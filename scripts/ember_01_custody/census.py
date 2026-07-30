@@ -282,6 +282,24 @@ def parse_worktree_porcelain(text: str) -> list[dict[str, Any]]:
     ]
 
 
+def _portable_worktree_rows(
+    rows: Iterable[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    return [
+        {key: value for key, value in row.items() if key != "normalized_path"}
+        for row in rows
+    ]
+
+
+def _portable_discovery_rows(
+    rows: Iterable[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    return [
+        {key: value for key, value in row.items() if key != "normalized_path"}
+        for row in rows
+    ]
+
+
 def _git_material_paths(root: Path) -> list[str]:
     paths: set[str] = set()
     commands = (
@@ -605,8 +623,6 @@ def build_root_census(
             root_row["absence_attested"] = absence_attested
         if isinstance(source_root_id, str):
             root_row["source_root_id"] = source_root_id
-        if not isinstance(source_root_id, str) and bound is not None:
-            root_row["normalized_bound_path"] = str(bound.resolve()).replace("\\", "/")
         roots.append(root_row)
         if not present:
             if absence_policy is not None and not absence_attested:
@@ -821,16 +837,17 @@ def build_root_census(
                                 {**error, "relative_path": f"{child.name}/{error['relative_path']}"}
                                 for error in nested_errors
                             )
-                root_row["discovered_roots"] = discovered
+                root_row["discovered_roots"] = _portable_discovery_rows(discovered)
                 root_row["discovered_root_count"] = len(discovered)
                 initial_discovery_snapshot = discovered
             if scan == "git_worktree_registry":
                 worktrees = parse_worktree_porcelain(
                     _git(bound, "worktree", "list", "--porcelain")
                 )
-                root_row["worktrees"] = worktrees
+                portable_worktrees = _portable_worktree_rows(worktrees)
+                root_row["worktrees"] = portable_worktrees
                 serialized = json.dumps(
-                    worktrees, sort_keys=True, separators=(",", ":")
+                    portable_worktrees, sort_keys=True, separators=(",", ":")
                 )
                 artifacts.append(
                     virtual_artifact("git-worktree-registry", _sha256_text(serialized))
@@ -840,7 +857,7 @@ def build_root_census(
                 worktrees = parse_worktree_porcelain(
                     _git(bound, "worktree", "list", "--porcelain")
                 )
-                root_row["worktrees"] = worktrees
+                root_row["worktrees"] = _portable_worktree_rows(worktrees)
                 root_row["registered_worktree_count"] = len(worktrees)
                 file_candidates = []
                 worktree_errors: list[dict[str, Any]] = []
@@ -914,7 +931,9 @@ def build_root_census(
                 {
                     "code": "root_scan_failed",
                     "root_id": root_id,
-                    "detail": str(exc),
+                    "exception": type(exc).__name__,
+                    "winerror": getattr(exc, "winerror", None),
+                    "errno": getattr(exc, "errno", None),
                     "resolution": "unresolved",
                 }
             )

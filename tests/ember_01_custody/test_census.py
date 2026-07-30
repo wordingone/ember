@@ -693,7 +693,7 @@ def test_git_repository_scan_binds_tracked_index_and_local_material_bytes(
     assert summary["reachable_object_manifest_sha256"]
     assert summary["tracked_tree_manifest_sha256"]
     assert summary["index_manifest_sha256"]
-    assert result["roots"][0]["normalized_bound_path"] == str(root.resolve()).replace("\\", "/")
+    assert "normalized_bound_path" not in result["roots"][0]
     artifacts = {row["source"]["relative_path"]: row for row in result["artifacts"]}
     assert artifacts["git-material/tracked.txt"]["sha256"] == sha256_file(tracked)
     assert artifacts["git-material/untracked.bin"]["sha256"] == sha256_file(root / "untracked.bin")
@@ -815,7 +815,7 @@ def test_remote_and_worktree_registry_modes_use_source_repo(tmp_path: Path) -> N
     assert roots["backup-remote"]["git_remote"]["remote_name"] == "backup"
     assert roots["worktrees"]["present"] is True
     assert len(roots["worktrees"]["worktrees"]) == 1
-    assert str(root) not in json.dumps(result)
+    assert str(root.resolve()).replace("\\", "/") not in json.dumps(result).replace("\\", "/")
 
 
 def test_cli_output_is_byte_stable_for_unchanged_read_only_roots(
@@ -982,7 +982,7 @@ def test_inaccessible_artifact_is_recorded_without_aborting_root(
             "resolution": "unresolved_preserve_entry",
         }
     ]
-    assert str(tmp_path) not in json.dumps(result)
+    assert str(tmp_path.resolve()).replace("\\", "/") not in json.dumps(result).replace("\\", "/")
 
 
 def test_discovery_access_error_reaches_portable_artifact_handler(
@@ -1028,7 +1028,7 @@ def test_discovery_access_error_reaches_portable_artifact_handler(
     ]
     assert result["artifacts"][0]["sha256"] is None
     assert result["contradictions"][0]["code"] == "artifact_access_failed"
-    assert str(tmp_path) not in json.dumps(result)
+    assert str(tmp_path.resolve()).replace("\\", "/") not in json.dumps(result).replace("\\", "/")
 
 
 def test_git_ignored_registry_hashes_ignored_bytes_without_object_walk(
@@ -1073,7 +1073,7 @@ def test_git_ignored_registry_hashes_ignored_bytes_without_object_walk(
     assert roots["ignored-root"]["ignored_entry_count"] == 1
     assert artifacts[0]["source"]["relative_path"] == "ignored/payload.bin"
     assert artifacts[0]["sha256"] == sha256_file(ignored)
-    assert str(root) not in json.dumps(result)
+    assert str(root.resolve()).replace("\\", "/") not in json.dumps(result).replace("\\", "/")
 
 
 def test_completed_benchmark_resolves_content_bindings(tmp_path: Path) -> None:
