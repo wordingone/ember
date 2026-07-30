@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """trajgate_tokenizer_lineage.py -- Generator for the tokenizer-lineage sidecar
 receipt, per #724 AMENDMENT (10-item binding). Reads custody run tree (READ-ONLY),
 verifies checkpoint hashes from actual bytes, loads tensors to extract dimensions,
@@ -172,10 +175,89 @@ def _read_checkpoint_manifest(step: int, rel_path: str, custody_tree: Path) -> t
     return manifest, manifest_sha
 
 
+def checkpoint_identity_from_artifacts(
+    step: int,
+    rel_path: str,
+    custody_tree: Path,
+) -> dict:
+    """Return a checkpoint identity derived only from its actual artifact bytes."""
+    _, manifest_sha = _read_checkpoint_manifest(step, rel_path, custody_tree)
+    model_path = custody_tree / "models" / rel_path / "model.pt"
+    if not model_path.exists():
+        raise LineageError(f"step {step}: model.pt not found at {model_path}")
+    return {
+        "step": step,
+        "manifest_sha256": manifest_sha,
+        "model_pt_sha256": _sha256_file(model_path),
+    }
+
+
+def _require_sha256(value: object, field: str) -> str:
+    if (
+        not isinstance(value, str)
+        or len(value) != 64
+        or any(char not in "0123456789abcdef" for char in value)
+    ):
+        raise LineageError(f"{field} must be non-null lowercase 64-hex")
+    return value
+
+
+def verify_parent_evidence_chain(receipts: list[dict]) -> dict:
+    """Verify each non-root row against the previous row's recorded identity."""
+    if not receipts:
+        raise LineageError("lineage chain must contain at least one row")
+
+    seen_steps: set[int] = set()
+    for index, receipt in enumerate(receipts):
+        step = receipt.get("step")
+        if not isinstance(step, int) or isinstance(step, bool):
+            raise LineageError(f"row {index}: step must be an integer")
+        if step in seen_steps:
+            raise LineageError(f"duplicate step {step} in lineage chain")
+        seen_steps.add(step)
+        _require_sha256(receipt.get("manifest_sha256"), f"step {step} manifest_sha256")
+        _require_sha256(receipt.get("model_pt_sha256"), f"step {step} model_pt_sha256")
+
+        parent_evidence = receipt.get("parent_evidence")
+        if not isinstance(parent_evidence, list):
+            raise LineageError(f"step {step}: parent_evidence must be a list")
+        if index == 0:
+            if parent_evidence:
+                raise LineageError("root row parent_evidence must be empty")
+            continue
+        if len(parent_evidence) != 1 or not isinstance(parent_evidence[0], dict):
+            raise LineageError(
+                f"step {step}: non-root parent_evidence must contain exactly one edge"
+            )
+
+        previous = receipts[index - 1]
+        expected = {
+            "step": previous["step"],
+            "manifest_sha256": previous["manifest_sha256"],
+            "model_pt_sha256": previous["model_pt_sha256"],
+        }
+        edge = parent_evidence[0]
+        if set(edge) != set(expected):
+            raise LineageError(f"step {step}: parent evidence shape mismatch")
+        _require_sha256(edge.get("manifest_sha256"), f"step {step} parent manifest_sha256")
+        _require_sha256(edge.get("model_pt_sha256"), f"step {step} parent model_pt_sha256")
+        if edge != expected:
+            raise LineageError(
+                f"step {step}: parent evidence mismatch: expected {expected}, found {edge}"
+            )
+
+    return {
+        "root_step": receipts[0]["step"],
+        "terminal_step": receipts[-1]["step"],
+        "verified_edge_count": len(receipts) - 1,
+    }
+
+
 def _generate_lineage_receipt(step: int, block_label: str, rel_path: str,
                               custody_tree: Path, tokenizer_sha: str,
                               tokenizer_freeze_receipt_name: str,
-                              prev_receipt: Optional[dict] = None) -> dict:
+                              parent_step: Optional[int] = None,
+                              parent_rel_path: Optional[str] = None) -> dict:
     """Generate one lineage receipt for a candidate checkpoint.
     Enforces items 1-5, 8-10."""
 
@@ -208,12 +290,21 @@ def _generate_lineage_receipt(step: int, block_label: str, rel_path: str,
     total_steps = manifest.get("extra", {}).get("total_steps")
 
     # Build predecessor edge (item 3)
+    parent_evidence = []
     predecessor_edge = None
-    if prev_receipt:
+    if parent_step is not None or parent_rel_path is not None:
+        if parent_step is None or parent_rel_path is None:
+            raise LineageError(
+                f"step {step}: parent step and artifact path must be supplied together"
+            )
+        parent_identity = checkpoint_identity_from_artifacts(
+            parent_step, parent_rel_path, custody_tree
+        )
+        parent_evidence = [parent_identity]
         predecessor_edge = {
-            "prev_step": prev_receipt["step"],
-            "prev_manifest_sha256": prev_receipt["manifest_sha256"],
-            "prev_model_pt_sha256": prev_receipt["model_pt_sha256"],
+            "prev_step": parent_identity["step"],
+            "prev_manifest_sha256": parent_identity["manifest_sha256"],
+            "prev_model_pt_sha256": parent_identity["model_pt_sha256"],
         }
 
     # Determine which provenance_230 epoch governs this checkpoint (item 5)
@@ -248,6 +339,7 @@ def _generate_lineage_receipt(step: int, block_label: str, rel_path: str,
             "step": step,
             "total_steps_in_segment": total_steps,
         },
+        "parent_evidence": parent_evidence,
         "predecessor_edge": predecessor_edge,
         "corpus_binding": {
             "shards_v0_receipt": "token-shards-v0-20260611T170047Z.json",
@@ -295,7 +387,7 @@ def main():
         seen_steps = set()
         all_vocabs = set()
         all_embedding_rows = set()
-        prev_receipt = None
+        parent_candidate = None
 
         for step, block_label, rel_path in CANDIDATE_CHECKPOINTS:
             if step in seen_steps:
@@ -304,16 +396,21 @@ def main():
             try:
                 receipt = _generate_lineage_receipt(
                     step, block_label, rel_path, custody_tree, tokenizer_sha,
-                    tokenizer_freeze_receipt_name, prev_receipt)
+                    tokenizer_freeze_receipt_name,
+                    parent_step=(parent_candidate[0] if parent_candidate else None),
+                    parent_rel_path=(parent_candidate[2] if parent_candidate else None),
+                )
                 receipts.append(receipt)
                 seen_steps.add(step)
                 all_vocabs.add(receipt["tensor_dims"]["vocab_size"])
                 all_embedding_rows.add(receipt["tensor_dims"]["embedding_rows"])
-                prev_receipt = receipt
+                parent_candidate = (step, block_label, rel_path)
                 print(f"Generated lineage receipt for step {step}", file=sys.stderr)
             except LineageError as e:
                 print(f"ERROR: step {step}: {e}", file=sys.stderr)
                 sys.exit(1)
+
+        chain_verification = verify_parent_evidence_chain(receipts)
 
         # Aggregate equality check (item 3): all vocabs and embedding rows must match
         if len(all_vocabs) != 1:
@@ -333,6 +430,7 @@ def main():
         sidecar_sha = _sha256_file(output_path)
 
         print(f"Emitted {len(receipts)} lineage receipts to {output_path}", file=sys.stderr)
+        print(f"Verified parent edges: {chain_verification['verified_edge_count']}", file=sys.stderr)
         print(f"Sidecar SHA256: {sidecar_sha}", file=sys.stderr)
         print(f"Output: {output_path}")
         print(f"SidecarSHA256: {sidecar_sha}")
