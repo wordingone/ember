@@ -89,10 +89,18 @@ jobs:
             --event-base-sha "${BASE_SHA}" \
             --event-head-sha "${HEAD_SHA}" \
             --snapshot-output "${RUNNER_TEMP}/pr-policy-snapshot.json"
-          python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["body"])' \
-            "${RUNNER_TEMP}/pr-policy-snapshot.json" > "${RUNNER_TEMP}/pr_body.txt"
-          cd "${subject}"
-          python "${kernel}/scripts/check_pr_authority_binding.py" \
-            --root "${subject}" \
-            --body-file "${RUNNER_TEMP}/pr_body.txt" \
-            --changed-range "${BASE_SHA}..HEAD"
+          actor_login="$(
+            python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["actor_login"])' \
+              "${RUNNER_TEMP}/pr-policy-snapshot.json"
+          )"
+          if [[ "${actor_login}" != "dependabot[bot]" ]]; then
+            python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["body"])' \
+              "${RUNNER_TEMP}/pr-policy-snapshot.json" > "${RUNNER_TEMP}/pr_body.txt"
+            cd "${subject}"
+            python "${kernel}/scripts/check_pr_authority_binding.py" \
+              --root "${subject}" \
+              --body-file "${RUNNER_TEMP}/pr_body.txt" \
+              --changed-range "${BASE_SHA}..HEAD"
+          else
+            echo "trusted narrow Dependabot schema accepted; human authority binding is not applicable"
+          fi

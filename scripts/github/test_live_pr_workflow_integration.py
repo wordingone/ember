@@ -48,6 +48,27 @@ class LivePullRequestWorkflowIntegrationTests(unittest.TestCase):
                 workflow,
             )
 
+    def test_dependabot_schema_bypasses_only_human_authority_binding(self) -> None:
+        workflow = (
+            ROOT / ".github" / "workflows" / "repo-policy-gate.yml"
+        ).read_text(encoding="utf-8")
+        live_policy = workflow.index("python -m scripts.github.live_pr_policy")
+        actor_read = workflow.index('["actor_login"]')
+        bot_boundary = workflow.index(
+            'if [[ "${actor_login}" != "dependabot[bot]" ]]; then'
+        )
+        authority_binding = workflow.index(
+            'python "${kernel}/scripts/check_pr_authority_binding.py"'
+        )
+        self.assertLess(live_policy, actor_read)
+        self.assertLess(actor_read, bot_boundary)
+        self.assertLess(bot_boundary, authority_binding)
+        self.assertIn(
+            'echo "trusted narrow Dependabot schema accepted; '
+            'human authority binding is not applicable"',
+            workflow,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
