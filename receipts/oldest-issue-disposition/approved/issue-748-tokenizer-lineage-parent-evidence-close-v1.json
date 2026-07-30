@@ -1781,7 +1781,7 @@
     "SUPERSEDED": 0
   },
   "master_sha": "40bca36516e8fce6ffad48f2036f743f433dc375",
-  "packet_sha256": "00b93a91ade6a5c218da420edf2f7f21d77476cb1c86b1b4fc8525393f4e8952",
+  "packet_sha256": "4cb01bf55bf94d3c905cb24518eda7eb49fdca3b31791171f4661a80dbf1ab2a",
   "public_issue_mutation_performed": false,
   "receipts": [
     {
@@ -1808,7 +1808,7 @@
           "blob_sha1": "346a6bdd195cfe6be1d29256cf79f9d5e018941a",
           "citation": "https://github.com/wordingone/ember/pull/1210#issuecomment-5131418456",
           "clean_checkout": true,
-          "commit_sha": "047252ed11b70755180f77d979c0ef6037e07658",
+          "commit_sha": "56605aebe067abb24acf7a56cde9445d5ce1b70e",
           "passed": true,
           "path": "tests/test_trajgate_tokenizer_lineage.py",
           "production_shaped": true,
@@ -1828,7 +1828,7 @@
       "disposition": "CLOSE",
       "issue_number": 748,
       "issue_url": "https://github.com/wordingone/ember/issues/748",
-      "receipt_sha256": "033115319c52e739a81f0983a80e5e37c2e4a2dc698258c122ecc1642c5271e0",
+      "receipt_sha256": "7593bfa4cd3ce47731d05fc168c0d65a50ee2c589feb15478fb38be45c6ac5fd",
       "replacement_citation": null,
       "retained_lesson": null,
       "smallest_binding_action": null,
