@@ -400,7 +400,7 @@ describe("issue #1044: statusBarText carries no keybinding-hint chrome", () => {
     expect(text).not.toContain("shift+tab");
     expect(text).not.toContain("esc to interrupt");
     expect(text).not.toContain("ctrl+t");
-    expect(text).toContain("regular mode");
+    expect(text).toContain("sandbox");
   });
 
   it("tasksVisible no longer changes the rendered text (dead param, kept for call-site compat)", () => {

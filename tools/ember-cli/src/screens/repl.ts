@@ -72,7 +72,7 @@ import {
   ANIMATION_LOOP_MS,
 }                                        from "../components/spinner.ts";
 import { QueryEngine, type QueryEvent, type ResultEvent, type RetryAttemptInfo } from "../core/query-engine.ts";
-import type { Tool }                    from "../core/tool-interface.ts";
+import type { PermissionBehavior, Tool } from "../core/tool-interface.ts";
 import {
   getDiagnostics,
   getState,
@@ -150,9 +150,11 @@ import { verifySourceBinding } from "../entrypoints/source-binding-verifier.ts";
 
 export type ReplPermissionMode = "bypass" | "interactive" | "swarm-worker";
 
+export const DEFAULT_REPL_PERMISSION_MODE: ReplPermissionMode = "interactive";
+
 export const REPL_PERMISSION_CYCLE: ReplPermissionMode[] = [
-  "bypass",
   "interactive",
+  "bypass",
   "swarm-worker",
 ];
 
@@ -271,7 +273,19 @@ export function clearInputRefForSubmit(
 export function cycleReplPermissionMode(current: ReplPermissionMode): ReplPermissionMode {
   const idx  = REPL_PERMISSION_CYCLE.indexOf(current);
   const next = REPL_PERMISSION_CYCLE[(idx + 1) % REPL_PERMISSION_CYCLE.length];
-  return next ?? "bypass";
+  return next ?? DEFAULT_REPL_PERMISSION_MODE;
+}
+
+/** Session-level authority applied after each tool has produced its own permission verdict. */
+export function authorizeReplTool(
+  mode: ReplPermissionMode,
+  tool: Tool<any, any>,
+  input: unknown,
+  behavior: PermissionBehavior,
+): boolean {
+  if (behavior === "deny") return false;
+  if (mode === "bypass") return true;
+  return behavior === "allow" && tool.isReadOnly(input);
 }
 
 /**
@@ -704,6 +718,8 @@ export function ReplScreen({
   const [controlDisabledReason, setControlDisabledReason] = useState<string | undefined>(undefined);
 
   const [permMode,         setPermMode]        = useState<ReplPermissionMode>(config.permissionMode);
+  const permModeRef = useRef<ReplPermissionMode>(permMode);
+  permModeRef.current = permMode;
   const [taskPanelVisible, setTaskPanelVisible] = useState(false);
   const [tasks]                                 = useState<Task[]>([]);
   const [permQueue,        setPermQueue]        = useState<PermissionQueueItem[]>([]);
@@ -937,7 +953,7 @@ export function ReplScreen({
     }
     analytics?.log(ANALYTICS_SESSION_START, {
       model:          config.model,
-      permissionMode: config.permissionMode,
+      permissionMode: permModeRef.current,
     });
     return () => {
       const duration = Date.now() - mountRef.current;
@@ -1128,7 +1144,11 @@ export function ReplScreen({
   // is `isActive` at registration. The pane owning its own branch is not enough — Ink delivers each
   // keypress to every active handler and a handler returning does not stop propagation, so while
   // the pane holds focus this hook must be switched OFF rather than merely out-competed.
-  const [inputState, inputActions] = usePromptInput({ keyboardActive: !paneFocused });
+  const [inputState, inputActions] = usePromptInput({
+    keyboardActive: !paneFocused,
+    permissionMode: sbMode,
+    onPermissionModeCycle: handlePermCycle,
+  });
 
   // Latest input-buffer snapshot, readable from the injector's closures below
   // without re-constructing them on every keystroke.
@@ -1393,7 +1413,8 @@ export function ReplScreen({
           commands:           [] as unknown[],
           mcpClients:         {} as Record<string, unknown>,
           agents:             {} as Record<string, unknown>,
-          canUseTool:         async () => true,
+          canUseTool:         async (tool: Tool, input: unknown, behavior: PermissionBehavior) =>
+            authorizeReplTool(permModeRef.current, tool, input, behavior),
           // #182: ExitPlanMode/EnterWorktree/ExitWorktree read state["cwd"] as
           // a fallback path to the resolved root; keep it consistent with the
           // same `cwd` this config already threads via ToolUseContext.cwd.

@@ -15,7 +15,7 @@ import {
   type ModelResponse,
   type CallModelParams,
 } from "../query/query-loop-support.ts";
-import type { Tool, ToolUseContext } from "./tool-interface.ts";
+import type { PermissionBehavior, Tool, ToolUseContext } from "./tool-interface.ts";
 import { createAutocompact } from "../services/compaction.ts";
 import { markPostCompaction } from "../session-state.ts";
 import { shouldRetry, computeRetryDelay, MAX_RETRY_ATTEMPTS } from "../api-backend.ts";
@@ -371,7 +371,11 @@ export type QueryEvent = AssistantEvent | UserEvent | ResultEvent;
 // ---------------------------------------------------------------------------
 
 /** Predicate that gates whether a given tool may be called. */
-export type CanUseToolFn = (tool: Tool, input: unknown) => Promise<boolean>;
+export type CanUseToolFn = (
+  tool: Tool<any, any>,
+  input: unknown,
+  behavior: PermissionBehavior,
+) => Promise<boolean>;
 
 export interface QueryParams {
   messages: unknown[];
@@ -678,8 +682,35 @@ export async function* query(
         let retries = 0;
         while (retries <= 1) {
           try {
-            const result = await tool.call(
+            const permission = await tool.checkPermissions(
               block.input,
+              params.toolUseContext,
+            );
+            if (permission.behavior === "deny") {
+              toolResultContent.push({
+                type: "tool_result",
+                tool_use_id: block.id,
+                content: permission.message ?? `Tool use denied: ${tool.name}`,
+                is_error: true,
+              });
+              break;
+            }
+
+            const sessionAllowed = params.canUseTool
+              ? await params.canUseTool(tool, permission.updatedInput, permission.behavior)
+              : permission.behavior === "allow";
+            if (!sessionAllowed) {
+              toolResultContent.push({
+                type: "tool_result",
+                tool_use_id: block.id,
+                content: `Tool blocked by the active sandbox permission mode: ${tool.name}`,
+                is_error: true,
+              });
+              break;
+            }
+
+            const result = await tool.call(
+              permission.updatedInput,
               params.toolUseContext,
               params.canUseTool,
               undefined,
