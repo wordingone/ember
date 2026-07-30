@@ -32,6 +32,12 @@ WRITE_KEYS = {
     "security-events",
     "statuses",
 }
+PR_EVENTS = {"pull_request", "pull_request_target"}
+TRUSTED_CODEQL_PR_ACTIONS = (
+    "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+    "github/codeql-action/init@3b0bd1d116c0bde30213346b22d4f634d96a2fb0",
+    "github/codeql-action/analyze@3b0bd1d116c0bde30213346b22d4f634d96a2fb0",
+)
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -52,6 +58,138 @@ def _permission_writes(value: Any) -> bool:
     )
 
 
+def _event_names(events: Any) -> set[str]:
+    if isinstance(events, str):
+        return {events}
+    if isinstance(events, dict):
+        return {str(event) for event in events}
+    if isinstance(events, list):
+        return {str(event) for event in events}
+    return set()
+
+
+def _effective_permissions(workflow: dict[str, Any], job: dict[str, Any]) -> Any:
+    if "permissions" in job:
+        return job["permissions"]
+    return workflow.get("permissions")
+
+
+def _checkout_uses_pr_subject(step: dict[str, Any]) -> bool:
+    action = step.get("uses")
+    if not isinstance(action, str) or not action.startswith("actions/checkout@"):
+        return False
+    with_values = step.get("with")
+    if not isinstance(with_values, dict):
+        with_values = {}
+    repository = str(with_values.get("repository", "")).strip()
+    trusted_repositories = {
+        "",
+        "${{ github.repository }}",
+        "wordingone/ember",
+    }
+    ref = str(with_values.get("ref", "")).strip()
+    if not ref:
+        return True
+    if "pull_request.head" in ref or "/merge" in ref:
+        return True
+    trusted_refs = {"master", "refs/heads/master"}
+    if ref in trusted_refs:
+        return repository not in trusted_repositories
+    trusted_ref_expressions = {
+        "${{ github.event.pull_request.base.sha }}",
+        "${{ github.event.repository.default_branch }}",
+    }
+    if ref in trusted_ref_expressions:
+        return repository not in trusted_repositories
+    return True
+
+
+def _job_executes_checked_out_repository_code(steps: list[Any]) -> bool:
+    if not any(
+        isinstance(step, dict) and _checkout_uses_pr_subject(step) for step in steps
+    ):
+        return False
+    return any(
+        isinstance(step, dict)
+        and (
+            bool(str(step.get("run", "")).strip())
+            or str(step.get("uses", "")).startswith("./")
+        )
+        for step in steps
+    )
+
+
+def _job_executes_pr_controlled_workflow_code(steps: list[Any]) -> bool:
+    return any(
+        isinstance(step, dict)
+        and (
+            bool(str(step.get("run", "")).strip())
+            or str(step.get("uses", "")).startswith("./")
+        )
+        for step in steps
+    )
+
+
+def _is_trusted_codeql_pr_write_job(
+    path: Path,
+    workflow: dict[str, Any],
+    job_name: str,
+    permissions: Any,
+    job: dict[str, Any],
+    steps: list[Any],
+) -> bool:
+    if path.name != "security-codeql.yml":
+        return False
+    if set(workflow) != {"name", "on", "permissions", "jobs"}:
+        return False
+    if workflow["name"] != "security-codeql":
+        return False
+    if workflow["on"] != {
+        "push": {"branches": ["master"]},
+        "pull_request": {"branches": ["master"]},
+        "schedule": [{"cron": "47 10 * * 2"}],
+    }:
+        return False
+    if set(workflow["jobs"]) != {"codeql"} or job_name != "codeql":
+        return False
+    if permissions != {"contents": "read", "security-events": "write"}:
+        return False
+    if set(job) != {"runs-on", "timeout-minutes", "strategy", "steps"}:
+        return False
+    if job["runs-on"] != "ubuntu-latest" or job["timeout-minutes"] != 45:
+        return False
+    if job["strategy"] != {
+        "fail-fast": False,
+        "matrix": {"language": ["python", "javascript-typescript"]},
+    }:
+        return False
+    expected_steps = (
+        {"uses": TRUSTED_CODEQL_PR_ACTIONS[0], "with": {"persist-credentials": False}},
+        {"uses": TRUSTED_CODEQL_PR_ACTIONS[1], "with": {"languages": "${{ matrix.language }}"}},
+        {"uses": TRUSTED_CODEQL_PR_ACTIONS[2]},
+    )
+    if tuple(steps) != expected_steps:
+        return False
+    actions = tuple(
+        str(step.get("uses", ""))
+        for step in steps
+        if isinstance(step, dict)
+    )
+    if actions != TRUSTED_CODEQL_PR_ACTIONS:
+        return False
+    if _job_executes_pr_controlled_workflow_code(steps):
+        return False
+    checkout = steps[0]
+    with_values = checkout.get("with")
+    if not isinstance(with_values, dict):
+        return False
+    return (
+        with_values.get("persist-credentials") is False
+        and "repository" not in with_values
+        and "ref" not in with_values
+    )
+
+
 def validate_workflow(path: Path) -> list[str]:
     errors: list[str] = []
     try:
@@ -65,16 +203,7 @@ def validate_workflow(path: Path) -> list[str]:
     if not isinstance(jobs, dict) or not jobs:
         return errors + [f"{path.name}: jobs must be a nonempty mapping"]
     events = workflow.get("on")
-    event_names = (
-        {events}
-        if isinstance(events, str)
-        else set(events or ())
-        if isinstance(events, (dict, list))
-        else set()
-    )
-    privileged = "pull_request_target" in event_names and _permission_writes(
-        workflow.get("permissions")
-    )
+    event_names = _event_names(events)
     for job_name, job in jobs.items():
         context = f"{path.name}:{job_name}"
         if not isinstance(job, dict):
@@ -86,10 +215,24 @@ def validate_workflow(path: Path) -> list[str]:
         if not isinstance(steps, list):
             errors.append(f"{context}: steps must be a list")
             continue
-        job_privileged = privileged or (
-            "pull_request_target" in event_names
-            and _permission_writes(job.get("permissions"))
+        effective_permissions = _effective_permissions(workflow, job)
+        job_privileged = bool(PR_EVENTS & event_names) and _permission_writes(
+            effective_permissions
         )
+        if (
+            job_privileged
+            and "pull_request" in event_names
+            and not _is_trusted_codeql_pr_write_job(
+                path, workflow, str(job_name), effective_permissions, job, steps
+            )
+        ):
+            errors.append(
+                f"{context}: pull_request workflow source cannot hold write authority"
+            )
+        if job_privileged and _job_executes_checked_out_repository_code(steps):
+            errors.append(
+                f"{context}: write-capable PR job executes pull-request code"
+            )
         for index, step in enumerate(steps):
             if not isinstance(step, dict):
                 errors.append(f"{context}:step[{index}] must be a mapping")
@@ -100,7 +243,10 @@ def validate_workflow(path: Path) -> list[str]:
                     errors.append(f"{context}: unpinned action {action}")
             if job_privileged:
                 ref = str(step.get("with", {}).get("ref", ""))
-                if "pull_request.head" in ref or "/merge" in ref:
+                if (
+                    "pull_request_target" in event_names
+                    and _checkout_uses_pr_subject(step)
+                ):
                     errors.append(
                         f"{context}: privileged job checks out pull-request subject"
                     )
@@ -108,6 +254,7 @@ def validate_workflow(path: Path) -> list[str]:
                 if (
                     re.search(r"\b(bun|npm|pip|pytest|cargo|python)\b", run)
                     and "trusted-kernel/scripts/github/" not in run
+                    and "pull_request_target" in event_names
                 ):
                     errors.append(
                         f"{context}: privileged job may execute repository-authored code"
