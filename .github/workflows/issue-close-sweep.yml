@@ -53,7 +53,7 @@ jobs:
           packet_master=$(jq -er .master_sha "${packet}")
           [[ "${packet_master}" =~ ^[0-9a-f]{40}$ ]]
           git merge-base --is-ancestor "${packet_master}" "${GITHUB_SHA}"
-          python -B scripts/issue_close_sweep.py validate \
+          python -B -m scripts.issue_close_sweep validate \
             --repository "${GITHUB_REPOSITORY}" \
             --packet "${packet}" \
             --authorization "${AUTHORIZATION_PATH}" \
@@ -95,7 +95,7 @@ jobs:
           packet_master=$(jq -er .master_sha "${packet}")
           [[ "${packet_master}" =~ ^[0-9a-f]{40}$ ]]
           git merge-base --is-ancestor "${packet_master}" "${GITHUB_SHA}"
-          python -B scripts/issue_close_sweep.py apply \
+          python -B -m scripts.issue_close_sweep apply \
             --repository "${GITHUB_REPOSITORY}" \
             --packet "${packet}" \
             --authorization "${AUTHORIZATION_PATH}" \
