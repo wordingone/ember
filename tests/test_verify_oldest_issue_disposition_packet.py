@@ -15,18 +15,19 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from scripts.build_oldest_issue_decisions import build_decisions  # noqa: E402
-from scripts.oldest_issue_disposition import (  # noqa: E402
+from test_build_oldest_issue_decisions import _classifications
+from test_oldest_issue_disposition import MASTER, _raw_capture
+
+from scripts.build_oldest_issue_decisions import build_decisions
+from scripts.oldest_issue_disposition import (
     PacketError,
     build_capture,
     build_packet,
 )
-from scripts.verify_oldest_issue_disposition_packet import (  # noqa: E402
+from scripts.verify_oldest_issue_disposition_packet import (
     verify_replay,
     write_raw_bundle,
 )
-from test_build_oldest_issue_decisions import _classifications  # noqa: E402
-from test_oldest_issue_disposition import MASTER, _raw_capture  # noqa: E402
 
 
 class VerifyOldestIssueDispositionPacketTests(unittest.TestCase):
@@ -60,6 +61,35 @@ class VerifyOldestIssueDispositionPacketTests(unittest.TestCase):
         )
         self.assertEqual(replayed["packet_sha256"], self.packet["packet_sha256"])
 
+    def test_cursor_bound_raw_sources_reproduce_partial_batch(self) -> None:
+        cursor_root = self.temporary_root / "cursor-raw"
+        cursor_root.mkdir()
+        _raw_capture(cursor_root, include_all_comments=True)
+        for number in range(1, 11):
+            (cursor_root / f"comments-{number}-pre.json").unlink()
+            (cursor_root / f"comments-{number}-post.json").unlink()
+        cursor_bundle = self.temporary_root / "cursor-raw.json"
+        write_raw_bundle(cursor_root, cursor_bundle)
+        capture = build_capture(
+            cursor_root,
+            master_sha=MASTER,
+            captured_at="2026-07-25T00:00:00Z",
+            after_created_at="2026-01-10T00:00:00Z",
+            after_issue_number=10,
+        )
+        classifications = _classifications(capture)
+        packet = build_packet(
+            capture,
+            build_decisions(capture, classifications),
+        )
+        replayed = verify_replay(
+            packet,
+            raw_bundle=cursor_bundle,
+            classifications_value=classifications,
+            expected_master=MASTER,
+        )
+        self.assertEqual(replayed["capture"]["cursor"], capture["cursor"])
+        self.assertEqual(len(replayed["receipts"]), 11)
     def test_missing_extra_or_tampered_raw_source_fails(self) -> None:
         missing = self.raw_root / "comments-1-pre.json"
         original = missing.read_bytes()

@@ -38,6 +38,7 @@ _CAPTURE_KEYS = {
     "repository",
     "master_sha",
     "captured_at",
+    "cursor",
     "pagination",
     "source_evidence",
     "open_issue_population",
@@ -362,7 +363,8 @@ def _comment_projection(
 
 
 def _capture_projection(capture: Mapping[str, Any]) -> dict[str, Any]:
-    return {key: capture[key] for key in sorted(_CAPTURE_KEYS - {"capture_sha256"})}
+    keys = _CAPTURE_KEYS if "cursor" in capture else _CAPTURE_KEYS - {"cursor"}
+    return {key: capture[key] for key in sorted(keys - {"capture_sha256"})}
 
 
 def build_capture(
@@ -370,6 +372,8 @@ def build_capture(
     *,
     master_sha: str,
     captured_at: str,
+    after_created_at: str | None = None,
+    after_issue_number: int | None = None,
 ) -> dict[str, Any]:
     master = _sha1(master_sha, field="master_sha")
     captured = _timestamp(captured_at, field="captured_at")
@@ -390,12 +394,32 @@ def build_capture(
 
     open_issues = [row for row in pre if not row["is_pull_request"]]
     pulls = [row for row in pre if row["is_pull_request"]]
-    selected = sorted(
+    if (after_created_at is None) != (after_issue_number is None):
+        raise PacketError("capture cursor fields must be supplied together")
+    cursor_created_at = (
+        None
+        if after_created_at is None
+        else _timestamp(after_created_at, field="after_created_at")
+    )
+    cursor_issue_number = (
+        None
+        if after_issue_number is None
+        else _integer(after_issue_number, field="after_issue_number", minimum=1)
+    )
+    ordered = sorted(
         open_issues,
         key=lambda row: (row["created_at"], row["number"]),
-    )[:20]
-    if len(selected) != 20:
-        raise PacketError("capture must select exactly twenty open issues")
+    )
+    if cursor_created_at is not None and cursor_issue_number is not None:
+        ordered = [
+            row
+            for row in ordered
+            if (row["created_at"], row["number"])
+            > (cursor_created_at, cursor_issue_number)
+        ]
+    selected = ordered[:20]
+    if not selected:
+        raise PacketError("capture has no open issues after cursor")
 
     pagination: dict[str, Any] = {
         "issues_pre": pre_page,
@@ -464,6 +488,10 @@ def build_capture(
         "repository": "wordingone/ember",
         "master_sha": master,
         "captured_at": captured,
+        "cursor": {
+            "after_created_at": cursor_created_at,
+            "after_issue_number": cursor_issue_number,
+        },
         "pagination": pagination,
         "source_evidence": dict(sorted(source_evidence.items())),
         "open_issue_population": len(open_issues),
@@ -516,8 +544,8 @@ def _validate_pagination(value: Any) -> None:
         pagination["comments"],
         field="capture.pagination.comments",
     )
-    if len(comments) != 20:
-        raise PacketError("capture.pagination.comments must have twenty rows")
+    if not 1 <= len(comments) <= 20:
+        raise PacketError("capture.pagination.comments must have one to twenty rows")
 
 
 def _validate_comment(value: Any, *, field: str) -> dict[str, Any]:
@@ -596,7 +624,10 @@ def validate_capture(
     expected_master: str | None = None,
 ) -> dict[str, Any]:
     capture = dict(_mapping(value, field="capture"))
-    _strict_keys(capture, _CAPTURE_KEYS, field="capture")
+    actual_capture_keys = set(capture)
+    legacy_capture_keys = _CAPTURE_KEYS - {"cursor"}
+    if actual_capture_keys != _CAPTURE_KEYS and actual_capture_keys != legacy_capture_keys:
+        raise PacketError("capture has invalid keys")
     if capture["authority"] != _AUTHORITY:
         raise PacketError("capture authority binding is invalid")
     if (
@@ -611,6 +642,30 @@ def validate_capture(
     ):
         raise PacketError("capture is bound to a stale master")
     _timestamp(capture["captured_at"], field="capture.captured_at")
+    cursor = (
+        _mapping(capture["cursor"], field="capture.cursor")
+        if "cursor" in capture
+        else {"after_created_at": None, "after_issue_number": None}
+    )
+    _strict_keys(
+        cursor,
+        {"after_created_at", "after_issue_number"},
+        field="capture.cursor",
+    )
+    if (cursor["after_created_at"] is None) != (
+        cursor["after_issue_number"] is None
+    ):
+        raise PacketError("capture cursor fields must be null or populated together")
+    if cursor["after_created_at"] is not None:
+        _timestamp(
+            cursor["after_created_at"],
+            field="capture.cursor.after_created_at",
+        )
+        _integer(
+            cursor["after_issue_number"],
+            field="capture.cursor.after_issue_number",
+            minimum=1,
+        )
     _validate_pagination(capture["pagination"])
     evidence = _mapping(
         capture["source_evidence"],
@@ -624,7 +679,7 @@ def validate_capture(
     _integer(
         capture["open_issue_population"],
         field="capture.open_issue_population",
-        minimum=20,
+        minimum=1,
     )
     _integer(
         capture["excluded_pull_request_population"],
@@ -634,11 +689,23 @@ def validate_capture(
         _validate_capture_issue(item, index=index)
         for index, item in enumerate(_list(capture["issues"], field="capture.issues"))
     ]
-    if len(issues) != 20:
-        raise PacketError("capture must contain exactly twenty issues")
+    if not 1 <= len(issues) <= 20:
+        raise PacketError("capture must contain one to twenty issues")
     order = [(row["created_at"], row["number"]) for row in issues]
-    if order != sorted(order) or len({row["number"] for row in issues}) != 20:
+    if order != sorted(order) or len({row["number"] for row in issues}) != len(issues):
         raise PacketError("capture issues are not unique oldest-order rows")
+    if cursor["after_created_at"] is not None and order[0] <= (
+        cursor["after_created_at"],
+        cursor["after_issue_number"],
+    ):
+        raise PacketError("capture selection does not advance after cursor")
+    comment_numbers = [
+        row.get("issue_number")
+        for row in capture["pagination"]["comments"]
+        if isinstance(row, Mapping)
+    ]
+    if comment_numbers != [row["number"] for row in issues]:
+        raise PacketError("capture pagination comment rows do not match issues")
     expected_selection = canonical_sha256(
         [[row["number"], row["created_at"]] for row in issues]
     )
@@ -888,8 +955,8 @@ def build_packet(
     if decisions["selection_sha256"] != capture["selection_sha256"]:
         raise PacketError("decisions selection mismatch")
     decision_rows = _list(decisions["rows"], field="decisions.rows")
-    if len(decision_rows) != 20:
-        raise PacketError("decisions must contain exactly twenty rows")
+    if len(decision_rows) != len(capture["issues"]):
+        raise PacketError("decisions must match the captured issue selection")
     by_number: dict[int, Mapping[str, Any]] = {}
     for index, raw in enumerate(decision_rows):
         row = _mapping(raw, field=f"decisions.rows[{index}]")
@@ -967,8 +1034,8 @@ def validate_packet(
     if packet["selection_sha256"] != capture["selection_sha256"]:
         raise PacketError("packet selection mismatch")
     receipts_raw = _list(packet["receipts"], field="packet.receipts")
-    if len(receipts_raw) != 20:
-        raise PacketError("packet must contain exactly twenty receipts")
+    if len(receipts_raw) != len(capture["issues"]):
+        raise PacketError("packet receipts must match the captured issue selection")
     receipts = [
         _validate_receipt(
             raw,
@@ -1018,6 +1085,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     capture_parser.add_argument("--raw-root", type=Path, required=True)
     capture_parser.add_argument("--master-sha", required=True)
     capture_parser.add_argument("--captured-at", required=True)
+    capture_parser.add_argument("--after-created-at")
+    capture_parser.add_argument("--after-issue-number", type=int)
     capture_parser.add_argument("--output", type=Path, required=True)
 
     build_parser = subparsers.add_parser("build")
@@ -1036,6 +1105,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.raw_root,
                 master_sha=args.master_sha,
                 captured_at=args.captured_at,
+                after_created_at=args.after_created_at,
+                after_issue_number=args.after_issue_number,
             )
             _write_json(args.output, capture)
             print(

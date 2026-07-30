@@ -5,6 +5,17 @@ name: oldest-issue-disposition-capture
 
 on:
   workflow_dispatch:
+    inputs:
+      after_created_at:
+        description: RFC3339 created_at of the last issue in the prior chunk
+        required: false
+        default: ""
+        type: string
+      after_issue_number:
+        description: Issue number paired with after_created_at; 0 starts at oldest
+        required: false
+        default: "0"
+        type: string
 
 permissions:
   contents: read
@@ -33,6 +44,8 @@ jobs:
       - name: Capture immutable non-authorizing raw sources
         env:
           GH_TOKEN: ${{ github.token }}
+          AFTER_CREATED_AT: ${{ inputs.after_created_at }}
+          AFTER_ISSUE_NUMBER: ${{ inputs.after_issue_number }}
         shell: bash
         run: |
           set -euo pipefail
@@ -40,6 +53,15 @@ jobs:
           out="${RUNNER_TEMP}/oldest-issue-disposition-raw-artifact"
           mkdir -p "${raw}" "${out}"
           captured_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          if [[ -z "${AFTER_CREATED_AT}" && "${AFTER_ISSUE_NUMBER}" = "0" ]]; then
+            :
+          elif [[ "${AFTER_CREATED_AT}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?Z$ ]] \
+            && [[ "${AFTER_ISSUE_NUMBER}" =~ ^[1-9][0-9]*$ ]]; then
+            :
+          else
+            echo "cursor fields must be initial (empty/0) or a valid RFC3339/positive pair" >&2
+            exit 1
+          fi
 
           api_master=$(gh api "repos/${GITHUB_REPOSITORY}/commits/master" --jq .sha)
           test "${api_master}" = "${GITHUB_SHA}"
@@ -48,14 +70,25 @@ jobs:
             "repos/${GITHUB_REPOSITORY}/issues?state=open&per_page=100&sort=created&direction=asc" \
             > "${raw}/issues_pre.json"
           mapfile -t issue_numbers < <(
-            jq -r '
+            jq -r \
+              --arg after_created_at "${AFTER_CREATED_AT}" \
+              --argjson after_issue_number "${AFTER_ISSUE_NUMBER}" '
               [.[][] | select(has("pull_request") | not)]
               | sort_by(.created_at, .number)
+              | map(select(
+                  ($after_issue_number == 0)
+                  or (.created_at > $after_created_at)
+                  or (
+                    .created_at == $after_created_at
+                    and .number > $after_issue_number
+                  )
+                ))
               | .[:20]
               | .[].number
             ' "${raw}/issues_pre.json"
           )
-          test "${#issue_numbers[@]}" -eq 20
+          test "${#issue_numbers[@]}" -ge 1
+          test "${#issue_numbers[@]}" -le 20
           for number in "${issue_numbers[@]}"; do
             gh api --paginate --slurp \
               "repos/${GITHUB_REPOSITORY}/issues/${number}/comments?per_page=100" \
@@ -77,10 +110,18 @@ jobs:
           bundle="${out}/ember-oldest-issue-disposition-015-raw-sources-v1.json"
           python -B scripts/build_oldest_issue_raw_bundle.py \
             --raw-root "${raw}" --output "${bundle}"
+          cursor_args=()
+          if [[ "${AFTER_ISSUE_NUMBER}" != "0" ]]; then
+            cursor_args+=(
+              --after-created-at "${AFTER_CREATED_AT}"
+              --after-issue-number "${AFTER_ISSUE_NUMBER}"
+            )
+          fi
           python -B scripts/oldest_issue_disposition.py capture \
             --raw-root "${raw}" \
             --master-sha "${GITHUB_SHA}" \
             --captured-at "${captured_at}" \
+            "${cursor_args[@]}" \
             --output "${out}/capture.json"
           cp "${raw}"/*.json "${out}/"
           (

@@ -7,8 +7,9 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 if __package__ in {None, ""}:
     import sys
@@ -16,8 +17,8 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.oldest_issue_disposition import (
-    PacketError,
     _AUTHORITY,
+    PacketError,
     _list,
     _load_mapping,
     _mapping,
@@ -26,7 +27,6 @@ from scripts.oldest_issue_disposition import (
     _write_json,
     validate_capture,
 )
-
 
 _CLASSIFICATION_KEYS = {
     "issue_number",
@@ -68,8 +68,8 @@ def build_decisions(
             "classification issue population does not match live selection"
         )
     rows = _list(classifications["rows"], field="classifications.rows")
-    if len(rows) != 20:
-        raise PacketError("classifications must contain exactly twenty rows")
+    if len(rows) != len(capture_numbers):
+        raise PacketError("classifications must match the live selection")
     by_number: dict[int, Mapping[str, Any]] = {}
     for index, raw in enumerate(rows):
         field = f"classifications.rows[{index}]"

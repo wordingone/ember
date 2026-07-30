@@ -403,6 +403,10 @@ def test_apply_posts_receipt_comment_before_close() -> None:
     assert receipt["skipped"] == []
     assert receipt["cursor"]["first_issue_number"] == 805
     assert receipt["cursor"]["last_issue_number"] == 805
+    assert (
+        receipt["cursor"]["last_issue_created_at"]
+        == "2026-07-11T17:36:53Z"
+    )
     assert receipt["mutation_count"] == 2
 
 

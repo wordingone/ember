@@ -295,6 +295,9 @@ def build_close_plan(
         for row in capture["issues"]
         if isinstance(row, Mapping) and isinstance(row.get("number"), int)
     ]
+    chunk_last_created_at = capture["issues"][-1].get("created_at")
+    if not isinstance(chunk_last_created_at, str):
+        raise CloseSweepError("packet chunk cursor timestamp is invalid")
     skipped = []
     for number in chunk_issue_numbers:
         if number in numbers:
@@ -390,6 +393,7 @@ def build_close_plan(
         "authorization_sha256": authorization["authorization_sha256"],
         "selection_sha256": packet.get("selection_sha256"),
         "chunk_issue_numbers": chunk_issue_numbers,
+        "chunk_last_created_at": chunk_last_created_at,
         "operations": operations,
         "skipped": skipped,
     }
@@ -478,6 +482,7 @@ def apply_close_plan(
             "packet_master_sha": plan.get("packet_master_sha"),
             "first_issue_number": chunk_issue_numbers[0],
             "last_issue_number": chunk_issue_numbers[-1],
+            "last_issue_created_at": plan.get("chunk_last_created_at"),
             "chunk_issue_numbers": chunk_issue_numbers,
         },
         "already_closed_issue_numbers": [

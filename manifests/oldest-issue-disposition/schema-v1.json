@@ -368,7 +368,7 @@
         "type": "object"
       },
       "maxItems": 20,
-      "minItems": 20,
+      "minItems": 1,
       "type": "array"
     },
     "repository": {
