@@ -8,7 +8,7 @@ on:
     branches: [master]
   pull_request_target:
     branches: [master]
-    types: [opened, synchronize, reopened, ready_for_review, edited]
+    types: [opened, synchronize, reopened, ready_for_review, edited, labeled, unlabeled, milestoned, demilestoned]
 
 permissions:
   contents: read
@@ -28,6 +28,7 @@ jobs:
       - name: Checkout trusted guard kernel
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
           path: guard-kernel
           fetch-depth: 0
           persist-credentials: false
@@ -65,16 +66,33 @@ jobs:
             exit 2
           }
           bash "${kernel}/tools/repo-guard.sh" --base "${BASE_SHA}"
-      - name: Validate exact PR authority binding with trusted kernel
+      - name: Acquire and validate live PR policy with trusted kernel
         if: github.event_name == 'pull_request_target'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
           kernel="${GITHUB_WORKSPACE}/guard-kernel"
           subject="${GITHUB_WORKSPACE}/guard-subject"
-          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.body // ""' > "${RUNNER_TEMP}/pr_body.txt"
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" > "${RUNNER_TEMP}/pr.json"
+          gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" \
+            > "${RUNNER_TEMP}/pr-files.json"
+          cd "${kernel}"
+          python -m scripts.github.live_pr_policy \
+            --root "${kernel}" \
+            --pr-json "${RUNNER_TEMP}/pr.json" \
+            --files-json "${RUNNER_TEMP}/pr-files.json" \
+            --event-base-sha "${BASE_SHA}" \
+            --event-head-sha "${HEAD_SHA}" \
+            --snapshot-output "${RUNNER_TEMP}/pr-policy-snapshot.json"
+          python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["body"])' \
+            "${RUNNER_TEMP}/pr-policy-snapshot.json" > "${RUNNER_TEMP}/pr_body.txt"
           cd "${subject}"
-          python "${kernel}/scripts/check_pr_authority_binding.py"             --root "${subject}" --body-file "${RUNNER_TEMP}/pr_body.txt"             --changed-range "${BASE_SHA}..HEAD"
+          python "${kernel}/scripts/check_pr_authority_binding.py" \
+            --root "${subject}" \
+            --body-file "${RUNNER_TEMP}/pr_body.txt" \
+            --changed-range "${BASE_SHA}..HEAD"

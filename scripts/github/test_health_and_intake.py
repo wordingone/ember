@@ -4,8 +4,9 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
-from scripts.github.branch_hygiene import build as branch_report
+from scripts.github.branch_inventory import build as branch_report
 from scripts.github.issue_intake import validate
 from scripts.github.repo_health import build as health_report
 
@@ -50,6 +51,35 @@ class HealthAndIntakeTests(unittest.TestCase):
             }
         )
         self.assertEqual([], valid)
+
+    def test_intake_preserves_pre_migration_legacy_bodies_on_metadata_events(self) -> None:
+        legacy = {
+            "number": 286,
+            "created_at": "2026-07-01T00:00:00Z",
+            "body": "Preserved historical issue body without a current form marker.",
+            "labels": [
+                {"name": "kind:defect"},
+                {"name": "area:cockpit"},
+                {"name": "state:ready"},
+                {"name": "priority:p2"},
+                {"name": "severity:s3"},
+            ],
+        }
+        self.assertEqual([], validate(legacy))
+        legacy["created_at"] = "2026-07-29T18:40:53Z"
+        self.assertIn("missing Ember issue-form marker", validate(legacy))
+
+    def test_issue_intake_workflow_covers_metadata_and_reopen_events(self) -> None:
+        workflow = (
+            Path(__file__).resolve().parents[2]
+            / ".github"
+            / "workflows"
+            / "issue-intake.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "types: [opened, edited, labeled, unlabeled, milestoned, demilestoned, reopened]",
+            workflow,
+        )
 
 
 if __name__ == "__main__":

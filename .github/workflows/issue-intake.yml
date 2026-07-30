@@ -5,7 +5,7 @@ name: Issue intake policy
 
 on:
   issues:
-    types: [opened, edited, labeled, unlabeled]
+    types: [opened, edited, labeled, unlabeled, milestoned, demilestoned, reopened]
 
 permissions:
   contents: read
