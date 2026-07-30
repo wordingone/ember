@@ -21,6 +21,21 @@ class LivePullRequestWorkflowIntegrationTests(unittest.TestCase):
         self.assertIn("--event-base-sha", workflow)
         self.assertIn("--event-head-sha", workflow)
 
+    def test_ci_pr_bootstraps_exact_head_policy_without_write_authority(self) -> None:
+        workflow = (ROOT / ".github" / "workflows" / "ci-pr.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("pull-requests: read", workflow)
+        self.assertNotIn("pull-requests: write", workflow)
+        self.assertNotIn("contents: write", workflow)
+        self.assertIn("Bootstrap exact-head live PR policy (read-only)", workflow)
+        self.assertIn("scripts/github/live_pr_policy.py", workflow)
+        self.assertIn("--event-base-sha", workflow)
+        self.assertIn("--event-head-sha", workflow)
+        self.assertEqual(
+            3, workflow.count("ref: ${{ github.event.pull_request.head.sha || github.sha }}")
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

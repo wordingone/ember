@@ -195,6 +195,32 @@ def apply_plan(
     confirm: bool,
 ) -> dict[str, Any]:
     verify_live_snapshot(plan, live_snapshot)
+    if engine._sha(
+        {
+            key: value
+            for key, value in plan.items()
+            if key not in {"authority", "plan_sha256"}
+        }
+    ) != plan.get("plan_sha256"):
+        raise WorkItemError("review plan digest mismatch")
+    if all(
+        sorted(row["before_labels"]) == sorted(row["desired_labels"])
+        for row in plan["rows"]
+    ):
+        if not confirm:
+            raise WorkItemError("apply requires --confirm-apply")
+        receipt = {
+            **engine.receipt_metadata("EMBER-GITHUB-OPEN-WORK-APPLY"),
+            "schema_version": "ember-open-work-review-apply/v1",
+            "repository": plan["repository"],
+            "plan_sha256": plan["plan_sha256"],
+            "updated_issue_count": 0,
+            "verified_issue_count": len(plan["rows"]),
+            "body_mutation_count": 0,
+            "status": "APPLIED_NO_CHANGES",
+        }
+        receipt["receipt_sha256"] = engine._sha(receipt)
+        return receipt
     return engine.apply_plan(plan, wrapper=wrapper, confirm=confirm)
 
 

@@ -9,9 +9,10 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from scripts.github.labels_engine import canonical_bytes
-from scripts.github.work_items import WorkItemError, apply_semantic_reviews, main
+from scripts.github.work_items import WorkItemError, apply_plan, apply_semantic_reviews, main
 from scripts.github import work_items_engine as engine
 
 
@@ -49,7 +50,9 @@ class SemanticWorkItemTests(unittest.TestCase):
             "schema_version": "ember-priority-semantic-review/v2",
             "repository": "wordingone/ember",
             "source_snapshot_sha256": "a" * 64,
-            "reviewer_identity": "Kai/Codex",
+            "reviewer_identity": (
+                "codex-thread:00000000-0000-0000-0000-000000000001"
+            ),
             "reviewed_at": "2026-07-29T00:00:00Z",
             "rows": [
                 {
@@ -76,7 +79,10 @@ class SemanticWorkItemTests(unittest.TestCase):
         result = apply_semantic_reviews(self._plan(), self._reviews())
         row = result["rows"][0]
         self.assertEqual("SEMANTICALLY_REVIEWED", row["review_status"])
-        self.assertEqual("Kai/Codex", row["reviewer_identity"])
+        self.assertEqual(
+            "codex-thread:00000000-0000-0000-0000-000000000001",
+            row["reviewer_identity"],
+        )
         self.assertEqual("a" * 64, row["review_source_snapshot_sha256"])
         self.assertIn("severity:s3", row["desired_labels"])
         self.assertNotIn("needs:review", row["desired_labels"])
@@ -92,6 +98,49 @@ class SemanticWorkItemTests(unittest.TestCase):
             }
         )
         self.assertEqual(expected, result["plan_sha256"])
+
+    def test_noop_apply_emits_receipt_without_live_mutation(self) -> None:
+        plan = self._plan()
+        row = plan["rows"][0]
+        row.update(
+            {
+                "before_labels": sorted(row["desired_labels"]),
+                "node_id": "I_286",
+                "primary_milestone": "EMBER-03",
+            }
+        )
+        live = {
+            "repository": "wordingone/ember",
+            "open_items": [
+                {
+                    "item_type": "issue",
+                    "number": 286,
+                    "node_id": "I_286",
+                    "title": "ignored because test patches hashes below",
+                    "body": "",
+                    "comments": [],
+                    "labels": list(row["before_labels"]),
+                    "milestone": "EMBER-03",
+                }
+            ],
+        }
+        row["title_sha256"] = engine._sha(live["open_items"][0]["title"])
+        row["body_sha256"] = hashlib.sha256(b"").hexdigest()
+        row["comments_sha256"] = hashlib.sha256(b"").hexdigest()
+        plan["plan_sha256"] = engine._sha(
+            {
+                key: value
+                for key, value in plan.items()
+                if key not in {"authority", "plan_sha256"}
+            }
+        )
+        with mock.patch("scripts.github.work_items.engine.apply_plan") as mutation:
+            receipt = apply_plan(
+                plan, live_snapshot=live, wrapper=Path("unused.ps1"), confirm=True
+            )
+        mutation.assert_not_called()
+        self.assertEqual("APPLIED_NO_CHANGES", receipt["status"])
+        self.assertEqual(1, receipt["verified_issue_count"])
 
     def test_review_source_or_row_hash_drift_fails_closed(self) -> None:
         for field, value in (
