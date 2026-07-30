@@ -2426,11 +2426,16 @@ impl Daemon {
         };
         #[cfg(not(windows))]
         {
-            let current =
-                inspect_process(row.pid).map_err(|_| EmberLabError::ProcessUnavailable {
-                    job_id: job_id.into(),
-                    pid: row.pid,
-                })?;
+            let current = match inspect_process(row.pid) {
+                Ok(current) => current,
+                Err(_) => {
+                    self.mark_exited_unknown(job_id, &row, "job_reconciled_exited_unknown")?;
+                    return Err(EmberLabError::ProcessUnavailable {
+                        job_id: job_id.into(),
+                        pid: row.pid,
+                    });
+                }
+            };
             if current.start_token != row.start_token
                 || !same_executable(&current.executable, &row.executable)
             {

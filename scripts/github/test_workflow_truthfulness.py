@@ -26,6 +26,19 @@ class WorkflowTruthfulnessTests(unittest.TestCase):
         self.assertFalse((WORKFLOWS / "branch-hygiene-audit.yml").exists())
         self.assertFalse((WORKFLOWS / "release-rehearsal.yml").exists())
 
+    def test_main_ci_accepts_honest_blocked_custody_but_never_red(self) -> None:
+        workflow = (WORKFLOWS / "ci-main.yml").read_text(encoding="utf-8")
+
+        self.assertIn(
+            "verify_c0_failure_class_ledger.py --require-non-red",
+            workflow,
+        )
+        self.assertNotIn(
+            "\n          python -B scripts/ember_01_custody/"
+            "verify_c0_failure_class_ledger.py\n",
+            workflow,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
