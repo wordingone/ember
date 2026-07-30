@@ -5,9 +5,7 @@
 
 from __future__ import annotations
 
-import base64
 import copy
-import hashlib
 import json
 import sys
 import tempfile
@@ -17,16 +15,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from scripts.oldest_issue_disposition import (  # noqa: E402
-    PacketError,
+from scripts.oldest_issue_disposition import (
     _AUTHORITY,
+    PacketError,
     build_capture,
     build_packet,
     canonical_sha256,
     validate_capture,
     validate_packet,
 )
-
 
 MASTER = "a" * 40
 
@@ -178,9 +175,7 @@ class OldestIssueDispositionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             _raw_capture(root)
-            post = json.loads(
-                (root / "issues_post.json").read_text(encoding="utf-8")
-            )
+            post = json.loads((root / "issues_post.json").read_text(encoding="utf-8"))
             post[0][0]["updated_at"] = "2026-07-25T00:00:01Z"
             _write_json(root / "issues_post.json", post)
             with self.assertRaisesRegex(PacketError, "issue population drift"):
@@ -231,14 +226,14 @@ class OldestIssueDispositionTests(unittest.TestCase):
 
         duplicate = copy.deepcopy(decisions)
         duplicate["rows"][0]["source_clause_inventory"].append(
-            copy.deepcopy(
-                duplicate["rows"][0]["source_clause_inventory"][0]
-            )
+            copy.deepcopy(duplicate["rows"][0]["source_clause_inventory"][0])
         )
         with self.assertRaisesRegex(PacketError, "source clause coverage"):
             build_packet(capture, duplicate)
 
-    def test_close_requires_authority_review_and_clean_production_evidence(self) -> None:
+    def test_close_requires_authority_review_and_clean_production_evidence(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             _raw_capture(root)
@@ -259,9 +254,7 @@ class OldestIssueDispositionTests(unittest.TestCase):
                 "commit_sha": "b" * 40,
                 "path": "tests/test_production.py",
                 "blob_sha1": "c" * 40,
-                "test_command": (
-                    "python -B -m pytest -q tests/test_production.py"
-                ),
+                "test_command": ("python -B -m pytest -q tests/test_production.py"),
                 "production_shaped": True,
                 "clean_checkout": True,
                 "passed": True,
@@ -271,6 +264,7 @@ class OldestIssueDispositionTests(unittest.TestCase):
             build_packet(capture, decisions)
         row["authority_review"] = {
             "reviewer": "delegated-authority",
+            "review_provenance": "INDEPENDENT_DELEGATED",
             "verdict": "PASS",
             "citation": "mailbox:999",
             "reviewed_commit_sha": "b" * 40,
@@ -278,10 +272,19 @@ class OldestIssueDispositionTests(unittest.TestCase):
         packet = build_packet(capture, decisions)
         validate_packet(packet, expected_master=MASTER)
 
+        solo_decisions = copy.deepcopy(decisions)
+        solo_decisions["rows"][0]["authority_review"] = {
+            "reviewer": "self-review-authority",
+            "review_provenance": "SELF_ONLY",
+            "verdict": "PASS",
+            "citation": "https://github.com/wordingone/ember/pull/1200",
+            "reviewed_commit_sha": "b" * 40,
+        }
+        solo_packet = build_packet(capture, solo_decisions)
+        validate_packet(solo_packet, expected_master=MASTER)
+
         tampered = copy.deepcopy(packet)
-        tampered["receipts"][0]["close_evidence"][0][
-            "clean_checkout"
-        ] = False
+        tampered["receipts"][0]["close_evidence"][0]["clean_checkout"] = False
         with self.assertRaises(PacketError):
             validate_packet(tampered, expected_master=MASTER)
 
@@ -329,9 +332,7 @@ class OldestIssueDispositionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             _raw_capture(root)
-            pages = json.loads(
-                (root / "issues_pre.json").read_text(encoding="utf-8")
-            )
+            pages = json.loads((root / "issues_pre.json").read_text(encoding="utf-8"))
             pages[0][0].pop("created_at")
             _write_json(root / "issues_pre.json", pages)
             with self.assertRaises(PacketError):
