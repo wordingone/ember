@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """P-3 FORENSIC (issue #513, CPU-only, no GPU).
 
 Runs the pre-registered P-3 forensic against the 2026-07-08 rung2-event
@@ -130,8 +133,9 @@ def main() -> int:
             "expectation_matched": old_resolver_missing_or_zero,
         },
         "new_resolver": {
-            "path": "resolve_gate_momentum_buffer: opt_state['muon']['state'][param_id]"
-                    "['momentum_buffer'], param_id = list(model_state.keys()).index(gate_key)",
+            "path": "resolve_gate_momentum_buffer: build_optimizer_id_maps(model_state=...)"
+                    "['muon_name_to_id'][gate_key] -> "
+                    "opt_state['muon']['state'][muon_local_id]['momentum_buffer']",
             "result_present": new_buf_present,
             "rms": new_buf_rms,
             "pre_registered_cached_reference_rms": CACHED_REFERENCE_RMS,

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """cbase_grow_rung2_stabilize.py — issue #480 LAUNCH SPEC: first stabilize leg
 for the rung-2 grown (ff=32768) model, Config C (micro_batch=1 + memmap
 optstate offload, MEASURED_PASS per receipts/cbase-grow-rung2-gpu-offload-
@@ -13,6 +16,15 @@ adjudicated law per receipts/cbase-grow-rung2-event-b513-b4rerun-b3.json,
 transplant cos_alignment=0.9536 >= 0.82) -- NOT reset_optimizer_on_resume
 (Branch B), which is what cbase_grow_live.py's post-grow segment currently
 hardcodes for the GROW step (a different boundary than this STABILIZE leg).
+
+CORRECTION (2026-07-30, issue #580 PR B): the historical disclosure below
+is retained as provenance, not current truth. The asserted 45-tensor gap was
+a GLOBAL-model-id versus optimizer-local-id comparison artifact. The shared
+checker now resolves each parameter through build_optimizer_id_maps; the
+corrected result is zero missing optimizer slots, and the 20-layer transplant
+ruling is established by the dated sibling evidence. This historical launcher
+is execution-denied by current policy; no path may revive its partial-hybrid
+claim or emit a new receipt under that superseded interpretation.
 
 DISCLOSED DEVIATION (team-lead ruling, 2026-07-09, receipts/cbase-grow-
 rung2-stabilize-transplant-wall-diagnostic-20260709T130000Z.json): the seed
@@ -82,7 +94,10 @@ from cpu_offload_adamw import (                                       # noqa: E4
 from rung_boundary_momentum_transplant import (                       # noqa: E402
     transplant_muon_ff_momentum, BOUNDARY_POLICY,
 )
-from p5_ratio_audit.run_p5_audit import EngagementFailure              # noqa: E402
+from p5_ratio_audit.run_p5_audit import (                              # noqa: E402
+    EngagementFailure,
+    enumerate_missing_optimizer_state_ids,
+)
 from receipt_write import checked_write                                # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
@@ -633,7 +648,7 @@ LR_MUON = 0.02  # event convention per b1m lr_used; NO eta/sqrt(r_n) correction 
 N_LAYERS = 20  # true model depth -- unchanged, net2net FF-widening never touches layer count
 FF_GROWN = 32768
 
-# ---- disclosed deviation: pinned to THIS incident's exact truncation shape --
+# ---- superseded historical partition retained for receipt comparison only ---
 # (receipts/cbase-grow-rung2-stabilize-transplant-wall-diagnostic-20260709T130000Z.json)
 N_LAYERS_VERIFIED_MOMENTUM = 15  # layers 0-14: real pre-grow muon FF momentum, transplant applies
 TRUNCATED_PARAM_ID_START = 140   # layer 15's FF + layers 16-19 + tail: zero optimizer state anywhere
@@ -782,15 +797,30 @@ class TruncationShapeMismatch(RuntimeError):
 
 
 def _enumerate_missing_optimizer_state_ids(m_state: dict, o_state: dict) -> set[int]:
-    """Every global param id (index into m_state.keys(), the same convention
-    resolve_gate_momentum_buffer / #513 uses) with NO entry in either the
-    muon or the adamw optimizer state. Read-only forensics, no mutation."""
-    param_names = list(m_state.keys())
-    muon_state = o_state.get("muon", {}).get("state") or o_state.get("state", {})
-    adamw_state = o_state.get("adamw", {}).get("state") or {}
-    muon_ids = set(muon_state.keys())
-    adamw_ids = set(adamw_state.keys())
-    return {i for i in range(len(param_names)) if i not in muon_ids and i not in adamw_ids}
+    """Return missing global IDs after checking each optimizer's local IDs."""
+    return enumerate_missing_optimizer_state_ids(m_state, o_state)
+
+
+def _write_transplanted_muon_buffers(
+    model_state: dict,
+    muon_state: dict,
+    post_grow_momentum_state: dict,
+) -> list[dict]:
+    """Write transplanted buffers into Muon's local on-disk ID space."""
+    id_maps = ts.build_optimizer_id_maps(model_state=model_state)
+    written = []
+    for key, tensor in post_grow_momentum_state.items():
+        muon_local_id = id_maps["muon_name_to_id"].get(key)
+        if muon_local_id is None:
+            raise StagedCheckpointVerificationFailure(
+                f"transplanted tensor {key!r} is not Muon-routed")
+        entry = muon_state.get(muon_local_id)
+        if entry is None:
+            raise StagedCheckpointVerificationFailure(
+                f"Muon-local optimizer slot {muon_local_id} for {key!r} is missing")
+        entry["momentum_buffer"] = tensor
+        written.append({"key": key, "muon_local_id": muon_local_id})
+    return written
 
 
 def build_transplanted_resume_checkpoint(seed_ckpt_dir: str, grown_cache_path: str,
@@ -862,17 +892,16 @@ def build_transplanted_resume_checkpoint(seed_ckpt_dir: str, grown_cache_path: s
     # copy.deepcopy(o_state) -- avoids briefly holding two full optimizer-state
     # copies at once. m_state's tensors are likewise unused past param_names
     # (the save below uses grown_sd_bf16, not m_state) -- freed immediately.
-    param_names = list(m_state.keys())
-    del m_state
     grown_opt_state = o_state
     muon_state = grown_opt_state.get("muon", {}).get("state")
     if muon_state is None:
         muon_state = grown_opt_state.setdefault("state", {})
-    written = []
-    for key, tensor in transplant["post_grow_momentum_state_dict"].items():
-        param_id = param_names.index(key)
-        muon_state[param_id]["momentum_buffer"] = tensor
-        written.append({"key": key, "param_id": param_id})
+    written = _write_transplanted_muon_buffers(
+        m_state,
+        muon_state,
+        transplant["post_grow_momentum_state_dict"],
+    )
+    del m_state
 
     # drop transplant's own metadata refs to the now-copied tensors + force a
     # collection before the staged save below -- headroom is thin on this
@@ -1060,8 +1089,8 @@ def materialize_optimizer_grown_bundle(seed_ckpt_dir: str, staged_ckpt_dir: str,
     optimizer.pt freshly materialized, sourced from seed_ckpt_dir via the
     UNMODIFIED rung_boundary_momentum_transplant.transplant_muon_ff_momentum
     (n_layers=20, its own docstring's full "60 = n_layers*3" scope), fed
-    through a corrected LOCAL->GLOBAL remap so that shared, already-
-    adjudicated function reads the right source tensor per name. Per-
+    directly in the checkpoint's Muon-local convention so the shared,
+    already-adjudicated resolver reads the right source tensor per name. Per-
     tensor rule per the #577 ruling: probe source RMS; RMS==0 -> Branch-B
     reset at grown shape; RMS>0 -> Branch-A pushforward -- executed
     uniformly (transplant_muon_ff_momentum's own EngagementFailure fires,
@@ -1084,7 +1113,6 @@ def materialize_optimizer_grown_bundle(seed_ckpt_dir: str, staged_ckpt_dir: str,
     muon_local_names = [n for n, _ in muon_named]
     adamw_local_names = [n for n, _ in adamw_named]
 
-    seed_param_names = list(seed_m.keys())  # GLOBAL ordering, used only for the remap below
     seed_muon_state = seed_o.get("muon", {}).get("state") or {}
     seed_adamw_state = seed_o.get("adamw", {}).get("state") or {}
 
@@ -1094,17 +1122,8 @@ def materialize_optimizer_grown_bundle(seed_ckpt_dir: str, staged_ckpt_dir: str,
             f"proceed with an unverified index assumption: muon {len(seed_muon_state)} vs "
             f"{len(muon_local_names)}, adamw {len(seed_adamw_state)} vs {len(adamw_local_names)}")
 
-    # remap the LOCAL-keyed seed muon state into the GLOBAL keying
-    # resolve_gate_momentum_buffer expects, so the shared, unmodified
-    # transplant function resolves the correct source tensor per name.
-    remapped_muon_state = {
-        seed_param_names.index(muon_local_names[local_idx]): entry
-        for local_idx, entry in seed_muon_state.items()
-    }
-    pre_opt_state_remapped = {"muon": {"state": remapped_muon_state}}
-
     transplant = transplant_muon_ff_momentum(
-        seed_m, pre_opt_state_remapped, n_layers=20, lr_muon=lr_muon,
+        seed_m, seed_o, n_layers=20, lr_muon=lr_muon,
         eps_sigma=0.0, eps_seed=0)
 
     grown_muon_state = dict(seed_muon_state)  # bitwise carry, all 140 local entries as a start
@@ -1255,16 +1274,20 @@ def momentum_norm_by_group(ckpt_dir: str) -> dict:
     just-written block checkpoint's own optimizer.pt."""
     import torch
     m_state, o_state, _r, _manifest = ts.load_checkpoint(ckpt_dir)
-    param_names = list(m_state.keys())
+    id_maps = ts.build_optimizer_id_maps(model_state=m_state)
     muon_state = o_state.get("muon", {}).get("state") or o_state.get("state", {})
     transplanted_norm_sq, transplanted_n = 0.0, 0
     reset_norm_sq, reset_n = 0.0, 0
-    for pid, name in enumerate(param_names):
-        st = muon_state.get(pid)
+    for muon_local_id, st in muon_state.items():
+        name = id_maps["muon_id_to_name"].get(muon_local_id)
+        if name is None:
+            raise StagedCheckpointVerificationFailure(
+                f"unknown Muon-local optimizer slot {muon_local_id!r}")
         if not st or "momentum_buffer" not in st or st["momentum_buffer"] is None:
             continue
         n = float(st["momentum_buffer"].float().norm().item())
-        if pid < TRUNCATED_PARAM_ID_START:
+        global_id = id_maps["global_name_to_id"][name]
+        if global_id < TRUNCATED_PARAM_ID_START:
             transplanted_norm_sq += n * n
             transplanted_n += 1
         else:
