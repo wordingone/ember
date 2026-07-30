@@ -101,6 +101,31 @@ jobs:
             errors,
         )
 
+    def test_pull_request_write_job_cannot_execute_foreign_master_checkout(self) -> None:
+        path = self._write(
+            """
+name: foreign-repository-master-is-not-trusted
+on: pull_request
+permissions:
+  issues: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: attacker/controlled
+          ref: master
+      - run: python -B scripts/github/labels.py apply
+"""
+        )
+        errors = workflow_policy.validate_workflow(path)
+        self.assertTrue(
+            any("write-capable PR job executes pull-request code" in e for e in errors),
+            errors,
+        )
+
     def test_dependabot_or_fork_token_reduction_is_not_a_safety_proof(self) -> None:
         path = self._write(
             """

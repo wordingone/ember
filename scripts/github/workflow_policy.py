@@ -76,6 +76,12 @@ def _checkout_uses_pr_subject(step: dict[str, Any]) -> bool:
     with_values = step.get("with")
     if not isinstance(with_values, dict):
         with_values = {}
+    repository = str(with_values.get("repository", "")).strip()
+    trusted_repositories = {
+        "",
+        "${{ github.repository }}",
+        "wordingone/ember",
+    }
     ref = str(with_values.get("ref", "")).strip()
     if not ref:
         return True
@@ -83,9 +89,9 @@ def _checkout_uses_pr_subject(step: dict[str, Any]) -> bool:
         return True
     trusted_refs = {"master", "refs/heads/master"}
     if ref in trusted_refs:
-        return False
+        return repository not in trusted_repositories
     if "pull_request.base.sha" in ref or "github.event.repository.default_branch" in ref:
-        return False
+        return repository not in trusted_repositories
     return True
 
 
