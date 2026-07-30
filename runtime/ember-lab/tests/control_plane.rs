@@ -173,7 +173,10 @@ fn detached_job_is_adopted_stopped_and_exported_after_daemon_reopen() {
     let reopened = Daemon::open(&db).unwrap();
     let adopted = reopened.adopt_job("sleep-job").unwrap();
     assert_eq!(adopted.pid, started.pid);
+    #[cfg(windows)]
     assert!(reopened.has_retained_process_handle("sleep-job"));
+    #[cfg(not(windows))]
+    assert!(!reopened.has_retained_process_handle("sleep-job"));
     assert_eq!(
         reopened.job_state("sleep-job").unwrap(),
         Some(JobState::Running)

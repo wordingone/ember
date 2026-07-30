@@ -410,10 +410,20 @@ def main(argv: list[str] | None = None) -> int:
         default=REPO_ROOT,
         help="Repo root guard_ref paths resolve against.",
     )
+    parser.add_argument(
+        "--require-non-red",
+        action="store_true",
+        help=(
+            "Exit zero for a structurally valid BLOCKED or CLOSED ledger; "
+            "continue to reject RED. This does not convert BLOCKED into CLOSED."
+        ),
+    )
     args = parser.parse_args(argv)
 
     verdict = verify(args.ledger, args.repo_root)
     print(json.dumps(verdict, indent=2, sort_keys=True))
+    if args.require_non_red:
+        return 0 if verdict["verdict"] in {"BLOCKED", "CLOSED"} else 1
     return 0 if verdict["verdict"] == "CLOSED" else 1
 
 
