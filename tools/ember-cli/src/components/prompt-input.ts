@@ -21,13 +21,18 @@ export const QUEUE_MAX_VISIBLE = 3;
 
 export type InputMode      = "prompt" | "bash";
 export type PermissionMode = "bypass" | "regular" | "plan";
+export const DEFAULT_PROMPT_PERMISSION_MODE: PermissionMode = "regular";
 
 export const MODE_GLYPHS: Record<InputMode, string> = {
   prompt: "❯", // ❯
   bash:   "!",
 };
 
-export const PERMISSION_MODES: PermissionMode[] = ["bypass", "regular", "plan"];
+export const PERMISSION_MODES: PermissionMode[] = [
+  DEFAULT_PROMPT_PERMISSION_MODE,
+  "bypass",
+  "plan",
+];
 
 // ---------------------------------------------------------------------------
 // Types
@@ -117,6 +122,10 @@ export interface PromptInputDeps {
    * pass false for the duration.
    */
   keyboardActive?:    boolean;
+  /** Controlled permission mode for callers that own the execution authority state. */
+  permissionMode?:    PermissionMode;
+  /** Controlled cycle callback; prevents a second internal authority state from drifting. */
+  onPermissionModeCycle?: () => void;
 }
 
 export interface QueueDisplay {
@@ -322,7 +331,8 @@ export function usePromptInput(
   // computes a mutually-consistent pair in one reducer call, rather than two separate useState
   // calls racing against each other across renders.
   const [tc,        setTc]        = useState<TextCursor>({ text: "", cursor: 0 });
-  const [permMode,  setPermMode]  = useState<PermissionMode>("bypass");
+  const [internalPermMode, setInternalPermMode] = useState<PermissionMode>(DEFAULT_PROMPT_PERMISSION_MODE);
+  const permMode = deps.permissionMode ?? internalPermMode;
   const [pasted,    setPasted]    = useState<PastedContents | null>(null);
   const [isStashed, setIsStashed] = useState(false);
   const stashRef = useRef(new StashManager());
@@ -413,8 +423,12 @@ export function usePromptInput(
   const getSnapshot = useCallback((): TextCursor => tcRef.current, []);
 
   const cyclePermissionMode = useCallback(() => {
-    setPermMode(m => nextPermissionMode(m));
-  }, []);
+    if (deps.onPermissionModeCycle) {
+      deps.onPermissionModeCycle();
+      return;
+    }
+    setInternalPermMode(m => nextPermissionMode(m));
+  }, [deps.onPermissionModeCycle]);
 
   const toggleFastMode = useCallback(() => {
     fastRef.current.toggle(Date.now());

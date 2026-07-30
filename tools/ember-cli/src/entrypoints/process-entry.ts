@@ -741,6 +741,18 @@ export interface MainOptions {
   selectedModelContractFn?: (decision: ModelSeatDecision) => SelectedModelContract | undefined;
 }
 
+export function freshInteractiveReplConfig(model: string): {
+  model: string;
+  permissionMode: "interactive";
+  baseSystemPrompt: string;
+} {
+  return {
+    model,
+    permissionMode: "interactive",
+    baseSystemPrompt: "",
+  };
+}
+
 // ---------------------------------------------------------------------------
 // main — the fully-wired entry point (called by boot in main.ts)
 // ---------------------------------------------------------------------------
@@ -1196,11 +1208,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   // today's process.cwd() only if none of those anchors find it (e.g. a genuinely
   // unrelated project directory), so this never regresses a non-ember working directory.
   const replProps = {
-    config: {
-      model:            process.env["EMBER_MODEL_NAME"] ?? "ember",
-      permissionMode:   "bypass" as const,
-      baseSystemPrompt: "",
-    },
+    config: freshInteractiveReplConfig(process.env["EMBER_MODEL_NAME"] ?? "ember"),
     cwd:    resolveEmberSourceRootOrCwd({}, "[ember-cli]"),
     onExit: (): void => { resolveExit(); },
   };
