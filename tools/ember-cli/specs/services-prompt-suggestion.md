@@ -1,8 +1,17 @@
+<!--
+goal_id: EMBER-02
+workstream_id: EMBER-02A
+next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+-->
+
 # Spec — prompt-suggestion service (task #48)
 
 Status: SHIPPED — implemented as src/services/prompt-suggestion.ts (+ prompt-suggestion.test.ts), landed via PR #199. Spec retained as the component's spec node per issue #567. The original avir-cli had 29 features across these two files (promptSuggestion.ts:
 11, speculation.ts: 18). This spec derives behavior from the behavioral mapping only —
 never from the predecessor source tree.
+
+Consumer: `tools/ember-cli/src/services/prompt-suggestion.ts`
+Consumer: `tools/ember-cli/src/services/speculation.ts`
 
 Clean-room: build from THIS spec + existing ember-cli interfaces only. No founder/user
 names, no predecessor-stack lineage, no avir-cli vendor names in code or comments.
