@@ -61,6 +61,10 @@ _ISSUE_KEYS = {
     "comments",
     "source_stability",
 }
+_ISSUE_KEYS_WITH_COMMENT_COUNT_CONTRADICTION = _ISSUE_KEYS | {
+    "comment_count_contradiction"
+}
+
 _COMMENT_KEYS = {
     "id",
     "url",
@@ -453,12 +457,13 @@ def build_capture(
         )
         if comments_pre != comments_post:
             raise PacketError(f"comment population drift for issue {number}")
+        comment_count_contradiction = None
         if len(comments_pre) != population_row["comment_count"]:
-            raise PacketError(
-                f"comment count mismatch for issue {number}: "
-                f"API={population_row['comment_count']} "
-                f"captured={len(comments_pre)}"
-            )
+            comment_count_contradiction = {
+                "code": "REST_METADATA_COMMENT_COUNT_MISMATCH",
+                "metadata_count": population_row["comment_count"],
+                "endpoint_count": len(comments_pre),
+            }
         source_evidence[comments_pre_path.name] = _file_sha256(comments_pre_path)
         source_evidence[comments_post_path.name] = _file_sha256(comments_post_path)
         pagination["comments"].append(
@@ -474,6 +479,8 @@ def build_capture(
             if key != "is_pull_request"
         }
         issue["comments"] = comments_pre
+        if comment_count_contradiction is not None:
+            issue["comment_count_contradiction"] = comment_count_contradiction
         issue["source_stability"] = {
             "pre_sha256": canonical_sha256(population_row),
             "post_sha256": canonical_sha256(population_row),
@@ -563,7 +570,12 @@ def _validate_comment(value: Any, *, field: str) -> dict[str, Any]:
 def _validate_capture_issue(value: Any, *, index: int) -> dict[str, Any]:
     field = f"capture.issues[{index}]"
     row = dict(_mapping(value, field=field))
-    _strict_keys(row, _ISSUE_KEYS, field=field)
+    actual_keys = set(row)
+    if actual_keys not in (
+        _ISSUE_KEYS,
+        _ISSUE_KEYS_WITH_COMMENT_COUNT_CONTRADICTION,
+    ):
+        raise PacketError(f"{field} has invalid keys")
     _integer(row["number"], field=f"{field}.number", minimum=1)
     _text(row["title"], field=f"{field}.title")
     _sha256(row["body_sha256"], field=f"{field}.body_sha256")
@@ -588,8 +600,33 @@ def _validate_capture_issue(value: Any, *, index: int) -> dict[str, Any]:
             _list(row["comments"], field=f"{field}.comments")
         )
     ]
+    contradiction = row.get("comment_count_contradiction")
     if len(comments) != count:
-        raise PacketError(f"{field}.comment_count mismatch")
+        if contradiction is None:
+            raise PacketError(f"{field}.comment_count mismatch")
+        contradiction_row = _mapping(
+            contradiction,
+            field=f"{field}.comment_count_contradiction",
+        )
+        _strict_keys(
+            contradiction_row,
+            {"code", "metadata_count", "endpoint_count"},
+            field=f"{field}.comment_count_contradiction",
+        )
+        if contradiction_row["code"] != "REST_METADATA_COMMENT_COUNT_MISMATCH":
+            raise PacketError(f"{field}.comment_count_contradiction code is invalid")
+        metadata_count = _integer(
+            contradiction_row["metadata_count"],
+            field=f"{field}.comment_count_contradiction.metadata_count",
+        )
+        endpoint_count = _integer(
+            contradiction_row["endpoint_count"],
+            field=f"{field}.comment_count_contradiction.endpoint_count",
+        )
+        if metadata_count != count or endpoint_count != len(comments):
+            raise PacketError(f"{field}.comment_count_contradiction mismatch")
+    elif contradiction is not None:
+        raise PacketError(f"{field}.comment_count_contradiction is unnecessary")
     identifiers = [comment["id"] for comment in comments]
     if len(identifiers) != len(set(identifiers)):
         raise PacketError(f"{field}.comments contains duplicate IDs")
@@ -626,7 +663,10 @@ def validate_capture(
     capture = dict(_mapping(value, field="capture"))
     actual_capture_keys = set(capture)
     legacy_capture_keys = _CAPTURE_KEYS - {"cursor"}
-    if actual_capture_keys != _CAPTURE_KEYS and actual_capture_keys != legacy_capture_keys:
+    if (
+        actual_capture_keys != _CAPTURE_KEYS
+        and actual_capture_keys != legacy_capture_keys
+    ):
         raise PacketError("capture has invalid keys")
     if capture["authority"] != _AUTHORITY:
         raise PacketError("capture authority binding is invalid")
@@ -652,9 +692,7 @@ def validate_capture(
         {"after_created_at", "after_issue_number"},
         field="capture.cursor",
     )
-    if (cursor["after_created_at"] is None) != (
-        cursor["after_issue_number"] is None
-    ):
+    if (cursor["after_created_at"] is None) != (cursor["after_issue_number"] is None):
         raise PacketError("capture cursor fields must be null or populated together")
     if cursor["after_created_at"] is not None:
         _timestamp(
