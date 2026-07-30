@@ -1,3 +1,7 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 """exp711_intervals.py -- #711 ordering-screen CPU apparatus, component 1:
 per-source global token intervals + scorer reservation intervals.
 
@@ -40,7 +44,9 @@ from datetime import datetime, timezone
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(REPO, "tools", "ember-restart-3b"))
 
+from frozen_tokenizer_decoder import attach_frozen_bytelevel_decoder  # noqa: E402
 from receipt_write import checked_write  # noqa: E402
 import token_shards_v0 as tsv0  # noqa: E402
 from a1_predicate_scan import load_stripped_tokenizer  # noqa: E402
@@ -322,22 +328,9 @@ def _wire_bytelevel_decoder(tk, tok_path: str) -> dict:
     tokenizer's own documented encode-side transform. On-disk bytes
     untouched; this is the exact same class of in-memory-only fix as
     load_stripped_tokenizer's orphaned-merge drop."""
-    d = json.load(open(tok_path, encoding="utf-8"))
-    pre_tok = d.get("pre_tokenizer") or {}
-    if pre_tok.get("type") != "ByteLevel":
-        raise ValueError(
-            "DECODER_WIRING_REFUSED: tokenizer.json pre_tokenizer.type is "
-            f"{pre_tok.get('type')!r}, not ByteLevel -- refusing to guess "
-            "a decoder for an unrecognized pre-tokenization scheme")
-    if d.get("decoder") is not None:
-        # Already has a decoder on disk; trust it, don't override.
-        return {"attached": False, "reason": "decoder already present on disk"}
-    from tokenizers import decoders
-    tk.decoder = decoders.ByteLevel()
-    return {"attached": True,
-            "reason": "on-disk decoder is null; attached decoders.ByteLevel() "
-                      "in-memory as the canonical inverse of the on-disk "
-                      "ByteLevel pre_tokenizer"}
+    with open(tok_path, "rb") as tokenizer_file:
+        tokenizer_bytes = tokenizer_file.read()
+    return attach_frozen_bytelevel_decoder(tk, tokenizer_bytes)
 
 
 def _open_stream(shard_dir=SHARD_DIR_DEFAULT, cache_dir=MMAP_CACHE_DIR_DEFAULT,
