@@ -10,8 +10,8 @@
       "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
       "workstream_id": "EMBER-02A"
     },
-    "capture_sha256": "c09466a63a25fd447c2327f5e913f5b14f9dc7b98d29381e10b90181bf262edc",
-    "captured_at": "2026-07-30T12:31:58Z",
+    "capture_sha256": "f7c2c08d549d9ead5ad6c9643f44dc185d8c94ec0276c0bc7e098ac29b5d27e0",
+    "captured_at": "2026-07-30T12:54:03Z",
     "cursor": {
       "after_created_at": "2026-07-11T01:29:33Z",
       "after_issue_number": 739
@@ -950,7 +950,7 @@
       {
         "author": "wordingone",
         "body_sha256": "82110f8fafcbf60bfeb719bde4e23ba795412adb12c0058f4237a0c9343adfbe",
-        "comment_count": 4,
+        "comment_count": 5,
         "comments": [
           {
             "author": "wordingone",
@@ -983,6 +983,14 @@
             "id": 5129816135,
             "updated_at": "2026-07-30T10:43:33Z",
             "url": "https://github.com/wordingone/ember/issues/805#issuecomment-5129816135"
+          },
+          {
+            "author": "wordingone",
+            "body_sha256": "1722ad7d5ce2d67c63825f18aec7d7fdc8fbb9fe49f7d5780e6598beaccee7ab",
+            "created_at": "2026-07-30T12:49:50Z",
+            "id": 5131026241,
+            "updated_at": "2026-07-30T12:49:50Z",
+            "url": "https://github.com/wordingone/ember/issues/805#issuecomment-5131026241"
           }
         ],
         "created_at": "2026-07-11T17:36:53Z",
@@ -996,14 +1004,14 @@
         ],
         "number": 805,
         "source_stability": {
-          "comments_post_sha256": "61b6d3c8aa38a0c7b1d5dde121102da6d454553ccd5403a537dfc7af2088ce71",
-          "comments_pre_sha256": "61b6d3c8aa38a0c7b1d5dde121102da6d454553ccd5403a537dfc7af2088ce71",
-          "post_sha256": "c5fbeca0ffba2a857f9548709cadf9613973366f19742be34e1d0110dc6f01ec",
-          "pre_sha256": "c5fbeca0ffba2a857f9548709cadf9613973366f19742be34e1d0110dc6f01ec"
+          "comments_post_sha256": "59ad4d1fdb0631cae0d9bcd72e348dcee7a7d5b86d7f1ab8c8792994c3a9b05a",
+          "comments_pre_sha256": "59ad4d1fdb0631cae0d9bcd72e348dcee7a7d5b86d7f1ab8c8792994c3a9b05a",
+          "post_sha256": "0e0475890acc5d47bb3901f5a8bcf7f8a16c5e846ec464443767f8ad0059324f",
+          "pre_sha256": "0e0475890acc5d47bb3901f5a8bcf7f8a16c5e846ec464443767f8ad0059324f"
         },
         "state": "open",
         "title": "Issue-close sweep loop: 274 open issues, refs-never-closes discipline has no matching close half",
-        "updated_at": "2026-07-30T10:43:33Z",
+        "updated_at": "2026-07-30T12:49:50Z",
         "url": "https://github.com/wordingone/ember/issues/805"
       },
       {
@@ -1228,7 +1236,7 @@
         "url": "https://github.com/wordingone/ember/issues/873"
       }
     ],
-    "master_sha": "d30cb9dfc87f1502ead2a9749519b74e23ce5f7a",
+    "master_sha": "40bca36516e8fce6ffad48f2036f743f433dc375",
     "open_issue_population": 154,
     "pagination": {
       "comments": [
@@ -1583,20 +1591,20 @@
             "complete": true,
             "page_count": 1,
             "page_lengths": [
-              4
+              5
             ],
             "page_size": 100,
-            "row_count": 4,
+            "row_count": 5,
             "terminal_page_short": true
           },
           "pre": {
             "complete": true,
             "page_count": 1,
             "page_lengths": [
-              4
+              5
             ],
             "page_size": 100,
-            "row_count": 4,
+            "row_count": 5,
             "terminal_page_short": true
           }
         },
@@ -1720,51 +1728,51 @@
     "schema_version": "ember-oldest-issue-capture-v1",
     "selection_sha256": "207a5ee1b1d1d629875bb0398a4e959f5bc4b104961c5d6e7241d55b4c0a3666",
     "source_evidence": {
-      "comments-748-post.json": "2dc5ed5371b9d7175847db30a96aa2af41d708bc9dd33f1dec9fe6efcd139c05",
-      "comments-748-pre.json": "2dc5ed5371b9d7175847db30a96aa2af41d708bc9dd33f1dec9fe6efcd139c05",
-      "comments-756-post.json": "145392d9870cb2368aaec40697403eaf2ad6e3b2f8ce0bc25e63b1a97c13ef92",
-      "comments-756-pre.json": "145392d9870cb2368aaec40697403eaf2ad6e3b2f8ce0bc25e63b1a97c13ef92",
-      "comments-757-post.json": "84e7459b130d983b5591d8c0a709890114ba68c47a7702108dca88a014e95292",
-      "comments-757-pre.json": "84e7459b130d983b5591d8c0a709890114ba68c47a7702108dca88a014e95292",
-      "comments-760-post.json": "2dc5ed5371b9d7175847db30a96aa2af41d708bc9dd33f1dec9fe6efcd139c05",
-      "comments-760-pre.json": "2dc5ed5371b9d7175847db30a96aa2af41d708bc9dd33f1dec9fe6efcd139c05",
-      "comments-764-post.json": "299cafbec1bdf11421624505bd21b5c34e8a5d5752b4fd949297be8ef2afcc55",
-      "comments-764-pre.json": "299cafbec1bdf11421624505bd21b5c34e8a5d5752b4fd949297be8ef2afcc55",
-      "comments-774-post.json": "8ccdba76c1d6bb40b4bea4b821466ed2fc39d58af3be3fab401563d661bdf038",
-      "comments-774-pre.json": "8ccdba76c1d6bb40b4bea4b821466ed2fc39d58af3be3fab401563d661bdf038",
-      "comments-779-post.json": "2dc5ed5371b9d7175847db30a96aa2af41d708bc9dd33f1dec9fe6efcd139c05",
-      "comments-779-pre.json": "2dc5ed5371b9d7175847db30a96aa2af41d708bc9dd33f1dec9fe6efcd139c05",
-      "comments-782-post.json": "8bc608d5d5eae77bcd62a4fd218470ac42e6955536249290b6ef73251b8fcdce",
-      "comments-782-pre.json": "8bc608d5d5eae77bcd62a4fd218470ac42e6955536249290b6ef73251b8fcdce",
-      "comments-784-post.json": "aca175d926cf54e5b204662b21e0cefc96183542ab9513e51ffbc408bb809963",
-      "comments-784-pre.json": "aca175d926cf54e5b204662b21e0cefc96183542ab9513e51ffbc408bb809963",
-      "comments-785-post.json": "2dc5ed5371b9d7175847db30a96aa2af41d708bc9dd33f1dec9fe6efcd139c05",
-      "comments-785-pre.json": "2dc5ed5371b9d7175847db30a96aa2af41d708bc9dd33f1dec9fe6efcd139c05",
-      "comments-786-post.json": "ec28cfc95a9702d38ad90755abdbd5dbcc53706f37eadb0e8e277c6328b07a5f",
-      "comments-786-pre.json": "ec28cfc95a9702d38ad90755abdbd5dbcc53706f37eadb0e8e277c6328b07a5f",
-      "comments-787-post.json": "4b7aa118304160c5224148ccf6930c161a6d27c8cc660cc721705b743f2dcc70",
-      "comments-787-pre.json": "4b7aa118304160c5224148ccf6930c161a6d27c8cc660cc721705b743f2dcc70",
-      "comments-796-post.json": "bdc19e2f8485207d7b09fdd5faa892a4cf92609b1c0eb2f9d8bacb985672ceea",
-      "comments-796-pre.json": "bdc19e2f8485207d7b09fdd5faa892a4cf92609b1c0eb2f9d8bacb985672ceea",
-      "comments-798-post.json": "c8b0244f333ebd153111061facd69391b0f07463dcbbd19b20a2aed927a52dd4",
-      "comments-798-pre.json": "c8b0244f333ebd153111061facd69391b0f07463dcbbd19b20a2aed927a52dd4",
-      "comments-802-post.json": "2dc5ed5371b9d7175847db30a96aa2af41d708bc9dd33f1dec9fe6efcd139c05",
-      "comments-802-pre.json": "2dc5ed5371b9d7175847db30a96aa2af41d708bc9dd33f1dec9fe6efcd139c05",
-      "comments-805-post.json": "afaf34e34937efcfa8a8c45976c36c307e203c1371264d26f64e22aa3b3d03bd",
-      "comments-805-pre.json": "afaf34e34937efcfa8a8c45976c36c307e203c1371264d26f64e22aa3b3d03bd",
-      "comments-812-post.json": "d6898e5c0f3afd25005a13f4f7c1e48bc8fa014ab5a1b66534c5dbb79cfe1f91",
-      "comments-812-pre.json": "d6898e5c0f3afd25005a13f4f7c1e48bc8fa014ab5a1b66534c5dbb79cfe1f91",
-      "comments-869-post.json": "9facd8060502d57fcac535a441e3f4a9dd99f165b3faf06282ea1c00e1e86962",
-      "comments-869-pre.json": "9facd8060502d57fcac535a441e3f4a9dd99f165b3faf06282ea1c00e1e86962",
-      "comments-872-post.json": "2dc5ed5371b9d7175847db30a96aa2af41d708bc9dd33f1dec9fe6efcd139c05",
-      "comments-872-pre.json": "2dc5ed5371b9d7175847db30a96aa2af41d708bc9dd33f1dec9fe6efcd139c05",
-      "comments-873-post.json": "2dc5ed5371b9d7175847db30a96aa2af41d708bc9dd33f1dec9fe6efcd139c05",
-      "comments-873-pre.json": "2dc5ed5371b9d7175847db30a96aa2af41d708bc9dd33f1dec9fe6efcd139c05",
-      "issues_post.json": "9ae41bb25c419fa901352a8c5ed83a1c822e92e37776f06f4b91724deb4c87a6",
-      "issues_pre.json": "9ae41bb25c419fa901352a8c5ed83a1c822e92e37776f06f4b91724deb4c87a6"
+      "comments-748-post.json": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+      "comments-748-pre.json": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+      "comments-756-post.json": "4a0b2908386ef5147c086970a69a8f03eb5cddfde45562decf16a5d87ce87eb8",
+      "comments-756-pre.json": "4a0b2908386ef5147c086970a69a8f03eb5cddfde45562decf16a5d87ce87eb8",
+      "comments-757-post.json": "0a569c8e6661e456b2637f05fab094924347ee27f4f5b70165f6a32ffbd6431d",
+      "comments-757-pre.json": "0a569c8e6661e456b2637f05fab094924347ee27f4f5b70165f6a32ffbd6431d",
+      "comments-760-post.json": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+      "comments-760-pre.json": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+      "comments-764-post.json": "58266292f40e79c2d9933815e077ea86dd13a32a6f21e9597aa8bb5bc90cbd37",
+      "comments-764-pre.json": "58266292f40e79c2d9933815e077ea86dd13a32a6f21e9597aa8bb5bc90cbd37",
+      "comments-774-post.json": "7e278e21e3ccf85d6241f0e93a8b95164b8f6c0af5b3160cdd68d1de609c9e0d",
+      "comments-774-pre.json": "7e278e21e3ccf85d6241f0e93a8b95164b8f6c0af5b3160cdd68d1de609c9e0d",
+      "comments-779-post.json": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+      "comments-779-pre.json": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+      "comments-782-post.json": "4e96b89dbd09949ac4fb77a9d7bc3837f15f341f46a25aab50e84be03fbfb218",
+      "comments-782-pre.json": "4e96b89dbd09949ac4fb77a9d7bc3837f15f341f46a25aab50e84be03fbfb218",
+      "comments-784-post.json": "387d5e379edab4b37c7e681439af903cea734790c33e5a703384fff3859fe6f7",
+      "comments-784-pre.json": "387d5e379edab4b37c7e681439af903cea734790c33e5a703384fff3859fe6f7",
+      "comments-785-post.json": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+      "comments-785-pre.json": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+      "comments-786-post.json": "8ce72c688a14b47c2cc26a601eee564151db806bcc93bd80303479afa6905a03",
+      "comments-786-pre.json": "8ce72c688a14b47c2cc26a601eee564151db806bcc93bd80303479afa6905a03",
+      "comments-787-post.json": "35ad8401c59754ac7bbc14583f813bfea68adc58010ad5dbeecc5a0a6c22c3a0",
+      "comments-787-pre.json": "35ad8401c59754ac7bbc14583f813bfea68adc58010ad5dbeecc5a0a6c22c3a0",
+      "comments-796-post.json": "074b9cb8c5eb6cc3f7b1c06bb4c23e1dfe5f6f2827581bd2e501ad695f723d35",
+      "comments-796-pre.json": "074b9cb8c5eb6cc3f7b1c06bb4c23e1dfe5f6f2827581bd2e501ad695f723d35",
+      "comments-798-post.json": "4acdf024b1dffd43e2f5c16287bbaa72c66c84919493305ade13be9f60e83d25",
+      "comments-798-pre.json": "4acdf024b1dffd43e2f5c16287bbaa72c66c84919493305ade13be9f60e83d25",
+      "comments-802-post.json": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+      "comments-802-pre.json": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+      "comments-805-post.json": "0122dd4143eeb5c66f39925975397cc6badef1c55f2d03a2e77fe6a6032b01e8",
+      "comments-805-pre.json": "0122dd4143eeb5c66f39925975397cc6badef1c55f2d03a2e77fe6a6032b01e8",
+      "comments-812-post.json": "2e06433b5b6e317deeb448bf590e15a1223d75326f0f1315892b878b8446670d",
+      "comments-812-pre.json": "2e06433b5b6e317deeb448bf590e15a1223d75326f0f1315892b878b8446670d",
+      "comments-869-post.json": "089b84bfde9ca51369ea5bc5545754bfcf0b6da892ec6f8931aa2fe7bfd2c703",
+      "comments-869-pre.json": "089b84bfde9ca51369ea5bc5545754bfcf0b6da892ec6f8931aa2fe7bfd2c703",
+      "comments-872-post.json": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+      "comments-872-pre.json": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+      "comments-873-post.json": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+      "comments-873-pre.json": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+      "issues_post.json": "fd5f54b860287ce6bc1408c837ffeeaf41a2286186ab7c68a27a86a8c91e49bc",
+      "issues_pre.json": "fd5f54b860287ce6bc1408c837ffeeaf41a2286186ab7c68a27a86a8c91e49bc"
     }
   },
-  "capture_sha256": "c09466a63a25fd447c2327f5e913f5b14f9dc7b98d29381e10b90181bf262edc",
+  "capture_sha256": "f7c2c08d549d9ead5ad6c9643f44dc185d8c94ec0276c0bc7e098ac29b5d27e0",
   "deletion_or_issue_mutation_authority": "NOT_GRANTED",
   "disposition_counts": {
     "CLOSE": 1,
@@ -1772,8 +1780,8 @@
     "PARTIAL": 19,
     "SUPERSEDED": 0
   },
-  "master_sha": "d30cb9dfc87f1502ead2a9749519b74e23ce5f7a",
-  "packet_sha256": "2f9751afbdf99a7ac96d3d6b51b5c4523fd9572733073828c9169ee85e6489e7",
+  "master_sha": "40bca36516e8fce6ffad48f2036f743f433dc375",
+  "packet_sha256": "31a13aa18bd7dd6a7554d114b1192273aee94d70f0098fe0bf2460b68deb916f",
   "public_issue_mutation_performed": false,
   "receipts": [
     {
@@ -2543,7 +2551,7 @@
         "reviewer": "self-review-authority",
         "verdict": "PASS"
       },
-      "capture_issue_sha256": "87c951d818c70bef892586651a08da82b559717f843d6f8d41dcbbc5c7abd015",
+      "capture_issue_sha256": "24e257f92a27be50ccc943869b93c850382f40e35eeaad27e55afb9d1fe436e0",
       "close_evidence": [
         {
           "blob_sha1": "eb26fb917d731fbfec502d6fe689c8138b6bca7e",
@@ -2589,7 +2597,7 @@
       "disposition": "CLOSE",
       "issue_number": 805,
       "issue_url": "https://github.com/wordingone/ember/issues/805",
-      "receipt_sha256": "9314b0b40da33c03f90f5e9626614076171edd3a8b5e40e735c93a1cbabdc5d9",
+      "receipt_sha256": "8a22c865d3a2973f85b37ad1c9c9b895f7180c0265342b7f30344a4bcad6445c",
       "replacement_citation": null,
       "retained_lesson": null,
       "smallest_binding_action": null,
@@ -2622,6 +2630,12 @@
           "citation": "https://github.com/wordingone/ember/issues/805#issuecomment-5129816135",
           "source_kind": "issue_comment",
           "source_sha256": "917e279400578dca589a9e9fd2cdfefe02f4337d3c9a7db7d54156cee4266ee4",
+          "status": "BOUND"
+        },
+        {
+          "citation": "https://github.com/wordingone/ember/issues/805#issuecomment-5131026241",
+          "source_kind": "issue_comment",
+          "source_sha256": "1722ad7d5ce2d67c63825f18aec7d7fdc8fbb9fe49f7d5780e6598beaccee7ab",
           "status": "BOUND"
         }
       ],

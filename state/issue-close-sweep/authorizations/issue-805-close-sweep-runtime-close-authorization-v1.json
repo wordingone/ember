@@ -1,11 +1,11 @@
 {
-  "authorization_sha256": "22060a5800d6b9afdeea09746edc001101a6eb2836901de6a677aabe8af7065b",
+  "authorization_sha256": "81aed5795e0ffd752287c4e893ba06211af89ad13fb079ad866828f2eb68afc5",
   "citation": "https://github.com/wordingone/ember/pull/1207#issuecomment-5130759639",
   "close_issue_numbers": [
     805
   ],
   "packet_path": "receipts/oldest-issue-disposition/approved/issue-805-close-sweep-runtime-close-v1.json",
-  "packet_sha256": "2f9751afbdf99a7ac96d3d6b51b5c4523fd9572733073828c9169ee85e6489e7",
+  "packet_sha256": "31a13aa18bd7dd6a7554d114b1192273aee94d70f0098fe0bf2460b68deb916f",
   "repository": "wordingone/ember",
   "review_provenance": "SELF_ONLY",
   "reviewer": "self-review-authority",
