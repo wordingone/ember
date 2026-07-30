@@ -39,6 +39,16 @@ class _GreedyModel:
 
 
 class InferenceTests(unittest.TestCase):
+    def test_real_frozen_bytelevel_tokenizer_decodes_exact_text(self) -> None:
+        tokenizer_path = ROOT / "tokenizer" / "tokenizer.json"
+        tokenizer_sha256 = hashlib.sha256(tokenizer_path.read_bytes()).hexdigest()
+        tokenizer = load_frozen_tokenizer(
+            tokenizer_path,
+            expected_sha256=tokenizer_sha256,
+        )
+        text = " hello\nEmber"
+        self.assertEqual(tokenizer.decode(tokenizer.encode(text)), text)
+
     def test_frozen_tokenizer_encodes_split_prompt_decodes_answer_and_rejects_substitution(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
