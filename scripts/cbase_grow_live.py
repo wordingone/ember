@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """cbase_grow_live.py — REAL governed net2net warm-start growth run (C-GROW).
 
 Produces the C-GROW receipt scripts/ember_totality/test_c_grow.py (in
@@ -103,14 +106,14 @@ def _flops_per_step(param_count: int, batch: int, seq: int) -> float:
 def _backbone_param_estimate(hidden: int, layers: int, vocab: int, ff: int,
                               n_mtp: int = 0) -> int:
     """Dense-decoder param count at an explicit FF width — needed because the
-    frozen v0 config's model.params_estimate pin (368354304) is only valid at
+    frozen v0 config's base_excluding_mtp pin (368354304) is only valid at
     the DEFAULT intermediate_size=4096; this grow run trains at ff_seed/
     ff_grown, both potentially != 4096. Per layer: 4*hidden^2 attention
     (q/k/v/o, no GQA reduction here) + 3*hidden*ff SwiGLU MLP (gate/up/
     down_proj) + 2*hidden (input + post-attn RMSNorm), plus one final RMSNorm
     (hidden) and the tied vocab embedding (vocab*hidden), plus n_mtp untied
     aux-head linears (n_mtp*hidden*vocab — FF-independent, and NOT counted in
-    the certified params_estimate pin, so included here on top: conservative,
+    the base-excluding-MTP pin, so included here on top: conservative,
     never understates cost against the fixed G-budget micro-fit ceiling).
     Verified EXACT against the certified pin at hidden=1024/layers=20/
     vocab=32000/ff=4096/n_mtp=0 -> 368354304."""

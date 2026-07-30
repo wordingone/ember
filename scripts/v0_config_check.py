@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """v0_config_check.py — validator for the frozen v0 pretrain config contract.
 
 G-config row of docs/research/v0-launch-gate.md. The launch shim runs this
@@ -15,6 +18,91 @@ ASSEMBLY_SHA = ("a29d2e567f1853966cc72a4890eadc963164265e"
                 "4f24a89cadea24d9ff5b80c2")
 GOVERNOR_FLOOR = {"vram_fraction": 0.80, "margin_gib_floor": 1.5,
                   "pace_s_per_step": 0.05}
+BASE_EXCLUDING_MTP_PARAMS = 368_354_304
+MTP_AUX_PARAMS = 65_536_000
+REALIZED_PARAMS = 433_890_304
+MTP_MECHANISM_IDENTITY = {
+    "implementation": "independent_vocab_projection_heads",
+    "shared_hidden_state": True,
+    "sequential_state_transition": False,
+    "deepseek_sequential_mtp_equivalent": False,
+    "speculative_decode_drafter": False,
+}
+
+
+def _parameter_accounting_violations(cfg):
+    """Validate the historical v0 model's explicit parameter partition.
+
+    This is declaration-level accounting. Live storage-deduplicated ownership
+    proof remains a separate admission boundary tracked by issue #688.
+    """
+    v = []
+    model = cfg.get("model", {})
+    accounting = model.get("parameter_accounting")
+    if not isinstance(accounting, dict):
+        return ["model.parameter_accounting missing or not an object"]
+
+    base = accounting.get("base_excluding_mtp")
+    mtp_aux = accounting.get("mtp_aux")
+    realized = accounting.get("realized")
+    if base != BASE_EXCLUDING_MTP_PARAMS:
+        v.append(
+            f"parameter_accounting.base_excluding_mtp {base} != "
+            f"{BASE_EXCLUDING_MTP_PARAMS}"
+        )
+
+    mtp = cfg.get("objective", {}).get("mtp_aux_heads", {})
+    dimensions = (
+        mtp.get("n_heads"),
+        model.get("hidden"),
+        model.get("vocab"),
+    )
+    if not all(type(value) is int and value >= 0 for value in dimensions):
+        expected_aux = None
+        v.append("MTP n_heads, model.hidden, and model.vocab must be integers")
+    else:
+        expected_aux = dimensions[0] * dimensions[1] * dimensions[2]
+    if (
+        mtp_aux != MTP_AUX_PARAMS
+        or expected_aux is None
+        or mtp_aux != expected_aux
+    ):
+        v.append(
+            f"parameter_accounting.mtp_aux {mtp_aux} != "
+            f"n_heads * hidden * vocab ({expected_aux})"
+        )
+    if realized != REALIZED_PARAMS:
+        v.append(
+            f"parameter_accounting.realized {realized} != {REALIZED_PARAMS}"
+        )
+    if not all(type(value) is int for value in (base, mtp_aux, realized)):
+        v.append("parameter_accounting values must be integers")
+    elif base + mtp_aux != realized:
+        v.append(
+            "parameter_accounting base_excluding_mtp + mtp_aux != realized"
+        )
+
+    mechanism = mtp.get("mechanism_identity")
+    if mechanism != MTP_MECHANISM_IDENTITY:
+        v.append(
+            "objective.mtp_aux_heads.mechanism_identity must identify "
+            "independent vocab-projection heads, not sequential MTP or a drafter"
+        )
+    return v
+
+
+def parameter_accounting(cfg):
+    """Return the validated (base, MTP auxiliary, realized) parameter split."""
+    violations = _parameter_accounting_violations(cfg)
+    if violations:
+        raise ValueError("; ".join(violations))
+    accounting = cfg["model"]["parameter_accounting"]
+    return (
+        accounting["base_excluding_mtp"],
+        accounting["mtp_aux"],
+        accounting["realized"],
+    )
+
 
 
 def check(cfg, launch=False):
@@ -31,9 +119,10 @@ def check(cfg, launch=False):
     # param pin = the MEASURED c03 count from fp19-bench (its receipt also
     # carries params_formula_est 284426240 — the 12h^2L formula
     # underestimates the real torch model; the measured value is binding)
-    if m.get("params_estimate") != 368354304:
-        v.append(f"params_estimate {m.get('params_estimate')} != receipted "
-                 f"c03 measured 368354304 (fp19-bench)")
+    # The measured pin is base-only at n_mtp=0; require the explicit MTP
+    # auxiliary and realized totals as a separate, internally closed
+    # partition. Live storage-identity proof remains issue #688.
+    v.extend(_parameter_accounting_violations(cfg))
     # directed components present (component contract — silent drop = gate
     # violation per break-the-wall directed-path gate)
     if not cfg.get("precision", {}).get("qat", {}).get("enabled"):

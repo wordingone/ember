@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """ember_c_e2b_paired_run.py — C-E2B paired-legs protocol runner (issue #23).
 
 FROZEN PROBE this runner answers to: ember-goalforge/scripts/ember_totality/
@@ -1013,7 +1016,7 @@ def cmd_live(args: argparse.Namespace) -> int:
     requested_run = {
         "source": "ember-c-e2b-paired-run--live",
         "total_steps": total_steps,
-        "params": gate_mod.V0_CERTIFIED_PARAMS,
+        "params": gate_mod.V0_REALIZED_PARAMS,
         "batch": 1,
         "seq": 1024,
     }

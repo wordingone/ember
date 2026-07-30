@@ -334,6 +334,10 @@ same step-count stabilization segment consumes a growing fraction of a ceiling t
 
 > **[ACCOUNTING ERRATA 2026-07-10]** The certified count 368,354,304 is n_mtp=0; realized production count with 2 live MTP heads is 433,890,304 (+65,536,000). The MICRO_FIT_CEILING calculation above uses the certified count; for actual production runs, verify the ceiling against the realized parameter count. See [errata issue #679](https://github.com/wordingone/ember/issues/679).
 
+> **Current implementation supersession:** the launch gate now derives its
+> fixed ceiling from `V0_REALIZED_PARAMS=433,890,304`, producing
+> `MICRO_FIT_CEILING_FLOPS=2.8636760064e+16`. The earlier formula is historical.
+
 ### 5.3 Live results for the four candidate rungs (executed 2026-07-03, pure Python, no CUDA)
 
 Calling `g_budget()` with a `requested_run` descriptor (`total_steps=120, batch=16, seq=1024`,

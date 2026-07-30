@@ -1,7 +1,7 @@
 # v0 launch gate — receipt-checkable preconditions for the owned-core pretrain dispatch
 
 Frozen 2026-06-11 (~06:58). The owned-core v0 pretrain (NC2-own, c03 shape:
-0.368B QAT, seq 1024, w1-governed 4090) is the June-22 critical path. This
+0.4339B declared realized / 0.3684B base-excluding-MTP QAT, seq 1024, w1-governed 4090) is the historical June-22 critical path. This
 gate turns "ready to launch" from prose into named receipts. The dispatch
 shim refuses unless every G-row is green; no row may be waived except by
 the user by name.
