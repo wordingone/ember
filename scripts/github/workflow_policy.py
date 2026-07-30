@@ -32,6 +32,7 @@ WRITE_KEYS = {
     "security-events",
     "statuses",
 }
+PR_EVENTS = {"pull_request", "pull_request_target"}
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -52,6 +53,57 @@ def _permission_writes(value: Any) -> bool:
     )
 
 
+def _event_names(events: Any) -> set[str]:
+    if isinstance(events, str):
+        return {events}
+    if isinstance(events, dict):
+        return {str(event) for event in events}
+    if isinstance(events, list):
+        return {str(event) for event in events}
+    return set()
+
+
+def _effective_permissions(workflow: dict[str, Any], job: dict[str, Any]) -> Any:
+    if "permissions" in job:
+        return job["permissions"]
+    return workflow.get("permissions")
+
+
+def _checkout_uses_pr_subject(step: dict[str, Any]) -> bool:
+    action = step.get("uses")
+    if not isinstance(action, str) or not action.startswith("actions/checkout@"):
+        return False
+    with_values = step.get("with")
+    if not isinstance(with_values, dict):
+        with_values = {}
+    ref = str(with_values.get("ref", "")).strip()
+    if not ref:
+        return True
+    if "pull_request.head" in ref or "/merge" in ref:
+        return True
+    trusted_refs = {"master", "refs/heads/master"}
+    if ref in trusted_refs:
+        return False
+    if "pull_request.base.sha" in ref or "github.event.repository.default_branch" in ref:
+        return False
+    return True
+
+
+def _job_executes_checked_out_repository_code(steps: list[Any]) -> bool:
+    if not any(
+        isinstance(step, dict) and _checkout_uses_pr_subject(step) for step in steps
+    ):
+        return False
+    return any(
+        isinstance(step, dict)
+        and (
+            bool(str(step.get("run", "")).strip())
+            or str(step.get("uses", "")).startswith("./")
+        )
+        for step in steps
+    )
+
+
 def validate_workflow(path: Path) -> list[str]:
     errors: list[str] = []
     try:
@@ -65,16 +117,7 @@ def validate_workflow(path: Path) -> list[str]:
     if not isinstance(jobs, dict) or not jobs:
         return errors + [f"{path.name}: jobs must be a nonempty mapping"]
     events = workflow.get("on")
-    event_names = (
-        {events}
-        if isinstance(events, str)
-        else set(events or ())
-        if isinstance(events, (dict, list))
-        else set()
-    )
-    privileged = "pull_request_target" in event_names and _permission_writes(
-        workflow.get("permissions")
-    )
+    event_names = _event_names(events)
     for job_name, job in jobs.items():
         context = f"{path.name}:{job_name}"
         if not isinstance(job, dict):
@@ -86,10 +129,13 @@ def validate_workflow(path: Path) -> list[str]:
         if not isinstance(steps, list):
             errors.append(f"{context}: steps must be a list")
             continue
-        job_privileged = privileged or (
-            "pull_request_target" in event_names
-            and _permission_writes(job.get("permissions"))
+        job_privileged = bool(PR_EVENTS & event_names) and _permission_writes(
+            _effective_permissions(workflow, job)
         )
+        if job_privileged and _job_executes_checked_out_repository_code(steps):
+            errors.append(
+                f"{context}: write-capable PR job executes pull-request code"
+            )
         for index, step in enumerate(steps):
             if not isinstance(step, dict):
                 errors.append(f"{context}:step[{index}] must be a mapping")
@@ -100,7 +146,10 @@ def validate_workflow(path: Path) -> list[str]:
                     errors.append(f"{context}: unpinned action {action}")
             if job_privileged:
                 ref = str(step.get("with", {}).get("ref", ""))
-                if "pull_request.head" in ref or "/merge" in ref:
+                if (
+                    "pull_request_target" in event_names
+                    and _checkout_uses_pr_subject(step)
+                ):
                     errors.append(
                         f"{context}: privileged job checks out pull-request subject"
                     )
@@ -108,6 +157,7 @@ def validate_workflow(path: Path) -> list[str]:
                 if (
                     re.search(r"\b(bun|npm|pip|pytest|cargo|python)\b", run)
                     and "trusted-kernel/scripts/github/" not in run
+                    and "pull_request_target" in event_names
                 ):
                     errors.append(
                         f"{context}: privileged job may execute repository-authored code"

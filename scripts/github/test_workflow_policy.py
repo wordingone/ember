@@ -7,6 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import yaml
+
 from scripts.github import workflow_policy
 
 
@@ -73,6 +75,76 @@ jobs:
         )
         errors = workflow_policy.validate_workflow(path)
         self.assertTrue(any("repository-authored code" in e for e in errors))
+
+    def test_pull_request_write_job_cannot_execute_checked_out_subject(self) -> None:
+        path = self._write(
+            """
+name: same-repository-pr-is-still-untrusted
+on: pull_request
+permissions:
+  contents: read
+jobs:
+  apply:
+    permissions:
+      contents: read
+      issues: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - run: python -B scripts/github/labels.py apply
+"""
+        )
+        errors = workflow_policy.validate_workflow(path)
+        self.assertTrue(
+            any("write-capable PR job executes pull-request code" in e for e in errors),
+            errors,
+        )
+
+    def test_dependabot_or_fork_token_reduction_is_not_a_safety_proof(self) -> None:
+        path = self._write(
+            """
+name: actor-filter-does-not-cure-authority-mixing
+on: pull_request
+permissions:
+  issues: write
+jobs:
+  apply:
+    if: github.actor == 'dependabot[bot]' || github.event.pull_request.head.repo.fork
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - run: python -B scripts/github/labels.py apply
+"""
+        )
+        errors = workflow_policy.validate_workflow(path)
+        self.assertTrue(
+            any("write-capable PR job executes pull-request code" in e for e in errors),
+            errors,
+        )
+
+    def test_labels_sync_confines_write_authority_to_trusted_master_apply(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        path = root / ".github" / "workflows" / "labels-sync.yml"
+        errors = workflow_policy.validate_workflow(path)
+        self.assertEqual([], errors)
+
+        workflow = yaml.safe_load(path.read_text(encoding="utf-8", errors="strict"))
+        if True in workflow and "on" not in workflow:
+            workflow["on"] = workflow.pop(True)
+        self.assertNotIn("pull_request", workflow["on"])
+        self.assertFalse(workflow_policy._permission_writes(workflow["permissions"]))
+
+        validate = workflow["jobs"]["validate"]
+        apply = workflow["jobs"]["apply"]
+        self.assertFalse(workflow_policy._permission_writes(validate.get("permissions")))
+        self.assertTrue(workflow_policy._permission_writes(apply["permissions"]))
+        self.assertIn("github.event_name == 'workflow_dispatch'", apply["if"])
+        self.assertIn("github.ref_protected == true", apply["if"])
+        checkout = next(step for step in apply["steps"] if "uses" in step)
+        self.assertEqual("${{ github.sha }}", checkout["with"]["ref"])
+        self.assertFalse(checkout["with"]["persist-credentials"])
 
 
 if __name__ == "__main__":
