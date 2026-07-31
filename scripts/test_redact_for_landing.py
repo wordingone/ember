@@ -14,6 +14,11 @@ line-ending-preservation check. All fixtures are synthetic and live under
 tempfile.TemporaryDirectory() -- this test never touches a tracked repo file
 (rails, issue #538).
 """
+
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 from __future__ import annotations
 
 import hashlib
@@ -222,12 +227,10 @@ class RedactForLandingTests(unittest.TestCase):
             self.assertIn("<REDACTED_PATH>", result[key], f"key {key!r} not redacted")
             self.assertNotIn("Z:/synthetic/fixture-tree", result[key], f"key {key!r} leaked")
 
-    # ---- 2026-07-11 follow-up: key-agnostic pattern-fallback case ----------
-    def test_pattern_fallback_redacts_unenumerated_key_not_in_terms_file(self):
-        """A key the enumeration STILL doesn't cover, with a path that is
-        NOT in the terms file either (simulating the 11th miss the fallback
-        exists to survive) -- must still lose its drive-letter prefix while
-        every trailing directory/basename segment survives untouched."""
+    # ---- 2026-07-28 closure: unauthorized JSON fields stay byte-identical --
+    def test_path_shape_does_not_authorize_unenumerated_json_rewrite(self):
+        """A path-looking value is data, not rewrite authority. Fields
+        outside the explicit evidence/export key manifest remain unchanged."""
         content = json.dumps({
             "totally_unenumerated_field": "Z:/synthetic/fixture-tree/models/cbase-grow-rung/rung1/step-00000766",
             "backslash_variant_field": "Z:\\synthetic\\fixture-tree\\scratch\\w1-control\\checkpoints\\step-00000050",
@@ -239,12 +242,10 @@ class RedactForLandingTests(unittest.TestCase):
         result = json.loads(target.with_name("fallback-redacted-edition.json").read_bytes())
         self.assertEqual(
             result["totally_unenumerated_field"],
-            "<LOCAL-ABS-PATH>/synthetic/fixture-tree/models/cbase-grow-rung/rung1/step-00000766",
-            "drive-letter prefix must be replaced, forward-slash segments preserved verbatim")
+            "Z:/synthetic/fixture-tree/models/cbase-grow-rung/rung1/step-00000766")
         self.assertEqual(
             result["backslash_variant_field"],
-            "<LOCAL-ABS-PATH>\\synthetic\\fixture-tree\\scratch\\w1-control\\checkpoints\\step-00000050",
-            "backslash separator style must be preserved after the token")
+            "Z:\\synthetic\\fixture-tree\\scratch\\w1-control\\checkpoints\\step-00000050")
 
     def test_pattern_fallback_does_not_false_positive_on_url_scheme(self):
         """The single-letter-before-colon-slash shape inside 'https://' or
@@ -263,7 +264,7 @@ class RedactForLandingTests(unittest.TestCase):
         self.assertEqual(result["totally_unenumerated_field"], url_value)
         self.assertNotIn("<LOCAL-ABS-PATH>", result["totally_unenumerated_field"])
 
-    def test_pattern_fallback_idempotent(self):
+    def test_unauthorized_path_shape_is_idempotently_unchanged(self):
         content = json.dumps({
             "totally_unenumerated_field": "Z:/synthetic/fixture-tree/x/y/z",
         })
@@ -278,7 +279,77 @@ class RedactForLandingTests(unittest.TestCase):
         out2 = second.with_name("fallback-idem2-redacted-edition.json").read_bytes()
         self.assertEqual(out1, out2, "re-redacting an already-fallback-redacted value must be a no-op")
 
+    def test_historical_placeholder_receipt_is_never_rewritten_in_place(self):
+        content = (
+            '{"harness_interface_path":"<REDACTED_GOALFORGE_PATH>\\\\receipts\\\\x.json",'
+            '"legacy_path":"<local-path>","other":"<REDACTED_PATH>"}'
+        )
+        target = self.write_work_file("historical.json", content)
+        before = target.read_bytes()
+        code, _, _ = self.cli(target)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(target.read_bytes(), before)
+        self.assertEqual(
+            target.with_name("historical-redacted-edition.json").read_bytes(),
+            before,
+        )
+
+    def test_source_extensions_refused_before_output_creation(self):
+        for suffix in (".py", ".ts", ".js", ".sh"):
+            with self.subTest(suffix=suffix):
+                target = self.write_work_file(
+                    f"functional{suffix}",
+                    "print('Z:/synthetic/fixture-tree')\n",
+                )
+                code, _, err = self.cli(target)
+                self.assertEqual(code, 2)
+                self.assertIn("unsupported file type", err)
+                self.assertFalse(
+                    target.with_name(
+                        target.stem + "-redacted-edition" + target.suffix
+                    ).exists()
+                )
+
+    def test_duplicate_display_placeholders_preserve_distinct_identities(self):
+        terms = self.tmp / "multiplicity-terms.txt"
+        terms.write_text(
+            "Z:/first\t<REDACTED_PATH>\n"
+            "Z:/second\t<REDACTED_PATH>\n",
+            encoding="utf-8",
+        )
+        target = self.write_work_file(
+            "multiplicity.json",
+            json.dumps({"path": "Z:/first/model.bin and Z:/second/model.bin"}),
+        )
+        code, _, _ = run_cli([
+            "--terms-file", str(terms),
+            "--repo-root", str(self.repo),
+            str(target),
+        ])
+        self.assertEqual(code, 0)
+        value = json.loads(
+            target.with_name("multiplicity-redacted-edition.json").read_bytes()
+        )["path"]
+        identities = set(rfl.STABLE_PLACEHOLDER_RE.findall(value))
+        self.assertEqual(len(identities), 2, value)
+
     # ---- 2026-07-11 follow-up: .log support ---------------------------------
+    def test_log_path_suppression_preserves_distinct_drive_identities(self):
+        target = self.work / "drive-identities.log"
+        target.write_text(
+            "first C:/same/tree/model.bin\n"
+            "second D:/same/tree/model.bin\n",
+            encoding="utf-8",
+        )
+        code, _, _ = self.cli(target)
+        self.assertEqual(code, 0)
+        value = target.with_name(
+            "drive-identities-redacted-edition.log"
+        ).read_text(encoding="utf-8")
+        identities = set(rfl.STABLE_PLACEHOLDER_RE.findall(value))
+        self.assertEqual(len(identities), 2, value)
+
     def test_log_file_gets_term_and_pattern_redaction(self):
         # NOTE: the forward-slash path here deliberately uses a synthetic drive
         # ("Y:") and tree name DISTINCT from the "Z:/synthetic/fixture-tree"
@@ -300,9 +371,14 @@ class RedactForLandingTests(unittest.TestCase):
         out_bytes = target.with_name("run-redacted-edition.log").read_bytes()
         out_text = out_bytes.decode("utf-8")
         self.assertIn("<REDACTED_NAME>", out_text, "term substitution must still apply per line")
-        self.assertIn("<LOCAL-ABS-PATH>/synthetic/live-tree/shards-v0", out_text, "forward-slash path must be redacted")
-        self.assertIn("<LOCAL-ABS-PATH>\\\\synthetic\\\\fixture-tree\\\\models\\\\x", out_text,
-                      "backslash path (JSON-escaped in the log line) must be redacted")
+        self.assertRegex(
+            out_text,
+            r"<LOCAL-ABS-PATH#sha256:[0-9a-f]{12}>/synthetic/live-tree/shards-v0",
+        )
+        self.assertRegex(
+            out_text,
+            r"<LOCAL-ABS-PATH#sha256:[0-9a-f]{12}>\\\\synthetic\\\\fixture-tree\\\\models\\\\x",
+        )
         self.assertIn(b"\r\n", out_bytes, "line endings must be preserved, same as .md")
         self.assertTrue(out_bytes.endswith(b"no newline at end"))
 

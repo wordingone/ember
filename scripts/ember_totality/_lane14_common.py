@@ -23,11 +23,16 @@ Two independent concerns live here:
                           convention used throughout this receipt corpus.
 """
 
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 import datetime
 import hashlib
 import os
 import re
 import subprocess
+from pathlib import PurePosixPath
 
 
 def redact_root(value):
@@ -102,6 +107,64 @@ def sha256_file(path):
             h.update(chunk)
     return h.hexdigest()
 
+_REDACTION_PLACEHOLDER_RE = re.compile(r"<[^<>]*PATH[^<>]*>", re.IGNORECASE)
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_CONTENT_LOCATOR_KEYS = {"schema_version", "repo_relative_path", "sha256"}
+
+
+def is_redaction_degraded_locator(value):
+    """True for historical display-redaction tokens, never real locators."""
+    return isinstance(value, str) and bool(_REDACTION_PLACEHOLDER_RE.search(value))
+
+
+def _check_content_locator(field, locator, root):
+    if not isinstance(locator, dict) or set(locator) != _CONTENT_LOCATOR_KEYS:
+        return False, f"{field}: content locator schema is not closed"
+    if locator.get("schema_version") != "ember-content-locator-v1":
+        return False, f"{field}: unsupported content locator schema"
+    rel = locator.get("repo_relative_path")
+    claimed_sha = locator.get("sha256")
+    if is_redaction_degraded_locator(rel):
+        return False, (
+            f"REDACTION_DEGRADED: {field} carries historical placeholder "
+            "evidence; AUDIT-PENDING until a resolvable content identity exists"
+        )
+    if (
+        not isinstance(rel, str)
+        or not rel
+        or "\\" in rel
+        or ":" in rel
+        or not isinstance(claimed_sha, str)
+        or not _SHA256_RE.fullmatch(claimed_sha)
+    ):
+        return False, f"{field}: malformed content locator"
+    pure = PurePosixPath(rel)
+    if (
+        pure.is_absolute()
+        or pure.as_posix() != rel
+        or any(part in {"", ".", ".."} for part in pure.parts)
+    ):
+        return False, f"{field}: content locator must be confined repo-relative"
+    root_abs = os.path.realpath(root)
+    candidate = os.path.realpath(os.path.join(root_abs, *pure.parts))
+    try:
+        common = os.path.commonpath(
+            [os.path.normcase(candidate), os.path.normcase(root_abs)]
+        )
+    except ValueError:
+        return False, f"{field}: content locator escapes the execution tree"
+    if os.path.normcase(common) != os.path.normcase(root_abs):
+        return False, f"{field}: content locator escapes the execution tree"
+    if not os.path.isfile(candidate):
+        return False, f"{field}: content locator target is missing"
+    actual = sha256_file(candidate)
+    if actual != claimed_sha:
+        return False, (
+            f"{field}: content locator sha256 {actual[:12]}.. != claimed "
+            f"{claimed_sha[:12]}.."
+        )
+    return True, f"{field}: content locator resolved and hash-verified"
+
 
 _COMPACT_TS_RE = re.compile(r"^(\d{8})T(\d{6})Z$")
 
@@ -120,32 +183,58 @@ def parse_compact_ts(s):
 
 
 def check_path_sha_pairs(cand, root):
-    """For every "<field>_path"/"<field>_sha256" pair present on `cand`
-    (the resident_training_candidate-style manifest block used by C4/C5),
-    require the path to resolve IN-TREE and its sha256 to match. Returns
-    (ok: bool, pairs_checked: int, detail: str). ok is True only when at
-    least one such pair exists AND every pair present resolves+verifies --
-    a manifest with zero _path/_sha256 pairs at all is NOT ok (nothing to
-    anchor the claim to the execution tree).
+    """Verify legacy path/hash pairs or closed content-addressed locators.
+
+    Historical redaction placeholders are explicitly degraded evidence and
+    return a distinct fail-closed reason instead of behaving like ordinary
+    missing files.
     """
     pairs = []
+    locators = []
     for key in cand:
         if key.endswith("_path"):
             field = key[: -len("_path")]
             sha_key = f"{field}_sha256"
             if sha_key in cand:
                 pairs.append((field, key, sha_key))
-    if not pairs:
-        return False, 0, "no <field>_path/<field>_sha256 pairs present on the candidate block"
+        elif key.endswith("_locator"):
+            field = key[: -len("_locator")]
+            locators.append((field, key))
+    total = len(pairs) + len(locators)
+    if not total:
+        return False, 0, (
+            "no <field>_path/<field>_sha256 pairs or closed content locators "
+            "present on the candidate block"
+        )
+
+    details = []
+    for field, locator_key in sorted(locators):
+        ok, detail = _check_content_locator(field, cand.get(locator_key), root)
+        if not ok:
+            return False, total, detail
+        details.append(detail)
 
     for field, path_key, sha_key in sorted(pairs):
         claimed_path = cand.get(path_key)
         claimed_sha = cand.get(sha_key)
+        if is_redaction_degraded_locator(claimed_path):
+            return False, total, (
+                f"REDACTION_DEGRADED: {field}: {path_key} carries historical "
+                "placeholder evidence; AUDIT-PENDING until a resolvable "
+                "content identity exists"
+            )
+        if isinstance(claimed_path, str) and (
+            os.path.isabs(claimed_path)
+            or re.match(r"^[A-Za-z]:[\\/]", claimed_path)
+        ):
+            return False, total, (
+                f"{field}: host-absolute path is noncanonical; content locator required"
+            )
         if not (isinstance(claimed_sha, str) and claimed_sha):
-            return False, len(pairs), f"{field}: {sha_key} missing/empty"
+            return False, total, f"{field}: {sha_key} missing/empty"
         on_disk = resolve_in_tree(claimed_path, root)
         if on_disk is None:
-            return False, len(pairs), (
+            return False, total, (
                 f"{field}: {path_key}={claimed_path!r} resolves OFF-TREE/missing "
                 f"under root ({redact_root(root)}) -- converges with GOAL.md's "
                 "Execution-surface 'Imports owed FROM the live tree' row "
@@ -153,11 +242,12 @@ def check_path_sha_pairs(cand, root):
             )
         actual = sha256_file(on_disk)
         if actual.lower() != claimed_sha.lower().replace("sha256:", ""):
-            return False, len(pairs), (
+            return False, total, (
                 f"{field}: on-disk sha256 {actual[:12]}.. != claimed "
                 f"{claimed_sha[:19]}.. at {path_key}"
             )
-    return True, len(pairs), f"{len(pairs)} <field>_path/<field>_sha256 pair(s) verified in-tree"
+        details.append(f"{field}: path/sha pair verified in-tree")
+    return True, total, f"{total} artifact binding(s) verified: " + "; ".join(details)
 
 
 def sample_recompute_row(rows):
