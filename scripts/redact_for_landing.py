@@ -2,8 +2,7 @@
 """Tracked, pin-aware redaction utility for landing lanes (ember issue #538).
 
 The ONLY sanctioned redaction path for landing lanes. Rewrites path-valued
-JSON fields (or, for .md/.log, whole lines) using a supplied term list, PLUS
-an unconditional value-pattern fallback (see below). A file whose sha256 is
+JSON fields (or, for .md/.log, whole lines) using a supplied term list. A file whose sha256 is
 pinned by any receipt under receipts/ or scripts/ember_totality/receipts-*/
 is refused outright -- no override exists.
 
@@ -17,31 +16,22 @@ Term-file format: one term per line, blank lines and '#' comments ignored.
 "term<TAB>replacement" sets an explicit replacement; a bare term defaults to
 the generic "<REDACTED>" placeholder.
 
-Two independent redaction mechanisms (2026-07-11, issue #538 follow-up --
-a real receipt leaked local paths under 10 of 13 path-bearing fields because
-the key enumeration missed them):
-
-  1. KEY-GATED term substitution (original mechanism): for JSON string
-     values under ENUMERATED_KEYS or a key ending in _path/_dir/_ref/
-     _source/_receipt, every term from --terms-file is substituted
-     (word-boundary matched). Deliberately key-gated so free-text/prose
-     fields that happen to mention a term are left untouched (see
-     test_sibling_non_enumerated_field_byte_identical).
-  2. KEY-AGNOSTIC local-absolute-path-shape fallback (NEW): regardless of
-     key name, any JSON string value containing a standalone Windows
-     drive-letter-absolute-path token (`X:/...` or `X:\\...`, not preceded
-     by a word character -- so "https://" never false-matches on its
-     trailing "s:") has that drive-letter+separator prefix replaced with
-     the neutral LOCAL_PATH_TOKEN, preserving every directory/basename
-     segment that follows. Key enumerations rot as new receipt schemas
-     appear; this pass is what catches the field the enumeration missed.
-
-.log files get the same two mechanisms applied line-by-line (mechanism 1
-applies terms per line the same way .md does; mechanism 2 is new for .log).
+JSON rewriting is strictly KEY-GATED: for string values under
+ENUMERATED_KEYS or a key ending in _path/_dir/_ref/_source/_receipt, every
+term from --terms-file is substituted (word-boundary matched). A
+path-looking value in any other JSON field is never rewrite authority.
+.log files remain display-only exports and receive line-wise term and
+path-prefix suppression.
 """
+
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import hashlib
 import json
 import re
@@ -69,8 +59,8 @@ ENUMERATED_KEYS = {
 # "dir"/"shard_dir"/"n_mtp_source"/"terminal_checkpoint_ref"/
 # "terminal_checkpoint_receipt"/"control_step25_dir"/"step50_checkpoint_dir"/
 # "source_dir"/"dest_dir" fields all leaked local paths because only "_path"
-# was covered. Key enumerations rot -- see the value-pattern fallback below
-# for the mechanism that survives the NEXT missed suffix too.
+# was covered. The explicit suffix families are part of the authorized field
+# manifest; unknown JSON fields remain byte-identical.
 ENUMERATED_KEY_SUFFIXES = ("_path", "_dir", "_ref", "_source", "_receipt")
 DOC_ALLOWLIST = {".md"}
 LOG_ALLOWLIST = {".log"}
@@ -78,6 +68,8 @@ DEFAULT_REPLACEMENT = "<REDACTED>"
 _GLOB_CHARS = set("*?[")
 _HEX64_RE = re.compile(rb"\b[0-9a-fA-F]{64}\b")
 _JSON_STRING_RE = r'"(?:[^"\\]|\\.)*"'
+STABLE_PLACEHOLDER_RE = re.compile(r"<[^<>]+#sha256:[0-9a-f]{12}>")
+_GENERIC_PLACEHOLDER_RE = re.compile(r"^<[^<>]+>$")
 LOCAL_PATH_TOKEN = "<LOCAL-ABS-PATH>"
 # Standalone Windows drive-letter-absolute-path prefix: a single letter,
 # colon, one separator (either slash direction), NOT preceded by a word
@@ -102,17 +94,20 @@ def _build_kv_regex(*, keys: "set[str] | None" = None, any_key: bool = False) ->
 
 
 _KV_RE = _build_kv_regex()
-_ANY_KV_RE = _build_kv_regex(any_key=True)
 
 
 def redact_local_abs_path_prefix(value: str) -> str:
-    """Key-agnostic fallback (mechanism 2, see module docstring): replace
+    """Display-only log fallback: replace
     every standalone Windows drive-letter-absolute-path prefix in `value`
-    with LOCAL_PATH_TOKEN, preserving the original separator style and every
-    directory/basename segment that follows. Applied to EVERY JSON string
-    value regardless of key name -- this is what survives a key enumeration
-    that hasn't caught up with a new receipt schema."""
-    return _LOCAL_ABS_PATH_PREFIX_RE.sub(LOCAL_PATH_TOKEN + r"\2", value)
+    with a stable drive identity while preserving separator style and every
+    directory/basename segment that follows."""
+
+    def _replace(match: "re.Match[str]") -> str:
+        root = f"{match.group(1).upper()}:/"
+        identity = hashlib.sha256(root.encode("utf-8")).hexdigest()[:12]
+        return f"{LOCAL_PATH_TOKEN[:-1]}#sha256:{identity}>{match.group(2)}"
+
+    return _LOCAL_ABS_PATH_PREFIX_RE.sub(_replace, value)
 
 
 def _check_not_glob(raw: str) -> None:
@@ -147,7 +142,14 @@ def load_terms(terms_file: Path) -> List[Tuple[str, str]]:
         repl = repl.strip()
         if term:
             terms.append((term, repl))
-    return terms
+    replacement_counts = Counter(repl for _term, repl in terms)
+    stable_terms: List[Tuple[str, str]] = []
+    for term, repl in terms:
+        if replacement_counts[repl] > 1 and _GENERIC_PLACEHOLDER_RE.fullmatch(repl):
+            identity = hashlib.sha256(term.encode("utf-8")).hexdigest()[:12]
+            repl = f"{repl[:-1]}#sha256:{identity}>"
+        stable_terms.append((term, repl))
+    return stable_terms
 
 
 def apply_terms(text: str, terms: List[Tuple[str, str]]) -> str:
@@ -223,26 +225,7 @@ def redact_json_bytes(data: bytes, terms: List[Tuple[str, str]]) -> bytes:
         new_literal = json.dumps(new_decoded, ensure_ascii=False)
         return f'"{m.group("key")}"{m.group("sep")}{new_literal}'
 
-    def _pattern_fallback_sub(m: "re.Match[str]") -> str:
-        decoded = json.loads(m.group("value"))
-        if not isinstance(decoded, str):
-            return m.group(0)
-        new_decoded = redact_local_abs_path_prefix(decoded)
-        if new_decoded == decoded:
-            return m.group(0)
-        new_literal = json.dumps(new_decoded, ensure_ascii=False)
-        return f'"{m.group("key")}"{m.group("sep")}{new_literal}'
-
-    # Mechanism 1 (key-gated term substitution) runs first, then mechanism 2
-    # (key-agnostic path-shape fallback) runs over the WHOLE document
-    # regardless of key -- see module docstring. Order is immaterial to
-    # idempotence: mechanism 1 already removes the drive-letter shape from
-    # any value it fully replaces (a matched term normally replaces the
-    # whole path), so mechanism 2 is a no-op on those; mechanism 2 alone
-    # handles every key mechanism 1 doesn't cover.
-    new_text = _KV_RE.sub(_term_sub, text)
-    new_text = _ANY_KV_RE.sub(_pattern_fallback_sub, new_text)
-    return new_text.encode("utf-8")
+    return _KV_RE.sub(_term_sub, text).encode("utf-8")
 
 
 _LINE_ENDING_RE = re.compile(r"(\r\n|\r|\n)$")
