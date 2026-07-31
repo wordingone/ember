@@ -159,13 +159,17 @@ def _load_json_with_fallback(path):
 
 
 def _clean_citation(raw):
-    """Strip a trailing `::field.path` compound-reference suffix (the base
-    file is the real citation; the suffix names a field inside it) and any
-    trailing markdown-fence backtick / prose punctuation the greedy
-    extraction regex swallows (issue #415 cure 1, extraction artifacts)."""
+    """Strip closed source-location syntax from a receipt citation.
+
+    `::field.path` names a field inside the base file. A trailing numeric
+    `:line`, `:start-end`, or `:line,line` suffix names source locations,
+    never filename bytes. Arbitrary nonnumeric colon suffixes remain literal
+    and therefore fail closed if absent.
+    """
     if "::" in raw:
         raw = raw.split("::", 1)[0]
-    return raw.rstrip("`,;.")
+    raw = raw.rstrip("`,;.")
+    return re.sub(r":(?:\d+(?:[-,]\d+)*)?$", "", raw)
 
 
 def _is_wrap_joined_record(obj):
@@ -274,6 +278,10 @@ _KNOWN_PROSE_FRAGMENTS = frozenset({
     # mechanism (already local)." -- receipts/c52-adversarial-pass-20260612T175700Z.json:63.
     # Names a mechanism, not a file; issue #415 enumeration bucket (c) row 15.
     "receipts/ledger/view",
+    # Historical prose says "receipts/custody corrections merged to master";
+    # this is a subsystem phrase, not a receipt or directory reference.
+    # Exact-only: similarly named concrete files remain checkable.
+    "receipts/custody",
 })
 
 # Literal path strings that are hardcoded schema-example constants baked
