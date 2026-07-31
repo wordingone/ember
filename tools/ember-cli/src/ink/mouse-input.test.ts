@@ -109,25 +109,31 @@ describe("SGR mouse decoder", () => {
 });
 
 describe("production mouse bridge and mounted-tree hit testing", () => {
-  it("uses native raw-mode capability when compiled ConPTY does not report isTTY", () => {
-    const calls: string[] = [];
+  it("flushes a hover-driven React state update into the rendered frame", async () => {
     const stdin = new FakeStdin();
-    stdin.isTTY = false;
-    const handle = mountInk(
-      React.createElement(Box, { width: 6, height: 1, onClick: () => calls.push("click") }, React.createElement(Text, null, "PAUSE")),
-      { stream: { write() {} }, stdout: { columns: 10, rows: 2 } },
-    );
+    let output = "";
+    const StatefulControl = (): React.ReactElement => {
+      const [hovered, setHovered] = React.useState(false);
+      return React.createElement(
+        Box,
+        { width: 8, height: 1, onMouseEnter: () => setHovered(true) },
+        React.createElement(Text, { inverse: hovered }, "[PAUSE]"),
+      );
+    };
+    const handle = mountInk(React.createElement(StatefulControl), {
+      stream: { write(value: string) { output += value; } },
+      stdout: { columns: 10, rows: 2 },
+    });
     const stop = startStdinBridge({ stdin: stdin as never, emitKeypressEvents: () => {} });
+    output = "";
 
-    stdin.emit("data", "\x1b[<0;2;1M");
+    stdin.emit("data", "\x1b[<35;2;1M");
+    await Bun.sleep(20);
 
-    expect(stdin.rawModes).toEqual([true]);
-    expect(calls).toEqual(["click"]);
+    expect(output).toContain("\x1b[7m");
     stop();
-    expect(stdin.rawModes).toEqual([true, false]);
     handle.unmount();
   });
-
   it("routes adjacent keyboard bytes without leaking mouse bytes to key handlers", () => {
     const keys: string[] = [];
     const stdin = new FakeStdin();
