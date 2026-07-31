@@ -88,6 +88,7 @@ async function main(): Promise<void> {
   let writes = Promise.resolve();
   let child: IPty | undefined;
   let exitCode: number | undefined;
+  const conptyInputCloseErrors: string[] = [];
   try {
     child = spawnPty(binary, [], {
       name: "xterm-256color",
@@ -111,6 +112,15 @@ async function main(): Promise<void> {
       writes = writes.then(() => new Promise<void>((done) => terminal.write(data, done)));
     });
     child.onExit(({ exitCode: code }) => { exitCode = code; });
+    // node-pty 1.1 listens for errors on ConPTY's output socket but not its input socket. A fast,
+    // clean Ctrl-C teardown can close the input socket while its asynchronous write callback is
+    // still settling, producing an otherwise unhandled ERR_SOCKET_CLOSED. Capture that exact
+    // transport race; any other input error remains terminal, and PASS still requires the child
+    // exit plus all three terminal-restoration sequences.
+    const inputSocket = (child as unknown as {
+      _agent?: { inSocket?: { on(event: "error", listener: (error: NodeJS.ErrnoException) => void): unknown } };
+    })._agent?.inSocket;
+    inputSocket?.on("error", (error) => conptyInputCloseErrors.push(error.code ?? error.message));
 
     await waitFor(() => raw.join("").includes(READY_OSC), "compiled cockpit readiness");
     await waitFor(() => frameLines(terminal).some((line) => line.includes("RUNNING")), "RUNNING telemetry frame");
@@ -147,6 +157,9 @@ async function main(): Promise<void> {
     if (negotiation.some((index) => index < 0 || index > readyAt)) throw new Error("mouse/viewport negotiation was not complete before readiness");
     const teardown = [DISABLE_MOUSE_TRACKING, SHOW_CURSOR, EXIT_ALT_SCREEN].map((sequence) => output.lastIndexOf(sequence));
     if (teardown.some((index) => index < readyAt)) throw new Error(`terminal teardown sequences were not emitted after interaction (exit=${exitCode}, indexes=${teardown.join(",")})`);
+    if (conptyInputCloseErrors.some((code) => code !== "ERR_SOCKET_CLOSED")) {
+      throw new Error(`unexpected ConPTY input errors: ${conptyInputCloseErrors.join(",")}`);
+    }
 
     const receipt = {
       schema_version: "ember-cli-pointer-conpty-smoke-v1",
@@ -158,7 +171,7 @@ async function main(): Promise<void> {
       negotiation: { alternate_screen: true, cursor_hidden: true, sgr_mouse_1003_1006: true },
       pointer: { hover_sent: true, click_sent: true, target: "PAUSE", terminal_cell: pauseAt },
       effect: { verb: controls[0].verb, run_id: controls[0].runId, exact_control_rows: controls.length },
-      teardown: { mouse_disabled: true, cursor_shown: true, primary_screen_restored: true, exit_code: exitCode },
+      teardown: { mouse_disabled: true, cursor_shown: true, primary_screen_restored: true, exit_code: exitCode, conpty_input_close_errors: conptyInputCloseErrors },
       verdict: "PASS",
       claim_boundary: "compiled Windows ConPTY negotiation, raw hover/click delivery, PAUSE effect, and terminal teardown only",
     };
