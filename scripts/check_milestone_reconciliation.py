@@ -349,7 +349,8 @@ def run():
     inputs = {}
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     base = {"ticket": TICKET, "ts": ts, "mapped": 0, "unmapped": [],
-            "lattice_diff": [], "floor_contract_gaps": [], "inputs": inputs}
+            "lattice_diff": [], "floor_contract_gaps": [], "inputs": inputs,
+            "api_spend_usd": 0, "paid_api_surface_used": False}
 
     try:
         matrix_path = os.path.join(ROOT, "docs", "ember-authority-matrix.md")
