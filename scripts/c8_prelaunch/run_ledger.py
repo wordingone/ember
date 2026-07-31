@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """run_ledger.py -- C8 pre-launch obligation O5 (issue #582; spec: the F1-F4 fill
 amendment on issue #123, comment 4928342201, section 1 "Anti-abort-button clause"
 and section 9 item 5). Hardening pass: issue #630 (independent-audit disposition,
@@ -85,18 +88,13 @@ append_launch_row for the same run_id, or two exclusion filings racing the
 same run_id).
 
 Launcher binding (issue #630: "integrate into the actual launcher BEFORE
-first training/eval with append failure blocking launch"): no C8 governed-run
-launcher exists yet in this repo (grepped scripts/ + receipts/ + docs/ for
-callers of gated-grown/A-scratch/A-schedule arm launches: none besides this
-module and f2_schedule_generator.py's arm-name literals). Per the established
-precedent for this exact situation (scripts/w2_heldout/launch_gate.py's own
-docstring: "No W2 runner file exists yet ... Delivered here as a standalone,
-importable module ... the future runner imports ... assert_launch_allowed for
-a fail-closed one-liner"), this module ships assert_launch_recorded: the
-fail-closed pre-launch hook a future governed-run launcher calls BEFORE
-building any arm's model. A failed append (bad hash, bad timestamp, unknown
-arm, duplicate run_id, lock timeout, disk I/O failure) raises SystemExit --
-the launch is REFUSED, never best-effort logged-and-continued.
+first training/eval with append failure blocking launch"):
+governed_run_launcher.py is the canonical C8 command launcher. It reads and
+hashes exact repository-confined config/admissibility bytes, calls
+assert_launch_recorded BEFORE process creation, and passes private snapshots
+of those same bytes to the child. A failed append (bad hash, bad timestamp,
+unknown arm, duplicate run_id, lock timeout, disk I/O failure) raises
+SystemExit -- the launch is REFUSED, never best-effort logged-and-continued.
 
 USAGE (as a library -- this ledger has no interesting CLI beyond --selftest;
 callers import append_launch_row / append_exclusion_row / count_inadmissible_for_arm
@@ -384,11 +382,8 @@ def assert_launch_recorded(*, ledger_path: str, run_id: str, arm: str, launch_ts
     SystemExit and the caller MUST NOT proceed to launch -- never a
     best-effort log-and-continue.
 
-    No C8 governed-run launcher exists yet in this repo (see module
-    docstring); this hook is delivered standalone, following the same
-    precedent scripts/w2_heldout/launch_gate.py set for its own
-    not-yet-built runner: the future launcher imports and calls this
-    function as its first pre-launch statement.
+    scripts/c8_prelaunch/governed_run_launcher.py calls this hook before
+    creating the child process. Other callers must preserve that ordering.
     """
     try:
         return append_launch_row(ledger_path, run_id, arm, launch_ts,
