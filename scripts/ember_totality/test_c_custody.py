@@ -101,7 +101,7 @@ import re
 import subprocess
 import sys
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 # Keep status output reproducible on default Windows CP1252 consoles.
 if hasattr(sys.stdout, "reconfigure"):
@@ -286,6 +286,108 @@ def _extract_citation_corrections(obj, corrections=None):
         for item in obj:
             _extract_citation_corrections(item, corrections)
     return corrections
+
+
+_EMBEDDED_RUNTIME_SUBJECT_KEYS = frozenset({
+    "schema_version", "missing_ref", "subject_receipt",
+    "subject_receipt_sha256", "binary_sha256", "classification", "reason",
+})
+
+
+def _extract_embedded_runtime_subjects(obj, records=None):
+    """Collect closed records for ephemeral binaries bound inside receipts."""
+    if records is None:
+        records = []
+    if isinstance(obj, dict):
+        if set(obj) == _EMBEDDED_RUNTIME_SUBJECT_KEYS:
+            records.append(obj)
+            return records
+        for value in obj.values():
+            _extract_embedded_runtime_subjects(value, records)
+    elif isinstance(obj, list):
+        for item in obj:
+            _extract_embedded_runtime_subjects(item, records)
+    return records
+
+
+def _is_safe_receipt_ref(value):
+    """Accept only canonical POSIX receipt paths with no traversal surface."""
+    if not isinstance(value, str) or "\\" in value or any(ch.isspace() for ch in value):
+        return False
+    path = PurePosixPath(value)
+    return (
+        not path.is_absolute()
+        and len(path.parts) > 1
+        and path.parts[0] == "receipts"
+        and all(part not in {"", ".", ".."} for part in path.parts)
+        and path.as_posix() == value
+    )
+
+
+def _resolve_embedded_runtime_subject(cited_path, records, tracked, root):
+    """Resolve only a receipt-relative ephemeral binary with exact byte proof.
+
+    This does not exempt arbitrary missing build outputs.  The separately
+    tracked subject receipt must be in the same directory, hash to the pinned
+    bytes, identify the same binary basename/hash, embed non-empty frame
+    evidence, and state a bounded PASS verdict.
+    """
+    if not _is_safe_receipt_ref(cited_path):
+        return None
+    candidates = [record for record in records if record.get("missing_ref") == cited_path]
+    if len(candidates) != 1:
+        return None
+    record = candidates[0]
+    hex64 = re.compile(r"^[0-9a-f]{64}$")
+    if set(record) != _EMBEDDED_RUNTIME_SUBJECT_KEYS:
+        return None
+    if record.get("schema_version") != "ember-c-custody-embedded-runtime-subject/v1":
+        return None
+    if record.get("classification") != "EPHEMERAL_COMPILED_TEST_SUBJECT":
+        return None
+    if not isinstance(record.get("reason"), str) or not record["reason"].strip():
+        return None
+    receipt_ref = record.get("subject_receipt")
+    receipt_sha = record.get("subject_receipt_sha256")
+    binary_sha = record.get("binary_sha256")
+    if not isinstance(receipt_ref, str) or receipt_ref not in tracked:
+        return None
+    if not _is_safe_receipt_ref(receipt_ref):
+        return None
+    if not isinstance(receipt_sha, str) or not hex64.fullmatch(receipt_sha):
+        return None
+    if not isinstance(binary_sha, str) or not hex64.fullmatch(binary_sha):
+        return None
+    if Path(receipt_ref).parent != Path(cited_path).parent:
+        return None
+    receipt_path = Path(root) / receipt_ref
+    try:
+        receipt_bytes = receipt_path.read_bytes()
+        if hashlib.sha256(receipt_bytes).hexdigest() != receipt_sha:
+            return None
+        subject = json.loads(receipt_bytes.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if subject.get("schema_version") != "ember-cli-text-wrap-capture-v1":
+        return None
+    binary = subject.get("binary")
+    if not isinstance(binary, dict) or set(binary) != {"name", "sha256"}:
+        return None
+    if binary.get("name") != Path(cited_path).name:
+        return None
+    if binary.get("sha256") != binary_sha:
+        return None
+    if subject.get("verdict") != "PASS":
+        return None
+    if not isinstance(subject.get("frames"), list) or not subject["frames"]:
+        return None
+    return {
+        "ref": cited_path,
+        "subject_receipt": receipt_ref,
+        "subject_receipt_sha256": receipt_sha,
+        "binary_sha256": binary_sha,
+        "classification": record["classification"],
+    }
 
 
 # Characters that mark a cited string as a regex/glob literal rather than a
@@ -702,6 +804,7 @@ def main():
     citations_to_verify = set()
     documented_absent_refs = set()
     citation_corrections = []
+    embedded_runtime_subjects = []
 
     for fpath in sorted(found_files):
         rel_path = os.path.relpath(fpath, ROOT).replace("\\", "/")
@@ -727,6 +830,7 @@ def main():
         # Shape (c): Extract citations for later verification
         _extract_citations(data, citations_to_verify, documented_absent_refs)
         _extract_citation_corrections(data, citation_corrections)
+        _extract_embedded_runtime_subjects(data, embedded_runtime_subjects)
 
     # --- (E) Check cited paths exist -- issue #415 cure ladder -------
     basename_index = _build_basename_index(git_tracked_normalized)
@@ -739,6 +843,7 @@ def main():
     annex_attested_citations = []
     redacted_twin_citations = []
     corrected_citations = []
+    embedded_runtime_citations = []
 
     for cited_path in sorted(citations_to_verify):
         if _classify_citation(cited_path) == "pattern":
@@ -767,6 +872,13 @@ def main():
         )
         if correction:
             corrected_citations.append(correction)
+            continue
+
+        runtime_subject = _resolve_embedded_runtime_subject(
+            cited_path, embedded_runtime_subjects, git_tracked_normalized, ROOT
+        )
+        if runtime_subject:
+            embedded_runtime_citations.append(runtime_subject)
             continue
 
         # Cure 1 tail: bare, no-extension citation naming a real, populated
@@ -832,6 +944,7 @@ def main():
                 "annex_attested": annex_attested_citations,
                 "resolved_redacted": redacted_twin_citations,
                 "corrected_citation": corrected_citations,
+                "embedded_runtime_subject": embedded_runtime_citations,
             },
             "pending_landing": pending_landing,
         }
@@ -846,6 +959,7 @@ def main():
                     f"annex_attested={len(annex_attested_citations)} "
                     f"resolved_redacted={len(redacted_twin_citations)} "
                     f"corrected_citation={len(corrected_citations)} "
+                    f"embedded_runtime_subject={len(embedded_runtime_citations)} "
                     f"pending_landing={len(pending_landing)}; "
                     f"sidecar={sidecar_path}")
 
@@ -866,6 +980,7 @@ def main():
             "annex_attested": annex_attested_citations,
             "resolved_redacted": redacted_twin_citations,
             "corrected_citation": corrected_citations,
+            "embedded_runtime_subject": embedded_runtime_citations,
         },
         "pending_landing": [],
     }
@@ -879,6 +994,7 @@ def main():
                   f"annex_attested={len(annex_attested_citations)} "
                   f"resolved_redacted={len(redacted_twin_citations)} "
                   f"corrected_citation={len(corrected_citations)} "
+                  f"embedded_runtime_subject={len(embedded_runtime_citations)} "
                   f"pending_landing={len(pending_landing)}; "
                   f"sidecar={sidecar_path}")
 
