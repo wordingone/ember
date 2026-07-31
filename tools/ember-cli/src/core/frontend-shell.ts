@@ -195,15 +195,22 @@ async function getInkRender(): Promise<(node: ReactElement, options?: RenderOpti
       : process.stdout;
     const terminalSession = createTerminalSessionController(stream);
     terminalSession.enter();
-    const handle = mountInk(wrapped, {
-      stream,
-      stdout: liveStdoutSize,
-      debug: options?.debug,
-    });
+    let handle: MountHandle;
+    try {
+      handle = mountInk(wrapped, {
+        stream,
+        stdout: liveStdoutSize,
+        debug: options?.debug,
+        onError: () => terminalSession.exit(),
+      });
+    } catch (error) {
+      terminalSession.exit();
+      throw error;
+    }
     return {
       unmount() {
-        handle.unmount();
-        terminalSession.exit();
+        try { handle.unmount(); }
+        finally { terminalSession.exit(); }
       },
       waitUntilExit(): Promise<void> { return Promise.resolve(); },
     };
@@ -232,6 +239,7 @@ export function render(node: ReactElement, options?: RenderOptions): InkInstance
       stream,
       stdout: liveStdoutSize,
       debug: options?.debug,
+      onError: () => terminalSession.exit(),
     });
   }).catch(() => {
     terminalSession.exit();
@@ -239,8 +247,8 @@ export function render(node: ReactElement, options?: RenderOptions): InkInstance
 
   return {
     unmount() {
-      handle?.unmount();
-      terminalSession.exit();
+      try { handle?.unmount(); }
+      finally { terminalSession.exit(); }
     },
     waitUntilExit(): Promise<void> { return Promise.resolve(); },
   };
@@ -288,16 +296,19 @@ export function createRoot(options?: RenderOptions): FrontendRoot {
             stream,
             stdout,
             onFirstFrameFlushed: options?.onFirstFrameFlushed,
+            onError: () => _rootTerminalSession?.exit(),
           });
         }
       }).catch(() => { _rootTerminalSession?.exit(); });
     },
     unmount(): void {
-      _rootHandle?.unmount();
-      _rootHandle = null;
-      _rootTerminalSession?.exit();
-      if (_rootExitListener) process.off("exit", _rootExitListener);
-      _rootExitListener = null;
+      try { _rootHandle?.unmount(); }
+      finally {
+        _rootHandle = null;
+        _rootTerminalSession?.exit();
+        if (_rootExitListener) process.off("exit", _rootExitListener);
+        _rootExitListener = null;
+      }
     },
   };
   return _rootInstance;

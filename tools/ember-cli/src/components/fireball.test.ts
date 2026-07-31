@@ -73,7 +73,7 @@ describe("fireballRaster", () => {
     }
   });
 
-  test("ships exactly 3 frames per mode (candidate B's lean cycle: center/left/right)", () => {
+  test("ships exactly 3 fixed-silhouette intensity frames per mode", () => {
     expect(FIREBALL_FRAME_COUNT).toBe(3);
     for (const size of SIZES) {
       for (const m of MODES) {
@@ -107,7 +107,7 @@ describe("fireballRaster", () => {
 
   test("FIREBALL_IDLE_POSE_FRAME is a valid, real frame index reserved for the reduced-motion/frozen pose", () => {
     // b14 item 3 (candidate B, 2026-07-03): frame 0 is the centered, tallest, brightest-pulse
-    // lean position -- the natural "balanced" pose, replacing the old design's frame 1.
+    // fixed reference pose -- the natural balanced silhouette.
     expect(FIREBALL_IDLE_POSE_FRAME).toBe(0);
     expect(FIREBALL_IDLE_POSE_FRAME).toBeGreaterThanOrEqual(0);
     expect(FIREBALL_IDLE_POSE_FRAME).toBeLessThan(FIREBALL_FRAME_COUNT);
@@ -117,7 +117,7 @@ describe("fireballRaster", () => {
 // b14 item 3 (2026-07-03): the original "triangle" shape was rejected, and a follow-up redesign
 // that split into disconnected tongues fared no better ("weird pointy blob... looks nothing like a
 // small flame"). Team-lead's gate verdict: candidate B ("Slender Candle-Lick") -- narrow at BOTH
-// ends, widest in the belly, ONE contiguous span per row, S-curve lean -- is the only candidate
+// ends, widest in the belly, ONE contiguous span per row and a fixed spatial footprint -- is the only candidate
 // that reads as a flame at a glance. These tests assert candidate B's actual properties, replacing
 // the earlier (rejected) disconnected-tongue design's tests.
 describe("fireballRaster — candidate B teardrop shape (not the old triangle, not disconnected tongues)", () => {
@@ -184,11 +184,9 @@ describe("fireballRaster — candidate B teardrop shape (not the old triangle, n
   });
 
   // Team-lead's refinement on the candidate B gate verdict (2026-07-03): "add a subtle
-  // core-brightness pulse layered on the lean cycle, so it reads alive even when the sway is
-  // between frames." Baked into the existing 3 lean frames rather than doubling the cycle: the
-  // FIREBALL_IDLE_POSE_FRAME (centered) lean position also carries the brightness peak, so the
-  // belly visibly breathes once per lean cycle instead of holding a flat, unchanging core.
-  test("panel/compact: the belly/core is brighter at FIREBALL_IDLE_POSE_FRAME than at the other lean frames (pulse, not a flat core)", () => {
+  // A core-brightness pulse keeps the fixed silhouette alive without translating any lit cell.
+  // FIREBALL_IDLE_POSE_FRAME carries the brightness peak; the other two frames are dim phases.
+  test("panel/compact: the belly/core is brighter at FIREBALL_IDLE_POSE_FRAME than at the other intensity frames", () => {
     // "inference" mode uses the identity rank ramp (r,R,o,O,y,Y,w unchanged), so counting raw
     // bright-rank characters directly reflects rank, with no per-mode recoloring to account for.
     const BRIGHT = new Set(["y", "Y", "w"]);
@@ -312,13 +310,10 @@ describe("issue #54: rendered fireball output is a fixed-width canvas (no per-fr
   });
 });
 
-// issue #54, reconciliation ruling (team-lead): the diagnosed jitter is the belly/base silhouette
-// translating sideways between frames -- a real defect -- but the tip's OWN sway (already locked in
-// by "the peak column drifts" above) is the approved S-curve-lean design and must survive
-// untouched. The fix pins only the WIDE rows (width>1 -- the belly/base "mass") to a constant
-// column footprint across the lean cycle; the narrow tip/base single-pixel rows keep drifting.
-// This is the mechanical complement of the peak-drift test: peak (tip) MUST vary, mass MUST NOT.
-describe("issue #54: the belly/base mass (width>1 rows) is pinned to a constant column extent across the lean cycle -- only the tip sways", () => {
+// issue #54 redundant lower-bound: the wide mass remains fixed too. The stronger test above binds
+// the complete occupancy mask, including tip and base; this retains the older extent invariant as
+// a focused diagnostic without granting any exception for tip motion.
+describe("issue #54: the wide flame mass remains pinned within the stronger fixed-occupancy contract", () => {
   function litCols(rowStr: string): number[] {
     const cols: number[] = [];
     for (let c = 0; c < rowStr.length; c++) if (rowStr[c] !== " ") cols.push(c);

@@ -1,0 +1,180 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+//
+// Issue #1251: compiled-product proof for the physical Windows ConPTY pointer path.
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
+import xtermHeadless from "@xterm/headless";
+import { spawn as spawnPty, type IPty } from "node-pty";
+import { READY_OSC } from "../cli/ready-sentinel.ts";
+import {
+  DISABLE_MOUSE_TRACKING,
+  ENABLE_MOUSE_TRACKING,
+  ENTER_ALT_SCREEN,
+  EXIT_ALT_SCREEN,
+  HIDE_CURSOR,
+  SHOW_CURSOR,
+} from "../ink/termio.ts";
+
+const { Terminal } = xtermHeadless;
+const COLS = 100;
+const ROWS = 30;
+const TIMEOUT_MS = 20_000;
+
+function sha256File(path: string): string {
+  return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolvePromise) => setTimeout(resolvePromise, ms));
+}
+
+async function waitFor(predicate: () => boolean, description: string): Promise<void> {
+  const started = Date.now();
+  while (!predicate()) {
+    if (Date.now() - started > TIMEOUT_MS) throw new Error(`timed out waiting for ${description}`);
+    await sleep(50);
+  }
+}
+
+function frameLines(terminal: InstanceType<typeof Terminal>): string[] {
+  return Array.from({ length: terminal.rows }, (_, row) =>
+    terminal.buffer.active.getLine(row)?.translateToString(true) ?? "",
+  );
+}
+
+function findGlyph(lines: string[], needle: string): { col: number; row: number } | undefined {
+  for (let row = 0; row < lines.length; row += 1) {
+    const col = lines[row]!.indexOf(needle);
+    if (col >= 0) return { col, row };
+  }
+  return undefined;
+}
+
+function sgrHover(col: number, row: number): string {
+  return `\x1b[<35;${col + 1};${row + 1}M`;
+}
+
+function sgrLeftClick(col: number, row: number): string {
+  return `\x1b[<0;${col + 1};${row + 1}M`;
+}
+
+async function main(): Promise<void> {
+  const binary = resolve(process.argv[2] ?? "");
+  const outDir = resolve(process.argv[3] ?? "");
+  const implementationCommit = process.argv[4] ?? "";
+  if (!existsSync(binary) || !/^[0-9a-f]{40}$/u.test(implementationCommit)) {
+    throw new Error("usage: pointer-conpty-smoke.ts <compiled-binary> <out-dir> <implementation-commit>");
+  }
+  mkdirSync(outDir, { recursive: true });
+  const repoRoot = resolve(import.meta.dirname, "../../../..");
+  const home = mkdtempSync(join(tmpdir(), "ember-pointer-conpty-"));
+  const telemetryPath = join(home, "telemetry.jsonl");
+  const controlPath = join(home, "control.jsonl");
+  const runId = "run-pointer-conpty-smoke";
+  writeFileSync(telemetryPath, `${JSON.stringify({
+    ts: new Date().toISOString(),
+    kind: "train_step",
+    source: "journal",
+    payload: { run_id: runId, step: 1, loss: 1.5 },
+  })}\n`, "utf8");
+
+  const terminal = new Terminal({ cols: COLS, rows: ROWS, allowProposedApi: true, scrollback: 0 });
+  const raw: string[] = [];
+  let writes = Promise.resolve();
+  let child: IPty | undefined;
+  let exitCode: number | undefined;
+  try {
+    child = spawnPty(binary, [], {
+      name: "xterm-256color",
+      cols: COLS,
+      rows: ROWS,
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        EMBER_HOME: home,
+        EMBER_REPO_ROOT: repoRoot,
+        EMBER_SOURCE_ROOT: repoRoot,
+        EMBER_GPU_FREE: "1",
+        EMBER_DISABLE_TERMINAL_TITLE: "1",
+        EMBER_CLI_HEADLESS_CAPTURE: "1",
+        EMBER_TELEMETRY_PATH: telemetryPath,
+        EMBER_FINETUNE_CONTROL_PATH: controlPath,
+      },
+    });
+    child.onData((data) => {
+      raw.push(data);
+      writes = writes.then(() => new Promise<void>((done) => terminal.write(data, done)));
+    });
+    child.onExit(({ exitCode: code }) => { exitCode = code; });
+
+    await waitFor(() => raw.join("").includes(READY_OSC), "compiled cockpit readiness");
+    await waitFor(() => frameLines(terminal).some((line) => line.includes("RUNNING")), "RUNNING telemetry frame");
+    await writes;
+    const before = frameLines(terminal);
+    const pauseAt = findGlyph(before, "[PAUSE]");
+    if (!pauseAt) throw new Error("compiled frame did not expose [PAUSE]");
+
+    child.write(sgrHover(pauseAt.col + 1, pauseAt.row));
+    await sleep(150);
+    child.write(sgrLeftClick(pauseAt.col + 1, pauseAt.row));
+    await waitFor(() => existsSync(controlPath) && readFileSync(controlPath, "utf8").includes('"verb":"pause"'), "PAUSE control effect");
+    const controls = readFileSync(controlPath, "utf8").trim().split(/\r?\n/u).filter(Boolean).map((line) => JSON.parse(line));
+    if (controls.length !== 1 || controls[0]?.verb !== "pause" || controls[0]?.runId !== runId) {
+      throw new Error("compiled click did not produce exactly one bound PAUSE command");
+    }
+
+    child.write("\x03");
+    await waitFor(() => exitCode !== undefined, "compiled cockpit exit");
+    // node-pty may publish the exit notification before its final ConPTY output callback. Give
+    // that bounded tail a turn, then await the complete xterm write chain before inspecting it.
+    await sleep(300);
+    await writes;
+    const output = raw.join("");
+    const readyAt = output.indexOf(READY_OSC);
+    const negotiation = [ENTER_ALT_SCREEN, HIDE_CURSOR, ENABLE_MOUSE_TRACKING].map((sequence) => output.indexOf(sequence));
+    if (negotiation.some((index) => index < 0 || index > readyAt)) throw new Error("mouse/viewport negotiation was not complete before readiness");
+    const teardown = [DISABLE_MOUSE_TRACKING, SHOW_CURSOR, EXIT_ALT_SCREEN].map((sequence) => output.lastIndexOf(sequence));
+    if (teardown.some((index) => index < readyAt)) throw new Error(`terminal teardown sequences were not emitted after interaction (exit=${exitCode}, indexes=${teardown.join(",")})`);
+
+    const receipt = {
+      schema_version: "ember-cli-pointer-conpty-smoke-v1",
+      issue: 1251,
+      implementation_commit: implementationCommit,
+      binary: { name: basename(binary), sha256: sha256File(binary) },
+      transport: "windows-conpty/node-pty",
+      geometry: { columns: COLS, rows: ROWS },
+      negotiation: { alternate_screen: true, cursor_hidden: true, sgr_mouse_1003_1006: true },
+      pointer: { hover_sent: true, click_sent: true, target: "PAUSE", terminal_cell: pauseAt },
+      effect: { verb: controls[0].verb, run_id: controls[0].runId, exact_control_rows: controls.length },
+      teardown: { mouse_disabled: true, cursor_shown: true, primary_screen_restored: true, exit_code: exitCode },
+      verdict: "PASS",
+      claim_boundary: "compiled Windows ConPTY negotiation, raw hover/click delivery, PAUSE effect, and terminal teardown only",
+    };
+    writeFileSync(join(outDir, "pointer-conpty-smoke-receipt.json"), `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
+    console.log(JSON.stringify(receipt));
+  } catch (error) {
+    await writes;
+    writeFileSync(join(outDir, "failure.raw.txt"), raw.join(""), "utf8");
+    writeFileSync(join(outDir, "failure.frame.txt"), `${frameLines(terminal).join("\n")}\n`, "utf8");
+    throw error;
+  } finally {
+    if (child && exitCode === undefined) {
+      spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore", timeout: 5_000 });
+    }
+    terminal.dispose();
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+
+main().then(
+  () => process.exit(0),
+  (error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  },
+);

@@ -673,6 +673,8 @@ export interface MountOptions {
   stdout: { columns: number; rows: number };
   debug?: boolean;
   onFirstFrameFlushed?: () => void;
+  /** Fatal render/reconciliation error. Callers owning terminal modes must tear them down here. */
+  onError?: (error: Error) => void;
 }
 
 /**
@@ -704,6 +706,15 @@ export function mountInk(element: ReactElement, options: MountOptions): MountHan
     hoverTarget: null,
   };
 
+  let renderError: Error | null = null;
+  const reportRenderError = (error: unknown): void => {
+    const normalized = error instanceof Error ? error : new Error(String(error));
+    if (renderError === null) {
+      renderError = normalized;
+      options.onError?.(normalized);
+    }
+  };
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rec = reconciler as any;
   const root = rec.createContainer(
@@ -713,25 +724,32 @@ export function mountInk(element: ReactElement, options: MountOptions): MountHan
     false, // isStrictMode
     null,  // concurrentUpdatesByDefaultOverride
     "",    // identifierPrefix
-    (_err: Error) => {},   // onUncaughtError
-    (_err: Error) => {},   // onCaughtError
-    (_err: Error) => {},   // onRecoverableError
+    (error: Error) => reportRenderError(error),   // onUncaughtError
+    (_error: Error) => {},                       // onCaughtError (an ErrorBoundary still owns the tree)
+    (_error: Error) => {},                       // onRecoverableError (React repaired the tree)
     () => {},              // onDefaultTransitionIndicator
   );
 
   function _syncRender(el: ReactNode): void {
-    if (
-      typeof rec.updateContainerSync === "function" &&
-      typeof rec.flushSyncWork === "function"
-    ) {
-      rec.updateContainerSync(el, root, null, null);
-      rec.flushSyncWork();
-      if (typeof rec.flushPassiveEffects === "function") {
-        rec.flushPassiveEffects();
+    renderError = null;
+    try {
+      if (
+        typeof rec.updateContainerSync === "function" &&
+        typeof rec.flushSyncWork === "function"
+      ) {
+        rec.updateContainerSync(el, root, null, null);
+        rec.flushSyncWork();
+        if (typeof rec.flushPassiveEffects === "function") {
+          rec.flushPassiveEffects();
+        }
+      } else {
+        rec.updateContainer(el, root, null, null);
       }
-    } else {
-      rec.updateContainer(el, root, null, null);
+    } catch (error) {
+      reportRenderError(error);
+      throw error;
     }
+    if (renderError !== null) throw renderError;
   }
 
   _syncRender(element);

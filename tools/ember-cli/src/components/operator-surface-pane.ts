@@ -203,8 +203,8 @@ export interface OperatorGraphCardLayout {
  *  one trace into dozens of rows; a tight terminal keeps whole cards and reports the hidden tail. */
 export const OPERATOR_GRAPH_CARD_MIN_WIDTH = 32;
 
-export function operatorGraphGridColumns(width: number): 1 | 2 {
-  return Number.isFinite(width) ? 1 : 1;
+export function operatorGraphGridColumns(_width: number): 1 {
+  return 1;
 }
 
 export function operatorGraphCardLayout(
@@ -242,10 +242,10 @@ function exactCell(text: string, width: number): string {
   return text.padEnd(target, " ");
 }
 
-/** Fixed-boundary chart card. Every returned line is exactly `width` cells and the sample window
- *  is bounded to the drawable width before charting, preventing an ever-growing render cost. */
+/** Produces only the card interior; the renderer-owned Box supplies every border cell and title.
+ *  The sample window is bounded to the drawable width before charting. */
 export function renderOperatorGraphCard(
-  title: string,
+  _title: string,
   values: Array<number | null> | undefined,
   unit: string,
   width: number,
@@ -255,16 +255,15 @@ export function renderOperatorGraphCard(
   const cardWidth = Math.max(8, Math.floor(width));
   const cardHeight = Math.max(OPERATOR_GRAPH_CARD_MIN_HEIGHT, Math.min(OPERATOR_GRAPH_CARD_MAX_HEIGHT, Math.floor(height)));
   const innerWidth = cardWidth - 2;
-  const heading = exactCell(` ${title} `, innerWidth).replace(/ +$/u, (spaces) => "-".repeat(spaces.length));
-  const lines = [`+${heading}+`];
+  const lines: string[] = [];
   const finiteValues = (values ?? []).filter((value): value is number => value !== null && Number.isFinite(value));
   const interiorRows = cardHeight - 2;
   if (values === undefined) {
-    lines.push(`|${exactCell(" SOURCE UNBOUND", innerWidth)}|`);
-    while (lines.length < cardHeight - 1) lines.push(`|${" ".repeat(innerWidth)}|`);
+    lines.push(exactCell(" SOURCE UNBOUND", innerWidth));
+    while (lines.length < interiorRows) lines.push(" ".repeat(innerWidth));
   } else if (finiteValues.length === 0) {
-    lines.push(`|${exactCell(` ${unavailableReason ?? "AWAITING FIRST SAMPLE"}`, innerWidth)}|`);
-    while (lines.length < cardHeight - 1) lines.push(`|${" ".repeat(innerWidth)}|`);
+    lines.push(exactCell(` ${unavailableReason ?? "AWAITING FIRST SAMPLE"}`, innerWidth));
+    while (lines.length < interiorRows) lines.push(" ".repeat(innerWidth));
   } else {
     const latest = finiteValues[finiteValues.length - 1]!;
     const min = Math.min(...finiteValues);
@@ -273,17 +272,17 @@ export function renderOperatorGraphCard(
     if (interiorRows === 1) {
       const sparkWidth = Math.max(1, innerWidth - stats.length - 3);
       const bounded = values.slice(-sparkWidth);
-      lines.push(`|${exactCell(` ${stats} ${sparklineRow(bounded, sparkWidth)}`, innerWidth)}|`);
+      lines.push(exactCell(` ${stats} ${sparklineRow(bounded, sparkWidth)}`, innerWidth));
     } else {
-      lines.push(`|${exactCell(` ${stats}`, innerWidth)}|`);
+      lines.push(exactCell(` ${stats}`, innerWidth));
       const plotRows = interiorRows - 1;
       const bounded = values.slice(-Math.max(2, innerWidth * 2));
       const chart = renderChart(bounded, { width: innerWidth, height: plotRows });
-      for (const row of chart.rows) lines.push(`|${exactCell(row, innerWidth)}|`);
+      for (const row of chart.rows) lines.push(exactCell(row, innerWidth));
     }
   }
-  lines.push(`+${"-".repeat(innerWidth)}+`);
-  return lines.slice(0, cardHeight);
+  while (lines.length < interiorRows) lines.push(" ".repeat(innerWidth));
+  return lines.slice(0, interiorRows);
 }
 
 export interface OperatorGraphCardSpec {
@@ -336,7 +335,7 @@ export function renderOperatorGraphCardRows(
           }
         : { color: "gray", lines: Array.from({ length: layout.cardHeight }, () => " ".repeat(columnWidth)) };
     });
-    for (let lineIndex = 0; lineIndex < layout.cardHeight; lineIndex += 1) {
+    for (let lineIndex = 0; lineIndex < Math.max(1, layout.cardHeight - 2); lineIndex += 1) {
       const segments: OperatorGraphCardRowSegment[] = [];
       rendered.forEach((card, columnIndex) => {
         if (columnIndex > 0) segments.push({ text: " ", color: "gray" });
@@ -1138,11 +1137,16 @@ export function OperatorSurfacePane({
   const disabledReasonLines = disabledActionReason
     ? [boundedSurfaceLine(`${disabledActionReason}`, innerWidth)]
     : [];
-  const fixedChromeRows = 2 + 1 + controlRows.length + disabledReasonLines.length + compactMetrics.length + 1 + 1 + compactAgentLines.length;
+  // The activity viewport is always exactly two rows high: its title plus either one event row or
+  // one intentionally blank row. Counting only compactAgentLines.length allowed Yoga to reclaim
+  // the RUNNING/IDLE status row whenever the feed was empty.
+  const activityViewportRows = 2;
+  const fixedChromeRows = 2 + 1 + controlRows.length + disabledReasonLines.length + compactMetrics.length + 1 + activityViewportRows;
   const graphRowBudget = effectiveHeight - fixedChromeRows;
   // Card height responds only within the tested three-to-five-row legibility range. Constrained
   // panes retain deterministic leading cards and one explicit hidden-card count.
-  const graphRender = renderOperatorGraphCardRows(graphCards, innerWidth, graphRowBudget);
+  const graphLayout = operatorGraphCardLayout(graphCards.length, graphRowBudget, 1);
+  const visibleGraphCards = graphCards.slice(0, graphLayout.visibleCardCount);
 
   const body = React.createElement(
     Box,
@@ -1158,29 +1162,44 @@ export function OperatorSurfacePane({
       overflow: "hidden",
       paddingX: 1,
     },
-    React.createElement(Text, { key: "status", color: statusColor, bold: true, wrap: "truncate-end" }, snapshot.status),
+    React.createElement(Box, { key: "status-row", height: 1, flexShrink: 0 }, React.createElement(Text, { color: statusColor, bold: true, wrap: "truncate-end" }, snapshot.status)),
     controlsElement,
-    ...disabledReasonLines.map((line) => React.createElement(Text, { key: `disabled-reason-${line}`, color: "yellow", wrap: "truncate-end" }, line)),
-    ...compactMetrics.map((metric) => React.createElement(Text, { key: metric, wrap: "truncate-end" }, metric)),
-    React.createElement(Text, { key: "source", dimColor: true, wrap: "truncate-end" }, sourceLineText),
-    ...graphRender.rows.map((row, index) => row.segments.length === 1
-      ? React.createElement(Text, {
-          key: `graph-${index}`,
-          color: row.segments[0]!.color,
-          wrap: "truncate-end",
-        }, row.segments[0]!.text)
-      : React.createElement(
-          Box,
-          { key: `graph-${index}`, flexDirection: "row", flexShrink: 0, width: innerWidth },
-          ...row.segments.map((segment, segmentIndex) => React.createElement(
-            Text,
-            { key: `graph-${index}-${segmentIndex}`, color: segment.color, wrap: "truncate-end" },
-            segment.text,
-          )),
-        )),
+    ...disabledReasonLines.map((line) => React.createElement(Box, { key: `disabled-reason-${line}`, height: 1, flexShrink: 0 }, React.createElement(Text, { color: "yellow", wrap: "truncate-end" }, line))),
+    ...compactMetrics.map((metric) => React.createElement(Box, { key: metric, height: 1, flexShrink: 0 }, React.createElement(Text, { wrap: "truncate-end" }, metric))),
+    React.createElement(Box, { key: "source-row", height: 1, flexShrink: 0 }, React.createElement(Text, { dimColor: true, wrap: "truncate-end" }, sourceLineText)),
+    ...visibleGraphCards.map((card) => React.createElement(
+      Box,
+      {
+        key: `graph-${card.id}`,
+        borderStyle: "single",
+        borderColor: operatorGraphCardColor(card.id),
+        borderTitle: card.title,
+        flexDirection: "column",
+        flexShrink: 0,
+        width: innerWidth,
+        height: graphLayout.cardHeight,
+        overflow: "hidden",
+      },
+      ...renderOperatorGraphCard(
+        card.title,
+        card.values,
+        card.unit,
+        innerWidth,
+        graphLayout.cardHeight,
+        card.unavailableReason,
+      ).map((line, index) => React.createElement(Text, {
+        key: `graph-${card.id}-${index}`,
+        color: operatorGraphCardColor(card.id),
+        wrap: "truncate-end",
+      }, line)),
+    )),
+    graphLayout.hiddenCardCount > 0
+      ? React.createElement(Box, { key: "hidden-graphs-row", height: 1, flexShrink: 0 }, React.createElement(Text, { color: "yellow", wrap: "truncate-end" },
+          boundedSurfaceLine(`\u2026 ${graphLayout.hiddenCardCount} more charts`, innerWidth)))
+      : null,
     React.createElement(
       Box,
-      { key: "activity-scroll-region", flexDirection: "column", height: 2, overflow: "hidden",
+      { key: "activity-scroll-region", flexDirection: "column", height: 2, flexShrink: 0, overflow: "hidden",
         onWheel: onActivityScroll ? (event: any) => onActivityScroll(event.deltaY) : undefined },
       React.createElement(Text, { key: "stream-title", color: "magenta", bold: true, wrap: "truncate-end" }, "ACTIVITY/EVENT FEED"),
       ...compactAgentLines.map((line, index) => React.createElement(Text, { key: `agent-${index}`, dimColor: true, wrap: "truncate-end" }, line)),

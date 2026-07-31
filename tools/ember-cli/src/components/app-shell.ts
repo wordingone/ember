@@ -241,6 +241,10 @@ export function VirtualMessageList({
   const window = virtualMessageWindow(messages.length, viewportRows, scrollOffset);
   const visibleMessages = messages.slice(window.start, window.end);
 
+  // Column-reverse is intentional at the viewport boundary: the newest message is laid out
+  // against the prompt and overflow is discarded above it. This makes clipping row-accurate
+  // even when one rendered message occupies many terminal rows; message count is used only to
+  // bound retained React work, never as a claim about rendered height.
   const entries = visibleMessages.map((msg, visibleIndex) => {
     const i = window.start + visibleIndex;
     return React.createElement(
@@ -248,13 +252,14 @@ export function VirtualMessageList({
       { key: msg.id, isOffscreen: i < frozenThreshold },
       renderMessage(msg),
     );
-  });
+  }).reverse();
 
   return React.createElement(
     Box,
     {
-      flexDirection: "column",
-      height: viewportRows,
+      flexDirection: "column-reverse",
+      flexGrow: 1,
+      minHeight: 0,
       overflow: "hidden",
       onWheel: (event) => setScrollOffset((current) => virtualMessageWindow(
         messages.length, viewportRows, current + ((event as InkPointerEvent).deltaY < 0 ? 1 : -1),

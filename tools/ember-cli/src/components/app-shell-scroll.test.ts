@@ -2,7 +2,10 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import { describe, expect, test } from "bun:test";
-import { virtualMessageWindow } from "./app-shell.ts";
+import React from "react";
+import { Box, Text } from "../ink/components.ts";
+import { mountInk } from "../ink/reconciler.ts";
+import { VirtualMessageList, virtualMessageWindow } from "./app-shell.ts";
 
 describe("fixed transcript viewport", () => {
   test("stays bottom-anchored at offset zero", () => {
@@ -17,5 +20,43 @@ describe("fixed transcript viewport", () => {
     expect(virtualMessageWindow(0, 3, 50)).toEqual({ start: 0, end: 0, offset: 0 });
     expect(virtualMessageWindow(2, 5, 50)).toEqual({ start: 0, end: 2, offset: 0 });
     expect(virtualMessageWindow(10, 3, -4)).toEqual({ start: 7, end: 10, offset: 0 });
+  });
+
+  test("keeps the end of the latest multiline result visible inside the flex-allocated transcript", () => {
+    let rendered = "";
+    const messages = [
+      { id: "old", role: "assistant", content: "old" },
+      { id: "latest", role: "assistant", content: "latest" },
+    ] as any;
+    const tree = React.createElement(
+      Box,
+      { flexDirection: "column", height: 8, width: 40 },
+      React.createElement(
+        Box,
+        { flexDirection: "column", flexGrow: 1, minHeight: 0, overflow: "hidden" },
+        React.createElement(VirtualMessageList, {
+          messages,
+          viewportRows: 20,
+          renderMessage: (message: any) => React.createElement(
+            Box,
+            { flexDirection: "column" },
+            ...Array.from({ length: message.id === "latest" ? 6 : 2 }, (_, index) => React.createElement(
+              Text,
+              { key: index },
+              message.id === "latest" && index === 5 ? "LATEST-END" : `${message.id}-${index}`,
+            )),
+          ),
+        }),
+      ),
+      React.createElement(Box, { height: 2, flexShrink: 0 }, React.createElement(Text, null, "PROMPT")),
+    );
+
+    mountInk(tree, {
+      stream: { write(value: string) { rendered += value; } },
+      stdout: { columns: 40, rows: 8 },
+    });
+
+    expect(rendered).toContain("LATEST-END");
+    expect(rendered).toContain("PROMPT");
   });
 });

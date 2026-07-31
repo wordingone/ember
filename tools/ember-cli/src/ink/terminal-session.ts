@@ -9,9 +9,12 @@ import {
   HIDE_CURSOR,
   SHOW_CURSOR,
 } from "./termio.ts";
+import { writeSync } from "node:fs";
 
 export interface TerminalSessionStream {
   write(value: string): unknown;
+  /** Native stdout/stderr file descriptor when synchronous teardown is available. */
+  fd?: number;
 }
 
 export interface TerminalSessionController {
@@ -25,6 +28,12 @@ export interface TerminalSessionController {
  * controller deliberately writes each transition as one atomic string and is
  * idempotent so normal teardown and process-exit teardown can safely race.
  */
+export function restoreTerminalSession(stream: TerminalSessionStream): void {
+  const teardown = DISABLE_MOUSE_TRACKING + SHOW_CURSOR + EXIT_ALT_SCREEN;
+  if (Number.isInteger(stream.fd)) writeSync(stream.fd!, teardown);
+  else stream.write(teardown);
+}
+
 export function createTerminalSessionController(
   stream: TerminalSessionStream,
 ): TerminalSessionController {
@@ -40,7 +49,7 @@ export function createTerminalSessionController(
       } catch (error) {
         active = false;
         try {
-          stream.write(DISABLE_MOUSE_TRACKING + SHOW_CURSOR + EXIT_ALT_SCREEN);
+          restoreTerminalSession(stream);
         } catch { /* preserve the acquisition error */ }
         throw error;
       }
@@ -48,7 +57,7 @@ export function createTerminalSessionController(
     exit(): void {
       if (!active) return;
       active = false;
-      stream.write(DISABLE_MOUSE_TRACKING + SHOW_CURSOR + EXIT_ALT_SCREEN);
+      restoreTerminalSession(stream);
     },
   };
 }
