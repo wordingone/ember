@@ -81,6 +81,7 @@ import json
 import re
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from datetime import datetime, timezone
@@ -99,6 +100,17 @@ from p5_ratio_audit.run_p5_audit import (                              # noqa: E
     enumerate_missing_optimizer_state_ids,
 )
 from receipt_write import checked_write                                # noqa: E402
+from optimizer_transplant_provenance import (                           # noqa: E402
+    build_transplant_provenance,
+    checkpoint_bundle_sha256,
+    load_transplant_provenance,
+    load_verified_custody_checkpoint,
+    publish_checkpoint_to_custody,
+    sha256_file as provenance_sha256_file,
+    verify_destination_optimizer_binding,
+    verify_transplant_provenance,
+    write_transplant_provenance_atomic,
+)
 
 REPO = Path(__file__).resolve().parent.parent
 INVARIANT_SHA256 = "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
@@ -854,6 +866,12 @@ def build_transplanted_resume_checkpoint(seed_ckpt_dir: str, grown_cache_path: s
     range -- the caller decides Branch-B fallback for that range, this
     function never silently substitutes there.
     """
+    raise RuntimeError(
+        "UNRECEIPTED_TRANSPLANT_BUILD_DISABLED: issue #677 requires "
+        "materialize_optimizer_grown_bundle plus verified durable custody; "
+        "the historical BUILD path cannot emit or resume an optimizer "
+        "transplant"
+    )
     import torch
 
     m_state, o_state, r_state, manifest = ts.load_checkpoint(seed_ckpt_dir)
@@ -1060,7 +1078,8 @@ def verify_staged_checkpoint(ckpt_dir: str) -> dict:
 
 
 def materialize_optimizer_grown_bundle(seed_ckpt_dir: str, staged_ckpt_dir: str,
-                                        out_dir: str, lr_muon: float, cfg: dict) -> dict:
+                                        out_dir: str, custody_root: str,
+                                        lr_muon: float, cfg: dict) -> dict:
     """Issue #577 cure (team-lead ruling): the staged optimizer.pt at
     staged_ckpt_dir declares mechanism branch_a_partial_hybrid_disclosed_
     deviation but never actually implements it -- run-v4's fail-closed
@@ -1103,7 +1122,7 @@ def materialize_optimizer_grown_bundle(seed_ckpt_dir: str, staged_ckpt_dir: str,
     import shutil
     import os
 
-    seed_m, seed_o, _seed_r, _seed_manifest = ts.load_checkpoint(seed_ckpt_dir)
+    seed_m, seed_o, _seed_r, seed_manifest = ts.load_checkpoint(seed_ckpt_dir)
     staged_m, _staged_o_unused, _staged_r, staged_manifest = ts.load_checkpoint(staged_ckpt_dir)
 
     # ground-truth LOCAL ordering: build the real (grown) model once, split_param_groups
@@ -1137,20 +1156,81 @@ def materialize_optimizer_grown_bundle(seed_ckpt_dir: str, staged_ckpt_dir: str,
         "adamw": seed_o["adamw"],  # carried bitwise unchanged -- shape-invariant across the grow
     }
 
+    # Issue #677: RMS remains diagnostic only.  A second independent replay
+    # must reproduce every transformed destination tensor before the sidecar
+    # can be written or a resume can consume this checkpoint.
+    build_timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    param_names = {"muon": muon_local_names, "adamw": adamw_local_names}
+    transforms = {}
+    transform_errors = {}
+    replay_tensors = {}
+    replay = transplant_muon_ff_momentum(
+        seed_m, seed_o, n_layers=20, lr_muon=lr_muon,
+        eps_sigma=0.0, eps_seed=0)
+    for name, replay_tensor in replay["post_grow_momentum_state_dict"].items():
+        local_idx = muon_local_names.index(name)
+        mapping_key = f"muon:{name}:momentum_buffer"
+        destination_tensor = grown_muon_state[local_idx]["momentum_buffer"]
+        transforms[mapping_key] = "momentum-pushforward-v1"
+        transform_errors[mapping_key] = float(
+            torch.max(torch.abs(
+                replay_tensor.to(torch.float64)
+                - destination_tensor.to(torch.float64)
+            )).item()
+        )
+        replay_tensors[mapping_key] = replay_tensor
+    provenance = build_transplant_provenance(
+        source_checkpoint_sha256=checkpoint_bundle_sha256(seed_ckpt_dir),
+        transplant_method="branch-a-momentum-pushforward-v1",
+        cure_version="issue-577-cure-with-issue-677-binding-v1",
+        build_timestamp=build_timestamp,
+        source_optimizer_state=seed_o,
+        destination_optimizer_state=grown_opt_state,
+        param_names=param_names,
+        transforms=transforms,
+        transform_errors=transform_errors,
+        authorized_fresh={},
+        dropped={},
+        global_step=int(staged_manifest["step"]),
+        scheduler_provenance={
+            "source": "source-checkpoint-manifest",
+            "value": seed_manifest.get("extra", {}).get("scheduler"),
+        },
+        scaler_provenance={
+            "source": "source-checkpoint-manifest",
+            "value": seed_manifest.get("extra", {}).get("scaler"),
+        },
+    )
+    provenance = verify_transplant_provenance(
+        provenance,
+        source_optimizer_state=seed_o,
+        destination_optimizer_state=grown_opt_state,
+        param_names=param_names,
+        replay_tensors=replay_tensors,
+    )
+
     out_ckpt_dir = os.path.join(out_dir, "checkpoints", f"step-{staged_manifest['step']:08d}")
     os.makedirs(out_ckpt_dir, exist_ok=True)
 
-    # model.pt / rng.pt: byte-identical copies of the already-verified-grown staged files
+    # model.pt / rng.pt: byte-identical copies of the already-verified-grown staged files.
     shutil.copyfile(os.path.join(staged_ckpt_dir, "model.pt"), os.path.join(out_ckpt_dir, "model.pt"))
     shutil.copyfile(os.path.join(staged_ckpt_dir, "rng.pt"), os.path.join(out_ckpt_dir, "rng.pt"))
 
     op_path = os.path.join(out_ckpt_dir, "optimizer.pt")
     torch.save(grown_opt_state, op_path)
 
-    # distinctly-named audit copy alongside the ORIGINAL staged dir (#577 ruling's literal
-    # filename ask) -- the original staged optimizer.pt there is left completely untouched.
-    grown_only_path = os.path.join(staged_ckpt_dir, "optimizer-grown.pt")
-    shutil.copyfile(op_path, grown_only_path)
+    # #577's audit copy belongs to the NEW checkpoint, never beside or inside
+    # either source checkpoint.  The old path mutated staged_ckpt_dir.
+    grown_only_path = os.path.join(out_ckpt_dir, "optimizer-grown.pt")
+    try:
+        os.link(op_path, grown_only_path)
+    except OSError:
+        shutil.copyfile(op_path, grown_only_path)
+
+    provenance_name = "transplant-provenance.json"
+    provenance_path = os.path.join(out_ckpt_dir, provenance_name)
+    write_transplant_provenance_atomic(provenance_path, provenance)
+    provenance_file_sha256 = provenance_sha256_file(provenance_path)
 
     n_pushforward = len(pushforward_names)
     n_carried_muon_non_ff = len(muon_local_names) - n_pushforward
@@ -1158,10 +1238,9 @@ def materialize_optimizer_grown_bundle(seed_ckpt_dir: str, staged_ckpt_dir: str,
 
     manifest_out = {
         "ticket": "CBASE-GROW-RUNG2-STABILIZE-LEG1-OPTIMIZER-CURE",
-        "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
-        "issue": "wordingone/ember#577",
-        "source_seed_ckpt_dir": seed_ckpt_dir,
-        "source_staged_ckpt_dir": staged_ckpt_dir,
+        "ts": build_timestamp,
+        "issue": "wordingone/ember#677",
+        "refs": [577, 677],
         "root_cause": (
             "resolve_gate_momentum_buffer / _enumerate_missing_optimizer_state_ids key by "
             "GLOBAL model-state index; this checkpoint's on-disk muon/adamw state is keyed "
@@ -1174,19 +1253,25 @@ def materialize_optimizer_grown_bundle(seed_ckpt_dir: str, staged_ckpt_dir: str,
         "files": {
             "model.pt": ts._sha256_file(os.path.join(out_ckpt_dir, "model.pt")),
             "optimizer.pt": ts._sha256_file(op_path),
+            "optimizer-grown.pt": ts._sha256_file(grown_only_path),
             "rng.pt": ts._sha256_file(os.path.join(out_ckpt_dir, "rng.pt")),
+            provenance_name: provenance_file_sha256,
         },
-        "source_files_sha": {
-            "seed_optimizer.pt": ts._sha256_file(os.path.join(seed_ckpt_dir, "optimizer.pt")),
-            "staged_optimizer.pt_superseded": ts._sha256_file(
-                os.path.join(staged_ckpt_dir, "optimizer.pt")),
-        },
+        "source_checkpoint_sha256": provenance["source_checkpoint_sha256"],
+        "source_staged_checkpoint_sha256": checkpoint_bundle_sha256(staged_ckpt_dir),
         "momentum_provenance": {
             "carried_muon_non_ff": n_carried_muon_non_ff,
             "carried_adamw": n_carried_adamw,
             "reset": 0,
             "pushforward": n_pushforward,
         },
+        "transplant_provenance_path": provenance_name,
+        "transplant_provenance_file_sha256": provenance_file_sha256,
+        "transplant_provenance": provenance,
+        "transplant_note": (
+            "issue #677 verified transplant provenance is inline and in "
+            f"{provenance_name}; both are hash-bound by this manifest"
+        ),
         "pre_buffer_rms_consumed": transplant["pre_buffer_rms_consumed"],
         "per_tensor_pre_buffer_rms": transplant["per_tensor_pre_buffer_rms"],
         "resolved_lr_muon": transplant["resolved_lr_muon"],
@@ -1194,14 +1279,50 @@ def materialize_optimizer_grown_bundle(seed_ckpt_dir: str, staged_ckpt_dir: str,
         "boundary_policy": transplant["boundary_policy"],
         "step": staged_manifest["step"],
     }
-    with open(os.path.join(out_ckpt_dir, "manifest.json"), "w", encoding="utf-8", newline="\n") as f:
-        json.dump(manifest_out, f, sort_keys=True, separators=(",", ": "), indent=2)
+    manifest_path = os.path.join(out_ckpt_dir, "manifest.json")
+    manifest_fd, manifest_tmp = tempfile.mkstemp(
+        dir=out_ckpt_dir, prefix=".manifest.", suffix=".tmp")
+    try:
+        with os.fdopen(manifest_fd, "w", encoding="utf-8", newline="\n") as stream:
+            json.dump(manifest_out, stream, sort_keys=True, separators=(",", ":"), indent=2)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(manifest_tmp, manifest_path)
+    finally:
+        if os.path.exists(manifest_tmp):
+            os.unlink(manifest_tmp)
+
+    custody = publish_checkpoint_to_custody(out_ckpt_dir, custody_root)
+    custody_checkpoint_dir = custody["destination_path"]
+    custody_manifest = json.loads(
+        Path(custody_checkpoint_dir, "manifest.json").read_text(
+            encoding="utf-8", errors="strict"))
+    loaded_provenance = load_transplant_provenance(
+        Path(custody_checkpoint_dir, provenance_name),
+        expected_sha256=custody_manifest["transplant_provenance_file_sha256"],
+        expected_build_timestamp=custody_manifest["ts"],
+    )
+    if loaded_provenance != custody_manifest["transplant_provenance"]:
+        raise RuntimeError("custody manifest and transplant sidecar disagree")
+    custody_optimizer = torch.load(
+        Path(custody_checkpoint_dir, "optimizer.pt"), map_location="cpu",
+        weights_only=True, mmap=True)
+    verify_destination_optimizer_binding(loaded_provenance, custody_optimizer)
 
     return {
-        "checkpoint_dir": out_ckpt_dir,
-        "grown_optimizer_audit_copy": grown_only_path,
-        "manifest": manifest_out,
+        "checkpoint_dir": custody_checkpoint_dir,
+        "transient_checkpoint_dir": out_ckpt_dir,
+        "grown_optimizer_audit_copy": str(Path(custody_checkpoint_dir, "optimizer-grown.pt")),
+        "manifest": custody_manifest,
+        "transplant_provenance": loaded_provenance,
+        "custody": custody,
     }
+
+
+def load_verified_transplant_checkpoint(ckpt_dir: str) -> dict:
+    """Archived launcher shim for the reusable #677 consumer."""
+    return load_verified_custody_checkpoint(ckpt_dir)
 
 
 def verify_optimizer_shapes(ckpt_dir: str, cfg: dict) -> dict:
@@ -1309,7 +1430,8 @@ def _run_block(cfg: dict, run_dir: str, resume_ckpt_dir: str, *, global_step_sta
                total_steps: int, shard_dir: str, grad_accum_steps: int, block_idx: int,
                sample_interval_s: float = 2.0,
                pace_gate_s: float | None = None,
-               receipt_dir: str | None = None) -> tuple[dict, dict]:
+               receipt_dir: str | None = None,
+               transplant_provenance: dict | None = None) -> tuple[dict, dict]:
     # v8 (ember #627 point 1): the incoming checkpoint is the last known-good
     # one until this block writes its own -- note it now so a governed abort
     # anywhere before run_v0_segment returns (front-load memmap creation, any
@@ -1473,6 +1595,9 @@ def main() -> int:
     ap.add_argument("--shard-dir", help="real packed uint16 corpus shard dir")
     ap.add_argument("--out-dir", default=str(REPO / "models" / "cbase-grow-rung" / "rung2-stabilize-leg1"))
     ap.add_argument("--receipt-dir", default=str(REPO / "receipts"))
+    ap.add_argument("--custody-root",
+                     help="durable checkpoint root outside the disposable build worktree; "
+                          "required for --materialize-optimizer-grown")
     ap.add_argument("--n-blocks", type=int, default=N_BLOCKS_DEFAULT)
     ap.add_argument("--start-block", type=int, default=1,
                      help="issue #480 mid-leg resume (v5 TIMESHARE_GOVERNOR_FAIL hold, block01->"
@@ -1530,12 +1655,12 @@ def main() -> int:
             return 4
 
     if args.materialize_optimizer_grown:
-        if not (args.seed_ckpt and args.staged_ckpt):
-            ap.error("--materialize-optimizer-grown requires --seed-ckpt and --staged-ckpt")
+        if not (args.seed_ckpt and args.staged_ckpt and args.custody_root):
+            ap.error("--materialize-optimizer-grown requires --seed-ckpt, --staged-ckpt, and --custody-root")
         cfg = ts.load_contract()
         out_dir = str(Path(args.out_dir) / "transplant-ckpt-cured")
         result = materialize_optimizer_grown_bundle(
-            args.seed_ckpt, args.staged_ckpt, out_dir, LR_MUON, cfg)
+            args.seed_ckpt, args.staged_ckpt, out_dir, args.custody_root, LR_MUON, cfg)
         print(f"OPTIMIZER_GROWN_MATERIALIZED checkpoint_dir={result['checkpoint_dir']} "
               f"momentum_provenance={json.dumps(result['manifest']['momentum_provenance'])}",
               flush=True)
@@ -1566,10 +1691,13 @@ def main() -> int:
         # issue #577 cure path: BUILD (and its verify) already ran via
         # --materialize-optimizer-grown + --verify-optimizer-shapes; skip
         # straight to g1 preflight + RUN against the cured checkpoint dir.
+        verified_transplant = load_verified_transplant_checkpoint(
+            args.resume_ckpt_dir_override)
         build = {
             "checkpoint_dir": args.resume_ckpt_dir_override,
-            "transplant_meta": {"note": "issue #577 cure -- see manifest.json in this dir "
-                                         "for momentum_provenance + per-tensor RMS"},
+            "transplant_meta": verified_transplant,
+            "transplant_provenance": verified_transplant["transplant_provenance"],
+            "custody": verified_transplant["custody"],
         }
         verify_proc = None
         cured_model_sd = torch.load(
@@ -1721,9 +1849,11 @@ def main() -> int:
             cfg, run_dir, resume_ckpt_dir, global_step_start=global_step,
             total_steps=total_steps, shard_dir=args.shard_dir,
             grad_accum_steps=grad_accum_steps, block_idx=block_idx,
-            pace_gate_s=pace_gate_s, receipt_dir=receipt_dir)
+            pace_gate_s=pace_gate_s, receipt_dir=receipt_dir,
+            transplant_provenance=build.get("transplant_provenance"))
         kwh_running += (block_receipt["kwh_this_block"] or 0.0)
         block_receipt["kwh_running_total"] = round(kwh_running, 6)
+        block_receipt["transplant_provenance"] = build.get("transplant_provenance")
         block_receipts.append(block_receipt)
         print(f"BLOCK {block_idx}/{args.n_blocks} step={block_receipt['global_step_end']} "
               f"loss_mean={block_receipt['loss_mean']} vram_peak_gib={block_receipt['vram_peak_gib']} "
