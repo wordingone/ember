@@ -63,5 +63,6 @@
     "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
     "ticket":  "WAVE-011-ISSUE-760-HELDOUT-PREFLIGHT",
     "ts":  "20260731T005114Z",
-    "sha_convention":  "sha256 over exact on-disk raw bytes, binary read, with no line-ending normalization"
+    "sha_convention":  "sha256 over exact on-disk raw bytes, binary read, with no line-ending normalization",
+    "invariant_sha256":  "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
 }
