@@ -621,9 +621,9 @@ describe("PR954 round 4 — writer-level coverage: relative gitdir + genuinely u
 });
 
 describe("headless-capture suppression", () => {
-  // The defect these cover: the heartbeat is the input to scripts/liveness-watchdog.ps1, which
-  // relaunches the cockpit once the heartbeat ages out. A capture harness driving the COMPILED
-  // binary therefore suppresses that relaunch -- it makes a dead cockpit look alive. Observed
+  // The defect these cover: a capture harness driving the compiled binary can publish a
+  // heartbeat that falsely looks like a live operator cockpit to census/activity consumers.
+  // Headless capture therefore suppresses all authoritative liveness publication. Observed
   // 2026-07-26: a palette-capture run inside an isolated worktree left a fresh heartbeat in the
   // MAIN repo's state dir, because this module resolves to the main root by design.
 

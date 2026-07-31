@@ -287,9 +287,10 @@ export type WatchdogRow = Record<string, unknown>;
 
 /** issue #616 bar 2: a kill-receipt row may render as a SERVER event only when the row's own
  *  cmdline-bearing field (`match_rule` in the kill-discipline receipt format, or a literal
- *  `cmdline` field) names the serving binary. liveness-watchdog.ps1's Write-KillReceiptRow always
- *  writes "Name=llama-server.exe ..." into match_rule on its server kill path, so this is a
- *  property the row itself carries — never an inference from context. */
+ *  `cmdline` field) names the serving binary. Historical liveness-watchdog kill receipts wrote
+ *  "Name=llama-server.exe ..." into match_rule; this reader preserves that append-only evidence
+ *  format after the watchdog itself was retired. Classification remains a property the row
+ *  itself carries — never an inference from context. */
 const SERVER_PROCESS_MARKER = "llama-server";
 
 export function killReceiptNamesServer(row: WatchdogRow): boolean {

@@ -483,6 +483,10 @@ describe("process-entry — AC8: managed server is NOT spawned for fast-path fla
   it("isFastPath returns false for normal interactive invocation", () => {
     expect(isFastPath(["node", "ember"])).toBe(false);
   });
+
+  it("treats OS-native liveness installation as a model-free fast path", () => {
+    expect(isFastPath(["node", "ember", "liveness", "install"])).toBe(true);
+  });
 });
 
 describe("process-entry — AC9: managed server killed on clean exit", () => {
