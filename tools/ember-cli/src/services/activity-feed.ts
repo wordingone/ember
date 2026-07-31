@@ -20,7 +20,7 @@
 // a still-writing file) is appended to state/activity-ledger.jsonl, so "nothing happened" is
 // machine-checkable instead of resting on the operator's own eyes.
 
-import { watch, readFileSync, type FSWatcher } from "node:fs";
+import { watch, readFileSync, statSync, type FSWatcher } from "node:fs";
 import { readFile, stat, writeFile, open } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -526,14 +526,20 @@ function freshTailState(): TailState {
   return { byteOffset: 0, lineBuffer: "" };
 }
 
-/** #576: `restartTail`/`killTail` are process-local (reset to byte offset 0 on every
- *  `startActivityFeed()` call, i.e. every cockpit process boot), so a fresh boot always replays
- *  the CURRENT full content of a tail-polled file once -- confirmed live (issue #576's natural
- *  experiment: an 859-line clean replay of `restart-log` on a manual cockpit restart with zero
- *  corresponding watchdog-recorded death). Beyond that baseline replay, the historical incident
- *  additionally saw one `kill-receipts` row explode to ~65,000 duplicate renders in the same
- *  tick -- root cause not yet pinned. This cap is a containment backstop independent of WHY a
- *  given tick's line count balloons: if a single tick would emit more than
+/** Watchdog logs are historical event streams. On a fresh cockpit boot, begin at the current
+ *  byte length so completed rows are not replayed into the new process's live activity feed.
+ *  If the file does not exist yet, offset zero correctly observes its future creation. */
+function tailStateAtCurrentEnd(filePath: string): TailState {
+  try {
+    return { byteOffset: statSync(filePath).size, lineBuffer: "" };
+  } catch {
+    return freshTailState();
+  }
+}
+
+/** #576: The historical incident saw one `kill-receipts` row explode to ~65,000 duplicate
+ *  renders in one tick. Boot baselining prevents completed-row replay; this cap remains a
+ *  defense-in-depth backstop for any anomalous live append. If a single tick emits more than
  *  MAX_TAIL_LINES_PER_TICK lines, render ONE collapsed summary line instead of N individual
  *  ones (mirrors the receipts-side burst-coalescing in P0-B/#574). */
 export const MAX_TAIL_LINES_PER_TICK = 20;
@@ -926,11 +932,11 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
   _stopFns.push(() => clearInterval(outageInterval));
 
   // -- Watchdog: restart-log + kill-receipts (tail-polled JSONL) -----------
-  const restartTail = freshTailState();
+  const restartTail = tailStateAtCurrentEnd(restartLogPath);
   logTailPollDiagnostic({ event: "freshTailState", file: "restart-log" });
-  const killTail = freshTailState();
-  logTailPollDiagnostic({ event: "freshTailState", file: "kill-receipts" });
   let resolvedKillReceiptsPath = deps.killReceiptsPath;
+  let killTail = resolvedKillReceiptsPath ? tailStateAtCurrentEnd(resolvedKillReceiptsPath) : null;
+  if (killTail) logTailPollDiagnostic({ event: "freshTailState", file: "kill-receipts" });
 
   const resolveKillReceiptsPath = (async (): Promise<void> => {
     if (resolvedKillReceiptsPath) return;
@@ -947,6 +953,10 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
     }
     if (!resolvedKillReceiptsPath) {
       resolvedKillReceiptsPath = process.env["EMBER_KILL_RECEIPTS_PATH"] || undefined;
+    }
+    if (resolvedKillReceiptsPath && killTail === null) {
+      killTail = tailStateAtCurrentEnd(resolvedKillReceiptsPath);
+      logTailPollDiagnostic({ event: "freshTailState", file: "kill-receipts" });
     }
   })();
 
@@ -1002,7 +1012,7 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
         }),
       );
 
-    if (resolvedKillReceiptsPath) {
+    if (resolvedKillReceiptsPath && killTail) {
       const killPath = resolvedKillReceiptsPath;
       pending.push(
         pollTail(
