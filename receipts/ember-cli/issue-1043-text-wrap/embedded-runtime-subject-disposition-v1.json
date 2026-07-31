@@ -1,0 +1,36 @@
+{
+  "schema_version": "ember-c-custody-embedded-runtime-subject-disposition/v1",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "ticket": "C-CUSTODY-ISSUE-1043-RUNTIME-SUBJECT",
+  "ts": "2026-07-31T16:28:18Z",
+  "sha_convention": "sha256 over exact on-disk file bytes, no normalization",
+  "source_commit": "52d6d49037719e26b0268865037d295171f9a589",
+  "source_pr": "https://github.com/wordingone/ember/pull/1167",
+  "source_issue": "https://github.com/wordingone/ember/issues/1043",
+  "embedded_runtime_subjects": [
+    {
+      "schema_version": "ember-c-custody-embedded-runtime-subject/v1",
+      "missing_ref": "receipts/ember-cli/issue-1043-text-wrap/ember.exe",
+      "subject_receipt": "receipts/ember-cli/issue-1043-text-wrap/capture-receipt.json",
+      "subject_receipt_sha256": "0c856572684b449427d493dd38a1d8c2faa0f959e47890c7be323fc06dd0ba43",
+      "binary_sha256": "1181f882bdb71e329ff185f0939b9cc352b75e1bd6f106b25ec989915653ad5c",
+      "classification": "EPHEMERAL_COMPILED_TEST_SUBJECT",
+      "reason": "the self-contained capture receipt embeds the compiled subject hash and exact path-neutral frame evidence; the binary was never a tracked custody artifact"
+    }
+  ],
+  "evidence": {
+    "capture_receipt_verdict": "PASS",
+    "capture_receipt_claim_boundary": "compiled text wrapping and one-row truncation only",
+    "git_object_history_contains_binary_path": false,
+    "merged_pr_declares_self_contained_receipt": true
+  },
+  "claim_boundary": {
+    "restoration_performed": false,
+    "binary_reconstructed": false,
+    "capability_claim": false,
+    "training_claim": false
+  }
+}

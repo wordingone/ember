@@ -1,0 +1,85 @@
+{
+  "schema_version": "ember-c-custody-documented-absent/v1",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "ticket": "C-CUSTODY-DOCUMENTED-ABSENT-WAVE031",
+  "ts": "2026-07-31T16:28:18Z",
+  "sha_convention": "sha256 over exact on-disk file bytes, no normalization",
+  "source_commit": "52d6d49037719e26b0268865037d295171f9a589",
+  "source_document": "docs/custody-disposition-20260731-wave031.md",
+  "source_document_sha256": "8b6ebf6073cc54f0f1366206d78599cdcbd5f82177e9e38b13b24a884d07961b",
+  "documented_absent": [
+    {
+      "doc": "docs/custody-disposition-20260731-wave031.md",
+      "ref": "receipts/ember-c-scale/w1-collapse-control-20260704T144548Z.json",
+      "marker": "33df343e14c2a19a572b21dac9aa8cc69482d86e",
+      "line": 20,
+      "disposition_class": "CROSS_LINEAGE_CONTENT_RAIL_BARRED"
+    },
+    {
+      "doc": "docs/custody-disposition-20260731-wave031.md",
+      "ref": "receipts/ember-preloop-resident-gate/avir-cli-full-parity-harness-gate-20260704T055811Z.json",
+      "marker": "13c39f7a587792ce9a70998984e3d46e4177769d",
+      "line": 21,
+      "disposition_class": "CROSS_LINEAGE_CONTENT_RAIL_BARRED"
+    },
+    {
+      "doc": "docs/custody-disposition-20260731-wave031.md",
+      "ref": "receipts/ember-preloop-resident-gate/real-avir-uiux-ax-observation-20260704T055355Z.json",
+      "marker": "13c39f7a587792ce9a70998984e3d46e4177769d",
+      "line": 22,
+      "disposition_class": "CROSS_LINEAGE_CONTENT_RAIL_BARRED"
+    },
+    {
+      "doc": "docs/custody-disposition-20260731-wave031.md",
+      "ref": "receipts/shatter-verdict-bf16ns5-20260623T132000Z.json",
+      "marker": "6c9b3d74c35b010ea69516d8240de9c634b613a4",
+      "line": 23,
+      "disposition_class": "CROSS_LINEAGE_CONTENT_RAIL_BARRED"
+    },
+    {
+      "doc": "docs/custody-disposition-20260731-wave031.md",
+      "ref": "receipts/shatter-verdict-canonical-20260623.json",
+      "marker": "6c9b3d74c35b010ea69516d8240de9c634b613a4",
+      "line": 24,
+      "disposition_class": "CROSS_LINEAGE_CONTENT_RAIL_BARRED"
+    },
+    {
+      "doc": "docs/custody-disposition-20260731-wave031.md",
+      "ref": "receipts/ember-c-scale/w2-heldout-decontam-20260707T055843Z.json",
+      "marker": "24e471f072d07d32bb3e012c695e9219ea35de0a0eafa1ce1d9a2c442660bbb3",
+      "line": 34,
+      "disposition_class": "DECLARED_HASH_ZERO_GIT_TRACE"
+    },
+    {
+      "doc": "docs/custody-disposition-20260731-wave031.md",
+      "ref": "receipts/ember-preloop-resident-gate/reference-cli-full-parity-harness-gate-20260622T152000Z-real-reference-observed.json",
+      "marker": "330c51d9d32934e7c6216f05540c9dbfbdfa6c7ccd1385c2fe8dd707a42d10ff",
+      "line": 35,
+      "disposition_class": "DECLARED_HASH_ZERO_GIT_TRACE"
+    },
+    {
+      "doc": "docs/custody-disposition-20260731-wave031.md",
+      "ref": "receipts/ember-preloop-resident-gate/reference-cli-full-parity-harness-gate-20260622T154500Z-real-reference-observation-blocked.json",
+      "marker": "34cd8547c77ccca33cd8b9aa0a3452923a751734e39ba2e0759746b3afd71bc2",
+      "line": 36,
+      "disposition_class": "DECLARED_HASH_ZERO_GIT_TRACE"
+    },
+    {
+      "doc": "docs/custody-disposition-20260731-wave031.md",
+      "ref": "receipts/ember-resident-training-gate/resident-training-gate-20260622T152500Z-real-reference-observed.json",
+      "marker": "f6992b3ae157f0e698eefd4740805cd5815ac4627da6775986c1183eb228c8a2",
+      "line": 37,
+      "disposition_class": "DECLARED_HASH_ZERO_GIT_TRACE"
+    }
+  ],
+  "claim_boundary": {
+    "restoration_performed": false,
+    "reconstruction_performed": false,
+    "capability_claim": false,
+    "training_claim": false,
+    "issue_closure_authorized": false
+  }
+}
