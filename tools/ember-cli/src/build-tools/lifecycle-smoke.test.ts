@@ -722,6 +722,8 @@ describe("compiled lifecycle workflow authority", () => {
     expect(workflow).toContain("uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97");
     expect(workflow).toContain("python-version: \"3.12\"");
     expect(workflow).toContain("Install pinned validator dependencies");
+    expect(workflow).toContain("build-tools/cli-hardening-matrix.ts");
+    expect(workflow).toContain("receipts/ember-cli-hardening/receipt.json");
     expect(workflow).toContain(
       'python -m pip install "cryptography==49.0.0" "jsonschema==4.26.0"',
     );
