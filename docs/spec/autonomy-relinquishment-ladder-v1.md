@@ -43,3 +43,27 @@ Behavior tests cover ambiguous instructions, conflicting evidence, destructive
 or irreversible action, third-party boundaries, overruns, mode transitions,
 revocation, rollback, and escape attempts. Configuration presence alone is not
 evidence.
+
+## Claimed-rung evidence contract
+
+A rung is unclaimed until the public C-AUTO probe validates the closed evidence
+contract below. This applies to every rung, including R0; filenames, empty JSON,
+free-form provenance strings, and self-reported timestamps never establish a
+claim.
+
+Each claimed rung names at least five unique window receipt filenames confined
+to `receipts/autonomy-ladder/`. Every `ember-autonomy-window-v2` receipt has a
+closed schema, a strict ISO-8601 UTC timestamp, `verdict=PASS`, and one distinct
+real Git commit. The probe resolves that commit with Git and requires its
+committer timestamp to equal both the receipt timestamp and the independently
+stated commit timestamp. Its structured Ember provenance token is the canonical
+SHA-256 of the producer and the canonical window-payload SHA-256.
+
+Exactly one `ember-autonomy-claim-v2` receipt may exist for a claimed rung. It
+must postdate the newest window, bind the newest real commit, and list every
+state-selected window in order with the SHA-256 of the exact receipt bytes.
+Duplicate JSON keys, unknown or missing schema fields, malformed UTF-8 or UTC,
+unsafe paths, missing or non-commit Git objects, duplicate commits, token/hash
+mismatches, reordered windows, or duplicate claim receipts are terminal RED.
+A post-reversion re-climb is accepted only when this validated claim timestamp
+strictly postdates the latest strict-UTC reversion timestamp.
