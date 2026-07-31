@@ -34,6 +34,13 @@ SCHEMA_VERSION = "ember-freeze-artifact-integrity/v1"
 GOAL_ID = "EMBER-02"
 WORKSTREAM_ID = "EMBER-02A"
 NEXT_EXECUTED_OUTCOME = "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+TICKET = "FREEZE-ARTIFACT-INTEGRITY-ISSUE531"
+SHA_CONVENTION = (
+    "sha256 over exact on-disk file bytes, no normalization"
+)
+INVARIANT_SHA256 = (
+    "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
+)
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 FormatProbe = Callable[[Path], dict[str, str]]
 
@@ -176,10 +183,28 @@ def _resolve_artifact(
     receipt_path: Path,
     raw: str,
     source_kind: str,
+    directory_hint: str | None = None,
 ) -> tuple[Path | None, str | None]:
     relative = _safe_relative_path(raw)
     if relative is None:
         return None, "PATH_OUTSIDE_REPOSITORY"
+
+    resolved_root = root.resolve()
+    if directory_hint is not None:
+        normalized_hint = directory_hint.replace("\\", "/")
+        hint = PurePosixPath(normalized_hint)
+        if (
+            not normalized_hint
+            or hint.is_absolute()
+            or re.match(r"^[A-Za-z]:", normalized_hint)
+        ):
+            return None, "PATH_OUTSIDE_REPOSITORY"
+        candidate = receipt_path.parent.joinpath(
+            *hint.parts, *relative.parts
+        ).resolve(strict=False)
+        if not _inside(resolved_root, candidate):
+            return None, "PATH_OUTSIDE_REPOSITORY"
+        return candidate, None
 
     if source_kind == "name":
         candidates = [
@@ -190,7 +215,6 @@ def _resolve_artifact(
     else:
         candidates = [root.joinpath(*relative.parts)]
 
-    resolved_root = root.resolve()
     safe_candidates: list[Path] = []
     for candidate in candidates:
         resolved = candidate.resolve(strict=False)
@@ -211,6 +235,7 @@ def _extract_pins(
     receipt: object,
 ) -> list[dict[str, Any]]:
     transitions = _provenance_transitions(receipt)
+    shard_dir = receipt.get("shard_dir") if isinstance(receipt, Mapping) else None
     pins: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
 
@@ -260,8 +285,17 @@ def _extract_pins(
             seen.add(identity)
             expected = transitions.get(field, original_digest)
             pin_source = "provenance_transition" if field in transitions else "receipt"
+            directory_hint = (
+                shard_dir
+                if (
+                    source_kind == "name"
+                    and object_path[:1] == ("shards",)
+                    and isinstance(shard_dir, str)
+                )
+                else None
+            )
             artifact, path_error = _resolve_artifact(
-                root, receipts_dir, receipt_path, raw_path, source_kind
+                root, receipts_dir, receipt_path, raw_path, source_kind, directory_hint
             )
             pins.append(
                 {
@@ -409,6 +443,9 @@ def scan_receipts(
         "goal_id": GOAL_ID,
         "workstream_id": WORKSTREAM_ID,
         "next_executed_outcome": NEXT_EXECUTED_OUTCOME,
+        "ticket": TICKET,
+        "sha_convention": SHA_CONVENTION,
+        "invariant_sha256": INVARIANT_SHA256,
         "receipts_directory": receipts_dir.relative_to(root).as_posix(),
         "summary": {
             "receipt_count": len(receipt_paths),
@@ -459,9 +496,9 @@ def main(argv: list[str] | None = None) -> int:
     report = scan_receipts(
         root, receipts_dir, exclude_paths=() if output is None else (output,)
     )
-    report["captured_at"] = (
-        datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    )
+    captured_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    report["captured_at"] = captured_at
+    report["ts"] = captured_at
     report["source_commit"] = _git_head(root)
     report["verifier_sha256"] = sha256_file(Path(__file__).resolve())
     report["report_sha256"] = hashlib.sha256(canonical_json_bytes(report)).hexdigest()

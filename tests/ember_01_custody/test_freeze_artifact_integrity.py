@@ -60,6 +60,9 @@ def test_matching_path_sha_pair_is_verified(tmp_path: Path) -> None:
         report["next_executed_outcome"]
         == "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
     )
+    assert report["ticket"] == "FREEZE-ARTIFACT-INTEGRITY-ISSUE531"
+    assert report["sha_convention"] == module.SHA_CONVENTION
+    assert report["invariant_sha256"] == module.INVARIANT_SHA256
     assert report["pins"][0]["status"] == "VERIFIED"
     assert report["pins"][0]["field"] == "artifact.sha256"
 
@@ -240,6 +243,62 @@ def test_receipt_name_resolves_inside_receipts_tree(tmp_path: Path) -> None:
     assert row["status"] == "VERIFIED"
 
 
+def test_shard_name_resolves_through_declared_shard_directory(
+    tmp_path: Path,
+) -> None:
+    module = load_module()
+    receipt = tmp_path / "receipts" / "token-shards.json"
+    write_json(
+        receipt,
+        {
+            "shard_dir": "../shards-v0",
+            "shards": [
+                {
+                    "name": "v0-00000.bin",
+                    "sha256": "0" * 64,
+                    "n_tokens": 1,
+                }
+            ],
+        },
+    )
+
+    row = module.scan_receipts(tmp_path, tmp_path / "receipts")["pins"][0]
+
+    assert row["artifact_path"] == "shards-v0/v0-00000.bin"
+    assert row["raw_artifact_reference"] == "v0-00000.bin"
+    assert row["violations"] == ["FILE_MISSING"]
+
+
+@pytest.mark.parametrize(
+    "shard_dir",
+    [
+        "../../outside",
+        "C:/outside",
+        "/outside",
+    ],
+)
+def test_declared_shard_directory_cannot_escape_repository(
+    shard_dir: str,
+    tmp_path: Path,
+) -> None:
+    module = load_module()
+    receipt = tmp_path / "receipts" / "token-shards.json"
+    write_json(
+        receipt,
+        {
+            "shard_dir": shard_dir,
+            "shards": [
+                {"name": "v0-00000.bin", "sha256": "0" * 64, "n_tokens": 1}
+            ],
+        },
+    )
+
+    row = module.scan_receipts(tmp_path, tmp_path / "receipts")["pins"][0]
+
+    assert row["artifact_path"] is None
+    assert row["violations"] == ["PATH_OUTSIDE_REPOSITORY"]
+
+
 def test_windows_separators_are_normalized_for_repo_relative_paths(
     tmp_path: Path,
 ) -> None:
@@ -312,6 +371,7 @@ def test_cli_report_hash_binds_verifier_and_all_prior_fields(tmp_path: Path) -> 
     assert exit_code == 0
     report = json.loads(output.read_text(encoding="utf-8"))
     expected = report.pop("report_sha256")
+    assert report["ts"] == report["captured_at"]
     assert "verifier_sha256" in report
     assert hashlib.sha256(module.canonical_json_bytes(report)).hexdigest() == expected
 
