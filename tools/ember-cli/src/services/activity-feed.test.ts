@@ -719,11 +719,8 @@ describe("startActivityFeed — engine (real fs)", () => {
     5000,
   );
 
-  // #576: MAX_TAIL_LINES_PER_TICK containment. Seeding the restart-log file BEFORE
-  // startActivityFeed() runs reproduces the real trigger (freshTailState() starts every process
-  // boot at byte offset 0, so the first tick after boot always sees the file's full current
-  // content at once) -- this is the same "boot replay" mechanism the natural experiment in
-  // issue #576 confirmed live.
+  // #576: MAX_TAIL_LINES_PER_TICK remains defense-in-depth for a large LIVE append even though
+  // completed rows present before boot are now baselined and never replayed.
   it(
     "collapses a tail-poll burst over the cap into one summary line instead of N individual ones",
     async () => {
@@ -732,10 +729,9 @@ describe("startActivityFeed — engine (real fs)", () => {
       const rows = Array.from({ length: lineCount }, (_, i) =>
         JSON.stringify({ ts: new Date().toISOString(), target: "cockpit", event: "relaunch", relaunchPid: i }),
       );
-      fs.writeFileSync(deps.restartLogPath, rows.join("\n") + "\n");
-
       handle = startActivityFeed(deps);
-      await sleep(1300); // first tail-poll tick fires ~TAIL_POLL_INTERVAL_MS after boot
+      fs.writeFileSync(deps.restartLogPath, rows.join("\n") + "\n");
+      await sleep(1300); // first tail-poll tick sees this live append after boot
 
       const state = getActivityFeedState();
       const watchdogLines = state.recentLines.filter((l) => l.source === "watchdog");
@@ -758,9 +754,8 @@ describe("startActivityFeed — engine (real fs)", () => {
       const rows = Array.from({ length: lineCount }, (_, i) =>
         JSON.stringify({ ts: new Date().toISOString(), target: "cockpit", event: "relaunch", relaunchPid: i }),
       );
-      fs.writeFileSync(deps.restartLogPath, rows.join("\n") + "\n");
-
       handle = startActivityFeed(deps);
+      fs.writeFileSync(deps.restartLogPath, rows.join("\n") + "\n");
       await sleep(1300);
 
       const state = getActivityFeedState();
@@ -772,16 +767,87 @@ describe("startActivityFeed — engine (real fs)", () => {
   );
 
   it(
+    "baselines the restart log at boot and never replays completed rows after a cockpit restart",
+    async () => {
+      const deps = baseDeps();
+      const historicalRow = JSON.stringify({
+        ts: new Date().toISOString(),
+        target: "cockpit",
+        event: "relaunch",
+        relaunchPid: 10,
+      });
+      fs.writeFileSync(deps.restartLogPath, historicalRow + "\n");
+
+      handle = startActivityFeed(deps);
+      await sleep(1300);
+      expect(getActivityFeedState().recentLines.filter((line) => line.source === "watchdog")).toEqual([]);
+
+      const firstLiveRow = JSON.stringify({
+        ts: new Date().toISOString(),
+        target: "cockpit",
+        event: "relaunch",
+        relaunchPid: 11,
+      });
+      fs.appendFileSync(deps.restartLogPath, firstLiveRow + "\n");
+      await sleep(1300);
+      expect(getActivityFeedState().recentLines.filter((line) => line.source === "watchdog")).toHaveLength(1);
+
+      handle.stop();
+      handle = startActivityFeed(deps);
+      await sleep(1300);
+      expect(getActivityFeedState().recentLines.filter((line) => line.source === "watchdog")).toEqual([]);
+
+      const secondLiveRow = JSON.stringify({
+        ts: new Date().toISOString(),
+        target: "cockpit",
+        event: "relaunch",
+        relaunchPid: 12,
+      });
+      fs.appendFileSync(deps.restartLogPath, secondLiveRow + "\n");
+      await sleep(1300);
+
+      const watchdogLines = getActivityFeedState().recentLines.filter((line) => line.source === "watchdog");
+      expect(watchdogLines).toHaveLength(1);
+      expect(watchdogLines[0]?.text).toContain("12");
+      expect(watchdogLines[0]?.text).not.toContain("10");
+      expect(watchdogLines[0]?.text).not.toContain("11");
+    },
+    10000,
+  );
+
+  it(
+    "baselines a resolved kill-receipts log and renders only rows appended after boot",
+    async () => {
+      const killReceiptsPath = path.join(scratchDir, "kill-receipts-baseline.jsonl");
+      const deps = baseDeps();
+      fs.writeFileSync(killReceiptsPath, JSON.stringify({ pids: [100] }) + "\n");
+      fs.writeFileSync(deps.watchdogStatePath, JSON.stringify({ kill_receipts_path: killReceiptsPath }));
+
+      handle = startActivityFeed(deps);
+      await sleep(1300);
+      expect(getActivityFeedState().recentLines.filter((line) => line.source === "watchdog")).toEqual([]);
+
+      fs.appendFileSync(killReceiptsPath, JSON.stringify({ pids: [101], reason: "test-live-row" }) + "\n");
+      await sleep(1300);
+
+      const watchdogLines = getActivityFeedState().recentLines.filter((line) => line.source === "watchdog");
+      expect(watchdogLines).toHaveLength(1);
+      expect(watchdogLines[0]?.text).toContain("test-live-row");
+      expect(watchdogLines[0]?.text).not.toContain("reason unavailable");
+    },
+    8000,
+  );
+
+  it(
     "writes a tail-poll diagnostic log row per tick, capped or not",
     async () => {
       const tailPollDebugLogPath = path.join(scratchDir, "tailpoll-debug.jsonl");
       const deps = baseDeps({ tailPollDebugLogPath });
+      handle = startActivityFeed(deps);
       fs.appendFileSync(
         deps.restartLogPath,
         JSON.stringify({ ts: new Date().toISOString(), target: "cockpit", event: "relaunch", relaunchPid: 1 }) + "\n",
       );
-
-      handle = startActivityFeed(deps);
       await sleep(1300);
 
       const raw = fs.readFileSync(tailPollDebugLogPath, "utf-8");
@@ -804,19 +870,17 @@ describe("startActivityFeed — engine (real fs)", () => {
 
   // issue #1045 (operator report, 2026-07-24: 4.9GB working set correlated with the 871-row
   // watchdog restart-log): pollTail used to `readFile(filePath)` -- the WHOLE file, every tick,
-  // forever -- even though only the bytes past byteOffset were ever new. The first tick after
-  // boot legitimately reads the whole file (freshTailState starts at offset 0, "baseline
-  // replay" is intended per issue #576); the DEFECT is every tick AFTER that also re-reading
-  // the whole (now-large) file for a tiny delta. RED-first: on pre-fix master this assertion
-  // fails (second tick's bytesRead == the ~200KB file size, not the ~60-byte delta).
+  // forever -- even though only the bytes past byteOffset were ever new. This regression appends
+  // a large live batch after boot, then proves the following tick allocates only its small delta.
   it(
     "a later tick reads only the new delta, never the whole (large) file again",
     async () => {
       const tailPollDebugLogPath = path.join(scratchDir, "tailpoll-bounded-debug.jsonl");
       const deps = baseDeps({ tailPollDebugLogPath });
 
-      // Seed a LARGE pre-existing log (~200KB) so the first-tick "baseline replay" is big --
-      // that tick's bytesRead is EXPECTED to be large and is not asserted on here.
+      handle = startActivityFeed(deps);
+
+      // Append a LARGE live batch (~200KB) after boot; the first tick consumes that batch.
       const paddingRow = JSON.stringify({
         ts: new Date().toISOString(),
         target: "cockpit",
@@ -829,8 +893,7 @@ describe("startActivityFeed — engine (real fs)", () => {
       const fileSizeAfterSeed = fs.statSync(deps.restartLogPath).size;
       expect(fileSizeAfterSeed).toBeGreaterThan(150_000);
 
-      handle = startActivityFeed(deps);
-      await sleep(1300); // first tick: consumes the ~200KB seed (baseline replay, expected)
+      await sleep(1300); // first tick: consumes the ~200KB live append
 
       // A single small append -- the real-world "one more watchdog row landed" case.
       const smallRow = JSON.stringify({
@@ -851,7 +914,7 @@ describe("startActivityFeed — engine (real fs)", () => {
         .map((l) => JSON.parse(l) as Record<string, unknown>)
         .filter((r) => r["event"] === "pollTail" && r["file"] === "restart-log");
 
-      // Exactly two ticks observed real bytes: the seed replay, then the small append.
+      // Exactly two ticks observed real bytes: the large live append, then the small append.
       expect(ticks.length).toBe(2);
       const secondTick = ticks[1] as { bytesRead: number };
       // Bounded by the append's real size, with generous headroom -- NOT anywhere near the
