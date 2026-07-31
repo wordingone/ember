@@ -38,6 +38,9 @@ TICKET = "FREEZE-ARTIFACT-INTEGRITY-ISSUE531"
 SHA_CONVENTION = (
     "sha256 over exact on-disk file bytes, no normalization"
 )
+INVARIANT_SHA256 = (
+    "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
+)
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 FormatProbe = Callable[[Path], dict[str, str]]
 
@@ -442,6 +445,7 @@ def scan_receipts(
         "next_executed_outcome": NEXT_EXECUTED_OUTCOME,
         "ticket": TICKET,
         "sha_convention": SHA_CONVENTION,
+        "invariant_sha256": INVARIANT_SHA256,
         "receipts_directory": receipts_dir.relative_to(root).as_posix(),
         "summary": {
             "receipt_count": len(receipt_paths),

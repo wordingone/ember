@@ -62,6 +62,7 @@ def test_matching_path_sha_pair_is_verified(tmp_path: Path) -> None:
     )
     assert report["ticket"] == "FREEZE-ARTIFACT-INTEGRITY-ISSUE531"
     assert report["sha_convention"] == module.SHA_CONVENTION
+    assert report["invariant_sha256"] == module.INVARIANT_SHA256
     assert report["pins"][0]["status"] == "VERIFIED"
     assert report["pins"][0]["field"] == "artifact.sha256"
 
