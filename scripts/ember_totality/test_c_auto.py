@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_c_auto.py -- STATUS PROBE for Ember autonomy-ladder-state faithfulness.
 
 Registry text: docs/spec/conditions-v1.md sec 4.2 C-AUTO (gh issue #104).
 R: The autonomy-relinquishment ladder contract (issue #92) mandates that every
 claimed rung's K>=5 consecutive windows exist, resolve, and postdate each other;
-every window carries its rung's required provenance field (scheduler_provenance /
-queue_provenance / launch-token per the ladder's rung table); reversion log entries
+every window binds a real Git commit and carries a closed, hash-linked Ember
+provenance token; reversion log entries
 resolve; and current_rung matches the highest claimed rung (or null when none
 claimed). The ladder state is a board-visible surface; the probe asserts that
 every ladder claim's receipts exist and are faithfully recorded (receipts-only
@@ -26,7 +29,10 @@ from __future__ import annotations
 import json
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
+
+from autonomy_claim_evidence import ClaimEvidenceError, validate_claimed_rung
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 CANDIDATE_ROOTS = [p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT) if p]
@@ -38,29 +44,22 @@ INVALID_TOKENS = [
     "invalid_autonomy_provenance_missing",
     "invalid_autonomy_state_claim_mismatch",
     "invalid_autonomy_reversion_ignored",
+    "invalid_autonomy_claim_evidence",
 ]
-
-# Mapping of rung to its required provenance field (per ladder v1 lever table).
-# R0 fires live-run telemetry (V1: Render own activity visibly) - no provenance field yet (in-build).
-# R1 carries scheduler_provenance (V2: Board re-runs + audit cadence).
-# R2 carries queue_provenance (V4: Fire CPU-safe jobs).
-# R3 carries launch_token (V5: Fire governed GPU windows).
-# R4 carries spec/execution provenance (V3+V6+V7: Choose next job, Gate verdicts, Spec authorship).
-# R5 carries publication_provenance (V8: Publication to public master).
-RUNG_PROVENANCE_FIELDS = {
-    "R0": None,  # In-build, no provenance field yet
-    "R1": "scheduler_provenance",
-    "R2": "queue_provenance",
-    "R3": "launch_token",
-    "R4": "spec_provenance",  # Generic for dispatch/verdict/design
-    "R5": "publication_provenance",
-}
-
 
 def emit(color, reason):
     """Print the single status line and exit 0 (status-probe contract)."""
     print(f"{color} {reason}")
     sys.exit(0)
+
+
+def parse_utc_timestamp(value):
+    if not isinstance(value, str) or not value.endswith("Z"):
+        raise ValueError("timestamp must be an ISO-8601 UTC string ending in Z")
+    parsed = datetime.fromisoformat(value[:-1] + "+00:00")
+    if parsed.tzinfo != timezone.utc:
+        raise ValueError("timestamp must resolve to UTC")
+    return parsed
 
 
 def main():
@@ -97,6 +96,7 @@ def main():
 
     rungs = state.get("rungs", {})
     claimed_rungs = {rung: rung_data for rung, rung_data in rungs.items() if rung_data.get("claimed", False)}
+    validated_claim_times = {}
 
     # If no rungs claimed, GREEN with detail "no rung claimed (honest)".
     if not claimed_rungs:
@@ -132,27 +132,21 @@ def main():
                 continue
 
             window_ts = window_receipt.get("ts")
-            if window_ts is None:
-                offenders.append((rung_name, f"window {idx} receipt missing ts field [invalid_autonomy_window_gap]"))
+            try:
+                parsed_window_ts = parse_utc_timestamp(window_ts)
+            except (TypeError, ValueError):
+                offenders.append(
+                    (
+                        rung_name,
+                        f"window {idx} receipt ts is not strict ISO-8601 UTC "
+                        f"[invalid_autonomy_claim_evidence]",
+                    )
+                )
                 continue
 
-            if prev_ts is not None and window_ts <= prev_ts:
+            if prev_ts is not None and parsed_window_ts <= prev_ts:
                 offenders.append((rung_name, f"window {idx} ts {window_ts} <= prior {prev_ts} (not strictly increasing) [invalid_autonomy_window_gap]"))
-            prev_ts = window_ts
-
-            # Check for provenance field if required by this rung.
-            provenance_field = RUNG_PROVENANCE_FIELDS.get(rung_name)
-            if provenance_field and provenance_field not in window_receipt:
-                offenders.append((rung_name, f"window {idx} missing required provenance field {provenance_field} [invalid_autonomy_provenance_missing]"))
-            elif provenance_field:
-                prov_value = window_receipt.get(provenance_field)
-                # Check that provenance is present, non-empty, and ember-attributed.
-                # Empty/None/non-string values are theater-dodges and fail-closed.
-                if not prov_value or not isinstance(prov_value, str):
-                    offenders.append((rung_name, f"window {idx} provenance field {provenance_field} empty or non-string: {prov_value!r} [invalid_autonomy_provenance_missing]"))
-                elif "ember" not in prov_value.lower():
-                    # Substring heuristic v1: value should contain "ember" (acceptable for v1; documents pattern in comment).
-                    offenders.append((rung_name, f"window {idx} provenance field {provenance_field} not ember-attributed: {prov_value!r} [invalid_autonomy_provenance_missing]"))
+            prev_ts = parsed_window_ts
 
         # Check that claim receipt exists (one per claimed rung).
         if not os.path.isdir(receipts_dir):
@@ -161,6 +155,18 @@ def main():
             claim_receipts = [f for f in os.listdir(receipts_dir) if f.startswith(f"{rung_name}-claim-") and f.endswith(".json")]
             if not claim_receipts:
                 offenders.append((rung_name, f"no claim receipt found for {rung_name} under receipts/autonomy-ladder/ [invalid_autonomy_unreceipted_claim]"))
+
+        try:
+            validated_claim_times[rung_name] = validate_claimed_rung(
+                root=Path(ROOT),
+                repo_root=Path(ROOT),
+                rung=rung_name,
+                window_refs=windows,
+            )
+        except ClaimEvidenceError as exc:
+            offenders.append(
+                (rung_name, f"{exc} [invalid_autonomy_claim_evidence]")
+            )
 
     # Condition 4: current_rung equals highest claimed rung (or null when none claimed).
     current_rung = state.get("current_rung")
@@ -181,40 +187,42 @@ def main():
             if not os.path.isfile(incident_path):
                 offenders.append(("reversion", f"incident receipt {incident_ref} does not resolve [invalid_autonomy_reversion_ignored]"))
 
-    # Also check that no STALE claimed rung is above the latest unresolved reversion's target.
-    # Re-earning a rung after reversion via fresh K windows is legitimate; it's only a violation
-    # if the claim receipt's ts PREDATES the reversion entry's ts (a stale claim that ignored the reversion).
+    # A claim above the newest reversion target is valid only when the same
+    # closed-schema claim validated above postdates a strict UTC reversion.
     if reversion_log and claimed_rungs:
         latest_reversion = reversion_log[-1]
         reverted_target = latest_reversion.get("target_rung")
         reversion_ts = latest_reversion.get("ts")
         if reverted_target and reversion_ts:
+            try:
+                parsed_reversion_ts = parse_utc_timestamp(reversion_ts)
+            except (TypeError, ValueError):
+                offenders.append((
+                    "reversion",
+                    "reversion ts is not strict ISO-8601 UTC "
+                    "[invalid_autonomy_reversion_ignored]",
+                ))
+                parsed_reversion_ts = None
             target_level = int(reverted_target[1:])
-            for claimed_rung in claimed_rungs.keys():
-                claimed_level = int(claimed_rung[1:])
-                if claimed_level > target_level:
-                    # Rung is above the reversion target -- check if the claim receipt is stale (ts before reversion).
-                    # Parse the claim receipt's ts; if it predates the reversion, this is a violation.
-                    claim_receipts = [f for f in os.listdir(receipts_dir) if f.startswith(f"{claimed_rung}-claim-") and f.endswith(".json")] if os.path.isdir(receipts_dir) else []
-                    if not claim_receipts:
-                        # No claim receipt found at all -- fail-closed as stale.
-                        offenders.append(("reversion", f"rung {claimed_rung} claimed above reversion target {reverted_target}, no claim receipt found (fail-closed stale) [invalid_autonomy_reversion_ignored]"))
-                    else:
-                        claim_receipt_path = os.path.join(receipts_dir, claim_receipts[0])
-                        try:
-                            with open(claim_receipt_path, "r", encoding="utf-8") as fh:
-                                claim_receipt = json.load(fh)
-                            claim_ts = claim_receipt.get("ts")
-                            if claim_ts is None:
-                                # No ts in claim receipt -- fail-closed as stale (can't verify freshness).
-                                offenders.append(("reversion", f"rung {claimed_rung} claim receipt missing ts, above reversion target {reverted_target} (fail-closed stale) [invalid_autonomy_reversion_ignored]"))
-                            elif claim_ts <= reversion_ts:
-                                # Claim ts predates reversion -- this is a stale claim that ignored the reversion.
-                                offenders.append(("reversion", f"rung {claimed_rung} claim ts {claim_ts} <= reversion ts {reversion_ts}, stale claim above target {reverted_target} [invalid_autonomy_reversion_ignored]"))
-                            # else: claim ts postdates reversion -- this is a legitimate re-climb, passes.
-                        except Exception as e:
-                            # Claim receipt unparseable -- fail-closed as stale.
-                            offenders.append(("reversion", f"rung {claimed_rung} claim receipt unparseable ({type(e).__name__}), above reversion target {reverted_target} (fail-closed stale) [invalid_autonomy_reversion_ignored]"))
+            for claimed_rung in claimed_rungs:
+                if int(claimed_rung[1:]) <= target_level:
+                    continue
+                claim_ts = validated_claim_times.get(claimed_rung)
+                if claim_ts is None or parsed_reversion_ts is None:
+                    offenders.append((
+                        "reversion",
+                        f"rung {claimed_rung} has no validated fresh claim above "
+                        f"reversion target {reverted_target} "
+                        "[invalid_autonomy_reversion_ignored]",
+                    ))
+                elif claim_ts <= parsed_reversion_ts:
+                    offenders.append((
+                        "reversion",
+                        f"rung {claimed_rung} claim ts {claim_ts.isoformat()} <= "
+                        f"reversion ts {parsed_reversion_ts.isoformat()}, stale claim "
+                        f"above target {reverted_target} "
+                        "[invalid_autonomy_reversion_ignored]",
+                    ))
 
     if offenders:
         shown = offenders[:3]
