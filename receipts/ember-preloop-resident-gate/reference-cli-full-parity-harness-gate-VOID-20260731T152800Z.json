@@ -1,0 +1,28 @@
+{
+  "ticket": "EMBER-reference-CLI-FULL-PARITY-HARNESS-GATE-VOID",
+  "ts": "2026-07-31T15:28:00Z",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over exact on-disk file bytes, no normalization",
+  "verdict": "VOID",
+  "voids_missing_identity": "receipts/ember-preloop-resident-gate/reference-cli-full-parity-harness-gate-20260622T141500Z.json",
+  "supersedes": [
+    {
+      "filename": "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T141500Z.json",
+      "sha256": "82b53006de78f2d68973b5c645cc2dba72f485f5008723a81708e3528e11f269"
+    }
+  ],
+  "reason": "The public historical custody disposition at docs/custody-disposition-20260708.md lines 184-198 proves that the existing artifact full-parity-harness-gate-20260622T141500Z.json self-declares an out_path under the never-written reference-cli- prefixed identity. Two downstream receipts propagated that missing identity. This is the same self-declared-out_path versus actual-saved-filename defect already voided under issue #349 / PR #348 for the adjacent 2026-06-22 UI/UX observation chain. The existing artifact is preserved byte-for-byte at SHA-256 82b53006de78f2d68973b5c645cc2dba72f485f5008723a81708e3528e11f269. This receipt formally voids only the never-written prefixed identity; it neither restores nor deletes any artifact and grants no model, training, evaluation, benchmark, or capability claim.",
+  "cites": [
+    "https://github.com/wordingone/ember/pull/348",
+    "https://github.com/wordingone/ember/issues/349",
+    "https://github.com/wordingone/ember/issues/400"
+  ],
+  "claim_boundary": {
+    "restoration_performed": false,
+    "deletion_performed": false,
+    "capability_claim": false
+  }
+}

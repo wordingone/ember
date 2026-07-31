@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-c-custody-documented-absent-v1",
-  "ticket": "C-CUSTODY-DOCUMENTED-ABSENT-WAVE028",
-  "ts": "2026-07-31T14:24:00Z",
+  "ticket": "C-CUSTODY-DOCUMENTED-ABSENT-WAVE029",
+  "ts": "2026-07-31T15:28:00Z",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
@@ -178,6 +178,23 @@
       "line": 406,
       "disposition_class": "MIS_ROOTED_NON_CUSTODY_RUNTIME_SENTINEL",
       "evidence": "The extracted receipts-root path is a citer-side mis-root; the real ignored target is machine-local runtime sentinel state, not a custody receipt."
+    },
+    {
+      "doc": "docs/custody-disposition-20260708.md",
+      "ref": "receipts/ember-preloop-resident-gate/reference-cli-full-parity-harness-gate-20260622T141500Z.json",
+      "marker": "| 14 |",
+      "line": 165,
+      "disposition_class": "VOID_SUPERSEDED",
+      "evidence": "The historical disposition proves the never-written identity has the same self-declared-out_path defect as the adjacent voided chain; the Wave 29 supporting VOID receipt formally completes that prescribed cure while preserving the actual artifact bytes."
+    }
+  ],
+  "supporting_disposition_receipts": [
+    {
+      "path": "receipts/ember-preloop-resident-gate/reference-cli-full-parity-harness-gate-VOID-20260731T152800Z.json",
+      "sha256": "662f801f41335aae3649baa1024d9f7dd523d3f51269a1568a3bacfa3fd6236d",
+      "voids_ref": "receipts/ember-preloop-resident-gate/reference-cli-full-parity-harness-gate-20260622T141500Z.json",
+      "source_path": "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T141500Z.json",
+      "source_sha256": "82b53006de78f2d68973b5c645cc2dba72f485f5008723a81708e3528e11f269"
     }
   ],
   "claim_boundary": {
