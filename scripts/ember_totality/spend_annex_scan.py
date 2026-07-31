@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """spend_annex_scan.py -- C(-1) spend-coverage annex scanner (gh issue #17, FROZEN SPEC v1).
 
 C(-1) is RED: 301/319 decisive receipts (verdict-bearing, per
@@ -283,6 +286,7 @@ import json
 import os
 import re
 import sys
+from datetime import datetime, timezone
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _THIS_DIR not in sys.path:
@@ -295,6 +299,12 @@ import void_supersession  # noqa: E402  (shared VOID-supersession partition, gh 
 ROOT = c_neg1.ROOT
 SPEND_KEY = c_neg1.SPEND_KEY
 PAID_FLAG_KEY = c_neg1.PAID_FLAG_KEY
+GOAL_ID = "EMBER-02"
+WORKSTREAM_ID = "EMBER-02A"
+NEXT_EXECUTED_OUTCOME = "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+TICKET = "ISSUE-586-SPEND-ANNEX-ROUND4"
+INVARIANT_SHA256 = "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
+SHA_CONVENTION = "sha256 over on-disk raw bytes (binary read, no line-ending normalization)"
 
 # --- Corpus-membership rule (2026-07-03, annex-round-3 change A) -- see the
 # CORPUS-MEMBERSHIP RULE paragraph in the module docstring. Matches this scanner's
@@ -581,6 +591,20 @@ CONVENTION_MAP = [
     (re.compile(r"^resident_training_candidate_receipt\.json$"), "scripts/ember_resident_training_candidate.py"),
 ]
 
+# Exact-path writer bindings for receipt names that are not globally unique.
+# These are deliberately path-scoped: for example, capture-receipt.json is a
+# generic basename and must never cause an unrelated receipt to inherit the
+# Ember CLI capture writer.  Each writer below constructs the named output in
+# the same commit that introduced the receipt (issue #586 round-4 refresh).
+CONVENTION_PATH_MAP = {
+    "receipts/ember-c-scale/land210j-public-revalidation-20260729T135005Z.json":
+        "scripts/land210j_public_revalidation.py",
+    "receipts/ember-cli/issue-1043-text-wrap/capture-receipt.json":
+        "tools/ember-cli/src/build-tools/capture-text-wrap-1043.ts",
+    "receipts/issue-457-current-acceptance-20260730.json":
+        "scripts/issue457_acceptance.py",
+}
+
 # --- Generator-absent-historical table (gh issue #17 second pass, 2026-07-03).
 # A THIRD disposition, distinct from both CONVENTION_MAP (a confirmed live in-tree
 # writer) and plain "unresolvable" (an honest coverage gap that might just need more
@@ -658,6 +682,39 @@ GENERATOR_ABSENT_HISTORICAL_PATH_PREFIXES = [
      "commit d3dff30): a live local UI-capture session against a local qwen model server, "
      "never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above."),
 ]
+
+# Exact-path evidence for current receipts that were intentionally assembled as
+# review/landing records, not emitted by a production script.  The introducing
+# commits pair each JSON record with the files it reviews/lands, and exhaustive
+# fixed-string searches find no writer constructing the receipt filename.  An
+# exact-path table avoids broad basename families that could classify future
+# generated receipts by accident.
+GENERATOR_ABSENT_HISTORICAL_PATHS = {
+    "receipts/ember-c-scale/land210g-experiment-runners-receipt.json":
+        ("manually_authored", "receipts/ember-c-scale/land210g-experiment-runners-receipt.json: "
+         "manually-authored landing inventory introduced by commit 617f071e with the reviewed family; "
+         "no committed writer constructs this filename"),
+    "receipts/ember-c-scale/land210h-ops-tools-receipt.json":
+        ("manually_authored", "receipts/ember-c-scale/land210h-ops-tools-receipt.json: "
+         "manually-authored landing inventory introduced by commit ea39d694 with the reviewed family; "
+         "no committed writer constructs this filename"),
+    "receipts/ember-c-scale/land210i-harness-entry-receipt.json":
+        ("manually_authored", "receipts/ember-c-scale/land210i-harness-entry-receipt.json: "
+         "manually-authored landing inventory introduced by commit 93b5b726 with the reviewed family; "
+         "no committed writer constructs this filename"),
+    "receipts/ember-c-scale/land210j-family3-stragglers-receipt.json":
+        ("manually_authored", "receipts/ember-c-scale/land210j-family3-stragglers-receipt.json: "
+         "manually-authored landing inventory introduced by commit 70aefaa0 with the reviewed family; "
+         "no committed writer constructs this filename"),
+    "receipts/ember-c-scale/land210k-e2b-pair-receipt.json":
+        ("manually_authored", "receipts/ember-c-scale/land210k-e2b-pair-receipt.json: "
+         "manually-authored landing inventory introduced by commit 560f93c3 with the reviewed family; "
+         "no committed writer constructs this filename"),
+    "receipts/issue-580-pr-b-retro-audit-20260730.json":
+        ("manually_authored", "receipts/issue-580-pr-b-retro-audit-20260730.json: "
+         "manually-authored retrospective audit introduced by commit 7b75f758 alongside the corrected "
+         "sources and tests; no committed writer constructs this filename"),
+}
 
 GENERATOR_ABSENT_HISTORICAL_BASENAMES = [
     (re.compile(r"^connected-cycle-field-level-audit-.*\.json$"), "external_tree_import",
@@ -830,6 +887,9 @@ def _check_generator_absent_historical(rel, d):
     CONVENTION_MAP resolution has already failed. Path-prefix rules are
     checked before basename rules, then the generic import_provenance
     structural detector (2026-07-03, annex-round-3 change C)."""
+    exact = GENERATOR_ABSENT_HISTORICAL_PATHS.get(rel)
+    if exact is not None:
+        return exact
     for prefix, subtype, evidence in GENERATOR_ABSENT_HISTORICAL_PATH_PREFIXES:
         if rel.startswith(prefix):
             return subtype, evidence
@@ -1019,6 +1079,9 @@ def _resolve_via_convention(rel):
     and confirm the mapped script still resolves in-tree. Returns the resolved
     absolute path or None -- never trusts the table without re-verifying the
     file exists right now (a mapping can go stale if a script moves)."""
+    exact_script = CONVENTION_PATH_MAP.get(rel)
+    if exact_script is not None:
+        return resolve_in_tree(exact_script, ROOT)
     base = os.path.basename(rel)
     for pattern, script_rel in CONVENTION_MAP:
         if pattern.match(base):
@@ -1559,8 +1622,15 @@ def main(out_path=None):
         )
 
     result = {
+        "goal_id": GOAL_ID,
+        "workstream_id": WORKSTREAM_ID,
+        "next_executed_outcome": NEXT_EXECUTED_OUTCOME,
+        "ticket": TICKET,
+        "invariant_sha256": INVARIANT_SHA256,
+        "sha_convention": SHA_CONVENTION,
+        "ts": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "spec": "gh issue #17 FROZEN SPEC v1",
-        "root": ROOT,
+        "root_id": "repository-root",
         "verdict": verdict,
         "verdict_reason": verdict_reason,
         "counts": counts,
@@ -1577,7 +1647,7 @@ def main(out_path=None):
 def _emit(result, out_path):
     if out_path:
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
-        with open(out_path, "w", encoding="utf-8") as fh:
+        with open(out_path, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(result, fh, indent=2, sort_keys=False)
             fh.write("\n")
     print(f"{result['verdict']} spend-annex: {result.get('verdict_reason', '')}")
