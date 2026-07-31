@@ -505,7 +505,6 @@ export function StatusLine({
   width,
 }: StatusLineProps): React.ReactElement {
   useInput((_input, key) => {
-    if (key.shift && key.tab)    { permissionMode.cycle(); return; }
     if (key.escape)              { interrupt.interrupt(); return; }
     if (key.ctrl && _input === "t") { taskPanel.toggle(); return; }
   });
