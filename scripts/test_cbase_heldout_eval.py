@@ -55,14 +55,14 @@ def test_manifest_hash_truncation_and_overlap_refused(tmp_path):
 def test_window_reader_verifies_bytes_and_counts_fragments(tmp_path):
     m=load_module(); tokens=np.arange(40,dtype="<u2"); tokens[9]=0; tokens[18]=0; shard=tmp_path/"v0-00000.bin"; tokens.tofile(shard); p=tmp_path/"slice.json"; doc=manifest(sha(shard)); loaded=m.load_frozen_slice_manifest(p,write_json(p,doc)); rows=m.read_eval_windows(tmp_path,loaded)
     assert len(rows)==2 and sum(len(x["target_ids"]) for x in rows)==8
-    assert len({d for row in rows for d in row["document_ids"]})==4
+    assert len({d for row in rows for d in row["document_ids"]})==3
     shard.write_bytes(b"\0"*shard.stat().st_size)
     with pytest.raises(m.HeldoutEvalRefusal,match="SHARD_SHA_MISMATCH"): m.read_eval_windows(tmp_path,loaded)
 
 def test_teacher_forced_is_deterministic_and_receipted():
     m=load_module(); torch.manual_seed(7); model=TinyTiedModel(); rows=[{"shard_name":"s","window_index":2,"input_ids":[1,2,3,4],"target_ids":[2,3,4,5],"document_ids":["a","a","b","b"]},{"shard_name":"s","window_index":4,"input_ids":[5,6,7,8],"target_ids":[6,7,8,9],"document_ids":["c","c","d","d"]}]
     kw={"device":"cpu","dtype":"float32","seed":83,"packed_bytes_per_token":2.0,"bootstrap_samples":200}; first=m.evaluate_teacher_forced(model,rows,**kw); second=m.evaluate_teacher_forced(model,rows,**kw)
-    assert first==second and first["token_count"]==8 and first["document_fragment_count"]==4 and first["repeat_run_match"] is True and len(first["per_batch_loss_vector_sha256"])==64
+    assert first==second and first["token_count"]==8 and first["document_count"]==4 and first["repeat_run_match"] is True and len(first["per_batch_loss_vector_sha256"])==64
     assert first["bits_per_packed_byte"]==pytest.approx(first["mean_nll"]/np.log(2)/2.0)
     receipt=m.build_receipt(checkpoint={"files_sha256":{"model.pt":"c"*64},"manifest_sha256":"d"*64,"manifest_step":50},checkpoint_identity=m.derive_checkpoint_identity(model.state_dict()),slice_manifest_sha256="e"*64,slice_manifest={"scale":"W1_FROM_SCRATCH_PILOT_BASELINE"},evaluation=first)
     assert receipt["api_spend_usd"]==0.0 and receipt["markers"]==["HELDOUT_EVAL_DETERMINISM_PASS","HELDOUT_EVAL_NEGATIVE_FIXTURES_PASS","HELDOUT_SLICE_DISJOINT_PASS"]

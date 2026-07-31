@@ -6,9 +6,9 @@
     "status":  "IMPLEMENTATION_VERIFIED_REAL_METRICS_UNMEASURABLE",
     "implementation":  {
                            "script":  "scripts/cbase_heldout_eval.py",
-                           "script_sha256":  "5d8cc6d91bf81a40fba2c10bc9e38c154f10018f940f2c4cb41decc03e0260f2",
+                           "script_sha256":  "73509518d398ccd0aea11c138415dbf938157745829c75cd46adb834a7308f25",
                            "test":  "scripts/test_cbase_heldout_eval.py",
-                           "test_sha256":  "a3eb98bf64f6cc9a6d19cfe2f389c360b81483d894f5a5736ebd34242640ee85",
+                           "test_sha256":  "4898f4532c846b684efbc6277cb4f443550809578374fdd9dfb7c81f48ee9903",
                            "slice_manifest":  "manifests/cbase-heldout-slice-v1.json",
                            "slice_manifest_sha256":  "32052288e761d8a01375bec40bc04785fcd46d75db58b325b73090f23dd74c14",
                            "historical_imports_execution_denied":  true,
@@ -18,7 +18,7 @@
                                                        }
                        },
     "verification":  {
-                         "focused":  "10 passed in 1.93s",
+                         "focused":  "10 passed in 1.95s",
                          "compile":  "PASS",
                          "strict_frozen_manifest":  "PASS: 16 windows / 16384 scored tokens",
                          "production_cli":  "REFUSED exit 2: SHARD_MISSING v0-00016.bin",

@@ -162,10 +162,10 @@ def read_eval_windows(shard_dir: str|Path, manifest: Mapping[str,Any]) -> list[d
     for row in manifest["windows"]:
         name=row["shard_name"]; start=int(row["shard_token_start"]); end=int(row["shard_token_end_exclusive"]); full=np.asarray(arrays[name][start:end],dtype=np.int64)
         if len(full)!=seq+1: raise HeldoutEvalRefusal(f"TRUNCATED_SLICE: window={row['window_index']}")
-        doc_index=0; docs=[]
+        doc_index=int(np.count_nonzero(arrays[name][:start]==separator)); docs=[]
         for token in full[:-1]:
             if int(token)==separator: doc_index+=1
-            docs.append(f"{name}:window-{row['window_index']}:doc-fragment-{doc_index}")
+            docs.append(f"{name}:document-{doc_index}")
         output.append({"shard_name":name,"window_index":row["window_index"],"input_ids":full[:-1].tolist(),"target_ids":full[1:].tolist(),"document_ids":docs})
     if sum(len(row["target_ids"]) for row in output)!=manifest["expected_scored_token_count"]: raise HeldoutEvalRefusal("TRUNCATED_SLICE: scored token count mismatch")
     return output
@@ -195,10 +195,10 @@ def evaluate_teacher_forced(model, windows: Sequence[Mapping[str,Any]], *, devic
     means=defaultdict(list); per_shard=defaultdict(set)
     for loss,doc,shard in zip(first[1],first[2],first[3]): means[doc].append(loss); per_shard[shard].add(doc)
     doc_means=np.asarray([sum(means[key])/len(means[key]) for key in sorted(means)],dtype=np.float64)
-    if not len(doc_means): raise HeldoutEvalRefusal("DOCUMENT_FRAGMENT_SET_EMPTY")
+    if not len(doc_means): raise HeldoutEvalRefusal("DOCUMENT_SET_EMPTY")
     rng=np.random.default_rng(seed); draws=np.asarray([float(rng.choice(doc_means,size=len(doc_means),replace=True).mean()) for _ in range(bootstrap_samples)])
     low,high=[float(v) for v in np.quantile(draws,[0.025,0.975])]; mean=float(sum(first[1])/len(first[1]))
-    return {"seed":seed,"dtype":dtype,"device":device,"batch_count":len(windows),"token_count":len(first[1]),"document_fragment_count":len(doc_means),"per_shard_document_fragment_counts":{k:len(v) for k,v in sorted(per_shard.items())},"mean_nll":mean,"bits_per_packed_byte":mean/math.log(2.0)/packed_bytes_per_token,"packed_bytes_per_token":packed_bytes_per_token,"bootstrap_samples":bootstrap_samples,"bootstrap_ci95":{"low":low,"high":high,"half_width":(high-low)/2.0,"unit":"document_fragment_mean_nll"},"per_batch_loss_vector_sha256":h1,"repeat_run_hashes":[h1,h2],"repeat_run_match":True}
+    return {"seed":seed,"dtype":dtype,"device":device,"batch_count":len(windows),"token_count":len(first[1]),"document_count":len(doc_means),"per_shard_document_counts":{k:len(v) for k,v in sorted(per_shard.items())},"mean_nll":mean,"bits_per_packed_byte":mean/math.log(2.0)/packed_bytes_per_token,"packed_bytes_per_token":packed_bytes_per_token,"bootstrap_samples":bootstrap_samples,"bootstrap_ci95":{"low":low,"high":high,"half_width":(high-low)/2.0,"unit":"document_mean_nll"},"per_batch_loss_vector_sha256":h1,"repeat_run_hashes":[h1,h2],"repeat_run_match":True}
 
 def build_receipt(*,checkpoint: Mapping[str,Any],checkpoint_identity: Mapping[str,Any],slice_manifest_sha256: str,slice_manifest: Mapping[str,Any],evaluation: Mapping[str,Any]) -> dict:
     return {"schema":"cbase-heldout-eval/v1","issue":"#760","ts":datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),"scale":slice_manifest["scale"],"checkpoint":dict(checkpoint),"checkpoint_identity":dict(checkpoint_identity),"slice_manifest_sha256":slice_manifest_sha256,"evaluation":dict(evaluation),"api_spend_usd":0.0,"paid_api_surface_used":False,"claim_boundary":"heldout NLL/BPB measurement only; no capability, same-quality, or milestone-completion claim","markers":["HELDOUT_EVAL_DETERMINISM_PASS","HELDOUT_EVAL_NEGATIVE_FIXTURES_PASS","HELDOUT_SLICE_DISJOINT_PASS"]}
