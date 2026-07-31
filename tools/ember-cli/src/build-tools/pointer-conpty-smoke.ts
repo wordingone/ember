@@ -55,6 +55,12 @@ function findGlyph(lines: string[], needle: string): { col: number; row: number 
   return undefined;
 }
 
+function cellStyle(terminal: InstanceType<typeof Terminal>, col: number, row: number): string {
+  const cell = terminal.buffer.active.getLine(row)?.getCell(col);
+  if (!cell) return "missing";
+  return [cell.getFgColorMode(), cell.getFgColor(), cell.getBgColorMode(), cell.getBgColor(), cell.isBold(), cell.isInverse()].join(":");
+}
+
 function sgrHover(col: number, row: number): string {
   return `\x1b[<35;${col + 1};${row + 1}M`;
 }
@@ -129,9 +135,14 @@ async function main(): Promise<void> {
     const pauseAt = findGlyph(before, "[PAUSE]");
     if (!pauseAt) throw new Error("compiled frame did not expose [PAUSE]");
 
-    child.write(sgrHover(pauseAt.col + 1, pauseAt.row));
-    await sleep(150);
-    child.write(sgrLeftClick(pauseAt.col + 1, pauseAt.row));
+    const pointerCol = pauseAt.col + 1;
+    const beforeHoverStyle = cellStyle(terminal, pointerCol, pauseAt.row);
+    child.write(sgrHover(pointerCol, pauseAt.row));
+    await waitFor(
+      () => cellStyle(terminal, pointerCol, pauseAt.row) !== beforeHoverStyle,
+      "PAUSE hover highlight",
+    );
+    child.write(sgrLeftClick(pointerCol, pauseAt.row));
     await waitFor(() => existsSync(controlPath) && readFileSync(controlPath, "utf8").includes('"verb":"pause"'), "PAUSE control effect");
     const controls = readFileSync(controlPath, "utf8").trim().split(/\r?\n/u).filter(Boolean).map((line) => JSON.parse(line));
     if (controls.length !== 1 || controls[0]?.verb !== "pause" || controls[0]?.runId !== runId) {
