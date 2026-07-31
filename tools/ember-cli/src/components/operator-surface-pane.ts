@@ -204,8 +204,7 @@ export interface OperatorGraphCardLayout {
 export const OPERATOR_GRAPH_CARD_MIN_WIDTH = 32;
 
 export function operatorGraphGridColumns(width: number): 1 | 2 {
-  const available = Math.max(0, Math.floor(width));
-  return available >= (OPERATOR_GRAPH_CARD_MIN_WIDTH * 2) + 1 ? 2 : 1;
+  return Number.isFinite(width) ? 1 : 1;
 }
 
 export function operatorGraphCardLayout(
@@ -709,6 +708,8 @@ export interface OperatorSurfacePaneProps extends OperatorSurfaceInput {
   onControlHover?: (action: OperatorControlAction | undefined) => void;
   height?: number;
   terminalColumns?: number;
+  activityScrollOffset?: number;
+  onActivityScroll?: (deltaY: -1 | 1) => void;
   terminalRows?: number;
   /** Index into OPERATOR_CONTROL_ACTIONS currently holding keyboard traversal focus, or
    *  undefined when the pane itself does not have keyboard focus (R2b). Drives the visible
@@ -1042,6 +1043,8 @@ export function OperatorSurfacePane({
   terminalRows,
   hoveredControl,
   onControlHover,
+  activityScrollOffset = 0,
+  onActivityScroll,
   onControl,
   focusedControlIndex,
   disabledActionReason,
@@ -1075,7 +1078,9 @@ export function OperatorSurfacePane({
   const compactMetrics = snapshot.metrics.length > 0
     ? [boundedSurfaceLine(`METRICS ${snapshot.metrics.join(" | ")}`, innerWidth)]
     : [];
-  const compactAgentLines = snapshot.agentLines.slice(-1).map((line) => boundedSurfaceLine(line, innerWidth));
+  const activityIndex = Math.max(0, snapshot.agentLines.length - 1 - Math.max(0, Math.floor(activityScrollOffset)));
+  const compactAgentLines = snapshot.agentLines.slice(activityIndex, activityIndex + 1)
+    .map((line) => boundedSurfaceLine(line, innerWidth));
   const sourceLineText = boundedSurfaceLine(snapshot.source, innerWidth);
 
   const CONTROL_ACTIONS = OPERATOR_CONTROL_ACTIONS;
@@ -1173,8 +1178,13 @@ export function OperatorSurfacePane({
             segment.text,
           )),
         )),
-    React.createElement(Text, { key: "stream-title", color: "magenta", bold: true, wrap: "truncate-end" }, "ACTIVITY/EVENT FEED"),
-    ...compactAgentLines.map((line, index) => React.createElement(Text, { key: `agent-${index}`, dimColor: true, wrap: "truncate-end" }, line)),
+    React.createElement(
+      Box,
+      { key: "activity-scroll-region", flexDirection: "column", height: 2, overflow: "hidden",
+        onWheel: onActivityScroll ? (event: any) => onActivityScroll(event.deltaY) : undefined },
+      React.createElement(Text, { key: "stream-title", color: "magenta", bold: true, wrap: "truncate-end" }, "ACTIVITY/EVENT FEED"),
+      ...compactAgentLines.map((line, index) => React.createElement(Text, { key: `agent-${index}`, dimColor: true, wrap: "truncate-end" }, line)),
+    ),
   );
 
   return React.createElement("div", { "data-operator-surface": "right-pane" }, body);

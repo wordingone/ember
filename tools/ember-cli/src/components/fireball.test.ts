@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // fireball.test.ts — cognitive-mode fireball indicator.
 // B7 item 1 redesign (operator: "the fire looks like a triangle" -- 2026-07-03 regrade, mocks
 // approved both sizes): the old raster was a perfectly symmetric, linearly-tapered isoceles
@@ -167,16 +170,15 @@ describe("fireballRaster — candidate B teardrop shape (not the old triangle, n
     }
   });
 
-  test("the peak (topmost lit) column drifts across the lean cycle (S-curve sway, not a static tip)", () => {
+  test("animation changes intensity without moving any lit cell, tip, or base", () => {
     for (const size of SIZES) {
       for (const m of MODES) {
-        const peakCols = new Set<number>();
+        const masks = new Set<string>();
         for (let t = 0; t < FIREBALL_FRAME_COUNT; t++) {
           const raster = fireballRaster(size, m, t);
-          const topRow = raster.find((r) => litCols(r).length > 0);
-          if (topRow) peakCols.add(litCols(topRow)[0]!);
+          masks.add(raster.map((row) => [...row].map((cell) => cell === " " ? " " : "#").join("")).join("\n"));
         }
-        expect(peakCols.size).toBeGreaterThan(1);
+        expect(masks.size).toBe(1);
       }
     }
   });

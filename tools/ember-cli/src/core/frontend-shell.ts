@@ -233,7 +233,9 @@ export function render(node: ReactElement, options?: RenderOptions): InkInstance
       stdout: liveStdoutSize,
       debug: options?.debug,
     });
-  }).catch(() => { /* reconciler load failure — degrade silently */ });
+  }).catch(() => {
+    terminalSession.exit();
+  });
 
   return {
     unmount() {

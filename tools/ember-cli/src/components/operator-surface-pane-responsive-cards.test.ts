@@ -34,21 +34,21 @@ describe("#894 responsive contained cockpit charts", () => {
     expect(OPERATOR_GRAPH_CARD_MAX_HEIGHT).toBeLessThanOrEqual(5);
   });
 
-  test("wide panes place independently colored cards in a bounded two-column grid", () => {
+  test("wide panes keep every independently colored graph in one bounded column", () => {
     expect(operatorGraphGridColumns(64)).toBe(1);
-    expect(operatorGraphGridColumns(65)).toBe(2);
+    expect(operatorGraphGridColumns(160)).toBe(1);
     const cards = [
       { id: "loss" as const, title: "LOSS", values: [2, 1], unit: "" },
       { id: "tokens" as const, title: "TOKENS/S", values: [100, 120], unit: "tok/s" },
       { id: "energy" as const, title: "ENERGY", values: [3, 4], unit: "J" },
       { id: "gpu" as const, title: "GPU", values: [40, 50], unit: "%" },
     ];
-    const rendered = renderOperatorGraphCardRows(cards, 96, 6);
+    const rendered = renderOperatorGraphCardRows(cards, 96, 12);
     expect(rendered.layout).toEqual({ cardHeight: 3, visibleCardCount: 4, hiddenCardCount: 0 });
-    expect(rendered.rows).toHaveLength(6);
+    expect(rendered.rows).toHaveLength(12);
     expect(rendered.rows[0]!.segments.map((segment) => segment.text).join(" ")).toContain("LOSS");
-    expect(rendered.rows[0]!.segments.map((segment) => segment.text).join(" ")).toContain("TOKENS/S");
-    expect(new Set(rendered.rows[0]!.segments.filter((segment) => segment.text.trim()).map((segment) => segment.color)).size).toBe(2);
+    expect(rendered.rows[3]!.segments.map((segment) => segment.text).join(" ")).toContain("TOKENS/S");
+    expect(rendered.rows.every((row) => row.segments.filter((segment) => segment.text.trim()).length === 1)).toBe(true);
     expect(rendered.rows.every((row) => row.segments.reduce((sum, segment) => sum + segment.text.length, 0) === 96)).toBe(true);
   });
 

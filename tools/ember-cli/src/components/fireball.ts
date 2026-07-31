@@ -131,7 +131,7 @@ function row(cols: number, placements: Array<[number, string]>): RasterRow {
   return arr.join("");
 }
 
-const PANEL_TEMPLATE: RasterRow[][] = [
+const PANEL_TEMPLATE_SOURCE: RasterRow[][] = [
   // frame 0 (FIREBALL_IDLE_POSE_FRAME): centered lean, candidate B's tallest/most-symmetric pose.
   // Belly rows (4,5) are bumped one rank brighter than the other two frames -- the baked-in
   // core-brightness pulse (team-lead's refinement note), positions unchanged from the approved mock.
@@ -183,7 +183,7 @@ const PANEL_TEMPLATE: RasterRow[][] = [
   ],
 ];
 
-const COMPACT_TEMPLATE: RasterRow[][] = [
+const COMPACT_TEMPLATE_SOURCE: RasterRow[][] = [
   // frame 0 (FIREBALL_IDLE_POSE_FRAME): centered, belly (row 1) bumped one rank -- pulse-bright.
   [row(3, [[1, "Y"]]), row(3, [[0, "O"], [1, "y"], [2, "O"]]), row(3, [[0, "R"], [1, "r"], [2, "R"]])],
   // frame 1: left lean, baseline (unbumped) belly rank.
@@ -200,6 +200,22 @@ const COMPACT_TEMPLATE: RasterRow[][] = [
   // matching frame 0's [0,2] extent instead of the originally-authored [1,2].
   [row(3, [[2, "Y"]]), row(3, [[0, "O"], [1, "o"], [2, "O"]]), row(3, [[0, "R"], [1, "r"], [2, "R"]])],
 ];
+const DIM_RANK: Record<string, string> = { w: "Y", Y: "y", y: "O", O: "o", o: "R", R: "r", r: "r" };
+
+/** Preserve one fixed spatial silhouette; animation is a color/intensity pulse only. */
+function stabilizeFrameOccupancy(frames: RasterRow[][]): RasterRow[][] {
+  const stable = frames[0]!;
+  return frames.map((frame, frameIndex) => frameIndex === 0
+    ? [...stable]
+    : stable.map((stableRow, rowIndex) => [...stableRow].map((cell, columnIndex) => {
+        if (cell === " ") return " ";
+        const authored = frame[rowIndex]?.[columnIndex];
+        return authored && authored !== " " ? authored : (DIM_RANK[cell] ?? cell);
+      }).join("")));
+}
+
+const PANEL_TEMPLATE = stabilizeFrameOccupancy(PANEL_TEMPLATE_SOURCE);
+const COMPACT_TEMPLATE = stabilizeFrameOccupancy(COMPACT_TEMPLATE_SOURCE);
 
 // COMPACT_TEMPLATE ships at 3 pixel-rows per frame (a compressed silhouette of the same shape
 // language); pad to FIREBALL_DIMS.compact.rows (5) with blank rows so every frame is a uniform

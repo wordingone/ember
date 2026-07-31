@@ -715,6 +715,7 @@ export function ReplScreen({
   const [paneFocused,          setPaneFocused]          = useState(false);
   const [focusedControlIndex,  setFocusedControlIndex]  = useState(0);
   const [hoveredControl, setHoveredControl] = useState<OperatorControlAction | undefined>(undefined);
+  const [activityScrollOffset, setActivityScrollOffset] = useState(0);
   const [controlDisabledReason, setControlDisabledReason] = useState<string | undefined>(undefined);
 
   const [permMode,         setPermMode]        = useState<ReplPermissionMode>(config.permissionMode);
@@ -1862,6 +1863,8 @@ export function ReplScreen({
       disabledActionReason: controlDisabledReason,
       hoveredControl,
       onControlHover: setHoveredControl,
+      activityScrollOffset,
+      onActivityScroll: (deltaY) => setActivityScrollOffset((value) => Math.max(0, value + (deltaY < 0 ? 1 : -1))),
     }),
   );
 }
