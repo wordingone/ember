@@ -705,6 +705,8 @@ export function buildOperatorSurfaceSnapshot({
 export interface OperatorSurfacePaneProps extends OperatorSurfaceInput {
   onControl?: (action: OperatorControlAction, runId?: string) => void;
   width?: number;
+  hoveredControl?: OperatorControlAction;
+  onControlHover?: (action: OperatorControlAction | undefined) => void;
   height?: number;
   terminalColumns?: number;
   terminalRows?: number;
@@ -1038,6 +1040,8 @@ export function OperatorSurfacePane({
   height,
   terminalColumns,
   terminalRows,
+  hoveredControl,
+  onControlHover,
   onControl,
   focusedControlIndex,
   disabledActionReason,
@@ -1083,6 +1087,7 @@ export function OperatorSurfacePane({
   const renderControl = (action: (typeof CONTROL_ACTIONS)[number]): React.ReactElement => {
     const enabled = controlEnabled(action);
     const focused = focusedControlIndex === CONTROL_ACTIONS.indexOf(action);
+    const hovered = enabled && hoveredControl === action;
     return React.createElement(
       Box,
       {
@@ -1090,10 +1095,12 @@ export function OperatorSurfacePane({
         flexShrink: 0,
         paddingRight: 1,
         onClick: enabled ? () => onControl?.(action, selectedControlRunId) : undefined,
+        onMouseEnter: enabled ? () => onControlHover?.(action) : undefined,
+        onMouseLeave: enabled ? () => onControlHover?.(undefined) : undefined,
       },
       React.createElement(
         Text,
-        { color: focused ? "cyan" : enabled ? "green" : "gray", bold: focused },
+        { color: focused ? "cyan" : enabled ? "green" : "gray", bold: focused || hovered, inverse: hovered },
         `${focused ? FOCUS_MARKER_ON : FOCUS_MARKER_OFF}${operatorControlLabel(action)}`,
       ),
     );

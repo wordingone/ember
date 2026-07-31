@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // event-system — terminal event class hierarchy and focus management.
 // Provides a lightweight DOM-like event model for terminal UI components.
 
@@ -193,4 +196,38 @@ export class FocusManager {
   getFocused(): FocusNode | null   { return this._focused; }
   isFocused(node: FocusNode): boolean { return this._focused === node; }
   getRegistered(): FocusNode[]     { return [...this._nodes]; }
+}
+
+export class PointerEvent extends TerminalEvent {
+  readonly bubbles = true;
+  readonly cancelable = true;
+  type: "mouseenter" | "mousemove" | "mouseleave" | "mouseup" | "wheel";
+  col: number;
+  row: number;
+  localCol: number;
+  localRow: number;
+  button: number | null;
+  modifiers: MouseModifiers;
+  deltaY: -1 | 0 | 1;
+
+  constructor(
+    type: PointerEvent["type"],
+    col: number,
+    row: number,
+    localCol: number,
+    localRow: number,
+    button: number | null,
+    modifiers: MouseModifiers,
+    deltaY: -1 | 0 | 1 = 0,
+  ) {
+    super();
+    this.type = type;
+    this.col = col;
+    this.row = row;
+    this.localCol = localCol;
+    this.localRow = localRow;
+    this.button = button;
+    this.modifiers = modifiers;
+    this.deltaY = deltaY;
+  }
 }

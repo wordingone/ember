@@ -714,6 +714,7 @@ export function ReplScreen({
   // (and the pane renders no marker) whenever paneFocused is false.
   const [paneFocused,          setPaneFocused]          = useState(false);
   const [focusedControlIndex,  setFocusedControlIndex]  = useState(0);
+  const [hoveredControl, setHoveredControl] = useState<OperatorControlAction | undefined>(undefined);
   const [controlDisabledReason, setControlDisabledReason] = useState<string | undefined>(undefined);
 
   const [permMode,         setPermMode]        = useState<ReplPermissionMode>(config.permissionMode);
@@ -1859,6 +1860,8 @@ export function ReplScreen({
       onControl: handleOperatorControl,
       focusedControlIndex: paneFocused ? focusedControlIndex : undefined,
       disabledActionReason: controlDisabledReason,
+      hoveredControl,
+      onControlHover: setHoveredControl,
     }),
   );
 }

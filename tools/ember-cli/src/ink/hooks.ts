@@ -13,7 +13,7 @@ import {
   TerminalSizeContext,
 } from "./components.ts";
 import { osc } from "./termio.ts";
-import type { SgrMousePress } from "./termio.ts";
+import type { SgrMouseEvent } from "./termio.ts";
 
 // ---------------------------------------------------------------------------
 // KeyboardKey — shape delivered to useInput handlers
@@ -91,7 +91,7 @@ export function _deliverKeyEvent(
   }
 }
 
-type MouseDispatcher = (event: SgrMousePress) => void;
+type MouseDispatcher = (event: SgrMouseEvent) => void;
 let _mouseDispatcher: MouseDispatcher | null = null;
 
 /** Installs the currently mounted renderer's pointer dispatcher. @internal */
@@ -103,7 +103,7 @@ export function _setMouseDispatcher(dispatcher: MouseDispatcher): () => void {
 }
 
 /** Routes one decoded mouse press to the currently mounted renderer. @internal */
-export function _deliverMouseEvent(event: SgrMousePress): void {
+export function _deliverMouseEvent(event: SgrMouseEvent): void {
   _mouseDispatcher?.(event);
 }
 
