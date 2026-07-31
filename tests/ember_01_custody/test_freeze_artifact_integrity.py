@@ -240,6 +240,62 @@ def test_receipt_name_resolves_inside_receipts_tree(tmp_path: Path) -> None:
     assert row["status"] == "VERIFIED"
 
 
+def test_shard_name_resolves_through_declared_shard_directory(
+    tmp_path: Path,
+) -> None:
+    module = load_module()
+    receipt = tmp_path / "receipts" / "token-shards.json"
+    write_json(
+        receipt,
+        {
+            "shard_dir": "../shards-v0",
+            "shards": [
+                {
+                    "name": "v0-00000.bin",
+                    "sha256": "0" * 64,
+                    "n_tokens": 1,
+                }
+            ],
+        },
+    )
+
+    row = module.scan_receipts(tmp_path, tmp_path / "receipts")["pins"][0]
+
+    assert row["artifact_path"] == "shards-v0/v0-00000.bin"
+    assert row["raw_artifact_reference"] == "v0-00000.bin"
+    assert row["violations"] == ["FILE_MISSING"]
+
+
+@pytest.mark.parametrize(
+    "shard_dir",
+    [
+        "../../outside",
+        "C:/outside",
+        "/outside",
+    ],
+)
+def test_declared_shard_directory_cannot_escape_repository(
+    shard_dir: str,
+    tmp_path: Path,
+) -> None:
+    module = load_module()
+    receipt = tmp_path / "receipts" / "token-shards.json"
+    write_json(
+        receipt,
+        {
+            "shard_dir": shard_dir,
+            "shards": [
+                {"name": "v0-00000.bin", "sha256": "0" * 64, "n_tokens": 1}
+            ],
+        },
+    )
+
+    row = module.scan_receipts(tmp_path, tmp_path / "receipts")["pins"][0]
+
+    assert row["artifact_path"] is None
+    assert row["violations"] == ["PATH_OUTSIDE_REPOSITORY"]
+
+
 def test_windows_separators_are_normalized_for_repo_relative_paths(
     tmp_path: Path,
 ) -> None:

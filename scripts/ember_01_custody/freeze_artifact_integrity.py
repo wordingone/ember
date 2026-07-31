@@ -176,10 +176,28 @@ def _resolve_artifact(
     receipt_path: Path,
     raw: str,
     source_kind: str,
+    directory_hint: str | None = None,
 ) -> tuple[Path | None, str | None]:
     relative = _safe_relative_path(raw)
     if relative is None:
         return None, "PATH_OUTSIDE_REPOSITORY"
+
+    resolved_root = root.resolve()
+    if directory_hint is not None:
+        normalized_hint = directory_hint.replace("\\", "/")
+        hint = PurePosixPath(normalized_hint)
+        if (
+            not normalized_hint
+            or hint.is_absolute()
+            or re.match(r"^[A-Za-z]:", normalized_hint)
+        ):
+            return None, "PATH_OUTSIDE_REPOSITORY"
+        candidate = receipt_path.parent.joinpath(
+            *hint.parts, *relative.parts
+        ).resolve(strict=False)
+        if not _inside(resolved_root, candidate):
+            return None, "PATH_OUTSIDE_REPOSITORY"
+        return candidate, None
 
     if source_kind == "name":
         candidates = [
@@ -190,7 +208,6 @@ def _resolve_artifact(
     else:
         candidates = [root.joinpath(*relative.parts)]
 
-    resolved_root = root.resolve()
     safe_candidates: list[Path] = []
     for candidate in candidates:
         resolved = candidate.resolve(strict=False)
@@ -211,6 +228,7 @@ def _extract_pins(
     receipt: object,
 ) -> list[dict[str, Any]]:
     transitions = _provenance_transitions(receipt)
+    shard_dir = receipt.get("shard_dir") if isinstance(receipt, Mapping) else None
     pins: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
 
@@ -260,8 +278,17 @@ def _extract_pins(
             seen.add(identity)
             expected = transitions.get(field, original_digest)
             pin_source = "provenance_transition" if field in transitions else "receipt"
+            directory_hint = (
+                shard_dir
+                if (
+                    source_kind == "name"
+                    and object_path[:1] == ("shards",)
+                    and isinstance(shard_dir, str)
+                )
+                else None
+            )
             artifact, path_error = _resolve_artifact(
-                root, receipts_dir, receipt_path, raw_path, source_kind
+                root, receipts_dir, receipt_path, raw_path, source_kind, directory_hint
             )
             pins.append(
                 {
