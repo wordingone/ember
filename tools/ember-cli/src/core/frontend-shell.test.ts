@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // frontend-shell.test.ts — AC1–AC10 tests for frontend-shell.ts
 // Spec: specs/core/frontend-shell.md
 
@@ -79,6 +82,22 @@ describe("frontend-shell — AC2: createRoot() is memoized", () => {
   it("returned object has a render method", () => {
     const root = createRoot();
     expect(typeof root.render).toBe("function");
+  });
+
+  it("acquires terminal ownership synchronously before the first render", () => {
+    const writes: string[] = [];
+    const stdout = {
+      columns: 80,
+      rows: 24,
+      write(value: string) { writes.push(value); return true; },
+    };
+    const root = createRoot({ stdout: stdout as unknown as NodeJS.WritableStream });
+
+    root.render(React.createElement("div", null, "first frame"));
+
+    expect(writes[0]).toContain("\x1b[?1049h");
+    expect(writes[0]).toContain("\x1b[?25l");
+    expect(writes[0]).toContain("\x1b[?1003h");
   });
 });
 

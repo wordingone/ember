@@ -1323,5 +1323,6 @@ export async function main(opts: MainOptions = {}): Promise<void> {
 
   await exitPromise;
   stopBridge();
+  root.unmount();
   process.exit(0);
 }

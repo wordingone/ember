@@ -36,10 +36,13 @@ export interface Style {
 export const ENTER_ALT_SCREEN     = "\x1b[?1049h";
 /** Switch back to the primary screen buffer. */
 export const EXIT_ALT_SCREEN      = "\x1b[?1049l";
-/** Enable mouse tracking (button events, SGR extended). */
-export const ENABLE_MOUSE_TRACKING  = "\x1b[?1000h\x1b[?1006h";
+/** Hide/show the native hardware cursor while the renderer owns the viewport. */
+export const HIDE_CURSOR = "\x1b[?25l";
+export const SHOW_CURSOR = "\x1b[?25h";
+/** Enable all-event mouse tracking (press, release, motion, wheel; SGR extended). */
+export const ENABLE_MOUSE_TRACKING  = "\x1b[?1003h\x1b[?1006h";
 /** Disable mouse tracking. */
-export const DISABLE_MOUSE_TRACKING = "\x1b[?1000l\x1b[?1006l";
+export const DISABLE_MOUSE_TRACKING = "\x1b[?1006l\x1b[?1003l\x1b[?1002l\x1b[?1000l";
 
 export interface SgrMousePress {
   col: number;
