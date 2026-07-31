@@ -34,6 +34,10 @@ SCHEMA_VERSION = "ember-freeze-artifact-integrity/v1"
 GOAL_ID = "EMBER-02"
 WORKSTREAM_ID = "EMBER-02A"
 NEXT_EXECUTED_OUTCOME = "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+TICKET = "FREEZE-ARTIFACT-INTEGRITY-ISSUE531"
+SHA_CONVENTION = (
+    "sha256 over exact on-disk file bytes, no normalization"
+)
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 FormatProbe = Callable[[Path], dict[str, str]]
 
@@ -436,6 +440,8 @@ def scan_receipts(
         "goal_id": GOAL_ID,
         "workstream_id": WORKSTREAM_ID,
         "next_executed_outcome": NEXT_EXECUTED_OUTCOME,
+        "ticket": TICKET,
+        "sha_convention": SHA_CONVENTION,
         "receipts_directory": receipts_dir.relative_to(root).as_posix(),
         "summary": {
             "receipt_count": len(receipt_paths),
@@ -486,9 +492,9 @@ def main(argv: list[str] | None = None) -> int:
     report = scan_receipts(
         root, receipts_dir, exclude_paths=() if output is None else (output,)
     )
-    report["captured_at"] = (
-        datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    )
+    captured_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    report["captured_at"] = captured_at
+    report["ts"] = captured_at
     report["source_commit"] = _git_head(root)
     report["verifier_sha256"] = sha256_file(Path(__file__).resolve())
     report["report_sha256"] = hashlib.sha256(canonical_json_bytes(report)).hexdigest()

@@ -60,6 +60,8 @@ def test_matching_path_sha_pair_is_verified(tmp_path: Path) -> None:
         report["next_executed_outcome"]
         == "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
     )
+    assert report["ticket"] == "FREEZE-ARTIFACT-INTEGRITY-ISSUE531"
+    assert report["sha_convention"] == module.SHA_CONVENTION
     assert report["pins"][0]["status"] == "VERIFIED"
     assert report["pins"][0]["field"] == "artifact.sha256"
 
@@ -368,6 +370,7 @@ def test_cli_report_hash_binds_verifier_and_all_prior_fields(tmp_path: Path) -> 
     assert exit_code == 0
     report = json.loads(output.read_text(encoding="utf-8"))
     expected = report.pop("report_sha256")
+    assert report["ts"] == report["captured_at"]
     assert "verifier_sha256" in report
     assert hashlib.sha256(module.canonical_json_bytes(report)).hexdigest() == expected
 
