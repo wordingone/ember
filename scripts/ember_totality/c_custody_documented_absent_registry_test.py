@@ -46,6 +46,7 @@ EXPECTED_ROW_KEYS = {
 ALLOWED_CLASSES = {
     "BARRED_AT_HEAD_BY_CONTENT_RAIL",
     "CROSS_TREE_LINEAGE_NON_CANONICAL",
+    "MIS_ROOTED_NON_CUSTODY_RUNTIME_SENTINEL",
     "MIS_ROOTED_ZERO_TRACE",
     "VOID_SUPERSEDED",
 }
@@ -63,6 +64,14 @@ EXPECTED_REFS = {
     "receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-stub-server-log.jsonl",
     "receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-terminal-transcript-clean.txt",
     "receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z.json",
+    "receipts/ceff-RESOLVED-20260703T124623Z.json",
+    "receipts/cgrow-prereq/ff-widen-preservation-20260628T053513Z.json",
+    "receipts/corpus-manifest-20260702T162110Z.json",
+    "receipts/corpus-materiality-adjudication-20260702T162033Z.json",
+    "receipts/ember-c-scale/c-scale-s3-deletion-arm-20260704T084922Z.json",
+    "receipts/ember-c-scale/w1-collapse-control-20260704T071732Z.json",
+    "receipts/ember-c8-execution-binding/ablation-20260703T080952Z.json",
+    "receipts/stab524-gpu-window-done-20260709.json",
 }
 
 
@@ -71,8 +80,8 @@ def test_registry_is_closed_and_bound_to_current_document_bytes() -> None:
     registry = json.loads(raw.decode("utf-8"))
     assert set(registry) == EXPECTED_TOP_LEVEL
     assert registry["schema_version"] == "ember-c-custody-documented-absent-v1"
-    assert registry["ticket"] == "C-CUSTODY-DOCUMENTED-ABSENT-WAVE027"
-    assert registry["ts"] == "2026-07-31T13:47:00Z"
+    assert registry["ticket"] == "C-CUSTODY-DOCUMENTED-ABSENT-WAVE028"
+    assert registry["ts"] == "2026-07-31T14:24:00Z"
     assert registry["goal_id"] == "EMBER-02"
     assert registry["workstream_id"] == "EMBER-02A"
     assert registry["next_executed_outcome"] == (
@@ -121,7 +130,7 @@ def test_registry_is_closed_and_bound_to_current_document_bytes() -> None:
 
     rows = registry["documented_absent"]
     assert isinstance(rows, list)
-    assert len(rows) == 13
+    assert len(rows) == 21
     assert {row["ref"] for row in rows} == EXPECTED_REFS
     assert len({row["ref"] for row in rows}) == len(rows)
 
