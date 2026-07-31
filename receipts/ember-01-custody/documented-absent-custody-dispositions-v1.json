@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-c-custody-documented-absent-v1",
-  "ticket": "C-CUSTODY-DOCUMENTED-ABSENT-WAVE027",
-  "ts": "2026-07-31T13:47:00Z",
+  "ticket": "C-CUSTODY-DOCUMENTED-ABSENT-WAVE028",
+  "ts": "2026-07-31T14:24:00Z",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
@@ -114,6 +114,70 @@
       "line": 164,
       "disposition_class": "VOID_SUPERSEDED",
       "evidence": "The later VOID receipt proves the real-prefixed main artifact was never written under the claimed identity."
+    },
+    {
+      "doc": "docs/custody-disposition-20260708.md",
+      "ref": "receipts/ceff-RESOLVED-20260703T124623Z.json",
+      "marker": "9d79cb864fc8b8fa62080019f4121951a4b965a4",
+      "line": 388,
+      "disposition_class": "CROSS_TREE_LINEAGE_NON_CANONICAL",
+      "evidence": "The only source blob is on a non-ancestor goalforge lineage and is not canonical public-master evidence."
+    },
+    {
+      "doc": "docs/custody-disposition-20260708.md",
+      "ref": "receipts/cgrow-prereq/ff-widen-preservation-20260628T053513Z.json",
+      "marker": "fa49af42c9541a064980e68421acb28db2550a1e",
+      "line": 389,
+      "disposition_class": "CROSS_TREE_LINEAGE_NON_CANONICAL",
+      "evidence": "The only source blob is on a non-ancestor goalforge lineage and is not canonical public-master evidence."
+    },
+    {
+      "doc": "docs/custody-disposition-20260708.md",
+      "ref": "receipts/corpus-manifest-20260702T162110Z.json",
+      "marker": "c63d31b5e470c4fba6a8d3d96063a3b2fa7de101",
+      "line": 390,
+      "disposition_class": "CROSS_TREE_LINEAGE_NON_CANONICAL",
+      "evidence": "The only source blob is on a non-ancestor goalforge lineage and is not canonical public-master evidence."
+    },
+    {
+      "doc": "docs/custody-disposition-20260708.md",
+      "ref": "receipts/corpus-materiality-adjudication-20260702T162033Z.json",
+      "marker": "c63d31b5e470c4fba6a8d3d96063a3b2fa7de101",
+      "line": 391,
+      "disposition_class": "CROSS_TREE_LINEAGE_NON_CANONICAL",
+      "evidence": "The only source blob is on a non-ancestor goalforge lineage and is not canonical public-master evidence."
+    },
+    {
+      "doc": "docs/custody-disposition-20260708.md",
+      "ref": "receipts/ember-c-scale/c-scale-s3-deletion-arm-20260704T084922Z.json",
+      "marker": "b96bbd6464ca47397b45ce013d2706fd75c6cee7",
+      "line": 392,
+      "disposition_class": "CROSS_TREE_LINEAGE_NON_CANONICAL",
+      "evidence": "The only source blob is on a non-ancestor goalforge lineage and is not canonical public-master evidence."
+    },
+    {
+      "doc": "docs/custody-disposition-20260708.md",
+      "ref": "receipts/ember-c-scale/w1-collapse-control-20260704T071732Z.json",
+      "marker": "1aba370711f7a77e8ba4e299fa53069352bb271a",
+      "line": 393,
+      "disposition_class": "CROSS_TREE_LINEAGE_NON_CANONICAL",
+      "evidence": "The only source blob is on a non-ancestor goalforge lineage and is not canonical public-master evidence."
+    },
+    {
+      "doc": "docs/custody-disposition-20260708.md",
+      "ref": "receipts/ember-c8-execution-binding/ablation-20260703T080952Z.json",
+      "marker": "69fb2b41a0c958ab1c17f506ba5a982ab9561626",
+      "line": 394,
+      "disposition_class": "CROSS_TREE_LINEAGE_NON_CANONICAL",
+      "evidence": "The only source blob is on a non-ancestor goalforge lineage and is not canonical public-master evidence."
+    },
+    {
+      "doc": "docs/custody-disposition-20260708.md",
+      "ref": "receipts/stab524-gpu-window-done-20260709.json",
+      "marker": "tools/ember-cli/state/serve-receipts/stab524-gpu-window-done-20260709.json",
+      "line": 406,
+      "disposition_class": "MIS_ROOTED_NON_CUSTODY_RUNTIME_SENTINEL",
+      "evidence": "The extracted receipts-root path is a citer-side mis-root; the real ignored target is machine-local runtime sentinel state, not a custody receipt."
     }
   ],
   "claim_boundary": {
