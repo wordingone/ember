@@ -12,6 +12,9 @@
 // made checkable without a screenshot: a live process overwrites this file at least once/second
 // (see screens/repl.ts's unconditional liveness tick); a dead process (frozen pane, exited binary)
 // leaves it exactly where it was at exit, forever.
+// Restart authority is intentionally elsewhere: Windows Task Scheduler owns cockpit
+// restart-on-failure through windows-restart-task.ts, while ember-lab exclusively owns
+// any model-server process.
 //
 // Fail-open by design, same contract as services/operator-receipts.ts: a heartbeat write must
 // never crash or delay the render loop. Every fs call is wrapped; failures are swallowed after a

@@ -113,6 +113,7 @@ const FAST_PATH_SUBCMDS = new Set<string>([
   "environment-runner",
   "self-hosted-runner",
   "gh",
+  "liveness",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -541,7 +542,8 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
       `\n` +
       `Subcommands:\n` +
       `  remote-control (rc), sync, bridge, daemon, ps, logs, attach, kill,\n` +
-      `  new, list, reply, environment-runner, self-hosted-runner, gh doctor\n` +
+      `  new, list, reply, environment-runner, self-hosted-runner, gh doctor,\n` +
+      `  liveness install [--executable C:\\path\\to\\ember.exe]\n` +
       `\n` +
       `Environment:\n` +
       `  EMBER_MODEL_URL       External endpoint; requires admitted owned identity match or explicit reference seat\n` +
@@ -651,6 +653,40 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
     }
     process.stderr.write(`gh: unknown subcommand "${sub ?? ""}" (supported: doctor)\n`);
     process.exit(1);
+    return true;
+  }
+
+  if (first === "liveness") {
+    const sub = args[1];
+    if (sub !== "install") {
+      process.stderr.write(`liveness: unknown subcommand "${sub ?? ""}" (supported: install)\n`);
+      process.exit(1);
+      return true;
+    }
+    const executableIndex = args.indexOf("--executable");
+    if (executableIndex >= 0 && (args[executableIndex + 1] === undefined ||
+        args[executableIndex + 1]!.startsWith("-"))) {
+      process.stderr.write("liveness install: --executable requires an absolute ember.exe path\n");
+      process.exit(1);
+      return true;
+    }
+    const executablePath = executableIndex >= 0
+      ? args[executableIndex + 1]!
+      : process.execPath;
+    try {
+      const { installWindowsRestartTask } =
+        await import("../services/windows-restart-task.ts");
+      const receipt = await installWindowsRestartTask({ executablePath });
+      process.stdout.write(JSON.stringify(receipt) + "\n");
+      process.exit(0);
+    } catch (error) {
+      process.stderr.write(
+        "liveness install failed: " +
+          (error instanceof Error ? error.message : String(error)) +
+          "\n",
+      );
+      process.exit(1);
+    }
     return true;
   }
 
