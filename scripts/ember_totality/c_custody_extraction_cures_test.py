@@ -133,6 +133,44 @@ def test_double_colon_field_suffix_stripped_resolves_present():
         print("PASS: ::field-suffix citation resolves once stripped to its base path")
 
 
+def test_location_suffixes_strip_to_present_receipt():
+    """Markdown line anchors are source locations, not filename bytes."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        repo = _new_repo(tmpdir)
+        (repo / "receipts" / "target.json").write_text(json.dumps({"payload": "ok"}))
+        (repo / "receipts" / "citing.json").write_text(json.dumps({
+            "range": "receipts/target.json:113-120",
+            "lines": "receipts/target.json:84,85",
+            "punctuation": "receipts/target.json:",
+        }))
+        _git_add_and_commit(repo, "line-location citations, target present")
+        _install_probe(repo)
+
+        output, _ = _run_custody_probe(repo)
+        assert "GREEN" in output, f"Expected GREEN (line suffixes stripped), got: {output}"
+        sidecar = _sidecar_data(repo)
+        assert sidecar["offenders"]["cited_missing"] == [], sidecar["offenders"]["cited_missing"]
+        print("PASS: numeric line/range/list suffixes resolve to the tracked base receipt")
+
+
+def test_nonnumeric_colon_suffix_stays_missing():
+    """Only closed numeric source locations may be stripped."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        repo = _new_repo(tmpdir)
+        (repo / "receipts" / "target.json").write_text(json.dumps({"payload": "ok"}))
+        (repo / "receipts" / "citing.json").write_text(json.dumps({
+            "citation": "receipts/target.json:foreign-field"
+        }))
+        _git_add_and_commit(repo, "nonnumeric colon suffix remains literal")
+        _install_probe(repo)
+
+        output, _ = _run_custody_probe(repo)
+        assert "RED" in output, f"Expected RED (nonnumeric suffix is not stripped), got: {output}"
+        sidecar = _sidecar_data(repo)
+        assert any("target.json:foreign-field" in c for c in sidecar["offenders"]["cited_missing"])
+        print("PASS: nonnumeric colon suffix remains a concrete missing citation")
+
+
 def test_wrap_joined_record_consumes_joined_not_ref():
     """A citation-check-shaped wrap_joined record ({"doc","ref","joined","line"})
     is consumed via its reconstructed `joined` value; the truncated `ref`
@@ -358,6 +396,41 @@ def test_known_prose_fragment_is_pattern():
         print("PASS: known prose fragment classifies pattern_citation")
 
 
+def test_known_custody_prose_fragment_is_pattern():
+    """A historical statement about receipts/custody corrections is prose."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        repo = _new_repo(tmpdir)
+        (repo / "receipts" / "citing.json").write_text(json.dumps({
+            "reason": "Git log shows receipts/custody corrections merged to master."
+        }))
+        _git_add_and_commit(repo, "known custody prose fragment")
+        _install_probe(repo)
+
+        output, _ = _run_custody_probe(repo)
+        assert "GREEN" in output, f"Expected GREEN (custody prose is pattern), got: {output}"
+        sidecar = _sidecar_data(repo)
+        assert sidecar["offenders"]["cited_missing"] == [], sidecar["offenders"]["cited_missing"]
+        assert any(p.endswith("receipts/custody") for p in sidecar["offenders"]["pattern_citation"])
+        print("PASS: receipts/custody prose fragment classifies pattern_citation")
+
+
+def test_similar_custody_filename_stays_missing():
+    """The prose exception must not hide a similarly named receipt file."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        repo = _new_repo(tmpdir)
+        (repo / "receipts" / "citing.json").write_text(json.dumps({
+            "citation": "receipts/custody-proof.json"
+        }))
+        _git_add_and_commit(repo, "similar custody receipt genuinely absent")
+        _install_probe(repo)
+
+        output, _ = _run_custody_probe(repo)
+        assert "RED" in output, f"Expected RED (similar filename absent), got: {output}"
+        sidecar = _sidecar_data(repo)
+        assert any("receipts/custody-proof.json" in c for c in sidecar["offenders"]["cited_missing"])
+        print("PASS: similar custody filename remains fail-closed")
+
+
 def test_schema_constant_exempted():
     """A citation exactly matching a documented schema-example constant
     (the cycle-*/statecommit-* convention) classifies pattern_citation, not
@@ -412,6 +485,8 @@ if __name__ == "__main__":
     tests = [
         test_trailing_backtick_stripped_resolves_present,
         test_double_colon_field_suffix_stripped_resolves_present,
+        test_location_suffixes_strip_to_present_receipt,
+        test_nonnumeric_colon_suffix_stays_missing,
         test_wrap_joined_record_consumes_joined_not_ref,
         test_wrap_joined_still_reds_when_joined_target_absent,
         test_documented_absent_record_honored,
@@ -421,6 +496,8 @@ if __name__ == "__main__":
         test_annex_attested_classifies_when_sha256_recorded,
         test_curly_brace_placeholder_is_pattern,
         test_known_prose_fragment_is_pattern,
+        test_known_custody_prose_fragment_is_pattern,
+        test_similar_custody_filename_stays_missing,
         test_schema_constant_exempted,
         test_cited_missing_uncapped_total,
     ]
