@@ -1,0 +1,68 @@
+{
+    "schema":  "cbase-heldout-eval-preflight/v1",
+    "issue":  "#760",
+    "captured_public_master":  "db571b310b0ad20f8b257760cdc7c7ee69714929",
+    "captured_at":  "20260731T005114Z",
+    "status":  "IMPLEMENTATION_VERIFIED_REAL_METRICS_UNMEASURABLE",
+    "implementation":  {
+                           "script":  "scripts/cbase_heldout_eval.py",
+                           "script_sha256":  "73509518d398ccd0aea11c138415dbf938157745829c75cd46adb834a7308f25",
+                           "test":  "scripts/test_cbase_heldout_eval.py",
+                           "test_sha256":  "4898f4532c846b684efbc6277cb4f443550809578374fdd9dfb7c81f48ee9903",
+                           "slice_manifest":  "manifests/cbase-heldout-slice-v1.json",
+                           "slice_manifest_sha256":  "32052288e761d8a01375bec40bc04785fcd46d75db58b325b73090f23dd74c14",
+                           "historical_imports_execution_denied":  true,
+                           "read_only_eval_contract":  {
+                                                           "w1_model_source_blob":  "3dc627d49c5e48ceb8ab0c028eab68acb74e4f61",
+                                                           "timeshare_source_blob":  "ea367b382b975afd7afecbe86b6efa1148bd76ad"
+                                                       }
+                       },
+    "verification":  {
+                         "focused":  "10 passed in 1.95s",
+                         "compile":  "PASS",
+                         "strict_frozen_manifest":  "PASS: 16 windows / 16384 scored tokens",
+                         "production_cli":  "REFUSED exit 2: SHARD_MISSING v0-00016.bin",
+                         "red_green_history":  [
+                                                   "missing implementation: 1 failed",
+                                                   "unimplemented functions: 6 failed / 1 passed",
+                                                   "missing CLI: 1 failed / 7 passed",
+                                                   "open manifest provenance: 1 failed / 8 passed",
+                                                   "historical importer dependency: 1 failed / 9 passed",
+                                                   "final: 10 passed"
+                                               ],
+                         "inherited_w2_collection":  "NOT_CLAIMED: execution-denied timeshare_pretrain importer exits historical_only before collection"
+                     },
+    "source_availability":  {
+                                "target_exists":  false,
+                                "required_shard":  "v0-00016.bin",
+                                "required_shard_sha256":  "c1a41ab49f993ab4dbf1b69673cda5712e6d7819b4a4d398fec3e3559fa083ed",
+                                "verdict":  "UNMEASURABLE_MISSING_SHARD_BYTES",
+                                "root_binding":  "configured-v0-shard-root",
+                                "binding_target_status":  "MISSING"
+                            },
+    "checkpoint_custody":  {
+                               "step25":  {
+                                              "manifest_sha256":  "3bd76c858576a3a0ac48bd2eecf3d33702116874529be640e627d4558f45d138",
+                                              "model_bytes":  2377797331,
+                                              "optimizer_bytes":  2574502283
+                                          },
+                               "step50":  {
+                                              "manifest_sha256":  "af828fd6388c7d0c00ec688bf291f474b0158c308a022f3d19fffc58b6b68504",
+                                              "model_bytes":  2377797331,
+                                              "optimizer_bytes":  2574502283
+                                          },
+                               "large_payload_rehash_performed":  false,
+                               "large_payload_rehash_boundary":  "deferred while operator compute is occupied; evaluator rehashes all manifest-listed checkpoint bytes before any metric"
+                           },
+    "api_spend_usd":  0,
+    "paid_api_surface_used":  false,
+    "public_mutation_performed":  false,
+    "claim_boundary":  "Harness, frozen slice authority, and fail-closed refusal only. No heldout metric, capability, same-quality, milestone-completion, or issue-completion claim.",
+    "goal_id":  "EMBER-02",
+    "workstream_id":  "EMBER-02A",
+    "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "ticket":  "WAVE-011-ISSUE-760-HELDOUT-PREFLIGHT",
+    "ts":  "20260731T005114Z",
+    "sha_convention":  "sha256 over exact on-disk raw bytes, binary read, with no line-ending normalization",
+    "invariant_sha256":  "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
+}

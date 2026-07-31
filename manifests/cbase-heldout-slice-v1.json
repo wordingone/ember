@@ -1,0 +1,214 @@
+{
+    "schema":  "cbase-heldout-slice/v1",
+    "issue":  "#760",
+    "captured_public_master":  "db571b310b0ad20f8b257760cdc7c7ee69714929",
+    "source_corpus":  {
+                          "combined_sha256":  "aa48f6ee5e74a40b533f3565ccb4025f9b6c5ad28d7926abc6bd0272ae92d88a",
+                          "receipt_path":  "receipts/token-shards-v0-20260611T170047Z.json",
+                          "receipt_sha256":  "cf98be6342e71a51dcc49e4e54b7323c20904ebf8f68e763a09a2a9be9d3bf8a",
+                          "shards":  [
+                                         {
+                                             "name":  "v0-00016.bin",
+                                             "sha256":  "c1a41ab49f993ab4dbf1b69673cda5712e6d7819b4a4d398fec3e3559fa083ed",
+                                             "n_tokens":  268435456,
+                                             "global_token_start":  4294967296,
+                                             "global_token_end_exclusive":  4563402752
+                                         }
+                                     ]
+                      },
+    "selection_evidence":  {
+                               "path":  "receipts/ember-c-scale/w2-heldout-decontam-20260708T121128Z.json",
+                               "sha256":  "40dfd9ecdd65cb74fb83d02b82c81c01aff1dd4586720847101cfb434452ec1a",
+                               "batch_sha256":  "91069e33b402b6a91267e59dfbeb02da96ddcbe683bc091817461fad79358929",
+                               "verdict":  "CLEAN"
+                           },
+    "sequence":  {
+                     "dtype":  "\u003cu2",
+                     "seq":  1024,
+                     "n_mtp":  2,
+                     "separator_id":  0,
+                     "packed_bytes_per_token":  2,
+                     "scoring":  "primary_next_token_only"
+                 },
+    "training_consumption":  [
+                                 {
+                                     "source":  "W1 ceiling arithmetic preserved by the selection evidence",
+                                     "window_start":  0,
+                                     "window_end_exclusive":  24528,
+                                     "global_token_start":  0,
+                                     "global_token_end_exclusive":  25116675
+                                 }
+                             ],
+    "windows":  [
+                    {
+                        "window_index":  4194305,
+                        "shard_name":  "v0-00016.bin",
+                        "shard_token_start":  1024,
+                        "shard_token_end_exclusive":  2049,
+                        "source_shard_token_end_exclusive":  2051,
+                        "global_token_start":  4294968320,
+                        "global_token_end_exclusive":  4294969345,
+                        "source_global_token_end_exclusive":  4294969347
+                    },
+                    {
+                        "window_index":  4194308,
+                        "shard_name":  "v0-00016.bin",
+                        "shard_token_start":  4096,
+                        "shard_token_end_exclusive":  5121,
+                        "source_shard_token_end_exclusive":  5123,
+                        "global_token_start":  4294971392,
+                        "global_token_end_exclusive":  4294972417,
+                        "source_global_token_end_exclusive":  4294972419
+                    },
+                    {
+                        "window_index":  4194310,
+                        "shard_name":  "v0-00016.bin",
+                        "shard_token_start":  6144,
+                        "shard_token_end_exclusive":  7169,
+                        "source_shard_token_end_exclusive":  7171,
+                        "global_token_start":  4294973440,
+                        "global_token_end_exclusive":  4294974465,
+                        "source_global_token_end_exclusive":  4294974467
+                    },
+                    {
+                        "window_index":  4194311,
+                        "shard_name":  "v0-00016.bin",
+                        "shard_token_start":  7168,
+                        "shard_token_end_exclusive":  8193,
+                        "source_shard_token_end_exclusive":  8195,
+                        "global_token_start":  4294974464,
+                        "global_token_end_exclusive":  4294975489,
+                        "source_global_token_end_exclusive":  4294975491
+                    },
+                    {
+                        "window_index":  4194312,
+                        "shard_name":  "v0-00016.bin",
+                        "shard_token_start":  8192,
+                        "shard_token_end_exclusive":  9217,
+                        "source_shard_token_end_exclusive":  9219,
+                        "global_token_start":  4294975488,
+                        "global_token_end_exclusive":  4294976513,
+                        "source_global_token_end_exclusive":  4294976515
+                    },
+                    {
+                        "window_index":  4194320,
+                        "shard_name":  "v0-00016.bin",
+                        "shard_token_start":  16384,
+                        "shard_token_end_exclusive":  17409,
+                        "source_shard_token_end_exclusive":  17411,
+                        "global_token_start":  4294983680,
+                        "global_token_end_exclusive":  4294984705,
+                        "source_global_token_end_exclusive":  4294984707
+                    },
+                    {
+                        "window_index":  4194323,
+                        "shard_name":  "v0-00016.bin",
+                        "shard_token_start":  19456,
+                        "shard_token_end_exclusive":  20481,
+                        "source_shard_token_end_exclusive":  20483,
+                        "global_token_start":  4294986752,
+                        "global_token_end_exclusive":  4294987777,
+                        "source_global_token_end_exclusive":  4294987779
+                    },
+                    {
+                        "window_index":  4194325,
+                        "shard_name":  "v0-00016.bin",
+                        "shard_token_start":  21504,
+                        "shard_token_end_exclusive":  22529,
+                        "source_shard_token_end_exclusive":  22531,
+                        "global_token_start":  4294988800,
+                        "global_token_end_exclusive":  4294989825,
+                        "source_global_token_end_exclusive":  4294989827
+                    },
+                    {
+                        "window_index":  4194326,
+                        "shard_name":  "v0-00016.bin",
+                        "shard_token_start":  22528,
+                        "shard_token_end_exclusive":  23553,
+                        "source_shard_token_end_exclusive":  23555,
+                        "global_token_start":  4294989824,
+                        "global_token_end_exclusive":  4294990849,
+                        "source_global_token_end_exclusive":  4294990851
+                    },
+                    {
+                        "window_index":  4194327,
+                        "shard_name":  "v0-00016.bin",
+                        "shard_token_start":  23552,
+                        "shard_token_end_exclusive":  24577,
+                        "source_shard_token_end_exclusive":  24579,
+                        "global_token_start":  4294990848,
+                        "global_token_end_exclusive":  4294991873,
+                        "source_global_token_end_exclusive":  4294991875
+                    },
+                    {
+                        "window_index":  4194329,
+                        "shard_name":  "v0-00016.bin",
+                        "shard_token_start":  25600,
+                        "shard_token_end_exclusive":  26625,
+                        "source_shard_token_end_exclusive":  26627,
+                        "global_token_start":  4294992896,
+                        "global_token_end_exclusive":  4294993921,
+                        "source_global_token_end_exclusive":  4294993923
+                    },
+                    {
+                        "window_index":  4194331,
+                        "shard_name":  "v0-00016.bin",
+                        "shard_token_start":  27648,
+                        "shard_token_end_exclusive":  28673,
+                        "source_shard_token_end_exclusive":  28675,
+                        "global_token_start":  4294994944,
+                        "global_token_end_exclusive":  4294995969,
+                        "source_global_token_end_exclusive":  4294995971
+                    },
+                    {
+                        "window_index":  4194335,
+                        "shard_name":  "v0-00016.bin",
+                        "shard_token_start":  31744,
+                        "shard_token_end_exclusive":  32769,
+                        "source_shard_token_end_exclusive":  32771,
+                        "global_token_start":  4294999040,
+                        "global_token_end_exclusive":  4295000065,
+                        "source_global_token_end_exclusive":  4295000067
+                    },
+                    {
+                        "window_index":  4194349,
+                        "shard_name":  "v0-00016.bin",
+                        "shard_token_start":  46080,
+                        "shard_token_end_exclusive":  47105,
+                        "source_shard_token_end_exclusive":  47107,
+                        "global_token_start":  4295013376,
+                        "global_token_end_exclusive":  4295014401,
+                        "source_global_token_end_exclusive":  4295014403
+                    },
+                    {
+                        "window_index":  4194350,
+                        "shard_name":  "v0-00016.bin",
+                        "shard_token_start":  47104,
+                        "shard_token_end_exclusive":  48129,
+                        "source_shard_token_end_exclusive":  48131,
+                        "global_token_start":  4295014400,
+                        "global_token_end_exclusive":  4295015425,
+                        "source_global_token_end_exclusive":  4295015427
+                    },
+                    {
+                        "window_index":  4194351,
+                        "shard_name":  "v0-00016.bin",
+                        "shard_token_start":  48128,
+                        "shard_token_end_exclusive":  49153,
+                        "source_shard_token_end_exclusive":  49155,
+                        "global_token_start":  4295015424,
+                        "global_token_end_exclusive":  4295016449,
+                        "source_global_token_end_exclusive":  4295016451
+                    }
+                ],
+    "expected_scored_token_count":  16384,
+    "scale":  "W1_FROM_SCRATCH_PILOT_BASELINE",
+    "availability":  {
+                         "status":  "UNMEASURABLE_MISSING_SHARD_BYTES",
+                         "missing":  [
+                                         "v0-00016.bin"
+                                     ],
+                         "note":  "The content-addressed shard is not present in the active workspace. Restore bytes matching the pinned SHA-256 before evaluation; do not substitute or relabel."
+                     },
+    "claim_boundary":  "Frozen primary-NLL slice authority only; no heldout metric, capability, same-quality, or milestone-completion claim until pinned shard and checkpoint bytes are executed."
+}
