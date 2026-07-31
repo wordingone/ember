@@ -56,6 +56,7 @@ FIXTURES_DIR = os.path.join(HERE, "fixtures")
 # structured parse_missing_condition_ids() (P2 fix) rather than duplicating
 # either.
 import test_issue_715_denominator_regression as issue715  # noqa: E402
+from c_auto_v2_fixture import build_fresh_reversion_climb as build_c_auto_v2_fixture  # noqa: E402
 
 SYNTHETIC_MARKER = {
     "_synthetic_control_fixture": True,
@@ -2278,73 +2279,15 @@ def build_c_auto_stale_reversion_claim():
 
 
 def build_c_auto_fresh_reversion_climb():
-    """Cure Defect 3 (legitimate re-climb): claimed rung above reversion target,
-    with claim receipt ts AFTER the reversion ts (fresh re-earn after reversion).
-    POS: legitimate re-climb, must GREEN."""
-    root = fresh_dir(os.path.join(FIXTURES_DIR, "c_auto_fresh_reversion_climb"))
-    write_readme(root, _C_AUTO_ISOLATION_NOTE)
-
-    state = {
-        "schema": "autonomy-ladder-state/v1",
-        "contract": "docs/spec/autonomy-relinquishment-ladder-v1.md",
-        "current_rung": "R1",
-        "rungs": {
-            "R0": {"status": "IN_BUILD", "claimed": False, "windows": []},
-            "R1": {
-                "status": "NOT_STARTED",
-                "claimed": True,
-                "windows": [
-                    "R1-window-20990101T010000Z.json",
-                    "R1-window-20990101T011000Z.json",
-                    "R1-window-20990101T012000Z.json",
-                    "R1-window-20990101T013000Z.json",
-                    "R1-window-20990101T014000Z.json",
-                ]
-            },
-            "R2": {"status": "NOT_STARTED", "claimed": False, "windows": []},
-            "R3": {"status": "BLOCKED_ON_C_E2B", "claimed": False, "windows": []},
-            "R4": {"status": "NOT_STARTED", "claimed": False, "windows": []},
-            "R5": {"status": "BLOCKED_ON_ISSUE_91", "claimed": False, "windows": []},
-        },
-        "reversion_log": [
-            {
-                "ts": "20990101T002000Z",
-                "target_rung": "R0",
-                "incident_receipt": "receipts/autonomy-ladder/reversion-20990101T002000Z.json",
-                "reason": "fixture reversion, then fresh re-climb test"
-            }
-        ],
-        "promotion_rule": "K=5 consecutive clean receipted windows per rung; claim itself is a receipt under receipts/autonomy-ladder/",
-        "safety_floor": "operator escalation set + governor caps + kill-discipline NEVER transfer",
-    }
-    write_json_no_marker(os.path.join(root, "autonomy-ladder-state.json"), state)
-
-    contract_path = os.path.join(root, "docs", "spec", "autonomy-relinquishment-ladder-v1.md")
-    os.makedirs(os.path.dirname(contract_path), exist_ok=True)
-    with open(contract_path, "w", encoding="utf-8") as fh:
-        fh.write("# Autonomy-relinquishment ladder v1 (fixture)\n\nFixture contract document.\n")
-
-    receipts_dir = os.path.join(root, "receipts", "autonomy-ladder")
-    for i, ts in enumerate([
-        "20990101T010000Z", "20990101T011000Z", "20990101T012000Z",
-        "20990101T013000Z", "20990101T014000Z"
-    ]):
-        write_json_no_marker(
-            os.path.join(receipts_dir, f"R1-window-{ts}.json"),
-            {"ts": ts, "rung": "R1", "window": i, "scheduler_provenance": "ember-scheduler"}
-        )
-
-    write_json_no_marker(
-        os.path.join(receipts_dir, "R1-claim-20990101T005000Z.json"),
-        {"ts": "20990101T005000Z", "rung": "R1", "claim": True}
+    """Build the production-shaped v2 positive re-climb fixture."""
+    return build_c_auto_v2_fixture(
+        fixtures_dir=FIXTURES_DIR,
+        repo_root=REPO_ROOT,
+        isolation_note=_C_AUTO_ISOLATION_NOTE,
+        fresh_dir=fresh_dir,
+        write_readme=write_readme,
+        write_json_no_marker=write_json_no_marker,
     )
-
-    write_json_no_marker(
-        os.path.join(receipts_dir, "reversion-20990101T002000Z.json"),
-        {"ts": "20990101T002000Z", "target_rung": "R0", "incident": "fixture"}
-    )
-
-    return root
 
 
 # --- end C-AUTO section -----
