@@ -129,7 +129,7 @@ sizes).
 | Event | Receipt | Mechanism check | `logit_max_abs_diff` | Tolerance | Verdict |
 |---|---|---|---|---|---|
 | Dry-run (CPU, fp32, no training) | `receipts/cbase-grow-dryrun/cbase-grow-dryrun-20260702T190532Z.json` | same fixed batch, pre-grow vs freshly-grown forward pass | `3.337860107421875e-06` | `1e-4` | `GROW_DRYRUN_PASS` |
-| Live (GPU, real governed training) | `receipts/cbase-grow-live-live-20260703T053225Z-import-edition.json` | identical mechanism, applied mid-training | `2.384185791015625e-06` | `1e-4` | `GROW_LIVE_PASS` |
+| Live (GPU, real governed training) | `receipts/cbase-grow-live/cbase-grow-live-live-20260703T053225Z.json` | identical mechanism, applied mid-training | `2.384185791015625e-06` | `1e-4` | `GROW_LIVE_PASS` |
 
 Both pass by roughly two orders of magnitude of margin — the issue's own "fp_diff 2.4e-6 precedent"
 is the live-run figure, quoted exactly. Issue #29's kill criterion ("function-preservation fp_diff
