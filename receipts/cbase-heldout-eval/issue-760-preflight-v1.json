@@ -33,12 +33,12 @@
                          "inherited_w2_collection":  "NOT_CLAIMED: execution-denied timeshare_pretrain importer exits historical_only before collection"
                      },
     "source_availability":  {
-                                "junction":  "B:/M/shards-v0",
-                                "junction_target":  "B:/M/avir/eli/state/ember-eng/shards-v0",
                                 "target_exists":  false,
                                 "required_shard":  "v0-00016.bin",
                                 "required_shard_sha256":  "c1a41ab49f993ab4dbf1b69673cda5712e6d7819b4a4d398fec3e3559fa083ed",
-                                "verdict":  "UNMEASURABLE_MISSING_SHARD_BYTES"
+                                "verdict":  "UNMEASURABLE_MISSING_SHARD_BYTES",
+                                "root_binding":  "configured-v0-shard-root",
+                                "binding_target_status":  "MISSING"
                             },
     "checkpoint_custody":  {
                                "step25":  {
@@ -60,5 +60,8 @@
     "claim_boundary":  "Harness, frozen slice authority, and fail-closed refusal only. No heldout metric, capability, same-quality, milestone-completion, or issue-completion claim.",
     "goal_id":  "EMBER-02",
     "workstream_id":  "EMBER-02A",
-    "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+    "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "ticket":  "WAVE-011-ISSUE-760-HELDOUT-PREFLIGHT",
+    "ts":  "20260731T005114Z",
+    "sha_convention":  "sha256 over exact on-disk raw bytes, binary read, with no line-ending normalization"
 }
