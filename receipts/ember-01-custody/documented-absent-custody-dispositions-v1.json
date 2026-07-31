@@ -1,0 +1,124 @@
+{
+  "schema_version": "ember-c-custody-documented-absent-v1",
+  "ticket": "C-CUSTODY-DOCUMENTED-ABSENT-WAVE027",
+  "ts": "2026-07-31T13:47:00Z",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "source_commit": "78dc2bf4d47df14fe8a7f41f188f216397b14089",
+  "source_document": "docs/custody-disposition-20260708.md",
+  "source_document_sha256": "f1b9db7ce7b717552d900943ffe0ab7babfdf3529035d3cbfe7bb07ef6093efd",
+  "sha_convention": "sha256 over exact on-disk file bytes, no normalization",
+  "documented_absent": [
+    {
+      "doc": "docs/custody-disposition-20260708.md",
+      "ref": "receipts/ceff-closure-gate9-shatter-bf16ns5-20260623T132000Z.json",
+      "marker": "6c9b3d74c35b010ea69516d8240de9c634b613a4",
+      "line": 80,
+      "disposition_class": "BARRED_AT_HEAD_BY_CONTENT_RAIL",
+      "evidence": "Historical blob is recoverable, but restoration is permanently declined by the public content rail."
+    },
+    {
+      "doc": "docs/custody-disposition-20260708.md",
+      "ref": "receipts/ceff-shatter-REPUDIATED-20260623T170000Z.json",
+      "marker": "4e1f32541e28bccc4899ac7b88b6f7ead41e6ad7",
+      "line": 81,
+      "disposition_class": "BARRED_AT_HEAD_BY_CONTENT_RAIL",
+      "evidence": "Historical blob is recoverable, but restoration is permanently declined by the public content rail."
+    },
+    {
+      "doc": "docs/custody-disposition-20260708.md",
+      "ref": "receipts/governor-repair-080-20260702T180248Z.json",
+      "marker": "530c5b3123d62e7f00e9dc9f640d764aae7efb1a",
+      "line": 82,
+      "disposition_class": "BARRED_AT_HEAD_BY_CONTENT_RAIL",
+      "evidence": "Historical blob is recoverable, but restoration is permanently declined by the public content rail."
+    },
+    {
+      "doc": "docs/custody-disposition-20260708.md",
+      "ref": "receipts/cgrow-superseded/cgrow-receipt-20260628T061735Z.json",
+      "marker": "fa49af42c9541a064980e68421acb28db2550a1e",
+      "line": 109,
+      "disposition_class": "CROSS_TREE_LINEAGE_NON_CANONICAL",
+      "evidence": "The only source blobs are on a non-ancestor lineage and are not canonical public-master evidence."
+    },
+    {
+      "doc": "docs/custody-disposition-20260708.md",
+      "ref": "receipts/stale-figure-adjudication-20260702T151929Z.json",
+      "marker": "83ac6bfc8b2fda788a3180dd146cd5c57228f8dc",
+      "line": 110,
+      "disposition_class": "CROSS_TREE_LINEAGE_NON_CANONICAL",
+      "evidence": "The only source blob is on a non-ancestor lineage and is not canonical public-master evidence."
+    },
+    {
+      "doc": "docs/custody-disposition-20260708.md",
+      "ref": "receipts/nck-event-mail-mail_arrived-15038-20260612T210139Z.json",
+      "marker": "yes, both roots",
+      "line": 136,
+      "disposition_class": "MIS_ROOTED_ZERO_TRACE",
+      "evidence": "The citer dropped the true directory prefix and neither the extracted nor correctly rooted artifact exists."
+    },
+    {
+      "doc": "docs/custody-disposition-20260708.md",
+      "ref": "receipts/wheel/wheel-real-20260618T143007Z.json",
+      "marker": "yes, both roots",
+      "line": 137,
+      "disposition_class": "MIS_ROOTED_ZERO_TRACE",
+      "evidence": "The citer dropped the true directory prefix and neither the extracted nor correctly rooted artifact exists."
+    },
+    {
+      "doc": "docs/custody-disposition-20260708.md",
+      "ref": "receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-adapter-trace.log",
+      "marker": "| 8 |",
+      "line": 159,
+      "disposition_class": "VOID_SUPERSEDED",
+      "evidence": "The later VOID receipt proves the real-prefixed sidecar was never written and the near-name bytes do not match."
+    },
+    {
+      "doc": "docs/custody-disposition-20260708.md",
+      "ref": "receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-meta.json",
+      "marker": "| 9 |",
+      "line": 160,
+      "disposition_class": "VOID_SUPERSEDED",
+      "evidence": "The later VOID receipt proves the real-prefixed sidecar was never written and the near-name bytes do not match."
+    },
+    {
+      "doc": "docs/custody-disposition-20260708.md",
+      "ref": "receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-process-after.json",
+      "marker": "| 10 |",
+      "line": 161,
+      "disposition_class": "VOID_SUPERSEDED",
+      "evidence": "The later VOID receipt proves the real-prefixed sidecar was never written and the near-name bytes do not match."
+    },
+    {
+      "doc": "docs/custody-disposition-20260708.md",
+      "ref": "receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-stub-server-log.jsonl",
+      "marker": "| 11 |",
+      "line": 162,
+      "disposition_class": "VOID_SUPERSEDED",
+      "evidence": "The later VOID receipt proves the real-prefixed sidecar was never written and the near-name bytes do not match."
+    },
+    {
+      "doc": "docs/custody-disposition-20260708.md",
+      "ref": "receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-terminal-transcript-clean.txt",
+      "marker": "| 12 |",
+      "line": 163,
+      "disposition_class": "VOID_SUPERSEDED",
+      "evidence": "The later VOID receipt proves the real-prefixed sidecar was never written and the near-name bytes do not match."
+    },
+    {
+      "doc": "docs/custody-disposition-20260708.md",
+      "ref": "receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z.json",
+      "marker": "| 13 |",
+      "line": 164,
+      "disposition_class": "VOID_SUPERSEDED",
+      "evidence": "The later VOID receipt proves the real-prefixed main artifact was never written under the claimed identity."
+    }
+  ],
+  "claim_boundary": {
+    "restoration_performed": false,
+    "deletion_performed": false,
+    "capability_claim": false
+  }
+}
