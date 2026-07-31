@@ -115,6 +115,7 @@ from scripts.lib.invariant import stamp, INVARIANT_SHA256
 from scripts.ember_totality import receipt_chain_verify
 from scripts.redact_local_paths import normalize_json_paths
 from scripts.ember_totality import quarantine_sweep
+from scripts.ember_totality import receipt_surface_integrity
 from scripts.ember_totality import tree_provenance
 from scripts.ember_phase3_c14 import floor_contract_manifest
 
@@ -1091,6 +1092,14 @@ def main():
             'current board claim'
         ),
     )
+    ap.add_argument(
+        "--refusal-receipt-dir",
+        default=os.path.join(RECEIPTS_DIR, "refusals"),
+        help=(
+            "durable destination for a pre-render receipt when tracked receipt "
+            "deletions make the evidence surface unsafe"
+        ),
+    )
     args = ap.parse_args()
     if args.ts:
         print(f"NOTE: positional ts argument {args.ts!r} is DEPRECATED and "
@@ -1099,6 +1108,15 @@ def main():
               f"(see module docstring / PROBE-HARDEN cure).",
               file=sys.stderr)
     effective_root = os.path.abspath(args.root) if args.root else REPO_ROOT
+
+    # Issue #672: a missing tracked receipt can falsify the board's evidence
+    # surface. Preserve a durable refusal receipt before registry reads,
+    # probes, or claim-bearing board output. This guard is not bypassed by the
+    # archaeology-only stale-tree option.
+    receipt_surface_integrity.enforce_board_receipt_surface(
+        REPO_ROOT,
+        refusal_root=args.refusal_receipt_dir,
+    )
 
     # Refuse stale or tracked-dirty execution before registry reads, probes,
     # output-directory creation, or any claim-bearing receipt work.
