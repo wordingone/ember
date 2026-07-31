@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """cockpit_watchdog.py -- standing liveness watchdog for the ember cockpit (#362).
 
-Composed liveness predicate over three legs (v1; leg 3 renderer-heartbeat is
-DEFERRED per the issue-362 spec addendum -- it needs #309's activity-event
-transport to expose a persisted pulse, and is tracked in a follow-up issue):
+Composed liveness predicate over four independent legs:
 
   1. window    -- a visible tab with the ledgered title exists in Windows Terminal
                   (or a top-level non-wt window with the ledgered title).
@@ -11,6 +12,9 @@ transport to expose a persisted pulse, and is tracked in a follow-up issue):
                   falling back to exact-title matching for non-wt windows.
   2. process   -- the window's owning process (GetWindowThreadProcessId) is
                   alive and its image name matches the ledgered process name.
+  3. heartbeat -- the cockpit's renderer heartbeat exists, is fresh, and its
+                  pid matches the independently observed backing process.
+                  Missing, malformed, future-dated, stale, or mismatched rows fail loud.
   4. residency -- VRAM tenant state is consistent with the declared mode read
                   from state/gpu-lease.json. Absent lease file = no lease =
                   inference mode = tenant expected PRESENT. A lease file
@@ -24,11 +28,8 @@ composed state and appends one receipt row (JSONL) plus one heartbeat row
 close, no auto-restore -- that is v2, scoped to the unambiguous "missing"
 case only, after the report path has receipts.
 
-Known v1 limitation (disclosed, not a bug): without leg 3 (renderer
-heartbeat) a genuinely HUNG cockpit (window+process alive, UI frozen) is
-indistinguishable from healthy -- both legs 1/2 pass. classify() therefore
-folds that case into "healthy". The follow-up issue names the exact pulse
-surface needed to close this gap.
+Issue #413 closes the old frozen-pixel gap: a pane with no process emits
+PANE-WITHOUT-PROCESS and a non-fresh renderer pulse emits HEARTBEAT-STALE.
 
 CLI:
   python cockpit_watchdog.py run --once --title <t> [--process <p>] [...]
@@ -41,6 +42,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 import json
+import math
 import os
 import subprocess
 import sys
@@ -345,6 +347,102 @@ def check_process_leg(
 
 
 # ---------------------------------------------------------------------------
+# Leg 3 -- renderer heartbeat (#413; independent from watchdog heartbeat)
+# ---------------------------------------------------------------------------
+
+def read_renderer_heartbeat(path: str) -> Optional[dict[str, Any]]:
+    """Read one strict cockpit renderer heartbeat snapshot.
+
+    Returning None is deliberately fail-closed: missing, unreadable,
+    malformed, unknown-key, or wrong-typed state can never count as fresh.
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            value = json.load(f)
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+
+    if not isinstance(value, dict):
+        return None
+    allowed = {"ts", "pid", "version", "telemetry"}
+    if set(value) - allowed or not {"ts", "pid", "version"} <= set(value):
+        return None
+    if not isinstance(value["ts"], str):
+        return None
+    if isinstance(value["pid"], bool) or not isinstance(value["pid"], int) or value["pid"] <= 0:
+        return None
+    if not isinstance(value["version"], str) or not value["version"]:
+        return None
+    if "telemetry" in value and not isinstance(value["telemetry"], dict):
+        return None
+    return value
+
+
+def _parse_heartbeat_ts(ts: str) -> Optional[float]:
+    if not ts.endswith("Z"):
+        return None
+    try:
+        parsed = datetime.fromisoformat(ts[:-1] + "+00:00")
+    except ValueError:
+        return None
+    return parsed.timestamp()
+
+
+def check_renderer_heartbeat_leg(
+    path: Optional[str],
+    process_leg: dict[str, Any],
+    *,
+    max_age_s: float,
+    now_epoch_s: Optional[float] = None,
+    heartbeat_reader: Callable[[str], Optional[dict[str, Any]]] = read_renderer_heartbeat,
+) -> dict[str, Any]:
+    """Leg 3: bind a fresh renderer pulse to the independently observed PID."""
+    if path is None:
+        return {
+            "leg": "renderer-heartbeat", "required": False, "fresh": None,
+            "reason": "not-configured", "path": None,
+        }
+    if (
+        isinstance(max_age_s, bool)
+        or not isinstance(max_age_s, (int, float))
+        or not math.isfinite(max_age_s)
+        or max_age_s <= 0
+    ):
+        raise ValueError("renderer heartbeat max age must be finite and positive")
+    if not process_leg.get("present"):
+        return {
+            "leg": "renderer-heartbeat", "required": True, "fresh": None,
+            "reason": "process-absent", "path": path,
+        }
+
+    row = heartbeat_reader(path)
+    heartbeat_epoch_s = None if row is None else _parse_heartbeat_ts(row.get("ts", ""))
+    if row is None or heartbeat_epoch_s is None:
+        return {
+            "leg": "renderer-heartbeat", "required": True, "fresh": False,
+            "reason": "missing-or-invalid", "path": path,
+        }
+    observed_pid = process_leg.get("pid")
+    if row.get("pid") != observed_pid:
+        return {
+            "leg": "renderer-heartbeat", "required": True, "fresh": False,
+            "reason": "pid-mismatch", "path": path, "heartbeat_pid": row.get("pid"),
+            "observed_pid": observed_pid,
+        }
+
+    now_s = time.time() if now_epoch_s is None else now_epoch_s
+    age_s = now_s - heartbeat_epoch_s
+    fresh = 0 <= age_s <= max_age_s
+    reason = "fresh" if fresh else ("future-timestamp" if age_s < 0 else "stale")
+    return {
+        "leg": "renderer-heartbeat", "required": True, "fresh": fresh,
+        "reason": reason, "path": path, "age_s": age_s,
+        "heartbeat_pid": row["pid"], "observed_pid": observed_pid,
+        "max_age_s": float(max_age_s),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Leg 4 -- residency vs the gpu-lease.json convention (read-only)
 # ---------------------------------------------------------------------------
 
@@ -406,16 +504,17 @@ def check_residency_leg(
 # ---------------------------------------------------------------------------
 
 def classify(window_leg: dict[str, Any], process_leg: dict[str, Any],
-             residency_leg: dict[str, Any]) -> str:
-    """Compose the three legs into one classified state.
+             residency_leg: dict[str, Any],
+             renderer_heartbeat_leg: Optional[dict[str, Any]] = None) -> str:
+    """Compose the four legs into one classified state.
 
     States (v1 vocabulary, matching the issue's "error pane vs hung vs
     missing" classification as closely as the available legs allow):
 
       healthy              -- window+process present, residency consistent
-                               (or unknown). NOTE: a genuinely HUNG cockpit
-                               also lands here in v1 -- leg 3 (deferred) is
-                               required to separate hung from healthy.
+                               (or unknown), heartbeat fresh when configured.
+      heartbeat-stale      -- window+process present, but the required
+                               renderer heartbeat is not fresh/PID-bound.
       lease-down-healthy   -- training lease active, window+process both
                                absent (cockpit deliberately unloaded) --
                                NOT a failure.
@@ -437,11 +536,14 @@ def classify(window_leg: dict[str, Any], process_leg: dict[str, Any],
     proc_present = process_leg["present"]
     residency_consistent = residency_leg["consistent"]
     declared_mode = residency_leg["declared_mode"]
+    heartbeat_fresh = None if renderer_heartbeat_leg is None else renderer_heartbeat_leg["fresh"]
 
     if not win_present and not proc_present:
         return "lease-down-healthy" if declared_mode == "training" else "missing"
 
     if win_present and proc_present:
+        if heartbeat_fresh is False:
+            return "heartbeat-stale"
         return "vram-mismatch" if residency_consistent is False else "healthy"
 
     if win_present and not proc_present:
@@ -451,6 +553,19 @@ def classify(window_leg: dict[str, Any], process_leg: dict[str, Any],
         return "orphan-process"
 
     return "ambiguous"
+
+
+def liveness_findings(
+    window_leg: dict[str, Any],
+    process_leg: dict[str, Any],
+    renderer_heartbeat_leg: dict[str, Any],
+) -> list[str]:
+    findings: list[str] = []
+    if window_leg["present"] and not process_leg["present"]:
+        findings.append("PANE-WITHOUT-PROCESS")
+    if window_leg["present"] and process_leg["present"] and renderer_heartbeat_leg["fresh"] is False:
+        findings.append("HEARTBEAT-STALE")
+    return findings
 
 
 # ---------------------------------------------------------------------------
@@ -584,6 +699,8 @@ class WatchdogConfig:
     heartbeat_path: str
     capture_dir: str
     inference_floor_mb: float = 512.0
+    renderer_heartbeat_path: Optional[str] = None
+    renderer_heartbeat_max_age_s: float = 5.0
     gpu_index: int = 0
 
 
@@ -596,8 +713,10 @@ def run_cycle(
     lease_reader: Callable[[str], Optional[dict[str, Any]]] = read_gpu_lease,
     vram_query: Callable[[int], Optional[float]] = query_vram_used_mb,
     capture_fn: Callable[[int, str], Optional[str]] = capture_window_bitmap,
+    renderer_heartbeat_reader: Callable[[str], Optional[dict[str, Any]]] = read_renderer_heartbeat,
+    now_epoch_s: Callable[[], float] = time.time,
 ) -> dict[str, Any]:
-    """One watchdog cycle: evaluate the 3 legs, classify, capture iff the
+    """One watchdog cycle: evaluate the 4 legs, classify, capture iff the
     state is anomalous AND a ledgered hwnd exists, append a receipt row,
     append a heartbeat row. REPORT-ONLY: never kills a process, never closes
     a window, never relaunches anything (v1 policy, frozen by the addendum).
@@ -610,8 +729,16 @@ def run_cycle(
     lease = lease_reader(cfg.lease_path)
     vram_used = vram_query(cfg.gpu_index)
     residency_leg = check_residency_leg(lease, vram_used, cfg.inference_floor_mb)
+    renderer_heartbeat_leg = check_renderer_heartbeat_leg(
+        cfg.renderer_heartbeat_path,
+        process_leg,
+        max_age_s=cfg.renderer_heartbeat_max_age_s,
+        now_epoch_s=now_epoch_s(),
+        heartbeat_reader=renderer_heartbeat_reader,
+    )
 
-    state = classify(window_leg, process_leg, residency_leg)
+    state = classify(window_leg, process_leg, residency_leg, renderer_heartbeat_leg)
+    findings = liveness_findings(window_leg, process_leg, renderer_heartbeat_leg)
 
     capture_path = None
     if state not in ("healthy", "lease-down-healthy") and window_leg["hwnd"]:
@@ -625,7 +752,9 @@ def run_cycle(
         "policy": "report-only",
         "window": window_leg,
         "process": process_leg,
+        "renderer_heartbeat": renderer_heartbeat_leg,
         "residency": residency_leg,
+        "findings": findings,
         "capture_path": capture_path,
     }
     append_jsonl(cfg.receipt_path, receipt)
@@ -731,6 +860,12 @@ def main(argv: Optional[list[str]] = None) -> None:
                         default=os.path.join("state", "cockpit-watchdog-receipts.jsonl"))
     run_p.add_argument("--heartbeat-path",
                         default=os.path.join("state", "cockpit-watchdog-heartbeat.jsonl"))
+    run_p.add_argument("--renderer-heartbeat-path",
+                        default=os.path.abspath(os.path.join(
+                            os.path.dirname(__file__), "..", "tools", "ember-cli",
+                            "state", "cockpit-heartbeat.json")))
+    run_p.add_argument("--renderer-heartbeat-max-age", type=float, default=5.0,
+                        help="maximum accepted renderer heartbeat age in seconds")
     run_p.add_argument("--capture-dir",
                         default=os.path.join("state", "cockpit-watchdog-captures"))
     run_p.add_argument("--inference-floor-mb", type=float, default=512.0,
@@ -757,6 +892,8 @@ def main(argv: Optional[list[str]] = None) -> None:
             receipt_path=args.receipt_path,
             heartbeat_path=args.heartbeat_path,
             capture_dir=args.capture_dir,
+            renderer_heartbeat_path=args.renderer_heartbeat_path,
+            renderer_heartbeat_max_age_s=args.renderer_heartbeat_max_age,
             inference_floor_mb=args.inference_floor_mb,
             gpu_index=args.gpu_index,
         )
