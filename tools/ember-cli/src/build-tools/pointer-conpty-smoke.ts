@@ -128,7 +128,14 @@ async function main(): Promise<void> {
       throw new Error("compiled click did not produce exactly one bound PAUSE command");
     }
 
-    child.write("\x03");
+    if (exitCode !== undefined) throw new Error(`compiled cockpit exited before Ctrl-C (exit=${exitCode})`);
+    try {
+      child.write("\x03");
+    } catch (error) {
+      await sleep(200);
+      const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      throw new Error(`compiled cockpit PTY closed before Ctrl-C delivery (exit=${exitCode}; ${detail})`);
+    }
     await waitFor(() => exitCode !== undefined, "compiled cockpit exit");
     // node-pty may publish the exit notification before its final ConPTY output callback. Give
     // that bounded tail a turn, then await the complete xterm write chain before inspecting it.
