@@ -5,6 +5,7 @@ import { describe, expect, test } from "bun:test";
 import React from "react";
 import { Box, Text } from "../ink/components.ts";
 import { mountInk } from "../ink/reconciler.ts";
+import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
 import { VirtualMessageList, virtualMessageWindow } from "./app-shell.ts";
 
 describe("fixed transcript viewport", () => {
@@ -56,7 +57,57 @@ describe("fixed transcript viewport", () => {
       stdout: { columns: 40, rows: 8 },
     });
 
-    expect(rendered).toContain("LATEST-END");
-    expect(rendered).toContain("PROMPT");
+    const frame = buildFrame(40, 8);
+    parseRenderedIntoFrame(rendered, frame, new StylePool());
+    const finalFrame = frame.cells
+      .map((row) => row.map((cell) => cell?.char ?? " ").join(""))
+      .join("\n");
+    expect(finalFrame).toContain("LATEST-END");
+    expect(finalFrame).toContain("PROMPT");
+  });
+
+  test("keeps a short newest result visible after an oversized prior result", () => {
+    let rendered = "";
+    const messages = [
+      { id: "oversized-prior", role: "assistant", content: "prior" },
+      { id: "new-command", role: "user", content: "/watch" },
+      { id: "new-result", role: "assistant", content: "WATCHING-RESULT" },
+    ] as any;
+    const tree = React.createElement(
+      Box,
+      { flexDirection: "column", height: 8, width: 40 },
+      React.createElement(
+        Box,
+        { flexDirection: "column", flexGrow: 1, minHeight: 0, overflow: "hidden" },
+        React.createElement(VirtualMessageList, {
+          messages,
+          viewportRows: 20,
+          renderMessage: (message: any) => React.createElement(
+            Box,
+            { flexDirection: "column" },
+            ...Array.from(
+              { length: message.id === "oversized-prior" ? 12 : 1 },
+              (_, index) => React.createElement(
+                Text,
+                { key: index },
+                message.id === "new-result" ? message.content : message.id + "-" + index,
+              ),
+            ),
+          ),
+        }),
+      ),
+      React.createElement(Box, { height: 2, flexShrink: 0 }, React.createElement(Text, null, "PROMPT")),
+    );
+    mountInk(tree, {
+      stream: { write(value: string) { rendered += value; } },
+      stdout: { columns: 40, rows: 8 },
+    });
+    const frame = buildFrame(40, 8);
+    parseRenderedIntoFrame(rendered, frame, new StylePool());
+    const finalFrame = frame.cells
+      .map((row) => row.map((cell) => cell?.char ?? " ").join(""))
+      .join("\n");
+    expect(finalFrame).toContain("WATCHING-RESULT");
+    expect(finalFrame).toContain("PROMPT");
   });
 });

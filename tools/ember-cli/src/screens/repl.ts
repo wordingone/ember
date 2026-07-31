@@ -302,6 +302,15 @@ export function transcriptJustifyContent(messages: SessionMessage[]): "flex-star
   return isWelcomeOnly ? "flex-start" : "flex-end";
 }
 
+// VirtualMessageList already owns newest-at-bottom placement with column-reverse. Its parent
+// must stay flex-start so multi-pass text fitting cannot apply a second, stale negative offset.
+export function transcriptViewportJustifyContent(
+  useVirtualScroll: boolean,
+  messages: SessionMessage[],
+): "flex-start" | "flex-end" {
+  return useVirtualScroll ? "flex-start" : transcriptJustifyContent(messages);
+}
+
 /**
  * issue #44 item (c), "document-flow" (operator's live-pixel verdict, 2026-07-04) -- REVERTED by
  * issue #114's final leg (operator's live DESKTOP-scale verdict, 2026-07-05). The document-flow
@@ -1383,6 +1392,9 @@ export function ReplScreen({
         ...prev,
         { id: crypto.randomUUID(), type: "assistant", content: slashResult.message },
       ]);
+      if (origin === "operator") {
+        operatorReceiptsRef.current?.append("command_completed", slashParsed.name);
+      }
       busyRef.current = false;
       setBusy(false);
       // ember #211 (found via live compiled-binary acceptance testing, not
@@ -1802,7 +1814,7 @@ export function ReplScreen({
         { key: "workspace", flexDirection: "column", flexGrow: 1, minHeight: 0, overflow: "hidden" },
         React.createElement(
           Box,
-          { key: "transcript", flexDirection: "column", flexGrow: 1, minWidth: 0, overflow: "hidden", justifyContent: transcriptJustifyContent(messages) },
+          { key: "transcript", flexDirection: "column", flexGrow: 1, minWidth: 0, minHeight: 0, overflow: "hidden", justifyContent: transcriptViewportJustifyContent(useVirtualScroll, messages) },
           transcript,
         ),
       ),

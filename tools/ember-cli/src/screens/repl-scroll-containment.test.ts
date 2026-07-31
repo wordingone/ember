@@ -3,6 +3,8 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import { describe, expect, test } from "bun:test";
 import { EventEmitter } from "node:events";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import React, { useState } from "react";
 import { Box, Text } from "../ink/components.ts";
 import { mountInk } from "../ink/reconciler.ts";
@@ -10,6 +12,7 @@ import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-
 import { startStdinBridge } from "../ink/stdin-bridge.ts";
 import { VirtualMessageList } from "../components/app-shell.ts";
 import { OperatorSurfacePane } from "../components/operator-surface-pane.ts";
+import { transcriptViewportJustifyContent } from "./repl.ts";
 
 class FakeStdin extends EventEmitter {
   isTTY = true;
@@ -43,6 +46,25 @@ function wheelUp(col: number, row: number): string {
 }
 
 describe("fixed cockpit scroll containment", () => {
+  test("the production transcript flex item can shrink inside the fixed viewport", () => {
+    const source = readFileSync(join(import.meta.dir, "repl.ts"), "utf8");
+    expect(source).toContain(
+      'key: "transcript", flexDirection: "column", flexGrow: 1, minWidth: 0, minHeight: 0, overflow: "hidden"',
+    );
+  });
+
+  test("virtual transcript owns bottom anchoring without a conflicting flex-end parent", () => {
+    const messages = [{ id: "landed", type: "assistant", content: "landed" }] as any;
+    expect(transcriptViewportJustifyContent(true, messages)).toBe("flex-start");
+    expect(transcriptViewportJustifyContent(false, messages)).toBe("flex-end");
+    expect(transcriptViewportJustifyContent(true, [])).toBe("flex-start");
+
+    const source = readFileSync(join(import.meta.dir, "repl.ts"), "utf8");
+    expect(source).toContain(
+      "justifyContent: transcriptViewportJustifyContent(useVirtualScroll, messages)",
+    );
+  });
+
   test("raw pointer wheels independently move only transcript or activity while chrome stays fixed", async () => {
     const columns = 100;
     const rows = 30;

@@ -486,7 +486,15 @@ describe("compiled lifecycle action completion", () => {
     expect(driver.classifyActionFrame!(
       "continue",
       "Unknown command: /continue",
-    )).toBe("MISSING");
+    )).toBe("MISSING");    expect(driver.classifyActionFrame!(
+      "continue",
+      "No resumable session selected.",
+    )).toBe("REFUSED");
+    expect(driver.actionCompletionObserved!(
+      "continue",
+      "No resumable session selected.",
+      "",
+    )).toBe(true);
     expect(driver.classifyActionFrame!(
       "continue",
       "cursor repaint without command result",
@@ -568,6 +576,33 @@ describe("compiled lifecycle action completion", () => {
       "error: failed to save checkpoint: identity refused",
     )).toBe(true);
 
+    expect(driver.actionCompletionObserved).toBeFunction();
+    expect(driver.actionCompletionObserved!(
+      "observe",
+      "unrelated fixed-viewport repaint",
+      "cursor repaint without watch result",
+    )).toBe(false);
+    expect(driver.actionCompletionObserved!(
+      "observe",
+      "fixed viewport",
+      "watching state/ember-telemetry.jsonl",
+    )).toBe(true);
+    expect(driver.actionCompletionObserved!(
+      "pause",
+      "fixed viewport",
+      "resume run=smoke-run",
+    )).toBe(false);
+    expect(driver.actionCompletionObserved!(
+      "pause",
+      "fixed viewport",
+      "pause run=smoke-run",
+    )).toBe(true);
+    expect(driver.actionCompletionObserved!(
+      "save",
+      "fixed viewport",
+      "error: failed to save checkpoint: identity refused",
+    )).toBe(true);
+
     expect(driver.redactPublicText).toBeFunction();
     const backslashProbe = `${String.fromCharCode(66, 58)}\\M\\ember`;
     const slashProbe = `${String.fromCharCode(67, 58)}/tmp/private`;
@@ -617,6 +652,15 @@ describe("compiled lifecycle action completion", () => {
       () => false,
     );
     expect(clearedWrites).toEqual([]);
+  });
+
+  test("routes lifecycle actions through the production operator pipe", () => {
+    const source = readFileSync(
+      join(import.meta.dir, "lifecycle-smoke-driver.ts"),
+      "utf8",
+    );
+    expect(source).toContain("operatorPipeName");
+    expect(source).toContain("writeOperatorLine(child.pid, input)");
   });
 });
 

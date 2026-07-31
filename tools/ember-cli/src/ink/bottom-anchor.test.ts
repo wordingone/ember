@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // bottom-anchor.test.ts — B7 item 2 ("kill the void"): the transcript region must anchor its
 // content toward the prompt (bottom of the viewport) instead of the top, so a sparse/fresh
 // session doesn't leave a huge black field below its content. Mechanism: justifyContent:"flexEnd"
@@ -28,6 +31,18 @@ function rowsForText(out: string, needle: string): number[] {
 }
 
 describe("B7 item 2: transcript region anchors content toward the bottom (prompt side)", () => {
+  test("column-reverse places the first child at the bottom and keeps source-order siblings above it", () => {
+    const el = React.createElement(
+      Box, { flexDirection: "column-reverse", height: 6, overflow: "hidden" },
+      React.createElement(Text, { key: "newest" }, "newest"),
+      React.createElement(Text, { key: "older" }, "older"),
+    );
+    const out = mountAndCapture(el, 40, 6);
+    const newestRows = rowsForText(out, "newest");
+    const olderRows = rowsForText(out, "older");
+    expect(newestRows.at(-1)).toBe(6);
+    expect(olderRows.at(-1)).toBe(5);
+  });
   test("short content sits flush against the bottom of a tall, fixed-height container", () => {
     const totalRows = 20;
     const el = React.createElement(
