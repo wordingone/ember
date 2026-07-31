@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // app-resize.test.ts — B7 item 3 investigation (team-lead's resize-reflow hypothesis, 2026-07-03).
 // Operator resized his live window after launch; team-lead's capture shows the welcome panel's
 // border sitting at ~63% of the window width, consistent with the tree having rendered at
@@ -91,5 +95,34 @@ describe("App — terminal resize reflow (B7 item 3 investigation)", () => {
     await new Promise((r) => setTimeout(r, 300));
 
     expect(readLine0(raw, 130, 45)).toBe("SIZE=130x45");
+  });
+
+  test("#159 resize storm reaches the final tiny viewport without throwing or freezing stale dimensions", async () => {
+    Object.defineProperty(process.stdout, "columns", { value: 80, configurable: true });
+    Object.defineProperty(process.stdout, "rows", { value: 24, configurable: true });
+
+    let raw = "";
+    const stream = { write(s: string) { raw += s; } };
+    const handle = mountInk(
+      React.createElement(App, null, React.createElement(Reporter)),
+      { stream, stdout: { columns: 80, rows: 24 } },
+    );
+
+    try {
+      for (let index = 0; index < 100; index += 1) {
+        const columns = 8 + (index % 73);
+        const rows = 4 + (index % 29);
+        Object.defineProperty(process.stdout, "columns", {
+          value: columns,
+          configurable: true,
+        });
+        Object.defineProperty(process.stdout, "rows", { value: rows, configurable: true });
+        process.stdout.emit("resize");
+      }
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 30));
+      expect(readLine0(raw, 34, 16)).toBe("SIZE=34x16");
+    } finally {
+      handle.unmount();
+    }
   });
 });

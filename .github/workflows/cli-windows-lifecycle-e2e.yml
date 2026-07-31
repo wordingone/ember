@@ -41,6 +41,11 @@ jobs:
       - name: Install lockfile-pinned CLI dependencies
         working-directory: tools/ember-cli/src
         run: bun install --frozen-lockfile
+      - name: Run release-blocking CLI hardening matrix
+        working-directory: tools/ember-cli/src
+        run: >
+          bun run build-tools/cli-hardening-matrix.ts
+          --receipt ../../../receipts/ember-cli-hardening/receipt.json
       - name: Verify lifecycle refusal matrix
         working-directory: tools/ember-cli/src
         run: bun test build-tools/lifecycle-smoke.test.ts
@@ -59,5 +64,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ember-cli-lifecycle-smoke-${{ github.sha }}
-          path: receipts/ember-cli-lifecycle-smoke
+          path: |
+            receipts/ember-cli-lifecycle-smoke
+            receipts/ember-cli-hardening
           if-no-files-found: error
