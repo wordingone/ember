@@ -109,6 +109,25 @@ describe("SGR mouse decoder", () => {
 });
 
 describe("production mouse bridge and mounted-tree hit testing", () => {
+  it("uses native raw-mode capability when compiled ConPTY does not report isTTY", () => {
+    const calls: string[] = [];
+    const stdin = new FakeStdin();
+    stdin.isTTY = false;
+    const handle = mountInk(
+      React.createElement(Box, { width: 6, height: 1, onClick: () => calls.push("click") }, React.createElement(Text, null, "PAUSE")),
+      { stream: { write() {} }, stdout: { columns: 10, rows: 2 } },
+    );
+    const stop = startStdinBridge({ stdin: stdin as never, emitKeypressEvents: () => {} });
+
+    stdin.emit("data", "\x1b[<0;2;1M");
+
+    expect(stdin.rawModes).toEqual([true]);
+    expect(calls).toEqual(["click"]);
+    stop();
+    expect(stdin.rawModes).toEqual([true, false]);
+    handle.unmount();
+  });
+
   it("routes adjacent keyboard bytes without leaking mouse bytes to key handlers", () => {
     const keys: string[] = [];
     const stdin = new FakeStdin();

@@ -40,7 +40,9 @@ export function startStdinBridge(options: StdinBridgeOptions = {}): () => void {
   const emitKeypressEvents = options.emitKeypressEvents ??
     ((stream: NodeJS.ReadableStream) => readline.emitKeypressEvents(stream));
 
-  if (!stdin.isTTY || typeof stdin.setRawMode !== "function") {
+  // Bun-compiled Windows ConPTY streams can expose a working native setRawMode while reporting
+  // isTTY=false. The capability itself is authoritative; ordinary pipes do not expose it.
+  if (typeof stdin.setRawMode !== "function") {
     return () => {};
   }
   const rawInput = stdin as NodeJS.ReadableStream;
