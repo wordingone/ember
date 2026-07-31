@@ -209,13 +209,60 @@ def inspect_and_enforce(
     )
 
 
+def _require_commits_in_source(
+    repo_root: str | Path,
+    source_sha: str,
+    required_commits: list[str] | tuple[str, ...],
+) -> None:
+    root = Path(repo_root).resolve()
+    source = _closed_sha(source_sha, "board source")
+    if _git(root, "cat-file", "-e", f"{source}^{{commit}}", check=False).returncode != 0:
+        raise TreeProvenanceError(
+            "README_TREE_REFUSED: board source commit is unavailable"
+        )
+    for value in required_commits:
+        if not isinstance(value, str):
+            raise TreeProvenanceError(
+                "README_TREE_REFUSED: required merge did not resolve to one Git SHA"
+            )
+        required = _closed_sha(value, "required merge")
+        if _git(root, "cat-file", "-e", f"{required}^{{commit}}", check=False).returncode != 0:
+            raise TreeProvenanceError(
+                f"README_TREE_REFUSED: required merge is unavailable: {required}"
+            )
+        ancestor = _git(
+            root,
+            "merge-base",
+            "--is-ancestor",
+            required,
+            source,
+            check=False,
+        )
+        if ancestor.returncode == 1:
+            raise TreeProvenanceError(
+                "README_TREE_REFUSED: required merge is newer than the board "
+                f"source: {required}"
+            )
+        if ancestor.returncode != 0:
+            raise TreeProvenanceError(
+                f"README_TREE_REFUSED: required merge ancestry is unproven: {required}"
+            )
+
+
 def validate_receipt_for_render(
     receipt: dict[str, Any],
     *,
     allow_stale_tree: bool = False,
+    repo_root: str | Path | None = None,
+    required_commits: list[str] | tuple[str, ...] = (),
 ) -> dict[str, Any] | None:
     state = receipt.get("run_tree_provenance")
     if state is None:
+        if required_commits:
+            raise TreeProvenanceError(
+                "README_TREE_REFUSED: required merge cannot be checked without "
+                "run-tree provenance"
+            )
         return None
     if not isinstance(state, dict):
         raise TreeProvenanceError("README_TREE_REFUSED: run_tree_provenance is malformed")
@@ -275,4 +322,10 @@ def validate_receipt_for_render(
             "README_TREE_REFUSED: stale/dirty board receipt requires the same "
             "--allow-stale-tree archaeology opt-out"
         )
+    if required_commits:
+        if repo_root is None:
+            raise TreeProvenanceError(
+                "README_TREE_REFUSED: repository root is required for merge ancestry"
+            )
+        _require_commits_in_source(repo_root, run_sha, required_commits)
     return state

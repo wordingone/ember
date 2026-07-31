@@ -192,6 +192,63 @@ class TreeProvenanceTests(unittest.TestCase):
                 {"run_tree_provenance": forged}
             )
 
+    def test_consumer_refuses_receipt_older_than_required_merge(self) -> None:
+        initial_sha = _git(self.run, "rev-parse", "HEAD")
+        state = tree_provenance.inspect_and_enforce(self.run)
+        required_merge = self._advance_remote()
+        _git(self.run, "fetch", "origin", "master")
+
+        with self.assertRaisesRegex(
+            tree_provenance.TreeProvenanceError,
+            "required merge is newer than the board source",
+        ):
+            tree_provenance.validate_receipt_for_render(
+                {"run_tree_provenance": state},
+                repo_root=self.run,
+                required_commits=[required_merge],
+            )
+
+        accepted = tree_provenance.validate_receipt_for_render(
+            {"run_tree_provenance": state},
+            repo_root=self.run,
+            required_commits=[initial_sha],
+        )
+        self.assertEqual(accepted, state)
+
+    def test_readme_renderer_requires_explicit_merge_in_board_source(self) -> None:
+        initial_sha = _git(self.run, "rev-parse", "HEAD")
+        state = tree_provenance.inspect_and_enforce(self.run)
+        required_merge = self._advance_remote()
+        _git(self.run, "fetch", "origin", "master")
+        with tempfile.TemporaryDirectory() as td:
+            receipt_path = Path(td) / "ember-totality-20990101T000000Z.json"
+            receipt_path.write_text(
+                json.dumps(
+                    {
+                        "ts": "20990101T000000Z",
+                        "summary": {},
+                        "run_tree_provenance": state,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                tree_provenance.TreeProvenanceError,
+                "required merge is newer than the board source",
+            ):
+                gen_readme_status.render_block(
+                    receipt_path,
+                    repo_root=self.run,
+                    required_commits=[required_merge],
+                )
+            block = gen_readme_status.render_block(
+                receipt_path,
+                repo_root=self.run,
+                required_commits=[initial_sha],
+            )
+            self.assertIn(initial_sha, block)
+
 
 if __name__ == "__main__":
     unittest.main()
