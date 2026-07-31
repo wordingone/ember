@@ -75,6 +75,40 @@ process.env["COREPACK_ENABLE_AUTO_PIN"]           ??= "0";
 
 export const EMBER_CLI_VERSION = "0.1.0-dev";
 
+export interface CliVersionRecord {
+  version: string;
+  source_commit: string | null;
+  source_binding: "BOUND" | "UNBOUND";
+}
+
+/** Exact source commit injected by build-cockpit.ts, or an honest unbound source run. */
+export function buildCliVersionRecord(): CliVersionRecord {
+  const value = (
+    globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }
+  ).__EMBER_BUILD_COMMIT__;
+  if (value === undefined) {
+    return {
+      version: EMBER_CLI_VERSION,
+      source_commit: null,
+      source_binding: "UNBOUND",
+    };
+  }
+  if (typeof value !== "string" || !/^[0-9a-f]{40}$/.test(value)) {
+    throw new Error("embedded Ember source commit is malformed");
+  }
+  return {
+    version: EMBER_CLI_VERSION,
+    source_commit: value,
+    source_binding: "BOUND",
+  };
+}
+
+export function formatCliVersionOutput(asJson: boolean): string {
+  const record = buildCliVersionRecord();
+  if (asJson) return JSON.stringify(record) + "\n";
+  return `ember-cli ${record.version} source ${record.source_commit ?? "SOURCE_UNBOUND"}\n`;
+}
+
 const LOG_MAX_BYTES  = 50 * 1024 * 1024; // 50 MB
 const LOG_KEEP_BYTES = 10 * 1024 * 1024; // 10 MB
 
@@ -560,11 +594,7 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
 
   if (first === "--version" || first === "-v" || first === "-V") {
     const asJson = args.includes("--json");
-    if (asJson) {
-      process.stdout.write(JSON.stringify({ version: EMBER_CLI_VERSION }) + "\n");
-    } else {
-      process.stdout.write(`ember-cli ${EMBER_CLI_VERSION}\n`);
-    }
+    process.stdout.write(formatCliVersionOutput(asJson));
     process.exit(0);
     return true;
   }
@@ -577,7 +607,10 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
   }
 
   if (first === "--diag-startup" || first === "--diagnostics") {
-    process.stdout.write(`[diag-startup] ember-cli ${EMBER_CLI_VERSION}\n`);
+    const version = buildCliVersionRecord();
+    process.stdout.write(
+      `[diag-startup] ember-cli ${version.version} source ${version.source_commit ?? "SOURCE_UNBOUND"}\n`,
+    );
     process.stdout.write(`  cwd: ${process.cwd()}\n`);
     process.stdout.write(`  EMBER_MODEL_URL: ${process.env["EMBER_MODEL_URL"] ?? "(unset)"}\n`);
     process.exit(0);
