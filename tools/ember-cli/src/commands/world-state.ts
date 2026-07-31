@@ -17,8 +17,16 @@
 // `bun build ./entrypoints/main.ts --compile --outfile ember.exe` from tools/ember-cli/src/ to
 // pick up the current source.
 
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+import { execFile } from "child_process";
 import type { CommandContext, CommandResult, RegistryCommand } from "../types/command-types.ts";
-import { buildEmberWorldState, GOALFORGE_ROOT } from "../core/ember-world-state.ts";
+import {
+  buildEmberWorldState,
+  GOALFORGE_ROOT,
+  requireBoardReceiptCommit,
+} from "../core/ember-world-state.ts";
 import type { EmberWorldState, Claim } from "../core/ember-world-state.ts";
 import { validateConfirmation, logEncounter, CONFIRM_TOKEN } from "../core/encounter-membrane.ts";
 import type { EncounterOffer } from "../core/encounter-membrane.ts";
@@ -33,6 +41,49 @@ let cachedState: EmberWorldState | null = null;
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function gitCapture(root: string, args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      "git",
+      ["-C", root, ...args],
+      { encoding: "utf8", windowsHide: true },
+      (error, stdout) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(stdout.trim());
+      },
+    );
+  });
+}
+
+async function gitIsAncestor(
+  root: string,
+  requiredCommit: string,
+  boardSource: string,
+): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      "git",
+      ["-C", root, "merge-base", "--is-ancestor", requiredCommit, boardSource],
+      { encoding: "utf8", windowsHide: true },
+      (error) => {
+        if (!error) {
+          resolve(true);
+          return;
+        }
+        const code = (error as Error & { code?: number | string }).code;
+        if (code === 1) {
+          resolve(false);
+          return;
+        }
+        reject(error);
+      },
+    );
+  });
 }
 
 function surfaceClaims(state: EmberWorldState, surface: string): Claim[] | undefined {
@@ -118,6 +169,20 @@ export async function runWorldStateTurn(argsLine: string): Promise<string> {
     const [surface, idx] = args;
     const claim = surface && idx ? resolveClaim(state, surface, idx) : undefined;
     if (!claim) return `OFFER: no claim at ${surface ?? "?"} ${idx ?? "?"} to act on`;
+    try {
+      const currentHead = await gitCapture(GOALFORGE_ROOT, ["rev-parse", "--verify", "HEAD"]);
+      await requireBoardReceiptCommit(
+        { run_tree_provenance: state.monitor.runTreeProvenance ?? undefined },
+        currentHead,
+        (required, boardSource) => gitIsAncestor(GOALFORGE_ROOT, required, boardSource),
+      );
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      return (
+        `ACTION REFUSED: displayed board cannot authorize a decision: ${detail}. ` +
+        "Run a fresh totality board from the current decision tree before acting."
+      );
+    }
     offerCounter += 1;
     const offerId = `off-${offerCounter}`;
     const offer: EncounterOffer = { offerId, ts: nowIso(), action: `inspect:${claim.id}`, detail: claim.detail };

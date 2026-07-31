@@ -98,12 +98,20 @@ def newest_receipt_path(data_root):
     return paths[-1]
 
 
-def render_block(receipt_path, *, allow_stale_tree=False):
+def render_block(
+    receipt_path,
+    *,
+    allow_stale_tree=False,
+    repo_root=None,
+    required_commits=(),
+):
     with open(receipt_path, "r", encoding="utf-8") as f:
         receipt = json.load(f)
     tree_state = tree_provenance.validate_receipt_for_render(
         receipt,
         allow_stale_tree=allow_stale_tree,
+        repo_root=repo_root,
+        required_commits=required_commits,
     )
     receipt_id = os.path.splitext(os.path.basename(receipt_path))[0]
     ts = receipt.get("ts", "unknown")
@@ -451,6 +459,16 @@ def main():
             "without this matching opt-out such receipts are refused"
         ),
     )
+    parser.add_argument(
+        "--require-merge",
+        action="append",
+        default=[],
+        metavar="SHA",
+        help=(
+            "repeatable exact merge commit that must be an ancestor of the "
+            "selected board receipt's run-tree SHA; refuses stale decision evidence"
+        ),
+    )
     args = parser.parse_args()
 
     try:
@@ -463,7 +481,12 @@ def main():
     except BranchInventoryError as exc:
         raise SystemExit(f"gen_readme_status: branch inventory is invalid: {exc}") from exc
     receipt_path = newest_receipt_path(args.data_root)
-    block = render_block(receipt_path, allow_stale_tree=args.allow_stale_tree)
+    block = render_block(
+        receipt_path,
+        allow_stale_tree=args.allow_stale_tree,
+        repo_root=ROOT,
+        required_commits=args.require_merge,
+    )
 
     with open(args.readme, "r", encoding="utf-8") as f:
         readme = f.read()
