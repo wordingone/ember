@@ -125,7 +125,7 @@ interface Mounted {
  *  file before mount so the pane observes them on its first poll. */
 async function mountForKeyboard(
   seedLines: Array<Record<string, unknown>>,
-  options: { columns?: number; rows?: number } = {},
+  options: { columns?: number; rows?: number; permissionMode?: "bypass" | "interactive" } = {},
 ): Promise<Mounted> {
   resetCommandRegistryForTests();
   const telemetryPath = join(tmpdir(), `test-kbd-telemetry-${Date.now()}-${Math.random()}.jsonl`);
@@ -137,7 +137,7 @@ async function mountForKeyboard(
   const columns = options.columns ?? 100;
   const rows = options.rows ?? 30;
   let raw = "";
-  const config = { model: "ember", permissionMode: "bypass" as const, baseSystemPrompt: "" };
+  const config = { model: "ember", permissionMode: options.permissionMode ?? "bypass", baseSystemPrompt: "" };
   const element = React.createElement(
     TerminalSizeContext.Provider,
     { value: { columns, rows } },
@@ -719,6 +719,28 @@ describe("repl keyboard operator controls (R2b)", () => {
     } finally {
       active.stopBridge();
       active.unmount();
+    }
+  }, 15000);
+
+  test("DD1b: one Shift+Tab action changes a fresh full REPL from sandbox to bypass exactly once", async () => {
+    const mounted = await mountForKeyboard([], { permissionMode: "interactive" });
+    const previous = (mounted.handle as unknown as { _previousTelemetryEnv?: string })._previousTelemetryEnv;
+    try {
+      const sandboxVisible = await waitFor(() =>
+        renderedLines(mounted.getRaw(), mounted.columns, mounted.rows)
+          .some((line) => line.includes("sandbox")),
+      );
+      expect(sandboxVisible).toBe(true);
+
+      send(mounted.stdin, KEY.SHIFT_TAB);
+      await flushRepl();
+      const bypassVisible = await waitFor(() =>
+        renderedLines(mounted.getRaw(), mounted.columns, mounted.rows)
+          .some((line) => line.includes("bypass permissions on")),
+      );
+      expect(bypassVisible).toBe(true);
+    } finally {
+      await teardown(mounted, previous);
     }
   }, 15000);
 
