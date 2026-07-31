@@ -33,6 +33,7 @@ EXPECTED_TOP_LEVEL = {
     "source_document_sha256",
     "sha_convention",
     "documented_absent",
+    "supporting_disposition_receipts",
     "claim_boundary",
 }
 EXPECTED_ROW_KEYS = {
@@ -72,6 +73,30 @@ EXPECTED_REFS = {
     "receipts/ember-c-scale/w1-collapse-control-20260704T071732Z.json",
     "receipts/ember-c8-execution-binding/ablation-20260703T080952Z.json",
     "receipts/stab524-gpu-window-done-20260709.json",
+    "receipts/ember-preloop-resident-gate/reference-cli-full-parity-harness-gate-20260622T141500Z.json",
+}
+
+EXPECTED_SUPPORT_KEYS = {
+    "path",
+    "sha256",
+    "voids_ref",
+    "source_path",
+    "source_sha256",
+}
+EXPECTED_VOID_KEYS = {
+    "ticket",
+    "ts",
+    "goal_id",
+    "workstream_id",
+    "next_executed_outcome",
+    "invariant_sha256",
+    "sha_convention",
+    "verdict",
+    "voids_missing_identity",
+    "supersedes",
+    "reason",
+    "cites",
+    "claim_boundary",
 }
 
 
@@ -80,8 +105,8 @@ def test_registry_is_closed_and_bound_to_current_document_bytes() -> None:
     registry = json.loads(raw.decode("utf-8"))
     assert set(registry) == EXPECTED_TOP_LEVEL
     assert registry["schema_version"] == "ember-c-custody-documented-absent-v1"
-    assert registry["ticket"] == "C-CUSTODY-DOCUMENTED-ABSENT-WAVE028"
-    assert registry["ts"] == "2026-07-31T14:24:00Z"
+    assert registry["ticket"] == "C-CUSTODY-DOCUMENTED-ABSENT-WAVE029"
+    assert registry["ts"] == "2026-07-31T15:28:00Z"
     assert registry["goal_id"] == "EMBER-02"
     assert registry["workstream_id"] == "EMBER-02A"
     assert registry["next_executed_outcome"] == (
@@ -130,7 +155,7 @@ def test_registry_is_closed_and_bound_to_current_document_bytes() -> None:
 
     rows = registry["documented_absent"]
     assert isinstance(rows, list)
-    assert len(rows) == 21
+    assert len(rows) == 22
     assert {row["ref"] for row in rows} == EXPECTED_REFS
     assert len({row["ref"] for row in rows}) == len(rows)
 
@@ -144,6 +169,60 @@ def test_registry_is_closed_and_bound_to_current_document_bytes() -> None:
         assert row["ref"] in source_line
         assert row["marker"] in source_line
         assert not (ROOT / row["ref"]).exists()
+
+    supports = registry["supporting_disposition_receipts"]
+    assert isinstance(supports, list) and len(supports) == 1
+    support = supports[0]
+    assert set(support) == EXPECTED_SUPPORT_KEYS
+    assert support["voids_ref"] == (
+        "receipts/ember-preloop-resident-gate/"
+        "reference-cli-full-parity-harness-gate-20260622T141500Z.json"
+    )
+    support_path = ROOT / support["path"]
+    source_path = ROOT / support["source_path"]
+    assert support_path.is_file()
+    assert source_path.is_file()
+    support_bytes = support_path.read_bytes()
+    source_bytes = source_path.read_bytes()
+    assert hashlib.sha256(support_bytes).hexdigest() == support["sha256"]
+    assert hashlib.sha256(source_bytes).hexdigest() == support["source_sha256"]
+
+    void_receipt = json.loads(support_bytes.decode("utf-8"))
+    assert set(void_receipt) == EXPECTED_VOID_KEYS
+    assert void_receipt["ticket"] == "EMBER-reference-CLI-FULL-PARITY-HARNESS-GATE-VOID"
+    assert void_receipt["goal_id"] == "EMBER-02"
+    assert void_receipt["workstream_id"] == "EMBER-02A"
+    assert void_receipt["next_executed_outcome"] == (
+        "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+    )
+    assert void_receipt["invariant_sha256"] == (
+        "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
+    )
+    assert void_receipt["sha_convention"] == (
+        "sha256 over exact on-disk file bytes, no normalization"
+    )
+    assert void_receipt["verdict"] == "VOID"
+    assert void_receipt["voids_missing_identity"] == support["voids_ref"]
+    assert void_receipt["supersedes"] == [
+        {
+            "filename": support["source_path"],
+            "sha256": support["source_sha256"],
+        }
+    ]
+    assert isinstance(void_receipt["reason"], str) and void_receipt["reason"].strip()
+    assert void_receipt["cites"] == [
+        "https://github.com/wordingone/ember/pull/348",
+        "https://github.com/wordingone/ember/issues/349",
+        "https://github.com/wordingone/ember/issues/400",
+    ]
+    assert void_receipt["claim_boundary"] == {
+        "restoration_performed": False,
+        "deletion_performed": False,
+        "capability_claim": False,
+    }
+
+    void_row = next(row for row in rows if row["ref"] == support["voids_ref"])
+    assert void_row["disposition_class"] == "VOID_SUPERSEDED"
 
     assert registry["claim_boundary"] == {
         "restoration_performed": False,
