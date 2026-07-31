@@ -61,8 +61,16 @@ def _remove_new_files(directory: Path, relative_paths: set[str]) -> None:
             path.unlink()
 
 
+def _exit_is_allowed(label: str, exit_code: int) -> bool:
+    if label == "milestone":
+        return exit_code == 0
+    if label == "publication":
+        return exit_code in {0, 1}
+    return False
+
+
 def test_writers_custody_two_run() -> bool:
-    """Run both writers twice and reject any canonical receipts/ mutation."""
+    """Run both writers twice and reject canonical receipt additions."""
     print("=" * 70)
     print("WRITERS CUSTODY TEST (ISSUE #400)")
     print("=" * 70)
@@ -88,16 +96,31 @@ def test_writers_custody_two_run() -> bool:
             print(f"{label}: exit={exit_code}")
             if stdout:
                 print(stdout.rstrip())
+            if not _exit_is_allowed(label, exit_code):
+                print(f"[FAIL] {label} writer exit {exit_code} is not allowed")
+                _remove_new_files(
+                    milestone_dir,
+                    _get_all_json_files(milestone_dir) - milestone_before,
+                )
+                _remove_new_files(
+                    publication_dir,
+                    _get_all_json_files(publication_dir) - publication_before,
+                )
+                return False
 
         leaked = _get_all_files(receipts_dir) - canonical_before
         if leaked:
-            print("[FAIL] Writer run changed canonical receipts/:")
+            print("[FAIL] Writer run added canonical receipts/:")
             for relative in sorted(leaked):
                 print(f"       {relative}")
-            new_milestone = _get_all_json_files(milestone_dir) - milestone_before
-            new_publication = _get_all_json_files(publication_dir) - publication_before
-            _remove_new_files(milestone_dir, new_milestone)
-            _remove_new_files(publication_dir, new_publication)
+            _remove_new_files(
+                milestone_dir,
+                _get_all_json_files(milestone_dir) - milestone_before,
+            )
+            _remove_new_files(
+                publication_dir,
+                _get_all_json_files(publication_dir) - publication_before,
+            )
             return False
 
     new_milestone = _get_all_json_files(milestone_dir) - milestone_before
@@ -118,11 +141,11 @@ def test_writers_custody_two_run() -> bool:
             )
             return False
         if _get_all_files(receipts_dir) != canonical_before:
-            print("[FAIL] Canonical receipts/ did not remain at its exact baseline")
+            print("[FAIL] Canonical receipts/ file membership changed")
             return False
-        print("[PASS] Both runs left the entire canonical receipts/ tree unchanged")
+        print("[PASS] Both runs added no files under canonical receipts/")
         print("[PASS] Both designated receipt families explicitly declare zero paid spend")
-        print("writer exits (gate RED is allowed when receipted): " + repr(runs))
+        print("writer exits (receipted publication RED is allowed): " + repr(runs))
         return True
     finally:
         _remove_new_files(milestone_dir, new_milestone)
