@@ -117,4 +117,3 @@
 - [ ] Run the complete focused TUI suite, typecheck, production build, diff-check, and repository guards.
 - [ ] Perform a bounded ConPTY/Windows Terminal negotiation smoke and capture exact-head evidence without relaunch churn.
 - [ ] Commit, push with the safe wrapper, and open the PR with issue #1251 acceptance mapping and rollback instructions.
-
