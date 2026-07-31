@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Hermetic tests for cockpit_watchdog.py (#362).
 
-Red-first (TDD): every case is faked -- lease file, ledger row, process
-absence, VRAM values -- via dependency injection. No live cockpit
+Red-first (TDD): every case is faked -- lease file, renderer heartbeat,
+process absence, VRAM values -- via dependency injection. No live cockpit
 dependency: the real ctypes/nvidia-smi/psutil backends are never invoked
 by these tests, only the injected fakes.
 
 Covers the composed liveness predicate over legs 1 (window), 2 (process),
-4 (residency/lease) -- leg 3 (renderer heartbeat) is deferred per the
-issue-362 spec addendum and out of scope here.
+3 (renderer heartbeat), and 4 (residency/lease).
 """
 
 import json
@@ -27,12 +29,146 @@ from cockpit_watchdog import (
     WatchdogConfig,
     check_window_leg,
     check_process_leg,
+    check_renderer_heartbeat_leg,
     check_residency_leg,
     classify,
     read_gpu_lease,
     append_jsonl,
     run_cycle,
 )
+
+
+# ---------------------------------------------------------------------------
+# Leg 3 -- renderer heartbeat (#413)
+# ---------------------------------------------------------------------------
+
+def test_renderer_heartbeat_leg_is_fresh_and_pid_bound():
+    leg = check_renderer_heartbeat_leg(
+        "ignored.json",
+        {"present": True, "pid": 222},
+        max_age_s=5.0,
+        now_epoch_s=100.0,
+        heartbeat_reader=lambda _path: {
+            "ts": "1970-01-01T00:01:38Z", "pid": 222, "version": "test"
+        },
+    )
+    assert leg["fresh"] is True
+    assert leg["age_s"] == 2.0
+    assert leg["reason"] == "fresh"
+
+
+def test_renderer_heartbeat_leg_flags_stale_age():
+    leg = check_renderer_heartbeat_leg(
+        "ignored.json",
+        {"present": True, "pid": 222},
+        max_age_s=5.0,
+        now_epoch_s=100.0,
+        heartbeat_reader=lambda _path: {
+            "ts": "1970-01-01T00:01:30Z", "pid": 222, "version": "test"
+        },
+    )
+    assert leg["fresh"] is False
+    assert leg["reason"] == "stale"
+
+
+def test_renderer_heartbeat_leg_flags_missing_or_malformed_rows():
+    missing = check_renderer_heartbeat_leg(
+        "ignored.json",
+        {"present": True, "pid": 222},
+        max_age_s=5.0,
+        now_epoch_s=100.0,
+        heartbeat_reader=lambda _path: None,
+    )
+    malformed = check_renderer_heartbeat_leg(
+        "ignored.json",
+        {"present": True, "pid": 222},
+        max_age_s=5.0,
+        now_epoch_s=100.0,
+        heartbeat_reader=lambda _path: {"ts": "bad", "pid": "222"},
+    )
+    assert missing["fresh"] is False
+    assert missing["reason"] == "missing-or-invalid"
+    assert malformed["fresh"] is False
+    assert malformed["reason"] == "missing-or-invalid"
+
+
+def test_renderer_heartbeat_leg_flags_pid_mismatch():
+    leg = check_renderer_heartbeat_leg(
+        "ignored.json",
+        {"present": True, "pid": 222},
+        max_age_s=5.0,
+        now_epoch_s=100.0,
+        heartbeat_reader=lambda _path: {
+            "ts": "1970-01-01T00:01:39Z", "pid": 999, "version": "test"
+        },
+    )
+    assert leg["fresh"] is False
+    assert leg["reason"] == "pid-mismatch"
+
+
+def test_renderer_heartbeat_leg_reads_real_file_and_rejects_unknown_keys():
+    with tempfile.TemporaryDirectory() as tmp:
+        heartbeat = Path(tmp, "cockpit-heartbeat.json")
+        heartbeat.write_text(
+            json.dumps({
+                "ts": "1970-01-01T00:01:39Z",
+                "pid": 222,
+                "version": "test",
+            }),
+            encoding="utf-8",
+        )
+        fresh = check_renderer_heartbeat_leg(
+            str(heartbeat),
+            {"present": True, "pid": 222},
+            max_age_s=5.0,
+            now_epoch_s=100.0,
+        )
+        assert fresh["fresh"] is True
+
+        heartbeat.write_text(
+            json.dumps({
+                "ts": "1970-01-01T00:01:39Z",
+                "pid": 222,
+                "version": "test",
+                "untrusted": True,
+            }),
+            encoding="utf-8",
+        )
+        invalid = check_renderer_heartbeat_leg(
+            str(heartbeat),
+            {"present": True, "pid": 222},
+            max_age_s=5.0,
+            now_epoch_s=100.0,
+        )
+        assert invalid["fresh"] is False
+        assert invalid["reason"] == "missing-or-invalid"
+
+
+def test_renderer_heartbeat_leg_rejects_future_timestamp_and_nonfinite_age_limit():
+    future = check_renderer_heartbeat_leg(
+        "ignored.json",
+        {"present": True, "pid": 222},
+        max_age_s=5.0,
+        now_epoch_s=100.0,
+        heartbeat_reader=lambda _path: {
+            "ts": "1970-01-01T00:01:41Z", "pid": 222, "version": "test"
+        },
+    )
+    assert future["fresh"] is False
+    assert future["reason"] == "future-timestamp"
+
+    try:
+        check_renderer_heartbeat_leg(
+            "ignored.json",
+            {"present": True, "pid": 222},
+            max_age_s=float("nan"),
+            now_epoch_s=100.0,
+            heartbeat_reader=lambda _path: None,
+        )
+    except ValueError as exc:
+        assert "finite and positive" in str(exc)
+    else:
+        raise AssertionError("NaN heartbeat age limit must fail closed")
 
 
 # ---------------------------------------------------------------------------
@@ -504,6 +640,63 @@ def test_run_cycle_lease_down_healthy_no_capture():
         )
         assert receipt["state"] == "lease-down-healthy"
         assert receipt["capture_path"] is None
+
+
+def test_run_cycle_flags_pane_without_process_loudly():
+    with tempfile.TemporaryDirectory() as tmp:
+        cfg = WatchdogConfig(
+            expected_title="ember-resident",
+            expected_process_name="ember.exe",
+            lease_path=os.path.join(tmp, "gpu-lease.json"),
+            receipt_path=os.path.join(tmp, "receipts.jsonl"),
+            heartbeat_path=os.path.join(tmp, "watchdog-heartbeat.jsonl"),
+            capture_dir=os.path.join(tmp, "captures"),
+            renderer_heartbeat_path=os.path.join(tmp, "cockpit-heartbeat.json"),
+        )
+        receipt = run_cycle(
+            cfg,
+            window_lister=lambda: [WindowInfo(hwnd=111, title="ember-resident", pid=222)],
+            tab_lister=lambda: [],
+            process_lookup=lambda _pid: None,
+            lease_reader=lambda _path: None,
+            vram_query=lambda _gpu: 0.0,
+            capture_fn=lambda _hwnd, out_path: out_path,
+            renderer_heartbeat_reader=lambda _path: None,
+            now_epoch_s=lambda: 100.0,
+        )
+        assert receipt["state"] == "corpse-or-error-pane"
+        assert receipt["findings"] == ["PANE-WITHOUT-PROCESS"]
+        assert receipt["renderer_heartbeat"]["reason"] == "process-absent"
+
+
+def test_run_cycle_flags_stale_renderer_heartbeat_loudly():
+    with tempfile.TemporaryDirectory() as tmp:
+        cfg = WatchdogConfig(
+            expected_title="ember-resident",
+            expected_process_name="ember.exe",
+            lease_path=os.path.join(tmp, "gpu-lease.json"),
+            receipt_path=os.path.join(tmp, "receipts.jsonl"),
+            heartbeat_path=os.path.join(tmp, "watchdog-heartbeat.jsonl"),
+            capture_dir=os.path.join(tmp, "captures"),
+            renderer_heartbeat_path=os.path.join(tmp, "cockpit-heartbeat.json"),
+            renderer_heartbeat_max_age_s=5.0,
+        )
+        receipt = run_cycle(
+            cfg,
+            window_lister=lambda: [WindowInfo(hwnd=111, title="ember-resident", pid=222)],
+            tab_lister=lambda: [],
+            process_lookup=lambda _pid: "ember.exe",
+            lease_reader=lambda _path: None,
+            vram_query=lambda _gpu: 8000.0,
+            capture_fn=lambda _hwnd, out_path: out_path,
+            renderer_heartbeat_reader=lambda _path: {
+                "ts": "1970-01-01T00:01:30Z", "pid": 222, "version": "test"
+            },
+            now_epoch_s=lambda: 100.0,
+        )
+        assert receipt["state"] == "heartbeat-stale"
+        assert receipt["findings"] == ["HEARTBEAT-STALE"]
+        assert receipt["renderer_heartbeat"]["age_s"] == 10.0
 
 
 def test_run_cycle_never_kills_or_closes_or_restores():
