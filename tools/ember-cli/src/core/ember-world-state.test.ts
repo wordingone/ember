@@ -4,6 +4,9 @@
 // summary.completion_math.pct_complete. Builds a fixture goalforge root (GOAL.md, debt ledger,
 // one board receipt) and points buildEmberWorldState() at it via EMBER_GOALFORGE_ROOT override.
 
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -13,6 +16,7 @@ import {
   peekNewestBoardReceiptFilename,
   pollForNewerBoardTs,
   diffBoardConditions,
+  requireBoardReceiptCommit,
   type BoardRow,
 } from "./ember-world-state.ts";
 
@@ -276,5 +280,67 @@ describe("diffBoardConditions", () => {
     expect(diffBoardConditions(prevRows, nextRows)).toEqual([
       { condition: "C1", from: "GREEN", to: "RED" },
     ]);
+  });
+});
+
+describe("requireBoardReceiptCommit", () => {
+  const source = "a".repeat(40);
+  const required = "b".repeat(40);
+
+  it("refuses a legacy board with no run-tree provenance", async () => {
+    await expect(
+      requireBoardReceiptCommit(
+        { ts: "x", rows: [], summary: { total: 0, green: 0, red: 0 } },
+        required,
+        async () => true,
+      ),
+    ).rejects.toThrow("board receipt has no closed run-tree provenance");
+  });
+
+  it("accepts only when the required commit is an ancestor of the board source", async () => {
+    const receipt = {
+      ts: "x",
+      rows: [],
+      summary: { total: 0, green: 0, red: 0 },
+      run_tree_provenance: {
+        run_tree_sha: source,
+        remote_master_sha: source,
+        remote_master_source: "LS_REMOTE" as const,
+        tree_is_stale: false,
+        behind_by: 0,
+        tree_dirty: [],
+        stale_tree_override: false,
+        provenance_status: "CURRENT_CLEAN" as const,
+        publishable_as_current: true,
+      },
+    };
+    let observed: [string, string] | undefined;
+    const accepted = await requireBoardReceiptCommit(
+      receipt,
+      required,
+      async (candidate, boardSource) => {
+        observed = [candidate, boardSource];
+        return true;
+      },
+    );
+    expect(accepted).toBe(source);
+    expect(observed).toEqual([required, source]);
+
+    await expect(
+      requireBoardReceiptCommit(receipt, required, async () => false),
+    ).rejects.toThrow("board source predates required commit");
+
+    await expect(
+      requireBoardReceiptCommit(
+        {
+          run_tree_provenance: {
+            ...receipt.run_tree_provenance,
+            tree_is_stale: true,
+          },
+        },
+        required,
+        async () => true,
+      ),
+    ).rejects.toThrow("board receipt has no closed run-tree provenance");
   });
 });

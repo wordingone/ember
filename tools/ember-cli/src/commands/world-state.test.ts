@@ -10,6 +10,9 @@
 // from process.env at first import, so an in-process env override after another file has already
 // imported it is too late. A subprocess sidesteps both problems with a fresh module registry.
 
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import { describe, it, expect, afterEach } from "bun:test";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -74,7 +77,7 @@ async function makeFixtureRoot(): Promise<string> {
 async function runCockpitTurns(
   goalforgeRoot: string,
   nowMs: number = FIXTURE_NOW_MS,
-): Promise<{ monitor: string; evidence0: string; evidenceOOB: string }> {
+): Promise<{ monitor: string; evidence0: string; evidenceOOB: string; act0: string }> {
   const specifier = pathToFileURL(join(SRC_DIR, "commands", "world-state.ts")).href;
   const driverScript = [
     // Mocked now, injected before world-state.ts is even imported -- never the subprocess's real
@@ -85,7 +88,8 @@ async function runCockpitTurns(
     `const monitor = await runWorldStateTurn("monitor");`,
     `const evidence0 = await runWorldStateTurn("evidence monitor 0");`,
     `const evidenceOOB = await runWorldStateTurn("evidence monitor 3");`,
-    `process.stdout.write(JSON.stringify({ monitor, evidence0, evidenceOOB }));`,
+    `const act0 = await runWorldStateTurn("act monitor 0");`,
+    `process.stdout.write(JSON.stringify({ monitor, evidence0, evidenceOOB, act0 }));`,
   ].join("\n");
   const driverPath = join(goalforgeRoot, "driver.mjs");
   await writeFile(driverPath, driverScript);
@@ -154,6 +158,18 @@ describe("/cockpit monitor turn shares core/monitor-render.ts with the REPL", ()
       // index 3 is out of bounds for a 3-element sorted array (0,1,2) -- if the surface were
       // still indexing against some other/unsorted collection this bound could silently differ.
       expect(evidenceOOB).toContain("no claim at monitor 3");
+    },
+    20000,
+  );
+
+  it(
+    "refuses an action offer when the displayed board lacks current-tree provenance",
+    async () => {
+      root = await makeFixtureRoot();
+      const { act0 } = await runCockpitTurns(root);
+      expect(act0).toContain("ACTION REFUSED");
+      expect(act0).toContain("board receipt has no closed run-tree provenance");
+      expect(act0).not.toContain("type \"confirm");
     },
     20000,
   );

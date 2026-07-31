@@ -15,6 +15,9 @@
 // executes from. Read-only; never writes into that tree. The contract tree's location is
 // deployment-specific and is never hardcoded here -- see the EMBER_GOALFORGE_ROOT contract below.
 
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import { readFile, readdir } from "fs/promises";
 import { createHash } from "crypto";
 import path from "path";
@@ -60,6 +63,7 @@ export interface EmberWorldState {
     red: number;
     pctComplete: number;
     conditions: Claim[]; // one per board row
+    runTreeProvenance?: RunTreeProvenance | null;
   };
   understand: {
     goalTitle: string;
@@ -164,9 +168,22 @@ export interface BoardRow {
   reason: string;
 }
 
+export interface RunTreeProvenance {
+  run_tree_sha: string;
+  remote_master_sha: string;
+  remote_master_source: "LS_REMOTE" | "FETCH_HEAD_DEGRADED";
+  tree_is_stale: boolean;
+  behind_by: number | null;
+  tree_dirty: string[];
+  stale_tree_override: boolean;
+  provenance_status: "CURRENT_CLEAN" | "DEGRADED_REMOTE_CHECK" | "STALE_DIRTY_OVERRIDE";
+  publishable_as_current: boolean;
+}
+
 export interface BoardReceipt {
   ts: string;
   rows: BoardRow[];
+  run_tree_provenance?: RunTreeProvenance;
   summary: {
     total: number;
     green: number;
@@ -179,6 +196,77 @@ export interface BoardReceipt {
       pct_complete?: number;
     };
   };
+}
+
+const GIT_SHA_RE = /^[0-9a-f]{40}$/;
+const RUN_TREE_PROVENANCE_KEYS = [
+  "behind_by",
+  "provenance_status",
+  "publishable_as_current",
+  "remote_master_sha",
+  "remote_master_source",
+  "run_tree_sha",
+  "stale_tree_override",
+  "tree_dirty",
+  "tree_is_stale",
+] as const;
+
+function closedRunTreeProvenance(value: unknown): RunTreeProvenance | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  if (Object.keys(row).sort().join("\n") !== [...RUN_TREE_PROVENANCE_KEYS].sort().join("\n")) {
+    return null;
+  }
+  if (
+    typeof row.run_tree_sha !== "string" ||
+    !GIT_SHA_RE.test(row.run_tree_sha) ||
+    typeof row.remote_master_sha !== "string" ||
+    !GIT_SHA_RE.test(row.remote_master_sha) ||
+    !["LS_REMOTE", "FETCH_HEAD_DEGRADED"].includes(String(row.remote_master_source)) ||
+    typeof row.tree_is_stale !== "boolean" ||
+    !(row.behind_by === null || (Number.isInteger(row.behind_by) && Number(row.behind_by) >= 0)) ||
+    !Array.isArray(row.tree_dirty) ||
+    row.tree_dirty.some((item) => typeof item !== "string" || item.length === 0) ||
+    typeof row.stale_tree_override !== "boolean" ||
+    !["CURRENT_CLEAN", "DEGRADED_REMOTE_CHECK", "STALE_DIRTY_OVERRIDE"].includes(
+      String(row.provenance_status),
+    ) ||
+    typeof row.publishable_as_current !== "boolean"
+  ) {
+    return null;
+  }
+  const dirty = row.tree_dirty as string[];
+  const stale = row.tree_is_stale as boolean;
+  const expectedStatus =
+    stale || dirty.length > 0
+      ? "STALE_DIRTY_OVERRIDE"
+      : row.remote_master_source === "FETCH_HEAD_DEGRADED"
+        ? "DEGRADED_REMOTE_CHECK"
+        : "CURRENT_CLEAN";
+  if (
+    stale !== (row.run_tree_sha !== row.remote_master_sha) ||
+    dirty.join("\n") !== [...new Set(dirty)].sort().join("\n") ||
+    row.provenance_status !== expectedStatus ||
+    row.stale_tree_override !== Boolean(stale || dirty.length > 0) ||
+    row.publishable_as_current !== (expectedStatus === "CURRENT_CLEAN")
+  ) {
+    return null;
+  }
+  return row as unknown as RunTreeProvenance;
+}
+
+export async function requireBoardReceiptCommit(
+  receipt: Pick<BoardReceipt, "run_tree_provenance">,
+  requiredCommit: string,
+  isAncestor: (required: string, boardSource: string) => Promise<boolean>,
+): Promise<string> {
+  const provenance = closedRunTreeProvenance(receipt.run_tree_provenance);
+  if (!provenance) throw new Error("board receipt has no closed run-tree provenance");
+  if (!GIT_SHA_RE.test(requiredCommit)) throw new Error("required commit is not one Git SHA");
+  if (!(await isAncestor(requiredCommit, provenance.run_tree_sha))) {
+    throw new Error(`board source predates required commit ${requiredCommit}`);
+  }
+  return provenance.run_tree_sha;
 }
 
 // ---------------------------------------------------------------------------
@@ -398,6 +486,7 @@ export async function buildEmberWorldState(
         board.parsed.summary?.pct_complete ??
         0,
       conditions,
+      runTreeProvenance: closedRunTreeProvenance(board.parsed.run_tree_provenance),
     },
     understand: {
       goalTitle,
