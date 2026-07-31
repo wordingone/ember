@@ -20,6 +20,8 @@ other pin; a transition is never a waiver.  Containers whose names include
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import hashlib
 import json
 import re
@@ -242,6 +244,34 @@ def _extract_pins(
     for object_path, node in _walk_dicts(receipt):
         candidates: list[tuple[str, str, str, str]] = []
         direct_digest = node.get("sha256")
+        if (
+            "body_base64" in node
+            and isinstance(direct_digest, str)
+            and isinstance(node.get("name"), str)
+        ):
+            field = ".".join((*object_path, "sha256"))
+            raw_path = node["name"]
+            identity = (field, raw_path)
+            if identity not in seen:
+                seen.add(identity)
+                expected = transitions.get(field, direct_digest)
+                pins.append(
+                    {
+                        "receipt_path": receipt_path.relative_to(root).as_posix(),
+                        "field": field,
+                        "artifact_path": None,
+                        "raw_artifact_reference": raw_path,
+                        "expected_sha256": expected,
+                        "original_expected_sha256": direct_digest,
+                        "pin_source": "embedded_receipt",
+                        "_artifact": None,
+                        "_path_error": None,
+                        "_embedded": True,
+                        "_embedded_body_base64": node.get("body_base64"),
+                        "_embedded_byte_count": node.get("byte_count"),
+                    }
+                )
+            continue
         if isinstance(direct_digest, str):
             for path_key in ("path", "name", "file"):
                 raw_path = node.get(path_key)
@@ -312,6 +342,9 @@ def _extract_pins(
                     "pin_source": pin_source,
                     "_artifact": artifact,
                     "_path_error": path_error,
+                    "_embedded": False,
+                    "_embedded_body_base64": None,
+                    "_embedded_byte_count": None,
                 }
             )
     return pins
@@ -394,11 +427,38 @@ def scan_receipts(
     for pin in pins:
         artifact = pin.pop("_artifact")
         path_error = pin.pop("_path_error")
+        embedded = pin.pop("_embedded")
+        embedded_body_base64 = pin.pop("_embedded_body_base64")
+        embedded_byte_count = pin.pop("_embedded_byte_count")
         violations: list[str] = []
         actual: str | None = None
         format_result: dict[str, str] | None = None
 
-        if path_error is not None:
+        if embedded:
+            body: bytes | None = None
+            if (
+                not isinstance(embedded_body_base64, str)
+                or not isinstance(embedded_byte_count, int)
+                or isinstance(embedded_byte_count, bool)
+                or embedded_byte_count < 0
+            ):
+                violations.append("EMBEDDED_SCHEMA_INVALID")
+            else:
+                try:
+                    body = base64.b64decode(
+                        embedded_body_base64.encode("ascii"), validate=True
+                    )
+                except (UnicodeEncodeError, binascii.Error, ValueError):
+                    violations.append("EMBEDDED_BASE64_INVALID")
+            if body is not None:
+                actual = hashlib.sha256(body).hexdigest()
+                if len(body) != embedded_byte_count:
+                    violations.append("EMBEDDED_BYTE_COUNT_MISMATCH")
+                if not SHA256_RE.fullmatch(pin["expected_sha256"]):
+                    violations.append("EXPECTED_SHA256_INVALID")
+                elif actual != pin["expected_sha256"]:
+                    violations.append("SHA256_MISMATCH")
+        elif path_error is not None:
             violations.append(path_error)
         elif artifact is None or not artifact.is_file():
             violations.append("FILE_MISSING")

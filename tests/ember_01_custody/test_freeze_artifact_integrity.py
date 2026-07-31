@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import importlib.util
 import json
@@ -241,6 +242,91 @@ def test_receipt_name_resolves_inside_receipts_tree(tmp_path: Path) -> None:
 
     assert row["artifact_path"] == "receipts/nested/artifact.json"
     assert row["status"] == "VERIFIED"
+
+
+def test_embedded_base64_body_is_verified_without_filesystem_lookup(
+    tmp_path: Path,
+) -> None:
+    module = load_module()
+    body = b'{"owned":"embedded"}\n'
+    receipt = tmp_path / "receipts" / "raw-sources.json"
+    write_json(
+        receipt,
+        {
+            "entries": [
+                {
+                    "body_base64": base64.b64encode(body).decode("ascii"),
+                    "byte_count": len(body),
+                    "name": "comments-105-post.json",
+                    "sha256": hashlib.sha256(body).hexdigest(),
+                }
+            ]
+        },
+    )
+
+    report = module.scan_receipts(tmp_path, tmp_path / "receipts")
+
+    assert report["summary"] == {
+        "receipt_count": 1,
+        "pin_count": 1,
+        "verified_count": 1,
+        "violation_count": 0,
+    }
+    row = report["pins"][0]
+    assert row["field"] == "entries.0.sha256"
+    assert row["raw_artifact_reference"] == "comments-105-post.json"
+    assert row["artifact_path"] is None
+    assert row["actual_sha256"] == hashlib.sha256(body).hexdigest()
+    assert row["pin_source"] == "embedded_receipt"
+    assert row["status"] == "VERIFIED"
+
+
+@pytest.mark.parametrize(
+    ("body_base64", "byte_count", "expected_sha256", "violation"),
+    [
+        ("***not-base64***", 4, hashlib.sha256(b"body").hexdigest(), "EMBEDDED_BASE64_INVALID"),
+        (
+            base64.b64encode(b"body").decode("ascii"),
+            5,
+            hashlib.sha256(b"body").hexdigest(),
+            "EMBEDDED_BYTE_COUNT_MISMATCH",
+        ),
+        (
+            base64.b64encode(b"body").decode("ascii"),
+            4,
+            "0" * 64,
+            "SHA256_MISMATCH",
+        ),
+    ],
+)
+def test_embedded_base64_body_corruption_fails_closed(
+    body_base64: str,
+    byte_count: int,
+    expected_sha256: str,
+    violation: str,
+    tmp_path: Path,
+) -> None:
+    module = load_module()
+    receipt = tmp_path / "receipts" / "raw-sources.json"
+    write_json(
+        receipt,
+        {
+            "entries": [
+                {
+                    "body_base64": body_base64,
+                    "byte_count": byte_count,
+                    "name": "comments-105-post.json",
+                    "sha256": expected_sha256,
+                }
+            ]
+        },
+    )
+
+    row = module.scan_receipts(tmp_path, tmp_path / "receipts")["pins"][0]
+
+    assert row["artifact_path"] is None
+    assert row["status"] == "VIOLATION"
+    assert row["violations"] == [violation]
 
 
 def test_shard_name_resolves_through_declared_shard_directory(
