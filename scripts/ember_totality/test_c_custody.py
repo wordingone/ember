@@ -94,6 +94,7 @@ per-row disposition.
 
 import fnmatch
 import glob
+import hashlib
 import json
 import os
 import re
@@ -261,6 +262,32 @@ def _extract_citations(obj, citations=None, documented_absent_refs=None):
     return citations, documented_absent_refs
 
 
+_CITATION_CORRECTION_KEYS = frozenset({
+    "schema_version", "old_ref", "canonical_ref", "canonical_sha256", "reason",
+})
+
+
+def _extract_citation_corrections(obj, corrections=None):
+    """Collect closed citation-correction records without granting authority.
+
+    Resolution separately re-hashes the tracked canonical target. Historical
+    receipts therefore remain immutable while a later correction can bind an
+    old, non-existent name to exact canonical bytes.
+    """
+    if corrections is None:
+        corrections = []
+    if isinstance(obj, dict):
+        if set(obj) == _CITATION_CORRECTION_KEYS:
+            corrections.append(obj)
+            return corrections
+        for value in obj.values():
+            _extract_citation_corrections(value, corrections)
+    elif isinstance(obj, list):
+        for item in obj:
+            _extract_citation_corrections(item, corrections)
+    return corrections
+
+
 # Characters that mark a cited string as a regex/glob literal rather than a
 # concrete file path (issue #410): `*` and `?` (glob), `[` `]` (char class),
 # `(` `)` (grouping / prose parenthetical), `<` `>` (placeholder), `\` (regex
@@ -395,6 +422,45 @@ def _resolve_redaction_twin(cited_path, git_tracked_normalized):
     if twin in git_tracked_normalized:
         return twin
     return None
+
+
+def _resolve_citation_correction(cited_path, corrections, git_tracked_normalized, root):
+    """Resolve one old citation only through exact tracked canonical bytes.
+
+    Any malformed or conflicting record for the same old ref fails closed.
+    """
+    relevant = [row for row in corrections if row.get("old_ref") == cited_path]
+    if not relevant:
+        return None
+
+    resolved = []
+    for row in relevant:
+        if set(row) != _CITATION_CORRECTION_KEYS:
+            return None
+        if row.get("schema_version") != "ember-citation-correction/v1":
+            return None
+        canonical_ref = row.get("canonical_ref")
+        canonical_sha256 = row.get("canonical_sha256")
+        reason = row.get("reason")
+        if not all(isinstance(value, str) and value for value in (
+            row.get("old_ref"), canonical_ref, canonical_sha256, reason
+        )):
+            return None
+        if not canonical_ref.startswith("receipts/") or canonical_ref not in git_tracked_normalized:
+            return None
+        if not re.fullmatch(r"[0-9a-f]{64}", canonical_sha256):
+            return None
+        canonical_path = Path(root) / canonical_ref
+        if not canonical_path.is_file():
+            return None
+        if hashlib.sha256(canonical_path.read_bytes()).hexdigest() != canonical_sha256:
+            return None
+        resolved.append((canonical_ref, canonical_sha256))
+
+    if len(set(resolved)) != 1:
+        return None
+    canonical_ref, canonical_sha256 = resolved[0]
+    return {"old": cited_path, "new": canonical_ref, "sha256": canonical_sha256}
 
 
 def _load_all_spend_annex_rows(root):
@@ -635,6 +701,7 @@ def main():
     pending_landing = []
     citations_to_verify = set()
     documented_absent_refs = set()
+    citation_corrections = []
 
     for fpath in sorted(found_files):
         rel_path = os.path.relpath(fpath, ROOT).replace("\\", "/")
@@ -659,6 +726,7 @@ def main():
 
         # Shape (c): Extract citations for later verification
         _extract_citations(data, citations_to_verify, documented_absent_refs)
+        _extract_citation_corrections(data, citation_corrections)
 
     # --- (E) Check cited paths exist -- issue #415 cure ladder -------
     basename_index = _build_basename_index(git_tracked_normalized)
@@ -670,6 +738,7 @@ def main():
     documented_absent_citations = []
     annex_attested_citations = []
     redacted_twin_citations = []
+    corrected_citations = []
 
     for cited_path in sorted(citations_to_verify):
         if _classify_citation(cited_path) == "pattern":
@@ -691,6 +760,13 @@ def main():
         redacted_twin = _resolve_redaction_twin(cited_path, git_tracked_normalized)
         if redacted_twin:
             redacted_twin_citations.append({"old": cited_path, "new": redacted_twin})
+            continue
+
+        correction = _resolve_citation_correction(
+            cited_path, citation_corrections, git_tracked_normalized, ROOT
+        )
+        if correction:
+            corrected_citations.append(correction)
             continue
 
         # Cure 1 tail: bare, no-extension citation naming a real, populated
@@ -755,6 +831,7 @@ def main():
                 "documented_absent": documented_absent_citations,
                 "annex_attested": annex_attested_citations,
                 "resolved_redacted": redacted_twin_citations,
+                "corrected_citation": corrected_citations,
             },
             "pending_landing": pending_landing,
         }
@@ -768,6 +845,7 @@ def main():
                     f"documented_absent={len(documented_absent_citations)} "
                     f"annex_attested={len(annex_attested_citations)} "
                     f"resolved_redacted={len(redacted_twin_citations)} "
+                    f"corrected_citation={len(corrected_citations)} "
                     f"pending_landing={len(pending_landing)}; "
                     f"sidecar={sidecar_path}")
 
@@ -787,6 +865,7 @@ def main():
             "documented_absent": documented_absent_citations,
             "annex_attested": annex_attested_citations,
             "resolved_redacted": redacted_twin_citations,
+            "corrected_citation": corrected_citations,
         },
         "pending_landing": [],
     }
@@ -799,6 +878,7 @@ def main():
                   f"documented_absent={len(documented_absent_citations)} "
                   f"annex_attested={len(annex_attested_citations)} "
                   f"resolved_redacted={len(redacted_twin_citations)} "
+                  f"corrected_citation={len(corrected_citations)} "
                   f"pending_landing={len(pending_landing)}; "
                   f"sidecar={sidecar_path}")
 

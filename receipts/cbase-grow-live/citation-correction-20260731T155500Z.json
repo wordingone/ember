@@ -1,0 +1,24 @@
+{
+  "schema_version": "ember-citation-correction-receipt/v1",
+  "ticket": "C-CUSTODY-CITATION-CORRECTION",
+  "ts": "2026-07-31T15:55:00Z",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over exact on-disk file bytes, no normalization",
+  "citation_corrections": [
+    {
+      "schema_version": "ember-citation-correction/v1",
+      "old_ref": "receipts/cbase-grow-live-live-20260703T053225Z-import-edition.json",
+      "canonical_ref": "receipts/cbase-grow-live/cbase-grow-live-live-20260703T053225Z.json",
+      "canonical_sha256": "43217cc5f31cce0320bf0627a603b11a7e4782ed1e03c48510c55346ac27c2d5",
+      "reason": "A historical citation-check snapshot preserved the former documentation citation after the live documentation was corrected; the old import-edition name never existed in the tracked tree."
+    }
+  ],
+  "claim_boundary": [
+    "This receipt corrects one historical citation name without rewriting the historical snapshot.",
+    "The canonical target is accepted only when tracked and byte-identical to canonical_sha256.",
+    "This is custody metadata, not model, training, checkpoint, benchmark, or capability evidence."
+  ]
+}
