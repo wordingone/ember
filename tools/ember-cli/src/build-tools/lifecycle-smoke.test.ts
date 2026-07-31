@@ -336,6 +336,28 @@ describe("validateLifecycleReceipt", () => {
     expect(forcedAfterTimeout).toBe(1);
   });
 
+  test("does not write to a lifecycle child whose exit was already observed", async () => {
+    const driver = await import("./lifecycle-smoke-driver.ts");
+    let exitRequests = 0;
+    let forced = 0;
+    const result = await driver.terminateLifecycleChild!(
+      () => { exitRequests += 1; },
+      () => true,
+      () => { forced += 1; },
+    );
+    expect(exitRequests).toBe(0);
+    expect(forced).toBe(0);
+    expect(result).toEqual({
+      explicit_requested: true,
+      clean_exit_observed: true,
+      clean_exit_wait_ms: 0,
+      forced_cleanup_required: false,
+      forced_cleanup_attempted: false,
+      final_exit_observed: true,
+      survivors: 0,
+    });
+  });
+
   test("refuses forged source, binary, rebuild, or builder bindings", () => {
     for (const mutate of [
       (r: LifecycleReceipt) => { r.source_commit = SHA_D; },

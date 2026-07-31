@@ -154,6 +154,17 @@ export async function terminateLifecycleChild(
   if (!Number.isInteger(cleanExitWaitMs) || cleanExitWaitMs < 1) {
     throw new Error("clean exit wait must be a positive integer");
   }
+  if (isExitObserved()) {
+    return {
+      explicit_requested: true,
+      clean_exit_observed: true,
+      clean_exit_wait_ms: 0,
+      forced_cleanup_required: false,
+      forced_cleanup_attempted: false,
+      final_exit_observed: true,
+      survivors: 0,
+    };
+  }
   requestExit();
   const startedAt = now();
   const cleanDeadline = startedAt + cleanExitWaitMs;
