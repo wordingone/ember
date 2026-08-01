@@ -143,6 +143,11 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 }
 
+export function isBenignConptyClosureError(error: unknown): boolean {
+  return typeof error === "object" && error !== null &&
+    (error as { code?: unknown }).code === "ERR_SOCKET_CLOSED";
+}
+
 export async function terminateLifecycleChild(
   requestExit: () => void,
   isExitObserved: () => boolean,
@@ -168,10 +173,7 @@ export async function terminateLifecycleChild(
   try {
     requestExit();
   } catch (error) {
-    if (
-      typeof error !== "object" || error === null ||
-      (error as { code?: unknown }).code !== "ERR_SOCKET_CLOSED"
-    ) throw error;
+    if (!isBenignConptyClosureError(error)) throw error;
   }
   const startedAt = now();
   const cleanDeadline = startedAt + cleanExitWaitMs;
@@ -754,6 +756,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
   let writes = Promise.resolve();
   let child: IPty | undefined;
   let exitObserved = false;
+  let ptyError: Error | null = null;
   const attempts: AttemptRow[] = [];
   const evidence: LifecycleActionEvidence[] = [];
   try {
@@ -771,6 +774,15 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
         EMBER_DISABLE_TERMINAL_TITLE: "1",
         ...headlessCaptureEnv(),
       },
+    });
+    const errorAwareChild = child as IPty & {
+      on(event: "error", listener: (error: unknown) => void): unknown;
+    };
+    errorAwareChild.on("error", (error) => {
+      if (isBenignConptyClosureError(error)) return;
+      ptyError = error instanceof Error
+        ? error
+        : new Error(`ConPTY error: ${String(error)}`);
     });
     child.onData((data) => {
       raw.push(data);
@@ -1017,6 +1029,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
         });
       },
     );
+    if (ptyError !== null) throw ptyError;
 
     const attemptArtifact = join(outDir, "attempt.json");
     writeFileSync(

@@ -380,6 +380,16 @@ describe("validateLifecycleReceipt", () => {
     expect(result.survivors).toBe(0);
   });
 
+  test("classifies only the Windows closed-socket race as benign", async () => {
+    const driver = await import("./lifecycle-smoke-driver.ts");
+    expect(driver.isBenignConptyClosureError({
+      code: "ERR_SOCKET_CLOSED",
+    })).toBe(true);
+    expect(driver.isBenignConptyClosureError({ code: "EIO" })).toBe(false);
+    expect(driver.isBenignConptyClosureError(new Error("Socket is closed")))
+      .toBe(false);
+  });
+
   test("refuses forged source, binary, rebuild, or builder bindings", () => {
     for (const mutate of [
       (r: LifecycleReceipt) => { r.source_commit = SHA_D; },
