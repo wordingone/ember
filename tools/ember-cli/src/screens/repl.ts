@@ -707,15 +707,23 @@ export function ReplScreen({
     };
   }, [env, cwd]);
 
-  // The operator-surface pane only renders click/keyboard INTENT ([START][PAUSE][RESUME]
-  // [RESTART]) -- driveOperatorControl is the one production path that turns that intent into a
-  // real effect: an append to the governed finetune control channel a training-side poller
-  // obeys. Before this wiring the pane's onControl prop was never passed here, so every click
-  // fired its handler and changed nothing (the exact defect: a control that appears to work).
-  // EMBER_FINETUNE_CONTROL_PATH lets tests point the channel at a temp file without touching the
-  // real state/ember-finetune-control.jsonl; production takes the default channel path.
+  // START is a launch request, so its click must enter the same governed /train command path as
+  // typed operator input. The ref is populated with the current submitPrompt closure below and
+  // lets this early-declared pointer handler remain stable without capturing a stale callback.
+  const submitPromptRef = useRef<(text: string, origin?: "keyboard" | "operator") => Promise<void>>(
+    async () => {},
+  );
+
+  // PAUSE/RESUME/RESTART remain runtime-control intents for an already identified run and are
+  // appended to the governed finetune control channel. START must not use that legacy channel:
+  // no production poller consumes a start row, and doing so bypasses /train's preflight and
+  // single-use confirmation boundary.
   const operatorControlChannelPath = env["EMBER_FINETUNE_CONTROL_PATH"];
   const handleOperatorControl = useCallback((action: OperatorControlAction, runId?: string) => {
+    if (action === "START") {
+      void submitPromptRef.current("/train", "operator");
+      return;
+    }
     void driveOperatorControl(action, runId, { channelPath: operatorControlChannelPath });
   }, [operatorControlChannelPath]);
 
@@ -780,9 +788,6 @@ export function ReplScreen({
   // latest submitPrompt closure so the injector (constructed once, below, after
   // usePromptInput) never calls a stale one. One receipt-writer/JSONL file per
   // mounted session.
-  const submitPromptRef = useRef<(text: string, origin?: "keyboard" | "operator") => Promise<void>>(
-    async () => {},
-  );
   const operatorReceiptsRef = useRef<OperatorReceiptWriter | null>(null);
   if (!operatorReceiptsRef.current) {
     operatorReceiptsRef.current = createOperatorReceiptWriter();
