@@ -1,0 +1,19 @@
+{
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "ticket": "DEBT-004",
+  "disposition": "ARCHIVAL",
+  "ts": "20260801T222935Z",
+  "row": "DEBT-004 | ACTIVE-NEXT | Goal source split between local goal file and repo GOAL.md",
+  "why_it_mattered": "A stale governing file could bypass the resident-training gate if a second, separately-editable goal source existed alongside repo GOAL.md.",
+  "evidence": {
+    "no_surviving_split_artifact": "docs/ember-debt-ledger.md line 14 already conditions the split concern on 'its byte-identical an agent state mirror when present' -- i.e. a second local goal file/agent-state mirror was already understood as optional at the time DEBT-004 was written. A full-tree search for any such artifact (local goal file, agent state mirror, or equivalent) under the current worktree finds none: only GOAL.md exists as a goal source.",
+    "authority_locked_post_debt004": "Commit 4f758db0ec11b5089698d80215a1145d48ef7537 ('fix: lock Ember authority and totality', 2026-07-12T13:01:43-07:00) postdates this ledger's own 2026-06-20 date and its DEBT-004 row. That commit is the one which stamped docs/ember-debt-ledger.md itself as EMBER_ARTIFACT_CLASS=historical_only, 'preserved as evidence... no current execution, goal-selection, research, or completion authority', formally subordinating this ledger to GOAL.md exactly as GOAL.md's own Authority section already required.",
+    "root_consolidation": "Commit 58ddf8d1858931933c9a7006ed49b6bb8bb2af6a ('Consolidate to a clean, externally-auditable public root', 2026-06-28T10:53:19-07:00) also postdates DEBT-004's authoring and precedes the authority-lock commit, part of the same single-tree consolidation that removed any surviving second goal-source artifact this row was written to guard against."
+  },
+  "successor": "GOAL.md as the sole, exclusively-authoritative goal source, per its own Authority And Precedence section and per commit 4f758db's explicit lock of this ledger to historical_only, no-execution-authority status.",
+  "classification_law_basis": "docs/ember-debt-ledger.md 'Classification Law': ARCHIVAL is permitted when a receipt proves the row 'is strictly subsumed by a successor under the same clearance tests' -- the successor here (GOAL.md as sole authoritative goal source, formally locked in-repo) strictly subsumes the split-prevention purpose DEBT-004 existed to serve; there is no remaining split-capable artifact for the condition to guard against.",
+  "claim_boundary": "This receipt disposes DEBT-004 only. It makes no claim about DEBT-001/002/003/005/006/007/008/009/010 or any other debt-ledger row, and no claim that docs/ember-debt-ledger.md as a whole is resolved.",
+  "produced_by": "automated disposition receipt, worktree fix/c10-debt-ledger-drain"
+}
