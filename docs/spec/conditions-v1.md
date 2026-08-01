@@ -160,14 +160,15 @@ pre-epoch history.
   pre/post checkpoints; deletion vs the untrained base instead of the short-horizon checkpoint. ✗
   `unearned_duration`, `clock_in_disguise`, `fabricated_outcomes`, `novelty_spoof`,
   `deletion_uses_wrong_baseline`. CHK: `test_c11.py` (9 recomputed checks, no trusted scalars). Spec:
-  `docs/c11-experience-horizon-spec.md`.
+  `docs/c11-experience-horizon-spec.md` (absent as of 2026-08-01 in this contract tree, unmerged
+  to master).
 - **C12 — State-dependent cognitive modes.** R: modes selected by state (observe/orient/hypothesize/
   simulate/act/verify/consolidate/sleep/ask/refuse/rollback/report), triggered by evidence/uncertainty/
   verifier-state/headroom/blocker/risk; deleting the mode selector or replacing it with fixed time
   slices degrades the cycle. Does NOT count: fixed equal-duration phases; `idle_think` without a
   bounded emitted artifact. ✗ `invalid_timer_artifact_modes`. CHK: deleted-mode-selector receipt
   degrades cycle/next-action/recipe.
-- **C13 — [STALE TEXT, dated amendment 2026-07-01: the live totality board (`docs/problems-meta.yaml` id C13) defines C13 as "Technique dissection (import / reject / make-native + ablation)", tier frontier — that definition is canonical per math-core §0. The text below is the RETIRED pre-reshuffle condition, preserved verbatim as extraction record only; see `docs/spec/milestones-v1.md` §A collision #5.] Native goal-mode organ.** R: Ember internalizes goal-mode (parse goal → read receipts →
+- **C13 — [STALE TEXT, dated amendment 2026-07-01: the live totality board (`docs/problems-meta.yaml` id C13) defines C13 as "Technique dissection (import / reject / make-native + ablation)", tier frontier — that definition is canonical per math-core §0. The text below is the RETIRED pre-reshuffle condition, preserved verbatim as extraction record only; see `docs/spec/milestones-v1.md` §A collision #5 (absent as of 2026-08-01 in this contract tree, unmerged to master).] Native goal-mode organ.** R: Ember internalizes goal-mode (parse goal → read receipts →
   identify blocker → compile attempt → run/delegate → verify → write receipt → update next blocker),
   with progressive non-Ember ablation and a first-principles dissection of goal-mode itself. Does NOT
   count: Ember calling an external executor; non-Ember control beyond start/stop/inspect/resource-
@@ -292,7 +293,8 @@ pre-epoch history.
   `invalid_single_leg_surpass`. CHK: a paired surpass receipt records both legs at matched budget with
   the owned-core identity, OR a measured-distance receipt naming the remaining gap.
 - **C-IND — operator-independence proof surface.** Full R/does-NOT-count/CHK text:
-  @docs/spec/operator-independence-v1.md — registry-text-by-reference.
+  @docs/spec/operator-independence-v1.md — registry-text-by-reference (absent as of 2026-08-01
+  in this contract tree; authored on an unlanded lane, not yet merged to master).
 - **C-PROC — operator-visible process currency (GOAL.md §13; added 2026-07-02 by operator
   directive, verbatim in §13).** R: the delegation/review record the OPERATOR can see (public-repo
   issues, milestones, PRs) is CURRENT with the work record — work never runs ahead of its visible
@@ -366,7 +368,8 @@ pre-epoch history.
   EXECUTION INTEGRITY, deliberately NOT the publication gate's own open/closed direction: that
   gate is the endgame publication-readiness bar (kernel freeze, earned rung, BOOTSTRAP_PASS,
   claims map, research-focus test) and its honest verdict pre-publication is CLOSED — a coherent
-  FAIL is GREEN-compatible here; its opening is judged by `docs/spec/publication-v1.md` §3,
+  FAIL is GREEN-compatible here; its opening is judged by `docs/spec/publication-v1.md` §3
+  (absent as of 2026-08-01 in this contract tree, unmerged to master),
   never by this row. Does NOT count: a checker that never executed; an exit code contradicting
   the checker's own printed verdict line (DISAGREEMENT — the probe-verdict-gate class: exit 0
   while printing RED); timeout / unparseable output (UNRESOLVABLE); a failing energy-law
@@ -427,7 +430,8 @@ pre-epoch history.
   ladder state file (`autonomy-ladder-state.json`) is schema-valid, cites a resolvable
   contract, and names the never-transfer safety floor (operator escalation set, governor
   caps, kill-discipline); every CLAIMED rung is backed by K≥5 consecutive resolvable window
-  receipts under `receipts/autonomy-ladder/` with strictly-increasing ts; each rung's
+  receipts under `receipts/autonomy-ladder/` (absent as of 2026-08-01 in this contract tree —
+  zero rungs claimed, per C-AUTO's honest zero-claim state) with strictly-increasing ts; each rung's
   required provenance field (R0=none [window receipts carry `r0_provenance_binding`],
   R1=scheduler_provenance, R2=queue_provenance, R3=launch_token, R4=spec_provenance,
   R5=publication_provenance) is present, non-empty, and ember-attributed; a claim receipt

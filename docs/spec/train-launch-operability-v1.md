@@ -32,6 +32,7 @@ Today the three paths are purely caller-supplied; no convention exists anywhere 
 (searched: scripts, manifests, docs). Establish one:
 
 ```
+build target — none of the three paths below exist yet in this contract tree
 receipts/ember-02-launch-authority/certificate.json
 receipts/ember-02-launch-authority/declaration-ledger.jsonl
 receipts/ember-02-launch-authority/run-spec.json
