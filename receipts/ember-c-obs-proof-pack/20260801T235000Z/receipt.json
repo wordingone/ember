@@ -1,0 +1,43 @@
+{
+  "all_commands_exit_zero": true,
+  "emberworldstate_adapter": {
+    "adapter_path": "tools/ember-cli/src/core/ember-world-state.ts",
+    "adapter_sha256": "045c3be7cb1cd57761b4cfd658012fca716ee3d34c0dfe3e64104428a9047bb8",
+    "binds": true,
+    "sources": [
+      "GOAL.md",
+      "docs/ember-debt-ledger.md",
+      "scripts/ember_totality/receipts-totality/ember-totality-20260801T052815Z.json"
+    ]
+  },
+  "goal_id": "EMBER-02",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "kind": "ember-c-obs-proof-pack-receipt",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "notes": "click-to-evidence surface: tools/ember-cli/src/commands/world-state.ts exposes an `evidence <s> <n>` verb on the /cockpit command that resolves a specific MONITOR/UNDERSTAND/INTERACT row to its underlying EvidenceRef{path, sha256}, i.e. real click-to-evidence, not a static summary. confirm-only encounter membrane: tools/ember-cli/src/core/encounter-membrane.ts's validateConfirmation(offer, suppliedOfferId, suppliedToken) is a pure function keyed on CONFIRM_TOKEN; there is no silent-steer path -- no code path in this module acts on an offer without an explicit matching confirm token supplied by the operator.",
+  "observatory_proof_pack": {
+    "commands": [
+      {
+        "exit_code": 0,
+        "output_len": 4629,
+        "verb": "monitor"
+      },
+      {
+        "exit_code": 0,
+        "output_len": 882,
+        "verb": "understand"
+      },
+      {
+        "exit_code": 0,
+        "output_len": 1160,
+        "verb": "interact"
+      }
+    ],
+    "runner_path": "tools/ember-cli/src/scripts/cobs-proof-pack-run.ts",
+    "runner_sha256": "f31eef39541c89cd207c0932dc0656a07bbe56e179f5008a6a7cafb7b49819db"
+  },
+  "sha_convention": "bytes on disk as-is (binary read, no normalization)",
+  "ticket": "C-OBS-PROOF-PACK",
+  "ts": "20260801T235000Z",
+  "workstream_id": "EMBER-02A"
+}
