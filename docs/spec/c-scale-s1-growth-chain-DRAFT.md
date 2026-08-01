@@ -7,8 +7,9 @@
 **DRAFT.** Assembled 2026-07-03, gathering the evidence base for issue #29's S1 clause ("S1 GROWTH
 CHAIN 718M->3e9+") ahead of a pre-registration review session that will freeze the actual rung
 count/sizes, the stabilization-segment sizing rule, and the remaining open decisions listed at the
-end of this document (marked **PRE-REGISTRATION DECISION**). Follows the same pattern as the landed
-`docs/spec/c-scale-s2-token-bill-protocol.md` (S2, ratified 2026-07-03): gather receipts-first,
+end of this document (marked **PRE-REGISTRATION DECISION**). Follows the same pattern as
+`docs/spec/c-scale-s2-token-bill-protocol.md` (S2, ratified 2026-07-03 on the pre-registration
+lane — absent as of 2026-08-01 in this contract tree, not yet merged to master): gather receipts-first,
 compute what can be computed live, flag what cannot be decided here, and never silently resolve an
 open question. The `DRAFT` suffix keeps this document out of `scripts/check_goal_citations.py`'s
 contract-force scope until ratified as `-v1.md`.
@@ -128,7 +129,7 @@ sizes).
 
 | Event | Receipt | Mechanism check | `logit_max_abs_diff` | Tolerance | Verdict |
 |---|---|---|---|---|---|
-| Dry-run (CPU, fp32, no training) | `receipts/cbase-grow-dryrun/cbase-grow-dryrun-20260702T190532Z.json` | same fixed batch, pre-grow vs freshly-grown forward pass | `3.337860107421875e-06` | `1e-4` | `GROW_DRYRUN_PASS` |
+| Dry-run (CPU, fp32, no training) | `receipts/cbase-grow-dryrun-20260702T190532Z.json` | same fixed batch, pre-grow vs freshly-grown forward pass | `3.337860107421875e-06` | `1e-4` | `GROW_DRYRUN_PASS` |
 | Live (GPU, real governed training) | `receipts/cbase-grow-live/cbase-grow-live-live-20260703T053225Z.json` | identical mechanism, applied mid-training | `2.384185791015625e-06` | `1e-4` | `GROW_LIVE_PASS` |
 
 Both pass by roughly two orders of magnitude of margin — the issue's own "fp_diff 2.4e-6 precedent"
@@ -276,7 +277,8 @@ open item, not resolved.
 **Pending closure confirmation (item the team-lead's assignment named directly):** the composition
 receipt's own `corpus_shards_note` states plainly: "synthetic batches, not real PackedShardLoader
 shards... **real-shard confirmation is the ladder's own §(e) next step if this cell keeps**"
-(`docs/spec/ceff-lever-ladder.md` §(e) item 1's plan: bench-shape cell → quality recheck → "a full
+(`docs/spec/ceff-lever-ladder.md` §(e) item 1's plan — absent as of 2026-08-01 in this contract
+tree, unmerged to master: bench-shape cell → quality recheck → "a full
 60M-token confirmation run (≈50–65 min) if both keep"). The 19,094.38 tok/s `D_both_composed` figure
 is therefore **not yet production-confirmed** — it is a bench-shape/synthetic-data measurement whose
 own governing doc names the outstanding step.
@@ -493,14 +495,14 @@ docstring), confirmed directly against `receipts/citation-check-20260703T122221Z
 `scripts/timeshare_pretrain.py` · `scripts/check_goal_citations.py` ·
 `configs/v0-pretrain-config.json` ·
 `receipts/v0-live-20260623T105829Z.json` ·
-`receipts/cbase-grow-dryrun/cbase-grow-dryrun-20260702T190532Z.json` ·
-`receipts/cbase-grow-live-live-20260703T053225Z-import-edition.json` ·
+`receipts/cbase-grow-dryrun-20260702T190532Z.json` ·
+`receipts/cbase-grow-live/cbase-grow-live-live-20260703T053225Z.json` ·
 `receipts/c04-design-bench-c03-h1024-d20-20260623T024512Z.json` ·
 `receipts/ceff-composition-ab-20260703T111351Z.json` ·
 `receipts/proof-growth-identity-20260702T064211Z.json` ·
 `receipts/proof-feasibility-20260702T064430Z.json` ·
 `receipts/shatter-verdict-canonical-20260623.json` ·
-`receipts/shatter-verdict-bf16ns5-20260623T132000Z.json`
+`receipts/shatter-verdict-bf16ns5-20260623T132000Z.json` — both SHATTER receipts are absent as of 2026-08-01 in this contract tree (the gate-9 closure landed on the C-EFF efficiency lane, unmerged to master).
 
 ---
 

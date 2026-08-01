@@ -5,7 +5,8 @@
 
 ## 1. What W1 established and what it did not
 
-W1 (receipt `receipts/ember-c-scale/w1-collapse-control-20260704T144548Z.json`, claim L3,
+W1 (receipt `receipts/ember-c-scale/w1-collapse-control-20260704T144548Z.json` — absent as of
+2026-08-01 in this contract tree, unlanded to master, claim L3,
 public issue #82 closed-landed): a width-matched from-scratch control under the matched recipe
 reached the grown model's capability point (eval 7.28125 on the sha-pinned held-out batch) by
 its FIRST eval cadence at step 100, giving token ratio ≤ 1,638,400/12,550,144 = **0.1305 —

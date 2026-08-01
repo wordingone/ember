@@ -34,14 +34,17 @@ by receipts, closed by an operator acceptance object. Prose enthusiasm, partial 
 Every quantitative or capability claim in the draft resolves to a @paper/claims-evidence-map.md
 row whose receipt is RE-OPENED and re-verified at adjudication time (no caching of trust). The
 map's own rule is load-bearing here: a claim not in the table is not made. Zero unmapped claims,
-zero ABSENT-slot claims stated as results (RESULT-GATED honesty per @paper/outline.md).
+zero ABSENT-slot claims stated as results (RESULT-GATED honesty per @paper/outline.md). Both
+`paper/claims-evidence-map.md` and `paper/outline.md` are absent as of 2026-08-01 in this
+contract tree (authored on the pre-registration lane, not yet merged to master).
 
 ## 3. Leg C — field-level delta (the "field level contribution" test)
 
 - The contribution is stated as a **falsifiable delta against the dated grounding negatives**
   (@docs/grounding/self-improvement-2026.md, @docs/grounding/local-fm-2026.md), re-swept ≤30
   days before any submission per the publication spec (@docs/spec/publication-v1.md, re-sweep
-  clause).
+  clause; all three paths cited in this item are absent as of 2026-08-01 in this contract tree,
+  unmerged to master).
 - The research-focus test of GOAL.md section 1b applies under the **inclusive reading** (R4,
   same receipt): a contribution is research if it is a statement about — or an instrument
   constitutive of — one of the two formal objects. Instruments remain subject to this leg's

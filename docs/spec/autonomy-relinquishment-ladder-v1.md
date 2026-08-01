@@ -52,7 +52,8 @@ free-form provenance strings, and self-reported timestamps never establish a
 claim.
 
 Each claimed rung names at least five unique window receipt filenames confined
-to `receipts/autonomy-ladder/`. Every `ember-autonomy-window-v2` receipt has a
+to `receipts/autonomy-ladder/` (absent as of 2026-08-01 in this contract tree — no rung has been
+claimed yet, per C-AUTO's honest zero-claim state). Every `ember-autonomy-window-v2` receipt has a
 closed schema, a strict ISO-8601 UTC timestamp, `verdict=PASS`, and one distinct
 real Git commit. The probe resolves that commit with Git and requires its
 committer timestamp to equal both the receipt timestamp and the independently
