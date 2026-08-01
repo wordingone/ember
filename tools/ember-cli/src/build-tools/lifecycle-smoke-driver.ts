@@ -148,6 +148,23 @@ export function isBenignConptyClosureError(error: unknown): boolean {
     (error as { code?: unknown }).code === "ERR_SOCKET_CLOSED";
 }
 
+export function bindConptyInputErrorFence(
+  pty: IPty,
+  onError: (error: unknown) => void,
+): void {
+  const inputSocket = (
+    pty as IPty & {
+      _agent?: {
+        _inSocket?: { on(event: "error", listener: (error: unknown) => void): unknown };
+      };
+    }
+  )._agent?._inSocket;
+  if (inputSocket === undefined) {
+    throw new Error("node-pty Windows input socket is unavailable");
+  }
+  inputSocket.on("error", onError);
+}
+
 export async function terminateLifecycleChild(
   requestExit: () => void,
   isExitObserved: () => boolean,
@@ -775,10 +792,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
         ...headlessCaptureEnv(),
       },
     });
-    const errorAwareChild = child as IPty & {
-      on(event: "error", listener: (error: unknown) => void): unknown;
-    };
-    errorAwareChild.on("error", (error) => {
+    bindConptyInputErrorFence(child, (error) => {
       if (isBenignConptyClosureError(error)) return;
       ptyError = error instanceof Error
         ? error

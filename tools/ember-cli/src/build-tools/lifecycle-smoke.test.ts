@@ -390,6 +390,27 @@ describe("validateLifecycleReceipt", () => {
       .toBe(false);
   });
 
+  test("binds the Windows node-pty input stream rather than its output emitter", async () => {
+    const driver = await import("./lifecycle-smoke-driver.ts");
+    let bound: ((error: unknown) => void) | undefined;
+    const fakePty = {
+      _agent: {
+        _inSocket: {
+          on: (event: string, listener: (error: unknown) => void) => {
+            expect(event).toBe("error");
+            bound = listener;
+          },
+        },
+      },
+    };
+    const observed: unknown[] = [];
+    driver.bindConptyInputErrorFence(fakePty as never, (error) => observed.push(error));
+    bound?.({ code: "ERR_SOCKET_CLOSED" });
+    expect(observed).toEqual([{ code: "ERR_SOCKET_CLOSED" }]);
+    expect(() => driver.bindConptyInputErrorFence({} as never, () => {}))
+      .toThrow("input socket is unavailable");
+  });
+
   test("refuses forged source, binary, rebuild, or builder bindings", () => {
     for (const mutate of [
       (r: LifecycleReceipt) => { r.source_commit = SHA_D; },
