@@ -1329,6 +1329,6 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   await new Promise<void>((resolveDrain, rejectDrain) => {
     process.stdout.write("", (error) => error ? rejectDrain(error) : resolveDrain());
   });
-  process.exitCode = 0;
   stopBridge();
+  doExitMain(0);
 }

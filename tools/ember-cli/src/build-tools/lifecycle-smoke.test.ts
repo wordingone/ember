@@ -737,6 +737,16 @@ describe("compiled lifecycle action completion", () => {
     expect(source).toContain("operatorPipeName");
     expect(source).toContain("writeOperatorLine(child.pid, input)");
   });
+
+  test("interactive cleanup terminates the packaged process after releasing terminal ownership", () => {
+    const source = readFileSync(
+      join(import.meta.dir, "..", "entrypoints", "process-entry.ts"),
+      "utf8",
+    );
+    const cleanup = source.slice(source.indexOf("await exitPromise;"));
+    expect(cleanup).toContain("root.unmount();");
+    expect(cleanup).toContain("stopBridge();\n  doExitMain(0);");
+  });
 });
 
 describe("compiled lifecycle durable state evidence", () => {
