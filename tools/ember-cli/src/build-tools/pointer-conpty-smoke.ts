@@ -69,12 +69,17 @@ function sgrLeftClick(col: number, row: number): string {
   return `\x1b[<0;${col + 1};${row + 1}M`;
 }
 
+function sgrLeftRelease(col: number, row: number): string {
+  return `\x1b[<0;${col + 1};${row + 1}m`;
+}
+
 async function main(): Promise<void> {
   const binary = resolve(process.argv[2] ?? "");
   const outDir = resolve(process.argv[3] ?? "");
   const implementationCommit = process.argv[4] ?? "";
+  const targetAction = process.argv[5] === "START" ? "START" : "PAUSE";
   if (!existsSync(binary) || !/^[0-9a-f]{40}$/u.test(implementationCommit)) {
-    throw new Error("usage: pointer-conpty-smoke.ts <compiled-binary> <out-dir> <implementation-commit>");
+    throw new Error("usage: pointer-conpty-smoke.ts <compiled-binary> <out-dir> <implementation-commit> [PAUSE|START]");
   }
   mkdirSync(outDir, { recursive: true });
   const repoRoot = resolve(import.meta.dirname, "../../../..");
@@ -82,7 +87,7 @@ async function main(): Promise<void> {
   const telemetryPath = join(home, "telemetry.jsonl");
   const controlPath = join(home, "control.jsonl");
   const runId = "run-pointer-conpty-smoke";
-  writeFileSync(telemetryPath, `${JSON.stringify({
+  writeFileSync(telemetryPath, targetAction === "START" ? "" : `${JSON.stringify({
     ts: new Date().toISOString(),
     kind: "train_step",
     source: "journal",
@@ -111,6 +116,7 @@ async function main(): Promise<void> {
         EMBER_CLI_HEADLESS_CAPTURE: "1",
         EMBER_TELEMETRY_PATH: telemetryPath,
         EMBER_FINETUNE_CONTROL_PATH: controlPath,
+        ...(targetAction === "START" ? { EMBER_PYTHON_BIN: join(home, "missing-python.exe") } : {}),
       },
     });
     child.onData((data) => {
@@ -129,25 +135,40 @@ async function main(): Promise<void> {
     inputSocket?.on("error", (error) => conptyInputCloseErrors.push(error.code ?? error.message));
 
     await waitFor(() => raw.join("").includes(READY_OSC), "compiled cockpit readiness");
-    await waitFor(() => frameLines(terminal).some((line) => line.includes("RUNNING")), "RUNNING telemetry frame");
+    await waitFor(
+      () => frameLines(terminal).some((line) => line.includes(targetAction === "START" ? "IDLE" : "RUNNING")),
+      `${targetAction} telemetry frame`,
+    );
     await writes;
     const before = frameLines(terminal);
-    const pauseAt = findGlyph(before, "[PAUSE]");
-    if (!pauseAt) throw new Error("compiled frame did not expose [PAUSE]");
+    const pauseAt = findGlyph(before, `[${targetAction}]`);
+    if (!pauseAt) throw new Error(`compiled frame did not expose [${targetAction}]`);
 
     const pointerCol = pauseAt.col + 1;
     const beforeHoverStyle = cellStyle(terminal, pointerCol, pauseAt.row);
     child.write(sgrHover(pointerCol, pauseAt.row));
     await waitFor(
       () => cellStyle(terminal, pointerCol, pauseAt.row) !== beforeHoverStyle,
-      "PAUSE hover highlight",
+      `${targetAction} hover highlight`,
     );
-    child.write(sgrLeftClick(pointerCol, pauseAt.row));
-    await waitFor(() => existsSync(controlPath) && readFileSync(controlPath, "utf8").includes('"verb":"pause"'), "PAUSE control effect");
-    const controls = readFileSync(controlPath, "utf8").trim().split(/\r?\n/u).filter(Boolean).map((line) => JSON.parse(line));
-    if (controls.length !== 1 || controls[0]?.verb !== "pause" || controls[0]?.runId !== runId) {
+    child.write(targetAction === "START"
+      ? sgrLeftRelease(pointerCol, pauseAt.row)
+      : sgrLeftClick(pointerCol, pauseAt.row));
+    if (targetAction === "START") {
+      await waitFor(
+        () => frameLines(terminal).some((line) => line.includes("/train") || line.includes("BLOCKED")),
+        "START visible acknowledgement",
+      );
+    } else {
+      await waitFor(() => existsSync(controlPath) && readFileSync(controlPath, "utf8").includes('"verb":"pause"'), "PAUSE control effect");
+    }
+    const controls = existsSync(controlPath)
+      ? readFileSync(controlPath, "utf8").trim().split(/\r?\n/u).filter(Boolean).map((line) => JSON.parse(line))
+      : [];
+    if (targetAction === "PAUSE" && (controls.length !== 1 || controls[0]?.verb !== "pause" || controls[0]?.runId !== runId)) {
       throw new Error("compiled click did not produce exactly one bound PAUSE command");
     }
+    if (targetAction === "START" && controls.length !== 0) throw new Error("START wrote the dead control channel");
 
     if (exitCode !== undefined) throw new Error(`compiled cockpit exited before Ctrl-C (exit=${exitCode})`);
     try {
@@ -174,7 +195,7 @@ async function main(): Promise<void> {
 
     const receipt = {
       schema_version: "ember-cli-pointer-conpty-smoke-v1",
-      issue: 1251,
+      issue: targetAction === "START" ? 1253 : 1251,
       implementation_commit: implementationCommit,
       binary: { name: basename(binary), sha256: sha256File(binary) },
       transport: "windows-conpty/node-pty",
@@ -184,13 +205,16 @@ async function main(): Promise<void> {
         hover_sent: true,
         hover_highlight_verified: true,
         click_sent: true,
-        target: "PAUSE",
+        report_kind: targetAction === "START" ? "release-only" : "press",
+        target: targetAction,
         terminal_cell: pauseAt,
       },
-      effect: { verb: controls[0].verb, run_id: controls[0].runId, exact_control_rows: controls.length },
+      effect: targetAction === "START"
+        ? { visible_acknowledgement: true, exact_control_rows: controls.length }
+        : { verb: controls[0].verb, run_id: controls[0].runId, exact_control_rows: controls.length },
       teardown: { mouse_disabled: true, cursor_shown: true, primary_screen_restored: true, exit_code: exitCode, conpty_input_close_errors: conptyInputCloseErrors },
       verdict: "PASS",
-      claim_boundary: "compiled Windows ConPTY negotiation, raw hover/click delivery, PAUSE effect, and terminal teardown only",
+      claim_boundary: `compiled Windows ConPTY negotiation, raw hover/click delivery, ${targetAction} effect, and terminal teardown only`,
     };
     writeFileSync(join(outDir, "pointer-conpty-smoke-receipt.json"), `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
     console.log(JSON.stringify(receipt));
