@@ -191,6 +191,15 @@ FILENAME_ID = {
     "test_c_custody.py": "C-CUSTODY",
 }
 
+# Unit/regression tests that intentionally live beside the executable board
+# probes because they import private probe helpers.  They are not status
+# producers and must never be executed as board rows.  Keep this exact,
+# closed allowlist synchronized with the directory: an unknown test_*.py
+# still fails PROBE_DIR_DRIFT, and a stale allowlist entry also fails.
+NON_PROBE_TEST_FILES = {
+    "test_c10_status_column_regression.py",
+}
+
 # Stable board ordering: the program order from the goal §4. This IS the
 # runner's own declared registry, checked at startup against
 # docs/spec/conditions-v1.md (registry sync / close condition, eng-contracts
@@ -764,12 +773,16 @@ def registry_sync_check():
     # absent from ORDER and the registry). Half-counting is the worst of both
     # worlds -- a truth instrument fails CLOSED, so any file/ORDER mismatch
     # aborts exactly like REGISTRY_DRIFT.
-    discovered = {n for n in os.listdir(HERE)
-                  if n.startswith("test_") and n.endswith(".py")}
+    all_test_files = {n for n in os.listdir(HERE)
+                      if n.startswith("test_") and n.endswith(".py")}
+    discovered = all_test_files - NON_PROBE_TEST_FILES
     unregistered_files = sorted(discovered - set(FILENAME_ID))
     missing_files = sorted(set(FILENAME_ID) - discovered)
     unmapped_ids = sorted(set(FILENAME_ID.values()) - runner_set)
-    if unregistered_files or missing_files or unmapped_ids:
+    missing_non_probes = sorted(NON_PROBE_TEST_FILES - all_test_files)
+    probe_non_probe_overlap = sorted(set(FILENAME_ID) & NON_PROBE_TEST_FILES)
+    if (unregistered_files or missing_files or unmapped_ids
+            or missing_non_probes or probe_non_probe_overlap):
         sys.stderr.write(
             "PROBE_DIR_DRIFT: the probe directory, FILENAME_ID, and ORDER must "
             "mirror exactly (same close condition as REGISTRY_DRIFT). "
@@ -777,6 +790,8 @@ def registry_sync_check():
             f"  probe files present but not in FILENAME_ID: {unregistered_files}\n"
             f"  FILENAME_ID files missing from directory:   {missing_files}\n"
             f"  FILENAME_ID ids not in ORDER:               {unmapped_ids}\n"
+            f"  NON_PROBE_TEST_FILES missing from directory: {missing_non_probes}\n"
+            f"  probe/non-probe overlap:                     {probe_non_probe_overlap}\n"
             "  Fix: register the probe (registry entry + ORDER + FILENAME_ID + "
             "manifest row), or remove the stray file.\n"
         )
@@ -786,10 +801,10 @@ def registry_sync_check():
 
 
 def discover_tests():
-    """Return sorted absolute paths of every test_*.py probe in HERE."""
+    """Return sorted absolute paths of every registered board probe."""
     out = []
     for name in sorted(os.listdir(HERE)):
-        if name.startswith("test_") and name.endswith(".py"):
+        if name in FILENAME_ID:
             out.append(os.path.join(HERE, name))
     return out
 
