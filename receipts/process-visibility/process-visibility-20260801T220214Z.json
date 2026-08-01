@@ -1,0 +1,39 @@
+{
+  "ticket": "EMBER-PROCESS-VISIBILITY",
+  "ts": "20260801T220214Z",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "issue_urls": [
+    "https://github.com/wordingone/ember/issues/586",
+    "https://github.com/wordingone/ember/issues/700"
+  ],
+  "open_prs": [
+    {
+      "number": 1250,
+      "state": "verdict-pending",
+      "pending_h": 28.4,
+      "note": "sole open PR on wordingone/ember at receipt time (gh pr list --state open, verified 2026-08-01T22:02:14Z); created 2026-07-31T17:39:41Z, reviewDecision empty, zero reviews recorded; well within 48h grace"
+    }
+  ],
+  "covered_commits": {
+    ".": "3d48d3870919bd04cec735f68d0fad45fcfae0b2"
+  },
+  "delegation": {
+    "issue-586": {
+      "built_by": "fix-cproc lane (process-visibility coverage-receipt refresh)",
+      "verified_by": "team-lead (merge review, PR pending)"
+    },
+    "issue-700": {
+      "built_by": "fix-cproc lane (process-visibility coverage-receipt refresh)",
+      "verified_by": "team-lead (merge review, PR pending)"
+    }
+  },
+  "window_note": "C-PROC board row (ember-totality-20260801T052815Z.json) went RED: work commits ran 499.4h ahead of the newest covered commit, because the prior process-visibility receipt (process-visibility-20260711T102300Z.json, covered_commits.=b7b5912c) was never superseded across three weeks of landed work (last tracked board receipt before 20260801T052815Z.json was ember-totality-20260711T102112Z.json -- no intermediate process-visibility receipt landed in between). This receipt closes the coverage gap honestly by re-anchoring covered_commits to the current origin/master tip (3d48d3870919, verified via `git rev-parse origin/master`) and citing the real, live GitHub state at write time (gh pr list / gh issue view, wordingone/ember) rather than fabricating retroactive coverage of the intervening three weeks. Scope is deliberately narrow: this receipt does not claim any merges/issues-filed history for the uncovered window -- it only proves the operator-visible process record is CURRENT as of now, per GOAL.md sec13's forward-looking currency requirement. Future landings must keep writing fresh process-visibility receipts to avoid re-accruing lag.",
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false
+}
