@@ -58,6 +58,7 @@ interface InkContainer {
   stream:   { write(s: string): void };
   stdout:   { columns: number; rows: number };
   hoverTarget: HitTarget | null;
+  leftPressSeen: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -412,29 +413,7 @@ function bubble(target: HitTarget, event: PointerEvent, handler: "onMouseUp" | "
   }
 }
 
-function dispatchMouseEvent(container: InkContainer, input: SgrMouseEvent): void {
-  const target = hitTest(container, input);
-  if (input.kind === "move") {
-    const previous = container.hoverTarget;
-    if (previous?.node !== target?.node) {
-      if (previous) previous.node.onMouseLeave?.(pointerEvent("mouseleave", input, previous));
-      if (target) target.node.onMouseEnter?.(pointerEvent("mouseenter", input, target));
-      container.hoverTarget = target;
-    }
-    if (target) target.node.onMouseMove?.(pointerEvent("mousemove", input, target));
-    return;
-  }
-  if (!target) return;
-  if (input.kind === "wheel") {
-    bubble(target, pointerEvent("wheel", input, target, input.deltaY), "onWheel");
-    return;
-  }
-  if (input.kind === "release") {
-    bubble(target, pointerEvent("mouseup", input, target), "onMouseUp");
-    return;
-  }
-  if (input.button !== 0) return;
-
+function dispatchClick(target: HitTarget, input: SgrMouseEvent): void {
   const event = new ClickEvent(
     input.col,
     input.row,
@@ -452,6 +431,42 @@ function dispatchMouseEvent(container: InkContainer, input: SgrMouseEvent): void
     if (event.propagationStopped) break;
     current = node._parent;
   }
+}
+
+function dispatchMouseEvent(container: InkContainer, input: SgrMouseEvent): void {
+  const target = hitTest(container, input);
+  if (input.kind === "move") {
+    const previous = container.hoverTarget;
+    if (previous?.node !== target?.node) {
+      if (previous) previous.node.onMouseLeave?.(pointerEvent("mouseleave", input, previous));
+      if (target) target.node.onMouseEnter?.(pointerEvent("mouseenter", input, target));
+      container.hoverTarget = target;
+    }
+    if (target) target.node.onMouseMove?.(pointerEvent("mousemove", input, target));
+    return;
+  }
+  if (input.kind === "release") {
+    const leftPressSeen = container.leftPressSeen;
+    container.leftPressSeen = false;
+    if (!target) return;
+    bubble(target, pointerEvent("mouseup", input, target), "onMouseUp");
+    // Windows Terminal may consume the press that activates its window while still delivering
+    // the matching release after focus transfers. Treat a left-button release with no observed
+    // press as the click. A press observed anywhere suppresses this fallback, preventing a drag
+    // that begins outside a control and ends over it from becoming an accidental activation.
+    if (input.button === 0 && !leftPressSeen) dispatchClick(target, input);
+    return;
+  }
+  if (input.kind === "press" && input.button === 0) container.leftPressSeen = true;
+  if (!target) {
+    return;
+  }
+  if (input.kind === "wheel") {
+    bubble(target, pointerEvent("wheel", input, target, input.deltaY), "onWheel");
+    return;
+  }
+  if (input.button !== 0) return;
+  dispatchClick(target, input);
 }
 
 // ---------------------------------------------------------------------------
@@ -704,6 +719,7 @@ export function mountInk(element: ReactElement, options: MountOptions): MountHan
     stream: options.stream,
     stdout: options.stdout,
     hoverTarget: null,
+    leftPressSeen: false,
   };
 
   let renderError: Error | null = null;
