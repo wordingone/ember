@@ -1,0 +1,108 @@
+{
+  "ticket": "EMBER-C-ANAT-ANATOMY-SET-COMPLETION",
+  "ts": "20260801T224931Z",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "condition": "C-ANAT",
+  "canonical_anatomy_set": "16-doc architecture set (docs/anatomy/00_INDEX.md .. 15_TECHNICAL_REPORT.md)",
+  "doc_set": [
+    {
+      "path": "docs/anatomy/00_INDEX.md",
+      "sha256": "6e62e0858631c139d8e4963260dff08ff8ab5cfd7fd495725d7d2d9298d50e8a",
+      "bytes": 3200
+    },
+    {
+      "path": "docs/anatomy/01_CONSTITUTION_AND_AUTHORITY.md",
+      "sha256": "c76e82ade13921c082bf08175e0631c47a1d5bf2c16cd04dc672fb7e55afe2b0",
+      "bytes": 2887
+    },
+    {
+      "path": "docs/anatomy/02_REPO_TOPOLOGY.md",
+      "sha256": "655ecfdec083298a36b4332b1bc0de794eca5b56d7e49f5d46aef293bec69b9d",
+      "bytes": 2645
+    },
+    {
+      "path": "docs/anatomy/03_MODEL_ARCHITECTURE.md",
+      "sha256": "dfded30cc5830d7039ecf161da7179e0e7588a93d7ee6c5e4f8a82123f3c8dce",
+      "bytes": 3398
+    },
+    {
+      "path": "docs/anatomy/04_TRAINING_PIPELINE.md",
+      "sha256": "fd07bcd4c39bda11b692975d4566a8c242de2ffd884c0f23d440fbd8cb5a099b",
+      "bytes": 3083
+    },
+    {
+      "path": "docs/anatomy/05_GROWTH_AND_SCALING.md",
+      "sha256": "6aee51c5ea27f0e0c16a2c9dd620a450899d64a75e755dda59dad8afceff61b8",
+      "bytes": 2860
+    },
+    {
+      "path": "docs/anatomy/06_EVALUATION_AND_BENCHMARKS.md",
+      "sha256": "3d81fbd30924f629a3a4ca1bccf1919d0559247179df71c6659dcbef4cae9adc",
+      "bytes": 2721
+    },
+    {
+      "path": "docs/anatomy/07_GOVERNOR_AND_RESOURCE_MANAGEMENT.md",
+      "sha256": "4a901b021b83b50c0e565d4910590c766a0ca6acf5b57f205695198d18f20e70",
+      "bytes": 2718
+    },
+    {
+      "path": "docs/anatomy/08_PROMPT_REGISTRY.md",
+      "sha256": "d64166313f3a85453cec39e6d08d11b99bb9fa8ef38d42b043b52e2eeef82d20",
+      "bytes": 2109
+    },
+    {
+      "path": "docs/anatomy/09_TOOLING_AND_CLI.md",
+      "sha256": "d7518fb542f299bb8f1ff660a3c4de47dab074aa7a4d1551c4acc02d36a60698",
+      "bytes": 2369
+    },
+    {
+      "path": "docs/anatomy/10_RECEIPTS_PROVENANCE.md",
+      "sha256": "a7318ef306172c956fa35126c21b4ae59926d6e85a0c1f118f0606b570bfe06f",
+      "bytes": 3370
+    },
+    {
+      "path": "docs/anatomy/11_TOTALITY_BOARD_CONDITIONS.md",
+      "sha256": "4d3468d1f636439b673cbd3e7534449fbe16f60f1c392376d05bd567ed7081b8",
+      "bytes": 3326
+    },
+    {
+      "path": "docs/anatomy/12_COCKPIT_OBSERVATORY.md",
+      "sha256": "096154718cfaf147f5ce2e1964b86769f8ce2bc31242247e04a831100bf57dec",
+      "bytes": 3176
+    },
+    {
+      "path": "docs/anatomy/13_RUNBOOK.md",
+      "sha256": "b432d42798fe23c2f72fca3f318c9956d212767c0e2f32d0b9ca144386f447ae",
+      "bytes": 3346
+    },
+    {
+      "path": "docs/anatomy/14_MODEL_CARD.md",
+      "sha256": "d060149c9913800858e6237374583511ac6c2a9fea3e92e70b06c839295d9369",
+      "bytes": 3190
+    },
+    {
+      "path": "docs/anatomy/15_TECHNICAL_REPORT.md",
+      "sha256": "962967d729c1fb8402697f96b28f456bcc010687b8f0cd2e6b2d5f8ff2fad6c6",
+      "bytes": 3199
+    }
+  ],
+  "all_16_present": true,
+  "set_complete": true,
+  "consistent_with_receipts": true,
+  "consistency_method": "Every doc cross-checked against real, on-disk sources at authoring time (2026-08-01): configs/ember-restart-3b.json, scripts/governor.py, scripts/receipt_check.py, scripts/receipt_write.py, scripts/ember_totality/ember_totality_spec.py, scripts/ember_totality/test_c_obs.py, scripts/ember_tally_checks.py, scripts/verify_authority_conservation.py, tools/ember-cli/src/core/ember-world-state.ts, scripts/ember_cobs_capture.py, docs/spec/conditions-v1.md, docs/probe-authoring-contract.md, docs/hardest-problems-register-v1.md, and the newest totality board receipt scripts/ember_totality/receipts-totality/ember-totality-20260801T052815Z.json. No doc describes an aspirational subsystem as built; where a subsystem is absent (08_PROMPT_REGISTRY) or a claim is unverifiable (03/14's C-BASE checkpoint status), the doc states that plainly with a 'Current gaps' section citing the board row that tracks it.",
+  "h4_verifier_free_judgment": {
+    "status": "OPEN, untouched",
+    "source": "docs/hardest-problems-register-v1.md, H4 -- O6: verifier-free judgment",
+    "addressed_how": "Not solved -- the register itself records H4 as OPEN and 'honestly not on the S5 critical path'. This anatomy set addresses the RISK named by H4 (verifier-free-judgment risk addressed, per the CHK text) by explicitly naming, in 15_TECHNICAL_REPORT.md, where H4's gap bears on the current architecture (03_MODEL_ARCHITECTURE.md's explicit-declaration expert routing as a non-learned alternative; 06_EVALUATION_AND_BENCHMARKS.md's anti-gaming C1-C5 protocol as the external-verifier substitute Ember currently depends on) rather than letting the gap go unrecorded in a doc set that would otherwise read as complete. H4 remains formally OPEN in the hardest-problems register; this receipt does not claim otherwise."
+  },
+  "invalid_anatomy_incomplete": false,
+  "window_note": "Authored on a scoped worktree, branch fix/c-anat-doc-set, to close the C-ANAT board row: the last render (ember-totality-20260801T052815Z.json) reported 0/16 anatomy docs present on disk (5 named absent + 7 partial + 4 strong per a historical master-plan citation that no longer resolves under this repo root). All 16 are now authored fresh against REAL current code/config/docs in this tree -- none are zero-byte stubs (docs/probe-authoring-contract.md discloses the presence check would accept one; this receipt and its doc_set exist so the set is honest regardless of that check's looseness).",
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false
+}
