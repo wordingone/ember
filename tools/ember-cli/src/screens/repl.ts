@@ -235,6 +235,10 @@ export function shouldUseVirtualScroll(env: NodeJS.ProcessEnv = process.env): bo
   return !env["EMBER_DISABLE_VIRTUAL_SCROLL"];
 }
 
+export function isExitCommandInput(text: string): boolean {
+  return /^\/(?:exit|quit)\s*$/i.test(text);
+}
+
 export function shouldShowMessageActions(env: NodeJS.ProcessEnv = process.env): boolean {
   return !env["EMBER_DISABLE_MESSAGE_ACTIONS"];
 }
@@ -1378,6 +1382,16 @@ export function ReplScreen({
           ...(origin === "operator" ? { origin } : {}),
         },
       ]);
+    }
+
+    if (isExitCommandInput(text)) {
+      if (origin === "operator") {
+        operatorReceiptsRef.current?.append("command_completed", slashParsed!.name);
+      }
+      busyRef.current = false;
+      setBusy(false);
+      _onExit?.();
+      return;
     }
 
     // Slash-command dispatch — execute a registered command instead of a model

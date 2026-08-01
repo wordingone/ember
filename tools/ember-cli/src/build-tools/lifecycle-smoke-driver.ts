@@ -166,7 +166,7 @@ export function bindConptyInputErrorFence(
 }
 
 export async function terminateLifecycleChild(
-  requestExit: () => void,
+  requestExit: () => void | Promise<void>,
   isExitObserved: () => boolean,
   forceCleanup: () => void,
   wait: (ms: number) => Promise<void> = sleep,
@@ -188,7 +188,7 @@ export async function terminateLifecycleChild(
     };
   }
   try {
-    requestExit();
+    await requestExit();
   } catch (error) {
     if (!isBenignConptyClosureError(error)) throw error;
   }
@@ -1034,7 +1034,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
     }
 
     const termination = await terminateLifecycleChild(
-      () => child!.write("\u0003"),
+      () => writeOperatorLine(child!.pid, "/exit"),
       () => exitObserved,
       () => {
         spawnSync("taskkill", ["/PID", String(child!.pid), "/T", "/F"], {

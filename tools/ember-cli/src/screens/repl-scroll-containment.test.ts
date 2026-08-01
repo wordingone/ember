@@ -12,7 +12,7 @@ import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-
 import { startStdinBridge } from "../ink/stdin-bridge.ts";
 import { VirtualMessageList } from "../components/app-shell.ts";
 import { OperatorSurfacePane } from "../components/operator-surface-pane.ts";
-import { transcriptViewportJustifyContent } from "./repl.ts";
+import { isExitCommandInput, transcriptViewportJustifyContent } from "./repl.ts";
 
 class FakeStdin extends EventEmitter {
   isTTY = true;
@@ -64,6 +64,13 @@ describe("fixed cockpit scroll containment", () => {
       "justifyContent: transcriptViewportJustifyContent(useVirtualScroll, messages)",
     );
   });
+  test("accepts only exact exit commands as clean operator lifecycle requests", () => {
+    expect(isExitCommandInput("/exit")).toBe(true);
+    expect(isExitCommandInput("/quit  ")).toBe(true);
+    expect(isExitCommandInput("/exit now")).toBe(false);
+    expect(isExitCommandInput("exit")).toBe(false);
+  });
+
 
   test("raw pointer wheels independently move only transcript or activity while chrome stays fixed", async () => {
     const columns = 100;
