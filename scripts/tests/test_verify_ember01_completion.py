@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 import sys
 import base64
 from pathlib import Path
@@ -111,6 +112,52 @@ def test_selection_evidence_detects_same_basename_target_change(
 def test_completion_receipt_declares_one_active_workstream() -> None:
     assert completion.RECEIPT_WORKSTREAM_ID == "EMBER-02A"
     assert completion.RECEIPT_WORKSTREAM_ID in completion.ACTIVE_WORKSTREAM_IDS
+
+
+def test_completion_subject_goal_id_is_ember01_and_distinct_from_active_goal_id() -> None:
+    # goal_id must stay the active-authority goal per GOAL.md's
+    # required_future_artifact_fields binding rule (same value
+    # verify_ember00_completion.py's receipt stamps for the same reason) --
+    # this is not the field the 2026-08-01 cert adjudication flagged.
+    assert completion.ACTIVE_GOAL_ID == "EMBER-02"
+    # What the adjudication actually asked for: an unambiguous field naming
+    # which goal this receipt certifies, distinct from goal_id.
+    assert completion.COMPLETION_SUBJECT_GOAL_ID == "EMBER-01"
+    assert completion.COMPLETION_SUBJECT_GOAL_ID != completion.ACTIVE_GOAL_ID
+
+
+def test_completion_receipt_payload_stamps_goal_id_and_subject_separately(
+    tmp_path: Path,
+) -> None:
+    """End-to-end regression: run the real script against this checkout and
+    read the actual receipt bytes back, rather than inspecting the source.
+    On the pre-fix code this fails with a KeyError on
+    'completion_subject_goal_id' -- the field did not exist."""
+    selection = tmp_path / "selection.md"
+    selection.write_text(
+        f"active_goal_path: {REPO_ROOT / 'GOAL.md'}\n", encoding="utf-8"
+    )
+    receipt = tmp_path / "receipt.json"
+    subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            str(REPO_ROOT / "scripts" / "verify_ember01_completion.py"),
+            "--root", str(REPO_ROOT),
+            "--selection", str(selection),
+            "--receipt", str(receipt),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert receipt.is_file()
+    payload = json.loads(receipt.read_text(encoding="utf-8"))
+    assert payload["schema"] == "ember-01-completion-receipt-v1"
+    assert payload["goal_id"] == "EMBER-02"
+    assert payload["completion_subject_goal_id"] == "EMBER-01"
+    assert payload["goal_id"] != payload["completion_subject_goal_id"]
 
 
 def test_custody_legs_bind_census_to_remote_master_ref(
