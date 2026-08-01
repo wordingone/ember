@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """
 Registry sync selftest — verify ORDER == conditions-v1.md registry.
 
@@ -32,6 +35,11 @@ ORDER_RE = re.compile(
 FILENAME_ID_RE = re.compile(
     r'FILENAME_ID = \{\s*(.*?)\s*\}',
     re.DOTALL
+)
+
+NON_PROBE_TEST_FILES_RE = re.compile(
+    r'NON_PROBE_TEST_FILES = \{\s*(.*?)\s*\}',
+    re.DOTALL,
 )
 
 def _normalize_id(cid):
@@ -87,6 +95,16 @@ def parse_filename_id_from_spec(spec_py_path):
         mappings[filename] = cid
     return mappings
 
+
+def parse_non_probe_tests_from_spec(spec_py_path):
+    """Extract the exact closed non-probe test allowlist from the runner."""
+    with open(spec_py_path, "r", encoding="utf-8") as fh:
+        text = fh.read()
+    match = NON_PROBE_TEST_FILES_RE.search(text)
+    if not match:
+        raise RuntimeError("Cannot find NON_PROBE_TEST_FILES = {...} in spec")
+    return set(re.findall(r'"([^"]+\.py)"', match.group(1)))
+
 try:
     registry_ids = parse_registry_ids(CONDITIONS_SPEC_PATH)
     registry_set = set(registry_ids)
@@ -102,15 +120,19 @@ try:
         sys.exit(0)
 
     # Check 2: FILENAME_ID coverage (every probe file should have a mapping)
-    discovered = {n for n in os.listdir(HERE)
-                  if n.startswith("test_") and n.endswith(".py")}
+    all_test_files = {n for n in os.listdir(HERE)
+                      if n.startswith("test_") and n.endswith(".py")}
     filename_id = parse_filename_id_from_spec(SPEC_PY_PATH)
+    non_probe_tests = parse_non_probe_tests_from_spec(SPEC_PY_PATH)
+    discovered = all_test_files - non_probe_tests
 
     unregistered = sorted(discovered - set(filename_id))
     missing_files = sorted(set(filename_id) - discovered)
     unmapped_ids = sorted(set(filename_id.values()) - runner_set)
+    missing_non_probes = sorted(non_probe_tests - all_test_files)
+    overlap = sorted(non_probe_tests & set(filename_id))
 
-    if unregistered or missing_files or unmapped_ids:
+    if unregistered or missing_files or unmapped_ids or missing_non_probes or overlap:
         detail = []
         if unregistered:
             detail.append(f"unregistered_files={unregistered}")
@@ -118,6 +140,10 @@ try:
             detail.append(f"missing_files={missing_files}")
         if unmapped_ids:
             detail.append(f"unmapped_ids={unmapped_ids}")
+        if missing_non_probes:
+            detail.append(f"missing_non_probes={missing_non_probes}")
+        if overlap:
+            detail.append(f"probe_non_probe_overlap={overlap}")
         print(f"RED FILENAME_ID drift: {', '.join(detail)}")
         sys.exit(0)
 

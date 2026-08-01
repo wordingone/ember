@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """TDD: ORDER list must match registry ids from conditions-v1.md, and the
 probe directory (scripts/ember_totality/) must mirror FILENAME_ID/ORDER.
 
@@ -62,21 +65,28 @@ def test_probe_dir_matches_filename_id():
     silently aborting the next live board run."""
 
     probe_dir = os.path.dirname(os.path.abspath(ember_totality_spec.__file__))
-    discovered = {n for n in os.listdir(probe_dir)
-                  if n.startswith("test_") and n.endswith(".py")}
+    all_test_files = {n for n in os.listdir(probe_dir)
+                      if n.startswith("test_") and n.endswith(".py")}
+    non_probe_tests = ember_totality_spec.NON_PROBE_TEST_FILES
+    discovered = all_test_files - non_probe_tests
     filename_id = ember_totality_spec.FILENAME_ID
     runner_set = set(ember_totality_spec.ORDER)
 
     unregistered_files = sorted(discovered - set(filename_id))
     missing_files = sorted(set(filename_id) - discovered)
     unmapped_ids = sorted(set(filename_id.values()) - runner_set)
+    missing_non_probes = sorted(non_probe_tests - all_test_files)
+    overlap = sorted(non_probe_tests & set(filename_id))
 
-    if unregistered_files or missing_files or unmapped_ids:
+    if (unregistered_files or missing_files or unmapped_ids
+            or missing_non_probes or overlap):
         msg = (
             f"probe-dir/FILENAME_ID/ORDER mismatch:\n"
             f"  probe files present but not in FILENAME_ID: {unregistered_files}\n"
             f"  FILENAME_ID files missing from directory:   {missing_files}\n"
-            f"  FILENAME_ID ids not in ORDER:               {unmapped_ids}"
+            f"  FILENAME_ID ids not in ORDER:               {unmapped_ids}\n"
+            f"  NON_PROBE_TEST_FILES missing:               {missing_non_probes}\n"
+            f"  probe/non-probe overlap:                     {overlap}"
         )
         print(f"RED probe-dir-sync {msg}", file=sys.stderr)
         sys.exit(1)
