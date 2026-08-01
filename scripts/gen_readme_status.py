@@ -43,6 +43,7 @@ import json
 import os
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -79,6 +80,42 @@ CURRENT_SUBJECT_FIELDS = {
     "token_cursor",
     "tokenizer_sha256",
 }
+RECEIPT_TIMESTAMP_PATTERN = re.compile(r"^\d{8}T\d{6}Z$")
+STATE_AS_OF_PATTERN = re.compile(r"<!-- state-as-of: \d{4}-\d{2}-\d{2} -->")
+
+
+def _receipt_datetime(ts):
+    if not isinstance(ts, str) or RECEIPT_TIMESTAMP_PATTERN.fullmatch(ts) is None:
+        raise ValueError("board receipt ts must be a YYYYMMDDTHHMMSSZ UTC timestamp")
+    return datetime.strptime(ts, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
+
+
+def validate_receipt_freshness(ts, *, max_age_days, now=None):
+    if isinstance(max_age_days, bool) or not isinstance(max_age_days, int) or max_age_days < 0:
+        raise ValueError("receipt max age must be a non-negative integer number of days")
+    captured_at = _receipt_datetime(ts)
+    observed_at = now or datetime.now(timezone.utc)
+    if observed_at.tzinfo is None:
+        raise ValueError("freshness clock must be timezone-aware")
+    observed_at = observed_at.astimezone(timezone.utc)
+    age_seconds = (observed_at - captured_at).total_seconds()
+    if age_seconds < 0:
+        raise ValueError("board receipt timestamp is in the future")
+    age_days = int(age_seconds // 86400)
+    if age_seconds > max_age_days * 86400:
+        raise ValueError(
+            f"board receipt is {age_days} days old; maximum is {max_age_days} days"
+        )
+    return captured_at
+
+
+def bind_state_as_of(readme, receipt_ts):
+    captured_at = _receipt_datetime(receipt_ts)
+    markers = STATE_AS_OF_PATTERN.findall(readme)
+    if len(markers) != 1:
+        raise ValueError("README must contain exactly one state-as-of marker")
+    marker = f"<!-- state-as-of: {captured_at.date().isoformat()} -->"
+    return STATE_AS_OF_PATTERN.sub(marker, readme, count=1)
 
 
 def newest_receipt_path(data_root):
@@ -104,6 +141,8 @@ def render_block(
     allow_stale_tree=False,
     repo_root=None,
     required_commits=(),
+    receipt_max_age_days=None,
+    now=None,
 ):
     with open(receipt_path, "r", encoding="utf-8") as f:
         receipt = json.load(f)
@@ -115,6 +154,8 @@ def render_block(
     )
     receipt_id = os.path.splitext(os.path.basename(receipt_path))[0]
     ts = receipt.get("ts", "unknown")
+    if receipt_max_age_days is not None:
+        validate_receipt_freshness(ts, max_age_days=receipt_max_age_days, now=now)
     summary = receipt.get("summary", {})
     green = summary.get("green", 0)
     red = summary.get("red", 0)
@@ -460,6 +501,12 @@ def main():
         ),
     )
     parser.add_argument(
+        "--receipt-max-age-days",
+        type=int,
+        default=1,
+        help="maximum age of the selected board receipt in normal README generation",
+    )
+    parser.add_argument(
         "--require-merge",
         action="append",
         default=[],
@@ -486,6 +533,7 @@ def main():
         allow_stale_tree=args.allow_stale_tree,
         repo_root=ROOT,
         required_commits=args.require_merge,
+        receipt_max_age_days=args.receipt_max_age_days,
     )
 
     with open(args.readme, "r", encoding="utf-8") as f:
@@ -497,6 +545,8 @@ def main():
             f"gen_readme_status: README.md is missing the {BEGIN_MARKER} ... {END_MARKER} markers"
         )
     new_readme = pattern.sub(lambda _: block, readme, count=1)
+    receipt_ts = Path(receipt_path).stem.removeprefix("ember-totality-")
+    new_readme = bind_state_as_of(new_readme, receipt_ts)
 
     subject = load_current_subject(args.subject_manifest)
     validate_current_subject_evidence(subject, ROOT)

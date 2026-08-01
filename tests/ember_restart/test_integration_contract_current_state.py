@@ -100,6 +100,14 @@ def test_readme_and_continuity_are_generated_from_current_subject() -> None:
     assert block in (REPO_ROOT / "CONTINUITY.md").read_text(encoding="utf-8")
 
 
+def test_readme_human_summary_agrees_with_current_subject() -> None:
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert "approximately 2.195B owned checkpoint" not in readme
+    assert "3.839B allocated, unique, trainable, and served" in readme
+    assert "1.021B active and episode-trainable parameters" in readme
+
+
 def test_subject_surface_mismatches_fail_closed(tmp_path: Path) -> None:
     module = load_generator()
     payload = module.load_current_subject(CURRENT_SUBJECT)

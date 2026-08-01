@@ -18,8 +18,8 @@ from pathlib import Path
 import pytest
 
 
-HERE = Path(__file__).resolve().parent
-TARGET = HERE / "test_c9.py"
+ROOT = Path(__file__).resolve().parents[2]
+TARGET = ROOT / "scripts" / "ember_totality" / "test_c9.py"
 
 
 def _load_target():
