@@ -209,6 +209,73 @@ describe("production mouse bridge and mounted-tree hit testing", () => {
     handle.unmount();
   });
 
+  it("activates once on a release-only report after Windows Terminal consumes the focus-changing press", () => {
+    const calls: string[] = [];
+    const stdin = new FakeStdin();
+    const tree = React.createElement(
+      Box,
+      { width: 8, height: 1, onClick: () => calls.push("start") },
+      React.createElement(Text, null, "[START]"),
+    );
+    const handle = mountInk(tree, {
+      stream: { write() {} },
+      stdout: { columns: 10, rows: 2 },
+    });
+    const stop = startStdinBridge({ stdin: stdin as never, emitKeypressEvents: () => {} });
+
+    stdin.emit("data", "\x1b[<0;2;1m");
+    expect(calls).toEqual(["start"]);
+
+    stop();
+    handle.unmount();
+  });
+
+  it("does not double-activate when both press and release reports arrive", () => {
+    const calls: string[] = [];
+    const stdin = new FakeStdin();
+    const tree = React.createElement(
+      Box,
+      { width: 8, height: 1, onClick: () => calls.push("start") },
+      React.createElement(Text, null, "[START]"),
+    );
+    const handle = mountInk(tree, {
+      stream: { write() {} },
+      stdout: { columns: 10, rows: 2 },
+    });
+    const stop = startStdinBridge({ stdin: stdin as never, emitKeypressEvents: () => {} });
+
+    stdin.emit("data", "\x1b[<0;2;1M\x1b[<0;2;1m");
+    expect(calls).toEqual(["start"]);
+
+    stop();
+    handle.unmount();
+  });
+
+  it("does not treat a press outside followed by a release over the control as an activation click", () => {
+    const calls: string[] = [];
+    const stdin = new FakeStdin();
+    const tree = React.createElement(
+      Box,
+      { width: 10, height: 1 },
+      React.createElement(
+        Box,
+        { width: 8, height: 1, flexShrink: 0, onClick: () => calls.push("start") },
+        React.createElement(Text, null, "[START]"),
+      ),
+    );
+    const handle = mountInk(tree, {
+      stream: { write() {} },
+      stdout: { columns: 10, rows: 2 },
+    });
+    const stop = startStdinBridge({ stdin: stdin as never, emitKeypressEvents: () => {} });
+
+    stdin.emit("data", "\x1b[<0;10;1M\x1b[<0;2;1m");
+    expect(calls).toEqual([]);
+
+    stop();
+    handle.unmount();
+  });
+
   it("uses current geometry and handler after update and removes dispatch authority on unmount", () => {
     const calls: string[] = [];
     const stdin = new FakeStdin();
