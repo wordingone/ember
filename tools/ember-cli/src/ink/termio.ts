@@ -36,15 +36,17 @@ export interface Style {
 export const ENTER_ALT_SCREEN     = "\x1b[?1049h";
 /** Switch back to the primary screen buffer. */
 export const EXIT_ALT_SCREEN      = "\x1b[?1049l";
-/** Enable mouse tracking (button events, SGR extended). */
-export const ENABLE_MOUSE_TRACKING  = "\x1b[?1000h\x1b[?1006h";
+/** Hide/show the native hardware cursor while the renderer owns the viewport. */
+export const HIDE_CURSOR = "\x1b[?25l";
+export const SHOW_CURSOR = "\x1b[?25h";
+/** Enable all-event mouse tracking (press, release, motion, wheel; SGR extended). */
+export const ENABLE_MOUSE_TRACKING  = "\x1b[?1003h\x1b[?1006h";
 /** Disable mouse tracking. */
-export const DISABLE_MOUSE_TRACKING = "\x1b[?1000l\x1b[?1006l";
+export const DISABLE_MOUSE_TRACKING = "\x1b[?1006l\x1b[?1003l\x1b[?1002l\x1b[?1000l";
 
-export interface SgrMousePress {
+export interface SgrMouseEventBase {
   col: number;
   row: number;
-  button: number;
   modifiers: {
     ctrl: boolean;
     shift: boolean;
@@ -52,9 +54,14 @@ export interface SgrMousePress {
     meta: boolean;
   };
 }
+export type SgrMouseEvent =
+  | (SgrMouseEventBase & { kind: "press" | "release"; button: number })
+  | (SgrMouseEventBase & { kind: "move"; button: number | null })
+  | (SgrMouseEventBase & { kind: "wheel"; button: null; deltaY: -1 | 1 });
+export type SgrMousePress = Extract<SgrMouseEvent, { kind: "press" }>;
 
 export interface SgrMouseDecodeResult {
-  events: SgrMousePress[];
+  events: SgrMouseEvent[];
   passthrough: string;
 }
 
@@ -75,10 +82,9 @@ function retainedPrefixLength(value: string): number {
 }
 
 /**
- * Incrementally decodes xterm SGR extended mouse input. Only a left-button
- * press is actionable; release, motion, wheel, extra-button, malformed, and
- * non-positive-coordinate sequences are consumed or passed through without
- * producing an activation.
+ * Incrementally decodes xterm SGR extended mouse input into typed press,
+ * release, motion, and wheel events. Invalid complete sequences are consumed;
+ * malformed non-sequences remain keyboard passthrough.
  */
 export function createSgrMouseDecoder(): SgrMouseDecoder {
   let pending = "";
@@ -86,7 +92,7 @@ export function createSgrMouseDecoder(): SgrMouseDecoder {
   return {
     push(chunk: string | Buffer): SgrMouseDecodeResult {
       pending += typeof chunk === "string" ? chunk : chunk.toString("utf8");
-      const events: SgrMousePress[] = [];
+      const events: SgrMouseEvent[] = [];
       let passthrough = "";
       let cursor = 0;
 
@@ -118,31 +124,28 @@ export function createSgrMouseDecoder(): SgrMouseDecoder {
         const terminalCol = Number(match[2]);
         const terminalRow = Number(match[3]);
         const terminator = match[4];
-        const unsupportedBits = code & ~(1 | 2 | 4 | 8 | 16 | 32 | 64);
-        const isLeftPress =
-          terminator === "M" &&
-          Number.isSafeInteger(code) &&
-          code >= 0 && code <= 31 &&
-          Number.isSafeInteger(terminalCol) &&
-          Number.isSafeInteger(terminalRow) &&
-          terminalCol > 0 &&
-          terminalRow > 0 &&
-          (code & 3) === 0 &&
-          (code & (32 | 64)) === 0 &&
-          unsupportedBits === 0;
-
-        if (isLeftPress) {
-          events.push({
-            col: terminalCol - 1,
-            row: terminalRow - 1,
-            button: 0,
-            modifiers: {
-              shift: (code & 4) !== 0,
-              alt: (code & 8) !== 0,
-              ctrl: (code & 16) !== 0,
-              meta: false,
-            },
-          });
+        const valid = Number.isSafeInteger(code) && code >= 0 && code <= 127
+          && Number.isSafeInteger(terminalCol) && terminalCol > 0
+          && Number.isSafeInteger(terminalRow) && terminalRow > 0;
+        if (!valid) continue;
+        const base = {
+          col: terminalCol - 1,
+          row: terminalRow - 1,
+          modifiers: {
+            shift: (code & 4) !== 0,
+            alt: (code & 8) !== 0,
+            ctrl: (code & 16) !== 0,
+            meta: false,
+          },
+        };
+        if ((code & 64) !== 0) {
+          events.push({ ...base, kind: "wheel", button: null, deltaY: (code & 1) === 0 ? -1 : 1 });
+        } else if ((code & 32) !== 0) {
+          events.push({ ...base, kind: "move", button: (code & 3) === 3 ? null : code & 3 });
+        } else if (terminator === "m") {
+          events.push({ ...base, kind: "release", button: code & 3 });
+        } else if ((code & 3) !== 3) {
+          events.push({ ...base, kind: "press", button: code & 3 });
         }
       }
 

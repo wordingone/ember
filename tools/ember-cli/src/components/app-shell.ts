@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // components/app-shell.ts — top-level composite shell.
 // Composes the committed components into the app layout: trust gate, theme,
 // session context, virtual transcript, and fullscreen pane split.
@@ -13,6 +16,7 @@ import React, {
 } from "react";
 import { join } from "path";
 import { mkdir, writeFile } from "fs/promises";
+import { PointerEvent as InkPointerEvent } from "../ink/event-system.ts";
 import { Box, Text, TerminalSizeContext } from "../ink/components.ts";
 import { ThemeProvider } from "./design-system.ts";
 
@@ -190,6 +194,21 @@ export const OffscreenFreeze = memo(
 // ---------------------------------------------------------------------------
 // VirtualMessageList — transcript view with off-screen freeze + scroll hint
 // ---------------------------------------------------------------------------
+export interface VirtualMessageWindow { start: number; end: number; offset: number }
+
+export function virtualMessageWindow(messageCount: number, viewportRows: number, requestedOffset: number): VirtualMessageWindow {
+  const count = Math.max(0, Math.floor(messageCount));
+  const capacity = Math.max(1, Math.floor(viewportRows));
+  const maxOffset = Math.max(0, count - capacity);
+  const offset = Math.max(0, Math.min(maxOffset, Math.floor(requestedOffset)));
+  const end = Math.max(0, count - offset);
+  return {
+    start: Math.max(0, end - capacity),
+    end,
+    offset,
+  };
+}
+
 
 export interface VirtualMessageListProps {
   messages:      SessionMessage[];
@@ -208,6 +227,7 @@ export function VirtualMessageList({
     messageCount:   messages.length,
   });
   const [showScrollIndicator, setShowScrollIndicator] = useState(false);
+  const [scrollOffset, setScrollOffset] = useState(0);
 
   useEffect(() => {
     setScrollState((prev) => {
@@ -218,20 +238,35 @@ export function VirtualMessageList({
   }, [messages.length]);
 
   const frozenThreshold = Math.max(0, messages.length - viewportRows - OFFSCREEN_FREEZE_ROWS);
+  const window = virtualMessageWindow(messages.length, viewportRows, scrollOffset);
+  const visibleMessages = messages.slice(window.start, window.end);
 
-  const entries = messages.map((msg, i) =>
-    React.createElement(
+  // Column-reverse is intentional at the viewport boundary: the newest message is laid out
+  // against the prompt and overflow is discarded above it. This makes clipping row-accurate
+  // even when one rendered message occupies many terminal rows; message count is used only to
+  // bound retained React work, never as a claim about rendered height.
+  const entries = visibleMessages.map((msg, visibleIndex) => {
+    const i = window.start + visibleIndex;
+    return React.createElement(
       OffscreenFreeze,
       { key: msg.id, isOffscreen: i < frozenThreshold },
       renderMessage(msg),
-    ),
-  );
+    );
+  }).reverse();
 
   return React.createElement(
     Box,
-    { flexDirection: "column", overflow: "hidden" },
+    {
+      flexDirection: "column-reverse",
+      flexGrow: 1,
+      minHeight: 0,
+      overflow: "hidden",
+      onWheel: (event) => setScrollOffset((current) => virtualMessageWindow(
+        messages.length, viewportRows, current + ((event as InkPointerEvent).deltaY < 0 ? 1 : -1),
+      ).offset),
+    },
     ...entries,
-    showScrollIndicator
+    (showScrollIndicator || window.offset > 0)
       ? React.createElement(Text, { key: "indicator", color: "cyan" }, "↓ scroll to bottom")
       : null,
   );

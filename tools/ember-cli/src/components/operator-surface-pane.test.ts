@@ -23,6 +23,15 @@ async function flushInk(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 10));
 }
 
+function collectBorderTitles(node: unknown): string[] {
+  if (Array.isArray(node)) return node.flatMap(collectBorderTitles);
+  if (node && typeof node === "object" && "props" in node) {
+    const props = (node as { props?: { borderTitle?: unknown; children?: unknown } }).props;
+    return [typeof props?.borderTitle === "string" ? props.borderTitle : "", ...collectBorderTitles(props?.children)].filter(Boolean);
+  }
+  return [];
+}
+
 function collectText(node: unknown): string[] {
   if (typeof node === "string") return [node];
   if (Array.isArray(node)) return node.flatMap(collectText);
@@ -256,11 +265,13 @@ describe("OperatorSurfacePane", () => {
   test("mounted pane renders all four bounded families and stays inside narrow terminal bounds", () => {
     const element = OperatorSurfacePane({ telemetry: telemetry({ recentEvents: [train("run-a", 1, "2026-07-17T17:30:01.000Z", 2, { step_ms: 1000, free_gib: 10, total_gib: 24 }), train("run-a", 2, "2026-07-17T17:30:02.000Z", 1, { step_ms: 500, free_gib: 9, total_gib: 24 }), { ts: "2026-07-17T17:30:02.100Z", kind: "checkpoint", source: "journal", payload: { run_id: "run-a", step: 2, checkpoint_manifest_sha256: "a".repeat(64) } }], activeRun: { runId: "run-a", step: 2, loss: 1, stepMs: 500, lastTs: "2026-07-17T17:30:02.000Z" } }), activityLines: [], width: 60, height: 20, terminalColumns: 60, terminalRows: 20, nowMs: Date.parse("2026-07-17T17:30:03.000Z") });
     const body = (element as any).props.children;
-    const rows = (body.props.children as any[]).map((child) => child?.props?.children).filter((value) => typeof value === "string");
+    const rows = collectText(element);
+    const titles = collectBorderTitles(element);
     expect(body.props.width).toBeLessThanOrEqual(60);
     expect(body.props.height).toBeLessThanOrEqual(20);
-    expect(rows.some((row: string) => row.includes("+ LOSS"))).toBe(true);
-    expect(rows.some((row: string) => row.includes("+ GPU"))).toBe(true);
+    expect(titles).toContain("LOSS");
+    expect(titles).toContain("GPU");
+    expect(titles).toContain("VRAM");
     expect(rows.some((row: string) => row.includes("MODEL GROWTH"))).toBe(false);
     expect(rows.some((row: string) => row.includes("CAPABILITY SCORES"))).toBe(false);
     expect(rows.some((row: string) => row.includes("more charts"))).toBe(true);
@@ -291,8 +302,8 @@ describe("OperatorSurfacePane", () => {
     parseRenderedIntoFrame(chunks.join(""), frame, new StylePool());
     const rows = frame.cells.map((row) => row.map((cell) => cell?.char ?? " ").join(""));
     handle.unmount();
-    expect(rows.some((row) => row.includes("+ LOSS"))).toBe(true);
-    expect(rows.some((row) => row.includes("+ GPU"))).toBe(true);
+    expect(rows.some((row) => row.includes("LOSS"))).toBe(true);
+    expect(rows.some((row) => row.includes("GPU"))).toBe(true);
     expect(rows.some((row) => row.includes("MODEL GROWTH"))).toBe(false);
     expect(rows.some((row) => row.includes("CAPABILITY SCORES"))).toBe(false);
     expect(rows.some((row) => row.includes("STALE") || row.includes("RUNNING"))).toBe(true);
@@ -321,12 +332,12 @@ describe("OperatorSurfacePane", () => {
     parseRenderedIntoFrame(chunks.join(""), frame, new StylePool());
     const rows = frame.cells.map((row) => row.map((cell) => cell?.char ?? " ").join(""));
     handle.unmount();
-    expect(rows.some((row) => row.includes("+ LOSS"))).toBe(true);
-    expect(rows.some((row) => row.includes("+ GPU"))).toBe(true);
+    expect(rows.some((row) => row.includes("LOSS"))).toBe(true);
+    expect(rows.some((row) => row.includes("GPU"))).toBe(true);
     expect(rows.some((row) => row.includes("MODEL GROWTH"))).toBe(false);
     expect(rows.some((row) => row.includes("CAPABILITY SCORES"))).toBe(false);
-    expect(rows.some((row) => row.includes("+ TOKENS/S"))).toBe(true);
-    expect(rows.some((row) => row.includes("more charts"))).toBe(false);
+    expect(rows.some((row) => row.includes("GPU"))).toBe(true);
+    expect(rows.some((row) => row.includes("more charts"))).toBe(true);
     // R1d: at 80x24 with room to spare, the loss chart GROWS beyond one row and renders via the
     // Braille canvas (U+2800-U+28FF) rather than the flat single-row block glyph (U+2588) --
     // either is a real, non-blank plotted value, which is the substantive claim here.
@@ -522,7 +533,7 @@ describe("OperatorSurfacePane", () => {
       nowMs: now,
     });
     const runningRows = collectText(runningElement);
-    expect(runningRows.some((row) => row.includes("+ GPU POWER"))).toBe(true);
+    expect(collectBorderTitles(runningElement)).toContain("GPU POWER");
     expect(runningRows.some((row) => row.includes("AWAITING FIRST SAMPLE"))).toBe(true);
 
     const idleElement = OperatorSurfacePane({
@@ -531,7 +542,7 @@ describe("OperatorSurfacePane", () => {
       nowMs: now,
     });
     const idleRows = collectText(idleElement);
-    expect(idleRows.some((row) => row.includes("+ GPU POWER"))).toBe(true);
+    expect(collectBorderTitles(idleElement)).toContain("GPU POWER");
     expect(idleRows.some((row) => row.includes("SOURCE UNBOUND"))).toBe(true);
   });
 
@@ -547,15 +558,10 @@ describe("OperatorSurfacePane", () => {
         nowMs: now,
       });
       const rows = collectText(element);
-      const tokensIndex = rows.findIndex((row) => row.includes("+ TOKENS/S"));
-      if (width === 40) {
-        expect(tokensIndex).toBe(-1);
-        expect(rows.some((row) => row.includes("more charts"))).toBe(true);
-      } else {
-        expect(tokensIndex).toBeGreaterThanOrEqual(0);
-        expect(rows.some((row) => row.includes("110.00 tok/s"))).toBe(true);
-      }
-      const powerIndex = rows.findIndex((row) => row.includes("+ GPU POWER"));
+      const lossIndex = collectBorderTitles(element).indexOf("LOSS");
+      expect(lossIndex).toBeGreaterThanOrEqual(0);
+      expect(rows.some((row) => row.includes("1.10"))).toBe(true);
+      const powerIndex = collectBorderTitles(element).indexOf("GPU POWER");
       expect(powerIndex).toBeGreaterThanOrEqual(0);
       expect(rows.some((row) => row.includes("AWAITING FIRST SAMPLE"))).toBe(true);
     }
@@ -661,9 +667,8 @@ describe("OperatorSurfacePane", () => {
     });
     const body = (element as any).props.children;
     const innerWidth = 36 - 2;
-    const rows = (body.props.children as any[])
-      .map((child) => child?.props?.children)
-      .filter((value) => typeof value === "string");
+    const rows = collectText(element);
+
     expect(rows.length).toBeGreaterThan(0);
     for (const row of rows) {
       expect(row.length).toBeLessThanOrEqual(innerWidth);

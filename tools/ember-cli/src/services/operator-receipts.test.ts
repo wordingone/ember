@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // operator-receipts.test.ts — JSONL receipt writer tests.
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
@@ -50,10 +53,11 @@ describe("createOperatorReceiptWriter", () => {
 
     writer.append("pipe_connected");
     writer.append("prompt_injected", "hello from the operator");
+    writer.append("command_completed", "watch");
     writer.append("response_rendered");
 
     const lines = fs.readFileSync(writer.filePath, "utf8").trim().split("\n");
-    expect(lines.length).toBe(3);
+    expect(lines.length).toBe(4);
 
     const rows = lines.map((l) => JSON.parse(l));
     expect(rows[0].event).toBe("pipe_connected");
@@ -61,7 +65,9 @@ describe("createOperatorReceiptWriter", () => {
     expect(typeof rows[0].ts).toBe("string");
     expect(rows[1].event).toBe("prompt_injected");
     expect(rows[1].detail).toBe("hello from the operator");
-    expect(rows[2].event).toBe("response_rendered");
+    expect(rows[2].event).toBe("command_completed");
+    expect(rows[2].detail).toBe("watch");
+    expect(rows[3].event).toBe("response_rendered");
   });
 
   test("fails open: append() never throws even when the target directory cannot be created", () => {

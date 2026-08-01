@@ -5,6 +5,10 @@
 // are never required. Fakes supply the minimum RegistryCommand shape needed to
 // exercise each acceptance criterion.
 
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 import { describe, it, expect, beforeEach } from "bun:test";
 import {
   getCommands,
@@ -46,6 +50,16 @@ function makeCmd(
 /** Reset deps + caches before every test to prevent cross-test contamination. */
 beforeEach(() => {
   resetCommandRegistryForTests();
+});
+
+describe("production built-in registry", () => {
+  it("registers the resume command and its continue alias", async () => {
+    const commands = await getCommands("/project");
+    const resume = commands.find((command) => command.name === "resume");
+    expect(resume).toBeDefined();
+    expect(resume?.aliases).toContain("continue");
+    expect(getCommand("continue", commands)).toBe(resume);
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 
 
@@ -120,6 +121,76 @@ class EmberRootLauncherTests(unittest.TestCase):
         self.assertIn('$ErrorActionPreference = "Continue"', implementation)
         self.assertNotIn('$LASTEXITCODE -ne 0 -or $commit', implementation)
         self.assertNotIn('& $bun run entrypoints/main.ts\n    if ($LASTEXITCODE', implementation)
+    def run_library_command(self, body: str) -> subprocess.CompletedProcess[str]:
+        script = str(LAUNCH_IMPL).replace("'", "''")
+        command = f"$env:EMBER_LAUNCH_LIBRARY_ONLY='1'; . '{script}'; {body}"
+        return subprocess.run(
+            ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=20,
+            check=False,
+        )
+
+    def test_left_half_geometry_uses_full_work_area_and_real_dimensions(self) -> None:
+        result = self.run_library_command(
+            "Get-EmberLeftHalfRectangle -Left -1920 -Top 40 -Right 0 -Bottom 1080 | ConvertTo-Json -Compress"
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn('{"X":-1920,"Y":40,"Width":960,"Height":1040}', result.stdout)
+        implementation = LAUNCH_IMPL.read_text(encoding="utf-8")
+        self.assertIn("MonitorFromWindow", implementation)
+        self.assertIn("SetWindowPos", implementation)
+        self.assertIn("GetWindowRect", implementation)
+        self.assertIn("FindVisibleWindowsByTitle", implementation)
+        self.assertNotIn("0x0001", implementation)  # SWP_NOSIZE is forbidden.
+
+    def test_owned_stale_process_filter_cannot_target_foreign_executables(self) -> None:
+        root = r"C:\fixture\ember"
+        result = self.run_library_command(
+            "$owned=Test-IsOwnedEmberExecutablePath "
+            f"'{root}\\.ember\\runtime\\ember\\abc\\Ember.exe' '{root}'; "
+            "$foreign=Test-IsOwnedEmberExecutablePath 'C:\\Windows\\System32\\Ember.exe' "
+            f"'{root}'; Write-Output \"$owned,$foreign\""
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("True,False", result.stdout)
+
+    def test_named_launcher_lease_allows_exactly_one_live_owner(self) -> None:
+        name = f"Local\\EmberLauncherContract-{uuid.uuid4().hex}"
+        script = str(LAUNCH_IMPL).replace("'", "''")
+        owner_command = (
+            f"$env:EMBER_LAUNCH_LIBRARY_ONLY='1'; . '{script}'; "
+            f"$m=Enter-EmberLauncherLease '{name}'; Write-Output 'ACQUIRED'; "
+            "Start-Sleep -Seconds 3; $m.ReleaseMutex(); $m.Dispose()"
+        )
+        owner = subprocess.Popen(
+            ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", owner_command],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        self.addCleanup(lambda: owner.kill() if owner.poll() is None else None)
+        self.assertIsNotNone(owner.stdout)
+        self.addCleanup(owner.stdout.close)
+        self.assertEqual(owner.stdout.readline().strip(), "ACQUIRED")
+        contender = self.run_library_command(
+            f"try {{ $m=Enter-EmberLauncherLease '{name}'; Write-Output 'SECOND_OWNER'; "
+            "$m.ReleaseMutex(); $m.Dispose() } catch { Write-Output $_.Exception.Message; exit 7 }"
+        )
+        self.assertEqual(contender.returncode, 7, contender.stdout)
+        self.assertIn("already running", contender.stdout)
+        owner.wait(timeout=10)
+        self.assertEqual(owner.returncode, 0)
+
+    def test_production_launcher_stays_in_one_shell_and_verifies_geometry(self) -> None:
+        implementation = LAUNCH_IMPL.read_text(encoding="utf-8")
+        self.assertIn("Enter-EmberLauncherLease", implementation)
+        self.assertIn("Stop-StaleOwnedEmberApplications", implementation)
+        self.assertIn("Set-EmberWindowToLeftWorkArea", implementation)
+        self.assertIn("& $application", implementation)
+        self.assertNotIn("Start-Process -FilePath $application", implementation)
 
 
 if __name__ == "__main__":

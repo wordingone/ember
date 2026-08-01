@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // operator-receipts.ts — JSONL receipt writer for the operator input channel
 // (ember issue #165 / #154 §2: "every session logs prompt/reply/next-action to
 // receipts/operator-sessions/<UTC>.jsonl").
@@ -10,7 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
 
-export type OperatorReceiptEvent = "pipe_connected" | "prompt_injected" | "response_rendered";
+export type OperatorReceiptEvent = "pipe_connected" | "prompt_injected" | "command_completed" | "response_rendered";
 
 export interface OperatorReceiptRow {
   ts: string;

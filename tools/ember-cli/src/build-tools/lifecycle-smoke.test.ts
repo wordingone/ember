@@ -336,6 +336,81 @@ describe("validateLifecycleReceipt", () => {
     expect(forcedAfterTimeout).toBe(1);
   });
 
+  test("does not write to a lifecycle child whose exit was already observed", async () => {
+    const driver = await import("./lifecycle-smoke-driver.ts");
+    let exitRequests = 0;
+    let forced = 0;
+    const result = await driver.terminateLifecycleChild!(
+      () => { exitRequests += 1; },
+      () => true,
+      () => { forced += 1; },
+    );
+    expect(exitRequests).toBe(0);
+    expect(forced).toBe(0);
+    expect(result).toEqual({
+      explicit_requested: true,
+      clean_exit_observed: true,
+      clean_exit_wait_ms: 0,
+      forced_cleanup_required: false,
+      forced_cleanup_attempted: false,
+      final_exit_observed: true,
+      survivors: 0,
+    });
+  });
+
+  test("waits for the exit event when ConPTY closes its socket first", async () => {
+    const driver = await import("./lifecycle-smoke-driver.ts");
+    let observed = false;
+    let forced = 0;
+    const socketClosed = Object.assign(new Error("Socket is closed"), {
+      code: "ERR_SOCKET_CLOSED",
+    });
+    const result = await driver.terminateLifecycleChild!(
+      () => { throw socketClosed; },
+      () => observed,
+      () => { forced += 1; },
+      async () => { observed = true; },
+      (() => { let now = 0; return () => (now += 25); })(),
+      100,
+    );
+    expect(forced).toBe(0);
+    expect(result.clean_exit_observed).toBe(true);
+    expect(result.forced_cleanup_required).toBe(false);
+    expect(result.final_exit_observed).toBe(true);
+    expect(result.survivors).toBe(0);
+  });
+
+  test("classifies only the Windows closed-socket race as benign", async () => {
+    const driver = await import("./lifecycle-smoke-driver.ts");
+    expect(driver.isBenignConptyClosureError({
+      code: "ERR_SOCKET_CLOSED",
+    })).toBe(true);
+    expect(driver.isBenignConptyClosureError({ code: "EIO" })).toBe(false);
+    expect(driver.isBenignConptyClosureError(new Error("Socket is closed")))
+      .toBe(false);
+  });
+
+  test("binds the Windows node-pty input stream rather than its output emitter", async () => {
+    const driver = await import("./lifecycle-smoke-driver.ts");
+    let bound: ((error: unknown) => void) | undefined;
+    const fakePty = {
+      _agent: {
+        _inSocket: {
+          on: (event: string, listener: (error: unknown) => void) => {
+            expect(event).toBe("error");
+            bound = listener;
+          },
+        },
+      },
+    };
+    const observed: unknown[] = [];
+    driver.bindConptyInputErrorFence(fakePty as never, (error) => observed.push(error));
+    bound?.({ code: "ERR_SOCKET_CLOSED" });
+    expect(observed).toEqual([{ code: "ERR_SOCKET_CLOSED" }]);
+    expect(() => driver.bindConptyInputErrorFence({} as never, () => {}))
+      .toThrow("input socket is unavailable");
+  });
+
   test("refuses forged source, binary, rebuild, or builder bindings", () => {
     for (const mutate of [
       (r: LifecycleReceipt) => { r.source_commit = SHA_D; },
@@ -486,7 +561,15 @@ describe("compiled lifecycle action completion", () => {
     expect(driver.classifyActionFrame!(
       "continue",
       "Unknown command: /continue",
-    )).toBe("MISSING");
+    )).toBe("MISSING");    expect(driver.classifyActionFrame!(
+      "continue",
+      "No resumable session selected.",
+    )).toBe("REFUSED");
+    expect(driver.actionCompletionObserved!(
+      "continue",
+      "No resumable session selected.",
+      "",
+    )).toBe(true);
     expect(driver.classifyActionFrame!(
       "continue",
       "cursor repaint without command result",
@@ -568,6 +651,33 @@ describe("compiled lifecycle action completion", () => {
       "error: failed to save checkpoint: identity refused",
     )).toBe(true);
 
+    expect(driver.actionCompletionObserved).toBeFunction();
+    expect(driver.actionCompletionObserved!(
+      "observe",
+      "unrelated fixed-viewport repaint",
+      "cursor repaint without watch result",
+    )).toBe(false);
+    expect(driver.actionCompletionObserved!(
+      "observe",
+      "fixed viewport",
+      "watching state/ember-telemetry.jsonl",
+    )).toBe(true);
+    expect(driver.actionCompletionObserved!(
+      "pause",
+      "fixed viewport",
+      "resume run=smoke-run",
+    )).toBe(false);
+    expect(driver.actionCompletionObserved!(
+      "pause",
+      "fixed viewport",
+      "pause run=smoke-run",
+    )).toBe(true);
+    expect(driver.actionCompletionObserved!(
+      "save",
+      "fixed viewport",
+      "error: failed to save checkpoint: identity refused",
+    )).toBe(true);
+
     expect(driver.redactPublicText).toBeFunction();
     const backslashProbe = `${String.fromCharCode(66, 58)}\\M\\ember`;
     const slashProbe = `${String.fromCharCode(67, 58)}/tmp/private`;
@@ -617,6 +727,25 @@ describe("compiled lifecycle action completion", () => {
       () => false,
     );
     expect(clearedWrites).toEqual([]);
+  });
+
+  test("routes lifecycle actions through the production operator pipe", () => {
+    const source = readFileSync(
+      join(import.meta.dir, "lifecycle-smoke-driver.ts"),
+      "utf8",
+    );
+    expect(source).toContain("operatorPipeName");
+    expect(source).toContain("writeOperatorLine(child.pid, input)");
+  });
+
+  test("interactive cleanup terminates the packaged process after releasing terminal ownership", () => {
+    const source = readFileSync(
+      join(import.meta.dir, "..", "entrypoints", "process-entry.ts"),
+      "utf8",
+    );
+    const cleanup = source.slice(source.indexOf("await exitPromise;"));
+    expect(cleanup).toContain("root.unmount();");
+    expect(cleanup).toContain("stopBridge();\n  doExitMain(0);");
   });
 });
 

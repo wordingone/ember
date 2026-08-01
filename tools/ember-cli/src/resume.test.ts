@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // Tests for the resume (/continue) slash command.
 
 import { describe, it, expect, beforeEach } from 'bun:test';
@@ -84,6 +87,17 @@ describe('AC2: current session excluded', () => {
     await resumeCommand.execute('', baseContext);
     expect(capturedSessions.map((s) => s.sessionId)).not.toContain('current-session');
     expect(capturedSessions.map((s) => s.sessionId)).toContain('other-session');
+  });
+});
+
+it('returns an explicit refusal when the picker closes without a selection', async () => {
+  setResumeDeps({
+    getSessions: async () => [],
+    openPicker: async () => ({ type: 'none' as const }),
+  });
+  await expect(resumeCommand.execute('', baseContext)).resolves.toEqual({
+    type: 'message',
+    message: 'No resumable session selected.',
   });
 });
 
