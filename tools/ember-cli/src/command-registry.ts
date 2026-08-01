@@ -11,6 +11,7 @@ import { createFinetuneCommand } from './commands/finetune.ts';
 import { createModelCommand } from './commands/model.ts';
 import { createTrainCommand } from './commands/train.ts';
 import { createAdmitCommand } from './commands/admit.ts';
+import { createDesignateCommand } from './commands/designate.ts';
 import { createGoalCommand } from './commands/goal.ts';
 import { createWorldStateCommand } from './commands/world-state.ts';
 import { createCustodyCommand } from './commands/custody.ts';
@@ -58,6 +59,7 @@ const defaultDeps: CommandRegistryDeps = {
     createModelCommand(),
     createTrainCommand(),
     createAdmitCommand(),
+    createDesignateCommand(),
     createGoalCommand(),
     createWorldStateCommand(),
     createCustodyCommand(),
