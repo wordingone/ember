@@ -2,16 +2,17 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // screens/repl-operator-control-wiring.test.ts — RED-first end-to-end proof that a real mouse
-// click on the operator-surface pane's [PAUSE] control drives a real effect on the run, not just
+// click on the operator-surface controls drives a real effect on the run, not just
 // a handler firing. Before this wiring, ReplScreen never passed `onControl` to
 // OperatorSurfacePane, so every click called `undefined?.(...)` -- a no-op indistinguishable
 // from a working control by anything short of an effect-level assertion.
 //
 // The chain exercised here is the REAL production click path, start to finish:
 //   raw SGR mouse bytes on stdin -> createSgrMouseDecoder -> hit-test -> Box.onClick
-//   -> OperatorSurfacePane's onControl(action, runId) -> ReplScreen's handleOperatorControl
-//   -> driveOperatorControl -> emitControlCmd -> a real JSONL append.
-// The assertion is on that last file, not on whether a handler ran (per the operator's bar:
+//   -> OperatorSurfacePane's onControl(action, runId) -> ReplScreen's handleOperatorControl.
+// START then enters the governed /train dispatcher and must render its result; runtime actions enter
+// driveOperatorControl -> emitControlCmd -> a real JSONL append. Assertions target those effects,
+// not whether a handler ran (per the operator's bar:
 // "did the test apparatus produce the condition it is measuring?" -- driving state directly and
 // observing that same state proves nothing; this drives the click and observes the channel).
 import { describe, expect, test } from "bun:test";
@@ -19,7 +20,7 @@ import { EventEmitter } from "node:events";
 import React from "react";
 import { tmpdir } from "os";
 import { join } from "path";
-import { writeFile, readFile, unlink } from "fs/promises";
+import { access, writeFile, readFile, unlink } from "fs/promises";
 import { mountInk } from "../ink/reconciler.ts";
 import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
 import { TerminalSizeContext } from "../ink/components.ts";
@@ -62,6 +63,78 @@ function sgrLeftClick(col: number, row: number): string {
 }
 
 describe("operator-surface pane control click drives a real effect on the run", () => {
+  test("clicking START enters the real /train flow and surfaces its refusal instead of appending a dead start row", async () => {
+    resetCommandRegistryForTests();
+    startTelemetryWatch().stop();
+    const telemetryPath = join(tmpdir(), `test-repl-start-telemetry-${Date.now()}-${Math.random()}.jsonl`);
+    const controlPath = join(tmpdir(), `test-repl-start-control-${Date.now()}-${Math.random()}.jsonl`);
+    await writeFile(telemetryPath, "");
+    const previousTelemetryEnv = process.env["EMBER_TELEMETRY_PATH"];
+    const previousPythonEnv = process.env["EMBER_PYTHON_BIN"];
+    process.env["EMBER_TELEMETRY_PATH"] = telemetryPath;
+    process.env["EMBER_PYTHON_BIN"] = join(tmpdir(), "ember-test-python-that-does-not-exist");
+
+    const columns = 100;
+    const rows = 30;
+    let raw = "";
+    const element = React.createElement(
+      TerminalSizeContext.Provider,
+      { value: { columns, rows } },
+      React.createElement(ReplScreen, {
+        config: { model: "ember", permissionMode: "interactive" as const, baseSystemPrompt: "" },
+        cwd: process.cwd(),
+        env: {
+          EMBER_DISABLE_TERMINAL_TITLE: "1",
+          EMBER_DISABLE_VIRTUAL_SCROLL: "1",
+          EMBER_FINETUNE_CONTROL_PATH: controlPath,
+        },
+        onExit: () => {},
+      }),
+    );
+    const handle = mountInk(element, {
+      stream: { write(chunk: string) { raw += chunk; } },
+      stdout: { columns, rows },
+    });
+    const stdin = new FakeStdin();
+    const stopBridge = startStdinBridge({ stdin: stdin as never, emitKeypressEvents: () => {} });
+
+    try {
+      let lines: string[] = [];
+      let startAt: { col: number; row: number } | undefined;
+      for (let attempt = 0; attempt < 30 && !startAt; attempt += 1) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 50));
+        await flushRepl();
+        lines = renderedLines(raw, columns, rows);
+        if (lines.some((line) => line.includes("IDLE"))) startAt = findGlyph(lines, "[START]");
+      }
+      expect(startAt).toBeDefined();
+
+      stdin.emit("data", Buffer.from(sgrLeftClick(startAt!.col + 1, startAt!.row)));
+      let refusalVisible = false;
+      for (let attempt = 0; attempt < 40 && !refusalVisible; attempt += 1) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 50));
+        await flushRepl();
+        lines = renderedLines(raw, columns, rows);
+        refusalVisible = lines.some((line) => line.includes("BLOCKED"));
+      }
+
+      expect(refusalVisible).toBe(true);
+      await expect(access(controlPath)).rejects.toThrow();
+    } finally {
+      stopBridge();
+      handle.unmount();
+      startTelemetryWatch().stop();
+      if (previousTelemetryEnv === undefined) delete process.env["EMBER_TELEMETRY_PATH"];
+      else process.env["EMBER_TELEMETRY_PATH"] = previousTelemetryEnv;
+      if (previousPythonEnv === undefined) delete process.env["EMBER_PYTHON_BIN"];
+      else process.env["EMBER_PYTHON_BIN"] = previousPythonEnv;
+      await Promise.all([
+        unlink(telemetryPath).catch(() => {}),
+        unlink(controlPath).catch(() => {}),
+      ]);
+    }
+  }, 15000);
+
   test("clicking [PAUSE] via the real mouse-click path appends a real pause command to the control channel", async () => {
     resetCommandRegistryForTests();
     const telemetryPath = join(tmpdir(), `test-repl-telemetry-${Date.now()}-${Math.random()}.jsonl`);
