@@ -3,7 +3,8 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 // Drives the real compiled Ember CLI through Windows ConPTY. This is not a
-// fixture backend: every input is dispatched by the production REPL registry.
+// fixture backend: actions enter through the production operator pipe and are
+// dispatched by the same production REPL registry used by interactive input.
 
 import {
   existsSync,
@@ -15,6 +16,7 @@ import {
 } from "node:fs";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
+import net from "node:net";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
@@ -22,6 +24,7 @@ import xtermHeadless from "@xterm/headless";
 import { spawn as spawnPty, type IPty } from "node-pty";
 import { headlessCaptureEnv } from "../services/headless-capture.ts";
 import { READY_OSC } from "../cli/ready-sentinel.ts";
+import { operatorPipeName } from "../services/operator-pipe.ts";
 import { cockpitCompileArgs } from "./build-cockpit.ts";
 import {
   LIFECYCLE_ACTIONS,
@@ -140,8 +143,30 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 }
 
+export function isBenignConptyClosureError(error: unknown): boolean {
+  return typeof error === "object" && error !== null &&
+    (error as { code?: unknown }).code === "ERR_SOCKET_CLOSED";
+}
+
+export function bindConptyInputErrorFence(
+  pty: IPty,
+  onError: (error: unknown) => void,
+): void {
+  const inputSocket = (
+    pty as IPty & {
+      _agent?: {
+        _inSocket?: { on(event: "error", listener: (error: unknown) => void): unknown };
+      };
+    }
+  )._agent?._inSocket;
+  if (inputSocket === undefined) {
+    throw new Error("node-pty Windows input socket is unavailable");
+  }
+  inputSocket.on("error", onError);
+}
+
 export async function terminateLifecycleChild(
-  requestExit: () => void,
+  requestExit: () => void | Promise<void>,
   isExitObserved: () => boolean,
   forceCleanup: () => void,
   wait: (ms: number) => Promise<void> = sleep,
@@ -151,7 +176,22 @@ export async function terminateLifecycleChild(
   if (!Number.isInteger(cleanExitWaitMs) || cleanExitWaitMs < 1) {
     throw new Error("clean exit wait must be a positive integer");
   }
-  requestExit();
+  if (isExitObserved()) {
+    return {
+      explicit_requested: true,
+      clean_exit_observed: true,
+      clean_exit_wait_ms: 0,
+      forced_cleanup_required: false,
+      forced_cleanup_attempted: false,
+      final_exit_observed: true,
+      survivors: 0,
+    };
+  }
+  try {
+    await requestExit();
+  } catch (error) {
+    if (!isBenignConptyClosureError(error)) throw error;
+  }
   const startedAt = now();
   const cleanDeadline = startedAt + cleanExitWaitMs;
   while (!isExitObserved() && now() < cleanDeadline) {
@@ -194,6 +234,44 @@ export async function writePromptInput(
   }
 }
 
+async function writeOperatorLine(
+  pid: number,
+  input: string,
+  timeoutMs = 5_000,
+): Promise<void> {
+  const pipe = operatorPipeName(pid);
+  const deadline = Date.now() + timeoutMs;
+  let lastError: unknown;
+  while (Date.now() < deadline) {
+    try {
+      await new Promise<void>((resolveWrite, rejectWrite) => {
+        const socket = net.createConnection(pipe);
+        let settled = false;
+        let timer: ReturnType<typeof setTimeout>;
+        const finish = (error?: unknown) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          socket.removeAllListeners();
+          socket.destroy();
+          if (error === undefined) resolveWrite();
+          else rejectWrite(error);
+        };
+        timer = setTimeout(() => finish(new Error("operator pipe write timed out")), 1_000);
+        socket.once("error", finish);
+        socket.once("connect", () => {
+          socket.end(input + "\n", "utf8", () => finish());
+        });
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+      await sleep(50);
+    }
+  }
+  throw new Error("operator pipe did not accept lifecycle input: " + String(lastError));
+}
+
 
 export function actionLocalDelta(delta: string, input: string): string {
   const marker = delta.indexOf(input);
@@ -227,6 +305,9 @@ export function classifyActionFrame(
     return "MISSING";
   }
   if (lower.includes("error:") || lower.includes("failed to")) return "REFUSED";
+  if (action === "continue" && lower.includes("no resumable session selected")) {
+    return "REFUSED";
+  }
   if (
     action === "train" &&
     lower.includes("launch-packet") &&
@@ -267,6 +348,25 @@ export function saveActionCompletionObserved(frame: string, delta: string): bool
   );
 }
 
+export function actionCompletionObserved(
+  action: Exclude<LifecycleAction, "launch">,
+  frame: string,
+  delta: string,
+): boolean {
+  const observed = frame + "\n" + delta;
+  if (action === "train") return classifyActionFrame(action, observed) !== "NO_EFFECT";
+  if (action === "save") return saveActionCompletionObserved(frame, delta);
+  const completion: Record<Exclude<LifecycleAction, "launch" | "train" | "save">, RegExp> = {
+    observe: /watching state[\\/]ember-telemetry\.jsonl/i,
+    pause: /pause run=smoke-run/i,
+    resume: /resume run=smoke-run/i,
+    terminate: /stop run=smoke-run/i,
+    reload: /checkpoint loaded|error: failed to load checkpoint/i,
+    continue: /unknown command|not registered|no resumable session selected/i,
+  };
+  return completion[action].test(observed);
+}
+
 export function actionOutputExcerpt(
   action: Exclude<LifecycleAction, "launch">,
   _frame: string,
@@ -285,7 +385,7 @@ export function actionOutputExcerpt(
     save: /modern governed sparse checkpoint saved|error: failed to save checkpoint/i,
     terminate: /stop run=/i,
     reload: /error: failed to load checkpoint/i,
-    continue: /unknown command|not registered/i,
+    continue: /unknown command|not registered|no resumable session selected/i,
   };
   const observedIndex = lines.findLastIndex((line) => patterns[action].test(line));
   if (observedIndex !== -1) {
@@ -585,49 +685,27 @@ async function driveInput(
   await flush();
   const before = `${visibleFrameLines(terminal).join("\n")}\n`;
   const rawStart = raw.join("").length;
-  let lastRawLength = rawStart;
-  let lastChange = Date.now();
-  await writePromptInput(child, input);
-  await sleep(100);
-  child.write("\r");
-  await sleep(600);
-  await flush();
-  submitSecondEnterIfNeeded(
-    child,
-    input,
-    visibleFrameLines(terminal),
-    COLS,
-  );
+  await writeOperatorLine(child.pid, input);
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const currentRawLength = raw.join("").length;
-    if (currentRawLength !== lastRawLength) {
-      lastRawLength = currentRawLength;
-      lastChange = Date.now();
-    }
-    if (currentRawLength > rawStart && Date.now() - lastChange >= 200) {
+    if (currentRawLength > rawStart) {
       await flush();
-      const after = `${visibleFrameLines(terminal).join("\n")}\n`;
-      try {
-        const afterLines = after.replace(/\n$/, "").split("\n");
-        if (completedPromptFrame(afterLines, COLS, input)) {
-          const delta = raw.join("").slice(rawStart);
-          const nonEcho = delta.replaceAll(input, "").replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
-          if (
-            sha256(before) !== sha256(after) &&
-            nonEcho.trim().length > 0 &&
-            (action !== "save" || saveActionCompletionObserved(after, delta))
-          ) {
-            return { before, after, delta };
-          }
-        }
-      } catch {
-        // The product has not repainted a complete cleared prompt yet.
+      const after = visibleFrameLines(terminal).join("\n") + "\n";
+      const delta = raw.join("").slice(rawStart);
+      if (actionCompletionObserved(action, after, delta)) {
+        await sleep(250);
+        await flush();
+        return {
+          before,
+          after: visibleFrameLines(terminal).join("\n") + "\n",
+          delta: raw.join("").slice(rawStart),
+        };
       }
     }
     await sleep(25);
   }
-  throw new Error(`no effect-bearing frame delta for ${input}`);
+  throw new Error("no effect-bearing frame delta for " + input);
 }
 
 export function actionInputs(home: string, _repoRoot: string): Record<Exclude<LifecycleAction, "launch">, string> {
@@ -695,6 +773,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
   let writes = Promise.resolve();
   let child: IPty | undefined;
   let exitObserved = false;
+  let ptyError: Error | null = null;
   const attempts: AttemptRow[] = [];
   const evidence: LifecycleActionEvidence[] = [];
   try {
@@ -712,6 +791,12 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
         EMBER_DISABLE_TERMINAL_TITLE: "1",
         ...headlessCaptureEnv(),
       },
+    });
+    bindConptyInputErrorFence(child, (error) => {
+      if (isBenignConptyClosureError(error)) return;
+      ptyError = error instanceof Error
+        ? error
+        : new Error(`ConPTY error: ${String(error)}`);
     });
     child.onData((data) => {
       raw.push(data);
@@ -949,7 +1034,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
     }
 
     const termination = await terminateLifecycleChild(
-      () => child!.write("\u0003"),
+      () => writeOperatorLine(child!.pid, "/exit"),
       () => exitObserved,
       () => {
         spawnSync("taskkill", ["/PID", String(child!.pid), "/T", "/F"], {
@@ -958,6 +1043,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
         });
       },
     );
+    if (ptyError !== null) throw ptyError;
 
     const attemptArtifact = join(outDir, "attempt.json");
     writeFileSync(
@@ -1003,7 +1089,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
       },
       operator_contract_mapping:
         "compiled Ember.cmd launch -> /train -> /watch -> /finetune pause/resume/stop -> " +
-        "/model checkpoint save/load -> unregistered resume.ts /continue",
+        "/model checkpoint save/load -> registered resume.ts /continue",
       accepted_instrument_run: true,
       claim_boundary: {
         model_capability: false,

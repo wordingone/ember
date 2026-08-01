@@ -195,6 +195,11 @@ export interface BoxProps {
 
   // Events
   onClick?:         (event: TerminalEvent) => void;
+  onMouseEnter?:    (event: TerminalEvent) => void;
+  onMouseMove?:     (event: TerminalEvent) => void;
+  onMouseLeave?:    (event: TerminalEvent) => void;
+  onMouseUp?:       (event: TerminalEvent) => void;
+  onWheel?:         (event: TerminalEvent) => void;
   onFocus?:         (event: TerminalEvent) => void;
   onBlur?:          (event: TerminalEvent) => void;
   onKeyDown?:       (event: TerminalEvent) => void;
@@ -261,6 +266,11 @@ export const Box = React.forwardRef<HTMLDivElement, BoxProps>(function Box(
     "data-border-title": props.borderTitle,
     "data-background-color": props.backgroundColor,
     onClick: props.onClick as React.MouseEventHandler | undefined,
+    onMouseEnter: props.onMouseEnter as React.MouseEventHandler | undefined,
+    onMouseMove: props.onMouseMove as React.MouseEventHandler | undefined,
+    onMouseLeave: props.onMouseLeave as React.MouseEventHandler | undefined,
+    onMouseUp: props.onMouseUp as React.MouseEventHandler | undefined,
+    onWheel: props.onWheel as React.WheelEventHandler | undefined,
     onFocus: props.onFocus as React.FocusEventHandler | undefined,
     onBlur: props.onBlur as React.FocusEventHandler | undefined,
     onKeyDown: props.onKeyDown as React.KeyboardEventHandler | undefined,

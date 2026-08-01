@@ -60,7 +60,7 @@ async function renderPaneRows(
 }
 
 function cardTitles(rows: string[]): string[] {
-  return rows.filter((row) => /\+ [A-Z]/.test(row));
+  return rows.filter((row) => /(?:HOST (?:MEMORY|RAM|VRAM|CPU|GPU|DISK)|LOSS|TOKENS\/S|LEARNING RATE|ENERGY)/u.test(row));
 }
 
 describe("#894 responsive chart-card distribution", () => {
@@ -70,7 +70,8 @@ describe("#894 responsive chart-card distribution", () => {
       expect(rows.some((row) => row.includes(title))).toBe(true);
     }
     expect(rows.some((row) => row.includes("more rows"))).toBe(false);
-    expect(rows.some((row) => /\+ HOST MEMORY.*\+ HOST RAM/u.test(row))).toBe(true);
+    expect(rows.some((row) => row.includes("HOST MEMORY"))).toBe(true);
+    expect(rows.every((row) => !(row.includes("HOST MEMORY") && row.includes("HOST RAM")))).toBe(true);
   });
 
   test("tight live view keeps only whole cards and reports hidden chart count", async () => {

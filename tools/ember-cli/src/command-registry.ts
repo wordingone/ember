@@ -11,11 +11,13 @@ import { createFinetuneCommand } from './commands/finetune.ts';
 import { createModelCommand } from './commands/model.ts';
 import { createTrainCommand } from './commands/train.ts';
 import { createAdmitCommand } from './commands/admit.ts';
+import { createDesignateCommand } from './commands/designate.ts';
 import { createGoalCommand } from './commands/goal.ts';
 import { createWorldStateCommand } from './commands/world-state.ts';
 import { createCustodyCommand } from './commands/custody.ts';
 import { createBenchmarkCommand } from './commands/benchmark.ts';
 import { createSpinePanelCommand } from './components/spine-panel.ts';
+import { resumeCommand } from './resume.ts';
 import { getModeHistory } from './state/app-state.ts';
 
 export type { RegistryCommand };
@@ -57,11 +59,13 @@ const defaultDeps: CommandRegistryDeps = {
     createModelCommand(),
     createTrainCommand(),
     createAdmitCommand(),
+    createDesignateCommand(),
     createGoalCommand(),
     createWorldStateCommand(),
     createCustodyCommand(),
     createBenchmarkCommand(),
     createSpinePanelCommand(),
+    resumeCommand,
   ],
   getSkillDirCommands: async () => [],
   getPluginCommands: async () => [],

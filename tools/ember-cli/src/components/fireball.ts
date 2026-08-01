@@ -18,10 +18,10 @@
 // BOTH ends, widest in the lower belly), plus disconnected tongues fragmenting the silhouette in
 // one frame. Team-lead gated 4 candidates against the bar "small living flame at a glance" and
 // picked candidate B ("Slender Candle-Lick"): narrower/taller, tip+base both pinched, ONE
-// contiguous span per row, S-curve lean across exactly 3 frames (center/left/right) -- plus a
-// core-brightness pulse layered on the lean cycle (team-lead's refinement note) so the belly
-// visibly breathes even when the sway reads as still between frames. FIREBALL_IDLE_POSE_FRAME
-// (index 0) is the reduced-motion/frozen pose -- the centered lean position, which also carries
+// contiguous span per row and exactly 3 fixed-silhouette intensity frames. The authored historical
+// sources below retain their color ranks, but stabilizeFrameOccupancy projects every frame onto
+// frame 0's exact tip/base/centerline footprint before any public raster is returned.
+// FIREBALL_IDLE_POSE_FRAME (index 0) is the reduced-motion/frozen pose and also carries
 // the pulse's brightness peak (team-lead: "the most balanced silhouette").
 //
 // Two sizes ship, each with its own call site: "panel" (9x9, Homescreen's identity block,
@@ -112,7 +112,7 @@ export const FIREBALL_FRAME_COUNT = 3;
 /** Production idle-frame cadence; the REPL owns the timer and passes its tick into Homescreen. */
 export const FIREBALL_TICK_MS = 140;
 /** Reduced-motion / frozen-tick pose (team-lead, 2026-07-03 approval note on candidate B): the
- * centered lean position -- tallest, most symmetric, and (post-pulse) brightest at the belly --
+ * fixed reference silhouette -- tallest, most symmetric, and brightest at the belly --
  * "the most balanced silhouette." */
 export const FIREBALL_IDLE_POSE_FRAME = 0;
 
@@ -131,8 +131,8 @@ function row(cols: number, placements: Array<[number, string]>): RasterRow {
   return arr.join("");
 }
 
-const PANEL_TEMPLATE: RasterRow[][] = [
-  // frame 0 (FIREBALL_IDLE_POSE_FRAME): centered lean, candidate B's tallest/most-symmetric pose.
+const PANEL_TEMPLATE_SOURCE: RasterRow[][] = [
+  // frame 0 (FIREBALL_IDLE_POSE_FRAME): canonical fixed occupancy and brightest pulse pose.
   // Belly rows (4,5) are bumped one rank brighter than the other two frames -- the baked-in
   // core-brightness pulse (team-lead's refinement note), positions unchanged from the approved mock.
   [
@@ -146,14 +146,11 @@ const PANEL_TEMPLATE: RasterRow[][] = [
     row(9, [[3, "r"], [4, "R"], [5, "r"]]),
     row(9, [[4, "r"]]),
   ],
-  // frame 1: left lean, one row shorter at the tip (the sway's flicker-down beat); belly at
+  // frame 1 source supplies dim-phase color ranks only; occupancy is normalized to frame 0 below; belly at
   // baseline (unbumped) rank -- the pulse's dim phase.
   //
-  // issue #54 reconciliation (team-lead ruling): the tip (rows 0,1 -- untouched, still receded/
-  // swaying) is the approved living sway and must stay exactly as authored. Rows 3-7 (the
-  // belly/base "mass", width>1) are shifted +1 column from their originally-authored position so
-  // their union column extent matches frame 0's [2,6] -- eliminating the whole-body horizontal
-  // jitter while changing nothing about which characters/ranks appear (only their column).
+  // Historical authored positions below supply color ranks only; the exported raster's tip,
+  // mass, centerline, base, and bounds are normalized to frame 0 by stabilizeFrameOccupancy.
   [
     row(9, []),
     row(9, [[3, "w"]]),
@@ -165,11 +162,10 @@ const PANEL_TEMPLATE: RasterRow[][] = [
     row(9, [[3, "r"], [4, "R"], [5, "r"]]),
     row(9, [[3, "r"]]),
   ],
-  // frame 2: right lean (the S-curve's other extreme), full height; belly at baseline rank.
+  // frame 2 source supplies the other dim-phase color ranks only; occupancy is normalized below.
   //
-  // issue #54 reconciliation: rows 0,1 (tip, untouched) keep their authored rightward sway. Rows
-  // 2-7 (mass) are shifted -1 column so the union extent matches frame 0's [2,6] instead of the
-  // originally-authored [3,7] -- same rank/characters, only repositioned.
+  // Historical authored positions below supply color ranks only; the exported raster's tip,
+  // mass, centerline, base, and bounds are normalized to frame 0 by stabilizeFrameOccupancy.
   [
     row(9, [[5, "w"]]),
     row(9, [[5, "Y"]]),
@@ -183,23 +179,36 @@ const PANEL_TEMPLATE: RasterRow[][] = [
   ],
 ];
 
-const COMPACT_TEMPLATE: RasterRow[][] = [
-  // frame 0 (FIREBALL_IDLE_POSE_FRAME): centered, belly (row 1) bumped one rank -- pulse-bright.
+const COMPACT_TEMPLATE_SOURCE: RasterRow[][] = [
+  // frame 0 (FIREBALL_IDLE_POSE_FRAME): canonical compact occupancy; pulse-bright belly.
   [row(3, [[1, "Y"]]), row(3, [[0, "O"], [1, "y"], [2, "O"]]), row(3, [[0, "R"], [1, "r"], [2, "R"]])],
-  // frame 1: left lean, baseline (unbumped) belly rank.
+  // frame 1 source: baseline belly rank; occupancy is normalized to frame 0 below.
   //
-  // issue #54 reconciliation (team-lead ruling): row 0 (tip, untouched) keeps its authored leftward
-  // sway. Rows 1-2 (belly/base) are widened from 2 cells back to the full 3-cell canvas width by
-  // mirroring each row's own already-chosen left-edge color into the new col 2 -- no new color
-  // invented, matches frame 0's full-width [0,2] extent instead of the originally-authored [0,1].
+  // Historical authored positions below supply color ranks only; the exported raster's tip,
+  // mass, centerline, base, and bounds are normalized to frame 0 by stabilizeFrameOccupancy.
   [row(3, [[0, "Y"]]), row(3, [[0, "O"], [1, "o"], [2, "O"]]), row(3, [[0, "R"], [1, "r"], [2, "R"]])],
-  // frame 2: right lean, baseline (unbumped) belly rank.
+  // frame 2 source: alternate baseline rank; occupancy is normalized to frame 0 below.
   //
-  // issue #54 reconciliation: row 0 (tip, untouched) keeps its authored rightward sway. Rows 1-2
-  // widened from 2 cells to 3 by mirroring each row's own right-edge color into the new col 0,
-  // matching frame 0's [0,2] extent instead of the originally-authored [1,2].
+  // Historical authored positions below supply color ranks only; the exported raster's tip,
+  // mass, centerline, base, and bounds are normalized to frame 0 by stabilizeFrameOccupancy.
   [row(3, [[2, "Y"]]), row(3, [[0, "O"], [1, "o"], [2, "O"]]), row(3, [[0, "R"], [1, "r"], [2, "R"]])],
 ];
+const DIM_RANK: Record<string, string> = { w: "Y", Y: "y", y: "O", O: "o", o: "R", R: "r", r: "r" };
+
+/** Preserve one fixed spatial silhouette; animation is a color/intensity pulse only. */
+function stabilizeFrameOccupancy(frames: RasterRow[][]): RasterRow[][] {
+  const stable = frames[0]!;
+  return frames.map((frame, frameIndex) => frameIndex === 0
+    ? [...stable]
+    : stable.map((stableRow, rowIndex) => [...stableRow].map((cell, columnIndex) => {
+        if (cell === " ") return " ";
+        const authored = frame[rowIndex]?.[columnIndex];
+        return authored && authored !== " " ? authored : (DIM_RANK[cell] ?? cell);
+      }).join("")));
+}
+
+const PANEL_TEMPLATE = stabilizeFrameOccupancy(PANEL_TEMPLATE_SOURCE);
+const COMPACT_TEMPLATE = stabilizeFrameOccupancy(COMPACT_TEMPLATE_SOURCE);
 
 // COMPACT_TEMPLATE ships at 3 pixel-rows per frame (a compressed silhouette of the same shape
 // language); pad to FIREBALL_DIMS.compact.rows (5) with blank rows so every frame is a uniform

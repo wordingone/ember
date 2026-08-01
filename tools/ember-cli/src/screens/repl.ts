@@ -235,6 +235,10 @@ export function shouldUseVirtualScroll(env: NodeJS.ProcessEnv = process.env): bo
   return !env["EMBER_DISABLE_VIRTUAL_SCROLL"];
 }
 
+export function isExitCommandInput(text: string): boolean {
+  return /^\/(?:exit|quit)\s*$/i.test(text);
+}
+
 export function shouldShowMessageActions(env: NodeJS.ProcessEnv = process.env): boolean {
   return !env["EMBER_DISABLE_MESSAGE_ACTIONS"];
 }
@@ -300,6 +304,15 @@ export function transcriptJustifyContent(messages: SessionMessage[]): "flex-star
   // "no turns have landed yet".
   const isWelcomeOnly = messages.length === 0;
   return isWelcomeOnly ? "flex-start" : "flex-end";
+}
+
+// VirtualMessageList already owns newest-at-bottom placement with column-reverse. Its parent
+// must stay flex-start so multi-pass text fitting cannot apply a second, stale negative offset.
+export function transcriptViewportJustifyContent(
+  useVirtualScroll: boolean,
+  messages: SessionMessage[],
+): "flex-start" | "flex-end" {
+  return useVirtualScroll ? "flex-start" : transcriptJustifyContent(messages);
 }
 
 /**
@@ -694,15 +707,23 @@ export function ReplScreen({
     };
   }, [env, cwd]);
 
-  // The operator-surface pane only renders click/keyboard INTENT ([START][PAUSE][RESUME]
-  // [RESTART]) -- driveOperatorControl is the one production path that turns that intent into a
-  // real effect: an append to the governed finetune control channel a training-side poller
-  // obeys. Before this wiring the pane's onControl prop was never passed here, so every click
-  // fired its handler and changed nothing (the exact defect: a control that appears to work).
-  // EMBER_FINETUNE_CONTROL_PATH lets tests point the channel at a temp file without touching the
-  // real state/ember-finetune-control.jsonl; production takes the default channel path.
+  // START is a launch request, so its click must enter the same governed /train command path as
+  // typed operator input. The ref is populated with the current submitPrompt closure below and
+  // lets this early-declared pointer handler remain stable without capturing a stale callback.
+  const submitPromptRef = useRef<(text: string, origin?: "keyboard" | "operator") => Promise<void>>(
+    async () => {},
+  );
+
+  // PAUSE/RESUME/RESTART remain runtime-control intents for an already identified run and are
+  // appended to the governed finetune control channel. START must not use that legacy channel:
+  // no production poller consumes a start row, and doing so bypasses /train's preflight and
+  // single-use confirmation boundary.
   const operatorControlChannelPath = env["EMBER_FINETUNE_CONTROL_PATH"];
   const handleOperatorControl = useCallback((action: OperatorControlAction, runId?: string) => {
+    if (action === "START") {
+      void submitPromptRef.current("/train", "operator");
+      return;
+    }
     void driveOperatorControl(action, runId, { channelPath: operatorControlChannelPath });
   }, [operatorControlChannelPath]);
 
@@ -714,6 +735,8 @@ export function ReplScreen({
   // (and the pane renders no marker) whenever paneFocused is false.
   const [paneFocused,          setPaneFocused]          = useState(false);
   const [focusedControlIndex,  setFocusedControlIndex]  = useState(0);
+  const [hoveredControl, setHoveredControl] = useState<OperatorControlAction | undefined>(undefined);
+  const [activityScrollOffset, setActivityScrollOffset] = useState(0);
   const [controlDisabledReason, setControlDisabledReason] = useState<string | undefined>(undefined);
 
   const [permMode,         setPermMode]        = useState<ReplPermissionMode>(config.permissionMode);
@@ -765,9 +788,6 @@ export function ReplScreen({
   // latest submitPrompt closure so the injector (constructed once, below, after
   // usePromptInput) never calls a stale one. One receipt-writer/JSONL file per
   // mounted session.
-  const submitPromptRef = useRef<(text: string, origin?: "keyboard" | "operator") => Promise<void>>(
-    async () => {},
-  );
   const operatorReceiptsRef = useRef<OperatorReceiptWriter | null>(null);
   if (!operatorReceiptsRef.current) {
     operatorReceiptsRef.current = createOperatorReceiptWriter();
@@ -1369,6 +1389,16 @@ export function ReplScreen({
       ]);
     }
 
+    if (isExitCommandInput(text)) {
+      if (origin === "operator") {
+        operatorReceiptsRef.current?.append("command_completed", slashParsed!.name);
+      }
+      busyRef.current = false;
+      setBusy(false);
+      _onExit?.();
+      return;
+    }
+
     // Slash-command dispatch — execute a registered command instead of a model
     // turn. Returns null for ordinary input, which falls through to the engine.
     const slashResult = await tryDispatchSlashCommand(text, {
@@ -1381,6 +1411,9 @@ export function ReplScreen({
         ...prev,
         { id: crypto.randomUUID(), type: "assistant", content: slashResult.message },
       ]);
+      if (origin === "operator") {
+        operatorReceiptsRef.current?.append("command_completed", slashParsed.name);
+      }
       busyRef.current = false;
       setBusy(false);
       // ember #211 (found via live compiled-binary acceptance testing, not
@@ -1800,7 +1833,7 @@ export function ReplScreen({
         { key: "workspace", flexDirection: "column", flexGrow: 1, minHeight: 0, overflow: "hidden" },
         React.createElement(
           Box,
-          { key: "transcript", flexDirection: "column", flexGrow: 1, minWidth: 0, overflow: "hidden", justifyContent: transcriptJustifyContent(messages) },
+          { key: "transcript", flexDirection: "column", flexGrow: 1, minWidth: 0, minHeight: 0, overflow: "hidden", justifyContent: transcriptViewportJustifyContent(useVirtualScroll, messages) },
           transcript,
         ),
       ),
@@ -1859,6 +1892,10 @@ export function ReplScreen({
       onControl: handleOperatorControl,
       focusedControlIndex: paneFocused ? focusedControlIndex : undefined,
       disabledActionReason: controlDisabledReason,
+      hoveredControl,
+      onControlHover: setHoveredControl,
+      activityScrollOffset,
+      onActivityScroll: (deltaY) => setActivityScrollOffset((value) => Math.max(0, value + (deltaY < 0 ? 1 : -1))),
     }),
   );
 }

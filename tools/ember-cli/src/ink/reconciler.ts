@@ -18,9 +18,9 @@ import {
 import { createLayoutNode } from "./layout-engine.ts";
 import type { Style } from "./termio.ts";
 import type { BorderStyleName } from "./border-glyphs.ts";
-import { ClickEvent, type MouseModifiers, type TerminalEvent } from "./event-system.ts";
+import { ClickEvent, PointerEvent, type MouseModifiers, type TerminalEvent } from "./event-system.ts";
 import { _setMouseDispatcher } from "./hooks.ts";
-import type { SgrMousePress } from "./termio.ts";
+import type { SgrMouseEvent } from "./termio.ts";
 
 // ---------------------------------------------------------------------------
 // Internal node — extends RenderNode with reconciler bookkeeping
@@ -35,6 +35,11 @@ interface InternalNode extends RenderNode {
   _rawParent?:   InternalNode;
   _parent?: InternalNode | RootNode;
   onClick?: (event: TerminalEvent) => void;
+  onMouseEnter?: (event: TerminalEvent) => void;
+  onMouseMove?: (event: TerminalEvent) => void;
+  onMouseLeave?: (event: TerminalEvent) => void;
+  onMouseUp?: (event: TerminalEvent) => void;
+  onWheel?: (event: TerminalEvent) => void;
 }
 
 interface RootNode {
@@ -52,6 +57,8 @@ interface InkContainer {
   renderer: Renderer;
   stream:   { write(s: string): void };
   stdout:   { columns: number; rows: number };
+  hoverTarget: HitTarget | null;
+  leftPressSeen: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -366,10 +373,12 @@ function hitTestNode(
     if (target) return target;
   }
 
-  return node.onClick ? { node, left, top } : null;
+  return node.onClick || node.onMouseEnter || node.onMouseMove || node.onMouseLeave || node.onMouseUp || node.onWheel
+    ? { node, left, top }
+    : null;
 }
 
-function dispatchMousePress(container: InkContainer, input: SgrMousePress): void {
+function hitTest(container: InkContainer, input: SgrMouseEvent): HitTarget | null {
   const clip = {
     x: 0,
     y: 0,
@@ -383,8 +392,28 @@ function dispatchMousePress(container: InkContainer, input: SgrMousePress): void
     target = hitTestNode(child, input.col, input.row, 0, 0, clip);
     if (target) break;
   }
-  if (!target) return;
+  return target;
+}
 
+function pointerEvent(type: PointerEvent["type"], input: SgrMouseEvent, target: HitTarget, deltaY: -1 | 0 | 1 = 0): PointerEvent {
+  return new PointerEvent(
+    type, input.col, input.row,
+    input.col - target.left, input.row - target.top,
+    input.button, input.modifiers as MouseModifiers, deltaY,
+  );
+}
+
+function bubble(target: HitTarget, event: PointerEvent, handler: "onMouseUp" | "onWheel"): void {
+  let current: InternalNode | RootNode | undefined = target.node;
+  while (current && current.kind !== "root") {
+    const node = current as InternalNode;
+    node[handler]?.(event);
+    if (event.propagationStopped) break;
+    current = node._parent;
+  }
+}
+
+function dispatchClick(target: HitTarget, input: SgrMouseEvent): void {
   const event = new ClickEvent(
     input.col,
     input.row,
@@ -402,6 +431,42 @@ function dispatchMousePress(container: InkContainer, input: SgrMousePress): void
     if (event.propagationStopped) break;
     current = node._parent;
   }
+}
+
+function dispatchMouseEvent(container: InkContainer, input: SgrMouseEvent): void {
+  const target = hitTest(container, input);
+  if (input.kind === "move") {
+    const previous = container.hoverTarget;
+    if (previous?.node !== target?.node) {
+      if (previous) previous.node.onMouseLeave?.(pointerEvent("mouseleave", input, previous));
+      if (target) target.node.onMouseEnter?.(pointerEvent("mouseenter", input, target));
+      container.hoverTarget = target;
+    }
+    if (target) target.node.onMouseMove?.(pointerEvent("mousemove", input, target));
+    return;
+  }
+  if (input.kind === "release") {
+    const leftPressSeen = container.leftPressSeen;
+    container.leftPressSeen = false;
+    if (!target) return;
+    bubble(target, pointerEvent("mouseup", input, target), "onMouseUp");
+    // Windows Terminal may consume the press that activates its window while still delivering
+    // the matching release after focus transfers. Treat a left-button release with no observed
+    // press as the click. A press observed anywhere suppresses this fallback, preventing a drag
+    // that begins outside a control and ends over it from becoming an accidental activation.
+    if (input.button === 0 && !leftPressSeen) dispatchClick(target, input);
+    return;
+  }
+  if (input.kind === "press" && input.button === 0) container.leftPressSeen = true;
+  if (!target) {
+    return;
+  }
+  if (input.kind === "wheel") {
+    bubble(target, pointerEvent("wheel", input, target, input.deltaY), "onWheel");
+    return;
+  }
+  if (input.button !== 0) return;
+  dispatchClick(target, input);
 }
 
 // ---------------------------------------------------------------------------
@@ -461,6 +526,9 @@ const hostConfig: any = {
     node.onClick = typeof props["onClick"] === "function"
       ? props["onClick"] as (event: TerminalEvent) => void
       : undefined;
+    for (const prop of ["onMouseEnter", "onMouseMove", "onMouseLeave", "onMouseUp", "onWheel"] as const) {
+      node[prop] = typeof props[prop] === "function" ? props[prop] as (event: TerminalEvent) => void : undefined;
+    }
     const s = props["style"];
     if (s && typeof s === "object") applyBoxStyle(node.layout, s as Record<string, unknown>);
     if (kind === "box") applyBorderProps(node, props);
@@ -524,6 +592,9 @@ const hostConfig: any = {
     instance.onClick = typeof nextProps["onClick"] === "function"
       ? nextProps["onClick"] as (event: TerminalEvent) => void
       : undefined;
+    for (const prop of ["onMouseEnter", "onMouseMove", "onMouseLeave", "onMouseUp", "onWheel"] as const) {
+      instance[prop] = typeof nextProps[prop] === "function" ? nextProps[prop] as (event: TerminalEvent) => void : undefined;
+    }
     const newStyle = extractStyle(nextProps);
     if (newStyle !== undefined) instance.style = newStyle;
     const newTextWrap = extractTextWrap(nextProps);
@@ -617,6 +688,8 @@ export interface MountOptions {
   stdout: { columns: number; rows: number };
   debug?: boolean;
   onFirstFrameFlushed?: () => void;
+  /** Fatal render/reconciliation error. Callers owning terminal modes must tear them down here. */
+  onError?: (error: Error) => void;
 }
 
 /**
@@ -645,6 +718,17 @@ export function mountInk(element: ReactElement, options: MountOptions): MountHan
     renderer,
     stream: options.stream,
     stdout: options.stdout,
+    hoverTarget: null,
+    leftPressSeen: false,
+  };
+
+  let renderError: Error | null = null;
+  const reportRenderError = (error: unknown): void => {
+    const normalized = error instanceof Error ? error : new Error(String(error));
+    if (renderError === null) {
+      renderError = normalized;
+      options.onError?.(normalized);
+    }
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -656,30 +740,37 @@ export function mountInk(element: ReactElement, options: MountOptions): MountHan
     false, // isStrictMode
     null,  // concurrentUpdatesByDefaultOverride
     "",    // identifierPrefix
-    (_err: Error) => {},   // onUncaughtError
-    (_err: Error) => {},   // onCaughtError
-    (_err: Error) => {},   // onRecoverableError
+    (error: Error) => reportRenderError(error),   // onUncaughtError
+    (_error: Error) => {},                       // onCaughtError (an ErrorBoundary still owns the tree)
+    (_error: Error) => {},                       // onRecoverableError (React repaired the tree)
     () => {},              // onDefaultTransitionIndicator
   );
 
   function _syncRender(el: ReactNode): void {
-    if (
-      typeof rec.updateContainerSync === "function" &&
-      typeof rec.flushSyncWork === "function"
-    ) {
-      rec.updateContainerSync(el, root, null, null);
-      rec.flushSyncWork();
-      if (typeof rec.flushPassiveEffects === "function") {
-        rec.flushPassiveEffects();
+    renderError = null;
+    try {
+      if (
+        typeof rec.updateContainerSync === "function" &&
+        typeof rec.flushSyncWork === "function"
+      ) {
+        rec.updateContainerSync(el, root, null, null);
+        rec.flushSyncWork();
+        if (typeof rec.flushPassiveEffects === "function") {
+          rec.flushPassiveEffects();
+        }
+      } else {
+        rec.updateContainer(el, root, null, null);
       }
-    } else {
-      rec.updateContainer(el, root, null, null);
+    } catch (error) {
+      reportRenderError(error);
+      throw error;
     }
+    if (renderError !== null) throw renderError;
   }
 
   _syncRender(element);
   const removeMouseDispatcher = _setMouseDispatcher(
-    (event) => dispatchMousePress(container, event),
+    (event) => dispatchMouseEvent(container, event),
   );
 
   return {

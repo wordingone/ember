@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // layout-engine — pure TypeScript flexbox adapter.
 // Implements the LayoutNode interface the renderer uses; abstracts away
 // the underlying layout engine (spec says Yoga WASM; we implement an
@@ -287,6 +290,7 @@ class FlexNode implements LayoutNode {
 
     // Layout children
     const isRow = this.flexDirection === "row" || this.flexDirection === "rowReverse";
+    const isReverse = this.flexDirection === "rowReverse" || this.flexDirection === "columnReverse";
     const effGap = isRow ? (this.columnGap || this.gap) : (this.rowGap || this.gap);
     const visibleChildren = this._children.filter(c => c.display !== "none");
 
@@ -408,7 +412,7 @@ class FlexNode implements LayoutNode {
     let spacing     = 0;
     switch (this.justifyContent) {
       case "center":        startOffset = Math.floor(relFree / 2); break;
-      case "flexEnd":       startOffset = relFree; break;
+      case "flexEnd":       startOffset = isReverse ? 0 : relFree; break;
       case "spaceBetween":  spacing = relChildren.length > 1 ? Math.floor(relFree / (relChildren.length - 1)) : 0; break;
       case "spaceAround":
         spacing = relChildren.length > 0 ? Math.floor(relFree / relChildren.length) : 0;
@@ -420,6 +424,7 @@ class FlexNode implements LayoutNode {
         break;
       default: break;
     }
+    if (isReverse && this.justifyContent === "flexStart") startOffset = relFree;
     cursor += startOffset;
 
     // Cross space used by stretch/align in a ROW: an auto-height row resolves its
@@ -430,8 +435,9 @@ class FlexNode implements LayoutNode {
       ? relChildren.reduce((m, c) => Math.max(m, c.computedHeight), 0)
       : innerH;
 
-    for (let ci = 0; ci < relChildren.length; ci++) {
-      const child = relChildren[ci]!;
+    const positionedChildren = isReverse ? [...relChildren].reverse() : relChildren;
+    for (let ci = 0; ci < positionedChildren.length; ci++) {
+      const child = positionedChildren[ci]!;
       if (isRow) {
         child.computedLeft = cursor;
         // align items cross-axis (may modify child.computedHeight via stretch)
@@ -442,7 +448,7 @@ class FlexNode implements LayoutNode {
         child.computedLeft = this._crossAlign(child, innerW, pl + bl);
       }
       cursor += (isRow ? child.computedWidth : child.computedHeight);
-      cursor += ci < relChildren.length - 1 ? (effGap + spacing) : 0;
+      cursor += ci < positionedChildren.length - 1 ? (effGap + spacing) : 0;
       // _markNewLayout AFTER cross-align so it sees the final stretched geometry.
       child._markNewLayout(childPrevMap.get(child)!);
     }

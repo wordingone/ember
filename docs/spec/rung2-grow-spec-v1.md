@@ -2,7 +2,8 @@
 
 Decision source: `docs/dossier/rung2-growth-ladder-dossier-v1.md` (#76, gated 2026-07-04:
 params arithmetic independently re-derived; S9 pre-registration and corpus citations
-spot-verified). Pre-registration remains binding: `docs/spec/c-scale-s1-growth-chain-DRAFT.md`
+spot-verified; dossier absent as of 2026-08-01 in this contract tree, unlanded on the rung-2
+lane). Pre-registration remains binding: `docs/spec/c-scale-s1-growth-chain-DRAFT.md`
 §9 (D1–D6). This spec adds the rung-2 execution decision on top of both.
 
 ## The rung

@@ -11,6 +11,7 @@
 import React from "react";
 import type { ReactElement } from "react";
 import type { MountHandle } from "../ink/reconciler.ts";
+import { createTerminalSessionController, type TerminalSessionController } from "../ink/terminal-session.ts";
 
 // ---------------------------------------------------------------------------
 // issue #286: mountInk/createRenderer close over whatever `stdout` object is
@@ -192,13 +193,25 @@ async function getInkRender(): Promise<(node: ReactElement, options?: RenderOpti
     const stream = (options?.stdout as { write?: (s: string) => void } | undefined)?.write
       ? options!.stdout as { write(s: string): void }
       : process.stdout;
-    const handle = mountInk(wrapped, {
-      stream,
-      stdout: liveStdoutSize,
-      debug: options?.debug,
-    });
+    const terminalSession = createTerminalSessionController(stream);
+    terminalSession.enter();
+    let handle: MountHandle;
+    try {
+      handle = mountInk(wrapped, {
+        stream,
+        stdout: liveStdoutSize,
+        debug: options?.debug,
+        onError: () => terminalSession.exit(),
+      });
+    } catch (error) {
+      terminalSession.exit();
+      throw error;
+    }
     return {
-      unmount() { handle.unmount(); },
+      unmount() {
+        try { handle.unmount(); }
+        finally { terminalSession.exit(); }
+      },
       waitUntilExit(): Promise<void> { return Promise.resolve(); },
     };
   };
@@ -217,6 +230,8 @@ export function render(node: ReactElement, options?: RenderOptions): InkInstance
   const stream = (options?.stdout as { write?: (s: string) => void } | undefined)?.write
     ? options!.stdout as { write(s: string): void }
     : process.stdout;
+  const terminalSession = createTerminalSessionController(stream);
+  terminalSession.enter();
 
   // Kick off the mount synchronously using a dynamic import cache
   import("../ink/reconciler.ts").then(({ mountInk }) => {
@@ -224,31 +239,52 @@ export function render(node: ReactElement, options?: RenderOptions): InkInstance
       stream,
       stdout: liveStdoutSize,
       debug: options?.debug,
+      onError: () => terminalSession.exit(),
     });
-  }).catch(() => { /* reconciler load failure — degrade silently */ });
+  }).catch(() => {
+    terminalSession.exit();
+  });
 
   return {
-    unmount() { handle?.unmount(); },
+    unmount() {
+      try { handle?.unmount(); }
+      finally { terminalSession.exit(); }
+    },
     waitUntilExit(): Promise<void> { return Promise.resolve(); },
   };
 }
 
 // Module-level root singleton (AC2)
-let _rootInstance: { render: (node: ReactElement) => void } | null = null;
+export interface FrontendRoot {
+  render(node: ReactElement): void;
+  unmount(): void;
+}
+
+let _rootInstance: FrontendRoot | null = null;
 let _rootHandle: MountHandle | null = null;
+let _rootTerminalSession: TerminalSessionController | null = null;
+let _rootExitListener: (() => void) | null = null;
 
 /**
  * AC2: Returns the same root instance on repeated calls within a process
  * (memoized at the module level). Uses the custom reconciler in production.
  */
-export function createRoot(options?: RenderOptions): { render: (node: ReactElement) => void } {
+export function createRoot(options?: RenderOptions): FrontendRoot {
   if (_rootInstance !== null) return _rootInstance;
 
-  const stream = process.stdout as { write(s: string): void };
+  const stream = (options?.stdout as { write?: (s: string) => void } | undefined)?.write
+    ? options!.stdout as { write(s: string): void }
+    : process.stdout as { write(s: string): void };
   const stdout = liveStdoutSize;
+  _rootTerminalSession = createTerminalSessionController(stream);
+  _rootExitListener = (): void => {
+    try { _rootTerminalSession?.exit(); } catch { /* process teardown is best-effort */ }
+  };
+  process.once("exit", _rootExitListener);
 
   _rootInstance = {
     render(node: ReactElement): void {
+      _rootTerminalSession?.enter();
       const wrapped = React.createElement(ThemeProvider, null, node);
       import("../ink/reconciler.ts").then(({ mountInk }) => {
         if (_rootHandle) {
@@ -260,9 +296,19 @@ export function createRoot(options?: RenderOptions): { render: (node: ReactEleme
             stream,
             stdout,
             onFirstFrameFlushed: options?.onFirstFrameFlushed,
+            onError: () => _rootTerminalSession?.exit(),
           });
         }
-      }).catch(() => { /* degrade silently */ });
+      }).catch(() => { _rootTerminalSession?.exit(); });
+    },
+    unmount(): void {
+      try { _rootHandle?.unmount(); }
+      finally {
+        _rootHandle = null;
+        _rootTerminalSession?.exit();
+        if (_rootExitListener) process.off("exit", _rootExitListener);
+        _rootExitListener = null;
+      }
     },
   };
   return _rootInstance;
@@ -270,8 +316,9 @@ export function createRoot(options?: RenderOptions): { render: (node: ReactEleme
 
 /** Test helper: resets the root singleton. */
 export function _resetRootForTests(): void {
-  _rootHandle?.unmount();
+  _rootInstance?.unmount();
   _rootHandle = null;
+  _rootTerminalSession = null;
   _rootInstance = null;
   _inkRender = null;
 }

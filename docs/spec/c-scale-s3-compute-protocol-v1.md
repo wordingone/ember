@@ -2,7 +2,8 @@
 
 Status: FROZEN v1 (maintainer spec authorship per #74; wall surfaced by the #73 gap report:
 five of test_c_scale.py's fifteen contract fields have no producer anywhere in the tree, and
-`docs/spec/c-scale-s2-token-bill-protocol.md` §1.2 scopes the 6ND FLOPs pair out of S2).
+`docs/spec/c-scale-s2-token-bill-protocol.md` §1.2 scopes the 6ND FLOPs pair out of S2; doc
+absent as of 2026-08-01 in this contract tree, unmerged to master).
 Consumer contract is FROZEN: `scripts/ember_totality/test_c_scale.py` (zero probe edits) —
 `capability_per_compute_ratio` must re-derive as projected/measured within 1%,
 `contribution_deletion_collapses_excess` must be literally true, and
@@ -28,7 +29,8 @@ exclusion — estimator bias cancels in the ratio, which is the only quantity th
   row's `params_unique` at that segment.
 - **projected_dense_flops_to_capability** = `6 × N_final × T_dense`, where `T_dense` is the W1
   control arm's tokens-to-match. Fairness inherits W1's rules verbatim
-  (`docs/spec/w1-token-collapse-control-v1.md` §2: standard from-scratch schedule, never a
+  (`docs/spec/w1-token-collapse-control-v1.md` §2 — absent as of 2026-08-01 in this contract
+  tree, unmerged to master: standard from-scratch schedule, never a
   hobbled control). Before the control run completes, this field is UNPRODUCIBLE — same
   outcome ladder as W1: L1 → measured T_dense; L2 → ceiling-valued T_dense with
   `lower_bound: true` carried into the ratio; L3 → the S3 FLOPs arm is REFUTED alongside W1
