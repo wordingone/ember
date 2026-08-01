@@ -4,7 +4,7 @@
 import { describe, expect, it } from "bun:test";
 import { EventEmitter } from "node:events";
 import React from "react";
-import type { ClickEvent } from "./event-system.ts";
+import type { ClickEvent, PointerEvent } from "./event-system.ts";
 
 import { Box, Text } from "./components.ts";
 import { useInput } from "./hooks.ts";
@@ -35,6 +35,7 @@ describe("SGR mouse decoder", () => {
 
     expect(decoder.push("\x1b[<0;7;4M")).toEqual({
       events: [{
+        kind: "press",
         col: 6,
         row: 3,
         button: 0,
@@ -50,6 +51,7 @@ describe("SGR mouse decoder", () => {
     expect(decoder.push("\x1b[<0;12")).toEqual({ events: [], passthrough: "" });
     expect(decoder.push(";9M")).toEqual({
       events: [{
+        kind: "press",
         col: 11,
         row: 8,
         button: 0,
@@ -64,6 +66,7 @@ describe("SGR mouse decoder", () => {
 
     expect(decoder.push("a\x1b[<0;2;1Mb")).toEqual({
       events: [{
+        kind: "press",
         col: 1,
         row: 0,
         button: 0,
@@ -73,23 +76,64 @@ describe("SGR mouse decoder", () => {
     });
   });
 
-  it("does not activate on release, motion, wheel, unsupported button, malformed, or zero coordinates", () => {
+  it("decodes release, hover motion, and wheel direction without treating malformed input as pointer authority", () => {
     const decoder = createSgrMouseDecoder();
-    const input = [
-      "\x1b[<0;2;1m",
-      "\x1b[<32;2;1M",
-      "\x1b[<64;2;1M",
-      "\x1b[<1;2;1M",
-      "\x1b[<0;0;1M",
-      "\x1b[<4294967296;2;1M",
-      "\x1b[<x;2;1M",
-    ].join("");
 
-    expect(decoder.push(input)).toEqual({ events: [], passthrough: "\x1b[<x;2;1M" });
+    expect(decoder.push("\x1b[<0;2;1m\x1b[<35;3;2M\x1b[<64;4;3M\x1b[<65;5;4M")).toEqual({
+      events: [
+        {
+          kind: "release", col: 1, row: 0, button: 0,
+          modifiers: { ctrl: false, shift: false, alt: false, meta: false },
+        },
+        {
+          kind: "move", col: 2, row: 1, button: null,
+          modifiers: { ctrl: false, shift: false, alt: false, meta: false },
+        },
+        {
+          kind: "wheel", col: 3, row: 2, button: null, deltaY: -1,
+          modifiers: { ctrl: false, shift: false, alt: false, meta: false },
+        },
+        {
+          kind: "wheel", col: 4, row: 3, button: null, deltaY: 1,
+          modifiers: { ctrl: false, shift: false, alt: false, meta: false },
+        },
+      ],
+      passthrough: "",
+    });
+
+    expect(decoder.push("\x1b[<0;0;1M\x1b[<4294967296;2;1M\x1b[<x;2;1M")).toEqual({
+      events: [],
+      passthrough: "\x1b[<x;2;1M",
+    });
   });
 });
 
 describe("production mouse bridge and mounted-tree hit testing", () => {
+  it("flushes a hover-driven React state update into the rendered frame", async () => {
+    const stdin = new FakeStdin();
+    let output = "";
+    const StatefulControl = (): React.ReactElement => {
+      const [hovered, setHovered] = React.useState(false);
+      return React.createElement(
+        Box,
+        { width: 8, height: 1, onMouseEnter: () => setHovered(true) },
+        React.createElement(Text, { inverse: hovered }, "[PAUSE]"),
+      );
+    };
+    const handle = mountInk(React.createElement(StatefulControl), {
+      stream: { write(value: string) { output += value; } },
+      stdout: { columns: 10, rows: 2 },
+    });
+    const stop = startStdinBridge({ stdin: stdin as never, emitKeypressEvents: () => {} });
+    output = "";
+
+    stdin.emit("data", "\x1b[<35;2;1M");
+    await Bun.sleep(20);
+
+    expect(output).toContain("\x1b[7m");
+    stop();
+    handle.unmount();
+  });
   it("routes adjacent keyboard bytes without leaking mouse bytes to key handlers", () => {
     const keys: string[] = [];
     const stdin = new FakeStdin();
@@ -217,6 +261,40 @@ describe("production mouse bridge and mounted-tree hit testing", () => {
     stdin.emit("data", "\x1b[<0;4;1M");
     expect(calls).toBe(0);
 
+    stop();
+    handle.unmount();
+  });
+
+  it("dispatches exact hover transitions and wheel direction to the pointed region", () => {
+    const calls: string[] = [];
+    const stdin = new FakeStdin();
+    const tree = React.createElement(
+      Box,
+      { width: 12, height: 2 },
+      React.createElement(Box, {
+        width: 6,
+        height: 1,
+        flexShrink: 0,
+        onMouseEnter: () => calls.push("enter"),
+        onMouseMove: () => calls.push("move"),
+        onMouseLeave: () => calls.push("leave"),
+        onWheel: (event) => calls.push(`wheel:${(event as PointerEvent).deltaY}`),
+      }),
+    );
+    const handle = mountInk(tree, {
+      stream: { write() {} },
+      stdout: { columns: 12, rows: 2 },
+    });
+    const stop = startStdinBridge({
+      stdin: stdin as never,
+      emitKeypressEvents: () => {},
+    });
+
+    stdin.emit("data", "\x1b[<35;2;1M");
+    stdin.emit("data", "\x1b[<64;2;1M");
+    stdin.emit("data", "\x1b[<35;10;1M");
+
+    expect(calls).toEqual(["enter", "move", "wheel:-1", "leave"]);
     stop();
     handle.unmount();
   });

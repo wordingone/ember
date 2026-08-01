@@ -1322,6 +1322,13 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   );
 
   await exitPromise;
+  // Restore terminal ownership before stopping the stdin bridge. In the compiled Windows
+  // runtime, pausing the final ConPTY input handle can let the process terminate immediately;
+  // cleanup after stopBridge() is therefore not an executable guarantee.
+  root.unmount();
+  await new Promise<void>((resolveDrain, rejectDrain) => {
+    process.stdout.write("", (error) => error ? rejectDrain(error) : resolveDrain());
+  });
   stopBridge();
-  process.exit(0);
+  doExitMain(0);
 }

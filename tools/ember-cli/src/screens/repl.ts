@@ -235,6 +235,10 @@ export function shouldUseVirtualScroll(env: NodeJS.ProcessEnv = process.env): bo
   return !env["EMBER_DISABLE_VIRTUAL_SCROLL"];
 }
 
+export function isExitCommandInput(text: string): boolean {
+  return /^\/(?:exit|quit)\s*$/i.test(text);
+}
+
 export function shouldShowMessageActions(env: NodeJS.ProcessEnv = process.env): boolean {
   return !env["EMBER_DISABLE_MESSAGE_ACTIONS"];
 }
@@ -300,6 +304,15 @@ export function transcriptJustifyContent(messages: SessionMessage[]): "flex-star
   // "no turns have landed yet".
   const isWelcomeOnly = messages.length === 0;
   return isWelcomeOnly ? "flex-start" : "flex-end";
+}
+
+// VirtualMessageList already owns newest-at-bottom placement with column-reverse. Its parent
+// must stay flex-start so multi-pass text fitting cannot apply a second, stale negative offset.
+export function transcriptViewportJustifyContent(
+  useVirtualScroll: boolean,
+  messages: SessionMessage[],
+): "flex-start" | "flex-end" {
+  return useVirtualScroll ? "flex-start" : transcriptJustifyContent(messages);
 }
 
 /**
@@ -714,6 +727,8 @@ export function ReplScreen({
   // (and the pane renders no marker) whenever paneFocused is false.
   const [paneFocused,          setPaneFocused]          = useState(false);
   const [focusedControlIndex,  setFocusedControlIndex]  = useState(0);
+  const [hoveredControl, setHoveredControl] = useState<OperatorControlAction | undefined>(undefined);
+  const [activityScrollOffset, setActivityScrollOffset] = useState(0);
   const [controlDisabledReason, setControlDisabledReason] = useState<string | undefined>(undefined);
 
   const [permMode,         setPermMode]        = useState<ReplPermissionMode>(config.permissionMode);
@@ -1369,6 +1384,16 @@ export function ReplScreen({
       ]);
     }
 
+    if (isExitCommandInput(text)) {
+      if (origin === "operator") {
+        operatorReceiptsRef.current?.append("command_completed", slashParsed!.name);
+      }
+      busyRef.current = false;
+      setBusy(false);
+      _onExit?.();
+      return;
+    }
+
     // Slash-command dispatch — execute a registered command instead of a model
     // turn. Returns null for ordinary input, which falls through to the engine.
     const slashResult = await tryDispatchSlashCommand(text, {
@@ -1381,6 +1406,9 @@ export function ReplScreen({
         ...prev,
         { id: crypto.randomUUID(), type: "assistant", content: slashResult.message },
       ]);
+      if (origin === "operator") {
+        operatorReceiptsRef.current?.append("command_completed", slashParsed.name);
+      }
       busyRef.current = false;
       setBusy(false);
       // ember #211 (found via live compiled-binary acceptance testing, not
@@ -1800,7 +1828,7 @@ export function ReplScreen({
         { key: "workspace", flexDirection: "column", flexGrow: 1, minHeight: 0, overflow: "hidden" },
         React.createElement(
           Box,
-          { key: "transcript", flexDirection: "column", flexGrow: 1, minWidth: 0, overflow: "hidden", justifyContent: transcriptJustifyContent(messages) },
+          { key: "transcript", flexDirection: "column", flexGrow: 1, minWidth: 0, minHeight: 0, overflow: "hidden", justifyContent: transcriptViewportJustifyContent(useVirtualScroll, messages) },
           transcript,
         ),
       ),
@@ -1859,6 +1887,10 @@ export function ReplScreen({
       onControl: handleOperatorControl,
       focusedControlIndex: paneFocused ? focusedControlIndex : undefined,
       disabledActionReason: controlDisabledReason,
+      hoveredControl,
+      onControlHover: setHoveredControl,
+      activityScrollOffset,
+      onActivityScroll: (deltaY) => setActivityScrollOffset((value) => Math.max(0, value + (deltaY < 0 ? 1 : -1))),
     }),
   );
 }

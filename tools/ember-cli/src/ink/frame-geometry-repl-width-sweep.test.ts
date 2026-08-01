@@ -50,10 +50,13 @@ describe("frame geometry — R4b acceptance row 3 (OperatorSurfacePane, existing
       // Zero violations alone is a fail-open verdict: checkFrameGeometry skips any box it marks
       // `clipped`, so a pane whose right edge vanished entirely -- R4b defect B, the exact symptom
       // this sweep exists to catch -- would report zero violations and pass silently. The pane
-      // yields exactly one `single`-style box at every swept width (observed), so binding that
-      // makes the assertion non-vacuous.
-      expect(result.boxes.length).toBe(1);
-      expect(result.boxes[0]!.clipped).toBe(false);
+      // now deliberately yields the outer live pane plus one renderer-owned graph card whenever
+      // the width can fit it; the two narrow fallback widths retain only the outer pane. Bind the
+      // exact responsive structure so the check remains non-vacuous after graph borders moved
+      // out of hand-drawn text and into the renderer.
+      expect(result.boxes.length).toBe(width < 60 ? 1 : 2);
+      expect(result.boxes.every((box) => box.styleName === "single")).toBe(true);
+      expect(result.boxes.every((box) => !box.clipped)).toBe(true);
     });
   }
 });
