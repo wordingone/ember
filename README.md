@@ -80,8 +80,10 @@ No current checkpoint is an admissible Ember model.
   verified random genesis. Image, audio, reasoning, and tool training exposure
   is therefore still zero for this checkpoint; no modality or capability
   admission is claimed.
-- The approximately 2.195B owned checkpoint remains radically undertrained,
-  capability-unproven, below the 3B birth floor, and historical-only.
+- The current candidate has 3.839B allocated, unique, trainable, and served
+  parameters, but only 1.021B active and episode-trainable parameters. It has
+  observed just 2,048 tokens and remains radically undertrained,
+  capability-unproven, below the active-route 3B birth floor, and not admitted.
 - Earlier approximately 0.4B, 0.7B, and 1.2B references are stages or accounting
   views of historical lineages, not separate current Ember models.
 - The closer unified multimodal implementation is a disconnected research
@@ -89,8 +91,9 @@ No current checkpoint is an admissible Ember model.
 - The checked-in ember-cli source now refuses ordinary model-backed launch
   without an `OWNED_ADMITTED` identity. Borrowed Qwen remains available only
   through the explicit `REFERENCE_ONLY` comparison seat and must never be
-  displayed or credited as Ember. The installed cockpit deployment has not yet
-  been clean-checkout reverified against the new owned path.
+  displayed or credited as Ember. Cockpit source and release behavior are
+  verified in repository tests and release receipts; this README does not infer
+  mutable installed-runtime freshness from checked-in source.
 - No complete neural verified-experience self-improvement cycle or field-level
   breakthrough is currently proven.
 

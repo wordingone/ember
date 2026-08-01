@@ -121,6 +121,10 @@ def test_receipt_and_continuity_block_are_content_bound(tmp_path):
         ],
         ignored_artifacts=[],
     )
+    assert receipt["ticket"] == "EMBER-BRANCH-INVENTORY"
+    assert receipt["ts"] == receipt["captured_at"]
+    assert "receipt_sha256" in receipt["sha_convention"]
+    assert receipt["invariant_sha256"] == module.INVARIANT_SHA256
     manifest = tmp_path / "receipts" / "branch-inventory" / "current.json"
     manifest.parent.mkdir(parents=True)
     module._write_json(manifest, receipt)

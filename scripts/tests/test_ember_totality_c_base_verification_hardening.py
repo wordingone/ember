@@ -5,15 +5,27 @@
 from __future__ import annotations
 
 import copy
+import importlib.util
 import json
+import sys
 import unittest
 from pathlib import Path
 
-import test_c_base as target
-
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RECEIPTS = REPO_ROOT / "receipts"
+TARGET = REPO_ROOT / "scripts" / "ember_totality" / "test_c_base.py"
+
+
+def _load_target():
+    spec = importlib.util.spec_from_file_location("ember_totality_test_c_base", TARGET)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+target = _load_target()
 
 
 def _receipt(name: str) -> dict:
