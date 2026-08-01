@@ -374,6 +374,21 @@ def run():
                 },
             }
             _emit(receipt, ts)
+            # [C-MILE cure] The dual-source leg reader (milestone_leg.py's
+            # MILESTONE_CHECKER.verdict_regex) and the status probe's own independent
+            # re-derivation (test_c_mile.py's MILESTONE_VERDICT_LINE_RE) both require a
+            # stdout line matching `mapped=<n>/<n> unmapped=<n> lattice_diff=<n>
+            # floor_contract_gaps=<n> exit=PASS|FAIL` -- this supersession branch used to
+            # print only the human-readable message below, so no line ever matched and
+            # every leg run resolved to UNRESOLVABLE regardless of the crosswalk's real
+            # state. Printed here from the SAME fields just persisted in `receipt` (never
+            # hand-typed independently), so the line is honest by construction.
+            print(
+                f"mapped={receipt['mapped']}/55  unmapped={len(receipt['unmapped'])}  "
+                f"lattice_diff={len(receipt['lattice_diff'])}  "
+                f"floor_contract_gaps={len(receipt['floor_contract_gaps'])}  "
+                f"exit={receipt['exit']}"
+            )
             print(
                 "PASS: legacy milestone reconciliation is preserved by the "
                 f"validated authority crosswalk ({crosswalk['row_count']} rows)"
