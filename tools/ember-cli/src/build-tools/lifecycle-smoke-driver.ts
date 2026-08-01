@@ -165,7 +165,14 @@ export async function terminateLifecycleChild(
       survivors: 0,
     };
   }
-  requestExit();
+  try {
+    requestExit();
+  } catch (error) {
+    if (
+      typeof error !== "object" || error === null ||
+      (error as { code?: unknown }).code !== "ERR_SOCKET_CLOSED"
+    ) throw error;
+  }
   const startedAt = now();
   const cleanDeadline = startedAt + cleanExitWaitMs;
   while (!isExitObserved() && now() < cleanDeadline) {

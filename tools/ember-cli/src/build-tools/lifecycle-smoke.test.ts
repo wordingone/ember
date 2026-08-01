@@ -358,6 +358,28 @@ describe("validateLifecycleReceipt", () => {
     });
   });
 
+  test("waits for the exit event when ConPTY closes its socket first", async () => {
+    const driver = await import("./lifecycle-smoke-driver.ts");
+    let observed = false;
+    let forced = 0;
+    const socketClosed = Object.assign(new Error("Socket is closed"), {
+      code: "ERR_SOCKET_CLOSED",
+    });
+    const result = await driver.terminateLifecycleChild!(
+      () => { throw socketClosed; },
+      () => observed,
+      () => { forced += 1; },
+      async () => { observed = true; },
+      (() => { let now = 0; return () => (now += 25); })(),
+      100,
+    );
+    expect(forced).toBe(0);
+    expect(result.clean_exit_observed).toBe(true);
+    expect(result.forced_cleanup_required).toBe(false);
+    expect(result.final_exit_observed).toBe(true);
+    expect(result.survivors).toBe(0);
+  });
+
   test("refuses forged source, binary, rebuild, or builder bindings", () => {
     for (const mutate of [
       (r: LifecycleReceipt) => { r.source_commit = SHA_D; },
