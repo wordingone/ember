@@ -32,9 +32,12 @@ CLAIM_LIMITS = [
     "PARK is the fail-closed default; LAND requires an explicit per-file override.",
     "This inventory grants no branch deletion, merge, issue closure, model, training, or capability authority.",
 ]
+TICKET = "EMBER-BRANCH-INVENTORY"
+SHA_CONVENTION = "lowercase hexadecimal SHA-256; receipt_sha256 hashes canonical UTF-8 JSON excluding its own field; identity and path hashes cover their UTF-8 bytes"
+INVARIANT_SHA256 = "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
 TOP_FIELDS = {
     "schema_version", "goal_id", "workstream_id", "next_executed_outcome",
-    "repository", "master_sha", "captured_at", "selection",
+    "repository", "master_sha", "captured_at", "ticket", "ts", "sha_convention", "invariant_sha256", "selection",
     "candidate_count", "path_dictionary", "file_sets", "rows", "ignored_artifacts",
     "mutation_performed", "claim_limits", "receipt_sha256",
 }
@@ -405,6 +408,10 @@ def build_receipt(
         "repository": repository,
         "master_sha": master_sha,
         "captured_at": captured_at,
+        "ticket": TICKET,
+        "ts": captured_at,
+        "sha_convention": SHA_CONVENTION,
+        "invariant_sha256": INVARIANT_SHA256,
         "selection": SELECTION,
         "candidate_count": len(compact_rows),
         "path_dictionary": path_dictionary,
@@ -451,6 +458,10 @@ def verify_receipt(payload: Mapping[str, Any]) -> dict[str, Any]:
         or payload.get("next_executed_outcome")
         != "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
         or payload.get("repository") != "wordingone/ember"
+        or payload.get("ticket") != TICKET
+        or payload.get("ts") != payload.get("captured_at")
+        or payload.get("sha_convention") != SHA_CONVENTION
+        or payload.get("invariant_sha256") != INVARIANT_SHA256
     ):
         raise InventoryError("inventory identity is invalid")
     _require_sha(payload.get("master_sha"), SHA1, "master_sha")
