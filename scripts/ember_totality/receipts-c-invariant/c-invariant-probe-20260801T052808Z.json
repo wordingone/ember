@@ -1,0 +1,24 @@
+{
+  "probe": "c_invariant",
+  "condition": "C-INV",
+  "timestamp": "2026-08-01T05:28:08.083663Z",
+  "status": "RED",
+  "reason": "Stamped receipts: 24/244 post-genesis receipt(s) missing/mismatched invariant_sha256 stamp and not errata-covered (of 1076 receipts scanned under receipts/; stamped=103, errata_covered=101, superseded=16, uncovered_pre_cutoff=0, uncovered_post_cutoff=24); first offenders: [\"receipts/ember-c-scale/land210k-e2b-pair-receipt.json (ts='20260711T091500Z', invariant_sha256=None)\", \"receipts/ember-c-scale/w1-baseline-replay-closure-20260711T025650Z-redacted-edition.json (ts='20260711T025650Z', invariant_sha256=None)\", \"receipts/ember-c-scale/w1-fullstate-resume-verify-20260711T045424Z-redacted-edition.json (ts='20260711T045424Z', invariant_sha256=None)\"]",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "invariant_file_hash": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "stamp_coverage": {
+    "post_genesis_scanned": 244,
+    "stamped": 103,
+    "errata_covered": 101,
+    "superseded": 16,
+    "uncovered_pre_cutoff": 0,
+    "uncovered_post_cutoff": 24,
+    "errata_rows_skipped": 0,
+    "supersession_rows_skipped": 0
+  },
+  "invariant_breach": true,
+  "complete": false,
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+}
