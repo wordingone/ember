@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Ember totality test — Condition C10 (status probe / TDD).
 
 C10 — No deferred-work escape hatch.
@@ -151,9 +154,18 @@ def main():
         row_id = cells[0]
         # The status is the LAST cell in these tables (Active Rows / Highest-
         # Priority / Self-Growth / etc. all put status last or second-to-last).
-        # Be robust: scan all cells for a recognizable status token.
+        # Be robust: scan all cells for a recognizable status token -- but a
+        # fixed taxonomy column (e.g. "Class": ACTIVE-BLOCKER/ACTIVE-NEXT/
+        # TRIGGER-GATED, which never changes once a row is disposed) always
+        # sits to the LEFT of the real Status column and uses the exact same
+        # vocabulary. Scanning left-to-right and stopping at the first match
+        # picked the permanent Class label every time and could never see a
+        # disposition written into Status -- contradicting this comment's own
+        # "status is the LAST cell" intent. Scan in REVERSE so the rightmost
+        # recognizable cell wins, falling back leftward only when no trailing
+        # cell carries a recognizable token.
         status_cell = None
-        for c in cells:
+        for c in reversed(cells):
             cu = c.strip().upper()
             base = cu.split(":")[0]
             if base in OFFENDING_STATUSES or base in (
