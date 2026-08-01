@@ -197,10 +197,7 @@ FILENAME_ID = {
 # closed allowlist synchronized with the directory: an unknown test_*.py
 # still fails PROBE_DIR_DRIFT, and a stale allowlist entry also fails.
 NON_PROBE_TEST_FILES = {
-    "test_c9_adversarial.py",
-    "test_c_base_verification_hardening_test.py",
-    "test_c_invariant_goal_pin.py",
-    "test_ind3_operate_producer.py",
+    "test_c10_status_column_regression.py",
 }
 
 # Stable board ordering: the program order from the goal §4. This IS the
