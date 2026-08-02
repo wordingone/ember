@@ -5,8 +5,8 @@
 #
 # Pre-handoff authority-binding preflight.
 #
-# Predicts the PUBLIC repo-guard verdict for a PR by reproducing BOTH CI steps
-# against the exact ref CI actually evaluates.
+# Predicts the PUBLIC verdict for a PR by reproducing the CI steps against the
+# exact ref CI actually evaluates.
 #
 # The `pull_request` job checks out `refs/pull/<N>/merge` — the GitHub-computed
 # merge of the PR head into the current base tip — never the bare PR head. A
@@ -42,13 +42,23 @@
 #
 # Usage:
 #   bash tools/pr_authbind_preflight.sh <PR_NUMBER> [<LOCAL_HEAD_REF>]
-# Exit 0 only if BOTH Step A (repo-guard structural kernel) and Step B
-# (PR-body + changed-artifact authority binding) pass against the merge ref.
+# Exit 0 only if ALL of Step A (repo-guard structural kernel), Step B (PR-body +
+# changed-artifact authority binding), and Step C (the live PR policy: labels,
+# milestone, title grammar, template marker, required body sections, and the
+# label/milestone vocabulary) pass against the merge ref.
 # Exit 2 on any preflight-validity failure (head mismatch, non-master base,
 # unauthenticated/stale base, mergeable=false or persistently unknown,
 # unresolvable/stale merge ref, non-clean merge, API failure, empty body) —
 # these are never guard verdicts; they mean the preflight cannot yet speak
 # for the public job, and it never proceeds past one to find out anyway.
+#
+# Step C exists because A and B alone were not the whole public verdict. A PR
+# could pass both and still fail ci-pr, guard, and python together, all three
+# reporting labels:*-cardinality and milestone:required-or-exception — rules
+# neither earlier step looks at. Step C delegates to the same
+# validate_live_pull_request() the CI gate calls, via
+# scripts/github/pr_intent_policy.py, so the contract is not restated here. To
+# check a PR that does not exist yet, use tools/pr_intent_preflight.sh.
 
 set -u
 ROOT="$(git rev-parse --show-toplevel)" || { echo "not in a git repo"; exit 2; }
@@ -130,10 +140,11 @@ echo "   fetched origin/master confirmed == public base sha ($AUTH_BASE_SHA)"
 
 # -- (4) resolve the guarded merge ref, falling back to constructing it ------
 TMPWT="$(mktemp -d)"
+WORK_C="$(mktemp -d -t pr_policy_c.XXXXXX)"
 BODY_FILE=""
 cleanup() {
   git worktree remove --force "$TMPWT" >/dev/null 2>&1
-  rm -rf "$TMPWT"
+  rm -rf "$TMPWT" "$WORK_C"
   [ -n "$BODY_FILE" ] && rm -f "$BODY_FILE"
 }
 trap cleanup EXIT
@@ -208,11 +219,62 @@ else
 fi
 
 echo
+echo "== Step C: live PR policy incl. labels, milestone, title, body sections =="
+# Steps A and B reproduce the repo-guard and authority-binding jobs. They do not
+# look at labels, milestone, or title, so a PR could pass both and still fail
+# ci-pr, guard, and python on labels:*-cardinality and milestone:required-or-exception.
+# This step runs the same policy CI runs, plus the vocabulary check that only
+# matters before GitHub has accepted the metadata.
+step_c() {
+  gh api "repos/${SLUG}/pulls/${PR}" > "$WORK_C/pr.json" 2>/dev/null || return 2
+  gh api --paginate --slurp "repos/${SLUG}/pulls/${PR}/files?per_page=100" \
+    > "$WORK_C/files.json" 2>/dev/null || return 2
+  gh api "repos/${SLUG}/labels?per_page=100" --paginate --slurp \
+    > "$WORK_C/labels.json" 2>/dev/null || return 2
+  gh api "repos/${SLUG}/milestones?state=all&per_page=100" --paginate --slurp \
+    > "$WORK_C/milestones.json" 2>/dev/null || return 2
+  (
+    cd "$TMPWT" || exit 2
+    PR_C_DIR="$WORK_C" PR_C_BASE="$AUTH_BASE_SHA" PR_C_HEAD="$PUBLIC_HEAD" python -c '
+import json, os, pathlib
+from scripts.github.live_pr_policy import build_snapshot
+from scripts.github.pr_intent_policy import DERIVED_FIELDS
+work = pathlib.Path(os.environ["PR_C_DIR"])
+snapshot = build_snapshot(
+    json.loads((work / "pr.json").read_text(encoding="utf-8")),
+    json.loads((work / "files.json").read_text(encoding="utf-8")),
+    event_base_sha=os.environ["PR_C_BASE"],
+    event_head_sha=os.environ["PR_C_HEAD"],
+)
+intent = {k: v for k, v in snapshot.items() if k not in DERIVED_FIELDS}
+(work / "intent.json").write_text(json.dumps(intent), encoding="utf-8")
+' || exit 2
+    python -m scripts.github.pr_intent_policy \
+      --root . \
+      --intent-json "$WORK_C/intent.json" \
+      --labels-json "$WORK_C/labels.json" \
+      --milestones-json "$WORK_C/milestones.json"
+  )
+}
+
+step_c
+STEP_C_RC=$?
+if [ "$STEP_C_RC" -eq 0 ]; then
+  echo "Step C: PASS"
+elif [ "$STEP_C_RC" -eq 2 ]; then
+  echo "Step C: FAIL (could not acquire live metadata or the label/milestone vocabulary)"
+  RC=1
+else
+  echo "Step C: FAIL"
+  RC=1
+fi
+
+echo
 if [ "$RC" -eq 0 ]; then
-  echo "PREFLIGHT: PASS — predicts public repo-guard GREEN for PR #$PR (merge ref $MERGE_OID)"
+  echo "PREFLIGHT: PASS — predicts public repo-guard AND live-PR-policy GREEN for PR #$PR (merge ref $MERGE_OID)"
   echo "   (if the public job is nonetheless RED, CI used a STALE body snapshot:"
   echo "    push a fresh event — empty commit or close/reopen — never 'gh run rerun'.)"
 else
-  echo "PREFLIGHT: FAIL — public repo-guard would be RED for PR #$PR (see Step A/B above)"
+  echo "PREFLIGHT: FAIL — a public job would be RED for PR #$PR (see Step A/B/C above)"
 fi
 exit "$RC"
