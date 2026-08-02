@@ -39,6 +39,7 @@ Stdlib only. No network.
 """
 import argparse
 import glob
+import hashlib
 import json
 import os
 import re
@@ -82,6 +83,10 @@ CURRENT_SUBJECT_FIELDS = {
 }
 RECEIPT_TIMESTAMP_PATTERN = re.compile(r"^\d{8}T\d{6}Z$")
 STATE_AS_OF_PATTERN = re.compile(r"<!-- state-as-of: \d{4}-\d{2}-\d{2} -->")
+# One glob for both selection and predecessor lookup: the chain check is only
+# meaningful if it walks the exact ordering that picked the rendered receipt.
+RECEIPT_GLOB = "ember-totality-*.json"
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
 def _receipt_datetime(ts):
@@ -126,7 +131,7 @@ def newest_receipt_path(data_root):
             "gen_readme_status: refusing stale receipt fallback because exact "
             f"{quarantine_sweep.QUARANTINE_SUFFIX} file(s) exist: {paths}"
         )
-    receipts_glob = os.path.join(data_root, "ember-totality-*.json")
+    receipts_glob = os.path.join(data_root, RECEIPT_GLOB)
     paths = sorted(glob.glob(receipts_glob))
     if not paths:
         raise SystemExit(
@@ -135,10 +140,68 @@ def newest_receipt_path(data_root):
     return paths[-1]
 
 
+def receipt_chain_predecessor(receipt_path):
+    """Immediate predecessor of receipt_path in selection order, or None if it is the first.
+
+    Derived from the directory listing rather than from any path string inside the
+    receipt, so a receipt cannot point the chain check at a file of its choosing.
+    """
+    directory = os.path.dirname(os.path.abspath(receipt_path))
+    paths = sorted(glob.glob(os.path.join(directory, RECEIPT_GLOB)))
+    target = os.path.abspath(receipt_path)
+    for index, candidate in enumerate(paths):
+        if os.path.abspath(candidate) == target:
+            return paths[index - 1] if index else None
+    return None
+
+
+def verify_receipt_chain(receipt_path, receipt, *, allow_unchained=False):
+    """Refuse to render unless the declared predecessor sha matches real predecessor bytes.
+
+    The receipt's own chain_verification.chain_ok is deliberately not consulted: it is
+    the subject's self-report, and the receipts carry a note conceding it could not be
+    computed at write time. The verdict here comes only from bytes hashed on disk.
+    """
+    predecessor = receipt_chain_predecessor(receipt_path)
+    declared = receipt.get("prev_totality_receipt_sha256")
+    name = os.path.basename(str(receipt_path))
+    if predecessor is None:
+        if declared is not None and not allow_unchained:
+            raise ValueError(
+                f"board receipt {name} declares a predecessor sha but no earlier "
+                "receipt exists beside it; pass --allow-unchained-receipt to render "
+                "it as an unverifiable fragment"
+            )
+        return None
+    if declared is None:
+        if allow_unchained:
+            return None
+        raise ValueError(
+            f"board receipt {name} omits prev_totality_receipt_sha256 while its "
+            f"predecessor {os.path.basename(predecessor)} exists on disk; the chain "
+            "cannot be verified"
+        )
+    if not isinstance(declared, str) or SHA256_PATTERN.fullmatch(declared) is None:
+        raise ValueError(
+            f"board receipt {name} prev_totality_receipt_sha256 must be lowercase SHA-256"
+        )
+    with open(predecessor, "rb") as stream:
+        actual = hashlib.sha256(stream.read()).hexdigest()
+    if actual != declared:
+        raise ValueError(
+            f"board receipt {name} chain is broken: it declares predecessor sha "
+            f"{declared}, but the on-disk bytes of its immediate predecessor "
+            f"{os.path.basename(predecessor)} hash to {actual}"
+        )
+    return predecessor
+
+
 def render_block(
     receipt_path,
     *,
     allow_stale_tree=False,
+    allow_unbound_tree=False,
+    allow_unchained=False,
     repo_root=None,
     required_commits=(),
     receipt_max_age_days=None,
@@ -156,6 +219,15 @@ def render_block(
     ts = receipt.get("ts", "unknown")
     if receipt_max_age_days is not None:
         validate_receipt_freshness(ts, max_age_days=receipt_max_age_days, now=now)
+    if tree_state is None and not allow_unbound_tree:
+        # A stale/dirty tree already demands --allow-stale-tree. A receipt with no
+        # run-tree binding at all is strictly less verifiable, so it cannot be the
+        # more permissive case: refuse unless the matching opt-out is passed.
+        raise ValueError(
+            "README_TREE_REFUSED: board receipt carries no run-tree provenance; "
+            "pass --allow-unbound-tree to render it as visibly marked archaeology"
+        )
+    verify_receipt_chain(receipt_path, receipt, allow_unchained=allow_unchained)
     summary = receipt.get("summary", {})
     green = summary.get("green", 0)
     red = summary.get("red", 0)
@@ -501,6 +573,22 @@ def main():
         ),
     )
     parser.add_argument(
+        "--allow-unbound-tree",
+        action="store_true",
+        help=(
+            "render a receipt carrying no run-tree provenance at all only as visibly "
+            "marked LEGACY_UNBOUND archaeology; without this opt-out it is refused"
+        ),
+    )
+    parser.add_argument(
+        "--allow-unchained-receipt",
+        action="store_true",
+        help=(
+            "render a receipt whose predecessor sha cannot be checked against the "
+            "on-disk bytes of the receipt before it; without this opt-out it is refused"
+        ),
+    )
+    parser.add_argument(
         "--receipt-max-age-days",
         type=int,
         default=1,
@@ -531,6 +619,8 @@ def main():
     block = render_block(
         receipt_path,
         allow_stale_tree=args.allow_stale_tree,
+        allow_unbound_tree=args.allow_unbound_tree,
+        allow_unchained=args.allow_unchained_receipt,
         repo_root=ROOT,
         required_commits=args.require_merge,
         receipt_max_age_days=args.receipt_max_age_days,
