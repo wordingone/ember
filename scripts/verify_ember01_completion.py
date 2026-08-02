@@ -91,6 +91,28 @@ LIVE_ISSUE_JSON_FIELDS = (
 LIVE_ISSUE_LIMIT = 1000
 RECEIPT_WORKSTREAM_ID = "EMBER-02A"
 
+# `goal_id` in this receipt is NOT this receipt's subject. Per GOAL.md
+# section 11 ("Every future pull request, experiment, receipt, ...artifact
+# names the active goal_id and the next executed model or capability outcome
+# it directly enables") and GOAL.md's `required_future_artifact_fields`
+# (["goal_id", "workstream_id", "next_executed_outcome"]), every artifact's
+# `goal_id` field records the CURRENTLY ACTIVE authority goal that artifact
+# was produced under and directly enables -- today that is ACTIVE_GOAL_ID
+# ("EMBER-02"), the same value verify_ember00_completion.py's receipt
+# schema stamps for the same binding-rule reason. Changing `goal_id` here to
+# "EMBER-01" would violate that standing rule, not honor it.
+#
+# What this receipt actually certifies (its subject) is unambiguous from its
+# `schema` string ("ember-01-completion-receipt-v1") and its nine EMBER-01
+# leg titles, but the 2026-08-01 cert adjudication flagged that an EMBER-01
+# receipt carrying `goal_id: "EMBER-02"` reads, on its own, as a field
+# reinterpretation in the exact instrument that certifies against field
+# reinterpretation. The fix is not to overload `goal_id` with a second,
+# conflicting meaning -- it is to name the subject explicitly, alongside the
+# required active-authority stamp, so both facts are legible without either
+# one shadowing the other.
+COMPLETION_SUBJECT_GOAL_ID = "EMBER-01"
+
 if RECEIPT_WORKSTREAM_ID not in ACTIVE_WORKSTREAM_IDS:
     raise RuntimeError("completion receipt workstream is not active")
 
@@ -1063,6 +1085,7 @@ def main() -> int:
         "ok": ok,
         "verified_at_utc": datetime.now(timezone.utc).isoformat(),
         "goal_id": ACTIVE_GOAL_ID,
+        "completion_subject_goal_id": COMPLETION_SUBJECT_GOAL_ID,
         "workstream_id": RECEIPT_WORKSTREAM_ID,
         "next_executed_outcome": NEXT_EXECUTED_OUTCOME,
         "certificate_legs": leg_states,
