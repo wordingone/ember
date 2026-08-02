@@ -1,0 +1,160 @@
+{
+  "ticket": "R1-ENTRY-ADMISSION-DRYRUN",
+  "ts": "2026-08-02T00:32:10+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "schema_version": "ember-admission-contract-dryrun-v1",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02B",
+  "workstream_note": "GOAL.md gives receipts/ember-restart-3b/ to EMBER-02B exclusively; the authority conservation certificate binds an artifact's workstream to its path's scope, and sec3 R1 Entry mandates this path for dispatch-gate receipts.",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "prereg_section": "docs/spec/ember02-preregistration-v1.md sec1 (admission-contract validation) + sec3 R1 Entry",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "purpose": "R1 entry gate: admission-contract validation dry-run against the R1 candidate, executed pre-cert to establish exactly which inputs are cert-gated.",
+  "validator": "scripts/ember_restart/contract.py",
+  "validator_sha256": "fa23a6f2844829606ad887b336bfa1b04921281d61ad8aa5149deec94bbab6bf",
+  "required_schema_version": "ember-owned-rung-v1",
+  "executed": true,
+  "result": "BLOCKED_CERT_GATED",
+  "verdict_summary": "The admission contract cannot return green at R1 entry today, and not because of a defect: its required input -- an ember-owned-rung-v1 rung manifest for the R1 candidate -- does not exist in this tree. No file in the repo carries that schema_version. Both paths that name the R1 subject were validated and both are a different schema, so every field finding below is the contract reporting a missing input, not a rejected candidate.",
+  "attempts": [
+    {
+      "command": "scripts/ember_restart/contract.py validate configs/ember-restart-3b.json",
+      "returncode": 1,
+      "verdict": {
+        "errors": [
+          "schema_version: must equal ember-owned-rung-v1",
+          "stage: must equal CHECKPOINT_CANDIDATE or OWNED_ADMITTED",
+          "run_id: must be non-empty",
+          "source_commit: expected lowercase 40-character Git SHA",
+          "trusted_verifier_registry: required for checkpoint claims",
+          "lineage.genesis: must equal OWNED_RANDOM_INIT",
+          "lineage.borrowed_teachers: must be false",
+          "lineage.borrowed_judges: must be false",
+          "lineage.borrowed_filters: must be false",
+          "lineage.borrowed_generated_labels: must be false",
+          "architecture: expected object",
+          "tokenizer: expected object",
+          "tokenizer.kind: must equal OWNED_TRAINED",
+          "tokenizer.freeze_receipt: expected object",
+          "training_data: expected list",
+          "training.input_class: must equal SMOKE_ONLY or SEMANTIC_PRETRAINING",
+          "training.optimizer_receipt.path: expected non-empty relative path",
+          "training.optimizer_receipt.sha256: expected lowercase SHA-256",
+          "training.optimizer: does not match model config",
+          "training.tokens_seen: must be a positive integer",
+          "training.command: must be non-empty",
+          "training.modality_tokens: expected object",
+          "checkpoint.path: expected non-empty relative path",
+          "checkpoint.sha256: expected lowercase SHA-256"
+        ],
+        "stage": null,
+        "valid": false
+      },
+      "raw_stdout": "{\"errors\": [\"schema_version: must equal ember-owned-rung-v1\", \"stage: must equal CHECKPOINT_CANDIDATE or OWNED_ADMITTED\", \"run_id: must be non-empty\", \"source_commit: expected lowercase 40-character Git SHA\", \"trusted_verifier_registry: required for checkpoint claims\", \"lineage.genesis: must equal OWNED_RANDOM_INIT\", \"lineage.borrowed_teachers: must be false\", \"lineage.borrowed_judges: must be false\", \"lineage.borrowed_filters: must be false\", \"lineage.borrowed_generated_labels: must be false\", \"architecture: expected object\", \"tokenizer: expected object\", \"tokenizer.kind: must equal OWNED_TRAINED\", \"tokenizer.freeze_receipt: expected object\", \"training_data: expected list\", \"training.input_class: must equal SMOKE_ONLY or SEMANTIC_PRETRAINING\", \"training.optimizer_receipt.path: expected non-empty relative path\", \"training.optimizer_receipt.sha256: expected lowercase SHA-256\", \"training.optimizer: does not match model config\", \"training.tokens_seen: must be a positive integer\", \"training.command: must be non-empty\", \"training.modality_tokens: expected object\", \"checkpoint.path: expected non-empty relative path\", \"checkpoint.sha256: expected lowercase SHA-256\"], \"stage\": null, \"valid\": false}"
+    },
+    {
+      "command": "scripts/ember_restart/contract.py validate configs/ember-restart-3b.json --trusted-verifier-registry manifests/ember-01-identity/trusted-verifiers-v1.json",
+      "returncode": 1,
+      "verdict": {
+        "errors": [
+          "schema_version: must equal ember-owned-rung-v1",
+          "stage: must equal CHECKPOINT_CANDIDATE or OWNED_ADMITTED",
+          "run_id: must be non-empty",
+          "source_commit: expected lowercase 40-character Git SHA",
+          "trusted_verifier_registry: invalid schema_version",
+          "lineage.genesis: must equal OWNED_RANDOM_INIT",
+          "lineage.borrowed_teachers: must be false",
+          "lineage.borrowed_judges: must be false",
+          "lineage.borrowed_filters: must be false",
+          "lineage.borrowed_generated_labels: must be false",
+          "architecture: expected object",
+          "tokenizer: expected object",
+          "tokenizer.kind: must equal OWNED_TRAINED",
+          "tokenizer.freeze_receipt: expected object",
+          "training_data: expected list",
+          "training.input_class: must equal SMOKE_ONLY or SEMANTIC_PRETRAINING",
+          "training.optimizer_receipt.path: expected non-empty relative path",
+          "training.optimizer_receipt.sha256: expected lowercase SHA-256",
+          "training.optimizer: does not match model config",
+          "training.tokens_seen: must be a positive integer",
+          "training.command: must be non-empty",
+          "training.modality_tokens: expected object",
+          "checkpoint.path: expected non-empty relative path",
+          "checkpoint.sha256: expected lowercase SHA-256"
+        ],
+        "stage": null,
+        "valid": false
+      },
+      "raw_stdout": "{\"errors\": [\"schema_version: must equal ember-owned-rung-v1\", \"stage: must equal CHECKPOINT_CANDIDATE or OWNED_ADMITTED\", \"run_id: must be non-empty\", \"source_commit: expected lowercase 40-character Git SHA\", \"trusted_verifier_registry: invalid schema_version\", \"lineage.genesis: must equal OWNED_RANDOM_INIT\", \"lineage.borrowed_teachers: must be false\", \"lineage.borrowed_judges: must be false\", \"lineage.borrowed_filters: must be false\", \"lineage.borrowed_generated_labels: must be false\", \"architecture: expected object\", \"tokenizer: expected object\", \"tokenizer.kind: must equal OWNED_TRAINED\", \"tokenizer.freeze_receipt: expected object\", \"training_data: expected list\", \"training.input_class: must equal SMOKE_ONLY or SEMANTIC_PRETRAINING\", \"training.optimizer_receipt.path: expected non-empty relative path\", \"training.optimizer_receipt.sha256: expected lowercase SHA-256\", \"training.optimizer: does not match model config\", \"training.tokens_seen: must be a positive integer\", \"training.command: must be non-empty\", \"training.modality_tokens: expected object\", \"checkpoint.path: expected non-empty relative path\", \"checkpoint.sha256: expected lowercase SHA-256\"], \"stage\": null, \"valid\": false}"
+    },
+    {
+      "command": "scripts/ember_restart/contract.py validate manifests/ember-current-subject-v1.json --trusted-verifier-registry manifests/ember-01-identity/trusted-verifiers-v1.json",
+      "returncode": 1,
+      "verdict": {
+        "errors": [
+          "schema_version: must equal ember-owned-rung-v1",
+          "stage: must equal CHECKPOINT_CANDIDATE or OWNED_ADMITTED",
+          "run_id: must be non-empty",
+          "source_commit: expected lowercase 40-character Git SHA",
+          "trusted_verifier_registry: invalid schema_version",
+          "lineage: expected object",
+          "architecture: expected object",
+          "tokenizer: expected object",
+          "tokenizer.kind: must equal OWNED_TRAINED",
+          "tokenizer.freeze_receipt: expected object",
+          "training_data: expected list",
+          "training: expected object",
+          "checkpoint.path: expected non-empty relative path",
+          "checkpoint.sha256: expected lowercase SHA-256"
+        ],
+        "stage": null,
+        "valid": false
+      },
+      "raw_stdout": "{\"errors\": [\"schema_version: must equal ember-owned-rung-v1\", \"stage: must equal CHECKPOINT_CANDIDATE or OWNED_ADMITTED\", \"run_id: must be non-empty\", \"source_commit: expected lowercase 40-character Git SHA\", \"trusted_verifier_registry: invalid schema_version\", \"lineage: expected object\", \"architecture: expected object\", \"tokenizer: expected object\", \"tokenizer.kind: must equal OWNED_TRAINED\", \"tokenizer.freeze_receipt: expected object\", \"training_data: expected list\", \"training: expected object\", \"checkpoint.path: expected non-empty relative path\", \"checkpoint.sha256: expected lowercase SHA-256\"], \"stage\": null, \"valid\": false}"
+    }
+  ],
+  "prereg_command_finding": "sec1 names `python scripts/ember_restart/contract.py validate configs/ember-restart-3b.json` as the fail-closed prerequisite. Executed as written, that command returns 24 field errors: configs/ember-restart-3b.json is an ember-restart contract CONFIG (contract_name/contract_version/namespaces), not an ember-owned-rung-v1 rung manifest. The named path cannot validate green at any point in the ladder. Either sec1's path is wrong or the rung manifest it intends has yet to be authored; this is filed for adjudication, not patched here.",
+  "cert_gated_inputs": [
+    {
+      "field": "checkpoint.path + checkpoint.sha256",
+      "why": "The subject checkpoint is held in private custody: manifests/ember-current-subject-v1.json records checkpoint_custody.class='private_checkpoint_bytes' with public_manifest_bytes_present=false. The contract resolves checkpoint.path relative to the manifest root and hashes the bytes, so it needs bytes this public tree does not hold.",
+      "blocking": true
+    },
+    {
+      "field": "trusted_verifier_registry",
+      "why": "The contract requires a registry whose schema_version equals 'ember-trusted-verifiers-v1'. The only candidate in the tree, manifests/ember-01-identity/trusted-verifiers-v1.json, carries no schema_version field at all and is rejected as 'invalid schema_version'. No conforming registry exists yet.",
+      "blocking": true
+    },
+    {
+      "field": "tokenizer.freeze_receipt / training.optimizer_receipt",
+      "why": "Both are receipt objects with path+sha256 bound to the certified run's artifacts. They are produced by EMBER-01 certification, not authored ahead of it.",
+      "blocking": true
+    },
+    {
+      "field": "architecture / training_data / training.{command,tokens_seen,modality_tokens,input_class}",
+      "why": "The rung manifest's substantive body. Authored as part of the R1 dispatch packet once the cert exists and the run_id is minted.",
+      "blocking": true
+    },
+    {
+      "field": "run_id + source_commit",
+      "why": "Minted at dispatch; a pre-dispatch value would be fabricated.",
+      "blocking": true
+    }
+  ],
+  "not_blocked_by_this_receipt": [
+    "Fixed-prior manifest (sec5.2) -- built and committed: manifests/ember-restart-3b/fixed-prior-manifest-v1.json",
+    "Energy-proxy logger smoke test (sec5.3) -- executed: receipts/ember-restart-3b/energy-proxy-logger-smoke-v1.json",
+    "Pre-registration hash pin -- docs/spec/ember02-preregistration-thresholds-v1.json verifies against its frozen sha256"
+  ],
+  "subject_under_test": {
+    "checkpoint_manifest_sha256": "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b",
+    "disposition": "CHECKPOINT_CANDIDATE_NOT_ADMITTED",
+    "tokens_seen": 2048,
+    "total_parameters": 3839161856,
+    "active_parameters": 1020589568,
+    "goal_md_3b_floor_met": true
+  },
+  "next_action": "Re-run this dry-run against the authored ember-owned-rung-v1 manifest once the EMBER-01 certification receipt lands; R1 dispatch stays fail-closed until it returns valid=true.",
+  "gpu_allocated": false,
+  "training_launched": false
+}
