@@ -105,11 +105,16 @@ REQUESTED_SCOPE_KEYS = {
     "artifact_root",
     "custody_root",
 }
+# Mirrors the EXACT emission of scripts/verify_ember01_completion.py (the
+# producer is the source of truth): top-level goal_id is the ACTIVE goal
+# ("EMBER-02"); the EMBER-01 subject binding is completion_subject_goal_id.
 COMPLETION_RECEIPT_KEYS = {
     "schema",
     "ok",
     "verified_at_utc",
     "goal_id",
+    "completion_subject_goal_id",
+    "workstream_id",
     "next_executed_outcome",
     "certificate_legs",
     "leg_detail",
@@ -119,6 +124,8 @@ COMPLETION_RECEIPT_KEYS = {
     "selection",
     "authority_certificate",
 }
+# scripts/verify_ember01_completion.py RESOLVED_TRUE -- lowercase-hyphen form.
+COMPLETION_LEG_RESOLVED_TRUE = "resolved-true"
 
 
 class ValidatedLaunch(NamedTuple):
@@ -256,7 +263,7 @@ def _validate_completion_receipt(
     legs = _require_object(value["certificate_legs"], "completion certificate legs")
     expected_legs = {str(index) for index in range(1, 10)}
     if set(legs) != expected_legs or any(
-        state != "RESOLVED_TRUE" for state in legs.values()
+        state != COMPLETION_LEG_RESOLVED_TRUE for state in legs.values()
     ):
         raise ValueError("completion receipt must contain exactly nine resolved-true legs")
 
@@ -275,11 +282,10 @@ def _validate_completion_receipt(
     ):
         raise ValueError("completion checkout integrity")
 
+    if value["completion_subject_goal_id"] != "EMBER-01":
+        raise ValueError("completion subject is not EMBER-01")
     selection = _require_object(value["selection"], "completion selection")
-    if (
-        selection.get("goal_id") != "EMBER-01"
-        or selection.get("unchanged_during_verification") is not True
-    ):
+    if selection.get("unchanged_during_verification") is not True:
         raise ValueError("completion selection integrity")
 
 
