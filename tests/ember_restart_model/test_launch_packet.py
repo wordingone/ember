@@ -249,7 +249,7 @@ def test_identity_manifest_pass_real_config_corpus_artifact_joined(cfg, root):
     assert cfg["training"]["expected_input_artifact_id"] == "owned-four-domain-production-rung-v1"
     r = lp.preflight_identity_manifest(cfg, root)
     assert r["status"] == "pass", r
-    assert r["corpus_sha256"] == "c651062976dd9b73e1d114c14e9d468348049e65311a7eb188708987f1a6949f"
+    assert r["corpus_sha256"] == "b71c33f829daaf4a369cc660f130a1e114ab373cff5d0697f0809e729371371c"
 
 
 def test_identity_manifest_pass_when_corpus_and_artifact_ids_aligned(cfg, root):
