@@ -37,9 +37,10 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 sys.path.insert(
     0,
@@ -139,22 +140,93 @@ def git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def inspect_checkout(root: Path) -> dict[str, Any]:
-    head = git(root, "rev-parse", "HEAD")
-    if head.returncode != 0:
-        raise RuntimeError(f"git rev-parse failed: {head.stderr.strip()}")
-    symbolic = git(root, "symbolic-ref", "--quiet", "--short", "HEAD")
-    if symbolic.returncode not in {0, 1}:
-        raise RuntimeError(f"git symbolic-ref failed: {symbolic.stderr.strip()}")
-    status = git(root, "status", "--porcelain", "--untracked-files=all")
-    if status.returncode != 0:
-        raise RuntimeError(f"git status failed: {status.stderr.strip()}")
+# A real 2026-08 run lost a ~100-minute custody census to this class: the
+# FINAL inspect_checkout() call hit a transient `git rev-parse HEAD` with
+# nonzero returncode and EMPTY stderr (git worked fine in the same checkout
+# immediately after), and the top-level except discarded the entire run with
+# exit 2 and no receipt. A transient subprocess hiccup destroying the whole
+# attestation is a probe defect, not a custody signal -- so read-only git
+# calls here retry the SUBPROCESS-FAILURE mode only, with short backoff.
+#
+# What must never happen: reinterpreting a genuine result as a failure to
+# retry it away. `git symbolic-ref` returning 1 means "detached HEAD" -- an
+# expected, meaningful result, not an error -- so it is never retried; only
+# a returncode outside its own expected set is. Likewise a clean `git
+# status --porcelain` invocation that legitimately reports a dirty tree
+# still returns 0 and is accepted on the first try, dirty result intact.
+GIT_RETRY_BACKOFF_SECONDS: tuple[float, ...] = (2.0, 5.0, 10.0)
+
+
+def _git_call_diagnostics(root: Path, result: subprocess.CompletedProcess[str]) -> dict[str, Any]:
+    return {
+        "returncode": result.returncode,
+        "stderr": result.stderr,
+        "stdout": result.stdout,
+        "cwd": str(root),
+        "git_dir_exists": (root / ".git").exists(),
+    }
+
+
+def _git_readonly_with_retry(
+    root: Path,
+    *args: str,
+    ok_returncodes: frozenset[int] = frozenset({0}),
+    sleep: Callable[[float], None] = time.sleep,
+) -> tuple[subprocess.CompletedProcess[str], int]:
+    """Run a read-only git call, retrying ONLY a genuine subprocess-failure
+    returncode (not in `ok_returncodes`), up to `len(GIT_RETRY_BACKOFF_SECONDS)`
+    additional attempts with short backoff between each. Returns the final
+    CompletedProcess and how many retries it took (0 on a first-try pass).
+    Raises RuntimeError with full diagnostics (returncode, stderr, stdout,
+    cwd, whether .git exists) if every attempt fails.
+    """
+    result = git(root, *args)
+    retries = 0
+    for backoff in GIT_RETRY_BACKOFF_SECONDS:
+        if result.returncode in ok_returncodes:
+            return result, retries
+        retries += 1
+        sleep(backoff)
+        result = git(root, *args)
+    if result.returncode not in ok_returncodes:
+        diagnostics = _git_call_diagnostics(root, result)
+        raise RuntimeError(
+            "git " + " ".join(args) + f" failed after {retries} retr"
+            + ("y" if retries == 1 else "ies")
+            + ": " + json.dumps(diagnostics, sort_keys=True)
+        )
+    return result, retries
+
+
+def inspect_checkout(
+    root: Path,
+    *,
+    sleep: Callable[[float], None] = time.sleep,
+) -> dict[str, Any]:
+    total_retries = 0
+
+    head, retries = _git_readonly_with_retry(root, "rev-parse", "HEAD", sleep=sleep)
+    total_retries += retries
+
+    symbolic, retries = _git_readonly_with_retry(
+        root, "symbolic-ref", "--quiet", "--short", "HEAD",
+        ok_returncodes=frozenset({0, 1}),
+        sleep=sleep,
+    )
+    total_retries += retries
+
+    status, retries = _git_readonly_with_retry(
+        root, "status", "--porcelain", "--untracked-files=all", sleep=sleep,
+    )
+    total_retries += retries
+
     return {
         "head": head.stdout.strip(),
         "detached": symbolic.returncode != 0,
         "branch": None if symbolic.returncode != 0 else symbolic.stdout.strip(),
         "clean": not status.stdout.strip(),
         "status": status.stdout.strip().splitlines(),
+        "git_retries": total_retries,
     }
 
 
@@ -1057,11 +1129,13 @@ def main() -> int:
         return 2
 
     checkout = {
-        **after,
+        **{k: v for k, v in after.items() if k != "git_retries"},
         "clean": bool(before["clean"] and after["clean"]),
         "detached": bool(before["detached"] and after["detached"]),
         "head_unchanged": before["head"] == after["head"],
         "status_before": before["status"],
+        "git_retries_before": before["git_retries"],
+        "git_retries_after": after["git_retries"],
     }
     selection_unchanged = selection_before == selection_after
 

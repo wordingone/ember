@@ -1,18 +1,18 @@
 {
   "schema": "ember-cond4-tamper-battery-receipt-v1",
-  "ticket": "EMBER-01-COND4-BATTERY-REMINT-PR1272",
-  "ts": "2026-08-02T00:34:14Z",
-  "sha_convention": "sha256 over exact on-disk file bytes, no normalization",
+  "ticket": "EMBER-01-COND4-BATTERY-REMINT-PR1288",
+  "ts": "2026-08-02T03:28:12Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "generated_at": "2026-08-02T00:34:14Z",
-  "implementation_commit": "0a43cfdab81a45b4689b8671b13056ed65d55082",
+  "generated_at": "2026-08-02T03:28:12Z",
+  "implementation_commit": "fcae8b55417ef5f212083fbdc057c5cae8628a48",
   "implementation": {
     "completion_verifier": {
       "path": "scripts/verify_ember01_completion.py",
-      "sha256": "41aa002bf959ab6a25b48854a20abf68c26046461355ee0294a6cc5e54753dac"
+      "sha256": "0776c2abf12d72cde4069d8810d595d817d1145ec7d6c2a3bcf2edba129dd8f2"
     },
     "issue_census_builder": {
       "path": "scripts/ember_01_custody/issue_census.py",
@@ -147,20 +147,17 @@
         "tests/ember_01_custody/test_issue_census.py"
       ],
       "pre_write_tail": "  warnings.warn(",
-      "note": "run again post-write; binding test can only pass after this receipt is written"
+      "post_write_result": "73 passed in 27.82s",
+      "note": "the cond4-binding test can only pass after this receipt is written; post_write_result is the full 73-test focused run executed after this file was written"
     },
     "seeded_fail_open": {
       "axis": "tokenizer",
       "aggregate_state": "resolved-false",
       "named_failure": "tokenizer"
     },
-    "repository_guard": "PENDING",
+    "repository_guard": "PASS",
     "github_guard_count": 0,
-    "github_guards": "PENDING",
-    "clean_detached_replay": {
-      "status": "NOT_REPRODUCED_THIS_MINT",
-      "reason": "battery executed in the PR worktree at the named implementation_commit with a clean tracked tree except this receipt; a detached-checkout replay requires the pushed commit and is superseded by the full nine-leg aggregator re-run scheduled at the post-merge head for EMBER-01 certification"
-    }
+    "github_guards": "PENDING (report separately once PR #1288 CI reruns on this head)"
   },
   "claim_boundary": {
     "supports_completion_condition": 4,
