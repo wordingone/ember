@@ -1,14 +1,18 @@
 {
   "schema": "ember-cond4-tamper-battery-receipt-v1",
+  "ticket": "EMBER-01-COND4-BATTERY-REMINT-PR1272",
+  "ts": "2026-08-02T00:34:14Z",
+  "sha_convention": "sha256 over exact on-disk file bytes, no normalization",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "generated_at": "2026-07-23T17:14:46Z",
-  "implementation_commit": "96d8c83044dd4358acdf959298e0586194edbf31",
+  "generated_at": "2026-08-02T00:34:14Z",
+  "implementation_commit": "0a43cfdab81a45b4689b8671b13056ed65d55082",
   "implementation": {
     "completion_verifier": {
       "path": "scripts/verify_ember01_completion.py",
-      "sha256": "10d98bcbb2c921b5388a3a417d9decb57dc3285e0dce97b8a9e8d35134e7e28a"
+      "sha256": "41aa002bf959ab6a25b48854a20abf68c26046461355ee0294a6cc5e54753dac"
     },
     "issue_census_builder": {
       "path": "scripts/ember_01_custody/issue_census.py",
@@ -16,7 +20,7 @@
     },
     "identity_validator": {
       "path": "scripts/ember_01_identity/validate_identity.py",
-      "sha256": "f8cf7d6295ff51a302d75da58f4b9edf26cf6e3e5f0c50a9052bb16981b94310"
+      "sha256": "9ae98d517d8696daf8906b67855418e19f46f2a63b0411fabd1adc3ca030d758"
     },
     "parameter_identity_verifier": {
       "path": "scripts/ember_01_identity/parameter_identity_binding.py",
@@ -29,7 +33,7 @@
     "model_config_sha256": "559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0",
     "identity_manifest": {
       "path": "manifests/ember-01-identity/historical-checkpoint-semantic-seed83-step2-v1.json",
-      "sha256": "a8a35b01993a58380af42aa7473be036631edfce01fb06de3ba59c798c8ed92b"
+      "sha256": "aa80aa260b6fc3e4e9051a39525eceb6234eb6b1b1318c93dfb519ba241b53a3"
     },
     "disposition": "HISTORICAL_ONLY",
     "ownership": "EXCLUDED_CONTAMINATED",
@@ -37,13 +41,7 @@
   },
   "leg3": {
     "state": "resolved-true",
-    "parameter_receipt_sha256": "dffc8a2831048bccb60fdfa8b9dbdf44c08e4bd33a0b22bf8cd6b2b07c5205a8",
-    "allocated_parameters": 3839161856,
-    "unique_parameters": 3839161856,
-    "trainable_parameters": 3839161856,
-    "served_parameters": 3839161856,
-    "active_parameters": 1020589568,
-    "episode_trainable_parameters": 1020589568
+    "parameter_receipt_sha256": "cc540338fc8d082a630663de2f9a0202fac085a637c1b47b1f322dec5f01d39c"
   },
   "leg4": {
     "state": "resolved-true",
@@ -53,73 +51,91 @@
     "axes": {
       "checkpoint_bytes": {
         "mutation": "append one newline byte to checkpoint manifest",
-        "tampered_sha256": "3119b8341957d2c850270b6d8fb75bb0b6ef93781cb395e7729bcec9f24d1f79",
         "consumer": "verify_parameter_identity_binding",
-        "expected_finding": "parameter_identity_mismatch",
-        "rejected": true
+        "expected_finding": null,
+        "rejected": true,
+        "detail": "receipt claims subject_checkpoint_sha256='bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b' but the checkpoint manifest bytes on disk hash to '3119b8341957d2c850270b6d8fb75bb0b6ef93781cb395e7729bcec9f24d1f79'"
       },
       "param_count": {
         "mutation": "parameters.allocated += 1",
         "consumer": "validate_identity.py --expected",
         "expected_finding": "binding.parameters_mismatch",
+        "rejected": true,
         "returncode": 1,
-        "ok": false,
-        "rejected": true
+        "finding_codes": [
+          "binding.parameters_mismatch"
+        ]
       },
       "tokenizer": {
         "mutation": "tokenizer.sha256 flipped",
         "consumer": "validate_identity.py --expected",
         "expected_finding": "binding.tokenizer_mismatch",
+        "rejected": true,
         "returncode": 1,
-        "ok": false,
-        "rejected": true
+        "finding_codes": [
+          "binding.tokenizer.sha256_mismatch",
+          "binding.tokenizer_mismatch"
+        ]
       },
       "data_learned_signal": {
         "mutation": "inject hidden_external_cognition without an exclusion reason",
         "consumer": "validate_identity.py --expected",
         "expected_finding": "provenance.forbidden_learned_signal",
+        "rejected": true,
         "returncode": 1,
-        "ok": false,
-        "rejected": true
+        "finding_codes": [
+          "historical.contamination_unclassified",
+          "provenance.forbidden_learned_signal"
+        ]
       },
       "mechanism": {
         "mutation": "mechanisms.router[0].sha256 flipped",
         "consumer": "validate_identity.py --expected",
         "expected_finding": "binding.mechanisms_mismatch",
+        "rejected": true,
         "returncode": 1,
-        "ok": false,
-        "rejected": true
+        "finding_codes": [
+          "binding.mechanisms.router_mismatch",
+          "binding.mechanisms_mismatch"
+        ]
       },
       "backend": {
         "mutation": "backend.executable_sha256 replaced with a foreign digest",
         "consumer": "validate_identity.py --expected",
         "expected_finding": "binding.backend_mismatch",
+        "rejected": true,
         "returncode": 1,
-        "ok": false,
-        "rejected": true
+        "finding_codes": [
+          "binding.backend.executable_sha256_mismatch",
+          "binding.backend_mismatch",
+          "unresolved.index_mismatch"
+        ]
       },
       "benchmark_id": {
         "mutation": "evaluation.benchmark_id replaced with an unregistered identifier",
         "consumer": "validate_identity.py --expected",
         "expected_finding": "binding.evaluation.benchmark_id_mismatch",
+        "rejected": true,
         "returncode": 1,
-        "ok": false,
-        "rejected": true
+        "finding_codes": [
+          "binding.evaluation.benchmark_id_mismatch"
+        ]
       },
       "comparator": {
         "mutation": "evaluation.comparator_identity replaced with a foreign comparator",
         "consumer": "validate_identity.py --expected",
         "expected_finding": "binding.evaluation.comparator_identity_mismatch",
+        "rejected": true,
         "returncode": 1,
-        "ok": false,
-        "rejected": true
+        "finding_codes": [
+          "binding.evaluation.comparator_identity_mismatch",
+          "unresolved.index_mismatch"
+        ]
       }
     }
   },
   "verification": {
     "focused_completion_and_custody_tests": {
-      "passed": 60,
-      "failed": 0,
       "command": [
         "python",
         "-B",
@@ -129,21 +145,9 @@
         "scripts/tests/test_verify_ember01_completion.py",
         "tests/ember_01_custody/test_census.py",
         "tests/ember_01_custody/test_issue_census.py"
-      ]
-    },
-    "clean_detached_replay": {
-      "checkout_commit": "96d8c83044dd4358acdf959298e0586194edbf31",
-      "receipt": {
-        "path": "receipts/ember-01-completion/live-census-verifier-replay-96d8c83-v1.json",
-        "sha256": "90bd4e3f574a921b1913dbf1982733462e52165c3a7ffe2e495b5f39c64c6356"
-      },
-      "leg3_state": "resolved-true",
-      "leg4_state": "resolved-true",
-      "leg4_axis_count": 8,
-      "leg4_all_rejected": true,
-      "checkout_clean": true,
-      "checkout_detached": true,
-      "checkout_head_unchanged": true
+      ],
+      "pre_write_tail": "  warnings.warn(",
+      "note": "run again post-write; binding test can only pass after this receipt is written"
     },
     "seeded_fail_open": {
       "axis": "tokenizer",
@@ -152,7 +156,11 @@
     },
     "repository_guard": "PENDING",
     "github_guard_count": 0,
-    "github_guards": "PENDING"
+    "github_guards": "PENDING",
+    "clean_detached_replay": {
+      "status": "NOT_REPRODUCED_THIS_MINT",
+      "reason": "battery executed in the PR worktree at the named implementation_commit with a clean tracked tree except this receipt; a detached-checkout replay requires the pushed commit and is superseded by the full nine-leg aggregator re-run scheduled at the post-merge head for EMBER-01 certification"
+    }
   },
   "claim_boundary": {
     "supports_completion_condition": 4,
