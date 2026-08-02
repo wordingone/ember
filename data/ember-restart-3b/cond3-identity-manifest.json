@@ -46,7 +46,7 @@
   },
   "data": {
     "corpus_id": "owned-four-domain-production-rung-v1",
-    "sha256": "c651062976dd9b73e1d114c14e9d468348049e65311a7eb188708987f1a6949f",
+    "sha256": "b71c33f829daaf4a369cc660f130a1e114ab373cff5d0697f0809e729371371c",
     "ordering_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     "curriculum_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
     "verifier_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
