@@ -1,0 +1,18 @@
+{
+  "class_id": "checkpoint-transient-scratch-cap-below-3b-optimizer-state",
+  "first_occurrence_ts": "2026-08-02T21:53:00Z",
+  "goal_id": "EMBER-02",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "kill_mechanism": "cap raised to 8 GiB (the certified launch scope's max_transient_checkpoint_gib) in the same change; tests/ember_restart_model/test_checkpoint_scratch_cap_3b.py AST-reads the constant and fails if it is <= the observed 3B optimizer lower bound or diverges from the certified 8 GiB scope, so a cap reduction or config growth past the cap fails in the test suite before any dispatch.",
+  "mechanism": "run_vertical_slice.py hardcoded _MAX_TRANSIENT_CHECKPOINT_SCRATCH_BYTES = 4 GiB while the 3B configuration's optimizer-state.pt tensor-storage lower bound is 7,798,675,456 bytes (~7.27 GiB); the first checkpoint write of every 3B governed run raised RuntimeError, the writer quarantined the candidate, and the certified run exited 1 after ~25 s (certified launch train-5 at master 9b18f1a6). The cap predates the 3B shape and no preflight or test bound it to the config.",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "receipt_refs": [
+    "live-receipts custody root r1-warm100-20260802 (off-repo): artifacts/checkpoints/.checkpoint-quarantine/checkpoint-write-failed-d09e090b972fd1701aa82e7a3ccf6cf4b5d77a42f5bfa81e4b128373efd19227.json, sha256 d09e090b972fd1701aa82e7a3ccf6cf4b5d77a42f5bfa81e4b128373efd19227",
+    "live-receipts custody root r1-warm100-20260802 (off-repo): disk-budget-runner-receipt.json (train-5 CHILD_FAILED, 24.8 s)"
+  ],
+  "schema_version": "ember-failure-class-v1",
+  "sha_convention": "bytes on disk as-is (binary read, no normalization)",
+  "ticket": "#1305",
+  "ts": "2026-08-02T22:01:21Z",
+  "workstream_id": "EMBER-02A"
+}
