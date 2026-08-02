@@ -28,8 +28,10 @@
       "class_id": "NATIVE_CRASH",
       "title": "Native crash / segfault in the training loop",
       "birth_relevance": "Operator training failure class (class-kill law, 2026-07-21): an unrecoverable native process death mid-run invalidates the run and, without a crash-survival guard, silently loses training state.",
-      "state": "BLOCKING",
-      "blocking_reason": "No landed fail-closed guard on this checkout. Named as spine-blocking OPEN work directly in the class-kill law (still-can-recur set: native-crash, shard-dir, crash-survival). Needs a crash-survival mechanism plus a synthetic-crash regression guard before this row can close."
+      "state": "CLOSED_GUARDED",
+      "guard_ref": "tests/ember_01_custody/test_native_crash_guard.py:test_run_supervised_mutation_guard_is_load_bearing",
+      "guard_kind": "test",
+      "evidence": "scripts/ember_01_custody/native_crash_guard.py:run_supervised -- a supervised-dispatch wrapper: the risky work runs as a CHILD process, the parent classifies the exit code via classify_exit() (POSIX: negative returncode == -signal_number, e.g. SIGSEGV=-11; Windows: NTSTATUS fault-severity codes, mask 0xC0000000, e.g. STATUS_ACCESS_VIOLATION=0xC0000005 -- both representations verified empirically against this host, not assumed) and, on a detected crash, writes a fail-closed receipt (class, cmd, returncode, crash_signature, ts) to disk BEFORE returning, so no caller can make a relaunch decision before the crash is recorded. Regression suite tests/ember_01_custody/test_native_crash_guard.py (19 tests): classify_exit() correctness for both platform branches with hand-picked codes (host-OS-independent, parametrized), fail-closed on non-int input, run_supervised() proven against a REAL crashing child process (os.kill(SIGSEGV) on POSIX / ctypes ExitProcess(NTSTATUS) on Windows -- not a fabricated returncode) writing a receipt that passes scripts/receipt_check.py, and a mutation-proof test (test_run_supervised_mutation_guard_is_load_bearing) showing the same real crashing child is wrongly reported crashed=False with no receipt if classify_exit is stubbed to a no-op."
     },
     {
       "class_id": "BF16_SILENT_FREEZE",
@@ -42,8 +44,10 @@
       "class_id": "GOVERNED_ABORT_OBSERVABILITY",
       "title": "Governed-abort observability loss",
       "birth_relevance": "Operator training failure class (class-kill law, 2026-07-21): a governed abort (resource cap, headroom violation, kill-discipline stop) that leaves no receipt is indistinguishable from an unexplained hang, masking the real defect from post-mortem review.",
-      "state": "BLOCKING",
-      "blocking_reason": "No landed fail-closed guard on this checkout. Receipted-abort logging exists for kill-discipline (kill-receipts.jsonl) but nothing wires a training-loop abort to a mandatory receipt write with a regression guard that reds on a silent-abort recurrence."
+      "state": "CLOSED_GUARDED",
+      "guard_ref": "tests/ember_01_custody/test_governed_abort_observability_guard.py:test_governed_abort_mutation_guard_is_load_bearing",
+      "guard_kind": "test",
+      "evidence": "scripts/ember_01_custody/governed_abort_observability_guard.py:verify_abort_observed -- generalizes kill-discipline's 'receipt first' law (infra/vigil/kill-receipts.jsonl) to any governed training abort. emit_abort_receipt() is the mandatory call every governed-abort site (resource cap trip, headroom violation, phase-boundary commit-charge breach) must make BEFORE the abort completes, writing a structured receipt naming the trigger, thresholds, live_reading, and phase (build_abort_receipt() refuses to construct a receipt missing any of the four, fail-closed). verify_abort_observed(event, receipts_dir) fail-closed-checks that a matching receipt exists for a DETECTED abort event; no matching receipt is RED -- exactly the silent-abort failure this class names. Regression suite tests/ember_01_custody/test_governed_abort_observability_guard.py (21 tests): construction fail-closed on missing trigger/thresholds/live_reading/phase, checked-write emission (receipt passes scripts/receipt_check.py), detection correctness (trigger match, ts-window match, malformed-window/missing-dir/malformed-JSON-receipt all fail closed without raising), and a mutation-proof test (test_governed_abort_mutation_guard_is_load_bearing) showing a genuinely silent (unreceipted) abort event is wrongly approved if verify_abort_observed is stubbed to a no-op."
     },
     {
       "class_id": "SHARD_DIR_WIRING",
