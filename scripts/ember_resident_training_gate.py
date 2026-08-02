@@ -417,6 +417,80 @@ ALLOWED_FLOOR_DISPOSITIONS = {"used_now", "preserved_trigger_gated", "blocked_wi
 FORBIDDEN_FLOOR_DISPOSITION_WORDS = {"archival", "archived", "killed", "irrelevant", "later", "covered by fp16", "covered_by_fp16"}
 
 
+_CONSERVATION_KEYS = (
+    "minimum_new_network_parameters=3000000000",
+    "destination_total_parameters=>27000000000",
+    "required_native_capabilities=text,image,audio,reasoning,structured_tool_use",
+    "borrowed_lineage=frozen_reference_only",
+    "mechanism_erasure=forbidden",
+)
+
+
+def _parse_no_deferral_floor_contract(
+    content: str, floor_path: Path, manifest: dict, errors: list[str]
+):
+    """Parse the current no-deferral contract shape (fail-closed).
+
+    The rewritten docs/ember-floor-contract.md deliberately carries no
+    deferral ledger ("No modality ... can be deferred out of the foundation
+    model"), so a deferral table is not a missing section but a shape the
+    doc forbids. What IS required, each with its own error code: the
+    EMBER_CONSERVATION_V1 header with its five exact keys, the Birth floor
+    bullet list, the Historical boundary and Rung admission sections, and
+    the closing no-deferral clause. Manifest rows are the birth-floor
+    bullets themselves: every one is used_now and non-deferrable.
+    """
+    if "EMBER_CONSERVATION_V1" not in content:
+        errors.append("floor_contract.conservation_header_missing")
+    else:
+        for pair in _CONSERVATION_KEYS:
+            if pair not in content:
+                errors.append(
+                    "floor_contract.conservation_key_missing:" + pair.split("=", 1)[0]
+                )
+    birth = re.search(
+        r"## Birth floor.*?\n(.*?)(?=\n##|\Z)", content, re.DOTALL | re.IGNORECASE
+    )
+    if not birth:
+        errors.append("floor_contract.birth_floor_section_missing")
+    else:
+        # Markdown hard-wraps bullets; join continuation lines onto their bullet.
+        joined: list[str] = []
+        for line in birth.group(1).splitlines():
+            stripped = line.strip()
+            if stripped.startswith("-"):
+                joined.append(stripped.lstrip("-").strip())
+            elif stripped and joined:
+                joined[-1] += " " + stripped
+        bullets = joined
+        if len(bullets) < 8:
+            errors.append("floor_contract.birth_floor_rows_missing")
+        for bullet in bullets:
+            slug = re.sub(r"[^a-z0-9]+", "_", bullet.lower()[:48]).strip("_")
+            manifest[f"birth_floor.{slug}"] = {
+                "source_file": "docs/ember-floor-contract.md",
+                "source_sha256": _sha256(floor_path),
+                "disposition": "used_now",
+                "launch_vehicle_impact": bullet,
+                "trigger": "model birth (non-deferrable floor)",
+                "pilot": "EMBER-02 birth evidence",
+                "kill_promote_condition": (
+                    "non-deferrable; only a user-approved contract change may alter"
+                ),
+                "evidence_path": "docs/ember-floor-contract.md",
+            }
+    if "## Historical boundary" not in content:
+        errors.append("floor_contract.historical_boundary_missing")
+    if "## Rung admission" not in content:
+        errors.append("floor_contract.rung_admission_missing")
+    if "deferred out of the foundation model" not in content:
+        errors.append("floor_contract.no_deferral_clause_missing")
+    if not manifest:
+        errors.append("floor_contract.no_rows_parsed")
+        return None, errors
+    return manifest, errors
+
+
 def parse_floor_contract_manifest(
     floor_path: Path,
 ) -> tuple[dict[str, dict[str, str | None]] | None, list[str]]:
@@ -516,7 +590,13 @@ def parse_floor_contract_manifest(
                     "evidence_path": "docs/ember-floor-contract.md",
                 }
 
-    # Parse deferral rows
+    # Current contract shape (2026-07 rewrite): the doc explicitly declares
+    # it contains no deferral ledger; requiring a deferral table would enforce
+    # a shape the authoritative doc forbids (#1289).
+    if "contains no deferral ledger" in content:
+        return _parse_no_deferral_floor_contract(content, floor_path, manifest, errors)
+
+    # Parse deferral rows (legacy table shape)
     if not deferral_match:
         errors.append("floor_contract.deferral_section_missing")
         if manifest:
@@ -642,7 +722,7 @@ def build_floor_contract_manifest(floor_sha: str | None, nc2_sha: str | None) ->
         }
 
     floor = "docs/ember-floor-contract.md"
-    nc2 = "nc2-own-technique-contract.md"
+    nc2 = "docs/nc2-own-technique-contract.md"
     return {
         "floor_contract.QAT": row(source_file=floor, source_hash=floor_sha, disposition="preserved_trigger_gated", impact="quantization-native launch floor preserved; tiny resident step does not clear it", trigger="launch vehicle QAT/int4 tail or deploy target requiring quantized form", pilot="QAT tail or governed low-bit pilot", kill_promote="only user-approved contract change or receipt-proved contradiction may demote", evidence_path=floor),
         "floor_contract.Muon": row(source_file=floor, source_hash=floor_sha, disposition="preserved_trigger_gated", impact="hidden-layer Muon floor preserved with AdamW fallback", trigger="owned-core training run using hidden 2D params", pilot="Muon hidden-layer optimizer run with AdamW fallback receipt", kill_promote="promote on same-scale efficiency; fallback only on receipt-backed null", evidence_path=floor),
@@ -684,7 +764,7 @@ def _marker_status(text: str, groups: dict[str, list[str]]) -> dict[str, dict[st
 def inspect_floor_contracts(repo: Path) -> tuple[dict[str, Any], list[str]]:
     errors: list[str] = []
     floor_path = repo / "docs/ember-floor-contract.md"
-    nc2_path = repo / "nc2-own-technique-contract.md"
+    nc2_path = repo / "docs/nc2-own-technique-contract.md"
     train_path = repo / "scripts/train_multimodal_v0.py"
 
     def read_required(path: Path, code: str) -> str:
@@ -705,32 +785,34 @@ def inspect_floor_contracts(repo: Path) -> tuple[dict[str, Any], list[str]]:
     floor_rows = _marker_status(
         floor_text,
         {
-            "QAT": ["QAT"],
-            "Muon": ["Muon"],
-            "QK-norm": ["QK-norm"],
-            "governor": ["Governor"],
-            "multimodal_locks": ["Reserved multimodal", "multimodal"],
-            "BitNet/1.58-bit": ["BitNet", "1.58"],
-            "SDEK/GDN": ["SDEK", "GDN"],
-            "MLA/KV": ["MLA", "KV"],
-            "iGRPO/GRPO": ["GRPO"],
-            "FP8": ["FP8"],
-            "MoE": ["MoE"],
-            "DiffusionGemma": ["DiffusionGemma"],
-            "trigger-gated_rows": ["trigger"],
+            "min_parameters": ["3,000,000,000"],
+            "clean_genesis": ["clean-genesis"],
+            "native_modalities": ["native text, image, audio"],
+            "structured_tool_use": ["structured tool use"],
+            "sufficient_training": ["heldout capability"],
+            "capacity_accounting": ["total, trainable, active"],
+            "checkpoint_bound_evidence": ["checkpoint-bound"],
+            "no_borrowed_signal": ["no borrowed learned"],
+            "body_identity": ["displayed identity matches the loaded bytes"],
+            "rung_binding": ["binds 7B, 15B,"],
+            "historical_boundary": ["cannot be trained"],
+            "rung_admission": ["preregisters"],
+            "vea_prediction": ["Verified Expert Accretion"],
+            "no_deferral": ["deferred out of the foundation model"],
         },
     )
     nc2_rows = _marker_status(
         nc2_text,
         {
-            "QAT": ["QAT"],
-            "turboquant": ["turboquant"],
-            "BitNet/1.58-bit": ["BitNet", "1.58"],
-            "SubQ": ["SubQ"],
-            "MTP": ["MTP"],
-            "SDEK": ["SDEK"],
-            "Chinese-lab_stack": ["Muon", "GRPO"],
-            "Gemma_unified_multimodal": ["Gemma", "unified"],
+            "unified_decoder": ["one owned decoder"],
+            "no_published_backbone": ["backbone"],
+            "sparse_capacity": ["task-level routing"],
+            "upcycling_gates": ["transfer, persistence, non-regression"],
+            "mechanism_portfolio": ["Conserved mechanism portfolio"],
+            "low_bit_numerics": ["BitNet"],
+            "subquadratic": ["sub-quadratic"],
+            "scale_boundary": ["3,000,000,000"],
+            "candidate_declaration": ["total, trainable, and active"],
         },
     )
     train_rows = _marker_status(
@@ -759,7 +841,7 @@ def inspect_floor_contracts(repo: Path) -> tuple[dict[str, Any], list[str]]:
         "status": "PASS" if not errors else "BLOCKED",
         "floor_contract_path": "docs/ember-floor-contract.md",
         "floor_contract_sha256": _sha256(floor_path) if floor_path.exists() else None,
-        "nc2_component_contract_path": "nc2-own-technique-contract.md",
+        "nc2_component_contract_path": "docs/nc2-own-technique-contract.md",
         "nc2_component_contract_sha256": _sha256(nc2_path) if nc2_path.exists() else None,
         "train_multimodal_path": "scripts/train_multimodal_v0.py",
         "train_multimodal_sha256": _sha256(train_path) if train_path.exists() else None,
@@ -1217,18 +1299,54 @@ def build_fixture_repo(root: Path) -> tuple[Path, Path, Path]:
         ),
         "docs/ember-debt-ledger.md": "ledger\n",
         "docs/ember-floor-contract.md": (
-            "Reserved multimodal vocab band\nQAT\nMuon optimizer\nQK-norm\nGovernor\n"
-            "BitNet / 1.58-bit\nSDEK / GDN-Jet\nMLA / KV-cache compression\n"
-            "GRPO / RL-on-verifier-reward\nFP8 training\nMoE\nDiffusionGemma\ntrigger-gated\n"
+            "<!-- EMBER_CONSERVATION_V1\n"
+            "minimum_new_network_parameters=3000000000\n"
+            "destination_total_parameters=>27000000000\n"
+            "required_native_capabilities=text,image,audio,reasoning,structured_tool_use\n"
+            "borrowed_lineage=frozen_reference_only\n"
+            "mechanism_erasure=forbidden\n"
+            "-->\n\n"
+            "# Ember model-birth and rung floor (fixture mirror)\n\n"
+            "This file is subordinate to GOAL.md. It contains no deferral ledger and no\n"
+            "smaller launch vehicle.\n\n"
+            "## Birth floor\n\n"
+            "- at least 3,000,000,000 total unique stored neural parameters;\n"
+            "- clean-genesis architecture, data, tokenizer, update, and checkpoint lineage;\n"
+            "- sufficient training demonstrated by heldout capability, not a smoke run;\n"
+            "- native text, image, audio, reasoning, and structured tool use in one decoder;\n"
+            "- exact total, trainable, active, and trained-capacity accounting;\n"
+            "- checkpoint-bound reasoning and modality evidence;\n"
+            "- no borrowed learned or evaluative signal; and\n"
+            "- a working body path whose displayed identity matches the loaded bytes.\n\n"
+            "The same floor, without regression or capability deferral, binds 7B, 15B, and\n"
+            ">27B rungs.\n\n"
+            "## Historical boundary\n\n"
+            "Historical artifacts cannot be trained, grown, evaluated, served, or promoted.\n\n"
+            "## Rung admission\n\n"
+            "Each rung preregisters equal-token/FLOP dense restart controls and a\n"
+            "falsifiable Verified Expert Accretion prediction.\n\n"
+            "No modality, mechanism family, benchmark obligation, or whole-stack requirement\n"
+            "can be deferred out of the foundation model.\n"
         ),
         "docs/ember-mvp-v0.md": "# SUPERSEDED fixture\n\nGOAL.md is the sole active goal file; no scope is reduced; resident_training_gate_status=PASS required.\n",
         "docs/20260617-maximally-viable-product.md": "# SUPERSEDED fixture\n\nGOAL.md is the sole active goal file; no scope is reduced; resident_training_gate_status=PASS required.\n",
         "docs/sp5-nck-harness-port-spec-v0.md": "clean-room spec\n",
         "docs/nck-event-loop-v0.md": "event loop\n",
         "docs/nck-invariants-v0.md": "invariants\n",
-        "nc2-own-technique-contract.md": (
-            "QAT\nturboquant\n1.58-bit\nBitNet\nSubQ\nMTP\nSDEK\n"
-            "MLA\nFP8\nMuon\nMoE\nGRPO\nGemma 4 12B unified architecture\n"
+        "docs/nc2-own-technique-contract.md": (
+            "# Owned architecture and mechanism research contract (fixture mirror)\n\n"
+            "## Unified decoder contract\n\n"
+            "Every admissible model rung uses one owned decoder. No published family can\n"
+            "be Ember's backbone.\n\n"
+            "## Sparse differentiated capacity\n\n"
+            "A shared core with independently trainable expert banks and task-level routing;\n"
+            "promoted only after transfer, persistence, non-regression, and deletion tests.\n\n"
+            "## Conserved mechanism portfolio\n\n"
+            "BitNet-style numerics; sub-quadratic attention and state, MTP, SDEK/adaptation\n"
+            "control.\n\n"
+            "## Scale and experiment boundary\n\n"
+            "No candidate below 3,000,000,000 total parameters. Every executable candidate\n"
+            "declares total, trainable, and active parameters.\n"
         ),
         "scripts/train_multimodal_v0.py": (
             "section 6 primitive-typed action-log contract\n"
@@ -1394,7 +1512,7 @@ def build_valid_candidate_manifest(root: Path, repo: Path, dt6_fields: dict[str,
             },
             "train_multimodal_adapter_path": str(root / "adapter.py"),
             "floor_contract_sha256": _sha256(repo / "docs/ember-floor-contract.md"),
-            "nc2_component_contract_sha256": _sha256(repo / "nc2-own-technique-contract.md"),
+            "nc2_component_contract_sha256": _sha256(repo / "docs/nc2-own-technique-contract.md"),
             "action_log_seam_evidence": {
                 "source_path": "scripts/train_multimodal_v0.py",
                 "required_primitives": ["emit-token", "emit-scalar", "emit-pointer", "commit", "stop"],
@@ -1409,7 +1527,7 @@ def build_valid_candidate_manifest(root: Path, repo: Path, dt6_fields: dict[str,
             },
             "floor_contract_manifest": build_floor_contract_manifest(
                 _sha256(repo / "docs/ember-floor-contract.md"),
-                _sha256(repo / "nc2-own-technique-contract.md"),
+                _sha256(repo / "docs/nc2-own-technique-contract.md"),
             ),
         }
     )
@@ -1459,7 +1577,15 @@ def selftest() -> int:
         )
         candidate_path.write_text(json.dumps(real_candidate), encoding="utf-8")
         passed = build_gate_receipt(repo, index, None, candidate_path, [], full_parity_path)
-        assert passed["resident_training_gate_status"] == "PASS"
+        assert passed["resident_training_gate_status"] == "PASS", (
+            "gate fixture BLOCKED — components: "
+            + json.dumps(
+                {k: v for k, v in passed.get("component_status", {}).items() if v != "PASS"},
+                sort_keys=True,
+            )
+            + " errors=" + json.dumps(passed.get("errors", []), sort_keys=True)
+            + " invalid_codes=" + json.dumps(passed.get("invalid_codes", []), sort_keys=True)
+        )
         # gh #128: PASS must carry a genuinely-evaluated (not placeholder) econ leg
         assert passed["component_status"]["loop_econ_gate"] == "PASS"
         assert passed["loop_economics_gate_verdict"]["decision"] == "ACCEPT"
