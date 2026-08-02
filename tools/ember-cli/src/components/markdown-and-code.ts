@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // markdown-and-code.ts — Markdown renderer and syntax-highlighted code blocks.
 // Bundle: components/markdown-and-code.ts (line 321756)
 
@@ -81,7 +84,8 @@ export type MarkdownNodeType =
   | "ul"
   | "ol"
   | "blockquote"
-  | "paragraph";
+  | "paragraph"
+  | "table";
 
 export interface MarkdownNode {
   type:      MarkdownNodeType;
@@ -90,11 +94,29 @@ export interface MarkdownNode {
   level?:    number;
   index?:    number;
   depth?:    number;
+  /** table node only: header row + body rows, each a list of raw (untrimmed-inline) cell strings */
+  header?:   string[];
+  rows?:     string[][];
 }
 
 // ---------------------------------------------------------------------------
 // parseMarkdown — streaming line-by-line parser
 // ---------------------------------------------------------------------------
+
+/** Splits a pipe-delimited table row into trimmed cells, dropping the optional leading/trailing
+ * empty cell produced by a line that opens/closes with "|" (GFM table syntax). */
+function parseTableRow(line: string): string[] {
+  let trimmed = line.trim();
+  if (trimmed.startsWith("|")) trimmed = trimmed.slice(1);
+  if (trimmed.endsWith("|"))   trimmed = trimmed.slice(0, -1);
+  return trimmed.split("|").map((cell) => cell.trim());
+}
+
+/** GFM table delimiter row: cells containing only "-", ":" and whitespace, e.g. `---|:---:|---`. */
+function isTableSeparatorRow(line: string): boolean {
+  const cells = parseTableRow(line);
+  return cells.length > 0 && cells.every((cell) => /^:?-+:?$/.test(cell));
+}
 
 export function parseMarkdown(content: string): MarkdownNode[] {
   const nodes: MarkdownNode[] = [];
@@ -118,11 +140,27 @@ export function parseMarkdown(content: string): MarkdownNode[] {
       continue;
     }
 
-    // ATX heading (up to ####)
-    const headingMatch = line.match(/^(#{1,4})\s+(.*)/);
+    // ATX heading — issue #111 must-win checklist ("headings h1-h6 render distinctly"):
+    // was capped at (#{1,4}), silently demoting h5/h6 to plain paragraphs.
+    const headingMatch = line.match(/^(#{1,6})\s+(.*)/);
     if (headingMatch) {
       nodes.push({ type: "heading", level: headingMatch[1]!.length, content: headingMatch[2] ?? "" });
       i++;
+      continue;
+    }
+
+    // GFM table: a header row immediately followed by a `---|---` delimiter row.
+    // Issue #111 must-win checklist ("Tables render aligned") — previously unimplemented,
+    // every pipe row fell through to the paragraph case and rendered as raw "| a | b |" text.
+    if (line.includes("|") && i + 1 < lines.length && isTableSeparatorRow(lines[i + 1] ?? "")) {
+      const header = parseTableRow(line);
+      i += 2; // skip header + delimiter
+      const rows: string[][] = [];
+      while (i < lines.length && (lines[i] ?? "").includes("|") && (lines[i] ?? "").trim() !== "") {
+        rows.push(parseTableRow(lines[i]!));
+        i++;
+      }
+      nodes.push({ type: "table", header, rows });
       continue;
     }
 
@@ -169,7 +207,33 @@ export function parseMarkdown(content: string): MarkdownNode[] {
 // renderInline — handles **bold** and `inline code` spans
 // ---------------------------------------------------------------------------
 
-export function renderInline(text: string): React.ReactElement {
+/** [label](url) — issue #111 must-win checklist ("Links render (distinguishable, not raw URLs
+ * mid-prose)"): previously unimplemented, a markdown link rendered as literal
+ * "[label](https://...)" text indistinguishable from surrounding prose. Renders just the label,
+ * styled with the primary accent + underline so it reads as interactive without dumping the raw
+ * URL into the flow (terminals have no href — the label IS the visible affordance). Non-link
+ * segments recurse through renderInlinePlain so bold/inline-code still work around a link. */
+function renderInlineWithLinks(text: string): React.ReactElement {
+  const linkParts = text.split(/(\[[^\]]+\]\([^)]+\))/g);
+  if (linkParts.length === 1) return renderInlinePlain(text);
+  return React.createElement(
+    React.Fragment,
+    null,
+    ...linkParts.filter((part) => part !== "").map((part, idx) => {
+      const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+      if (linkMatch) {
+        return React.createElement(
+          Text,
+          { key: idx, color: color("primary", "fg", "dark"), underline: true },
+          linkMatch[1],
+        );
+      }
+      return React.cloneElement(renderInlinePlain(part), { key: idx });
+    }),
+  );
+}
+
+function renderInlinePlain(text: string): React.ReactElement {
   // **bold** takes precedence
   const boldParts = text.split(/(\*\*[^*]+\*\*)/g);
   if (boldParts.length > 1) {
@@ -203,6 +267,32 @@ export function renderInline(text: string): React.ReactElement {
   return React.createElement(Text, null, text);
 }
 
+/** Public entry point: bold/inline-code (renderInlinePlain) plus link spans, composable. */
+export function renderInline(text: string): React.ReactElement {
+  return renderInlineWithLinks(text);
+}
+
+// ---------------------------------------------------------------------------
+// heading style — issue #111 must-win checklist ("headings h1-h6 render distinctly"): a fixed,
+// monotonically-decreasing weight/color/style ramp so all 6 levels are visually distinguishable
+// from each other, not just a bold/non-bold binary that collapsed h3-h6 into one look.
+// ---------------------------------------------------------------------------
+
+interface HeadingStyle { bold: boolean; italic: boolean; dimColor: boolean; underline: boolean; colorKey: "identity" | "primary" | "muted"; }
+
+const HEADING_STYLES: Record<number, HeadingStyle> = {
+  1: { bold: true,  italic: false, dimColor: false, underline: true,  colorKey: "identity" },
+  2: { bold: true,  italic: false, dimColor: false, underline: false, colorKey: "identity" },
+  3: { bold: true,  italic: false, dimColor: false, underline: false, colorKey: "primary" },
+  4: { bold: false, italic: false, dimColor: false, underline: false, colorKey: "primary" },
+  5: { bold: false, italic: true,  dimColor: false, underline: false, colorKey: "muted" },
+  6: { bold: false, italic: true,  dimColor: true,  underline: false, colorKey: "muted" },
+};
+
+function headingStyle(level: number): HeadingStyle {
+  return HEADING_STYLES[Math.min(6, Math.max(1, level))] ?? HEADING_STYLES[1]!;
+}
+
 // ---------------------------------------------------------------------------
 // Markdown — root component
 // ---------------------------------------------------------------------------
@@ -215,12 +305,48 @@ export function Markdown({ content }: MarkdownProps): React.ReactElement {
   const elements = nodes.map((node, idx) => {
     switch (node.type) {
       case "heading": {
-        const weight = (node.level ?? 1) <= 2;
         // Issue #581: headings carry the identity fg token (was bold-only, no color).
+        // Issue #111: extended to a 6-level distinct ramp (was a 2-tier bold/non-bold binary).
+        const style = headingStyle(node.level ?? 1);
         return React.createElement(
           Text,
-          { key: idx, bold: weight, color: color("identity", "fg", "dark") },
+          {
+            key: idx,
+            bold: style.bold,
+            italic: style.italic,
+            dimColor: style.dimColor,
+            underline: style.underline,
+            color: color(style.colorKey, "fg", "dark"),
+          },
           node.content ?? "",
+        );
+      }
+      case "table": {
+        // Issue #111 must-win checklist ("Tables render aligned"): each column padded to its
+        // widest cell (header included) across the whole table, so pipes line up like a real grid.
+        const header = node.header ?? [];
+        const rows = node.rows ?? [];
+        const colCount = Math.max(header.length, ...rows.map((r) => r.length), 0);
+        const colWidths: number[] = [];
+        for (let c = 0; c < colCount; c++) {
+          const cellsInCol = [header[c] ?? "", ...rows.map((r) => r[c] ?? "")];
+          colWidths[c] = Math.max(...cellsInCol.map((cell) => cell.length));
+        }
+        const renderRow = (cells: string[], rowIdx: number, isHeader: boolean) =>
+          React.createElement(
+            Box, { key: rowIdx, flexDirection: "row" },
+            ...Array.from({ length: colCount }, (_, c) => {
+              const cellText = (cells[c] ?? "").padEnd(colWidths[c] ?? 0, " ");
+              return React.createElement(
+                Box, { key: c, marginRight: 1 },
+                React.createElement(Text, { bold: isHeader }, cellText),
+              );
+            }),
+          );
+        return React.createElement(
+          Box, { key: idx, flexDirection: "column" },
+          renderRow(header, -1, true),
+          ...rows.map((row, rIdx) => renderRow(row, rIdx, false)),
         );
       }
       case "code_block": {
