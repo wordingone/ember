@@ -1227,3 +1227,251 @@ def test_census_cli_rejects_historical_commit_labeled_public_master(tmp_path: Pa
     )
     assert result.returncode == 1
     assert "source commit is not the bound public master ref" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Bounded-memory git_ignored_registry regression tests.
+#
+# Context: a real 2026-07-21 run of the full 24-root census died mid-scan at
+# this exact root (journal reached 855,271 lines / 259MB before the process
+# was killed) because the old code path materialized the entire recursive
+# ignored-file row list into one Python list before any hashing started, and
+# then kept a full copy of every relative path alive in `final_membership_records`
+# for the rest of the run. These tests prove the streaming/spooling
+# replacement (a) is the code path actually exercised, (b) uses meaningfully
+# less peak memory than the old eager path on the exact operation that OOM'd,
+# and (c) has not weakened the TOCTOU membership-change detection it replaces.
+# ---------------------------------------------------------------------------
+
+
+def _init_ignored_payload_repo(root: Path, file_count: int) -> Path:
+    root.mkdir()
+    git(root, "init")
+    git(root, "config", "user.email", "fixture@example.invalid")
+    git(root, "config", "user.name", "fixture")
+    (root / ".gitignore").write_text("payload/\n", encoding="utf-8")
+    (root / "tracked.txt").write_text("tracked\n", encoding="utf-8")
+    payload_dir = root / "payload"
+    payload_dir.mkdir()
+    for index in range(file_count):
+        (payload_dir / f"f{index}.bin").write_bytes(b"x")
+    git(root, "add", ".gitignore", "tracked.txt")
+    git(root, "commit", "-m", "fixture")
+    return payload_dir
+
+
+def test_git_ignored_registry_never_calls_eager_row_materializer(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """The bounded-memory rewrite must not fall back to the old
+    `_material_file_rows`/`_discover_file_rows` full-list functions for the
+    git_ignored_registry scan — those are exactly what OOM'd on 2026-07-21."""
+    root = tmp_path / "repo"
+    _init_ignored_payload_repo(root, file_count=25)
+
+    def _forbidden(*args, **kwargs):
+        raise AssertionError(
+            "git_ignored_registry must not call the eager row materializer"
+        )
+
+    monkeypatch.setattr(census_module, "_material_file_rows", _forbidden)
+    monkeypatch.setattr(census_module, "_discover_file_rows", _forbidden)
+
+    spec = {
+        "roots": [
+            {
+                "root_id": "repo-root",
+                "required": True,
+                "scan": "git_repository",
+                "provenance_class": "harness_tooling",
+                "lineage_admissibility": "source_authority_not_weight_lineage",
+            },
+            {
+                "root_id": "ignored-root",
+                "required": True,
+                "scan": "git_ignored_registry",
+                "source_root_id": "repo-root",
+                "provenance_class": "unresolved",
+                "lineage_admissibility": "unresolved_requires_item_review",
+            },
+        ]
+    }
+    result = build_root_census(spec, {"repo-root": root})
+    artifacts = [
+        row for row in result["artifacts"] if row["source"]["root_id"] == "ignored-root"
+    ]
+    assert len(artifacts) == 25
+    assert all(row["sha256"] for row in artifacts)
+
+
+def test_git_ignored_registry_bounds_peak_memory_vs_eager_materialization(
+    tmp_path: Path,
+) -> None:
+    """Quantitative memory-bound proof. Compares peak traced memory for the
+    old eager row-materializer against the new streaming+spooling path on
+    the identical ignored payload. The old path must hold every
+    (relative_path, Path) row in one list before returning; the new path
+    never should. If this regresses back to eager materialization, the new
+    path's peak rises to roughly match the old path's and this test fails."""
+    import tracemalloc
+
+    root = tmp_path / "repo"
+    payload_dir = _init_ignored_payload_repo(root, file_count=15_000)
+    assert len(list(payload_dir.iterdir())) == 15_000
+
+    ignored_top = sorted(set(census_module._iter_git_ignored_paths(root)))
+
+    tracemalloc.start()
+    eager_rows, _ = census_module._material_file_rows(root, ignored_top)
+    _, eager_peak = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    assert len(eager_rows) == 15_000
+
+    tracemalloc.start()
+    digest = census_module._spooled_membership_digest(
+        relative
+        for relative, _ in census_module._iter_material_rows(root, ignored_top)
+    )
+    _, lazy_peak = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    assert digest
+
+    # Same rows, same order-independent content — the lazy path must use a
+    # small fraction of the eager path's peak allocation to enroll them.
+    assert lazy_peak < eager_peak * 0.35, (
+        f"lazy path peak {lazy_peak} bytes is not meaningfully bounded "
+        f"relative to eager path peak {eager_peak} bytes"
+    )
+
+
+def test_git_ignored_registry_spool_file_is_cleaned_up(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Row accumulation is spooled to a real tempfile (not just an
+    in-memory buffer standing in for one) and the tempfile is deleted once
+    the membership digest has been derived from it."""
+    import tempfile as tempfile_module
+
+    root = tmp_path / "repo"
+    _init_ignored_payload_repo(root, file_count=40)
+
+    created_paths: list[str] = []
+    real_named_temp = tempfile_module.NamedTemporaryFile
+
+    def _tracking_named_temp(*args, **kwargs):
+        handle = real_named_temp(*args, **kwargs)
+        created_paths.append(handle.name)
+        return handle
+
+    monkeypatch.setattr(census_module.tempfile, "NamedTemporaryFile", _tracking_named_temp)
+
+    spec = {
+        "roots": [
+            {
+                "root_id": "repo-root",
+                "required": True,
+                "scan": "git_repository",
+                "provenance_class": "harness_tooling",
+                "lineage_admissibility": "source_authority_not_weight_lineage",
+            },
+            {
+                "root_id": "ignored-root",
+                "required": True,
+                "scan": "git_ignored_registry",
+                "source_root_id": "repo-root",
+                "provenance_class": "unresolved",
+                "lineage_admissibility": "unresolved_requires_item_review",
+            },
+        ]
+    }
+    build_root_census(spec, {"repo-root": root})
+
+    assert created_paths, "expected the bounded path to spool through a real tempfile"
+    for spooled_path in created_paths:
+        assert not os.path.exists(spooled_path), (
+            f"spool file {spooled_path} was not cleaned up"
+        )
+
+
+def test_git_ignored_registry_membership_change_still_detected(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """The sha256-digest replacement for the TOCTOU membership check must
+    catch the same class of mid-scan mutation the old full-list-equality
+    check caught (see test_directory_membership_change_is_rejected above,
+    same technique, applied to the git_ignored_registry scan type)."""
+    root = tmp_path / "repo"
+    _init_ignored_payload_repo(root, file_count=3)
+    payload_dir = root / "payload"
+
+    real_hash = census_module.hash_file_streaming
+    changed = False
+
+    def mutate_membership(path, *args, **kwargs):
+        nonlocal changed
+        result = real_hash(path, *args, **kwargs)
+        if not changed:
+            (payload_dir / "late.bin").write_bytes(b"late")
+            changed = True
+        return result
+
+    monkeypatch.setattr(census_module, "hash_file_streaming", mutate_membership)
+
+    spec = {
+        "roots": [
+            {
+                "root_id": "repo-root",
+                "required": True,
+                "scan": "git_repository",
+                "provenance_class": "harness_tooling",
+                "lineage_admissibility": "source_authority_not_weight_lineage",
+            },
+            {
+                "root_id": "ignored-root",
+                "required": True,
+                "scan": "git_ignored_registry",
+                "source_root_id": "repo-root",
+                "provenance_class": "unresolved",
+                "lineage_admissibility": "unresolved_requires_item_review",
+            },
+        ]
+    }
+    result = build_root_census(spec, {"repo-root": root})
+    assert any(
+        row["code"] == "directory_membership_changed_during_scan"
+        for row in result["contradictions"]
+    )
+
+
+def test_git_ignored_registry_membership_unchanged_is_not_flagged(
+    tmp_path: Path,
+) -> None:
+    """No false positive: an untouched ignored payload must not trip the
+    membership-changed contradiction under the new digest comparison."""
+    root = tmp_path / "repo"
+    _init_ignored_payload_repo(root, file_count=50)
+
+    spec = {
+        "roots": [
+            {
+                "root_id": "repo-root",
+                "required": True,
+                "scan": "git_repository",
+                "provenance_class": "harness_tooling",
+                "lineage_admissibility": "source_authority_not_weight_lineage",
+            },
+            {
+                "root_id": "ignored-root",
+                "required": True,
+                "scan": "git_ignored_registry",
+                "source_root_id": "repo-root",
+                "provenance_class": "unresolved",
+                "lineage_admissibility": "unresolved_requires_item_review",
+            },
+        ]
+    }
+    result = build_root_census(spec, {"repo-root": root})
+    assert not any(
+        row["code"] == "directory_membership_changed_during_scan"
+        for row in result["contradictions"]
+    )

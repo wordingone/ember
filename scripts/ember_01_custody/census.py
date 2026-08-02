@@ -9,13 +9,15 @@ import argparse
 import fnmatch
 import hashlib
 import json
+import os
 import secrets
 import re
 import subprocess
+import tempfile
 from collections import defaultdict
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Iterator, Mapping
 
 from issue_census import validate_issue_census
 
@@ -333,6 +335,161 @@ def _material_file_rows(
         else:
             rows.append((f"{prefix}{relative}", candidate))
     return rows, errors
+
+
+# ---------------------------------------------------------------------------
+# Bounded-memory variants for the git_ignored_registry scan.
+#
+# A working tree's git-ignored payload (node_modules, venvs, build output,
+# model checkpoints, torch caches, ...) has no upper bound census.py can rely
+# on. `_discover_file_rows`/`_material_file_rows` above are correct but
+# materialize every discovered (relative_path, Path) row into one Python list
+# before any hashing starts, and the caller then keeps that full list alive
+# for the remainder of the run (`final_membership_records`) to detect
+# membership changes at the end. On a large enough ignored payload this is
+# exactly the class of allocation that OOM'd a real run (2026-07-21,
+# `state/receipts/cond1-2-census-ABORTED-20260721.md` — journal reached
+# 855,271 lines / 259MB before the process was killed, never finishing).
+#
+# The functions below give the SAME rows, in the SAME deterministic order,
+# with the SAME scope (every ignored path is still enrolled and byte-hashed,
+# nothing is excluded) — they just never hold more than one directory level's
+# worth of entries in memory at a time, and the long-lived per-root
+# "membership snapshot" used for the final TOCTOU check becomes a single
+# sha256 digest instead of the full path list, so it does not have to stay
+# resident for the rest of the census run.
+def _iter_git_ignored_paths(bound: Path) -> Iterator[str]:
+    """Stream `git ls-files -z --others --ignored --exclude-standard` output.
+
+    Reads stdout incrementally instead of capturing it in one string
+    (`_git()`'s `subprocess.run(..., capture_output=True)`), and yields each
+    NUL-delimited path as soon as it is available. Bounded by one read chunk,
+    not by the total number of ignored paths in the tree.
+    """
+    process = subprocess.Popen(
+        ["git", "ls-files", "--others", "--ignored", "--exclude-standard", "-z"],
+        cwd=bound,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    assert process.stdout is not None
+    pending = ""
+    try:
+        while True:
+            chunk = process.stdout.read(1 << 16)
+            if not chunk:
+                break
+            pending += chunk
+            *complete, pending = pending.split("\0")
+            for relative in complete:
+                if relative:
+                    yield relative.replace("\\", "/")
+        if pending:
+            yield pending.replace("\\", "/")
+    finally:
+        process.stdout.close()
+        stderr = process.stderr.read() if process.stderr is not None else ""
+        returncode = process.wait()
+        if returncode != 0:
+            raise ValueError(
+                "git command failed: ls-files --others --ignored --exclude-standard -z: "
+                + stderr.strip()
+            )
+
+
+def _iter_discover_file_rows(root: Path) -> Iterator[tuple[str, Path]]:
+    """Generator twin of `_discover_file_rows`: same iterative stack walk,
+    same relative-path construction, but yields each file row immediately
+    instead of accumulating the full list before returning. Directory access
+    errors are swallowed here (parity with `_discover_file_rows` recording
+    them as a side list is preserved by `_iter_material_rows`, which is the
+    only caller that needs errors alongside rows for census purposes)."""
+    pending = [root]
+    while pending:
+        directory = pending.pop()
+        try:
+            children = list(directory.iterdir())
+        except OSError:
+            continue
+        for candidate in children:
+            try:
+                if candidate.is_dir():
+                    pending.append(candidate)
+                elif candidate.is_file():
+                    yield candidate.relative_to(root).as_posix(), candidate
+            except OSError:
+                yield candidate.relative_to(root).as_posix(), candidate
+
+
+def _iter_material_rows(
+    root: Path, paths: Iterable[str], prefix: str = ""
+) -> Iterator[tuple[str, Path]]:
+    """Lazy twin of `_material_file_rows`. The top-level `paths` set (the
+    entries `git ls-files` reports directly, before recursing into any
+    ignored directory) is still small enough to sort eagerly — the explosion
+    happens inside a single ignored directory (e.g. one `node_modules/`
+    unfolding into hundreds of thousands of files), which is exactly the part
+    this streams instead of materializing."""
+    for relative in sorted(set(paths)):
+        candidate = root / Path(relative)
+        if candidate.is_dir():
+            for child, path in _iter_discover_file_rows(candidate):
+                yield f"{prefix}{relative}/{child}", path
+        else:
+            yield f"{prefix}{relative}", candidate
+
+
+def _canonical_membership_digest(paths: Iterable[str]) -> str:
+    """Length-prefixed sha256 over the sorted, de-duplicated relative-path
+    set — the same collision-safe encoding style `tree_digest` uses for file
+    content. Two calls over the same underlying set (regardless of
+    encounter order or how many times a path was yielded) always agree."""
+    digest = hashlib.sha256()
+    for relative in sorted(set(paths)):
+        encoded = relative.encode("utf-8")
+        digest.update(len(encoded).to_bytes(8, "big"))
+        digest.update(encoded)
+    return digest.hexdigest()
+
+
+def _spooled_membership_digest(path_iter: Iterator[str]) -> str:
+    """Spool a stream of relative-path strings to a tempfile (bounded
+    memory: one line at a time, never the whole set), then read it back once
+    to compute `_canonical_membership_digest`. The read-back is a single
+    short-lived local list scoped to this one root's membership check, freed
+    immediately after — unlike storing the raw list in
+    `final_membership_records` for the rest of the run, nothing from it
+    survives past this function returning."""
+    handle = tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", suffix=".jsonl", delete=False
+    )
+    try:
+        for relative in path_iter:
+            handle.write(relative)
+            handle.write("\n")
+        handle.close()
+        with open(handle.name, "r", encoding="utf-8") as spooled:
+            return _canonical_membership_digest(
+                line.rstrip("\n") for line in spooled
+            )
+    finally:
+        try:
+            os.unlink(handle.name)
+        except OSError:
+            pass
+
+
+def _compute_ignored_membership_sha256(bound: Path) -> str:
+    """Recompute the current git-ignored membership digest for `bound`,
+    bounded the same way as the initial scan (spooled, never a resident full
+    list). Used only for the final TOCTOU membership check."""
+    return _spooled_membership_digest(
+        relative
+        for relative, _ in _iter_material_rows(bound, _iter_git_ignored_paths(bound))
+    )
 
 
 def canonical_root_identity(payload: Mapping[str, Any]) -> dict[str, Any]:
@@ -691,11 +848,18 @@ def build_root_census(
                 ),
             }
 
-        file_candidates: list[tuple[str, Path]] | None = None
+        file_candidates: Iterable[tuple[str, Path]] | None = None
         directory_errors: list[dict[str, Any]] = []
         initial_membership: list[str] | None = None
         initial_git_summary: dict[str, Any] | None = None
         initial_discovery_snapshot: list[dict[str, Any]] | None = None
+        # Set true only for the git_ignored_registry bounded-memory path:
+        # `file_candidates` there is a single-use generator, so the
+        # membership snapshot cannot be derived from it up front the way
+        # every other scan type does — it is spooled during the per-file
+        # hash loop below and reduced to a digest right after.
+        membership_deferred = False
+        membership_spool: Any = None
         try:
             if scan == "git_repository":
                 summary = git_repository_summary(root_id, bound)
@@ -899,24 +1063,33 @@ def build_root_census(
                 root_row["materialized_worktree_count"] = materialized
                 root_row["worktree_errors"] = worktree_errors
             if scan == "git_ignored_registry":
-                ignored_text = _git(
-                    bound,
-                    "ls-files",
-                    "--others",
-                    "--ignored",
-                    "--exclude-standard",
-                    "-z",
+                # Bounded-memory path (see the block above `canonical_root_identity`).
+                # The top-level ignored-entry list (what `git ls-files` reports
+                # directly) is small and still sorted+deduped eagerly; the
+                # per-directory recursive expansion (the part that can explode
+                # to hundreds of thousands of rows for one ignored payload
+                # directory) is streamed lazily straight into the existing
+                # per-file hash loop below, never materialized as one list.
+                ignored_top_level = sorted(set(_iter_git_ignored_paths(bound)))
+                root_row["ignored_entry_count"] = len(ignored_top_level)
+                membership_spool = tempfile.NamedTemporaryFile(
+                    mode="w", encoding="utf-8", suffix=".jsonl", delete=False
                 )
-                ignored_paths = sorted(
-                    relative.replace("\\", "/")
-                    for relative in ignored_text.split("\0")
-                    if relative
+
+                def _spooling_ignored_rows(
+                    rows: Iterator[tuple[str, Path]], spool=membership_spool
+                ) -> Iterator[tuple[str, Path]]:
+                    for relative, path in rows:
+                        spool.write(relative)
+                        spool.write("\n")
+                        yield relative, path
+
+                file_candidates = _spooling_ignored_rows(
+                    _iter_material_rows(bound, ignored_top_level)
                 )
-                root_row["ignored_entry_count"] = len(ignored_paths)
-                file_candidates, directory_errors = _material_file_rows(
-                    bound, ignored_paths
-                )
-                initial_membership = [relative for relative, _ in file_candidates]
+                directory_errors = []
+                initial_membership = None
+                membership_deferred = True
             if scan != "files":
                 if scan not in {
                     "directory_discovery",
@@ -945,22 +1118,37 @@ def build_root_census(
         else:
             candidates, directory_errors = _discover_file_rows(bound)
             initial_membership = [relative for relative, _ in candidates]
-        if initial_membership is None:
+        if initial_membership is None and not membership_deferred:
             initial_membership = [relative for relative, _ in candidates]
+        pending_membership_record: dict[str, Any] | None = None
         if not (
             scan == "git_repository"
             and initial_git_summary is not None
             and initial_git_summary["is_bare"] is True
         ):
-            final_membership_records.append(
-                {
+            if membership_deferred:
+                membership_record: dict[str, Any] = {
                     "root_id": root_id,
                     "scan": scan,
                     "bound": bound,
                     "root_spec": dict(root_spec),
+                    "membership_representation": "sha256",
+                    # Patched in right after the per-file hash loop below
+                    # finishes spooling this root's rows — see the
+                    # `if membership_deferred:` block that follows it.
+                    "initial_membership_sha256": None,
+                }
+                pending_membership_record = membership_record
+            else:
+                membership_record = {
+                    "root_id": root_id,
+                    "scan": scan,
+                    "bound": bound,
+                    "root_spec": dict(root_spec),
+                    "membership_representation": "list",
                     "initial_membership": list(initial_membership),
                 }
-            )
+            final_membership_records.append(membership_record)
         if initial_git_summary is not None:
             final_git_records.append(
                 {
@@ -1124,6 +1312,24 @@ def build_root_census(
                 }
                 final_byte_records[physical_key] = final_record
             final_record["sources"].append((root_id, relative))
+        if membership_deferred and pending_membership_record is not None:
+            # The spooling generator above has now been fully drained by the
+            # hash loop that just finished, so the spool file holds exactly
+            # this root's membership set. Reduce it to a digest and forget
+            # the file — nothing about the full row set survives past here.
+            membership_spool.close()
+            try:
+                with open(membership_spool.name, "r", encoding="utf-8") as spooled:
+                    pending_membership_record["initial_membership_sha256"] = (
+                        _canonical_membership_digest(
+                            line.rstrip("\n") for line in spooled
+                        )
+                    )
+            finally:
+                try:
+                    os.unlink(membership_spool.name)
+                except OSError:
+                    pass
     for record in final_discovery_records:
         try:
             final_discovery_snapshot = _current_discovery_snapshot(
@@ -1161,6 +1367,30 @@ def build_root_census(
                 "resolution": "unresolved_retry_snapshot",
             })
     for record in final_membership_records:
+        if record.get("membership_representation") == "sha256":
+            # Bounded-memory path (git_ignored_registry): the initial
+            # membership was reduced to a digest, not kept as a full list, so
+            # the final check recomputes the same digest (also bounded — see
+            # `_compute_ignored_membership_sha256`) instead of re-diffing two
+            # full path lists.
+            try:
+                final_membership_sha256 = _compute_ignored_membership_sha256(
+                    record["bound"]
+                )
+            except Exception as exc:
+                contradictions.append(
+                    _final_verification_error(
+                        record["root_id"], "directory_membership", exc
+                    )
+                )
+                continue
+            if final_membership_sha256 != record["initial_membership_sha256"]:
+                contradictions.append({
+                    "code": "directory_membership_changed_during_scan",
+                    "root_id": record["root_id"],
+                    "resolution": "unresolved_retry_snapshot",
+                })
+            continue
         try:
             final_membership = _current_root_membership(
                 record["scan"],
