@@ -1,0 +1,53 @@
+{
+  "schema_version": "ember-trusted-verifiers-v1",
+  "verifiers": [
+    {
+      "path": "verifiers/parameter-realization-verifier.py",
+      "sha256": "f490f807a901c30d90e7e7b67b271c7e7fc7bca8088267aacd7197500dec5e59",
+      "evidence_classes": [
+        "parameter_realization"
+      ],
+      "criterion_ids": []
+    },
+    {
+      "path": "verifiers/tokenizer-freeze-verifier.py",
+      "sha256": "924decebfd2d97f873f21eca583f29d50868cd49a89f39cc025ef5a90d442afe",
+      "evidence_classes": [
+        "tokenizer_freeze"
+      ],
+      "criterion_ids": []
+    },
+    {
+      "path": "verifiers/training-data-verifier.py",
+      "sha256": "0354fbd33ccb2a85b169fd0363ef922787d50935959f95469979ae868de1c978",
+      "evidence_classes": [
+        "training_data"
+      ],
+      "criterion_ids": []
+    },
+    {
+      "path": "verifiers/sufficient-pretraining-verifier.py",
+      "sha256": "7874023f1e7c0327a55f70cc3a4993fa352d555624759904bc540a8da3b27065",
+      "evidence_classes": [
+        "sufficient_pretraining"
+      ],
+      "criterion_ids": [
+        "ember-sufficient-pretraining-v2"
+      ]
+    },
+    {
+      "path": "verifiers/capability-evaluation-verifier.py",
+      "sha256": "d5f58e7b16669f99af8b693f46a9289e79b89f1f5c9d77467b61d881c150c038",
+      "evidence_classes": [
+        "evaluation"
+      ],
+      "criterion_ids": [
+        "ember-3b-text-capability-v1",
+        "ember-3b-image-capability-v1",
+        "ember-3b-audio-capability-v1",
+        "ember-3b-reasoning-capability-v1",
+        "ember-3b-tool-capability-v1"
+      ]
+    }
+  ]
+}
