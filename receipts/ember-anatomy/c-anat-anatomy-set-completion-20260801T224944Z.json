@@ -1,0 +1,40 @@
+{
+  "ticket": "EMBER-C-ANAT-DOC-SET",
+  "ts": "20260801T224944Z",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "receipt_kind": "canonical anatomy set completion / consistency attestation",
+  "condition": "C-ANAT",
+  "board_row_cured": "ember-totality-20260801T052815Z.json (C-ANAT was RED: 0/16 anatomy docs present anywhere in the repo)",
+  "summary": "This receipt attests the canonical anatomy_set (the 16-doc architecture set required by C-ANAT, docs/spec/conditions-v1.md sec 4.2) is complete and consistent with the receipts. All 16 docs (docs/anatomy/00_INDEX.md through docs/anatomy/15_TECHNICAL_REPORT.md) were authored by reading real, on-disk subsystems (configs/ember-restart-3b.json, scripts/governor.py, scripts/ember_totality/ember_totality_spec.py, scripts/receipt_check.py, scripts/receipt_write.py, tools/ember-cli/src/core/ember-world-state.ts, scripts/ember_cobs_capture.py, scripts/ember_tally_checks.py, scripts/timeshare_pretrain.py, docs/ember-restart-3b-governed-runner-v1.md, docs/hardest-problems-register-v1.md, and the current totality board receipt ember-totality-20260801T052815Z.json among others) rather than invented from prose. Where a subsystem genuinely does not exist yet (08_PROMPT_REGISTRY), the corresponding doc states that plainly instead of fabricating one, per docs/probe-authoring-contract.md's disclosed weakness that test_c_anat.py's presence check is filename-glob only.",
+  "consistency_check": "Each of the 16 docs' 'Current gaps' section was cross-checked against the live rows in scripts/ember_totality/receipts-totality/ember-totality-20260801T052815Z.json at authoring time (C-AUTHORITY GREEN, C-CUSTODY GREEN, C-INV RED, C-BASE RED, C-GROW GREEN, C-SCALE RED, C1 RED, C2/C3/C6 GREEN, C4/C5 RED, C7/C8 RED, C-PORT GREEN, C-OBS RED, C-IND RED, C-MANIFEST GREEN, C-TALLY RED-by-definition). No doc claims a condition status that the cited board receipt does not itself state -- this is a receipt-backed, cross-checked set, not a prose set consistent only with itself.",
+  "doc_set": [
+    {"path": "docs/anatomy/00_INDEX.md", "prefix": "00_"},
+    {"path": "docs/anatomy/01_CONSTITUTION_AND_AUTHORITY.md", "prefix": "01_"},
+    {"path": "docs/anatomy/02_REPO_TOPOLOGY.md", "prefix": "02_"},
+    {"path": "docs/anatomy/03_MODEL_ARCHITECTURE.md", "prefix": "03_"},
+    {"path": "docs/anatomy/04_TRAINING_PIPELINE.md", "prefix": "04_"},
+    {"path": "docs/anatomy/05_GROWTH_AND_SCALING.md", "prefix": "05_"},
+    {"path": "docs/anatomy/06_EVALUATION_AND_BENCHMARKS.md", "prefix": "06_"},
+    {"path": "docs/anatomy/07_GOVERNOR_AND_RESOURCE_MANAGEMENT.md", "prefix": "07_"},
+    {"path": "docs/anatomy/08_PROMPT_REGISTRY.md", "prefix": "08_", "note": "subsystem does not exist yet; doc states this plainly, not aspirational"},
+    {"path": "docs/anatomy/09_TOOLING_AND_CLI.md", "prefix": "09_"},
+    {"path": "docs/anatomy/10_RECEIPTS_PROVENANCE.md", "prefix": "10_"},
+    {"path": "docs/anatomy/11_TOTALITY_BOARD_CONDITIONS.md", "prefix": "11_"},
+    {"path": "docs/anatomy/12_COCKPIT_OBSERVATORY.md", "prefix": "12_"},
+    {"path": "docs/anatomy/13_RUNBOOK.md", "prefix": "13_"},
+    {"path": "docs/anatomy/14_MODEL_CARD.md", "prefix": "14_"},
+    {"path": "docs/anatomy/15_TECHNICAL_REPORT.md", "prefix": "15_"}
+  ],
+  "all_16_present": true,
+  "set_complete": true,
+  "h4_verifier_free_judgment": "H4 (verifier-free judgment, docs/hardest-problems-register-v1.md O6) is ADDRESSED by this receipt in the sense the register itself models: not solved, but named where its risk bears in the current architecture. docs/anatomy/15_TECHNICAL_REPORT.md's 'H4 -- verifier-free judgment' section quotes the register's own honest status ('OPEN, untouched, honestly not on the S5 critical path') and names the two concrete places H4's risk shows up today: 03_MODEL_ARCHITECTURE.md's expert-routing is an explicit local episode declaration (a designed non-learned alternative to a verifier-scored router), and 06_EVALUATION_AND_BENCHMARKS.md's anti-gaming C1-C5 protocol exists precisely because Ember currently routes every certifiable gain through an external verifier, per H4's own problem statement. This receipt does not claim H4 is resolved -- it is not -- only that the risk is named and cross-referenced rather than left to drift unrecorded.",
+  "does_not_count_guard": "No claim in this receipt or the doc set treats docs-only progress as substrate (conditions-v1.md's C-ANAT 'Does NOT count' clause). Every 'Current gaps' section in the 16 docs cites the live board receipt's own RED/GREEN verdicts rather than asserting completion in prose; C-BASE, C-SCALE, C-OBS, C1/C4/C5/C7/C8, C-INV, and C(-1) are all reported RED in this doc set exactly as the board reports them.",
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false
+}
