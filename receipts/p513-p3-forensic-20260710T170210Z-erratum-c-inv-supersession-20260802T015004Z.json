@@ -1,0 +1,31 @@
+{
+  "claim_boundary": {
+    "checkpoint_or_capability_claim": false,
+    "gpu_claim": false,
+    "historical_metrics_or_verdict_reexecuted": false,
+    "historical_metrics_or_verdict_rescored": false,
+    "historical_receipt_byte_identity_verified": true,
+    "historical_receipt_git_lineage_verified": true,
+    "issue_700_completion_claim": false,
+    "training_claim": false
+  },
+  "goal_id": "EMBER-02",
+  "historical_declared_ts": "2026-07-10T17:31:00.000000+00:00",
+  "historical_landing_commit": "6f05a2908c93375947051c69554efd4a990d952c",
+  "historical_receipt_sha256": "2ff92fd81a077fa85f944e0d5dfdb912d91df828c261f54b4d3d5f244eca2938",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "revalidation": {
+    "landing_commit_confirmed_ancestor_of_head": true,
+    "method": "git_lineage_and_byte_identity_only",
+    "note": "This receipt does not re-execute the original producer and does not re-derive or re-score any metric/verdict recorded in the historical receipt. It proves only that the historical receipt is real, committed, git-tracked history whose bytes have not been silently altered since landing.",
+    "on_disk_bytes_match_head_committed_blob": true
+  },
+  "schema_version": "ember-c-inv-batch-supersession/v1",
+  "sha_convention": "bytes on disk as-is (binary read, no normalization)",
+  "supersedes": "receipts/p513-p3-forensic-20260710T170210Z-erratum.json",
+  "ticket": "P513-P3-FORENSIC-ERRATUM",
+  "ts": "20260802T015004Z",
+  "verdict": "C_INV_BATCH_SUPERSESSION_GIT_LINEAGE_AND_BYTE_IDENTITY_VERIFIED",
+  "workstream_id": "EMBER-02A"
+}
