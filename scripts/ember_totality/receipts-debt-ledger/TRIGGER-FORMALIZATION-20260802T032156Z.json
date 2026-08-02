@@ -1,0 +1,73 @@
+{
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "ticket": "DEBT-009, GATE-001, GATE-002, GATE-003, GATE-004, GATE-005, GATE-006",
+  "disposition": "TRIGGER-FORMALIZATION",
+  "ts": "20260802T032156Z",
+  "verified_against_master": "3b2a64561652e731fe2ffa3c1892f4d3d334fe0b",
+  "what_this_is_not": "This receipt does NOT dispose any row. All seven rows remain live obligations with their required actions unchanged, unweakened, and unreworded. What changes is only that each row's fire condition is now written as a machine-checkable predicate instead of prose that could never be evaluated false. No row's work is reduced, deferred, or reclassified.",
+  "why_the_rows_were_triggerless": "C10 reads a row's fire condition from its Status cell. All seven rows carried the bare token 'TRIGGER-GATED' there, so the probe classified them triggerless — correctly, since a bare token names no condition. For DEBT-009 and GATE-001/002/006 a real condition already existed, but only in the separate Trigger column, invisible to the check that has to evaluate it. For GATE-003/004/005 no evaluable condition existed anywhere: the prose named an event with no observable that could witness it.",
+  "trigger_state_verified_not_inherited": {
+    "finding": "resident_training_gate_status is BLOCKED, not PASS, so every trigger below that keys on PASS has NOT fired.",
+    "method": "Every receipt under receipts/ember-resident-training-gate/ was read and ordered. resident-training-gate-20260622T152500Z-final.json reports PASS, but resident-training-gate-20260622T155000Z-blocked.json is later and reports BLOCKED with concrete errors — clean_room_harness.full_parity_receipt_not_pass, clean_room_harness.real_reference_uiux_ax_observation_missing_or_not_pass, clean_room_harness.observed_real_reference_binary_not_true — and invalid_codes invalid_clean_room_harness_incomplete.",
+    "why_the_later_PASS_files_do_not_override": "resident-training-gate-20260704T062951Z-issue69-cured-redacted-edition.json and resident-training-gate-20260704T065507Z-intree-issue70-redacted-edition.json also report PASS and carry later timestamps, but they are redaction editions filed under custody import for issues 69 and 70, not new gate evaluations: their own source_truth pins git_head afe16a6afc1cd32a60c14d9db4553d20e597782c, a tree that is not master. The last actual gate RUN is the 2026-06-22 BLOCKED one.",
+    "corroboration": "The BLOCKED reason and DEBT-003's row text agree independently: the gate blocks on clean_room_harness.*, and DEBT-003 is 'clean-room predecessor-CLI resident harness absent'. Both point at the same single missing component."
+  },
+  "rows": {
+    "DEBT-009": {
+      "condition_before": "bare TRIGGER-GATED in Status; the fp16-gate dependency stated only in prose",
+      "condition_after": "resident_training_gate_status=PASS observed in a receipts/ember-resident-training-gate/*.json run receipt",
+      "evaluable_because": "names an exact field, an exact value, and an exact directory to read it from",
+      "fired": false,
+      "required_action_unchanged": "BITNET_BLOCKED or a comparison receipt with fp16 baseline, BitNet identity, quality/footprint/latency/memory rows, transfer, and deletion/revert evidence"
+    },
+    "GATE-001": {
+      "condition_before": "resident_training_gate_status=PASS, present in the Trigger column only",
+      "condition_after": "same condition, now written into Status where the check can read it",
+      "evaluable_because": "field=value predicate over a named receipt directory",
+      "fired": false,
+      "required_action_unchanged": "produce an exact source-backed benchmark discovery receipt"
+    },
+    "GATE-002": {
+      "condition_before": "resident_training_gate_status=PASS, present in the Trigger column only",
+      "condition_after": "same condition, now written into Status where the check can read it",
+      "evaluable_because": "field=value predicate over a named receipt directory",
+      "fired": false,
+      "required_action_unchanged": "combine original goal, state, issues, receipts, session history, and research notes into next-loop techniques"
+    },
+    "GATE-003": {
+      "condition_before": "'resident-trained organ exists and benchmark selected' — no observable; 'exists' and 'selected' had no witness",
+      "condition_after": "resident_training_gate_status=PASS in receipts/ember-resident-training-gate/*.json AND a benchmark-discovery receipt from GATE-001 exists under receipts/",
+      "evaluable_because": "both halves are now file-and-field conditions; the second is exactly GATE-001's own deliverable, so the dependency is checkable rather than asserted",
+      "fired": false,
+      "required_action_unchanged": "run an equal-budget before/after positive-delta loop with deletion and reproducibility"
+    },
+    "GATE-004": {
+      "condition_before": "'field-level claim attempted' — no observable; nothing recorded when a claim was made",
+      "condition_after": "any receipts/**/*.json sets field_level_contribution_claimed=true",
+      "evaluable_because": "the claim becomes a recorded flag rather than an intention, so the guardrail can be checked instead of remembered",
+      "fired": false,
+      "note": "This is a standing conditional obligation, not scheduled work. It fires if and only if such a claim is actually made, and its proof burden is unchanged.",
+      "required_action_unchanged": "cite prior baseline, define material difference, ablate, show transfer/reuse, publish a reproducible recipe"
+    },
+    "GATE-005": {
+      "condition_before": "'duration scale-up proposed' — no observable; a proposal left no trace to test",
+      "condition_after": "any receipts/**/*.json sets duration_scale_up_proposed=true or declares planned_run_hours >= 1",
+      "evaluable_because": "both disjuncts are field predicates on receipts; the numeric one gives a threshold that cannot be argued about",
+      "fired": false,
+      "note": "Also a standing conditional. The unearned_duration marker it demands is unchanged.",
+      "required_action_unchanged": "prove the extra time is load-bearing and deletion-sensitive; otherwise mark unearned_duration"
+    },
+    "GATE-006": {
+      "condition_before": "resident_training_gate_status=PASS, present in the Trigger column only",
+      "condition_after": "same condition, now written into Status where the check can read it",
+      "evaluable_because": "field=value predicate over a named receipt directory",
+      "fired": false,
+      "required_action_unchanged": "run the post-fp16 BitNet comparison or write BITNET_BLOCKED before any benchmark/readiness/D3 continuation"
+    }
+  },
+  "classification_law_basis": "docs/ember-debt-ledger.md 'Classification Law': a row for which disposal proof does not exist 'remains ACTIVE or TRIGGER-GATED'. TRIGGER-GATED is therefore the ledger's own sanctioned state for a live, not-yet-due obligation. These seven rows stay in that state; only their fire conditions become testable. None is moved toward ARCHIVAL, KILLED, or EXCLUDED, and none of the never-killable rows (RLM, iGRPO, clean-room predecessor-CLI) is touched here.",
+  "claim_boundary": "This receipt claims only that each of the seven rows now carries a machine-checkable fire condition, and that none of those conditions has fired as of master 3b2a6456. It does NOT dispose any row, does NOT assert any row's work is done or unnecessary, does NOT weaken any required action, and makes no claim about whether the resident-training programme should be resumed.",
+  "produced_by": "automated disposition receipt, worktree fix/c10-debt-ledger-drain-2"
+}

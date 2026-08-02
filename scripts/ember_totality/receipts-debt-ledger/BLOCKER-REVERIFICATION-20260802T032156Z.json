@@ -1,0 +1,76 @@
+{
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "ticket": "DEBT-001, DEBT-002, DEBT-003, DEBT-005, DEBT-008, DEBT-010",
+  "disposition": "NONE — rows remain OPEN",
+  "ts": "20260802T032156Z",
+  "verified_against_master": "3b2a64561652e731fe2ffa3c1892f4d3d334fe0b",
+  "what_this_is": "A blocker re-verification, not a disposition. These six rows stay OPEN and keep board row C10 RED. The purpose is to replace each row's inherited 2026-06 blocker with one re-established against master's current bytes, so that no row is left resting on a reason that stopped being true.",
+  "why_re_verification_was_necessary": {
+    "the_prior_evidence_is_pinned_to_a_tree_that_no_longer_exists": "The resident-training gate receipts report component_status values that would, read naively, discharge several of these rows: paper_source_preflight PASS, train_multimodal_adapter PASS, train_multimodal_floor_contract PASS, native_goal_organ PASS, recursive_query_policy PASS, verifier_conditioned_update PASS. Every one of those verdicts is bound to artifact hashes that have since drifted from master, so none of them can be inherited as current.",
+    "measured_drift": [
+      {
+        "path": "scripts/train_multimodal_v0.py",
+        "hash_pinned_by_gate_receipts": "89283f362778c7072bab81f4d5bbbd3d4b6393788c2a504469232d073cf49e90",
+        "hash_at_master": "af4cb2159c0e9b6413d1e287a209c2a5ee6f61496f66832bb19950590f2a5ba9",
+        "state": "DRIFTED"
+      },
+      {
+        "path": "docs/ember-floor-contract.md",
+        "hash_pinned_by_gate_receipts": "08e492c656c019bede4bb713f4966ce796fcb585039884da89ef6d189cdeca1e",
+        "hash_at_master": "83816f1de862f9dc4bbe90e73474f4e50f0e1aef7c1a191f31c40683d0493ad1",
+        "state": "DRIFTED"
+      },
+      {
+        "path": "docs/nc2-own-technique-contract.md",
+        "hash_pinned_by_gate_receipts": "1f709d42d9828450b3216f30d9da6790501e0e36ea039422ca279db8e65c69d1",
+        "hash_at_master": "a0a12328b2d96f6df12bd7d51d029f88279436c9e1073835edbc12e7c8b85b9c",
+        "state": "DRIFTED, and additionally MOVED: the gate receipts name it at repository root as nc2-own-technique-contract.md, which does not exist at master; the file is now under docs/."
+      }
+    ],
+    "drift_check_method": "Each path's bytes were read from origin/master and hashed, comparing against both the LF form and the CRLF form so a line-ending difference could not be mistaken for content drift. All three differ under both forms, so this is real content drift, not normalization."
+  },
+  "current_blocker_verified_at_master": {
+    "primary": "The resident-training gate does not pass its own selftest at master. Running scripts/ember_resident_training_gate_selftest.py raises AssertionError on 'assert passed[\"resident_training_gate_status\"] == \"PASS\"'. Instrumenting the run shows the receipt under that assertion is BLOCKED with component_status train_multimodal_floor_contract = BLOCKED, errors ['floor_contract.deferral_section_missing'], and invalid_codes ['invalid_floor_contract_bypass']. Until that is repaired, no gate receipt can be produced at master, and every row whose Required Receipt is a gate receipt is blocked by construction — independently of any training or hardware question.",
+    "secondary": "The last real gate RUN, receipts/ember-resident-training-gate/resident-training-gate-20260622T155000Z-blocked.json (sha256 e1bb5973a277219bc49c2bcb9a834535956d297fcc92ab07b4d21eeed7f980df), is BLOCKED on clean_room_harness.* — the same component DEBT-003 names as absent. The two agree independently.",
+    "authority_context": "GOAL.md at master (sha256 84d1faf6ca34b02507b3c232138c1c21f3102b860cefd88c7b17cdf0dc578595) contains no occurrence of RLM, iGRPO, resident-training, clean-room, or predecessor-CLI; its EMBER_AUTHORITY_V1 block names active_goal_id EMBER-02. This ledger is itself stamped EMBER_ARTIFACT_CLASS=historical_only with 'no current execution, goal-selection, research, or completion authority', and its own Authority section states that where it conflicts with the goal file, the goal file wins. This context is recorded because it is true and material, NOT as a disposition ground: none of these rows is being cleared on the basis that the goal moved on."
+  },
+  "rows": {
+    "DEBT-001": {
+      "status": "OPEN",
+      "blocker": "Requires a resident-training gate receipt, which cannot be produced at master (selftest BLOCKED, floor_contract.deferral_section_missing). Producing a real one additionally requires a learned neural update, i.e. training.",
+      "never_killable": true,
+      "note": "The Classification Law names RLM as a never-killable row. No disposition is attempted or implied."
+    },
+    "DEBT-002": {
+      "status": "OPEN",
+      "blocker": "Same gate-receipt blocker as DEBT-001; the verifier-conditioned update it demands is a training result, not a code artifact.",
+      "never_killable": true,
+      "note": "The Classification Law names iGRPO as a never-killable row."
+    },
+    "DEBT-003": {
+      "status": "OPEN",
+      "blocker": "The clean-room predecessor-CLI harness is the exact component the last real gate run blocked on (clean_room_harness.full_parity_receipt_not_pass, clean_room_harness.real_reference_uiux_ax_observation_missing_or_not_pass, clean_room_harness.observed_real_reference_binary_not_true). The parity evidence it needs includes observation of a real reference binary, which is not obtainable from repository bytes.",
+      "never_killable": true,
+      "note": "The Classification Law names the clean-room predecessor-CLI port as a never-killable row."
+    },
+    "DEBT-005": {
+      "status": "OPEN",
+      "blocker": "The row requires a citation-only pass to be marked invalid_paper_to_spec_only. A repository-wide search at master finds that token ONLY in documentation (this ledger, docs/goal-archive-v1-full.md, docs/spec/conditions-v1.md) and in the invalid-token lists of scripts/ember_totality/test_c0.py and test_c14.py. It is never emitted by scripts/ember_resident_training_gate.py, so the guard the row demands is unimplemented. The mechanism-to-implementation map half IS emitted by the gate; the marker half is not.",
+      "why_not_cured_here": "Implementing the marker means changing gate behaviour in a script whose own selftest is currently RED at master. A change to that script could not be shown green by its selftest, so it would ship unverifiable. The honest sequence is to repair the selftest first; that repair is out of this row's scope and is recorded as the unblocking action.",
+      "unblocking_action": "Repair floor_contract.deferral_section_missing so scripts/ember_resident_training_gate_selftest.py passes, then emit invalid_paper_to_spec_only from the paper_source_preflight component when a pass yields no mechanism extraction."
+    },
+    "DEBT-008": {
+      "status": "OPEN",
+      "blocker": "The row requires a gate receipt pinning scripts/train_multimodal_v0.py's hash plus A/B/C/deleted neural evidence. The only receipts pinning that hash pin 89283f36..., which is not the file at master (af4cb215...), so the integration evidence no longer describes the tree. Re-establishing it requires a fresh gate run, which the selftest blocker prevents, and neural evidence, which requires training."
+    },
+    "DEBT-010": {
+      "status": "OPEN",
+      "blocker": "The row requires a gate receipt carrying floor and NC2 contract hashes. Both pinned hashes have drifted (floor 08e492c6... vs master 83816f1d...; nc2 1f709d42... vs master a0a12328...), and the nc2 path the receipts name does not exist at master at all. Sharpening the point: the gate's CURRENT selftest failure is itself in this row's component — train_multimodal_floor_contract BLOCKED with floor_contract.deferral_section_missing — so this row is not merely unproven, it is actively failing at master."
+    }
+  },
+  "classification_law_basis": "docs/ember-debt-ledger.md 'Classification Law': ARCHIVAL/KILLED/EXCLUDED require a receipt proving physical/functional contradiction or strict successor-subsumption. No such proof exists for any of these six rows, so per that same law each 'remains ACTIVE or TRIGGER-GATED'. They are held OPEN rather than moved to TRIGGER-GATED because their work is not waiting on a future event — it is due and blocked, and recording it as gated would misstate that.",
+  "claim_boundary": "This receipt disposes nothing and clears nothing. It claims only that each named blocker was re-established against master's bytes on the stated date, and that the gate receipts' prior PASS components cannot be inherited because their pinned artifacts have drifted. It makes no claim that these rows are unimportant, that the resident-training programme is abandoned, or that C10 can go GREEN. C10 remains RED with these six rows outstanding.",
+  "produced_by": "automated blocker re-verification receipt, worktree fix/c10-debt-ledger-drain-2"
+}
