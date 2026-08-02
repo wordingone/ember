@@ -47,9 +47,11 @@ def valid_completion_receipt() -> dict[str, object]:
         "schema": "ember-01-completion-receipt-v1",
         "ok": True,
         "verified_at_utc": "2026-07-23T08:00:00+00:00",
-        "goal_id": "EMBER-01",
+        "goal_id": "EMBER-02",
+        "completion_subject_goal_id": "EMBER-01",
+        "workstream_id": "EMBER-02A",
         "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-        "certificate_legs": {str(index): "RESOLVED_TRUE" for index in range(1, 10)},
+        "certificate_legs": {str(index): "resolved-true" for index in range(1, 10)},
         "leg_detail": {},
         "leg_summary": {
             "resolved_true": [str(index) for index in range(1, 10)],
@@ -72,7 +74,8 @@ def valid_completion_receipt() -> dict[str, object]:
             "status_before": "",
         },
         "selection": {
-            "goal_id": "EMBER-01",
+            "selected_goal_suffix": "EMBER-GOAL-GRAPH.json",
+            "selector_sha256": "0" * 64,
             "unchanged_during_verification": True,
         },
         "authority_certificate": {"ok": True},
@@ -314,6 +317,16 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                     ),
                 ),
                 "checkout integrity",
+                SHA,
+            ),
+            "wrong completion subject": (
+                lambda paths: _rewrite_completion(
+                    paths,
+                    lambda receipt: receipt.__setitem__(
+                        "completion_subject_goal_id", "EMBER-02"
+                    ),
+                ),
+                "completion subject is not EMBER-01",
                 SHA,
             ),
             "selection changed": (
@@ -705,6 +718,39 @@ def _rewrite_completion(
             "completion_receipt_sha256", completion_sha256
         ),
     )
+
+
+class ProducerSchemaBindingTest(unittest.TestCase):
+    """Bind the consumer's completion-receipt expectations to the REAL
+    producer (scripts/verify_ember01_completion.py) so schema drift breaks CI
+    instead of the launch (issue #1300)."""
+
+    def test_leg_state_constant_matches_producer(self) -> None:
+        # AST-read the producer source (importing it drags heavy deps): the
+        # module-level RESOLVED_TRUE assignment is the emitted leg state.
+        import ast
+
+        producer_path = ROOT / "scripts" / "verify_ember01_completion.py"
+        tree = ast.parse(producer_path.read_text(encoding="utf-8"))
+        values = [
+            node.value.value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "RESOLVED_TRUE"
+                for target in node.targets
+            )
+            and isinstance(node.value, ast.Constant)
+        ]
+        self.assertEqual(len(values), 1)
+        module = load_module()
+        self.assertEqual(module.COMPLETION_LEG_RESOLVED_TRUE, values[0])
+
+    def test_fixture_keys_match_consumer_closed_set(self) -> None:
+        module = load_module()
+        self.assertEqual(
+            set(valid_completion_receipt()), module.COMPLETION_RECEIPT_KEYS
+        )
 
 
 if __name__ == "__main__":
