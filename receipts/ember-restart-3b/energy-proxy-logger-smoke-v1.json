@@ -1,0 +1,100 @@
+{
+  "ticket": "R1-ENTRY-ENERGY-SMOKE",
+  "ts": "2026-08-02T00:31:41+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "schema_version": "ember-energy-proxy-smoke-v1",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02B",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "prereg_section": "docs/spec/ember02-preregistration-v1.md sec5.3",
+  "purpose": "R1 entry gate: energy-proxy logger smoke-tested pre-birth (sec3 R1 Entry)",
+  "result": "MEASURED",
+  "executed": true,
+  "gpu_reader_chain": [
+    {
+      "leg": "pynvml",
+      "available": false,
+      "detail": "unavailable: ModuleNotFoundError"
+    },
+    {
+      "leg": "nvidia_smi",
+      "available": true,
+      "detail": "nvidia-smi at C:\\WINDOWS\\system32\\nvidia-smi.EXE"
+    }
+  ],
+  "measured_interval_s": 59.06562399864197,
+  "cpu_counter_interval_s": 60.33479690551758,
+  "intended_samples": 60,
+  "captured_samples": 60,
+  "t06_coverage_floor": 0.95,
+  "coverage_meets_t06": true,
+  "coverage_scope": "sample_coverage_fraction describes the sampled GPU leg; the CPU leg is a cumulative-counter endpoint difference and cannot lose samples",
+  "energy": {
+    "energy_boundary": "DEGRADED_PROXY",
+    "method": {
+      "gpu": "NVML power sampling, integrated over run (reader: nvidia_smi)",
+      "cpu": "CPU package power counter -- resolved leg: windows_pdh_rapl_package; counter: ['\\\\Energy Meter(rapl_package0_pkg)\\\\Energy']",
+      "sample_hz": 1.0,
+      "integration": "GPU: trapezoidal over (timestamp, watts) samples. CPU: endpoint difference of a cumulative hardware energy counter (no sampling reconstruction).",
+      "cpu_energy_unit": "picowatt-hours; joules = raw * 3.6e-9",
+      "cpu_counter_chain": [
+        {
+          "leg": "linux_powercap_rapl",
+          "available": false,
+          "detail": "/sys/class/powercap exposes no energy_uj domain",
+          "reader_wired": true
+        },
+        {
+          "leg": "windows_pdh_rapl_package",
+          "available": true,
+          "detail": "\\Energy Meter(rapl_package0_pkg)\\Energy readable (cumulative picowatt-hours; live read 4433406977654170)",
+          "reader_wired": true
+        },
+        {
+          "leg": "amd_uprof_cli",
+          "available": false,
+          "detail": "AMDuProfCLI not on PATH",
+          "reader_wired": false
+        },
+        {
+          "leg": "ryzen_master_sdk_cli",
+          "available": false,
+          "detail": "CLI present but produced no output within 20s (blocks without an elevated interactive console); unusable as a sampler",
+          "reader_wired": false
+        }
+      ]
+    },
+    "gpu_joules": 791.7986350810529,
+    "cpu_pkg_joules": 3280.942214999348,
+    "total_proxy_joules": 4072.740850080401,
+    "idle_baseline": {
+      "gpu_w": 13.74,
+      "cpu_pkg_w": 57.78512907476905,
+      "measured_interval_s": 10,
+      "procedure": "counters sampled with no Ember job resident, immediately before the measured interval; reported, never subtracted"
+    },
+    "sample_coverage_fraction": 1.0,
+    "excluded_components": [
+      "RAM",
+      "storage",
+      "network",
+      "motherboard",
+      "cooling",
+      "PSU conversion losses"
+    ],
+    "boundary_degradations": [],
+    "uncertainty": {
+      "stated_bound_pct": null,
+      "basis": "Integrated 1 Hz GPU power telemetry; quantization and sampling-aliasing bounds are not characterized for this counter, so no numeric bound is asserted. The CPU package term is absent, not bounded."
+    },
+    "gpu_sanity_check": "OK",
+    "upgrade_path": "AC_WALL_METERED"
+  },
+  "host": {
+    "platform": "win32",
+    "python_version": "3.10.11"
+  },
+  "gpu_allocated": false,
+  "training_launched": false
+}
