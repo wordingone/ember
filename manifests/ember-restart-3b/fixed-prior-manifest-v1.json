@@ -2,7 +2,8 @@
   "schema_version": "ember-fixed-prior-manifest-v1",
   "manifest_version": 1,
   "ticket": "R1-ENTRY-FIXED-PRIOR-MANIFEST",
-  "ts": "20260802T002104Z",
+  "ts": "2026-08-02T00:32:19+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
@@ -11,7 +12,7 @@
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "tree_digest_convention": "combined_sha256 = sha256 over sorted '<name>\\t<sha256>\\t<size_bytes>\\n' lines (scripts/manifest_sha.py convention); git-tracked files only",
   "repo": {
-    "commit": "5ccc9bfef7175dc8caff7715148a483834655741",
+    "commit": "12b20e4a08987f0af6e9060edc8ee98fe2eeb6bb",
     "branch": "feat/r1-entry-prep"
   },
   "learned_import_attestation": "Every item in this manifest is a NON-LEARNED prior. Zero imported learned weights, embeddings, learned-parameter tokenizers, teacher outputs, learned filters or judges, or hidden accelerator services (INVARIANT.md clause 3, fail-closed on unknown provenance).",
@@ -33,7 +34,7 @@
       {
         "leg": "windows_pdh_rapl_package",
         "available": true,
-        "detail": "\\Energy Meter(rapl_package0_pkg)\\Energy readable (cumulative picowatt-hours; live read 4425396834579170)",
+        "detail": "\\Energy Meter(rapl_package0_pkg)\\Energy readable (cumulative picowatt-hours; live read 4435353224933330)",
         "reader_wired": true
       },
       {
@@ -2999,8 +3000,8 @@
       "kind": "file",
       "provenance": "The sec5.3 DEGRADED_PROXY energy logger; smoke-tested as an R1 entry-gate item. Criterion receipted before first use.",
       "path": "scripts/energy_proxy_logger.py",
-      "sha256": "7a1fe114b0ebe034b436814515aedf550bfa4fef9d9c466cf3a8f0b49d683737",
-      "size_bytes": 28566
+      "sha256": "10fb0d1e8f9808b527f180ffb055db91e90702aef0220a7a7a54b0d769c4e97d",
+      "size_bytes": 29473
     },
     {
       "category": "deterministic_tools",
@@ -3023,8 +3024,8 @@
       "kind": "file",
       "provenance": "This builder. Self-included so the manifest's own producer is a pinned prior and cannot change unnoticed.",
       "path": "scripts/build_fixed_prior_manifest.py",
-      "sha256": "52f8989fc6478c6400af81cc5f3b511b28b11509354f13e0de0d49e05e360ef4",
-      "size_bytes": 30558
+      "sha256": "e335a4e8c1c42e1f6eacd180cf4193306789eaf713f700df54ff17ed810cccd9",
+      "size_bytes": 30573
     },
     {
       "category": "corpora",

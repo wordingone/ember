@@ -1,6 +1,8 @@
 {
   "ticket": "R1-ENTRY-ENERGY-SMOKE",
-  "ts": "20260802T001437Z",
+  "ts": "2026-08-02T00:31:41+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "schema_version": "ember-energy-proxy-smoke-v1",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02B",
@@ -21,8 +23,8 @@
       "detail": "nvidia-smi at C:\\WINDOWS\\system32\\nvidia-smi.EXE"
     }
   ],
-  "measured_interval_s": 59.075806617736816,
-  "cpu_counter_interval_s": 60.36754488945007,
+  "measured_interval_s": 59.06562399864197,
+  "cpu_counter_interval_s": 60.33479690551758,
   "intended_samples": 60,
   "captured_samples": 60,
   "t06_coverage_floor": 0.95,
@@ -46,7 +48,7 @@
         {
           "leg": "windows_pdh_rapl_package",
           "available": true,
-          "detail": "\\Energy Meter(rapl_package0_pkg)\\Energy readable (cumulative picowatt-hours; live read 4417390968437500)",
+          "detail": "\\Energy Meter(rapl_package0_pkg)\\Energy readable (cumulative picowatt-hours; live read 4433406977654170)",
           "reader_wired": true
         },
         {
@@ -63,12 +65,12 @@
         }
       ]
     },
-    "gpu_joules": 829.859977873564,
-    "cpu_pkg_joules": 3234.99166498892,
-    "total_proxy_joules": 4064.8516428624844,
+    "gpu_joules": 791.7986350810529,
+    "cpu_pkg_joules": 3280.942214999348,
+    "total_proxy_joules": 4072.740850080401,
     "idle_baseline": {
-      "gpu_w": 14.020000000000001,
-      "cpu_pkg_w": 57.09401036683146,
+      "gpu_w": 13.74,
+      "cpu_pkg_w": 57.78512907476905,
       "measured_interval_s": 10,
       "procedure": "counters sampled with no Ember job resident, immediately before the measured interval; reported, never subtracted"
     },

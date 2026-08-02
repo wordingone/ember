@@ -416,7 +416,8 @@ def build_manifest() -> dict:
         "schema_version": SCHEMA_VERSION,
         "manifest_version": 1,
         "ticket": "R1-ENTRY-FIXED-PRIOR-MANIFEST",
-        "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
+        "ts": epl._utc_stamp(),
+        "invariant_sha256": epl.invariant_sha256(),
         "goal_id": "EMBER-02",
         "workstream_id": "EMBER-02A",
         "next_executed_outcome": ("EMBER-02 first sufficiently pretrained "

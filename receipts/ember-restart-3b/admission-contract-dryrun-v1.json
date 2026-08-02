@@ -1,6 +1,7 @@
 {
   "ticket": "R1-ENTRY-ADMISSION-DRYRUN",
-  "ts": "20260802T001509Z",
+  "ts": "2026-08-02T00:32:10+00:00",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "schema_version": "ember-admission-contract-dryrun-v1",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02B",

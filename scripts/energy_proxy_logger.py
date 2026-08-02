@@ -2,7 +2,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""energy_proxy_logger.py -- the DEGRADED_PROXY energy logger of
+r"""energy_proxy_logger.py -- the DEGRADED_PROXY energy logger of
 docs/spec/ember02-preregistration-v1.md sec5.3.
 
 Emits the frozen sec5.3 `energy` block: an integrated proxy over the run, never a
@@ -58,6 +58,7 @@ from __future__ import annotations
 
 import argparse
 import glob
+import hashlib
 import json
 import os
 import shutil
@@ -136,7 +137,24 @@ follows the path."""
 
 
 def _utc_stamp() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    """ISO-8601 with an explicit offset.
+
+    The compact `%Y%m%dT%H%M%SZ` form does not parse under receipt_check's
+    timestamp reader, which silently EXEMPTS the receipt from the post-genesis
+    invariant rule instead of enforcing it -- a local pass that CI does not
+    share. An unparseable timestamp buying a free pass is the wrong direction to
+    fail in, so this writes a form the validator can actually read.
+    """
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+
+
+def invariant_sha256() -> str:
+    """sha256 of INVARIANT.md -- the F3 stamp every receipt carries (sec5.1 item 9).
+
+    Computed from the file rather than pinned as a literal: a hardcoded copy
+    would keep validating after the invariant it claims to stamp had changed.
+    """
+    return hashlib.sha256((REPO_ROOT / "INVARIANT.md").read_bytes()).hexdigest()
 
 
 # ---------------------------------------------------------------------------
@@ -499,6 +517,8 @@ def run_smoke(duration_s: float, receipt_path: str | None,
     receipt = {
         "ticket": ticket,
         "ts": _utc_stamp(),
+        "invariant_sha256": invariant_sha256(),
+        "sha_convention": SHA_CONVENTION,
         "schema_version": "ember-energy-proxy-smoke-v1",
         "goal_id": "EMBER-02",
         "workstream_id": RECEIPT_WORKSTREAM_ID,
