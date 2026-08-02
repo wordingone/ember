@@ -79,6 +79,24 @@ jobs:
           cargo test --locked --test control_plane
           cargo test --locked --test dispatch_manifest
           cargo test --locked --test rpc_named_pipe named_pipe_rpc_survives_daemon_restart_and_controls_bound_job -- --exact
+  production-rung-replay:
+    # Class-kill for #1302: a generator/tokenizer/config edit that lands
+    # without re-minting the checked-in rung must fail HERE, on the PR --
+    # not at the next certified /train launch. Runs the same canonical
+    # replay the training input-admission path executes.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - run: python -m pip install "tokenizers==0.22.2"
+      - name: Replay checked-in production rung from canonical owned sources
+        run: python -B tools/ember-restart-3b/production_rung.py --repo-root .
   cli:
     runs-on: windows-latest
     timeout-minutes: 25
@@ -101,7 +119,7 @@ jobs:
       - run: bun run build
   ci-pr:
     if: always()
-    needs: [python, rust, cli]
+    needs: [python, rust, cli, production-rung-replay]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

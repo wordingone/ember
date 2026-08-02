@@ -33,8 +33,10 @@ class LivePullRequestWorkflowIntegrationTests(unittest.TestCase):
         self.assertIn("python -m scripts.github.live_pr_policy", workflow)
         self.assertIn("--event-base-sha", workflow)
         self.assertIn("--event-head-sha", workflow)
+        # python, rust, cli, production-rung-replay -- every job checks out
+        # the exact PR head, never a moving branch ref.
         self.assertEqual(
-            3, workflow.count("ref: ${{ github.event.pull_request.head.sha || github.sha }}")
+            4, workflow.count("ref: ${{ github.event.pull_request.head.sha || github.sha }}")
         )
 
     def test_live_policy_uses_package_safe_module_entrypoint(self) -> None:
