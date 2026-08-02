@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ember.internal/schemas/loop-graph/execution-graph-v1.schema.json",
+  "title": "Ember execution graph v1 (loop/graph substrate, issue #1309)",
+  "description": "Per-node execution record: one research-loop stage/run. Modeled on The Search's STAGE_MAP.md table, RESEARCH_WORKFLOW.md's per-stage sequence, and worktree_lifecycle.py's lease record. Matches the approved loop/graph substrate schema sketch, section 2 (workstream B, issue #1309). Engine-agnostic: command.argv is an opaque argv list, resource_class is a label not a lock implementation -- no field references any specific engine.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "node_id", "authority_ref", "type", "owner", "resource_class",
+    "prereqs", "command", "state", "created_at"
+  ],
+  "properties": {
+    "node_id": {"type": "string", "minLength": 1},
+    "authority_ref": {"type": "string", "minLength": 1},
+    "type": {
+      "type": "string",
+      "enum": [
+        "canary", "measurement", "ladder-rung", "long-run",
+        "diagnosis", "matched-experiment", "independent-review",
+        "promotion-decision"
+      ]
+    },
+    "owner": {"type": "string", "minLength": 1},
+    "resource_class": {
+      "type": "string",
+      "enum": ["cpu", "gpu-shared", "gpu-exclusive", "disk-heavy", "none"]
+    },
+    "prereqs": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "one_variable_change": {"type": "string"},
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["argv", "cwd"],
+      "properties": {
+        "argv": {
+          "type": "array",
+          "items": {"type": "string"},
+          "minItems": 1
+        },
+        "cwd": {"type": "string"},
+        "content_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "inputs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/contentRef"}
+    },
+    "gate_invariants": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/gateInvariant"}
+    },
+    "retry_abort": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_retries": {"type": "integer", "minimum": 0},
+        "abort_reason_field": {
+          "type": "string",
+          "enum": ["timeout", "budget_exhausted", "gate_invariant_failed"]
+        }
+      }
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "PENDING", "RUNNING", "AWAITING_REVIEW",
+        "CLOSED_PASS", "CLOSED_FLAT", "CLOSED_REJECTED"
+      ]
+    },
+    "outputs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/contentRef"}
+    },
+    "receipt_id": {"type": "string"},
+    "edges_out": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "created_at": {"type": "string", "format": "date-time"},
+    "closed_at": {"type": "string", "format": "date-time"},
+    "lock": {
+      "type": "object",
+      "description": "Present only while state == RUNNING. Not part of the sketch's example payload but required by mutex.py/stale.py to detect a dead owner without guessing -- an explicit field beats inferring liveness from state alone.",
+      "additionalProperties": false,
+      "required": ["owner_pid", "acquired_at"],
+      "properties": {
+        "owner_pid": {"type": "integer"},
+        "acquired_at": {"type": "string", "format": "date-time"},
+        "wall_budget_seconds": {"type": "number", "minimum": 0}
+      }
+    }
+  },
+  "$defs": {
+    "contentRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "content_hash"],
+      "properties": {
+        "path": {"type": "string"},
+        "content_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "gateInvariant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field"],
+      "properties": {
+        "field": {"type": "string"},
+        "source": {"type": "string"},
+        "asserted": {"type": "boolean"},
+        "expect": {"type": "string"},
+        "expect_equals": {"type": "string"}
+      }
+    }
+  }
+}
