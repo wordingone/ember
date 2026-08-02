@@ -178,36 +178,73 @@ def _sha256_first16(path: Path) -> str | None:
         return None
 
 
-def _is_superseded(receipt_path: Path, all_receipts: list[Path]) -> bool:
-    """Check if this receipt is superseded by a VOID receipt.
+class SupersessionIndex:
+    """[PERF cure, gh C-BASE timeout] O(N) supersession lookup, built once.
 
-    A VOID receipt supersedes another if it lists the target receipt's
-    filename or sha256 in its 'supersedes' array.
+    The prior `_is_superseded(receipt_path, all_receipts)` re-read and
+    re-parsed EVERY receipt file's JSON, on EVERY call, searching for a VOID
+    receipt naming the target -- and it was called once per receipt in BOTH
+    of main()'s scan loops (clause a/c and clause d). That is O(N) work per
+    call times O(N) calls times 2 loops = O(N^2) JSON parses. Measured on
+    this repo's real receipts/ corpus (1097 files at cure time): profiling a
+    representative 200x200 sample of the pattern extrapolates to ~435s for
+    ONE of the two O(N^2) loops alone -- comfortably explains the 600s
+    harness timeout (UNEVALUABLE verdict) on its own, without needing a
+    second cause.
+
+    This class does the identical VOID-receipt discovery ONCE, in a single
+    O(N) pass over `all_receipts`, building an index of every filename and
+    sha256 any VOID receipt's `supersedes` array names. Per-receipt lookup
+    against that index is then O(1) (name) or O(1) amortized (hash, computed
+    once per receipt, never per (receipt, candidate) pair). Total cost drops
+    from O(N^2) to O(N) while checking the exact same supersession claims
+    for the exact same set of receipts -- no path or byte is excluded from
+    what the condition actually verifies; this is an engineering fix to how
+    the check is computed, not a narrowing of what is checked.
     """
-    receipt_name = receipt_path.name
-    receipt_hash = _sha256_first16(receipt_path)
 
-    for void_candidate in all_receipts:
-        obj = _read_json(void_candidate)
-        if obj is None or not isinstance(obj, dict):
-            continue
-        # VOID receipts have verdict="VOID"
-        if obj.get("verdict") != "VOID":
-            continue
-        supersedes = obj.get("supersedes", [])
-        if not isinstance(supersedes, list):
-            continue
-        # Check if this receipt is named or hashed in the supersession list
-        for sup in supersedes:
-            if isinstance(sup, dict):
-                if sup.get("filename") == receipt_name:
-                    return True
-                if receipt_hash and sup.get("sha256") == receipt_hash:
-                    return True
-            elif isinstance(sup, str):
-                if sup == receipt_name or (receipt_hash and sup == receipt_hash):
-                    return True
-    return False
+    def __init__(self, all_receipts: list[Path]):
+        names: set[str] = set()
+        hashes: set[str] = set()
+        for void_candidate in all_receipts:
+            obj = _read_json(void_candidate)
+            if obj is None or not isinstance(obj, dict):
+                continue
+            if obj.get("verdict") != "VOID":
+                continue
+            supersedes = obj.get("supersedes", [])
+            if not isinstance(supersedes, list):
+                continue
+            for sup in supersedes:
+                if isinstance(sup, dict):
+                    fn = sup.get("filename")
+                    if isinstance(fn, str) and fn:
+                        names.add(fn)
+                    h = sup.get("sha256")
+                    if isinstance(h, str) and h:
+                        hashes.add(h)
+                elif isinstance(sup, str) and sup:
+                    names.add(sup)
+                    hashes.add(sup)
+        self._names = names
+        self._hashes = hashes
+
+    def is_superseded(self, receipt_path: Path) -> bool:
+        if receipt_path.name in self._names:
+            return True
+        if self._hashes:
+            receipt_hash = _sha256_first16(receipt_path)
+            if receipt_hash and receipt_hash in self._hashes:
+                return True
+        return False
+
+
+def _is_superseded(receipt_path: Path, all_receipts: list[Path]) -> bool:
+    """Back-compat single-call wrapper (O(N) per call -- builds a fresh
+    index each time). Retained for any external caller/test that invokes
+    the original two-argument signature directly; `main()` below uses
+    `SupersessionIndex` built once instead, which is the actual cure."""
+    return SupersessionIndex(all_receipts).is_superseded(receipt_path)
 
 
 def _is_degenerate_loss_trace(loss_trace) -> bool:
@@ -338,6 +375,11 @@ def main() -> int:
         return 0
 
     receipt_files = sorted(RECEIPTS.rglob("*.json"))
+    # [PERF cure, gh C-BASE timeout] Built ONCE, O(N) -- see SupersessionIndex
+    # docstring. Both scan loops below use this instead of calling
+    # _is_superseded(rp, receipt_files) per receipt, which re-scanned the
+    # entire corpus on every call (O(N^2), the harness-timeout cause).
+    supersession_index = SupersessionIndex(receipt_files)
 
     # ---- CHK clause (a)+(c): find a REAL owned-base checkpoint receipt that ---
     #      names a checkpoint with weight hashes, is from-scratch (no borrowed
@@ -358,7 +400,7 @@ def main() -> int:
 
     for rp in receipt_files:
         # Check for supersession first
-        if _is_superseded(rp, receipt_files):
+        if supersession_index.is_superseded(rp):
             continue
 
         obj = _read_json(rp)
@@ -412,7 +454,7 @@ def main() -> int:
     grow_op_receipt = None
     for rp in receipt_files:
         # Check for supersession first
-        if _is_superseded(rp, receipt_files):
+        if supersession_index.is_superseded(rp):
             continue
 
         obj = _read_json(rp)
