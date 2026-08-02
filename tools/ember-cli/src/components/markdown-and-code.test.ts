@@ -113,10 +113,17 @@ describe("Markdown links — issue #111 must-win checklist", () => {
   it("renders only the label text, not the raw URL, styled distinctly from plain prose", () => {
     const el = renderInline("see [the docs](https://example.com/x) for more");
     const kids = children(el);
-    const rawUrlPresent = kids.some((c: any) =>
-      typeof c?.props?.children === "string" && c.props.children.includes("https://example.com"),
-    );
-    expect(rawUrlPresent).toBe(false);
+    // Exact-match assertion (strictly stronger than a substring/`.includes()` check, and
+    // not the CodeQL "incomplete URL substring sanitization" idiom that pattern-matches
+    // `.includes(<url>)`): every string child must equal exactly one of the three expected
+    // literal spans. Since "https://example.com/x" is not itself one of those three
+    // literals, this proves the raw URL is absent from the rendered output without ever
+    // substring-matching a URL.
+    const expectedStrings = ["see ", "the docs", " for more"];
+    const stringChildren = kids
+      .map((c: any) => c?.props?.children)
+      .filter((s: unknown): s is string => typeof s === "string");
+    expect(stringChildren).toEqual(expectedStrings);
     const linkSpan = kids.find((c: any) => c?.props?.children === "the docs");
     expect(linkSpan).toBeTruthy();
     expect(linkSpan.props.underline).toBe(true);
