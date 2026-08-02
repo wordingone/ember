@@ -885,3 +885,107 @@ def test_committed_cond4_receipt_binds_shipping_verifiers_and_all_axes() -> None
         "counts_as_capability_evidence": False,
         "counts_as_full_ember_completion": False,
     }
+
+
+def _init_git_repo(root: Path) -> None:
+    root.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(
+        ["git", "-c", "user.email=t@e.st", "-c", "user.name=t",
+         "commit", "--allow-empty", "-q", "-m", "init"],
+        cwd=root, check=True,
+    )
+
+
+def test_inspect_checkout_retries_transient_git_failure_then_succeeds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The real class this cures: `git rev-parse HEAD` returns nonzero with
+    EMPTY stderr once, then works fine on retry -- inspect_checkout must
+    survive that instead of discarding the whole run."""
+    root = tmp_path / "repo"
+    _init_git_repo(root)
+
+    real_git = completion.git
+    call_counts: dict[tuple, int] = {}
+
+    def flaky_git(call_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+        call_counts[args] = call_counts.get(args, 0) + 1
+        if args[:2] == ("rev-parse", "HEAD") and call_counts[args] == 1:
+            return subprocess.CompletedProcess(args, returncode=128, stdout="", stderr="")
+        return real_git(call_root, *args)
+
+    monkeypatch.setattr(completion, "git", flaky_git)
+
+    sleeps: list[float] = []
+    result = completion.inspect_checkout(root, sleep=sleeps.append)
+
+    assert result["git_retries"] == 1
+    assert result["head"]
+    assert sleeps == [2.0]
+
+
+def test_inspect_checkout_raises_with_full_diagnostics_after_persistent_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "repo"
+    root.mkdir()  # deliberately not a git repo -- persistent failure case
+
+    def always_fails(call_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            args, returncode=128, stdout="", stderr="fatal: not a git repository"
+        )
+
+    monkeypatch.setattr(completion, "git", always_fails)
+
+    sleeps: list[float] = []
+    with pytest.raises(RuntimeError) as excinfo:
+        completion.inspect_checkout(root, sleep=sleeps.append)
+
+    message = str(excinfo.value)
+    assert "rev-parse HEAD" in message
+    diagnostics = json.loads(message.split(": ", 1)[1])
+    assert diagnostics["returncode"] == 128
+    assert diagnostics["stderr"] == "fatal: not a git repository"
+    assert diagnostics["stdout"] == ""
+    assert diagnostics["cwd"] == str(root)
+    assert diagnostics["git_dir_exists"] is False
+    assert sleeps == [2.0, 5.0, 10.0]
+
+
+def test_inspect_checkout_dirty_tree_reported_without_retry_masking(
+    tmp_path: Path,
+) -> None:
+    """A successful git-status call that legitimately reports a dirty tree
+    must never be retried or reinterpreted -- returncode 0 is accepted on
+    the first try regardless of what the tree state says."""
+    root = tmp_path / "repo"
+    _init_git_repo(root)
+    (root / "untracked.txt").write_text("dirty", encoding="utf-8")
+
+    sleeps: list[float] = []
+    result = completion.inspect_checkout(root, sleep=sleeps.append)
+
+    assert result["clean"] is False
+    assert result["git_retries"] == 0
+    assert sleeps == []
+
+
+def test_inspect_checkout_detached_head_symbolic_ref_not_retried(
+    tmp_path: Path,
+) -> None:
+    """`git symbolic-ref` returning 1 means detached HEAD -- an expected
+    result, not an error -- and must never trigger a retry."""
+    root = tmp_path / "repo"
+    _init_git_repo(root)
+    head_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    subprocess.run(["git", "checkout", "-q", head_sha], cwd=root, check=True)
+
+    sleeps: list[float] = []
+    result = completion.inspect_checkout(root, sleep=sleeps.append)
+
+    assert result["detached"] is True
+    assert result["git_retries"] == 0
+    assert sleeps == []
