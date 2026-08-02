@@ -69,8 +69,8 @@ _CANONICAL_RUNNER_CACHE_ENV = ("TEMP", "TMP", "TORCH_HOME", "TRITON_CACHE_DIR", 
 # 8 GiB: the certified launch scope's max_transient_checkpoint_gib. The 3B
 # config's optimizer state alone needs ~7.27 GiB of transient scratch, so the
 # previous 4 GiB cap killed every 3B governed run at its first checkpoint
-# write (#1305). tests/ember_restart_model/test_checkpoint_scratch_cap.py
-# binds this constant to the config's own computed optimizer bound.
+# write (#1305). tests/ember_restart_model/test_checkpoint_scratch_cap_3b.py
+# pins this constant above the observed 3B bound and to the certified scope.
 _MAX_TRANSIENT_CHECKPOINT_SCRATCH_BYTES = 8 * 1024**3
 
 
