@@ -752,6 +752,36 @@ class ProducerSchemaBindingTest(unittest.TestCase):
             set(valid_completion_receipt()), module.COMPLETION_RECEIPT_KEYS
         )
 
+    def test_producer_payload_keys_match_consumer_closed_set(self) -> None:
+        # AST-extract the producer's receipt payload dict literal (the one
+        # containing the "schema" -> "ember-01-completion-receipt-v1" pair)
+        # so PRODUCER-side key drift also breaks CI, not just fixture drift.
+        import ast
+
+        producer_path = ROOT / "scripts" / "verify_ember01_completion.py"
+        tree = ast.parse(producer_path.read_text(encoding="utf-8"))
+        payload_key_sets = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Dict):
+                continue
+            keys = [
+                key.value
+                for key in node.keys
+                if isinstance(key, ast.Constant) and isinstance(key.value, str)
+            ]
+            if len(keys) != len(node.keys):
+                continue
+            values = dict(zip(keys, node.values))
+            schema_value = values.get("schema")
+            if (
+                isinstance(schema_value, ast.Constant)
+                and schema_value.value == "ember-01-completion-receipt-v1"
+            ):
+                payload_key_sets.append(set(keys))
+        self.assertEqual(len(payload_key_sets), 1)
+        module = load_module()
+        self.assertEqual(payload_key_sets[0], module.COMPLETION_RECEIPT_KEYS)
+
 
 if __name__ == "__main__":
     unittest.main()
