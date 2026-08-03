@@ -100,7 +100,7 @@
                                             "final_rmsnorm":  "hidden_size",
                                             "image_projection":  "(48*48*3)*hidden_size",
                                             "audio_projection":  "640*hidden_size",
-                                            "total_unique_trainable":  "tied_embedding + layers*(shared_attention_per_layer + shared_text_ffn_per_layer + four_experts_per_layer + rmsnorm_per_layer) + final_rmsnorm + image_projection + audio_projection"
+                                            "total_unique_trainable":  "tied_embedding + layers*(shared_attention_per_layer + qk_rmsnorm_per_layer + shared_text_ffn_per_layer + four_experts_per_layer + rmsnorm_per_layer) + final_rmsnorm + image_projection + audio_projection"
                                         },
                   "total_unique_trainable_parameters":  3839161856,
                   "assertion_minimum_unique_trainable_parameters":  3000000000
