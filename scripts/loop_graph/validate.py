@@ -101,6 +101,19 @@ _PY_TYPE_BY_JSON_TYPE = {
 }
 
 
+def _matches_json_type(value: Any, json_type: str) -> bool:
+    py_type = _PY_TYPE_BY_JSON_TYPE.get(json_type)
+    if py_type is None:
+        return True  # unknown type keyword -- don't fail-closed on a schema-authoring bug here
+    if json_type == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if json_type == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if json_type == "boolean":
+        return isinstance(value, bool)
+    return isinstance(value, py_type)
+
+
 def _fallback_validate(document: Any, schema: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     _check_node(document, schema, "<root>", errors, schema.get("$defs", {}))
@@ -125,16 +138,25 @@ def _check_node(value: Any, node_schema: dict[str, Any], path: str, errors: list
         errors.append(f"{path}: {value!r} not in enum {node_schema['enum']}")
         return
 
-    expected_type = node_schema.get("type")
-    if expected_type:
-        py_type = _PY_TYPE_BY_JSON_TYPE.get(expected_type)
-        if py_type is not None and not isinstance(value, py_type):
-            # bool is a subclass of int in Python; JSON schema treats them as distinct.
-            if expected_type == "integer" and isinstance(value, bool):
-                errors.append(f"{path}: expected integer, got bool")
-            elif not (expected_type == "number" and isinstance(value, bool) is False and isinstance(value, py_type)):
-                errors.append(f"{path}: expected {expected_type}, got {type(value).__name__}")
-                return
+    raw_type = node_schema.get("type")
+    # JSON Schema allows `type` to be a single string or a list of alternatives
+    # (e.g. ["number", "null"] for an optional numeric field). Normalize to a
+    # list so the rest of this function can treat both shapes uniformly.
+    type_options = raw_type if isinstance(raw_type, list) else ([raw_type] if raw_type else [])
+    expected_type = type_options[0] if len(type_options) == 1 else None
+
+    if type_options:
+        if not any(_matches_json_type(value, option) for option in type_options):
+            errors.append(f"{path}: expected one of {type_options}, got {type(value).__name__}")
+            return
+        # Only one candidate type actually matched the value (or there's only
+        # one option) -- that's the type whose object/array/string/integer
+        # sub-checks below should run. With multiple candidate types (e.g.
+        # number|null) and a non-null match, treat it as "number" for the
+        # sub-checks that follow.
+        if expected_type is None:
+            matching = [option for option in type_options if _matches_json_type(value, option)]
+            expected_type = matching[0] if matching else None
 
     if expected_type == "object" or (expected_type is None and isinstance(value, dict)):
         if not isinstance(value, dict):

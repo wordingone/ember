@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -16,7 +17,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from loop_graph import gates, lifecycle, mutex, receipts, replay, validate  # noqa: E402
+from loop_graph import gates, lifecycle, mutex, procid, receipts, replay, validate  # noqa: E402
 from loop_graph.hashing import hash_bytes, hash_file  # noqa: E402
 
 
@@ -496,3 +497,218 @@ def test_gate_invariant_full_sketch_example_all_three_forms():
 
     outcome = gates.check_gate_invariants(invariants, result, baseline=baseline, prior_node_outputs=prior)
     assert outcome.ok, outcome.problems
+
+
+def test_gate_invariant_unrecognized_expect_value_fails_closed():
+    """review-pr1310.md MEDIUM-1: a typo'd expect directive must be reported,
+    never silently pass through as ok=True."""
+    invariants = [{"field": "space_hash", "expect": "unchagned"}]
+    result = gates.check_gate_invariants(invariants, {"space_hash": "abc"}, baseline={"space_hash": "abc"})
+    assert not result.ok
+    assert any("unrecognized expect directive" in problem for problem in result.problems)
+
+
+def test_gate_invariant_directive_less_entry_fails_closed():
+    """review-pr1310.md MEDIUM-1: {"field": F} with none of asserted/expect/
+    expect_equals must be reported, never silently pass through."""
+    invariants = [{"field": "n_leaves"}]
+    result = gates.check_gate_invariants(invariants, {"n_leaves": 128})
+    assert not result.ok
+    assert any("no recognized directive" in problem for problem in result.problems)
+
+
+def test_gate_invariant_expect_unchanged_typo_rejected_by_schema():
+    """review-pr1310.md MEDIUM-1: the schema enum-restricts expect, so the
+    same typo is caught at validation time too, independent of gates.py."""
+    node = make_execution_node(gate_invariants=[{"field": "space_hash", "expect": "unchagned"}])
+    errors = validate.validate(node, "execution")
+    assert errors
+
+
+# --------------------------------------------------------------------------
+# concurrency: true append-only receipts (MAJOR-1)
+# --------------------------------------------------------------------------
+
+def _append_worker_script(index_path: Path, worker_id: int, count: int) -> str:
+    scripts_dir = str(REPO_ROOT / "scripts").replace("\\", "\\\\")
+    index_str = str(index_path).replace("\\", "\\\\")
+    return f"""
+import sys
+sys.path.insert(0, "{scripts_dir}")
+from pathlib import Path
+from loop_graph import receipts
+
+for i in range({count}):
+    receipts.append_receipt(Path("{index_str}"), {{
+        "receipt_id": f"w{worker_id}-{{i}}",
+        "node_id": "exec-{worker_id}",
+        "path": "receipts/x.json",
+        "content_hash": "sha256:" + "0" * 64,
+        "verdict": "PASS",
+        "verified_by": "reviewer-L3-recount",
+        "ts": "2026-08-02T18:00:00+00:00",
+    }})
+"""
+
+
+def test_concurrent_appends_across_processes_lose_no_rows(tmp_path: Path):
+    """review-pr1310.md MAJOR-1 required test: N=8 processes x 25 appends
+    each -> exactly 200 rows, all parseable. A read-modify-replace append
+    (the pre-fix implementation) would silently drop rows here whenever two
+    processes' os.replace calls raced; the locked true-append must not."""
+    index_path = tmp_path / "INDEX.jsonl"
+    workers = 8
+    per_worker = 25
+
+    procs = [
+        subprocess.Popen([sys.executable, "-c", _append_worker_script(index_path, worker_id, per_worker)])
+        for worker_id in range(workers)
+    ]
+    for proc in procs:
+        assert proc.wait() == 0
+
+    rows = receipts.load_index(index_path)  # raises on any unparseable row
+    assert len(rows) == workers * per_worker
+
+    for worker_id in range(workers):
+        assert len(receipts.receipts_for_node(index_path, f"exec-{worker_id}")) == per_worker
+
+
+# --------------------------------------------------------------------------
+# concurrency: atomic mutex acquire (MAJOR-2)
+# --------------------------------------------------------------------------
+
+def test_mutex_concurrent_acquire_exactly_one_winner(tmp_path: Path):
+    """review-pr1310.md MAJOR-2 required test: N racers, exactly one wins.
+    All racers share this test process's own (live) PID -- correctness here
+    is about os.open(O_CREAT|O_EXCL) atomicity, not about process liveness,
+    so racing threads against a single shared PID is sufficient to prove the
+    create-is-acquisition property. A check-then-write implementation (the
+    pre-fix version) would let more than one thread land in the "class looks
+    free" window and both return True."""
+    locks = tmp_path / "locks"
+    pid = os.getpid()
+    n = 8
+    barrier = threading.Barrier(n)
+    results: list[tuple[str, int]] = []
+    results_lock = threading.Lock()
+
+    def worker(worker_id: int) -> None:
+        barrier.wait()
+        try:
+            mutex.acquire(locks, "gpu-exclusive", f"node-{worker_id}", pid)
+            outcome = "ok"
+        except mutex.MutexBusy:
+            outcome = "busy"
+        with results_lock:
+            results.append((outcome, worker_id))
+
+    threads = [threading.Thread(target=worker, args=(i,)) for i in range(n)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    winners = [entry for entry in results if entry[0] == "ok"]
+    assert len(winners) == 1
+    assert len(results) == n
+
+
+# --------------------------------------------------------------------------
+# concurrency: atomic lifecycle claim (MEDIUM-3)
+# --------------------------------------------------------------------------
+
+def test_lifecycle_concurrent_claim_exactly_one_winner(tmp_path: Path):
+    """review-pr1310.md MEDIUM-3 required test: N engines racing to claim the
+    same PENDING node -- exactly one must win; the rest must get
+    ALREADY_CLAIMED, never silently overwrite each other's ownership."""
+    store = tmp_path / "nodes"
+    node_id = "exec-race"
+    # owner=None: make_execution_node()'s default "owner" is the schema's
+    # declared-assignee field (any agent-name string), which lifecycle.claim
+    # also reads as the current claimant -- a non-None default would make
+    # every racer see the node as already claimed before the race even
+    # starts.
+    lifecycle.create(store, make_execution_node(node_id=node_id, owner=None))
+
+    n = 8
+    barrier = threading.Barrier(n)
+    results: list[tuple[str, int]] = []
+    results_lock = threading.Lock()
+
+    def worker(worker_id: int) -> None:
+        barrier.wait()
+        try:
+            lifecycle.claim(store, node_id, owner=f"agent-{worker_id}")
+            outcome = "ok"
+        except lifecycle.LifecycleError as exc:
+            outcome = exc.code
+        with results_lock:
+            results.append((outcome, worker_id))
+
+    threads = [threading.Thread(target=worker, args=(i,)) for i in range(n)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    winners = [entry for entry in results if entry[0] == "ok"]
+    losers = [entry for entry in results if entry[0] == "ALREADY_CLAIMED"]
+    assert len(winners) == 1
+    assert len(losers) == n - 1
+
+    final = lifecycle.load_node(store, node_id)
+    winner_owner = f"agent-{winners[0][1]}"
+    assert final["owner"] == winner_owner
+
+
+# --------------------------------------------------------------------------
+# PID-reuse-safe liveness (MEDIUM-2)
+# --------------------------------------------------------------------------
+
+def test_procid_identity_pid_only_mode_when_creation_time_unavailable():
+    identity = {"pid": os.getpid(), "creation_time": None, "mode": procid.MODE_PID_ONLY}
+    assert procid.is_same_process_alive(identity) is True
+
+
+def test_procid_identity_detects_pid_reuse_via_creation_time_mismatch():
+    """Simulates PID reuse without needing to actually exhaust and recycle a
+    PID: a live PID whose recorded creation_time does not match its CURRENT
+    creation_time must read as a different process, not the original
+    holder -- this is exactly what protects the mutex/stale-scan from a
+    reused PID silently reading as still-alive."""
+    pid = os.getpid()
+    real_creation_time = procid.creation_time(pid)
+    if real_creation_time is None:
+        pytest.skip("creation_time is unavailable on this platform")
+
+    forged_identity = {
+        "pid": pid,
+        "creation_time": real_creation_time - 10_000,  # far outside tolerance
+        "mode": procid.MODE_PID_AND_CREATION_TIME,
+    }
+    assert procid.is_same_process_alive(forged_identity) is False
+
+    genuine_identity = {
+        "pid": pid,
+        "creation_time": real_creation_time,
+        "mode": procid.MODE_PID_AND_CREATION_TIME,
+    }
+    assert procid.is_same_process_alive(genuine_identity) is True
+
+
+def test_procid_dead_pid_is_not_alive_regardless_of_mode():
+    dead_pid = _find_dead_pid()
+    identity = {"pid": dead_pid, "creation_time": None, "mode": procid.MODE_PID_ONLY}
+    assert procid.is_same_process_alive(identity) is False
+
+
+def test_start_records_liveness_mode_in_lock(tmp_path: Path):
+    store = tmp_path / "nodes"
+    node_id = "exec-identity"
+    lifecycle.create(store, make_execution_node(node_id=node_id))
+
+    started = lifecycle.start(store, node_id, owner_pid=os.getpid())
+    assert started["lock"]["owner_liveness_mode"] in (procid.MODE_PID_AND_CREATION_TIME, procid.MODE_PID_ONLY)
+    if started["lock"]["owner_liveness_mode"] == procid.MODE_PID_AND_CREATION_TIME:
+        assert started["lock"]["owner_creation_time"] is not None

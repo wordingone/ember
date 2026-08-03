@@ -3,14 +3,20 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Stale-node detection: flag, never kill.
 
-A RUNNING node is STALE if its lock's owner_pid is no longer alive, or its
-lock's acquired_at exceeds its declared wall_budget_seconds. Either way this
-module only produces a report -- gap-matrix.md's "Stale-node detection"
-generic case explicitly does not exist anywhere in the audited surfaces, and
-the one thing every existing narrow instance (ember-stale-tree-read-gate.sh,
-worktree_lifecycle.py's audit_state) agrees on is fail-closed reporting, not
-auto-remediation. Deciding what to do about a stale node is an operator/
-engine call, not this module's.
+A RUNNING node is STALE if its lock's owner (PID + creation-time identity,
+see procid.py) is no longer alive, or its lock's acquired_at exceeds its
+declared wall_budget_seconds. Either way this module only produces a report
+-- gap-matrix.md's "Stale-node detection" generic case explicitly does not
+exist anywhere in the audited surfaces, and the one thing every existing
+narrow instance (ember-stale-tree-read-gate.sh, worktree_lifecycle.py's
+audit_state) agrees on is fail-closed reporting, not auto-remediation.
+Deciding what to do about a stale node is an operator/engine call, not this
+module's.
+
+Using procid.is_same_process_alive (PID + creation time) rather than a bare
+PID check closes review-pr1310.md MEDIUM-2's false-negative: without it, a
+dead RUNNING node's PID getting reused by an unrelated process would make
+this scan report the node as healthy.
 """
 
 from __future__ import annotations
@@ -20,9 +26,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from . import procid
 from ._atomic import read_json
 from .lifecycle import RUNNING
-from .mutex import is_pid_alive
 
 
 @dataclass(frozen=True)
@@ -47,8 +53,16 @@ def check_node(node: dict[str, Any], *, now: datetime | None = None) -> StaleRep
     node_id = node.get("node_id", "?")
     owner_pid = lock.get("owner_pid")
 
-    if owner_pid is not None and not is_pid_alive(int(owner_pid)):
-        return StaleReport(node_id, "DEAD_OWNER", f"lock owner_pid {owner_pid} is not alive")
+    if owner_pid is not None:
+        identity = {
+            "pid": owner_pid,
+            "creation_time": lock.get("owner_creation_time"),
+            "mode": lock.get("owner_liveness_mode", procid.MODE_PID_ONLY),
+        }
+        if not procid.is_same_process_alive(identity):
+            return StaleReport(
+                node_id, "DEAD_OWNER", f"lock owner_pid {owner_pid} (mode={identity['mode']}) is not alive"
+            )
 
     wall_budget = lock.get("wall_budget_seconds")
     acquired_at = lock.get("acquired_at")

@@ -83,11 +83,16 @@
     "closed_at": {"type": "string", "format": "date-time"},
     "lock": {
       "type": "object",
-      "description": "Present only while state == RUNNING. Not part of the sketch's example payload but required by mutex.py/stale.py to detect a dead owner without guessing -- an explicit field beats inferring liveness from state alone.",
+      "description": "Present only while state == RUNNING. Not part of the sketch's example payload but required by mutex.py/stale.py to detect a dead owner without guessing -- an explicit field beats inferring liveness from state alone. owner_creation_time/owner_liveness_mode (review-pr1310.md MEDIUM-2) guard against PID reuse: a bare owner_pid can silently start referring to an unrelated process after the original owner dies, so liveness checks also compare process creation time when the platform can supply it, and record which mode (pid+creation_time vs pid_only) was actually used.",
       "additionalProperties": false,
       "required": ["owner_pid", "acquired_at"],
       "properties": {
         "owner_pid": {"type": "integer"},
+        "owner_creation_time": {"type": ["number", "null"]},
+        "owner_liveness_mode": {
+          "type": "string",
+          "enum": ["pid+creation_time", "pid_only"]
+        },
         "acquired_at": {"type": "string", "format": "date-time"},
         "wall_budget_seconds": {"type": "number", "minimum": 0}
       }
@@ -105,13 +110,14 @@
     },
     "gateInvariant": {
       "type": "object",
+      "description": "review-pr1310.md MEDIUM-1: `expect` is enum-restricted (not a free string) so a typo like 'unchagned' fails schema validation instead of silently matching no branch in gates.py's checker.",
       "additionalProperties": false,
       "required": ["field"],
       "properties": {
         "field": {"type": "string"},
         "source": {"type": "string"},
         "asserted": {"type": "boolean"},
-        "expect": {"type": "string"},
+        "expect": {"type": "string", "enum": ["unchanged"]},
         "expect_equals": {"type": "string"}
       }
     }

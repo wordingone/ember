@@ -14,6 +14,9 @@ command's script, every declared input, and every declared output still
 match their recorded content_hash on disk, and that the receipt closing the
 node is itself untampered. If any of those drift, replay (of either kind) is
 not trustworthy no matter how it's performed.
+
+v1 verifies reconstructibility by content hash; re-execution equivalence is
+engine-side and out of scope (lead sign-off 2026-08-02, review-pr1310).
 """
 
 from __future__ import annotations
