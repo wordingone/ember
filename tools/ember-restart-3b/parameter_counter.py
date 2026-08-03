@@ -623,6 +623,47 @@ def _verify_shared_expert_genesis(archive: zipfile.ZipFile, payload: Any, *, nam
         raise ValueError(f"shared expert genesis hash mismatch: {name}")
 
 
+_STORAGE_PROJECTION_SCHEMA = "ember-checkpoint-storage-projection-v1"
+
+
+def _full_coverage_root_projection(manifest: Mapping[str, Any], *, active_expert: str) -> bool:
+    """True when the manifest is a signed full-coverage root.
+
+    A governed-vertical genesis run trains every expert in one episode: the
+    checkpoint is specialist-active (one routed expert) yet has no lineage,
+    because there is no parent — all four banks were realized from genesis in
+    this same run. The discriminator is the manifest's own digest-bound storage
+    projection attesting that every optimizer route was active. Any tampering
+    (forged digest, partial route list, mismatched active expert, missing
+    projection) makes this return False and the lineage refusal stands.
+    """
+    if active_expert == "shared":
+        return False
+    if manifest.get("schema_version") != "ember-sparse-checkpoint-v5":
+        return False
+    if manifest.get("lineage") is not None:
+        return False
+    projection = manifest.get("storage_projection")
+    if not isinstance(projection, Mapping):
+        return False
+    if projection.get("schema_version") != _STORAGE_PROJECTION_SCHEMA:
+        return False
+    declared = projection.get("projection_sha256")
+    if not isinstance(declared, str):
+        return False
+    unsigned = {key: value for key, value in projection.items() if key != "projection_sha256"}
+    digest = hashlib.sha256(
+        json.dumps(unsigned, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    if digest != declared:
+        return False
+    if projection.get("active_expert") != active_expert:
+        return False
+    if projection.get("optimizer_state_active_expert_ids") != list(EXPERT_NAMES):
+        return False
+    return True
+
+
 def _inspect_realization(manifest_path: Path, manifest: Mapping[str, Any], *, active_expert: str, shape: Mapping[str, int]) -> dict[str, Any]:
     records = manifest.get("shards")
     if not isinstance(records, list): raise ValueError("checkpoint manifest lacks shard records")
@@ -657,7 +698,7 @@ def _inspect_realization(manifest_path: Path, manifest: Mapping[str, Any], *, ac
     if active_expert != "shared" and (
         schema_version not in {"ember-sparse-checkpoint-v4", "ember-sparse-checkpoint-v5"}
         or not isinstance(manifest.get("lineage"), Mapping)
-    ):
+    ) and not _full_coverage_root_projection(manifest, active_expert=active_expert):
         raise ValueError("specialist-active realization requires a lineage manifest")
     genesis, expert_hashes = manifest.get("expert_genesis_sha256"), manifest.get("expert_checkpoint_sha256")
     if not isinstance(genesis, dict) or set(genesis) != set(EXPERT_NAMES) or not isinstance(expert_hashes, dict) or set(expert_hashes) != set(EXPERT_NAMES): raise ValueError("checkpoint lacks the four expert genesis/checkpoint hashes")
@@ -729,9 +770,20 @@ def execute_counter(
     runtime_authority: dict[str, Any] = dict(_RUNTIME_AUTHORITY_NONE)
     if active_expert == "shared" and any(value is not None for value in p2b_inputs):
         raise ValueError("legacy counter call must not include P2B stream authority")
-    if active_expert != "shared" and (parent_manifest is None or root_manifest is None):
+    full_coverage_root = _full_coverage_root_projection(manifest, active_expert=active_expert)
+    if full_coverage_root:
+        if any(value is not None for value in p2b_inputs):
+            raise ValueError("full-coverage root counter call must not include P2B stream authority")
+        if parent_manifest is not None or root_manifest is not None:
+            raise ValueError("full-coverage root realization must not carry external lineage manifests")
+        root_parameters = manifest.get("expert_parameter_sha256")
+        if not isinstance(root_parameters, dict) or set(root_parameters) != set(EXPERT_NAMES):
+            raise ValueError("full-coverage root manifest lacks closed expert parameter hashes")
+        for name in EXPERT_NAMES:
+            _sha256_value(root_parameters[name], label=f"root {name} parameter hash")
+    if active_expert != "shared" and not full_coverage_root and (parent_manifest is None or root_manifest is None):
         raise ValueError("specialist-active realization requires external parent and root manifests")
-    if active_expert != "shared":
+    if active_expert != "shared" and not full_coverage_root:
         lineage = manifest.get("lineage")
         if not isinstance(lineage, Mapping):
             raise ValueError("specialist-active realization lacks v4 lineage")

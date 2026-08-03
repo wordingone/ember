@@ -657,6 +657,72 @@ class CounterCliTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "parent checkpoint hash"):
                 execute_counter(model_config=config_path, checkpoint_manifest=manifest_path, active_expert="reasoning", parent_manifest=manifest_path, root_manifest=manifest_path)
 
+    def test_counter_admits_full_coverage_root_and_rejects_tampered_projection(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=61)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        # Mirror the governed vertical: every record's routed expert is activated
+        # and stepped before the single end-of-run checkpoint, so the optimizer
+        # holds post-update state for the complete specialist set.
+        for name in ("vision", "audio", "reasoning", "tool"):
+            model._activate_expert(name)
+            for parameter in model.parameters():
+                if parameter.requires_grad:
+                    parameter.grad = torch.zeros_like(parameter)
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+        model._activate_expert("tool")
+
+        def resign(projection: dict[str, Any]) -> None:
+            unsigned = {key: value for key, value in projection.items() if key != "projection_sha256"}
+            projection["projection_sha256"] = hashlib.sha256(json.dumps(unsigned, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path = root / "config.json"
+            config_path.write_text(json.dumps({"architecture_revision": "ember-sparse-3b-v2", "model": {"hidden_size": 32, "layers": 2, "attention_heads": 4, "vocab_size": 64, "tied_embeddings": True, "image_projection": {"input_shape": [48, 48, 3], "output_size": 32}, "audio_projection": {"frame_samples": 640, "output_size": 32}, "expert_routing": {"expert_names": ["vision", "audio", "reasoning", "tool"]}}}), encoding="utf-8")
+            write_checkpoint_artifacts(model, optimizer, root / "checkpoint", launch_seed=61, rng_state={"cpu": torch.get_rng_state().clone(), "cuda": (torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8))}, data_cursor={"shard": "vertical", "record_index": 4, "global_step": 4, "tokens_seen": 8}, model_config_sha256=hashlib.sha256(config_path.read_bytes()).hexdigest(), contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes(), max_serialized_bytes=1 << 30, max_transient_scratch_bytes=1 << 30)
+            manifest_path = root / "checkpoint" / "checkpoint-manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertIsNone(manifest.get("lineage"))
+            self.assertEqual(manifest["active_expert_ids"], ["tool"])
+            self.assertEqual(manifest["storage_projection"]["optimizer_state_active_expert_ids"], ["vision", "audio", "reasoning", "tool"])
+            original = json.loads(json.dumps(manifest))
+
+            receipt = execute_counter(model_config=config_path, checkpoint_manifest=manifest_path, active_expert="tool")
+            self.assertEqual(receipt["active_expert_ids"], ["tool"])
+            self.assertEqual(receipt["active_parameters"], model.count_unique_trainable_parameters())
+            self.assertEqual(receipt["result"], "MEASURED")
+
+            with self.assertRaisesRegex(ValueError, "must not carry external lineage manifests"):
+                execute_counter(model_config=config_path, checkpoint_manifest=manifest_path, active_expert="tool", parent_manifest=manifest_path, root_manifest=manifest_path)
+
+            manifest = json.loads(json.dumps(original))
+            manifest["storage_projection"]["projection_sha256"] = "0" * 64
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "lineage manifest"):
+                execute_counter(model_config=config_path, checkpoint_manifest=manifest_path, active_expert="tool")
+
+            manifest = json.loads(json.dumps(original))
+            manifest["storage_projection"]["optimizer_state_active_expert_ids"] = ["tool"]
+            resign(manifest["storage_projection"])
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "lineage manifest"):
+                execute_counter(model_config=config_path, checkpoint_manifest=manifest_path, active_expert="tool")
+
+            manifest = json.loads(json.dumps(original))
+            manifest["storage_projection"]["active_expert"] = "vision"
+            resign(manifest["storage_projection"])
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "lineage manifest"):
+                execute_counter(model_config=config_path, checkpoint_manifest=manifest_path, active_expert="tool")
+
+            manifest = json.loads(json.dumps(original))
+            manifest.pop("storage_projection")
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "lineage manifest"):
+                execute_counter(model_config=config_path, checkpoint_manifest=manifest_path, active_expert="tool")
+
 
 
     def test_counter_rejects_v4_active_parameter_digest_equal_to_parent(self) -> None:
