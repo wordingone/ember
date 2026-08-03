@@ -12,7 +12,12 @@
 //
 // git operations are injectable (gitOps) for unit-test isolation.
 
+import { join as pathJoin } from "path";
 import { emberStatePath } from "../utils/ember-state-root.ts";
+
+/** Lease length stamped on a cockpit-created worktree, so the lifecycle manager's audit
+ *  can retire one the operator forgot rather than letting it accrue as census surface. */
+const WORKTREE_LEASE_DAYS = 7;
 import { z } from "zod";
 import { buildTool } from "../core/tool-interface.ts";
 import type { ToolUseContext } from "../core/tool-interface.ts";
@@ -88,12 +93,40 @@ const defaultGitOps: GitOps = {
     return text.trim();
   },
 
+  // Worktree creation goes through scripts/worktree_lifecycle.py, NEVER `git worktree add`
+  // directly (issue #1330 / repo guard #1009). Relocating the worktree path out of the
+  // tree is not enough on its own: a registered worktree is enumerated and byte-hashed by
+  // the census's `git_worktree_material_registry` scan WHEREVER it lives, and a
+  // missing or mutating one contradicts (`registered_worktree_missing`). The lifecycle
+  // manager is what keeps the registry accurate -- budget-capped, expiry-stamped, and
+  // reconcilable -- so a cockpit worktree is at least an accounted-for census subject
+  // rather than an unowned one nobody retires.
   async createWorktree({ gitRoot, path, branch }) {
-    const proc = bunSpawn(["git", "worktree", "add", "-b", branch, path], {
-      cwd: gitRoot,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    const python = process.env["EMBER_PYTHON_BIN"] ?? "python";
+    const expires = new Date(Date.now() + WORKTREE_LEASE_DAYS * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    const proc = bunSpawn(
+      [
+        python,
+        "-B",
+        pathJoin(gitRoot, "scripts", "worktree_lifecycle.py"),
+        "--repo",
+        gitRoot,
+        "create",
+        "--path",
+        path,
+        "--branch",
+        branch,
+        "--owner",
+        "ember-cli",
+        "--purpose",
+        "cockpit /worktree",
+        "--expires",
+        expires,
+      ],
+      { cwd: gitRoot, stdout: "pipe", stderr: "pipe" },
+    );
     const exitCode = await proc.exited;
     if (exitCode !== 0) {
       const err = await new Response(proc.stderr).text();

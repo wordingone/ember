@@ -14,7 +14,11 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { isAbsolute, join, sep } from "node:path";
 import {
+  CENSUS_DISCOVERY_NAME_PATTERNS,
+  EmberStateRootError,
   IN_TREE_STATE_DIR_NAME,
+  SANCTIONED_STATE_DIR_NAME,
+  assertStateRootIsWritable,
   emberStatePath,
   emberStateRoot,
   isUnderEmberState,
@@ -32,6 +36,7 @@ export const KEY_PARITY_VECTORS: ReadonlyArray<readonly [string, string]> = [
 
 const SAVED_STATE_ROOT = process.env["EMBER_STATE_ROOT"];
 const SAVED_EMBER_HOME = process.env["EMBER_HOME"];
+const SAVED_NAMED_ROOT_PARENT = process.env["EMBER_NAMED_ROOT_PARENT"];
 
 function setEnv(name: string, value: string | undefined): void {
   if (value === undefined) delete process.env[name];
@@ -40,13 +45,90 @@ function setEnv(name: string, value: string | undefined): void {
 
 beforeEach(() => {
   delete process.env["EMBER_STATE_ROOT"];
+  delete process.env["EMBER_NAMED_ROOT_PARENT"];
   _resetConfigHomeMemo();
 });
 
 afterEach(() => {
   setEnv("EMBER_STATE_ROOT", SAVED_STATE_ROOT);
   setEnv("EMBER_HOME", SAVED_EMBER_HOME);
+  setEnv("EMBER_NAMED_ROOT_PARENT", SAVED_NAMED_ROOT_PARENT);
   _resetConfigHomeMemo();
+});
+
+// The writer-side guard. A verifier-only refusal finds the regression at the NEXT census,
+// by which point the run is already red — so an unusable root has to throw before a write.
+describe("assertStateRootIsWritable — refuses roots a census would read", () => {
+  const CHECKOUT = join("C:", "fixture", "ember");
+
+  test("refuses a root inside the checkout", () => {
+    expect(() => assertStateRootIsWritable(join(CHECKOUT, ".ember"), CHECKOUT)).toThrow(
+      EmberStateRootError,
+    );
+  });
+
+  test("refuses the checkout itself", () => {
+    expect(() => assertStateRootIsWritable(CHECKOUT, CHECKOUT)).toThrow(EmberStateRootError);
+  });
+
+  test("refuses a discovery-pattern directory under the named-root parent", () => {
+    // This is the trap the relocation could have walked into: `ember-cockpit-state` is
+    // outside the checkout but still matches `ember*`, so the census discovers and
+    // byte-hashes it and the move buys nothing.
+    process.env["EMBER_NAMED_ROOT_PARENT"] = join("C:", "fixture");
+    expect(() =>
+      assertStateRootIsWritable(join("C:", "fixture", "ember-cockpit-state"), CHECKOUT),
+    ).toThrow(/root-discovery pattern/);
+  });
+
+  test("refuses a nested path under a discovery-pattern directory", () => {
+    process.env["EMBER_NAMED_ROOT_PARENT"] = join("C:", "fixture");
+    expect(() =>
+      assertStateRootIsWritable(join("C:", "fixture", "ember-scratch", "cockpit"), CHECKOUT),
+    ).toThrow(EmberStateRootError);
+  });
+
+  test("accepts the sanctioned directory name under the same parent", () => {
+    process.env["EMBER_NAMED_ROOT_PARENT"] = join("C:", "fixture");
+    expect(() =>
+      assertStateRootIsWritable(join("C:", "fixture", SANCTIONED_STATE_DIR_NAME), CHECKOUT),
+    ).not.toThrow();
+  });
+
+  test("the sanctioned name matches none of the discovery patterns", () => {
+    process.env["EMBER_NAMED_ROOT_PARENT"] = join("C:", "fixture");
+    for (const pattern of CENSUS_DISCOVERY_NAME_PATTERNS) {
+      expect(SANCTIONED_STATE_DIR_NAME).not.toBe(pattern);
+    }
+    expect(SANCTIONED_STATE_DIR_NAME.startsWith("ember")).toBe(false);
+  });
+
+  test("the literal second pattern is matched exactly, not merely by prefix", () => {
+    process.env["EMBER_NAMED_ROOT_PARENT"] = join("C:", "fixture");
+    expect(() =>
+      assertStateRootIsWritable(join("C:", "fixture", "wt-stab480-bench594-scratch"), CHECKOUT),
+    ).toThrow(EmberStateRootError);
+    expect(() =>
+      assertStateRootIsWritable(join("C:", "fixture", "wt-stab480-bench594-scratch-2"), CHECKOUT),
+    ).not.toThrow();
+  });
+
+  test("an unrelated sibling of the checkout is fine", () => {
+    expect(() =>
+      assertStateRootIsWritable(join("C:", "fixture", "cockpit-state"), CHECKOUT),
+    ).not.toThrow();
+  });
+
+  test("emberStateRoot enforces the guard, not just the standalone assert", () => {
+    process.env["EMBER_STATE_ROOT"] = join(CHECKOUT, "state");
+    expect(() => emberStateRoot(CHECKOUT)).toThrow(EmberStateRootError);
+  });
+
+  test("isUnderEmberState degrades to false rather than throwing on a bad root", () => {
+    // A write-trigger predicate must never crash the caller over a misconfigured root.
+    process.env["EMBER_STATE_ROOT"] = join(CHECKOUT, "state");
+    expect(isUnderEmberState(join("C:", "elsewhere", "a.ts"), CHECKOUT)).toBe(false);
+  });
 });
 
 describe("repoStateKey — cross-language parity", () => {

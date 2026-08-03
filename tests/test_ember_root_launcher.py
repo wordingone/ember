@@ -275,6 +275,70 @@ class EmberRootLauncherTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("False", result.stdout)
 
+    def test_state_root_guard_refuses_roots_a_census_would_read(self) -> None:
+        # Writer-side and fail-closed, mirroring assertStateRootIsWritable in
+        # tools/ember-cli/src/utils/ember-state-root.ts. A verifier-only refusal finds the
+        # regression at the NEXT census, by which time the run is already red.
+        parent = r"C:\fixture"
+        cases = [
+            # (state root, named-root parent, expected verdict)
+            (r"C:\fixture\ember\.ember", "", "REFUSED"),  # inside the checkout
+            (r"C:\fixture\ember", "", "REFUSED"),  # the checkout itself
+            (r"C:\fixture\ember-cockpit-state", parent, "REFUSED"),  # matches ember*
+            (r"C:\fixture\ember-scratch\cockpit", parent, "REFUSED"),  # nested under a match
+            (r"C:\fixture\wt-stab480-bench594-scratch", parent, "REFUSED"),  # literal pattern
+            (r"C:\fixture\cockpit-state", parent, "OK"),  # the sanctioned name
+            (r"C:\fixture\wt-stab480-bench594-scratch-2", parent, "OK"),  # prefix is not a match
+            (r"C:\elsewhere\cockpit-state", "", "OK"),  # outside the parent entirely
+        ]
+        body = "; ".join(
+            f"$env:EMBER_NAMED_ROOT_PARENT='{parent}'; "
+            f"try {{ Assert-EmberStateRootIsWritable '{root}' 'C:\\fixture\\ember'; "
+            "Write-Output 'OK' } catch { Write-Output 'REFUSED' }"
+            for root, parent, _ in cases
+        )
+        result = self.run_library_command(body)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        produced = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        self.assertEqual(produced, [expected for _, _, expected in cases], result.stdout)
+
+    def test_in_tree_state_refusal_covers_every_entry_shape(self) -> None:
+        # A junction pointing at the external root is the dangerous shape: the census walks
+        # THROUGH it and hashes live cockpit state, so a compatibility shim would put the
+        # contamination straight back. A plain file is refused for the same reason a
+        # populated directory is — only a genuinely empty real directory may be swept.
+        owner, root, _ = self.make_fixture()
+        self.addCleanup(owner.cleanup)
+        (root / ".ember").write_text("not a directory\n", encoding="utf-8")
+        escaped = str(root).replace("'", "''")
+        result = self.run_library_command(
+            f"try {{ Assert-EmberStateIsExternal '{escaped}'; Write-Output 'ACCEPTED' }} "
+            "catch { Write-Output $_.Exception.Message }"
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn("ACCEPTED", result.stdout)
+        self.assertIn("it is a file", result.stdout)
+
+    def test_build_output_never_lands_inside_the_repository(self) -> None:
+        # The build used to emit ember.exe beside the sources and then move it, putting a
+        # transient writer inside the censused tree for the length of every build.
+        implementation = LAUNCH_IMPL.read_text(encoding="utf-8")
+        self.assertNotIn('Join-Path $sourceRoot "ember.exe"', implementation)
+        self.assertIn('Join-Path $applicationRoot "Ember.exe.partial"', implementation)
+        self.assertIn("$env:EMBER_BUILD_OUTFILE = $buildOutput", implementation)
+        # Publishing is write-partial-then-rename on the destination volume.
+        self.assertLess(
+            implementation.index("Ember.exe.partial"),
+            implementation.index("Move-Item -LiteralPath $buildOutput"),
+        )
+
+    def test_bun_package_cache_is_redirected_out_of_the_repository(self) -> None:
+        implementation = LAUNCH_IMPL.read_text(encoding="utf-8")
+        self.assertIn('$env:BUN_INSTALL_CACHE_DIR = Join-Path $stateRoot "bun-cache"', implementation)
+        # node_modules cannot move (Bun resolves it by walking up from the importing file);
+        # the launcher must say so out loud rather than let it look like steady state.
+        self.assertIn("node_modules", implementation)
+
     def test_no_state_path_is_joined_onto_the_repository_root(self) -> None:
         # One resolution point: every state path derives from $stateRoot. A literal joined
         # onto the repository root is exactly the class this issue removed.

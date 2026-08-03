@@ -379,6 +379,21 @@ def test_red_resident_cockpit_state_dir():
         cleanup(tmp)
 
 
+def test_red_cockpit_state_as_a_file():
+    # Any SHAPE is refused, not just a populated directory — otherwise the check has a
+    # blind spot exactly where a shim would sit.
+    tmp = make_fixture("fix/selftest-cockpit-file")
+    try:
+        commit_fixture(tmp)
+        (tmp / ".ember").write_text("not a directory\n", encoding="utf-8", newline="\n")
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected failure for a '.ember' file\n{out}"
+        assert "cockpit-state" in out, out
+        assert "as a file" in out, out
+    finally:
+        cleanup(tmp)
+
+
 def test_green_empty_cockpit_state_dir():
     # Emptiness is the bar, not absence: an empty leftover writes nothing.
     tmp = make_fixture("fix/selftest-cockpit-empty")
@@ -1178,6 +1193,7 @@ ALL_TESTS = [
     test_red_names_staged_bypass_worktree_restore,
     test_red_names_hashed_staged_bypass_worktree_restore,
     test_red_resident_cockpit_state_dir,
+    test_red_cockpit_state_as_a_file,
     test_green_empty_cockpit_state_dir,
     test_red_pathfrags_staged_bypass_worktree_restore,
     test_red_line_endings_staged_bypass_worktree_restore,

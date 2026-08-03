@@ -9,6 +9,9 @@ $BunArchiveUrl = "https://github.com/oven-sh/bun/releases/download/bun-v1.3.12/b
 $BunArchiveSha256 = "841ff9c5dffcaa3a2620d1e3f87ee500f32a4ca830b001cade7a3479609d4a89"
 $EmberLauncherMutexName = "Local\EmberCliCanonicalLauncher"
 $EmberInTreeStateDirectoryName = ".ember"
+$EmberSanctionedStateDirectoryName = "cockpit-state"
+# Mirrors ember-named-root-discovery.name_patterns in manifests/ember-01-custody/root-spec.json.
+$EmberCensusDiscoveryNamePatterns = @("ember*", "wt-stab480-bench594-scratch")
 
 Add-Type @"
 using System;
@@ -84,10 +87,58 @@ function Get-EmberStateRootKey([string]$RepositoryRoot) {
     return $key
 }
 
+function Test-EmberDiscoveryNameMatch([string]$Name) {
+    foreach ($pattern in $EmberCensusDiscoveryNamePatterns) {
+        if ($Name.ToLowerInvariant() -like $pattern.ToLowerInvariant()) { return $true }
+    }
+    return $false
+}
+
+function Assert-EmberStateRootIsWritable([string]$StateRoot, [string]$RepositoryRoot) {
+    # Writer-side and fail-closed. A verifier-only refusal finds the regression at the NEXT
+    # census, by which time the run is already red; this refuses before anything is written.
+    # Mirrors assertStateRootIsWritable in tools/ember-cli/src/utils/ember-state-root.ts.
+    $resolved = [System.IO.Path]::GetFullPath($StateRoot)
+    $repository = [System.IO.Path]::GetFullPath($RepositoryRoot).TrimEnd(
+        [System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+
+    if ($resolved.Equals($repository, [StringComparison]::OrdinalIgnoreCase) -or
+        $resolved.StartsWith($repository + [System.IO.Path]::DirectorySeparatorChar,
+            [StringComparison]::OrdinalIgnoreCase)) {
+        throw ("Cockpit state root '$resolved' is inside the repository. The completion " +
+            "verifier censuses that tree in full, so state written there reds the run. " +
+            "Point EMBER_STATE_ROOT at a directory outside it.")
+    }
+
+    # The non-obvious one: the census DISCOVERS roots by name under EMBER_NAMED_ROOT_PARENT
+    # (root-spec.json's ember-named-root-discovery) and byte-hashes every match. A state
+    # root in a directory named e.g. 'ember-cockpit-state' would be censused wherever else
+    # it sits, so the relocation would buy nothing.
+    if ([string]::IsNullOrWhiteSpace($env:EMBER_NAMED_ROOT_PARENT)) { return }
+    $parent = [System.IO.Path]::GetFullPath($env:EMBER_NAMED_ROOT_PARENT.Trim()).TrimEnd(
+        [System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    if (-not $resolved.StartsWith($parent + [System.IO.Path]::DirectorySeparatorChar,
+            [StringComparison]::OrdinalIgnoreCase)) {
+        return
+    }
+    $child = $resolved.Substring($parent.Length).Split(
+        [char[]]@([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar),
+        [StringSplitOptions]::RemoveEmptyEntries)[0]
+    if (Test-EmberDiscoveryNameMatch $child) {
+        throw ("Cockpit state root '$resolved' sits under the census named-root parent in " +
+            "'$child', whose name matches a root-discovery pattern " +
+            "($($EmberCensusDiscoveryNamePatterns -join ', ')). The census discovers and " +
+            "byte-hashes that directory, so relocating there buys nothing. Use a directory " +
+            "named '$EmberSanctionedStateDirectoryName', or another name outside those patterns.")
+    }
+}
+
 function Get-EmberStateRoot([string]$RepositoryRoot) {
     # 1. EMBER_STATE_ROOT verbatim, so an operator can place cockpit state deliberately.
     if (-not [string]::IsNullOrWhiteSpace($env:EMBER_STATE_ROOT)) {
-        return [System.IO.Path]::GetFullPath($env:EMBER_STATE_ROOT.Trim())
+        $override = [System.IO.Path]::GetFullPath($env:EMBER_STATE_ROOT.Trim())
+        Assert-EmberStateRootIsWritable $override $RepositoryRoot
+        return $override
     }
     # 2. <EMBER_HOME>/cockpit-state/<key>, EMBER_HOME defaulting to the CLI's own
     #    user-scoped config home -- always outside any checkout.
@@ -100,8 +151,10 @@ function Get-EmberStateRoot([string]$RepositoryRoot) {
         }
         $emberHome = Join-Path $profile $EmberInTreeStateDirectoryName
     }
-    $keyed = Join-Path (Join-Path $emberHome "cockpit-state") (Get-EmberStateRootKey $RepositoryRoot)
-    return [System.IO.Path]::GetFullPath($keyed)
+    $keyed = Join-Path (Join-Path $emberHome $EmberSanctionedStateDirectoryName) (Get-EmberStateRootKey $RepositoryRoot)
+    $resolved = [System.IO.Path]::GetFullPath($keyed)
+    Assert-EmberStateRootIsWritable $resolved $RepositoryRoot
+    return $resolved
 }
 
 function Move-EmberStateOutOfTree([string]$RepositoryRoot, [string]$StateRoot) {
@@ -131,17 +184,33 @@ function Move-EmberStateOutOfTree([string]$RepositoryRoot, [string]$StateRoot) {
 }
 
 function Assert-EmberStateIsExternal([string]$RepositoryRoot) {
-    # Fail-closed re-check: if the directory reappeared non-empty (a stale binary at an old
-    # revision still writing, a hand-created path), refuse rather than certify around it.
+    # Fail-closed re-check: if the entry reappeared (a stale binary at an old revision still
+    # writing, a hand-created path), refuse rather than certify around it.
+    #
+    # ANY in-tree `.ember` entry is refused -- directory, file, OR reparse point. A
+    # junction pointing at the external root is the dangerous shape: the census's
+    # ignored-registry scan walks THROUGH it and hashes live external state, so a
+    # compatibility shim would reintroduce exactly the contamination this move removes.
+    # Refusing every shape is also the only version with no blind spot to argue about.
     $inTree = Join-Path $RepositoryRoot $EmberInTreeStateDirectoryName
-    if (-not (Test-Path -LiteralPath $inTree -PathType Container)) { return }
-    if (@(Get-ChildItem -LiteralPath $inTree -Force -ErrorAction SilentlyContinue).Count -eq 0) {
+    $entry = Get-Item -LiteralPath $inTree -Force -ErrorAction SilentlyContinue
+    if ($null -eq $entry) { return }
+
+    $isReparsePoint = ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0
+    if (-not $isReparsePoint -and ($entry -is [IO.DirectoryInfo]) -and
+        @(Get-ChildItem -LiteralPath $inTree -Force -ErrorAction SilentlyContinue).Count -eq 0) {
+        # A genuinely empty directory writes nothing; sweep it instead of refusing.
         Remove-Item -LiteralPath $inTree -Recurse -Force -ErrorAction SilentlyContinue
         return
     }
-    throw ("Cockpit state is present inside the repository at '$inTree'. It must live " +
-        "outside the certified tree. Stop every Ember process writing there, move or " +
-        "delete that directory, and run Ember.cmd again.")
+
+    $shape = if ($isReparsePoint) { "a junction or symlink" }
+        elseif ($entry -is [IO.DirectoryInfo]) { "a directory" }
+        else { "a file" }
+    throw ("Cockpit state is present inside the repository at '$inTree' (it is $shape). " +
+        "It must live outside the certified tree, and a shim pointing at the external " +
+        "root is not acceptable -- the census walks through it. Stop every Ember process " +
+        "writing there, remove that entry, and run Ember.cmd again.")
 }
 
 function Test-IsOwnedEmberExecutablePath([string]$Candidate, [string]$StateRoot) {
@@ -333,10 +402,22 @@ try {
     Assert-EmberStateIsExternal $repositoryRoot
     $env:EMBER_STATE_ROOT = $stateRoot
 
+    # Bun's package cache is cockpit state, so it moves out with the rest. node_modules
+    # itself cannot: Bun resolves it by walking up from the importing file, so it has to
+    # stay beside the sources, inside the censused tree.
+    $env:BUN_INSTALL_CACHE_DIR = Join-Path $stateRoot "bun-cache"
+
     $bun = Get-VerifiedBun $stateRoot
     $dependenciesReady = Test-Path -LiteralPath (Join-Path $sourceRoot "node_modules\react\package.json") -PathType Leaf
     if (-not $dependenciesReady) {
-        Write-Host "Preparing Ember's interface dependencies once..."
+        # THE ONE REMAINING IN-TREE WRITE, and it is deliberate. Installing populates
+        # tools/ember-cli/src/node_modules/ inside the certified tree; a census running
+        # concurrently WILL red. This is a one-time preparation step, not steady state:
+        # once dependencies exist, launches perform no in-tree writes and the cockpit can
+        # stay up across certifications, which is the acceptance this issue claims.
+        # Announced rather than silent so an operator who sees it knows to let it finish
+        # before a census window opens.
+        Write-Host "Preparing Ember's interface dependencies once. This writes into the repository (node_modules); let it finish before starting a certification run."
         Push-Location $sourceRoot
         try {
             & $bun install --frozen-lockfile --production
@@ -380,7 +461,12 @@ try {
     $applicationRoot = Join-Path $stateRoot "runtime\ember\$commit"
     $application = Join-Path $applicationRoot "Ember.exe"
     if (-not (Test-Path -LiteralPath $application -PathType Leaf)) {
-        $buildOutput = Join-Path $sourceRoot "ember.exe"
+        # Compile STRAIGHT into the state root. The build used to emit ember.exe beside the
+        # sources and then move it, which put a transient writer inside the censused tree
+        # for the length of every build. Publishing is write-to-partial-then-rename ON THE
+        # DESTINATION volume, so a crash mid-build can never leave a truncated binary at
+        # the final name for the next launch's Test-Path to accept.
+        $buildOutput = Join-Path $applicationRoot "Ember.exe.partial"
         $buildLog = Join-Path $stateRoot "runtime\ember-build.log"
         New-Item -ItemType Directory -Force -Path $applicationRoot | Out-Null
         try {
@@ -388,10 +474,13 @@ try {
             try {
                 $previousErrorActionPreference = $ErrorActionPreference
                 $ErrorActionPreference = "Continue"
+                $previousBuildOutfile = $env:EMBER_BUILD_OUTFILE
+                $env:EMBER_BUILD_OUTFILE = $buildOutput
                 try {
                     & $bun run build *> $buildLog
                 }
                 finally {
+                    $env:EMBER_BUILD_OUTFILE = $previousBuildOutfile
                     $ErrorActionPreference = $previousErrorActionPreference
                 }
                 $buildExit = $LASTEXITCODE
@@ -410,6 +499,7 @@ try {
             }
         }
     }
+    Assert-EmberStateIsExternal $repositoryRoot
 
     $windowHandle = Get-EmberHostWindowHandle
     Set-EmberWindowToLeftWorkArea $windowHandle | Out-Null

@@ -13,17 +13,21 @@ import { emberStatePath } from "../utils/ember-state-root.ts";
 import type { GoalRecord } from "../core/goal-store.ts";
 
 let scratchDir: string;
+let stateDir: string;
 
 beforeEach(() => {
   scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "ember-goal-persistence-"));
-  // Pin the external state root inside the scratch dir: the default resolves under the
-  // user config home, which would outlive this suite and leak between runs.
-  process.env["EMBER_STATE_ROOT"] = path.join(scratchDir, "cockpit-state");
+  // Pin the external state root, for two reasons: the default resolves under the real
+  // user config home (which would outlive this suite), and the root must sit OUTSIDE the
+  // repo root it serves or the writer-side guard refuses it.
+  stateDir = `${scratchDir}-cockpit-state`;
+  process.env["EMBER_STATE_ROOT"] = stateDir;
 });
 
 afterEach(() => {
   delete process.env["EMBER_STATE_ROOT"];
   fs.rmSync(scratchDir, { recursive: true, force: true });
+  fs.rmSync(stateDir, { recursive: true, force: true });
 });
 
 function fakeGoal(overrides: Partial<GoalRecord> = {}): GoalRecord {

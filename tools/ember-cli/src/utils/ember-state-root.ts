@@ -3,14 +3,14 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 // ember-state-root.ts — the ONE TypeScript resolution point for cockpit-mutable state
-// (issue #1330).
+// (issue #1330), and the writer-side guard that keeps it out of every censused root.
 //
 // The completion verifier certifies the local execution tree by TOTALITY: it censuses and
 // fingerprints every file, tracked and untracked, so any resident writer produces
 // list-vs-hash contradictions and a red receipt. That totality is load-bearing (it caught
 // the run15 stale-cockpit contamination) and must never be weakened with path exclusions.
-// The cure is on the writer side: the cockpit's mutable state lives OUTSIDE the certified
-// tree, so the cockpit can stay up during verification instead of being quiesced for it.
+// The cure is on the writer side: the cockpit's mutable state lives OUTSIDE every root the
+// census reads, so the cockpit can stay up during verification instead of being quiesced.
 //
 // Every call site that used to compute `join(root, ".ember", ...)` now calls
 // `emberStatePath()`. No module may reconstruct that join itself — a single literal
@@ -30,6 +30,17 @@
 // scripts/launch-ember-cli.ps1. Both sides are pinned to the same fixture vectors
 // (ember-state-root.test.ts / tests/test_ember_root_launcher.py) so the two
 // implementations cannot drift apart unnoticed.
+//
+// GUARD (writer-side, fail-closed). A verifier-only refusal detects the regression at the
+// NEXT census; by then the run is already red. So every resolution is validated here,
+// before any write, and an unusable root throws rather than silently landing state
+// somewhere censused. Two ways a root is unusable:
+//   (a) it is inside the checkout — the original defect;
+//   (b) it sits under EMBER_NAMED_ROOT_PARENT in a directory whose name matches the
+//       census's `ember-named-root-discovery` patterns. This is the non-obvious one:
+//       moving `.ember/` to a sibling named `ember-cockpit-state` would be discovered by
+//       that scan and byte-hashed anyway, so the relocation would buy nothing. Use a
+//       directory name outside those patterns — `cockpit-state` is the sanctioned one.
 
 import { isAbsolute, join, resolve, sep } from "node:path";
 import { getEmberConfigHomeDir } from "./env-detection.ts";
@@ -38,6 +49,79 @@ import { getEmberConfigHomeDir } from "./env-detection.ts";
  *  skill-directory write triggers can still recognize a pre-relocation path; it is never
  *  used to build a write target. */
 export const IN_TREE_STATE_DIR_NAME = ".ember";
+
+/** Directory name for the external state root. Chosen to match none of
+ *  CENSUS_DISCOVERY_NAME_PATTERNS — see the guard note above. */
+export const SANCTIONED_STATE_DIR_NAME = "cockpit-state";
+
+/** Mirrors `ember-named-root-discovery`.name_patterns in
+ *  manifests/ember-01-custody/root-spec.json. The census fnmatches these (casefolded)
+ *  against the immediate children of EMBER_NAMED_ROOT_PARENT and byte-hashes every match,
+ *  so a state root landing in one is censused wherever else it sits. */
+export const CENSUS_DISCOVERY_NAME_PATTERNS: readonly string[] = [
+  "ember*",
+  "wt-stab480-bench594-scratch",
+];
+
+/** Thrown when a resolved state root would be read by a census. Named so a caller that
+ *  must degrade rather than crash can catch precisely this class. */
+export class EmberStateRootError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "EmberStateRootError";
+  }
+}
+
+function matchesDiscoveryPattern(name: string): boolean {
+  const folded = name.toLowerCase();
+  return CENSUS_DISCOVERY_NAME_PATTERNS.some((pattern) => {
+    const body = pattern
+      .toLowerCase()
+      .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+      .replace(/\*/g, ".*")
+      .replace(/\?/g, ".");
+    return new RegExp(`^${body}$`).test(folded);
+  });
+}
+
+function isSameOrInside(candidate: string, container: string): boolean {
+  const a = candidate.toLowerCase();
+  const b = container.toLowerCase().replace(/[\\/]+$/, "");
+  return a === b || a.startsWith(b + sep);
+}
+
+/** Fail-closed validation of a resolved state root. Exported so the launcher-equivalent
+ *  check and the tests exercise the same predicate the writers do. */
+export function assertStateRootIsWritable(stateRoot: string, checkoutRoot: string): void {
+  const resolved = resolve(stateRoot);
+  const checkout = resolve(checkoutRoot);
+
+  if (isSameOrInside(resolved, checkout)) {
+    throw new EmberStateRootError(
+      `cockpit state root '${resolved}' is inside the checkout '${checkout}'. The ` +
+        `completion verifier censuses that tree in full, so state written there reds the ` +
+        `run. Point EMBER_STATE_ROOT at a directory outside it.`,
+    );
+  }
+
+  const namedRootParent = process.env["EMBER_NAMED_ROOT_PARENT"];
+  if (namedRootParent === undefined || namedRootParent.trim().length === 0) return;
+
+  const parent = resolve(namedRootParent.trim());
+  if (!isSameOrInside(resolved, parent)) return;
+  if (resolved.toLowerCase() === parent.toLowerCase()) return;
+
+  const child = resolved.slice(parent.length).split(sep).filter(Boolean)[0];
+  if (child === undefined || !matchesDiscoveryPattern(child)) return;
+
+  throw new EmberStateRootError(
+    `cockpit state root '${resolved}' sits under the census named-root parent in ` +
+      `'${child}', whose name matches a root-discovery pattern ` +
+      `(${CENSUS_DISCOVERY_NAME_PATTERNS.join(", ")}). The census discovers and ` +
+      `byte-hashes that directory, so relocating there buys nothing. Use a directory ` +
+      `named '${SANCTIONED_STATE_DIR_NAME}', or another name outside those patterns.`,
+  );
+}
 
 /** Filesystem-safe, case-stable key for a checkout root. Lowercased because Windows paths
  *  are case-insensitive: two spellings of one checkout must key to one state directory. */
@@ -48,18 +132,21 @@ export function repoStateKey(root: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
   if (key.length === 0) {
-    throw new Error(`[ember-state-root] cannot derive a state key from root '${root}'`);
+    throw new EmberStateRootError(`cannot derive a state key from root '${root}'`);
   }
   return key;
 }
 
-/** Absolute root of all cockpit-mutable state for `root`. Never inside the certified tree. */
+/** Absolute root of all cockpit-mutable state for `root`. Never inside a censused root —
+ *  validated on every call, because this is the last point before a write. */
 export function emberStateRoot(root: string): string {
   const override = process.env["EMBER_STATE_ROOT"];
-  if (override !== undefined && override.trim().length > 0) {
-    return resolve(override.trim());
-  }
-  return join(getEmberConfigHomeDir(), "cockpit-state", repoStateKey(root));
+  const resolved =
+    override !== undefined && override.trim().length > 0
+      ? resolve(override.trim())
+      : join(getEmberConfigHomeDir(), SANCTIONED_STATE_DIR_NAME, repoStateKey(root));
+  assertStateRootIsWritable(resolved, root);
+  return resolved;
 }
 
 /** Path to a named piece of cockpit state under `root`'s external state root. */
@@ -70,13 +157,19 @@ export function emberStatePath(root: string, ...segments: string[]): string {
 /** True when `filePath` is cockpit state: under the resolved external root, or carrying a
  *  legacy in-tree `.ember` path segment. Both arms are needed — the external root is where
  *  state lives now, and the legacy segment still identifies state on a machine that has not
- *  been migrated yet (and in the `~/.ember` user config home, which never moves). */
+ *  been migrated yet (and in the `~/.ember` user config home, which never moves).
+ *  Never throws: a caller deciding whether to fire a skill-dir trigger must not crash
+ *  because the state root happens to be misconfigured. */
 export function isUnderEmberState(filePath: string, root?: string): boolean {
   const segment = `${sep}${IN_TREE_STATE_DIR_NAME}${sep}`;
   const normalized = filePath.replace(/\//g, sep);
   if (normalized.includes(segment)) return true;
   if (!isAbsolute(normalized)) return false;
-  const stateRoot = emberStateRoot(root ?? process.cwd());
-  const prefix = stateRoot.endsWith(sep) ? stateRoot : stateRoot + sep;
-  return normalized.toLowerCase().startsWith(prefix.toLowerCase());
+  try {
+    const stateRoot = emberStateRoot(root ?? process.cwd());
+    const prefix = stateRoot.endsWith(sep) ? stateRoot : stateRoot + sep;
+    return normalized.toLowerCase().startsWith(prefix.toLowerCase());
+  } catch {
+    return false;
+  }
 }
