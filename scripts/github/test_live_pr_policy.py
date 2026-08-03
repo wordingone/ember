@@ -4,9 +4,17 @@
 from __future__ import annotations
 
 import copy
+import os
+import pathlib
+import shutil
+import subprocess
+import tempfile
 import unittest
 
-from scripts.github.live_pr_policy import validate_live_pull_request
+from scripts.github.live_pr_policy import (
+    pinned_head_covers_live_head,
+    validate_live_pull_request,
+)
 
 
 BASE = "a" * 40
@@ -152,6 +160,103 @@ class LivePullRequestPolicyTests(unittest.TestCase):
         value = human_pr()
         value["changed_files"] = [None]
         self.assertIn("snapshot:changed-files-invalid", validate_live_pull_request(value))
+
+
+
+
+class HeadPinBranchUpdateTests(unittest.TestCase):
+    """Issue #1350: guard verdicts must be invariant under base branch updates."""
+
+    def _run(self, repo, *args, env=None):
+        result = subprocess.run(
+            ["git", *args], cwd=repo, capture_output=True, text=True, env=env
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result.stdout.strip()
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.mkdtemp(prefix="pin-fixture-")
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.env = dict(
+            os.environ,
+            GIT_AUTHOR_NAME="fixture",
+            GIT_AUTHOR_EMAIL="fixture@example.invalid",
+            GIT_COMMITTER_NAME="fixture",
+            GIT_COMMITTER_EMAIL="fixture@example.invalid",
+        )
+        repo = self.tmp
+        run = lambda *a: self._run(repo, *a, env=self.env)
+        run("init", "-b", "master")
+        pathlib.Path(repo, "master_only.txt").write_text("m0\n", encoding="utf-8")
+        pathlib.Path(repo, "pr_file.txt").write_text("p0\n", encoding="utf-8")
+        run("add", "-A")
+        run("commit", "-m", "base")
+        run("checkout", "-b", "pr")
+        pathlib.Path(repo, "pr_file.txt").write_text("p1\n", encoding="utf-8")
+        run("commit", "-am", "pr change")
+        self.pinned_head = run("rev-parse", "HEAD")
+        run("checkout", "master")
+        pathlib.Path(repo, "master_only.txt").write_text("m1\n", encoding="utf-8")
+        run("commit", "-am", "unrelated master merge")
+        self.master_tip = run("rev-parse", "HEAD")
+        run("checkout", "pr")
+        run("merge", "--no-edit", "master")
+        self.live_head = run("rev-parse", "HEAD")
+        run("checkout", "--detach", "master")
+        run("merge", "--no-ff", "--no-edit", "pr")
+        self.run = run
+
+    def test_pinned_head_survives_unrelated_master_merge(self) -> None:
+        self.assertTrue(
+            pinned_head_covers_live_head(
+                pathlib.Path(self.tmp), self.pinned_head, self.live_head
+            )
+        )
+
+    def test_post_pin_pr_side_edit_still_fails(self) -> None:
+        self.run("checkout", "pr")
+        pathlib.Path(self.tmp, "pr_file.txt").write_text("p2\n", encoding="utf-8")
+        self.run("commit", "-am", "post-pin edit")
+        tampered_head = self.run("rev-parse", "HEAD")
+        self.run("checkout", "--detach", "master")
+        self.run("merge", "--no-ff", "--no-edit", "pr")
+        self.assertFalse(
+            pinned_head_covers_live_head(
+                pathlib.Path(self.tmp), self.pinned_head, tampered_head
+            )
+        )
+
+    def test_unrelated_sha_never_accepted(self) -> None:
+        self.assertFalse(
+            pinned_head_covers_live_head(
+                pathlib.Path(self.tmp), self.master_tip, self.live_head
+            )
+        )
+
+    def test_merge_parent_range_excludes_master_only_files(self) -> None:
+        # The workflow's range on the refs/pull/N/merge subject: HEAD^1...HEAD,
+        # exercised with the exact diff flags the binding checker runs.
+        files = self._run(
+            self.tmp,
+            "diff", "--find-renames", "--find-copies", "--name-only",
+            "--diff-filter=ACMRT", "HEAD^1...HEAD",
+            env=self.env,
+        ).splitlines()
+        self.assertEqual(files, ["pr_file.txt"])
+
+    def test_two_dot_stale_base_range_swept_in_master_files(self) -> None:
+        # The pre-fix defect: two-dot from the stale event base sweeps in
+        # files the PR never touched.
+        stale_base = self._run(
+            self.tmp, "rev-list", "--max-parents=0", "HEAD", env=self.env
+        )
+        files = self._run(
+            self.tmp,
+            "diff", "--name-only", "--diff-filter=ACMRT",
+            f"{stale_base}..HEAD",
+            env=self.env,
+        ).splitlines()
+        self.assertIn("master_only.txt", files)
 
 
 if __name__ == "__main__":
