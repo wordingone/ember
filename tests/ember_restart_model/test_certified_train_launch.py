@@ -8,6 +8,7 @@ import hashlib
 import importlib.util
 import json
 import pathlib
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -781,6 +782,273 @@ class ProducerSchemaBindingTest(unittest.TestCase):
         self.assertEqual(len(payload_key_sets), 1)
         module = load_module()
         self.assertEqual(payload_key_sets[0], module.COMPLETION_RECEIPT_KEYS)
+
+
+def install_closure(repo: pathlib.Path) -> str:
+    """Give a fixture repo a real closure module, manifest, and closure files."""
+
+    (repo / "scripts").mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(
+        ROOT / "scripts" / "training_closure.py", repo / "scripts" / "training_closure.py"
+    )
+    (repo / "tools").mkdir(parents=True, exist_ok=True)
+    (repo / "tools" / "entrypoint.py").write_text("import json\n", encoding="utf-8")
+    (repo / "configs").mkdir(parents=True, exist_ok=True)
+    (repo / "configs" / "training.json").write_text('{"steps": 1}\n', encoding="utf-8")
+    manifest_path = repo / "manifests" / "training-dependency-closure.json"
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "ember-training-dependency-closure-v1",
+                "entrypoints": ["tools/entrypoint.py"],
+                "dynamic_entrypoints": [],
+                "code": ["scripts/training_closure.py"],
+                "data": ["configs/training.json"],
+                "dynamic_call_sites": {},
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    module = load_module()
+    return module.read_live_closure_sha256(repo)
+
+
+class ClosureBoundCertificateTests(unittest.TestCase):
+    """The certificate binds the training closure, not the whole repository tip."""
+
+    def test_moved_tip_outside_the_closure_is_accepted(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            closure_sha256 = install_closure(paths["repo"])
+            rewrite_certificate(
+                paths, lambda cert: cert.update({"closure_sha256": closure_sha256})
+            )
+            # A docs-only merge landed: the tip moved, the closure did not.
+            moved_tip = "c" * 40
+            with mock.patch.object(
+                module, "read_current_master", return_value=moved_tip
+            ), mock.patch.object(
+                module, "read_pin_is_ancestor", return_value=True
+            ):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            self.assertEqual(launch.closure_sha256, closure_sha256)
+            self.assertEqual(launch.public_master_sha, moved_tip)
+
+    def test_changed_closure_file_is_rejected_even_at_the_pinned_tip(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            closure_sha256 = install_closure(paths["repo"])
+            rewrite_certificate(
+                paths, lambda cert: cert.update({"closure_sha256": closure_sha256})
+            )
+            (paths["repo"] / "configs" / "training.json").write_text(
+                '{"steps": 2}\n', encoding="utf-8"
+            )
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(
+                    ValueError, "live training dependency closure"
+                ):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_certificate_without_closure_sha256_still_binds_the_tip(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            with mock.patch.object(
+                module, "read_current_master", return_value="c" * 40
+            ):
+                with self.assertRaisesRegex(ValueError, "current public master"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_malformed_closure_sha256_is_rejected(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            install_closure(paths["repo"])
+            rewrite_certificate(
+                paths, lambda cert: cert.update({"closure_sha256": "NOT-A-HASH"})
+            )
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "closure_sha256"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_unknown_certificate_key_is_still_rejected(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            rewrite_certificate(
+                paths, lambda cert: cert.update({"smuggled_key": "value"})
+            )
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "certificate schema keys"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_stale_closure_manifest_is_rejected_at_launch(self) -> None:
+        """The boundary is re-audited live: matching bytes are not enough.
+
+        Otherwise a manifest that went stale since the guard last ran in CI
+        would let code outside the declared closure train under a green
+        certificate -- worse than the blunt tip pin it replaced.
+        """
+
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            closure_sha256 = install_closure(paths["repo"])
+            rewrite_certificate(
+                paths, lambda cert: cert.update({"closure_sha256": closure_sha256})
+            )
+            # An undeclared module enters the entrypoint's import graph, and the
+            # certificate is re-minted over the new bytes so only the BOUNDARY
+            # is wrong.
+            (paths["repo"] / "tools" / "smuggled.py").write_text(
+                "SECRET = 1\n", encoding="utf-8"
+            )
+            (paths["repo"] / "tools" / "entrypoint.py").write_text(
+                "from smuggled import SECRET\n", encoding="utf-8"
+            )
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "boundary guard"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_verified_pin_off_the_live_history_is_rejected(self) -> None:
+        """Closure equality alone must not accept a tree that never held the pin."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            closure_sha256 = install_closure(paths["repo"])
+            rewrite_certificate(
+                paths, lambda cert: cert.update({"closure_sha256": closure_sha256})
+            )
+            with mock.patch.object(
+                module, "read_current_master", return_value="c" * 40
+            ), mock.patch.object(
+                module, "read_pin_is_ancestor", return_value=False
+            ):
+                with self.assertRaisesRegex(ValueError, "not an ancestor"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_read_pin_is_ancestor_answers_from_real_git_history(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            repo = pathlib.Path(directory) / "repo"
+            repo.mkdir()
+
+            def git(*arguments: str) -> str:
+                return subprocess.run(
+                    ["git", "-C", str(repo), *arguments],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+
+            git("init", "-q")
+            git("config", "user.email", "test@example.invalid")
+            git("config", "user.name", "closure test")
+            (repo / "first.txt").write_text("first\n", encoding="utf-8")
+            git("add", "first.txt")
+            git("commit", "-qm", "first")
+            first = git("rev-parse", "HEAD")
+            (repo / "second.txt").write_text("second\n", encoding="utf-8")
+            git("add", "second.txt")
+            git("commit", "-qm", "second")
+            second = git("rev-parse", "HEAD")
+
+            # The verified-at pin is behind live HEAD: a merge landed after
+            # verification, which is exactly the case closure binding unblocks.
+            self.assertTrue(module.read_pin_is_ancestor(repo, first))
+            self.assertTrue(module.read_pin_is_ancestor(repo, second))
+            self.assertFalse(module.read_pin_is_ancestor(repo, "d" * 40))
+
+    def test_execution_receipt_records_the_closure_binding(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            closure_sha256 = install_closure(paths["repo"])
+            rewrite_certificate(
+                paths, lambda cert: cert.update({"closure_sha256": closure_sha256})
+            )
+            with mock.patch.object(
+                module, "read_current_master", return_value=SHA
+            ), mock.patch.object(
+                module, "read_pin_is_ancestor", return_value=True
+            ):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            module.execute_validated_launch(
+                paths["repo"],
+                launch,
+                run_process=lambda *args, **kwargs: mock.Mock(returncode=0),
+            )
+            receipt = json.loads(
+                module._execution_receipt_path(launch).read_text(encoding="utf-8")
+            )
+            self.assertEqual(receipt["closure_sha256"], closure_sha256)
+
+
+class ClosureCrossConsumerAgreementTest(unittest.TestCase):
+    def test_closure_evidence_agrees_with_the_launch_consumer_at_this_tree(self) -> None:
+        """Verify side and launch side must compute the identical closure hash."""
+        sys.path.insert(0, str(ROOT / "scripts"))
+        self.addCleanup(sys.path.remove, str(ROOT / "scripts"))
+        spec = importlib.util.spec_from_file_location(
+            "verify_ember01_completion_under_test",
+            ROOT / "scripts" / "verify_ember01_completion.py",
+        )
+        assert spec is not None and spec.loader is not None
+        completion = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(completion)
+
+        launch = load_module()
+        value, reason = completion.closure_evidence_at(ROOT)
+
+        self.assertEqual(reason, "ok")
+        self.assertEqual(value, launch.read_live_closure_sha256(ROOT))
 
 
 if __name__ == "__main__":

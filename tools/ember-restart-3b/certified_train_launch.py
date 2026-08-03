@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import pathlib
@@ -15,6 +16,17 @@ import tempfile
 from typing import Any, NamedTuple
 
 
+# A certificate that carries closure_sha256 binds the TRAINING DEPENDENCY
+# CLOSURE (scripts/training_closure.py) instead of the whole repository tip, so
+# a merge outside the closure no longer invalidates a pending launch.
+# public_master_sha stays the VERIFIED-AT commit either way. Certificates minted
+# before this field existed keep whole-tip equality.
+#
+# CERTIFICATE_KEYS and OPTIONAL_CERTIFICATE_KEYS are the key template the
+# out-of-repo mint producer reads (it already exec-loads this module), so
+# producer and consumer cannot skew.
+CLOSURE_MODULE_RELATIVE_PATH = "scripts/training_closure.py"
+OPTIONAL_CERTIFICATE_KEYS = {"closure_sha256"}
 CERTIFICATE_KEYS = {
     "schema_version",
     "event_kind",
@@ -132,6 +144,7 @@ class ValidatedLaunch(NamedTuple):
     certificate_sha256: str
     run_spec_sha256: str
     public_master_sha: str
+    closure_sha256: str | None
     artifact_root: pathlib.Path
     custody_root: pathlib.Path
     runner_receipt: pathlib.Path
@@ -238,6 +251,76 @@ def _load_ledger(path: pathlib.Path) -> list[dict[str, Any]]:
         )
         rows.append(row)
     return rows
+
+
+def load_closure_module(repo_root: pathlib.Path):
+    """Load the single closure implementation out of the tree being launched."""
+
+    module_path = pathlib.Path(repo_root) / CLOSURE_MODULE_RELATIVE_PATH
+    specification = importlib.util.spec_from_file_location(
+        "ember_training_closure", module_path
+    )
+    if specification is None or specification.loader is None:
+        raise ValueError("training dependency closure module cannot be loaded")
+    module = importlib.util.module_from_spec(specification)
+    try:
+        specification.loader.exec_module(module)
+    except OSError as error:
+        raise ValueError("training dependency closure module is unreadable") from error
+    return module
+
+
+def read_live_closure_sha256(repo_root: pathlib.Path) -> str:
+    """Recompute the training closure from LIVE TREE BYTES, boundary included.
+
+    Not a format check. The declared closure is re-audited against the live
+    import/exec graph first -- a stale manifest is the shape that would let
+    unverified code train under a green certificate -- and only then are the
+    member bytes re-hashed. CI runs this same function; it is the mechanism,
+    not a mirror of one.
+    """
+
+    repo_root = pathlib.Path(repo_root)
+    closure = load_closure_module(repo_root)
+    try:
+        manifest = closure.load_manifest(repo_root)
+        audit = closure.audit_closure(repo_root, manifest)
+    except ValueError as error:
+        raise ValueError(f"training dependency closure is unusable: {error}") from error
+    if not audit.ok:
+        raise ValueError(
+            "live training dependency closure fails its own boundary guard:\n"
+            + audit.failure_report()
+        )
+    return _require_sha256(
+        closure.compute_closure_hash(repo_root, manifest),
+        "live training dependency closure hash",
+    )
+
+
+def read_pin_is_ancestor(repo_root: pathlib.Path, pin: str) -> bool:
+    """Whether the certificate's verified-at commit is an ancestor of live HEAD.
+
+    Closure equality alone would accept a tree that never contained the
+    verified commit; this keeps the launch on the same history.
+    """
+
+    result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "merge-base",
+            "--is-ancestor",
+            pin,
+            "HEAD",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        shell=False,
+    )
+    return result.returncode == 0
 
 
 def read_current_master(repo_root: pathlib.Path) -> str:
@@ -366,7 +449,8 @@ def validate_certified_request(
     run_spec_path = pathlib.Path(run_spec_path)
 
     certificate = _load_json(certificate_path, "certificate")
-    _require_keys(certificate, CERTIFICATE_KEYS, "certificate")
+    if set(certificate) - OPTIONAL_CERTIFICATE_KEYS != CERTIFICATE_KEYS:
+        raise ValueError("certificate schema keys mismatch")
     if certificate["schema_version"] != "ember-spine-certified-declaration-v1":
         raise ValueError("certificate schema")
     if certificate["event_kind"] != "SPINE_CERTIFIED":
@@ -403,9 +487,29 @@ def validate_certified_request(
     if any(value is not True for value in conjuncts.values()):
         raise ValueError("B7 declaration conjunct is false")
 
+    # Closure binding when the certificate carries one. public_master_sha stays
+    # the VERIFIED-AT commit, and live-HEAD equality is replaced by exactly two
+    # checks: the closure recomputed from live bytes equals the certificate's,
+    # and the verified-at commit is an ancestor of live HEAD. So a docs-only
+    # merge -- which cannot affect a training run -- no longer stalls one, while
+    # "you train exactly the verified training code" is untouched: a changed
+    # closure file still rejects, even at the pinned tip. Certificates minted
+    # before closure_sha256 existed fall back to whole-tip equality.
     current_master = read_current_master(repo_root)
-    if certificate["public_master_sha"] != current_master:
-        raise ValueError("certificate does not bind current public master")
+    certificate_closure_sha256 = certificate.get("closure_sha256")
+    if certificate_closure_sha256 is None:
+        if certificate["public_master_sha"] != current_master:
+            raise ValueError("certificate does not bind current public master")
+    else:
+        _require_sha256(certificate_closure_sha256, "certificate closure_sha256")
+        if read_live_closure_sha256(repo_root) != certificate_closure_sha256:
+            raise ValueError(
+                "certificate does not bind the live training dependency closure"
+            )
+        if not read_pin_is_ancestor(repo_root, certificate["public_master_sha"]):
+            raise ValueError(
+                "certificate verified-at commit is not an ancestor of current HEAD"
+            )
 
     run_spec = _load_json(run_spec_path, "run spec")
     _require_keys(run_spec, RUN_SPEC_KEYS, "run spec")
@@ -446,6 +550,7 @@ def validate_certified_request(
         certificate_sha256=certificate_sha256,
         run_spec_sha256=_file_sha256(run_spec_path, "run spec"),
         public_master_sha=current_master,
+        closure_sha256=certificate_closure_sha256,
         artifact_root=pathlib.Path(requested_scope["artifact_root"]),
         custody_root=custody_root,
         runner_receipt=runner_receipt,
@@ -508,6 +613,7 @@ def _write_execution_receipt(
         "certificate_sha256": launch.certificate_sha256,
         "run_spec_sha256": launch.run_spec_sha256,
         "public_master_sha": launch.public_master_sha,
+        "closure_sha256": launch.closure_sha256,
         "argv": argv,
         "exit_code": exit_code,
         "artifact_root": str(launch.artifact_root),

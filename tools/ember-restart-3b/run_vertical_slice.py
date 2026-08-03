@@ -1968,7 +1968,10 @@ def load_verified_specialist_records(
         raise ValueError("specialist data manifest must reside in the selected worktree")
     verifier = Path(__file__).with_name("verify_training_data.py")
     completed = subprocess.run(
-        [sys.executable, "-I", "-c", "import runpy,sys;sys.path[:0]=[sys.argv[1],sys.argv[2]];sys.argv=sys.argv[3:];runpy.run_path(sys.argv[0],run_name=\"__main__\")", str(verifier.parent.resolve()), str(Path(tokenizers.__file__).resolve().parent.parent), str(verifier), "--data-manifest", str(manifest), "--tokenizer", str(tokenizer_path), "--capability", capability],
+        # -B: the child's sys.path leads with the in-tree tools directory, and -I
+        # drops the parent's PYTHONDONTWRITEBYTECODE, so without it every governed
+        # run compiles __pycache__ into the certified tree and reds the next census.
+        [sys.executable, "-I", "-B", "-c", "import runpy,sys;sys.path[:0]=[sys.argv[1],sys.argv[2]];sys.argv=sys.argv[3:];runpy.run_path(sys.argv[0],run_name=\"__main__\")", str(verifier.parent.resolve()), str(Path(tokenizers.__file__).resolve().parent.parent), str(verifier), "--data-manifest", str(manifest), "--tokenizer", str(tokenizer_path), "--capability", capability],
         cwd=root, env={name: os.environ[name] for name in ("SYSTEMROOT", "WINDIR", "COMSPEC", "TEMP", "TMP") if name in os.environ}, text=True, capture_output=True, check=False,
     )
     if completed.returncode != 0:
@@ -2387,6 +2390,8 @@ def _execute_realization_counter(
     arguments = [
         sys.executable,
         "-I",
+        # -B: -I also drops PYTHONDONTWRITEBYTECODE, and counter_path is in-tree.
+        "-B",
         str(counter_path),
         "--model-config",
         str(config_path),
