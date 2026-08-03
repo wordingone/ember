@@ -157,11 +157,43 @@ function Get-EmberStateRoot([string]$RepositoryRoot) {
     return $resolved
 }
 
+function Assert-NoResidentCockpitWorktrees([string]$RepositoryRoot) {
+    # Worktrees are the ONE thing migration must not touch. Moving a registered worktree
+    # breaks its administrative link (git still records the old path); deleting it destroys
+    # whatever work is in it. Both are worse than stopping. So they are enumerated, named,
+    # and left exactly where they are for the operator to retire deliberately.
+    $worktreeRoot = Join-Path (Join-Path $RepositoryRoot $EmberInTreeStateDirectoryName) "worktrees"
+    if (-not (Test-Path -LiteralPath $worktreeRoot -PathType Container)) { return }
+    $resident = @(Get-ChildItem -LiteralPath $worktreeRoot -Force -ErrorAction SilentlyContinue)
+    if ($resident.Count -eq 0) {
+        Remove-Item -LiteralPath $worktreeRoot -Recurse -Force -ErrorAction SilentlyContinue
+        return
+    }
+
+    Write-Host ""
+    Write-Host "Cockpit-created worktrees are still inside the repository:" -ForegroundColor Yellow
+    foreach ($entry in $resident) { Write-Host "  $($entry.FullName)" }
+    Write-Host ""
+    Write-Host "They are NOT moved or deleted automatically: moving a registered worktree breaks"
+    Write-Host "its link to this repository, and deleting one destroys the work inside it. Retire"
+    Write-Host "each deliberately, then run Ember.cmd again:"
+    Write-Host ""
+    foreach ($entry in $resident) {
+        Write-Host "  python scripts/worktree_lifecycle.py retire --path `"$($entry.FullName)`""
+    }
+    Write-Host ""
+    throw ("Cockpit state cannot be migrated while $($resident.Count) cockpit-created " +
+        "worktree(s) remain inside the repository. Retire them and run Ember.cmd again.")
+}
+
 function Move-EmberStateOutOfTree([string]$RepositoryRoot, [string]$StateRoot) {
     # One-time migration: an in-tree .ember/ from a pre-relocation launch is moved wholesale
     # to $StateRoot and NOTHING is left behind, so the very next census sees a clean tree.
     $inTree = Join-Path $RepositoryRoot $EmberInTreeStateDirectoryName
     if (-not (Test-Path -LiteralPath $inTree -PathType Container)) { return }
+
+    # Registered worktrees are the exception -- refused, never relocated (see above).
+    Assert-NoResidentCockpitWorktrees $RepositoryRoot
 
     $entries = @(Get-ChildItem -LiteralPath $inTree -Force -ErrorAction Stop)
     if ($entries.Count -gt 0) {

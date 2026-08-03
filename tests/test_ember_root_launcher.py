@@ -246,6 +246,39 @@ class EmberRootLauncherTests(unittest.TestCase):
         self.assertEqual((moved / "runs" / "run-1.json").read_text(encoding="utf-8"), '{"id":1}\n')
         self.assertTrue((moved / "root-bindings.json").is_file())
 
+    def test_migration_refuses_to_dispose_of_cockpit_worktrees_itself(self) -> None:
+        # Moving a registered worktree breaks its link to the repository and deleting one
+        # destroys the work inside it, so migration names them and stops rather than
+        # picking either. The rest of the state stays put too — a half-migrated tree is
+        # not an improvement on an un-migrated one.
+        owner, root, runtime = self.make_fixture()
+        self.addCleanup(owner.cleanup)
+        resident = root / ".ember" / "worktrees" / "wt-alpha"
+        resident.mkdir(parents=True)
+        (resident / "file.txt").write_text("work in progress\n", encoding="utf-8")
+        (root / ".ember" / "root-bindings.json").write_text("{}\n", encoding="utf-8")
+
+        result = self.run_launcher(root, runtime)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("wt-alpha", result.stdout)
+        self.assertIn("worktree_lifecycle.py retire", result.stdout)
+        self.assertTrue(resident.is_dir(), "the worktree must be left untouched")
+        self.assertEqual((resident / "file.txt").read_text(encoding="utf-8"), "work in progress\n")
+        self.assertTrue((root / ".ember" / "root-bindings.json").is_file())
+
+    def test_migration_sweeps_an_empty_worktrees_directory(self) -> None:
+        owner, root, runtime = self.make_fixture()
+        self.addCleanup(owner.cleanup)
+        (root / ".ember" / "worktrees").mkdir(parents=True)
+        (root / ".ember" / "root-bindings.json").write_text("{}\n", encoding="utf-8")
+
+        result = self.run_launcher(root, runtime)
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertFalse((root / ".ember").exists())
+        self.assertTrue((self.state_root(root) / "root-bindings.json").is_file())
+
     def test_launch_refuses_when_in_tree_state_is_not_removable(self) -> None:
         # A directory that reappears non-empty must refuse the launch, not be certified
         # around. Simulated directly against the assertion so the test does not depend on

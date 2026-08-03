@@ -12,12 +12,30 @@
 //
 // git operations are injectable (gitOps) for unit-test isolation.
 
-import { join as pathJoin } from "path";
 import { emberStatePath } from "../utils/ember-state-root.ts";
 
-/** Lease length stamped on a cockpit-created worktree, so the lifecycle manager's audit
- *  can retire one the operator forgot rather than letting it accrue as census surface. */
-const WORKTREE_LEASE_DAYS = 7;
+/** The refusal an operator actually reads when `/worktree` tries to create one. It has to
+ *  carry three things or it just reads as breakage: WHY the cockpit will not do this, the
+ *  exact command that will, and a concrete `--path` to use. Exported so the test asserts
+ *  the operator-facing text rather than the fact that some error was thrown. */
+export function buildWorktreeRefusal(path: string, branch: string): string {
+  return [
+    "Creating a worktree from the cockpit is refused.",
+    "",
+    "A git worktree shares this repository's .git, so it is registered in the worktree",
+    "list and the completion verifier's census enumerates and byte-hashes it wherever it",
+    "lives — putting it outside the repository does NOT take it out of the census, and an",
+    "ad-hoc worktree also violates the repository's worktree policy (repo guard #1009).",
+    "Creating one has to be a deliberate, owned, expiring act, so it goes through the",
+    "lifecycle manager:",
+    "",
+    `  python scripts/worktree_lifecycle.py create --path "${path}" \\`,
+    `      --branch "${branch}" --owner <you> --purpose <why> --expires <YYYY-MM-DD>`,
+    "",
+    "That --path is the sanctioned location: under the external cockpit state root, so it",
+    "is outside this checkout and outside .claude/. Then reopen the cockpit there.",
+  ].join("\n");
+}
 import { z } from "zod";
 import { buildTool } from "../core/tool-interface.ts";
 import type { ToolUseContext } from "../core/tool-interface.ts";
@@ -93,45 +111,16 @@ const defaultGitOps: GitOps = {
     return text.trim();
   },
 
-  // Worktree creation goes through scripts/worktree_lifecycle.py, NEVER `git worktree add`
-  // directly (issue #1330 / repo guard #1009). Relocating the worktree path out of the
-  // tree is not enough on its own: a registered worktree is enumerated and byte-hashed by
-  // the census's `git_worktree_material_registry` scan WHEREVER it lives, and a
-  // missing or mutating one contradicts (`registered_worktree_missing`). The lifecycle
-  // manager is what keeps the registry accurate -- budget-capped, expiry-stamped, and
-  // reconcilable -- so a cockpit worktree is at least an accounted-for census subject
-  // rather than an unowned one nobody retires.
-  async createWorktree({ gitRoot, path, branch }) {
-    const python = process.env["EMBER_PYTHON_BIN"] ?? "python";
-    const expires = new Date(Date.now() + WORKTREE_LEASE_DAYS * 86_400_000)
-      .toISOString()
-      .slice(0, 10);
-    const proc = bunSpawn(
-      [
-        python,
-        "-B",
-        pathJoin(gitRoot, "scripts", "worktree_lifecycle.py"),
-        "--repo",
-        gitRoot,
-        "create",
-        "--path",
-        path,
-        "--branch",
-        branch,
-        "--owner",
-        "ember-cli",
-        "--purpose",
-        "cockpit /worktree",
-        "--expires",
-        expires,
-      ],
-      { cwd: gitRoot, stdout: "pipe", stderr: "pipe" },
-    );
-    const exitCode = await proc.exited;
-    if (exitCode !== 0) {
-      const err = await new Response(proc.stderr).text();
-      throw new Error(`Failed to create worktree: ${err}`);
-    }
+  // REFUSED, deliberately (issue #1330 / repo guard #1009). Relocating the worktree path
+  // out of the tree buys nothing on its own: a git worktree shares this repository's .git,
+  // so it stays in the worktree list and the census's `git_worktree_material_registry`
+  // scan enumerates and byte-hashes it WHEREVER it lives, while a missing or mutating one
+  // contradicts (`registered_worktree_missing`). The cockpit cannot make that safe, so it
+  // does not pretend to: it points at the sanctioned path instead of registering something
+  // nobody owns or retires. A refusal also cannot mis-register anything, which shelling
+  // out to the lifecycle manager from here could.
+  async createWorktree({ path, branch }) {
+    throw new Error(buildWorktreeRefusal(path, branch));
   },
 
   async isKnownWorktree({ gitRoot, path }) {
