@@ -35,11 +35,39 @@ bare unlink. Closing this requires content verification, not just an atomic
 rename: `_reclaim_stale` is passed the exact dead record the caller
 observed, and after the rename it reads the tombstone back and compares
 identity (pid + creation_time) against that expected dead record. A match
-means the rename really did remove the dead holder -- proceed. A mismatch
-means the straggler just evicted someone else's live lock by accident; it is
-restored via `os.replace(tombstone, path)` and the call reports a loss, not
-a win, so the straggler falls through to re-check the (now-restored) live
-holder like any other loser.
+means the rename really did remove the dead holder -- proceed.
+
+A mismatch means the straggler just evicted someone else's live lock by
+accident, and it must be put back -- but the restore step is itself a
+second window, symmetric to the first: a bare `os.replace(tombstone, path)`
+restore is just as content-blind as the original bug, so if a THIRD process
+legitimately creates a fresh valid lock at the now-empty `path` in the gap
+between the straggler's rename-out and its restore, a content-blind restore
+would silently overwrite that fresh, live lock with the stale content being
+put back -- destroying it exactly as destructively as the original defect,
+just relocated one step later. The restore therefore uses the SAME O_EXCL
+primitive the module already trusts for every other write
+(`_create_exclusive`, via its shared `_create_exclusive_bytes` helper): if
+something now occupies `path`, the O_EXCL create fails cleanly with
+FileExistsError and the straggler fails safe -- it destroys nothing, and
+the new occupant's legitimate win stands. Only if `path` is genuinely still
+empty does the restore succeed, and either way the straggler reports a
+loss, not a win, so it falls through to re-check the current true holder
+like any other loser.
+
+Residual window (disclosed, not closed by this fix): if THIS process
+crashes between the rename-out (evicting a live record it should not have
+touched) and the O_EXCL restore, the evicted live record is left stranded
+in the tombstone file and `path` stays empty indefinitely -- a subsequent
+unrelated `acquire()` would then legitimately create a fresh holder there,
+while the original live process (whose record was stranded) still believes
+it holds the mutex. This requires BOTH a straggler mismatch AND a crash in
+the narrow gap between two syscalls (versus the pre-fix bug, triggered by
+any two ordinary racers), and is not closed here -- no rename-based
+primitive can make two syscalls atomic with each other. Closing it fully
+would need a crash-recovery pass that scans for orphaned
+`*.stale.<owner_pid>.<pid>.<ident>` tombstones and restores them, which is
+out of scope for this fix.
 
 Liveness (review-pr1310.md MEDIUM-2): holder identity is PID + process
 creation time (see procid.py), not a bare PID -- a bare PID is vulnerable to
@@ -112,10 +140,13 @@ def _holder_identity(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _create_exclusive(path: Path, record: dict[str, Any]) -> bool:
-    """Attempt the atomic O_EXCL create. Returns True on success, False if
-    something else already holds the path (FileExistsError)."""
-    payload = (json.dumps(record, sort_keys=True) + "\n").encode("utf-8")
+def _create_exclusive_bytes(path: Path, payload: bytes) -> bool:
+    """Attempt the atomic O_EXCL create with raw bytes. Returns True on
+    success, False if something else already holds the path
+    (FileExistsError) -- the shared primitive behind both a fresh acquire
+    (_create_exclusive) and a content-safe stale-lock restore
+    (_reclaim_stale), so a restore can never silently clobber a legitimate
+    fresh occupant the same way a bare unlink/replace would."""
     try:
         fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError:
@@ -125,6 +156,13 @@ def _create_exclusive(path: Path, record: dict[str, Any]) -> bool:
     finally:
         os.close(fd)
     return True
+
+
+def _create_exclusive(path: Path, record: dict[str, Any]) -> bool:
+    """Attempt the atomic O_EXCL create. Returns True on success, False if
+    something else already holds the path (FileExistsError)."""
+    payload = (json.dumps(record, sort_keys=True) + "\n").encode("utf-8")
+    return _create_exclusive_bytes(path, payload)
 
 
 def _reclaim_stale(path: Path, owner_pid: int, expected_dead: dict[str, Any]) -> bool:
@@ -145,9 +183,13 @@ def _reclaim_stale(path: Path, owner_pid: int, expected_dead: dict[str, Any]) ->
     - Content mismatch: the rename succeeded, but what it moved was NOT the
       dead record we expected -- a straggler case where a different racer
       already fully reclaimed and recreated a live lock at `path` between
-      our read and our rename. The tombstoned file is restored to `path` via
-      os.replace(tombstone, path) so the live holder is never lost, and this
-      call reports a loss rather than a phantom win.
+      our read and our rename. The evicted content is restored to `path` via
+      an O_EXCL create (see module docstring for why -- a bare
+      os.replace(tombstone, path) restore would itself be content-blind and
+      could clobber a THIRD process's legitimate fresh lock). If the O_EXCL
+      restore fails because something now occupies `path`, that occupant's
+      win stands and we destroy nothing; either way this call reports a
+      loss, never a phantom win.
     """
     tombstone = path.with_name(f"{path.name}.stale.{owner_pid}.{os.getpid()}.{threading.get_ident()}")
     try:
@@ -156,8 +198,10 @@ def _reclaim_stale(path: Path, owner_pid: int, expected_dead: dict[str, Any]) ->
         return False
 
     try:
-        moved = read_json(tombstone)
+        raw = tombstone.read_bytes()
+        moved = json.loads(raw)
     except (OSError, ValueError):
+        raw = None
         moved = None
 
     if (
@@ -172,13 +216,18 @@ def _reclaim_stale(path: Path, owner_pid: int, expected_dead: dict[str, Any]) ->
         return True
 
     # Mismatch (or unreadable tombstone content): we evicted something other
-    # than the dead record we meant to reclaim. Put it back rather than
-    # silently dropping whatever it actually was -- this is exactly the
-    # straggler-clobbers-a-live-winner window this function exists to close.
+    # than the dead record we meant to reclaim. Put the exact original bytes
+    # back via O_EXCL -- never a bare replace, which would silently clobber
+    # a third process's legitimate fresh lock if one raced in during the
+    # eviction. FileExistsError here means exactly that happened: someone
+    # else already legitimately holds `path` now, so we must NOT overwrite
+    # it -- fail safe, destroy nothing, discard our own tombstone.
+    if raw is not None:
+        _create_exclusive_bytes(path, raw)
     try:
-        os.replace(tombstone, path)
+        tombstone.unlink()
     except OSError:
-        pass  # if this also fails, there is nothing more we can safely do
+        pass
     return False
 
 

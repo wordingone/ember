@@ -724,6 +724,72 @@ def test_mutex_straggler_reclaim_loses_to_concurrent_winner_and_live_lock_surviv
     assert live_after == live_before  # the winner's live lock survived intact
 
 
+def test_mutex_reclaim_restore_fails_safe_when_third_process_wins_the_gap(tmp_path: Path, monkeypatch):
+    """Reviewer-driven deterministic repro for the RELOCATED N1 defect: the
+    mismatch-RESTORE step is itself a second content-blind window if it
+    uses a bare os.replace. Manually drives the exact interleaving the
+    reviewer specified: V holds a live lock; a straggler S evicts it (its
+    rename-out succeeds, moving V's live record to a tombstone -- this is
+    the "S accidentally evicted a live lock" case _reclaim_stale detects via
+    content mismatch); while S is deciding to restore what it evicted, a
+    THIRD process U legitimately creates a fresh valid lock at the
+    now-empty path. S's restore must then fail (O_EXCL sees `path`
+    occupied) rather than silently overwrite U's fresh lock with V's
+    evicted bytes -- U's lock must survive byte-for-byte, and S must report
+    a loss, never a phantom win.
+
+    The interleaving is driven deterministically (not via thread scheduling)
+    by hooking `json.loads` -- the exact point in `_reclaim_stale` between
+    "read back what the rename moved" and "decide whether to restore it" --
+    to fire U's create exactly once, right after S observes V's evicted
+    record and before S acts on that observation."""
+    import json
+
+    locks = tmp_path / "locks"
+    path = mutex.lock_path(locks, "gpu-exclusive")
+
+    # V: a live lock -- this is what straggler S is about to evict by
+    # accident (S's own stale identity, below, deliberately does not match
+    # V, forcing _reclaim_stale into the mismatch/restore branch).
+    mutex.acquire(locks, "gpu-exclusive", "node-v", os.getpid())
+
+    stale_identity_s_saw = {"owner_pid": 999999, "owner_creation_time": "some-other-time"}
+
+    u_record = {
+        "resource_class": "gpu-exclusive",
+        "node_id": "node-u",
+        "owner_pid": os.getpid(),
+        "owner_creation_time": "u-creation-time",
+        "owner_liveness_mode": "pid_only",
+        "acquired_at": "2026-08-03T00:00:00+00:00",
+    }
+
+    original_loads = json.loads
+    injected = {"done": False}
+
+    def loads_with_u_interleaved(data, *args, **kwargs):
+        result = original_loads(data, *args, **kwargs)
+        # Fire exactly once: right after S reads back the record it just
+        # evicted (V's), before S decides whether to restore it -- this is
+        # the gap the reviewer's repro targets.
+        if not injected["done"] and isinstance(result, dict) and result.get("node_id") == "node-v":
+            injected["done"] = True
+            created = mutex._create_exclusive_bytes(
+                path, (json.dumps(u_record, sort_keys=True) + "\n").encode("utf-8")
+            )
+            assert created is True  # path must genuinely be empty at this point (S already renamed V out)
+        return result
+
+    monkeypatch.setattr(mutex.json, "loads", loads_with_u_interleaved)
+
+    won = mutex._reclaim_stale(path, os.getpid(), stale_identity_s_saw)
+
+    assert injected["done"]  # sanity: the interleaving actually fired
+    assert won is False  # S must never report a win here
+    survivor = mutex.current_holder(locks, "gpu-exclusive")
+    assert survivor == u_record  # U's fresh lock survives byte-for-byte, never overwritten by V's evicted bytes
+
+
 # --------------------------------------------------------------------------
 # newline-guard against crash-torn append welding (review-pr1310.md RE-REVIEW N2)
 # --------------------------------------------------------------------------
