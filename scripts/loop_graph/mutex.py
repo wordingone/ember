@@ -55,19 +55,34 @@ empty does the restore succeed, and either way the straggler reports a
 loss, not a win, so it falls through to re-check the current true holder
 like any other loser.
 
-Residual window (disclosed, not closed by this fix): if THIS process
-crashes between the rename-out (evicting a live record it should not have
-touched) and the O_EXCL restore, the evicted live record is left stranded
-in the tombstone file and `path` stays empty indefinitely -- a subsequent
-unrelated `acquire()` would then legitimately create a fresh holder there,
-while the original live process (whose record was stranded) still believes
-it holds the mutex. This requires BOTH a straggler mismatch AND a crash in
-the narrow gap between two syscalls (versus the pre-fix bug, triggered by
-any two ordinary racers), and is not closed here -- no rename-based
-primitive can make two syscalls atomic with each other. Closing it fully
-would need a crash-recovery pass that scans for orphaned
-`*.stale.<owner_pid>.<pid>.<ident>` tombstones and restores them, which is
-out of scope for this fix.
+Residual window (disclosed, not closed by this fix): a straggler's evicted
+record ends up stranded in an orphaned tombstone file -- never lost, but
+never automatically returned to `path` either -- in two distinct cases,
+neither closed by this fix:
+
+1. Lost the restore race: the O_EXCL restore hits FileExistsError because a
+   third process legitimately created a fresh lock at `path` first (the
+   case _reclaim_stale's mismatch branch is built to detect). The evicted
+   record's ONLY surviving copy is the tombstone, and it is deliberately
+   left on disk rather than unlinked (unlinking it here would destroy that
+   only copy, merely relocating the original defect one file over -- see
+   `_reclaim_stale`). No crash is required for this case; it is the direct,
+   expected outcome of losing that race, every time it happens.
+2. Crashed mid-restore: THIS process dies between the rename-out and the
+   O_EXCL restore attempt, leaving the tombstone behind with no attempt
+   ever made to put it back, while the original live process (whose record
+   was evicted) still believes it holds the mutex and `path` sits empty in
+   the meantime.
+
+In both cases the orphaned `*.stale.<owner_pid>.<pid>.<ident>` tombstone
+file at `locks_dir` is the recovery artifact: it holds the exact evicted
+record, is never overwritten or reused (each reclaim attempt mints its own
+uniquely-named tombstone), and is safe to restore to `path` by hand or by
+an automated scan once nothing legitimately occupies `path`. Building that
+scan is out of scope for this fix -- no rename-based primitive can make the
+rename-out and the restore atomic with each other, so some window between
+them, and some accumulation of orphaned tombstones on the losing side,
+is inherent to this design.
 
 Liveness (review-pr1310.md MEDIUM-2): holder identity is PID + process
 creation time (see procid.py), not a bare PID -- a bare PID is vulnerable to
@@ -188,8 +203,11 @@ def _reclaim_stale(path: Path, owner_pid: int, expected_dead: dict[str, Any]) ->
       os.replace(tombstone, path) restore would itself be content-blind and
       could clobber a THIRD process's legitimate fresh lock). If the O_EXCL
       restore fails because something now occupies `path`, that occupant's
-      win stands and we destroy nothing; either way this call reports a
-      loss, never a phantom win.
+      win stands and we destroy nothing at `path` -- but the tombstone is
+      the ONLY surviving copy of the record we evicted, so it is left on
+      disk as a named orphan rather than unlinked; unlinking it here would
+      just relocate the destruction one file over (see module docstring).
+      Either way this call reports a loss, never a phantom win.
     """
     tombstone = path.with_name(f"{path.name}.stale.{owner_pid}.{os.getpid()}.{threading.get_ident()}")
     try:
@@ -221,13 +239,22 @@ def _reclaim_stale(path: Path, owner_pid: int, expected_dead: dict[str, Any]) ->
     # a third process's legitimate fresh lock if one raced in during the
     # eviction. FileExistsError here means exactly that happened: someone
     # else already legitimately holds `path` now, so we must NOT overwrite
-    # it -- fail safe, destroy nothing, discard our own tombstone.
-    if raw is not None:
-        _create_exclusive_bytes(path, raw)
-    try:
-        tombstone.unlink()
-    except OSError:
-        pass
+    # it -- fail safe, destroy nothing at `path`.
+    #
+    # Unlink the tombstone ONLY when the restore actually succeeded. The
+    # tombstone is the sole surviving copy of whatever we evicted; if the
+    # restore lost (raw was None -- unreadable -- or the O_EXCL create hit
+    # FileExistsError), unconditionally unlinking it here would destroy
+    # that only copy just as permanently as the original defect, merely
+    # relocated to this file. Leave it on disk as a named orphan instead --
+    # exactly the artifact the disclosed future orphan-scan recovery pass
+    # is meant to find and restore.
+    restored = raw is not None and _create_exclusive_bytes(path, raw)
+    if restored:
+        try:
+            tombstone.unlink()
+        except OSError:
+            pass
     return False
 
 

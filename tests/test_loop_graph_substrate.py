@@ -735,8 +735,11 @@ def test_mutex_reclaim_restore_fails_safe_when_third_process_wins_the_gap(tmp_pa
     THIRD process U legitimately creates a fresh valid lock at the
     now-empty path. S's restore must then fail (O_EXCL sees `path`
     occupied) rather than silently overwrite U's fresh lock with V's
-    evicted bytes -- U's lock must survive byte-for-byte, and S must report
-    a loss, never a phantom win.
+    evicted bytes -- U's lock must survive byte-for-byte, S must report a
+    loss, never a phantom win, AND V's evicted record must survive intact
+    as the orphaned tombstone (not be unconditionally unlinked on a lost
+    restore -- that would destroy the only surviving copy of V just as
+    permanently as the original defect, merely relocated to this file).
 
     The interleaving is driven deterministically (not via thread scheduling)
     by hooking `json.loads` -- the exact point in `_reclaim_stale` between
@@ -752,6 +755,7 @@ def test_mutex_reclaim_restore_fails_safe_when_third_process_wins_the_gap(tmp_pa
     # accident (S's own stale identity, below, deliberately does not match
     # V, forcing _reclaim_stale into the mismatch/restore branch).
     mutex.acquire(locks, "gpu-exclusive", "node-v", os.getpid())
+    v_record = mutex.current_holder(locks, "gpu-exclusive")
 
     stale_identity_s_saw = {"owner_pid": 999999, "owner_creation_time": "some-other-time"}
 
@@ -788,6 +792,13 @@ def test_mutex_reclaim_restore_fails_safe_when_third_process_wins_the_gap(tmp_pa
     assert won is False  # S must never report a win here
     survivor = mutex.current_holder(locks, "gpu-exclusive")
     assert survivor == u_record  # U's fresh lock survives byte-for-byte, never overwritten by V's evicted bytes
+
+    # V's evicted record must survive as a named orphan tombstone -- a lost
+    # restore must never unconditionally unlink the tombstone, since it is
+    # the only surviving copy of what got evicted.
+    orphans = list(locks.glob(f"{path.name}.stale.*"))
+    assert len(orphans) == 1
+    assert json.loads(orphans[0].read_text(encoding="utf-8")) == v_record
 
 
 # --------------------------------------------------------------------------
