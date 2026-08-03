@@ -13,11 +13,13 @@ import re
 import subprocess
 import sys
 from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 
 ISSUE_REF_RE = re.compile(r"(?<![A-Za-z0-9_])#([1-9][0-9]*)")
+ISO_INSTANT_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 ALLOWED_DISPOSITIONS = (
     "current executable obligation",
     "preserved research direction",
@@ -316,6 +318,7 @@ def build_issue_census(
     issues: Iterable[Mapping[str, Any]],
     closed_issues: Iterable[Mapping[str, Any]] = (),
     completion_evidence: Iterable[Mapping[str, Any]] = (),
+    captured_at: str | None = None,
 ) -> dict[str, Any]:
     root = repository_root.resolve()
     public_master_sha = _git(root, "rev-parse", public_ref).strip()
@@ -408,6 +411,10 @@ def build_issue_census(
         },
         "schema": "ember-01-public-issue-census-v1",
         "repository": "wordingone/ember",
+        # The instant this snapshot was taken. Downstream certification binds to
+        # it so the claim reads "issues as of <captured_at>" instead of implying
+        # the live list still matches at end-of-run (#1331).
+        "captured_at": captured_at,
         "public_master_sha": public_master_sha,
         "open_issue_count": len(rows),
         "issue_snapshot_sha256": _sha256_json(normalized),
@@ -532,6 +539,11 @@ def validate_issue_census(
         errors.append("open_issue_count_mismatch")
     if payload.get("allowed_dispositions") != list(ALLOWED_DISPOSITIONS):
         errors.append("allowed_dispositions_mismatch")
+    captured_at = payload.get("captured_at")
+    if captured_at is not None and not (
+        isinstance(captured_at, str) and ISO_INSTANT_RE.fullmatch(captured_at)
+    ):
+        errors.append("captured_at_invalid")
     master_sha = payload.get("public_master_sha")
     source_snapshot = payload.get("issue_source_snapshot")
     if not isinstance(source_snapshot, list):
@@ -820,6 +832,13 @@ def main() -> int:
     parser.add_argument("--issues-json")
     parser.add_argument("--closed-issues-json")
     parser.add_argument("--completion-evidence-json")
+    parser.add_argument(
+        "--captured-at",
+        help=(
+            "ISO8601 Z instant the issue snapshot was acquired; defaults to the "
+            "build instant, which bounds acquisition from above"
+        ),
+    )
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
     try:
@@ -831,8 +850,14 @@ def main() -> int:
         issues = json.loads(raw)
         if not isinstance(issues, list):
             raise ValueError("issue snapshot must be a JSON list")
+        captured_at = args.captured_at or datetime.now(timezone.utc).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
+        if not ISO_INSTANT_RE.fullmatch(captured_at):
+            raise ValueError("captured-at must be ISO8601 YYYY-MM-DDTHH:MM:SSZ")
         payload = build_issue_census(
             Path(args.repo_root), args.public_ref, issues,
+            captured_at=captured_at,
             closed_issues=(json.loads(Path(args.closed_issues_json).read_text(encoding="utf-8")) if args.closed_issues_json else []),
             completion_evidence=(json.loads(Path(args.completion_evidence_json).read_text(encoding="utf-8")) if args.completion_evidence_json else []),
         )
