@@ -47,6 +47,34 @@ def root() -> Path:
     return _CONFIG_PATH.resolve().parent.parent
 
 
+@pytest.fixture(autouse=True)
+def _redirect_launch_packet_receipts(tmp_path, monkeypatch, root):
+    """#1341: every call into lp.run()/lp.main() in this suite must write its
+    transient packet.jsonl receipt under pytest's own tmp_path, never into the
+    tracked repo tree -- regardless of whether a test calls lp.run() directly
+    (positional config-path only, no receipt_root kwarg) or exercises the CLI
+    entry point. Autouse + env-var (not a per-call kwarg) so this holds for
+    every test in the file, present and future, without each one opting in.
+
+    Also the regression guard the issue asks for: assert the real
+    receipts/ember-01-launch-packet/ dir gains no new subdirectory across this
+    test's run. A few tests intentionally write/clean up individual fixture
+    FILES directly under that dir (see the stream-receipt tests below) -- this
+    only polices the timestamped-directory byproduct class the issue is about.
+    """
+    env_var = lp.RECEIPT_ROOT_ENV
+    monkeypatch.setenv(env_var, str(tmp_path))
+    real_packet_root = root / "receipts" / "ember-01-launch-packet"
+    before = {p for p in real_packet_root.iterdir() if p.is_dir()} if real_packet_root.is_dir() else set()
+    yield
+    after = {p for p in real_packet_root.iterdir() if p.is_dir()} if real_packet_root.is_dir() else set()
+    new_dirs = after - before
+    assert not new_dirs, (
+        f"suite run left new receipt dirs in the tracked tree: {new_dirs} "
+        f"(env var {env_var} should have redirected these under {tmp_path})"
+    )
+
+
 # ---- no-sub-3B ------------------------------------------------------------
 
 def test_no_sub_3b_pass_real_config(cfg, root):
