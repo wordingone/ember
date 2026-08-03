@@ -16,6 +16,7 @@ import React, {
 } from "react";
 import { join } from "path";
 import { mkdir, writeFile } from "fs/promises";
+import { emberStateRoot } from "../utils/ember-state-root.ts";
 import { PointerEvent as InkPointerEvent } from "../ink/event-system.ts";
 import { Box, Text, TerminalSizeContext } from "../ink/components.ts";
 import { ThemeProvider } from "./design-system.ts";
@@ -92,19 +93,19 @@ export function encodeCwdKey(cwd: string): string {
   return cwd.replace(/[:/\\]/g, "-");
 }
 
-/** Returns the .ember/ debug file paths for the given working directory. */
+/** Returns the external cockpit-state debug file paths for the given working directory. */
 export function getDebugFilePaths(cwd: string): { debugPort: string; debugPid: string } {
-  const dir = join(cwd, ".ember");
+  const dir = emberStateRoot(cwd);
   return {
     debugPort: join(dir, "debug-port"),
     debugPid:  join(dir, "debug-pid"),
   };
 }
 
-/** Writes debug-port and debug-pid into cwd/.ember/ (creates the dir if needed). */
+/** Writes debug-port and debug-pid into the external state root (creates it if needed). */
 export async function writeDebugFiles(opts: DebugFileOpts): Promise<void> {
   const { debugPort, debugPid } = getDebugFilePaths(opts.cwd);
-  const dir = join(opts.cwd, ".ember");
+  const dir = emberStateRoot(opts.cwd);
   await mkdir(dir, { recursive: true });
   await writeFile(debugPort, String(opts.debugPort), "utf8");
   await writeFile(debugPid,  String(opts.pid),       "utf8");

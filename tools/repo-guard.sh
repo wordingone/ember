@@ -97,6 +97,23 @@ else
   ok ".agent" "not tracked"
 fi
 
+# ---- 1a. cockpit state must never reside inside the certified tree -------
+# The completion verifier certifies this tree by TOTALITY -- it censuses and fingerprints
+# every file, tracked AND untracked -- so a resident cockpit writer produces list-vs-hash
+# contradictions and reds the run (run15). The cure was to move the writer out, not to
+# exclude paths from the census: an exclusion would be a standing blind spot where
+# contamination hides while the certificate silently promises less. Issue #1330 relocated
+# all cockpit-mutable state to an external root; this check is what keeps the class from
+# silently returning. Non-EMPTY is the bar, not absence -- an empty leftover directory
+# writes nothing and the launcher sweeps it.
+COCKPIT_STATE_DIR="$SUBJECT_ROOT/.ember"
+if [ -d "$COCKPIT_STATE_DIR" ] && [ -n "$(ls -A "$COCKPIT_STATE_DIR" 2>/dev/null)" ]; then
+  fail "cockpit-state" "'.ember/' is resident in the tree; cockpit state must live outside it (see EMBER_STATE_ROOT). Launch Ember.cmd once to migrate it, or move/delete the directory"
+  ls -A "$COCKPIT_STATE_DIR" | sed 's/^/      /' | head -10
+else
+  ok "cockpit-state" "no resident cockpit state in the tree"
+fi
+
 # ---- 1b. tracked text files must be LF-only ------------------------------
 if python "$KERNEL_ROOT/tools/check_line_endings.py" "$SUBJECT_ROOT"; then
   :

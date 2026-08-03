@@ -8,6 +8,7 @@ $BunVersion = "1.3.12"
 $BunArchiveUrl = "https://github.com/oven-sh/bun/releases/download/bun-v1.3.12/bun-windows-x64.zip"
 $BunArchiveSha256 = "841ff9c5dffcaa3a2620d1e3f87ee500f32a4ca830b001cade7a3479609d4a89"
 $EmberLauncherMutexName = "Local\EmberCliCanonicalLauncher"
+$EmberInTreeStateDirectoryName = ".ember"
 
 Add-Type @"
 using System;
@@ -59,10 +60,94 @@ function Get-EmberLeftHalfRectangle(
     }
 }
 
-function Test-IsOwnedEmberExecutablePath([string]$Candidate, [string]$RepositoryRoot) {
+# --- Cockpit state root (issue #1330) ------------------------------------------------
+# The completion verifier certifies this tree by TOTALITY -- every file, tracked and
+# untracked -- so a cockpit writing inside it produces list-vs-hash contradictions and a
+# red receipt. Rather than weaken the census with exclusions, the writer moves out: all
+# cockpit-mutable state (pinned runtime, built cockpit binaries, build logs, run dirs)
+# lives under an external root, and the cockpit can stay up while the tree is certified.
+#
+# This is the ONE PowerShell resolution point. No other line in this script may join a
+# state path onto $repositoryRoot.
+
+function Get-EmberStateRootKey([string]$RepositoryRoot) {
+    # Mirrors repoStateKey in tools/ember-cli/src/utils/ember-state-root.ts. Both sides are
+    # pinned to the same fixture vectors so the two implementations cannot drift apart.
+    # Lowercased because Windows paths are case-insensitive: two spellings of one checkout
+    # must key to one state directory.
+    $full = [System.IO.Path]::GetFullPath($RepositoryRoot).TrimEnd(
+        [System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    $key = ($full.ToLowerInvariant() -replace '[^a-z0-9]+', '-').Trim('-')
+    if ([string]::IsNullOrWhiteSpace($key)) {
+        throw "Ember could not derive a state key for this repository location."
+    }
+    return $key
+}
+
+function Get-EmberStateRoot([string]$RepositoryRoot) {
+    # 1. EMBER_STATE_ROOT verbatim, so an operator can place cockpit state deliberately.
+    if (-not [string]::IsNullOrWhiteSpace($env:EMBER_STATE_ROOT)) {
+        return [System.IO.Path]::GetFullPath($env:EMBER_STATE_ROOT.Trim())
+    }
+    # 2. <EMBER_HOME>/cockpit-state/<key>, EMBER_HOME defaulting to the CLI's own
+    #    user-scoped config home -- always outside any checkout.
+    $emberHome = $env:EMBER_HOME
+    if ([string]::IsNullOrWhiteSpace($emberHome)) {
+        $profile = $env:USERPROFILE
+        if ([string]::IsNullOrWhiteSpace($profile)) { $profile = $HOME }
+        if ([string]::IsNullOrWhiteSpace($profile)) {
+            throw "Ember could not locate a user profile directory for its state root."
+        }
+        $emberHome = Join-Path $profile $EmberInTreeStateDirectoryName
+    }
+    $keyed = Join-Path (Join-Path $emberHome "cockpit-state") (Get-EmberStateRootKey $RepositoryRoot)
+    return [System.IO.Path]::GetFullPath($keyed)
+}
+
+function Move-EmberStateOutOfTree([string]$RepositoryRoot, [string]$StateRoot) {
+    # One-time migration: an in-tree .ember/ from a pre-relocation launch is moved wholesale
+    # to $StateRoot and NOTHING is left behind, so the very next census sees a clean tree.
+    $inTree = Join-Path $RepositoryRoot $EmberInTreeStateDirectoryName
+    if (-not (Test-Path -LiteralPath $inTree -PathType Container)) { return }
+
+    $entries = @(Get-ChildItem -LiteralPath $inTree -Force -ErrorAction Stop)
+    if ($entries.Count -gt 0) {
+        New-Item -ItemType Directory -Force -Path $StateRoot | Out-Null
+        foreach ($entry in $entries) {
+            $destination = Join-Path $StateRoot $entry.Name
+            if (Test-Path -LiteralPath $destination) {
+                # The external root already owns this name: it is the live copy, and the
+                # in-tree one is stale residue. Discard the residue rather than merging two
+                # divergent histories of the same state.
+                Remove-Item -LiteralPath $entry.FullName -Recurse -Force
+                continue
+            }
+            Move-Item -LiteralPath $entry.FullName -Destination $destination
+        }
+        Write-Host "Moved $($entries.Count) cockpit state item(s) out of the repository into $StateRoot."
+    }
+
+    Remove-Item -LiteralPath $inTree -Recurse -Force
+}
+
+function Assert-EmberStateIsExternal([string]$RepositoryRoot) {
+    # Fail-closed re-check: if the directory reappeared non-empty (a stale binary at an old
+    # revision still writing, a hand-created path), refuse rather than certify around it.
+    $inTree = Join-Path $RepositoryRoot $EmberInTreeStateDirectoryName
+    if (-not (Test-Path -LiteralPath $inTree -PathType Container)) { return }
+    if (@(Get-ChildItem -LiteralPath $inTree -Force -ErrorAction SilentlyContinue).Count -eq 0) {
+        Remove-Item -LiteralPath $inTree -Recurse -Force -ErrorAction SilentlyContinue
+        return
+    }
+    throw ("Cockpit state is present inside the repository at '$inTree'. It must live " +
+        "outside the certified tree. Stop every Ember process writing there, move or " +
+        "delete that directory, and run Ember.cmd again.")
+}
+
+function Test-IsOwnedEmberExecutablePath([string]$Candidate, [string]$StateRoot) {
     if ([string]::IsNullOrWhiteSpace($Candidate)) { return $false }
     try {
-        $ownedRoot = [System.IO.Path]::GetFullPath((Join-Path $RepositoryRoot ".ember\runtime\ember"))
+        $ownedRoot = [System.IO.Path]::GetFullPath((Join-Path $StateRoot "runtime\ember"))
         $candidatePath = [System.IO.Path]::GetFullPath($Candidate)
         return $candidatePath.StartsWith($ownedRoot + [System.IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -and
             [System.IO.Path]::GetFileName($candidatePath).Equals("Ember.exe", [StringComparison]::OrdinalIgnoreCase)
@@ -85,11 +170,11 @@ function Enter-EmberLauncherLease([string]$Name = $EmberLauncherMutexName) {
     }
 }
 
-function Stop-StaleOwnedEmberApplications([string]$RepositoryRoot) {
+function Stop-StaleOwnedEmberApplications([string]$StateRoot) {
     $stale = @(Get-CimInstance Win32_Process -Filter "Name='Ember.exe'" -ErrorAction Stop |
         Where-Object {
             $_.ProcessId -ne $PID -and
-            (Test-IsOwnedEmberExecutablePath ([string]$_.ExecutablePath) $RepositoryRoot)
+            (Test-IsOwnedEmberExecutablePath ([string]$_.ExecutablePath) $StateRoot)
         })
     foreach ($process in $stale) {
         Stop-Process -Id $process.ProcessId -Force -ErrorAction Stop
@@ -140,14 +225,23 @@ function Set-EmberWindowToLeftWorkArea([IntPtr]$WindowHandle) {
     throw "Ember's terminal window did not retain the requested left-half work-area geometry."
 }
 
-function Stop-EmberLaunch([string]$Message) {
+# $Headline is the one line an operator reads. It defaults to the preparation failure, but
+# a cockpit that RAN and then exited is not a preparation failure -- reporting it as one
+# sent operators hunting a broken install after a deliberate stop. The child-exit callers
+# pass their own headline.
+function Stop-EmberLaunch([string]$Message, [string]$Headline = "Ember could not prepare its runtime.") {
     Write-Host ""
-    Write-Host "Ember could not prepare its runtime." -ForegroundColor Red
-    Write-Host $Message
+    Write-Host $Headline -ForegroundColor Red
+    if (-not [string]::IsNullOrWhiteSpace($Message)) { Write-Host $Message }
     exit 1
 }
 
-function Get-VerifiedBun([string]$RepositoryRoot) {
+function Stop-EmberLaunchAfterChildExit([int]$ExitCode) {
+    Stop-EmberLaunch "The cockpit started and then stopped. Nothing needs repairing unless this was unexpected." `
+        "Ember CLI exited with code $ExitCode."
+}
+
+function Get-VerifiedBun([string]$StateRoot) {
     if ($env:EMBER_LAUNCH_TEST_MODE -eq "1") {
         $candidate = $env:EMBER_LAUNCH_TEST_RUNTIME
         if ([string]::IsNullOrWhiteSpace($candidate) -or -not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
@@ -169,7 +263,7 @@ function Get-VerifiedBun([string]$RepositoryRoot) {
         }
     }
 
-    $runtimeParent = Join-Path $RepositoryRoot ".ember\runtime"
+    $runtimeParent = Join-Path $StateRoot "runtime"
     $runtimeRoot = Join-Path $runtimeParent "bun-v$BunVersion"
     $bun = Join-Path $runtimeRoot "bun-windows-x64\bun.exe"
     if (Test-Path -LiteralPath $bun -PathType Leaf) {
@@ -227,7 +321,19 @@ try {
         }
     }
 
-    $bun = Get-VerifiedBun $repositoryRoot
+    # State root first: the migration below must complete before anything writes runtime
+    # bytes, and the lease must be held before the migration moves files another launcher
+    # could be reading. EMBER_STATE_ROOT is exported so the cockpit child resolves the
+    # identical root instead of recomputing its own.
+    $stateRoot = Get-EmberStateRoot $repositoryRoot
+    if ($env:EMBER_LAUNCH_TEST_MODE -ne "1") {
+        $launcherLease = Enter-EmberLauncherLease
+    }
+    Move-EmberStateOutOfTree $repositoryRoot $stateRoot
+    Assert-EmberStateIsExternal $repositoryRoot
+    $env:EMBER_STATE_ROOT = $stateRoot
+
+    $bun = Get-VerifiedBun $stateRoot
     $dependenciesReady = Test-Path -LiteralPath (Join-Path $sourceRoot "node_modules\react\package.json") -PathType Leaf
     if (-not $dependenciesReady) {
         Write-Host "Preparing Ember's interface dependencies once..."
@@ -260,23 +366,22 @@ try {
             Pop-Location
         }
         if ($exitCode -ne 0) {
-            throw "Ember CLI exited with code $exitCode."
+            Stop-EmberLaunchAfterChildExit $exitCode
         }
         return
     }
 
-    $launcherLease = Enter-EmberLauncherLease
-    Stop-StaleOwnedEmberApplications $repositoryRoot
+    Stop-StaleOwnedEmberApplications $stateRoot
 
     $commit = (& git -C $repositoryRoot rev-parse HEAD 2>$null | Select-Object -First 1).Trim()
     if ($commit -notmatch "^[0-9a-f]{40}$") {
         throw "This repository does not have an exact Git source identity."
     }
-    $applicationRoot = Join-Path $repositoryRoot ".ember\runtime\ember\$commit"
+    $applicationRoot = Join-Path $stateRoot "runtime\ember\$commit"
     $application = Join-Path $applicationRoot "Ember.exe"
     if (-not (Test-Path -LiteralPath $application -PathType Leaf)) {
         $buildOutput = Join-Path $sourceRoot "ember.exe"
-        $buildLog = Join-Path $repositoryRoot ".ember\runtime\ember-build.log"
+        $buildLog = Join-Path $stateRoot "runtime\ember-build.log"
         New-Item -ItemType Directory -Force -Path $applicationRoot | Out-Null
         try {
             Push-Location $sourceRoot
@@ -311,8 +416,9 @@ try {
 
     # Invoke in this shell: no second terminal or dead launcher window may remain underneath.
     & $application
-    if ($LASTEXITCODE -ne 0) {
-        throw "Ember CLI exited with code $LASTEXITCODE."
+    $applicationExit = $LASTEXITCODE
+    if ($applicationExit -ne 0) {
+        Stop-EmberLaunchAfterChildExit $applicationExit
     }
 }
 catch {

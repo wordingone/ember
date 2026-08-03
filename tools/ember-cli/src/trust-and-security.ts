@@ -1,8 +1,13 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // trust-and-security.ts — project trust dialog and managed-settings security
 // dialog utilities.
 
 import React from "react";
 import { Box, Text } from "./ink/components.ts";
+import { emberStatePath } from "./utils/ember-state-root.ts";
 
 // ---------------------------------------------------------------------------
 // Analytics event constants (AC3)
@@ -71,7 +76,7 @@ export function getTrustSavePath(
   if (destination === "session") {
     return `${homeDir}/.ember/session-trust.json`;
   }
-  return `${projectDir}/.ember/trust.json`;
+  return emberStatePath(projectDir, "trust.json");
 }
 
 // ---------------------------------------------------------------------------

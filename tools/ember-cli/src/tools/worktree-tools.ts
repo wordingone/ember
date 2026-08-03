@@ -1,13 +1,18 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // tools/worktree-tools.ts — EnterWorktree and ExitWorktree tools.
 //
 // EnterWorktree: creates a new git worktree (with a timestamped branch) under
-//   .ember/worktrees/<slug>, or switches into an existing known worktree by path.
+//   <emberStateRoot>/worktrees/<slug>, or switches into an existing known worktree by
+//   path. Worktrees are created OUTSIDE the certified tree (issue #1330).
 // ExitWorktree: leaves the active worktree session, optionally removing the
 //   worktree + branch. A no-op when no EnterWorktree session is active.
 //
 // git operations are injectable (gitOps) for unit-test isolation.
 
-import { join } from "path";
+import { emberStatePath } from "../utils/ember-state-root.ts";
 import { z } from "zod";
 import { buildTool } from "../core/tool-interface.ts";
 import type { ToolUseContext } from "../core/tool-interface.ts";
@@ -307,7 +312,7 @@ export const EnterWorktreeTool = buildTool<EnterWorktreeInput, unknown>({
 
     const gitRoot = await gitOps.getGitRoot(originalCwd);
     const slug = args.name ? generateWorktreeSlug(args.name) : generateWorktreeSlug();
-    const worktreePath = join(gitRoot, ".ember", "worktrees", slug);
+    const worktreePath = emberStatePath(gitRoot, "worktrees", slug);
     const branchName = `worktree/${slug}`;
 
     await gitOps.createWorktree({ gitRoot, path: worktreePath, branch: branchName });

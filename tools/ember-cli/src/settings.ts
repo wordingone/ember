@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // settings.ts
 // Hierarchical settings loading (user → project → local → flag → policy),
 // permission-rule validation, and file-change detection.
@@ -6,6 +10,7 @@ import { join } from 'path';
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { watch } from 'fs';
 import { getEmberConfigHomeDir } from './utils/env-detection.ts';
+import { emberStatePath } from './utils/ember-state-root.ts';
 
 // ---- Constants ----
 
@@ -22,8 +27,11 @@ export const SETTINGS_STABILITY_THRESHOLD_MS = 1500;
  * Returns the on-disk path for the settings file belonging to `source`.
  *
  * - 'user'    → {EMBER_HOME}/settings.json
- * - 'project' → {gitRoot}/.ember/settings.json
- * - 'local'   → {gitRoot}/.ember/settings.local.json
+ * - 'project' → {emberStateRoot(gitRoot)}/settings.json
+ * - 'local'   → {emberStateRoot(gitRoot)}/settings.local.json
+ *
+ * Project/local settings live outside the certified tree (issue #1330) so the
+ * completion verifier's total census never sees a resident cockpit writer.
  */
 export function getSettingsFilePathForSource(
   source: 'user' | 'project' | 'local',
@@ -34,10 +42,10 @@ export function getSettingsFilePathForSource(
   }
   const root = gitRoot ?? process.cwd();
   if (source === 'project') {
-    return join(root, '.ember', 'settings.json');
+    return emberStatePath(root, 'settings.json');
   }
   // 'local'
-  return join(root, '.ember', 'settings.local.json');
+  return emberStatePath(root, 'settings.local.json');
 }
 
 // ---- Deep merge (arrays replaced, objects merged) ----
