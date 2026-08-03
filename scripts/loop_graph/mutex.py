@@ -20,15 +20,26 @@ A bare unlink is read-then-unlink -- it deletes whatever currently sits at
 dead holder could see the faster one already win (unlink + recreate) with a
 fresh, valid, live record, and the slower one's unlink then deletes THAT
 valid record out from under it, with both ending up believing they hold
-gpu-exclusive. `os.replace` fixes this because its source-existence check is
-atomic: of N concurrent `os.replace(path, ...)` calls against the same
-`path`, exactly one succeeds (renaming path away) and every other one raises
-FileNotFoundError (path is already gone) -- there is no window in which a
-second reclaimer can act on a path that has already been renamed away by the
-first. A reclaimer that wins the rename retries the O_EXCL create next loop
-iteration (path is now free); a reclaimer that loses simply loops back and
-re-reads, which by then observes the winner's fresh, live record instead of
-blindly destroying it.
+gpu-exclusive.
+
+`os.replace` alone only fixes the case where the RENAME calls themselves
+race (of N concurrent `os.replace(path, ...)` calls against the same
+`path`, exactly one succeeds and every other one raises FileNotFoundError).
+It does NOT fix a straggler: a reclaimer whose `read_json` observed the dead
+holder, then paused (thread scheduling, GC, anything) while a DIFFERENT
+racer fully reclaimed and recreated a live lock at `path`, then resumes and
+calls `os.replace(path, tombstone)` -- at that point `path` holds the
+winner's fresh live record, not the stale one the straggler read, and the
+unconditional rename would remove it just as destructively as the original
+bare unlink. Closing this requires content verification, not just an atomic
+rename: `_reclaim_stale` is passed the exact dead record the caller
+observed, and after the rename it reads the tombstone back and compares
+identity (pid + creation_time) against that expected dead record. A match
+means the rename really did remove the dead holder -- proceed. A mismatch
+means the straggler just evicted someone else's live lock by accident; it is
+restored via `os.replace(tombstone, path)` and the call reports a loss, not
+a win, so the straggler falls through to re-check the (now-restored) live
+holder like any other loser.
 
 Liveness (review-pr1310.md MEDIUM-2): holder identity is PID + process
 creation time (see procid.py), not a bare PID -- a bare PID is vulnerable to
@@ -116,31 +127,59 @@ def _create_exclusive(path: Path, record: dict[str, Any]) -> bool:
     return True
 
 
-def _reclaim_stale(path: Path, owner_pid: int) -> bool:
-    """Reclaim a dead holder's lock file via os.replace to a tombstone,
-    never a bare unlink (review-pr1310.md RE-REVIEW N1).
+def _reclaim_stale(path: Path, owner_pid: int, expected_dead: dict[str, Any]) -> bool:
+    """Reclaim a dead holder's lock file via os.replace to a tombstone plus
+    content verification, never a bare unlink (review-pr1310.md RE-REVIEW
+    N1). `expected_dead` is the exact record the caller observed and judged
+    dead -- the reclaim is only honored if that is still what actually got
+    removed.
 
-    Returns True if THIS call is the one that moved `path` out of the way
-    (the caller may now retry the O_EXCL create), False if a concurrent
-    reclaimer already won or the rename hit transient contention (`path`
-    was already renamed away by someone else -- FileNotFoundError -- or, on
-    Windows, another thread had it transiently open for read at the same
-    instant -- PermissionError / WinError 32, a sharing violation, not a
-    real failure). Either outcome is safe to loop back on: a win means the
-    path is free for our own create; a loss means the winner's create will
-    be (or already is) the fresh holder we should re-check, never a file we
-    blindly destroyed.
+    Returns True only if THIS call both won the rename AND the content it
+    moved out of the way matches `expected_dead` (the caller may now retry
+    the O_EXCL create). Returns False in every other case, each of which is
+    always safe to loop back on and re-check:
+
+    - FileNotFoundError / PermissionError (WinError 32 sharing violation) on
+      the rename: a concurrent reclaimer already won, or transient
+      Windows handle contention -- `path` was not ours to move.
+    - Content mismatch: the rename succeeded, but what it moved was NOT the
+      dead record we expected -- a straggler case where a different racer
+      already fully reclaimed and recreated a live lock at `path` between
+      our read and our rename. The tombstoned file is restored to `path` via
+      os.replace(tombstone, path) so the live holder is never lost, and this
+      call reports a loss rather than a phantom win.
     """
     tombstone = path.with_name(f"{path.name}.stale.{owner_pid}.{os.getpid()}.{threading.get_ident()}")
     try:
         os.replace(path, tombstone)
     except (FileNotFoundError, PermissionError):
         return False
+
     try:
-        tombstone.unlink()
+        moved = read_json(tombstone)
+    except (OSError, ValueError):
+        moved = None
+
+    if (
+        moved is not None
+        and moved.get("owner_pid") == expected_dead.get("owner_pid")
+        and moved.get("owner_creation_time") == expected_dead.get("owner_creation_time")
+    ):
+        try:
+            tombstone.unlink()
+        except OSError:
+            pass  # best-effort cleanup only; the tombstone is never read back
+        return True
+
+    # Mismatch (or unreadable tombstone content): we evicted something other
+    # than the dead record we meant to reclaim. Put it back rather than
+    # silently dropping whatever it actually was -- this is exactly the
+    # straggler-clobbers-a-live-winner window this function exists to close.
+    try:
+        os.replace(tombstone, path)
     except OSError:
-        pass  # best-effort cleanup only; the tombstone is never read back
-    return True
+        pass  # if this also fails, there is nothing more we can safely do
+    return False
 
 
 def acquire(locks_dir: Path, resource_class: str, node_id: str, owner_pid: int) -> bool:
@@ -189,12 +228,14 @@ def acquire(locks_dir: Path, resource_class: str, node_id: str, owner_pid: int) 
         if procid.is_same_process_alive(_holder_identity(current)):
             raise MutexBusy(resource_class, current.get("node_id", "?"), int(current.get("owner_pid", -1)))
 
-        # Stale holder: reclaim via os.replace to a tombstone, not a bare
-        # unlink (RE-REVIEW N1 -- see _reclaim_stale and module docstring).
-        # Whether we win or lose this specific reclaim race, looping back is
-        # always safe: a win frees the path for our own create; a loss means
-        # the winner's fresh record is what we'll observe on the re-check.
-        _reclaim_stale(path, owner_pid)
+        # Stale holder: reclaim via os.replace to a tombstone WITH content
+        # verification against `current` (RE-REVIEW N1 -- see
+        # _reclaim_stale and module docstring). Whether we win or lose this
+        # specific reclaim race, looping back is always safe: a win frees
+        # the path for our own create; a loss (including a straggler
+        # mismatch, which restores the live record) means we'll observe the
+        # current true holder on the re-check.
+        _reclaim_stale(path, owner_pid, current)
 
 
 def release(locks_dir: Path, resource_class: str, node_id: str) -> None:

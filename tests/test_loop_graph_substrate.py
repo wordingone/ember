@@ -663,6 +663,67 @@ def test_mutex_concurrent_reclaim_exactly_one_winner(tmp_path: Path):
     assert holder["node_id"] == f"node-{winners[0][1]}"  # disk agrees with the sole winner
 
 
+def test_mutex_reclaim_direct_call_on_live_lock_is_refused_and_leaves_it_intact(tmp_path: Path):
+    """Reviewer's direct repro for RE-REVIEW N1: calling `_reclaim_stale`
+    against a lock file that currently holds a LIVE record, passing a
+    mismatched "expected dead" identity (as a straggler's stale read would
+    be), must return False and leave the live lock file exactly intact --
+    never a phantom win that silently deletes a live holder out from under
+    it. Content-verification-free `os.replace(path, tombstone)` alone
+    returns True here and destroys the live lock; this is exactly the gap
+    the content check closes."""
+    locks = tmp_path / "locks"
+    pid = os.getpid()
+    mutex.acquire(locks, "gpu-exclusive", "node-live", pid)
+    path = mutex.lock_path(locks, "gpu-exclusive")
+    live_before = mutex.current_holder(locks, "gpu-exclusive")
+
+    dead_pid = _find_dead_pid()
+    stale_identity_the_straggler_saw = {"owner_pid": dead_pid, "owner_creation_time": "some-other-time"}
+
+    won = mutex._reclaim_stale(path, os.getpid(), stale_identity_the_straggler_saw)
+
+    assert won is False
+    live_after = mutex.current_holder(locks, "gpu-exclusive")
+    assert live_after == live_before  # the live lock was restored/untouched, never lost
+
+
+def test_mutex_straggler_reclaim_loses_to_concurrent_winner_and_live_lock_survives(tmp_path: Path):
+    """review-pr1310.md RE-REVIEW N1 required test: the straggler
+    interleaving the barrier-start race test above is structurally blind to.
+    A reclaimer observes a dead holder (its "stale read"); before it acts on
+    that read, a DIFFERENT racer fully reclaims and recreates a live lock at
+    the same path; only THEN does the straggler fire its reclaim, still
+    holding the identity it captured before the winner ever acted. That
+    reclaim must LOSE (content no longer matches what it read), and the
+    winner's live lock must remain exactly intact afterward -- never
+    silently clobbered by a rename that only checked "does something exist
+    at this path", not "is it still the thing I meant to remove"."""
+    locks = tmp_path / "locks"
+    dead_pid = _find_dead_pid()
+    mutex.acquire(locks, "gpu-exclusive", "node-dead", dead_pid)
+    path = mutex.lock_path(locks, "gpu-exclusive")
+
+    # Straggler's "stale read" -- captured now, acted on later.
+    straggler_observed = mutex.current_holder(locks, "gpu-exclusive")
+    assert straggler_observed["node_id"] == "node-dead"
+
+    # A different racer fully reclaims and creates a live lock in between,
+    # before the straggler ever acts on what it read above.
+    winner_pid = os.getpid()
+    assert mutex.acquire(locks, "gpu-exclusive", "node-winner", winner_pid) is True
+    live_before = mutex.current_holder(locks, "gpu-exclusive")
+    assert live_before["node_id"] == "node-winner"
+
+    # Straggler fires its reclaim now, using the STALE identity it captured
+    # before the winner ever acted -- this must lose, not clobber the winner.
+    won = mutex._reclaim_stale(path, os.getpid(), straggler_observed)
+    assert won is False
+
+    live_after = mutex.current_holder(locks, "gpu-exclusive")
+    assert live_after == live_before  # the winner's live lock survived intact
+
+
 # --------------------------------------------------------------------------
 # newline-guard against crash-torn append welding (review-pr1310.md RE-REVIEW N2)
 # --------------------------------------------------------------------------
