@@ -15,8 +15,16 @@ import {
   heartbeatAge,
   readHeartbeatRow,
 } from "./liveness-heartbeat.ts";
+import { emberStatePath } from "../utils/ember-state-root.ts";
+import { _resetConfigHomeMemo } from "../utils/env-detection.ts";
 
 let scratchDir: string;
+/** #413/#1330: every test's heartbeat now resolves through emberStatePath(), whose default
+ *  branch keys off EMBER_HOME. Pinned to a fresh per-test scratch dir so tests never touch
+ *  the real ~/.ember and never collide with each other or a concurrently running cockpit. */
+let emberHomeDir: string;
+const SAVED_EMBER_HOME = process.env["EMBER_HOME"];
+const SAVED_EMBER_STATE_ROOT = process.env["EMBER_STATE_ROOT"];
 
 /** PR954 round 3: `writer.filePath` is `string | null` (inert-writer contract), but every
  *  test here constructs its writer with a known-resolvable `repoRoot`, so the writer is
@@ -68,20 +76,30 @@ const realAclDenialEffective: boolean = (() => {
 
 beforeEach(() => {
   scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "ember-liveness-heartbeat-"));
+  emberHomeDir = fs.mkdtempSync(path.join(os.tmpdir(), "ember-liveness-heartbeat-home-"));
+  delete process.env["EMBER_STATE_ROOT"];
+  process.env["EMBER_HOME"] = emberHomeDir;
+  _resetConfigHomeMemo();
 });
 
 afterEach(() => {
   fs.rmSync(scratchDir, { recursive: true, force: true });
+  fs.rmSync(emberHomeDir, { recursive: true, force: true });
+  if (SAVED_EMBER_HOME === undefined) delete process.env["EMBER_HOME"];
+  else process.env["EMBER_HOME"] = SAVED_EMBER_HOME;
+  if (SAVED_EMBER_STATE_ROOT === undefined) delete process.env["EMBER_STATE_ROOT"];
+  else process.env["EMBER_STATE_ROOT"] = SAVED_EMBER_STATE_ROOT;
+  _resetConfigHomeMemo();
 });
 
 describe("createLivenessHeartbeatWriter", () => {
-  test("resolves filePath under <repoRoot>/tools/ember-cli/state/cockpit-heartbeat.json", () => {
+  test("resolves filePath under emberStatePath(repoRoot, 'cockpit-heartbeat.json'), never inside the checkout", () => {
     const writer = createLivenessHeartbeatWriter({ repoRoot: scratchDir });
 
-    expect(writer.filePath).toBe(
-      path.join(scratchDir, "tools", "ember-cli", "state", "cockpit-heartbeat.json"),
-    );
+    expect(writer.filePath).toBe(emberStatePath(scratchDir, "cockpit-heartbeat.json"));
     expect(fs.existsSync(path.dirname(requireFilePath(writer.filePath)))).toBe(true);
+    // #413/#1330: the whole point of the relocation -- nothing lands under the checkout.
+    expect(fs.existsSync(path.join(scratchDir, "tools", "ember-cli", "state"))).toBe(false);
   });
 
   test("write() overwrites the file with a fresh {ts, pid, version} row", () => {
@@ -167,13 +185,49 @@ describe("createLivenessHeartbeatWriter", () => {
   test("fails open: write() never throws even when the target directory cannot be created", () => {
     // A plain FILE sits where the writer expects a directory (ENOTDIR-shaped collision) --
     // a realistic disk problem, same technique as operator-receipts.test.ts's equivalent case.
-    const blockerPath = path.join(scratchDir, "tools");
+    const blockerPath = path.dirname(emberStatePath(scratchDir, "cockpit-heartbeat.json"));
+    fs.mkdirSync(path.dirname(blockerPath), { recursive: true });
     fs.writeFileSync(blockerPath, "not a directory");
 
     expect(() => {
       const writer = createLivenessHeartbeatWriter({ repoRoot: scratchDir });
       writer.write();
     }).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------------------
+// #1330 relocation review (rev-1330) follow-up finding, now closed here: the writer must
+// land at the SAME external, never-censused root every other cockpit-mutable file uses --
+// never inside tools/ember-cli/state/, gitignored or not, because the completion verifier's
+// census enrolls ignored files too.
+// ---------------------------------------------------------------------------------------
+
+describe("#413/#1330 -- heartbeat writes through the relocated external state root", () => {
+  test("honors an EMBER_STATE_ROOT override verbatim, same as every other cockpit-mutable writer", () => {
+    const overrideRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ember-hb-state-root-override-"));
+    try {
+      process.env["EMBER_STATE_ROOT"] = overrideRoot;
+
+      const writer = createLivenessHeartbeatWriter({ repoRoot: scratchDir, pid: 1111, version: "ov" });
+      expect(writer.filePath).toBe(path.join(overrideRoot, "cockpit-heartbeat.json"));
+
+      writer.write(Date.UTC(2026, 6, 7, 12, 0, 0));
+      expect(readHeartbeatRow(requireFilePath(writer.filePath))?.pid).toBe(1111);
+      expect(fs.existsSync(path.join(scratchDir, "tools", "ember-cli", "state"))).toBe(false);
+    } finally {
+      fs.rmSync(overrideRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("never writes anywhere under <repoRoot>/tools/ember-cli/state, gitignored or not", () => {
+    const writer = createLivenessHeartbeatWriter({ repoRoot: scratchDir, pid: 2222, version: "ig" });
+    for (let i = 0; i < 3; i += 1) writer.write(Date.UTC(2026, 6, 7, 12, 0, i));
+
+    expect(fs.existsSync(path.join(scratchDir, "tools", "ember-cli", "state"))).toBe(false);
+    expect(requireFilePath(writer.filePath).toLowerCase()).not.toBe(
+      path.join(scratchDir, "tools", "ember-cli", "state", "cockpit-heartbeat.json").toLowerCase(),
+    );
   });
 });
 
@@ -277,13 +331,15 @@ describe("issue #666 — writer launched from a worktree cwd", () => {
       process.chdir(path.join(worktreeRoot, "tools", "ember-cli"));
 
       const writer = createLivenessHeartbeatWriter({ pid: 4242, version: "t" });
-      const expected = path.join(path.resolve(mainRoot), "tools", "ember-cli", "state", "cockpit-heartbeat.json");
+      const expected = emberStatePath(path.resolve(mainRoot), "cockpit-heartbeat.json");
       expect(writer.filePath).toBe(expected);
 
       writer.write();
-      // The watchdog-side read of the MAIN-tree path sees the row the writer just wrote.
+      // The watchdog-side read of the MAIN-checkout-keyed state root sees the row the writer just wrote.
       expect(readHeartbeatRow(expected)?.pid).toBe(4242);
-      // And nothing landed at the worktree-derived path (the old divergent behavior).
+      // And nothing landed in-tree at either the main checkout or the worktree-derived path
+      // (in-tree writes are categorically gone now, not just re-pointed at the main root).
+      expect(fs.existsSync(path.join(mainRoot, "tools", "ember-cli", "state"))).toBe(false);
       expect(fs.existsSync(path.join(worktreeRoot, "tools", "ember-cli", "state", "cockpit-heartbeat.json"))).toBe(false);
     } finally {
       process.chdir(savedCwd);
@@ -407,7 +463,7 @@ describe("PR954 round 4 — writer-level coverage: relative gitdir + genuinely u
       process.chdir(path.join(worktreeRoot, "tools", "ember-cli"));
 
       const writer = createLivenessHeartbeatWriter({ pid: 5252, version: "rel" });
-      const expected = path.join(path.resolve(mainRoot), "tools", "ember-cli", "state", "cockpit-heartbeat.json");
+      const expected = emberStatePath(path.resolve(mainRoot), "cockpit-heartbeat.json");
       expect(writer.filePath).toBe(expected);
 
       writer.write();
@@ -631,7 +687,7 @@ describe("headless-capture suppression", () => {
     // This is the load-bearing case. Resolution SUCCEEDS here, which is every normal run and the
     // only path whose file the watchdog ever polls -- so a guard placed after resolution would
     // leave this exact case writing. The would-be path is computed independently of the writer.
-    const wouldBePath = path.join(scratchDir, "tools", "ember-cli", "state", "cockpit-heartbeat.json");
+    const wouldBePath = emberStatePath(scratchDir, "cockpit-heartbeat.json");
 
     const writer = createLivenessHeartbeatWriter({
       repoRoot: scratchDir,
@@ -646,7 +702,7 @@ describe("headless-capture suppression", () => {
   });
 
   test("write() stays a no-op across repeated calls on a suppressed writer", () => {
-    const wouldBePath = path.join(scratchDir, "tools", "ember-cli", "state", "cockpit-heartbeat.json");
+    const wouldBePath = emberStatePath(scratchDir, "cockpit-heartbeat.json");
     const writer = createLivenessHeartbeatWriter({
       repoRoot: scratchDir,
       env: { [HEADLESS_CAPTURE_ENV]: "1" },

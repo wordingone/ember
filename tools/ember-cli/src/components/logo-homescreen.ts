@@ -133,6 +133,14 @@ export interface BoardSummary {
    * "an hour of real organism work rendered as idleness" incident is exactly what this answers:
    * the pane's own downtime is now a visible fact, not silence. */
   cockpitRestartEvent?: { text: string; color?: string };
+  /** #413/#1330 review round 2: the renderer heartbeat writer goes INERT (filePath === null,
+   * never writes) when repo-root or external-state-root resolution fails at mount --
+   * previously only a console.warn buried in stderr, invisible from inside the TUI itself.
+   * A cockpit that looks alive while its ONE external liveness signal never leaves the
+   * process is exactly the class #413 exists to catch, so this renders the same way
+   * cockpitRestartEvent does: a one-shot boot-time fact about this pane, computed once at
+   * mount in screens/repl.ts right after the writer ref is populated. */
+  heartbeatWriterInert?: { text: string; color?: string };
   /** #447: live-state strip -- GPU state (VRAM + compute classification), the newest active
    * training/inference run's phase, and the last-receipt-landing age. Each line is pre-formatted
    * upstream by its own poller (services/gpu-state-poller.ts, services/run-progress-scanner.ts,
@@ -369,6 +377,11 @@ function recentFeedEntries(boardSummary?: BoardSummary, nowMs: number = Date.now
   // yet (liveness must be visible from the very first frame, never gated on board data arriving).
   // Same style token as the line below it: plain text, no color -- "no new colors" per spec.
   const entries: FeedEntry[] = [{ text: `clock: ${formatWallClock(nowMs)}` }];
+  // #413/#1330 review round 2: an inert heartbeat writer means this pane's ONE external
+  // liveness signal never leaves the process -- rendered before cockpitRestartEvent (a
+  // degraded liveness-reporting fact outranks a historical restart note) and, like it,
+  // independent of board data.
+  if (boardSummary?.heartbeatWriterInert) entries.push(boardSummary.heartbeatWriterInert);
   // #447: cockpit self-restart -- "was this pane just resurrected" is the most orienting fact a
   // fresh session can show, so it renders right after the clock and BEFORE the board-data early
   // return below (it doesn't depend on board data at all -- it's a fact about the pane itself).
