@@ -63,6 +63,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -75,7 +76,19 @@ from . import receipts as receipts_mod
 
 HERE = Path(__file__).resolve().parent
 SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
-SUPPORTED_HASH_METHOD = "sha256_filelist_manifest"
+
+# The content-based construction (compute_filelist_manifest) — the only
+# hash_method this tool trusts as an upload-integrity gate. NOTE (2026-08-02):
+# the Workstream A census's own original "sha256_filelist_manifest" label
+# turned out to name a size-only, content-blind construction (see
+# compute_sizeonly_manifest) — a same-name collision with what this tool
+# needs, not the same algorithm. inventory-v1.jsonl's UPLOAD_ALLOWED rows
+# were re-minted (remint_hashes.py) to carry THIS value under hash_method,
+# with the old size-only hash preserved separately under
+# content_hash_sizeonly_census. Deliberately renamed here (not left as
+# "sha256_filelist_manifest") so the two constructions can never be
+# silently confused again.
+SUPPORTED_HASH_METHOD = "sha256_content_manifest"
 REQUIRED_ELIGIBLE_FIELDS = ("content_hash", "hash_method", "hash_status")
 
 # Excludes dotfiles/dotdirs and .git* paths from the UPLOADED fileset only.
@@ -218,18 +231,19 @@ def _sha256_file(path: Path) -> str:
 def compute_filelist_manifest(root: Path) -> dict[str, Any]:
     """Recompute a per-file sha256 manifest for `root` (recursive, all files).
 
-    Follows a similar convention to scripts/manifest_sha.py — sort by
-    relative POSIX path, hash each file's bytes as-is, combine into a single
-    combined_sha256 over sorted "<relpath>\\t<sha256>\\t<size_bytes>\\n"
-    lines — but it is NOT the same function: manifest_sha.py is flat,
-    *.bin-only, and keyed by bare filename, while this is recursive,
-    all-file, and keyed by relative path. Whether this recompute is
-    byte-for-byte comparable to whatever tool actually produced a given
-    inventory row's content_hash is NOT verified by this module; a mismatch
-    always fails closed (refuses the row/run), so the direction of any
-    algorithmic drift is safe, but a false-positive refusal on an
-    otherwise-good row is possible and would need investigating against the
-    original census tooling, not silently worked around here.
+    This is a CONTENT-based manifest: sort by relative POSIX path, hash each
+    file's actual bytes as-is, combine into a single combined_sha256 over
+    sorted "<relpath>\\t<sha256>\\t<size_bytes>\\n" lines. This is a distinct
+    construction from scripts/manifest_sha.py (which is flat, *.bin-only,
+    and keyed by bare filename) and, as of 2026-08-02, is ALSO confirmed
+    distinct from the Workstream A census's own "sha256_filelist_manifest"
+    label: the census construction never reads file content at all — see
+    compute_sizeonly_manifest below. This function's whole purpose is to be
+    the content-based upload-integrity gate the size-only census construction
+    cannot be (same-size tampering is invisible to a size-only hash; it is
+    not invisible here). inventory-v1.jsonl's UPLOAD_ALLOWED rows were
+    re-minted on 2026-08-02 to use THIS function's output as content_hash —
+    see remint_hashes.py and each row's hash_remint note.
 
     Refuses (raises ValueError) on any symlink encountered in the walk —
     this tool will never hash-then-publish a symlink's target transparently.
@@ -263,6 +277,50 @@ def compute_filelist_manifest(root: Path) -> dict[str, Any]:
         "combined_sha256": combined.hexdigest(),
         "sha_convention": SHA_CONVENTION,
     }
+
+
+def compute_sizeonly_manifest(root: Path) -> str:
+    """Reproduce the Workstream A census's ORIGINAL "sha256_filelist_manifest"
+    construction, exactly, for historical verification only.
+
+    STRUCTURE-ONLY CHECK — NOT AN INTEGRITY CHECK. This hashes relative
+    paths and file SIZES; it never reads a single byte of file content. Two
+    directories with the same file names and sizes but completely different
+    content produce the SAME hash under this function. This is why the
+    census's content_hash values could not be reproduced by any
+    content-based construction (compute_filelist_manifest above) — they
+    were never content-based to begin with — and why this function exists
+    only to (a) empirically confirm that historical fact per-row
+    (remint_hashes.py does this before touching anything) and (b) document
+    the construction precisely enough that nobody has to reverse-engineer
+    it again. It is NEVER used as the tool's actual upload-integrity gate;
+    compute_filelist_manifest is the only function sync_row/verify_all_
+    eligible_rows use for that.
+
+    Exact construction (confirmed empirically against rows 13 and 17's
+    known-good ingestion-receipt hashes, then against all 8 UPLOAD_ALLOWED
+    rows, 2026-08-02): os.walk(root, followlinks=False) — dotfiles/dotdirs
+    INCLUDED, no exclusions of any kind; for each file, the POSIX-style
+    relative path (forward slashes, computed the same way regardless of
+    host OS); collected as (relpath, size_bytes) pairs; sorted by relpath
+    using plain Python ordinal string comparison (the default `sort`); a
+    single hashlib.sha256() object is then updated, per file in that sorted
+    order, with `relpath.encode("utf-8") + b"\\x00" + str(size_bytes).encode
+    ("utf-8") + b"\\n"` — i.e. NUL-separated path/size, LF-terminated,
+    streamed straight into one incremental digest (equivalent to, but more
+    memory-efficient than, hashing the full joined string in one call).
+    """
+    files: list[tuple[str, int]] = []
+    for dirpath, _dirnames, filenames in os.walk(root, followlinks=False):
+        for fn in filenames:
+            p = Path(dirpath) / fn
+            rel = p.relative_to(root).as_posix()
+            files.append((rel, p.stat().st_size))
+    files.sort(key=lambda r: r[0])
+    h = hashlib.sha256()
+    for rel, size in files:
+        h.update(rel.encode("utf-8") + b"\x00" + str(size).encode("utf-8") + b"\n")
+    return h.hexdigest()
 
 
 @dataclass

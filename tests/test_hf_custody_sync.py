@@ -57,7 +57,7 @@ def _eligible_row(local_path: str, content_hash: str, **extra) -> dict:
         "local_canonical_path": local_path,
         "disposition": "UPLOAD_ALLOWED",
         "content_hash": content_hash,
-        "hash_method": "sha256_filelist_manifest",
+        "hash_method": sync.SUPPORTED_HASH_METHOD,
         "hash_status": "complete",
         **extra,
     }
@@ -412,6 +412,78 @@ def test_verification_includes_dotfiles_census_identical(tmp_path):
     (root / ".git").unlink()
     without_dotfile = sync.compute_filelist_manifest(root)["combined_sha256"]
     assert without_dotfile != combined_sha
+
+
+# ---------------------------------------------------------------------------
+# Regression fixture: both manifest constructions, pinned to hand-verified
+# golden digests (2026-08-02 root-cause fix). This is the "future drift"
+# guard requested by the review — if either compute_filelist_manifest or
+# compute_sizeonly_manifest's byte-level construction ever changes by
+# accident, this test catches it even though every other test in this file
+# only checks internal self-consistency (recompute == recompute), never an
+# externally-fixed value.
+#
+# The fixture's expected digests were independently computed (see the git
+# history for the one-off script used) and cross-validated against the real
+# Workstream A inventory: compute_sizeonly_manifest reproduces the census's
+# original content_hash for rows 13 and 17 exactly, and compute_
+# filelist_manifest is the construction inventory-v1.jsonl's UPLOAD_ALLOWED
+# rows were re-minted to on 2026-08-02 (remint_hashes.py).
+# ---------------------------------------------------------------------------
+
+GOLDEN_SIZEONLY_SHA256 = "a84448abeb672764a00e843d0322d6732d0f3c42c3bc1e2eba261ff603466ab3"
+GOLDEN_CONTENT_SHA256 = "6b7be1e36636d41bc678c3fd39da3c416a6696eb627f39b9ee8cdd201908cde2"
+
+
+@pytest.fixture
+def golden_fixture_dir(tmp_path: Path):
+    root = tmp_path / "golden-fixture"
+    root.mkdir()
+    (root / "a.txt").write_bytes(b"hello\n")
+    sub = root / "sub"
+    sub.mkdir()
+    (sub / "b.bin").write_bytes(b"\x00\x01\x02")
+    return root
+
+
+def test_compute_sizeonly_manifest_matches_golden_digest(golden_fixture_dir):
+    assert sync.compute_sizeonly_manifest(golden_fixture_dir) == GOLDEN_SIZEONLY_SHA256
+
+
+def test_compute_filelist_manifest_matches_golden_digest(golden_fixture_dir):
+    manifest = sync.compute_filelist_manifest(golden_fixture_dir)
+    assert manifest["combined_sha256"] == GOLDEN_CONTENT_SHA256
+
+
+def test_sizeonly_and_content_constructions_diverge_on_same_size_tamper(tmp_path):
+    """The whole point of the M4/root-cause fix: a same-size content change
+    must be INVISIBLE to compute_sizeonly_manifest (it never reads bytes)
+    but MUST be caught by compute_filelist_manifest (it hashes bytes)."""
+    root = tmp_path / "tamper-fixture"
+    root.mkdir()
+    (root / "a.txt").write_bytes(b"hello\n")  # 6 bytes
+
+    sizeonly_before = sync.compute_sizeonly_manifest(root)
+    content_before = sync.compute_filelist_manifest(root)["combined_sha256"]
+
+    (root / "a.txt").write_bytes(b"AAAAAA")  # same 6 bytes, different content
+
+    sizeonly_after = sync.compute_sizeonly_manifest(root)
+    content_after = sync.compute_filelist_manifest(root)["combined_sha256"]
+
+    assert sizeonly_after == sizeonly_before  # size-only is blind to this
+    assert content_after != content_before  # content-based catches it
+
+
+def test_sizeonly_manifest_includes_dotfiles_and_uses_posix_relpath(tmp_path):
+    root = tmp_path / "sizeonly-dotfile-fixture"
+    root.mkdir()
+    (root / "visible.txt").write_bytes(b"x")
+    (root / ".git").write_bytes(b"gitdir: /elsewhere\n")
+    with_dotfile = sync.compute_sizeonly_manifest(root)
+    (root / ".git").unlink()
+    without_dotfile = sync.compute_sizeonly_manifest(root)
+    assert with_dotfile != without_dotfile
 
 
 # ---------------------------------------------------------------------------
