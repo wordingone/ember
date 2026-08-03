@@ -43,6 +43,10 @@ def _live_issue(number: int = 7, title: str = "Live obligation") -> dict:
 def _live_census_payload(issue: dict | None = None) -> dict:
     source = issue or _live_issue()
     return {
+        "captured_at": "2026-07-23T02:00:00Z",
+        "public_master_sha": "a" * 40,
+        "open_issue_count": 1,
+        "issue_snapshot_sha256": "d" * 64,
         "issue_source_snapshot": [
             {
                 "number": source["number"],
@@ -311,22 +315,82 @@ def test_custody_legs_reject_issue_census_mutated_during_run(
     }
 
 
-def test_custody_legs_reject_explicit_census_not_equal_to_live_github(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+def _passing_custody_run(
+    monkeypatch: pytest.MonkeyPatch, live_issues: list[dict] | None = None,
 ) -> None:
-    supplied = tmp_path / "forged-census.json"
-    supplied.write_text(
-        json.dumps(_live_census_payload(_live_issue(title="forged"))),
-        encoding="utf-8",
+    """Stub git + gh + census so custody_legs resolves on its own evidence."""
+    monkeypatch.setattr(
+        completion,
+        "git",
+        lambda *_args: SimpleNamespace(stdout="a" * 40 + "\n"),
     )
     monkeypatch.setattr(
         completion,
         "fetch_live_open_issues",
         lambda *_args, **_kwargs: {
             "returncode": 0,
-            "issues": [_live_issue(title="actual")],
+            "issues": live_issues if live_issues is not None else [_live_issue()],
             "stdout_sha256": "c" * 64,
             "command": ["gh", "issue", "list"],
+        },
+    )
+    monkeypatch.setattr(
+        completion,
+        "run",
+        lambda *_args, **_kwargs: {
+            "returncode": 0,
+            "timed_out": False,
+            "stdout": "",
+            "stderr": "",
+        },
+    )
+
+
+def test_custody_legs_survive_github_mutation_after_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#1331: issues filed/closed/relabelled DURING the census run must not
+    invalidate the certificate. The legs bind to the captured snapshot, so a
+    live list that has moved on since capture is evidence, never a verdict."""
+    snapshot = tmp_path / "public-issue-census-live.json"
+    snapshot.write_text(json.dumps(_live_census_payload()), encoding="utf-8")
+    mutated_live = [
+        _live_issue(title="relabelled after capture"),
+        _live_issue(number=9, title="filed after capture"),
+    ]
+    _passing_custody_run(monkeypatch, live_issues=mutated_live)
+
+    result = completion.custody_legs(
+        REPO_ROOT,
+        ["public-repository=B:/tmp/public"],
+        run_custody=True,
+        issue_census=snapshot,
+    )
+
+    assert {row["state"] for row in result.values()} == {completion.RESOLVED_TRUE}
+    live_evidence = result["9"]["evidence"]["live_issue_snapshot"]
+    assert live_evidence["equals_census_snapshot"] is False
+    assert live_evidence["informational_only"] is True
+    assert live_evidence["resolves_leg_state"] is False
+
+
+def test_custody_legs_survive_live_github_acquisition_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The live list is informational, so failing to fetch it cannot turn a
+    certified snapshot red."""
+    snapshot = tmp_path / "public-issue-census-live.json"
+    snapshot.write_text(json.dumps(_live_census_payload()), encoding="utf-8")
+    _passing_custody_run(monkeypatch)
+    monkeypatch.setattr(
+        completion,
+        "fetch_live_open_issues",
+        lambda *_args, **_kwargs: {
+            "returncode": 1,
+            "issues": None,
+            "stdout_sha256": "0" * 64,
+            "command": ["gh", "issue", "list"],
+            "stderr": "rate limited",
         },
     )
 
@@ -334,14 +398,96 @@ def test_custody_legs_reject_explicit_census_not_equal_to_live_github(
         REPO_ROOT,
         ["public-repository=B:/tmp/public"],
         run_custody=True,
-        issue_census=supplied,
+        issue_census=snapshot,
+    )
+
+    assert {row["state"] for row in result.values()} == {completion.RESOLVED_TRUE}
+    assert result["9"]["evidence"]["live_issue_snapshot"]["acquired"] is False
+
+
+def test_custody_legs_record_snapshot_binding_fields(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    snapshot = tmp_path / "public-issue-census-live.json"
+    snapshot.write_text(json.dumps(_live_census_payload()), encoding="utf-8")
+    expected_sha = hashlib.sha256(snapshot.read_bytes()).hexdigest()
+    _passing_custody_run(monkeypatch)
+
+    result = completion.custody_legs(
+        REPO_ROOT,
+        ["public-repository=B:/tmp/public"],
+        run_custody=True,
+        issue_census=snapshot,
+    )
+
+    for row in result.values():
+        evidence = row["evidence"]
+        assert evidence["issue_census_binding_mode"] == "point_in_time_snapshot"
+        assert evidence["issue_census_sha256"] == expected_sha
+        assert evidence["issue_census_capture_instant"] == "2026-07-23T02:00:00Z"
+        assert (
+            evidence["issue_census_capture_instant_source"]
+            == "census.captured_at"
+        )
+        assert evidence["issue_census_public_master_sha"] == "a" * 40
+        assert evidence["issue_census_open_issue_count"] == 1
+        assert evidence["verified_checkout_head"] == "a" * 40
+        assert expected_sha in evidence["issue_census_claim"]
+        assert "2026-07-23T02:00:00Z" in evidence["issue_census_claim"]
+
+
+def test_custody_legs_fall_back_to_snapshot_max_updated_at(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Snapshots predating `captured_at` are still bindable through the newest
+    issue update they contain -- a true lower bound on capture."""
+    payload = _live_census_payload()
+    del payload["captured_at"]
+    payload["snapshot_max_issue_updated_at"] = "2026-07-23T01:00:00Z"
+    snapshot = tmp_path / "legacy-census.json"
+    snapshot.write_text(json.dumps(payload), encoding="utf-8")
+    _passing_custody_run(monkeypatch)
+
+    result = completion.custody_legs(
+        REPO_ROOT,
+        ["public-repository=B:/tmp/public"],
+        run_custody=True,
+        issue_census=snapshot,
+    )
+
+    assert {row["state"] for row in result.values()} == {completion.RESOLVED_TRUE}
+    evidence = result["9"]["evidence"]
+    assert evidence["issue_census_capture_instant"] == "2026-07-23T01:00:00Z"
+    assert "lower bound" in evidence["issue_census_capture_instant_source"]
+
+
+def test_custody_legs_reject_census_without_capture_instant(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A snapshot that cannot say WHEN it was taken cannot be certified: the
+    certificate's claim is 'issues as of <instant>' and there is no instant."""
+    payload = _live_census_payload()
+    del payload["captured_at"]
+    snapshot = tmp_path / "instantless-census.json"
+    snapshot.write_text(json.dumps(payload), encoding="utf-8")
+    monkeypatch.setattr(
+        completion,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail("census must not run"),
+    )
+
+    result = completion.custody_legs(
+        REPO_ROOT,
+        ["public-repository=B:/tmp/public"],
+        run_custody=True,
+        issue_census=snapshot,
     )
 
     assert {row["state"] for row in result.values()} == {
         completion.RESOLVED_FALSE
     }
     assert {row["reason"] for row in result.values()} == {
-        "issue census does not equal same-run live GitHub snapshot"
+        "issue census carries no capture instant"
     }
 
 
