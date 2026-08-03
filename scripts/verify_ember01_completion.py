@@ -639,6 +639,7 @@ def custody_legs(
     bindings: list[str],
     run_custody: bool,
     issue_census: Path | None = None,
+    preserve_custody_output: Path | None = None,
 ) -> dict[str, Any]:
     manifests = root / "manifests" / "ember-01-custody"
     root_spec = manifests / "root-spec.json"
@@ -750,6 +751,19 @@ def custody_legs(
     for b in bindings:
         cmd += ["--binding", b]
     result = run(cmd, root=root, name="ember_01_custody")
+    if preserve_custody_output is not None:
+        # Preserve the raw census.py output OUTSIDE the checkout before it is
+        # unlinked below, on BOTH a green and a red run -- the caller (ember-cli's
+        # /verify) needs the per-file contradiction detail even when this leg
+        # resolves false, not just when it passes. Best-effort: a copy failure
+        # (e.g. census.py never produced `out` because it crashed before writing)
+        # never changes a leg verdict, so this is swallowed, not raised.
+        try:
+            if out.is_file():
+                preserve_custody_output.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(out, preserve_custody_output)
+        except OSError:
+            pass
     try:
         out.unlink(missing_ok=True)  # keep the checkout clean
     except OSError:
@@ -1282,6 +1296,15 @@ def main() -> int:
     parser.add_argument("--run-custody", action="store_true",
                         help="run the custody census (requires real ROOT bindings)")
     parser.add_argument(
+        "--preserve-custody-output",
+        default=None,
+        help=(
+            "copy census.py's raw per-file custody-census output to this path "
+            "(outside the checkout) before it is unlinked, on both a green and "
+            "a red custody run; omitted by default, matching prior behavior"
+        ),
+    )
+    parser.add_argument(
         "--issue-census",
         default=None,
         help=(
@@ -1305,6 +1328,9 @@ def main() -> int:
     checkpoint_manifest = Path(args.checkpoint_manifest).resolve() if args.checkpoint_manifest else None
     model_config = Path(args.model_config).resolve() if args.model_config else None
     issue_census = Path(args.issue_census).resolve() if args.issue_census else None
+    preserve_custody_output = (
+        Path(args.preserve_custody_output).resolve() if args.preserve_custody_output else None
+    )
 
     try:
         receipt = validate_receipt_path(root, Path(args.receipt))
@@ -1324,6 +1350,7 @@ def main() -> int:
                     args.binding,
                     args.run_custody,
                     issue_census=issue_census,
+                    preserve_custody_output=preserve_custody_output,
                 )
             )
             legs.update(

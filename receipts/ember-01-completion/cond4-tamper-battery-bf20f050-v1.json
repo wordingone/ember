@@ -1,19 +1,19 @@
 {
   "schema": "ember-cond4-tamper-battery-receipt-v1",
   "ticket": "EMBER-01-COND4-BATTERY-REMINT-1331",
-  "ts": "2026-08-03T17:46:51Z",
+  "ts": "2026-08-03T21:41:38Z",
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "generated_at": "2026-08-03T17:46:51Z",
+  "generated_at": "2026-08-03T21:41:38Z",
   "implementation_commit": null,
   "implementation_commit_note": "null by construction: this receipt ships in the SAME commit as the implementation it binds, so no prior commit contains those bytes. The sha256 bindings under `implementation` are the authority and are re-hashed against the tree by scripts/tests/test_verify_ember01_completion.py.",
   "implementation": {
     "completion_verifier": {
       "path": "scripts/verify_ember01_completion.py",
-      "sha256": "1ca1609b2de736425d4bfc7179638054420360071b674c32be51f36d594f698c"
+      "sha256": "b3ef88a12ea6ff7c8e10c5dce5fe93561519138ab9fe0e74f98ea8319af6aebd"
     },
     "issue_census_builder": {
       "path": "scripts/ember_01_custody/issue_census.py",

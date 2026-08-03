@@ -296,6 +296,61 @@ def test_custody_legs_use_explicit_live_issue_census(
     ).hexdigest()
 
 
+def test_custody_legs_preserve_custody_output_on_green_and_red(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ember-cli's /verify needs census.py's raw per-file output even on a red
+    run (5 legs resolved-false, contradictions>0) -- not just on green. The
+    in-checkout scratch file is always deleted ("keep the checkout clean"); a
+    caller-supplied --preserve-custody-output copies it out first, regardless
+    of census.py's exit code."""
+    live_issue_census = tmp_path / "public-issue-census-live.json"
+    live_issue_census.write_text(
+        json.dumps(_live_census_payload()), encoding="utf-8"
+    )
+
+    monkeypatch.setattr(
+        completion, "git", lambda *_args: SimpleNamespace(stdout="a" * 40 + "\n"),
+    )
+    monkeypatch.setattr(
+        completion,
+        "fetch_live_open_issues",
+        lambda *_args, **_kwargs: {
+            "returncode": 0,
+            "issues": [_live_issue()],
+            "stdout_sha256": "b" * 64,
+            "command": ["gh", "issue", "list"],
+        },
+    )
+
+    for returncode, contradictions in ((0, 0), (2, 8050)):
+        def fake_run(
+            args: list[str], returncode: int = returncode,
+            contradictions: int = contradictions, **_: object,
+        ) -> dict[str, object]:
+            out_path = Path(args[args.index("--output") + 1])
+            out_path.write_text(
+                json.dumps({"contradictions": contradictions}), encoding="utf-8"
+            )
+            return {"returncode": returncode, "timed_out": False, "stdout": "", "stderr": ""}
+
+        monkeypatch.setattr(completion, "run", fake_run)
+
+        preserved = tmp_path / f"preserved-{returncode}.json"
+        completion.custody_legs(
+            REPO_ROOT,
+            ["public-repository=B:/tmp/public"],
+            run_custody=True,
+            issue_census=live_issue_census,
+            preserve_custody_output=preserved,
+        )
+
+        assert preserved.is_file()
+        assert json.loads(preserved.read_text(encoding="utf-8"))["contradictions"] == contradictions
+        # the in-checkout scratch file is always cleaned up, preserved or not
+        assert not (REPO_ROOT / ".ember01-verify-custody.tmp.json").exists()
+
+
 def test_custody_legs_reject_issue_census_mutated_during_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
