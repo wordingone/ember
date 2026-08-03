@@ -235,6 +235,10 @@ def _child_cache_environment(write_roots: Mapping[str, pathlib.Path]) -> tuple[d
     bindings = {name: str(path.resolve()) for name, path in cache_paths.items()}
     environment.update(bindings)
     environment["EMBER_DISK_BUDGET_ENV_ASSERTION"] = str(assertion_path)
+    # No -I/-B on this spawn (argv[4:] is the certificate-visible command),
+    # so bytecode suppression must ride the child env; the bootstrap script
+    # re-execs argv[4:] with env=os.environ, so this propagates unbroken.
+    environment["PYTHONDONTWRITEBYTECODE"] = "1"
     return environment, bindings, assertion_path
 
 def _load_child_cache_assertion(

@@ -655,11 +655,17 @@ def execute_validated_launch(
 ) -> int:
     repo_root = pathlib.Path(repo_root)
     argv = build_runner_argv(repo_root, launch)
+    # argv is certificate-visible (an execution receipt pins argv[1] to the
+    # fixed runner path) so bytecode suppression rides the spawn env instead
+    # of an -B argv insertion, which would shift that pinned position.
+    child_env = os.environ.copy()
+    child_env["PYTHONDONTWRITEBYTECODE"] = "1"
     result = run_process(
         argv,
         shell=False,
         check=False,
         cwd=repo_root,
+        env=child_env,
     )
     exit_code = int(result.returncode)
     _write_execution_receipt(launch, argv, exit_code)
