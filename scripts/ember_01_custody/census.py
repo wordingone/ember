@@ -1687,14 +1687,28 @@ def main() -> int:
             raise ValueError("source commit does not match public repository object")
         if arguments.public_master_ref != "refs/remotes/origin/master":
             raise ValueError("public master ref must be refs/remotes/origin/master")
-        resolved_public_master = _git(
-            public_repository,
-            "rev-parse",
-            "--verify",
-            arguments.public_master_ref + "^{commit}",
-        ).strip().lower()
-        if resolved_public_master != source_commit:
-            raise ValueError("source commit is not the bound public master ref")
+        # The census binds to the commit its own snapshot pinned, NOT to wherever
+        # the public master ref happens to point while the run executes. Demanding
+        # equality here froze every code merge for the whole census window: a docs
+        # merge advancing master mid-run failed a census that had already captured
+        # its evidence at the pinned commit (#1331). Where the ref points now is
+        # recorded as evidence; the binding that gates is snapshot-internal --
+        # the issue census's own public_master_sha must equal this source commit.
+        try:
+            resolved_public_master = _git(
+                public_repository,
+                "rev-parse",
+                "--verify",
+                arguments.public_master_ref + "^{commit}",
+            ).strip().lower()
+        except ValueError:
+            resolved_public_master = None
+        public_master_binding = {
+            "public_master_ref": arguments.public_master_ref,
+            "public_master_ref_resolved": resolved_public_master,
+            "source_commit_is_public_master_tip": resolved_public_master == source_commit,
+            "binding_mode": "snapshot_internal",
+        }
         root_census = build_root_census(
             specification,
             bindings,
@@ -1731,6 +1745,7 @@ def main() -> int:
             "schema": "ember-01-custody-census-v1",
             "authority": specification.get("authority"),
             "source_commit": source_commit,
+            "public_master_binding": public_master_binding,
             "root_spec_sha256": sha256_file(spec_path),
             "benchmark_registry_sha256": manifest_binding[
                 "benchmark_registry_sha256"

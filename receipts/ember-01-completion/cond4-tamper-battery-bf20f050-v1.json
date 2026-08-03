@@ -1,22 +1,22 @@
 {
   "schema": "ember-cond4-tamper-battery-receipt-v1",
-  "ticket": "EMBER-01-COND4-BATTERY-REMINT-PR1288",
-  "ts": "2026-08-02T03:28:12Z",
+  "ticket": "EMBER-01-COND4-BATTERY-REMINT-1331",
+  "ts": "2026-08-03T16:41:33Z",
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "generated_at": "2026-08-02T03:28:12Z",
-  "implementation_commit": "fcae8b55417ef5f212083fbdc057c5cae8628a48",
+  "generated_at": "2026-08-03T16:41:33Z",
+  "implementation_commit": "4f3d5b9fdac6114b105eb56dbee97c6dea8298c3",
   "implementation": {
     "completion_verifier": {
       "path": "scripts/verify_ember01_completion.py",
-      "sha256": "0776c2abf12d72cde4069d8810d595d817d1145ec7d6c2a3bcf2edba129dd8f2"
+      "sha256": "a81eccf5e5ebd3b944b4a27fc3adca8c80a542f4eec729a45ca7cee84657bc19"
     },
     "issue_census_builder": {
       "path": "scripts/ember_01_custody/issue_census.py",
-      "sha256": "b3bfd1bb5f0136d3c8016e8f087916be0cb641e00cc2de7fa7209c6c5a5acdd9"
+      "sha256": "106d74bad84aef269dca360beebec148b689c97b26c872f02759bd8a6803c5cc"
     },
     "identity_validator": {
       "path": "scripts/ember_01_identity/validate_identity.py",
@@ -41,7 +41,7 @@
   },
   "leg3": {
     "state": "resolved-true",
-    "parameter_receipt_sha256": "cc540338fc8d082a630663de2f9a0202fac085a637c1b47b1f322dec5f01d39c"
+    "parameter_receipt_sha256": "e3cf0407cc1322bc7bc87aae65c9d31efe0a0c042139f937cfcef94897bb2817"
   },
   "leg4": {
     "state": "resolved-true",
@@ -147,17 +147,18 @@
         "tests/ember_01_custody/test_issue_census.py"
       ],
       "pre_write_tail": "  warnings.warn(",
-      "post_write_result": "73 passed in 27.82s",
-      "note": "the cond4-binding test can only pass after this receipt is written; post_write_result is the full 73-test focused run executed after this file was written"
+      "post_write_result": "81 passed in 67.63s",
+      "note": "the cond4-binding test can only pass after this receipt is written; post_write_result is the full 81-test focused run executed after this file was written"
     },
     "seeded_fail_open": {
       "axis": "tokenizer",
       "aggregate_state": "resolved-false",
-      "named_failure": "tokenizer"
+      "named_failure": "tokenizer",
+      "all_rejected": false
     },
     "repository_guard": "PASS",
     "github_guard_count": 0,
-    "github_guards": "PENDING (report separately once PR #1288 CI reruns on this head)"
+    "github_guards": "PENDING (report separately once CI runs on this head)"
   },
   "claim_boundary": {
     "supports_completion_condition": 4,

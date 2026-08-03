@@ -1189,7 +1189,13 @@ def test_census_cli_rejects_issue_master_source_commit_mismatch(tmp_path: Path) 
     assert "issue census public master does not match source commit" in result.stdout
 
 
-def test_census_cli_rejects_historical_commit_labeled_public_master(tmp_path: Path) -> None:
+def test_census_cli_binds_to_its_snapshot_commit_not_the_live_master_tip(
+    tmp_path: Path,
+) -> None:
+    """A merge advancing origin/master while the census runs used to fail the
+    run outright, freezing every code merge for the whole window (#1331). The
+    census now binds to the commit its own snapshot pinned and records where the
+    ref points as evidence."""
     repo = tmp_path / "repo"
     repo.mkdir()
     git(repo, "init")
@@ -1225,8 +1231,13 @@ def test_census_cli_rejects_historical_commit_labeled_public_master(tmp_path: Pa
         capture_output=True,
         check=False,
     )
-    assert result.returncode == 1
-    assert "source commit is not the bound public master ref" in result.stdout
+    assert "source commit is not the bound public master ref" not in result.stdout
+    payload = json.loads((tmp_path / "out.json").read_text(encoding="utf-8"))
+    binding = payload["public_master_binding"]
+    assert binding["binding_mode"] == "snapshot_internal"
+    assert binding["source_commit_is_public_master_tip"] is False
+    assert binding["public_master_ref_resolved"] != historical
+    assert payload["source_commit"] == historical
 
 
 # ---------------------------------------------------------------------------
