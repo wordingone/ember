@@ -829,14 +829,18 @@ class RunnerPreflightTests(unittest.TestCase):
             specialist=False, ordinary_rows=full_rows,
         )
         _specialist_result, specialist_kwargs, specialist_writer = self._run_vertical_resume_with_mocks(specialist=True)
-        bound = run_vertical_slice.checkpoint_serialization_byte_bound(ROOT / "configs" / "ember-restart-3b.json", active_parameters=1_725_232_640)
+        specialist_bound = run_vertical_slice.checkpoint_serialization_byte_bound(ROOT / "configs" / "ember-restart-3b.json", active_parameters=1_725_232_640)
+        # Non-specialist episodes realize every expert, so their checkpoint
+        # bound must admit full-coverage optimizer state (#1320); specialist
+        # lineage episodes keep the tighter shared-plus-one-expert bound.
+        full_coverage_bound = run_vertical_slice.checkpoint_serialization_byte_bound(ROOT / "configs" / "ember-restart-3b.json", active_parameters=3_839_161_856)
         self.assertEqual(ordinary_kwargs["initial_data_cursor"], 37)
         self.assertEqual(ordinary_kwargs["initial_global_step"], 19)
         self.assertEqual(specialist_kwargs["initial_data_cursor"], 0)
         self.assertEqual(specialist_kwargs["initial_global_step"], 19)
         self.assertTrue(str(specialist_kwargs["data_shard_id"]).startswith("VERIFIED_SPECIALIST:"))
-        self.assertEqual(ordinary_writer.call_args.kwargs["max_serialized_bytes"], bound)
-        self.assertEqual(specialist_writer.call_args.kwargs["max_serialized_bytes"], bound)
+        self.assertEqual(ordinary_writer.call_args.kwargs["max_serialized_bytes"], full_coverage_bound)
+        self.assertEqual(specialist_writer.call_args.kwargs["max_serialized_bytes"], specialist_bound)
         self.assertEqual(ordinary_writer.call_args.kwargs["max_transient_scratch_bytes"], 8 * 1024**3)
         self.assertEqual(specialist_writer.call_args.kwargs["max_transient_scratch_bytes"], 8 * 1024**3)
     def test_vertical_resume_passes_frozen_manifest_identity_to_checkpoint_loader(self) -> None:
@@ -1058,7 +1062,7 @@ class RunnerPreflightTests(unittest.TestCase):
                     with patch.object(run_vertical_slice, "governed_resource_preflight", side_effect=RuntimeError("governor reached")) as governor:
                         with self.assertRaisesRegex(RuntimeError, "governor reached"):
                             run_vertical_slice.run_governed_vertical(
-                                seed=83, artifact_root=artifact_root, write_budget_bytes=12_202_530_816,
+                                seed=83, artifact_root=artifact_root, write_budget_bytes=16_430_389_248,
                             )
             governor.assert_called_once_with()
 
@@ -1088,11 +1092,21 @@ class RunnerPreflightTests(unittest.TestCase):
             governor.assert_not_called()
             vertical_run.assert_not_called()
 
-    def test_governed_checkpoint_bound_includes_one_active_expert(self) -> None:
+    def test_governed_checkpoint_bound_covers_every_expert(self) -> None:
         config_path = ROOT / "configs" / "ember-restart-3b.json"
-        self.assertEqual(
-            run_vertical_slice.governed_vertical_checkpoint_byte_bound(config_path),
-            12_202_530_816,
+        bound = run_vertical_slice.governed_vertical_checkpoint_byte_bound(config_path)
+        self.assertEqual(bound, 3_839_161_856 * 2 + 3_839_161_856 * 2 + 1024**3)
+        # The governed-vertical shard realizes all four experts, so the bound
+        # must admit full-coverage optimizer state: model shards plus one
+        # optimizer moment over every structural parameter (#1320).
+        full_coverage_tensor_floor = 3_839_161_856 * 2 * 2
+        self.assertGreater(bound, full_coverage_tensor_floor)
+
+    def test_run_path_reserves_full_coverage_bound_for_nonspecialist_episodes(self) -> None:
+        source = inspect.getsource(run_vertical_slice.run)
+        self.assertIn(
+            "active_parameters if specialist_lineage is not None else total_parameters",
+            source,
         )
 
     def test_governed_vertical_refuses_successor_four_gib_checkpoint_envelope(self) -> None:
@@ -1696,7 +1710,7 @@ class RunnerPreflightTests(unittest.TestCase):
                     sys.executable, "-I", str(runner), "--max-c-write-gib", "0", "--max-b-write-gib", "0.01",
                     "--receipt", str(receipt), "--write-root", f"custody={custody}", "--write-root", f"artifacts={artifact_root}", "--",
                     sys.executable, str(child), "governed-vertical-preflight", "--seed", "83", "--artifact-root", str(artifact_root),
-                    "--write-budget-bytes", str(12 * 1024**3), "--max-records", "1",
+                    "--write-budget-bytes", str(17 * 1024**3), "--max-records", "1",
                 ], text=True, capture_output=True, check=False,
             )
             payload = json.loads(receipt.read_text(encoding="utf-8"))
