@@ -188,7 +188,19 @@ def _function_preservation_check(cfg_model: dict, n_mtp: int, sd_pre_f32: dict,
     if real_missing or unexpected:
         raise SystemExit(f"pre-grow probe load mismatch: missing={real_missing} unexpected={unexpected}")
     pre_model.eval()
-    logits_pre = pre_model.logits(ids)
+    with torch.no_grad():
+        logits_pre = pre_model.logits(ids).detach().clone()
+
+    # #406: release the pre-grow model before building the post-grow model.
+    # At rung-2 scale (~1.19B pre-grow + ~2.2B post-grow params) holding both
+    # resident+uncollected here deterministically SIGSEGVs (exit 139). Bound
+    # peak residency to one model at a time — logits_pre is already copied
+    # out above, so pre_model is no longer needed past this point.
+    import gc
+    del pre_model
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
     post_model = dryrun_build_model(cfg_model, n_mtp, ff_grown)
     missing, unexpected = post_model.load_state_dict(sd_post_f32, strict=False)
