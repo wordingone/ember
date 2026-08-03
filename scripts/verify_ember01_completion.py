@@ -34,6 +34,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import sys
@@ -445,6 +446,93 @@ def fetch_live_open_issues(
 
 
 ISO_INSTANT_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
+ISSUE_SNAPSHOT_ATTEMPTS = 3
+
+
+def _canonical_sha256(value: Any) -> str:
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def _now_utc() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def capture_issue_snapshot(
+    root: Path, attempts: int = ISSUE_SNAPSHOT_ATTEMPTS
+) -> dict[str, Any]:
+    """Capture the open-issue list INSIDE this verification run.
+
+    Once the snapshot is the authority rather than a same-run equality check, a
+    torn read becomes durable: GitHub serves this list paginated, so an edit
+    landing mid-read returns a set that never existed at any instant. A capture
+    therefore counts only when two back-to-back reads project to the same
+    canonical snapshot - the same double-read the gh binary itself gets above.
+
+    `captured_at_utc` and `capture_nonce` are stamped here, from this process,
+    so a consumer can refuse a snapshot older than the run that certified it.
+    """
+    started = _now_utc()
+    torn: list[dict[str, Any]] = []
+    for attempt in range(1, attempts + 1):
+        first = fetch_live_open_issues(root)
+        second = (
+            fetch_live_open_issues(root)
+            if first["returncode"] == 0 and isinstance(first["issues"], list)
+            else None
+        )
+        for read in (first, second):
+            if read is None or read["returncode"] != 0 or not isinstance(read["issues"], list):
+                failed = read if read is not None else first
+                return {
+                    "ok": False,
+                    "failure": "acquisition_failed",
+                    "attempts": attempt,
+                    "capture_started_at_utc": started,
+                    "command": failed["command"],
+                    "returncode": failed["returncode"],
+                    "stdout_sha256": failed["stdout_sha256"],
+                    "github_cli_executable_name": failed.get("executable_name"),
+                    "github_cli_executable_sha256": failed.get("executable_sha256"),
+                    "stderr_tail": str(failed["stderr"])[-400:],
+                }
+        canonical_first = canonical_open_issue_source_snapshot(first["issues"])
+        canonical_second = canonical_open_issue_source_snapshot(second["issues"])
+        if canonical_first == canonical_second:
+            return {
+                "ok": True,
+                "attempts": attempt,
+                "torn_reads": torn,
+                "snapshot": canonical_first,
+                "snapshot_sha256": _canonical_sha256(canonical_first),
+                "issue_count": len(canonical_first),
+                "capture_started_at_utc": started,
+                "captured_at_utc": _now_utc(),
+                "capture_nonce": secrets.token_hex(16),
+                "command": first["command"],
+                "stdout_sha256": first["stdout_sha256"],
+                "confirming_stdout_sha256": second["stdout_sha256"],
+                "github_cli_executable_name": first.get("executable_name"),
+                "github_cli_executable_sha256": first.get("executable_sha256"),
+            }
+        torn.append(
+            {
+                "attempt": attempt,
+                "first_snapshot_sha256": _canonical_sha256(canonical_first),
+                "second_snapshot_sha256": _canonical_sha256(canonical_second),
+            }
+        )
+    return {
+        "ok": False,
+        "failure": "torn_read",
+        "attempts": attempts,
+        "torn_reads": torn,
+        "capture_started_at_utc": started,
+        "command": first["command"],
+        "github_cli_executable_name": first.get("executable_name"),
+        "github_cli_executable_sha256": first.get("executable_sha256"),
+    }
 
 
 def census_capture_instant(payload: Any) -> tuple[str | None, str | None]:
@@ -471,16 +559,33 @@ def census_capture_instant(payload: Any) -> tuple[str | None, str | None]:
     return None, None
 
 
+def _instant_seconds(value: Any) -> float | None:
+    if not isinstance(value, str) or not ISO_INSTANT_RE.fullmatch(value):
+        return None
+    return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(
+        tzinfo=timezone.utc
+    ).timestamp()
+
+
 def census_snapshot_binding(
     payload: Any,
     census_sha256: str,
     capture_instant: str,
     capture_instant_source: str | None,
     head: str,
+    snapshot: dict[str, Any],
 ) -> dict[str, Any]:
-    """The fields that make the issue legs a point-in-time certification."""
+    """The fields that make the issue legs a point-in-time certification.
+
+    These live INSIDE the leg evidence on purpose: the completion receipt's
+    top-level key set is validated with exact set equality by
+    tools/ember-restart-3b/certified_train_launch.py, so a new top-level field
+    would make every certificate minted afterwards unlaunchable.
+    """
     pinned = payload.get("public_master_sha") if isinstance(payload, dict) else None
     count = payload.get("open_issue_count") if isinstance(payload, dict) else None
+    census_seconds = _instant_seconds(capture_instant)
+    run_seconds = _instant_seconds(snapshot.get("captured_at_utc"))
     return {
         "issue_census_binding_mode": "point_in_time_snapshot",
         "issue_census_sha256": census_sha256,
@@ -492,6 +597,34 @@ def census_snapshot_binding(
             payload.get("issue_snapshot_sha256") if isinstance(payload, dict) else None
         ),
         "verified_checkout_head": head,
+        # Freshness for the external mint consumer: the in-run capture is
+        # stamped by THIS process, so a census artifact captured days earlier is
+        # visible as an age rather than hiding behind self-consistent hashes.
+        "in_run_issue_snapshot": {
+            "captured_at_utc": snapshot.get("captured_at_utc"),
+            "capture_started_at_utc": snapshot.get("capture_started_at_utc"),
+            "capture_nonce": snapshot.get("capture_nonce"),
+            "snapshot_sha256": snapshot.get("snapshot_sha256"),
+            "issue_count": snapshot.get("issue_count"),
+            "capture_attempts": snapshot.get("attempts"),
+            "torn_reads": snapshot.get("torn_reads"),
+            "command": snapshot.get("command"),
+            "stdout_sha256": snapshot.get("stdout_sha256"),
+            "confirming_stdout_sha256": snapshot.get("confirming_stdout_sha256"),
+            "github_cli_executable_name": snapshot.get("github_cli_executable_name"),
+            "github_cli_executable_sha256": snapshot.get("github_cli_executable_sha256"),
+            "equals_census_snapshot": (
+                payload.get("issue_source_snapshot") == snapshot.get("snapshot")
+                if isinstance(payload, dict)
+                else None
+            ),
+            "divergence_resolves_leg_state": False,
+        },
+        "issue_census_age_seconds": (
+            None
+            if census_seconds is None or run_seconds is None
+            else int(run_seconds - census_seconds)
+        ),
         "issue_census_claim": (
             f"open issues as of {capture_instant}, census sha256 {census_sha256}, "
             f"pinned tip {pinned}"
@@ -577,6 +710,22 @@ def custody_legs(
             for k in ("1", "2", "6", "9")
         }
 
+    # Capture the snapshot of record INSIDE this run, before the census executes.
+    # Nothing downstream compares it to a live re-read: an issue filed, closed,
+    # relabelled, or commented on while a multi-hour census runs must invalidate
+    # nothing. Divergence from the census artifact is recorded, never fatal.
+    snapshot = capture_issue_snapshot(root)
+    if not snapshot["ok"]:
+        reason = (
+            "in-run issue snapshot could not be captured"
+            if snapshot["failure"] == "acquisition_failed"
+            else "issue snapshot torn across repeated live reads"
+        )
+        return {
+            k: leg(RESOLVED_FALSE, LEG_TITLES[k], reason, snapshot)
+            for k in ("1", "2", "6", "9")
+        }
+
     out = root / ".ember01-verify-custody.tmp.json"
     head = git(root, "rev-parse", "HEAD").stdout.strip()
     snapshot_binding = census_snapshot_binding(
@@ -585,33 +734,8 @@ def custody_legs(
         capture_instant,
         capture_instant_source,
         head,
+        snapshot,
     )
-
-    # INFORMATIONAL ONLY (#1331). The certificate binds to the snapshot captured
-    # above - its sha256, its capture instant, and the tip it pinned - never to
-    # the live GitHub list at end-of-run. Filing, closing, labelling, or
-    # commenting on an issue during a multi-hour census must invalidate nothing.
-    # Divergence here is recorded as evidence and MUST NOT resolve a leg.
-    live = fetch_live_open_issues(root)
-    live_evidence: dict[str, Any] = {
-        "informational_only": True,
-        "resolves_leg_state": False,
-        "returncode": live["returncode"],
-        "command": live["command"],
-        "stdout_sha256": live["stdout_sha256"],
-        "github_cli_executable_name": live.get("executable_name"),
-        "github_cli_executable_sha256": live.get("executable_sha256"),
-    }
-    if live["returncode"] != 0 or not isinstance(live["issues"], list):
-        live_evidence["acquired"] = False
-        live_evidence["stderr_tail"] = str(live["stderr"])[-400:]
-    else:
-        live_source = canonical_open_issue_source_snapshot(live["issues"])
-        live_evidence["acquired"] = True
-        live_evidence["live_issue_count"] = len(live_source)
-        live_evidence["equals_census_snapshot"] = (
-            issue_census_payload.get("issue_source_snapshot") == live_source
-        )
     cmd = [
         sys.executable, "-B", CENSUS_REL,
         "--root-spec", str(root_spec),
@@ -662,7 +786,6 @@ def custody_legs(
         "returncode": rc,
         "stdout_tail": result["stdout"][-400:],
         **snapshot_binding,
-        "live_issue_snapshot": live_evidence,
     }
     return {k: leg(state, LEG_TITLES[k], reason, ev) for k in ("1", "2", "6", "9")}
 
@@ -1236,13 +1359,6 @@ def main() -> int:
                 "A bare clean clone honestly reports the operator-machine-bound "
                 "legs (custody/identity/seat) as UNRESOLVED. ok=true requires an "
                 "operator-machine run with real roots + owned checkpoint + seat."
-            ),
-            "issue_census_binding": (
-                "point-in-time: legs 1/2/6/9 certify the issue-census snapshot "
-                "this run captured - its sha256, capture instant, and pinned tip "
-                "are in leg_detail evidence - never the live GitHub issue list at "
-                "end-of-run. GitHub metadata changing during the run invalidates "
-                "nothing certified here."
             ),
         },
         "checkout": checkout,

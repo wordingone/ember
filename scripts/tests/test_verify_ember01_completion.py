@@ -164,6 +164,39 @@ def test_completion_receipt_payload_stamps_goal_id_and_subject_separately(
     assert payload["goal_id"] != payload["completion_subject_goal_id"]
 
 
+def test_receipt_top_level_keys_match_the_launch_consumer_exactly(
+    tmp_path: Path,
+) -> None:
+    """The launch validator compares the receipt's top-level key set with set
+    equality, so a new top-level field makes every certificate minted afterwards
+    unlaunchable. New evidence belongs inside an existing object instead."""
+    sys.path.insert(0, str(REPO_ROOT / "tools" / "ember-restart-3b"))
+    import certified_train_launch  # noqa: PLC0415
+
+    selection = tmp_path / "selection.md"
+    selection.write_text(
+        f"active_goal_path: {REPO_ROOT / 'GOAL.md'}\n", encoding="utf-8"
+    )
+    receipt = tmp_path / "receipt.json"
+    subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            str(REPO_ROOT / "scripts" / "verify_ember01_completion.py"),
+            "--root", str(REPO_ROOT),
+            "--selection", str(selection),
+            "--receipt", str(receipt),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    payload = json.loads(receipt.read_text(encoding="utf-8"))
+
+    assert set(payload) == certified_train_launch.COMPLETION_RECEIPT_KEYS
+
+
 def test_custody_legs_bind_census_to_remote_master_ref(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -346,6 +379,89 @@ def _passing_custody_run(
     )
 
 
+def test_issue_snapshot_capture_requires_two_agreeing_reads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A torn paginated read must not become the certified snapshot: the second
+    read has to agree before the capture counts."""
+    reads = [
+        [_live_issue(title="torn")],
+        [_live_issue(title="settled")],
+        [_live_issue(title="settled")],
+        [_live_issue(title="settled")],
+    ]
+    monkeypatch.setattr(
+        completion,
+        "fetch_live_open_issues",
+        lambda *_args, **_kwargs: {
+            "returncode": 0,
+            "issues": reads.pop(0),
+            "stdout_sha256": "c" * 64,
+            "command": ["gh", "issue", "list"],
+        },
+    )
+
+    snapshot = completion.capture_issue_snapshot(REPO_ROOT)
+
+    assert snapshot["ok"] is True
+    assert snapshot["attempts"] == 2
+    assert len(snapshot["torn_reads"]) == 1
+    assert snapshot["issue_count"] == 1
+    assert completion.ISO_INSTANT_RE.fullmatch(snapshot["captured_at_utc"])
+    assert len(snapshot["capture_nonce"]) == 32
+
+
+def test_issue_snapshot_capture_refuses_a_persistently_torn_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    counter = iter(range(100))
+    monkeypatch.setattr(
+        completion,
+        "fetch_live_open_issues",
+        lambda *_args, **_kwargs: {
+            "returncode": 0,
+            "issues": [_live_issue(title=f"churn-{next(counter)}")],
+            "stdout_sha256": "c" * 64,
+            "command": ["gh", "issue", "list"],
+        },
+    )
+
+    snapshot = completion.capture_issue_snapshot(REPO_ROOT)
+
+    assert snapshot["ok"] is False
+    assert snapshot["failure"] == "torn_read"
+    assert snapshot["attempts"] == completion.ISSUE_SNAPSHOT_ATTEMPTS
+
+
+def test_custody_legs_reject_a_torn_issue_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    snapshot_file = tmp_path / "public-issue-census-live.json"
+    snapshot_file.write_text(json.dumps(_live_census_payload()), encoding="utf-8")
+    monkeypatch.setattr(
+        completion,
+        "capture_issue_snapshot",
+        lambda *_args, **_kwargs: {"ok": False, "failure": "torn_read", "attempts": 3},
+    )
+    monkeypatch.setattr(
+        completion,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail("census must not run"),
+    )
+
+    result = completion.custody_legs(
+        REPO_ROOT,
+        ["public-repository=B:/tmp/public"],
+        run_custody=True,
+        issue_census=snapshot_file,
+    )
+
+    assert {row["reason"] for row in result.values()} == {
+        "issue snapshot torn across repeated live reads"
+    }
+    assert {row["state"] for row in result.values()} == {completion.RESOLVED_FALSE}
+
+
 def test_custody_legs_survive_github_mutation_after_snapshot(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -368,17 +484,17 @@ def test_custody_legs_survive_github_mutation_after_snapshot(
     )
 
     assert {row["state"] for row in result.values()} == {completion.RESOLVED_TRUE}
-    live_evidence = result["9"]["evidence"]["live_issue_snapshot"]
-    assert live_evidence["equals_census_snapshot"] is False
-    assert live_evidence["informational_only"] is True
-    assert live_evidence["resolves_leg_state"] is False
+    in_run = result["9"]["evidence"]["in_run_issue_snapshot"]
+    assert in_run["equals_census_snapshot"] is False
+    assert in_run["divergence_resolves_leg_state"] is False
+    assert in_run["issue_count"] == 2
 
 
-def test_custody_legs_survive_live_github_acquisition_failure(
+def test_custody_legs_refuse_when_the_issue_snapshot_cannot_be_captured(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The live list is informational, so failing to fetch it cannot turn a
-    certified snapshot red."""
+    """The in-run snapshot is what the certificate claims, so failing to take it
+    is a refusal -- unlike divergence from it, which is only evidence."""
     snapshot = tmp_path / "public-issue-census-live.json"
     snapshot.write_text(json.dumps(_live_census_payload()), encoding="utf-8")
     _passing_custody_run(monkeypatch)
@@ -401,8 +517,10 @@ def test_custody_legs_survive_live_github_acquisition_failure(
         issue_census=snapshot,
     )
 
-    assert {row["state"] for row in result.values()} == {completion.RESOLVED_TRUE}
-    assert result["9"]["evidence"]["live_issue_snapshot"]["acquired"] is False
+    assert {row["state"] for row in result.values()} == {completion.RESOLVED_FALSE}
+    assert {row["reason"] for row in result.values()} == {
+        "in-run issue snapshot could not be captured"
+    }
 
 
 def test_custody_legs_record_snapshot_binding_fields(
@@ -434,6 +552,14 @@ def test_custody_legs_record_snapshot_binding_fields(
         assert evidence["verified_checkout_head"] == "a" * 40
         assert expected_sha in evidence["issue_census_claim"]
         assert "2026-07-23T02:00:00Z" in evidence["issue_census_claim"]
+        # Freshness the external mint consumer reads, stamped by this process.
+        in_run = evidence["in_run_issue_snapshot"]
+        assert completion.ISO_INSTANT_RE.fullmatch(in_run["captured_at_utc"])
+        assert completion.ISO_INSTANT_RE.fullmatch(in_run["capture_started_at_utc"])
+        assert len(in_run["capture_nonce"]) == 32
+        assert len(in_run["snapshot_sha256"]) == 64
+        assert in_run["capture_attempts"] == 1
+        assert evidence["issue_census_age_seconds"] > 0
 
 
 def test_custody_legs_fall_back_to_snapshot_max_updated_at(
