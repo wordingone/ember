@@ -85,11 +85,22 @@ silently confused again. See each row's `hash_remint` note.
   the census's `content_hash`). `sync._build_commit_operations` additionally
   filters the row's data files through
   `filter_repo_objects(..., ignore_patterns=sync.UPLOAD_IGNORE_PATTERNS)`,
-  which excludes dotfiles and `.git*` paths from what's actually published —
-  this matters for rows like the census's row 14
+  which excludes dotfiles, `.git*` paths, AND (issue #1313 rework)
+  `sync.HF_UPLOAD_FOLDER_DEFAULT_IGNORE_PATTERNS` — the
+  `.git`+`.cache/huggingface` pattern family `huggingface_hub`'s own
+  `upload_folder` always appended on top of any caller-supplied
+  `ignore_patterns`. The old `upload_folder`-based implementation got that
+  union for free; `create_commit` (the N1 fix's single-commit path) has no
+  such implicit behavior, so `UPLOAD_IGNORE_PATTERNS` now unions the two
+  explicitly — `test_hf_default_ignore_patterns_is_subset_of_installed_
+  library` pins the inlined constant against whatever the installed
+  `huggingface_hub` version actually enforces, so a future hub version
+  widening its own denylist fails that test loudly instead of silently
+  under-filtering. This matters for rows like the census's row 14
   (`ember-corpus-v1-lane-285`), an active git worktree whose `.git` pointer
   file contains an absolute local filesystem path that must never be
-  published.
+  published, and for any row containing a stray
+  `.cache/huggingface/` directory from local tooling.
 - **Row-scoped publication conditions via `publish_note`, one commit
   (issue #1313/N1).** An inventory row may carry an optional `publish_note`
   field. When present at `--execute` time, its text is uploaded as a

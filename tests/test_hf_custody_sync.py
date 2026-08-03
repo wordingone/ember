@@ -416,6 +416,63 @@ def test_create_commit_operations_exclude_dotfiles_and_git(tmp_path, monkeypatch
     assert not any(".git" in p for p in operation_paths)
 
 
+def test_create_commit_operations_exclude_hf_cache_dir(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    """Review rework (issue #1313): huggingface_hub's `upload_folder` always
+    excludes `.cache/huggingface/**` on top of any caller-supplied
+    `ignore_patterns` — the old implementation got that for free. The N1
+    fix's `create_commit` path has no such implicit behavior, so
+    UPLOAD_IGNORE_PATTERNS now unions in
+    HF_UPLOAD_FOLDER_DEFAULT_IGNORE_PATTERNS explicitly. This fixtures a row
+    with a `.cache/huggingface` directory and proves: (a) verification still
+    hashes it (census-identical, M4b), (b) the create_commit operations for
+    the row do NOT include it."""
+    root = tmp_path / "data" / "with-hf-cache"
+    combined_sha = _write_dataset_dir(
+        root,
+        {
+            "visible.txt": b"a",
+            ".cache/huggingface/token": b"should-never-publish",
+            ".cache/huggingface/download/blob.lock": b"lockfile-content",
+        },
+    )
+
+    manifest = sync.compute_filelist_manifest(root)
+    manifest_names = {f["name"] for f in manifest["files"]}
+    assert ".cache/huggingface/token" in manifest_names
+    assert ".cache/huggingface/download/blob.lock" in manifest_names
+
+    fake_api = FakeHfApi()
+    monkeypatch.setattr(sync, "HfApi", lambda: fake_api)
+
+    inv_path = tmp_path / "inventory.jsonl"
+    inv_path.write_text(_inventory_line(**_eligible_row(str(root), combined_sha)) + "\n", encoding="utf-8")
+    sync.sync(inv_path, repo_id="wordingone/ember-custody", execute=True)
+
+    call = fake_api.create_commit_calls[0]
+    operation_paths = {op.path_in_repo for op in call["operations"]}
+    assert operation_paths == {f"{root.name}/visible.txt"}
+    assert not any(".cache" in p for p in operation_paths)
+
+
+def test_hf_default_ignore_patterns_is_subset_of_installed_library():
+    """Pin sync.HF_UPLOAD_FOLDER_DEFAULT_IGNORE_PATTERNS (inlined, not
+    imported, because it names an internal huggingface_hub module
+    attribute that could move or change without notice) against whatever
+    the ACTUALLY INSTALLED huggingface_hub version enforces. If a future
+    hub version widens `upload_folder`'s always-applied denylist beyond
+    what's inlined here, this test fails loudly instead of this tool
+    silently under-filtering relative to what upload_folder used to
+    guarantee."""
+    try:
+        from huggingface_hub.hf_api import DEFAULT_IGNORE_PATTERNS as installed_default_ignore_patterns
+    except ImportError:
+        pytest.skip(
+            "huggingface_hub.hf_api.DEFAULT_IGNORE_PATTERNS is not importable "
+            "in this installed huggingface_hub version — nothing to pin against"
+        )
+    assert set(installed_default_ignore_patterns) <= set(sync.HF_UPLOAD_FOLDER_DEFAULT_IGNORE_PATTERNS)
+
+
 def test_verification_includes_dotfiles_census_identical(tmp_path):
     root = tmp_path / "data" / "with-dotfile"
     combined_sha = _write_dataset_dir(root, {"visible.txt": b"a", ".git": b"gitdir: /elsewhere\n"})

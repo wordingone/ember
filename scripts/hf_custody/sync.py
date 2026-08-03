@@ -43,9 +43,14 @@ HARD INVARIANTS (encoded here, not just documented):
     --dry-run is not passed (see build_arg_parser). In dry-run, zero
     huggingface_hub network calls are made.
   * Upload fileset is a SUBSET of the verified fileset (PR #1311 review,
-    M4b/m3): dotfiles and `.git*` paths are excluded from the commit
+    M4b/m3): dotfiles, `.git*` paths, and the `.cache/huggingface` family
+    huggingface_hub itself always excludes are excluded from the commit
     operations built for the row (`_build_commit_operations`) via
-    `UPLOAD_IGNORE_PATTERNS`, but verification still
+    `UPLOAD_IGNORE_PATTERNS` (issue #1313 rework: this now explicitly
+    unions in `HF_UPLOAD_FOLDER_DEFAULT_IGNORE_PATTERNS`, matching what
+    `upload_folder` always applied on top of any caller-supplied
+    `ignore_patterns` — `create_commit` has no such implicit behavior, so
+    the union must be supplied here), but verification still
     hashes them — the verification set stays census-identical, only the
     published bytes are narrower. A refused symlink anywhere in the walk
     aborts verification (and therefore the whole run) rather than being
@@ -101,12 +106,38 @@ SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization
 SUPPORTED_HASH_METHOD = "sha256_content_manifest"
 REQUIRED_ELIGIBLE_FIELDS = ("content_hash", "hash_method", "hash_status")
 
-# Excludes dotfiles/dotdirs and .git* paths from the UPLOADED fileset only.
-# Verification (compute_filelist_manifest) is NOT filtered by this — it stays
-# census-identical (M4b). The exact glob-matching semantics against these
-# patterns are huggingface_hub's own and are not exercised by the offline
-# test suite (only that the kwarg is passed is tested).
-UPLOAD_IGNORE_PATTERNS = ["**/.*", ".*", "**/.git", "**/.git/**", ".git", ".git/**"]
+# huggingface_hub's own HfApi.upload_folder ALWAYS appends this exact pattern
+# family to whatever ignore_patterns the caller passes (source:
+# huggingface_hub.hf_api.DEFAULT_IGNORE_PATTERNS as of the huggingface_hub
+# version this tool is pinned against) — it is not something a caller can
+# opt out of. Inlined here as a named constant, rather than imported,
+# because `huggingface_hub.hf_api.DEFAULT_IGNORE_PATTERNS` is an internal
+# module attribute (no leading underscore on the name, but not part of the
+# package's public `__init__` surface either) that could move or change
+# without notice across hub versions; a wrong/missing value here would
+# silently under-filter, so it is pinned by
+# test_hf_default_ignore_patterns_is_subset_of_installed_library, which
+# fails loudly if a newer installed hub version widens its own denylist
+# beyond what's listed here (issue #1313, N1-rework: the create_commit
+# path below builds its own operations list and therefore does NOT get
+# upload_folder's implicit append for free — it must be unioned in
+# explicitly, see UPLOAD_IGNORE_PATTERNS).
+HF_UPLOAD_FOLDER_DEFAULT_IGNORE_PATTERNS = [
+    ".git", ".git/*", "*/.git", "**/.git/**",
+    ".cache/huggingface", ".cache/huggingface/*", "*/.cache/huggingface", "**/.cache/huggingface/**",
+]
+
+# Excludes dotfiles/dotdirs, .git* paths, AND (via the union above) the
+# `.cache/huggingface` family huggingface_hub always excludes on its own,
+# from the UPLOADED fileset only. Verification (compute_filelist_manifest)
+# is NOT filtered by this — it stays census-identical (M4b). The exact
+# glob-matching semantics against these patterns are huggingface_hub's own
+# (`huggingface_hub.utils.filter_repo_objects`) and are exercised by
+# test_create_commit_operations_exclude_dotfiles_and_git and
+# test_create_commit_operations_exclude_hf_cache_dir.
+UPLOAD_IGNORE_PATTERNS = [
+    "**/.*", ".*", "**/.git", "**/.git/**", ".git", ".git/**",
+] + HF_UPLOAD_FOLDER_DEFAULT_IGNORE_PATTERNS
 
 
 class InventoryRefusal(ValueError):
@@ -430,13 +461,18 @@ def _build_commit_operations(
     """Build the ONE commit's worth of operations for a verified row (N1 fix).
 
     Data files are the verified manifest's fileset (census-identical) minus
-    UPLOAD_IGNORE_PATTERNS — the same subset upload_folder's own
-    `ignore_patterns` kwarg used to select, computed here with
-    huggingface_hub's own `filter_repo_objects` so the matching semantics
-    are identical. If the row carries a `publish_note`, its README.md is
-    APPENDED to this same operations list — never issued as a separate,
-    trailing commit — so a single `create_commit` call either lands data
-    and README together or fails the row's commit atomically.
+    UPLOAD_IGNORE_PATTERNS — the UNION of this repo's own dotfile/.git
+    exclusions and `HF_UPLOAD_FOLDER_DEFAULT_IGNORE_PATTERNS` (the
+    `.git`+`.cache/huggingface` family `upload_folder` always applies on
+    top of whatever `ignore_patterns` a caller passes; `create_commit`
+    itself has no such implicit behavior, so this function must supply the
+    union explicitly to match what the old `upload_folder` call actually
+    excluded — not just the repo's own patterns in isolation), computed
+    here with huggingface_hub's own `filter_repo_objects` so the matching
+    semantics are identical. If the row carries a `publish_note`, its
+    README.md is APPENDED to this same operations list — never issued as a
+    separate, trailing commit — so a single `create_commit` call either
+    lands data and README together or fails the row's commit atomically.
     """
     root = Path(row["local_canonical_path"])
     included = filter_repo_objects(
