@@ -1,18 +1,18 @@
 {
   "schema": "ember-cond4-tamper-battery-receipt-v1",
   "ticket": "EMBER-01-COND4-BATTERY-REMINT-1331",
-  "ts": "2026-08-03T16:19:10Z",
+  "ts": "2026-08-03T16:41:33Z",
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "generated_at": "2026-08-03T16:19:10Z",
-  "implementation_commit": "3a45a004b97814a43e2022144f18b8c57214b8cf",
+  "generated_at": "2026-08-03T16:41:33Z",
+  "implementation_commit": "4f3d5b9fdac6114b105eb56dbee97c6dea8298c3",
   "implementation": {
     "completion_verifier": {
       "path": "scripts/verify_ember01_completion.py",
-      "sha256": "c48ee25cb141bbae268ec57aad8e8b840ca82e86b578a636d845247fbebb27af"
+      "sha256": "a81eccf5e5ebd3b944b4a27fc3adca8c80a542f4eec729a45ca7cee84657bc19"
     },
     "issue_census_builder": {
       "path": "scripts/ember_01_custody/issue_census.py",
@@ -147,8 +147,8 @@
         "tests/ember_01_custody/test_issue_census.py"
       ],
       "pre_write_tail": "  warnings.warn(",
-      "post_write_result": "77 passed in 38.91s",
-      "note": "the cond4-binding test can only pass after this receipt is written; post_write_result is the full 77-test focused run executed after this file was written"
+      "post_write_result": "81 passed in 67.63s",
+      "note": "the cond4-binding test can only pass after this receipt is written; post_write_result is the full 81-test focused run executed after this file was written"
     },
     "seeded_fail_open": {
       "axis": "tokenizer",
