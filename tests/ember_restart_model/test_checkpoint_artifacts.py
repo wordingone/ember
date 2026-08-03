@@ -1369,6 +1369,7 @@ class CheckpointArtifactTests(unittest.TestCase):
             global_step=1,
             max_transient_scratch_bytes=optimizer_floor + 100,
             max_serialized_bytes=1024**3,
+            single_specialist_episode=False,
         )
 
         self.assertEqual(
@@ -1382,6 +1383,140 @@ class CheckpointArtifactTests(unittest.TestCase):
             projection["all_expert_projected_tensor_storage_lower_bound_bytes"],
             bounds["expert-audio.pt"],
         )
+
+    def test_v5_storage_projection_admits_full_coverage_vertical_optimizer(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+        )
+        model = UnifiedDecoder(config, genesis_seed=187)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        for expert in checkpoint_artifacts.EXPERT_NAMES:
+            optimizer.zero_grad(set_to_none=True)
+            model(
+                torch.tensor([[1, 2, 3]], dtype=torch.long),
+                active_expert=expert,
+            ).float().square().mean().backward()
+            optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "v5"
+            receipt = write_checkpoint_artifacts(
+                model,
+                optimizer,
+                root,
+                launch_seed=187,
+                rng_state=_valid_rng_state(),
+                data_cursor={
+                    "shard": "owned",
+                    "record_index": 4,
+                    "global_step": 4,
+                    "tokens_seen": 12,
+                },
+                model_config_sha256="a" * 64,
+                contract_sha256="b" * 64,
+                expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                max_transient_scratch_bytes=1024**3,
+                max_serialized_bytes=1024**3,
+            )
+
+        projection = receipt["storage_projection"]
+        self.assertEqual(
+            projection["optimizer_state_active_expert_ids"],
+            list(checkpoint_artifacts.EXPERT_NAMES),
+        )
+        for route in ("shared", *checkpoint_artifacts.EXPERT_NAMES):
+            self.assertGreater(
+                projection["optimizer_state_tensor_storage_by_route_bytes"][route],
+                0,
+            )
+        self.assertEqual(
+            projection[
+                "projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes"
+            ],
+            projection["optimizer_state_tensor_storage_lower_bound_bytes"],
+        )
+
+    def test_v5_storage_projection_rejects_partial_multi_route_state(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+        )
+        model = UnifiedDecoder(config, genesis_seed=188)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        for expert in ("vision", "audio"):
+            optimizer.zero_grad(set_to_none=True)
+            model(
+                torch.tensor([[1, 2, 3]], dtype=torch.long),
+                active_expert=expert,
+            ).float().square().mean().backward()
+            optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(
+                ValueError, "post-update optimizer state"
+            ):
+                write_checkpoint_artifacts(
+                    model,
+                    optimizer,
+                    Path(directory) / "v5",
+                    launch_seed=188,
+                    rng_state=_valid_rng_state(),
+                    data_cursor={
+                        "shard": "owned",
+                        "record_index": 2,
+                        "global_step": 2,
+                        "tokens_seen": 6,
+                    },
+                    model_config_sha256="a" * 64,
+                    contract_sha256="b" * 64,
+                    expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                    max_transient_scratch_bytes=1024**3,
+                    max_serialized_bytes=1024**3,
+                )
+
+    def test_v5_storage_projection_rejects_multi_route_state_for_specialist_episode(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+        )
+        model = UnifiedDecoder(config, genesis_seed=189)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        for expert in checkpoint_artifacts.EXPERT_NAMES:
+            optimizer.zero_grad(set_to_none=True)
+            model(
+                torch.tensor([[1, 2, 3]], dtype=torch.long),
+                active_expert=expert,
+            ).float().square().mean().backward()
+            optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+        optimizer_payload = {"optimizer": optimizer.state_dict()}
+        optimizer_floor = checkpoint_artifacts._unique_tensor_storage_bytes(
+            optimizer_payload
+        )
+        bounds = {
+            "shared-model.pt": 100,
+            "optimizer-state.pt": optimizer_floor,
+            "replay-state.pt": 100,
+            **{
+                f"expert-{name}.pt": 100
+                for name in checkpoint_artifacts.EXPERT_NAMES
+            },
+        }
+        with self.assertRaisesRegex(
+            ValueError, "post-update optimizer state"
+        ):
+            checkpoint_artifacts._derive_checkpoint_storage_projection(
+                model=model,
+                optimizer=optimizer,
+                optimizer_file_payload=optimizer_payload,
+                shard_storage_lower_bounds=bounds,
+                shard_sha256={path: "a" * 64 for path in bounds},
+                publication_modes={path: "written" for path in bounds},
+                global_step=4,
+                max_transient_scratch_bytes=1024**3,
+                max_serialized_bytes=1024**3,
+                single_specialist_episode=True,
+            )
 
     def test_v5_storage_projection_rejects_all_expert_aggregate_over_serialized_gate(self) -> None:
         config = RestartDecoderConfig.small_for_tests(
@@ -1425,6 +1560,7 @@ class CheckpointArtifactTests(unittest.TestCase):
                 global_step=1,
                 max_transient_scratch_bytes=per_shard_ceiling,
                 max_serialized_bytes=per_shard_ceiling,
+                single_specialist_episode=False,
             )
 
     def test_v5_storage_projection_rejects_rehashed_route_tamper(self) -> None:
