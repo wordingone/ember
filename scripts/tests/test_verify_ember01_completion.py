@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import hashlib
+import shutil
 import json
 import subprocess
 import sys
@@ -1261,3 +1262,85 @@ def test_inspect_checkout_detached_head_symbolic_ref_not_retried(
     assert result["detached"] is True
     assert result["git_retries"] == 0
     assert sleeps == []
+
+
+def _sandbox_closure_repo(root: Path, *, entrypoint: str = "import json\n") -> Path:
+    """A miniature repo carrying a real closure module and a declared closure."""
+    repo = root / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    shutil.copyfile(
+        REPO_ROOT / "scripts" / "training_closure.py",
+        repo / "scripts" / "training_closure.py",
+    )
+    (repo / "tools").mkdir(parents=True)
+    (repo / "tools" / "entrypoint.py").write_text(entrypoint, encoding="utf-8")
+    (repo / "configs").mkdir(parents=True)
+    (repo / "configs" / "training.json").write_text('{"steps": 1}\n', encoding="utf-8")
+    manifest = repo / "manifests" / "training-dependency-closure.json"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": "ember-training-dependency-closure-v1",
+                "entrypoints": ["tools/entrypoint.py"],
+                "dynamic_entrypoints": [],
+                "code": ["scripts/training_closure.py"],
+                "data": ["configs/training.json"],
+                "dynamic_call_sites": {},
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return repo
+
+
+def test_closure_evidence_pins_the_hash_on_a_clean_boundary(tmp_path: Path) -> None:
+    repo = _sandbox_closure_repo(tmp_path)
+    value, reason = completion.closure_evidence_at(repo)
+    assert reason == "ok"
+    assert value is not None and len(value) == 64
+
+
+def test_closure_evidence_refuses_to_pin_over_a_violated_boundary(
+    tmp_path: Path,
+) -> None:
+    """A green certificate must never pin a closure hash over a broken boundary.
+
+    The launch consumer falls back to whole-tip equality when no hash is
+    pinned, so a violated boundary loses the relaxation and gets the older,
+    stricter binding instead of a hash that would look authoritative.
+    """
+    repo = _sandbox_closure_repo(tmp_path, entrypoint="from smuggled import SECRET\n")
+    (repo / "tools" / "smuggled.py").write_text("SECRET = 1\n", encoding="utf-8")
+
+    value, reason = completion.closure_evidence_at(repo)
+
+    assert value is None
+    assert reason.startswith("violated:")
+    assert "tools/smuggled.py" in reason
+
+
+def test_closure_evidence_distinguishes_unavailable_from_violated(
+    tmp_path: Path,
+) -> None:
+    """A bare None cannot tell predates-the-manifest from boundary-broken."""
+    bare = tmp_path / "bare"
+    bare.mkdir()
+
+    value, reason = completion.closure_evidence_at(bare)
+
+    assert value is None
+    assert reason.startswith("unavailable:")
+
+
+def test_closure_evidence_missing_manifest_is_unavailable(tmp_path: Path) -> None:
+    repo = _sandbox_closure_repo(tmp_path)
+    (repo / "manifests" / "training-dependency-closure.json").unlink()
+
+    value, reason = completion.closure_evidence_at(repo)
+
+    assert value is None
+    assert reason.startswith("unavailable:")
+

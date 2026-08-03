@@ -1,0 +1,93 @@
+{
+  "schema_version": "ember-training-dependency-closure-v1",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "purpose": "The certified launch chain binds THIS path set, not the repository tip. A merge that touches nothing here cannot invalidate a pending launch certificate; a merge that touches anything here correctly demands re-verification. scripts/training_closure.py walks the entrypoints and FAILS if anything reachable lies outside this declaration, if a declared path is absent, or if a member reaches code through subprocess/importlib/runpy/__import__ without a dynamic_call_sites entry -- so the boundary is machine-enforced and an undeclared dynamic edge is a red rather than a gap.",
+  "path_canonicalization": "Every path is repo-relative POSIX, exactly as git records it. The closure hash sorts these paths, hashes each file's bytes, and hashes the concatenation, so it is identical on every checkout of the same tree.",
+  "entrypoints": [
+    "tools/ember-restart-3b/certified_train_launch.py",
+    "tools/ember-restart-3b/checkpoint_artifacts.py",
+    "tools/ember-restart-3b/disk_budget_runner.py",
+    "tools/ember-restart-3b/parameter_counter.py",
+    "tools/ember-restart-3b/run_vertical_slice.py"
+  ],
+  "dynamic_entrypoints": [
+    "scripts/governor.py",
+    "tools/ember-restart-3b/launch_packet.py"
+  ],
+  "dynamic_entrypoints_note": "Programs the run path loads through spec_from_file_location or spawns from a path assembled out of several literals, which no static walk can recover: run_vertical_slice exec-loads scripts/governor.py (a different top-level directory) before any CUDA allocation, and launch_packet.py is the launch-surface program whose bytes the certificate already binds as launch_packet_sha256. Declaring one still subjects ITS imports to the walk.",
+  "code": [
+    "tools/ember-restart-3b/batch.py",
+    "tools/ember-restart-3b/build_owned_audio_frames.py",
+    "tools/ember-restart-3b/build_owned_reasoning_tool_trajectories.py",
+    "tools/ember-restart-3b/build_owned_vision_scenes.py",
+    "tools/ember-restart-3b/checkpoint_scratch.py",
+    "tools/ember-restart-3b/durable_io.py",
+    "tools/ember-restart-3b/input_identity.py",
+    "tools/ember-restart-3b/model.py",
+    "tools/ember-restart-3b/optimizer_transition.py",
+    "tools/ember-restart-3b/pretrain.py",
+    "tools/ember-restart-3b/production_rung.py",
+    "tools/ember-restart-3b/semantic_contract.py",
+    "tools/ember-restart-3b/semantic_stream.py",
+    "tools/ember-restart-3b/specialist_semantics.py",
+    "tools/ember-restart-3b/specialist_stream.py",
+    "tools/ember-restart-3b/step2_realization_registry.py",
+    "tools/ember-restart-3b/text_lab_corpus.py",
+    "tools/ember-restart-3b/tokenizer_runtime_bundle.py",
+    "tools/ember-restart-3b/train.py",
+    "tools/ember-restart-3b/verify_capability_record.py",
+    "tools/ember-restart-3b/verify_training_data.py",
+    "scripts/training_closure.py"
+  ],
+  "data": [
+    "Ember.cmd",
+    "configs/ember-restart-3b.json",
+    "data/ember-restart-3b/owned-four-domain-production-rung-v1.json",
+    "data/ember-restart-3b/owned-four-domain-production-rung-v1.receipt.json",
+    "data/ember-restart-3b/text-lab-authority-index-v1.json",
+    "manifests/python-environment-v1.json",
+    "scripts/launch-ember-cli.ps1",
+    "tokenizer/tokenizer.json",
+    "tools/ember-restart-3b/checkpoint-low-commit-deferral-policy.json"
+  ],
+  "data_declaration_note": "Data dependencies are declared rather than walked: a static walker cannot honestly prove which JSON a program reads, and a fabricated 'machine-detected' data edge would be worse than an explicit declaration. Every entry is a runtime input of the training chain -- the repo-relative constants in closure members (production_rung.SHARD_RELATIVE/RECEIPT_RELATIVE/TOKENIZER_RELATIVE/CONFIG_RELATIVE, text_lab_corpus._AUTHORITY_INDEX, run_vertical_slice's deferral policy and model config), the launch surface the certificate already binds by bytes (Ember.cmd as cli_binary_sha256, plus the launcher it invokes), and manifests/python-environment-v1.json, which pins the third-party imports (tokenizers, torch) that live outside the repo and therefore outside any path hash. All are inside the closure hash, so changing one demands re-verification.",
+  "dynamic_call_sites": {
+    "tools/ember-restart-3b/certified_train_launch.py": [
+      "scripts/training_closure.py",
+      "tools/ember-restart-3b/disk_budget_runner.py",
+      "tools/ember-restart-3b/run_vertical_slice.py",
+      "no repo target: git rev-parse and git merge-base --is-ancestor"
+    ],
+    "tools/ember-restart-3b/disk_budget_runner.py": [
+      "no repo target: spawns the certificate-declared child argv it is handed"
+    ],
+    "tools/ember-restart-3b/launch_packet.py": [
+      "no repo target: __import__ of stdlib base64 and hashlib"
+    ],
+    "tools/ember-restart-3b/pretrain.py": [
+      "tools/ember-restart-3b/verify_capability_record.py"
+    ],
+    "tools/ember-restart-3b/run_vertical_slice.py": [
+      "scripts/governor.py",
+      "tools/ember-restart-3b/parameter_counter.py",
+      "tools/ember-restart-3b/verify_training_data.py"
+    ],
+    "tools/ember-restart-3b/specialist_stream.py": [
+      "no repo target: a controlled __import__ replacement that admits only the declared module allowlist"
+    ],
+    "tools/ember-restart-3b/tokenizer_runtime_bundle.py": [
+      "no repo target: import_module('tokenizers'), pinned by manifests/python-environment-v1.json"
+    ],
+    "tools/ember-restart-3b/text_lab_corpus.py": [
+      "no repo target: git rev-parse and git merge-base --is-ancestor"
+    ],
+    "tools/ember-restart-3b/train.py": [
+      "no repo target: git rev-parse for the code commit"
+    ],
+    "tools/ember-restart-3b/verify_training_data.py": [
+      "no repo target: stdlib and third-party imports only"
+    ]
+  },
+  "dynamic_call_sites_note": "Every closure member that calls subprocess, importlib, runpy, or __import__ appears here with what it reaches. Adding such a call to a member without adding its target FAILS the guard, so a new exec edge cannot enter the run path unreviewed."
+}

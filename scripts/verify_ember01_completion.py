@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import copy
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -1221,6 +1222,45 @@ def authority_leg(root: Path, selection: Path) -> tuple[dict[str, Any], dict[str
     return {"8": leg(state, LEG_TITLES["8"], reason, {"tool": "verify_authority_conservation.verify"})}, cert
 
 
+def closure_evidence_at(root: Path) -> tuple[str | None, str]:
+    """Training-dependency-closure hash at the verified-at commit, and why.
+
+    Rides inside `checkout` rather than as a new top-level receipt key, so the
+    receipt's key set is unchanged and an unmodified launch consumer still
+    validates it. The launch consumer compares the hash against the closure it
+    recomputes from live bytes, so a merge outside the closure no longer
+    invalidates a pending certificate.
+
+    Fail-closed, and audited BEFORE it is hashed: if the declared closure does
+    not match what the entrypoints actually reach, no hash is pinned. The
+    launch consumer then falls back to whole-tip equality -- a violated
+    boundary loses the relaxation and gets the older, blunter, stricter
+    binding. A green certificate must never pin a closure hash over an
+    already-violated boundary.
+
+    The second element records WHY a hash is absent, because a bare None
+    cannot distinguish a tree that predates the closure manifest from one
+    whose boundary is broken, and whoever reads the receipt has to tell those
+    apart.
+    """
+    module_path = Path(root) / "scripts" / "training_closure.py"
+    specification = importlib.util.spec_from_file_location(
+        "ember_training_closure", module_path
+    )
+    if specification is None or specification.loader is None:
+        return None, "unavailable: no training closure module in this checkout"
+    module = importlib.util.module_from_spec(specification)
+    try:
+        specification.loader.exec_module(module)
+        manifest = module.load_manifest(Path(root))
+        audit = module.audit_closure(Path(root), manifest)
+        if not audit.ok:
+            return None, f"violated: {audit.failure_report()}"
+        return str(module.compute_closure_hash(Path(root), manifest)), "ok"
+    except (OSError, ValueError) as error:
+        return None, f"unavailable: {error}"
+
+
 def write_receipt(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + ".tmp")
@@ -1319,6 +1359,7 @@ def main() -> int:
         "git_retries_before": before["git_retries"],
         "git_retries_after": after["git_retries"],
     }
+    closure_sha256, closure_boundary = closure_evidence_at(root)
     selection_unchanged = selection_before == selection_after
 
     legs = {k: legs[k] for k in sorted(legs, key=int)}
@@ -1361,7 +1402,11 @@ def main() -> int:
                 "operator-machine run with real roots + owned checkpoint + seat."
             ),
         },
-        "checkout": checkout,
+        "checkout": {
+            **checkout,
+            "closure_sha256": closure_sha256,
+            "closure_boundary": closure_boundary,
+        },
         "selection": {**selection_after, "unchanged_during_verification": selection_unchanged},
         "authority_certificate": authority_cert,
     }

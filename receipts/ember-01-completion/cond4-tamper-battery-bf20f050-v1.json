@@ -1,18 +1,19 @@
 {
   "schema": "ember-cond4-tamper-battery-receipt-v1",
   "ticket": "EMBER-01-COND4-BATTERY-REMINT-1331",
-  "ts": "2026-08-03T16:41:33Z",
+  "ts": "2026-08-03T17:46:51Z",
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "generated_at": "2026-08-03T16:41:33Z",
-  "implementation_commit": "4f3d5b9fdac6114b105eb56dbee97c6dea8298c3",
+  "generated_at": "2026-08-03T17:46:51Z",
+  "implementation_commit": null,
+  "implementation_commit_note": "null by construction: this receipt ships in the SAME commit as the implementation it binds, so no prior commit contains those bytes. The sha256 bindings under `implementation` are the authority and are re-hashed against the tree by scripts/tests/test_verify_ember01_completion.py.",
   "implementation": {
     "completion_verifier": {
       "path": "scripts/verify_ember01_completion.py",
-      "sha256": "a81eccf5e5ebd3b944b4a27fc3adca8c80a542f4eec729a45ca7cee84657bc19"
+      "sha256": "1ca1609b2de736425d4bfc7179638054420360071b674c32be51f36d594f698c"
     },
     "issue_census_builder": {
       "path": "scripts/ember_01_custody/issue_census.py",
@@ -50,87 +51,78 @@
     "failures": [],
     "axes": {
       "checkpoint_bytes": {
-        "mutation": "append one newline byte to checkpoint manifest",
-        "consumer": "verify_parameter_identity_binding",
-        "expected_finding": null,
         "rejected": true,
+        "finding": "parameter_identity_mismatch",
         "detail": "receipt claims subject_checkpoint_sha256='bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b' but the checkpoint manifest bytes on disk hash to '3119b8341957d2c850270b6d8fb75bb0b6ef93781cb395e7729bcec9f24d1f79'"
       },
       "param_count": {
-        "mutation": "parameters.allocated += 1",
-        "consumer": "validate_identity.py --expected",
-        "expected_finding": "binding.parameters_mismatch",
         "rejected": true,
-        "returncode": 1,
+        "expected_finding": "binding.parameters_mismatch",
         "finding_codes": [
           "binding.parameters_mismatch"
-        ]
+        ],
+        "returncode": 1,
+        "timed_out": false
       },
       "tokenizer": {
-        "mutation": "tokenizer.sha256 flipped",
-        "consumer": "validate_identity.py --expected",
-        "expected_finding": "binding.tokenizer_mismatch",
         "rejected": true,
-        "returncode": 1,
+        "expected_finding": "binding.tokenizer_mismatch",
         "finding_codes": [
           "binding.tokenizer.sha256_mismatch",
           "binding.tokenizer_mismatch"
-        ]
+        ],
+        "returncode": 1,
+        "timed_out": false
       },
       "data_learned_signal": {
-        "mutation": "inject hidden_external_cognition without an exclusion reason",
-        "consumer": "validate_identity.py --expected",
-        "expected_finding": "provenance.forbidden_learned_signal",
         "rejected": true,
-        "returncode": 1,
+        "expected_finding": "provenance.forbidden_learned_signal",
         "finding_codes": [
           "historical.contamination_unclassified",
           "provenance.forbidden_learned_signal"
-        ]
+        ],
+        "returncode": 1,
+        "timed_out": false
       },
       "mechanism": {
-        "mutation": "mechanisms.router[0].sha256 flipped",
-        "consumer": "validate_identity.py --expected",
-        "expected_finding": "binding.mechanisms_mismatch",
         "rejected": true,
-        "returncode": 1,
+        "expected_finding": "binding.mechanisms_mismatch",
         "finding_codes": [
           "binding.mechanisms.router_mismatch",
           "binding.mechanisms_mismatch"
-        ]
+        ],
+        "returncode": 1,
+        "timed_out": false
       },
       "backend": {
-        "mutation": "backend.executable_sha256 replaced with a foreign digest",
-        "consumer": "validate_identity.py --expected",
-        "expected_finding": "binding.backend_mismatch",
         "rejected": true,
-        "returncode": 1,
+        "expected_finding": "binding.backend_mismatch",
         "finding_codes": [
           "binding.backend.executable_sha256_mismatch",
           "binding.backend_mismatch",
           "unresolved.index_mismatch"
-        ]
+        ],
+        "returncode": 1,
+        "timed_out": false
       },
       "benchmark_id": {
-        "mutation": "evaluation.benchmark_id replaced with an unregistered identifier",
-        "consumer": "validate_identity.py --expected",
-        "expected_finding": "binding.evaluation.benchmark_id_mismatch",
         "rejected": true,
-        "returncode": 1,
+        "expected_finding": "binding.evaluation.benchmark_id_mismatch",
         "finding_codes": [
           "binding.evaluation.benchmark_id_mismatch"
-        ]
+        ],
+        "returncode": 1,
+        "timed_out": false
       },
       "comparator": {
-        "mutation": "evaluation.comparator_identity replaced with a foreign comparator",
-        "consumer": "validate_identity.py --expected",
-        "expected_finding": "binding.evaluation.comparator_identity_mismatch",
         "rejected": true,
-        "returncode": 1,
+        "expected_finding": "binding.evaluation.comparator_identity_mismatch",
         "finding_codes": [
           "binding.evaluation.comparator_identity_mismatch",
           "unresolved.index_mismatch"
-        ]
+        ],
+        "returncode": 1,
+        "timed_out": false
       }
     }
   },
