@@ -8,15 +8,23 @@ touches the network. No test in this file may pass if a real HTTP call is made.
 
 Covers the PR #1311 review fixes:
   M1 — whole-run verify-then-upload (a single mismatch/collision/symlink
-       aborts the ENTIRE run before the first upload_folder call).
+       aborts the ENTIRE run before the first create_commit call).
   M2 — receipts are appended per-outcome, immediately, so a mid-run failure
        still leaves earlier rows' receipts on disk.
   M3 — hf_revision is always None or a real 40-hex commit sha; no commit_url
        fallback, enforced both at upload time and at receipt-write time.
   M4 — publish_note -> README.md upload + readme_uploaded receipt flag (a);
-       dotfiles/.git* excluded from the upload fileset via ignore_patterns,
-       while verification still hashes them (b).
+       dotfiles/.git* excluded from the upload fileset via UPLOAD_IGNORE_
+       PATTERNS filtering, while verification still hashes them (b).
   m5 — path_in_repo basename collisions are a hard, whole-run refusal.
+
+Also covers issue #1313 (PR #1311 re-review nits N1/N4):
+  N1 — a row's README.md (from publish_note) is one more operation in the
+       SAME create_commit call as its data files, never a second, trailing
+       commit — see the "N1" tests near the M4a section.
+  N4 — with N1 fixed there is only one commit per row, so its oid
+       (hf_revision) already covers the README whenever readme_uploaded is
+       true; there is no separate README-commit revision left unrecorded.
 """
 from __future__ import annotations
 
@@ -70,19 +78,20 @@ class FakeCommitInfo:
 
 
 class FakeHfApi:
-    """Records calls; never touches the network."""
+    """Records calls; never touches the network.
+
+    N1 fix: sync.py issues exactly ONE `create_commit` call per row — data
+    files and, when present, the row's README.md as operations in the SAME
+    commit — instead of an `upload_folder` call followed by a separate,
+    trailing `upload_file` call.
+    """
 
     def __init__(self, oid: str | None = VALID_REVISION):
-        self.upload_calls: list[dict] = []
-        self.upload_file_calls: list[dict] = []
+        self.create_commit_calls: list[dict] = []
         self._oid = oid
 
-    def upload_folder(self, **kwargs):
-        self.upload_calls.append(kwargs)
-        return FakeCommitInfo(oid=self._oid)
-
-    def upload_file(self, **kwargs):
-        self.upload_file_calls.append(kwargs)
+    def create_commit(self, **kwargs):
+        self.create_commit_calls.append(kwargs)
         return FakeCommitInfo(oid=self._oid)
 
 
@@ -199,8 +208,7 @@ def test_tampered_row_aborts_whole_run_before_any_upload(
     with pytest.raises(sync.InventoryRefusal, match="row 2"):
         sync.sync(inv_path, repo_id="wordingone/ember-custody", execute=True)
 
-    assert fake_api.upload_calls == []
-    assert fake_api.upload_file_calls == []
+    assert fake_api.create_commit_calls == []
 
 
 def test_missing_local_directory_aborts_whole_run(eligible_dataset, tmp_path, monkeypatch: pytest.MonkeyPatch):
@@ -218,7 +226,7 @@ def test_missing_local_directory_aborts_whole_run(eligible_dataset, tmp_path, mo
     )
     with pytest.raises(sync.InventoryRefusal, match="not a directory"):
         sync.sync(inv_path, repo_id="wordingone/ember-custody", execute=True)
-    assert fake_api.upload_calls == []
+    assert fake_api.create_commit_calls == []
 
 
 def test_symlink_in_dataset_dir_refuses_verification(tmp_path, monkeypatch: pytest.MonkeyPatch):
@@ -267,7 +275,7 @@ def test_symlinked_dataset_row_aborts_whole_run(eligible_dataset, tmp_path, monk
     )
     with pytest.raises(sync.InventoryRefusal, match="symlink refused"):
         sync.sync(inv_path, repo_id="wordingone/ember-custody", execute=True)
-    assert fake_api.upload_calls == []
+    assert fake_api.create_commit_calls == []
 
 
 def test_missing_sha_fields_on_eligible_row_refuses_whole_run(eligible_dataset, tmp_path):
@@ -321,7 +329,7 @@ def test_refusal_uploads_nothing(eligible_dataset, review_dataset, tmp_path, mon
     )
     with pytest.raises(sync.InventoryRefusal):
         sync.sync(inv_path, repo_id="wordingone/ember-custody", execute=True)
-    assert fake_api.upload_calls == []
+    assert fake_api.create_commit_calls == []
 
 
 # ---------------------------------------------------------------------------
@@ -347,7 +355,7 @@ def test_path_in_repo_collision_aborts_whole_run(tmp_path, monkeypatch: pytest.M
     )
     with pytest.raises(sync.InventoryRefusal, match="collision"):
         sync.sync(inv_path, repo_id="wordingone/ember-custody", execute=True)
-    assert fake_api.upload_calls == []
+    assert fake_api.create_commit_calls == []
 
 
 # ---------------------------------------------------------------------------
@@ -362,13 +370,13 @@ def test_dry_run_default_makes_zero_upload_calls(eligible_dataset, tmp_path, mon
     inv_path = tmp_path / "inventory.jsonl"
     inv_path.write_text(_inventory_line(**_eligible_row(str(root), combined_sha)) + "\n", encoding="utf-8")
     outcomes = sync.sync(inv_path, repo_id="wordingone/ember-custody", execute=False)
-    assert fake_api.upload_calls == []
+    assert fake_api.create_commit_calls == []
     assert outcomes[0].status == "dry_run"
     assert outcomes[0].hf_revision is None
     assert outcomes[0].readme_uploaded is False
 
 
-def test_execute_true_calls_upload_folder_exactly_once_per_eligible_row(
+def test_execute_true_calls_create_commit_exactly_once_per_eligible_row(
     eligible_dataset, tmp_path, monkeypatch: pytest.MonkeyPatch
 ):
     root, combined_sha = eligible_dataset
@@ -378,11 +386,12 @@ def test_execute_true_calls_upload_folder_exactly_once_per_eligible_row(
     inv_path = tmp_path / "inventory.jsonl"
     inv_path.write_text(_inventory_line(**_eligible_row(str(root), combined_sha)) + "\n", encoding="utf-8")
     outcomes = sync.sync(inv_path, repo_id="wordingone/ember-custody", execute=True)
-    assert len(fake_api.upload_calls) == 1
-    call = fake_api.upload_calls[0]
+    assert len(fake_api.create_commit_calls) == 1
+    call = fake_api.create_commit_calls[0]
     assert call["repo_id"] == "wordingone/ember-custody"
     assert call["repo_type"] == "dataset"
-    assert call["folder_path"] == str(root)
+    operation_paths = {op.path_in_repo for op in call["operations"]}
+    assert operation_paths == {f"{root.name}/a.jsonl", f"{root.name}/b.jsonl"}
     assert outcomes[0].status == "uploaded"
     assert outcomes[0].hf_revision == VALID_REVISION
 
@@ -391,8 +400,9 @@ def test_execute_true_calls_upload_folder_exactly_once_per_eligible_row(
 # M4b — dotfiles/.git* excluded from upload, but not from verification
 # ---------------------------------------------------------------------------
 
-def test_upload_folder_receives_dotfile_ignore_patterns(eligible_dataset, tmp_path, monkeypatch: pytest.MonkeyPatch):
-    root, combined_sha = eligible_dataset
+def test_create_commit_operations_exclude_dotfiles_and_git(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    root = tmp_path / "data" / "with-dotfile"
+    combined_sha = _write_dataset_dir(root, {"visible.txt": b"a", ".git": b"gitdir: /elsewhere\n"})
     fake_api = FakeHfApi()
     monkeypatch.setattr(sync, "HfApi", lambda: fake_api)
 
@@ -400,9 +410,10 @@ def test_upload_folder_receives_dotfile_ignore_patterns(eligible_dataset, tmp_pa
     inv_path.write_text(_inventory_line(**_eligible_row(str(root), combined_sha)) + "\n", encoding="utf-8")
     sync.sync(inv_path, repo_id="wordingone/ember-custody", execute=True)
 
-    call = fake_api.upload_calls[0]
-    assert call["ignore_patterns"] == sync.UPLOAD_IGNORE_PATTERNS
-    assert any(".git" in p or ".*" in p for p in call["ignore_patterns"])
+    call = fake_api.create_commit_calls[0]
+    operation_paths = {op.path_in_repo for op in call["operations"]}
+    assert operation_paths == {f"{root.name}/visible.txt"}
+    assert not any(".git" in p for p in operation_paths)
 
 
 def test_verification_includes_dotfiles_census_identical(tmp_path):
@@ -499,14 +510,14 @@ def test_partial_run_receipts_persisted_up_to_the_failing_row(
     fake_api = FakeHfApi()
     call_count = {"n": 0}
 
-    def flaky_upload_folder(**kwargs):
+    def flaky_create_commit(**kwargs):
         call_count["n"] += 1
-        fake_api.upload_calls.append(kwargs)
+        fake_api.create_commit_calls.append(kwargs)
         if call_count["n"] == 2:
             raise RuntimeError("simulated network blip on row 2")
         return FakeCommitInfo(oid=VALID_REVISION)
 
-    fake_api.upload_folder = flaky_upload_folder
+    fake_api.create_commit = flaky_create_commit
     monkeypatch.setattr(sync, "HfApi", lambda: fake_api)
 
     inv_path = tmp_path / "inventory.jsonl"
@@ -554,7 +565,7 @@ def test_cli_main_writes_run_refused_receipt_on_whole_run_refusal(
         "--receipts-path", str(receipts_path),
     ])
     assert rc == 1
-    assert fake_api.upload_calls == []
+    assert fake_api.create_commit_calls == []
     rows = receipts.read_receipts(receipts_path)
     assert len(rows) == 1
     assert rows[0]["status"] == "run_refused"
@@ -570,8 +581,8 @@ def test_missing_oid_is_a_hard_error_not_a_commit_url_fallback(
 ):
     root, combined_sha = eligible_dataset
     fake_api = FakeHfApi(oid=None)
-    fake_api.upload_folder = lambda **kwargs: (
-        fake_api.upload_calls.append(kwargs) or FakeCommitInfo(oid=None, commit_url="https://huggingface.co/x/commit/abc")
+    fake_api.create_commit = lambda **kwargs: (
+        fake_api.create_commit_calls.append(kwargs) or FakeCommitInfo(oid=None, commit_url="https://huggingface.co/x/commit/abc")
     )
     monkeypatch.setattr(sync, "HfApi", lambda: fake_api)
 
@@ -622,7 +633,8 @@ def test_receipts_append_rejects_uploaded_status_with_url_as_revision(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# M4a — publish_note -> README.md upload
+# M4a / N1 (issue #1313) — publish_note -> README.md folded into the SAME
+# commit as the row's data files, never a second, trailing commit.
 # ---------------------------------------------------------------------------
 
 def test_publish_note_uploads_readme_and_sets_receipt_flag(tmp_path, monkeypatch: pytest.MonkeyPatch):
@@ -640,11 +652,57 @@ def test_publish_note_uploads_readme_and_sets_receipt_flag(tmp_path, monkeypatch
     )
     outcomes = sync.sync(inv_path, repo_id="wordingone/ember-custody", execute=True)
 
-    assert len(fake_api.upload_file_calls) == 1
-    readme_call = fake_api.upload_file_calls[0]
-    assert readme_call["path_in_repo"] == "lane-285/README.md"
-    assert note in readme_call["path_or_fileobj"].decode("utf-8")
+    # N1: exactly ONE create_commit call for the row — no second, trailing
+    # commit for the README.
+    assert len(fake_api.create_commit_calls) == 1
+    operations = fake_api.create_commit_calls[0]["operations"]
+    readme_ops = [op for op in operations if op.path_in_repo == "lane-285/README.md"]
+    data_ops = [op for op in operations if op.path_in_repo == "lane-285/manifest.json"]
+    assert len(readme_ops) == 1
+    assert len(data_ops) == 1
+    assert note in readme_ops[0].path_or_fileobj.decode("utf-8")
     assert outcomes[0].readme_uploaded is True
+
+    # N4: with one commit, the README's revision IS the row's hf_revision —
+    # nothing left unrecorded.
+    assert outcomes[0].hf_revision == VALID_REVISION
+
+
+def test_publish_note_readme_and_data_share_one_commit_operations_list(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    """N1, explicit atomicity pin: the README operation is APPENDED to the
+    exact same `operations` list passed to `create_commit` as the data
+    files — not a second call, not a second commit_message, not a second
+    oid. A single create_commit failure (e.g. the fake below raising) means
+    NEITHER the data nor the README lands, which is the atomicity N1 asked
+    for (a README failure can no longer leave data published unlabeled)."""
+    root = tmp_path / "data" / "lane-285"
+    combined_sha = _write_dataset_dir(root, {"manifest.json": b"{}"})
+    note = "withheld source note"
+
+    fake_api = FakeHfApi()
+
+    def failing_create_commit(**kwargs):
+        fake_api.create_commit_calls.append(kwargs)
+        raise RuntimeError("simulated commit failure")
+
+    fake_api.create_commit = failing_create_commit
+    monkeypatch.setattr(sync, "HfApi", lambda: fake_api)
+
+    inv_path = tmp_path / "inventory.jsonl"
+    inv_path.write_text(
+        _inventory_line(**_eligible_row(str(root), combined_sha, publish_note=note)) + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match="simulated commit failure"):
+        sync.sync(inv_path, repo_id="wordingone/ember-custody", execute=True)
+
+    # The one (failed) create_commit call already carried the README
+    # operation alongside the data — proof there was never a second,
+    # separate README commit that could "succeed" after a data failure.
+    assert len(fake_api.create_commit_calls) == 1
+    operations = fake_api.create_commit_calls[0]["operations"]
+    assert any(op.path_in_repo == "lane-285/README.md" for op in operations)
+    assert any(op.path_in_repo == "lane-285/manifest.json" for op in operations)
 
 
 def test_publish_note_not_uploaded_in_dry_run(tmp_path, monkeypatch: pytest.MonkeyPatch):
@@ -659,11 +717,11 @@ def test_publish_note_not_uploaded_in_dry_run(tmp_path, monkeypatch: pytest.Monk
         encoding="utf-8",
     )
     outcomes = sync.sync(inv_path, repo_id="wordingone/ember-custody", execute=False)
-    assert fake_api.upload_file_calls == []
+    assert fake_api.create_commit_calls == []
     assert outcomes[0].readme_uploaded is False
 
 
-def test_row_without_publish_note_never_calls_upload_file(eligible_dataset, tmp_path, monkeypatch: pytest.MonkeyPatch):
+def test_row_without_publish_note_never_adds_readme_operation(eligible_dataset, tmp_path, monkeypatch: pytest.MonkeyPatch):
     root, combined_sha = eligible_dataset
     fake_api = FakeHfApi()
     monkeypatch.setattr(sync, "HfApi", lambda: fake_api)
@@ -671,7 +729,8 @@ def test_row_without_publish_note_never_calls_upload_file(eligible_dataset, tmp_
     inv_path = tmp_path / "inventory.jsonl"
     inv_path.write_text(_inventory_line(**_eligible_row(str(root), combined_sha)) + "\n", encoding="utf-8")
     outcomes = sync.sync(inv_path, repo_id="wordingone/ember-custody", execute=True)
-    assert fake_api.upload_file_calls == []
+    operations = fake_api.create_commit_calls[0]["operations"]
+    assert not any(op.path_in_repo.endswith("README.md") for op in operations)
     assert outcomes[0].readme_uploaded is False
 
 

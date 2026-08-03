@@ -46,7 +46,7 @@ silently confused again. See each row's `hash_remint` note.
   40-hex commit sha — never the unpinned/mutable `hf://datasets/<repo>` form,
   and never a commit URL or any other non-sha placeholder. This is enforced
   at THREE points, not just documented: `sync.upload_verified_row` hard-
-  errors if `upload_folder`'s returned `CommitInfo.oid` is missing or not a
+  errors if `create_commit`'s returned `CommitInfo.oid` is missing or not a
   40-hex sha (no `commit_url` fallback); `receipts.append_receipt` refuses
   to write an `"uploaded"` receipt row whose `hf_revision` doesn't match
   `receipts.REVISION_RE`; and `pin.pinned_prefix` re-checks the same regex
@@ -69,7 +69,7 @@ silently confused again. See each row's `hash_remint` note.
   `sync.verify_all_eligible_rows` recomputes and checks EVERY eligible
   row's local per-file sha256 manifest against its declared `content_hash`,
   and checks the whole eligible set for `path_in_repo` basename collisions,
-  BEFORE the first `upload_folder` call of the run. If any row mismatches,
+  BEFORE the first `create_commit` call of the run. If any row mismatches,
   is missing its directory, contains a refused symlink, or collides with
   another row's `path_in_repo`, the run raises `InventoryRefusal` and NO
   row is uploaded — not just the offending one. (Earlier revisions of this
@@ -82,18 +82,26 @@ silently confused again. See each row's `hash_remint` note.
 - **Upload fileset is a subset of the verified fileset.** Verification
   hashes every file under a row's directory, including dotfiles and `.git*`
   paths (this keeps the verification set comparable to whatever produced
-  the census's `content_hash`). The actual `upload_folder` call additionally
-  passes `ignore_patterns=sync.UPLOAD_IGNORE_PATTERNS`, which excludes
-  dotfiles and `.git*` paths from what's actually published — this matters
-  for rows like the census's row 14 (`ember-corpus-v1-lane-285`), an active
-  git worktree whose `.git` pointer file contains an absolute local
-  filesystem path that must never be published.
-- **Row-scoped publication conditions via `publish_note`.** An inventory
-  row may carry an optional `publish_note` field. When present at
-  `--execute` time, its text is uploaded as a `README.md` inside the row's
-  `path_in_repo` — generated in memory, never written to the local
-  directory — and the row's receipt records `readme_uploaded: true`. This
-  is how a scoped ruling (e.g. "UPLOAD_ALLOWED but must carry a label
+  the census's `content_hash`). `sync._build_commit_operations` additionally
+  filters the row's data files through
+  `filter_repo_objects(..., ignore_patterns=sync.UPLOAD_IGNORE_PATTERNS)`,
+  which excludes dotfiles and `.git*` paths from what's actually published —
+  this matters for rows like the census's row 14
+  (`ember-corpus-v1-lane-285`), an active git worktree whose `.git` pointer
+  file contains an absolute local filesystem path that must never be
+  published.
+- **Row-scoped publication conditions via `publish_note`, one commit
+  (issue #1313/N1).** An inventory row may carry an optional `publish_note`
+  field. When present at `--execute` time, its text is uploaded as a
+  `README.md` inside the row's `path_in_repo` — generated in memory, never
+  written to the local directory — and the row's receipt records
+  `readme_uploaded: true`. The README is one more `CommitOperationAdd` in
+  the SAME `create_commit` call as the row's data files, not a second,
+  trailing commit: a README failure now fails the row's whole commit
+  instead of leaving previously-committed data published without its
+  label, and a consumer resolving the row's pinned `hf_revision` always
+  sees the README alongside the data whenever `readme_uploaded` is true.
+  This is how a scoped ruling (e.g. "UPLOAD_ALLOWED but must carry a label
   stating X is not included") gets enforced by the tool instead of trusted
   to operator memory.
 - **Receipts are appended per-outcome, immediately.** `sync.sync()` accepts
@@ -112,7 +120,7 @@ silently confused again. See each row's `hash_remint` note.
 ## Known, accepted limitation: TOCTOU between verify and upload
 
 `verify_all_eligible_rows` reads and hashes every eligible row's files, and
-`upload_folder` independently re-reads the same directory later in the same
+`create_commit` independently re-reads the same directory later in the same
 process. For a mutable path (row 14 is an active git worktree), bytes could
 in principle change in the window between verification and upload, producing
 an `"uploaded"` receipt whose `manifest_sha256` no longer exactly describes

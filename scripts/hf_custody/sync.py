@@ -24,7 +24,7 @@ HARD INVARIANTS (encoded here, not just documented):
   * TWO-PHASE, WHOLE-RUN VERIFICATION (PR #1311 review, M1). Every eligible
     (UPLOAD_ALLOWED) row's local per-file sha256 manifest is recomputed and
     compared against the row's declared `content_hash` BEFORE the first
-    `upload_folder` call of the run. Verification is never interleaved with
+    `create_commit` call of the run. Verification is never interleaved with
     uploads: if ANY eligible row mismatches, is missing its directory,
     contains a refused symlink, or collides on `path_in_repo` with another
     row, the WHOLE RUN refuses (raises InventoryRefusal) and zero rows are
@@ -43,17 +43,26 @@ HARD INVARIANTS (encoded here, not just documented):
     --dry-run is not passed (see build_arg_parser). In dry-run, zero
     huggingface_hub network calls are made.
   * Upload fileset is a SUBSET of the verified fileset (PR #1311 review,
-    M4b/m3): dotfiles and `.git*` paths are excluded from the actual
-    `upload_folder` call via `ignore_patterns`, but verification still
+    M4b/m3): dotfiles and `.git*` paths are excluded from the commit
+    operations built for the row (`_build_commit_operations`) via
+    `UPLOAD_IGNORE_PATTERNS`, but verification still
     hashes them — the verification set stays census-identical, only the
     published bytes are narrower. A refused symlink anywhere in the walk
     aborts verification (and therefore the whole run) rather than being
     silently skipped or silently uploaded.
-  * Row-scoped publication conditions (PR #1311 review, M4a): if a row
-    carries an optional `publish_note` field, its text is uploaded as a
-    `README.md` alongside the row's data (generated in-memory — this does
-    NOT write anything to the local directory) and the row's receipt
-    records `readme_uploaded: true`.
+  * Row-scoped publication conditions (PR #1311 review, M4a; folded into a
+    single commit per issue #1313/N1). If a row carries an optional
+    `publish_note` field, its text is uploaded as a `README.md` alongside
+    the row's data (generated in-memory — this does NOT write anything to
+    the local directory) and the row's receipt records `readme_uploaded:
+    true`. The README is included as one more operation in the SAME
+    `create_commit` call as the row's data files (not a second, trailing
+    `upload_file` commit) — a README failure now fails the whole row's
+    commit instead of leaving previously-committed data published without
+    its label, and the pinned `hf_revision` for the row always points at a
+    commit that contains the README whenever `readme_uploaded` is true, so
+    there is no separate "README commit revision" to track (issue #1313/N4
+    — moot once N1 is fixed: one commit, one revision, covering both).
 
 Deletion of a mirrored HF path is never automated by this tool or any tool
 in this package — see docs/hf-custody/SYNC.md.
@@ -70,7 +79,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from huggingface_hub import HfApi
+from huggingface_hub import CommitOperationAdd, HfApi
+from huggingface_hub.utils import filter_repo_objects
 
 from . import receipts as receipts_mod
 
@@ -351,7 +361,7 @@ def verify_all_eligible_rows(
     content_hash, and checks for path_in_repo basename collisions across the
     whole eligible set. If ANY row fails ANY of these checks, the whole run
     refuses (raises InventoryRefusal) and the caller must not attempt a
-    single upload_folder call — verification and upload are never
+    single create_commit call — verification and upload are never
     interleaved. Precondition: validate_eligible_rows_verifiable already
     passed, so content_hash/hash_method/hash_status are known present and
     supported for every row here.
@@ -412,6 +422,45 @@ def _readme_content(row: dict[str, Any]) -> str:
     return note if note.endswith("\n") else note + "\n"
 
 
+def _build_commit_operations(
+    row: dict[str, Any],
+    manifest: dict[str, Any],
+    path_in_repo: str,
+) -> list[CommitOperationAdd]:
+    """Build the ONE commit's worth of operations for a verified row (N1 fix).
+
+    Data files are the verified manifest's fileset (census-identical) minus
+    UPLOAD_IGNORE_PATTERNS — the same subset upload_folder's own
+    `ignore_patterns` kwarg used to select, computed here with
+    huggingface_hub's own `filter_repo_objects` so the matching semantics
+    are identical. If the row carries a `publish_note`, its README.md is
+    APPENDED to this same operations list — never issued as a separate,
+    trailing commit — so a single `create_commit` call either lands data
+    and README together or fails the row's commit atomically.
+    """
+    root = Path(row["local_canonical_path"])
+    included = filter_repo_objects(
+        manifest["files"],
+        ignore_patterns=UPLOAD_IGNORE_PATTERNS,
+        key=lambda f: f["name"],
+    )
+    operations = [
+        CommitOperationAdd(
+            path_in_repo=f"{path_in_repo}/{f['name']}",
+            path_or_fileobj=str(root / f["name"]),
+        )
+        for f in included
+    ]
+    if row.get("publish_note"):
+        operations.append(
+            CommitOperationAdd(
+                path_in_repo=f"{path_in_repo}/README.md",
+                path_or_fileobj=_readme_content(row).encode("utf-8"),
+            )
+        )
+    return operations
+
+
 def upload_verified_row(
     api: "HfApi | None",
     verified: VerifiedRow,
@@ -420,12 +469,14 @@ def upload_verified_row(
 ) -> SyncOutcome:
     """PHASE 2: upload (or dry-run) a row that has already passed verification.
 
-    Never re-touches local bytes for reading purposes beyond what
-    huggingface_hub's upload_folder itself reads. Raises on any upload
-    failure (network error, or a returned commit with no valid sha) — the
-    caller (sync()) is responsible for receipting the failure and
-    propagating it; this function never swallows an upload error into a
-    quiet "refused" outcome.
+    Never re-touches local bytes for reading purposes beyond what the
+    per-row `create_commit` call's `CommitOperationAdd` operations read.
+    Raises on any upload failure (network error, or a returned commit with
+    no valid sha) — the caller (sync()) is responsible for receipting the
+    failure and propagating it; this function never swallows an upload
+    error into a quiet "refused" outcome. One `create_commit` call per row
+    (N1): data files and, when present, the row's README.md land in the
+    SAME commit — never a second, trailing commit.
     """
     row_id, row, manifest, path_in_repo = (
         verified.row_id,
@@ -457,34 +508,28 @@ def upload_verified_row(
         )
 
     assert api is not None
-    commit_info = api.upload_folder(
+    operations = _build_commit_operations(row, manifest, path_in_repo)
+    commit_info = api.create_commit(
         repo_id=repo_id,
         repo_type="dataset",
-        folder_path=row["local_canonical_path"],
-        path_in_repo=path_in_repo,
+        operations=operations,
         commit_message=commit_message,
-        ignore_patterns=UPLOAD_IGNORE_PATTERNS,
     )
     oid = getattr(commit_info, "oid", None)
     if not oid or not receipts_mod.REVISION_RE.fullmatch(oid):
         # M3: no commit_url fallback. A missing/invalid oid is a hard error —
         # never record an unpinned/non-sha reference as a revision.
         raise RuntimeError(
-            f"hf-custody-sync: upload_folder returned no valid commit sha for "
+            f"hf-custody-sync: create_commit returned no valid commit sha for "
             f"row {row_id} (oid={oid!r}) — refusing to record an unpinned "
             "revision"
         )
 
-    readme_uploaded = False
-    if has_publish_note:
-        api.upload_file(
-            path_or_fileobj=_readme_content(row).encode("utf-8"),
-            path_in_repo=f"{path_in_repo}/README.md",
-            repo_id=repo_id,
-            repo_type="dataset",
-            commit_message=f"{commit_message} (publish_note README label)",
-        )
-        readme_uploaded = True
+    # N1: README landed in the SAME commit as the data (or not at all — no
+    # partial state). N4: that commit's oid (already captured above as the
+    # row's hf_revision) IS the README's revision whenever readme_uploaded
+    # is true — there is no second commit to separately record.
+    readme_uploaded = has_publish_note
 
     return SyncOutcome(
         row_id=row_id,
@@ -532,7 +577,7 @@ def sync(
 
     Fail-closed (M1): loads + selects + validates + verifies EVERY eligible
     row before any upload; a single bad row raises InventoryRefusal with
-    zero upload_folder calls made.
+    zero create_commit calls made.
 
     Per-outcome receipting (M2): if `on_outcome` is given, it is called
     immediately after each outcome is produced — skips first, then each
