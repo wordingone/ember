@@ -29,6 +29,8 @@ _P2B_STREAM_BUILD_RECEIPT_SHA256 = "748787e23c3100836713f6672a05629185a914563475
 _P2B_STREAM_CORPUS_ROOT_SHA256 = "42d1aac14c1e59563d348b7a53ce83dcce499a48217569d7d00a3966199141ab"
 EXPERT_NAMES = ("vision", "audio", "reasoning", "tool")
 ARCHITECTURE_REVISION = "ember-sparse-3b-v2"
+# `active_parameters` / `episode_trainable_parameters` semantics (issue #1329
+# finding 3, decided not redefined): see the `_counts` docstring.
 REALIZATION_RECEIPT_FIELDS = frozenset(
     {
         "schema_version", "verification_boundary", "result", "model_config_sha256",
@@ -607,20 +609,39 @@ def _tensor_raw_bytes(archive: zipfile.ZipFile, tensor: _TensorMetadata) -> byte
     return raw
 
 
-def _verify_shared_expert_genesis(archive: zipfile.ZipFile, payload: Any, *, name: str, genesis: Mapping[str, str], shape: Mapping[str, int]) -> None:
+def _expert_raw_digest(archive: zipfile.ZipFile, payload: Any, *, name: str, shape: Mapping[str, int]) -> str:
+    """Hash one expert bank's raw storage bytes straight off the archive."""
     state = payload.get("model") if isinstance(payload, dict) else None
     expected = _expected_expert(shape, name)
     if not isinstance(state, dict) or set(state) != set(expected):
-        raise ValueError(f"shared expert genesis payload state mismatch: {name}")
+        raise ValueError(f"expert genesis payload state mismatch: {name}")
     digest = hashlib.sha256()
     for layer in range(shape["layers"]):
         for suffix in ("up_gate.weight", "down.weight"):
             tensor = state.get(f"layers.{layer}.experts.{name}.{suffix}")
             if not isinstance(tensor, _TensorMetadata):
-                raise ValueError(f"shared expert genesis payload tensor mismatch: {name}")
+                raise ValueError(f"expert genesis payload tensor mismatch: {name}")
             digest.update(_tensor_raw_bytes(archive, tensor))
-    if digest.hexdigest() != genesis[name]:
+    return digest.hexdigest()
+
+
+def _verify_shared_expert_genesis(archive: zipfile.ZipFile, payload: Any, *, name: str, genesis: Mapping[str, str], shape: Mapping[str, int]) -> None:
+    if _expert_raw_digest(archive, payload, name=name, shape=shape) != genesis[name]:
         raise ValueError(f"shared expert genesis hash mismatch: {name}")
+
+
+def _verify_expert_trained_from_genesis(archive: zipfile.ZipFile, payload: Any, *, name: str, genesis: Mapping[str, str], shape: Mapping[str, int]) -> None:
+    """Inverted genesis check: full-coverage root claims every bank trained.
+
+    Unlike ``_verify_shared_expert_genesis`` (which requires an exact genesis
+    match for the untouched pure-genesis checkpoint), a full-coverage root
+    realization asserts all four banks were trained in this one episode. Byte
+    evidence for that claim requires each bank's recomputed raw hash to
+    DIFFER from its recorded genesis hash -- a bank still at genesis bytes
+    means the manifest's claim is unearned.
+    """
+    if _expert_raw_digest(archive, payload, name=name, shape=shape) == genesis[name]:
+        raise ValueError(f"full-coverage root expert genesis byte-verification failed (untrained): {name}")
 
 
 _STORAGE_PROJECTION_SCHEMA = "ember-checkpoint-storage-projection-v1"
@@ -635,7 +656,12 @@ def _full_coverage_root_projection(manifest: Mapping[str, Any], *, active_expert
     this same run. The discriminator is the manifest's own digest-bound storage
     projection attesting that every optimizer route was active. Any tampering
     (forged digest, partial route list, mismatched active expert, missing
-    projection) makes this return False and the lineage refusal stands.
+    projection, or an id list widened over route bytes that are not actually
+    positive for all four routes) makes this return False and the lineage
+    refusal stands. The route-bytes cross-check mirrors
+    ``_validate_checkpoint_storage_projection`` (checkpoint_artifacts.py) so a
+    re-signed manifest that widens only the id list over a genuinely-partial
+    optimizer state is refused here too, not just at governed publication.
     """
     if active_expert == "shared":
         return False
@@ -661,10 +687,19 @@ def _full_coverage_root_projection(manifest: Mapping[str, Any], *, active_expert
         return False
     if projection.get("optimizer_state_active_expert_ids") != list(EXPERT_NAMES):
         return False
+    route_bytes = projection.get("optimizer_state_tensor_storage_by_route_bytes")
+    if not isinstance(route_bytes, Mapping) or set(route_bytes) != {"shared", *EXPERT_NAMES}:
+        return False
+    if any(type(value) is not int or value < 0 for value in route_bytes.values()):
+        return False
+    if route_bytes[active_expert] <= 0:
+        return False
+    if [name for name in EXPERT_NAMES if route_bytes[name] > 0] != list(EXPERT_NAMES):
+        return False
     return True
 
 
-def _inspect_realization(manifest_path: Path, manifest: Mapping[str, Any], *, active_expert: str, shape: Mapping[str, int]) -> dict[str, Any]:
+def _inspect_realization(manifest_path: Path, manifest: Mapping[str, Any], *, active_expert: str, shape: Mapping[str, int], full_coverage_root: bool = False) -> dict[str, Any]:
     records = manifest.get("shards")
     if not isinstance(records, list): raise ValueError("checkpoint manifest lacks shard records")
     schema_version = manifest.get("schema_version")
@@ -724,11 +759,28 @@ def _inspect_realization(manifest_path: Path, manifest: Mapping[str, Any], *, ac
                         if not isinstance(payload, dict) or payload.get("expert") != name: raise ValueError(f"expert realization identifies the wrong bank: {name}")
                         _validate_state(payload.get("model"), _expected_expert(shape, name), label=f"expert {name}")
                         if active_expert == "shared": _verify_shared_expert_genesis(archive, payload, name=name, genesis=genesis, shape=shape)
+                        elif full_coverage_root: _verify_expert_trained_from_genesis(archive, payload, name=name, genesis=genesis, shape=shape)
         except (OSError, zipfile.BadZipFile, ValueError) as error:
             if isinstance(error, ValueError): raise
             raise ValueError(f"checkpoint realization cannot be safely inspected: {error}") from error
     return dict(manifest)
 def _counts(shape: Mapping[str, int], *, active_expert: str) -> dict[str, int]:
+    """Measure the receipt's parameter-count fields.
+
+    Decided episode-scope semantics (issue #1329 finding 3): ``active_parameters``
+    and ``episode_trainable_parameters`` are always the per-step ROUTED-ACTIVE
+    scope -- shared plus at most the one bank named by ``active_expert`` -- for
+    every admission path, including a full-coverage root realization where the
+    manifest's own storage projection attests all four banks were trained in
+    the one governed-vertical episode. They never report the wider per-episode
+    TRAINED set (shared plus all four banks); that would be a silent
+    redefinition rippling into the byte-bound arithmetic of #1320 and into
+    ``checkpoint_artifacts._validate_counter_receipt``'s architecture
+    cross-check, which is explicitly not wanted. A caller who needs the wider
+    trained-set figure for a full-coverage root receipt derives it itself as
+    ``allocated_parameters`` (== ``total`` below), since a full-coverage root's
+    trained scope is by definition the whole model.
+    """
     hidden, layers, vocab = shape["hidden_size"], shape["layers"], shape["vocab_size"]
     head_dim = hidden // shape["attention_heads"]
     shared = (
@@ -765,12 +817,15 @@ def execute_counter(
         raise ValueError("model config revision is not ember-sparse-3b-v2")
     shape = _model_shape(config)
     manifest_snapshot, subject_checkpoint_sha256 = _read_json_snapshot(checkpoint_manifest, label="checkpoint manifest")
-    manifest = _inspect_realization(checkpoint_manifest, manifest_snapshot, active_expert=active_expert, shape=shape)
+    # Determined from the raw snapshot (not the post-inspection manifest) so the
+    # discriminator can be threaded into `_inspect_realization` for the inverted
+    # genesis byte-verification (Finding 2, issue #1329) in the same shard pass.
+    full_coverage_root = _full_coverage_root_projection(manifest_snapshot, active_expert=active_expert)
+    manifest = _inspect_realization(checkpoint_manifest, manifest_snapshot, active_expert=active_expert, shape=shape, full_coverage_root=full_coverage_root)
     p2b_inputs = (p2b_repo_root, p2b_stream_manifest, p2b_stream_build_receipt, p2b_tokenizer_runtime_root, p2b_tokenizer_runtime_manifest)
     runtime_authority: dict[str, Any] = dict(_RUNTIME_AUTHORITY_NONE)
     if active_expert == "shared" and any(value is not None for value in p2b_inputs):
         raise ValueError("legacy counter call must not include P2B stream authority")
-    full_coverage_root = _full_coverage_root_projection(manifest, active_expert=active_expert)
     if full_coverage_root:
         if any(value is not None for value in p2b_inputs):
             raise ValueError("full-coverage root counter call must not include P2B stream authority")
