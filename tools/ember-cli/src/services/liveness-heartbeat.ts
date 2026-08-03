@@ -26,6 +26,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { resolveEmberRepoRoot } from "../utils/repo-root.ts";
+import { emberStatePath, EmberStateRootError } from "../utils/ember-state-root.ts";
 import { isHeadlessCapture, HEADLESS_CAPTURE_ENV } from "./headless-capture.ts";
 import type { TelemetryDiagnostics } from "./telemetry-watch.ts";
 
@@ -99,10 +100,11 @@ function telemetrySnapshot(
   }
 }
 
-/** #413: tools/ember-cli/state/ is gitignored repo-wide -- the root .gitignore's bare `state/`
- *  pattern matches at any depth (verified via `git check-ignore -v
- *  tools/ember-cli/state/cockpit-heartbeat.json`), so this path needs no new .gitignore line and
- *  can never land in receipts/ (custody scans receipts only). */
+/** #413 / #1330: the heartbeat used to live under the gitignored `tools/ember-cli/state/`, but
+ *  the completion verifier's census enrolls ignored files too (nothing is excluded -- that
+ *  totality is load-bearing), so a live cockpit reintroduced the class #1330 relocated
+ *  everything else out of. The heartbeat now writes through `emberStatePath()`, the same
+ *  external, never-censused root every other cockpit-mutable file uses. */
 export function createLivenessHeartbeatWriter(
   options: LivenessHeartbeatWriterOptions = {},
 ): LivenessHeartbeatWriter {
@@ -150,8 +152,28 @@ export function createLivenessHeartbeatWriter(
     };
   }
 
-  const dir      = path.join(repoRoot, "tools", "ember-cli", "state");
-  const filePath = path.join(dir, "cockpit-heartbeat.json");
+  // #413/#1330: resolve through the external state root, never a literal join under repoRoot --
+  // emberStatePath() fail-closed-validates that the resolved root is outside the censused
+  // checkout, so a misconfiguration throws here instead of silently landing state somewhere
+  // the completion verifier will byte-hash.
+  let filePath: string;
+  try {
+    filePath = emberStatePath(repoRoot, "cockpit-heartbeat.json");
+  } catch (err) {
+    const reason =
+      err instanceof EmberStateRootError ? err.message : err instanceof Error ? err.message : String(err);
+    console.warn(
+      `[liveness-heartbeat] state root resolution failed -- heartbeat writer is INERT ` +
+        `(no file will ever be created or written): ${reason}`,
+    );
+    return {
+      filePath: null,
+      write() {
+        // Deliberate no-op -- an inert writer never touches disk.
+      },
+    };
+  }
+  const dir = path.dirname(filePath);
 
   // #666 startup path-assert: name the exact file this process will write, so a divergence
   // from the path the watchdog logs on ITS side is visible in two adjacent log lines

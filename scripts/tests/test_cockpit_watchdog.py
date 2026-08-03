@@ -23,6 +23,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS_DIR = os.path.abspath(os.path.join(HERE, ".."))
 sys.path.insert(0, SCRIPTS_DIR)
 
+import pytest
+
 from cockpit_watchdog import (
     WindowInfo,
     TabInfo,
@@ -35,6 +37,10 @@ from cockpit_watchdog import (
     read_gpu_lease,
     append_jsonl,
     run_cycle,
+    _default_renderer_heartbeat_path,
+    _ember_config_home_dir,
+    _repo_state_key,
+    _resolve_ember_state_root,
 )
 
 
@@ -722,3 +728,87 @@ def test_run_cycle_never_kills_or_closes_or_restores():
             if name in banned_names:
                 hits.append(name)
     assert hits == [], f"v1 must be report-only; found banned call(s): {hits}"
+
+
+# ---------------------------------------------------------------------------
+# #413/#1330 review round 2 -- the renderer-heartbeat-path default is a THIRD
+# resolution-point consumer, in lockstep with tools/ember-cli/src/utils/ember-state-root.ts
+# (emberStateRoot/repoStateKey) and Get-EmberStateRoot/Get-EmberStateRootKey in
+# scripts/launch-ember-cli.ps1. KEY_PARITY_VECTORS below is the SAME set already shared by
+# ember-state-root.test.ts and tests/test_ember_root_launcher.py -- if this port drifts from
+# either, this suite goes red.
+# ---------------------------------------------------------------------------
+
+#: [repo root, expected key] -- mirrored verbatim from KEY_PARITY_VECTORS in
+#: tools/ember-cli/src/utils/ember-state-root.test.ts and tests/test_ember_root_launcher.py.
+KEY_PARITY_VECTORS = [
+    (r"C:\fixture\ember", "c-fixture-ember"),
+    ("C:\\Fixture\\Ember\\", "c-fixture-ember"),
+    (r"C:\fixture\ember repo", "c-fixture-ember-repo"),
+    (r"C:\fixture\ember-wt\wt-1330", "c-fixture-ember-wt-wt-1330"),
+]
+
+
+@pytest.fixture
+def clean_state_root_env(monkeypatch):
+    """Isolates EMBER_STATE_ROOT/EMBER_HOME for each test in this section -- these are
+    real process-wide env vars the rest of the suite (and a real cockpit session) may also
+    read, so tests here must never leak into or out of that state."""
+    monkeypatch.delenv("EMBER_STATE_ROOT", raising=False)
+    monkeypatch.delenv("EMBER_HOME", raising=False)
+    return monkeypatch
+
+
+def test_repo_state_key_matches_the_typescript_and_powershell_resolution_points(clean_state_root_env):
+    for root, expected_key in KEY_PARITY_VECTORS:
+        assert _repo_state_key(root) == expected_key
+
+
+def test_resolve_ember_state_root_honours_the_override_verbatim(clean_state_root_env):
+    clean_state_root_env.setenv("EMBER_STATE_ROOT", r"C:\fixture\cockpit-state")
+    assert _resolve_ember_state_root(r"C:\fixture\ember") == os.path.abspath(r"C:\fixture\cockpit-state")
+
+
+def test_resolve_ember_state_root_defaults_to_ember_home_cockpit_state_key(clean_state_root_env):
+    clean_state_root_env.setenv("EMBER_HOME", r"C:\fixture\home")
+    resolved = _resolve_ember_state_root(r"C:\fixture\ember")
+    assert resolved == os.path.join(r"C:\fixture\home", "cockpit-state", "c-fixture-ember")
+
+
+def test_resolve_ember_state_root_defaults_to_home_dot_ember_when_ember_home_unset(clean_state_root_env, tmp_path, monkeypatch):
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: fake_home))
+    resolved = _resolve_ember_state_root(r"C:\fixture\ember")
+    assert resolved == os.path.join(str(fake_home), ".ember", "cockpit-state", "c-fixture-ember")
+
+
+def test_ember_config_home_dir_matches_env_detection_ts_contract(clean_state_root_env, tmp_path, monkeypatch):
+    # EMBER_HOME verbatim when set.
+    clean_state_root_env.setenv("EMBER_HOME", str(tmp_path))
+    assert _ember_config_home_dir() == str(tmp_path)
+    # Falls back to ~/.ember when unset, same as getEmberConfigHomeDir() in env-detection.ts.
+    monkeypatch.delenv("EMBER_HOME", raising=False)
+    fake_home = tmp_path / "home2"
+    fake_home.mkdir()
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: fake_home))
+    assert _ember_config_home_dir() == str(fake_home / ".ember")
+
+
+def test_default_renderer_heartbeat_path_matches_the_writer_when_override_is_set(clean_state_root_env):
+    clean_state_root_env.setenv("EMBER_STATE_ROOT", r"C:\fixture\cockpit-state")
+    assert _default_renderer_heartbeat_path() == os.path.join(
+        os.path.abspath(r"C:\fixture\cockpit-state"), "cockpit-heartbeat.json"
+    )
+
+
+def test_default_renderer_heartbeat_path_never_falls_back_to_the_legacy_in_tree_path(clean_state_root_env):
+    # #413/#1330 review round 2 blocker: the old fallback silently read a permanently-empty
+    # in-tree path when EMBER_STATE_ROOT was unset -- structural blindness dressed as
+    # fail-loud. The default now must resolve through the SAME EMBER_HOME/repoStateKey arm
+    # the writer uses, never a literal join under the checkout.
+    default_path = _default_renderer_heartbeat_path()
+    legacy_in_tree = os.path.abspath(os.path.join(
+        SCRIPTS_DIR, "..", "tools", "ember-cli", "state", "cockpit-heartbeat.json"))
+    assert default_path != legacy_in_tree
+    assert "tools" not in Path(default_path).parts or "ember-cli" not in Path(default_path).parts

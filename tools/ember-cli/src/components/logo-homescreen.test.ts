@@ -266,6 +266,42 @@ describe("Homescreen — recent-activity feed carries live telemetry + cockpit-r
   });
 });
 
+describe("Homescreen — heartbeat-writer-inert event (issue #413/#1330 review round 2)", () => {
+  it("renders the inert-writer fact, in red, even when boardSummary carries no other data", () => {
+    const rendered = renderedRecentFeed(Homescreen({
+      state: {},
+      boardSummary: {
+        green: 0, total: 0, pctComplete: 0, topAttention: [],
+        heartbeatWriterInert: {
+          text: "heartbeat: writer inert -- external liveness checks are blind",
+          color: "red",
+        },
+      },
+    }));
+    expect(findTextChild(
+      rendered,
+      "heartbeat: writer inert -- external liveness checks are blind",
+    )).toBe(true);
+    expect(colorForText(
+      rendered,
+      "heartbeat: writer inert -- external liveness checks are blind",
+    )).toBe("red");
+  });
+
+  it("carries no inert-writer line when heartbeatWriterInert is absent (the normal, resolvable-state-root case)", () => {
+    const rendered = renderedRecentFeed(Homescreen({
+      state: {},
+      boardSummary: { green: 23, total: 30, pctComplete: 76.7, topAttention: [] },
+    }));
+    expect(findTextWhere(rendered, (s) => s.startsWith("heartbeat: writer inert"))).toBe(false);
+  });
+
+  it("carries no inert-writer line when boardSummary itself is absent (mount-time race, never fabricated)", () => {
+    const rendered = renderedRecentFeed(Homescreen({ state: {} }));
+    expect(findTextWhere(rendered, (s) => s.startsWith("heartbeat: writer inert"))).toBe(false);
+  });
+});
+
 describe("formatWallClock — HH:MM:SS local (issue #413: cockpit liveness clock)", () => {
   it("zero-pads hours, minutes, and seconds", () => {
     const nowMs = new Date(2026, 6, 7, 9, 5, 3).getTime(); // local 09:05:03
