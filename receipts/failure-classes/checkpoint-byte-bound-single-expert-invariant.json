@@ -1,0 +1,18 @@
+{
+  "class_id": "checkpoint-byte-bound-single-expert-invariant-vs-full-coverage-vertical",
+  "first_occurrence_ts": "2026-08-03T10:30:57Z",
+  "goal_id": "EMBER-02",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "kill_mechanism": "governed_vertical_checkpoint_byte_bound and the run-path bound now derive max_serialized_bytes with active_parameters = structural_parameter_count() whenever the episode is not a single-specialist lineage episode; tests pin the bound to 16,430,389,248 bytes, assert it strictly exceeds the full-coverage optimizer tensor floor, and assert the run-path selection expression, so any regression to the shared-plus-one-expert budget fails in the suite before any dispatch.",
+  "mechanism": "run_vertical_slice.py derived the governed-vertical checkpoint serialization bound with active_parameters = shared + one specialist (12,202,530,816 bytes) while the governed-vertical 4-record shard activates every expert, producing full-coverage optimizer state whose checkpoint tensor-storage floor is ~15.4 GB; the #1316 storage projection correctly reported the floor at factor 1, checkpoint_artifacts.py:625 refused publication, the writer quarantined the candidate, and certified launch train-2 exited 1 after ~44 s (master e6b8a121). Same single-active-expert invariant class as #1315, one level up in the derivation chain.",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "receipt_refs": [
+    "live-receipts custody root r1-warm100-20260802 (off-repo): artifacts/checkpoints/.checkpoint-quarantine/checkpoint-write-failed-3c02c3d37d306fe810508e46717c2608799200dca6edf86299700a9e5389791d.json, sha256 3c02c3d37d306fe810508e46717c2608799200dca6edf86299700a9e5389791d",
+    "live-receipts custody root r1-warm100-20260802 (off-repo): disk-budget-runner-receipt.json (train-2 CHILD_FAILED, 44.0 s)"
+  ],
+  "schema_version": "ember-failure-class-v1",
+  "sha_convention": "bytes on disk as-is (binary read, no normalization)",
+  "ticket": "#1320",
+  "ts": "2026-08-03T10:41:50Z",
+  "workstream_id": "EMBER-02A"
+}
