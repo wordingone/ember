@@ -21,17 +21,39 @@ HARD INVARIANTS (encoded here, not just documented):
     REVIEW, LOCAL_ONLY, EXCLUDED) are always SKIPPED, never uploaded, and
     each skip is recorded with its reason — this is how withheld items are
     preserved rather than silently dropped from the record.
-  * Before any row is uploaded, its local per-file sha256 manifest is
-    recomputed and compared against the row's own declared manifest hash
-    (`content_hash`, when `hash_method` is `sha256_filelist_manifest` and
-    `hash_status` is `complete`). A mismatch refuses that row's upload.
-  * The whole run refuses to start (raises, uploads nothing) if any eligible
-    (UPLOAD_ALLOWED) row is missing the sha/manifest fields needed to verify
-    it (`content_hash`, `hash_method`, `hash_status`) — an inventory that
-    cannot be verified is not a basis for any upload, eligible or not.
+  * TWO-PHASE, WHOLE-RUN VERIFICATION (PR #1311 review, M1). Every eligible
+    (UPLOAD_ALLOWED) row's local per-file sha256 manifest is recomputed and
+    compared against the row's declared `content_hash` BEFORE the first
+    `upload_folder` call of the run. Verification is never interleaved with
+    uploads: if ANY eligible row mismatches, is missing its directory,
+    contains a refused symlink, or collides on `path_in_repo` with another
+    row, the WHOLE RUN refuses (raises InventoryRefusal) and zero rows are
+    uploaded — not just the offending row. See verify_all_eligible_rows().
+  * Per-row receipts are emitted immediately as each outcome is produced
+    (PR #1311 review, M2) via the optional `on_outcome` callback threaded
+    through sync(). An exception raised mid-upload-loop (e.g. a network
+    failure on row k+1) still leaves receipts for rows 1..k on disk before
+    it propagates — no partial upload is ever left unreceipted.
+  * A revision is only ever recorded as a real, resolvable commit sha (PR
+    #1311 review, M3): `hf_revision` is ALWAYS either `None` or a 40-hex
+    sha matching `receipts.REVISION_RE`. There is no commit_url fallback —
+    a missing/invalid `oid` on the returned CommitInfo is a hard error for
+    that row (caught, receipted as status="error", then re-raised).
   * --dry-run is the default. A real upload requires --execute AND
     --dry-run is not passed (see build_arg_parser). In dry-run, zero
     huggingface_hub network calls are made.
+  * Upload fileset is a SUBSET of the verified fileset (PR #1311 review,
+    M4b/m3): dotfiles and `.git*` paths are excluded from the actual
+    `upload_folder` call via `ignore_patterns`, but verification still
+    hashes them — the verification set stays census-identical, only the
+    published bytes are narrower. A refused symlink anywhere in the walk
+    aborts verification (and therefore the whole run) rather than being
+    silently skipped or silently uploaded.
+  * Row-scoped publication conditions (PR #1311 review, M4a): if a row
+    carries an optional `publish_note` field, its text is uploaded as a
+    `README.md` alongside the row's data (generated in-memory — this does
+    NOT write anything to the local directory) and the row's receipt
+    records `readme_uploaded: true`.
 
 Deletion of a mirrored HF path is never automated by this tool or any tool
 in this package — see docs/hf-custody/SYNC.md.
@@ -42,17 +64,26 @@ import argparse
 import hashlib
 import json
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from huggingface_hub import HfApi
+
+from . import receipts as receipts_mod
 
 HERE = Path(__file__).resolve().parent
 SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
 SUPPORTED_HASH_METHOD = "sha256_filelist_manifest"
 REQUIRED_ELIGIBLE_FIELDS = ("content_hash", "hash_method", "hash_status")
+
+# Excludes dotfiles/dotdirs and .git* paths from the UPLOADED fileset only.
+# Verification (compute_filelist_manifest) is NOT filtered by this — it stays
+# census-identical (M4b). The exact glob-matching semantics against these
+# patterns are huggingface_hub's own and are not exercised by the offline
+# test suite (only that the kwarg is passed is tested).
+UPLOAD_IGNORE_PATTERNS = ["**/.*", ".*", "**/.git", "**/.git/**", ".git", ".git/**"]
 
 
 class InventoryRefusal(ValueError):
@@ -61,12 +92,12 @@ class InventoryRefusal(ValueError):
 
 @dataclass
 class SyncOutcome:
-    """One row's outcome — either an upload receipt or a recorded skip."""
+    """One row's outcome — an upload/dry-run receipt, a skip, or an error."""
 
-    row_id: int
-    local_canonical_path: str
-    disposition: str
-    status: str  # "uploaded" | "dry_run" | "skipped" | "refused"
+    row_id: int | None
+    local_canonical_path: str | None
+    disposition: str | None
+    status: str  # "uploaded" | "dry_run" | "skipped" | "error"
     reason: str | None = None
     files_count: int | None = None
     bytes: int | None = None
@@ -75,6 +106,7 @@ class SyncOutcome:
     hf_revision: str | None = None
     commit_message: str | None = None
     path_in_repo: str | None = None
+    readme_uploaded: bool = False
 
     def to_receipt_dict(self, ts: str) -> dict[str, Any]:
         return {
@@ -91,6 +123,7 @@ class SyncOutcome:
             "hf_revision": self.hf_revision,
             "commit_message": self.commit_message,
             "path_in_repo": self.path_in_repo,
+            "readme_uploaded": self.readme_uploaded,
             "sha_convention": SHA_CONVENTION,
         }
 
@@ -183,16 +216,33 @@ def _sha256_file(path: Path) -> str:
 
 
 def compute_filelist_manifest(root: Path) -> dict[str, Any]:
-    """Recompute a sha256_filelist_manifest-style manifest for `root`.
+    """Recompute a per-file sha256 manifest for `root` (recursive, all files).
 
-    Mirrors manifest_sha.py's convention: sort files by POSIX-style relative
-    path, hash each file's bytes as-is, then combine into a single
-    combined_sha256 over sorted "<relpath>\\t<sha256>\\t<size_bytes>\\n" lines.
-    This is the same algorithm the census used to produce each UPLOAD_ALLOWED
-    row's content_hash, so a live recompute is directly comparable to it.
+    Follows a similar convention to scripts/manifest_sha.py — sort by
+    relative POSIX path, hash each file's bytes as-is, combine into a single
+    combined_sha256 over sorted "<relpath>\\t<sha256>\\t<size_bytes>\\n"
+    lines — but it is NOT the same function: manifest_sha.py is flat,
+    *.bin-only, and keyed by bare filename, while this is recursive,
+    all-file, and keyed by relative path. Whether this recompute is
+    byte-for-byte comparable to whatever tool actually produced a given
+    inventory row's content_hash is NOT verified by this module; a mismatch
+    always fails closed (refuses the row/run), so the direction of any
+    algorithmic drift is safe, but a false-positive refusal on an
+    otherwise-good row is possible and would need investigating against the
+    original census tooling, not silently worked around here.
+
+    Refuses (raises ValueError) on any symlink encountered in the walk —
+    this tool will never hash-then-publish a symlink's target transparently.
+
+    This intentionally does NOT exclude dotfiles/.git* — the verification
+    set stays census-identical. Excluding withheld paths from the UPLOADED
+    fileset (not the verified one) is upload_verified_row's job via
+    UPLOAD_IGNORE_PATTERNS.
     """
     files = []
     for p in sorted(root.rglob("*")):
+        if p.is_symlink():
+            raise ValueError(f"symlink refused in verification walk: {p}")
         if not p.is_file():
             continue
         rel = p.relative_to(root).as_posix()
@@ -215,25 +265,80 @@ def compute_filelist_manifest(root: Path) -> dict[str, Any]:
     }
 
 
-def verify_local_manifest(row: dict[str, Any]) -> tuple[bool, dict[str, Any], str | None]:
-    """Recompute the local manifest and compare it to row['content_hash'].
+@dataclass
+class VerifiedRow:
+    """One eligible row that has already passed whole-run verification."""
 
-    Returns (ok, computed_manifest, reason_if_not_ok).
-    Precondition: caller already ran validate_eligible_rows_verifiable, so
-    hash_method/hash_status/content_hash are known present and supported.
+    row_id: int
+    row: dict[str, Any]
+    manifest: dict[str, Any]
+    path_in_repo: str
+
+
+def _find_path_in_repo_collisions(
+    candidates: list[tuple[int, str]],
+) -> dict[str, list[int]]:
+    by_path: dict[str, list[int]] = {}
+    for row_id, path_in_repo in candidates:
+        by_path.setdefault(path_in_repo, []).append(row_id)
+    return {p: ids for p, ids in by_path.items() if len(ids) > 1}
+
+
+def verify_all_eligible_rows(
+    eligible: list[tuple[int, dict[str, Any]]],
+) -> list[VerifiedRow]:
+    """PHASE 1 (M1 fix): verify EVERY eligible row before ANY upload happens.
+
+    Recomputes each row's local manifest, compares it to the row's declared
+    content_hash, and checks for path_in_repo basename collisions across the
+    whole eligible set. If ANY row fails ANY of these checks, the whole run
+    refuses (raises InventoryRefusal) and the caller must not attempt a
+    single upload_folder call — verification and upload are never
+    interleaved. Precondition: validate_eligible_rows_verifiable already
+    passed, so content_hash/hash_method/hash_status are known present and
+    supported for every row here.
     """
-    root = Path(row["local_canonical_path"])
-    if not root.is_dir():
-        return False, {}, f"local_canonical_path does not exist or is not a directory: {root}"
-    computed = compute_filelist_manifest(root)
-    if computed["combined_sha256"] != row["content_hash"]:
-        return (
-            False,
-            computed,
-            "sha256_mismatch: local manifest "
-            f"{computed['combined_sha256']} != inventory content_hash {row['content_hash']}",
+    verified: list[VerifiedRow] = []
+    problems: list[str] = []
+    path_candidates: list[tuple[int, str]] = []
+
+    for row_id, row in eligible:
+        root = Path(row["local_canonical_path"])
+        if not root.is_dir():
+            problems.append(f"row {row_id}: local_canonical_path is not a directory: {root}")
+            continue
+        try:
+            manifest = compute_filelist_manifest(root)
+        except ValueError as exc:
+            problems.append(f"row {row_id}: {exc}")
+            continue
+        if manifest["combined_sha256"] != row["content_hash"]:
+            problems.append(
+                f"row {row_id}: sha256_mismatch: local manifest "
+                f"{manifest['combined_sha256']} != inventory content_hash {row['content_hash']}"
+            )
+            continue
+        path_in_repo = Path(row["local_canonical_path"]).name
+        path_candidates.append((row_id, path_in_repo))
+        verified.append(
+            VerifiedRow(row_id=row_id, row=row, manifest=manifest, path_in_repo=path_in_repo)
         )
-    return True, computed, None
+
+    collisions = _find_path_in_repo_collisions(path_candidates)
+    if collisions:
+        for path_in_repo, row_ids in collisions.items():
+            problems.append(
+                f"path_in_repo collision {path_in_repo!r}: rows {row_ids} would "
+                "silently overwrite each other in the hub repo"
+            )
+
+    if problems:
+        raise InventoryRefusal(
+            "REFUSING TO RUN: verification failed for "
+            + str(len(problems)) + " eligible row(s)/check(s) before any "
+            "upload was attempted:\n  " + "\n  ".join(problems)
+        )
+    return verified
 
 
 def build_commit_message(row_id: int, row: dict[str, Any], manifest_sha256: str) -> str:
@@ -244,32 +349,37 @@ def build_commit_message(row_id: int, row: dict[str, Any], manifest_sha256: str)
     )
 
 
-def sync_row(
+def _readme_content(row: dict[str, Any]) -> str:
+    note = row["publish_note"]
+    return note if note.endswith("\n") else note + "\n"
+
+
+def upload_verified_row(
     api: "HfApi | None",
-    row_id: int,
-    row: dict[str, Any],
+    verified: VerifiedRow,
     repo_id: str,
     execute: bool,
 ) -> SyncOutcome:
-    """Verify then (maybe) upload a single eligible row. Never touches local bytes."""
-    ok, computed, reason = verify_local_manifest(row)
-    files_count = len(computed.get("files", [])) or None
-    bytes_total = sum(f["size_bytes"] for f in computed.get("files", [])) or None
-    if not ok:
-        return SyncOutcome(
-            row_id=row_id,
-            local_canonical_path=row.get("local_canonical_path", ""),
-            disposition=row.get("disposition", "UPLOAD_ALLOWED"),
-            status="refused",
-            reason=reason,
-            files_count=files_count,
-            bytes=bytes_total,
-            manifest_sha256=computed.get("combined_sha256"),
-        )
+    """PHASE 2: upload (or dry-run) a row that has already passed verification.
 
-    manifest_sha256 = computed["combined_sha256"]
+    Never re-touches local bytes for reading purposes beyond what
+    huggingface_hub's upload_folder itself reads. Raises on any upload
+    failure (network error, or a returned commit with no valid sha) — the
+    caller (sync()) is responsible for receipting the failure and
+    propagating it; this function never swallows an upload error into a
+    quiet "refused" outcome.
+    """
+    row_id, row, manifest, path_in_repo = (
+        verified.row_id,
+        verified.row,
+        verified.manifest,
+        verified.path_in_repo,
+    )
+    files_count = len(manifest["files"]) or None
+    bytes_total = sum(f["size_bytes"] for f in manifest["files"]) or None
+    manifest_sha256 = manifest["combined_sha256"]
     commit_message = build_commit_message(row_id, row, manifest_sha256)
-    path_in_repo = Path(row["local_canonical_path"]).name
+    has_publish_note = bool(row.get("publish_note"))
 
     if not execute:
         return SyncOutcome(
@@ -285,6 +395,7 @@ def sync_row(
             hf_revision=None,
             commit_message=commit_message,
             path_in_repo=path_in_repo,
+            readme_uploaded=False,
         )
 
     assert api is not None
@@ -294,8 +405,28 @@ def sync_row(
         folder_path=row["local_canonical_path"],
         path_in_repo=path_in_repo,
         commit_message=commit_message,
+        ignore_patterns=UPLOAD_IGNORE_PATTERNS,
     )
-    hf_revision = getattr(commit_info, "oid", None) or getattr(commit_info, "commit_url", None)
+    oid = getattr(commit_info, "oid", None)
+    if not oid or not receipts_mod.REVISION_RE.fullmatch(oid):
+        # M3: no commit_url fallback. A missing/invalid oid is a hard error —
+        # never record an unpinned/non-sha reference as a revision.
+        raise RuntimeError(
+            f"hf-custody-sync: upload_folder returned no valid commit sha for "
+            f"row {row_id} (oid={oid!r}) — refusing to record an unpinned "
+            "revision"
+        )
+
+    readme_uploaded = False
+    if has_publish_note:
+        api.upload_file(
+            path_or_fileobj=_readme_content(row).encode("utf-8"),
+            path_in_repo=f"{path_in_repo}/README.md",
+            repo_id=repo_id,
+            repo_type="dataset",
+            commit_message=f"{commit_message} (publish_note README label)",
+        )
+        readme_uploaded = True
 
     return SyncOutcome(
         row_id=row_id,
@@ -307,9 +438,29 @@ def sync_row(
         bytes=bytes_total,
         manifest_sha256=manifest_sha256,
         hf_repo=repo_id,
-        hf_revision=hf_revision,
+        hf_revision=oid,
         commit_message=commit_message,
         path_in_repo=path_in_repo,
+        readme_uploaded=readme_uploaded,
+    )
+
+
+def _error_outcome(verified: VerifiedRow, repo_id: str, exc: Exception) -> SyncOutcome:
+    manifest = verified.manifest
+    return SyncOutcome(
+        row_id=verified.row_id,
+        local_canonical_path=verified.row.get("local_canonical_path"),
+        disposition=verified.row.get("disposition", "UPLOAD_ALLOWED"),
+        status="error",
+        reason=str(exc),
+        files_count=len(manifest["files"]) or None,
+        bytes=sum(f["size_bytes"] for f in manifest["files"]) or None,
+        manifest_sha256=manifest["combined_sha256"],
+        hf_repo=repo_id,
+        hf_revision=None,
+        commit_message=build_commit_message(verified.row_id, verified.row, manifest["combined_sha256"]),
+        path_in_repo=verified.path_in_repo,
+        readme_uploaded=False,
     )
 
 
@@ -317,18 +468,49 @@ def sync(
     inventory_path: str | Path,
     repo_id: str,
     execute: bool = False,
+    on_outcome: Callable[[SyncOutcome], None] | None = None,
 ) -> list[SyncOutcome]:
-    """Top-level orchestration. Fail-closed: raises InventoryRefusal before
-    any upload if the inventory can't back up its UPLOAD_ALLOWED claims."""
+    """Top-level orchestration.
+
+    Fail-closed (M1): loads + selects + validates + verifies EVERY eligible
+    row before any upload; a single bad row raises InventoryRefusal with
+    zero upload_folder calls made.
+
+    Per-outcome receipting (M2): if `on_outcome` is given, it is called
+    immediately after each outcome is produced — skips first, then each
+    verified row's dry-run/upload/error outcome, in that order, as it
+    happens. If an upload raises mid-loop, that row's "error" outcome is
+    still passed to `on_outcome` before the exception is re-raised, so
+    receipts for every row processed so far (including the failing one)
+    are never lost.
+    """
     rows = load_inventory(inventory_path)
     eligible, skip_outcomes = select_eligible_rows(rows)
     validate_eligible_rows_verifiable(eligible)  # raises -> nothing uploaded
+    verified = verify_all_eligible_rows(eligible)  # raises -> nothing uploaded (M1)
 
     api = HfApi() if execute else None
-    outcomes: list[SyncOutcome] = list(skip_outcomes)
-    for row_id, row in eligible:
-        outcomes.append(sync_row(api, row_id, row, repo_id, execute))
-    outcomes.sort(key=lambda o: o.row_id)
+    outcomes: list[SyncOutcome] = []
+
+    for outcome in skip_outcomes:
+        outcomes.append(outcome)
+        if on_outcome is not None:
+            on_outcome(outcome)
+
+    for v in verified:
+        try:
+            outcome = upload_verified_row(api, v, repo_id, execute)
+        except Exception as exc:  # noqa: BLE001 — deliberately broad: any upload failure is receipted then re-raised
+            error_outcome = _error_outcome(v, repo_id, exc)
+            outcomes.append(error_outcome)
+            if on_outcome is not None:
+                on_outcome(error_outcome)
+            raise
+        outcomes.append(outcome)
+        if on_outcome is not None:
+            on_outcome(outcome)
+
+    outcomes.sort(key=lambda o: (o.row_id is None, o.row_id))
     return outcomes
 
 
@@ -347,22 +529,45 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    from . import receipts as receipts_mod  # local import: keep CLI-only dependency out of library import path
-
     args = build_arg_parser().parse_args(argv)
     execute = args.execute and not args.dry_run
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    try:
-        outcomes = sync(args.inventory, args.repo_id, execute=execute)
-    except InventoryRefusal as exc:
-        print(f"[hf-custody-sync] {exc}", file=sys.stderr)
-        return 1
 
-    for outcome in outcomes:
+    def on_outcome(outcome: SyncOutcome) -> None:
         receipt = outcome.to_receipt_dict(ts)
         print(json.dumps(receipt), flush=True)
         if args.receipts_path:
             receipts_mod.append_receipt(args.receipts_path, receipt)
+
+    try:
+        sync(args.inventory, args.repo_id, execute=execute, on_outcome=on_outcome)
+    except InventoryRefusal as exc:
+        print(f"[hf-custody-sync] {exc}", file=sys.stderr)
+        if args.receipts_path:
+            receipts_mod.append_receipt(
+                args.receipts_path,
+                {
+                    "ts": ts,
+                    "inventory_row_id": None,
+                    "local_path": None,
+                    "disposition": None,
+                    "status": "run_refused",
+                    "reason": str(exc),
+                    "files_count": None,
+                    "bytes": None,
+                    "manifest_sha256": None,
+                    "hf_repo": args.repo_id,
+                    "hf_revision": None,
+                    "commit_message": None,
+                    "path_in_repo": None,
+                    "readme_uploaded": False,
+                    "sha_convention": SHA_CONVENTION,
+                },
+            )
+        return 1
+    except Exception as exc:  # noqa: BLE001 — mid-run failure already receipted row-by-row via on_outcome
+        print(f"[hf-custody-sync] aborted mid-run: {exc}", file=sys.stderr)
+        return 1
     return 0
 
 

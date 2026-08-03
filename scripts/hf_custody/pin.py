@@ -23,23 +23,31 @@ import argparse
 from pathlib import Path
 from typing import Any
 
+from .receipts import REVISION_RE
+
 
 def pinned_prefix(receipt: dict[str, Any]) -> str:
     """Given one sync receipt row, return its fully-pinned hf:// prefix.
 
-    Raises ValueError if the receipt has no hf_revision — this includes
-    dry-run and skipped/refused receipts, none of which are ever pinnable:
-    only a completed "uploaded" receipt carries a real revision sha.
+    Raises ValueError if the receipt has no hf_revision, or has one that is
+    not a real 40-hex commit sha — this includes dry-run, skipped, error,
+    and run-refused receipts, none of which are ever pinnable: only a
+    completed "uploaded" receipt carries a real, resolvable revision sha.
+    This is the second of two enforcement points for the same invariant
+    (receipts.append_receipt is the first, at write time); a receipt file
+    written by something other than this package's own writer is still
+    checked here before anything gets treated as pinnable.
     """
     repo = receipt.get("hf_repo")
     revision = receipt.get("hf_revision")
     if not repo:
         raise ValueError("pin.py: receipt has no hf_repo — nothing to pin")
-    if not revision:
+    if not revision or not REVISION_RE.fullmatch(revision):
         raise ValueError(
-            "pin.py: receipt has no hf_revision (status="
-            f"{receipt.get('status')!r}) — only a completed 'uploaded' "
-            "receipt is ever pinnable; dry-run/skip/refused receipts are not"
+            f"pin.py: hf_revision {revision!r} (status="
+            f"{receipt.get('status')!r}) is not a valid pinned commit sha "
+            f"(must match {REVISION_RE.pattern}) — only a completed "
+            "'uploaded' receipt is ever pinnable"
         )
     return f"hf://datasets/{repo}@{revision}"
 
