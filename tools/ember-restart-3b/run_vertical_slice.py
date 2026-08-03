@@ -126,14 +126,19 @@ def canonical_disk_budget_runner_authority() -> dict[str, object]:
 
 
 def governed_vertical_checkpoint_byte_bound(config_path: Path) -> int:
-    """Budget shared decoder state plus exactly one active expert before allocation."""
+    """Budget the full-coverage governed-vertical checkpoint before allocation.
+
+    The governed-vertical shard routes one record through every specialist, so
+    the optimizer legitimately covers every structural parameter and the
+    serialized checkpoint carries full-coverage optimizer state (the state the
+    storage projection admits at factor 1). Budgeting shared-plus-one-expert
+    here under-declares that checkpoint and refuses the by-design publication.
+    """
 
     config = RestartDecoderConfig.from_contract(config_path)
-    specialist_parameters = config.layers * 12 * config.hidden_size * config.hidden_size
-    shared_active_parameters = config.structural_parameter_count() - len(config.expert_names) * specialist_parameters
     return checkpoint_serialization_byte_bound(
         config_path,
-        active_parameters=shared_active_parameters + specialist_parameters,
+        active_parameters=config.structural_parameter_count(),
     )
 
 
@@ -2632,7 +2637,15 @@ def run(
             f"checkpoint-continue-seed-{seed}-from-step-"
             f"{int(resume_cursor['global_step']) + bounded_records}"
         )
-    checkpoint_byte_bound = checkpoint_serialization_byte_bound(config_path, active_parameters=active_parameters)
+    # Specialist lineage episodes hold optimizer state for shared plus exactly
+    # one expert; the governed-vertical shard realizes every expert, so its
+    # checkpoint bound must admit full-coverage optimizer state (#1320).
+    checkpoint_byte_bound = checkpoint_serialization_byte_bound(
+        config_path,
+        active_parameters=(
+            active_parameters if specialist_lineage is not None else total_parameters
+        ),
+    )
     specialist_plan: dict[str, int] | None = None
     if records_override is not None:
         specialist_plan = specialist_publication_plan(
