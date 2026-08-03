@@ -1656,7 +1656,7 @@ class RunnerPreflightTests(unittest.TestCase):
                 "import json, os, pathlib\n"
                 "assertion = pathlib.Path(os.environ['EMBER_DISK_BUDGET_ENV_ASSERTION'])\n"
                 "payload = json.loads(assertion.read_text(encoding='utf-8'))\n"
-                "pathlib.Path(os.environ['GOVERNED_LAUNCH_CAPTURE']).write_text(json.dumps({'payload': payload, 'env': {key: os.environ[key] for key in payload['bindings']}}, sort_keys=True), encoding='utf-8')\n",
+                "pathlib.Path(os.environ['GOVERNED_LAUNCH_CAPTURE']).write_text(json.dumps({'payload': payload, 'env': {key: os.environ[key] for key in payload['bindings']}, 'dont_write_bytecode': os.environ.get('PYTHONDONTWRITEBYTECODE')}, sort_keys=True), encoding='utf-8')\n",
                 encoding="utf-8",
             )
             receipt = custody / "runner-receipt.json"
@@ -1675,6 +1675,12 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(observed["payload"]["schema_version"], 1)
         self.assertRegex(observed["payload"]["nonce"], r"^[0-9a-f]{32}$")
         self.assertEqual(observed["payload"]["bindings"], observed["env"])
+        self.assertEqual(
+            observed["dont_write_bytecode"],
+            "1",
+            "disk_budget_runner child spawn (argv is certificate-visible, "
+            "so -B cannot ride argv) must suppress bytecode writes via env",
+        )
         self.assertEqual(runner_receipt["outcome"], "COMPLETED")
         self.assertTrue(capture.is_relative_to(custody))
         self.assertEqual(runner_receipt["unredirected_cache_roots"], [])

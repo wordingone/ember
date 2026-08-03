@@ -587,6 +587,13 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
             self.assertIs(kwargs["shell"], False)
             self.assertIs(kwargs["check"], False)
             self.assertEqual(kwargs["cwd"], paths["repo"])
+            self.assertEqual(
+                kwargs["env"]["PYTHONDONTWRITEBYTECODE"],
+                "1",
+                "runner argv is certificate-visible (execution receipt pins "
+                "argv[1]), so bytecode suppression must ride the spawn env "
+                "rather than an -B argv insertion",
+            )
             execution_receipt = (
                 paths["custody_root"] / "runner-receipt-certified-launch.json"
             )
