@@ -1,0 +1,23 @@
+{
+  "class_id": "checkpoint-storage-projection-single-expert-route-invariant-vs-full-coverage-vertical",
+  "first_occurrence_ts": "2026-08-03T06:03:10Z",
+  "goal_id": "EMBER-02",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "kill_mechanism": "_derive_checkpoint_storage_projection and its two sibling enforcement sites (the stored-projection revalidator and the independent re-measurement) take a required single_specialist_episode parameter threaded from specialist_lineage is not None, and admit exactly two closed non-shared states: specialist_routes == [active_expert] for a lineage episode (projection unchanged, worst-case factor len(EXPERT_NAMES)) or specialist_routes == list(EXPERT_NAMES) for the full-coverage vertical (projection = optimizer_actual, factor 1). Partial multi-route state, empty optimizer state, and shared semantics stay rejected/closed. tests/ember_restart_model/test_checkpoint_artifacts.py pins all four cases (test_v5_storage_projection_admits_full_coverage_vertical_optimizer, test_v5_storage_projection_rejects_partial_multi_route_state, test_v5_storage_projection_rejects_multi_route_state_for_specialist_episode, test_v5_storage_projection_preserves_shared_semantic_checkpoint), so any regression to the single-route assumption fails in the suite before any dispatch.",
+  "mechanism": "_derive_checkpoint_storage_projection (tools/ember-restart-3b/checkpoint_artifacts.py:564-581) required post-update optimizer state on exactly one specialist route (specialist_routes == [model.active_expert]) and raised ValueError: checkpoint storage projection requires one post-update optimizer state on EVERY governed-vertical run, deterministically, at the first and only checkpoint. The invariant is structurally unsatisfiable in that mode: UnifiedDecoder.forward calls _activate_expert per record (model.py:479) and the authorized vertical shard is exactly 4 records, one per expert (measured {'vision':1,'audio':1,'reasoning':1,'tool':1}), so end-of-run optimizer state covers shared plus all four specialists while model.active_expert is whatever the last record routed ('tool'). Full coverage is by design \u2014 run_pretraining_segment's require_complete_coverage demands every expert receive examples. Earlier sequential gates masked it: prior vertical runs died before reaching the projection check (train-5 at the 4 GiB scratch cap, #1305/#1306; a later train at the 12 GiB artifact-drive write budget), so this was the first 3B run to reach it and it killed the certified R1 WARM-100 dispatch. First and lowest layer of the single-active-expert invariant class, later re-derived one level up in the serialization byte bound (#1320) and again in the realization counter (#1326).",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "receipt_refs": [
+    "first_occurrence_ts provenance: the run's own machine-readable artifacts for this kill did not survive \u2014 the repro diag root diag-projection-20260803 (off-repo, full child traceback) and the quarantine record checkpoint-write-failed-815badea*.json under live-receipts custody root r1-warm100-20260802 (off-repo) were both superseded by subsequent dispatches into the same roots (the runner receipt path is overwritten per run). first_occurrence_ts is therefore taken from the instant quoted by the class's own issue thread: the GitHub filing instant of wordingone/ember#1315, 2026-08-03T06:03:10Z, which is an upper bound on the kill (the issue reports the completed kill and cites the receipts above). No timestamp in this row is estimated or invented.",
+    "wordingone/ember#1315 (issue body): defect statement, route-invariant root cause, measured 4-record shard census, and the two receipt paths named above",
+    "wordingone/ember#1316 (cure PR, merged): three enforcement sites corrected, 59 passed / 3 skipped at reviewed head e9e94080e1f94592f3b507115704db6f5593633d"
+  ],
+  "related_class_ids": [
+    "checkpoint-byte-bound-single-expert-invariant-vs-full-coverage-vertical",
+    "checkpoint-counter-single-expert-invariant-vs-full-coverage-root"
+  ],
+  "schema_version": "ember-failure-class-v1",
+  "sha_convention": "bytes on disk as-is (binary read, no normalization)",
+  "ticket": "#1315",
+  "ts": "2026-08-03T16:43:20Z",
+  "workstream_id": "EMBER-02A"
+}
