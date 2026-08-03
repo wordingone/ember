@@ -69,13 +69,22 @@ class ExclusiveLock(AbstractContextManager["ExclusiveLock"]):
             self.handle.flush()
         self.handle.seek(0)
         if sys.platform == "win32":
+            import errno
             import msvcrt
 
             while True:
                 try:
                     msvcrt.locking(self.handle.fileno(), msvcrt.LK_NBLCK, 1)
                     break
-                except OSError:
+                except OSError as exc:
+                    # review-pr1310.md RE-REVIEW N3: msvcrt.locking raises
+                    # OSError(errno.EACCES) when the region is already held
+                    # by another lock -- that is the only expected/retryable
+                    # outcome here. Any other errno (e.g. a bad fd, disk
+                    # error) is a real error, not contention, and spinning on
+                    # it forever would hang instead of surfacing the fault.
+                    if exc.errno != errno.EACCES:
+                        raise
                     time.sleep(0.005)
         else:
             import fcntl
@@ -111,10 +120,28 @@ def atomic_append_jsonl(path: Path, row: Any) -> None:
     lock, so a crash mid-write can only ever leave the *last* line torn, and
     read_jsonl tolerates exactly that (see below) -- it never loses an
     already-committed row.
+
+    Newline-guard (review-pr1310.md RE-REVIEW N2): if the existing file ends
+    without a trailing newline -- the exact shape of a crash-torn last line
+    -- a plain `open(..., "a")` append would land the new row's bytes
+    directly after the torn tail with no separator, welding them into one
+    permanently unparseable line that is no longer the FINAL line once this
+    append completes (a later append would push it further into the
+    middle). read_jsonl only tolerates a torn line when it is last, so a
+    welded middle line can never be recovered. Writing a leading "\n" first
+    (under the same lock, before the new row) restores the one-line-per-row
+    invariant instead of welding.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     with ExclusiveLock(lock_sidecar(path)):
+        needs_newline_guard = False
+        if path.exists() and path.stat().st_size > 0:
+            with path.open("rb") as reader:
+                reader.seek(-1, os.SEEK_END)
+                needs_newline_guard = reader.read(1) != b"\n"
         with path.open("a", encoding="utf-8", newline="\n") as handle:
+            if needs_newline_guard:
+                handle.write("\n")
             handle.write(json.dumps(row, sort_keys=True))
             handle.write("\n")
             handle.flush()

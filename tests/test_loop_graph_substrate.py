@@ -615,6 +615,308 @@ def test_mutex_concurrent_acquire_exactly_one_winner(tmp_path: Path):
 
 
 # --------------------------------------------------------------------------
+# concurrency: atomic stale-reclaim (review-pr1310.md RE-REVIEW N1)
+# --------------------------------------------------------------------------
+
+def test_mutex_concurrent_reclaim_exactly_one_winner(tmp_path: Path):
+    """review-pr1310.md RE-REVIEW N1 required test: N racers all observe the
+    SAME dead-pid stale holder and race to reclaim it -- exactly one must
+    end up the actual holder. The pre-fix implementation reclaimed via a
+    bare `path.unlink()`, which deletes whatever currently sits at `path`
+    regardless of content: a slower racer's unlink could delete a faster
+    racer's freshly created VALID lock, after which both racers' acquire()
+    calls had already returned True -- i.e. both believed they held
+    gpu-exclusive simultaneously. The os.replace-to-tombstone reclaim must
+    never allow that: acquire() returns True for at most one racer, and the
+    lock file on disk always agrees with whichever one that was."""
+    locks = tmp_path / "locks"
+    dead_pid = _find_dead_pid()
+    mutex.acquire(locks, "gpu-exclusive", "node-dead", dead_pid)
+
+    n = 8
+    barrier = threading.Barrier(n)
+    results: list[tuple[str, int]] = []
+    results_lock = threading.Lock()
+
+    def worker(worker_id: int) -> None:
+        barrier.wait()
+        try:
+            mutex.acquire(locks, "gpu-exclusive", f"node-{worker_id}", os.getpid())
+            outcome = "ok"
+        except mutex.MutexBusy:
+            outcome = "busy"
+        with results_lock:
+            results.append((outcome, worker_id))
+
+    threads = [threading.Thread(target=worker, args=(i,)) for i in range(n)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    winners = [entry for entry in results if entry[0] == "ok"]
+    assert len(results) == n
+    assert len(winners) == 1  # never more than one racer believes it holds the mutex
+
+    holder = mutex.current_holder(locks, "gpu-exclusive")
+    assert holder is not None
+    assert holder["node_id"] == f"node-{winners[0][1]}"  # disk agrees with the sole winner
+
+
+def test_mutex_reclaim_direct_call_on_live_lock_is_refused_and_leaves_it_intact(tmp_path: Path):
+    """Reviewer's direct repro for RE-REVIEW N1: calling `_reclaim_stale`
+    against a lock file that currently holds a LIVE record, passing a
+    mismatched "expected dead" identity (as a straggler's stale read would
+    be), must return False and leave the live lock file exactly intact --
+    never a phantom win that silently deletes a live holder out from under
+    it. Content-verification-free `os.replace(path, tombstone)` alone
+    returns True here and destroys the live lock; this is exactly the gap
+    the content check closes."""
+    locks = tmp_path / "locks"
+    pid = os.getpid()
+    mutex.acquire(locks, "gpu-exclusive", "node-live", pid)
+    path = mutex.lock_path(locks, "gpu-exclusive")
+    live_before = mutex.current_holder(locks, "gpu-exclusive")
+
+    dead_pid = _find_dead_pid()
+    stale_identity_the_straggler_saw = {"owner_pid": dead_pid, "owner_creation_time": "some-other-time"}
+
+    won = mutex._reclaim_stale(path, os.getpid(), stale_identity_the_straggler_saw)
+
+    assert won is False
+    live_after = mutex.current_holder(locks, "gpu-exclusive")
+    assert live_after == live_before  # the live lock was restored/untouched, never lost
+
+
+def test_mutex_straggler_reclaim_loses_to_concurrent_winner_and_live_lock_survives(tmp_path: Path):
+    """review-pr1310.md RE-REVIEW N1 required test: the straggler
+    interleaving the barrier-start race test above is structurally blind to.
+    A reclaimer observes a dead holder (its "stale read"); before it acts on
+    that read, a DIFFERENT racer fully reclaims and recreates a live lock at
+    the same path; only THEN does the straggler fire its reclaim, still
+    holding the identity it captured before the winner ever acted. That
+    reclaim must LOSE (content no longer matches what it read), and the
+    winner's live lock must remain exactly intact afterward -- never
+    silently clobbered by a rename that only checked "does something exist
+    at this path", not "is it still the thing I meant to remove"."""
+    locks = tmp_path / "locks"
+    dead_pid = _find_dead_pid()
+    mutex.acquire(locks, "gpu-exclusive", "node-dead", dead_pid)
+    path = mutex.lock_path(locks, "gpu-exclusive")
+
+    # Straggler's "stale read" -- captured now, acted on later.
+    straggler_observed = mutex.current_holder(locks, "gpu-exclusive")
+    assert straggler_observed["node_id"] == "node-dead"
+
+    # A different racer fully reclaims and creates a live lock in between,
+    # before the straggler ever acts on what it read above.
+    winner_pid = os.getpid()
+    assert mutex.acquire(locks, "gpu-exclusive", "node-winner", winner_pid) is True
+    live_before = mutex.current_holder(locks, "gpu-exclusive")
+    assert live_before["node_id"] == "node-winner"
+
+    # Straggler fires its reclaim now, using the STALE identity it captured
+    # before the winner ever acted -- this must lose, not clobber the winner.
+    won = mutex._reclaim_stale(path, os.getpid(), straggler_observed)
+    assert won is False
+
+    live_after = mutex.current_holder(locks, "gpu-exclusive")
+    assert live_after == live_before  # the winner's live lock survived intact
+
+
+def test_mutex_reclaim_restore_fails_safe_when_third_process_wins_the_gap(tmp_path: Path, monkeypatch):
+    """Reviewer-driven deterministic repro for the RELOCATED N1 defect: the
+    mismatch-RESTORE step is itself a second content-blind window if it
+    uses a bare os.replace. Manually drives the exact interleaving the
+    reviewer specified: V holds a live lock; a straggler S evicts it (its
+    rename-out succeeds, moving V's live record to a tombstone -- this is
+    the "S accidentally evicted a live lock" case _reclaim_stale detects via
+    content mismatch); while S is deciding to restore what it evicted, a
+    THIRD process U legitimately creates a fresh valid lock at the
+    now-empty path. S's restore must then fail (O_EXCL sees `path`
+    occupied) rather than silently overwrite U's fresh lock with V's
+    evicted bytes -- U's lock must survive byte-for-byte, S must report a
+    loss, never a phantom win, AND V's evicted record must survive intact
+    as the orphaned tombstone (not be unconditionally unlinked on a lost
+    restore -- that would destroy the only surviving copy of V just as
+    permanently as the original defect, merely relocated to this file).
+
+    The interleaving is driven deterministically (not via thread scheduling)
+    by hooking `json.loads` -- the exact point in `_reclaim_stale` between
+    "read back what the rename moved" and "decide whether to restore it" --
+    to fire U's create exactly once, right after S observes V's evicted
+    record and before S acts on that observation."""
+    import json
+
+    locks = tmp_path / "locks"
+    path = mutex.lock_path(locks, "gpu-exclusive")
+
+    # V: a live lock -- this is what straggler S is about to evict by
+    # accident (S's own stale identity, below, deliberately does not match
+    # V, forcing _reclaim_stale into the mismatch/restore branch).
+    mutex.acquire(locks, "gpu-exclusive", "node-v", os.getpid())
+    v_record = mutex.current_holder(locks, "gpu-exclusive")
+
+    stale_identity_s_saw = {"owner_pid": 999999, "owner_creation_time": "some-other-time"}
+
+    u_record = {
+        "resource_class": "gpu-exclusive",
+        "node_id": "node-u",
+        "owner_pid": os.getpid(),
+        "owner_creation_time": "u-creation-time",
+        "owner_liveness_mode": "pid_only",
+        "acquired_at": "2026-08-03T00:00:00+00:00",
+    }
+
+    original_loads = json.loads
+    injected = {"done": False}
+
+    def loads_with_u_interleaved(data, *args, **kwargs):
+        result = original_loads(data, *args, **kwargs)
+        # Fire exactly once: right after S reads back the record it just
+        # evicted (V's), before S decides whether to restore it -- this is
+        # the gap the reviewer's repro targets.
+        if not injected["done"] and isinstance(result, dict) and result.get("node_id") == "node-v":
+            injected["done"] = True
+            created = mutex._create_exclusive_bytes(
+                path, (json.dumps(u_record, sort_keys=True) + "\n").encode("utf-8")
+            )
+            assert created is True  # path must genuinely be empty at this point (S already renamed V out)
+        return result
+
+    monkeypatch.setattr(mutex.json, "loads", loads_with_u_interleaved)
+
+    won = mutex._reclaim_stale(path, os.getpid(), stale_identity_s_saw)
+
+    assert injected["done"]  # sanity: the interleaving actually fired
+    assert won is False  # S must never report a win here
+    survivor = mutex.current_holder(locks, "gpu-exclusive")
+    assert survivor == u_record  # U's fresh lock survives byte-for-byte, never overwritten by V's evicted bytes
+
+    # V's evicted record must survive as a named orphan tombstone -- a lost
+    # restore must never unconditionally unlink the tombstone, since it is
+    # the only surviving copy of what got evicted.
+    orphans = list(locks.glob(f"{path.name}.stale.*"))
+    assert len(orphans) == 1
+    assert json.loads(orphans[0].read_text(encoding="utf-8")) == v_record
+
+
+# --------------------------------------------------------------------------
+# newline-guard against crash-torn append welding (review-pr1310.md RE-REVIEW N2)
+# --------------------------------------------------------------------------
+
+def test_atomic_append_newline_guard_after_crash_torn_tail(tmp_path: Path):
+    """review-pr1310.md RE-REVIEW N2 required test: a crash that tears the
+    final line of a JSONL file (no trailing newline) must not get welded to
+    the next append. Without the newline-guard, `open(path, "a")` lands the
+    new row's bytes directly after the torn tail with no separator,
+    producing one line that mixes the torn tail with the new row -- which
+    read_jsonl can never recover (a torn line is only ever tolerated when it
+    stays the LAST line; welding pushes real data into an unparseable middle
+    line the moment anything is appended after it). With the guard, the new
+    row always lands on its own independently-parseable line."""
+    import json
+
+    from loop_graph._atomic import atomic_append_jsonl
+
+    path = tmp_path / "INDEX.jsonl"
+    good_row = {"receipt_id": "r0", "node_id": "exec-0"}
+    torn_tail = '{"receipt_id": "r1", "node_id": "exec-1", "path": "rec'  # deliberately truncated, no trailing newline
+    path.write_text(json.dumps(good_row, sort_keys=True) + "\n" + torn_tail, encoding="utf-8")
+
+    new_row = {"receipt_id": "r2", "node_id": "exec-2"}
+    atomic_append_jsonl(path, new_row)
+
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 3
+    assert lines[0] == json.dumps(good_row, sort_keys=True)
+    assert lines[1] == torn_tail  # the torn tail stays isolated, never welded
+    assert json.loads(lines[2]) == new_row  # the new row parses on its own
+
+
+def test_atomic_append_no_spurious_newline_when_prior_write_well_formed(tmp_path: Path):
+    """The newline-guard must be a no-op when the file already ends cleanly
+    -- it should never insert a blank line between two well-formed rows."""
+    import json
+
+    from loop_graph._atomic import atomic_append_jsonl
+
+    path = tmp_path / "INDEX.jsonl"
+    atomic_append_jsonl(path, {"receipt_id": "r0", "node_id": "exec-0"})
+    atomic_append_jsonl(path, {"receipt_id": "r1", "node_id": "exec-1"})
+
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 2
+    assert all(line.strip() for line in lines)  # no blank line inserted
+
+
+# --------------------------------------------------------------------------
+# Windows lock-poll errno narrowing (review-pr1310.md RE-REVIEW N3)
+# --------------------------------------------------------------------------
+
+@pytest.mark.skipif(sys.platform != "win32", reason="msvcrt-specific errno narrowing")
+def test_windows_exclusive_lock_propagates_non_contention_oserror(tmp_path: Path, monkeypatch):
+    """review-pr1310.md RE-REVIEW N3 required test: ExclusiveLock's win32
+    poll loop must retry ONLY on the lock-contention errno (EACCES) that
+    msvcrt.locking raises when the region is already held. Any other OSError
+    (a real fault) must propagate immediately instead of spinning forever --
+    the pre-fix `except OSError: time.sleep(...)` caught everything and
+    would hang on a genuine error."""
+    import errno
+    import msvcrt
+
+    from loop_graph._atomic import ExclusiveLock
+
+    def fake_locking(fd, mode, nbytes):
+        raise OSError(errno.EINVAL, "simulated non-contention error")
+
+    monkeypatch.setattr(msvcrt, "locking", fake_locking)
+
+    lock = ExclusiveLock(tmp_path / "sidecar.lock")
+    with pytest.raises(OSError) as excinfo:
+        lock.__enter__()
+    assert excinfo.value.errno == errno.EINVAL
+
+
+# --------------------------------------------------------------------------
+# lifecycle.create under the per-node lock (review-pr1310.md RE-REVIEW N4)
+# --------------------------------------------------------------------------
+
+def test_lifecycle_concurrent_create_exactly_one_writer_and_rest_idempotent(tmp_path: Path):
+    """review-pr1310.md RE-REVIEW N4 required test: create() is now wrapped
+    in the same per-node ExclusiveLock as claim/start/close, so N engines
+    racing to create the same node_id all converge on one record instead of
+    racing read-check-write independently."""
+    store = tmp_path / "nodes"
+    node_id = "exec-create-race"
+
+    n = 8
+    barrier = threading.Barrier(n)
+    results: list[dict] = []
+    results_lock = threading.Lock()
+
+    def worker(worker_id: int) -> None:
+        node = make_execution_node(node_id=node_id, owner=f"agent-{worker_id}")
+        barrier.wait()
+        record = lifecycle.create(store, node)
+        with results_lock:
+            results.append(record)
+
+    threads = [threading.Thread(target=worker, args=(i,)) for i in range(n)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert len(results) == n
+    owners = {record["owner"] for record in results}
+    assert len(owners) == 1  # every racer converged on the same first-writer's record
+
+    final = lifecycle.load_node(store, node_id)
+    assert final["owner"] in owners
+
+
+# --------------------------------------------------------------------------
 # concurrency: atomic lifecycle claim (MEDIUM-3)
 # --------------------------------------------------------------------------
 
