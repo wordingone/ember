@@ -8,6 +8,8 @@ import os
 import subprocess
 import sys
 import hashlib
+import threading
+import time
 from pathlib import Path
 
 
@@ -484,7 +486,11 @@ def test_checked_in_root_spec_distinguishes_owned_and_external_surfaces() -> Non
             rows[root_id]["absence_policy"]
             == "external_party_evidence_absent_by_design"
         )
-    assert rows["internal-execution-tree"] == {
+    internal_execution_tree = dict(rows["internal-execution-tree"])
+    # #1365: cockpit runtime state is declared per-root, not asserted here
+    # verbatim (that's covered by test_runtime_state_exclusions_* below).
+    internal_execution_tree.pop("runtime_state_exclusions", None)
+    assert internal_execution_tree == {
         "root_id": "internal-execution-tree",
         "binding": "EMBER_INTERNAL_EXECUTION_ROOT",
         "required": True,
@@ -501,6 +507,29 @@ def test_checked_in_root_spec_distinguishes_owned_and_external_surfaces() -> Non
         not any(token in json.dumps(row) for token in ("B:\\\\", "C:\\\\"))
         for row in spec["roots"]
     )
+
+
+def test_checked_in_root_spec_runtime_state_exclusions_are_well_formed() -> None:
+    # #1365: every declared exclusion is a version-controlled pattern+reason
+    # pair on the root itself — never a scanner-level hardcoded glob — and
+    # covers the cockpit's own state directory.
+    path = REPO_ROOT / "manifests" / "ember-01-custody" / "root-spec.json"
+    spec = json.loads(path.read_text(encoding="utf-8"))
+    declaring_roots = {
+        row["root_id"]: row["runtime_state_exclusions"]
+        for row in spec["roots"]
+        if "runtime_state_exclusions" in row
+    }
+    assert "local-execution-tree" in declaring_roots
+    assert "internal-execution-tree" in declaring_roots
+    assert "ember-named-root-discovery" in declaring_roots
+    assert "registered-worktree-material-registry" in declaring_roots
+    for root_id, exclusions in declaring_roots.items():
+        assert isinstance(exclusions, list) and exclusions, root_id
+        for entry in exclusions:
+            assert isinstance(entry["pattern"], str) and entry["pattern"], root_id
+            assert isinstance(entry["reason"], str) and entry["reason"], root_id
+            assert "ember-cli/state" in entry["pattern"], root_id
 
 
 def test_missing_required_external_root_with_closed_attestation_is_resolved() -> None:
@@ -1485,4 +1514,231 @@ def test_git_ignored_registry_membership_unchanged_is_not_flagged(
     assert not any(
         row["code"] == "directory_membership_changed_during_scan"
         for row in result["contradictions"]
+    )
+
+
+# ---------------------------------------------------------------------------
+# #1365: runtime-state exclusion (cockpit self-contamination).
+
+
+_STATE_EXCLUSION = {
+    "pattern": "*tools/ember-cli/state/*",
+    "reason": "cockpit runtime state, see #1365",
+}
+
+
+def test_runtime_state_exclusion_is_disclosed_with_pattern_reason_and_count(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "keep.bin").write_bytes(b"keep")
+    state_dir = root / "tools" / "ember-cli" / "state"
+    state_dir.mkdir(parents=True)
+    (state_dir / "a.jsonl").write_bytes(b"a")
+    (state_dir / "b.json").write_bytes(b"b")
+    spec = {
+        "roots": [
+            {
+                "root_id": "root",
+                "required": True,
+                "scan": "files",
+                "owner": "operator",
+                "authority_status": "noncanonical_evidence",
+                "runtime_state_exclusions": [_STATE_EXCLUSION],
+            }
+        ]
+    }
+    result = build_root_census(spec, {"root": root})
+    root_row = result["roots"][0]
+    assert root_row["runtime_state_exclusions"] == [
+        {**_STATE_EXCLUSION, "excluded_artifact_count": 2}
+    ]
+    assert result["runtime_state_excluded_artifact_count"] == 2
+    assert {row["source"]["relative_path"] for row in result["artifacts"]} == {
+        "keep.bin"
+    }
+
+    # Never silently applied: a root that does not declare the exclusion is
+    # scanned in full — no hardcoded scanner-level glob, no ambient default.
+    spec_no_declaration = {
+        "roots": [
+            {
+                "root_id": "root",
+                "required": True,
+                "scan": "files",
+                "owner": "operator",
+                "authority_status": "noncanonical_evidence",
+            }
+        ]
+    }
+    undeclared = build_root_census(spec_no_declaration, {"root": root})
+    assert {row["source"]["relative_path"] for row in undeclared["artifacts"]} == {
+        "keep.bin",
+        "tools/ember-cli/state/a.jsonl",
+        "tools/ember-cli/state/b.json",
+    }
+    assert "runtime_state_exclusions" not in undeclared["roots"][0]
+    assert undeclared["runtime_state_excluded_artifact_count"] == 0
+
+
+def test_runtime_state_exclusion_does_not_blanket_suppress_other_paths(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """Acceptance #4: a mutation OUTSIDE the excluded set still produces a
+    contradiction — declaring an exclusion never goes blanket."""
+    root = tmp_path / "root"
+    root.mkdir()
+    watched = root / "watched.bin"
+    watched.write_bytes(b"before")
+    state_dir = root / "tools" / "ember-cli" / "state"
+    state_dir.mkdir(parents=True)
+    (state_dir / "watermark.json").write_bytes(b"{}")
+
+    real_hash = census_module.hash_file_streaming
+    mutated = False
+
+    def mutate_after_hash(path, *args, **kwargs):
+        nonlocal mutated
+        result = real_hash(path, *args, **kwargs)
+        if path == watched and not mutated:
+            mutated = True
+            watched.write_bytes(b"after-hash-mutation")
+        return result
+
+    monkeypatch.setattr(census_module, "hash_file_streaming", mutate_after_hash)
+    spec = {
+        "roots": [
+            {
+                "root_id": "root",
+                "required": True,
+                "scan": "files",
+                "owner": "operator",
+                "authority_status": "noncanonical_evidence",
+                "runtime_state_exclusions": [_STATE_EXCLUSION],
+            }
+        ]
+    }
+    result = build_root_census(spec, {"root": root})
+    # Either code proves the mutation on the non-excluded path was caught
+    # (immediate post-hash guard vs. the final re-verification pass,
+    # depending on exactly when the write lands) — what matters is that it
+    # is NOT silently absorbed the way an excluded-path mutation now is.
+    assert any(
+        row["code"] in {"artifact_changed_after_hash", "artifact_mutated_during_hash"}
+        and row.get("relative_path") == "watched.bin"
+        for row in result["contradictions"]
+    )
+
+
+def test_runtime_state_exclusion_applies_to_git_repository_material_paths(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "repo"
+    root.mkdir()
+    git(root, "init")
+    git(root, "config", "user.email", "fixture@example.invalid")
+    git(root, "config", "user.name", "fixture")
+    (root / ".gitignore").write_text(
+        "tools/ember-cli/state/\n", encoding="utf-8"
+    )
+    git(root, "add", ".gitignore")
+    git(root, "commit", "-m", "fixture")
+    (root / "loose.txt").write_text("loose\n", encoding="utf-8")
+    state_dir = root / "tools" / "ember-cli" / "state"
+    state_dir.mkdir(parents=True)
+    (state_dir / "watermark.json").write_bytes(b"{}")
+    spec = {
+        "roots": [
+            {
+                "root_id": "repo",
+                "required": True,
+                "scan": "git_repository",
+                "provenance_class": "harness_tooling",
+                "lineage_admissibility": "source_authority_not_weight_lineage",
+                "runtime_state_exclusions": [_STATE_EXCLUSION],
+            }
+        ]
+    }
+    result = build_root_census(spec, {"repo": root})
+    relative_paths = {row["source"]["relative_path"] for row in result["artifacts"]}
+    assert "git-material/tools/ember-cli/state/watermark.json" not in relative_paths
+    assert "git-material/loose.txt" in relative_paths
+    assert (
+        result["roots"][0]["runtime_state_exclusions"][0]["excluded_artifact_count"]
+        == 1
+    )
+    assert not any(
+        row["code"] == "directory_membership_changed_during_scan"
+        for row in result["contradictions"]
+    )
+
+
+def test_runtime_state_exclusion_survives_background_writer_thread(
+    tmp_path: Path,
+) -> None:
+    """Acceptance #2: a census run over a fixture root, with a background
+    writer thread continuously mutating an excluded state file for the whole
+    run, produces zero contradictions attributable to the excluded path."""
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "included.bin").write_bytes(b"keep-me")
+    state_dir = root / "tools" / "ember-cli" / "state"
+    state_dir.mkdir(parents=True)
+    watermark = state_dir / "activity-feed-watermark.json"
+    watermark.write_bytes(b'{"n":0}')
+
+    stop_writer = threading.Event()
+
+    def _writer() -> None:
+        counter = 0
+        while not stop_writer.is_set():
+            counter += 1
+            try:
+                watermark.write_bytes(
+                    json.dumps({"n": counter}).encode("utf-8")
+                )
+            except OSError:
+                pass
+            time.sleep(0.005)
+
+    thread = threading.Thread(target=_writer, daemon=True)
+    thread.start()
+    spec = {
+        "roots": [
+            {
+                "root_id": "root",
+                "required": True,
+                "scan": "files",
+                "owner": "operator",
+                "authority_status": "noncanonical_evidence",
+                "runtime_state_exclusions": [_STATE_EXCLUSION],
+            }
+        ]
+    }
+    result = None
+    try:
+        # The writer never stops for the whole block below, so every one of
+        # these runs genuinely overlaps its mutation window.
+        for _ in range(5):
+            result = build_root_census(spec, {"root": root})
+            assert not any(
+                row["code"]
+                in {
+                    "artifact_changed_after_hash",
+                    "artifact_mutated_during_hash",
+                    "directory_membership_changed_during_scan",
+                }
+                for row in result["contradictions"]
+            )
+    finally:
+        stop_writer.set()
+        thread.join(timeout=2)
+
+    assert result is not None
+    relative_paths = {row["source"]["relative_path"] for row in result["artifacts"]}
+    assert relative_paths == {"included.bin"}
+    assert (
+        result["roots"][0]["runtime_state_exclusions"][0]["excluded_artifact_count"]
+        == 1
     )
