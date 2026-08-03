@@ -600,8 +600,7 @@
     {
       "imports": [
         "dsl",
-        "generators",
-        "verifiers"
+        "generators"
       ],
       "feature": "ARC vendor-tree diagnostics",
       "reason": "Loaded only after explicit sys.path binding to operator-supplied ARC vendor trees; not a pip authority."
