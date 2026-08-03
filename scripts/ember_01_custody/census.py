@@ -482,14 +482,20 @@ def _spooled_membership_digest(path_iter: Iterator[str]) -> str:
             pass
 
 
-def _compute_ignored_membership_sha256(bound: Path) -> str:
+def _compute_ignored_membership_sha256(
+    bound: Path, exclusions: list[dict[str, str]] | None = None
+) -> str:
     """Recompute the current git-ignored membership digest for `bound`,
     bounded the same way as the initial scan (spooled, never a resident full
-    list). Used only for the final TOCTOU membership check."""
-    return _spooled_membership_digest(
-        relative
-        for relative, _ in _iter_material_rows(bound, _iter_git_ignored_paths(bound))
-    )
+    list). Used only for the final TOCTOU membership check. `exclusions`
+    must match whatever runtime-state exclusions (#1365) were applied to the
+    initial digest, or a filter mismatch alone would manufacture a spurious
+    membership-changed contradiction."""
+    rows = _iter_material_rows(bound, _iter_git_ignored_paths(bound))
+    if exclusions:
+        discard_counts: dict[str, int] = defaultdict(int)
+        rows = _iter_exclude_runtime_state(rows, exclusions, discard_counts)
+    return _spooled_membership_digest(relative for relative, _ in rows)
 
 
 def canonical_root_identity(payload: Mapping[str, Any]) -> dict[str, Any]:
@@ -540,10 +546,18 @@ def _current_root_membership(
     root_spec: Mapping[str, Any],
     initial_membership: list[str],
 ) -> list[str]:
+    # Must apply the exact same runtime-state exclusion filter as the
+    # initial scan in build_root_census (#1365) — otherwise an excluded
+    # path would be present in one snapshot and absent from the other,
+    # manufacturing a spurious directory_membership_changed_during_scan
+    # contradiction purely from the filter mismatch, not a real mutation.
+    exclusions = _normalize_runtime_state_exclusions(root_spec)
+    discard_counts: dict[str, int] = defaultdict(int)
     if scan == "git_repository":
         rows, _ = _material_file_rows(
             bound, _git_material_paths(bound), "git-material/"
         )
+        rows = _apply_runtime_state_exclusions(rows, exclusions, discard_counts)
         return [relative for relative, _ in rows]
     if scan == "directory_discovery":
         patterns = root_spec["name_patterns"]
@@ -578,15 +592,23 @@ def _current_root_membership(
                         _git_material_paths(child),
                         f"{child.name}/git-material/",
                     )
+                    material_rows = _apply_runtime_state_exclusions(
+                        material_rows, exclusions, discard_counts
+                    )
                     rows.extend(material_rows)
             elif child.is_file():
                 rows.append((child.name, child))
             elif child.is_dir():
                 nested_rows, _ = _discover_file_rows(child)
-                rows.extend(
-                    (f"{child.name}/{relative}", candidate)
-                    for relative, candidate in nested_rows
+                nested_rows = _apply_runtime_state_exclusions(
+                    (
+                        (f"{child.name}/{relative}", candidate)
+                        for relative, candidate in nested_rows
+                    ),
+                    exclusions,
+                    discard_counts,
                 )
+                rows.extend(nested_rows)
         return [relative for relative, _ in rows]
     if scan == "git_ignored_registry":
         ignored = [
@@ -602,6 +624,7 @@ def _current_root_membership(
             if relative
         ]
         rows, _ = _material_file_rows(bound, ignored)
+        rows = _apply_runtime_state_exclusions(rows, exclusions, discard_counts)
         return [relative for relative, _ in rows]
     if scan == "git_worktree_material_registry":
         rows: list[tuple[str, Path]] = []
@@ -614,7 +637,7 @@ def _current_root_membership(
                     2, "registered worktree unavailable during final verification"
                 )
             material_paths = _git_material_paths(worktree_path)
-            rows.extend(
+            worktree_rows = (
                 (
                     f"{worktree['worktree_id']}/{relative}",
                     worktree_path / Path(relative),
@@ -622,9 +645,16 @@ def _current_root_membership(
                 for relative in material_paths
                 if (worktree_path / Path(relative)).is_file()
             )
+            rows.extend(
+                _apply_runtime_state_exclusions(
+                    worktree_rows, exclusions, discard_counts
+                )
+            )
         return [relative for relative, _ in rows]
     if scan == "files" and bound.is_dir():
-        return [relative for relative, _ in _discover_file_rows(bound)[0]]
+        rows, _ = _discover_file_rows(bound)
+        rows = _apply_runtime_state_exclusions(rows, exclusions, discard_counts)
+        return [relative for relative, _ in rows]
     return list(initial_membership)
 
 
@@ -708,6 +738,87 @@ def _valid_required_absence_policy(root_spec: Mapping[str, Any]) -> bool:
     )
 
 
+# ---------------------------------------------------------------------------
+# Runtime-state exclusions (#1365).
+#
+# The custody census hashes every artifact under its registered roots, then
+# re-verifies unchanged bytes at the end of the run. A live ember-cli cockpit
+# continuously rewrites its own runtime-state files (activity-feed tailpoll
+# debug log, activity-feed watermark, hardening receipts) under
+# `tools/ember-cli/state/` inside every root that mirrors the ember working
+# tree — and since /verify (#1360) dispatches verification FROM the cockpit,
+# the cockpit is by definition alive during every census. Without an
+# exclusion this is structural self-contamination: the census flags its own
+# host's heartbeat as a custody violation on every run.
+#
+# The exclusion is read ONLY from each root's own `runtime_state_exclusions`
+# entry in the version-controlled root spec (manifests/ember-01-custody/
+# root-spec.json) — never from a pattern hardcoded here. A root that does not
+# declare an exclusion is scanned in full, unconditionally; declaring one on
+# a root that never contains a match costs nothing (excluded_artifact_count
+# stays 0) but keeps every filesystem-mirroring root defended in advance.
+def _normalize_runtime_state_exclusions(
+    root_spec: Mapping[str, Any],
+) -> list[dict[str, str]]:
+    raw = root_spec.get("runtime_state_exclusions")
+    if not isinstance(raw, list):
+        return []
+    normalized: list[dict[str, str]] = []
+    seen_patterns: set[str] = set()
+    for entry in raw:
+        if not isinstance(entry, Mapping):
+            continue
+        pattern = entry.get("pattern")
+        reason = entry.get("reason")
+        if (
+            isinstance(pattern, str)
+            and pattern.strip()
+            and isinstance(reason, str)
+            and reason.strip()
+            and pattern not in seen_patterns
+        ):
+            normalized.append({"pattern": pattern, "reason": reason})
+            seen_patterns.add(pattern)
+    return normalized
+
+
+def _runtime_state_exclusion_match(
+    relative: str, exclusions: list[dict[str, str]]
+) -> str | None:
+    normalized_relative = relative.replace("\\", "/").casefold()
+    for entry in exclusions:
+        if fnmatch.fnmatch(normalized_relative, entry["pattern"].casefold()):
+            return entry["pattern"]
+    return None
+
+
+def _iter_exclude_runtime_state(
+    rows: Iterable[tuple[str, Path]],
+    exclusions: list[dict[str, str]],
+    counts: dict[str, int],
+) -> Iterator[tuple[str, Path]]:
+    """Drop rows matching a declared exclusion pattern before they are ever
+    hashed or membership-tracked, so a writer mutating an excluded path
+    mid-census can never produce a contradiction. Every drop is counted
+    (never silent) so it can be disclosed in the census output."""
+    if not exclusions:
+        yield from rows
+        return
+    for relative, path in rows:
+        matched = _runtime_state_exclusion_match(relative, exclusions)
+        if matched is not None:
+            counts[matched] += 1
+            continue
+        yield relative, path
+
+
+def _apply_runtime_state_exclusions(
+    rows: Iterable[tuple[str, Path]],
+    exclusions: list[dict[str, str]],
+    counts: dict[str, int],
+) -> list[tuple[str, Path]]:
+    return list(_iter_exclude_runtime_state(rows, exclusions, counts))
+
 
 def build_root_census(
     specification: Mapping[str, Any],
@@ -753,6 +864,8 @@ def build_root_census(
     ):
         root_id = root_spec["root_id"]
         scan = root_spec.get("scan", "files")
+        runtime_state_exclusions = _normalize_runtime_state_exclusions(root_spec)
+        runtime_state_exclusion_hits: dict[str, int] = defaultdict(int)
         source_root_id = root_spec.get("source_root_id")
         binding_id = source_root_id if isinstance(source_root_id, str) else root_id
         bound_value = bindings.get(binding_id)
@@ -881,6 +994,11 @@ def build_root_census(
                     file_candidates, directory_errors = _material_file_rows(
                         bound, _git_material_paths(bound), "git-material/"
                     )
+                    file_candidates = _apply_runtime_state_exclusions(
+                        file_candidates,
+                        runtime_state_exclusions,
+                        runtime_state_exclusion_hits,
+                    )
                     initial_membership = [
                         relative for relative, _ in file_candidates
                     ]
@@ -979,6 +1097,11 @@ def build_root_census(
                                 _git_material_paths(child),
                                 f"{child.name}/git-material/",
                             )
+                            material_rows = _apply_runtime_state_exclusions(
+                                material_rows,
+                                runtime_state_exclusions,
+                                runtime_state_exclusion_hits,
+                            )
                             file_candidates.extend(material_rows)
                             directory_errors.extend(material_errors)
                     else:
@@ -993,10 +1116,15 @@ def build_root_census(
                             file_candidates.append((child.name, child))
                         elif child.is_dir():
                             nested_rows, nested_errors = _discover_file_rows(child)
-                            file_candidates.extend(
-                                (f"{child.name}/{relative}", candidate)
-                                for relative, candidate in nested_rows
+                            nested_rows = _apply_runtime_state_exclusions(
+                                (
+                                    (f"{child.name}/{relative}", candidate)
+                                    for relative, candidate in nested_rows
+                                ),
+                                runtime_state_exclusions,
+                                runtime_state_exclusion_hits,
                             )
+                            file_candidates.extend(nested_rows)
                             directory_errors.extend(
                                 {**error, "relative_path": f"{child.name}/{error['relative_path']}"}
                                 for error in nested_errors
@@ -1052,13 +1180,20 @@ def build_root_census(
                         worktree_errors.append(error)
                         continue
                     materialized += 1
-                    file_candidates.extend(
+                    worktree_rows = (
                         (
                             f"{worktree['worktree_id']}/{relative}",
                             worktree_path / Path(relative),
                         )
                         for relative in material_paths
                         if (worktree_path / Path(relative)).is_file()
+                    )
+                    file_candidates.extend(
+                        _apply_runtime_state_exclusions(
+                            worktree_rows,
+                            runtime_state_exclusions,
+                            runtime_state_exclusion_hits,
+                        )
                     )
                 root_row["materialized_worktree_count"] = materialized
                 root_row["worktree_errors"] = worktree_errors
@@ -1085,7 +1220,11 @@ def build_root_census(
                         yield relative, path
 
                 file_candidates = _spooling_ignored_rows(
-                    _iter_material_rows(bound, ignored_top_level)
+                    _iter_exclude_runtime_state(
+                        _iter_material_rows(bound, ignored_top_level),
+                        runtime_state_exclusions,
+                        runtime_state_exclusion_hits,
+                    )
                 )
                 directory_errors = []
                 initial_membership = None
@@ -1114,9 +1253,16 @@ def build_root_census(
         if file_candidates is not None:
             candidates = file_candidates
         elif bound.is_file():
-            candidates = [(bound.name, bound)]
+            candidates = _apply_runtime_state_exclusions(
+                [(bound.name, bound)],
+                runtime_state_exclusions,
+                runtime_state_exclusion_hits,
+            )
         else:
             candidates, directory_errors = _discover_file_rows(bound)
+            candidates = _apply_runtime_state_exclusions(
+                candidates, runtime_state_exclusions, runtime_state_exclusion_hits
+            )
             initial_membership = [relative for relative, _ in candidates]
         if initial_membership is None and not membership_deferred:
             initial_membership = [relative for relative, _ in candidates]
@@ -1330,6 +1476,22 @@ def build_root_census(
                     os.unlink(membership_spool.name)
                 except OSError:
                     pass
+        if runtime_state_exclusions:
+            # Disclosure (#1365 acceptance #3): every declared exclusion is
+            # always reported, pattern + reason + how many artifacts it
+            # actually dropped on this root — 0 for a root the pattern never
+            # matches, so an exclusion can never silently hide custody
+            # material.
+            root_row["runtime_state_exclusions"] = [
+                {
+                    "pattern": entry["pattern"],
+                    "reason": entry["reason"],
+                    "excluded_artifact_count": runtime_state_exclusion_hits.get(
+                        entry["pattern"], 0
+                    ),
+                }
+                for entry in runtime_state_exclusions
+            ]
     for record in final_discovery_records:
         try:
             final_discovery_snapshot = _current_discovery_snapshot(
@@ -1375,7 +1537,8 @@ def build_root_census(
             # full path lists.
             try:
                 final_membership_sha256 = _compute_ignored_membership_sha256(
-                    record["bound"]
+                    record["bound"],
+                    _normalize_runtime_state_exclusions(record["root_spec"]),
                 )
             except Exception as exc:
                 contradictions.append(
@@ -1454,6 +1617,11 @@ def build_root_census(
         )
     )
     contradictions.extend(detect_contradictions(artifacts))
+    runtime_state_excluded_artifact_count = sum(
+        entry.get("excluded_artifact_count", 0)
+        for root_row in roots
+        for entry in root_row.get("runtime_state_exclusions", [])
+    )
     return {
         "schema": "ember-01-root-census-v1",
         "hash_algorithm": HASH_ALGORITHM,
@@ -1461,6 +1629,7 @@ def build_root_census(
         "roots": roots,
         "artifacts": artifacts,
         "duplicate_groups": build_duplicate_groups(artifacts),
+        "runtime_state_excluded_artifact_count": runtime_state_excluded_artifact_count,
         "contradictions": sorted(
             contradictions,
             key=lambda row: (row["code"], row.get("root_id", ""), row.get("artifact_id", "")),

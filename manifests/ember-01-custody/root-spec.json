@@ -63,7 +63,13 @@
                       "lineage_admissibility":  "unresolved_requires_item_review",
                       "mutability":  "preserve_read_only",
                       "owner":  "operator",
-                      "authority_status":  "noncanonical_evidence"
+                      "authority_status":  "noncanonical_evidence",
+                      "runtime_state_exclusions":  [
+                          {
+                              "pattern":  "*tools/ember-cli/state/*",
+                              "reason":  "cockpit runtime state (activity-feed tailpoll debug log, activity-feed watermark, hardening receipts) rewritten continuously by a live ember-cli process; a full-tree recovery copy can carry the same paths as the live execution tree it mirrors; excluded from custody hash/membership comparison, see #1365"
+                          }
+                      ]
                   },
                   {
                       "root_id":  "ember-named-root-discovery",
@@ -78,7 +84,13 @@
                       "lineage_admissibility":  "unresolved_requires_item_review",
                       "mutability":  "mixed",
                       "owner":  "operator",
-                      "authority_status":  "distributed_local_material"
+                      "authority_status":  "distributed_local_material",
+                      "runtime_state_exclusions":  [
+                          {
+                              "pattern":  "*tools/ember-cli/state/*",
+                              "reason":  "cockpit runtime state (activity-feed tailpoll debug log, activity-feed watermark, hardening receipts) rewritten continuously by a live ember-cli process; the cockpit is structurally alive during every census since /verify dispatches from it (#1360); excluded from custody hash/membership comparison, see #1365"
+                          }
+                      ]
                   },
                   {
                       "root_id":  "external-data-root",
@@ -102,7 +114,13 @@
                       "mutability":  "dirty_live_tree",
                       "owner":  "operator",
                       "authority_status":  "candidate_not_selected",
-                      "disposition":  "logical_alias_of_local_execution_tree"
+                      "disposition":  "logical_alias_of_local_execution_tree",
+                      "runtime_state_exclusions":  [
+                          {
+                              "pattern":  "*tools/ember-cli/state/*",
+                              "reason":  "cockpit runtime state (activity-feed tailpoll debug log, activity-feed watermark, hardening receipts) rewritten continuously by a live ember-cli process; the cockpit is structurally alive during every census since /verify dispatches from it (#1360); excluded from custody hash/membership comparison, see #1365"
+                          }
+                      ]
                   },
                   {
                       "root_id":  "auditor-stale-clone",
@@ -160,7 +178,13 @@
                       "lineage_admissibility":  "unresolved_requires_item_review",
                       "mutability":  "dirty_live_tree",
                       "owner":  "operator",
-                      "authority_status":  "candidate_not_selected"
+                      "authority_status":  "candidate_not_selected",
+                      "runtime_state_exclusions":  [
+                          {
+                              "pattern":  "*tools/ember-cli/state/*",
+                              "reason":  "cockpit runtime state (activity-feed tailpoll debug log, activity-feed watermark, hardening receipts) rewritten continuously by a live ember-cli process; the cockpit is structurally alive during every census since /verify dispatches from it (#1360); excluded from custody hash/membership comparison, see #1365"
+                          }
+                      ]
                   },
                   {
                       "root_id":  "local-ignored-payload-registry",
@@ -196,7 +220,13 @@
                       "lineage_admissibility":  "unresolved_requires_ref_review",
                       "mutability":  "preserve_read_only",
                       "owner":  "operator",
-                      "authority_status":  "missing_or_relocated"
+                      "authority_status":  "missing_or_relocated",
+                      "runtime_state_exclusions":  [
+                          {
+                              "pattern":  "*tools/ember-cli/state/*",
+                              "reason":  "cockpit runtime state (activity-feed tailpoll debug log, activity-feed watermark, hardening receipts) rewritten continuously by a live ember-cli process; a full-tree backup can carry the same paths as the live execution tree it mirrors; excluded from custody hash/membership comparison, see #1365"
+                          }
+                      ]
                   },
                   {
                       "root_id":  "public-bare-mirror",
@@ -218,7 +248,13 @@
                       "lineage_admissibility":  "source_authority_not_weight_lineage",
                       "mutability":  "git_controlled",
                       "owner":  "operator",
-                      "authority_status":  "public_source_authority"
+                      "authority_status":  "public_source_authority",
+                      "runtime_state_exclusions":  [
+                          {
+                              "pattern":  "*tools/ember-cli/state/*",
+                              "reason":  "cockpit runtime state (activity-feed tailpoll debug log, activity-feed watermark, hardening receipts) rewritten continuously by a live ember-cli process running against this clone; excluded from custody hash/membership comparison, see #1365"
+                          }
+                      ]
                   },
                   {
                       "root_id":  "public-worktree",
@@ -229,7 +265,13 @@
                       "lineage_admissibility":  "unresolved_requires_patch_review",
                       "mutability":  "dirty_or_branch_specific",
                       "owner":  "operator",
-                      "authority_status":  "noncanonical_worktree"
+                      "authority_status":  "noncanonical_worktree",
+                      "runtime_state_exclusions":  [
+                          {
+                              "pattern":  "*tools/ember-cli/state/*",
+                              "reason":  "cockpit runtime state (activity-feed tailpoll debug log, activity-feed watermark, hardening receipts) rewritten continuously by a live ember-cli process; a public worktree of the ember repo can carry the same paths as the live execution tree; excluded from custody hash/membership comparison, see #1365"
+                          }
+                      ]
                   },
                   {
                       "root_id":  "pull-backup-root",
@@ -240,7 +282,13 @@
                       "lineage_admissibility":  "unresolved_requires_item_review",
                       "mutability":  "preserve_read_only",
                       "owner":  "operator",
-                      "authority_status":  "noncanonical_backup"
+                      "authority_status":  "noncanonical_backup",
+                      "runtime_state_exclusions":  [
+                          {
+                              "pattern":  "*tools/ember-cli/state/*",
+                              "reason":  "cockpit runtime state (activity-feed tailpoll debug log, activity-feed watermark, hardening receipts) rewritten continuously by a live ember-cli process; a full-tree backup copy can carry the same paths as the live execution tree it mirrors; excluded from custody hash/membership comparison, see #1365"
+                          }
+                      ]
                   },
                   {
                       "root_id":  "recovery-root",
@@ -251,7 +299,13 @@
                       "lineage_admissibility":  "unresolved_requires_item_review",
                       "mutability":  "preserve_read_only",
                       "owner":  "operator",
-                      "authority_status":  "noncanonical_recovery"
+                      "authority_status":  "noncanonical_recovery",
+                      "runtime_state_exclusions":  [
+                          {
+                              "pattern":  "*tools/ember-cli/state/*",
+                              "reason":  "cockpit runtime state (activity-feed tailpoll debug log, activity-feed watermark, hardening receipts) rewritten continuously by a live ember-cli process; a full-tree recovery copy can carry the same paths as the live execution tree it mirrors; excluded from custody hash/membership comparison, see #1365"
+                          }
+                      ]
                   },
                   {
                       "root_id":  "registered-worktree-material-registry",
@@ -263,7 +317,13 @@
                       "lineage_admissibility":  "unresolved_requires_item_review",
                       "mutability":  "distributed_worktree_state",
                       "owner":  "operator",
-                      "authority_status":  "distributed_local_material"
+                      "authority_status":  "distributed_local_material",
+                      "runtime_state_exclusions":  [
+                          {
+                              "pattern":  "*tools/ember-cli/state/*",
+                              "reason":  "cockpit runtime state (activity-feed tailpoll debug log, activity-feed watermark, hardening receipts) rewritten continuously by a live ember-cli process; the cockpit is structurally alive during every census since /verify dispatches from it (#1360); excluded from custody hash/membership comparison, see #1365"
+                          }
+                      ]
                   },
                   {
                       "root_id":  "registered-worktree-registry",
@@ -286,7 +346,13 @@
                       "lineage_admissibility":  "unresolved_requires_item_review",
                       "mutability":  "preserve_read_only",
                       "owner":  "operator",
-                      "authority_status":  "noncanonical_backup"
+                      "authority_status":  "noncanonical_backup",
+                      "runtime_state_exclusions":  [
+                          {
+                              "pattern":  "*tools/ember-cli/state/*",
+                              "reason":  "cockpit runtime state (activity-feed tailpoll debug log, activity-feed watermark, hardening receipts) rewritten continuously by a live ember-cli process; a full-tree backup copy can carry the same paths as the live execution tree it mirrors; excluded from custody hash/membership comparison, see #1365"
+                          }
+                      ]
                   }
               ]
 }
