@@ -847,6 +847,36 @@ def run_selftest() -> None:
 # CLI
 # ---------------------------------------------------------------------------
 
+def _default_renderer_heartbeat_path() -> str:
+    """#413/#1330: the renderer heartbeat writer (services/liveness-heartbeat.ts) now writes
+    through emberStatePath() -- the same external, never-censused state root every other
+    cockpit-mutable file uses (utils/ember-state-root.ts) -- never under the checkout's
+    tools/ember-cli/state/, gitignored or not.
+
+    This CLI default mirrors ONLY the `EMBER_STATE_ROOT` arm of that resolution, verbatim,
+    same contract as the TS and PowerShell sides. It deliberately does NOT reimplement the
+    EMBER_HOME/repoStateKey fallback arm in a third language -- ember-state-root.ts's own
+    header is explicit that only two implementations are kept in lockstep (TS + PS1) so they
+    "cannot drift apart unnoticed"; a Python third would be exactly the drift risk that
+    guards against. scripts/launch-ember-cli.ps1 already exports EMBER_STATE_ROOT into the
+    cockpit's launching session, so a watchdog started from (or after) that same launch
+    picks it up here too.
+
+    Absent EMBER_STATE_ROOT, this falls back to the legacy in-tree path. That file is never
+    written anymore (the writer alone decides where state lives), so a watchdog run without
+    EMBER_STATE_ROOT set reads a permanently-missing file and reports the renderer-heartbeat
+    leg not-fresh -- fail-loud, matching this module's own "missing... rows fail loud"
+    contract, never a silently stale green. Pass --renderer-heartbeat-path explicitly to
+    point at a specific location instead.
+    """
+    override = os.environ.get("EMBER_STATE_ROOT", "").strip()
+    if override:
+        return os.path.join(os.path.abspath(override), "cockpit-heartbeat.json")
+    return os.path.abspath(os.path.join(
+        os.path.dirname(__file__), "..", "tools", "ember-cli",
+        "state", "cockpit-heartbeat.json"))
+
+
 def main(argv: Optional[list[str]] = None) -> None:
     parser = argparse.ArgumentParser(prog="cockpit_watchdog")
     sub = parser.add_subparsers(dest="cmd")
@@ -861,9 +891,7 @@ def main(argv: Optional[list[str]] = None) -> None:
     run_p.add_argument("--heartbeat-path",
                         default=os.path.join("state", "cockpit-watchdog-heartbeat.jsonl"))
     run_p.add_argument("--renderer-heartbeat-path",
-                        default=os.path.abspath(os.path.join(
-                            os.path.dirname(__file__), "..", "tools", "ember-cli",
-                            "state", "cockpit-heartbeat.json")))
+                        default=_default_renderer_heartbeat_path())
     run_p.add_argument("--renderer-heartbeat-max-age", type=float, default=5.0,
                         help="maximum accepted renderer heartbeat age in seconds")
     run_p.add_argument("--capture-dir",
