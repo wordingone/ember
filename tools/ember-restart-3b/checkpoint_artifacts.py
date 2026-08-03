@@ -520,6 +520,7 @@ def _derive_checkpoint_storage_projection(
     global_step: int,
     max_transient_scratch_bytes: int,
     max_serialized_bytes: int,
+    single_specialist_episode: bool,
 ) -> dict[str, Any]:
     """Bind the post-update optimizer floor and four-expert checkpoint floor."""
 
@@ -570,11 +571,22 @@ def _derive_checkpoint_storage_projection(
     if model.active_expert == "shared":
         route_valid = active_bytes > 0 and specialist_routes == []
         active_routes = ["shared"]
-    else:
-        route_valid = active_bytes > 0 and specialist_routes == [
-            model.active_expert
-        ]
+    elif specialist_routes == [model.active_expert]:
+        route_valid = active_bytes > 0
         active_routes = [model.active_expert]
+    else:
+        # Full-shard vertical training activates every record's routed expert
+        # (forward -> _activate_expert) before its single end-of-run
+        # checkpoint, so a valid post-update optimizer may hold state for the
+        # complete specialist set. Only the CLOSED full set is admissible;
+        # any partial multi-route state stays rejected, and a
+        # single-specialist lineage episode never admits extra routes.
+        route_valid = (
+            not single_specialist_episode
+            and active_bytes > 0
+            and specialist_routes == list(EXPERT_NAMES)
+        )
+        active_routes = list(specialist_routes)
     if optimizer_actual < 1 or not route_valid:
         raise ValueError(
             "checkpoint storage projection requires one post-update optimizer state"
@@ -583,9 +595,13 @@ def _derive_checkpoint_storage_projection(
     # generic optimizer state_dict without trusting candidate-authored labels.
     # Use the closed worst-case bound: every initialized byte may belong to the
     # one active specialist and therefore exist once per specialist at full
-    # four-expert realization.
+    # four-expert realization. When every specialist route is already
+    # realized, the state itself is the full-realization floor.
     projected_optimizer = optimizer_actual * (
-        1 if model.active_expert == "shared" else len(EXPERT_NAMES)
+        1
+        if model.active_expert == "shared"
+        or specialist_routes == list(EXPERT_NAMES)
+        else len(EXPERT_NAMES)
     )
     actual_checkpoint_floor = sum(shard_storage_lower_bounds.values())
     projected_checkpoint_floor = (
@@ -677,10 +693,15 @@ def _validate_checkpoint_storage_projection(
         or digest != _canonical_sha256(materialized)
     ):
         raise ValueError("checkpoint storage projection digest mismatch")
+    valid_active_ids = (
+        [["shared"]]
+        if materialized["active_expert"] == "shared"
+        else [[materialized["active_expert"]], list(EXPERT_NAMES)]
+    )
     if (
         materialized["active_expert"] not in {"shared", *EXPERT_NAMES}
         or materialized["optimizer_state_active_expert_ids"]
-        != [materialized["active_expert"]]
+        not in valid_active_ids
         or type(materialized["optimizer_state_after_global_step"]) is not int
         or materialized["optimizer_state_after_global_step"] < 1
         or materialized["manifest_written_last"] is not True
@@ -752,7 +773,8 @@ def _validate_checkpoint_storage_projection(
         route_bounds["shared"] > 0 and specialist_routes == []
         if active_expert == "shared"
         else route_bounds[active_expert] > 0
-        and specialist_routes == [active_expert]
+        and specialist_routes
+        == materialized["optimizer_state_active_expert_ids"]
     )
     if not route_valid:
         raise ValueError("checkpoint optimizer route projection is invalid")
@@ -760,7 +782,10 @@ def _validate_checkpoint_storage_projection(
         "optimizer_state_tensor_storage_lower_bound_bytes"
     ]
     expected_projected_optimizer = optimizer_actual * (
-        1 if active_expert == "shared" else len(EXPERT_NAMES)
+        1
+        if active_expert == "shared"
+        or specialist_routes == list(EXPERT_NAMES)
+        else len(EXPERT_NAMES)
     )
     if (
         shard_bounds["optimizer-state.pt"] != optimizer_actual
@@ -823,7 +848,11 @@ def _measure_candidate_storage_projection(
 
     optimizer_actual = measured["optimizer-state.pt"]
     projected_optimizer = optimizer_actual * (
-        1 if projection["active_expert"] == "shared" else len(EXPERT_NAMES)
+        1
+        if projection["active_expert"] == "shared"
+        or projection["optimizer_state_active_expert_ids"]
+        == list(EXPERT_NAMES)
+        else len(EXPERT_NAMES)
     )
     projected_checkpoint = (
         sum(measured.values()) - optimizer_actual + projected_optimizer
@@ -1704,6 +1733,7 @@ def _write_checkpoint_artifacts_impl(
                 global_step=int(data_cursor["global_step"]),
                 max_transient_scratch_bytes=max_transient_scratch_bytes,
                 max_serialized_bytes=int(max_serialized_bytes),
+                single_specialist_episode=specialist_lineage is not None,
             )
 
         counts = measure_parameter_counts(model)
