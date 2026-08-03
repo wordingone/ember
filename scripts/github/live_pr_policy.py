@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -72,6 +73,61 @@ DEPENDABOT_PATHS = (
     re.compile(r"^(?:requirements[^/]*\.txt|[^/]+/package\.json|[^/]+/bun\.lockb?)$"),
     re.compile(r"^(?:runtime/[^/]+/Cargo\.(?:toml|lock))$"),
 )
+
+
+def _git(repo: Path, *args: str, stdin: bytes | None = None) -> tuple[int, str]:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=repo,
+        input=stdin,
+        capture_output=True,
+        check=False,
+    )
+    return result.returncode, result.stdout.decode("utf-8", errors="replace")
+
+
+def _own_diff_patch_id(repo: Path, base_tip: str, head: str) -> str | None:
+    """Patch-id of the PR's own diff: merge-base(base_tip, head)..head."""
+    code, merge_base = _git(repo, "merge-base", base_tip, head)
+    if code != 0:
+        return None
+    code, patch = _git(repo, "diff", "--full-index", merge_base.strip(), head)
+    if code != 0:
+        return None
+    if not patch.strip():
+        return ""
+    code, out = _git(repo, "patch-id", "--stable", stdin=patch.encode("utf-8"))
+    if code != 0:
+        return None
+    return out.split()[0] if out.split() else ""
+
+
+def pinned_head_covers_live_head(
+    repo: Path, pinned_head: str, live_head: str
+) -> bool:
+    """Accept a stale head pin only when the branch update left the PR's own
+    diff byte-identical: the pinned reviewed head must be an ancestor of the
+    live head, and the own-diff (merge-base against the live base tip) must
+    carry the same patch-id at both heads. Any PR-side edit after the pin
+    changes the patch-id and still fails."""
+    if not SHA_RE.fullmatch(pinned_head or ""):
+        return False
+    code, _ = _git(repo, "merge-base", "--is-ancestor", pinned_head, live_head)
+    if code != 0:
+        return False
+    code, base_tip = _git(repo, "rev-parse", "--verify", "--quiet", "HEAD^2")
+    if code == 0:
+        # Subject is the refs/pull/N/merge test-merge: first parent is the
+        # live base tip, second is the live PR head.
+        code, base_tip = _git(repo, "rev-parse", "HEAD^1")
+        if code != 0:
+            return False
+        base_tip = base_tip.strip()
+    else:
+        return False
+    pinned_id = _own_diff_patch_id(repo, base_tip, pinned_head)
+    live_id = _own_diff_patch_id(repo, base_tip, live_head)
+    return pinned_id is not None and pinned_id == live_id
 
 
 def _sections(body: str) -> dict[str, str]:
@@ -203,7 +259,12 @@ def validate_live_pull_request(
     head_section = sections.get("Exact reviewed head SHA", "").strip("` \r\n")
     if base_section != snapshot["base_sha"]:
         errors.append("body:base-sha-mismatch")
-    if head_section != snapshot["head_sha"]:
+    if head_section != snapshot["head_sha"] and not (
+        subject_root is not None
+        and pinned_head_covers_live_head(
+            subject_root, head_section, snapshot["head_sha"]
+        )
+    ):
         errors.append("body:head-sha-mismatch")
     milestone = snapshot["milestone"]
     milestone_section = sections.get("Affected milestones", "")

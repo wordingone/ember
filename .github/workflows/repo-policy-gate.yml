@@ -98,10 +98,15 @@ jobs:
             python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["body"])' \
               "${RUNNER_TEMP}/pr-policy-snapshot.json" > "${RUNNER_TEMP}/pr_body.txt"
             cd "${subject}"
+            if git rev-parse --verify --quiet 'HEAD^2' > /dev/null; then
+              range_base="$(git rev-parse 'HEAD^1')"
+            else
+              range_base="$(git merge-base "${BASE_SHA}" HEAD)"
+            fi
             python "${kernel}/scripts/check_pr_authority_binding.py" \
               --root "${subject}" \
               --body-file "${RUNNER_TEMP}/pr_body.txt" \
-              --changed-range "${BASE_SHA}..HEAD"
+              --changed-range "${range_base}...HEAD"
           else
             echo "trusted narrow Dependabot schema accepted; human authority binding is not applicable"
           fi
