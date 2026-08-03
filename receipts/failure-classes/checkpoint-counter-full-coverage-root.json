@@ -1,0 +1,21 @@
+{
+  "class_id": "checkpoint-counter-single-expert-invariant-vs-full-coverage-root",
+  "first_occurrence_ts": "2026-08-03T13:14:02Z",
+  "goal_id": "EMBER-02",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "kill_mechanism": "execute_counter/_inspect_realization admit an explicit full-coverage root mode discriminated by the signed storage projection (schema v1, lineage null, projection_sha256 digest-valid over the canonical-JSON unsigned body, projection.active_expert == executed counter argument, optimizer_state_active_expert_ids == closed four-expert set); in that mode the external parent/root lineage demand is skipped while P2B authority and external manifests are forbidden and every shape/hash/shard binding still runs. Tests pin admission on the governed-vertical fixture and refusal on forged digest, partial routes, mismatched active expert, and missing projection; the cure was additionally executed against the quarantined train-2 candidate itself (exit 0, MEASURED, active 1,725,232,640).",
+  "mechanism": "parameter_counter.py modeled only two checkpoint worlds \u2014 shared-root genesis and specialist-lineage accretion \u2014 while the governed vertical's end-of-run checkpoint is a third: specialist-active (active_expert_ids ['tool']) with lineage null, every expert trained from genesis in one episode, attested by the manifest's own digest-bound storage projection (optimizer_state_active_expert_ids = the closed four-expert set). _inspect_realization refused it ('specialist-active realization requires a lineage manifest'), the writer quarantined the full 15.4 GB candidate, and certified launch train-2 exited CHILD_FAILED after 60.8 s (master c4c0adb0). Fourth and last layer of the single-active-expert invariant class (#1315 projection, #1320 byte bound + run-path selection, now the counter).",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "receipt_refs": [
+    "live-receipts custody root r1-warm100-20260802 (off-repo): artifacts/checkpoints/.checkpoint-quarantine/checkpoint-write-failed-9dc9d2ba6022c1694b15d5b79d3e98226ec9ef53a0c21cd721729e0d11905eea.json, sha256 9dc9d2ba6022c1694b15d5b79d3e98226ec9ef53a0c21cd721729e0d11905eea",
+    "live-receipts custody root r1-warm100-20260802 (off-repo): disk-budget-runner-receipt.json (train-2 second dispatch CHILD_FAILED, 60.8 s)"
+  ],
+  "related_class_ids": [
+    "checkpoint-byte-bound-single-expert-invariant-vs-full-coverage-vertical"
+  ],
+  "schema_version": "ember-failure-class-v1",
+  "sha_convention": "bytes on disk as-is (binary read, no normalization)",
+  "ticket": "#1326",
+  "ts": "2026-08-03T13:37:35Z",
+  "workstream_id": "EMBER-02A"
+}
