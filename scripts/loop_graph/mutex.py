@@ -11,11 +11,24 @@ acquisition, not a separate read-then-write. Two processes racing this call
 can never both "win": the OS guarantees exactly one O_EXCL create succeeds
 and every other one raises FileExistsError, so there is no window between
 "lock looks free" and "I write myself as holder" for a second claimant to
-land in. A dead holder's lock is reclaimed by unlinking it and retrying the
-same O_EXCL create -- the loser of THAT race (two reclaimers unlinking and
-recreating at once) simply fails cleanly and loops back to re-check the
-holder, which by then is a live process (the winner), so the loop always
-converges.
+land in.
+
+Stale-reclaim (review-pr1310.md RE-REVIEW N1): a dead holder's lock is
+reclaimed via `os.replace(path, tombstone)`, never a bare `path.unlink()`.
+A bare unlink is read-then-unlink -- it deletes whatever currently sits at
+`path` regardless of content, so two engines racing to reclaim the same
+dead holder could see the faster one already win (unlink + recreate) with a
+fresh, valid, live record, and the slower one's unlink then deletes THAT
+valid record out from under it, with both ending up believing they hold
+gpu-exclusive. `os.replace` fixes this because its source-existence check is
+atomic: of N concurrent `os.replace(path, ...)` calls against the same
+`path`, exactly one succeeds (renaming path away) and every other one raises
+FileNotFoundError (path is already gone) -- there is no window in which a
+second reclaimer can act on a path that has already been renamed away by the
+first. A reclaimer that wins the rename retries the O_EXCL create next loop
+iteration (path is now free); a reclaimer that loses simply loops back and
+re-reads, which by then observes the winner's fresh, live record instead of
+blindly destroying it.
 
 Liveness (review-pr1310.md MEDIUM-2): holder identity is PID + process
 creation time (see procid.py), not a bare PID -- a bare PID is vulnerable to
@@ -27,6 +40,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -102,6 +116,33 @@ def _create_exclusive(path: Path, record: dict[str, Any]) -> bool:
     return True
 
 
+def _reclaim_stale(path: Path, owner_pid: int) -> bool:
+    """Reclaim a dead holder's lock file via os.replace to a tombstone,
+    never a bare unlink (review-pr1310.md RE-REVIEW N1).
+
+    Returns True if THIS call is the one that moved `path` out of the way
+    (the caller may now retry the O_EXCL create), False if a concurrent
+    reclaimer already won or the rename hit transient contention (`path`
+    was already renamed away by someone else -- FileNotFoundError -- or, on
+    Windows, another thread had it transiently open for read at the same
+    instant -- PermissionError / WinError 32, a sharing violation, not a
+    real failure). Either outcome is safe to loop back on: a win means the
+    path is free for our own create; a loss means the winner's create will
+    be (or already is) the fresh holder we should re-check, never a file we
+    blindly destroyed.
+    """
+    tombstone = path.with_name(f"{path.name}.stale.{owner_pid}.{os.getpid()}.{threading.get_ident()}")
+    try:
+        os.replace(path, tombstone)
+    except (FileNotFoundError, PermissionError):
+        return False
+    try:
+        tombstone.unlink()
+    except OSError:
+        pass  # best-effort cleanup only; the tombstone is never read back
+    return True
+
+
 def acquire(locks_dir: Path, resource_class: str, node_id: str, owner_pid: int) -> bool:
     """Attempt to acquire the mutex for resource_class on behalf of node_id.
 
@@ -148,13 +189,12 @@ def acquire(locks_dir: Path, resource_class: str, node_id: str, owner_pid: int) 
         if procid.is_same_process_alive(_holder_identity(current)):
             raise MutexBusy(resource_class, current.get("node_id", "?"), int(current.get("owner_pid", -1)))
 
-        # Stale holder: reclaim. If another reclaimer wins the recreate race,
-        # our own _create_exclusive call above will simply fail again next
-        # loop iteration and we'll re-check the (now live) new holder.
-        try:
-            path.unlink()
-        except FileNotFoundError:
-            pass
+        # Stale holder: reclaim via os.replace to a tombstone, not a bare
+        # unlink (RE-REVIEW N1 -- see _reclaim_stale and module docstring).
+        # Whether we win or lose this specific reclaim race, looping back is
+        # always safe: a win frees the path for our own create; a loss means
+        # the winner's fresh record is what we'll observe on the re-check.
+        _reclaim_stale(path, owner_pid)
 
 
 def release(locks_dir: Path, resource_class: str, node_id: str) -> None:

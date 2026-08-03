@@ -615,6 +615,170 @@ def test_mutex_concurrent_acquire_exactly_one_winner(tmp_path: Path):
 
 
 # --------------------------------------------------------------------------
+# concurrency: atomic stale-reclaim (review-pr1310.md RE-REVIEW N1)
+# --------------------------------------------------------------------------
+
+def test_mutex_concurrent_reclaim_exactly_one_winner(tmp_path: Path):
+    """review-pr1310.md RE-REVIEW N1 required test: N racers all observe the
+    SAME dead-pid stale holder and race to reclaim it -- exactly one must
+    end up the actual holder. The pre-fix implementation reclaimed via a
+    bare `path.unlink()`, which deletes whatever currently sits at `path`
+    regardless of content: a slower racer's unlink could delete a faster
+    racer's freshly created VALID lock, after which both racers' acquire()
+    calls had already returned True -- i.e. both believed they held
+    gpu-exclusive simultaneously. The os.replace-to-tombstone reclaim must
+    never allow that: acquire() returns True for at most one racer, and the
+    lock file on disk always agrees with whichever one that was."""
+    locks = tmp_path / "locks"
+    dead_pid = _find_dead_pid()
+    mutex.acquire(locks, "gpu-exclusive", "node-dead", dead_pid)
+
+    n = 8
+    barrier = threading.Barrier(n)
+    results: list[tuple[str, int]] = []
+    results_lock = threading.Lock()
+
+    def worker(worker_id: int) -> None:
+        barrier.wait()
+        try:
+            mutex.acquire(locks, "gpu-exclusive", f"node-{worker_id}", os.getpid())
+            outcome = "ok"
+        except mutex.MutexBusy:
+            outcome = "busy"
+        with results_lock:
+            results.append((outcome, worker_id))
+
+    threads = [threading.Thread(target=worker, args=(i,)) for i in range(n)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    winners = [entry for entry in results if entry[0] == "ok"]
+    assert len(results) == n
+    assert len(winners) == 1  # never more than one racer believes it holds the mutex
+
+    holder = mutex.current_holder(locks, "gpu-exclusive")
+    assert holder is not None
+    assert holder["node_id"] == f"node-{winners[0][1]}"  # disk agrees with the sole winner
+
+
+# --------------------------------------------------------------------------
+# newline-guard against crash-torn append welding (review-pr1310.md RE-REVIEW N2)
+# --------------------------------------------------------------------------
+
+def test_atomic_append_newline_guard_after_crash_torn_tail(tmp_path: Path):
+    """review-pr1310.md RE-REVIEW N2 required test: a crash that tears the
+    final line of a JSONL file (no trailing newline) must not get welded to
+    the next append. Without the newline-guard, `open(path, "a")` lands the
+    new row's bytes directly after the torn tail with no separator,
+    producing one line that mixes the torn tail with the new row -- which
+    read_jsonl can never recover (a torn line is only ever tolerated when it
+    stays the LAST line; welding pushes real data into an unparseable middle
+    line the moment anything is appended after it). With the guard, the new
+    row always lands on its own independently-parseable line."""
+    import json
+
+    from loop_graph._atomic import atomic_append_jsonl
+
+    path = tmp_path / "INDEX.jsonl"
+    good_row = {"receipt_id": "r0", "node_id": "exec-0"}
+    torn_tail = '{"receipt_id": "r1", "node_id": "exec-1", "path": "rec'  # deliberately truncated, no trailing newline
+    path.write_text(json.dumps(good_row, sort_keys=True) + "\n" + torn_tail, encoding="utf-8")
+
+    new_row = {"receipt_id": "r2", "node_id": "exec-2"}
+    atomic_append_jsonl(path, new_row)
+
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 3
+    assert lines[0] == json.dumps(good_row, sort_keys=True)
+    assert lines[1] == torn_tail  # the torn tail stays isolated, never welded
+    assert json.loads(lines[2]) == new_row  # the new row parses on its own
+
+
+def test_atomic_append_no_spurious_newline_when_prior_write_well_formed(tmp_path: Path):
+    """The newline-guard must be a no-op when the file already ends cleanly
+    -- it should never insert a blank line between two well-formed rows."""
+    import json
+
+    from loop_graph._atomic import atomic_append_jsonl
+
+    path = tmp_path / "INDEX.jsonl"
+    atomic_append_jsonl(path, {"receipt_id": "r0", "node_id": "exec-0"})
+    atomic_append_jsonl(path, {"receipt_id": "r1", "node_id": "exec-1"})
+
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 2
+    assert all(line.strip() for line in lines)  # no blank line inserted
+
+
+# --------------------------------------------------------------------------
+# Windows lock-poll errno narrowing (review-pr1310.md RE-REVIEW N3)
+# --------------------------------------------------------------------------
+
+@pytest.mark.skipif(sys.platform != "win32", reason="msvcrt-specific errno narrowing")
+def test_windows_exclusive_lock_propagates_non_contention_oserror(tmp_path: Path, monkeypatch):
+    """review-pr1310.md RE-REVIEW N3 required test: ExclusiveLock's win32
+    poll loop must retry ONLY on the lock-contention errno (EACCES) that
+    msvcrt.locking raises when the region is already held. Any other OSError
+    (a real fault) must propagate immediately instead of spinning forever --
+    the pre-fix `except OSError: time.sleep(...)` caught everything and
+    would hang on a genuine error."""
+    import errno
+    import msvcrt
+
+    from loop_graph._atomic import ExclusiveLock
+
+    def fake_locking(fd, mode, nbytes):
+        raise OSError(errno.EINVAL, "simulated non-contention error")
+
+    monkeypatch.setattr(msvcrt, "locking", fake_locking)
+
+    lock = ExclusiveLock(tmp_path / "sidecar.lock")
+    with pytest.raises(OSError) as excinfo:
+        lock.__enter__()
+    assert excinfo.value.errno == errno.EINVAL
+
+
+# --------------------------------------------------------------------------
+# lifecycle.create under the per-node lock (review-pr1310.md RE-REVIEW N4)
+# --------------------------------------------------------------------------
+
+def test_lifecycle_concurrent_create_exactly_one_writer_and_rest_idempotent(tmp_path: Path):
+    """review-pr1310.md RE-REVIEW N4 required test: create() is now wrapped
+    in the same per-node ExclusiveLock as claim/start/close, so N engines
+    racing to create the same node_id all converge on one record instead of
+    racing read-check-write independently."""
+    store = tmp_path / "nodes"
+    node_id = "exec-create-race"
+
+    n = 8
+    barrier = threading.Barrier(n)
+    results: list[dict] = []
+    results_lock = threading.Lock()
+
+    def worker(worker_id: int) -> None:
+        node = make_execution_node(node_id=node_id, owner=f"agent-{worker_id}")
+        barrier.wait()
+        record = lifecycle.create(store, node)
+        with results_lock:
+            results.append(record)
+
+    threads = [threading.Thread(target=worker, args=(i,)) for i in range(n)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert len(results) == n
+    owners = {record["owner"] for record in results}
+    assert len(owners) == 1  # every racer converged on the same first-writer's record
+
+    final = lifecycle.load_node(store, node_id)
+    assert final["owner"] in owners
+
+
+# --------------------------------------------------------------------------
 # concurrency: atomic lifecycle claim (MEDIUM-3)
 # --------------------------------------------------------------------------
 

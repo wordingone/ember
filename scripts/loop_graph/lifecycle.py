@@ -77,23 +77,33 @@ def create(store_dir: Path, node: dict[str, Any]) -> dict[str, Any]:
     """Create a new execution node in PENDING state. Idempotent: creating a
     node_id that already exists returns the existing record unchanged rather
     than erroring or overwriting it (a re-run of the same "create" call after
-    a crash must never clobber progress a prior run already made)."""
+    a crash must never clobber progress a prior run already made).
+
+    Locked (review-pr1310.md RE-REVIEW N4): every other transition in this
+    module runs its read-check-write under the per-node ExclusiveLock;
+    create() was the one transition outside it, so two engines racing to
+    create the same node_id could both observe "no existing node" and both
+    write -- harmless to node.json itself (atomic_write_json guarantees the
+    last write wins cleanly), but inconsistent with the module's own
+    concurrency contract and a needless exception to it.
+    """
     node_id = node.get("node_id")
     if not node_id:
         raise LifecycleError("INVALID_NODE", "node is missing node_id")
 
-    existing = try_load_node(store_dir, node_id)
-    if existing is not None:
-        return existing
+    with _node_lock(store_dir, node_id):
+        existing = try_load_node(store_dir, node_id)
+        if existing is not None:
+            return existing
 
-    record = dict(node)
-    record.setdefault("state", PENDING)
-    record.setdefault("created_at", _now())
-    if record["state"] != PENDING:
-        raise LifecycleError("INVALID_NODE", "a newly created node must start PENDING")
+        record = dict(node)
+        record.setdefault("state", PENDING)
+        record.setdefault("created_at", _now())
+        if record["state"] != PENDING:
+            raise LifecycleError("INVALID_NODE", "a newly created node must start PENDING")
 
-    atomic_write_json(node_path(store_dir, node_id), record)
-    return record
+        atomic_write_json(node_path(store_dir, node_id), record)
+        return record
 
 
 def claim(store_dir: Path, node_id: str, owner: str) -> dict[str, Any]:
