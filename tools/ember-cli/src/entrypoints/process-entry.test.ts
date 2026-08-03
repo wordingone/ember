@@ -29,10 +29,12 @@ import {
   makeServerHandle,
   registerServerCleanup,
   describeEndpointResolution,
+  defaultCheckGpuLease,
   type ServerSpawnOptions,
   type ServerHandle,
   main,
 } from "./process-entry.ts";
+import type { OutageMarker } from "../services/activity-feed.ts";
 import { _resetConfigHomeMemo } from "../utils/env-detection.ts";
 import { _resetInitForTests } from "./session-init.ts";
 import type { OwnedModelIdentity } from "./model-seat.ts";
@@ -1193,6 +1195,161 @@ describe("process-entry — main() end-to-end: EMBER_GPU_FREE precedence over pe
 
     expect(spawnCalls).toBe(0);
     expect(receivedServerUrl).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Issue #344: the cockpit boot spawns a VRAM-resident model server
+// unconditionally, even while a training leg holds a live GPU lease (the
+// 2026-07-07 incident: cockpit boot at 10:13:46Z OOM'd a W1 training attempt
+// at 10:39Z). Fix: an effective planned-outage.json marker (the SAME marker
+// services/brain-server-supervisor.ts's device policy already reads) is
+// folded into gpuFreeRequested BEFORE the seat is constructed, so the boot
+// takes the identical GPU-free code path -- no spawn, OFFLINE seat, and a
+// distinct "[ember] GPU leased to training: ..." disclosure line naming the
+// lease owner/reason/target/expiry.
+// ---------------------------------------------------------------------------
+
+describe("process-entry — main() end-to-end: GPU-lease awareness (issue #344)", () => {
+  let tmpDir: string;
+  let savedEnv: Record<string, string | undefined>;
+
+  const LIVE_LEASE: OutageMarker = {
+    owner: "w2-garm-runner",
+    reason: "W2 G-arm training leg",
+    target: "single-4090",
+    started: "2026-08-03T10:00:00Z",
+    expires: "2099-01-01T00:00:00Z", // effectively-forever for this test
+    kill_receipt_ref: "receipts/kill/none.json",
+  };
+
+  beforeEach(async () => {
+    tmpDir = join(tmpdir(), `pe-344-e2e-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    await mkdir(tmpDir, { recursive: true });
+    savedEnv = saveEnv(["EMBER_HOME", "EMBER_MODEL_URL", "EMBER_MODEL_NAME", "EMBER_GPU_FREE"]);
+    delete process.env["EMBER_MODEL_URL"];
+    delete process.env["EMBER_MODEL_NAME"];
+    delete process.env["EMBER_GPU_FREE"];
+    process.env["EMBER_HOME"] = tmpDir;
+    _resetConfigHomeMemo();
+  });
+
+  afterEach(async () => {
+    restoreEnv(savedEnv);
+    _resetConfigHomeMemo();
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("a live GPU lease boots GPU-free (no spawn) with a lease-disclosure line, EMBER_MODEL_URL unset and no models.json endpoint", async () => {
+    let spawnCalls = 0;
+    let receivedServerUrl: string | null | undefined = "NEVER_CALLED" as unknown as string | null;
+
+    const stdoutCap = captureStdout();
+    try {
+      await main({
+        argv: ["node", "ember", "-p", "hello"],
+        checkGpuLease: async () => LIVE_LEASE,
+        spawnServer: async () => { spawnCalls += 1; return makeFakeHandle(29981); },
+        waitReady: async () => {},
+        probeExisting: async () => false,
+        initFn: async (o) => { receivedServerUrl = o.serverUrl ?? null; },
+        getLoopDepsFn: makeFakeDeps,
+        headlessRunner: async () => ({ events: [], exitCode: 0 }),
+        exitFn: () => {},
+      });
+    } finally {
+      stdoutCap.restore();
+    }
+
+    expect(spawnCalls).toBe(0);            // #344: no VRAM-resident spawn while leased
+    expect(receivedServerUrl).toBeNull();  // same GPU-free signal session-init.ts relies on
+    const out = stdoutCap.output();
+    expect(out).toContain("GPU leased to training");
+    expect(out).toContain(LIVE_LEASE.owner);
+    expect(out).toContain(LIVE_LEASE.reason);
+    expect(out).toContain("model server not spawned");
+  });
+
+  it("a live GPU lease with a persisted models.json endpoint present still boots GPU-free (lease beats a stale config endpoint, same precedence as EMBER_GPU_FREE)", async () => {
+    await writeFile(join(tmpDir, "models.json"), JSON.stringify({ endpoint: "http://localhost:9999" }));
+
+    let spawnCalls = 0;
+    let receivedServerUrl: string | null | undefined = "NEVER_CALLED" as unknown as string | null;
+
+    await main({
+      argv: ["node", "ember", "-p", "hello"],
+      checkGpuLease: async () => LIVE_LEASE,
+      spawnServer: async () => { spawnCalls += 1; return makeFakeHandle(29982); },
+      waitReady: async () => {},
+      probeExisting: async () => false,
+      initFn: async (o) => { receivedServerUrl = o.serverUrl ?? null; },
+      getLoopDepsFn: makeFakeDeps,
+      headlessRunner: async () => ({ events: [], exitCode: 0 }),
+      exitFn: () => {},
+    });
+
+    expect(spawnCalls).toBe(0);
+    expect(receivedServerUrl).toBeNull();
+  });
+
+  it("an explicit EMBER_MODEL_URL still wins over a live GPU lease (operator naming a server is the strongest signal, same rule as EMBER_GPU_FREE)", async () => {
+    process.env["EMBER_MODEL_URL"] = "http://localhost:19194";
+
+    let spawnCalls = 0;
+    let receivedServerUrl: string | null | undefined = "NEVER_CALLED" as unknown as string | null;
+    let leaseCheckCalls = 0;
+
+    await main({
+      argv: ["node", "ember", "--reference-seat", "-p", "hello"],
+      checkGpuLease: async () => { leaseCheckCalls += 1; return LIVE_LEASE; },
+      spawnServer: async () => { spawnCalls += 1; return makeFakeHandle(29983); },
+      waitReady: async () => {},
+      probeExisting: async () => false,
+      initFn: async (o) => { receivedServerUrl = o.serverUrl ?? null; },
+      getLoopDepsFn: makeFakeDeps,
+      headlessRunner: async () => ({ events: [], exitCode: 0 }),
+      exitFn: () => {},
+    });
+
+    expect(spawnCalls).toBe(0);
+    expect(receivedServerUrl).toBe("http://localhost:19194"); // explicit env wins over the lease
+    expect(leaseCheckCalls).toBe(0); // #344: EMBER_MODEL_URL set -> lease is never even checked
+  });
+
+  it("no lease (checkGpuLease resolves null) boots normally, spawning the managed server exactly as before #344 (no regression)", async () => {
+    const realBinary = join(tmpDir, "real-llama-server.exe");
+    const realModel  = join(tmpDir, "real-model.gguf");
+    await writeFile(realBinary, "");
+    await writeFile(realModel, "");
+    await writeFile(join(tmpDir, "models.json"), JSON.stringify({ binary: realBinary, model: realModel }));
+
+    let spawnCalls = 0;
+    let receivedServerUrl: string | null | undefined = "NEVER_CALLED" as unknown as string | null;
+
+    await main({
+      argv: ["node", "ember", "--reference-seat", "-p", "hello"],
+      checkGpuLease: async () => null,
+      spawnServer: async () => { spawnCalls += 1; return makeFakeHandle(29984); },
+      waitReady: async () => {},
+      probeExisting: async () => false,
+      initFn: async (o) => { receivedServerUrl = o.serverUrl ?? null; },
+      getLoopDepsFn: makeFakeDeps,
+      headlessRunner: async () => ({ events: [], exitCode: 0 }),
+      exitFn: () => {},
+    });
+
+    expect(spawnCalls).toBe(1);
+    expect(receivedServerUrl).not.toBeNull();
+  });
+});
+
+describe("process-entry — defaultCheckGpuLease", () => {
+  it("returns null when planned-outage.json is absent (fail-open, matches brain-server-supervisor.ts's resolveDeviceForSpawn)", async () => {
+    const marker = await defaultCheckGpuLease();
+    // In this test environment there is no live tools/ember-cli/state/planned-outage.json,
+    // so this must resolve null, never throw -- the same fail-open contract
+    // resolveDeviceForSpawn documents for an absent/unreadable/malformed marker.
+    expect(marker).toBeNull();
   });
 });
 
