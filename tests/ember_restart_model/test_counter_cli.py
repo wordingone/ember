@@ -660,6 +660,17 @@ class CounterCliTests(unittest.TestCase):
     def test_counter_admits_full_coverage_root_and_rejects_tampered_projection(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=61)
+        # Capture the true pre-training genesis once, before any optimizer step.
+        # (Previously this fixture recomputed "genesis" hashes AFTER training,
+        # which made every full-coverage-root receipt's genesis map trivially
+        # equal to its trained bytes -- the exact gap issue #1329 finding 2
+        # closes with an inverted byte-verification.)
+        genesis_hashes = model.expert_bank_genesis_hashes()
+        genesis_vision_tensors = {
+            name: parameter.detach().clone()
+            for name, parameter in model.named_parameters()
+            if ".experts.vision." in name
+        }
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
         # Mirror the governed vertical: every record's routed expert is activated
         # and stepped before the single end-of-run checkpoint, so the optimizer
@@ -672,6 +683,9 @@ class CounterCliTests(unittest.TestCase):
             optimizer.step()
             optimizer.zero_grad(set_to_none=True)
         model._activate_expert("tool")
+        trained_hashes = model.expert_bank_genesis_hashes()
+        for name in ("vision", "audio", "reasoning", "tool"):
+            self.assertNotEqual(trained_hashes[name], genesis_hashes[name], f"fixture must actually train {name} away from genesis")
 
         def resign(projection: dict[str, Any]) -> None:
             unsigned = {key: value for key, value in projection.items() if key != "projection_sha256"}
@@ -681,17 +695,23 @@ class CounterCliTests(unittest.TestCase):
             root = Path(directory)
             config_path = root / "config.json"
             config_path.write_text(json.dumps({"architecture_revision": "ember-sparse-3b-v2", "model": {"hidden_size": 32, "layers": 2, "attention_heads": 4, "vocab_size": 64, "tied_embeddings": True, "image_projection": {"input_shape": [48, 48, 3], "output_size": 32}, "audio_projection": {"frame_samples": 640, "output_size": 32}, "expert_routing": {"expert_names": ["vision", "audio", "reasoning", "tool"]}}}), encoding="utf-8")
-            write_checkpoint_artifacts(model, optimizer, root / "checkpoint", launch_seed=61, rng_state={"cpu": torch.get_rng_state().clone(), "cuda": (torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8))}, data_cursor={"shard": "vertical", "record_index": 4, "global_step": 4, "tokens_seen": 8}, model_config_sha256=hashlib.sha256(config_path.read_bytes()).hexdigest(), contract_sha256="d" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes(), max_serialized_bytes=1 << 30, max_transient_scratch_bytes=1 << 30)
+            write_checkpoint_artifacts(model, optimizer, root / "checkpoint", launch_seed=61, rng_state={"cpu": torch.get_rng_state().clone(), "cuda": (torch.cuda.get_rng_state().clone() if torch.cuda.is_available() else torch.tensor([1, 2, 3], dtype=torch.uint8))}, data_cursor={"shard": "vertical", "record_index": 4, "global_step": 4, "tokens_seen": 8}, model_config_sha256=hashlib.sha256(config_path.read_bytes()).hexdigest(), contract_sha256="d" * 64, expert_genesis_sha256=genesis_hashes, max_serialized_bytes=1 << 30, max_transient_scratch_bytes=1 << 30)
             manifest_path = root / "checkpoint" / "checkpoint-manifest.json"
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             self.assertIsNone(manifest.get("lineage"))
             self.assertEqual(manifest["active_expert_ids"], ["tool"])
             self.assertEqual(manifest["storage_projection"]["optimizer_state_active_expert_ids"], ["vision", "audio", "reasoning", "tool"])
+            self.assertEqual(manifest["expert_genesis_sha256"], genesis_hashes)
             original = json.loads(json.dumps(manifest))
 
             receipt = execute_counter(model_config=config_path, checkpoint_manifest=manifest_path, active_expert="tool")
             self.assertEqual(receipt["active_expert_ids"], ["tool"])
             self.assertEqual(receipt["active_parameters"], model.count_unique_trainable_parameters())
+            # Decided episode-scope semantics (finding 3): the receipt reports
+            # the per-step routed-active scope, not the wider per-episode
+            # trained set, even for a full-coverage root realization.
+            self.assertEqual(receipt["episode_trainable_parameters"], receipt["active_parameters"])
+            self.assertLess(receipt["active_parameters"], receipt["allocated_parameters"])
             self.assertEqual(receipt["result"], "MEASURED")
 
             with self.assertRaisesRegex(ValueError, "must not carry external lineage manifests"):
@@ -721,6 +741,64 @@ class CounterCliTests(unittest.TestCase):
             manifest.pop("storage_projection")
             manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "lineage manifest"):
+                execute_counter(model_config=config_path, checkpoint_manifest=manifest_path, active_expert="tool")
+
+            # --- Finding 1: route-bytes cross-check (widening-tamper inverse test) ---
+            # Reviewer's proven attack on #1327: build a genuine single/partial-route
+            # checkpoint, widen ONLY the id list to the four-expert set, re-sign the
+            # digest. The id list alone was previously sufficient for admission; the
+            # route-bytes cross-check must now refuse it.
+            manifest = json.loads(json.dumps(original))
+            manifest["storage_projection"]["optimizer_state_tensor_storage_by_route_bytes"]["vision"] = 0
+            resign(manifest["storage_projection"])
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "lineage manifest"):
+                execute_counter(model_config=config_path, checkpoint_manifest=manifest_path, active_expert="tool")
+
+            manifest = json.loads(json.dumps(original))
+            manifest["storage_projection"]["optimizer_state_tensor_storage_by_route_bytes"] = {
+                "shared": 0, "vision": 0, "audio": 0, "reasoning": 0, "tool": 1,
+            }
+            resign(manifest["storage_projection"])
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "lineage manifest"):
+                execute_counter(model_config=config_path, checkpoint_manifest=manifest_path, active_expert="tool")
+
+            manifest = json.loads(json.dumps(original))
+            del manifest["storage_projection"]["optimizer_state_tensor_storage_by_route_bytes"]["vision"]
+            resign(manifest["storage_projection"])
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "lineage manifest"):
+                execute_counter(model_config=config_path, checkpoint_manifest=manifest_path, active_expert="tool")
+
+            # The genuine, untampered manifest still admits (route bytes cross-check
+            # does not disturb the honest full-coverage-root receipt).
+            manifest_path.write_text(json.dumps(original), encoding="utf-8")
+            execute_counter(model_config=config_path, checkpoint_manifest=manifest_path, active_expert="tool")
+
+            # --- Finding 2: inverted genesis byte-verification ---
+            # Revert the on-disk vision expert bank to its true pre-training
+            # genesis bytes while every other admission signal (route bytes,
+            # projection digest, id list, manifest genesis map) stays genuine --
+            # the manifest still CLAIMS vision was trained (full coverage), but
+            # the bytes prove it was not.
+            manifest = json.loads(json.dumps(original))
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            expert_path = root / "checkpoint" / "expert-vision.pt"
+            payload = torch.load(expert_path, map_location="cpu", weights_only=True)
+            for layer in range(2):
+                for suffix in ("up_gate.weight", "down.weight"):
+                    key = f"layers.{layer}.experts.vision.{suffix}"
+                    payload["model"][key].copy_(genesis_vision_tensors[key])
+            torch.save(payload, expert_path)
+            digest = hashlib.sha256(expert_path.read_bytes()).hexdigest()
+            manifest["expert_checkpoint_sha256"]["vision"] = digest
+            for record in manifest["shards"]:
+                if record["path"] == "expert-vision.pt":
+                    record["sha256"] = digest
+                    record["bytes"] = expert_path.stat().st_size
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "untrained"):
                 execute_counter(model_config=config_path, checkpoint_manifest=manifest_path, active_expert="tool")
 
 
