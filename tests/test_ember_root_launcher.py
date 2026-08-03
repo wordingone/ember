@@ -41,6 +41,12 @@ class EmberRootLauncherTests(unittest.TestCase):
         )
         return owner, root, runtime
 
+    def state_root(self, root: Path) -> Path:
+        """Cockpit state root for a fixture — deliberately a SIBLING of the checkout, never
+        inside it: the whole point of the relocation is that no launch writes into the tree
+        the completion verifier censuses (issue #1330)."""
+        return root.parent / "cockpit-state"
+
     def run_launcher(
         self,
         root: Path,
@@ -55,6 +61,7 @@ class EmberRootLauncherTests(unittest.TestCase):
                 "EMBER_LAUNCH_NONINTERACTIVE": "1",
                 "EMBER_LAUNCH_TEST_MODE": "1",
                 "EMBER_LAUNCH_TEST_LOG": str(log),
+                "EMBER_STATE_ROOT": str(self.state_root(root)),
             }
         )
         if include_runtime:
@@ -116,7 +123,7 @@ class EmberRootLauncherTests(unittest.TestCase):
     def test_production_path_builds_and_runs_a_commit_bound_executable(self) -> None:
         implementation = LAUNCH_IMPL.read_text(encoding="utf-8")
         self.assertIn("& $bun run build", implementation)
-        self.assertIn('".ember\\runtime\\ember\\$commit"', implementation)
+        self.assertIn('Join-Path $stateRoot "runtime\\ember\\$commit"', implementation)
         self.assertIn('& $application', implementation)
         self.assertIn('$ErrorActionPreference = "Continue"', implementation)
         self.assertNotIn('$LASTEXITCODE -ne 0 -or $commit', implementation)
@@ -147,12 +154,12 @@ class EmberRootLauncherTests(unittest.TestCase):
         self.assertNotIn("0x0001", implementation)  # SWP_NOSIZE is forbidden.
 
     def test_owned_stale_process_filter_cannot_target_foreign_executables(self) -> None:
-        root = r"C:\fixture\ember"
+        state = r"C:\fixture\cockpit-state"
         result = self.run_library_command(
             "$owned=Test-IsOwnedEmberExecutablePath "
-            f"'{root}\\.ember\\runtime\\ember\\abc\\Ember.exe' '{root}'; "
+            f"'{state}\\runtime\\ember\\abc\\Ember.exe' '{state}'; "
             "$foreign=Test-IsOwnedEmberExecutablePath 'C:\\Windows\\System32\\Ember.exe' "
-            f"'{root}'; Write-Output \"$owned,$foreign\""
+            f"'{state}'; Write-Output \"$owned,$foreign\""
         )
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("True,False", result.stdout)
@@ -183,6 +190,214 @@ class EmberRootLauncherTests(unittest.TestCase):
         self.assertIn("already running", contender.stdout)
         owner.wait(timeout=10)
         self.assertEqual(owner.returncode, 0)
+
+    # -- issue #1330: cockpit state lives outside the certified tree -----------------
+    #
+    # The completion verifier certifies the tree by TOTALITY -- every file, tracked and
+    # untracked -- so a cockpit writing inside it reds the run. These pin the writer-side
+    # cure: the state root resolves outside the checkout, an existing in-tree directory is
+    # migrated out on launch, and a reappearing one refuses the launch outright.
+
+    #: [repo root, expected key] -- mirrored verbatim by KEY_PARITY_VECTORS in
+    #: tools/ember-cli/src/utils/ember-state-root.test.ts. The launcher and the cockpit must
+    #: derive the SAME default state directory; if either side drifts, one suite goes red.
+    KEY_PARITY_VECTORS = [
+        (r"C:\fixture\ember", "c-fixture-ember"),
+        ("C:\\Fixture\\Ember\\", "c-fixture-ember"),
+        (r"C:\fixture\ember repo", "c-fixture-ember-repo"),
+        (r"C:\fixture\ember-wt\wt-1330", "c-fixture-ember-wt-wt-1330"),
+    ]
+
+    def test_state_root_key_matches_the_typescript_resolution_point(self) -> None:
+        body = "; ".join(
+            f"Write-Output (Get-EmberStateRootKey '{root}')" for root, _ in self.KEY_PARITY_VECTORS
+        )
+        result = self.run_library_command(f"$env:EMBER_STATE_ROOT=''; {body}")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        produced = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        self.assertEqual(produced, [key for _, key in self.KEY_PARITY_VECTORS], result.stdout)
+
+    def test_state_root_honours_the_override_and_never_defaults_into_the_tree(self) -> None:
+        result = self.run_library_command(
+            "$env:EMBER_STATE_ROOT='C:\\fixture\\cockpit-state'; "
+            "Write-Output (Get-EmberStateRoot 'C:\\fixture\\ember'); "
+            "$env:EMBER_STATE_ROOT=''; $env:EMBER_HOME='C:\\fixture\\home'; "
+            "Write-Output (Get-EmberStateRoot 'C:\\fixture\\ember')"
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+        override, default = [l.strip() for l in result.stdout.splitlines() if l.strip()][:2]
+        self.assertEqual(override, r"C:\fixture\cockpit-state")
+        self.assertEqual(default, r"C:\fixture\home\cockpit-state\c-fixture-ember")
+        self.assertNotIn(r"C:\fixture\ember\\", default)
+
+    def test_launch_migrates_in_tree_state_out_and_leaves_nothing_behind(self) -> None:
+        owner, root, runtime = self.make_fixture()
+        self.addCleanup(owner.cleanup)
+        resident = root / ".ember" / "runs"
+        resident.mkdir(parents=True)
+        (resident / "run-1.json").write_text('{"id":1}\n', encoding="utf-8")
+        (root / ".ember" / "root-bindings.json").write_text("{}\n", encoding="utf-8")
+
+        result = self.run_launcher(root, runtime)
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertFalse((root / ".ember").exists(), "the in-tree state dir must be gone")
+        moved = self.state_root(root)
+        self.assertEqual((moved / "runs" / "run-1.json").read_text(encoding="utf-8"), '{"id":1}\n')
+        self.assertTrue((moved / "root-bindings.json").is_file())
+
+    def test_migration_refuses_to_dispose_of_cockpit_worktrees_itself(self) -> None:
+        # Moving a registered worktree breaks its link to the repository and deleting one
+        # destroys the work inside it, so migration names them and stops rather than
+        # picking either. The rest of the state stays put too — a half-migrated tree is
+        # not an improvement on an un-migrated one.
+        owner, root, runtime = self.make_fixture()
+        self.addCleanup(owner.cleanup)
+        resident = root / ".ember" / "worktrees" / "wt-alpha"
+        resident.mkdir(parents=True)
+        (resident / "file.txt").write_text("work in progress\n", encoding="utf-8")
+        (root / ".ember" / "root-bindings.json").write_text("{}\n", encoding="utf-8")
+
+        result = self.run_launcher(root, runtime)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("wt-alpha", result.stdout)
+        self.assertIn("worktree_lifecycle.py retire", result.stdout)
+        self.assertTrue(resident.is_dir(), "the worktree must be left untouched")
+        self.assertEqual((resident / "file.txt").read_text(encoding="utf-8"), "work in progress\n")
+        self.assertTrue((root / ".ember" / "root-bindings.json").is_file())
+
+    def test_migration_sweeps_an_empty_worktrees_directory(self) -> None:
+        owner, root, runtime = self.make_fixture()
+        self.addCleanup(owner.cleanup)
+        (root / ".ember" / "worktrees").mkdir(parents=True)
+        (root / ".ember" / "root-bindings.json").write_text("{}\n", encoding="utf-8")
+
+        result = self.run_launcher(root, runtime)
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertFalse((root / ".ember").exists())
+        self.assertTrue((self.state_root(root) / "root-bindings.json").is_file())
+
+    def test_launch_refuses_when_in_tree_state_is_not_removable(self) -> None:
+        # A directory that reappears non-empty must refuse the launch, not be certified
+        # around. Simulated directly against the assertion so the test does not depend on
+        # holding a real file lock.
+        owner, root, _ = self.make_fixture()
+        self.addCleanup(owner.cleanup)
+        (root / ".ember").mkdir()
+        (root / ".ember" / "runs.json").write_text("{}\n", encoding="utf-8")
+        escaped = str(root).replace("'", "''")
+        result = self.run_library_command(
+            f"try {{ Assert-EmberStateIsExternal '{escaped}'; Write-Output 'ACCEPTED' }} "
+            "catch { Write-Output $_.Exception.Message }"
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn("ACCEPTED", result.stdout)
+        self.assertIn("outside the certified tree", result.stdout)
+
+    def test_empty_in_tree_state_dir_is_swept_rather_than_refused(self) -> None:
+        owner, root, _ = self.make_fixture()
+        self.addCleanup(owner.cleanup)
+        (root / ".ember").mkdir()
+        escaped = str(root).replace("'", "''")
+        result = self.run_library_command(
+            f"Assert-EmberStateIsExternal '{escaped}'; "
+            f"Write-Output (Test-Path -LiteralPath (Join-Path '{escaped}' '.ember'))"
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("False", result.stdout)
+
+    def test_state_root_guard_refuses_roots_a_census_would_read(self) -> None:
+        # Writer-side and fail-closed, mirroring assertStateRootIsWritable in
+        # tools/ember-cli/src/utils/ember-state-root.ts. A verifier-only refusal finds the
+        # regression at the NEXT census, by which time the run is already red.
+        parent = r"C:\fixture"
+        cases = [
+            # (state root, named-root parent, expected verdict)
+            (r"C:\fixture\ember\.ember", "", "REFUSED"),  # inside the checkout
+            (r"C:\fixture\ember", "", "REFUSED"),  # the checkout itself
+            (r"C:\fixture\ember-cockpit-state", parent, "REFUSED"),  # matches ember*
+            (r"C:\fixture\ember-scratch\cockpit", parent, "REFUSED"),  # nested under a match
+            (r"C:\fixture\wt-stab480-bench594-scratch", parent, "REFUSED"),  # literal pattern
+            (r"C:\fixture\cockpit-state", parent, "OK"),  # the sanctioned name
+            (r"C:\fixture\wt-stab480-bench594-scratch-2", parent, "OK"),  # prefix is not a match
+            (r"C:\elsewhere\cockpit-state", "", "OK"),  # outside the parent entirely
+        ]
+        body = "; ".join(
+            f"$env:EMBER_NAMED_ROOT_PARENT='{parent}'; "
+            f"try {{ Assert-EmberStateRootIsWritable '{root}' 'C:\\fixture\\ember'; "
+            "Write-Output 'OK' } catch { Write-Output 'REFUSED' }"
+            for root, parent, _ in cases
+        )
+        result = self.run_library_command(body)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        produced = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        self.assertEqual(produced, [expected for _, _, expected in cases], result.stdout)
+
+    def test_in_tree_state_refusal_covers_every_entry_shape(self) -> None:
+        # A junction pointing at the external root is the dangerous shape: the census walks
+        # THROUGH it and hashes live cockpit state, so a compatibility shim would put the
+        # contamination straight back. A plain file is refused for the same reason a
+        # populated directory is — only a genuinely empty real directory may be swept.
+        owner, root, _ = self.make_fixture()
+        self.addCleanup(owner.cleanup)
+        (root / ".ember").write_text("not a directory\n", encoding="utf-8")
+        escaped = str(root).replace("'", "''")
+        result = self.run_library_command(
+            f"try {{ Assert-EmberStateIsExternal '{escaped}'; Write-Output 'ACCEPTED' }} "
+            "catch { Write-Output $_.Exception.Message }"
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn("ACCEPTED", result.stdout)
+        self.assertIn("it is a file", result.stdout)
+
+    def test_build_output_never_lands_inside_the_repository(self) -> None:
+        # The build used to emit ember.exe beside the sources and then move it, putting a
+        # transient writer inside the censused tree for the length of every build.
+        implementation = LAUNCH_IMPL.read_text(encoding="utf-8")
+        self.assertNotIn('Join-Path $sourceRoot "ember.exe"', implementation)
+        self.assertIn('Join-Path $applicationRoot "Ember.exe.partial"', implementation)
+        self.assertIn("$env:EMBER_BUILD_OUTFILE = $buildOutput", implementation)
+        # Publishing is write-partial-then-rename on the destination volume.
+        self.assertLess(
+            implementation.index("Ember.exe.partial"),
+            implementation.index("Move-Item -LiteralPath $buildOutput"),
+        )
+
+    def test_bun_package_cache_is_redirected_out_of_the_repository(self) -> None:
+        implementation = LAUNCH_IMPL.read_text(encoding="utf-8")
+        self.assertIn('$env:BUN_INSTALL_CACHE_DIR = Join-Path $stateRoot "bun-cache"', implementation)
+        # node_modules cannot move (Bun resolves it by walking up from the importing file);
+        # the launcher must say so out loud rather than let it look like steady state.
+        self.assertIn("node_modules", implementation)
+
+    def test_no_state_path_is_joined_onto_the_repository_root(self) -> None:
+        # One resolution point: every state path derives from $stateRoot. A literal joined
+        # onto the repository root is exactly the class this issue removed.
+        implementation = LAUNCH_IMPL.read_text(encoding="utf-8")
+        self.assertNotIn('Join-Path $repositoryRoot ".ember', implementation)
+        self.assertNotIn('Join-Path $RepositoryRoot ".ember', implementation)
+        self.assertIn("$env:EMBER_STATE_ROOT = $stateRoot", implementation)
+
+    # -- issue #1330 secondary: a child that ran and exited is not a prepare failure --
+
+    def test_child_exit_is_reported_as_an_exit_not_a_preparation_failure(self) -> None:
+        owner, root, runtime = self.make_fixture()
+        self.addCleanup(owner.cleanup)
+        # Dependency preparation still succeeds — only the cockpit child fails, so the
+        # message must not blame preparation.
+        runtime.write_text(
+            "@echo off\r\n"
+            "if \"%1\"==\"install\" exit /b 0\r\n"
+            "> \"%EMBER_LAUNCH_TEST_LOG%\" echo cwd=%CD%\r\n"
+            "exit /b 3\r\n",
+            encoding="utf-8",
+        )
+        result = self.run_launcher(root, runtime)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Ember CLI exited with code 3", result.stdout)
+        self.assertNotIn("could not prepare its runtime", result.stdout)
 
     def test_production_launcher_stays_in_one_shell_and_verifies_geometry(self) -> None:
         implementation = LAUNCH_IMPL.read_text(encoding="utf-8")

@@ -17,7 +17,8 @@
 //   element 3 custody-leg state  -> manifests/ember-01-custody/root-spec.json's
 //                                    declared roots, cross-referenced against
 //                                    services/custody-bindings.ts's readRootBindingsStore
-//                                    (.ember/root-bindings.json).
+//                                    (root-bindings.json in the external cockpit
+//                                    state root, utils/ember-state-root.ts).
 //   element 4 launch-packet      -> the newest receipts/ember-01-launch-packet/<ts>/
 //                                    packet.jsonl the real launch_packet.py preflight
 //                                    writes (tools/ember-restart-3b/launch_packet.py);

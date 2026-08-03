@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // Plan mode tools (EnterPlanMode + ExitPlanMode) — behavioral spec implementation.
 //
 // Two paired tools implementing a deliberate design-before-code gate.
@@ -10,7 +14,8 @@ import type { ToolResult } from "../core/tool-interface.ts";
 import type { ToolUseContext } from "../core/tool-use-context.ts";
 import type { PermissionMode } from "../types/permission-types.ts";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
+import { emberStatePath } from "../utils/ember-state-root.ts";
 
 // --- AppState keys (well-known dynamic keys for permission mode tracking) ---
 
@@ -42,7 +47,7 @@ async function setStoredPermCtx(
 const PLAN_FILE_NAME = "plan.md";
 
 function getPlanFilePath(cwd: string): string {
-  return join(cwd, ".ember", PLAN_FILE_NAME);
+  return emberStatePath(cwd, PLAN_FILE_NAME);
 }
 
 // --- Feature flag hooks ---

@@ -28,6 +28,7 @@ import {
 import { ensureOwnedServer } from "./owned-server-supervisor.ts";
 import { handshakeConfiguredEmberLab } from "../services/ember-lab-rpc.ts";
 import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
+import { emberStateRoot } from "../utils/ember-state-root.ts";
 import { waitForServerReady, LLAMA_SERVER_DEFAULT_PORT } from "../services/runtime-bootstrap.ts";
 import { normalizeModelServerUrl } from "../services/api-openai-adapter.ts";
 import { registerManagedModel } from "../services/model-lifecycle.ts";
@@ -487,13 +488,13 @@ export async function spawnLlamaServer(opts: ServerSpawnOptions): Promise<Server
 // ---------------------------------------------------------------------------
 
 export async function writeDebugPort(cwd: string, port: number): Promise<void> {
-  const dir = join(cwd, ".ember");
+  const dir = emberStateRoot(cwd);
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, "debug-port"), String(port), "utf-8");
 }
 
 export async function writeDebugPid(cwd: string, pid: number): Promise<void> {
-  const dir = join(cwd, ".ember");
+  const dir = emberStateRoot(cwd);
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, "debug-pid"), String(pid), "utf-8");
 }

@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // skill-framework.ts
 // Skill discovery, registration, caching, conditional path-gating, bundled
 // skills, and MCP skill builder registry.
@@ -5,6 +9,7 @@
 
 import { readdir, readFile } from 'fs/promises';
 import { join, resolve } from 'path';
+import { emberStatePath } from './utils/ember-state-root.ts';
 import { tmpdir } from 'os';
 import type { RegistryCommand, CommandContext, CommandResult } from './types/command-types.ts';
 
@@ -311,7 +316,7 @@ export async function getSkillDirCommands(cwd: string): Promise<SkillCommand[]> 
     return _skillDirCache.get(resolvedCwd)!;
   }
 
-  const skillsDir = join(resolvedCwd, '.ember', 'skills');
+  const skillsDir = emberStatePath(resolvedCwd, 'skills');
   let loaded: LoadedSkill[] = [];
   try {
     loaded = await loadSkillsFromSkillsDir(skillsDir, 'projectSettings');

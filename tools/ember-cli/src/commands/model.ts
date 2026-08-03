@@ -29,6 +29,7 @@ import {
   type VerifiedCheckpointBundle,
 } from "../services/checkpoint-load.ts";
 import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
+import { emberStatePath } from "../utils/ember-state-root.ts";
 import { resolveEmberSourceRootOrCwd } from "../utils/repo-root.ts";
 import {
   saveCheckpoint,
@@ -230,9 +231,11 @@ export async function _resolveModelIdentity(
 // Kill-receipts ledger wiring
 // ---------------------------------------------------------------------------
 
-/** Default kill-receipt audit ledger (cwd-relative .ember/; used only when neither
- *  EMBER_KILL_RECEIPTS_PATH nor the legacy KILL_RECEIPTS_PATH is set). */
-const DEFAULT_KILL_RECEIPTS_PATH = ".ember/kill-receipts.jsonl";
+/** Default kill-receipt audit ledger (the cwd's external cockpit state root; used only
+ *  when neither EMBER_KILL_RECEIPTS_PATH nor the legacy KILL_RECEIPTS_PATH is set). */
+function defaultKillReceiptsPath(): string {
+  return emberStatePath(process.cwd(), "kill-receipts.jsonl");
+}
 
 /**
  * Factory that produces a kill-receipt writer function.
@@ -260,7 +263,7 @@ export function _makeKillReceiptWriter(opts: {
     opts.ledgerPath ??
     process.env["EMBER_KILL_RECEIPTS_PATH"] ??
     process.env["KILL_RECEIPTS_PATH"] ??
-    DEFAULT_KILL_RECEIPTS_PATH;
+    defaultKillReceiptsPath();
   const afn: (path: string, data: string) => Promise<void> =
     opts.appendFileFn ?? ((p, d) => appendFile(p, d));
 
@@ -365,9 +368,9 @@ function _defaultEnsureOwnedServer(identity: OwnedModelIdentity): Promise<Ensure
 }
 
 /** Default manifest path convention: EMBER_MODEL_IDENTITY_MANIFEST env override,
- * else `.ember/model-identity.json` relative to cwd. */
+ * else `model-identity.json` in the cwd's external cockpit state root. */
 function _defaultManifestPath(cwd: string): string {
-  return process.env["EMBER_MODEL_IDENTITY_MANIFEST"] ?? join(cwd, ".ember", "model-identity.json");
+  return process.env["EMBER_MODEL_IDENTITY_MANIFEST"] ?? emberStatePath(cwd, "model-identity.json");
 }
 
 // ---------------------------------------------------------------------------

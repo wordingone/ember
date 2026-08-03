@@ -360,6 +360,57 @@ def test_green_clean_fixture():
 
 
 # ---------------------------------------------------------------------------
+# RED/GREEN: cockpit state must never reside inside the certified tree (#1330).
+# The completion verifier's census is total, so a resident writer reds the run;
+# the guard refuses the directory rather than the census excluding it.
+# ---------------------------------------------------------------------------
+def test_red_resident_cockpit_state_dir():
+    tmp = make_fixture("fix/selftest-cockpit-state")
+    try:
+        commit_fixture(tmp)
+        state = tmp / ".ember"
+        state.mkdir()
+        (state / "root-bindings.json").write_text("{}\n", encoding="utf-8", newline="\n")
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected failure for a resident cockpit state dir\n{out}"
+        assert "cockpit-state" in out, out
+        assert "root-bindings.json" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_cockpit_state_as_a_file():
+    # Any SHAPE is refused, not just a populated directory — otherwise the check has a
+    # blind spot exactly where a shim would sit.
+    tmp = make_fixture("fix/selftest-cockpit-file")
+    try:
+        commit_fixture(tmp)
+        (tmp / ".ember").write_text("not a directory\n", encoding="utf-8", newline="\n")
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected failure for a '.ember' file\n{out}"
+        assert "cockpit-state" in out, out
+        assert "as a file" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_green_empty_cockpit_state_dir():
+    # Emptiness is the bar, not absence: an empty leftover writes nothing.
+    tmp = make_fixture("fix/selftest-cockpit-empty")
+    try:
+        commit_fixture(tmp)
+        (tmp / ".ember").mkdir()
+        _, out = run_guard(tmp)
+        # Assert this check's own verdict rather than the guard's overall exit code: the
+        # fixture repo carries only the subset of the tree the guard needs for the checks
+        # under test, so unrelated checks may report on their own.
+        assert "ok   [cockpit-state]" in out, out
+        assert "FAIL [cockpit-state]" not in out, out
+    finally:
+        cleanup(tmp)
+
+
+# ---------------------------------------------------------------------------
 # RED/GREEN: an invalid pre-existing branch must not prompt an unsafe rename.
 # ---------------------------------------------------------------------------
 def test_red_invalid_branch_names_safe_recovery():
@@ -1141,6 +1192,9 @@ ALL_TESTS = [
     test_red_legacy_env_override_ignored,
     test_red_names_staged_bypass_worktree_restore,
     test_red_names_hashed_staged_bypass_worktree_restore,
+    test_red_resident_cockpit_state_dir,
+    test_red_cockpit_state_as_a_file,
+    test_green_empty_cockpit_state_dir,
     test_red_pathfrags_staged_bypass_worktree_restore,
     test_red_line_endings_staged_bypass_worktree_restore,
 ]

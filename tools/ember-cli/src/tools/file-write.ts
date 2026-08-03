@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // tools/file-write.ts — Write tool: create or overwrite files.
 // De-transpiled from bundle (lines 304860–305245). Also contains utilities
 // (computeUnifiedDiff, detectLineEndings, resolveGitDir) inlined from
@@ -7,6 +11,7 @@
 
 import { readFile, writeFile, stat, mkdir } from "fs/promises";
 import { dirname } from "path";
+import { isUnderEmberState } from "../utils/ember-state-root.ts";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { readFile as readFileGit, stat as statGit } from "fs/promises";
@@ -325,7 +330,7 @@ async function writeFile_(
     ctx.readFileState?.set(filePath, { mtime: newStat.mtimeMs, content: finalContent });
   } catch {}
 
-  if (filePath.includes("/.ember/") || filePath.includes("\\.ember\\")) {
+  if (isUnderEmberState(filePath)) {
     ctx.dynamicSkillDirTriggers?.add(dirname(filePath));
   }
 

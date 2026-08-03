@@ -539,30 +539,47 @@ describe("process-entry — AC9: managed server killed on clean exit", () => {
   });
 });
 
-describe("process-entry — AC10: <cwd>/.ember/debug-port written", () => {
+describe("process-entry — AC10: debug-port written to the external state root", () => {
   let tmpDir: string;
+  let stateDir: string;
+  let savedStateRoot: string | undefined;
 
   beforeEach(async () => {
     tmpDir = join(tmpdir(), `pe-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     await mkdir(tmpDir, { recursive: true });
+    // Debug files are cockpit state: they land outside the checkout (#1330). The root is
+    // pinned to a SIBLING of the cwd -- the writer-side guard refuses a state root nested
+    // inside the directory it serves, which is exactly the defect being cured.
+    stateDir = `${tmpDir}-cockpit-state`;
+    savedStateRoot = process.env["EMBER_STATE_ROOT"];
+    process.env["EMBER_STATE_ROOT"] = stateDir;
   });
 
   afterEach(async () => {
+    if (savedStateRoot === undefined) delete process.env["EMBER_STATE_ROOT"];
+    else process.env["EMBER_STATE_ROOT"] = savedStateRoot;
     await rm(tmpDir, { recursive: true, force: true });
+    await rm(stateDir, { recursive: true, force: true });
   });
 
   it("writeDebugPort creates the file with the port number", async () => {
     await writeDebugPort(tmpDir, 8099);
     const { readFile } = await import("node:fs/promises");
-    const content = await readFile(join(tmpDir, ".ember", "debug-port"), "utf-8");
+    const content = await readFile(join(stateDir, "debug-port"), "utf-8");
     expect(content).toBe("8099");
   });
 
   it("writeDebugPid creates the file with the PID", async () => {
     await writeDebugPid(tmpDir, 12345);
     const { readFile } = await import("node:fs/promises");
-    const content = await readFile(join(tmpDir, ".ember", "debug-pid"), "utf-8");
+    const content = await readFile(join(stateDir, "debug-pid"), "utf-8");
     expect(content).toBe("12345");
+  });
+
+  it("writes nothing into the working directory itself", async () => {
+    await writeDebugPort(tmpDir, 8099);
+    const { readdir } = await import("node:fs/promises");
+    expect(await readdir(tmpDir)).toEqual([]);
   });
 });
 
