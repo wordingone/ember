@@ -22,7 +22,11 @@ once its receipt exists.
   dispatch so a previously-killed class cannot recur unnoticed.
 - **Append-only.** Existing rows are never edited or deleted; a
   reclassification is a new row that supersedes an old one by reference,
-  not an in-place rewrite.
+  not an in-place rewrite. The single permitted in-place amendment is
+  adding or extending `related_class_ids` / `supersedes` on an existing
+  row so a newly filed sibling class is reachable from both ends; no
+  substantive field (`class_id`, `first_occurrence_ts`, `mechanism`,
+  `kill_mechanism`, `receipt_refs`) may be rewritten that way.
 
 ## Schema (per class)
 
@@ -32,13 +36,28 @@ directory. Fields:
 - `class_id` — stable identifier for the failure mechanism (used to detect
   repeats).
 - `first_occurrence_ts` — timestamp of the run/rung where the class was
-  first observed.
+  first observed. Always read off a real receipt or run artifact, never
+  estimated; where the originating artifact has since been superseded
+  (live-receipt roots are overwritten per run), the row states the instant
+  it did use and where that instant comes from, in `receipt_refs`.
 - `mechanism` — what actually failed and why, in enough detail that a
   future dispatch can check for the same precondition.
 - `kill_mechanism` — the kill criterion, guard, or check that now catches
   this class before/during dispatch.
 - `receipt_refs` — paths to the supporting receipt(s) (kill receipt,
-  anomaly receipt, falsifier pivot receipt) that evidence the class.
+  anomaly receipt, falsifier pivot receipt) that evidence the class, plus
+  any provenance note the row's own timestamps require.
+- `related_class_ids` — *optional* list of `class_id` values for classes
+  that share a root invariant with this one (typically the same wrong
+  assumption re-derived at another layer). Contractual, not decorative:
+  the pre-dispatch consult traverses these links, so filing a sibling
+  class means linking it from both ends — the "where else is this
+  invariant assumed?" sweep is only as good as the edges it can follow.
+  Absent or empty means no known sibling, not "not yet checked".
+- `supersedes` — *optional* list of `class_id` values this row replaces
+  when a class is reclassified. The superseded row stays on disk (the
+  library is append-only); this field is how a reader knows it is no
+  longer the live classification.
 
 ## Receipt stamping
 

@@ -11,6 +11,7 @@
     "live-receipts custody root r1-warm100-20260802 (off-repo): disk-budget-runner-receipt.json (train-2 second dispatch CHILD_FAILED, 60.8 s)"
   ],
   "related_class_ids": [
+    "checkpoint-storage-projection-single-expert-route-invariant-vs-full-coverage-vertical",
     "checkpoint-byte-bound-single-expert-invariant-vs-full-coverage-vertical"
   ],
   "schema_version": "ember-failure-class-v1",
