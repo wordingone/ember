@@ -44,11 +44,13 @@ import ctypes
 import json
 import math
 import os
+import re
 import subprocess
 import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Callable, Optional
 
 # ---------------------------------------------------------------------------
@@ -847,34 +849,71 @@ def run_selftest() -> None:
 # CLI
 # ---------------------------------------------------------------------------
 
-def _default_renderer_heartbeat_path() -> str:
-    """#413/#1330: the renderer heartbeat writer (services/liveness-heartbeat.ts) now writes
-    through emberStatePath() -- the same external, never-censused state root every other
-    cockpit-mutable file uses (utils/ember-state-root.ts) -- never under the checkout's
-    tools/ember-cli/state/, gitignored or not.
+# #413/#1330 (review round 2): third resolution-point consumer, in lockstep with
+# tools/ember-cli/src/utils/ember-state-root.ts (emberStateRoot/repoStateKey) and
+# Get-EmberStateRoot/Get-EmberStateRootKey in scripts/launch-ember-cli.ps1. Guarded against
+# drift by scripts/tests/test_cockpit_watchdog.py's KEY_PARITY_VECTORS, which pins this
+# port's output against the SAME vectors the other two suites already share.
+#
+# The renderer heartbeat writer (services/liveness-heartbeat.ts) resolves through
+# emberStatePath(): EMBER_STATE_ROOT verbatim if set, else
+# <EMBER_HOME>/cockpit-state/<repoStateKey(repoRoot)>. This module reads that same file, so
+# it needs the SAME two-arm resolution -- mirroring only the override arm (as an earlier
+# round of this fix did) left a standard watchdog run, with EMBER_STATE_ROOT unset in its
+# own process env, reading a path the writer never touches: structural blindness dressed as
+# fail-loud. Nothing wires EMBER_STATE_ROOT into the watchdog's launch environment today
+# (launch-ember-cli.ps1 exports it only for its own cockpit child), so the default arm is
+# the one that actually fires in practice.
 
-    This CLI default mirrors ONLY the `EMBER_STATE_ROOT` arm of that resolution, verbatim,
-    same contract as the TS and PowerShell sides. It deliberately does NOT reimplement the
-    EMBER_HOME/repoStateKey fallback arm in a third language -- ember-state-root.ts's own
-    header is explicit that only two implementations are kept in lockstep (TS + PS1) so they
-    "cannot drift apart unnoticed"; a Python third would be exactly the drift risk that
-    guards against. scripts/launch-ember-cli.ps1 already exports EMBER_STATE_ROOT into the
-    cockpit's launching session, so a watchdog started from (or after) that same launch
-    picks it up here too.
 
-    Absent EMBER_STATE_ROOT, this falls back to the legacy in-tree path. That file is never
-    written anymore (the writer alone decides where state lives), so a watchdog run without
-    EMBER_STATE_ROOT set reads a permanently-missing file and reports the renderer-heartbeat
-    leg not-fresh -- fail-loud, matching this module's own "missing... rows fail loud"
-    contract, never a silently stale green. Pass --renderer-heartbeat-path explicitly to
-    point at a specific location instead.
-    """
+class EmberStateRootError(Exception):
+    """Raised when the cockpit state root cannot be resolved. Named so a caller can catch
+    precisely this class, mirroring EmberStateRootError in ember-state-root.ts."""
+
+
+def _repo_state_key(root: str) -> str:
+    """Port of repoStateKey() in tools/ember-cli/src/utils/ember-state-root.ts. Filesystem-
+    safe, case-stable key for a checkout root -- lowercased because Windows paths are
+    case-insensitive, so two spellings of one checkout key to one state directory. Pinned
+    byte-for-byte against KEY_PARITY_VECTORS in scripts/tests/test_cockpit_watchdog.py."""
+    resolved = os.path.abspath(root).rstrip("\\/")
+    key = re.sub(r"[^a-z0-9]+", "-", resolved.lower()).strip("-")
+    if not key:
+        raise EmberStateRootError(f"cannot derive a state key from root '{root}'")
+    return key
+
+
+def _ember_config_home_dir() -> str:
+    """Port of getEmberConfigHomeDir() in utils/env-detection.ts: EMBER_HOME verbatim, else
+    ~/.ember."""
+    ember_home = os.environ.get("EMBER_HOME", "").strip()
+    if ember_home:
+        return ember_home
+    return str(Path.home() / ".ember")
+
+
+def _resolve_ember_state_root(repo_root: str) -> str:
+    """Port of emberStateRoot()'s resolution order (the read side never needs its
+    writer-only assertStateRootIsWritable guard -- this module only reads the heartbeat,
+    it never writes there):
+      1. EMBER_STATE_ROOT, used verbatim.
+      2. <EMBER_HOME>/cockpit-state/<repoStateKey(repoRoot)>.
+    Never silently falls back to the old in-tree path -- that file is permanently unwritten
+    now, and returning it here would manufacture a false "not fresh" read instead of a loud
+    resolution failure."""
     override = os.environ.get("EMBER_STATE_ROOT", "").strip()
     if override:
-        return os.path.join(os.path.abspath(override), "cockpit-heartbeat.json")
-    return os.path.abspath(os.path.join(
-        os.path.dirname(__file__), "..", "tools", "ember-cli",
-        "state", "cockpit-heartbeat.json"))
+        return os.path.abspath(override)
+    return os.path.join(_ember_config_home_dir(), "cockpit-state", _repo_state_key(repo_root))
+
+
+def _default_renderer_heartbeat_path() -> str:
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    try:
+        state_root = _resolve_ember_state_root(repo_root)
+    except EmberStateRootError as err:
+        raise SystemExit(f"cockpit_watchdog: state root unresolvable: {err}") from err
+    return os.path.join(state_root, "cockpit-heartbeat.json")
 
 
 def main(argv: Optional[list[str]] = None) -> None:

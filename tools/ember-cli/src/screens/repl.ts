@@ -816,6 +816,20 @@ export function ReplScreen({
     return formatCockpitRestartEvent(previous, process.pid, Date.now());
   });
 
+  // #413/#1330 review round 2: the writer above goes INERT (filePath === null) when repo-root
+  // or external-state-root resolution fails -- previously only a console.warn, invisible from
+  // inside the TUI. Same one-shot, mount-time pattern as cockpitRestartEvent, so a resolution
+  // failure on THIS boot is visible on THIS boot's very first frame, not just in a log an
+  // operator has to go find.
+  const [heartbeatWriterInert] = useState<{ text: string; color?: string } | null>(() =>
+    livenessHeartbeatRef.current?.filePath === null
+      ? {
+          text: "heartbeat: writer inert -- external liveness checks are blind",
+          color: "red",
+        }
+      : null,
+  );
+
   const [busy,           setBusy]           = useState(false);
   const busyRef                             = useRef(false);
   const [spinnerElapsed, setSpinnerElapsed] = useState(0);
@@ -1003,6 +1017,7 @@ export function ReplScreen({
             // present the FIRST time boardSummary becomes defined, regardless of this async
             // load's timing relative to the mount-time cockpitRestartEvent computation above.
             cockpitRestartEvent: cockpitRestartEvent ?? undefined,
+            heartbeatWriterInert: heartbeatWriterInert ?? undefined,
           };
           setBoardSummary(summary);
         }

@@ -27,9 +27,14 @@
 //      already owns; the per-root key keeps two checkouts from sharing one state dir.
 //
 // The default's key derivation is mirrored by Get-EmberStateRootKey in
-// scripts/launch-ember-cli.ps1. Both sides are pinned to the same fixture vectors
-// (ember-state-root.test.ts / tests/test_ember_root_launcher.py) so the two
-// implementations cannot drift apart unnoticed.
+// scripts/launch-ember-cli.ps1, AND by _repo_state_key in scripts/cockpit_watchdog.py (#413:
+// the renderer-heartbeat reader needs the same default the writer resolves to, since nothing
+// exports EMBER_STATE_ROOT into the watchdog's own launch environment). Three
+// implementations, not two — TS, PowerShell, Python — all pinned to the same fixture vectors
+// (ember-state-root.test.ts / tests/test_ember_root_launcher.py /
+// scripts/tests/test_cockpit_watchdog.py's KEY_PARITY_VECTORS) so none can drift apart
+// unnoticed. A fourth consumer needing this default belongs in this shared-vectors pattern
+// too, never a hand-rolled join.
 //
 // GUARD (writer-side, fail-closed). A verifier-only refusal detects the regression at the
 // NEXT census; by then the run is already red. So every resolution is validated here,
