@@ -15,11 +15,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import sys
 import time
 from pathlib import Path
 from typing import Any
+
+# Test/CI override: redirect the transient run receipt (packet.jsonl) outside
+# the tracked tree without touching where preflights look for real inputs
+# (those always resolve against the actual repo root, unaffected by this).
+RECEIPT_ROOT_ENV = "EMBER01_LAUNCH_PACKET_RECEIPT_ROOT"
 
 GIB = 1024 ** 3
 
@@ -751,11 +757,18 @@ def named_launch_command(cfg: dict, identity: dict) -> dict:
     }
 
 
-def run(config_path: Path) -> int:
+def run(config_path: Path, *, receipt_root: Path | None = None) -> int:
     cfg = json.loads(config_path.read_text(encoding="utf-8"))
     root = _repo_root(config_path)
     ts = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
-    receipt_dir = root / "receipts" / "ember-01-launch-packet" / ts
+    # receipt_root controls only where the transient run receipt is written.
+    # `root` (used by every preflight above to resolve real config/data/
+    # checkpoint paths) is never affected by this override -- production
+    # launches are byte-identical to before this override existed.
+    if receipt_root is None:
+        env_override = os.environ.get(RECEIPT_ROOT_ENV)
+        receipt_root = Path(env_override) if env_override else root
+    receipt_dir = receipt_root / "receipts" / "ember-01-launch-packet" / ts
     receipt_dir.mkdir(parents=True, exist_ok=True)
     receipt_path = receipt_dir / "packet.jsonl"
 
