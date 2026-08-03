@@ -45,7 +45,8 @@ def _verified_capabilities(record: Mapping[str, object], *, active_expert: str) 
         raise ValueError("capability receipt is not bound to the exact local verifier bytes")
     encoded = base64.b64encode(json.dumps(record, sort_keys=True, separators=(",", ":")).encode("utf-8")).decode("ascii")
     completed = subprocess.run(
-        [sys.executable, "-I", str(VERIFIER_PATH), "--record-json-base64", encoded],
+        # -B: -I also drops PYTHONDONTWRITEBYTECODE, and VERIFIER_PATH is in-tree.
+        [sys.executable, "-I", "-B", str(VERIFIER_PATH), "--record-json-base64", encoded],
         capture_output=True,
         text=True,
         timeout=15,
