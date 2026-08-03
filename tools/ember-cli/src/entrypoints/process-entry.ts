@@ -39,6 +39,8 @@ import type { HeadlessReplOptions } from "../cli/headless-repl.ts";
 import type { StructuredIO } from "../cli/structured-io.ts";
 import type { AppProps } from "../core/frontend-shell.ts";
 import { resolveEmberSourceRootOrCwd } from "../utils/repo-root.ts";
+import { parseOutageMarker, computeEffectiveMarker } from "../services/activity-feed.ts";
+import type { OutageMarker } from "../services/activity-feed.ts";
 
 // ---------------------------------------------------------------------------
 // Module-level env cleanup (runs at import time — mirrors bundle __esm init)
@@ -484,6 +486,36 @@ export async function spawnLlamaServer(opts: ServerSpawnOptions): Promise<Server
 }
 
 // ---------------------------------------------------------------------------
+// GPU-lease awareness (issue #344): the cockpit boot spawn above loads a
+// resident model into VRAM. Before #344 it did so unconditionally, even
+// while a training leg held a live GPU lease -- the 2026-07-07 incident
+// (W1 attempt-3 OOM'd 10:39Z after the cockpit's 10:13:46Z boot spawned
+// llama-server) is exactly that collision. This reuses the SAME
+// planned-outage.json marker + parse/effective-check pair
+// services/brain-server-supervisor.ts's resolveDeviceForSpawn already reads
+// for its own cuda/cpu device policy (issue #588/#602/#614 lineage) --
+// no new lease mechanism, no new marker format, same fail-open contract
+// (absent/unreadable/malformed marker = no lease, never a false refusal).
+// ---------------------------------------------------------------------------
+
+/** Reads tools/ember-cli/state/planned-outage.json relative to the resolved ember
+ *  source root and returns the effective marker, or null if none is live.
+ *  Fail-open on any read/parse error, matching brain-server-supervisor.ts's
+ *  resolveDeviceForSpawn (an outage system that fails CLOSED on marker read errors
+ *  would itself become an availability hazard). */
+export async function defaultCheckGpuLease(): Promise<OutageMarker | null> {
+  try {
+    const repoRoot = resolveEmberSourceRootOrCwd();
+    const markerPath = join(repoRoot, "tools", "ember-cli", "state", "planned-outage.json");
+    const raw = await readFile(markerPath, "utf-8");
+    const parsed = parseOutageMarker(raw);
+    return computeEffectiveMarker(parsed, Date.now());
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Debug file writers
 // ---------------------------------------------------------------------------
 
@@ -783,6 +815,10 @@ export interface MainOptions {
   /** #159 boot matrix, "backend already running": probed BEFORE spawning. Defaults to a
    *  short real health probe; tests inject a fake to avoid real network I/O. */
   probeExisting?:  (port: number) => Promise<boolean>;
+  /** #344 GPU-lease awareness: returns the effective planned-outage.json marker, or null
+   *  when no training window holds the GPU. Defaults to defaultCheckGpuLease (real file
+   *  read); tests inject a fake to avoid touching tools/ember-cli/state/. */
+  checkGpuLease?:  () => Promise<OutageMarker | null>;
   loadOwnedIdentityFn?: typeof loadOwnedModelIdentity;
   loadOwnedDevelopmentIdentityFn?: typeof loadOwnedDevelopmentIdentity;
   verifyOwnedEndpointFn?: typeof verifyOwnedEndpointIdentity;
@@ -857,6 +893,29 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   // report OFFLINE while the code below it still tried to spawn a managed server, which is
   // exactly the half-demoted shape the map's D1 forbids.
   let gpuFreeRequested = Boolean(process.env["EMBER_GPU_FREE"]);
+
+  // #344: the cockpit boot spawns a VRAM-resident model server unconditionally, colliding
+  // with a live training leg's GPU lease (2026-07-07 incident: cockpit boot at 10:13:46Z
+  // OOM'd a W1 training attempt at 10:39Z). Folded into gpuFreeRequested BEFORE seatInput
+  // is built below -- same reasoning as the stale-owned-binding demotion a few lines down
+  // (D1: the seat decision and the spawn decision must agree, or the seat reports OFFLINE
+  // while the code below still tries to spawn a server). An explicit EMBER_MODEL_URL still
+  // wins over a lease (checked via envModelUrlBeforeConfigApply, identical precedence to
+  // the existing GPU-free flag). Reuses the SAME planned-outage.json marker
+  // services/brain-server-supervisor.ts's resolveDeviceForSpawn already reads for its own
+  // cuda/cpu device policy -- no new lease mechanism.
+  const gpuLeaseMarker = envModelUrlBeforeConfigApply === undefined
+    ? await (opts.checkGpuLease ?? defaultCheckGpuLease)()
+    : null;
+  if (gpuLeaseMarker) {
+    gpuFreeRequested = true;
+    process.stdout.write(
+      "[ember] GPU leased to training: " + gpuLeaseMarker.owner + " -- " + gpuLeaseMarker.reason +
+        " (target=" + gpuLeaseMarker.target + ", expires=" + gpuLeaseMarker.expires +
+        ") -- model server not spawned\n",
+    );
+  }
+
   const doExitMain = opts.exitFn ?? ((code: number) => { process.exit(code); });
   const seatInput = {
     argv: rawArgv,
@@ -1040,9 +1099,11 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   // (`externalUrl`) below -- with EMBER_MODEL_URL unset, EMBER_GPU_FREE=1 wins outright, even
   // when models.json has a persisted "endpoint". An explicit EMBER_MODEL_URL still wins over
   // GPU-free (checked first, via envModelUrlBeforeConfigApply): the operator naming a server
-  // is a stronger signal than the GPU-free flag.
+  // is a stronger signal than the GPU-free flag. #344: a live GPU lease was folded into
+  // gpuFreeRequested above (same D1 reasoning as the stale-owned-binding demotion: the seat
+  // AND the spawn decision must agree), so this branch already covers it.
   if (envModelUrlBeforeConfigApply === undefined && gpuFreeRequested) {
-    // GPU-free mode: boot the cockpit without spawning/loading the model server.
+    // GPU-free / GPU-leased mode: boot the cockpit without spawning/loading the model server.
     // The model client stub in session-init.ts surfaces OFFLINE state when called.
     serverUrl    = null; // signal to session-init that model is disabled
     detectedNCtx = modelsCfg?.nCtx ?? 4096;
