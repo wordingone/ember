@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // goal-persistence.test.ts — file-backed GoalStorePersistence tests.
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
@@ -5,16 +9,25 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createFileGoalPersistence, goalStateFilePath } from "./goal-persistence.ts";
+import { emberStatePath } from "../utils/ember-state-root.ts";
 import type { GoalRecord } from "../core/goal-store.ts";
 
 let scratchDir: string;
+let stateDir: string;
 
 beforeEach(() => {
   scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "ember-goal-persistence-"));
+  // Pin the external state root, for two reasons: the default resolves under the real
+  // user config home (which would outlive this suite), and the root must sit OUTSIDE the
+  // repo root it serves or the writer-side guard refuses it.
+  stateDir = `${scratchDir}-cockpit-state`;
+  process.env["EMBER_STATE_ROOT"] = stateDir;
 });
 
 afterEach(() => {
+  delete process.env["EMBER_STATE_ROOT"];
   fs.rmSync(scratchDir, { recursive: true, force: true });
+  fs.rmSync(stateDir, { recursive: true, force: true });
 });
 
 function fakeGoal(overrides: Partial<GoalRecord> = {}): GoalRecord {
@@ -31,10 +44,14 @@ function fakeGoal(overrides: Partial<GoalRecord> = {}): GoalRecord {
 }
 
 describe("goalStateFilePath", () => {
-  test("resolves to .ember/goals/<sessionId>.json under the repo root", () => {
+  test("resolves to goals/<sessionId>.json under the EXTERNAL state root", () => {
+    // Never under the repo root itself: the completion verifier censuses that tree by
+    // totality, so a goal file written during a run would red the certificate (#1330).
     expect(goalStateFilePath("/repo", "sess-1")).toBe(
-      path.join("/repo", ".ember", "goals", "sess-1.json"),
+      emberStatePath("/repo", "goals", "sess-1.json"),
     );
+    expect(goalStateFilePath("/repo", "sess-1").startsWith(path.resolve("/repo") + path.sep))
+      .toBe(false);
   });
 });
 
@@ -81,7 +98,8 @@ describe("createFileGoalPersistence", () => {
   });
 
   test("write() never throws even when the directory cannot be created", () => {
-    const blockerPath = path.join(scratchDir, ".ember");
+    const blockerPath = path.dirname(goalStateFilePath(scratchDir, "s1"));
+    fs.mkdirSync(path.dirname(blockerPath), { recursive: true });
     fs.writeFileSync(blockerPath, "not a directory");
     const persistence = createFileGoalPersistence({ repoRoot: scratchDir, sessionId: "s1" });
     expect(() => persistence.write(fakeGoal())).not.toThrow();

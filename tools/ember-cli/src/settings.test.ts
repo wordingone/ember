@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
 import { join } from 'path';
 import { rm, mkdir, writeFile } from 'fs/promises';
@@ -15,6 +19,9 @@ import { _resetConfigHomeMemo } from './env-detection';
 
 const TEST_HOME = join(import.meta.dir, '__settings_test_home__');
 const TEST_GIT_ROOT = join(TEST_HOME, 'project');
+// Project/local settings live OUTSIDE the checkout (#1330); pin the root so the suite
+// does not fall back to the real user config home.
+const TEST_STATE_ROOT = join(TEST_HOME, 'cockpit-state');
 
 function pause(ms: number) {
   return new Promise<void>((r) => setTimeout(r, ms));
@@ -22,16 +29,18 @@ function pause(ms: number) {
 
 beforeEach(async () => {
   process.env['EMBER_HOME'] = TEST_HOME;
+  process.env['EMBER_STATE_ROOT'] = TEST_STATE_ROOT;
   _resetConfigHomeMemo();
   _resetSettingsCache();
   try { await rm(TEST_HOME, { recursive: true, force: true }); } catch { /* ok */ }
   await mkdir(join(TEST_HOME, '.ember'), { recursive: true });
   await mkdir(join(TEST_GIT_ROOT, '.git'), { recursive: true });
-  await mkdir(join(TEST_GIT_ROOT, '.ember'), { recursive: true });
+  await mkdir(TEST_STATE_ROOT, { recursive: true });
 });
 
 afterEach(async () => {
   delete process.env['EMBER_HOME'];
+  delete process.env['EMBER_STATE_ROOT'];
   _resetConfigHomeMemo();
   _resetSettingsCache();
   try { await rm(TEST_HOME, { recursive: true, force: true }); } catch { /* ok */ }

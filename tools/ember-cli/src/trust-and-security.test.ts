@@ -1,5 +1,10 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // trust-and-security tests — one named test per AC.
 import { describe, test, expect } from "bun:test";
+import { join, resolve } from "node:path";
 import {
   // Pure utilities
   shouldShowTrustDialog,
@@ -77,13 +82,28 @@ describe("AC4 — getTrustSavePath session", () => {
 });
 
 // ---------------------------------------------------------------------------
-// AC5: Accepting for "project" saves to the project's .ember/ config
+// AC5: Accepting for "project" saves to the project's cockpit state root, which lives
+// OUTSIDE the project itself (#1330) so the completion verifier's total census never
+// sees a trust file written mid-run.
 // ---------------------------------------------------------------------------
 describe("AC5 — getTrustSavePath project", () => {
-  test("AC5: project destination resolves to .ember/ path", () => {
-    const path = getTrustSavePath("project", "/home/user", "/projects/myapp");
-    expect(path).toContain("/projects/myapp");
-    expect(path).toContain(".ember");
+  test("AC5: project destination resolves under the external state root", () => {
+    const saved = process.env["EMBER_STATE_ROOT"];
+    process.env["EMBER_STATE_ROOT"] = join("/cockpit-state");
+    try {
+      const path = getTrustSavePath("project", "/home/user", "/projects/myapp");
+      expect(path).toBe(join(resolve("/cockpit-state"), "trust.json"));
+      expect(path).not.toContain("myapp");
+    } finally {
+      if (saved === undefined) delete process.env["EMBER_STATE_ROOT"];
+      else process.env["EMBER_STATE_ROOT"] = saved;
+    }
+  });
+
+  test("AC5: the project destination is distinct from the session destination", () => {
+    expect(getTrustSavePath("project", "/home/user", "/projects/myapp")).not.toBe(
+      getTrustSavePath("session", "/home/user", "/projects/myapp"),
+    );
   });
 });
 

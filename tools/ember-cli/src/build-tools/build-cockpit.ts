@@ -71,9 +71,14 @@ if (import.meta.main) {
     throw new Error("cannot verify clean tracked Ember source for cockpit build");
   }
   requireCleanTrackedStatus(status.stdout ?? "");
+  // EMBER_BUILD_OUTFILE lets the launcher compile STRAIGHT into the external cockpit
+  // state root (issue #1330). The old default emits `ember.exe` beside the sources, i.e.
+  // inside the tree the completion verifier censuses by totality -- a transient in-tree
+  // writer that reds a run that happens to be censusing during a build.
+  const outfile = process.env["EMBER_BUILD_OUTFILE"] ?? "ember.exe";
   const result = spawnSync(
     process.execPath,
-    cockpitCompileArgs(commit),
+    cockpitCompileArgs(commit, outfile),
     { cwd: sourceRoot, stdio: "inherit", windowsHide: true },
   );
   if (result.status !== 0) {

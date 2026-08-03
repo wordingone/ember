@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // tools/file-edit.ts — Edit tool: exact-string-replacement edits on existing files.
 // De-transpiled from bundle (lines 305245–305510). Requires prior Read; uses
 // computeUnifiedDiff and detectLineEndings from file-write.ts.
@@ -5,6 +9,7 @@
 
 import { readFile, writeFile, stat, mkdir } from "fs/promises";
 import { dirname } from "path";
+import { isUnderEmberState } from "../utils/ember-state-root.ts";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { z } from "zod";
@@ -203,7 +208,7 @@ async function editFile_(
       const newStat = await stat(filePath);
       ctx.readFileState?.set(filePath, { mtime: newStat.mtimeMs, content: finalContent });
     } catch {}
-    if (filePath.includes("/.ember/") || filePath.includes("\\.ember\\")) {
+    if (isUnderEmberState(filePath)) {
       ctx.dynamicSkillDirTriggers?.add(dirname(filePath));
     }
     const patch = computeUnifiedDiff(originalFile, finalContent);
@@ -243,7 +248,7 @@ async function editFile_(
       const newStat = await stat(filePath);
       ctx.readFileState?.set(filePath, { mtime: newStat.mtimeMs, content: finalContent });
     } catch {}
-    if (filePath.includes("/.ember/") || filePath.includes("\\.ember\\")) {
+    if (isUnderEmberState(filePath)) {
       ctx.dynamicSkillDirTriggers?.add(dirname(filePath));
     }
     const patch = computeUnifiedDiff(originalFile, finalContent);

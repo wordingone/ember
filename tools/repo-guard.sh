@@ -97,6 +97,31 @@ else
   ok ".agent" "not tracked"
 fi
 
+# ---- 1a. cockpit state must never reside inside the certified tree -------
+# The completion verifier certifies this tree by TOTALITY -- it censuses and fingerprints
+# every file, tracked AND untracked -- so a resident cockpit writer produces list-vs-hash
+# contradictions and reds the run (run15). The cure was to move the writer out, not to
+# exclude paths from the census: an exclusion would be a standing blind spot where
+# contamination hides while the certificate silently promises less. Issue #1330 relocated
+# all cockpit-mutable state to an external root; this check is what keeps the class from
+# silently returning. Non-EMPTY is the bar, not absence -- an empty leftover directory
+# writes nothing and the launcher sweeps it.
+# Any SHAPE is refused, not just a populated directory: a symlink or junction pointing at
+# the external root is the dangerous one, because the census walks through it and hashes
+# live external state, so a "compatibility shim" would reintroduce the contamination. Only
+# a genuinely empty real directory passes -- it writes nothing and the launcher sweeps it.
+COCKPIT_STATE_DIR="$SUBJECT_ROOT/.ember"
+if [ -L "$COCKPIT_STATE_DIR" ]; then
+  fail "cockpit-state" "'.ember' is a symlink/junction in the tree; the census walks through it and hashes live cockpit state. Remove it — a shim is not an acceptable migration"
+elif [ -e "$COCKPIT_STATE_DIR" ] && [ ! -d "$COCKPIT_STATE_DIR" ]; then
+  fail "cockpit-state" "'.ember' exists in the tree as a file; cockpit state must live outside it (see EMBER_STATE_ROOT)"
+elif [ -d "$COCKPIT_STATE_DIR" ] && [ -n "$(ls -A "$COCKPIT_STATE_DIR" 2>/dev/null)" ]; then
+  fail "cockpit-state" "'.ember/' is resident in the tree; cockpit state must live outside it (see EMBER_STATE_ROOT). Launch Ember.cmd once to migrate it, or move/delete the directory"
+  ls -A "$COCKPIT_STATE_DIR" | sed 's/^/      /' | head -10
+else
+  ok "cockpit-state" "no resident cockpit state in the tree"
+fi
+
 # ---- 1b. tracked text files must be LF-only ------------------------------
 if python "$KERNEL_ROOT/tools/check_line_endings.py" "$SUBJECT_ROOT"; then
   :

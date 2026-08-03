@@ -6,7 +6,7 @@
 // store (`/custody set`). fs is fully mocked in-memory; no real filesystem is touched.
 
 import { describe, it, expect } from "bun:test";
-import { join as pathJoin } from "node:path";
+import { emberStateRoot } from "../utils/ember-state-root.ts";
 import {
   deriveBindingEnvName,
   MalformedBindingArgError,
@@ -149,10 +149,10 @@ describe("writeRootBinding", () => {
     expect(readBack.roots["benchmark-root"]).toEqual(written);
   });
 
-  it("creates the .ember/ directory when absent", () => {
+  it("creates the external state directory when absent", () => {
     const { deps, dirs } = makeMemFs();
     writeRootBinding(REPO_ROOT, "benchmark-root", "/mnt/data/bench", deps);
-    expect(dirs.has(pathJoin(REPO_ROOT, ".ember"))).toBe(true);
+    expect(dirs.has(emberStateRoot(REPO_ROOT))).toBe(true);
   });
 
   it("read-merge-write: a second binding never clobbers an existing one for a different root_id", () => {

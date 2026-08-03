@@ -7,7 +7,8 @@
 // Persists logical-root-id -> machine-path mappings so a per-machine path never leaks
 // into tracked output (manifests/ember-01-custody/root-spec.json's `path_policy`:
 // "logical root IDs in tracked output; machine paths supplied at execution"). The store
-// lives at `<repoRoot>/.ember/root-bindings.json`, gitignored (`.ember/`), and is
+// lives under the external cockpit state root (utils/ember-state-root.ts) as
+// `root-bindings.json` -- outside the certified tree (issue #1330), and is
 // read-merge-written so a second `set` call never clobbers a previously-persisted
 // binding for a different root_id.
 //
@@ -16,7 +17,8 @@
 // throughout services/ (e.g. services/compaction.ts's AutocompactDeps).
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
+import { emberStatePath } from "../utils/ember-state-root.ts";
 
 // ---------------------------------------------------------------------------
 // Shapes
@@ -51,7 +53,7 @@ function resolveDeps(deps: CustodyBindingsDeps): Required<CustodyBindingsDeps> {
 /** Path to the machine-local binding store for a given repo root. Exported so callers
  *  (e.g. tests, `/custody status`) never hand-roll the join. */
 export function rootBindingsStorePath(repoRoot: string): string {
-  return join(repoRoot, ".ember", "root-bindings.json");
+  return emberStatePath(repoRoot, "root-bindings.json");
 }
 
 /** Env var name a logical root id maps to, mirroring root-spec.json's `binding` field
@@ -140,7 +142,7 @@ export function parseBindingArg(arg: string): { rootId: string; machinePath: str
 
 /** Persists one binding into the store: reads whatever exists (fail-open to empty),
  *  merges in the new/updated `root_id` entry, and writes the whole store back --
- *  NEVER clobbers bindings for other root_ids. Creates `.ember/` if absent. */
+ *  NEVER clobbers bindings for other root_ids. Creates the state root if absent. */
 export function writeRootBinding(
   repoRoot: string,
   rootId: string,
