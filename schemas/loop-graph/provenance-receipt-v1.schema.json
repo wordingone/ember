@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ember.internal/schemas/loop-graph/provenance-receipt-v1.schema.json",
+  "title": "Ember provenance receipt v1 (loop/graph substrate, issue #1309)",
+  "description": "Extends receipts/INDEX.jsonl's existing flat, append-only shape by making every field except claim_fields mandatory, and adding node_id as the join key back into the execution graph. Matches the approved loop/graph substrate schema sketch, section 3 (workstream B, issue #1309). One JSON object per line (JSONL), append-only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["receipt_id", "node_id", "path", "content_hash", "verdict", "verified_by", "ts"],
+  "properties": {
+    "receipt_id": {"type": "string", "minLength": 1},
+    "node_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Join key back into the execution graph. The single field missing from every real INDEX.jsonl row sampled in audit-v1.md."
+    },
+    "path": {"type": "string", "minLength": 1},
+    "content_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "verdict": {
+      "type": "string",
+      "enum": ["PASS", "FAIL", "FLAT", "COMMITMENT_RECORDED_REPLAY_BOUNDED_NONPUBLIC"]
+    },
+    "verified_by": {"type": "string", "minLength": 1},
+    "ts": {"type": "string", "format": "date-time"},
+    "claim_fields": {
+      "type": "object",
+      "description": "Free-form escape hatch matching existing INDEX.jsonl rows that carry arbitrary claim payloads."
+    }
+  }
+}
