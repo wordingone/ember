@@ -1,7 +1,38 @@
 {
-  "schema": "frozen-receipt-exceptions-v1",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "entries": []
+  "schema": "frozen-receipt-exceptions-v1",
+  "entries": [
+    {
+      "path": "receipts/ember-01-completion/evidence-pack-v1/completion-receipt-9leg-20260802.json",
+      "sha256": "7306d591c8a7a60f3629870747fe79832d20a528ef7576ede310fd21155390e2",
+      "reason": "frozen EMBER-01 nine-leg completion receipt as emitted 2026-08-02 at 323be9da. Its sha256 is the value cited by the freeze-lift record; adding the ticket/ts/sha_convention floor fields would make it a different document and break that citation."
+    },
+    {
+      "path": "receipts/ember-01-completion/evidence-pack-v1/verifier-receipt-9leg-20260804.json",
+      "sha256": "48d98dc2aff79b71ad59ed00b4458c3d40d88709a97b9dd00badb72e64b89707",
+      "reason": "frozen fresh nine-leg verifier receipt as emitted 2026-08-04 at 3028f80. Pinned by receipts/ember-02-launch-authority/certificate.json completion_receipt_sha256; any field addition breaks the certificate binding."
+    },
+    {
+      "path": "receipts/ember-01-completion/evidence-pack-v1/verify-run-receipt-20260804.json",
+      "sha256": "c221c47d78c98fcbea93262bcf625bfc17138a0aa40962f338f1a81566aef505",
+      "reason": "frozen ember-cli verify run receipt for job verify-msemvz0yrvyq00 (leg timings, pinned commit, worktree disposition), redacted per REDACTIONS.md. It is the emitted run record of a tool, not a receipt this repository authors."
+    },
+    {
+      "path": "receipts/ember-02-launch-authority/certificate.json",
+      "sha256": "54882a9a831685e2552fbfce79e4bd35cad0fedb974a6048e16bf7b40ede606e",
+      "reason": "the SPINE_CERTIFIED declaration itself. Its canonical sha256 is the identity cited by declaration-ledger.jsonl and run-spec.json; a certificate that is edited to satisfy a checker is no longer the certificate that was declared."
+    },
+    {
+      "path": "receipts/ember-02-launch-authority/run-spec.json",
+      "sha256": "d336f3f79e2116ac9362d5952cb69180c24f6300415c7f8c3089358b6db983a9",
+      "reason": "frozen certified train run-spec bound to certificate 54882a9a. Its requested_scope is compared literally against the certificate's execution_scope, so it must stay byte-identical to what was minted."
+    },
+    {
+      "path": "receipts/ember-02-launch-authority/sha-binding-map.json",
+      "sha256": "d4bbfafa7f84a620849690392671816c64ead433ccf47ffcb80936de3e1f40f3",
+      "reason": "documentation sidecar naming the source each certificate sha256 was read from, redacted per REDACTIONS.md. It carries no claim of its own and has no ticket."
+    }
+  ]
 }
