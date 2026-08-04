@@ -13,9 +13,11 @@ import { describe, expect, test } from "bun:test";
 import {
   buildCommandButtons,
   commandBarLayout,
+  commandBarPages,
   commandButtonActivation,
   commandButtonLabel,
   packCommandBarRows,
+  resolveCommandBarPage,
   type CommandBarCell,
 } from "./command-buttons.ts";
 import {
@@ -220,5 +222,63 @@ describe("width-bounded layout", () => {
 
   test("an empty registry renders nothing and discloses nothing", () => {
     expect(commandBarLayout([], 80, 2)).toEqual({ rows: [], hiddenCount: 0 });
+  });
+});
+
+describe("commandBarPages", () => {
+  const registry = () =>
+    buildCommandButtons(
+      ["watch", "model", "train", "verify", "admit", "designate", "goal", "custody",
+        "benchmark", "spine", "status", "plan", "review", "export"].map((n) => cmd(n)),
+    );
+
+  test("the pages partition the registry exactly — nothing dropped, nothing shown twice", () => {
+    const buttons = registry();
+    for (let width = 12; width <= 200; width += 4) {
+      for (const maxRows of [1, 2, 3]) {
+        const pages = commandBarPages(buttons, width, maxRows);
+        expect(pages.length).toBeGreaterThan(0);
+        const shown = pages.flatMap((page) => buttonCells(page.rows));
+        expect(shown).toEqual(buttons.map((b) => b.label));
+      }
+    }
+  });
+
+  test("every page carries a pager whenever there is more than one page", () => {
+    const buttons = registry();
+    for (let width = 12; width <= 200; width += 4) {
+      for (const maxRows of [1, 2, 3]) {
+        const pages = commandBarPages(buttons, width, maxRows);
+        for (const page of pages) {
+          const pagers = page.rows.flat().filter((cell) => cell.kind === "overflow");
+          expect(pagers.length).toBe(pages.length > 1 ? 1 : 0);
+          // A page that shows nothing cannot be paged past — progress must be structural.
+          expect(page.count).toBeGreaterThanOrEqual(1);
+        }
+      }
+    }
+  });
+
+  test("the pager never pushes a page past its row budget at usable widths", () => {
+    const buttons = registry();
+    for (const [width, maxRows] of [[40, 2], [60, 1], [80, 2], [100, 2], [140, 3]] as const) {
+      for (const page of commandBarPages(buttons, width, maxRows)) {
+        expect(page.rows.length).toBeLessThanOrEqual(maxRows);
+        for (const row of page.rows) {
+          const used = row.reduce((sum, cell) => sum + cell.label.length + 1, 0);
+          if (used > width) expect(row.length).toBe(1);
+        }
+      }
+    }
+  });
+
+  test("a remembered page index is wrapped onto the live page count, never left dangling", () => {
+    expect(resolveCommandBarPage(0, 3)).toBe(0);
+    expect(resolveCommandBarPage(2, 3)).toBe(2);
+    expect(resolveCommandBarPage(3, 3)).toBe(0);
+    expect(resolveCommandBarPage(7, 3)).toBe(1);
+    expect(resolveCommandBarPage(-1, 3)).toBe(2);
+    expect(resolveCommandBarPage(5, 0)).toBe(0);
+    expect(resolveCommandBarPage(Number.NaN, 3)).toBe(0);
   });
 });

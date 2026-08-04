@@ -63,6 +63,13 @@ declare it from the SAME constant their `USAGE` line renders, so the hint and th
 cannot drift. Commands whose bare form does real work (`/model` → status, `/benchmark` → table,
 `/verify` → start, `/train` → preflight) leave it unset and dispatch directly on click.
 
+Skills declare the same thing as `argument-hint:` frontmatter, and `skill-framework.ts` carries it
+from `parseSkillFrontmatterFields` through `createSkillCommand` onto the command. Parsing a hint
+and dropping it before the command object is the failure mode here: it is invisible until a
+skill's button fires a bare invocation that could only be a usage error, which is why the
+`#1370 — argument-hint frontmatter reaches the registered command` test asserts the resulting
+BUTTON CLASSIFICATION (`prefill`), not merely that the field parsed.
+
 ## Contract: `components/command-bar-pane.ts`
 
 Renders the button model above the composer, using the affordance the run controls established:
@@ -77,10 +84,19 @@ row, so clicking an unavailable command says why instead of behaving like a dead
   This is the same rule `layoutControlRows` applies to the run controls, for the same reason: the
   layout engine declares `flexWrap` but never implements it, so an over-wide row would otherwise
   be raw-clipped by the enclosing `overflow:"hidden"` box with no marker at all.
-- `commandBarLayout(buttons, width, maxRows)` bounds the bar's height. Buttons that do not fit
-  the row budget are traded for an explicit `+N more` cell whose own width is reserved inside the
-  budget — a hidden command is DISCLOSED, never silently absent, and the hidden ones remain
-  reachable by typing `/`.
+- `commandBarPages(buttons, width, maxRows)` bounds the bar's height by PAGING, never by dropping:
+  the buttons are split into pages that each fit the row budget, and every page carries a pager
+  cell whose own width is reserved inside the budget. The pager is clickable and WRAPS from the
+  last page to the first, so every registered command is reachable by mouse at every width in a
+  bounded number of clicks. Its caption degrades from `+N more` to a single `›` glyph when the
+  pane is too narrow to afford the caption, so no width can produce a page the operator cannot
+  leave. `commandBarLayout` is the first page of that split.
+  - "Hidden commands remain reachable by typing `/`" is NOT an acceptable fallback and was the
+    #1370 review's blocking finding: keyboard-only reachability is the state this issue exists to
+    end, so a marker with no click handler fails acceptance no matter how honestly it discloses
+    the count. Enforced by `screens/width-sweep-probe.test.ts`, which mounts the real screen at
+    40x24 / 60x20 / 80x24 / 100x30 / 140x40 and reaches every command in the LIVE registry using
+    real SGR mouse clicks only.
 - `commandBarMaxRows(terminalRows)` spends 3 rows at ≥40 rows, 2 at ≥24, and 1 below that: the
   bar is chrome competing with the transcript and never crowds a short terminal.
 
@@ -93,9 +109,16 @@ row, so clicking an unavailable command says why instead of behaving like a dead
   line is surfaced on the notice row instead. A button click is never allowed to destroy typing.
 - The bar is suppressed while the slash palette is open — the palette owns those rows and is
   itself a command surface; both at once would be two competing command lists on screen.
-- The screen's command-button state (`hoveredCommand`, `commandBarNotice`) is disjoint from the
-  operator surface's `paneFocused` / `focusedControlIndex`. No activation branch writes either,
-  so the keyboard path is unchanged by construction.
+- The screen's command-button state (`hoveredCommand`, `commandBarNotice`, the page index) is
+  disjoint from the operator surface's `paneFocused` / `focusedControlIndex`. No activation branch
+  writes either, so the keyboard path is unchanged by construction.
+- The notice row is cleared the moment the operator acts on it — on the next keystroke and on
+  submit. A notice describes a command the operator was ABOUT to run; once they have moved on it
+  is stale, and it costs a permanent row of chrome to keep saying something untrue.
+- The page index is stored WITH the layout signature it was chosen under (pane width, row budget,
+  registry command names). A resize or a registry change produces a different signature and the
+  index is discarded rather than clamped, so the bar reopens at the first page instead of on a
+  page whose commands no longer exist.
 
 ## Acceptance
 
@@ -107,5 +130,7 @@ row, so clicking an unavailable command says why instead of behaving like a dead
 4. A prefill click with text already in the composer preserves that text.
 5. A click on a disabled command surfaces its reason and dispatches nothing.
 6. No activation result can carry focus; the screen's focus state is untouched by every branch.
-7. Width sweep: at every tested width no label is split or unmarked-clipped, and the row budget
-   is honoured with an accurate `+N more` disclosure.
+7. Width sweep: at every tested width no label is split or unmarked-clipped, the row budget is
+   honoured, and EVERY registered command is reachable by mouse — directly or through the pager —
+   proved by real clicks against the real screen, not by a layout assertion.
+8. A skill declaring `argument-hint:` produces a button that composes rather than dispatches.

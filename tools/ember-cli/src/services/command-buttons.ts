@@ -124,15 +124,21 @@ export function commandButtonActivation(button: CommandButton): CommandButtonAct
 // Width-bounded layout
 // ---------------------------------------------------------------------------
 
-/** One rendered cell of the bar: a real button, or the honest overflow marker. */
+/**
+ * One rendered cell of the bar: a real button, or the pager.
+ *
+ * The pager is a CELL, not a caption: it carries the count it is hiding so the component can
+ * render it, and the component gives it a click handler that advances the page. An overflow
+ * marker with no handler was the #1370 review's blocking finding — at 80x24 it made half the
+ * registry mouse-unreachable, which is the exact keyboard-only state the issue exists to end.
+ */
 export type CommandBarCell =
   | { readonly kind: "button"; readonly label: string; readonly button: CommandButton }
   | { readonly kind: "overflow"; readonly label: string; readonly hiddenCount: number };
 
 export interface CommandBarLayout {
   readonly rows: CommandBarCell[][];
-  /** Commands with no visible button in this layout. Rendered as `+N more` so a hidden command
-   *  is DISCLOSED rather than silently absent. */
+  /** Commands with no visible button on this page. Rendered as `+N more`, which PAGES to them. */
   readonly hiddenCount: number;
 }
 
@@ -141,8 +147,19 @@ function cellWidth(cell: CommandBarCell): number {
   return cell.label.length + 1;
 }
 
-function overflowCell(hiddenCount: number): CommandBarCell {
-  return { kind: "overflow", label: `+${hiddenCount} more`, hiddenCount };
+/**
+ * The pager's compact form, for panes too narrow to spend 8 columns on a caption. Two columns
+ * (glyph + gap) is the floor at which a page can still hold one button AND remain escapable, so
+ * there is no width at which the bar can strand the operator on a page.
+ */
+export const COMMAND_BAR_PAGER_GLYPH = "›";
+
+function overflowCell(hiddenCount: number, compact: boolean): CommandBarCell {
+  return {
+    kind: "overflow",
+    label: compact ? COMMAND_BAR_PAGER_GLYPH : `+${hiddenCount} more`,
+    hiddenCount,
+  };
 }
 
 /**
@@ -173,12 +190,88 @@ export function packCommandBarRows(
   return rows;
 }
 
+/** One page of the bar: the rows to render, and which slice of the registry they cover. */
+export interface CommandBarPage {
+  readonly rows: CommandBarCell[][];
+  /** Index into the button array of this page's first button. */
+  readonly startIndex: number;
+  /** How many buttons this page actually shows. Always >= 1, so paging always makes progress. */
+  readonly count: number;
+  /** Buttons not on this page — the number the pager cell discloses. */
+  readonly hiddenCount: number;
+}
+
 /**
- * Packs `buttons` into at most `maxRows` rows of `availableWidth`. When they do not all fit, the
- * trailing rows are dropped and an overflow cell is packed IN PLACE of the last buttons that
- * would have fit — reserving the marker's own width rather than letting it push the row over the
- * pane edge. The dropped commands stay reachable by typing `/`, which is why disclosing the
- * count is sufficient and truncating in silence is not.
+ * Splits `buttons` into pages that each fit `maxRows` rows of `availableWidth`, NEVER dropping a
+ * command. When more than one page exists every page carries a pager cell, and the pager WRAPS:
+ * from the last page it returns to the first. That is what makes the guarantee total — every
+ * registered command is reachable by mouse at every width in a bounded number of clicks, rather
+ * than "reachable by typing `/`", which is the keyboard-only state #1370 was filed to end.
+ *
+ * The pager's width is reserved BEFORE the buttons are packed, never allowed to push a row past
+ * the pane edge; if its caption will not fit it degrades to a single glyph, so no width can
+ * produce a page the operator cannot leave.
+ */
+export function commandBarPages(
+  buttons: readonly CommandButton[],
+  availableWidth: number,
+  maxRows: number,
+): CommandBarPage[] {
+  if (buttons.length === 0 || maxRows <= 0) return [];
+  const cells: CommandBarCell[] = buttons.map((button) => ({
+    kind: "button" as const,
+    label: button.label,
+    button,
+  }));
+
+  // Fast path: the whole registry fits, so there is no pager and no paging.
+  const full = packCommandBarRows(cells, availableWidth);
+  if (full.length <= maxRows) {
+    return [{ rows: full, startIndex: 0, count: cells.length, hiddenCount: 0 }];
+  }
+
+  const pages: CommandBarPage[] = [];
+  let start = 0;
+  while (start < cells.length) {
+    const remaining = cells.length - start;
+    let count = 0;
+    let rows: CommandBarCell[][] | undefined;
+    // Caption first, glyph only if the caption cannot be afforded at this width.
+    for (const compact of [false, true]) {
+      for (let shown = remaining; shown >= 1; shown--) {
+        const hidden = cells.length - shown;
+        const candidate = packCommandBarRows(
+          [...cells.slice(start, start + shown), overflowCell(hidden, compact)],
+          availableWidth,
+        );
+        if (candidate.length <= maxRows) {
+          count = shown;
+          rows = candidate;
+          break;
+        }
+      }
+      if (rows) break;
+    }
+    if (!rows) {
+      // A single label alone is wider than the pane. `packCommandBarRows` gives it its own whole
+      // row rather than a clipped fragment; the page overruns the budget by that one row, which
+      // is strictly better than a command with no button at all.
+      count = 1;
+      rows = packCommandBarRows(
+        [...cells.slice(start, start + 1), overflowCell(cells.length - 1, true)],
+        availableWidth,
+      );
+    }
+    pages.push({ rows, startIndex: start, count, hiddenCount: cells.length - count });
+    start += count;
+  }
+  return pages;
+}
+
+/**
+ * The first page of the bar. Retained as the single-page view of `commandBarPages` for callers
+ * that only need the opening layout; `hiddenCount` is now the count the pager PAGES to, not a
+ * count of commands that have been given up on.
  */
 export function commandBarLayout(
   buttons: readonly CommandButton[],
@@ -187,20 +280,19 @@ export function commandBarLayout(
 ): CommandBarLayout {
   if (buttons.length === 0) return { rows: [], hiddenCount: 0 };
   if (maxRows <= 0) return { rows: [], hiddenCount: buttons.length };
-  const cells: CommandBarCell[] = buttons.map((button) => ({
-    kind: "button" as const,
-    label: button.label,
-    button,
-  }));
-  const full = packCommandBarRows(cells, availableWidth);
-  if (full.length <= maxRows) return { rows: full, hiddenCount: 0 };
-  // Overflow: shrink the visible set until the buttons AND the marker fit the row budget.
-  for (let shown = cells.length - 1; shown > 0; shown--) {
-    const kept = cells.slice(0, shown);
-    const hidden = cells.length - shown;
-    const rows = packCommandBarRows([...kept, overflowCell(hidden)], availableWidth);
-    if (rows.length <= maxRows) return { rows, hiddenCount: hidden };
-  }
-  // Even one button plus the marker does not fit: disclose everything as hidden.
-  return { rows: [[overflowCell(cells.length)]], hiddenCount: cells.length };
+  const first = commandBarPages(buttons, availableWidth, maxRows)[0];
+  if (!first) return { rows: [], hiddenCount: buttons.length };
+  return { rows: first.rows, hiddenCount: first.hiddenCount };
+}
+
+/**
+ * Clamps a remembered page index onto a live page count, wrapping past the end. Extracted so the
+ * screen's stored index and the component's rendered index can never disagree about what a
+ * shrunken terminal or a changed registry means: both go through this.
+ */
+export function resolveCommandBarPage(pageIndex: number, pageCount: number): number {
+  if (pageCount <= 0) return 0;
+  if (!Number.isFinite(pageIndex)) return 0;
+  const wrapped = Math.trunc(pageIndex) % pageCount;
+  return wrapped < 0 ? wrapped + pageCount : wrapped;
 }

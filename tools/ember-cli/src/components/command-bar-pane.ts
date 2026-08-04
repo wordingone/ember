@@ -23,8 +23,9 @@ import { Box, Text } from "../ink/components.ts";
 import type { RegistryCommand } from "../types/command-types.ts";
 import {
   buildCommandButtons,
-  commandBarLayout,
+  commandBarPages,
   commandButtonActivation,
+  resolveCommandBarPage,
   type CommandButton,
   type CommandButtonActivation,
 } from "../services/command-buttons.ts";
@@ -34,11 +35,17 @@ export interface CommandBarPaneProps {
   commands: readonly RegistryCommand[];
   /** Total columns the bar may occupy. */
   width: number;
-  /** Row budget. Rows beyond it are traded for an explicit `+N more` disclosure. */
+  /** Row budget per page. Commands beyond it move to the next page, never out of reach. */
   maxRows?: number;
   /** Name of the command currently under the pointer, for the hover highlight. */
   hoveredCommand?: string;
   onHoverCommand?: (name: string | undefined) => void;
+  /** Which page of buttons to show. Out-of-range values are wrapped, never clamped to an empty
+   *  bar, so a stale index from a resize or a registry change can only ever land on a real page. */
+  page?: number;
+  /** The page a click on the pager means. Absent -> the pager is not rendered clickable, which
+   *  is the state this component exists to make impossible in production. */
+  onPageChange?: (page: number) => void;
   /** Receives what the click MEANS; the caller performs it through its own prompt paths. */
   onActivate?: (activation: CommandButtonActivation, button: CommandButton) => void;
   /** One-line feedback row (a rejected activation's reason, or the argument hint after a
@@ -60,7 +67,7 @@ export function commandBarMaxRows(terminalRows: number): number {
 }
 
 export function CommandBarPane(props: CommandBarPaneProps): React.ReactElement | null {
-  const { commands, width, hoveredCommand, onHoverCommand, onActivate, notice } = props;
+  const { commands, width, hoveredCommand, onHoverCommand, onActivate, onPageChange, notice } = props;
   const maxRows = props.maxRows ?? DEFAULT_COMMAND_BAR_MAX_ROWS;
   const buttons = buildCommandButtons(commands);
   if (buttons.length === 0) return null;
@@ -68,17 +75,33 @@ export function CommandBarPane(props: CommandBarPaneProps): React.ReactElement |
   // TRUE inner width, so nothing can reach the enclosing overflow:"hidden" box wider than its
   // budget and get raw-clipped without a marker.
   const innerWidth = Math.max(1, width);
-  const layout = commandBarLayout(buttons, innerWidth, maxRows);
+  const pages = commandBarPages(buttons, innerWidth, maxRows);
+  if (pages.length === 0) return null;
+  const pageIndex = resolveCommandBarPage(props.page ?? 0, pages.length);
+  const page = pages[pageIndex]!;
 
   const renderCell = (
-    cell: (typeof layout.rows)[number][number],
+    cell: (typeof page.rows)[number][number],
     key: string,
   ): React.ReactElement => {
     if (cell.kind === "overflow") {
+      // The pager is a BUTTON, not a caption. Clicking it advances a page and wraps at the end,
+      // so every command the bar cannot show at this width is still a bounded number of clicks
+      // away. Rendered in the same green/`[...]` affordance as the commands themselves, because
+      // it is exactly as clickable as they are.
       return React.createElement(
         Box,
-        { key, flexShrink: 0, paddingRight: 1 },
-        React.createElement(Text, { dimColor: true, wrap: "truncate-end" }, cell.label),
+        {
+          key,
+          flexShrink: 0,
+          paddingRight: 1,
+          onClick: onPageChange ? () => onPageChange(pageIndex + 1) : undefined,
+        },
+        React.createElement(
+          Text,
+          { color: onPageChange ? "green" : undefined, dimColor: !onPageChange, wrap: "truncate-end" },
+          cell.label,
+        ),
       );
     }
     const button = cell.button;
@@ -119,7 +142,7 @@ export function CommandBarPane(props: CommandBarPaneProps): React.ReactElement |
       flexShrink: 0,
       overflow: "hidden",
     },
-    ...layout.rows.map((row, rowIndex) =>
+    ...page.rows.map((row, rowIndex) =>
       React.createElement(
         Box,
         { key: `command-bar-row-${rowIndex}`, flexDirection: "row", height: 1, flexShrink: 0 },

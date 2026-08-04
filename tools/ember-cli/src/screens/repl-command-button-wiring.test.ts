@@ -71,11 +71,11 @@ interface Harness {
   stop: () => void;
 }
 
-function mountRepl(): Harness {
+function mountRepl(columns: number = COLUMNS, rows: number = ROWS): Harness {
   let raw = "";
   const element = React.createElement(
     TerminalSizeContext.Provider,
-    { value: { columns: COLUMNS, rows: ROWS } },
+    { value: { columns, rows } },
     React.createElement(ReplScreen, {
       config: { model: "ember", permissionMode: "bypass" as const, baseSystemPrompt: "" },
       cwd: process.cwd(),
@@ -88,7 +88,7 @@ function mountRepl(): Harness {
   );
   const handle = mountInk(element, {
     stream: { write(chunk: string) { raw += chunk; } },
-    stdout: { columns: COLUMNS, rows: ROWS },
+    stdout: { columns, rows },
   });
   const stdin = new FakeStdin();
   // The REAL readline keypress emitter, not a stub: the focus-preservation test below has to
@@ -98,7 +98,7 @@ function mountRepl(): Harness {
     stdin: stdin as never,
     emitKeypressEvents: (stream) => readline.emitKeypressEvents(stream),
   });
-  const lines = () => renderedLines(raw, COLUMNS, ROWS);
+  const lines = () => renderedLines(raw, columns, rows);
   const waitFor = async (predicate: (l: string[]) => boolean, attempts = 40): Promise<boolean> => {
     for (let attempt = 0; attempt < attempts; attempt++) {
       await new Promise<void>((resolve) => setTimeout(resolve, 50));
@@ -269,6 +269,143 @@ describe("command-button click drives the real registered command", () => {
         l.some((line) => line.includes("halftypedXZ")),
       );
       expect(stillTyping).toBe(true);
+    } finally {
+      harness.stop();
+      startTelemetryWatch().stop();
+      resetCommandRegistryForTests();
+    }
+  }, 20000);
+});
+
+describe("paging reaches the commands the bar has no room to show", () => {
+  /** A registry deliberately larger than an 80-column bar can hold in its row budget. */
+  function crowdedRegistry(): RegistryCommand[] {
+    return ["alphacmd", "bravocmd", "charliecmd", "deltacmd", "echocmd", "foxtrotcmd",
+      "golfcmd", "hotelcmd", "indiacmd", "juliettcmd", "kilocmd", "limacmd"].map((name) => ({
+      name,
+      description: `${name} description`,
+      isEnabled: () => true,
+      execute: async () => ({ type: "message" as const, message: `${name.toUpperCase()}-EXECUTED` }),
+    }));
+  }
+
+  test("at 80x24 a command with no button on the first page is reached by clicking the pager", async () => {
+    const registry = crowdedRegistry();
+    registerCommands(registry);
+    startTelemetryWatch().stop();
+    const harness = mountRepl(80, 24);
+    try {
+      // Find a command the first page genuinely cannot show — the review's exact failure mode.
+      await harness.waitFor((l) => findGlyph(l, "[/alphacmd]") !== undefined);
+      const firstPage = harness.lines().join("\n");
+      const hidden = registry.map((c) => c.name).filter((name) => !firstPage.includes(`[/${name}]`));
+      expect(hidden.length).toBeGreaterThan(0);
+
+      // The pager is on screen, and it is a real click target rather than a caption.
+      const pagerLabel = firstPage.includes(" more") ? "more" : "›";
+      expect(await harness.click(pagerLabel)).toBe(true);
+
+      // Page forward until the hidden command has a button, then click THAT button and prove the
+      // command really ran. Bounded by the registry size: paging that never arrives is a failure.
+      let reached = false;
+      for (let hop = 0; hop < registry.length && !reached; hop++) {
+        if (await harness.waitFor((l) => findGlyph(l, `[/${hidden[0]}]`) !== undefined, 4)) {
+          reached = true;
+          break;
+        }
+        await harness.click(pagerLabel);
+      }
+      expect(reached).toBe(true);
+      expect(await harness.click(`[/${hidden[0]}]`)).toBe(true);
+      const ran = await harness.waitFor((l) =>
+        l.some((line) => line.includes(`${hidden[0]!.toUpperCase()}-EXECUTED`)),
+      );
+      expect(ran).toBe(true);
+    } finally {
+      harness.stop();
+      startTelemetryWatch().stop();
+      resetCommandRegistryForTests();
+    }
+  }, 40000);
+
+  test("at 40x24 — the narrowest cockpit — every command is still reachable by paging", async () => {
+    const registry = crowdedRegistry();
+    registerCommands(registry);
+    startTelemetryWatch().stop();
+    const harness = mountRepl(40, 24);
+    try {
+      await harness.waitFor((l) => findGlyph(l, "[/alphacmd]") !== undefined);
+      const seen = new Set<string>();
+      const pagerLabel = harness.lines().join("\n").includes(" more") ? "more" : "›";
+      // One full cycle of the pager must expose the whole registry; the loop is bounded so a
+      // pager that silently stops advancing fails rather than hangs.
+      for (let hop = 0; hop < registry.length * 2 && seen.size < registry.length; hop++) {
+        for (const command of registry) {
+          if (findGlyph(harness.lines(), `[/${command.name}]`)) seen.add(command.name);
+        }
+        await harness.click(pagerLabel);
+        await harness.waitFor(() => true, 2);
+      }
+      expect([...seen].sort()).toEqual(registry.map((c) => c.name).sort());
+    } finally {
+      harness.stop();
+      startTelemetryWatch().stop();
+      resetCommandRegistryForTests();
+    }
+  }, 40000);
+});
+
+describe("the notice row clears instead of going stale", () => {
+  test("a rejected command's reason disappears as soon as the operator types", async () => {
+    registerCommands([
+      {
+        name: "offlinecmd",
+        description: "test command that is unavailable",
+        isEnabled: () => false,
+        execute: async () => ({ type: "message" as const, message: "OFFLINECMD-EXECUTED" }),
+      },
+    ]);
+    startTelemetryWatch().stop();
+    const harness = mountRepl();
+    try {
+      expect(await harness.click("[/offlinecmd]")).toBe(true);
+      expect(await harness.waitFor((l) => l.some((line) => line.includes("is not available")))).toBe(true);
+
+      // A single ordinary keystroke — no slash, so the palette never opens and cannot be what
+      // removes the row.
+      harness.stdin.emit("data", Buffer.from("z"));
+      const cleared = await harness.waitFor((l) => !l.some((line) => line.includes("is not available")));
+      expect(cleared).toBe(true);
+      // ...and the keystroke landed in the composer: the clear costs no typing.
+      expect(harness.lines().some((line) => line.includes("z"))).toBe(true);
+    } finally {
+      harness.stop();
+      startTelemetryWatch().stop();
+      resetCommandRegistryForTests();
+    }
+  }, 20000);
+
+  test("a usage line does not survive the submit it was describing", async () => {
+    registerCommands([
+      {
+        name: "needsargs",
+        description: "test command with required arguments",
+        argumentHint: "--target <path>",
+        isEnabled: () => true,
+        execute: async () => ({ type: "message" as const, message: "NEEDSARGS-EXECUTED" }),
+      },
+    ]);
+    startTelemetryWatch().stop();
+    const harness = mountRepl();
+    try {
+      expect(await harness.click("[/needsargs]")).toBe(true);
+      expect(await harness.waitFor((l) => l.some((line) => line.includes("--target <path>")))).toBe(true);
+
+      // Submit the prefilled composer. Its trailing space closes the palette, so Enter really is
+      // a submit and not a palette completion.
+      harness.stdin.emit("data", Buffer.from("\r"));
+      const cleared = await harness.waitFor((l) => !l.some((line) => line.includes("--target <path>")));
+      expect(cleared).toBe(true);
     } finally {
       harness.stop();
       startTelemetryWatch().stop();

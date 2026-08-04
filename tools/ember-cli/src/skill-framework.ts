@@ -186,6 +186,9 @@ interface CreateSkillCommandOptions {
   context?: string;
   aliases?: string[];
   disableModelInvocation?: boolean;
+  /** From `argument-hint:` frontmatter. Declares that a bare `/name` can only be a usage error,
+   *  so the command bar composes the invocation instead of dispatching it blind (#1370). */
+  argumentHint?: string;
 }
 
 export function createSkillCommand(opts: CreateSkillCommandOptions): SkillCommand {
@@ -206,6 +209,7 @@ export function createSkillCommand(opts: CreateSkillCommandOptions): SkillComman
     context: opts.context,
     aliases: opts.aliases,
     disableModelInvocation: opts.disableModelInvocation,
+    argumentHint: opts.argumentHint,
     isEnabled: () => true,
     async execute(_args: string, _ctx: CommandContext): Promise<CommandResult | void> {
       return undefined;
@@ -267,6 +271,7 @@ export async function loadSkillsFromSkillsDir(
       context: parsed.context,
       aliases: [],
       disableModelInvocation: parsed.disableModelInvocation,
+      argumentHint: parsed.argumentHint,
     });
 
     results.push({

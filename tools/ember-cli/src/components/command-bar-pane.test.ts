@@ -15,7 +15,13 @@ import { mountInk } from "../ink/reconciler.ts";
 import { Box } from "../ink/components.ts";
 import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
 import { CommandBarPane, commandBarMaxRows } from "./command-bar-pane.ts";
-import type { CommandButton, CommandButtonActivation } from "../services/command-buttons.ts";
+import {
+  buildCommandButtons,
+  commandBarPages,
+  resolveCommandBarPage,
+  type CommandButton,
+  type CommandButtonActivation,
+} from "../services/command-buttons.ts";
 import { getCommands, resetCommandRegistryForTests, setCommandRegistryDeps } from "../command-registry.ts";
 import type { RegistryCommand } from "../types/command-types.ts";
 
@@ -71,6 +77,41 @@ function allText(node: unknown): string {
     return allText((node as { props?: { children?: unknown } }).props?.children);
   }
   return "";
+}
+
+/** Labels of the command buttons rendered on this page, pager excluded. */
+function labelsOf(node: unknown): string[] {
+  return clickTargets(node).map((t) => t.label).filter((label) => label.startsWith("[/"));
+}
+
+/**
+ * Walks the bar the way an operator with only a mouse would: click every button on the page,
+ * then click the pager, and repeat. Nothing here reads the layout to find commands — reachability
+ * is proved by the clicks themselves, which is the only thing issue #1370 actually asks for.
+ */
+function pageThroughByClicking(
+  commands: RegistryCommand[],
+  width: number,
+  maxRows: number,
+): { reached: string[]; finalPage: number; pageCount: number } {
+  const reached: string[] = [];
+  const pageCount = commandBarPages(buildCommandButtons(commands), width, maxRows).length;
+  let page = 0;
+  for (let step = 0; step < pageCount; step++) {
+    let requested: number | undefined;
+    const rendered = CommandBarPane({
+      commands,
+      width,
+      maxRows,
+      page,
+      onActivate: (_activation, button) => reached.push(button.name),
+      onPageChange: (next) => { requested = next; },
+    });
+    for (const target of clickTargets(rendered)) target.onClick?.();
+    if (requested === undefined) break;
+    page = requested;
+  }
+  return { reached, finalPage: resolveCommandBarPage(page, pageCount), pageCount };
 }
 
 async function renderToLines(
@@ -220,12 +261,64 @@ describe("CommandBarPane hit surface", () => {
     expect(hovers).toEqual(["verify", undefined]);
   });
 
-  test("the overflow disclosure is NOT clickable — only real commands are", () => {
+  test("the pager IS clickable and advances the page — the overflow marker is not a dead end", () => {
     const commands = ["one", "two", "three", "four", "five", "six", "seven", "eight"].map((n) => cmd(n));
-    const rendered = CommandBarPane({ commands, width: 24, maxRows: 1, onActivate: () => {} });
-    const labels = clickTargets(rendered).map((t) => t.label);
-    expect(labels.every((label) => label.startsWith("[/"))).toBe(true);
-    expect(allText(rendered)).toContain("more");
+    let requested: number | undefined;
+    const rendered = CommandBarPane({
+      commands,
+      width: 24,
+      maxRows: 1,
+      onActivate: () => {},
+      onPageChange: (page) => { requested = page; },
+    });
+    const pager = clickTargets(rendered).find((t) => !t.label.startsWith("[/"));
+    expect(pager).toBeDefined();
+    expect(pager!.label).toContain("more");
+    pager!.onClick?.();
+    expect(requested).toBe(1);
+  });
+
+  test("a second page shows the commands the first page could not, and the pager wraps home", () => {
+    const commands = ["one", "two", "three", "four", "five", "six", "seven", "eight"].map((n) => cmd(n));
+    const first = labelsOf(CommandBarPane({ commands, width: 24, maxRows: 1, onActivate: () => {} }));
+    const second = labelsOf(CommandBarPane({ commands, width: 24, maxRows: 1, page: 1, onActivate: () => {} }));
+    expect(second.length).toBeGreaterThan(0);
+    // Disjoint: paging shows NEW commands rather than re-showing the same ones.
+    expect(second.some((label) => first.includes(label))).toBe(false);
+
+    // From the last page the pager returns to the first, so no page is a trap.
+    const pageCount = commandBarPages(buildCommandButtons(commands), 24, 1).length;
+    let requested: number | undefined;
+    const last = CommandBarPane({
+      commands,
+      width: 24,
+      maxRows: 1,
+      page: pageCount - 1,
+      onActivate: () => {},
+      onPageChange: (page) => { requested = page; },
+    });
+    clickTargets(last).find((t) => !t.label.startsWith("[/"))!.onClick?.();
+    expect(resolveCommandBarPage(requested!, pageCount)).toBe(0);
+  });
+
+  test("every registered command is click-reachable by paging at every terminal size", () => {
+    const commands = ["watch", "model", "train", "verify", "admit", "designate", "goal",
+      "custody", "benchmark", "spine", "status", "plan", "review", "export"].map((n) => cmd(n));
+    for (const [width, rows] of [[40, 24], [60, 20], [80, 24], [100, 30], [140, 40]] as const) {
+      const walk = pageThroughByClicking(commands, width, commandBarMaxRows(rows));
+      expect(new Set(walk.reached)).toEqual(new Set(commands.map((c) => c.name)));
+      // The walk was driven entirely by clicking the pager, and it landed back on page 0.
+      expect(walk.finalPage).toBe(0);
+    }
+  });
+
+  test("an out-of-range remembered page never blanks the bar — a shrink wraps onto a real page", () => {
+    const commands = ["one", "two", "three", "four", "five", "six"].map((n) => cmd(n));
+    // Page 5 was valid at a narrow width; the same index arriving at a wide one must still render.
+    for (const page of [5, 99, -1]) {
+      const labels = labelsOf(CommandBarPane({ commands, width: 200, maxRows: 3, page, onActivate: () => {} }));
+      expect(labels).toEqual(commands.map((c) => `[/${c.name}]`));
+    }
   });
 
   test("the pane exposes no focus props — a click cannot move keyboard focus", () => {
