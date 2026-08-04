@@ -17,8 +17,10 @@ fn sandbox(name: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let path =
-        std::env::temp_dir().join(format!("ember-lab-rpc-{name}-{}-{nonce}", std::process::id()));
+    let path = std::env::temp_dir().join(format!(
+        "ember-lab-rpc-{name}-{}-{nonce}",
+        std::process::id()
+    ));
     std::fs::create_dir_all(&path).unwrap();
     path
 }

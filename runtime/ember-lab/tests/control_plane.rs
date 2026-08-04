@@ -18,7 +18,8 @@ fn sandbox(name: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let path = std::env::temp_dir().join(format!("ember-lab-{name}-{}-{nonce}", std::process::id()));
+    let path =
+        std::env::temp_dir().join(format!("ember-lab-{name}-{}-{nonce}", std::process::id()));
     fs::create_dir_all(&path).unwrap();
     path
 }
@@ -267,7 +268,10 @@ fn schedule_lease_requires_prediction_and_measurement_drives_durable_alarms() {
     let overdue = daemon
         .schedule_alarm_state_at(now + 7 * 24 * 60 * 60 * 1000 + 1)
         .unwrap();
-    assert_eq!(overdue["schema_version"], "ember-lab-schedule-alarm-state-v1");
+    assert_eq!(
+        overdue["schema_version"],
+        "ember-lab-schedule-alarm-state-v1"
+    );
     assert_eq!(overdue["alarms"]["prediction_overrun"], true);
     assert_eq!(overdue["alarms"]["zero_schedule_receipts_7d"], true);
     assert_eq!(overdue["alarms"]["absolute_deadline_drift"], true);
@@ -772,7 +776,10 @@ fn stale_uncertain_reconciliation_cannot_overwrite_stopped_state() {
     let state = daemon.job_state("uncertain-race").unwrap();
     let events = daemon.job_event_kinds("uncertain-race").unwrap();
     force_terminate_process(started.pid);
-    assert!(matches!(result, Err(EmberLabError::InvalidTransition { .. })));
+    assert!(matches!(
+        result,
+        Err(EmberLabError::InvalidTransition { .. })
+    ));
     assert_eq!(state, Some(JobState::Stopped));
     let stopped = events
         .iter()
@@ -843,7 +850,10 @@ fn stale_dead_reconciliation_cannot_overwrite_stopped_state() {
     let result = reconciler.join().unwrap();
     let state = daemon.job_state("dead-race").unwrap();
     let events = daemon.job_event_kinds("dead-race").unwrap();
-    assert!(matches!(result, Err(EmberLabError::InvalidTransition { .. })));
+    assert!(matches!(
+        result,
+        Err(EmberLabError::InvalidTransition { .. })
+    ));
     assert_eq!(state, Some(JobState::Stopped));
     let stopped = events
         .iter()
@@ -921,7 +931,10 @@ fn starting_reconciliation_cannot_kill_a_concurrently_committed_start() {
         alive_while_state_commit_is_fenced,
         "reconciliation killed the cohort before winning the starting-state DB fence"
     );
-    assert!(matches!(result, Err(EmberLabError::InvalidTransition { .. })));
+    assert!(matches!(
+        result,
+        Err(EmberLabError::InvalidTransition { .. })
+    ));
 }
 #[cfg(windows)]
 #[test]
@@ -1382,7 +1395,10 @@ fn prepared_recovery_terminates_process_when_running_commit_fails() {
         .unwrap();
 
     let reopened = Daemon::open(&db).unwrap();
-    assert!(matches!(reopened.reconcile(), Err(EmberLabError::Sqlite(_))));
+    assert!(matches!(
+        reopened.reconcile(),
+        Err(EmberLabError::Sqlite(_))
+    ));
     assert_eq!(
         reopened.job_state("prepared-failure").unwrap(),
         Some(JobState::Failed)
@@ -1452,7 +1468,10 @@ fn pre_resume_fence_error_does_not_kill_a_still_prepared_process() {
         .unwrap();
 
     let reopened = Daemon::open(&db).unwrap();
-    assert!(matches!(reopened.reconcile(), Err(EmberLabError::Sqlite(_))));
+    assert!(matches!(
+        reopened.reconcile(),
+        Err(EmberLabError::Sqlite(_))
+    ));
     assert_eq!(
         reopened.job_state("pre-resume-failure").unwrap(),
         Some(JobState::Prepared)
