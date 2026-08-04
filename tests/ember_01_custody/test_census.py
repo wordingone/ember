@@ -20,6 +20,7 @@ sys.path.insert(0, str(SCRIPT_ROOT))
 import census as census_module  # noqa: E402
 from census import (  # noqa: E402
     build_duplicate_groups,
+    classify_discovery_snapshot_change,
     build_root_census,
     bound_root_paths,
     canonical_root_identity,
@@ -1993,3 +1994,315 @@ def test_bound_root_paths_credits_only_the_root_that_owns_the_bytes(
         {"bound-tree": bound_child, "derived": bound_child, "alias": bound_child},
     )
     assert list(owners.values()) == [["bound-tree"]]
+
+
+# ---------------------------------------------------------------------------
+# #1384: the census must not fail-close on its own live-state writes, nor on
+# the concurrent repository work the non-blocking-verify directive sanctions.
+
+
+def test_spec_level_exclusion_defaults_reach_every_root(tmp_path: Path) -> None:
+    """Acceptance #1: the patterns are declared once, in the spec, and cover a
+    root that declares nothing of its own -- the gap that let the cockpit's own
+    ledger and watermark red-line verify-msefitztozimp6 through
+    local-ignored-payload-registry."""
+    root = tmp_path / "root"
+    (root / "tools" / "ember-cli" / "state").mkdir(parents=True)
+    (root / "tools" / "ember-cli" / "state" / "activity-ledger.jsonl").write_bytes(b"{}")
+    (root / "tools" / "ember-cli" / "state" / "activity-feed-watermark.json").write_bytes(b"{}")
+    (root / ".pytest_cache" / "v" / "cache").mkdir(parents=True)
+    (root / ".pytest_cache" / "v" / "cache" / "nodeids").write_bytes(b"[]")
+    (root / "pkg" / "__pycache__").mkdir(parents=True)
+    (root / "pkg" / "__pycache__" / "m.cpython-310.pyc").write_bytes(b"\x00")
+    (root / "pkg" / "custody.py").write_bytes(b"real")
+
+    spec = {
+        "runtime_state_exclusion_defaults": [
+            {"pattern": "*tools/ember-cli/state/*", "reason": "cockpit runtime state"},
+            {"pattern": "*.pytest_cache/*", "reason": "pytest cache"},
+            {"pattern": "*__pycache__/*", "reason": "bytecode cache"},
+        ],
+        "roots": [
+            {
+                "root_id": "root",
+                "required": True,
+                "scan": "files",
+                "owner": "operator",
+                "authority_status": "noncanonical_evidence",
+            }
+        ],
+    }
+    result = build_root_census(spec, {"root": root})
+    assert {row["source"]["relative_path"] for row in result["artifacts"]} == {
+        "pkg/custody.py"
+    }
+    assert result["runtime_state_excluded_artifact_count"] == 4
+    root_row = result["roots"][0]
+    assert [entry["pattern"] for entry in root_row["runtime_state_exclusions"]] == [
+        "*tools/ember-cli/state/*",
+        "*.pytest_cache/*",
+        "*__pycache__/*",
+    ]
+    assert result["contradictions"] == []
+
+
+def test_spec_defaults_merge_with_root_entries_without_duplicating(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "keep.bin").write_bytes(b"keep")
+    spec = {
+        "runtime_state_exclusion_defaults": [_STATE_EXCLUSION],
+        "roots": [
+            {
+                "root_id": "root",
+                "required": True,
+                "scan": "files",
+                "owner": "operator",
+                "authority_status": "noncanonical_evidence",
+                "runtime_state_exclusions": [
+                    _STATE_EXCLUSION,
+                    {"pattern": "*/local-only/*", "reason": "root-specific"},
+                ],
+            }
+        ],
+    }
+    result = build_root_census(spec, {"root": root})
+    assert [
+        entry["pattern"] for entry in result["roots"][0]["runtime_state_exclusions"]
+    ] == ["*tools/ember-cli/state/*", "*/local-only/*"]
+
+
+def test_excluded_state_writer_cannot_contradict_but_custody_bytes_still_do(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """Acceptance #2: the exclusion narrows the surface, it does not weaken the
+    check. Both directions in one run -- the excluded live-state file is
+    rewritten after it would have been hashed and is absorbed; a genuine custody
+    file rewritten the same way still contradicts."""
+    root = tmp_path / "root"
+    root.mkdir()
+    custody = root / "custody.bin"
+    custody.write_bytes(b"before")
+    state_dir = root / "tools" / "ember-cli" / "state"
+    state_dir.mkdir(parents=True)
+    ledger = state_dir / "activity-ledger.jsonl"
+    ledger.write_bytes(b"{}")
+
+    real_hash = census_module.hash_file_streaming
+    rewritten: set[Path] = set()
+
+    def rewrite_after_hash(path, *args, **kwargs):
+        result = real_hash(path, *args, **kwargs)
+        for target in (custody, ledger):
+            if target not in rewritten:
+                rewritten.add(target)
+                target.write_bytes(b"live-write-during-scan")
+        return result
+
+    monkeypatch.setattr(census_module, "hash_file_streaming", rewrite_after_hash)
+    result = build_root_census(
+        {
+            "runtime_state_exclusion_defaults": [_STATE_EXCLUSION],
+            "roots": [
+                {
+                    "root_id": "root",
+                    "required": True,
+                    "scan": "files",
+                    "owner": "operator",
+                    "authority_status": "noncanonical_evidence",
+                }
+            ],
+        },
+        {"root": root},
+    )
+    codes = {
+        (row["code"], row.get("relative_path")) for row in result["contradictions"]
+    }
+    assert any(
+        code in {"artifact_changed_after_hash", "artifact_mutated_during_hash"}
+        and relative == "custody.bin"
+        for code, relative in codes
+    )
+    assert not any(
+        relative is not None and "ember-cli/state" in relative
+        for _, relative in codes
+    )
+
+
+def _discovery_child(name: str, *, head: str = "a" * 40, status: str = "s") -> dict:
+    return {
+        "name": name,
+        "normalized_path": f"/parent/{name}",
+        "kind": "git_worktree",
+        "git": {"head": head, "status_sha256": status, "branch": "master"},
+    }
+
+
+def test_discovery_live_git_movement_is_tolerated_and_receipted() -> None:
+    """Acceptance #3, tolerated direction: a discovered tree that is still
+    there, still the same kind, whose HEAD and working-tree status simply moved
+    forward under the non-blocking-verify directive."""
+    change = classify_discovery_snapshot_change(
+        [_discovery_child("ember-wt-a"), _discovery_child("ember-wt-b")],
+        [
+            _discovery_child("ember-wt-a"),
+            _discovery_child("ember-wt-b", head="b" * 40, status="t"),
+        ],
+    )
+    assert change["membership_changed"] is False
+    assert change["live_state_churn"] == [
+        {"name": "ember-wt-b", "changed_fields": ["head", "status_sha256"]}
+    ]
+
+
+def test_discovery_membership_churn_still_contradicts() -> None:
+    """Acceptance #3, fail direction: what the census enumerated as being under
+    this root changed, so its own enumeration is now wrong."""
+    removed = classify_discovery_snapshot_change(
+        [_discovery_child("ember-wt-a"), _discovery_child("ember-wt-b")],
+        [_discovery_child("ember-wt-a")],
+    )
+    assert removed["membership_changed"] is True
+    assert removed["removed"] == ["ember-wt-b"] and removed["added"] == []
+
+    added = classify_discovery_snapshot_change(
+        [_discovery_child("ember-wt-a")],
+        [_discovery_child("ember-wt-a"), _discovery_child("ember-wt-c")],
+    )
+    assert added["membership_changed"] is True and added["added"] == ["ember-wt-c"]
+
+    rekinded = classify_discovery_snapshot_change(
+        [_discovery_child("ember-wt-a")],
+        [{**_discovery_child("ember-wt-a"), "kind": "bare_git"}],
+    )
+    assert rekinded["membership_changed"] is True
+    assert rekinded["kind_changed"] == ["ember-wt-a"]
+    assert rekinded["live_state_churn"] == []
+
+
+def test_discovery_root_survives_a_concurrent_commit_in_a_discovered_tree(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """End to end over a real git tree: a commit lands in a discovered worktree
+    between the initial and final snapshot. No contradiction, and the census
+    receipts which child moved and in which fields."""
+    parent = tmp_path / "parent"
+    child = parent / "ember-child"
+    child.mkdir(parents=True)
+    git(child, "init")
+    git(child, "config", "user.email", "fixture@example.invalid")
+    git(child, "config", "user.name", "fixture")
+    (child / "tracked.txt").write_text("one\n", encoding="utf-8")
+    git(child, "add", "tracked.txt")
+    git(child, "commit", "-m", "one")
+
+    real_snapshot = census_module._current_discovery_snapshot
+
+    def commit_then_snapshot(*args, **kwargs):
+        (child / "tracked.txt").write_text("two\n", encoding="utf-8")
+        git(child, "add", "tracked.txt")
+        git(child, "commit", "-m", "two")
+        return real_snapshot(*args, **kwargs)
+
+    monkeypatch.setattr(
+        census_module, "_current_discovery_snapshot", commit_then_snapshot
+    )
+    result = build_root_census(
+        {
+            "roots": [
+                {
+                    "root_id": "discovery",
+                    "required": False,
+                    "scan": "directory_discovery",
+                    "name_patterns": ["ember*"],
+                }
+            ]
+        },
+        {"discovery": parent},
+    )
+
+    assert not any(
+        row["code"] == "directory_snapshot_changed_during_scan"
+        for row in result["contradictions"]
+    )
+    churn = result["roots"][0]["discovery_live_state_churn"]
+    assert [row["name"] for row in churn] == ["ember-child"]
+    assert "head" in churn[0]["changed_fields"]
+
+
+def test_discovery_root_still_fails_when_a_discovered_tree_disappears(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    parent = tmp_path / "parent"
+    keep = parent / "ember-keep"
+    doomed = parent / "ember-doomed"
+    keep.mkdir(parents=True)
+    doomed.mkdir()
+    (keep / "payload.bin").write_bytes(b"keep")
+    (doomed / "payload.bin").write_bytes(b"doomed")
+
+    real_snapshot = census_module._current_discovery_snapshot
+
+    def remove_then_snapshot(*args, **kwargs):
+        if (doomed / "payload.bin").exists():
+            (doomed / "payload.bin").unlink()
+            doomed.rmdir()
+        return real_snapshot(*args, **kwargs)
+
+    monkeypatch.setattr(
+        census_module, "_current_discovery_snapshot", remove_then_snapshot
+    )
+    result = build_root_census(
+        {
+            "roots": [
+                {
+                    "root_id": "discovery",
+                    "required": False,
+                    "scan": "directory_discovery",
+                    "name_patterns": ["ember*"],
+                }
+            ]
+        },
+        {"discovery": parent},
+    )
+
+    snapshot_rows = [
+        row
+        for row in result["contradictions"]
+        if row["code"] == "directory_snapshot_changed_during_scan"
+    ]
+    assert len(snapshot_rows) == 1
+    assert snapshot_rows[0]["removed"] == ["ember-doomed"]
+    assert snapshot_rows[0]["resolution"] == "unresolved_retry_snapshot"
+
+
+def test_checked_in_root_spec_declares_the_live_state_defaults() -> None:
+    path = REPO_ROOT / "manifests" / "ember-01-custody" / "root-spec.json"
+    spec = json.loads(path.read_text(encoding="utf-8"))
+    defaults = spec["runtime_state_exclusion_defaults"]
+    patterns = [entry["pattern"] for entry in defaults]
+    assert {
+        "*tools/ember-cli/state/*",
+        "*.pytest_cache/*",
+        "*__pycache__/*",
+    } <= set(patterns)
+    for entry in defaults:
+        assert isinstance(entry["pattern"], str) and entry["pattern"].strip()
+        assert isinstance(entry["reason"], str) and entry["reason"].strip()
+    # Every path that contradicted verify-msefitztozimp6 as live-environment
+    # churn is covered by a declared default, on every root, whatever that root
+    # declares for itself.
+    resolved = census_module._normalize_runtime_state_exclusions(
+        {}, census_module._specification_exclusion_defaults(spec)
+    )
+    for relative in (
+        "tools/ember-cli/state/activity-feed-watermark.json",
+        "tools/ember-cli/state/activity-ledger.jsonl",
+        "worktree-c5d507d5a6bb60c7/.pytest_cache/v/cache/nodeids",
+    ):
+        assert (
+            census_module._runtime_state_exclusion_match(relative, resolved)
+            is not None
+        ), relative

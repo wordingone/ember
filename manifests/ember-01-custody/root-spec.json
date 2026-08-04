@@ -6,6 +6,28 @@
                   },
     "schema":  "ember-01-root-spec-v1",
     "path_policy":  "logical root IDs in tracked output; machine paths supplied at execution",
+    "runtime_state_exclusion_defaults":  [
+        {
+            "pattern":  "*tools/ember-cli/state/*",
+            "reason":  "cockpit runtime state (activity ledger, activity-feed watermark, tailpoll debug log, liveness-watchdog restart log and state, planned-outage marker) rewritten continuously by a live ember-cli process; /verify dispatches FROM the cockpit, so the cockpit is alive during every census and any root that reaches these bytes -- including local-ignored-payload-registry, which reaches them as ignored payload rather than as tracked material -- is self-contaminated without this default, see #1384"
+        },
+        {
+            "pattern":  "*.pytest_cache/*",
+            "reason":  "pytest run cache written by any test process in any registered worktree; tool dropping, not custody material, see #1384"
+        },
+        {
+            "pattern":  "*__pycache__/*",
+            "reason":  "CPython bytecode cache written as a side effect of importing any module under a scanned root; tool dropping, not custody material, see #1384"
+        },
+        {
+            "pattern":  "*.mypy_cache/*",
+            "reason":  "mypy incremental cache written by any type-check run in a scanned root; tool dropping, not custody material, see #1384"
+        },
+        {
+            "pattern":  "*.ruff_cache/*",
+            "reason":  "ruff incremental cache written by any lint run in a scanned root; tool dropping, not custody material, see #1384"
+        }
+    ],
     "roots":  [
                   {
                       "root_id":  "avir-ember-repository",
