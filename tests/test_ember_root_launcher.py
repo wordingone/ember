@@ -15,6 +15,7 @@ from pathlib import Path
 REPOSITORY = Path(__file__).resolve().parents[1]
 PUBLIC_LAUNCHER = REPOSITORY / "Ember.cmd"
 LAUNCH_IMPL = REPOSITORY / "scripts" / "launch-ember-cli.ps1"
+LAUNCH_STAGING = REPOSITORY / "scripts" / "ember-launch-staging.ps1"
 START_HERE = REPOSITORY / "docs" / "START-HERE.md"
 
 
@@ -27,6 +28,9 @@ class EmberRootLauncherTests(unittest.TestCase):
         (source / "entrypoints").mkdir(parents=True)
         shutil.copy2(PUBLIC_LAUNCHER, root / "Ember.cmd")
         shutil.copy2(LAUNCH_IMPL, root / "scripts" / "launch-ember-cli.ps1")
+        # The launcher dot-sources this sibling at startup; the fixture mirrors the
+        # deployed scripts/ layout so the copy under test can actually run.
+        shutil.copy2(LAUNCH_STAGING, root / "scripts" / "ember-launch-staging.ps1")
         (source / "entrypoints" / "main.ts").write_text("throw new Error('fixture only');\n", encoding="utf-8")
         (source / "package.json").write_text('{"name":"ember-cli","type":"module"}\n', encoding="utf-8")
         (source / "bun.lock").write_text("fixture-lock\n", encoding="utf-8")
@@ -356,13 +360,20 @@ class EmberRootLauncherTests(unittest.TestCase):
         # The build used to emit ember.exe beside the sources and then move it, putting a
         # transient writer inside the censused tree for the length of every build.
         implementation = LAUNCH_IMPL.read_text(encoding="utf-8")
+        staging = LAUNCH_STAGING.read_text(encoding="utf-8")
         self.assertNotIn('Join-Path $sourceRoot "ember.exe"', implementation)
-        self.assertIn('Join-Path $applicationRoot "Ember.exe.partial"', implementation)
+        # Staging is derived in one place, joined onto the state-root application dir,
+        # and named so bun's forced win32 .exe suffix is a no-op (issue #1368) while
+        # still not being the final Ember.exe.
+        self.assertIn("$buildOutput = Get-EmberStagedBuildOutfile $applicationRoot", implementation)
+        self.assertIn('Join-Path $ApplicationRoot "Ember.partial.exe"', staging)
+        self.assertNotIn('"Ember.exe"', staging)
         self.assertIn("$env:EMBER_BUILD_OUTFILE = $buildOutput", implementation)
-        # Publishing is write-partial-then-rename on the destination volume.
+        # Publishing is write-partial-then-rename on the destination volume, moving the
+        # artifact the build tool actually landed.
         self.assertLess(
-            implementation.index("Ember.exe.partial"),
-            implementation.index("Move-Item -LiteralPath $buildOutput"),
+            implementation.index("Get-EmberStagedBuildOutfile"),
+            implementation.index("Move-Item -LiteralPath $stagedArtifact"),
         )
 
     def test_bun_package_cache_is_redirected_out_of_the_repository(self) -> None:
