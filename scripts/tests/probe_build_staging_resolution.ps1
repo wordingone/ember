@@ -46,6 +46,12 @@ try {
 
     # Layout C: nothing landed.
     Assert-Probe ($null -eq (Resolve-EmberStagedBuildArtifact (Join-Path $probeRoot "missing.exe"))) "resolver returns null when no artifact landed"
+
+    # Layout D: a zero-byte staged file (crashed writer) is never a runnable binary.
+    $zeroByte = Join-Path $probeRoot "Ember.partial.exe"
+    New-Item -ItemType File -Path $zeroByte | Out-Null
+    Assert-Probe ($null -eq (Resolve-EmberStagedBuildArtifact $zeroByte)) "resolver ignores a zero-byte staged artifact"
+    Remove-Item -LiteralPath $zeroByte
 }
 finally {
     Remove-Item -Recurse -Force $probeRoot
@@ -55,5 +61,5 @@ if ($script:failures -gt 0) {
     Write-Output "PROBE FAILED ($script:failures assertion(s))"
     exit 1
 }
-Write-Output "PROBE PASSED (5 assertions)"
+Write-Output "PROBE PASSED (6 assertions)"
 exit 0

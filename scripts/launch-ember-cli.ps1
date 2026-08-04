@@ -503,6 +503,13 @@ try {
         $buildOutput = Get-EmberStagedBuildOutfile $applicationRoot
         $buildLog = Join-Path $stateRoot "runtime\ember-build.log"
         New-Item -ItemType Directory -Force -Path $applicationRoot | Out-Null
+        # Sweep staged leftovers from a previously crashed build so the resolver can
+        # only ever see what THIS build lands.
+        foreach ($staleStagedArtifact in @($buildOutput, "$buildOutput.exe")) {
+            if (Test-Path -LiteralPath $staleStagedArtifact -PathType Leaf) {
+                Remove-Item -LiteralPath $staleStagedArtifact -Force
+            }
+        }
         try {
             Push-Location $sourceRoot
             try {

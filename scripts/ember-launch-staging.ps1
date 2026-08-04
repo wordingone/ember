@@ -16,13 +16,13 @@ function Resolve-EmberStagedBuildArtifact([string]$RequestedOutfile) {
     # Returns the path the build tool actually produced for the requested outfile:
     # the exact requested name, or the bun-forced "<name>.exe" variant, else $null.
     # Accepting both means a future staging-name change cannot recreate #1368's
-    # silent miss of a good binary.
-    if (Test-Path -LiteralPath $RequestedOutfile -PathType Leaf) {
-        return $RequestedOutfile
-    }
-    $forcedSuffixVariant = "$RequestedOutfile.exe"
-    if (Test-Path -LiteralPath $forcedSuffixVariant -PathType Leaf) {
-        return $forcedSuffixVariant
+    # silent miss of a good binary. Zero-byte files are never a runnable binary and
+    # are ignored rather than published.
+    foreach ($candidate in @($RequestedOutfile, "$RequestedOutfile.exe")) {
+        if ((Test-Path -LiteralPath $candidate -PathType Leaf) -and
+            (Get-Item -LiteralPath $candidate).Length -gt 0) {
+            return $candidate
+        }
     }
     return $null
 }
