@@ -2065,6 +2065,10 @@ def check_changed_artifact_bindings(
                 text = shown.stdout
             else:
                 text = read_text(root / normalized)
+            # The .jsonl branch below narrows `text` to the added rows. A
+            # content-addressed sidecar binds the whole artifact, so keep the
+            # full bytes before that narrowing happens.
+            artifact_text = text
             if suffix == ".jsonl":
                 diff_command = ["git", "diff"]
                 if staged:
@@ -2092,11 +2096,22 @@ def check_changed_artifact_bindings(
         except Exception as exc:
             errors.append(finding(4, "artifact.binding_unreadable", f"{normalized}: {exc}"))
             continue
-        if normalized == ".github/labels.yml":
+        # An artifact that cannot carry the binding inline — a generated file
+        # with a fixed schema, or frozen evidence whose sha256 another document
+        # cites, so that adding fields to it would break the citation — binds
+        # through a content-addressed sidecar beside it, named by replacing the
+        # artifact's suffix with `.authority.json`. The sidecar is only
+        # believed when it names this exact path AND records the artifact's
+        # current digest, so it cannot be pointed at a file it does not
+        # describe, and it cannot survive the artifact being edited.
+        sidecar_rel = str(PurePosixPath(normalized).with_suffix(".authority.json"))
+        if sidecar_rel != normalized and (root / sidecar_rel).is_file():
             try:
-                sidecar_text = read_text(root / ".github" / "labels.authority.json")
+                sidecar_text = read_text(root / sidecar_rel)
                 sidecar = json.loads(sidecar_text)
-                expected_digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+                expected_digest = hashlib.sha256(
+                    artifact_text.encode("utf-8")
+                ).hexdigest()
                 binding_valid = bool(
                     isinstance(sidecar, dict)
                     and sidecar.get("schema_version")
