@@ -586,9 +586,17 @@ def test_directory_discovery_detects_git_state_change_during_scan(
 
     monkeypatch.setattr(census_module, "git_repository_summary", changing_summary)
     result = build_root_census(spec, {"discovery-root": parent})
-    assert {
-        row["code"] for row in result["contradictions"]
-    } >= {"directory_snapshot_changed_during_scan"}
+    # #1384: a discovered tree whose live git state moves under a still-present,
+    # still-same-kind child is the concurrent work the non-blocking-verify
+    # directive sanctions. The final pass still detects it — it now reports it
+    # as receipted churn naming the field that moved, instead of contradicting.
+    assert result["roots"][0]["discovery_live_state_churn"] == [
+        {"name": "ember-repo", "changed_fields": ["status_sha256"]}
+    ]
+    assert not any(
+        row["code"] == "directory_snapshot_changed_during_scan"
+        for row in result["contradictions"]
+    )
 
 
 def test_final_discovery_snapshot_pass_runs_after_all_roots(
@@ -639,18 +647,24 @@ def test_final_discovery_snapshot_pass_runs_after_all_roots(
     )
 
     assert mutated is True
-    changed = [
-        row
+    # The early root's final snapshot pass runs after every root has been
+    # scanned, so it sees the ref that `late`'s scan created behind it. Post
+    # #1384 that lands as receipted live-state churn on the early root rather
+    # than as a contradiction — either way, only a pass that runs LAST can see
+    # it at all, which is what this test exists to prove.
+    early_row = next(row for row in result["roots"] if row["root_id"] == "early")
+    late_row = next(row for row in result["roots"] if row["root_id"] == "late")
+    assert [row["name"] for row in early_row["discovery_live_state_churn"]] == [
+        "ember-early"
+    ]
+    assert "refs_sha256" in early_row["discovery_live_state_churn"][0][
+        "changed_fields"
+    ]
+    assert "discovery_live_state_churn" not in late_row
+    assert not any(
+        row["code"] == "directory_snapshot_changed_during_scan"
         for row in result["contradictions"]
-        if row["code"] == "directory_snapshot_changed_during_scan"
-    ]
-    assert changed == [
-        {
-            "code": "directory_snapshot_changed_during_scan",
-            "root_id": "early",
-            "resolution": "unresolved_retry_snapshot",
-        }
-    ]
+    )
 
 
 def test_git_repository_detects_same_status_dirty_byte_change(
