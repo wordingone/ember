@@ -1,122 +1,89 @@
 #!/usr/bin/env python3
-"""Ember totality test — Condition C11 (status probe / TDD).
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+"""Ember totality test -- Condition C11 (status probe / TDD).
 
-C11 — Cycle-duration developmental growth.
-  R: receipt-backed progression toward 1h/3h/24h milestones, each buying deeper
-     horizon / larger heldout / stronger consolidation / broader transfer / real
-     capacity growth, and deletion-sensitive (removing the longer-horizon
-     mechanism degrades the result).
-  Does NOT count: artificial delay, sleep-padding, idle waits, unchanged tiny
-     loops (= unearned_duration); duration as a standalone next action; the 24h
-     milestone before a shorter cycle proves the horizon is the needed lever;
-     "add params" as growth.
-  Invalid-token (?): unearned_duration
-  CHK: each milestone receipt shows a load-bearing, deletion-sensitive capacity
-       increase.
+C11 -- Experience-horizon capability delta (duration-as-wall-clock is a timer,
+  not a lever).
+  R: across increasing experience-horizon scales (short<medium<long *novel*
+     problems learned and consolidated into resident weights), each longer
+     horizon -- via real learning updates (pre!=post parameter hashes; gradient
+     steps Merkle-bound to the novel problem ids) -- produces a measured
+     held-out capability delta the shorter horizon does not reach, and the
+     long-horizon consolidation is load-bearing (deleting it degrades
+     long-horizon capability back toward the SHORT-HORIZON level). Capability is
+     proven by live re-execution of sampled solutions, never trusted arrays.
+  Does NOT count: wall-clock duration; CPU re-hash of repeated rows; fabricated
+     outcome booleans; identical pre/post checkpoints; deletion vs the untrained
+     base instead of the short-horizon checkpoint.
+  Invalid-tokens (?): unearned_duration, clock_in_disguise, fabricated_outcomes,
+     novelty_spoof, deletion_uses_wrong_baseline
+  CHK: this file -- 9 recomputed checks, no trusted scalars.
 
-Gloss (task): cycle-duration developmental growth toward 1h/3h/24h, each
-  load-bearing + deletion-sensitive; NOT artificial delay / sleep-padding /
-  add-params.
-Receipt hint: scripts/ember_native_one_hour_cycle.py,
-  ember_native_three_hour_cycle.py, ember_native_duration_scale_probe.py
-  + receipts.
+Spec: docs/c11-experience-horizon-spec.md (authored under issue #107; it is the
+machine-checkable form of the conditions-v1.md C11 row and this probe implements
+it check-for-check).
 
-This is a STATUS PROBE. It always exits 0 and prints exactly one line
-beginning with "RED " or "GREEN ". RED/GREEN is determined by really
-inspecting state under <external-state> — never hardcoded.
+[ISSUE #107, 2026-08-03] This probe previously evaluated the RETIRED 1h/3h/24h
+wall-clock re-earn contract, so C11 reported UNEVALUABLE because a receipt
+directory belonging to a superseded condition was absent -- UNEVALUABLE for the
+wrong reason. It now evaluates the live experience-horizon contract. The
+evidence itself is still future work (it needs the owned 3B substrate under
+EMBER-05), so the honest current output remains UNEVALUABLE -- but now naming
+the real receipts and the per-check gaps of the contract actually in force.
 
-Run ONLY via:  wsl python3 <this file>
-Under WSL the execution root may mount at <local-mount-point>/ or /mnt<local-mount-point>/ on this host.
+This is a STATUS PROBE. It always exits 0 and prints exactly one line beginning
+with "RED ", "GREEN " or "UNEVALUABLE ". The verdict is determined by really
+inspecting state under the resolved root -- never hardcoded.
 """
 
-# [PATH-REWRITE 2026-07-01] Imported from
-# <<external>>/state/ember-totality-build/ into
-# <local-exec-root>-goalforge/scripts/ember_totality/. Original WSL dual/triple-mount
-# candidates pointing at <<external>>/state/<external-state> (and /mnt<local-mount-point>/M/...,
-# <local-mount-point>/M/..., <TEMP_WORKSPACE>/... variants) replaced with a single REPO_ROOT-relative
-# candidate, REPO_ROOT computed from this file's own location (two levels up
-# from scripts/ember_totality/), for native Windows system-python execution.
-# No probe logic changed -- only path resolution. <external-state> does not exist
-# under the new repo root, so these probes are expected to emit a clean RED
-# 'root not found' line, which is the correct, non-error outcome.
-
-import datetime
+import hashlib
 import json
 import os
 import sys
 
-# --- Locate <external-state> robustly across WSL mount conventions ----------------
+# --- Root resolution (unchanged convention: EMBER_TOTALITY_ROOT overrides) ----
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 CANDIDATE_ROOTS = [
-    p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT,
-                os.path.join(REPO_ROOT, "<external-state>"))
+    p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT)
     if p
 ]
 ROOT = next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)
 
-# Receipt directory holding the native developmental-duration milestones.
-RECEIPT_DIR_REL = os.path.join(
-    "receipts", "ember-mvp", "breakthrough-goal-20260619"
-)
+# The canonical spec this probe implements. Resolved against REPO_ROOT (this
+# file's own repository), NOT the possibly-overridden evidence ROOT: a control
+# fixture root supplies receipts, never the version-controlled contract.
+SPEC_REL = os.path.join("docs", "c11-experience-horizon-spec.md")
 
-# The three milestones C11 requires progression toward. Each maps to the
-# expected milestone receipt filename and the minimum active-seconds the
-# milestone must demonstrate (1h=3600, 3h=10800, 24h=86400). A milestone whose
-# receipt is genuinely ABSENT makes the progression incomplete -> RED.
-MILESTONES = [
-    ("1-hour", "native-one-hour-cycle-20260619T-now.json", 3600.0),
-    ("3-hour", "native-three-hour-cycle-20260619T-now.json", 10800.0),
-    ("24-hour", "native-twenty-four-hour-cycle-20260619T-now.json", 86400.0),
-]
+RECEIPT_DIR_REL = os.path.join("receipts", "ember-mvp", "c11-experience-horizon")
 
-# The load_bearing_duration_growth flags that MUST all be true for a milestone
-# receipt to show a load-bearing capacity increase (CHK).
-LOAD_BEARING_FLAGS = [
-    "deeper_experiment_horizon",
-    "larger_heldout_surface",
-    "stronger_consolidation",
-    "broader_transfer_reuse_checks",
-    "active_capacity_growth",
-]
+HORIZONS = ["short", "medium", "long"]
+HORIZON_FILES = {
+    "short": "horizon-short.json",
+    "medium": "horizon-medium.json",
+    "long": "horizon-long.json",
+}
+DELETION_FILE = "deletion.json"
 
-# [ISSUE #97 cure 1, 2026-07-04] Execution-binding hardening. The pre-cure
-# checker only ever inspected the cumulative `active_seconds` field of EACH
-# milestone receipt in isolation -- it never verified the receipt's OWN
-# claimed provenance chain (this_run_active_seconds / inherited_active_
-# seconds), never verified consecutive tiers are separated by at least the
-# milestone's own incremental target delta, and never checked a single run
-# cannot claim more active-work seconds than the wall-clock time it took.
-# All three checks are execution-binding: they tie the receipt's numbers to
-# what could physically have happened, not just to whether the right JSON
-# keys are present.
-TS_FMT = "%Y%m%dT%H%M%SZ"
-PROVENANCE_TOLERANCE_SECONDS = 1.0  # float-rounding slack for chain arithmetic
-WALL_VS_ACTIVE_TOLERANCE_SECONDS = 0.05  # slack for this_run <= wall_seconds
+# Pre-registered noise floor for the held-out capability delta between adjacent
+# horizons (spec v1, CHK-5). A gap at or below this is not a delta.
+NOISE_FLOOR = 0.02
 
+DELETION_ARMS = ["short", "long", "long_minus_consolidation"]
 
-def _parse_ts(value):
-    """Parse a receipt's compact ts string (e.g. 20260703T175910Z) to a naive
-    UTC datetime. Returns None if absent/unparseable (caller treats that as
-    an execution-binding failure, never as a silent pass)."""
-    if not isinstance(value, str):
-        return None
-    try:
-        return datetime.datetime.strptime(value, TS_FMT)
-    except ValueError:
-        return None
-
-
-# --- Invalid-tokens (negative assertions; C11 "does NOT count" set) -----------
-# C11's explicit ? token plus the does-NOT-count substitutes, encoded so that a
-# match in a milestone receipt is a violation.
 INVALID_TOKENS = [
-    "unearned_duration",          # C11 explicit ?
-    "artificial_delay",
-    "sleep_padding",              # as a marker/verdict string, not the =0 field
-    "idle_wait",
-    "add_params",
-    "add params",
+    "unearned_duration",
+    "clock_in_disguise",
+    "fabricated_outcomes",
+    "novelty_spoof",
+    "deletion_uses_wrong_baseline",
 ]
+
+# Duration-shaped fields stripped for the CHK-9 invariance re-derivation.
+DURATION_KEYS_EXACT = {"wall_seconds", "duration_s", "elapsed_s", "active_seconds"}
+
+PASS, FAIL, GAP = "PASS", "FAIL", "GAP"
 
 
 def emit(color, reason):
@@ -125,311 +92,502 @@ def emit(color, reason):
     sys.exit(0)
 
 
+# --- helpers -----------------------------------------------------------------
+
 def load_json(path):
     with open(path, "r", encoding="utf-8") as fh:
         return json.load(fh)
 
 
-def raw_text(path):
-    with open(path, "r", encoding="utf-8") as fh:
-        return fh.read()
+def strip_hash_prefix(value):
+    if isinstance(value, str) and ":" in value:
+        return value.split(":", 1)[1]
+    return value
 
 
-def check_invalid_tokens(label, text):
-    """Return a list of (token, label) hits for any invalid-token appearing as a
-    LIVE string in the receipt — never inside a legitimate field name or an
-    explanatory field that NEGATES the failure mode.
-
-    Two classes of legitimate, non-violating mentions are scrubbed before
-    scanning:
-      1. Numeric/identifier field names that merely embed a token substring,
-         e.g. `sleep_padding_seconds` (a numeric field; =0 means EARNED) and the
-         explanatory key `why_not_artificial_delay`.
-      2. The VALUE of explanatory negation fields. The receipts carry a
-         `why_not_artificial_delay` prose value that explicitly states no sleep
-         is used to inflate duration. That negation is the OPPOSITE of a
-         violation; flagging it would mean a receipt is penalized for proving it
-         is not artificial. We drop the entire value of any key whose name
-         begins with `why_not_` before scanning.
-    A token surviving this scrub is a genuine live marker (e.g. a verdict of
-    "unearned_duration", or "add_params" used as the growth mechanism)."""
-    # Parse so we can drop explanatory-negation values structurally, not by
-    # fragile string surgery. Fall back to raw text if parse fails.
-    scrub = text
-    try:
-        obj = json.loads(text)
-
-        def strip_negations(node):
-            if isinstance(node, dict):
-                return {
-                    k: ("" if k.lower().startswith("why_not_")
-                        else strip_negations(v))
-                    for k, v in node.items()
-                }
-            if isinstance(node, list):
-                return [strip_negations(x) for x in node]
-            return node
-
-        scrub = json.dumps(strip_negations(obj))
-    except Exception:
-        scrub = text
-
-    low = scrub.lower()
-    # Remove legitimate field NAMES that embed a token substring.
-    for field_name in ("sleep_padding_seconds", "why_not_artificial_delay"):
-        low = low.replace(field_name, "<<field>>")
-    hits = []
-    for t in INVALID_TOKENS:
-        if t.lower() in low:
-            hits.append((t, label))
-    return hits
+def merkle_root(leaf_hexes):
+    """Pairwise sha256 over hex-string concatenation, odd node promoted.
+    Declared in the spec as the merkle_leaf_recipe's companion tree rule."""
+    if not leaf_hexes:
+        return None
+    level = list(leaf_hexes)
+    while len(level) > 1:
+        nxt = []
+        for i in range(0, len(level), 2):
+            if i + 1 < len(level):
+                nxt.append(hashlib.sha256((level[i] + level[i + 1]).encode()).hexdigest())
+            else:
+                nxt.append(level[i])
+        level = nxt
+    return level[0]
 
 
-def assess_milestone(name, path, min_seconds):
-    """Inspect one milestone receipt. Returns a dict describing its state:
-       present, well_formed, earned (no sleep padding, real active seconds),
-       load_bearing (all flags), deletion_sensitive, invalid_token_hits.
-    """
-    state = {
-        "name": name,
-        "path": path,
-        "present": os.path.isfile(path),
-        "wellformed": False,
-        "active_seconds": None,
-        "min_seconds": min_seconds,
-        "earned": False,
-        "load_bearing": False,
-        "deletion_sensitive": False,
-        "missing_flags": [],
-        "token_hits": [],
-        "reason": "",
-        # [ISSUE #97 cure 1] execution-binding fields.
-        "ts": None,
-        "inherited_active_seconds": None,
-        "this_run_active_seconds": None,
-        "wall_seconds": None,
-        "wall_consistent": False,
+def problem_ids(receipt):
+    return ((receipt.get("novel_problems") or {}).get("problem_ids")) or []
+
+
+def heldout_items(receipt):
+    return ((receipt.get("heldout") or {}).get("items")) or []
+
+
+def recompute_score(items):
+    """Mean of the per-item pass flags, recomputed from rows. Returns None when
+    there are no rows to compute from (a gap, never a 0.0 that reads as a
+    measured floor)."""
+    if not items:
+        return None
+    passed = 0
+    for it in items:
+        if isinstance(it, dict) and it.get("passed") is True:
+            passed += 1
+    return passed / float(len(items))
+
+
+def strip_durations(node):
+    """Return a deep copy with every duration-shaped field removed (CHK-9)."""
+    if isinstance(node, dict):
+        return {
+            k: strip_durations(v) for k, v in node.items()
+            if not (k in DURATION_KEYS_EXACT or k.endswith("_seconds"))
+        }
+    if isinstance(node, list):
+        return [strip_durations(x) for x in node]
+    return node
+
+
+def present_horizons(receipts):
+    return [h for h in HORIZONS if receipts.get(h) is not None]
+
+
+# --- the nine checks ---------------------------------------------------------
+# Each returns (status, detail). GAP means the check's own claim-bearing input
+# is absent (nothing has been claimed) -- distinct from FAIL, which means a
+# present claim does not hold.
+
+def chk1_horizon_ordering(receipts):
+    """Ordering key is the count of distinct consolidated novel problems.
+    No duration field participates."""
+    missing = [h for h in HORIZONS if receipts.get(h) is None]
+    if missing:
+        return GAP, f"horizon receipt(s) absent: {missing}"
+    counts = {}
+    for h in HORIZONS:
+        ids = problem_ids(receipts[h])
+        if not ids:
+            return GAP, f"'{h}' carries no novel_problems.problem_ids"
+        counts[h] = len(set(ids))
+    if not (counts["short"] < counts["medium"] < counts["long"]):
+        return FAIL, (f"novel-problem counts not strictly increasing "
+                      f"(short={counts['short']} medium={counts['medium']} "
+                      f"long={counts['long']}) -> clock_in_disguise")
+    return PASS, (f"novel-problem counts short={counts['short']} < "
+                  f"medium={counts['medium']} < long={counts['long']}")
+
+
+def chk2_novelty_integrity(receipts):
+    """No repeated rows, no pretrain overlap, longer horizon strictly supersets
+    the shorter one's experience."""
+    if not present_horizons(receipts):
+        return GAP, "no horizon receipt present"
+    sets = {}
+    for h in HORIZONS:
+        r = receipts.get(h)
+        if r is None:
+            continue
+        ids = problem_ids(r)
+        if not ids:
+            return GAP, f"'{h}' carries no novel_problems.problem_ids"
+        if len(set(ids)) != len(ids):
+            dupes = len(ids) - len(set(ids))
+            return FAIL, (f"'{h}' problem_ids contains {dupes} repeated row(s) "
+                          f"-> re-hashing repeated rows is not new experience "
+                          f"(novelty_spoof)")
+        overlap = (r.get("novel_problems") or {}).get("pretrain_overlap_ids")
+        if overlap is None:
+            return GAP, f"'{h}' does not declare novel_problems.pretrain_overlap_ids"
+        if overlap:
+            return FAIL, (f"'{h}' declares {len(overlap)} pretrain-corpus "
+                          f"overlap id(s) -> not novel (novelty_spoof)")
+        sets[h] = set(ids)
+    for shorter, longer in (("short", "medium"), ("medium", "long")):
+        if shorter in sets and longer in sets:
+            if not sets[shorter] < sets[longer]:
+                return FAIL, (f"'{longer}' problem-id set is not a strict superset "
+                              f"of '{shorter}' -> the longer horizon did not learn "
+                              f"everything the shorter one did plus more "
+                              f"(novelty_spoof)")
+    if len(sets) < len(HORIZONS):
+        return GAP, f"only {sorted(sets)} present; superset chain incomplete"
+    return PASS, "no repeats, no pretrain overlap, short < medium < long id sets"
+
+
+def chk3_real_parameter_change(receipts):
+    """pre != post per horizon; post hashes pairwise distinct across horizons."""
+    if not present_horizons(receipts):
+        return GAP, "no horizon receipt present"
+    posts = {}
+    for h in HORIZONS:
+        r = receipts.get(h)
+        if r is None:
+            continue
+        lu = r.get("learning_update") or {}
+        pre = strip_hash_prefix(lu.get("pre_param_hash"))
+        post = strip_hash_prefix(lu.get("post_param_hash"))
+        if not pre or not post:
+            return GAP, (f"'{h}' missing learning_update.pre_param_hash/"
+                         f"post_param_hash")
+        if pre == post:
+            return FAIL, (f"'{h}' pre_param_hash == post_param_hash -> the "
+                          f"checkpoint is identical, no learning update happened")
+        posts[h] = post
+    dupes = [h for h in posts if list(posts.values()).count(posts[h]) > 1]
+    if dupes:
+        return FAIL, (f"horizons {sorted(dupes)} share an identical "
+                      f"post_param_hash -> the horizons are the same checkpoint")
+    if len(posts) < len(HORIZONS):
+        return GAP, f"only {sorted(posts)} present; cross-horizon distinctness incomplete"
+    return PASS, "pre!=post per horizon and all three post hashes distinct"
+
+
+def chk4_merkle_binding(receipts):
+    """Recompute the Merkle root over the receipt's own gradient-step leaves and
+    require every leaf's problem_id to be in that horizon's novel id set."""
+    if not present_horizons(receipts):
+        return GAP, "no horizon receipt present"
+    checked = []
+    for h in HORIZONS:
+        r = receipts.get(h)
+        if r is None:
+            continue
+        lu = r.get("learning_update") or {}
+        steps = lu.get("gradient_steps")
+        claimed = strip_hash_prefix(lu.get("merkle_root"))
+        if not steps or not claimed:
+            return GAP, (f"'{h}' missing learning_update.gradient_steps/"
+                         f"merkle_root")
+        ids = set(problem_ids(r))
+        leaves = []
+        for st in steps:
+            if not isinstance(st, dict) or "step" not in st or "problem_id" not in st:
+                return FAIL, (f"'{h}' gradient_steps carries a row without "
+                              f"step/problem_id -> steps cannot be bound to "
+                              f"novel problems")
+            pid = st["problem_id"]
+            if pid not in ids:
+                return FAIL, (f"'{h}' gradient step {st['step']} cites "
+                              f"problem_id '{pid}' which is not in this "
+                              f"horizon's novel id set -> gradient steps are "
+                              f"not Merkle-bound to the novel problems")
+            leaves.append(hashlib.sha256(f"{st['step']}:{pid}".encode()).hexdigest())
+        recomputed = merkle_root(leaves)
+        if recomputed != claimed:
+            return FAIL, (f"'{h}' merkle_root {claimed[:12]}.. does not match the "
+                          f"root recomputed from its own {len(leaves)} gradient-step "
+                          f"leaves ({str(recomputed)[:12]}..)")
+        checked.append(f"{h}({len(leaves)} steps)")
+    if len(checked) < len(HORIZONS):
+        return GAP, f"only {checked} present; Merkle binding incomplete"
+    return PASS, f"recomputed roots match claimed roots: {', '.join(checked)}"
+
+
+def chk5_heldout_delta(receipts):
+    """Recompute each horizon's held-out score from its rows; require strictly
+    increasing beyond the pre-registered noise floor."""
+    missing = [h for h in HORIZONS if receipts.get(h) is None]
+    if missing:
+        return GAP, f"horizon receipt(s) absent: {missing}"
+    scores = {}
+    for h in HORIZONS:
+        items = heldout_items(receipts[h])
+        s = recompute_score(items)
+        if s is None:
+            return GAP, f"'{h}' carries no heldout.items to recompute a score from"
+        claimed = (receipts[h].get("heldout") or {}).get("claimed_score")
+        if isinstance(claimed, (int, float)) and abs(claimed - s) > 1e-9:
+            return FAIL, (f"'{h}' claimed_score {claimed} != score {s:.4f} "
+                          f"recomputed from its own {len(items)} held-out rows")
+        scores[h] = s
+    gaps = {
+        "medium-short": scores["medium"] - scores["short"],
+        "long-medium": scores["long"] - scores["medium"],
     }
-    if not state["present"]:
-        state["reason"] = "milestone receipt ABSENT"
-        return state
+    small = [k for k, v in gaps.items() if v <= NOISE_FLOOR]
+    if small:
+        return FAIL, (f"held-out delta {small} at or below the pre-registered "
+                      f"noise floor {NOISE_FLOOR} "
+                      f"(short={scores['short']:.4f} medium={scores['medium']:.4f} "
+                      f"long={scores['long']:.4f}) -> the longer horizon does not "
+                      f"reach a capability the shorter one misses")
+    return PASS, (f"recomputed held-out short={scores['short']:.4f} < "
+                  f"medium={scores['medium']:.4f} < long={scores['long']:.4f}, "
+                  f"each gap > {NOISE_FLOOR}")
 
-    text = raw_text(path)
-    state["token_hits"] = check_invalid_tokens(name, text)
-    try:
-        d = load_json(path)
-    except Exception as e:  # broken receipt -> cannot count as a pass
-        state["reason"] = f"receipt unparseable: {e}"
-        return state
-    state["wellformed"] = True
 
-    aw = d.get("active_work", {}) or {}
-    active_seconds = aw.get("active_seconds")
-    state["active_seconds"] = active_seconds
-    # [ISSUE #97 cure 1] execution-binding raw fields, captured for the
-    # cross-tier checks run afterward in main().
-    state["ts"] = _parse_ts(d.get("ts"))
-    state["inherited_active_seconds"] = aw.get("inherited_active_seconds")
-    state["this_run_active_seconds"] = aw.get("this_run_active_seconds")
-    state["wall_seconds"] = aw.get("wall_seconds")
+def chk6_heldout_contamination(receipts):
+    """Held-out item ids must not intersect any horizon's training ids."""
+    if not present_horizons(receipts):
+        return GAP, "no horizon receipt present"
+    trained = set()
+    held = set()
+    for h in HORIZONS:
+        r = receipts.get(h)
+        if r is None:
+            continue
+        trained |= set(problem_ids(r))
+        items = heldout_items(r)
+        if not items:
+            return GAP, f"'{h}' carries no heldout.items"
+        for it in items:
+            if not isinstance(it, dict) or "item_id" not in it:
+                return FAIL, f"'{h}' held-out row without an item_id"
+            held.add(it["item_id"])
+    if not trained or not held:
+        return GAP, "training or held-out id set empty; contamination not computable"
+    overlap = trained & held
+    if overlap:
+        return FAIL, (f"{len(overlap)} held-out item(s) also appear as trained "
+                      f"novel problems (e.g. {sorted(overlap)[:3]}) -> the "
+                      f"capability delta is measured on trained problems")
+    return PASS, (f"{len(held)} held-out ids disjoint from {len(trained)} "
+                  f"trained novel-problem ids")
 
-    # Earned duration: sleep padding == 0 AND active_seconds reaches the
-    # milestone target (within a small tolerance below the nominal target).
-    spad = d.get("sleep_padding_seconds", None)
-    enough_time = (
-        isinstance(active_seconds, (int, float))
-        and active_seconds >= min_seconds
-    )
-    no_padding = (spad == 0)
-    state["earned"] = bool(no_padding and enough_time)
-    if not no_padding:
-        state["reason"] = f"sleep_padding_seconds != 0 ({spad}) -> unearned_duration"
-    elif not enough_time:
-        state["reason"] = (
-            f"active_seconds {active_seconds} < milestone target {min_seconds}"
-        )
 
-    # Load-bearing capacity increase: every LOAD_BEARING_FLAGS flag true.
-    lbdg = d.get("load_bearing_duration_growth", {}) or {}
-    missing = [f for f in LOAD_BEARING_FLAGS if lbdg.get(f) is not True]
-    state["missing_flags"] = missing
-    state["load_bearing"] = (len(missing) == 0)
-    if missing and not state["reason"]:
-        state["reason"] = f"load_bearing_duration_growth flags not all true: {missing}"
+def chk7_live_reexecution(receipts):
+    """Every held-out row carries execution evidence and the pass flags agree
+    with the recomputed exit-code outcome."""
+    if not present_horizons(receipts):
+        return GAP, "no horizon receipt present"
+    total = 0
+    for h in HORIZONS:
+        r = receipts.get(h)
+        if r is None:
+            continue
+        items = heldout_items(r)
+        if not items:
+            return GAP, f"'{h}' carries no heldout.items"
+        for it in items:
+            ex = (it or {}).get("execution")
+            if not isinstance(ex, dict):
+                return FAIL, (f"'{h}' held-out row '{it.get('item_id')}' carries a "
+                              f"passed flag with NO execution block -> asserted "
+                              f"outcome, nothing was re-executed "
+                              f"(fabricated_outcomes)")
+            for field in ("executor", "exit_code", "stdout_sha256"):
+                if ex.get(field) in (None, ""):
+                    return FAIL, (f"'{h}' held-out row '{it.get('item_id')}' "
+                                  f"execution block missing '{field}' -> the "
+                                  f"re-execution is not evidenced "
+                                  f"(fabricated_outcomes)")
+            if not isinstance(ex.get("exit_code"), int):
+                return FAIL, (f"'{h}' held-out row '{it.get('item_id')}' exit_code "
+                              f"is not an integer -> no live re-execution")
+            dur = ex.get("duration_s")
+            if dur is not None and not (isinstance(dur, (int, float)) and dur > 0):
+                return FAIL, (f"'{h}' held-out row '{it.get('item_id')}' "
+                              f"duration_s={dur!r} -> nothing ran")
+            derived = (ex["exit_code"] == 0)
+            if bool(it.get("passed")) != derived:
+                return FAIL, (f"'{h}' held-out row '{it.get('item_id')}' passed="
+                              f"{it.get('passed')!r} disagrees with its own "
+                              f"exit_code {ex['exit_code']} -> the pass flag is "
+                              f"not what the execution produced "
+                              f"(fabricated_outcomes)")
+            total += 1
+    if total == 0:
+        return GAP, "no held-out rows to re-derive from"
+    return PASS, (f"{total} held-out rows carry execution evidence agreeing with "
+                  f"their pass flags")
 
-    # Deletion-sensitive: a deletion_ablation block that degrades the decision
-    # (and/or active work) when the longer-horizon mechanism is removed.
-    da = d.get("deletion_ablation", {}) or {}
-    degrades = (
-        da.get("degrades_decision") is True
-        or da.get("degrades_active_seconds") is True
-        or da.get("degrades_row_passes") is True
-    )
-    # The deleted next-action must be disallowed (the loop decision breaks).
-    deleted_next = da.get("deleted_selected_next_action", {}) or {}
-    next_disallowed = deleted_next.get("disallowed") is True
-    state["deletion_sensitive"] = bool(degrades and next_disallowed)
-    if not state["deletion_sensitive"] and not state["reason"]:
-        state["reason"] = (
-            "deletion_ablation does not show a degraded/blocked next decision"
-        )
 
-    # [ISSUE #97 cure 1] wall >= active (per-run, not cumulative): a single
-    # run cannot claim more active-work seconds than the wall-clock time that
-    # run actually took. Scoped to this_run_active_seconds vs wall_seconds
-    # (the CUMULATIVE active_seconds legitimately exceeds any one run's
-    # wall_seconds once prior tiers' work has been inherited -- that is not
-    # a violation, only a per-run claim exceeding its own run's wall time is).
-    trs = state["this_run_active_seconds"]
-    wall = state["wall_seconds"]
-    if not (isinstance(trs, (int, float)) and isinstance(wall, (int, float))):
-        state["wall_consistent"] = False
-        if not state["reason"]:
-            state["reason"] = (
-                "this_run_active_seconds/wall_seconds missing or non-numeric "
-                "-> cannot execution-bind this run's claim to wall-clock time"
-            )
-    else:
-        state["wall_consistent"] = (trs <= wall + WALL_VS_ACTIVE_TOLERANCE_SECONDS)
-        if not state["wall_consistent"] and not state["reason"]:
-            state["reason"] = (
-                f"this_run_active_seconds ({trs}) exceeds this run's own "
-                f"wall_seconds ({wall}) -> physically impossible, unearned_duration"
-            )
+def chk8_deletion_baseline(receipts):
+    """Deletion is measured against the SHORT-HORIZON checkpoint and drags long
+    capability back toward it."""
+    d = receipts.get("deletion")
+    if d is None:
+        return GAP, "deletion.json absent"
+    short = receipts.get("short")
+    long_r = receipts.get("long")
+    if short is None or long_r is None:
+        return GAP, "horizon-short/horizon-long absent; deletion baseline not resolvable"
 
-    return state
+    short_post = strip_hash_prefix(((short.get("learning_update") or {})
+                                    .get("post_param_hash")))
+    baseline = strip_hash_prefix(d.get("baseline_checkpoint_hash"))
+    if not baseline or not short_post:
+        return GAP, "baseline_checkpoint_hash or horizon-short post_param_hash missing"
+    if baseline != short_post:
+        return FAIL, (f"deletion baseline_checkpoint_hash {baseline[:12]}.. is not "
+                      f"the short-horizon checkpoint {short_post[:12]}.. -> "
+                      f"deletion_uses_wrong_baseline")
 
+    arms = d.get("arms") or {}
+    missing = [a for a in DELETION_ARMS if a not in arms]
+    if missing:
+        return GAP, f"deletion arms absent: {missing}"
+    hashes = [strip_hash_prefix((arms[a] or {}).get("checkpoint_hash"))
+              for a in DELETION_ARMS]
+    if any(not h for h in hashes):
+        return GAP, "one or more deletion arms carry no checkpoint_hash"
+    if len(set(hashes)) != len(hashes):
+        return FAIL, ("deletion arms share a checkpoint_hash -> the arms are not "
+                      "distinct checkpoints")
+
+    scores = {}
+    for a in DELETION_ARMS:
+        s = recompute_score((arms[a] or {}).get("items") or [])
+        if s is None:
+            return GAP, f"deletion arm '{a}' carries no items to recompute a score from"
+        scores[a] = s
+    lo, dele, sh = scores["long"], scores["long_minus_consolidation"], scores["short"]
+    if not (lo > dele):
+        return FAIL, (f"deleting the long-horizon consolidation did not degrade "
+                      f"capability (long={lo:.4f}, deleted={dele:.4f}) -> the "
+                      f"consolidation is not load-bearing")
+    if abs(dele - sh) >= abs(dele - lo):
+        return FAIL, (f"deleted arm {dele:.4f} is not closer to the short-horizon "
+                      f"level {sh:.4f} than to the long-horizon level {lo:.4f} -> "
+                      f"the degradation does not return toward the short horizon")
+    return PASS, (f"baseline is the short-horizon checkpoint; recomputed "
+                  f"long={lo:.4f} > deleted={dele:.4f}, and deleted sits closer "
+                  f"to short={sh:.4f} than to long")
+
+
+CORE_CHECKS = [
+    ("CHK-1", "horizon ordering by novel-problem count", chk1_horizon_ordering),
+    ("CHK-2", "novelty integrity", chk2_novelty_integrity),
+    ("CHK-3", "real parameter change", chk3_real_parameter_change),
+    ("CHK-4", "gradient steps Merkle-bound to novel problem ids", chk4_merkle_binding),
+    ("CHK-5", "held-out capability delta strictly increasing", chk5_heldout_delta),
+    ("CHK-6", "held-out contamination", chk6_heldout_contamination),
+    ("CHK-7", "live re-execution of sampled solutions", chk7_live_reexecution),
+    ("CHK-8", "deletion against the short-horizon checkpoint", chk8_deletion_baseline),
+]
+
+
+def run_core_checks(receipts):
+    return [(cid, name) + tuple(fn(receipts)) for (cid, name, fn) in CORE_CHECKS]
+
+
+def scan_invalid_tokens(receipts):
+    """Live invalid-token sweep. Values of explanatory negation keys are dropped
+    first -- a receipt stating why it is NOT unearned_duration is the opposite of
+    a violation."""
+    def scrub(node):
+        if isinstance(node, dict):
+            return {
+                k: ("" if (k.lower().startswith("why_not_")
+                           or k.lower().startswith("does_not_count"))
+                    else scrub(v))
+                for k, v in node.items()
+            }
+        if isinstance(node, list):
+            return [scrub(x) for x in node]
+        return node
+
+    blob = json.dumps(scrub({k: v for k, v in receipts.items()
+                             if v is not None})).lower()
+    return [t for t in INVALID_TOKENS if t in blob]
+
+
+def chk9_duration_invariance(receipts, core_results):
+    """Re-derive CHK-1..CHK-8 with every duration-shaped field stripped and
+    require the identical verdict, plus a live invalid-token sweep."""
+    tokens = scan_invalid_tokens(receipts)
+    if tokens:
+        return FAIL, (f"invalid-token(s) live in the receipt set: {tokens} -> "
+                      f"the receipts stamp themselves with a does-NOT-count verdict")
+    if not present_horizons(receipts) and receipts.get("deletion") is None:
+        return GAP, "no receipt present; duration-invariance not derivable"
+    stripped = {k: (strip_durations(v) if v is not None else None)
+                for k, v in receipts.items()}
+    after = run_core_checks(stripped)
+    drifted = [
+        f"{cid}({before[2]}->{status})"
+        for (cid, _n, status, _d), before in zip(after, core_results)
+        if status != before[2]
+    ]
+    if drifted:
+        return FAIL, (f"stripping duration fields changed {drifted} -> wall-clock "
+                      f"duration was load-bearing in the verdict "
+                      f"(unearned_duration)")
+    return PASS, ("verdict identical with every duration field stripped; no "
+                  "invalid-token present")
+
+
+# --- main --------------------------------------------------------------------
 
 def main():
     if ROOT is None:
-        emit("UNEVALUABLE", "C11: state root not found under any known layout -- input-missing, dead branch under the flat-layout resolver (paper-consistency flip, 2026-07-02)")
+        emit("UNEVALUABLE",
+             "C11: state root not found under any known layout -- input-missing")
+
+    spec_path = os.path.join(REPO_ROOT, SPEC_REL)
+    if not os.path.isfile(spec_path):
+        emit("RED",
+             f"C11: canonical spec {SPEC_REL} ABSENT from the repository -> the "
+             f"contract conditions-v1.md names is not version-controlled; the "
+             f"checker has no authority to evaluate against (issue #107)")
 
     rdir = os.path.join(ROOT, RECEIPT_DIR_REL)
-    if not os.path.isdir(rdir):
-        # Input-missing (the receipt directory itself is absent), not
-        # evaluated-false: nothing exists for the CHK to inspect.
-        emit("UNEVALUABLE", f"C11: receipt dir ABSENT at {RECEIPT_DIR_REL} -> "
-                    "no native developmental-duration milestones exist")
+    receipts = {}
+    for h in HORIZONS:
+        p = os.path.join(rdir, HORIZON_FILES[h])
+        try:
+            receipts[h] = load_json(p) if os.path.isfile(p) else None
+        except Exception as e:
+            emit("RED", f"C11: {HORIZON_FILES[h]} present but unparseable: {e}")
+    p = os.path.join(rdir, DELETION_FILE)
+    try:
+        receipts["deletion"] = load_json(p) if os.path.isfile(p) else None
+    except Exception as e:
+        emit("RED", f"C11: {DELETION_FILE} present but unparseable: {e}")
 
-    states = [
-        assess_milestone(name, os.path.join(rdir, fn), secs)
-        for (name, fn, secs) in MILESTONES
-    ]
+    absent = ([HORIZON_FILES[h] for h in HORIZONS if receipts[h] is None]
+              + ([DELETION_FILE] if receipts["deletion"] is None else []))
 
-    # --- (B) Negative assertion: NO invalid-token in any milestone receipt -----
-    all_token_hits = []
-    for st in states:
-        all_token_hits.extend(st["token_hits"])
-    all_token_hits = list(dict.fromkeys(all_token_hits))
-    if all_token_hits:
+    if len(absent) == len(HORIZONS) + 1:
+        emit("UNEVALUABLE",
+             f"C11: experience-horizon receipt set entirely ABSENT under "
+             f"{RECEIPT_DIR_REL} ({absent}) -> no capability-delta claim has been "
+             f"made yet; all 9 checks of {SPEC_REL} pending-evidence. The "
+             f"short/medium/long real-learning run needs the owned 3B substrate "
+             f"(EMBER-05). Wall-clock duration is NOT a pass path.")
+
+    results = run_core_checks(receipts)
+    results.append(("CHK-9", "duration invariance / invalid-token sweep")
+                   + tuple(chk9_duration_invariance(receipts, results)))
+
+    failed = [(cid, name, detail) for (cid, name, st, detail) in results if st == FAIL]
+    gaps = [(cid, name, detail) for (cid, name, st, detail) in results if st == GAP]
+    passed = [cid for (cid, _n, st, _d) in results if st == PASS]
+
+    if failed:
+        cid, name, detail = failed[0]
+        others = [c for (c, _n, _d) in failed[1:]]
         emit("RED",
-             f"C11: invalid-token(s) present in milestone receipt(s) "
-             f"-> {all_token_hits[:3]} (unearned_duration / does-NOT-count)")
+             f"C11: {cid} ({name}) FAILS -> {detail}"
+             + (f"; also failing: {others}" if others else "")
+             + f" [{len(passed)}/9 checks pass]")
 
-    # --- (C) Positive CHK per present milestone --------------------------------
-    # Any PRESENT milestone receipt must be earned + load-bearing +
-    # deletion-sensitive; a present-but-defective one is a RED (wrong-for-the-
-    # right-reason, e.g. sleep padding or missing ablation).
-    present = [st for st in states if st["present"]]
-    absent = [st for st in states if not st["present"]]
+    if gaps:
+        listed = "; ".join(f"{cid} {name}: {detail}" for (cid, name, detail) in gaps[:4])
+        more = f" (+{len(gaps) - 4} more)" if len(gaps) > 4 else ""
+        emit("UNEVALUABLE",
+             f"C11: contract evaluated, {len(passed)}/9 checks pass, "
+             f"{len(gaps)} pending-evidence -> {listed}{more}. "
+             f"Partial receipts present under {RECEIPT_DIR_REL} ({absent} absent); "
+             f"no check that could be evaluated failed.")
 
-    defective = [
-        st for st in present
-        if not (st["earned"] and st["load_bearing"] and st["deletion_sensitive"]
-                and st["wall_consistent"])
-    ]
-    if defective:
-        d0 = defective[0]
-        emit("RED",
-             f"C11: milestone '{d0['name']}' present but FAILS CHK "
-             f"(earned={d0['earned']} load_bearing={d0['load_bearing']} "
-             f"deletion_sensitive={d0['deletion_sensitive']} "
-             f"wall_consistent={d0['wall_consistent']}): {d0['reason']}")
-
-    # [ISSUE #97 cure 1] Cross-tier execution-binding: per-tier this_run/
-    # inherited provenance resolution + inter-tier ts separation >= the
-    # milestone's own incremental target delta. Runs over consecutive
-    # PRESENT tiers in MILESTONES order (1h -> 3h -> 24h); a genuinely
-    # absent tier already emits RED above the ordinary way, so this loop
-    # only strengthens tiers that are jointly present.
-    present_by_name = {st["name"]: st for st in states}
-    ordered_present = [st for (nm, _fn, _secs) in MILESTONES
-                        for st in [present_by_name[nm]] if st["present"]]
-    for prev, cur in zip(ordered_present, ordered_present[1:]):
-        # (i) inherited_active_seconds must resolve to the PRIOR tier's own
-        # active_seconds -- a receipt whose "inherited" number does not match
-        # what the earlier receipt actually recorded is not a genuine
-        # carry-forward (it is either fabricated or the chain was reset).
-        inh = cur["inherited_active_seconds"]
-        prior_active = prev["active_seconds"]
-        if not (isinstance(inh, (int, float)) and isinstance(prior_active, (int, float))):
-            emit("RED",
-                 f"C11: milestone '{cur['name']}' inherited_active_seconds or "
-                 f"prior milestone '{prev['name']}' active_seconds missing/"
-                 f"non-numeric -> cannot resolve provenance chain")
-        if abs(inh - prior_active) > PROVENANCE_TOLERANCE_SECONDS:
-            emit("RED",
-                 f"C11: milestone '{cur['name']}' inherited_active_seconds "
-                 f"({inh}) does NOT match prior milestone '{prev['name']}' "
-                 f"active_seconds ({prior_active}) -> provenance chain broken "
-                 f"(fabricated or reset inheritance, not a genuine carry-forward)")
-
-        # (i-b) arithmetic self-consistency: active_seconds == inherited + this_run.
-        cur_active = cur["active_seconds"]
-        this_run = cur["this_run_active_seconds"]
-        if (isinstance(cur_active, (int, float)) and isinstance(inh, (int, float))
-                and isinstance(this_run, (int, float))):
-            if abs(cur_active - (inh + this_run)) > PROVENANCE_TOLERANCE_SECONDS:
-                emit("RED",
-                     f"C11: milestone '{cur['name']}' active_seconds "
-                     f"({cur_active}) != inherited_active_seconds ({inh}) + "
-                     f"this_run_active_seconds ({this_run}) -> internal "
-                     f"provenance arithmetic does not reconcile")
-
-        # (ii) inter-tier wall-clock ts separation must be >= this milestone's
-        # own incremental target delta (target[cur] - target[prev]) -- two
-        # tiers minted back-to-back (seconds apart) cannot represent a
-        # genuine hours-long progression between them.
-        if prev["ts"] is None or cur["ts"] is None:
-            emit("RED",
-                 f"C11: milestone '{prev['name']}' or '{cur['name']}' ts "
-                 f"missing/unparseable -> cannot verify inter-tier separation")
-        incremental_target = cur["min_seconds"] - prev["min_seconds"]
-        actual_gap = (cur["ts"] - prev["ts"]).total_seconds()
-        if actual_gap < incremental_target:
-            emit("RED",
-                 f"C11: milestone '{cur['name']}' ts is only {actual_gap:.0f}s "
-                 f"after '{prev['name']}' ts, but the incremental target "
-                 f"between these tiers is {incremental_target:.0f}s -> tiers "
-                 f"minted too close together to represent a genuine "
-                 f"progression (unearned_duration)")
-
-    # All present milestones pass CHK. If any required milestone is ABSENT, the
-    # progression toward 1h/3h/24h is genuinely incomplete -> RED for the right
-    # reason (artifact absent, not faked).
-    if absent:
-        passed = ", ".join(
-            f"{st['name']}({st['active_seconds']:.0f}s)" for st in present
-        ) or "none"
-        missing_names = ", ".join(st["name"] for st in absent)
-        emit("RED",
-             f"C11: developmental-duration progression INCOMPLETE -> "
-             f"earned+load-bearing+deletion-sensitive milestones [{passed}] "
-             f"present & CHK-passing, but milestone(s) [{missing_names}] genuinely "
-             f"ABSENT (no receipt). The full 1h/3h/24h progression is not yet "
-             f"proven; no unearned_duration / sleep-padding / add-params present.")
-
-    # GREEN: all three milestones present, each earned, load-bearing,
-    # deletion-sensitive, with no invalid-token.
-    detail = ", ".join(
-        f"{st['name']}({st['active_seconds']:.0f}s)" for st in states
-    )
     emit("GREEN",
-         f"C11: 1h/3h/24h developmental-duration progression COMPLETE -> "
-         f"[{detail}] each earned (sleep_padding=0, active_seconds>=target), "
-         f"load-bearing (all 5 capacity flags true), deletion-sensitive "
-         f"(deleted next-action disallowed + degrades), no unearned_duration / "
-         f"artificial-delay / add-params token.")
+         "C11: experience-horizon capability delta PROVEN -- all 9 recomputed "
+         f"checks of {SPEC_REL} pass: novel-problem counts strictly increasing, "
+         "no repeats/pretrain overlap, real pre!=post parameter change with "
+         "distinct checkpoints, gradient steps Merkle-bound to the novel problem "
+         "ids, recomputed held-out delta short<medium<long beyond the "
+         f"{NOISE_FLOOR} noise floor, held-out uncontaminated, every row live "
+         "re-executed, deletion measured against the short-horizon checkpoint "
+         "degrading long capability back toward it, and the verdict unchanged "
+         "with all duration fields stripped.")
 
 
 if __name__ == "__main__":

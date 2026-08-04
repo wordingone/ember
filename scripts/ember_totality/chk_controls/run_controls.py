@@ -1295,100 +1295,165 @@ def build_cure7_c_port():
     return pos_root, neg_root
 
 
-# --- (15) ISSUE #97 cure 1: test_c11.py execution-binding hardening ---------
-# 2026-07-04. Pre-cure, test_c11.py only ever inspected each milestone
-# receipt's cumulative active_seconds in isolation. The live repo's real
-# receipts reveal exactly the two failure modes this cure targets: the
-# 1h->3h ts gap is 11s (needs >=7200s), and the 3h->24h inherited_active_
-# seconds (10800.09) does not match the 3h receipt's own active_seconds
-# (34967.93) -- a broken/fabricated provenance chain. Fixtures below
-# isolate each new tooth (provenance-chain match, ts-separation, wall>=
-# active) one at a time against an otherwise fully-conforming 3-tier
-# progression.
+# --- (15) ISSUE #107: test_c11.py experience-horizon contract ---------------
+# 2026-08-03. The retired fixtures here exercised the 1h/3h/24h wall-clock
+# re-earn contract, which conditions-v1.md superseded: C11 is an
+# experience-horizon capability delta, and duration is a timer, not a lever.
+# These fixtures exercise the sharp tooth of each of the nine recomputed
+# checks in docs/c11-experience-horizon-spec.md, one at a time, against an
+# otherwise fully-conforming short/medium/long + deletion receipt set.
 
-_C11_RECEIPT_DIR_REL = os.path.join("receipts", "ember-mvp", "breakthrough-goal-20260619")
+_C11_RECEIPT_DIR_REL = os.path.join("receipts", "ember-mvp", "c11-experience-horizon")
 _C11_FILES = {
-    "1-hour": "native-one-hour-cycle-20260619T-now.json",
-    "3-hour": "native-three-hour-cycle-20260619T-now.json",
-    "24-hour": "native-twenty-four-hour-cycle-20260619T-now.json",
+    "short": "horizon-short.json",
+    "medium": "horizon-medium.json",
+    "long": "horizon-long.json",
+    "deletion": "deletion.json",
 }
-_C11_TARGETS = {"1-hour": 3600.0, "3-hour": 10800.0, "24-hour": 86400.0}
 
 
-def _c11_tier_receipt(name, ts, active_seconds, inherited, this_run, wall):
+def _c11_merkle_root(leaf_hexes):
+    """Same tree rule test_c11.py recomputes with: pairwise sha256 over hex
+    concatenation, odd node promoted."""
+    level = list(leaf_hexes)
+    while len(level) > 1:
+        nxt = []
+        for i in range(0, len(level), 2):
+            if i + 1 < len(level):
+                nxt.append(hashlib.sha256((level[i] + level[i + 1]).encode()).hexdigest())
+            else:
+                nxt.append(level[i])
+        level = nxt
+    return level[0]
+
+
+def _c11_items(n_total, n_passed, prefix, with_execution=True):
+    """Held-out rows. `passed` is always kept consistent with the row's own
+    exit_code -- the probe re-derives one from the other."""
+    items = []
+    for i in range(n_total):
+        passed = i < n_passed
+        row = {"item_id": f"{prefix}-ho-{i:04d}", "passed": passed}
+        if with_execution:
+            row["execution"] = {
+                "executor": "fixture-sandbox-runner",
+                "exit_code": 0 if passed else 1,
+                "stdout_sha256": hashlib.sha256(
+                    f"{prefix}-{i}-{passed}".encode()).hexdigest(),
+                "duration_s": 0.5 + i * 0.01,
+            }
+        items.append(row)
+    return items
+
+
+def _c11_horizon_receipt(horizon, n_novel, n_total, n_passed, post_seed,
+                          stray_gradient_problem_id=None,
+                          strip_execution_on_first_row=False):
+    problem_ids = [f"np-{i:04d}" for i in range(n_novel)]
+    steps = [{"step": i, "problem_id": problem_ids[i % len(problem_ids)],
+              "grad_norm": 0.4 + i * 0.01}
+             for i in range(min(8, n_novel))]
+    if stray_gradient_problem_id is not None:
+        steps[-1]["problem_id"] = stray_gradient_problem_id
+    leaves = [hashlib.sha256(f"{s['step']}:{s['problem_id']}".encode()).hexdigest()
+              for s in steps]
+    items = _c11_items(n_total, n_passed, horizon)
+    if strip_execution_on_first_row:
+        items[0].pop("execution", None)
     return {
-        "ticket": "EMBER-C11-NATIVE-DURATION-CYCLE",
-        "ts": ts,
-        "milestone": name,
-        "target_seconds": _C11_TARGETS[name],
-        "active_work": {
-            "active_seconds": active_seconds,
-            "inherited_active_seconds": inherited,
-            "this_run_active_seconds": this_run,
-            "wall_seconds": wall,
+        "ticket": "EMBER-C11-EXPERIENCE-HORIZON",
+        "ts": "20990101T000000Z",
+        "horizon": horizon,
+        "ordering_basis": "novel_problem_count",
+        "substrate": {"model_id": "fixture-3b", "param_count": 3000000000},
+        "novel_problems": {
+            "problem_ids": problem_ids,
+            "pretrain_overlap_ids": [],
+            "corpus_exclusion_digest": sha256_bytes(b"fixture-corpus"),
         },
-        "sleep_padding_seconds": 0,
-        "why_not_artificial_delay": "fixture: no time.sleep call, every second is real measured work",
-        "load_bearing_duration_growth": {
-            "deeper_experiment_horizon": True,
-            "larger_heldout_surface": True,
-            "stronger_consolidation": True,
-            "broader_transfer_reuse_checks": True,
-            "active_capacity_growth": True,
+        "learning_update": {
+            "pre_param_hash": f"sha256:{sha256_bytes(('pre-' + horizon).encode())}",
+            "post_param_hash": f"sha256:{sha256_bytes(post_seed.encode())}",
+            "hash_algorithm": "sha256 over the sorted state_dict tensor bytes",
+            "merkle_leaf_recipe": 'sha256(f"{step}:{problem_id}")',
+            "merkle_root": f"sha256:{_c11_merkle_root(leaves)}",
+            "gradient_steps": steps,
         },
-        "deletion_ablation": {
-            "degrades_decision": True,
-            "deleted_selected_next_action": {"disallowed": True},
+        "heldout": {
+            "suite_id": "c11-heldout-v1",
+            "claimed_score": n_passed / float(n_total),
+            "items": items,
+        },
+        "wall_seconds": 3600.0 * (1 + n_novel),
+    }
+
+
+def _c11_deletion_receipt(baseline_hash):
+    def arm(tag, n_passed, seed):
+        return {
+            "checkpoint_hash": f"sha256:{sha256_bytes(seed.encode())}",
+            "items": _c11_items(20, n_passed, tag),
+        }
+    return {
+        "ticket": "EMBER-C11-EXPERIENCE-HORIZON-DELETION",
+        "ts": "20990101T000000Z",
+        "deleted_component": "long_horizon_consolidation",
+        "baseline_label": "short_horizon_checkpoint",
+        "baseline_checkpoint_hash": baseline_hash,
+        "arms": {
+            # short 0.50, long 0.90, deleted 0.55 -- deleting the long-horizon
+            # consolidation drags capability back toward the short-horizon level.
+            "short": arm("del-short", 10, "post-short"),
+            "long": arm("del-long", 18, "post-long"),
+            "long_minus_consolidation": arm("del-cut", 11, "post-long-cut"),
         },
     }
 
 
-def _c11_write_tier(root, name, receipt):
-    write_json_no_marker(
-        os.path.join(root, _C11_RECEIPT_DIR_REL, _C11_FILES[name]), receipt)
+def build_c11_horizon(variant):
+    """variant: 'pos' | 'neg_ordering' | 'neg_identical_checkpoint' |
+    'neg_merkle' | 'neg_fabricated' | 'neg_wrong_baseline'.
 
-
-def build_cure1_c11(variant):
-    """variant: 'pos' | 'neg_provenance' | 'neg_ts_separation' | 'neg_wall'."""
-    root = fresh_dir(os.path.join(FIXTURES_DIR, f"cure1_c11_{variant}"))
+    POS is a fully-conforming short/medium/long + deletion set; each NEG breaks
+    exactly one check's sharp tooth and leaves the rest conforming."""
+    root = fresh_dir(os.path.join(FIXTURES_DIR, f"c11_{variant}"))
     write_readme(root, _CURE7_ISOLATION_NOTE)
 
-    # 1-hour: base tier, nothing inherited.
-    r1 = _c11_tier_receipt("1-hour", "20990101T000000Z",
-                            active_seconds=3700.0, inherited=0.0,
-                            this_run=3700.0, wall=3705.0)
-    _c11_write_tier(root, "1-hour", r1)
+    # Held-out scores 0.50 / 0.70 / 0.90 -- each gap well above the 0.02
+    # pre-registered noise floor. Novel-problem counts 4 < 8 < 12, and the id
+    # sets nest (np-0000..) so each longer horizon strictly supersets the
+    # shorter one.
+    short = _c11_horizon_receipt("short", 4, 20, 10, "post-short")
+    medium = _c11_horizon_receipt("medium", 8, 20, 14, "post-medium")
 
-    # 3-hour: genuinely inherits 1-hour's active_seconds (3700.0), ts 3h
-    # after 1h (>= the 7200s incremental target for the conforming variants).
-    ts_3h = "20990101T030000Z"
-    if variant == "neg_ts_separation":
-        # Only 100s after the 1-hour ts -- far short of the 7200s target.
-        ts_3h = "20990101T000140Z"
-    r3 = _c11_tier_receipt("3-hour", ts_3h,
-                            active_seconds=10900.0, inherited=3700.0,
-                            this_run=7200.0, wall=7205.0)
-    _c11_write_tier(root, "3-hour", r3)
+    long_novel = 12
+    long_post_seed = "post-long"
+    stray = None
+    strip_exec = False
+    if variant == "neg_ordering":
+        # Fewer novel problems than medium -> the ordering claim is not carried
+        # by experience; only wall_seconds still rises (clock_in_disguise).
+        long_novel = 6
+    if variant == "neg_identical_checkpoint":
+        long_post_seed = "post-medium"
+    if variant == "neg_merkle":
+        stray = "np-9999"
+    if variant == "neg_fabricated":
+        strip_exec = True
+    long_r = _c11_horizon_receipt("long", long_novel, 20, 18, long_post_seed,
+                                   stray_gradient_problem_id=stray,
+                                   strip_execution_on_first_row=strip_exec)
 
-    # 24-hour: genuinely inherits 3-hour's active_seconds (10900.0), ts 27h
-    # after the 3-hour ts (>= the 75600s/21h incremental target).
-    inherited_24h = 10900.0
-    if variant == "neg_provenance":
-        # Mirrors the REAL live bug: inherited claims ~= the prior tier's
-        # TARGET (10800), not what the prior tier's receipt actually
-        # recorded (10900) -- a fabricated/reset provenance chain.
-        inherited_24h = 10800.0
-    active_24h = inherited_24h + 75600.0  # keeps internal arithmetic self-consistent
-    wall_24h = 75650.0
-    if variant == "neg_wall":
-        # this_run_active_seconds (75600) exceeds this run's own wall_seconds
-        # -- physically impossible.
-        wall_24h = 1000.0
-    ts_24h = "20990102T060000Z"
-    r24 = _c11_tier_receipt("24-hour", ts_24h,
-                             active_seconds=active_24h, inherited=inherited_24h,
-                             this_run=75600.0, wall=wall_24h)
-    _c11_write_tier(root, "24-hour", r24)
+    baseline = short["learning_update"]["post_param_hash"]
+    if variant == "neg_wrong_baseline":
+        # Deletion measured against the untrained base instead of the
+        # short-horizon checkpoint.
+        baseline = f"sha256:{sha256_bytes(b'untrained-base')}"
+    deletion = _c11_deletion_receipt(baseline)
+
+    for key, obj in (("short", short), ("medium", medium),
+                     ("long", long_r), ("deletion", deletion)):
+        write_json(os.path.join(root, _C11_RECEIPT_DIR_REL, _C11_FILES[key]), obj)
 
     return root
 
@@ -2556,14 +2621,13 @@ def main(argv=None):
     record("14 ISSUE#97-cure7 meta-audit-family exclusion", "POS real candidate GREEN, later audit receipt not selected", "test_c_port.py", port7_pos, "GREEN")
     record("14 ISSUE#97-cure7 meta-audit-family exclusion", "NEG real 4090-only candidate still RED, audit receipt not selected", "test_c_port.py", port7_neg, "RED")
 
-    c11_pos = build_cure1_c11("pos")
-    record("15 ISSUE#97-cure1 C11 execution-binding", "POS 3-tier progression, provenance+ts+wall all conform", "test_c11.py", c11_pos, "GREEN")
-    c11_neg_prov = build_cure1_c11("neg_provenance")
-    record("15 ISSUE#97-cure1 C11 execution-binding", "NEG 24h inherited != 3h's real active_seconds (real 2026-07-04 bug shape)", "test_c11.py", c11_neg_prov, "RED")
-    c11_neg_ts = build_cure1_c11("neg_ts_separation")
-    record("15 ISSUE#97-cure1 C11 execution-binding", "NEG 3h ts only 100s after 1h ts, needs >=7200s (real 2026-07-04 bug shape)", "test_c11.py", c11_neg_ts, "RED")
-    c11_neg_wall = build_cure1_c11("neg_wall")
-    record("15 ISSUE#97-cure1 C11 execution-binding", "NEG this_run_active_seconds exceeds this run's own wall_seconds", "test_c11.py", c11_neg_wall, "RED")
+    _C11_LANE = "15 ISSUE#107 C11 experience-horizon contract"
+    record(_C11_LANE, "POS short/medium/long + deletion, all 9 checks conform", "test_c11.py", build_c11_horizon("pos"), "GREEN")
+    record(_C11_LANE, "NEG CHK-1 long horizon has FEWER novel problems than medium, only wall_seconds rises (clock_in_disguise)", "test_c11.py", build_c11_horizon("neg_ordering"), "RED")
+    record(_C11_LANE, "NEG CHK-3 long post_param_hash identical to medium's (same checkpoint, nothing learned)", "test_c11.py", build_c11_horizon("neg_identical_checkpoint"), "RED")
+    record(_C11_LANE, "NEG CHK-4 a gradient step cites a problem_id outside the horizon's novel set (steps not Merkle-bound to novelty)", "test_c11.py", build_c11_horizon("neg_merkle"), "RED")
+    record(_C11_LANE, "NEG CHK-7 a held-out row asserts passed with no execution block (fabricated_outcomes)", "test_c11.py", build_c11_horizon("neg_fabricated"), "RED")
+    record(_C11_LANE, "NEG CHK-8 deletion measured against the untrained base, not the short-horizon checkpoint (deletion_uses_wrong_baseline)", "test_c11.py", build_c11_horizon("neg_wrong_baseline"), "RED")
 
     c3_pos = build_cure2_c3("pos")
     record("16 ISSUE#97-cure2 C3 equal_within_tolerance value", "POS wall_time measured equal within tolerance", "test_c3.py", c3_pos, "GREEN")
