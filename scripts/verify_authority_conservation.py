@@ -21,7 +21,7 @@ import subprocess
 import sys
 import tempfile
 from collections import Counter
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 
@@ -1780,6 +1780,165 @@ def check_crosswalk_source_commit_repin(
     )
 
 
+INPUT_IDENTITY_SCHEMA = "ember-input-identity-v1"
+
+
+def _identity_pinned_file(
+    root: Path, manifest_rel: str, value: Any, errors: list[dict[str, Any]]
+) -> Path | None:
+    """Resolve a manifest-declared repository-relative path, or record why not."""
+    if not isinstance(value, str) or not value:
+        errors.append(
+            finding(
+                4,
+                "input_identity.path_invalid",
+                f"{manifest_rel}: pinned path must be a non-empty relative string",
+            )
+        )
+        return None
+    relative = PurePosixPath(value.replace("\\", "/"))
+    if relative.is_absolute() or ".." in relative.parts:
+        errors.append(
+            finding(
+                4,
+                "input_identity.path_invalid",
+                f"{manifest_rel}: pinned path {value!r} leaves the worktree",
+            )
+        )
+        return None
+    path = root / relative.as_posix()
+    if not path.is_file():
+        errors.append(
+            finding(
+                4,
+                "input_identity.pinned_file_missing",
+                f"{manifest_rel} pins {relative.as_posix()}, which is absent",
+            )
+        )
+        return None
+    return path
+
+
+def _expect_pinned_digest(
+    root: Path,
+    manifest_rel: str,
+    pinned_rel: Any,
+    pinned_sha: Any,
+    errors: list[dict[str, Any]],
+) -> None:
+    path = _identity_pinned_file(root, manifest_rel, pinned_rel, errors)
+    if path is None:
+        return
+    if not isinstance(pinned_sha, str) or re.fullmatch(r"[0-9a-fA-F]{64}", pinned_sha) is None:
+        errors.append(
+            finding(
+                4,
+                "input_identity.pin_malformed",
+                f"{manifest_rel}: {pinned_rel} carries no sha256 pin",
+            )
+        )
+        return
+    actual = sha256(path)
+    if actual != pinned_sha.upper():
+        errors.append(
+            finding(
+                4,
+                "input_identity.pin_stale",
+                f"{manifest_rel} pins {pinned_rel} at {pinned_sha.lower()}, "
+                f"but those bytes hash to {actual.lower()}",
+            )
+        )
+
+
+def check_input_identity_pins(root: Path, errors: list[dict[str, Any]]) -> None:
+    """Every input-identity manifest must pin the bytes that are actually there.
+
+    Contract of issue #1394. The manifest and the artefacts it pins are separate
+    files that one change must move together: PR #1333 re-minted
+    `owned-four-domain-production-rung-v1.receipt.json` without re-pinning
+    `input-identity.json`, and nothing noticed until a certified run failed
+    closed at `InputIdentityError byte_drift` hours later.
+
+    Deliberately a state rule rather than a coupling-over-a-diff rule like
+    `check_crosswalk_source_commit_repin` above. That rule has to read a diff
+    because a crosswalk is re-pinned in the same commit as the content it
+    describes, so no single tree can decide it. Here the property -- the pin
+    names the bytes on disk -- is decidable from one tree, and deciding it there
+    is strictly stronger: it rejects every diff a coupling rule would reject,
+    plus the ones it cannot see (a merge of two independently valid branches, a
+    re-pin onto a hash no file carries, a receipt edit arriving by any other
+    path). Both directions of #1394 fall out of the one comparison.
+
+    Manifests are reached through the configs that select them, which is the
+    selection path `resolve_input_identity` itself walks, so a new config or a
+    new manifest is covered the day it lands. Execution authority is not
+    filtered on: a pin that misdescribes its bytes is a false statement whether
+    or not the config naming it may currently dispatch, and curing it edits the
+    manifest, never the frozen historical config.
+    """
+    config_root = root / "configs"
+    if not config_root.is_dir():
+        # check_configs already reports the absence; nothing to select from.
+        return
+    manifest_rels: list[str] = []
+    for config_path in sorted(config_root.rglob("*.json")):
+        try:
+            payload = json.loads(read_text(config_path))
+        except Exception:
+            # check_configs reports unparseable configs; do not double-report.
+            continue
+        training = payload.get("training") if isinstance(payload, dict) else None
+        if not isinstance(training, dict):
+            continue
+        selected = training.get("input_identity_manifest")
+        if isinstance(selected, str) and selected and selected not in manifest_rels:
+            manifest_rels.append(selected)
+
+    for manifest_rel in sorted(manifest_rels):
+        manifest_path = _identity_pinned_file(root, "configs", manifest_rel, errors)
+        if manifest_path is None:
+            continue
+        try:
+            identity = json.loads(read_text(manifest_path))
+        except Exception as exc:
+            errors.append(
+                finding(4, "input_identity.manifest_unreadable", f"{manifest_rel}: {exc}")
+            )
+            continue
+        if not isinstance(identity, dict) or identity.get("schema_version") != INPUT_IDENTITY_SCHEMA:
+            # Other identity schemas carry their own pins and their own rules.
+            continue
+        shard_rel = identity.get("shard_path")
+        _expect_pinned_digest(root, manifest_rel, shard_rel, identity.get("sha256"), errors)
+        shard_path = root / str(shard_rel) if isinstance(shard_rel, str) else None
+        pinned_bytes = identity.get("bytes")
+        if shard_path is not None and shard_path.is_file() and pinned_bytes != shard_path.stat().st_size:
+            # Runtime admission checks the byte count separately from the digest,
+            # so a manifest can satisfy one pin and still fail closed on the other.
+            errors.append(
+                finding(
+                    4,
+                    "input_identity.pin_stale",
+                    f"{manifest_rel} pins {shard_rel} at {pinned_bytes!r} bytes, "
+                    f"but the file holds {shard_path.stat().st_size}",
+                )
+            )
+        receipt_rel = identity.get("admission_receipt_path")
+        receipt_sha = identity.get("admission_receipt_sha256")
+        if receipt_rel is None and receipt_sha is None:
+            continue
+        if receipt_rel is None or receipt_sha is None:
+            errors.append(
+                finding(
+                    4,
+                    "input_identity.admission_pin_incomplete",
+                    f"{manifest_rel}: an admission receipt needs both a path and a sha256",
+                )
+            )
+            continue
+        _expect_pinned_digest(root, manifest_rel, receipt_rel, receipt_sha, errors)
+
+
 def check_changed_artifact_bindings(
     root: Path,
     policy: dict[str, Any] | None,
@@ -2086,6 +2245,7 @@ def verify(
     check_manifest(root, policy, errors)
     check_governing_surfaces(root, policy, errors)
     check_configs(root, policy, errors, active_goal)
+    check_input_identity_pins(root, errors)
     check_historical_executables(root, errors)
     check_lower_precedence_authority(root, errors)
     check_mechanism_registry(root, errors)
