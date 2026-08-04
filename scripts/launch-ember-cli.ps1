@@ -4,6 +4,8 @@
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+. (Join-Path $PSScriptRoot "ember-launch-staging.ps1")
+
 $BunVersion = "1.3.12"
 $BunArchiveUrl = "https://github.com/oven-sh/bun/releases/download/bun-v1.3.12/bun-windows-x64.zip"
 $BunArchiveSha256 = "841ff9c5dffcaa3a2620d1e3f87ee500f32a4ca830b001cade7a3479609d4a89"
@@ -498,9 +500,16 @@ try {
         # for the length of every build. Publishing is write-to-partial-then-rename ON THE
         # DESTINATION volume, so a crash mid-build can never leave a truncated binary at
         # the final name for the next launch's Test-Path to accept.
-        $buildOutput = Join-Path $applicationRoot "Ember.exe.partial"
+        $buildOutput = Get-EmberStagedBuildOutfile $applicationRoot
         $buildLog = Join-Path $stateRoot "runtime\ember-build.log"
         New-Item -ItemType Directory -Force -Path $applicationRoot | Out-Null
+        # Sweep staged leftovers from a previously crashed build so the resolver can
+        # only ever see what THIS build lands.
+        foreach ($staleStagedArtifact in @($buildOutput, "$buildOutput.exe")) {
+            if (Test-Path -LiteralPath $staleStagedArtifact -PathType Leaf) {
+                Remove-Item -LiteralPath $staleStagedArtifact -Force
+            }
+        }
         try {
             Push-Location $sourceRoot
             try {
@@ -509,7 +518,10 @@ try {
                 $previousBuildOutfile = $env:EMBER_BUILD_OUTFILE
                 $env:EMBER_BUILD_OUTFILE = $buildOutput
                 try {
-                    & $bun run build *> $buildLog
+                    # PS5.1 *> writes UTF-16LE; pipe through Out-File so the log is UTF-8.
+                    & $bun run build 2>&1 |
+                        ForEach-Object { "$_" } |
+                        Out-File -LiteralPath $buildLog -Encoding utf8
                 }
                 finally {
                     $env:EMBER_BUILD_OUTFILE = $previousBuildOutfile
@@ -520,14 +532,20 @@ try {
             finally {
                 Pop-Location
             }
-            if ($buildExit -ne 0 -or -not (Test-Path -LiteralPath $buildOutput -PathType Leaf)) {
-                throw "Ember's local application build was refused. Restore a clean repository and run Ember.cmd again."
+            $stagedArtifact = Resolve-EmberStagedBuildArtifact $buildOutput
+            if ($buildExit -ne 0 -or -not $stagedArtifact) {
+                $observed = if ($stagedArtifact) { $stagedArtifact } else { "no file at $buildOutput or $buildOutput.exe" }
+                throw ("Ember's local application build did not produce a launchable binary. " +
+                    "Build exit code: $buildExit. Expected staged artifact: $buildOutput. " +
+                    "Observed: $observed. Inspect the build log: $buildLog")
             }
-            Move-Item -LiteralPath $buildOutput -Destination $application
+            Move-Item -LiteralPath $stagedArtifact -Destination $application
         }
         finally {
-            if (Test-Path -LiteralPath $buildOutput -PathType Leaf) {
-                Remove-Item -LiteralPath $buildOutput -Force
+            foreach ($staleStagedArtifact in @($buildOutput, "$buildOutput.exe")) {
+                if (Test-Path -LiteralPath $staleStagedArtifact -PathType Leaf) {
+                    Remove-Item -LiteralPath $staleStagedArtifact -Force
+                }
             }
         }
     }
