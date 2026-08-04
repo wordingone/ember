@@ -640,6 +640,7 @@ def custody_legs(
     run_custody: bool,
     issue_census: Path | None = None,
     preserve_custody_output: Path | None = None,
+    receipt_dir: Path | None = None,
 ) -> dict[str, Any]:
     manifests = root / "manifests" / "ember-01-custody"
     root_spec = manifests / "root-spec.json"
@@ -751,6 +752,8 @@ def custody_legs(
     for b in bindings:
         cmd += ["--binding", b]
     result = run(cmd, root=root, name="ember_01_custody")
+    rc = result["returncode"]
+    preserved: dict[str, Any] = {}
     if preserve_custody_output is not None:
         # Preserve the raw census.py output OUTSIDE the checkout before it is
         # unlinked below, on BOTH a green and a red run -- the caller (ember-cli's
@@ -764,6 +767,22 @@ def custody_legs(
                 shutil.copy2(out, preserve_custody_output)
         except OSError:
             pass
+    if rc != 0 and receipt_dir is not None:
+        # A red census IS the diagnosis: its per-file contradiction rows are the
+        # only thing that says WHICH files contradict. Deleting them and keeping
+        # the 400-char stdout tail costs a full standalone census re-run to
+        # recover (run20, 2026-08-03: 8050 contradictions, ~80 minutes). Keep
+        # the payload beside the receipt -- outside the checkout by contract, so
+        # the checkout stays clean either way -- and name the path in evidence.
+        try:
+            if out.is_file():
+                receipt_dir.mkdir(parents=True, exist_ok=True)
+                dest = receipt_dir / f"ember01-custody-census-red.{head[:12]}.json"
+                shutil.copy2(out, dest)
+                preserved["preserved_custody_output"] = str(dest)
+        except OSError as exc:
+            # Never let a preservation failure change a leg verdict; say so.
+            preserved["preserved_custody_output_error"] = str(exc)
     try:
         out.unlink(missing_ok=True)  # keep the checkout clean
     except OSError:
@@ -779,6 +798,7 @@ def custody_legs(
             "tool": CENSUS_REL,
             "issue_census_sha256_before": issue_census_sha_before,
             "issue_census_sha256_after": issue_census_sha_after,
+            **preserved,
         }
         return {
             k: leg(
@@ -789,7 +809,6 @@ def custody_legs(
             )
             for k in ("1", "2", "6", "9")
         }
-    rc = result["returncode"]
     if rc == 0:
         state, reason = RESOLVED_TRUE, "census PASS"
     elif rc == 2:
@@ -801,6 +820,7 @@ def custody_legs(
         "returncode": rc,
         "stdout_tail": result["stdout"][-400:],
         **snapshot_binding,
+        **preserved,
     }
     return {k: leg(state, LEG_TITLES[k], reason, ev) for k in ("1", "2", "6", "9")}
 
@@ -1301,7 +1321,8 @@ def main() -> int:
         help=(
             "copy census.py's raw per-file custody-census output to this path "
             "(outside the checkout) before it is unlinked, on both a green and "
-            "a red custody run; omitted by default, matching prior behavior"
+            "a red custody run; optional -- a red census is preserved beside "
+            "the receipt regardless, with the path named in leg evidence"
         ),
     )
     parser.add_argument(
@@ -1351,6 +1372,7 @@ def main() -> int:
                     args.run_custody,
                     issue_census=issue_census,
                     preserve_custody_output=preserve_custody_output,
+                    receipt_dir=receipt.parent,
                 )
             )
             legs.update(

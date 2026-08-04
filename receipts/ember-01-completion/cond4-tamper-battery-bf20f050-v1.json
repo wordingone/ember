@@ -13,7 +13,7 @@
   "implementation": {
     "completion_verifier": {
       "path": "scripts/verify_ember01_completion.py",
-      "sha256": "b3ef88a12ea6ff7c8e10c5dce5fe93561519138ab9fe0e74f98ea8319af6aebd"
+      "sha256": "56393b4de9051d74a02a01fef077fe3a501e8fec39dd38e4d4302f42b76f177c"
     },
     "issue_census_builder": {
       "path": "scripts/ember_01_custody/issue_census.py",

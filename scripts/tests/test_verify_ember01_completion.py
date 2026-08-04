@@ -351,6 +351,73 @@ def test_custody_legs_preserve_custody_output_on_green_and_red(
         assert not (REPO_ROOT / ".ember01-verify-custody.tmp.json").exists()
 
 
+def test_red_census_output_survives_beside_the_receipt_with_no_flag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A red census's per-file contradiction rows ARE the diagnosis. Without any
+    caller opt-in they must land beside the receipt (outside the checkout) with
+    the path named in leg evidence; a green census must still leave nothing
+    behind but a clean checkout."""
+    live_issue_census = tmp_path / "public-issue-census-live.json"
+    live_issue_census.write_text(
+        json.dumps(_live_census_payload()), encoding="utf-8"
+    )
+
+    monkeypatch.setattr(
+        completion, "git", lambda *_args: SimpleNamespace(stdout="a" * 40 + "\n"),
+    )
+    monkeypatch.setattr(
+        completion,
+        "fetch_live_open_issues",
+        lambda *_args, **_kwargs: {
+            "returncode": 0,
+            "issues": [_live_issue()],
+            "stdout_sha256": "b" * 64,
+            "command": ["gh", "issue", "list"],
+        },
+    )
+
+    for returncode, contradictions in ((2, 8050), (0, 0)):
+        def fake_run(
+            args: list[str], returncode: int = returncode,
+            contradictions: int = contradictions, **_: object,
+        ) -> dict[str, object]:
+            out_path = Path(args[args.index("--output") + 1])
+            out_path.write_text(
+                json.dumps({"contradictions": contradictions}), encoding="utf-8"
+            )
+            return {"returncode": returncode, "timed_out": False, "stdout": "", "stderr": ""}
+
+        monkeypatch.setattr(completion, "run", fake_run)
+
+        receipt_dir = tmp_path / f"receipt-{returncode}"
+        result = completion.custody_legs(
+            REPO_ROOT,
+            ["public-repository=B:/tmp/public"],
+            run_custody=True,
+            issue_census=live_issue_census,
+            receipt_dir=receipt_dir,
+        )
+
+        # the in-checkout scratch file is gone either way
+        assert not (REPO_ROOT / ".ember01-verify-custody.tmp.json").exists()
+        evidence = result["1"]["evidence"]
+        preserved = [p for p in receipt_dir.glob("*.json")] if receipt_dir.exists() else []
+
+        if returncode == 0:
+            assert "preserved_custody_output" not in evidence
+            assert preserved == []
+            continue
+
+        recorded = Path(evidence["preserved_custody_output"])
+        assert recorded.is_file()
+        assert preserved == [recorded]
+        assert json.loads(recorded.read_text(encoding="utf-8"))["contradictions"] == 8050
+        # every custody leg carries the pointer, not just leg 1
+        for key in ("1", "2", "6", "9"):
+            assert result[key]["evidence"]["preserved_custody_output"] == str(recorded)
+
+
 def test_custody_legs_reject_issue_census_mutated_during_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
