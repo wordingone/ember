@@ -1850,10 +1850,128 @@ def test_alias_root_that_names_no_declared_root_is_a_contradiction(
         },
         {"alias-tree": bound_child},
     )
-    assert result["artifacts"] == []
     assert [row["code"] for row in result["contradictions"]] == [
         "alias_target_root_missing"
     ]
+    # Fail-closed: an unverifiable alias is scanned anyway, so declaring one
+    # can never delete custody material.
+    assert [row["source"]["relative_path"] for row in result["artifacts"]] == [
+        "payload.bin"
+    ]
+    alias_row = next(row for row in result["roots"] if row["root_id"] == "alias-tree")
+    assert alias_row["artifact_contribution"] == "scanned_unverified_alias"
+
+
+def test_alias_bound_to_different_bytes_than_its_target_is_still_hashed(
+    tmp_path: Path,
+) -> None:
+    # rev-1380 P6: an alias whose own binding is NOT the target's path would
+    # otherwise vanish from the census silently, taking its bytes with it.
+    _, target_child, other_child = _1380_fixture(tmp_path)
+    result = build_root_census(
+        {
+            "roots": [
+                {"root_id": "target", "required": False, "scan": "files"},
+                {
+                    "root_id": "impostor",
+                    "required": False,
+                    "scan": "files",
+                    "alias_of_root_id": "target",
+                },
+            ]
+        },
+        {"target": target_child, "impostor": other_child},
+    )
+    assert [row["code"] for row in result["contradictions"]] == [
+        "alias_target_path_mismatch"
+    ]
+    by_root = {
+        row["source"]["root_id"]: row["source"]["relative_path"]
+        for row in result["artifacts"]
+    }
+    # Both distinct payloads survive — nothing was silently dropped.
+    assert by_root == {"target": "payload.bin", "impostor": "payload.bin"}
+    assert {row["sha256"] for row in result["artifacts"]} == {
+        sha256_file(target_child / "payload.bin"),
+        sha256_file(other_child / "payload.bin"),
+    }
+
+
+def test_mutual_alias_cycle_cannot_empty_the_census(tmp_path: Path) -> None:
+    # rev-1380 P5: two roots each declaring the other emptied the census with
+    # zero contradictions. Every alias target must itself be a non-alias root,
+    # which breaks chains and cycles by construction.
+    _, first_child, second_child = _1380_fixture(tmp_path)
+    result = build_root_census(
+        {
+            "roots": [
+                {
+                    "root_id": "alpha",
+                    "required": False,
+                    "scan": "files",
+                    "alias_of_root_id": "beta",
+                },
+                {
+                    "root_id": "beta",
+                    "required": False,
+                    "scan": "files",
+                    "alias_of_root_id": "alpha",
+                },
+            ]
+        },
+        {"alpha": first_child, "beta": second_child},
+    )
+    assert [row["code"] for row in result["contradictions"]] == [
+        "alias_target_is_alias",
+        "alias_target_is_alias",
+    ]
+    assert {row["source"]["root_id"] for row in result["artifacts"]} == {
+        "alpha",
+        "beta",
+    }
+
+
+def test_alias_whose_target_is_unbound_is_still_hashed(tmp_path: Path) -> None:
+    _, bound_child, _ = _1380_fixture(tmp_path)
+    result = build_root_census(
+        {
+            "roots": [
+                {"root_id": "target", "required": False, "scan": "files"},
+                {
+                    "root_id": "alias-tree",
+                    "required": False,
+                    "scan": "files",
+                    "alias_of_root_id": "target",
+                },
+            ]
+        },
+        {"alias-tree": bound_child},
+    )
+    assert [row["code"] for row in result["contradictions"]] == [
+        "alias_target_unbound"
+    ]
+    assert [row["source"]["root_id"] for row in result["artifacts"]] == ["alias-tree"]
+
+
+def test_alias_that_names_itself_is_still_hashed(tmp_path: Path) -> None:
+    _, bound_child, _ = _1380_fixture(tmp_path)
+    result = build_root_census(
+        {
+            "roots": [
+                {
+                    "root_id": "selfie",
+                    "required": False,
+                    "scan": "files",
+                    "alias_of_root_id": "selfie",
+                }
+            ]
+        },
+        {"selfie": bound_child},
+    )
+    assert [row["code"] for row in result["contradictions"]] == [
+        "alias_target_is_self"
+    ]
+    assert [row["source"]["root_id"] for row in result["artifacts"]] == ["selfie"]
 
 
 def test_bound_root_paths_credits_only_the_root_that_owns_the_bytes(

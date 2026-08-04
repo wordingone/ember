@@ -576,6 +576,49 @@ def discovery_children(
     return children, excluded
 
 
+def alias_validation_error(
+    root_id: str,
+    alias_of_root_id: str,
+    bound: Path,
+    specs_by_id: Mapping[str, Mapping[str, Any]],
+    bindings: Mapping[str, Path],
+) -> dict[str, Any] | None:
+    """Why this alias cannot be trusted to stand in for its target, or None.
+
+    Dropping a root's bytes is only safe when the target provably hashes the
+    SAME path. Anything unproven — a self-reference, an undeclared target, a
+    target that is itself an alias (which is also how chains and cycles are
+    caught), an unbound target, or a target on different bytes — is a
+    contradiction, and the caller scans the root anyway. An alias must never
+    be able to remove custody material.
+    """
+    def error(code: str) -> dict[str, Any]:
+        return {
+            "code": code,
+            "root_id": root_id,
+            "alias_of_root_id": alias_of_root_id,
+            "resolution": "unresolved",
+        }
+
+    if alias_of_root_id == root_id:
+        return error("alias_target_is_self")
+    target = specs_by_id.get(alias_of_root_id)
+    if target is None:
+        return error("alias_target_root_missing")
+    if isinstance(target.get("alias_of_root_id"), str):
+        return error("alias_target_is_alias")
+    target_source = target.get("source_root_id")
+    target_binding_id = (
+        target_source if isinstance(target_source, str) else alias_of_root_id
+    )
+    target_bound = bindings.get(target_binding_id)
+    if target_bound is None or not Path(target_bound).exists():
+        return error("alias_target_unbound")
+    if _resolved_path_key(Path(target_bound)) != _resolved_path_key(bound):
+        return error("alias_target_path_mismatch")
+    return None
+
+
 def canonical_root_identity(payload: Mapping[str, Any]) -> dict[str, Any]:
     encoded = json.loads(json.dumps(payload))
     for artifact in encoded.get("artifacts", []):
@@ -897,8 +940,8 @@ def build_root_census(
     if journal_path:
         load_hash_journal(journal_path)
     direct_paths = bound_root_paths(specification, bindings)
-    declared_root_ids = {
-        row.get("root_id")
+    specs_by_id = {
+        row["root_id"]: row
         for row in specification.get("roots", [])
         if isinstance(row.get("root_id"), str)
     }
@@ -953,7 +996,6 @@ def build_root_census(
         alias_of_root_id = root_spec.get("alias_of_root_id")
         if isinstance(alias_of_root_id, str):
             root_row["alias_of_root_id"] = alias_of_root_id
-            root_row["artifact_contribution"] = "none_alias"
         roots.append(root_row)
         if not present:
             if absence_policy is not None and not absence_attested:
@@ -1008,24 +1050,19 @@ def build_root_census(
             # declared, still checked for presence and required-root fields,
             # and still names what it aliases — it just contributes no
             # artifacts of its own.
-            if alias_of_root_id == root_id:
-                contradictions.append(
-                    {
-                        "code": "alias_target_is_self",
-                        "root_id": root_id,
-                        "resolution": "unresolved",
-                    }
-                )
-            elif alias_of_root_id not in declared_root_ids:
-                contradictions.append(
-                    {
-                        "code": "alias_target_root_missing",
-                        "root_id": root_id,
-                        "alias_of_root_id": alias_of_root_id,
-                        "resolution": "unresolved",
-                    }
-                )
-            continue
+            #
+            # Dropping those bytes is sound ONLY when the target provably
+            # covers the same path, so an alias that cannot be verified is a
+            # contradiction AND is scanned normally below. Fail-closed: the
+            # field can add a contradiction, never remove custody material.
+            alias_error = alias_validation_error(
+                root_id, alias_of_root_id, bound, specs_by_id, bindings
+            )
+            if alias_error is None:
+                root_row["artifact_contribution"] = "none_alias"
+                continue
+            contradictions.append(alias_error)
+            root_row["artifact_contribution"] = "scanned_unverified_alias"
         provenance_class = root_spec.get("provenance_class", "unresolved")
         lineage_admissibility = root_spec.get(
             "lineage_admissibility", "unresolved"
