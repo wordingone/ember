@@ -172,6 +172,20 @@ def validate_state(payload: Any) -> dict[str, Any]:
         raise LifecycleError("MALFORMED_STATE", "legacy_paths must be a string list")
     if not isinstance(payload["managed"], dict):
         raise LifecycleError("MALFORMED_STATE", "managed must be an object")
+    # Both fields postdate version 1's first states, so absence is legal and reads as
+    # empty. Presence is validated strictly: a tombstone log that can hold non-records
+    # is not an audit trail, and a removal journal that can hold non-records cannot be
+    # replayed by the very check that exists to find interrupted removals.
+    tombstones = payload.get("tombstones", [])
+    if not isinstance(tombstones, list) or not all(
+        isinstance(item, dict) for item in tombstones
+    ):
+        raise LifecycleError("MALFORMED_STATE", "tombstones must be a list of objects")
+    pending = payload.get("pending_removals", {})
+    if not isinstance(pending, dict) or not all(
+        isinstance(item, dict) for item in pending.values()
+    ):
+        raise LifecycleError("MALFORMED_STATE", "pending_removals must be an object of objects")
     return payload
 
 
@@ -208,8 +222,84 @@ def new_state(worktrees: list[Worktree], target: int) -> dict[str, Any]:
         "main_path": worktrees[0].key,
         "legacy_paths": sorted(row.key for row in worktrees),
         "managed": {},
+        "tombstones": [],
+        "pending_removals": {},
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+def tombstones_of(state: dict[str, Any]) -> list[dict[str, Any]]:
+    """The retirement log, created on first use so pre-existing states keep working."""
+    return state.setdefault("tombstones", [])
+
+
+def pending_removals_of(state: dict[str, Any]) -> dict[str, Any]:
+    """In-flight removal intents, keyed by path key. See `begin_removal`."""
+    return state.setdefault("pending_removals", {})
+
+
+def record_tombstone(
+    state: dict[str, Any],
+    *,
+    key: str,
+    record: dict[str, Any],
+    verb: str,
+    reason: str,
+) -> dict[str, Any]:
+    """Append the dated, reasoned record of a registration that has left the registry.
+
+    Custody history is the point: a row that simply disappears leaves no way to answer
+    "what was registered here, who owned it, and why is it gone" months later, and the
+    census contradictions this file exists to kill were themselves only legible because
+    someone still had the paths. Retirement and reconciliation both write one of these,
+    so every departure from `managed` is accounted for by name.
+    """
+    tombstone = {
+        "path": record.get("path", key),
+        "key": key,
+        "branch": record.get("branch"),
+        "owner": record.get("owner"),
+        "purpose": record.get("purpose"),
+        "head": record.get("head"),
+        "created_at": record.get("created_at"),
+        "retired_on": date.today().isoformat(),
+        "retired_at": datetime.now(timezone.utc).isoformat(),
+        "verb": verb,
+        "reason": reason,
+    }
+    tombstones_of(state).append(tombstone)
+    return tombstone
+
+
+def begin_removal(
+    state: dict[str, Any],
+    state_file: Path,
+    *,
+    key: str,
+    path: str,
+    verb: str,
+) -> None:
+    """Persist the INTENT to remove before anything on disk changes.
+
+    Removing a worktree is two facts -- a directory and a Git registration -- and no
+    filesystem gives us both in one write. The failure this file exists to kill is the
+    interval between them going unnoticed: the tree is swept, the registration survives,
+    and nothing says so until a census walks 224 registrations and finds thirteen paths
+    that are not there.
+
+    So the interval is made *declared* rather than eliminated. The intent lands first, is
+    fsynced with the state, and is cleared only once the registration is verified gone.
+    A process killed anywhere in between leaves this row behind, and `audit --strict`
+    reports it as `interrupted_removal` with the exact cure. The window still exists; what
+    no longer exists is a window that is silent.
+    """
+    pending_removals_of(state)[key] = {
+        "path": path,
+        "verb": verb,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+    }
+    state["updated_at"] = datetime.now(timezone.utc).isoformat()
+    write_state(state_file, state)
 
 
 def load_or_initialize(repo: Path, state_file: Path, target: int = DEFAULT_TARGET) -> dict[str, Any]:
@@ -342,7 +432,12 @@ def safe_ref_component(value: str) -> str:
     return cleaned or "worktree"
 
 
-def retire_worktree(repo: Path, state_file: Path, requested_path: str) -> dict[str, Any]:
+def retire_worktree(
+    repo: Path,
+    state_file: Path,
+    requested_path: str,
+    reason: str = "retired by owner",
+) -> dict[str, Any]:
     state = load_or_initialize(repo, state_file)
     # Expiry is a reason to retire, not a gate against retirement. Every other
     # repository-integrity gate remains active, and the selected worktree still
@@ -374,10 +469,28 @@ def retire_worktree(repo: Path, state_file: Path, requested_path: str) -> dict[s
         if resolved != row.head:
             raise LifecycleError("ARCHIVE_REF_MISMATCH", row.path)
 
+    # Intent first: from here until the verified deregistration below, a crash is
+    # discoverable by `audit --strict` instead of silently stranding a registration.
+    record = dict(state["managed"].get(key) or {"path": row.path, "branch": row.branch})
+    begin_removal(state, state_file, key=key, path=row.path, verb="retire")
+
     run_git(repo, ["worktree", "remove", row.path])
     if Path(row.path).exists():
         raise LifecycleError("REMOVE_INCOMPLETE", row.path)
+    # Deregistration is the half that used to be assumed. `git worktree remove` drops the
+    # directory and the administrative record together, but "usually together" is what
+    # produced thirteen stranded registrations, so the outcome is READ back rather than
+    # inferred from the exit code. If the record survived, the pending intent is left on
+    # disk deliberately -- the operator gets a named cure instead of a clean-looking exit.
+    if any(other.key == key for other in list_worktrees(repo)):
+        raise LifecycleError(
+            "DEREGISTRATION_INCOMPLETE",
+            f"{row.path} is still registered with Git after removal; removal intent retained",
+        )
 
+    record.setdefault("head", row.head)
+    record_tombstone(state, key=key, record=record, verb="retire", reason=reason)
+    pending_removals_of(state).pop(key, None)
     state["managed"].pop(key, None)
     state["legacy_paths"] = sorted(item for item in state["legacy_paths"] if item != key)
     # Retire frees a slot but does NOT lower the ceiling: the ceiling is a bounded
@@ -434,7 +547,12 @@ def prune_one_worktree_metadata(repo: Path, target_path: str) -> bool:
     return False
 
 
-def reconcile_worktree(repo: Path, state_file: Path, requested_path: str) -> dict[str, Any]:
+def reconcile_worktree(
+    repo: Path,
+    state_file: Path,
+    requested_path: str,
+    reason: str = "registration stale: worktree directory no longer present",
+) -> dict[str, Any]:
     """Clear ONE managed row whose worktree is genuinely gone.
 
     MISSING_MANAGED_WORKTREE is raised by audit_state before it does anything, and
@@ -535,16 +653,192 @@ def reconcile_worktree(repo: Path, state_file: Path, requested_path: str) -> dic
             f"{record['path']} is still registered with Git after target-scoped removal; row preserved",
         )
 
+    # The row leaves the registry and enters the retirement log in the same write: a
+    # stale row is cleared, never silently dropped, so custody history survives the cure.
+    tombstone = record_tombstone(state, key=key, record=record, verb="reconcile", reason=reason)
+    pending_removals_of(state).pop(key, None)
     state["managed"].pop(key)
     state["updated_at"] = datetime.now(timezone.utc).isoformat()
     write_state(state_file, state)
     return {
         "status": "RECONCILED",
+        "reason": reason,
+        "tombstone": tombstone,
         "path": record["path"],
         "owner": record.get("owner"),
         "retained_branch": record.get("branch"),
         "recorded_head": record.get("head"),
         "ceiling": state["ceiling"],
+    }
+
+
+def directory_is_empty(path: Path) -> bool:
+    with os.scandir(path) as entries:
+        return next(entries, None) is None
+
+
+def known_roots(
+    registrations: Sequence[Worktree],
+    state: dict[str, Any],
+    extra: Sequence[str] | None,
+) -> list[Path]:
+    """Directories that hold worktrees, derived from what is already registered.
+
+    A root is not configured anywhere, and inventing a config file would only move the
+    staleness problem into it. Every directory that currently parents a registration --
+    plus every directory that parented one according to the state -- is a place worktrees
+    demonstrably live, and that is exactly where an unregistered one would appear.
+    """
+    roots: dict[str, Path] = {}
+    candidates = [Path(row.path).parent for row in registrations]
+    candidates += [Path(str(record.get("path", key))).parent for key, record in state["managed"].items()]
+    candidates += [Path(item) for item in (extra or [])]
+    for candidate in candidates:
+        resolved = Path(canonical_path(candidate))
+        roots.setdefault(path_key(resolved), resolved)
+    return [roots[key] for key in sorted(roots)]
+
+
+def strict_report(
+    repo: Path,
+    state: dict[str, Any],
+    extra_roots: Sequence[str] | None = None,
+) -> dict[str, Any]:
+    """Find stale registrations MECHANICALLY, before a census has to find them by walking.
+
+    This is the detection half of the class-kill. `audit` proper answers a different
+    question -- is the managed pool within its bounds -- and it answers it by RAISING on
+    the first violation, which is exactly wrong for an inventory: the operator needs every
+    stale row at once, not the first one. It also raises on `MISSING_MANAGED_WORKTREE`,
+    which would pre-empt the listing this mode exists to produce. So this scan is separate,
+    read-only, and total.
+
+    Four contradiction classes, matching what the custody census reports:
+
+    * ``stale_registration`` -- Git lists a worktree whose directory is missing, empty, or
+      which Git itself marks prunable. This is the census's ``registered_worktree_missing``.
+    * ``unscannable_registration`` -- the directory is there but Git cannot read it as a
+      worktree. This is the census's ``registered_worktree_scan_failed``; the underlying
+      error text is carried through so the cause is NAMED rather than left as a code.
+    * ``unregistered_worktree_dir`` -- a linked-worktree directory (a `.git` FILE, not a
+      repository of its own) sitting under a known root with no registration. The mirror
+      image of a stale row, and the shape a half-finished create leaves behind.
+    * ``interrupted_removal`` -- a removal intent that was never cleared, i.e. a process
+      died between removing a tree and deregistering it. See `begin_removal`.
+
+    Nothing here mutates: this must be safe to run against a live repository that other
+    owners are working in, and a detector that repairs things cannot be trusted to report.
+    """
+    registrations = list_worktrees(repo)
+    registered = {row.key for row in registrations}
+    contradictions: list[dict[str, Any]] = []
+    main_key = state.get("main_path")
+
+    for row in registrations:
+        path = Path(row.path)
+        cure = f"python scripts/worktree_lifecycle.py reconcile --path {row.path}"
+        if not path.exists():
+            contradictions.append(
+                {
+                    "code": "stale_registration",
+                    "reason": "registered directory does not exist",
+                    "path": row.path,
+                    "branch": row.branch,
+                    "prunable": row.prunable,
+                    "cure": cure,
+                }
+            )
+            continue
+        try:
+            empty = path.is_dir() and directory_is_empty(path)
+        except OSError as exc:
+            contradictions.append(
+                {
+                    "code": "unscannable_registration",
+                    "reason": f"registered directory is unreadable: {exc}",
+                    "path": row.path,
+                    "branch": row.branch,
+                    "cure": cure,
+                }
+            )
+            continue
+        if empty:
+            contradictions.append(
+                {
+                    "code": "stale_registration",
+                    "reason": "registered directory is empty",
+                    "path": row.path,
+                    "branch": row.branch,
+                    "prunable": row.prunable,
+                    "cure": cure,
+                }
+            )
+            continue
+        if row.prunable:
+            contradictions.append(
+                {
+                    "code": "stale_registration",
+                    "reason": "Git marks the administrative record prunable",
+                    "path": row.path,
+                    "branch": row.branch,
+                    "prunable": True,
+                    "cure": cure,
+                }
+            )
+            continue
+        probe = run_git(path, ["rev-parse", "--git-dir"], check=False)
+        if probe.returncode:
+            contradictions.append(
+                {
+                    "code": "unscannable_registration",
+                    "reason": (probe.stderr.strip() or probe.stdout.strip() or "git could not read the worktree"),
+                    "path": row.path,
+                    "branch": row.branch,
+                    "cure": cure,
+                }
+            )
+
+    for root in known_roots(registrations, state, extra_roots):
+        if not root.is_dir():
+            continue
+        try:
+            children = sorted(root.iterdir())
+        except OSError:
+            continue
+        for child in children:
+            if not child.is_dir() or path_key(child) in registered:
+                continue
+            marker = child / ".git"
+            # A `.git` FILE is the linked-worktree marker. A `.git` DIRECTORY is somebody
+            # else's repository that happens to share a parent, and is none of our business.
+            if not marker.is_file():
+                continue
+            contradictions.append(
+                {
+                    "code": "unregistered_worktree_dir",
+                    "reason": "linked-worktree directory with no Git registration",
+                    "path": canonical_path(child),
+                    "cure": "re-register with `git worktree repair`, or remove the directory",
+                }
+            )
+
+    for key, intent in sorted(pending_removals_of(state).items()):
+        contradictions.append(
+            {
+                "code": "interrupted_removal",
+                "reason": f"{intent.get('verb', 'removal')} intent from {intent.get('started_at')} was never completed",
+                "path": intent.get("path", key),
+                "cure": f"python scripts/worktree_lifecycle.py reconcile --path {intent.get('path', key)}",
+            }
+        )
+
+    return {
+        "status": "FAIL" if contradictions else "PASS",
+        "registered": len(registrations),
+        "main_path": main_key,
+        "contradictions": contradictions,
+        "contradiction_count": len(contradictions),
+        "tombstones": len(tombstones_of(state)),
     }
 
 
@@ -564,6 +858,21 @@ def build_parser() -> argparse.ArgumentParser:
     audit_parser = subparsers.add_parser("audit")
     audit_parser.add_argument("--ratchet", action="store_true")
     audit_parser.add_argument("--quiet", action="store_true")
+    audit_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help=(
+            "read-only registry inventory: list EVERY stale registration, unscannable "
+            "registration, unregistered worktree directory and interrupted removal, then "
+            "exit nonzero if any were found. Does not ratchet and does not mutate."
+        ),
+    )
+    audit_parser.add_argument(
+        "--root",
+        action="append",
+        default=[],
+        help="extra directory to scan for unregistered worktrees (--strict only; repeatable)",
+    )
 
     create_parser = subparsers.add_parser("create")
     create_parser.add_argument("--path", required=True)
@@ -575,6 +884,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     retire_parser = subparsers.add_parser("retire")
     retire_parser.add_argument("--path", required=True)
+    retire_parser.add_argument(
+        "--reason",
+        default="retired by owner",
+        help="recorded on the tombstone so the retirement stays auditable",
+    )
 
     reconcile_parser = subparsers.add_parser("reconcile")
     reconcile_parser.add_argument(
@@ -584,6 +898,11 @@ def build_parser() -> argparse.ArgumentParser:
             "exact registered path of a managed row whose worktree is gone; "
             "refuses when the worktree is live or the path has any content"
         ),
+    )
+    reconcile_parser.add_argument(
+        "--reason",
+        default="registration stale: worktree directory no longer present",
+        help="recorded on the tombstone so the cleared row stays auditable",
     )
     return parser
 
@@ -600,16 +919,30 @@ def main(argv: Sequence[str] | None = None) -> int:
                 emit(payload, False)
             elif args.command == "audit":
                 state = load_or_initialize(repo, state_file)
-                state, payload = audit_state(repo, state, ratchet=args.ratchet)
-                if args.ratchet:
-                    write_state(state_file, state)
-                emit(payload, args.quiet)
+                if args.strict:
+                    # Deliberately NOT audit_state(): that raises on the first violation and
+                    # on MISSING_MANAGED_WORKTREE, either of which would truncate the very
+                    # inventory this mode exists to print.
+                    payload = strict_report(repo, state, args.root)
+                    emit(payload, args.quiet)
+                    if payload["contradictions"]:
+                        raise LifecycleError(
+                            "REGISTRY_CONTRADICTION",
+                            "; ".join(
+                                f"{item['code']} {item['path']}" for item in payload["contradictions"]
+                            ),
+                        )
+                else:
+                    state, payload = audit_state(repo, state, ratchet=args.ratchet)
+                    if args.ratchet:
+                        write_state(state_file, state)
+                    emit(payload, args.quiet)
             elif args.command == "create":
                 emit(create_worktree(repo, state_file, args), False)
             elif args.command == "retire":
-                emit(retire_worktree(repo, state_file, args.path), False)
+                emit(retire_worktree(repo, state_file, args.path, args.reason), False)
             elif args.command == "reconcile":
-                emit(reconcile_worktree(repo, state_file, args.path), False)
+                emit(reconcile_worktree(repo, state_file, args.path, args.reason), False)
             else:
                 raise AssertionError(args.command)
         return 0

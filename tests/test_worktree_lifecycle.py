@@ -820,3 +820,241 @@ def test_reconcile_refuses_a_legacy_snapshot_path(tmp_path: Path) -> None:
     # Live, so the live check fires first -- either refusal is correct, but it must
     # never succeed.
     assert "WORKTREE_LIVE" in result.stderr or "LEGACY_PATH" in result.stderr
+
+
+# ---------------------------------------------------------------------------
+# sweep-time deregistration: stale registrations must fail mechanically (#1366)
+# ---------------------------------------------------------------------------
+
+
+def read_state(repo: Path) -> dict:
+    return json.loads(state_path(repo).read_text(encoding="utf-8"))
+
+
+def strict(repo: Path) -> subprocess.CompletedProcess[str]:
+    return lifecycle(repo, "audit", "--strict", check=False)
+
+
+def contradictions_of(result: subprocess.CompletedProcess[str]) -> list[dict]:
+    return json.loads(result.stdout)["contradictions"]
+
+
+def test_strict_audit_reports_a_registration_whose_directory_is_gone(tmp_path: Path) -> None:
+    """The defect, stated mechanically.
+
+    Thirteen registrations pointed at directories that were not there, and nothing said so
+    until a custody census walked every one of them and reported the contradictions. Plain
+    `audit` cannot be that alarm: a raw-deleted worktree is still LISTED by git, so audit's
+    live set counts it as present and passes. That silence is the bug.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    gone = _managed(repo, tmp_path, "swept")
+    shutil.rmtree(gone)
+
+    # Measured, not assumed: the old check is blind to this shape.
+    assert lifecycle(repo, "audit", check=False).returncode == 0
+
+    result = strict(repo)
+    assert result.returncode == 2
+    assert "REGISTRY_CONTRADICTION" in result.stderr
+    stale = [item for item in contradictions_of(result) if item["code"] == "stale_registration"]
+    assert [item["path"] for item in stale] == [str(gone)]
+    assert "does not exist" in stale[0]["reason"]
+    assert "reconcile --path" in stale[0]["cure"], "a report without a cure is a nag"
+
+
+def test_strict_audit_reports_an_empty_registered_directory(tmp_path: Path) -> None:
+    """An empty directory is not a worktree. A sweep that leaves the shell behind is the
+    same stranded registration wearing a directory entry, and existence alone would pass it.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    hollow = _managed(repo, tmp_path, "hollow")
+    shutil.rmtree(hollow)
+    hollow.mkdir()
+
+    result = strict(repo)
+    assert result.returncode == 2
+    stale = [item for item in contradictions_of(result) if item["code"] == "stale_registration"]
+    assert [item["path"] for item in stale] == [str(hollow)]
+    assert "empty" in stale[0]["reason"]
+
+
+def test_strict_audit_names_the_cause_of_an_unscannable_registration(tmp_path: Path) -> None:
+    """The census's other contradiction class, `registered_worktree_scan_failed`, reported
+    a code and no cause -- which is what made the one ValueError worktree a manual
+    investigation. The error text git gives us is carried through verbatim instead.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    broken = _managed(repo, tmp_path, "unreadable")
+    # Git marks the linked-worktree `.git` file hidden on Windows, and a hidden file
+    # cannot be reopened for writing -- so replace it rather than rewrite it.
+    marker = broken / ".git"
+    marker.unlink()
+    marker.write_text("gitdir: nowhere-at-all\n", encoding="utf-8")
+
+    result = strict(repo)
+    assert result.returncode == 2
+    failed = [item for item in contradictions_of(result) if item["code"] == "unscannable_registration"]
+    assert [item["path"] for item in failed] == [str(broken)]
+    assert failed[0]["reason"], "the cause must be named, not just the class"
+
+
+def test_strict_audit_reports_an_unregistered_worktree_directory(tmp_path: Path) -> None:
+    """The mirror image: a linked-worktree directory with nobody registering it, which is
+    what a half-finished create or a repaired-by-hand tree leaves behind.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    _managed(repo, tmp_path, "anchor")  # establishes tmp_path as a known root
+
+    orphan = tmp_path / "orphan"
+    orphan.mkdir()
+    (orphan / ".git").write_text("gitdir: /nowhere/.git/worktrees/orphan\n", encoding="utf-8")
+
+    result = strict(repo)
+    assert result.returncode == 2
+    found = [item for item in contradictions_of(result) if item["code"] == "unregistered_worktree_dir"]
+    assert [item["path"] for item in found] == [str(orphan)]
+
+
+def test_strict_audit_ignores_a_neighbouring_repository(tmp_path: Path) -> None:
+    """A `.git` DIRECTORY is somebody else's repository that happens to share a parent.
+    Flagging it would make the check noisy enough to be ignored, which is how a mechanical
+    check quietly stops being one.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    _managed(repo, tmp_path, "anchor")
+
+    neighbour = tmp_path / "neighbour"
+    neighbour.mkdir()
+    git(neighbour, "init", "-b", "master")
+
+    result = strict(repo)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout)["contradictions"] == []
+
+
+def test_strict_audit_is_green_after_reconcile_clears_the_stale_row(tmp_path: Path) -> None:
+    """Acceptance: after reconcile, a census finds zero worktree-registry contradictions.
+
+    This is the fixture form of that clause -- a registry holding a missing-path row, cured,
+    then re-inventoried by the same scan that found it.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    gone = _managed(repo, tmp_path, "cured")
+    shutil.rmtree(gone)
+    assert strict(repo).returncode == 2
+
+    lifecycle(repo, "reconcile", "--path", str(gone))
+
+    result = strict(repo)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout)["contradictions"] == []
+    listed = git(repo, "worktree", "list", "--porcelain").stdout.replace("\\", "/")
+    assert str(gone).replace("\\", "/") not in listed
+
+
+def test_reconcile_writes_a_dated_reasoned_tombstone(tmp_path: Path) -> None:
+    """Cleared, never silently dropped: the row leaves `managed` and enters the retirement
+    log in the same write, so custody history survives its own cure.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    gone = _managed(repo, tmp_path, "buried")
+    shutil.rmtree(gone)
+
+    lifecycle(repo, "reconcile", "--path", str(gone), "--reason", "swept by post-merge cleanup")
+
+    state = read_state(repo)
+    assert path_key_of(gone) not in state["managed"]
+    tombstones = [item for item in state["tombstones"] if item["key"] == path_key_of(gone)]
+    assert len(tombstones) == 1
+    tombstone = tombstones[0]
+    assert tombstone["verb"] == "reconcile"
+    assert tombstone["reason"] == "swept by post-merge cleanup"
+    assert tombstone["retired_on"], "a tombstone without a date is not custody history"
+    assert tombstone["owner"] == "founder-one"
+    assert tombstone["branch"] == "buried"
+
+
+def test_retire_deregisters_and_leaves_no_removal_intent(tmp_path: Path) -> None:
+    """The class-kill on the clean path: the directory, the Git registration and the
+    registry row move together, and the intent that guards the interval is cleared only
+    once the deregistration has been READ BACK from git rather than inferred.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    doomed = _managed(repo, tmp_path, "doomed")
+
+    lifecycle(repo, "retire", "--path", str(doomed), "--reason", "lane finished")
+
+    state = read_state(repo)
+    assert path_key_of(doomed) not in state["managed"]
+    assert state["pending_removals"] == {}, "a completed retirement leaves no intent behind"
+    tombstone = [item for item in state["tombstones"] if item["key"] == path_key_of(doomed)][0]
+    assert tombstone["verb"] == "retire"
+    assert tombstone["reason"] == "lane finished"
+
+    listed = git(repo, "worktree", "list", "--porcelain").stdout.replace("\\", "/")
+    assert str(doomed).replace("\\", "/") not in listed
+    result = strict(repo)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_strict_audit_reports_an_interrupted_removal(tmp_path: Path) -> None:
+    """A process killed between removing a tree and deregistering it used to leave nothing
+    but a stale registration nobody would look for. It now leaves a declared intent, and
+    the intent is itself a contradiction with a cure attached.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    interrupted = _managed(repo, tmp_path, "interrupted")
+
+    state = read_state(repo)
+    state["pending_removals"] = {
+        path_key_of(interrupted): {
+            "path": str(interrupted),
+            "verb": "retire",
+            "started_at": "2026-08-03T00:00:00+00:00",
+        }
+    }
+    state_path(repo).write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
+
+    result = strict(repo)
+    assert result.returncode == 2
+    found = [item for item in contradictions_of(result) if item["code"] == "interrupted_removal"]
+    assert [item["path"] for item in found] == [str(interrupted)]
+    assert "2026-08-03" in found[0]["reason"]
+
+
+def test_reconcile_refusal_writes_no_tombstone(tmp_path: Path) -> None:
+    """A refusal must be a no-op in the log too. A tombstone for a row that is still
+    registered would make the retirement log lie in exactly the direction that costs the
+    most: it would look like the cure had already been applied.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    holding = _managed(repo, tmp_path, "holding")
+    git(repo, "worktree", "remove", str(holding))
+    holding.mkdir(parents=True, exist_ok=True)
+    (holding / "unsaved.txt").write_text("work nobody has copied out\n", encoding="utf-8")
+
+    result = lifecycle(repo, "reconcile", "--path", str(holding), check=False)
+    assert result.returncode == 2
+    assert "PATH_NOT_EMPTY" in result.stderr
+
+    state = read_state(repo)
+    assert path_key_of(holding) in state["managed"]
+    assert state.get("tombstones", []) == []
+    assert state.get("pending_removals", {}) == {}
+
+
+def test_agents_documents_the_mechanical_registry_check() -> None:
+    """The check only kills the class if the next agent knows it exists."""
+    agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    assert "scripts/worktree_lifecycle.py audit --strict" in agents
