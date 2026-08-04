@@ -160,6 +160,7 @@
     }
   ],
   "goal_id": "EMBER-02",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "missing": [],
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "pass": true,
@@ -168,6 +169,7 @@
   "row_id_map_error": "paper/claims-evidence-map.md not found",
   "row_id_map_rows_found": 0,
   "row_id_missing": [],
+  "sha_convention": "bytes on disk as-is (binary read, no normalization)",
   "sources_scanned": [
     "GOAL.md",
     "docs/PROBLEMS.md",
