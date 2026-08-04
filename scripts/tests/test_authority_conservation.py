@@ -10,6 +10,7 @@ import copy
 import hashlib
 import json
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -292,6 +293,114 @@ def render_goal(policy: dict) -> str:
     )
 
 
+def write_valid_crosswalk(root: Path, matrix_path: Path) -> None:
+    """Give the fixture the authority supersession packet leg 4 demands.
+
+    A valid minimal authority repo is not just the D-matrix. Once
+    docs/ember-authority-matrix.md exists, authority_supersession_gate treats the
+    tree as a current-authority tree and requires, fail-closed, all three of:
+
+      1. manifests/authority/issue-35-authority-supersession-crosswalk-v1.json,
+      2. scripts/verify_authority_supersession_crosswalk.py (the gate imports the
+         validator from the tree under test, not from this repo), and
+      3. docs/roadmap/milestones/EMBER-*.md, because the crosswalk's milestone_ids
+         must equal the live roadmap contracts and an empty roadmap is an error.
+
+    The crosswalk itself is closed-schema: every object's key set must match
+    exactly, discrepancy_ids must equal the matrix's own D identifiers, each
+    evidence path must exist with a matching sha256, every declared source id
+    needs exactly one row, no row may claim completion credit, and
+    crosswalk_sha256 is the canonical hash of the payload minus that field.
+    Anything added here must keep all of those true -- see
+    scripts/verify_authority_supersession_crosswalk.py for the contract, and
+    manifests/authority/issue-35-authority-supersession-crosswalk-v1.json in this
+    repo for the production-scale example.
+
+    source_commit is the all-zero sha: the fixture tree has no commits when this
+    runs, and an honest placeholder is what the #1381 re-pin coupling rule wants
+    to see. That rule only fires when the pins move across a diff, so a fixture
+    that writes this packet once, identically, never trips it.
+    """
+    (root / "scripts").mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(
+        REPO_ROOT / "scripts" / "verify_authority_supersession_crosswalk.py",
+        root / "scripts" / "verify_authority_supersession_crosswalk.py",
+    )
+
+    milestone_id = "EMBER-02"
+    milestone_dir = root / "docs" / "roadmap" / "milestones"
+    milestone_dir.mkdir(parents=True, exist_ok=True)
+    (milestone_dir / f"{milestone_id}.md").write_text(
+        f"# {milestone_id}\n\nFixture milestone contract.\n", encoding="utf-8"
+    )
+
+    matrix_rel = matrix_path.relative_to(root).as_posix()
+    matrix_sha = hashlib.sha256(matrix_path.read_bytes()).hexdigest()
+    evidence = [{"path": matrix_rel, "sha256": matrix_sha}]
+    discrepancy_ids = sorted(
+        set(re.findall(r"\|\s*(D-\d{3})\s*\|", matrix_path.read_text(encoding="utf-8")))
+    )
+    assert discrepancy_ids, "fixture matrix must carry D identifiers"
+
+    payload = {
+        "schema_version": "ember-authority-supersession-crosswalk-v1",
+        "repository": "wordingone/ember",
+        "source_commit": "0" * 40,
+        "current_authority": {
+            "matrix_path": matrix_rel,
+            "matrix_sha256": matrix_sha,
+            "discrepancy_ids": discrepancy_ids,
+            "milestone_ids": [milestone_id],
+            "historical_terminal": "HISTORICAL_ORPHANED",
+        },
+        "source_registries": [
+            {
+                "registry_id": "fixture-legacy-registry",
+                "expected_source_ids": ["fixture-legacy-001", "fixture-legacy-002"],
+                "evidence": evidence,
+            }
+        ],
+        "rows": [
+            {
+                "source_registry": "fixture-legacy-registry",
+                "source_id": "fixture-legacy-001",
+                "source_kind": "legacy_milestone",
+                "statement": "fixture legacy obligation carried into the live matrix",
+                "disposition": "SUPERSEDED",
+                "targets": [discrepancy_ids[0], milestone_id],
+                "evidence": evidence,
+                "completion_credit": False,
+            },
+            {
+                "source_registry": "fixture-legacy-registry",
+                "source_id": "fixture-legacy-002",
+                "source_kind": "legacy_condition",
+                "statement": "fixture legacy condition with no live successor",
+                "disposition": "HISTORICAL_ORPHANED",
+                "targets": ["HISTORICAL_ORPHANED"],
+                "evidence": evidence,
+                "completion_credit": False,
+            },
+        ],
+    }
+    payload["crosswalk_sha256"] = hashlib.sha256(
+        json.dumps(
+            payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
+    ).hexdigest()
+
+    crosswalk_path = (
+        root
+        / "manifests"
+        / "authority"
+        / "issue-35-authority-supersession-crosswalk-v1.json"
+    )
+    crosswalk_path.parent.mkdir(parents=True, exist_ok=True)
+    crosswalk_path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
 def write_valid_fixture(root: Path) -> None:
     invariant = (REPO_ROOT / "INVARIANT.md").read_bytes()
     assert hashlib.sha256(invariant).hexdigest().upper() == INVARIANT_SHA256
@@ -320,6 +429,8 @@ def write_valid_fixture(root: Path) -> None:
         CONSERVATION_HEADER + "\n" + "\n".join(manifest) + "\n",
         encoding="utf-8",
     )
+
+    write_valid_crosswalk(root, manifest_path)
 
     state = """# Current artifact identity resolver
 
