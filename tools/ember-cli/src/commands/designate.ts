@@ -17,9 +17,13 @@ import type { CommandContext, CommandResult, RegistryCommand } from "../types/co
 import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
 import { verifyAdmissionProducerReceipt } from "./admit.ts";
 
-const USAGE =
-  "usage: /designate --output-root <path> --candidate-id <id> " +
+/** The required-argument shape, declared once. USAGE renders it for the failure path; the
+ *  registry entry publishes it as `argumentHint` so the command bar composes `/designate ` on
+ *  click rather than dispatching a bare invocation that can only be a usage error. */
+const ARGUMENT_HINT =
+  "--output-root <path> --candidate-id <id> " +
   "--candidate-sha256 <sha256> --producer-receipt-sha256 <sha256>";
+const USAGE = `usage: /designate ${ARGUMENT_HINT}`;
 const SHA256_RE = /^[0-9a-f]{64}$/;
 // Identical grammar to admit.ts's CANDIDATE_ID_RE (#1107 P1 cure): no dot, no
 // slash -- "current.json" and any owned/-escaping path component are
@@ -202,6 +206,7 @@ export function createDesignateCommand(deps: DesignateCommandDeps = {}): Registr
     description:
       "Atomically select one admitted candidate into the live owned/current.json seat pointer, " +
       "with hash-verified read-back and a designation receipt",
+    argumentHint: ARGUMENT_HINT,
     isEnabled: () => true,
     async execute(args: string, _context: CommandContext) {
       const options = parseOptions(args);

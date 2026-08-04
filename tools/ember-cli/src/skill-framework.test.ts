@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+//
 // Tests for skill-framework.ts — one describe block per AC.
 //
 // Filesystem interactions are exercised against actual temp directories
@@ -29,6 +33,7 @@ import {
   setSkillFrameworkSettings,
   type BundledSkillDefinition,
 } from './skill-framework.ts';
+import { buildCommandButtons, commandButtonActivation } from './services/command-buttons.ts';
 
 // Reset all module-level state before each test
 beforeEach(() => {
@@ -256,6 +261,48 @@ describe('AC9 — EMBER_SKILL_DIR substitution', () => {
     ) => Array<{ type: 'text'; text: string }>;
     const blocks = getPrompt('', {});
     expect(blocks[0]!.text).toContain('C:/my/skill/dir');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #1370: argument-hint frontmatter reaches the command, so a skill's BUTTON composes
+// its invocation instead of dispatching one that could only be a usage error.
+// ---------------------------------------------------------------------------
+
+describe('#1370 — argument-hint frontmatter reaches the registered command', () => {
+  it('a skill declaring argument-hint produces a command whose button PREFILLS, not dispatches', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'sf-arghint-'));
+    try {
+      await makeSkillDir(
+        tmp,
+        'needs-args',
+        'description: Needs arguments\nargument-hint: --workspace <path>',
+      );
+      await makeSkillDir(tmp, 'no-args', 'description: Takes none');
+      const loaded = await loadSkillsFromSkillsDir(tmp, 'test');
+
+      const withHint = loaded.find((s) => s.name === 'needs-args');
+      expect(withHint).toBeDefined();
+      expect(withHint!.command.argumentHint).toBe('--workspace <path>');
+
+      // The parse is not the point — the CLASSIFICATION is. A dropped hint is invisible until
+      // the button fires a bare invocation, so assert the button model, not the field alone.
+      const buttons = buildCommandButtons(loaded.map((s) => s.command));
+      const hintButton = buttons.find((b) => b.name === 'needs-args')!;
+      expect(hintButton.needsArgument).toBe(true);
+      expect(commandButtonActivation(hintButton)).toMatchObject({
+        kind: 'prefill',
+        text: '/needs-args ',
+        hint: '/needs-args --workspace <path>',
+      });
+
+      // A skill that declares no hint is unaffected and still dispatches on click.
+      const plainButton = buttons.find((b) => b.name === 'no-args')!;
+      expect(plainButton.needsArgument).toBe(false);
+      expect(commandButtonActivation(plainButton).kind).toBe('dispatch');
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
   });
 });
 

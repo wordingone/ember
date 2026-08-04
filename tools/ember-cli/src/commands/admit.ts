@@ -38,8 +38,11 @@ interface AdmitOptions {
   outputRoot: string;
 }
 
-const USAGE =
-  "usage: /admit --workspace <path> --descriptor <path> --output-root <path>";
+/** The required-argument shape, declared once. USAGE renders it for the failure path; the
+ *  registry entry publishes it as `argumentHint` so the command bar knows a bare `/admit` can
+ *  only ever be a usage error and composes instead of dispatching one. */
+const ARGUMENT_HINT = "--workspace <path> --descriptor <path> --output-root <path>";
+const USAGE = `usage: /admit ${ARGUMENT_HINT}`;
 const RECEIPT_KEYS = [
   "benchmark_claim",
   "candidate_id",
@@ -471,6 +474,7 @@ export function createAdmitCommand(deps: AdmitCommandDeps = {}): RegistryCommand
     name: "admit",
     description:
       "Construct and validate an owned-admission candidate from existing evidence bytes without selecting or loading it",
+    argumentHint: ARGUMENT_HINT,
     isEnabled: () => true,
     async execute(args: string, context: CommandContext) {
       const options = parseOptions(args);
