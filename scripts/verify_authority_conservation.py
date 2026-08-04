@@ -1665,6 +1665,121 @@ def verified_derived_receipt_index_paths(
         return set()
 
 
+CROSSWALK_REL = "manifests/authority/issue-35-authority-supersession-crosswalk-v1.json"
+
+
+def crosswalk_content_pins(payload: Any) -> dict[str, str]:
+    """Every content digest the crosswalk pins, keyed by what it describes.
+
+    Deliberately excludes `crosswalk_sha256` (a self-hash, which moves whenever
+    ANY field moves, including source_commit itself) so the coupling rule below
+    reacts to described-content drift only.
+    """
+    if not isinstance(payload, dict):
+        raise ValueError("crosswalk payload must be an object")
+    pins: dict[str, str] = {}
+    authority = payload.get("current_authority")
+    if isinstance(authority, dict):
+        pins[f"matrix:{authority.get('matrix_path')}"] = str(
+            authority.get("matrix_sha256")
+        )
+    groups: list[tuple[str, Any]] = []
+    for registry in payload.get("source_registries") or []:
+        if isinstance(registry, dict):
+            groups.append((str(registry.get("registry_id")), registry.get("evidence")))
+    for row in payload.get("rows") or []:
+        if isinstance(row, dict):
+            label = f"{row.get('source_registry')}/{row.get('source_id')}"
+            groups.append((label, row.get("evidence")))
+    for label, evidence in groups:
+        for item in evidence or []:
+            if isinstance(item, dict):
+                pins[f"{label}:{item.get('path')}"] = str(item.get("sha256"))
+    return pins
+
+
+def _git_blob(root: Path, revision: str, rel: str) -> bytes | None:
+    result = subprocess.run(
+        ["git", "show", f"{revision}:{rel}"],
+        cwd=root,
+        capture_output=True,
+        check=False,
+    )
+    return result.stdout if result.returncode == 0 else None
+
+
+def check_crosswalk_source_commit_repin(
+    root: Path,
+    errors: list[dict[str, Any]],
+    *,
+    changed_range: str | None = None,
+    staged: bool = False,
+) -> None:
+    """`source_commit` must move whenever the crosswalk's content pins move.
+
+    Contract (a) of issue #1381. Without this the field is a pin nothing keeps
+    true, and `--expected-source-commit` converts an honest "unverified" into a
+    silent "verified against the wrong commit" -- worse than no pin at all.
+
+    The rule is a coupling rule, checked across a diff, because no single-state
+    check can express it: the crosswalk is re-pinned in the SAME commit as the
+    content it describes, so at authoring time no commit yet holds those bytes
+    and "the pins must reproduce at source_commit" is unsatisfiable by
+    construction. What IS enforceable, and what this enforces, is that a re-pin
+    may never leave the previous commit's name behind.
+    """
+    if not changed_range and not staged:
+        return
+    if staged:
+        before_rev, after_rev = "HEAD", ""
+    else:
+        base = re.split(r"\.\.\.?", changed_range or "", maxsplit=1)
+        if len(base) != 2 or not base[0] or not base[1]:
+            errors.append(
+                finding(
+                    4,
+                    "authority.crosswalk_range_unparsed",
+                    f"cannot read a base and head from range {changed_range!r}",
+                )
+            )
+            return
+        before_rev, after_rev = base[0], base[1]
+
+    before_bytes = _git_blob(root, before_rev, CROSSWALK_REL)
+    # `git show :path` reads the index -- the staged bytes are what a staged run
+    # certifies, not the worktree's.
+    after_bytes = _git_blob(root, after_rev, CROSSWALK_REL)
+    if before_bytes is None or after_bytes is None or before_bytes == after_bytes:
+        # Added, removed, or untouched: nothing to couple. Absence and malformation
+        # are already fatal in check_authority_supersession_crosswalk.
+        return
+    try:
+        before = json.loads(before_bytes.decode("utf-8"))
+        after = json.loads(after_bytes.decode("utf-8"))
+        before_pins = crosswalk_content_pins(before)
+        after_pins = crosswalk_content_pins(after)
+    except (UnicodeError, json.JSONDecodeError, ValueError) as exc:
+        errors.append(finding(4, "authority.crosswalk_repin_unreadable", str(exc)))
+        return
+    if before_pins == after_pins:
+        return
+    if before.get("source_commit") != after.get("source_commit"):
+        return
+    moved = sorted(
+        key
+        for key in set(before_pins) | set(after_pins)
+        if before_pins.get(key) != after_pins.get(key)
+    )
+    errors.append(
+        finding(
+            4,
+            "authority.crosswalk_source_commit_stale",
+            f"crosswalk content pins changed while source_commit stayed "
+            f"{after.get('source_commit')!r}; moved pins: {', '.join(moved)}",
+        )
+    )
+
+
 def check_changed_artifact_bindings(
     root: Path,
     policy: dict[str, Any] | None,
@@ -1952,6 +2067,7 @@ def verify(
                 binding_errors,
                 staged=True,
             )
+            check_crosswalk_source_commit_repin(root, binding_errors, staged=True)
             return build_certificate(staged_payload["errors"] + binding_errors)
 
     errors: list[dict[str, Any]] = []
@@ -1982,6 +2098,9 @@ def verify(
         errors,
         changed_range=changed_range,
         staged=staged,
+    )
+    check_crosswalk_source_commit_repin(
+        root, errors, changed_range=changed_range, staged=staged
     )
     return build_certificate(errors)
 
