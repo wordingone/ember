@@ -115,6 +115,7 @@
                       "owner":  "operator",
                       "authority_status":  "candidate_not_selected",
                       "disposition":  "logical_alias_of_local_execution_tree",
+                      "alias_of_root_id":  "local-execution-tree",
                       "runtime_state_exclusions":  [
                           {
                               "pattern":  "*tools/ember-cli/state/*",

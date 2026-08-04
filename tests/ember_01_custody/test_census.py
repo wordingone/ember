@@ -21,6 +21,7 @@ import census as census_module  # noqa: E402
 from census import (  # noqa: E402
     build_duplicate_groups,
     build_root_census,
+    bound_root_paths,
     canonical_root_identity,
     detect_contradictions,
     git_repository_summary,
@@ -502,6 +503,9 @@ def test_checked_in_root_spec_distinguishes_owned_and_external_surfaces() -> Non
         "owner": "operator",
         "authority_status": "candidate_not_selected",
         "disposition": "logical_alias_of_local_execution_tree",
+        # #1380: the declared alias disposition is now machine-readable, so
+        # the census stops re-hashing the live tree under a second root_id.
+        "alias_of_root_id": "local-execution-tree",
     }
     assert all(
         not any(token in json.dumps(row) for token in ("B:\\\\", "C:\\\\"))
@@ -1742,3 +1746,250 @@ def test_runtime_state_exclusion_survives_background_writer_thread(
         result["roots"][0]["runtime_state_exclusions"][0]["excluded_artifact_count"]
         == 1
     )
+
+
+def _1380_fixture(tmp_path: Path) -> tuple[Path, Path, Path]:
+    # A discovery parent holding two name-matching children: one that another
+    # root already binds directly, one that nothing else owns (#1380).
+    parent = tmp_path / "parent"
+    bound_child = parent / "ember"
+    stray_child = parent / "ember-stray"
+    bound_child.mkdir(parents=True)
+    stray_child.mkdir()
+    (bound_child / "payload.bin").write_bytes(b"bound-root-bytes")
+    (stray_child / "payload.bin").write_bytes(b"stray-bytes")
+    return parent, bound_child, stray_child
+
+
+def test_discovery_never_rescans_a_path_bound_to_another_root(tmp_path: Path) -> None:
+    parent, bound_child, stray_child = _1380_fixture(tmp_path)
+    result = build_root_census(
+        {
+            "roots": [
+                {"root_id": "bound-tree", "required": False, "scan": "files"},
+                {
+                    "root_id": "discovery",
+                    "required": False,
+                    "scan": "directory_discovery",
+                    "name_patterns": ["ember*"],
+                },
+            ]
+        },
+        {"bound-tree": bound_child, "discovery": parent},
+    )
+    by_root: dict[str, list[str]] = {}
+    for row in result["artifacts"]:
+        by_root.setdefault(row["source"]["root_id"], []).append(
+            row["source"]["relative_path"]
+        )
+    # The bound tree is hashed exactly once, under the root that binds it.
+    assert by_root["bound-tree"] == ["payload.bin"]
+    assert by_root["discovery"] == ["ember-stray/payload.bin"]
+    # Non-colliding discovery children keep their coverage.
+    assert (stray_child / "payload.bin").is_file()
+    discovery_row = next(
+        row for row in result["roots"] if row["root_id"] == "discovery"
+    )
+    assert discovery_row["discovery_bound_elsewhere"] == [
+        {"name": "ember", "bound_root_ids": ["bound-tree"]}
+    ]
+    assert [row["name"] for row in discovery_row["discovered_roots"]] == [
+        "ember-stray"
+    ]
+    assert discovery_row["discovered_root_count"] == 1
+    # The re-scan is gone, so the live bytes no longer duplicate themselves.
+    assert result["duplicate_groups"] == []
+    assert not any(
+        row["code"] == "directory_snapshot_changed_during_scan"
+        or row["code"] == "directory_membership_changed_during_scan"
+        for row in result["contradictions"]
+    )
+
+
+def test_alias_root_contributes_no_artifacts(tmp_path: Path) -> None:
+    parent, bound_child, _ = _1380_fixture(tmp_path)
+    result = build_root_census(
+        {
+            "roots": [
+                {"root_id": "bound-tree", "required": False, "scan": "files"},
+                {
+                    "root_id": "alias-tree",
+                    "required": False,
+                    "scan": "files",
+                    "source_root_id": "bound-tree",
+                    "alias_of_root_id": "bound-tree",
+                    "disposition": "logical_alias_of_bound_tree",
+                },
+            ]
+        },
+        {"bound-tree": bound_child},
+    )
+    assert {row["source"]["root_id"] for row in result["artifacts"]} == {"bound-tree"}
+    alias_row = next(row for row in result["roots"] if row["root_id"] == "alias-tree")
+    assert alias_row["present"] is True
+    assert alias_row["alias_of_root_id"] == "bound-tree"
+    assert alias_row["artifact_contribution"] == "none_alias"
+    assert result["duplicate_groups"] == []
+    assert result["contradictions"] == []
+
+
+def test_alias_root_that_names_no_declared_root_is_a_contradiction(
+    tmp_path: Path,
+) -> None:
+    _, bound_child, _ = _1380_fixture(tmp_path)
+    result = build_root_census(
+        {
+            "roots": [
+                {
+                    "root_id": "alias-tree",
+                    "required": False,
+                    "scan": "files",
+                    "alias_of_root_id": "nonexistent-root",
+                }
+            ]
+        },
+        {"alias-tree": bound_child},
+    )
+    assert [row["code"] for row in result["contradictions"]] == [
+        "alias_target_root_missing"
+    ]
+    # Fail-closed: an unverifiable alias is scanned anyway, so declaring one
+    # can never delete custody material.
+    assert [row["source"]["relative_path"] for row in result["artifacts"]] == [
+        "payload.bin"
+    ]
+    alias_row = next(row for row in result["roots"] if row["root_id"] == "alias-tree")
+    assert alias_row["artifact_contribution"] == "scanned_unverified_alias"
+
+
+def test_alias_bound_to_different_bytes_than_its_target_is_still_hashed(
+    tmp_path: Path,
+) -> None:
+    # rev-1380 P6: an alias whose own binding is NOT the target's path would
+    # otherwise vanish from the census silently, taking its bytes with it.
+    _, target_child, other_child = _1380_fixture(tmp_path)
+    result = build_root_census(
+        {
+            "roots": [
+                {"root_id": "target", "required": False, "scan": "files"},
+                {
+                    "root_id": "impostor",
+                    "required": False,
+                    "scan": "files",
+                    "alias_of_root_id": "target",
+                },
+            ]
+        },
+        {"target": target_child, "impostor": other_child},
+    )
+    assert [row["code"] for row in result["contradictions"]] == [
+        "alias_target_path_mismatch"
+    ]
+    by_root = {
+        row["source"]["root_id"]: row["source"]["relative_path"]
+        for row in result["artifacts"]
+    }
+    # Both distinct payloads survive — nothing was silently dropped.
+    assert by_root == {"target": "payload.bin", "impostor": "payload.bin"}
+    assert {row["sha256"] for row in result["artifacts"]} == {
+        sha256_file(target_child / "payload.bin"),
+        sha256_file(other_child / "payload.bin"),
+    }
+
+
+def test_mutual_alias_cycle_cannot_empty_the_census(tmp_path: Path) -> None:
+    # rev-1380 P5: two roots each declaring the other emptied the census with
+    # zero contradictions. Every alias target must itself be a non-alias root,
+    # which breaks chains and cycles by construction.
+    _, first_child, second_child = _1380_fixture(tmp_path)
+    result = build_root_census(
+        {
+            "roots": [
+                {
+                    "root_id": "alpha",
+                    "required": False,
+                    "scan": "files",
+                    "alias_of_root_id": "beta",
+                },
+                {
+                    "root_id": "beta",
+                    "required": False,
+                    "scan": "files",
+                    "alias_of_root_id": "alpha",
+                },
+            ]
+        },
+        {"alpha": first_child, "beta": second_child},
+    )
+    assert [row["code"] for row in result["contradictions"]] == [
+        "alias_target_is_alias",
+        "alias_target_is_alias",
+    ]
+    assert {row["source"]["root_id"] for row in result["artifacts"]} == {
+        "alpha",
+        "beta",
+    }
+
+
+def test_alias_whose_target_is_unbound_is_still_hashed(tmp_path: Path) -> None:
+    _, bound_child, _ = _1380_fixture(tmp_path)
+    result = build_root_census(
+        {
+            "roots": [
+                {"root_id": "target", "required": False, "scan": "files"},
+                {
+                    "root_id": "alias-tree",
+                    "required": False,
+                    "scan": "files",
+                    "alias_of_root_id": "target",
+                },
+            ]
+        },
+        {"alias-tree": bound_child},
+    )
+    assert [row["code"] for row in result["contradictions"]] == [
+        "alias_target_unbound"
+    ]
+    assert [row["source"]["root_id"] for row in result["artifacts"]] == ["alias-tree"]
+
+
+def test_alias_that_names_itself_is_still_hashed(tmp_path: Path) -> None:
+    _, bound_child, _ = _1380_fixture(tmp_path)
+    result = build_root_census(
+        {
+            "roots": [
+                {
+                    "root_id": "selfie",
+                    "required": False,
+                    "scan": "files",
+                    "alias_of_root_id": "selfie",
+                }
+            ]
+        },
+        {"selfie": bound_child},
+    )
+    assert [row["code"] for row in result["contradictions"]] == [
+        "alias_target_is_self"
+    ]
+    assert [row["source"]["root_id"] for row in result["artifacts"]] == ["selfie"]
+
+
+def test_bound_root_paths_credits_only_the_root_that_owns_the_bytes(
+    tmp_path: Path,
+) -> None:
+    _, bound_child, _ = _1380_fixture(tmp_path)
+    owners = bound_root_paths(
+        {
+            "roots": [
+                {"root_id": "bound-tree", "scan": "files"},
+                {"root_id": "derived", "scan": "files", "source_root_id": "bound-tree"},
+                {
+                    "root_id": "alias",
+                    "scan": "files",
+                    "alias_of_root_id": "bound-tree",
+                },
+            ]
+        },
+        {"bound-tree": bound_child, "derived": bound_child, "alias": bound_child},
+    )
+    assert list(owners.values()) == [["bound-tree"]]

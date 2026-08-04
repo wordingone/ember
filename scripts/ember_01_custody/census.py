@@ -498,6 +498,127 @@ def _compute_ignored_membership_sha256(
     return _spooled_membership_digest(relative for relative, _ in rows)
 
 
+def _resolved_path_key(path: Path) -> str:
+    return str(Path(path).resolve()).replace("\\", "/").casefold()
+
+
+def bound_root_paths(
+    specification: Mapping[str, Any],
+    bindings: Mapping[str, Path],
+) -> dict[str, list[str]]:
+    """Map every physically bound root's resolved path to the root_ids on it.
+
+    Roots that only re-express another root (`source_root_id`) or that declare
+    themselves an alias (`alias_of_root_id`) are not path owners — the root
+    they derive from is.
+    """
+    owners: dict[str, list[str]] = defaultdict(list)
+    for root_spec in specification.get("roots", []):
+        if root_spec.get("source_root_id") or root_spec.get("alias_of_root_id"):
+            continue
+        root_id = root_spec.get("root_id")
+        bound = bindings.get(root_id)
+        if not isinstance(root_id, str) or bound is None or not Path(bound).exists():
+            continue
+        owners[_resolved_path_key(Path(bound))].append(root_id)
+    return dict(owners)
+
+
+def discovery_children(
+    bound: Path,
+    patterns: Iterable[str],
+    root_id: str,
+    owners: Mapping[str, list[str]] | None = None,
+) -> tuple[list[Path], list[dict[str, Any]]]:
+    """Name-matched children of `bound`, minus any already bound to another root.
+
+    A discovery root whose glob happens to match a directory that some other
+    root already binds would otherwise hash that whole tree a second time
+    (#1380: the `ember*` pattern self-matched the live execution tree, which
+    local-execution-tree already binds). The exclusion is by resolved path, so
+    it holds for every such collision, not just the ones anyone has noticed.
+    """
+    pattern_list = list(patterns)
+    matched = sorted(
+        (
+            child
+            for child in bound.iterdir()
+            if any(
+                fnmatch.fnmatch(child.name.casefold(), pattern.casefold())
+                for pattern in pattern_list
+            )
+        ),
+        key=lambda child: child.name.casefold(),
+    )
+    if not owners:
+        return matched, []
+    children: list[Path] = []
+    excluded: list[dict[str, Any]] = []
+    for child in matched:
+        try:
+            key = _resolved_path_key(child)
+        except OSError:
+            children.append(child)
+            continue
+        bound_elsewhere = sorted(
+            owner for owner in owners.get(key, []) if owner != root_id
+        )
+        if bound_elsewhere:
+            excluded.append(
+                {
+                    "name": child.name,
+                    "normalized_path": str(child.resolve()).replace("\\", "/"),
+                    "bound_root_ids": bound_elsewhere,
+                }
+            )
+            continue
+        children.append(child)
+    return children, excluded
+
+
+def alias_validation_error(
+    root_id: str,
+    alias_of_root_id: str,
+    bound: Path,
+    specs_by_id: Mapping[str, Mapping[str, Any]],
+    bindings: Mapping[str, Path],
+) -> dict[str, Any] | None:
+    """Why this alias cannot be trusted to stand in for its target, or None.
+
+    Dropping a root's bytes is only safe when the target provably hashes the
+    SAME path. Anything unproven — a self-reference, an undeclared target, a
+    target that is itself an alias (which is also how chains and cycles are
+    caught), an unbound target, or a target on different bytes — is a
+    contradiction, and the caller scans the root anyway. An alias must never
+    be able to remove custody material.
+    """
+    def error(code: str) -> dict[str, Any]:
+        return {
+            "code": code,
+            "root_id": root_id,
+            "alias_of_root_id": alias_of_root_id,
+            "resolution": "unresolved",
+        }
+
+    if alias_of_root_id == root_id:
+        return error("alias_target_is_self")
+    target = specs_by_id.get(alias_of_root_id)
+    if target is None:
+        return error("alias_target_root_missing")
+    if isinstance(target.get("alias_of_root_id"), str):
+        return error("alias_target_is_alias")
+    target_source = target.get("source_root_id")
+    target_binding_id = (
+        target_source if isinstance(target_source, str) else alias_of_root_id
+    )
+    target_bound = bindings.get(target_binding_id)
+    if target_bound is None or not Path(target_bound).exists():
+        return error("alias_target_unbound")
+    if _resolved_path_key(Path(target_bound)) != _resolved_path_key(bound):
+        return error("alias_target_path_mismatch")
+    return None
+
+
 def canonical_root_identity(payload: Mapping[str, Any]) -> dict[str, Any]:
     encoded = json.loads(json.dumps(payload))
     for artifact in encoded.get("artifacts", []):
@@ -545,6 +666,7 @@ def _current_root_membership(
     bound: Path,
     root_spec: Mapping[str, Any],
     initial_membership: list[str],
+    owners: Mapping[str, list[str]] | None = None,
 ) -> list[str]:
     # Must apply the exact same runtime-state exclusion filter as the
     # initial scan in build_root_census (#1365) — otherwise an excluded
@@ -562,17 +684,10 @@ def _current_root_membership(
     if scan == "directory_discovery":
         patterns = root_spec["name_patterns"]
         rows: list[tuple[str, Path]] = []
-        for child in sorted(
-            (
-                child
-                for child in bound.iterdir()
-                if any(
-                    fnmatch.fnmatch(child.name.casefold(), pattern.casefold())
-                    for pattern in patterns
-                )
-            ),
-            key=lambda child: child.name.casefold(),
-        ):
+        children, _ = discovery_children(
+            bound, patterns, str(root_spec.get("root_id", "")), owners
+        )
+        for child in children:
             git_probe = subprocess.run(
                 ["git", "rev-parse", "--git-dir"],
                 cwd=child if child.is_dir() else bound,
@@ -678,19 +793,11 @@ def _current_discovery_snapshot(
     root_id: str,
     bound: Path,
     patterns: list[str],
+    owners: Mapping[str, list[str]] | None = None,
 ) -> list[dict[str, Any]]:
     snapshot: list[dict[str, Any]] = []
-    for child in sorted(
-        (
-            child
-            for child in bound.iterdir()
-            if any(
-                fnmatch.fnmatch(child.name.casefold(), pattern.casefold())
-                for pattern in patterns
-            )
-        ),
-        key=lambda child: child.name.casefold(),
-    ):
+    children, _ = discovery_children(bound, patterns, root_id, owners)
+    for child in children:
         normalized_path = str(child.resolve()).replace("\\", "/")
         git_probe = subprocess.run(
             ["git", "rev-parse", "--git-dir"],
@@ -832,19 +939,12 @@ def build_root_census(
     # from current bytes; metadata can be restored without restoring bytes.
     if journal_path:
         load_hash_journal(journal_path)
-    direct_paths: dict[str, list[str]] = defaultdict(list)
-    for candidate_spec in specification.get("roots", []):
-        if candidate_spec.get("source_root_id"):
-            continue
-        candidate_id = candidate_spec.get("root_id")
-        candidate_bound = bindings.get(candidate_id)
-        if (
-            isinstance(candidate_id, str)
-            and candidate_bound is not None
-            and Path(candidate_bound).exists()
-        ):
-            key = str(Path(candidate_bound).resolve()).replace("\\", "/").casefold()
-            direct_paths[key].append(candidate_id)
+    direct_paths = bound_root_paths(specification, bindings)
+    specs_by_id = {
+        row["root_id"]: row
+        for row in specification.get("roots", [])
+        if isinstance(row.get("root_id"), str)
+    }
     for root_ids in direct_paths.values():
         if len(root_ids) > 1:
             contradictions.append(
@@ -893,6 +993,9 @@ def build_root_census(
             root_row["absence_attested"] = absence_attested
         if isinstance(source_root_id, str):
             root_row["source_root_id"] = source_root_id
+        alias_of_root_id = root_spec.get("alias_of_root_id")
+        if isinstance(alias_of_root_id, str):
+            root_row["alias_of_root_id"] = alias_of_root_id
         roots.append(root_row)
         if not present:
             if absence_policy is not None and not absence_attested:
@@ -940,6 +1043,26 @@ def build_root_census(
                         "resolution": "unresolved",
                     }
                 )
+        if isinstance(alias_of_root_id, str):
+            # #1380: a root declared an alias of another root is the SAME
+            # physical bytes under a second logical name. Re-hashing it buys
+            # no custody evidence and doubles the census. The alias is still
+            # declared, still checked for presence and required-root fields,
+            # and still names what it aliases — it just contributes no
+            # artifacts of its own.
+            #
+            # Dropping those bytes is sound ONLY when the target provably
+            # covers the same path, so an alias that cannot be verified is a
+            # contradiction AND is scanned normally below. Fail-closed: the
+            # field can add a contradiction, never remove custody material.
+            alias_error = alias_validation_error(
+                root_id, alias_of_root_id, bound, specs_by_id, bindings
+            )
+            if alias_error is None:
+                root_row["artifact_contribution"] = "none_alias"
+                continue
+            contradictions.append(alias_error)
+            root_row["artifact_contribution"] = "scanned_unverified_alias"
         provenance_class = root_spec.get("provenance_class", "unresolved")
         lineage_admissibility = root_spec.get(
             "lineage_admissibility", "unresolved"
@@ -1042,17 +1165,13 @@ def build_root_census(
                     or not all(isinstance(item, str) and item for item in patterns)
                 ):
                     raise ValueError("directory_discovery requires name_patterns")
-                children = sorted(
-                    (
-                        child
-                        for child in bound.iterdir()
-                        if any(
-                            fnmatch.fnmatch(child.name.casefold(), pattern.casefold())
-                            for pattern in patterns
-                        )
-                    ),
-                    key=lambda child: child.name.casefold(),
+                children, alias_excluded = discovery_children(
+                    bound, patterns, root_id, direct_paths
                 )
+                if alias_excluded:
+                    root_row["discovery_bound_elsewhere"] = (
+                        _portable_discovery_rows(alias_excluded)
+                    )
                 discovered: list[dict[str, Any]] = []
                 file_candidates = []
                 for child in children:
@@ -1498,6 +1617,7 @@ def build_root_census(
                 record["root_id"],
                 record["bound"],
                 record["patterns"],
+                direct_paths,
             )
         except Exception as exc:
             contradictions.append(
@@ -1560,6 +1680,7 @@ def build_root_census(
                 record["bound"],
                 record["root_spec"],
                 record["initial_membership"],
+                direct_paths,
             )
         except Exception as exc:
             contradictions.append(
