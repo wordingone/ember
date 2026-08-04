@@ -170,6 +170,15 @@ PATHPAT='([A-Za-z]:[/\\]+(Users|M|Downloads))|([A-Za-z]:[/\\]+[Ww][Ii][Nn][Dd][O
 # frozen-before. Enumerated individually -- NEVER directory globs. Each entry
 # has a REDACTIONS.md row. The operator-name checks still cover these files
 # in full (this exclusion applies ONLY to the paths grep).
+#
+# Class 3 (issue #1401, 2026-08-04): the EMBER-02 LAUNCH-AUTHORITY DECLARATION
+# and its run-spec. Same load-bearing-bytes reason as class 2: the
+# certificate's sha256 is its identity, cited by declaration-ledger.jsonl and
+# run-spec.json, so redacting the two path strings it carries would produce a
+# document that is not the certificate that was declared. The run-spec's
+# requested_scope is compared literally against the certificate's
+# execution_scope, so redacting one and not the other would make a consistent
+# pair read as a mismatch.
 PATHPAT_FIXTURE_EXCLUDE_ARGS=(
   ':(exclude)scripts/test_w1b_continuation.py'
   ':(exclude)tools/ember-cli/src/core/monitor-render.test.ts'
@@ -177,6 +186,8 @@ PATHPAT_FIXTURE_EXCLUDE_ARGS=(
   ':(exclude)tools/ember-cli/src/components/logo-homescreen.test.ts'
   ':(exclude)receipts/ember-d3-native-loop/d3-gym-fresh-rows-offset20-len12-20260708T221652Z.json'
   ':(exclude)receipts/ember-d3-native-loop/d3-broader-multifamily-fresh-rows-reconstructed.json'
+  ':(exclude)receipts/ember-02-launch-authority/certificate.json'
+  ':(exclude)receipts/ember-02-launch-authority/run-spec.json'
 )
 PATHPAT_SELF_EXCLUDE_ARGS=()
 if surface_bytes_match 'tools/repo-guard.sh'; then

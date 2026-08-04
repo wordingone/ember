@@ -1,0 +1,15 @@
+{
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "schema_version": "ember-content-addressed-authority-binding/v1",
+  "artifact_path": "receipts/ember-02-launch-authority/declaration-ledger.jsonl",
+  "artifact_sha256": "9fcfbdc607e7b37f89d95bbc45a139ea26a06b14801dfeb5efe50e4e6468ebc6",
+  "ticket": "1401",
+  "ts": "2026-08-04T15:20:00Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "reason": "the declaration ledger row bound to certificate 54882a9a; the row schema is fixed by the minting authority"
+}

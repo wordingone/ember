@@ -1,0 +1,15 @@
+{
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "schema_version": "ember-content-addressed-authority-binding/v1",
+  "artifact_path": "receipts/ember-02-launch-authority/run-spec.json",
+  "artifact_sha256": "d336f3f79e2116ac9362d5952cb69180c24f6300415c7f8c3089358b6db983a9",
+  "ticket": "1401",
+  "ts": "2026-08-04T15:20:00Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "reason": "the certified run-spec bound to certificate 54882a9a; its requested_scope is compared literally against the certificate execution_scope"
+}

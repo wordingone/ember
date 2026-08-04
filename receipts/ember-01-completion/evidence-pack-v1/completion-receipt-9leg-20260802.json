@@ -1,0 +1,307 @@
+{
+  "authority_certificate": {
+    "certificate_legs": {
+      "1": true,
+      "2": true,
+      "3": true,
+      "4": true,
+      "5": true,
+      "6": true,
+      "7": true
+    },
+    "errors": [],
+    "ok": true,
+    "schema": "ember-authority-certificate-v1"
+  },
+  "certificate_legs": {
+    "1": "resolved-true",
+    "2": "resolved-true",
+    "3": "resolved-true",
+    "4": "resolved-true",
+    "5": "resolved-true",
+    "6": "resolved-true",
+    "7": "resolved-true",
+    "8": "resolved-true",
+    "9": "resolved-true"
+  },
+  "checkout": {
+    "branch": null,
+    "clean": true,
+    "detached": true,
+    "head": "323be9da58a7527f3526d4a9a839ae2b5765bfd1",
+    "head_unchanged": true,
+    "status": [],
+    "status_before": []
+  },
+  "claim_scope": {
+    "benchmark_completed": false,
+    "model_completed": false,
+    "note": "A bare clean clone honestly reports the operator-machine-bound legs (custody/identity/seat) as UNRESOLVED. ok=true requires an operator-machine run with real roots + owned checkpoint + seat.",
+    "runtime_completed": false,
+    "training_completed": false
+  },
+  "completion_subject_goal_id": "EMBER-01",
+  "goal_id": "EMBER-02",
+  "leg_detail": {
+    "1": {
+      "evidence": {
+        "github_cli_executable_name": "gh.exe",
+        "github_cli_executable_sha256": "fdc88cd790510c1367ebd87f57de4d929b409d3483b6f8c6916653fc77d6621a",
+        "issue_census_sha256": "5e63457c219c7649b9b8b8c20a9b55d0e9ec2d16261830ad18ee027329193b81",
+        "live_issue_command": [
+          "gh",
+          "issue",
+          "list",
+          "--repo",
+          "wordingone/ember",
+          "--state",
+          "open",
+          "--limit",
+          "1000",
+          "--json",
+          "number,title,body,url,createdAt,updatedAt,labels,author,state,stateReason,closedAt,comments"
+        ],
+        "live_issue_count": 125,
+        "live_issue_stdout_sha256": "44e503ae8f3e9477facd5c557e01cce01444107d27202369b3a8393c79169517",
+        "returncode": 0,
+        "stdout_tail": "EMBER_01_CUSTODY PASS: roots=24 artifacts=1526277",
+        "tool": "scripts/ember_01_custody/census.py"
+      },
+      "reason": "census PASS",
+      "state": "resolved-true",
+      "title": "custody root census (operator-machine roots)"
+    },
+    "2": {
+      "evidence": {
+        "github_cli_executable_name": "gh.exe",
+        "github_cli_executable_sha256": "fdc88cd790510c1367ebd87f57de4d929b409d3483b6f8c6916653fc77d6621a",
+        "issue_census_sha256": "5e63457c219c7649b9b8b8c20a9b55d0e9ec2d16261830ad18ee027329193b81",
+        "live_issue_command": [
+          "gh",
+          "issue",
+          "list",
+          "--repo",
+          "wordingone/ember",
+          "--state",
+          "open",
+          "--limit",
+          "1000",
+          "--json",
+          "number,title,body,url,createdAt,updatedAt,labels,author,state,stateReason,closedAt,comments"
+        ],
+        "live_issue_count": 125,
+        "live_issue_stdout_sha256": "44e503ae8f3e9477facd5c557e01cce01444107d27202369b3a8393c79169517",
+        "returncode": 0,
+        "stdout_tail": "EMBER_01_CUSTODY PASS: roots=24 artifacts=1526277",
+        "tool": "scripts/ember_01_custody/census.py"
+      },
+      "reason": "census PASS",
+      "state": "resolved-true",
+      "title": "artifact custody census"
+    },
+    "3": {
+      "evidence": {
+        "checkpoint_sha256": "0f4991378b7631fa7f849299d0a18c3ff50a96ac557c852fc4f17e0422365f0b",
+        "disposition": "OWNED_CANDIDATE",
+        "ownership": "OWNED_CLEAN_GENESIS",
+        "parameter_receipt_sha256": "1faddbf98b8dcf9b585e0747702dc9e5829c77821e974bbcfe11d74feb637f41",
+        "tool": "scripts/ember_01_identity/parameter_identity_binding.py"
+      },
+      "reason": "real checkpoint identity re-derived",
+      "state": "resolved-true",
+      "title": "identity round-trip on real checkpoint"
+    },
+    "4": {
+      "evidence": {
+        "all_rejected": true,
+        "axes": {
+          "backend": {
+            "expected_finding": "binding.backend_mismatch",
+            "finding_codes": [
+              "binding.backend.executable_sha256_mismatch",
+              "binding.backend_mismatch"
+            ],
+            "rejected": true,
+            "returncode": 1,
+            "timed_out": false
+          },
+          "benchmark_id": {
+            "expected_finding": "binding.evaluation.benchmark_id_mismatch",
+            "finding_codes": [
+              "binding.evaluation.benchmark_id_mismatch"
+            ],
+            "rejected": true,
+            "returncode": 1,
+            "timed_out": false
+          },
+          "checkpoint_bytes": {
+            "detail": "receipt claims subject_checkpoint_sha256='0f4991378b7631fa7f849299d0a18c3ff50a96ac557c852fc4f17e0422365f0b' but the checkpoint manifest bytes on disk hash to '747ac589cb7106d17c04447d33947172b9764ac278bdf1cf9db32c23dcaa296d'",
+            "finding": "parameter_identity_mismatch",
+            "rejected": true
+          },
+          "comparator": {
+            "expected_finding": "binding.evaluation.comparator_identity_mismatch",
+            "finding_codes": [
+              "binding.evaluation.comparator_identity_mismatch"
+            ],
+            "rejected": true,
+            "returncode": 1,
+            "timed_out": false
+          },
+          "data_learned_signal": {
+            "expected_finding": "provenance.forbidden_learned_signal",
+            "finding_codes": [
+              "provenance.forbidden_learned_signal"
+            ],
+            "rejected": true,
+            "returncode": 1,
+            "timed_out": false
+          },
+          "mechanism": {
+            "expected_finding": "binding.mechanisms_mismatch",
+            "finding_codes": [
+              "binding.mechanisms.router_mismatch",
+              "binding.mechanisms_mismatch"
+            ],
+            "rejected": true,
+            "returncode": 1,
+            "timed_out": false
+          },
+          "param_count": {
+            "expected_finding": "binding.parameters_mismatch",
+            "finding_codes": [
+              "binding.parameters_mismatch"
+            ],
+            "rejected": true,
+            "returncode": 1,
+            "timed_out": false
+          },
+          "tokenizer": {
+            "expected_finding": "binding.tokenizer_mismatch",
+            "finding_codes": [
+              "binding.tokenizer.sha256_mismatch",
+              "binding.tokenizer_mismatch"
+            ],
+            "rejected": true,
+            "returncode": 1,
+            "timed_out": false
+          }
+        },
+        "axis_count": 8,
+        "failures": [],
+        "tool": "scripts/verify_ember01_completion.py::cond4_tamper_battery"
+      },
+      "reason": "all eight isolated identity tamper axes rejected",
+      "state": "resolved-true",
+      "title": "identity fail-closed on tampered checkpoint"
+    },
+    "5": {
+      "evidence": {
+        "returncode": 0,
+        "tool": "bun test"
+      },
+      "reason": "bun test model-seat passed",
+      "state": "resolved-true",
+      "title": "reference model seat resolves and serves"
+    },
+    "6": {
+      "evidence": {
+        "github_cli_executable_name": "gh.exe",
+        "github_cli_executable_sha256": "fdc88cd790510c1367ebd87f57de4d929b409d3483b6f8c6916653fc77d6621a",
+        "issue_census_sha256": "5e63457c219c7649b9b8b8c20a9b55d0e9ec2d16261830ad18ee027329193b81",
+        "live_issue_command": [
+          "gh",
+          "issue",
+          "list",
+          "--repo",
+          "wordingone/ember",
+          "--state",
+          "open",
+          "--limit",
+          "1000",
+          "--json",
+          "number,title,body,url,createdAt,updatedAt,labels,author,state,stateReason,closedAt,comments"
+        ],
+        "live_issue_count": 125,
+        "live_issue_stdout_sha256": "44e503ae8f3e9477facd5c557e01cce01444107d27202369b3a8393c79169517",
+        "returncode": 0,
+        "stdout_tail": "EMBER_01_CUSTODY PASS: roots=24 artifacts=1526277",
+        "tool": "scripts/ember_01_custody/census.py"
+      },
+      "reason": "census PASS",
+      "state": "resolved-true",
+      "title": "benchmark registry freeze"
+    },
+    "7": {
+      "evidence": {
+        "returncode": 0,
+        "stdout_tail": "er/tokenizer.json --expected-receipt-sha256 cf98be6342e71a51dcc49e4e54b7323c20904ebf8f68e763a09a2a9be9d3bf8a --expected-tokenizer-sha256 2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97 --expected-architecture-sha256 c267b0de1f7fa6f6b039a28bcb9af1fe87964dc13786abe5bec13aa44ee2cd6b --steps <N> --sequence-length <seq-len> --checkpoint-interval 50 --write-budget-gib <write-budget-gib>",
+        "tool": "tools/ember-restart-3b/launch_packet.py"
+      },
+      "reason": "launch packet ready",
+      "state": "resolved-true",
+      "title": "3B launch packet readiness"
+    },
+    "8": {
+      "evidence": {
+        "tool": "verify_authority_conservation.verify"
+      },
+      "reason": "authority conservation certificate ok",
+      "state": "resolved-true",
+      "title": "authority conservation certificate"
+    },
+    "9": {
+      "evidence": {
+        "github_cli_executable_name": "gh.exe",
+        "github_cli_executable_sha256": "fdc88cd790510c1367ebd87f57de4d929b409d3483b6f8c6916653fc77d6621a",
+        "issue_census_sha256": "5e63457c219c7649b9b8b8c20a9b55d0e9ec2d16261830ad18ee027329193b81",
+        "live_issue_command": [
+          "gh",
+          "issue",
+          "list",
+          "--repo",
+          "wordingone/ember",
+          "--state",
+          "open",
+          "--limit",
+          "1000",
+          "--json",
+          "number,title,body,url,createdAt,updatedAt,labels,author,state,stateReason,closedAt,comments"
+        ],
+        "live_issue_count": 125,
+        "live_issue_stdout_sha256": "44e503ae8f3e9477facd5c557e01cce01444107d27202369b3a8393c79169517",
+        "returncode": 0,
+        "stdout_tail": "EMBER_01_CUSTODY PASS: roots=24 artifacts=1526277",
+        "tool": "scripts/ember_01_custody/census.py"
+      },
+      "reason": "census PASS",
+      "state": "resolved-true",
+      "title": "public issue census freeze"
+    }
+  },
+  "leg_summary": {
+    "resolved_false": [],
+    "resolved_true": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9"
+    ],
+    "unresolved": []
+  },
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "ok": true,
+  "schema": "ember-01-completion-receipt-v1",
+  "selection": {
+    "selected_goal_suffix": "EMBER-GOAL-GRAPH.json",
+    "selector_sha256": "cb9df0b3cd915969a4b97703f26865fb0c0bb9733c36e0e93f463991766aa220",
+    "unchanged_during_verification": true
+  },
+  "verified_at_utc": "2026-08-02T15:15:29.296633+00:00",
+  "workstream_id": "EMBER-02A"
+}

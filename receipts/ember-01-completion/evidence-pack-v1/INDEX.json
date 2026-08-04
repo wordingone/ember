@@ -1,0 +1,150 @@
+{
+  "schema": "ember-01-completion-evidence-pack-index-v1",
+  "ticket": "1401",
+  "ts": "2026-08-04T15:20:00Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "completion_subject_goal_id": "EMBER-01",
+  "public_master_sha": "3028f807995977449660f1407e538adc7a55c3d8",
+  "purpose": "Make EMBER-01 completion provable from the public repository. Before this pack the nine-leg completion receipt, the fresh green verification, and the launch-authority declaration existed only on the operator machine, so the completion claim rested on assertion rather than committed evidence (issue #1401).",
+  "artifacts": [
+    {
+      "path": "receipts/ember-01-completion/evidence-pack-v1/completion-receipt-9leg-20260802.json",
+      "sha256": "7306d591c8a7a60f3629870747fe79832d20a528ef7576ede310fd21155390e2",
+      "schema": "ember-01-completion-receipt-v1",
+      "emitted_at_utc": "2026-08-02T15:15:29Z",
+      "pinned_commit": "323be9da58a7527f3526d4a9a839ae2b5765bfd1",
+      "byte_state": "verbatim",
+      "proves": "All nine EMBER-01 certificate legs stood resolved-true simultaneously in one verifier run on 2026-08-02, with ok=true and an empty unresolved set. This is the receipt whose sha256 the freeze-lift record cites.",
+      "backs_legs": [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    },
+    {
+      "path": "receipts/ember-01-completion/evidence-pack-v1/verifier-receipt-9leg-20260804.json",
+      "sha256": "48d98dc2aff79b71ad59ed00b4458c3d40d88709a97b9dd00badb72e64b89707",
+      "schema": "ember-01-completion-receipt-v1",
+      "emitted_at_utc": "2026-08-04T13:06:12Z",
+      "pinned_commit": "3028f807995977449660f1407e538adc7a55c3d8",
+      "byte_state": "verbatim",
+      "proves": "The nine legs still stand resolved-true at the current public tip, not only at the older 2026-08-02 tip. Its checkout block records head 3028f807, clean=true, and closure_sha256 e8287af1551d6115c4bd5355bab73f1b8452ca21ed6b31b6de25a0a10c4a09bc. This is the document the certificate binds as completion_receipt_sha256.",
+      "backs_legs": [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    },
+    {
+      "path": "receipts/ember-01-completion/evidence-pack-v1/verify-run-receipt-20260804.json",
+      "sha256": "c221c47d78c98fcbea93262bcf625bfc17138a0aa40962f338f1a81566aef505",
+      "schema": "ember-cli/verify-run-receipt@1",
+      "emitted_at_utc": "2026-08-04T13:06:15Z",
+      "pinned_commit": "3028f807995977449660f1407e538adc7a55c3d8",
+      "byte_state": "redacted",
+      "redaction": "worktree_path rewritten to the <USER_HOME> token per REDACTIONS.md. No other byte changed; the file still parses and every non-path value is byte-identical to the emitted receipt.",
+      "proves": "The 2026-08-04 verification was a real executed run, not a replayed record: job verify-msemvz0yrvyq00, 2290682 ms wall, per-leg timings, detached worktree at the pinned commit, no reaped PIDs, ok=true.",
+      "backs_legs": []
+    },
+    {
+      "path": "receipts/ember-02-launch-authority/certificate.json",
+      "sha256": "54882a9a831685e2552fbfce79e4bd35cad0fedb974a6048e16bf7b40ede606e",
+      "schema": "ember-spine-certified-declaration-v1",
+      "emitted_at_utc": "2026-08-04T13:10:37Z",
+      "byte_state": "verbatim",
+      "proves": "The EMBER-01 certificate. SPINE_CERTIFIED was declared on the strength of the nine-leg completion (declaration_conjuncts.nine_leg_completion=true, birth_failure_classes_disposed=true, record_coherent=true), binding public_master_sha 3028f807, closure_sha256 e8287af1, and completion_receipt_sha256 48d98dc2 — the verifier receipt in this pack. There is no separate EMBER-01 certificate file: this declaration is it.",
+      "backs_legs": [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    },
+    {
+      "path": "receipts/ember-02-launch-authority/declaration-ledger.jsonl",
+      "sha256": "9fcfbdc607e7b37f89d95bbc45a139ea26a06b14801dfeb5efe50e4e6468ebc6",
+      "schema": "ember-spine-declaration-ledger-row-v1",
+      "byte_state": "verbatim",
+      "proves": "The declaration was ledgered under certificate_sha256 54882a9a, so the certificate above is the one that was actually declared rather than one produced afterwards.",
+      "backs_legs": []
+    },
+    {
+      "path": "receipts/ember-02-launch-authority/run-spec.json",
+      "sha256": "d336f3f79e2116ac9362d5952cb69180c24f6300415c7f8c3089358b6db983a9",
+      "schema": "ember-certified-train-run-v1",
+      "byte_state": "verbatim",
+      "proves": "The R1 WARM-100 run authorized by that certificate: run_id r1-warm100-20260804, seed 830001, 100 optimizer steps, and a requested_scope that sits inside the certificate's execution_scope.",
+      "backs_legs": []
+    },
+    {
+      "path": "receipts/ember-02-launch-authority/sha-binding-map.json",
+      "sha256": "d4bbfafa7f84a620849690392671816c64ead433ccf47ffcb80936de3e1f40f3",
+      "schema": "sha-binding-map",
+      "byte_state": "redacted",
+      "redaction": "Project-drive paths rewritten to <TEMP_WORKSPACE> per REDACTIONS.md, keeping the repo-relative remainder. Four entries whose sources live in a private operator workspace outside this repository (input_authority, seat, subject_manifest, tokenizer) have their paths elided entirely; the sha256 in the certificate remains the binding for those.",
+      "proves": "Which source document each certificate sha256 was read from, so a reader can tell a repo-resident binding from a machine-bound one without guessing.",
+      "backs_legs": []
+    }
+  ],
+  "binding_sidecars": [
+    {
+      "path": "receipts/ember-01-completion/evidence-pack-v1/verify-run-receipt-20260804.authority.json",
+      "sha256": "717518bf27edf127e9bf56495406e81a6325e8098993cb994109487be2985c0b",
+      "binds": "receipts/ember-01-completion/evidence-pack-v1/verify-run-receipt-20260804.json"
+    },
+    {
+      "path": "receipts/ember-02-launch-authority/certificate.authority.json",
+      "sha256": "734fa8463a139914803f4f7c152e14b8a3f504d427a5b6639bf6e141faf30ec3",
+      "binds": "receipts/ember-02-launch-authority/certificate.json"
+    },
+    {
+      "path": "receipts/ember-02-launch-authority/declaration-ledger.authority.json",
+      "sha256": "b7a570a48b631a5320ae5da7da9e137630141c6c6f845961466a12a703cf44b9",
+      "binds": "receipts/ember-02-launch-authority/declaration-ledger.jsonl"
+    },
+    {
+      "path": "receipts/ember-02-launch-authority/run-spec.authority.json",
+      "sha256": "b987d1e3631b5f80f538a3884adbd5f0014313aff8adade0bc206178acdf416c",
+      "binds": "receipts/ember-02-launch-authority/run-spec.json"
+    },
+    {
+      "path": "receipts/ember-02-launch-authority/sha-binding-map.authority.json",
+      "sha256": "be7617dbaa5983c0875bde0522ed6e85cf1eadd1bdb21a44746d9f81daf4684b",
+      "binds": "receipts/ember-02-launch-authority/sha-binding-map.json"
+    }
+  ],
+  "binding_sidecars_note": "Five artifacts here cannot carry the repository's goal binding inline — their schema is fixed by the tool that emitted them, or their sha256 is cited elsewhere so no field may be added. Each binds instead through a content-addressed sidecar that names the artifact and records its digest, the same mechanism .github/labels.yml uses. The sidecars are plumbing, not evidence: they prove nothing about EMBER-01.",
+  "certificate_legs": {
+    "1": "custody root census (operator-machine roots)",
+    "2": "artifact custody census",
+    "3": "identity round-trip on real checkpoint",
+    "4": "identity fail-closed on tampered checkpoint",
+    "5": "reference model seat resolves and serves",
+    "6": "benchmark registry freeze",
+    "7": "3B launch packet readiness",
+    "8": "authority conservation certificate",
+    "9": "public issue census freeze"
+  },
+  "claim_scope": {
+    "note": "Copied from the verifier receipt this pack ships: a bare clean clone honestly reports the operator-machine-bound legs (custody/identity/seat) as UNRESOLVED. ok=true requires an operator-machine run with real roots + owned checkpoint + seat.",
+    "benchmark_completed": false,
+    "model_completed": false,
+    "runtime_completed": false,
+    "training_completed": false
+  },
+  "reproducibility": {
+    "basis": "The split below is not asserted: it is what a verifier run off the operator machine actually returned. See receipts/ember-01-completion/live-census-verifier-replay-96d8c83-v1.json, which resolved legs 3, 4, 7 and 8 true and left 1, 2, 5, 6 and 9 unresolved.",
+    "reproducible_from_repository_bytes_alone": {
+      "legs": [7, 8],
+      "detail": "Leg 7 re-runs tools/ember-restart-3b/launch_packet.py and leg 8 re-runs the authority conservation certificate; both read only tracked files."
+    },
+    "machine_independent_given_custody_only_checkpoint_bytes": {
+      "legs": [3, 4],
+      "detail": "Legs 3 and 4 re-derive and then tamper the owned checkpoint identity. The logic is machine-independent, but the checkpoint bytes are custody-only and are not public, so a stranger cannot supply the input. The public trace of leg 4 is receipts/ember-01-completion/cond4-tamper-battery-bf20f050-v1.json."
+    },
+    "operator_machine_bound": {
+      "legs": [1, 2, 5, 6, 9],
+      "detail": "Legs 1, 2, 6 and 9 need the operator machine's 24 custody roots, which the census cannot bind on a bare clone; leg 5 needs the reference model seat with its runtime dependencies installed. On a stranger clone these legs return UNRESOLVED, never false — the verifier does not silently convert an absent binding into a passing one."
+    }
+  },
+  "verification_procedure": [
+    "sha256 every path in artifacts[] and compare against the recorded digest; all seven must match.",
+    "sha256 receipts/ember-02-launch-authority/certificate.json and confirm it equals the certificate_sha256 in declaration-ledger.jsonl and run-spec.json (54882a9a831685e2552fbfce79e4bd35cad0fedb974a6048e16bf7b40ede606e).",
+    "sha256 the verifier receipt in this pack and confirm it equals the certificate's completion_receipt_sha256 (48d98dc2aff79b71ad59ed00b4458c3d40d88709a97b9dd00badb72e64b89707).",
+    "confirm the certificate's public_master_sha equals the verifier receipt's checkout.head (3028f807995977449660f1407e538adc7a55c3d8), and that both closure_sha256 values agree.",
+    "confirm every leg in the two nine-leg receipts reads resolved-true and that leg_summary.unresolved is empty.",
+    "re-run legs 7 and 8 from a fresh clone; expect them to resolve true. Legs 1, 2, 5, 6 and 9 will report UNRESOLVED off the operator machine, which is the honest result, not a failure."
+  ],
+  "frozen_bytes_note": "Five artifacts here carry a sha256 that another document cites, so they are committed verbatim and are enumerated in tools/frozen-receipt-exceptions.json rather than being edited to satisfy the receipt schema floor. Editing a hash-cited document to please a checker would break the citation that makes it evidence."
+}
