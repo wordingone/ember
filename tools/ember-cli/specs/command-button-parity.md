@@ -104,6 +104,15 @@ The grouping does NOT reintroduce the second-list defect below. Membership is a 
 the final group claims everything unnamed, so a newly registered skill, plugin, or MCP command is
 grouped and rendered with no edit anywhere. That totality is asserted against the LIVE registry.
 
+The bar can never starve the charts. `operator-surface-pane.ts` caps the rows the bar may spend
+at `paneHeight - baseChrome - (OPERATOR_GRAPH_CARD_MIN_HEIGHT + 1)`, so one whole chart card plus
+its hidden-count row always survives; the caption is the first row surrendered, and the bar keeps
+a one-row floor of its own so a short pane still owes the operator a reachable command surface.
+Rows the cap takes back cost no commands — the bar PAGES, so a tighter budget means more pager
+clicks and never a command without a button. The `+ 1` is load-bearing:
+`operatorGraphCardLayout` spends a row on its own "… N more charts" disclosure BEFORE dividing the
+rest into cards, so a floor of exactly one card's height yields zero cards and a lone caption.
+
 Captions are suppressed entirely below a two-row budget — a one-row bar is one fragment of one
 group, and a caption there would spend scarce columns saying nothing while pushing buttons onto a
 page they need not be on.

@@ -1169,7 +1169,41 @@ export function OperatorSurfacePane({
   // their own `run control` caption, and every command group opens with its own dim caption
   // (`launch`, `inspect`, `govern`, `more`) supplied by the bar itself.
   const commandButtons = commands ? buildCommandButtons(commands) : [];
-  const commandRowBudget = commandBarMaxRows ?? DEFAULT_COMMAND_BAR_MAX_ROWS;
+  const disabledReasonLines = disabledActionReason
+    ? [boundedSurfaceLine(`${disabledActionReason}`, innerWidth)]
+    : [];
+  // The activity viewport is always exactly two rows high: its title plus either one event row or
+  // one intentionally blank row. Counting only compactAgentLines.length allowed Yoga to reclaim
+  // the RUNNING/IDLE status row whenever the feed was empty.
+  const activityViewportRows = 2;
+  // Chrome this pane owes before the command bar asks for anything: borders, status, controls,
+  // any disabled-action reason, metrics, provenance, activity.
+  const baseChromeRows = 2 + 1 + controlRows.length + disabledReasonLines.length
+    + compactMetrics.length + 1 + activityViewportRows;
+  // #1399 review: the bar must never be able to eat the graph budget whole. The rows it may spend
+  // are capped so that ONE WHOLE CHART CARD still fits — the legibility bar is "a card survives at
+  // every supported size", and leaving that to arithmetic that happens to work out at today's
+  // sizes is how it silently stops being true at tomorrow's. Rows the cap takes away are not rows
+  // of commands lost: the bar PAGES, so a tighter budget means more pager clicks and never a
+  // command without a button (#1370). The bar keeps a one-row floor of its own for the same
+  // reason — a pane too short for both still owes the operator a reachable command surface, and
+  // the graph side already discloses its own shortfall as "… N more charts".
+  // MIN_HEIGHT + 1, not MIN_HEIGHT: `operatorGraphCardLayout` takes a row for its own
+  // hidden-card disclosure before it divides the rest into cards, so a budget of exactly one
+  // card's height yields ZERO cards and a lone "… N more charts" row. The floor has to buy what a
+  // visible card actually costs — the card plus the count beside it — or it buys nothing.
+  const graphFloorRows = OPERATOR_GRAPH_CARD_MIN_HEIGHT + 1;
+  const commandBarCeiling = Math.max(0, effectiveHeight - baseChromeRows - graphFloorRows);
+  // The caption is the first thing to go when rows are that scarce: it names a group the operator
+  // can already see, where a button row IS the surface.
+  const controlsCaption = commandButtons.length > 0 && commandBarCeiling >= 2 ? "run control" : undefined;
+  const commandRowBudget = Math.max(
+    1,
+    Math.min(
+      commandBarMaxRows ?? DEFAULT_COMMAND_BAR_MAX_ROWS,
+      commandBarCeiling - (controlsCaption ? 1 : 0),
+    ),
+  );
   const commandBarRows = commandButtons.length === 0
     ? 0
     : commandBarRowCount(
@@ -1179,7 +1213,6 @@ export function OperatorSurfacePane({
         commandPage ?? 0,
         commandNotice !== undefined,
       );
-  const controlsCaption = commandButtons.length > 0 ? "run control" : undefined;
   const commandBarElement = commandButtons.length === 0
     ? null
     : React.createElement(CommandBarPane, {
@@ -1195,18 +1228,10 @@ export function OperatorSurfacePane({
         ...(commandNotice !== undefined ? { notice: commandNotice } : {}),
       });
 
-  // Reserve exact rows for borders, status, controls, provenance, and activity. The remaining
-  // budget belongs exclusively to whole bounded chart cards; hidden cards are disclosed rather
-  // than relying on Ink to collapse arbitrary middle rows.
-  const disabledReasonLines = disabledActionReason
-    ? [boundedSurfaceLine(`${disabledActionReason}`, innerWidth)]
-    : [];
-  // The activity viewport is always exactly two rows high: its title plus either one event row or
-  // one intentionally blank row. Counting only compactAgentLines.length allowed Yoga to reclaim
-  // the RUNNING/IDLE status row whenever the feed was empty.
-  const activityViewportRows = 2;
-  const fixedChromeRows = 2 + 1 + controlRows.length + (controlsCaption ? 1 : 0) + commandBarRows
-    + disabledReasonLines.length + compactMetrics.length + 1 + activityViewportRows;
+  // Reserve exact rows for borders, status, controls, the command bar, provenance, and activity.
+  // The remaining budget belongs exclusively to whole bounded chart cards; hidden cards are
+  // disclosed rather than relying on Ink to collapse arbitrary middle rows.
+  const fixedChromeRows = baseChromeRows + (controlsCaption ? 1 : 0) + commandBarRows;
   const graphRowBudget = effectiveHeight - fixedChromeRows;
   // Card height responds only within the tested three-to-five-row legibility range. Constrained
   // panes retain deterministic leading cards and one explicit hidden-card count.

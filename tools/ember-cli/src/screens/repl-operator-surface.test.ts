@@ -10,7 +10,7 @@ import { mountInk } from "../ink/reconciler.ts";
 import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
 import { TerminalSizeContext } from "../ink/components.ts";
 import { _deliverKeyEvent } from "../ink/hooks.ts";
-import { resetCommandRegistryForTests } from "../command-registry.ts";
+import { getCommands, resetCommandRegistryForTests } from "../command-registry.ts";
 import { getActivityFeedState } from "../services/activity-feed.ts";
 import { ReplScreen } from "./repl.ts";
 import { operatorSurfaceWidth } from "./repl.ts";
@@ -27,7 +27,7 @@ function renderedLines(raw: string, columns: number, rows: number): string[] {
   return frame.cells.map((line) => line.map((cell) => cell?.char ?? " ").join(""));
 }
 
-function assertPaletteDoesNotContaminatePrompt(lines: string[], width: number): void {
+function assertPaletteDoesNotContaminatePrompt(lines: string[], width: number, allNames: string[]): void {
   // Both the palette selection and the actual input use ❯. Select the bottom-most closed
   // region first (the prompt/status panel), then find its glyph inside that region.
   const promptBottom = lines
@@ -50,11 +50,14 @@ function assertPaletteDoesNotContaminatePrompt(lines: string[], width: number): 
   expect(lines[promptTop]?.indexOf("╮")).toBe(width - 1);
   expect(lines[promptBottom]?.indexOf("╯")).toBe(width - 1);
 
-  const commandRow = /\/(?:observatory|watch|finetune|model|train|goal|cockpit|custody|benchmark|spine)\b/;
-  const commandNames = [
-    "observatory", "watch", "finetune", "model", "train",
-    "goal", "cockpit", "custody", "benchmark", "spine",
-  ];
+  // The command universe is the LIVE registry, not a hand-written list. The list this replaced
+  // named 10 commands while the registry holds 14, and the palette's "+N more" counts hidden
+  // commands over the WHOLE registry — so the conservation check below summed two different
+  // universes and could only balance by coincidence. It never ran on master (the card assertions
+  // above failed first), so the mismatch stayed invisible; deriving the universe from
+  // `getCommands` is also what every other command-surface test in this repo already does.
+  const commandRow = new RegExp(`/(?:${allNames.join("|")})\\b`);
+  const commandNames = allNames;
   for (let row = promptTop; row <= promptBottom; row++) {
     expect(lines[row] ?? "").not.toMatch(commandRow);
   }
@@ -75,6 +78,8 @@ function assertPaletteDoesNotContaminatePrompt(lines: string[], width: number): 
 describe("repl operator surface layout", () => {
   test("keeps the banner, 500-event pane, and prompt bounded through live resize", async () => {
     resetCommandRegistryForTests();
+    const registryNames = (await getCommands(process.cwd())).map((command) => command.name);
+    expect(registryNames.length).toBeGreaterThan(0);
     let handle: ReturnType<typeof mountInk> | undefined;
     let raw = "";
     const seedActivityBurst = () => getActivityFeedState().recentLines.push(
@@ -129,11 +134,25 @@ describe("repl operator surface layout", () => {
       // #894: the old unbounded TRAINING/LOSS + RESOURCE EFFICIENCY stream has been replaced by
       // independently bounded chart cards. At every supported size at least one card title and
       // one complete horizontal card boundary must survive the actual Repl resize path.
+      //
+      // The corner glyph is matched in BOTH box-drawing sets. The cards declare
+      // borderStyle:"single", which ink/border-glyphs.ts renders as "┌─┐└┘"; "+" corners belong to
+      // the "classic" style (ink/border-glyphs.ts:18). Pinning "+" alone asserted a style these
+      // cards do not use, so this pair could not pass at ANY size — it was red on master for that
+      // reason, independently of any layout change, and a red that cannot go green tells you
+      // nothing about the layout it was written to protect. What #894 actually cares about is that
+      // a WHOLE card survives, which is what both glyph sets express.
+      //
       // The size travels with the assertion: this loop covers four of them, and "expected true,
       // got false" alone does not say which one regressed.
-      expect({ size: `${columns}x${rows}`, cardTitle: lines.some((line) => /\+\s*(HOST|LOSS|TOKENS|LEARNING|ENERGY|GPU)/u.test(line)) })
+      const cardTitle = /[+┌]─?\s*(HOST|LOSS|TOKENS|LEARNING|ENERGY|GPU)/u;
+      // NESTED, so the pane's own frame cannot satisfy it: a card boundary is enclosed by the
+      // pane's vertical rules ("│ └────┘ │"). The pre-existing whole-line form would have passed
+      // on the outer box alone, i.e. on a pane showing no card at all.
+      const cardBorder = /[|│]\s*(\+-{3,}\+|[┌└]─{3,}[┐┘])\s*[|│]/u;
+      expect({ size: `${columns}x${rows}`, cardTitle: lines.some((line) => cardTitle.test(line)) })
         .toEqual({ size: `${columns}x${rows}`, cardTitle: true });
-      expect({ size: `${columns}x${rows}`, cardBorder: lines.some((line) => /\+-{3,}\+/u.test(line)) })
+      expect({ size: `${columns}x${rows}`, cardBorder: lines.some((line) => cardBorder.test(line)) })
         .toEqual({ size: `${columns}x${rows}`, cardBorder: true });
       expect(lines.some((line) => line.includes("TRAINING/LOSS"))).toBe(false);
       if (columns <= 40) {
@@ -187,6 +206,7 @@ describe("repl operator surface layout", () => {
       assertPaletteDoesNotContaminatePrompt(
         renderedLines(raw, width, 24),
         width - operatorSurfaceWidth(width),
+        registryNames,
       );
       raw = "";
     }
