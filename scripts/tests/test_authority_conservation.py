@@ -1572,3 +1572,147 @@ def test_moving_source_commit_alone_is_not_a_content_repin(tmp_path: Path) -> No
     assert "authority.crosswalk_source_commit_stale" not in {
         item["code"] for item in errors
     }, errors
+
+
+IDENTITY_REL = "data/fixture/input-identity.json"
+SHARD_REL = "data/fixture/shard.json"
+RECEIPT_REL = "data/fixture/shard.receipt.json"
+
+
+def _digest(root: Path, rel: str) -> str:
+    return hashlib.sha256((root / rel).read_bytes()).hexdigest()
+
+
+def _seed_input_identity_repo(root: Path, receipt_body: str = "minted once") -> None:
+    """A tree whose config selects an identity manifest pinning shard + receipt."""
+    write_valid_fixture(root)
+    data = root / "data" / "fixture"
+    data.mkdir(parents=True, exist_ok=True)
+    (root / SHARD_REL).write_text('{"records": []}\n', encoding="utf-8")
+    (root / RECEIPT_REL).write_text(
+        json.dumps({"admission": receipt_body}) + "\n", encoding="utf-8"
+    )
+    _repin_identity(root)
+    config_path = root / "configs" / "historical.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config["training"] = {"input_identity_manifest": IDENTITY_REL}
+    config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+
+
+def _repin_identity(root: Path) -> None:
+    """Re-pin the manifest onto whatever the pinned files currently hold."""
+    (root / IDENTITY_REL).write_text(
+        json.dumps(
+            {
+                "schema_version": "ember-input-identity-v1",
+                "artifact_id": "fixture-rung-v1",
+                "shard_path": SHARD_REL,
+                "sha256": _digest(root, SHARD_REL),
+                "bytes": (root / SHARD_REL).stat().st_size,
+                "admission_receipt_path": RECEIPT_REL,
+                "admission_receipt_sha256": _digest(root, RECEIPT_REL),
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _identity_errors(root: Path) -> list[dict]:
+    result = run_verifier(root)
+    return json.loads(result.stdout)["errors"]
+
+
+def test_reminted_admission_receipt_without_a_repin_is_rejected(tmp_path: Path) -> None:
+    """Issue #1394: PR #1333 re-minted the production rung receipt and left the
+    manifest pinning the old bytes, so the defect surfaced only when a certified
+    run failed closed at InputIdentityError byte_drift hours later."""
+    _seed_input_identity_repo(tmp_path)
+
+    (tmp_path / RECEIPT_REL).write_text(
+        json.dumps({"admission": "re-minted"}) + "\n", encoding="utf-8"
+    )
+
+    stale = [
+        item for item in _identity_errors(tmp_path)
+        if item["code"] == "input_identity.pin_stale"
+    ]
+    assert stale, _identity_errors(tmp_path)
+    assert RECEIPT_REL in stale[0]["detail"]
+    assert _digest(tmp_path, RECEIPT_REL) in stale[0]["detail"]
+
+
+def test_reminted_admission_receipt_with_a_repin_is_accepted(tmp_path: Path) -> None:
+    _seed_input_identity_repo(tmp_path)
+
+    (tmp_path / RECEIPT_REL).write_text(
+        json.dumps({"admission": "re-minted"}) + "\n", encoding="utf-8"
+    )
+    _repin_identity(tmp_path)
+
+    errors = _identity_errors(tmp_path)
+    assert not [item for item in errors if item["code"].startswith("input_identity.")], errors
+
+
+def test_edits_outside_the_pinned_set_are_not_a_repin_obligation(tmp_path: Path) -> None:
+    """The rule must stay quiet on the diffs that make up ordinary work."""
+    _seed_input_identity_repo(tmp_path)
+
+    (tmp_path / "data" / "fixture" / "notes.md").write_text("unrelated\n", encoding="utf-8")
+
+    errors = _identity_errors(tmp_path)
+    assert not [item for item in errors if item["code"].startswith("input_identity.")], errors
+
+
+def test_pin_claiming_bytes_no_artifact_carries_is_rejected(tmp_path: Path) -> None:
+    """The reverse direction: a manifest re-pinned onto a hash nothing matches."""
+    _seed_input_identity_repo(tmp_path)
+    identity = json.loads((tmp_path / IDENTITY_REL).read_text(encoding="utf-8"))
+    identity["admission_receipt_sha256"] = "f" * 64
+    (tmp_path / IDENTITY_REL).write_text(json.dumps(identity, indent=2) + "\n", encoding="utf-8")
+
+    assert_rejected(tmp_path, "input_identity.pin_stale")
+
+
+def test_shard_repin_is_coupled_on_the_same_rule(tmp_path: Path) -> None:
+    """Every artefact the manifest pins is covered, not the receipt alone."""
+    _seed_input_identity_repo(tmp_path)
+    (tmp_path / SHARD_REL).write_text('{"records": [1]}\n', encoding="utf-8")
+
+    assert_rejected(tmp_path, "input_identity.pin_stale")
+
+
+def test_shard_byte_count_pin_is_checked_alongside_the_digest(tmp_path: Path) -> None:
+    """Runtime admission checks the count separately, so one pin can pass while
+    the other fails closed."""
+    _seed_input_identity_repo(tmp_path)
+    identity = json.loads((tmp_path / IDENTITY_REL).read_text(encoding="utf-8"))
+    identity["bytes"] = identity["bytes"] + 1
+    (tmp_path / IDENTITY_REL).write_text(json.dumps(identity, indent=2) + "\n", encoding="utf-8")
+
+    assert_rejected(tmp_path, "input_identity.pin_stale")
+
+
+def test_pinned_artifact_that_is_absent_is_rejected(tmp_path: Path) -> None:
+    _seed_input_identity_repo(tmp_path)
+    (tmp_path / RECEIPT_REL).unlink()
+
+    assert_rejected(tmp_path, "input_identity.pinned_file_missing")
+
+
+def test_admission_receipt_path_without_a_digest_is_rejected(tmp_path: Path) -> None:
+    """Half a pin admits unbound bytes, which is the failure the pin exists for."""
+    _seed_input_identity_repo(tmp_path)
+    identity = json.loads((tmp_path / IDENTITY_REL).read_text(encoding="utf-8"))
+    del identity["admission_receipt_sha256"]
+    (tmp_path / IDENTITY_REL).write_text(json.dumps(identity, indent=2) + "\n", encoding="utf-8")
+
+    assert_rejected(tmp_path, "input_identity.admission_pin_incomplete")
+
+
+def test_identity_manifest_named_by_a_config_must_exist(tmp_path: Path) -> None:
+    _seed_input_identity_repo(tmp_path)
+    (tmp_path / IDENTITY_REL).unlink()
+
+    assert_rejected(tmp_path, "input_identity.pinned_file_missing")
