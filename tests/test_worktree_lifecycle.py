@@ -561,7 +561,7 @@ def test_hooks_and_agents_require_lifecycle_guard() -> None:
     pre_push = (REPO_ROOT / ".githooks" / "pre-push").read_text(encoding="utf-8")
     agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
 
-    invocation = 'python "$ROOT/scripts/worktree_lifecycle.py" audit --quiet'
+    invocation = 'python "$ROOT/scripts/worktree_lifecycle.py" audit --strict --quiet'
     assert invocation in pre_commit
     assert invocation in pre_push
     assert "scripts/worktree_lifecycle.py create" in agents
@@ -900,6 +900,10 @@ def test_strict_audit_names_the_cause_of_an_unscannable_registration(tmp_path: P
     failed = [item for item in contradictions_of(result) if item["code"] == "unscannable_registration"]
     assert [item["path"] for item in failed] == [str(broken)]
     assert failed[0]["reason"], "the cause must be named, not just the class"
+    # The failing command is named too, and it is one the census actually runs.
+    assert tuple(failed[0]["failing_probe"].split()) in {
+        tuple(probe) for probe in load_lifecycle_module().CENSUS_MATERIAL_PROBES
+    }
 
 
 def test_strict_audit_reports_an_unregistered_worktree_directory(tmp_path: Path) -> None:
@@ -912,7 +916,11 @@ def test_strict_audit_reports_an_unregistered_worktree_directory(tmp_path: Path)
 
     orphan = tmp_path / "orphan"
     orphan.mkdir()
-    (orphan / ".git").write_text("gitdir: /nowhere/.git/worktrees/orphan\n", encoding="utf-8")
+    # The gitdir must point into THIS repository's common dir -- that is what makes the
+    # directory ours to report rather than another repo's live worktree.
+    (orphan / ".git").write_text(
+        f"gitdir: {repo / '.git' / 'worktrees' / 'orphan'}\n", encoding="utf-8"
+    )
 
     result = strict(repo)
     assert result.returncode == 2
@@ -972,9 +980,7 @@ def test_reconcile_writes_a_dated_reasoned_tombstone(tmp_path: Path) -> None:
 
     state = read_state(repo)
     assert path_key_of(gone) not in state["managed"]
-    tombstones = [item for item in state["tombstones"] if item["key"] == path_key_of(gone)]
-    assert len(tombstones) == 1
-    tombstone = tombstones[0]
+    tombstone = state["retired"][path_key_of(gone)]
     assert tombstone["verb"] == "reconcile"
     assert tombstone["reason"] == "swept by post-merge cleanup"
     assert tombstone["retired_on"], "a tombstone without a date is not custody history"
@@ -996,7 +1002,7 @@ def test_retire_deregisters_and_leaves_no_removal_intent(tmp_path: Path) -> None
     state = read_state(repo)
     assert path_key_of(doomed) not in state["managed"]
     assert state["pending_removals"] == {}, "a completed retirement leaves no intent behind"
-    tombstone = [item for item in state["tombstones"] if item["key"] == path_key_of(doomed)][0]
+    tombstone = state["retired"][path_key_of(doomed)]
     assert tombstone["verb"] == "retire"
     assert tombstone["reason"] == "lane finished"
 
@@ -1050,7 +1056,7 @@ def test_reconcile_refusal_writes_no_tombstone(tmp_path: Path) -> None:
 
     state = read_state(repo)
     assert path_key_of(holding) in state["managed"]
-    assert state.get("tombstones", []) == []
+    assert state.get("retired", {}) == {}
     assert state.get("pending_removals", {}) == {}
 
 
@@ -1058,3 +1064,259 @@ def test_agents_documents_the_mechanical_registry_check() -> None:
     """The check only kills the class if the next agent knows it exists."""
     agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
     assert "scripts/worktree_lifecycle.py audit --strict" in agents
+
+
+def test_strict_audit_ignores_another_repositorys_linked_worktree(tmp_path: Path) -> None:
+    """A `.git` FILE is not evidence of OUR worktree -- it is what EVERY repository's
+    linked worktree looks like. The un-scoped marker test reported ~70 of them on this host
+    -- other repositories' live trees, sharing a parent directory with ours -- each with
+    "or remove the directory" attached, which is destructive advice aimed at someone else's
+    work and enough noise to bury the real findings. The gitdir must resolve inside THIS
+    repository's common dir.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    _managed(repo, tmp_path, "anchor")  # establishes tmp_path as a known root
+
+    (tmp_path / "stranger-home").mkdir()
+    stranger = make_repo(tmp_path / "stranger-home")
+    stranger_worktree = tmp_path / "stranger-worktree"
+    git(stranger, "worktree", "add", "-b", "stranger", str(stranger_worktree))
+    assert (stranger_worktree / ".git").is_file(), "precondition: a linked-worktree marker"
+
+    result = strict(repo)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout)["contradictions"] == []
+
+
+def test_strict_audit_reports_a_legacy_stale_row_and_the_printed_cure_clears_it(
+    tmp_path: Path,
+) -> None:
+    """The defect population, which `_managed` fixtures cannot reach.
+
+    The live registry holds 37 managed rows of which ZERO point at a missing directory, and
+    244 legacy paths of which 73 are missing. So every stale registration the census
+    reported was legacy -- and `reconcile` refused legacy rows, so `audit --strict` printed
+    a cure that returned LEGACY_PATH and strict stayed red forever. This builds its stale
+    row the way the registry actually got them: a raw `git worktree add` before install,
+    then the directory swept.
+    """
+    repo = make_repo(tmp_path)
+    legacy_stale = tmp_path / "legacy-stale"
+    git(repo, "worktree", "add", "-b", "legacy-stale", str(legacy_stale))
+    lifecycle(repo, "install", "--target", "6")
+    assert path_key_of(legacy_stale) in read_state(repo)["legacy_paths"]
+    shutil.rmtree(legacy_stale)
+
+    result = strict(repo)
+    stale = [item for item in contradictions_of(result) if item["code"] == "stale_registration"]
+    assert [item["path"] for item in stale] == [str(legacy_stale)]
+    # Inherited debt, so it is reported on every run but does not fail the gate; that split
+    # is what lets the hooks enforce the class today instead of blocking on the backlog.
+    assert stale[0]["severity"] == "backlog"
+    assert stale[0]["origin"] == "legacy"
+    assert result.returncode == 0, "backlog alone must not fail the default gate"
+    assert lifecycle(repo, "audit", "--strict", "--all", check=False).returncode == 2
+
+    # The cure the report printed must actually work. This is the assertion the previous
+    # revision could not make.
+    cure = lifecycle(repo, "reconcile", "--path", str(legacy_stale))
+    assert '"status": "RECONCILED"' in cure.stdout
+    assert '"origin": "legacy"' in cure.stdout
+
+    state = read_state(repo)
+    assert path_key_of(legacy_stale) not in state["legacy_paths"]
+    assert state["retired"][path_key_of(legacy_stale)]["origin"] == "legacy"
+    assert lifecycle(repo, "audit", "--strict", "--all", check=False).returncode == 0
+
+
+def test_strict_audit_reports_an_unregistered_stale_registration_and_clears_it(
+    tmp_path: Path,
+) -> None:
+    """The third population: registered with Git, unknown to the registry, directory gone.
+    `reconcile` used to raise NOT_MANAGED for these, which is the same unreachable cure.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    rogue = tmp_path / "rogue"
+    git(repo, "worktree", "add", "-b", "rogue", str(rogue))
+    shutil.rmtree(rogue)
+
+    result = strict(repo)
+    stale = [item for item in contradictions_of(result) if item["code"] == "stale_registration"]
+    assert [item["path"] for item in stale] == [str(rogue)]
+    assert stale[0]["origin"] == "unregistered"
+
+    cure = lifecycle(repo, "reconcile", "--path", str(rogue))
+    assert '"status": "RECONCILED"' in cure.stdout
+    assert read_state(repo)["retired"][path_key_of(rogue)]["origin"] == "unregistered"
+
+
+def test_interrupted_removal_with_the_tree_intact_points_at_retire(tmp_path: Path) -> None:
+    """The Windows shape: `git worktree remove` fails with Permission denied, the intent is
+    retained by design, and the worktree is untouched. `reconcile` refuses a non-empty path,
+    so printing it as the cure left an intent that no verb could clear -- red until someone
+    hand-edited the state JSON. The cure has to branch on whether the tree survived.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    survivor = _managed(repo, tmp_path, "survivor")
+
+    state = read_state(repo)
+    state["pending_removals"] = {
+        path_key_of(survivor): {
+            "path": str(survivor),
+            "verb": "retire",
+            "started_at": "2026-08-04T04:52:20+00:00",
+        }
+    }
+    state_path(repo).write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
+
+    result = strict(repo)
+    assert result.returncode == 2
+    found = [item for item in contradictions_of(result) if item["code"] == "interrupted_removal"][0]
+    assert found["tree_present"] is True
+    assert found["still_registered"] is True
+    assert "retire --path" in found["cure"]
+    assert "still present and still registered" in found["reason"]
+
+    # And the cure completes it: retire succeeds and the intent is gone.
+    lifecycle(repo, "retire", "--path", str(survivor))
+    assert read_state(repo)["pending_removals"] == {}
+    assert strict(repo).returncode == 0
+
+
+def test_abandon_intent_clears_the_journal_and_nothing_else(tmp_path: Path) -> None:
+    """The other exit for the same shape: the removal will not be retried and the worktree
+    stays. Only the journal entry is cleared -- the directory, the registration and the
+    registry row are all untouched -- so no branch of `interrupted_removal` is a dead end.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    kept = _managed(repo, tmp_path, "kept")
+
+    state = read_state(repo)
+    state["pending_removals"] = {
+        path_key_of(kept): {"path": str(kept), "verb": "retire", "started_at": "2026-08-04T04:52:20+00:00"}
+    }
+    state_path(repo).write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
+
+    result = lifecycle(repo, "reconcile", "--path", str(kept), "--abandon-intent")
+    assert '"status": "INTENT_ABANDONED"' in result.stdout
+
+    state = read_state(repo)
+    assert state["pending_removals"] == {}
+    assert path_key_of(kept) in state["managed"], "the row must be untouched"
+    assert kept.exists() and (kept / ".git").exists(), "the worktree must be untouched"
+    assert str(kept).replace("\\", "/") in git(repo, "worktree", "list", "--porcelain").stdout.replace("\\", "/")
+    assert strict(repo).returncode == 0
+
+
+def test_abandon_intent_refuses_when_there_is_no_intent(tmp_path: Path) -> None:
+    """It clears a journal entry and only that, so with nothing to clear it is an error --
+    never a quiet no-op that could be mistaken for a completed removal.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    live = _managed(repo, tmp_path, "no-intent")
+
+    result = lifecycle(repo, "reconcile", "--path", str(live), "--abandon-intent", check=False)
+    assert result.returncode == 2
+    assert "NO_PENDING_REMOVAL" in result.stderr
+
+
+def _deregister_leaving_the_directory(repo: Path, path: Path) -> None:
+    """Reproduce the partial removal: Git's record goes, the directory stays.
+
+    This is what a failed `git worktree remove` actually leaves on this host -- the delete
+    hit Permission denied AFTER the registration was dropped -- and it is the end state the
+    reviewer's probe reached once its own file handle was released.
+    """
+    module = load_lifecycle_module()
+    assert module.prune_one_worktree_metadata(repo, str(path)), "precondition: a record to remove"
+    assert path.is_dir() and any(path.iterdir()), "precondition: the directory survives"
+
+
+def test_partial_removal_that_left_the_directory_names_the_manual_step(tmp_path: Path) -> None:
+    """The third end state, and the one that had no exit at all.
+
+    Directory present, registration gone, row still managed. `retire` refuses
+    (MISSING_MANAGED_WORKTREE -- there is no registration to work from) and `reconcile`
+    refuses (PATH_NOT_EMPTY -- it will not discard bytes). Deleting them automatically is
+    precisely what this tool must never do unasked, so the exit is a named human step
+    rather than a verb, and the report has to say which half failed.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    partial = _managed(repo, tmp_path, "half-removed")
+
+    state = read_state(repo)
+    state["pending_removals"] = {
+        path_key_of(partial): {
+            "path": str(partial),
+            "verb": "retire",
+            "started_at": "2026-08-04T05:09:34+00:00",
+        }
+    }
+    state_path(repo).write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
+    _deregister_leaving_the_directory(repo, partial)
+
+    # Both verbs refuse, which is why an unconditional cure was a dead end.
+    assert "MISSING_MANAGED_WORKTREE" in lifecycle(repo, "retire", "--path", str(partial), check=False).stderr
+    assert "PATH_NOT_EMPTY" in lifecycle(repo, "reconcile", "--path", str(partial), check=False).stderr
+
+    found = [
+        item for item in contradictions_of(strict(repo)) if item["code"] == "interrupted_removal"
+    ][0]
+    assert found["tree_present"] is True
+    assert found["still_registered"] is False
+    assert "could not be deleted" in found["reason"]
+    assert "remove" in found["cure"] and "then" in found["cure"]
+    assert "retire --path" not in found["cure"], "retire cannot run without a registration"
+
+    # Follow the printed step: the operator removes the bytes, then reconcile clears the row.
+    shutil.rmtree(partial)
+    assert '"status": "RECONCILED"' in lifecycle(repo, "reconcile", "--path", str(partial)).stdout
+    assert strict(repo).returncode == 0
+
+
+def test_strict_reports_a_managed_row_that_git_does_not_register(tmp_path: Path) -> None:
+    """The same fact without an intent to explain it: `audit` raises
+    MISSING_MANAGED_WORKTREE and stops, so the inventory must carry the row itself.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    orphaned_row = _managed(repo, tmp_path, "row-only")
+    _deregister_leaving_the_directory(repo, orphaned_row)
+
+    result = strict(repo)
+    assert result.returncode == 2
+    found = [item for item in contradictions_of(result) if item["code"] == "missing_registration"]
+    assert [item["path"] for item in found] == [str(orphaned_row)]
+    assert found[0]["severity"] == "error"
+
+
+def test_strict_probe_is_the_census_probe(tmp_path: Path) -> None:
+    """Drift guard on the equivalence acceptance clause 4 depends on.
+
+    The census raises `registered_worktree_scan_failed` out of `_git_material_paths`, which
+    runs three specific `ls-files`/`diff` commands. `strict_report` probed with
+    `rev-parse --git-dir`, which succeeds on registrations whose `ls-files` fails -- so a
+    green `--strict` did not imply a green census, and the two detectors could drift apart
+    silently. This reads the census's own command tuple and requires it to match.
+    """
+    import ast
+
+    module = load_lifecycle_module()
+    census = ast.parse((REPO_ROOT / "scripts" / "ember_01_custody" / "census.py").read_text(encoding="utf-8"))
+    commands = None
+    for node in ast.walk(census):
+        if isinstance(node, ast.FunctionDef) and node.name == "_git_material_paths":
+            for statement in ast.walk(node):
+                if isinstance(statement, ast.Assign) and any(
+                    isinstance(target, ast.Name) and target.id == "commands"
+                    for target in statement.targets
+                ):
+                    commands = ast.literal_eval(statement.value)
+    assert commands is not None, "census._git_material_paths no longer defines `commands`"
+    assert tuple(commands) == module.CENSUS_MATERIAL_PROBES
