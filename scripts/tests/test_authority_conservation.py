@@ -1460,3 +1460,115 @@ def test_state_pointer_tamper_is_rejected(tmp_path: Path) -> None:
     write_valid_fixture(tmp_path)
     (tmp_path / "STATE.md").write_text("STATE rows moved elsewhere\n", encoding="utf-8")
     assert_rejected(tmp_path, "state.pointer_invalid")
+
+
+CROSSWALK_REL = "manifests/authority/issue-35-authority-supersession-crosswalk-v1.json"
+
+
+def _crosswalk_fixture(
+    *, source_commit: str, matrix_sha: str, evidence_sha: str
+) -> dict:
+    """The crosswalk fields the re-pin coupling rule reads, and nothing else."""
+    return {
+        "schema_version": "ember-authority-supersession-crosswalk-v1",
+        "repository": "wordingone/ember",
+        "source_commit": source_commit,
+        "current_authority": {
+            "matrix_path": "docs/ember-authority-matrix.md",
+            "matrix_sha256": matrix_sha,
+        },
+        "source_registries": [
+            {
+                "registry_id": "legacy",
+                "evidence": [
+                    {"path": "docs/spec/conditions-v1.md", "sha256": evidence_sha}
+                ],
+            }
+        ],
+        "rows": [],
+        "crosswalk_sha256": "d" * 64,
+    }
+
+
+def _seed_crosswalk_repo(root: Path, payload: dict) -> None:
+    write_valid_fixture(root)
+    crosswalk = root / CROSSWALK_REL
+    crosswalk.parent.mkdir(parents=True, exist_ok=True)
+    crosswalk.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    git_fixture(root, "init")
+    git_fixture(root, "config", "user.email", "fixture@example.invalid")
+    git_fixture(root, "config", "user.name", "fixture")
+    git_fixture(root, "add", ".")
+    git_fixture(root, "commit", "-m", "fixture")
+
+
+def _stage_crosswalk(root: Path, payload: dict) -> list[dict]:
+    (root / CROSSWALK_REL).write_text(
+        json.dumps(payload, indent=2) + "\n", encoding="utf-8"
+    )
+    git_fixture(root, "add", CROSSWALK_REL)
+    result = run_verifier(root, extra_args=("--staged",))
+    return json.loads(result.stdout)["errors"]
+
+
+def test_crosswalk_content_repin_without_moving_source_commit_is_rejected(
+    tmp_path: Path,
+) -> None:
+    """Issue #1381 contract (a): a re-pin may never leave the previous commit's
+    name behind. Without this the field is a pin nothing keeps true, and
+    --expected-source-commit silently certifies against the wrong commit."""
+    _seed_crosswalk_repo(
+        tmp_path,
+        _crosswalk_fixture(source_commit="a" * 40, matrix_sha="1" * 64, evidence_sha="2" * 64),
+    )
+
+    errors = _stage_crosswalk(
+        tmp_path,
+        # content pin moves, source_commit deliberately left stale
+        _crosswalk_fixture(source_commit="a" * 40, matrix_sha="1" * 64, evidence_sha="3" * 64),
+    )
+
+    stale = [
+        item for item in errors
+        if item["code"] == "authority.crosswalk_source_commit_stale"
+    ]
+    assert stale, errors
+    assert "legacy:docs/spec/conditions-v1.md" in stale[0]["detail"]
+    assert "a" * 40 in stale[0]["detail"]
+
+
+def test_crosswalk_content_repin_that_moves_source_commit_is_accepted(
+    tmp_path: Path,
+) -> None:
+    _seed_crosswalk_repo(
+        tmp_path,
+        _crosswalk_fixture(source_commit="a" * 40, matrix_sha="1" * 64, evidence_sha="2" * 64),
+    )
+
+    errors = _stage_crosswalk(
+        tmp_path,
+        _crosswalk_fixture(source_commit="b" * 40, matrix_sha="1" * 64, evidence_sha="3" * 64),
+    )
+
+    assert "authority.crosswalk_source_commit_stale" not in {
+        item["code"] for item in errors
+    }, errors
+
+
+def test_moving_source_commit_alone_is_not_a_content_repin(tmp_path: Path) -> None:
+    """The self-hash moves whenever any field moves, so coupling on it would
+    fire on every edit. Only described-content digests count."""
+    _seed_crosswalk_repo(
+        tmp_path,
+        _crosswalk_fixture(source_commit="a" * 40, matrix_sha="1" * 64, evidence_sha="2" * 64),
+    )
+
+    payload = _crosswalk_fixture(
+        source_commit="a" * 40, matrix_sha="1" * 64, evidence_sha="2" * 64
+    )
+    payload["crosswalk_sha256"] = "e" * 64
+    errors = _stage_crosswalk(tmp_path, payload)
+
+    assert "authority.crosswalk_source_commit_stale" not in {
+        item["code"] for item in errors
+    }, errors
