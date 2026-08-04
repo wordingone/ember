@@ -170,7 +170,7 @@ instead. Both dispositions are recorded here.
 
 Same ruling class as the 2026-07-09 C2 restore above — byte-exact sha256 is
 load-bearing, redaction breaks the pin, and re-pinning breaks the frozen-before law.
-Enumerated individually in `PATHPAT_EXCLUDE` in `tools/repo-guard.sh`. The
+Enumerated individually in `PATHPAT_FIXTURE_EXCLUDE_ARGS` in `tools/repo-guard.sh`. The
 operator-name checks still cover both files in full.
 
 - `receipts/ember-02-launch-authority/certificate.json`

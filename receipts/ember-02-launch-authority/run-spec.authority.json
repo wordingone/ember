@@ -8,8 +8,8 @@
   "artifact_path": "receipts/ember-02-launch-authority/run-spec.json",
   "artifact_sha256": "02ef9f24cbc5b5bcd7d1412e8b3d86897b5854c87d8c278acec2ab1d54ed88c8",
   "ticket": "1401",
-  "ts": "2026-08-04T19:39:52Z",
+  "ts": "2026-08-04T20:15:00Z",
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
-  "reason": "the certified run-spec bound to certificate 54882a9a; its requested_scope is compared literally against the certificate execution_scope"
+  "reason": "the certified run-spec bound to certificate 10696f76; its requested_scope is compared literally against the certificate execution_scope"
 }

@@ -1,7 +1,7 @@
 {
   "schema": "ember-01-completion-evidence-pack-index-v1",
   "ticket": "1401",
-  "ts": "2026-08-04T19:39:52Z",
+  "ts": "2026-08-04T20:15:00Z",
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "goal_id": "EMBER-02",
@@ -48,7 +48,7 @@
       "schema": "ember-spine-certified-declaration-v1",
       "emitted_at_utc": "2026-08-04T17:20:42Z",
       "byte_state": "verbatim",
-      "proves": "The EMBER-01 certificate. SPINE_CERTIFIED was declared on the strength of the nine-leg completion (declaration_conjuncts.nine_leg_completion=true, birth_failure_classes_disposed=true, record_coherent=true), binding public_master_sha 363177c9, closure_sha256 e8287af1, and completion_receipt_sha256 752376cd — the verifier receipt in this pack. There is no separate EMBER-01 certificate file: this declaration is it.",
+      "proves": "The EMBER-01 certificate. SPINE_CERTIFIED was declared on the strength of the nine-leg completion (declaration_conjuncts.nine_leg_completion=true, birth_failure_classes_disposed=true, record_coherent=true), binding public_master_sha 363177c9, closure_sha256 e8287af1, and completion_receipt_sha256 752376cd — the verifier receipt in this pack. There is no separate EMBER-01 certificate file: this declaration is it. Scope: this certificate authorized the executed r1-warm100-20260804 run and is committed as historical evidence of that run, not as a current launch authority — its superseded_by field reads null because that was true when it was minted, and later mints supersede it on the operator tree rather than by editing these frozen bytes.",
       "backs_legs": [1, 2, 3, 4, 5, 6, 7, 8, 9]
     },
     {
@@ -90,12 +90,12 @@
     },
     {
       "path": "receipts/ember-02-launch-authority/declaration-ledger.authority.json",
-      "sha256": "cdddc657c018d29c19d13499e8dbb27b6e1dc1d502e2e6307273c546691a538a",
+      "sha256": "64dbf412eeef2e5cf2ec44bfb2cf7df87512a6f7b13a541a3df2261326e787da",
       "binds": "receipts/ember-02-launch-authority/declaration-ledger.jsonl"
     },
     {
       "path": "receipts/ember-02-launch-authority/run-spec.authority.json",
-      "sha256": "7b02602d2a4dc338243009ff2fcade33c9bd1756d62593cca2272516f96a0916",
+      "sha256": "6868e815a6e7be935a3906a4d59e4d494fede028564ea0ab39666fa698e58a2d",
       "binds": "receipts/ember-02-launch-authority/run-spec.json"
     },
     {
