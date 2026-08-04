@@ -118,7 +118,22 @@ export function renderVerifyStatus(state: VerifyJobState | null): string {
     lines.push(`pinned commit: ${state.pinnedCommit}`);
   }
   if (state.worktreePath) {
-    lines.push(`verification worktree (isolated from the live checkout): ${state.worktreePath}`);
+    const detail = state.worktreeRegistered === false
+      ? " [not yet created -- this is the path this run will create]"
+      : state.worktreeDetached
+        ? " [detached]"
+        : "";
+    lines.push(
+      `verification worktree (isolated from the live checkout): ${state.worktreePath}${detail}`,
+    );
+  }
+  // #1371 N5: the budget is run-wide, so "how much is left" is a property of the RUN, and
+  // an operator watching a long census needs it to tell a slow run from a doomed one.
+  if (state.status === "running" && state.timeoutMs && state.remainingMs !== undefined) {
+    lines.push(
+      `run budget: ${Math.round(state.remainingMs / 60_000)} min left of ` +
+        `${Math.round(state.timeoutMs / 60_000)} min (shared by all remaining legs)`,
+    );
   }
   lines.push("", renderEnvBindingBlock(state.envBindings));
   if (state.error) {
@@ -164,6 +179,12 @@ export function renderVerifyStatus(state: VerifyJobState | null): string {
   }
   if (state.preservedCustodyOutputPath) {
     lines.push(`preserved custody-census output: ${state.preservedCustodyOutputPath}`);
+  }
+  if (state.worktreeForciblyRetired) {
+    lines.push(
+      "note: the verification worktree was dirty at release (a killed leg never deleted its own scratch) " +
+        "and was retired with the owner-scoped force path. Nothing outside this pipeline's worktree was touched.",
+    );
   }
   if (state.worktreeRetireError) {
     lines.push(

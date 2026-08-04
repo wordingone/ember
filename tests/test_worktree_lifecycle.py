@@ -820,3 +820,131 @@ def test_reconcile_refuses_a_legacy_snapshot_path(tmp_path: Path) -> None:
     # Live, so the live check fires first -- either refusal is correct, but it must
     # never succeed.
     assert "WORKTREE_LIVE" in result.stderr or "LEGACY_PATH" in result.stderr
+
+
+# ---------------------------------------------------------------------------
+# --detach (#1371): certification consumers refuse a branch-attached checkout
+# ---------------------------------------------------------------------------
+
+
+def test_create_detach_leaves_head_detached_and_mints_no_branch_ref(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    target = tmp_path / "detached-wt"
+
+    result = lifecycle(
+        repo,
+        "create",
+        "--path",
+        str(target),
+        "--detach",
+        "--owner",
+        "ember-cli-verify",
+        "--purpose",
+        "verify dispatch",
+        "--expires",
+        "2999-01-01",
+    )
+    payload = json.loads(result.stdout)
+
+    assert payload["status"] == "CREATED"
+    assert payload["detached"] is True
+    assert payload["branch"] is None
+    # The property the verifier actually reads: symbolic-ref fails on a detached HEAD.
+    assert git(target, "symbolic-ref", "--quiet", "HEAD", check=False).returncode != 0
+    # No refs/heads/* accumulates per run -- the leak the attached mode caused.
+    assert git(repo, "for-each-ref", "--format=%(refname)", "refs/heads/").stdout.strip() == (
+        "refs/heads/master"
+    )
+    state = json.loads(state_path(repo).read_text(encoding="utf-8"))
+    row = next(iter(state["managed"].values()))
+    assert row["detached"] is True
+    assert row["branch"] is None
+
+
+def test_create_refuses_detach_together_with_branch_and_refuses_neither(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+
+    both = lifecycle(
+        repo, "create", "--path", str(tmp_path / "a"), "--detach", "--branch", "x",
+        "--owner", "o", "--purpose", "p", "--expires", "2999-01-01", check=False,
+    )
+    assert both.returncode == 2
+    assert "DETACH_WITH_BRANCH" in both.stderr
+
+    neither = lifecycle(
+        repo, "create", "--path", str(tmp_path / "b"),
+        "--owner", "o", "--purpose", "p", "--expires", "2999-01-01", check=False,
+    )
+    assert neither.returncode == 2
+    assert "BRANCH_REQUIRED" in neither.stderr
+
+
+def test_retire_of_a_detached_row_archives_its_head(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    target = tmp_path / "detached-retire"
+    lifecycle(
+        repo, "create", "--path", str(target), "--detach",
+        "--owner", "ember-cli-verify", "--purpose", "p", "--expires", "2999-01-01",
+    )
+
+    payload = json.loads(lifecycle(repo, "retire", "--path", str(target)).stdout)
+
+    assert payload["status"] == "RETIRED"
+    assert payload["archive_ref"]
+    assert git(repo, "rev-parse", payload["archive_ref"]).stdout.strip() == payload["head"]
+
+
+# ---------------------------------------------------------------------------
+# --force-owner retire (#1371 N3): a killed pipeline leaves its own scratch behind
+# ---------------------------------------------------------------------------
+
+
+def test_force_owner_retires_a_dirty_worktree_only_for_the_owner_that_created_it(
+    tmp_path: Path,
+) -> None:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    target = tmp_path / "dirty-wt"
+    lifecycle(
+        repo, "create", "--path", str(target), "--detach",
+        "--owner", "ember-cli-verify", "--purpose", "p", "--expires", "2999-01-01",
+    )
+    # Exactly the residue a timeout leaves: verifier scratch nobody else wrote.
+    (target / ".ember01-verify-custody.tmp.json").write_text("{}", encoding="utf-8")
+
+    plain = lifecycle(repo, "retire", "--path", str(target), check=False)
+    assert plain.returncode == 2
+    assert "DIRTY_WORKTREE" in plain.stderr
+
+    wrong_owner = lifecycle(
+        repo, "retire", "--path", str(target), "--force-owner", "someone-else", check=False,
+    )
+    assert wrong_owner.returncode == 2
+    assert "DIRTY_WORKTREE" in wrong_owner.stderr
+    assert target.exists()
+
+    forced = json.loads(
+        lifecycle(repo, "retire", "--path", str(target), "--force-owner", "ember-cli-verify").stdout
+    )
+    assert forced["status"] == "RETIRED"
+    assert forced["forced"] is True
+    assert not target.exists()
+
+
+def test_force_owner_does_not_weaken_a_clean_retire(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    target = tmp_path / "clean-wt"
+    lifecycle(
+        repo, "create", "--path", str(target), "--detach",
+        "--owner", "ember-cli-verify", "--purpose", "p", "--expires", "2999-01-01",
+    )
+
+    payload = json.loads(
+        lifecycle(repo, "retire", "--path", str(target), "--force-owner", "ember-cli-verify").stdout
+    )
+    # Nothing was dirty, so nothing was forced -- force is a fallback, not a mode.
+    assert payload["forced"] is False

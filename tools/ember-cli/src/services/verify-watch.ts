@@ -17,8 +17,11 @@
 // change file bytes mid-hash, so operators learned to hold writes until a run finished.
 // That informal hold is the freeze this issue kills. The fix: every repository-scoped leg
 // now runs against a DEDICATED, MANAGED worktree pinned to the exact commit at dispatch
-// (`scripts/worktree_lifecycle.py create`), created before the pipeline's first leg and
-// retired after the last one, success or failure. Development in every OTHER worktree
+// (`scripts/worktree_lifecycle.py create --detach`), created before the pipeline's first
+// leg and released after the last one, success or failure. DETACHED is load-bearing:
+// verify_ember01_completion.py runs its executable legs, and computes ok, only on a
+// clean+detached checkout, so a branch-attached worktree would produce a pipeline that
+// completes around a verdict that was never reachable. Development in every OTHER worktree
 // (including the live repoRoot checkout the cockpit itself runs from) is never touched by
 // this pipeline and never needs to wait for it.
 //
@@ -117,51 +120,73 @@ export function resolveVerifyTimeoutMs(env: NodeJS.ProcessEnv = process.env): nu
   return Math.round(minutes * 60_000);
 }
 
-/** The tree-kill argv for one platform. `proc.kill()` signals only the DIRECT child: on
- *  run verify-msdz1l2eum570b the direct child died on timeout while its census.py
- *  GRANDCHILD survived as an orphan for 84 more minutes, writing a 1.4GB temp file no
- *  one ever consumed. Windows has no process groups to signal, so the whole descendant
- *  tree is reaped explicitly via `taskkill /T /F`; POSIX kills the spawned process's
- *  children by parent pid via `pkill -KILL -P`. */
+/** The tree-kill argv on Windows. `proc.kill()` signals only the DIRECT child: on run
+ *  verify-msdz1l2eum570b the direct child died on timeout while its census.py GRANDCHILD
+ *  survived as an orphan for 84 more minutes, writing a 1.4GB temp file no one ever
+ *  consumed. Windows has no process group to signal, so the whole descendant tree is
+ *  reaped explicitly via `taskkill /T /F`.
+ *
+ *  Returns null on POSIX, where there is a better mechanism than any argv: legs are
+ *  spawned `detached` there, which makes the child its own process-group leader, so
+ *  `process.kill(-pid, "SIGKILL")` takes the child AND every descendant in one signal.
+ *  An earlier draft used `pkill -KILL -P <pid>`, which is wrong in both directions --
+ *  it kills the direct children (leaving the spawned root alive) and never recurses to
+ *  the grandchild that was the actual orphan. */
 export function _buildTreeKillCommand(
   pid: number,
   platform: NodeJS.Platform = process.platform,
-): { executable: string; args: string[] } {
+): { executable: string; args: string[] } | null {
   if (platform === "win32") {
     return { executable: "taskkill", args: ["/PID", String(pid), "/T", "/F"] };
   }
-  return { executable: "pkill", args: ["-KILL", "-P", String(pid)] };
+  return null;
 }
 
-/** Extracts every PID `taskkill /T /F` reports terminating (it prints one line per
- *  process in the tree, including "child of PID <root>" lines). The root pid is always
- *  included even when the output is unparseable or empty, so the receipt never claims a
- *  reap of zero processes after a kill actually ran. */
-export function _parseReapedPids(killStdout: string, rootPid: number): number[] {
-  const pids = new Set<number>([rootPid]);
-  for (const match of killStdout.matchAll(/PID[:\s]+(\d+)/gi)) {
+/** PIDs `taskkill /T /F` CONFIRMS it terminated -- only lines it reports as SUCCESS, and
+ *  only the first PID on each such line (a child's line also names its parent, which has
+ *  its own line if it too was killed). Nothing is seeded: a receipt that lists a PID the
+ *  kill did not actually take is the same class of lie the reap exists to end, so an
+ *  empty or unparseable output yields an empty list rather than an assumed root. */
+export function _parseReapedPids(killStdout: string): number[] {
+  const pids = new Set<number>();
+  for (const line of killStdout.split(/\r?\n/)) {
+    if (!/^\s*SUCCESS/i.test(line)) continue;
+    const match = /PID[:\s]+(\d+)/i.exec(line);
+    if (match === null) continue;
     const value = Number(match[1]);
     if (Number.isFinite(value) && value > 0) pids.add(value);
   }
   return [...pids];
 }
 
-/** Best-effort descendant reap. Never rejects: a failed reap degrades to "we killed what
- *  we could and say so", it never turns into a second failure on top of the timeout. */
+/** Best-effort descendant reap, resolving with the PIDs actually confirmed killed. Never
+ *  rejects: a failed reap degrades to "we killed what we could and say so", it never
+ *  turns into a second failure on top of the timeout. */
 function reapProcessTree(pid: number): Promise<number[]> {
+  const command = _buildTreeKillCommand(pid);
+  if (command === null) {
+    // POSIX: the leg was spawned detached, so `pid` is its own process-group id and a
+    // negative-pid signal reaches every descendant. Confirmation is the absence of a
+    // throw -- kill(2) reports whether the group was signalled.
+    try {
+      process.kill(-pid, "SIGKILL");
+      return Promise.resolve([pid]);
+    } catch {
+      return Promise.resolve([]);
+    }
+  }
   return new Promise((resolve) => {
-    const { executable, args } = _buildTreeKillCommand(pid);
     const chunks: Buffer[] = [];
     let killer;
     try {
-      killer = spawn(executable, args, { windowsHide: true });
+      killer = spawn(command.executable, command.args, { windowsHide: true });
     } catch {
-      resolve([pid]);
+      resolve([]);
       return;
     }
     killer.stdout?.on("data", (chunk: Buffer) => chunks.push(chunk));
-    killer.on("error", () => resolve([pid]));
-    killer.on("close", () => resolve(_parseReapedPids(Buffer.concat(chunks).toString("utf8"), pid)));
+    killer.on("error", () => resolve([]));
+    killer.on("close", () => resolve(_parseReapedPids(Buffer.concat(chunks).toString("utf8"))));
   });
 }
 
@@ -178,7 +203,14 @@ export function _defaultRunVerifyProcess(
 
     let proc;
     try {
-      proc = spawn(executable, args, { cwd, windowsHide: true });
+      // `detached` on POSIX only: it makes the child its own process-group leader so a
+      // timeout can signal the whole group (see reapProcessTree). On Windows `detached`
+      // would spawn a new console window, and taskkill /T already reaches the tree.
+      proc = spawn(executable, args, {
+        cwd,
+        windowsHide: true,
+        detached: process.platform !== "win32",
+      });
     } catch {
       resolve({ status: null, stdout: "", stderr: "spawn threw synchronously" });
       return;
@@ -260,6 +292,19 @@ export interface VerifyJobState {
    *  (should not happen once phase has advanced past "preparing-worktree"). */
   worktreePath?: string;
   pinnedCommit?: string;
+  /** True once `worktree_lifecycle.py create` reported CREATED, i.e. a managed row exists
+   *  for worktreePath. False while the path is only the one this run INTENDS to create --
+   *  set before the create leg spawns so a create killed mid-`git worktree add` still has
+   *  a path to clean up (#1371 N2). */
+  worktreeRegistered?: boolean;
+  /** True once the lifecycle script confirmed the worktree was created DETACHED -- the
+   *  precondition the verifier gates its executable legs on. */
+  worktreeDetached?: boolean;
+  /** True when the worktree could only be given back through the owner-scoped forced
+   *  retire, i.e. it was dirty at release time (normally: a leg was killed before the
+   *  verifier deleted its own scratch). Disclosed rather than silent -- a forced retire
+   *  is a normal outcome of a timeout, but never an invisible one. */
+  worktreeForciblyRetired?: boolean;
   /** Set only if worktree retirement failed after the pipeline finished -- best-effort
    *  cleanup, never escalated into a run failure (the run's verdict is about the pinned
    *  commit, not about whether its scratch worktree was tidied away afterward). A leaked
@@ -274,9 +319,12 @@ export interface VerifyJobState {
   /** Per-leg wall time, keyed by leg name -- the evidence that says WHICH leg ate the
    *  timeout, which the 2026-08-04 run could not answer because nothing was written. */
   legTimingsMs?: Record<string, number>;
-  /** The resolved per-leg timeout this run used (#1371 cure a), disclosed so a run killed
-   *  by the cap can be told apart from one killed by something else. */
+  /** The resolved RUN-WIDE budget this run was given (#1371 cure a), disclosed so a run
+   *  killed by the cap can be told apart from one killed by something else. */
   timeoutMs?: number;
+  /** Milliseconds left of that budget as of the last completed leg -- the operator-facing
+   *  half of the run-wide deadline. */
+  remainingMs?: number;
   /** Set only if writing the run receipt itself failed. The job still goes terminal --
    *  but it says so rather than presenting a terminal state whose receipt silently is not
    *  on disk, which is the exact failure #1371 cure c exists to end. */
@@ -310,6 +358,12 @@ export interface VerifyRunReceipt {
   phase: VerifyPhase;
   pinned_commit: string | null;
   worktree_path: string | null;
+  /** Whether the pinned worktree was detached. The verifier refuses to run its executable
+   *  legs on a branch-attached checkout, so this is the difference between a run that
+   *  could certify and one that structurally could not. */
+  worktree_detached: boolean;
+  /** Whether release needed the owner-scoped forced retire (dirty worktree at release). */
+  worktree_forcibly_retired: boolean;
   started_at: string;
   finished_at: string;
   duration_ms: number;
@@ -344,6 +398,17 @@ function tail(text: string, maxBytes = 4096): string {
 
 const WORKTREE_LIFECYCLE_SCRIPT = "scripts/worktree_lifecycle.py";
 
+/** Owner recorded on every worktree this pipeline creates. It is also the key that
+ *  authorizes the forced retire below: `worktree_lifecycle.py retire --force-owner` only
+ *  overrides its dirty check for rows carrying exactly this owner, so the escalation can
+ *  never reach a worktree somebody else made. */
+const WORKTREE_OWNER = "ember-cli-verify";
+
+/** Budget for the worktree release legs, deliberately separate from the run deadline: on
+ *  the timeout path that deadline is spent by definition, and a release that cannot run
+ *  is exactly how a worktree leaks. */
+const RELEASE_GRACE_MS = 5 * 60_000;
+
 function defaultWorktreeRoot(): string {
   return path.join(os.homedir(), "ember-verify-worktrees");
 }
@@ -361,18 +426,26 @@ function shortLeaseExpiry(now: Date = new Date()): string {
 interface WorktreeCreateResult {
   status: "CREATED";
   path: string;
-  branch: string;
+  detached: boolean;
 }
 
+/** Parses `worktree_lifecycle.py create` output, and REQUIRES `detached: true`.
+ *
+ *  This is fail-closed on purpose. verify_ember01_completion.py runs its executable legs
+ *  only when the checkout is clean AND detached (`inspect_checkout` reads `git
+ *  symbolic-ref HEAD`), and stamps all nine legs UNRESOLVED otherwise. A branch-attached
+ *  worktree therefore produces a run that can never return ok -- a green-looking pipeline
+ *  around a verdict that was never reachable. Refusing here turns that into an honest
+ *  failure at `preparing-worktree`. */
 function parseWorktreeCreateResult(stdout: string): WorktreeCreateResult | null {
   try {
     const parsed = JSON.parse(stdout) as Record<string, unknown>;
     if (
       parsed["status"] === "CREATED" &&
       typeof parsed["path"] === "string" &&
-      typeof parsed["branch"] === "string"
+      parsed["detached"] === true
     ) {
-      return { status: "CREATED", path: parsed["path"], branch: parsed["branch"] };
+      return { status: "CREATED", path: parsed["path"], detached: true };
     }
   } catch {
     // fall through to null -- caller treats an unparseable result as a create failure
@@ -399,10 +472,10 @@ export interface VerifyPipelineDeps {
    *  Defaults to `<homedir>/ember-verify-worktrees`. Never under `.claude/` (repo-guard
    *  #1009) and never inside repoRoot itself. */
   worktreeRoot?: string;
-  /** Environment the per-leg timeout is resolved from (EMBER_VERIFY_TIMEOUT_MINUTES).
+  /** Environment the run deadline is resolved from (EMBER_VERIFY_TIMEOUT_MINUTES).
    *  Defaults to process.env. */
   env?: NodeJS.ProcessEnv;
-  /** Explicit per-leg timeout, overriding the env-resolved one. Tests use it to keep
+  /** Explicit run-wide budget, overriding the env-resolved one. Tests use it to keep
    *  runs instant; production leaves it unset. */
   timeoutMs?: number;
   runProcess?: VerifyProcessRunner;
@@ -428,7 +501,10 @@ export function startVerifyRun(deps: VerifyPipelineDeps): VerifyJobState {
   const timeoutMs = deps.timeoutMs ?? resolveVerifyTimeoutMs(deps.env ?? process.env);
   const worktreeRoot = deps.worktreeRoot ?? defaultWorktreeRoot();
   const worktreePath = path.join(worktreeRoot, deps.jobId);
-  const worktreeBranch = `verify/${deps.jobId}`;
+  // #1371 N5: EMBER_VERIFY_TIMEOUT_MINUTES reads as "this run gets N minutes", so it IS
+  // that -- one deadline shared by every leg, not N minutes each. Per-leg it would have
+  // meant a ~18-hour worst case at the 180-minute default before any terminal state.
+  const deadlineAt = Date.now() + timeoutMs;
 
   mkdir(deps.jobDir, { recursive: true });
 
@@ -466,9 +542,12 @@ export function startVerifyRun(deps: VerifyPipelineDeps): VerifyJobState {
 
   return { ..._state };
 
-  /** Runs one leg under the resolved timeout, recording its wall time and any PIDs the
+  /** Runs one leg against the RUN-WIDE deadline, recording its wall time and any PIDs the
    *  timeout tree-reap killed. Every subprocess in the pipeline goes through here so no
-   *  leg can be silently un-timed or un-timed-out. */
+   *  leg can be silently un-timed or un-timed-out. A leg reached after the budget is
+   *  already spent is never spawned: it reports as timed out immediately, because
+   *  starting a subprocess we would have to kill on its first tick is worse than saying
+   *  the deadline passed. */
   async function runLeg(
     leg: string,
     executable: string,
@@ -476,8 +555,21 @@ export function startVerifyRun(deps: VerifyPipelineDeps): VerifyJobState {
     cwd: string,
   ): Promise<VerifyProcessResult> {
     const startedMs = Date.now();
-    const result = await runProcess(executable, args, cwd, timeoutMs);
+    const remainingMs = deadlineAt - startedMs;
+    if (remainingMs <= 0) {
+      legTimingsMs[leg] = 0;
+      _update(deps.jobId, { legTimingsMs: { ...legTimingsMs }, remainingMs: 0 });
+      return {
+        status: null,
+        timedOut: true,
+        reapedPids: [],
+        stdout: "",
+        stderr: `[verify: run deadline already spent before ${leg} started]`,
+      };
+    }
+    const result = await runProcess(executable, args, cwd, remainingMs);
     legTimingsMs[leg] = Date.now() - startedMs;
+    _update(deps.jobId, { remainingMs: Math.max(0, deadlineAt - Date.now()) });
     if (result.reapedPids && result.reapedPids.length > 0) {
       reapedPids = [...reapedPids, ...result.reapedPids];
     }
@@ -498,6 +590,7 @@ export function startVerifyRun(deps: VerifyPipelineDeps): VerifyJobState {
     legs: Record<string, { status: string; title: string }> | null;
     verifierReceiptWritten: boolean;
   }): Promise<string | undefined> {
+    const live = _state?.jobId === deps.jobId ? _state : null;
     const receipt: VerifyRunReceipt = {
       schema: "ember-cli/verify-run-receipt@1",
       job_id: deps.jobId,
@@ -506,7 +599,12 @@ export function startVerifyRun(deps: VerifyPipelineDeps): VerifyJobState {
       failure_kind: fields.failureKind,
       phase: fields.phase,
       pinned_commit: pinnedCommit,
-      worktree_path: _state?.jobId === deps.jobId ? (_state.worktreePath ?? null) : null,
+      // Only a REGISTERED worktree is named here: before create succeeds, worktreePath
+      // holds the path this run intended to make, and a receipt naming a worktree that
+      // was never created would send a reader looking for something that is not there.
+      worktree_path: live?.worktreeRegistered === true ? (live.worktreePath ?? null) : null,
+      worktree_detached: live?.worktreeDetached === true,
+      worktree_forcibly_retired: live?.worktreeForciblyRetired === true,
       started_at: startedAt,
       finished_at: fields.finishedAt,
       duration_ms: new Date(fields.finishedAt).getTime() - new Date(startedAt).getTime(),
@@ -516,8 +614,7 @@ export function startVerifyRun(deps: VerifyPipelineDeps): VerifyJobState {
       verifier_receipt_path: fields.verifierReceiptWritten ? verifierReceiptPath : null,
       legs: fields.legs,
       error: fields.error,
-      worktree_retire_error:
-        _state?.jobId === deps.jobId ? (_state.worktreeRetireError ?? null) : null,
+      worktree_retire_error: live?.worktreeRetireError ?? null,
     };
     try {
       const fsp = await import("node:fs/promises");
@@ -578,33 +675,111 @@ export function startVerifyRun(deps: VerifyPipelineDeps): VerifyJobState {
     });
   }
 
+  /** Deletes the scratch the verifier writes INSIDE the pinned worktree. On the normal
+   *  path verify_ember01_completion.py deletes these itself, precisely to keep the tree
+   *  clean; when a leg is killed by the deadline that cleanup never runs, the worktree is
+   *  left dirty, and `retire` then refuses with DIRTY_WORKTREE -- stranding the worktree
+   *  together with the very temp file that reached 1.4GB in the live incident. Only paths
+   *  this pipeline's own verifier creates are touched; anything else in the worktree is
+   *  left for the (still fail-closed) dirty check to refuse on. */
+  async function cleanPipelineScratch(worktreeDir: string): Promise<void> {
+    const scratch = [
+      ".ember01-verify-custody.tmp.json",
+      "receipts/ember-01-launch-packet",
+    ];
+    try {
+      const fsp = await import("node:fs/promises");
+      for (const relative of scratch) {
+        await fsp.rm(path.join(worktreeDir, relative), { recursive: true, force: true });
+      }
+    } catch {
+      // Best effort by construction: if the scratch cannot be removed, retire's own
+      // dirty check reports it, which is a better error than one raised here.
+    }
+  }
+
+  async function runLifecycle(args: string[]): Promise<VerifyProcessResult> {
+    // Worktree release runs on its own small budget rather than the run deadline: on the
+    // timeout path that deadline is by definition already spent, and a release that
+    // cannot run is exactly how a worktree leaks.
+    return runProcess(
+      deps.pythonBin,
+      ["-B", WORKTREE_LIFECYCLE_SCRIPT, "--repo", deps.repoRoot, ...args],
+      deps.repoRoot,
+      RELEASE_GRACE_MS,
+    );
+  }
+
+  /** Gives the pinned worktree back, escalating only as far as it must:
+   *  scratch cleanup -> plain retire -> owner-scoped forced retire -> raw `git worktree
+   *  remove --force` for a worktree that exists but was never registered (the partial-
+   *  create case, where no managed row exists for retire to find). Never throws, never
+   *  fails the run; whatever it could not do lands in worktreeRetireError. */
   async function retireWorktreeBestEffort(): Promise<void> {
     if (_state?.jobId !== deps.jobId || _state.worktreePath === undefined) return;
     // Retire the ACTUAL path the lifecycle script reported back from `create` (the
-    // canonicalized path it registered), never the locally-requested `worktreePath` --
-    // `canonical_path()` on the python side may normalize it differently than this
-    // process's own `path.join`, and retiring the wrong string would leave the real
-    // managed row stranded while reporting a false success.
+    // canonicalized path it registered) when there is one, never the locally-requested
+    // `worktreePath` -- `canonical_path()` on the python side may normalize it
+    // differently than this process's own `path.join`, and retiring the wrong string
+    // would leave the real managed row stranded while reporting a false success. Before
+    // create returns, the expected path is used instead, so a create that half-succeeded
+    // still has something to clean up (#1371 N2).
     const actualPath = _state.worktreePath;
+    const registered = _state.worktreeRegistered === true;
     _update(deps.jobId, { phase: "retiring-worktree" });
     try {
-      const result = await runProcess(
-        deps.pythonBin,
-        [
-          "-B", WORKTREE_LIFECYCLE_SCRIPT,
-          "--repo", deps.repoRoot,
-          "retire",
-          "--path", actualPath,
-        ],
+      await cleanPipelineScratch(actualPath);
+
+      if (registered) {
+        const plain = await runLifecycle(["retire", "--path", actualPath]);
+        if (_state?.jobId !== deps.jobId) return;
+        if (plain.status === 0) return;
+
+        const forced = await runLifecycle([
+          "retire", "--path", actualPath, "--force-owner", WORKTREE_OWNER,
+        ]);
+        if (_state?.jobId !== deps.jobId) return;
+        if (forced.status === 0) {
+          _update(deps.jobId, { worktreeForciblyRetired: true });
+          return;
+        }
+        _update(deps.jobId, {
+          worktreeRetireError:
+            `worktree_lifecycle.py retire exited ${plain.status ?? "null"} (${tail(plain.stderr)}); ` +
+            `forced retire exited ${forced.status ?? "null"}: ${tail(forced.stderr)}`,
+        });
+        return;
+      }
+
+      // Not registered: `create` never reported success, but it may still have gotten as
+      // far as `git worktree add` (a deadline landing mid-create is the realistic
+      // trigger). Nothing will ever retire that -- it has no managed row, so `retire`
+      // refuses it as UNMANAGED_WORKTREE and `audit` reports it as a violation for
+      // everyone. Removing it directly is the only path that cleans it up. When the path
+      // does not exist, create refused before touching the filesystem (WORKTREE_CEILING,
+      // INVALID_EXPIRY, PATH_EXISTS...) and there is nothing to release.
+      const fsp = await import("node:fs/promises");
+      const exists = await fsp
+        .stat(actualPath)
+        .then(() => true)
+        .catch(() => false);
+      if (!exists) return;
+      const removed = await runProcess(
+        gitBin,
+        ["worktree", "remove", "--force", actualPath],
         deps.repoRoot,
-        timeoutMs,
+        RELEASE_GRACE_MS,
       );
       if (_state?.jobId !== deps.jobId) return;
-      if (result.status !== 0) {
+      if (removed.status !== 0) {
         _update(deps.jobId, {
-          worktreeRetireError: `worktree_lifecycle.py retire exited ${result.status ?? "null"}: ${tail(result.stderr)}`,
+          worktreeRetireError:
+            `partially-created worktree at ${actualPath} could not be removed ` +
+            `(git worktree remove --force exited ${removed.status ?? "null"}): ${tail(removed.stderr)}`,
         });
+        return;
       }
+      await runProcess(gitBin, ["worktree", "prune"], deps.repoRoot, RELEASE_GRACE_MS);
     } catch (err) {
       if (_state?.jobId !== deps.jobId) return;
       _update(deps.jobId, {
@@ -638,6 +813,14 @@ export function startVerifyRun(deps: VerifyPipelineDeps): VerifyJobState {
       }
       pinnedCommit = head;
 
+      // #1371 N2: record the path we are ABOUT to create before spawning create. A
+      // deadline landing mid-`git worktree add` can leave a worktree registered with git
+      // but with no managed row written -- an UNMANAGED_WORKTREE that blocks `retire` and
+      // `audit` for everyone and that nothing would otherwise clean up, because the old
+      // code only learned the path from a create that SUCCEEDED.
+      _update(deps.jobId, { worktreePath, worktreeRegistered: false });
+      worktreeCreated = true;
+
       const createResult = await runLeg(
         "worktree-create",
         deps.pythonBin,
@@ -646,8 +829,13 @@ export function startVerifyRun(deps: VerifyPipelineDeps): VerifyJobState {
           "--repo", deps.repoRoot,
           "create",
           "--path", worktreePath,
-          "--branch", worktreeBranch,
-          "--owner", "ember-cli-verify",
+          // #1371 B1: DETACHED, not `--branch`. The verifier gates every executable leg
+          // and the final ok on a detached checkout, so a branch-attached worktree makes
+          // a green run structurally impossible. Detaching also stops a
+          // `refs/heads/verify/<jobId>` accumulating per run, since retire's archive-ref
+          // path handles detached rows.
+          "--detach",
+          "--owner", WORKTREE_OWNER,
           "--purpose", `verify dispatch ${deps.jobId}`,
           "--expires", shortLeaseExpiry(),
           "--start-point", pinnedCommit,
@@ -657,6 +845,8 @@ export function startVerifyRun(deps: VerifyPipelineDeps): VerifyJobState {
       if (_state?.jobId !== deps.jobId) return;
       const created = createResult.status === 0 ? parseWorktreeCreateResult(createResult.stdout) : null;
       if (created === null) {
+        await retireWorktreeBestEffort();
+        if (_state?.jobId !== deps.jobId) return;
         await finish({
           ok: false,
           status: "failed",
@@ -668,10 +858,11 @@ export function startVerifyRun(deps: VerifyPipelineDeps): VerifyJobState {
         });
         return;
       }
-      worktreeCreated = true;
       _update(deps.jobId, {
         phase: "fetching-issues",
         worktreePath: created.path,
+        worktreeRegistered: true,
+        worktreeDetached: true,
         pinnedCommit,
       });
 

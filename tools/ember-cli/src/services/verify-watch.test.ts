@@ -84,7 +84,7 @@ function mockRunner(opts: {
     if (args.includes("scripts/worktree_lifecycle.py") && args.includes("create")) {
       return {
         status: 0,
-        stdout: JSON.stringify({ status: "CREATED", path: opts.worktreePath, branch: "verify/job" }),
+        stdout: JSON.stringify({ status: "CREATED", path: opts.worktreePath, branch: null, detached: true }),
         stderr: "",
       };
     }
@@ -324,7 +324,11 @@ describe("startVerifyRun", () => {
     expect(final.status).toBe("failed");
     expect(final.phase).toBe("preparing-worktree");
     expect(final.error).toContain("WORKTREE_CEILING");
-    expect(final.worktreePath).toBeUndefined();
+    // #1371 N2: the INTENDED path is recorded before create is spawned, so a create that
+    // half-succeeds still has something to clean up -- but it is explicitly not marked
+    // registered, and the receipt names no worktree.
+    expect(final.worktreePath).toBeDefined();
+    expect(final.worktreeRegistered).toBe(false);
     // gh never ran -- development-affecting legs never start without a pinned worktree.
     expect(calls.some((c) => c.executable === "gh")).toBe(false);
   });
@@ -386,7 +390,7 @@ describe("resolveVerifyTimeoutMs", () => {
     expect(resolveVerifyTimeoutMs({ EMBER_VERIFY_TIMEOUT_MINUTES: "-5" })).toBe(DEFAULT_VERIFY_TIMEOUT_MS);
   });
 
-  it("passes the resolved timeout down to every leg's runner", async () => {
+  it("spends ONE run-wide budget across the legs rather than giving each leg the full timeout", async () => {
     const jobDir = tmpJobDir();
     const worktreePath = path.join(os.tmpdir(), "verify-wt-job-timeout-arg");
     const calls: { executable: string; args: string[] }[] = [];
@@ -411,14 +415,24 @@ describe("resolveVerifyTimeoutMs", () => {
       gitBin: "git",
       env: { EMBER_VERIFY_TIMEOUT_MINUTES: "45" },
       runProcess: (executable, args, cwd, timeoutMs) => {
-        seenTimeouts.push(timeoutMs);
+        // The retire legs run on their own release grace, not the run budget -- on the
+        // timeout path the run budget is spent by definition, and a release that cannot
+        // run is how a worktree leaks. Only pipeline legs are measured here.
+        if (!args.includes("retire")) seenTimeouts.push(timeoutMs);
         return inner(executable, args, cwd);
       },
     });
 
     await waitForSettled();
-    expect(seenTimeouts.length).toBeGreaterThan(0);
-    expect(seenTimeouts.every((t) => t === 45 * 60_000)).toBe(true);
+    expect(seenTimeouts.length).toBeGreaterThan(1);
+    const budget = 45 * 60_000;
+    // Every leg is bounded by what is LEFT of the one budget...
+    expect(seenTimeouts.every((t) => t !== undefined && t > 0 && t <= budget)).toBe(true);
+    // ...and the budget only ever shrinks, so six legs cannot cost six times the cap.
+    const shrinking = seenTimeouts.every(
+      (t, i) => i === 0 || (t as number) <= (seenTimeouts[i - 1] as number),
+    );
+    expect(shrinking).toBe(true);
   });
 });
 
@@ -436,22 +450,25 @@ describe("tree reap on timeout", () => {
     expect(cmd.args).toContain("/T");
   });
 
-  it("reaps descendants on posix too", () => {
-    const cmd = _buildTreeKillCommand(99, "linux");
-    expect(cmd.executable).toBe("pkill");
-    expect(cmd.args).toContain("-P");
-    expect(cmd.args).toContain("99");
+  it("uses no argv on posix -- legs are spawned detached and the whole process GROUP is signalled", () => {
+    // The earlier `pkill -KILL -P <pid>` was wrong in both directions: it killed the
+    // direct children (leaving the spawned root alive) and never reached the grandchild
+    // that was the actual orphan. Returning null routes to process.kill(-pid) instead.
+    expect(_buildTreeKillCommand(99, "linux")).toBeNull();
+    expect(_buildTreeKillCommand(99, "darwin")).toBeNull();
   });
 
-  it("records every PID taskkill reports, always including the root even on unparseable output", () => {
+  it("records only PIDs taskkill CONFIRMS it killed -- never a seeded root it may not have taken", () => {
     const parsed = _parseReapedPids(
       "SUCCESS: The process with PID 4242 has been terminated.\n" +
         "SUCCESS: The process with PID 5150 (child process of PID 4242) has been terminated.\n",
-      4242,
     );
-    expect(parsed).toContain(4242);
-    expect(parsed).toContain(5150);
-    expect(_parseReapedPids("", 7)).toEqual([7]);
+    expect(parsed).toEqual([4242, 5150]);
+    // No output means nothing was confirmed. Claiming the root anyway is exactly the
+    // over-claim that makes a receipt lie about what it killed.
+    expect(_parseReapedPids("")).toEqual([]);
+    // A failure line is not a kill.
+    expect(_parseReapedPids("ERROR: The process with PID 99 could not be terminated.")).toEqual([]);
   });
 });
 
@@ -646,5 +663,174 @@ describe("run receipt", () => {
     expect(receipt["failure_kind"]).toBe("gh");
     expect(receipt["phase"]).toBe("fetching-issues");
     expect(receipt["duration_ms"]).toBeGreaterThanOrEqual(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #1371 B1/N2/N3 — detached creation, partial-create cleanup, dirty release
+// ---------------------------------------------------------------------------
+
+describe("pinned worktree lifecycle", () => {
+  it("creates the worktree DETACHED and never mints a branch -- the verifier refuses a branch-attached checkout", async () => {
+    const jobDir = tmpJobDir();
+    const worktreePath = path.join(os.tmpdir(), "verify-wt-detach");
+    const calls: { executable: string; args: string[] }[] = [];
+
+    startVerifyRun({
+      repoRoot: "/repo",
+      jobDir,
+      jobId: "job-detach",
+      envBindings: baseEnvBindings(),
+      bindings: [],
+      pythonBin: "python",
+      ghBin: "gh",
+      gitBin: "git",
+      runProcess: mockRunner({
+        worktreePath,
+        calls,
+        onVerifier: (args) => {
+          fs.writeFileSync(args[args.indexOf("--receipt") + 1]!, JSON.stringify({ ok: true, legs: {} }));
+          return { status: 0, stdout: "", stderr: "" };
+        },
+      }),
+    });
+
+    await waitForSettled();
+    const createArgs = calls.find((c) => c.args.includes("create"))!.args;
+    expect(createArgs).toContain("--detach");
+    expect(createArgs).not.toContain("--branch");
+    expect(getVerifyState()?.worktreeDetached).toBe(true);
+    expect(readRunReceipt(jobDir)["worktree_detached"]).toBe(true);
+  });
+
+  it("refuses a create that reports success WITHOUT detachment, rather than running a verification that could never go green", async () => {
+    const jobDir = tmpJobDir();
+    const calls: { executable: string; args: string[] }[] = [];
+
+    startVerifyRun({
+      repoRoot: "/repo",
+      jobDir,
+      jobId: "job-attached",
+      envBindings: baseEnvBindings(),
+      bindings: [],
+      pythonBin: "python",
+      ghBin: "gh",
+      gitBin: "git",
+      runProcess: async (executable: string, args: string[]): Promise<VerifyProcessResult> => {
+        calls.push({ executable, args });
+        if (executable === "git" && args[0] === "rev-parse") {
+          return { status: 0, stdout: `${PINNED_COMMIT}\n`, stderr: "" };
+        }
+        if (args.includes("create")) {
+          // An older lifecycle script, or a future one that quietly reverts to `-b`.
+          return {
+            status: 0,
+            stdout: JSON.stringify({ status: "CREATED", path: "/wt", branch: "verify/job", detached: false }),
+            stderr: "",
+          };
+        }
+        return { status: 0, stdout: "", stderr: "" };
+      },
+    });
+
+    await waitForSettled();
+    const final = getVerifyState()!;
+    expect(final.status).toBe("failed");
+    expect(final.phase).toBe("preparing-worktree");
+    // gh never ran: a run that cannot certify never starts doing work.
+    expect(calls.some((c) => c.executable === "gh")).toBe(false);
+    expect(readRunReceipt(jobDir)["failure_kind"]).toBe("worktree-create");
+  });
+
+  it("cleans up a worktree whose create was killed mid-flight, which no managed row would ever cover -- #1371 N2", async () => {
+    const jobDir = tmpJobDir();
+    // The worktree must EXIST on disk for the unmanaged-removal path to engage: that is
+    // exactly the partial-create shape (git worktree add ran, the state row never landed).
+    const worktreeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "verify-wt-partial-"));
+    fs.mkdirSync(path.join(worktreeRoot, "job-partial"), { recursive: true });
+    const calls: { executable: string; args: string[] }[] = [];
+
+    startVerifyRun({
+      repoRoot: "/repo",
+      jobDir,
+      jobId: "job-partial",
+      envBindings: baseEnvBindings(),
+      bindings: [],
+      pythonBin: "python",
+      ghBin: "gh",
+      gitBin: "git",
+      worktreeRoot,
+      runProcess: async (executable: string, args: string[]): Promise<VerifyProcessResult> => {
+        calls.push({ executable, args });
+        if (executable === "git" && args[0] === "rev-parse") {
+          return { status: 0, stdout: `${PINNED_COMMIT}\n`, stderr: "" };
+        }
+        if (args.includes("create")) {
+          return { status: null, timedOut: true, reapedPids: [777], stdout: "", stderr: "[verify: timed out]" };
+        }
+        return { status: 0, stdout: "", stderr: "" };
+      },
+    });
+
+    await waitForSettled();
+    // No managed row exists, so `retire` would refuse it as UNMANAGED_WORKTREE forever.
+    // The raw removal is the only thing that can clean it up.
+    const removal = calls.find((c) => c.executable === "git" && c.args.includes("remove"));
+    expect(removal).toBeDefined();
+    expect(removal!.args).toContain("--force");
+    expect(removal!.args).toContain(path.join(worktreeRoot, "job-partial"));
+    expect(calls.some((c) => c.executable === "git" && c.args.includes("prune"))).toBe(true);
+
+    const receipt = readRunReceipt(jobDir);
+    expect(receipt["failure_kind"]).toBe("timeout");
+    // Never created as far as the lifecycle state is concerned, so the receipt names no
+    // worktree even though a path was cleaned up.
+    expect(receipt["worktree_path"]).toBeNull();
+  });
+
+  it("escalates to an owner-scoped forced retire when a killed leg left the worktree dirty -- #1371 N3", async () => {
+    const jobDir = tmpJobDir();
+    const worktreePath = path.join(os.tmpdir(), "verify-wt-dirty-release");
+    const calls: { executable: string; args: string[] }[] = [];
+
+    startVerifyRun({
+      repoRoot: "/repo",
+      jobDir,
+      jobId: "job-dirty",
+      envBindings: baseEnvBindings(),
+      bindings: [],
+      pythonBin: "python",
+      ghBin: "gh",
+      gitBin: "git",
+      timeoutMs: 60_000,
+      runProcess: mockRunner({
+        worktreePath,
+        calls,
+        onIssueCensus: () => ({
+          status: null,
+          timedOut: true,
+          reapedPids: [4242],
+          stdout: "",
+          stderr: "[verify: timed out]",
+        }),
+        onRetire: (args) =>
+          args.includes("--force-owner")
+            ? { status: 0, stdout: JSON.stringify({ status: "RETIRED", forced: true }), stderr: "" }
+            : { status: 2, stdout: "", stderr: "DIRTY_WORKTREE: .ember01-verify-custody.tmp.json" },
+      }),
+    });
+
+    await waitForSettled();
+    const retires = calls.filter((c) => c.args.includes("retire"));
+    // Plain retire first -- the fail-closed check is still tried before overriding it.
+    expect(retires[0]!.args).not.toContain("--force-owner");
+    expect(retires[1]!.args).toContain("--force-owner");
+    expect(retires[1]!.args).toContain("ember-cli-verify");
+
+    const final = getVerifyState()!;
+    expect(final.worktreeForciblyRetired).toBe(true);
+    // A forced retire is a normal outcome of a timeout, but never an invisible one.
+    expect(final.worktreeRetireError).toBeUndefined();
+    expect(readRunReceipt(jobDir)["worktree_forcibly_retired"]).toBe(true);
   });
 });

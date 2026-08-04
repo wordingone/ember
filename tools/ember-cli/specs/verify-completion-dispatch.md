@@ -43,18 +43,31 @@ implementation: `node:child_process.spawn`, buffered async, timeout-bounded at
 
 ### Pipeline (#1371: pinned-worktree dispatch, then the original three legs, then retire)
 
-0. **Pin + create the dedicated managed worktree.** `git rev-parse HEAD` against
+0. **Pin + create the dedicated managed worktree, DETACHED.** `git rev-parse HEAD` against
    `repoRoot` (read-only; the ONLY write this pipeline makes to `repoRoot`'s own git state
    is registering a new worktree row via step 0's `worktree add` — it never touches
    `repoRoot`'s working tree, index, or HEAD). Then `python -B
    scripts/worktree_lifecycle.py --repo <repoRoot> create --path
-   <worktreeRoot>/<jobId> --branch verify/<jobId> --owner ember-cli-verify --purpose
+   <worktreeRoot>/<jobId> --detach --owner ember-cli-verify --purpose
    "verify dispatch <jobId>" --expires <today+1d> --start-point <pinnedCommit>` — the
    ONLY worktree-creation path (composes with #1366: no ad-hoc `git worktree add`).
    Failure here (including `WORKTREE_CEILING`) fails the job at phase
    `preparing-worktree` BEFORE any repository-scoped leg or `gh` call runs.
    `worktreeRoot` defaults to `<homedir>/ember-verify-worktrees`, always outside
    `.claude/` (repo-guard #1009) and outside `repoRoot` itself.
+
+   **`--detach` is load-bearing, not a style choice.**
+   `verify_ember01_completion.py` runs its executable legs — and computes `ok` — only when
+   the checkout is clean AND detached (`inspect_checkout` reads `git symbolic-ref HEAD`;
+   a branch-attached checkout stamps all nine legs `UNRESOLVED` with "checkout not
+   clean+detached" and forces `checkout_integrity` false). A `--branch`-created worktree
+   therefore yields a pipeline that runs to completion around a verdict that could never
+   have been green. `parseWorktreeCreateResult` requires `detached: true` in the create
+   response and fails the job at `preparing-worktree` otherwise, so a lifecycle script
+   that ever reverts to `-b` is refused rather than silently certifying nothing.
+   Detaching also stops a `refs/heads/verify/<jobId>` accruing per run on a shared
+   repository surface: retire's archive-ref path applies to detached rows, preserving the
+   head under `refs/archive/worktree-retirement/...` without a permanent branch.
 1. `gh issue list --repo wordingone/ember --state open --limit 1000 --json ...` — stdout
    written to `<jobDir>/issues.json`. Non-zero exit fails the job at phase
    `fetching-issues`; later legs never run.
@@ -72,10 +85,32 @@ implementation: `node:child_process.spawn`, buffered async, timeout-bounded at
    against the isolated copy. Exit 0 or 1 are both a COMPLETED run (ok / not-ok) and land
    the job at `status: "done"`; any other exit (crash, missing interpreter, bad args) is
    an infra failure and lands the job at `status: "failed"`.
-4. **Retire the managed worktree.** `python -B scripts/worktree_lifecycle.py --repo
-   <repoRoot> retire --path <PINNED WORKTREE PATH>`, run on EVERY exit path after step 0
-   succeeds (leg 1/2 failure, leg 3 crash, leg 3 completion, or an unexpected exception
-   inside the pipeline) — best-effort: a retire failure is disclosed as
+4. **Release the managed worktree.** Run on EVERY exit path once step 0 has been
+   ATTEMPTED — not merely once it succeeded — escalating only as far as it must:
+
+   1. Delete the scratch this pipeline's own verifier writes inside the worktree
+      (`.ember01-verify-custody.tmp.json`, `receipts/ember-01-launch-packet/`).
+      `verify_ember01_completion.py` deletes these itself on the normal path precisely to
+      keep the tree clean; when a leg is killed by the deadline that cleanup never runs,
+      so the worktree is dirty with files only this pipeline wrote.
+   2. `python -B scripts/worktree_lifecycle.py --repo <repoRoot> retire --path <PATH>`.
+   3. If that refuses (`DIRTY_WORKTREE` on residue step 1 did not know about), retry with
+      `--force-owner ember-cli-verify`. The lifecycle script overrides its dirty check
+      ONLY for managed rows whose recorded owner matches that value, so the escalation can
+      never reach a worktree somebody else created; a forced release is disclosed as
+      `worktreeForciblyRetired` in status and in the receipt, never silent. Without this,
+      a timed-out run strands its worktree together with the temp file that reached 1.4GB
+      in the live incident — the single most probable leak in this design.
+   4. If the worktree was never REGISTERED — create was killed mid-`git worktree add`, so
+      git knows about a worktree that has no managed row — `retire` would refuse it as
+      `UNMANAGED_WORKTREE` forever and `audit` would report it as a violation for
+      everyone. That case is cleaned up with `git worktree remove --force` + `git worktree
+      prune` against the path this run intended to create, which is recorded in state
+      BEFORE the create leg spawns for exactly this reason. When the path does not exist
+      (create refused before touching the filesystem, e.g. `WORKTREE_CEILING`) nothing is
+      attempted.
+
+   Release is best-effort throughout: a failure at any step is disclosed as
    `worktreeRetireError` on the job state, never escalated into a run failure (the run's
    verdict is about the pinned commit, not about whether its scratch worktree was tidied
    away afterward). The REAL guarantee here is step 4 running on every exit path, not the
@@ -100,15 +135,26 @@ file nobody ever consumed; and because the job was terminal only in this module'
 in-memory singleton, NOTHING was written to disk — after a cockpit restart there was no
 way to say what had run, how far it got, or what was still alive.
 
-- **Timeout (`EMBER_VERIFY_TIMEOUT_MINUTES`, default 180).** Applied per leg through
-  `resolveVerifyTimeoutMs()`. The default is measured, not guessed: the custody census
-  leg alone took ~95 minutes on the operator machine, so 20 minutes was amputating
-  healthy runs. A malformed or non-positive value falls back to the default — never to
-  "no timeout".
+- **Timeout (`EMBER_VERIFY_TIMEOUT_MINUTES`, default 180): a RUN-WIDE deadline.** One
+  budget, resolved once by `resolveVerifyTimeoutMs()` and shared by every leg — each leg
+  gets what is left of it, and a leg reached after it is spent reports as timed out
+  without being spawned. Per-leg it would have meant a ~18-hour worst case at the default
+  before any terminal state, against an env var that reads as "this run gets N minutes".
+  The default is measured, not guessed: the custody census leg alone took ~95 minutes on
+  the operator machine, so 20 minutes was amputating healthy runs. A malformed or
+  non-positive value falls back to the default — never to "no timeout". Worktree release
+  runs on its own separate 5-minute grace, because on the timeout path the run budget is
+  spent by definition and a release that cannot run is exactly how a worktree leaks.
+  `/verify status` shows the remaining budget while a run is live.
 - **Tree-reap on timeout.** `proc.kill()` signals only the direct child, which is how the
-  grandchild outlived it. On timeout the runner reaps the whole descendant tree
-  (`taskkill /PID <pid> /T /F` on Windows, `pkill -KILL -P <pid>` elsewhere) and records
-  every PID it terminated. Those PIDs land in the run receipt and in `/verify status`.
+  grandchild outlived it. On Windows the runner reaps the whole descendant tree with
+  `taskkill /PID <pid> /T /F`. On POSIX legs are spawned `detached`, making each child its
+  own process-group leader, so `process.kill(-pid, SIGKILL)` reaches the child and every
+  descendant in one signal — `pkill -KILL -P <pid>` would have been wrong in both
+  directions, killing the direct children while leaving the spawned root alive and never
+  reaching the grandchild that was the actual orphan. The receipt records only PIDs the
+  kill CONFIRMS it took (`taskkill` SUCCESS lines; nothing is seeded), because a receipt
+  naming a PID that is still running is the same class of lie the reap exists to end.
 - **Terminal receipt, always.** `<jobDir>/receipt.json` is the RUN receipt this service
   owns, written on EVERY terminal state — green, red, infra failure, timeout, and a
   worktree-create failure that happens before any leg runs — with `ok`, `failure_kind`,
@@ -229,7 +275,26 @@ malformed value falls back rather than disabling the cap) and reaches every leg'
 the Windows tree-kill argv keeps its `/T` flag and the reaped-PID parse always includes
 the root; and `receipt.json` is on disk with the right `ok`/`failure_kind`/`phase`/
 `reaped_pids`/`leg_timings_ms` after a timeout, after a pre-leg worktree-create failure,
-after a gh infra failure, and on both green and red completed runs. `commands/verify.ts` covers the command-layer contract (env-binding block
+after a gh infra failure, and on both green and red completed runs. It further covers the
+send-back cures: create passes `--detach` and never `--branch`, a create response without
+`detached: true` fails the job before `gh` runs, a create killed mid-flight is cleaned up
+by path even though no managed row exists, and a dirty worktree at release escalates from
+plain retire to the owner-scoped forced retire.
+
+`services/verify-watch.integration.test.ts` is the one NON-mocked test in this node, and
+exists because the all-mocked suite structurally could not see B1: it creates a real
+worktree with the real `scripts/worktree_lifecycle.py` in a throwaway git repository, then
+asks the REAL `verify_ember01_completion.inspect_checkout` what it sees, asserting
+`detached` and `clean` are both true (the gate the executable legs hang on), that no
+`refs/heads/*` beyond `master` accrues, that retire archives the detached head, and that a
+worktree dirtied the way a killed leg dirties it can still be released — but only by its
+own owner.
+
+`tests/test_worktree_lifecycle.py` covers the lifecycle-script half: `--detach` leaves HEAD
+detached and mints no branch ref, `--detach` with `--branch` and neither-of-them are both
+refused, a detached row's retire archives its head, and `--force-owner` retires a dirty
+worktree for its own owner while still refusing another owner and while never weakening a
+clean retire. `commands/verify.ts` covers the command-layer contract (env-binding block
 rendering, pinned-commit/worktree-path status disclosure, custody-bindings-store
 forwarding, mandatory-selection refusal, already-running guard, status rendering) but is
 not itself the bound consumer of this node — `commands/*.ts` is outside
