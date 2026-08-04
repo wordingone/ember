@@ -20,6 +20,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub mod rpc;
 pub mod scratch;
+pub mod training_verify;
 
 pub type Result<T> = std::result::Result<T, EmberLabError>;
 
@@ -3348,10 +3349,13 @@ fn validate_hash(value: &str) -> Result<()> {
         })
     }
 }
-fn hash_file(path: &Path) -> Result<String> {
+/// `pub`: also the self-identity hash `main.rs`'s `verify-training` subcommand reuses for a
+/// one-shot command's `ember_lab_binary_sha256`, the same provenance discipline `Daemon::open`
+/// already applies to the resident process.
+pub fn hash_file(path: &Path) -> Result<String> {
     Ok(hash_bytes(&fs::read(path)?))
 }
-fn hash_bytes(bytes: &[u8]) -> String {
+pub fn hash_bytes(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
@@ -3920,11 +3924,14 @@ fn available_free_vram_bytes() -> Result<u64> {
             detail: "nvidia-smi VRAM value overflowed bytes".into(),
         })
 }
-fn ember_lab_source_hash() -> String {
-    let sources: [&[u8]; 5] = [
+/// `pub`: reused by `main.rs`'s `verify-training` subcommand for the same self-identity
+/// receipt field the daemon already stamps on every dispatch (`Daemon::open`).
+pub fn ember_lab_source_hash() -> String {
+    let sources: [&[u8]; 6] = [
         include_bytes!("lib.rs"),
         include_bytes!("rpc.rs"),
         include_bytes!("main.rs"),
+        include_bytes!("training_verify.rs"),
         include_bytes!("../Cargo.toml"),
         include_bytes!("../Cargo.lock"),
     ];
