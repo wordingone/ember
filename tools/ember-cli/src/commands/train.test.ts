@@ -547,6 +547,41 @@ describe("train command", () => {
       expect(result?.message).not.toContain("capability");
     });
 
+    it("registers COMPLETED when a noisy child's log lines precede the JSON handshake (#1408)", async () => {
+      // Regression: even though the fixed consumer now redirects its child's
+      // stdout away from its own (issue #1408), the cockpit must still fail
+      // open on any leftover noise ahead of the handshake line rather than
+      // failing the whole parse -- a successful certified launch must never
+      // be reported as an error.
+      const noisyStdout = [
+        "epoch 1/10 loss=0.42",
+        "epoch 2/10 loss=0.31",
+        "checkpoint saved: checkpoint-vertical-slice-seed-830001",
+        JSON.stringify({
+          outcome: "COMPLETED",
+          execution_receipt: "receipt.json",
+          artifact_root: "artifacts/run",
+        }),
+      ].join("\n");
+      const { cmd, certifiedSpawns } = makeExecuteCmd(
+        { status: 0, stdout: allGreenStdout() },
+        { status: 0, stdout: noisyStdout },
+      );
+
+      const result = await cmd.execute(
+        "--execute --certificate c.json --declaration-ledger d.jsonl --run-spec r.json",
+        mockCtx,
+      );
+
+      expect(certifiedSpawns).toHaveLength(1);
+      expect(result?.exitCode).toBeUndefined();
+      expect(result?.message).toContain("certified bounded canary process completed");
+      expect(result?.message).toContain("receipt.json");
+      expect(result?.message).not.toContain(
+        "without a valid execution receipt response",
+      );
+    });
+
     it("preflight failure prevents certified consumer execution", async () => {
       const { cmd, preflightSpawns, certifiedSpawns } = makeExecuteCmd(
         { status: 1, stdout: failingStdout() },
