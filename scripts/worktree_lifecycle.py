@@ -283,6 +283,11 @@ def record_retirement(
         "path": record.get("path", key),
         "key": key,
         "branch": record.get("branch"),
+        # A null `branch` means two different things now that `create --detach` exists:
+        # a detached row never had one, and a record reconstructed from a bare Git
+        # registration may simply not know. Carrying the flag keeps the tombstone
+        # unambiguous; None stays None where the source genuinely could not say.
+        "detached": record.get("detached"),
         "owner": record.get("owner"),
         "purpose": record.get("purpose"),
         "head": record.get("head"),
@@ -434,15 +439,30 @@ def create_worktree(repo: Path, state_file: Path, args: argparse.Namespace) -> d
     if key in state["managed"] or key in state["legacy_paths"]:
         raise LifecycleError("PATH_REGISTERED", str(destination))
 
-    command = ["worktree", "add", "-b", args.branch, str(destination), args.start_point]
+    # `--detach` exists for certification consumers: verify_ember01_completion.py runs its
+    # executable legs only when the checkout is clean AND DETACHED (its inspect_checkout
+    # reads `git symbolic-ref HEAD`), so a worktree created with `-b` can never certify --
+    # every leg comes back UNRESOLVED "checkout not clean+detached". A detached row also
+    # takes retire's archive-ref path, so its head is preserved without leaving a
+    # permanent `refs/heads/...` behind for every run.
+    detach = bool(getattr(args, "detach", False))
+    if detach:
+        command = ["worktree", "add", "--detach", str(destination), args.start_point]
+    else:
+        command = ["worktree", "add", "-b", args.branch, str(destination), args.start_point]
     run_git(repo, command)
     try:
         live = {row.key: row for row in list_worktrees(repo)}
         if key not in live:
             raise LifecycleError("CREATE_NOT_REGISTERED", str(destination))
+        if detach and not live[key].detached:
+            # Fail closed rather than register a row claiming a detachment git did not
+            # perform: a consumer that trusted it would silently certify nothing.
+            raise LifecycleError("DETACH_NOT_APPLIED", str(destination))
         state["managed"][key] = {
             "path": canonical_path(destination),
-            "branch": args.branch,
+            "branch": None if detach else args.branch,
+            "detached": detach,
             "owner": args.owner,
             "purpose": args.purpose,
             "expires": args.expires,
@@ -454,7 +474,12 @@ def create_worktree(repo: Path, state_file: Path, args: argparse.Namespace) -> d
     except Exception:
         run_git(repo, ["worktree", "remove", str(destination)], check=False)
         raise
-    return {"status": "CREATED", "path": canonical_path(destination), "branch": args.branch}
+    return {
+        "status": "CREATED",
+        "path": canonical_path(destination),
+        "branch": None if detach else args.branch,
+        "detached": detach,
+    }
 
 
 def safe_ref_component(value: str) -> str:
@@ -467,6 +492,8 @@ def retire_worktree(
     state_file: Path,
     requested_path: str,
     reason: str = "retired by owner",
+    *,
+    force_owner: str | None = None,
 ) -> dict[str, Any]:
     state = load_or_initialize(repo, state_file)
     # Expiry is a reason to retire, not a gate against retirement. Every other
@@ -483,9 +510,22 @@ def retire_worktree(
     if key not in state["legacy_paths"] and key not in state["managed"]:
         raise LifecycleError("UNMANAGED_WORKTREE", row.path)
 
+    # A dirty worktree normally refuses retirement: residue may be someone's unsaved work.
+    # `--force --owner <name>` narrows that refusal to worktrees this owner created, and
+    # exists for one situation: an automated pipeline whose leg was killed mid-run never
+    # got to delete its own scratch, so its worktree is dirty with files only it wrote.
+    # Refusing there does not protect work, it strands a worktree (and, in the incident
+    # that motivated this, a 1.4GB temp file) that nothing else will ever clean up. The
+    # owner match is the whole safety property: force NEVER applies to a row this caller
+    # did not create, and never to a legacy (unowned) row.
+    forced = False
     status = run_git(Path(row.path), ["status", "--porcelain", "--untracked-files=all"])
     if status.stdout:
-        raise LifecycleError("DIRTY_WORKTREE", row.path)
+        managed_record = state["managed"].get(key, {})
+        if force_owner is not None and managed_record.get("owner") == force_owner:
+            forced = True
+        else:
+            raise LifecycleError("DIRTY_WORKTREE", row.path)
 
     archive_ref: str | None = None
     if row.detached:
@@ -501,10 +541,13 @@ def retire_worktree(
 
     # Intent first: from here until the verified deregistration below, a crash is
     # discoverable by `audit --strict` instead of silently stranding a registration.
-    record = dict(state["managed"].get(key) or {"path": row.path, "branch": row.branch})
+    record = dict(
+        state["managed"].get(key)
+        or {"path": row.path, "branch": row.branch, "detached": row.detached}
+    )
     begin_removal(state, state_file, key=key, path=row.path, verb="retire")
 
-    run_git(repo, ["worktree", "remove", row.path])
+    run_git(repo, ["worktree", "remove", *(["--force"] if forced else []), row.path])
     if Path(row.path).exists():
         raise LifecycleError("REMOVE_INCOMPLETE", row.path)
     # Deregistration is the half that used to be assumed. `git worktree remove` drops the
@@ -524,7 +567,12 @@ def retire_worktree(
         key=key,
         record=record,
         verb="retire",
-        reason=reason,
+        # A forced retirement DISCARDED uncommitted bytes. That is the one retirement
+        # whose reason cannot be taken at face value later, so the tombstone says so
+        # itself rather than leaving it inferable only from the owner field.
+        reason=f"{reason} (forced: dirty tree discarded, owner {force_owner})"
+        if forced
+        else reason,
         origin="managed" if key in state["managed"] else "legacy",
     )
     pending_removals_of(state).pop(key, None)
@@ -546,6 +594,7 @@ def retire_worktree(
         "head": row.head,
         "retained_ref": row.branch,
         "archive_ref": archive_ref,
+        "forced": forced,
         "ceiling": state["ceiling"],
     }
 
@@ -679,6 +728,7 @@ def reconcile_worktree(
             record = {
                 "path": row.path,
                 "branch": row.branch,
+                "detached": row.detached,
                 "head": row.head,
                 "purpose": "registered with Git, absent from the registry",
             }
@@ -1125,7 +1175,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     create_parser = subparsers.add_parser("create")
     create_parser.add_argument("--path", required=True)
-    create_parser.add_argument("--branch", required=True)
+    create_parser.add_argument(
+        "--branch",
+        help="branch to create the worktree on; required unless --detach is given",
+    )
+    create_parser.add_argument(
+        "--detach",
+        action="store_true",
+        help=(
+            "create the worktree with a detached HEAD at --start-point. Required by "
+            "certification consumers, which refuse to run on a branch-attached checkout."
+        ),
+    )
     create_parser.add_argument("--owner", required=True)
     create_parser.add_argument("--purpose", required=True)
     create_parser.add_argument("--expires", required=True)
@@ -1133,6 +1194,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     retire_parser = subparsers.add_parser("retire")
     retire_parser.add_argument("--path", required=True)
+    retire_parser.add_argument(
+        "--force-owner",
+        help=(
+            "retire even when the worktree is dirty, but ONLY if the managed row's owner "
+            "equals this value. For automated owners whose scratch cleanup was interrupted."
+        ),
+    )
     retire_parser.add_argument(
         "--reason",
         default="retired by owner",
@@ -1199,9 +1267,27 @@ def main(argv: Sequence[str] | None = None) -> int:
                     write_state(state_file, state)
                 emit(payload, args.quiet or args.strict)
             elif args.command == "create":
+                if args.detach and args.branch:
+                    raise LifecycleError(
+                        "DETACH_WITH_BRANCH",
+                        "--detach creates a detached HEAD; --branch is meaningless with it",
+                    )
+                if not args.detach and not args.branch:
+                    raise LifecycleError(
+                        "BRANCH_REQUIRED", "pass --branch <name> or --detach"
+                    )
                 emit(create_worktree(repo, state_file, args), False)
             elif args.command == "retire":
-                emit(retire_worktree(repo, state_file, args.path, args.reason), False)
+                emit(
+                    retire_worktree(
+                        repo,
+                        state_file,
+                        args.path,
+                        args.reason,
+                        force_owner=args.force_owner,
+                    ),
+                    False,
+                )
             elif args.command == "reconcile":
                 emit(
                     reconcile_worktree(
