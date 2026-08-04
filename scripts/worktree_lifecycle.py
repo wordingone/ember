@@ -15,7 +15,7 @@ import subprocess
 import sys
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -23,6 +23,7 @@ from typing import Any, Sequence
 STATE_NAME = "ember-worktree-lifecycle.json"
 LOCK_NAME = "ember-worktree-lifecycle.lock"
 DEFAULT_TARGET = 12
+RENEWAL_CAP_DAYS = 14
 
 # The exact commands the custody census runs per registered worktree
 # (`scripts/ember_01_custody/census.py`, `_git_material_paths`). The census's
@@ -596,6 +597,71 @@ def retire_worktree(
         "archive_ref": archive_ref,
         "forced": forced,
         "ceiling": state["ceiling"],
+    }
+
+
+def renew_worktree(repo: Path, state_file: Path, args: argparse.Namespace) -> dict[str, Any]:
+    """Extend ONE managed row's lease, under the same lock as create/retire.
+
+    An expired lease's only cure used to be a hand-locked JSON edit -- the exact
+    ad-hoc registry mutation this tool exists to eliminate (2026-08-04, verify
+    cockpit worktree). This verb is the sanctioned form: exact path, managed rows
+    only, bounded horizon, and the renewal is recorded on the row so audit can
+    show it.
+
+    * Expiry is the condition being cured, so -- like retire -- the audit runs
+      with enforce_expiry=False. Every other integrity gate stays live: an
+      unmanaged or missing worktree still refuses before anything is written.
+    * The new expiry is bounded to RENEWAL_CAP_DAYS from today per invocation.
+      A lease is a lease: extending forever in one call would make expiry
+      decorative.
+    * legacy_paths carry no lease and are not this verb's to edit.
+    """
+    state = load_or_initialize(repo, state_file)
+    state, _ = audit_state(repo, state, ratchet=False, enforce_expiry=False)
+    key = path_key(args.path)
+    record = state["managed"].get(key)
+    if record is None:
+        if key in state["legacy_paths"]:
+            raise LifecycleError("LEGACY_PATH", canonical_path(args.path))
+        raise LifecycleError("NOT_MANAGED", canonical_path(args.path))
+
+    today = date.today()
+    if args.until is not None:
+        try:
+            new_expiry = date.fromisoformat(args.until)
+        except ValueError as exc:
+            raise LifecycleError("INVALID_EXPIRY", args.until) from exc
+    else:
+        if args.days < 1:
+            raise LifecycleError("INVALID_EXPIRY", f"--days {args.days}: must be at least 1")
+        new_expiry = today + timedelta(days=args.days)
+    if new_expiry < today:
+        raise LifecycleError("INVALID_EXPIRY", "expiry is already past")
+    if new_expiry > today + timedelta(days=RENEWAL_CAP_DAYS):
+        raise LifecycleError(
+            "RENEWAL_CAP",
+            f"{new_expiry.isoformat()} is more than {RENEWAL_CAP_DAYS} days out; "
+            "renew again closer to the date instead",
+        )
+
+    previous = record.get("expires")
+    record["expires"] = new_expiry.isoformat()
+    record.setdefault("renewals", []).append(
+        {
+            "renewed_at": datetime.now(timezone.utc).isoformat(),
+            "previous_expires": previous,
+            "expires": new_expiry.isoformat(),
+        }
+    )
+    state["updated_at"] = datetime.now(timezone.utc).isoformat()
+    write_state(state_file, state)
+    return {
+        "status": "RENEWED",
+        "path": record["path"],
+        "previous_expires": previous,
+        "expires": new_expiry.isoformat(),
+        "renewals": len(record["renewals"]),
     }
 
 
@@ -1207,6 +1273,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="recorded on the tombstone so the retirement stays auditable",
     )
 
+    renew_parser = subparsers.add_parser("renew")
+    renew_parser.add_argument("--path", required=True)
+    horizon = renew_parser.add_mutually_exclusive_group(required=True)
+    horizon.add_argument(
+        "--days",
+        type=int,
+        help=f"extend the lease to today plus N days (1..{RENEWAL_CAP_DAYS})",
+    )
+    horizon.add_argument(
+        "--until",
+        help=f"extend the lease to an ISO date, at most {RENEWAL_CAP_DAYS} days out",
+    )
+
     reconcile_parser = subparsers.add_parser("reconcile")
     reconcile_parser.add_argument(
         "--path",
@@ -1288,6 +1367,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     ),
                     False,
                 )
+            elif args.command == "renew":
+                emit(renew_worktree(repo, state_file, args), False)
             elif args.command == "reconcile":
                 emit(
                     reconcile_worktree(

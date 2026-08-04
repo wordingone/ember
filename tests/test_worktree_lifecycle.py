@@ -7,6 +7,7 @@ import json
 import shutil
 import subprocess
 import sys
+from datetime import date, timedelta
 from pathlib import Path
 
 
@@ -1556,3 +1557,108 @@ def test_a_forced_retirement_says_so_on_its_own_tombstone(tmp_path: Path) -> Non
     assert "forced" in tombstone["reason"]
     assert "ember-cli-verify" in tombstone["reason"]
     assert strict(repo).returncode == 0, "a forced retirement must leave no removal intent"
+
+
+# ---------------------------------------------------------------------------
+# renew: the sanctioned lease extension (the exit that is not a hand-locked
+# JSON edit)
+# ---------------------------------------------------------------------------
+
+
+def test_renew_extends_lease_and_records_the_renewal(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    managed = _managed(repo, tmp_path, "renewable")
+    key = path_key_of(managed)
+
+    result = lifecycle(repo, "renew", "--path", str(managed), "--days", "7")
+    payload = json.loads(result.stdout)
+    expected = (date.today() + timedelta(days=7)).isoformat()
+    assert payload["status"] == "RENEWED"
+    assert payload["expires"] == expected
+    assert payload["previous_expires"] == "2099-01-01"
+
+    record = read_state(repo)["managed"][key]
+    assert record["expires"] == expected
+    # The renewal is recorded on the row, so audit tooling can show it.
+    assert len(record["renewals"]) == 1
+    assert record["renewals"][0]["previous_expires"] == "2099-01-01"
+    assert record["renewals"][0]["expires"] == expected
+    assert "renewed_at" in record["renewals"][0]
+
+    # --until works too, and the history accretes.
+    until = (date.today() + timedelta(days=3)).isoformat()
+    lifecycle(repo, "renew", "--path", str(managed), "--until", until)
+    record = read_state(repo)["managed"][key]
+    assert record["expires"] == until
+    assert len(record["renewals"]) == 2
+    assert record["renewals"][1]["previous_expires"] == expected
+
+
+def test_renew_is_bounded_by_the_cap(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    managed = _managed(repo, tmp_path, "capped")
+
+    for horizon in (("--days", "15"), ("--until", "2099-01-01")):
+        result = lifecycle(repo, "renew", "--path", str(managed), *horizon, check=False)
+        assert result.returncode == 2
+        assert "RENEWAL_CAP" in result.stderr
+
+    # A refused renewal writes nothing.
+    record = read_state(repo)["managed"][path_key_of(managed)]
+    assert record["expires"] == "2099-01-01"
+    assert "renewals" not in record
+
+
+def test_renew_refuses_an_unmanaged_path(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    legacy = tmp_path / "legacy"
+    git(repo, "worktree", "add", "-b", "legacy", str(legacy))
+    lifecycle(repo, "install", "--target", "3")
+
+    never = lifecycle(
+        repo, "renew", "--path", str(tmp_path / "never-registered"), "--days", "7", check=False
+    )
+    assert never.returncode == 2
+    assert "NOT_MANAGED" in never.stderr
+
+    # legacy_paths carry no lease; they are not this verb's to edit.
+    snapshot = lifecycle(repo, "renew", "--path", str(legacy), "--days", "7", check=False)
+    assert snapshot.returncode == 2
+    assert "LEGACY_PATH" in snapshot.stderr
+
+
+def test_renew_respects_the_repository_lock(tmp_path: Path) -> None:
+    module = load_lifecycle_module()
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    managed = _managed(repo, tmp_path, "locked")
+
+    lock = state_path(repo).with_name("ember-worktree-lifecycle.lock")
+    with module.RepositoryLock(lock):
+        result = lifecycle(repo, "renew", "--path", str(managed), "--days", "7", check=False)
+    assert result.returncode == 2
+    assert "LIFECYCLE_LOCKED" in result.stderr
+    assert read_state(repo)["managed"][path_key_of(managed)]["expires"] == "2099-01-01"
+
+
+def test_expired_then_renewed_worktree_passes_the_strict_audit(tmp_path: Path) -> None:
+    """The 2026-08-04 incident shape: an expired lease hard-fails the strict audit
+    (and therefore the push guard), and the only cure was an ad-hoc registry edit.
+    renew is that cure in sanctioned form: audit fails EXPIRED_WORKTREE, renew
+    extends the lease under the lock, audit passes.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    expired = _managed(repo, tmp_path, "expired-lease")
+    expire_managed_worktrees(repo, expired)
+
+    blocked = strict(repo)
+    assert blocked.returncode == 2
+    assert "EXPIRED_WORKTREE" in blocked.stderr
+
+    renewed = lifecycle(repo, "renew", "--path", str(expired), "--days", "3")
+    assert '"status": "RENEWED"' in renewed.stdout
+
+    assert strict(repo).returncode == 0, strict(repo).stderr
