@@ -81,7 +81,7 @@ function allText(node: unknown): string {
 
 /** Labels of the command buttons rendered on this page, pager excluded. */
 function labelsOf(node: unknown): string[] {
-  return clickTargets(node).map((t) => t.label).filter((label) => label.startsWith("[/"));
+  return clickTargets(node).map((t) => t.label).filter((label) => /^\[[a-z0-9-]+\]$/.test(label));
 }
 
 /**
@@ -148,7 +148,7 @@ describe("CommandBarPane rendering", () => {
       const rendered = CommandBarPane({ commands, width: 200, maxRows: 12 });
       const text = allText(rendered);
       for (const command of commands) {
-        expect(text).toContain(`[/${command.name}]`);
+        expect(text).toContain(`[${command.name}]`);
       }
     } finally {
       resetCommandRegistryForTests();
@@ -165,7 +165,7 @@ describe("CommandBarPane rendering", () => {
         60,
         6,
       );
-      expect(lines.join("\n")).toContain("[/brand-new-command]");
+      expect(lines.join("\n")).toContain("[brand-new-command]");
     } finally {
       resetCommandRegistryForTests();
     }
@@ -187,17 +187,20 @@ describe("CommandBarPane rendering", () => {
       // Every label that appears at all appears WHOLE — a half-written "[/verif" would mean the
       // packer let a label cross the pane edge.
       for (const command of commands) {
-        const openings = joined.split(`[/${command.name.slice(0, 3)}`).length - 1;
-        if (openings > 0) expect(joined).toContain(`[/${command.name}]`);
+        const openings = joined.split(`[${command.name.slice(0, 3)}`).length - 1;
+        if (openings > 0) expect(joined).toContain(`[${command.name}]`);
       }
       for (const line of lines) expect(line.length).toBeLessThanOrEqual(width);
     }
   });
 
   test("commandBarMaxRows never crowds a short terminal", () => {
-    expect(commandBarMaxRows(20)).toBe(1);
-    expect(commandBarMaxRows(30)).toBe(2);
-    expect(commandBarMaxRows(44)).toBe(3);
+    // #1399 raised every tier: the bar left the transcript column for the live-run pane, and
+    // it now spends a row per group caption.
+    expect(commandBarMaxRows(20)).toBe(2);
+    expect(commandBarMaxRows(26)).toBe(4);
+    expect(commandBarMaxRows(30)).toBe(5);
+    expect(commandBarMaxRows(44)).toBe(6);
   });
 
   test("the notice row renders the reason it was handed, bounded to the pane width", async () => {
@@ -229,11 +232,14 @@ describe("CommandBarPane hit surface", () => {
       onActivate: (activation, button) => seen.push({ activation, button }),
     });
     const targets = clickTargets(rendered);
-    expect(targets.map((t) => t.label)).toEqual(["[/verify]", "[/admit]", "[/train]"]);
+    // Captions carry no click handler, so the hit surface is exactly the three buttons — and
+    // every label that reaches it carries no slash (#1399).
+    // Order is the GROUPED order (#1399): verify and train are `launch`, admit is `govern`.
+    expect(targets.map((t) => t.label)).toEqual(["[verify]", "[train]", "[admit]"]);
     for (const target of targets) target.onClick?.();
-    expect(seen.map((s) => s.activation.kind)).toEqual(["dispatch", "prefill", "rejected"]);
+    expect(seen.map((s) => s.activation.kind)).toEqual(["dispatch", "rejected", "prefill"]);
     expect(seen[0]!.activation).toEqual({ kind: "dispatch", text: "/verify" });
-    expect(seen[1]!.activation).toMatchObject({ text: "/admit " });
+    expect(seen[2]!.activation).toMatchObject({ text: "/admit " });
   });
 
   test("a disabled command keeps its handler so the click can say why", () => {
@@ -271,7 +277,7 @@ describe("CommandBarPane hit surface", () => {
       onActivate: () => {},
       onPageChange: (page) => { requested = page; },
     });
-    const pager = clickTargets(rendered).find((t) => !t.label.startsWith("[/"));
+    const pager = clickTargets(rendered).find((t) => !/^\[[a-z0-9-]+\]$/.test(t.label));
     expect(pager).toBeDefined();
     expect(pager!.label).toContain("more");
     pager!.onClick?.();
@@ -297,7 +303,7 @@ describe("CommandBarPane hit surface", () => {
       onActivate: () => {},
       onPageChange: (page) => { requested = page; },
     });
-    clickTargets(last).find((t) => !t.label.startsWith("[/"))!.onClick?.();
+    clickTargets(last).find((t) => !/^\[[a-z0-9-]+\]$/.test(t.label))!.onClick?.();
     expect(resolveCommandBarPage(requested!, pageCount)).toBe(0);
   });
 
@@ -317,7 +323,7 @@ describe("CommandBarPane hit surface", () => {
     // Page 5 was valid at a narrow width; the same index arriving at a wide one must still render.
     for (const page of [5, 99, -1]) {
       const labels = labelsOf(CommandBarPane({ commands, width: 200, maxRows: 3, page, onActivate: () => {} }));
-      expect(labels).toEqual(commands.map((c) => `[/${c.name}]`));
+      expect(labels).toEqual(commands.map((c) => `[${c.name}]`));
     }
   });
 

@@ -8,7 +8,7 @@ next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B E
 
 Status: CURRENT
 
-Issue: #1370
+Issue: #1370, extended by #1399 (home, labels, grouping)
 
 Consumer: `tools/ember-cli/src/services/command-buttons.ts`, `tools/ember-cli/src/components/command-bar-pane.ts`
 
@@ -36,7 +36,7 @@ give it a button. Nothing in the component or the screen names a command.
 
 ## Contract: `services/command-buttons.ts` (pure)
 
-`CommandButton` carries `name`, the `[/name]` label, `enabled` (from `cmd.isEnabled()`),
+`CommandButton` carries `name`, the `[name]` label, `enabled` (from `cmd.isEnabled()`),
 `needsArgument`, the `argumentHint`, and a `disabledReason`. An `isEnabled()` that THROWS
 yields a disabled button carrying the thrown message rather than taking the cockpit render
 down — an availability probe reaching a missing file or unset env var is routine, not fatal.
@@ -70,12 +70,57 @@ skill's button fires a bare invocation that could only be a usage error, which i
 `#1370 — argument-hint frontmatter reaches the registered command` test asserts the resulting
 BUTTON CLASSIFICATION (`prefill`), not merely that the field parsed.
 
+## Where the buttons live, how they are labelled, how they are grouped (#1399)
+
+Operator visual review of the live cockpit, 2026-08-04: the bar rendered at the bottom of the
+transcript column as one unbroken run of slash-spelled brackets — `[/observatory] [/watch]
+[/finetune] …` — wrapping mid-list. Three separate defects, cured together:
+
+1. **Home.** The bar is mounted INSIDE `components/operator-surface-pane.ts`, directly below the
+   `[START] [PAUSE] [RESUME] [RESTART]` run controls, because that is the panel an operator
+   already reaches into for a control. The bar's own component owns no position: the operator
+   surface accepts `commands` (plus the hover/activation/page props) and renders the bar itself,
+   so the bar can be re-homed again without touching either the layout service or the screen.
+   The operator surface reserves the bar's rows in its `fixedChromeRows` budget through
+   `commandBarRowCount`, which is derived from the SAME `commandBarPages` call the component
+   renders from — a pane that reserved fewer rows than the bar draws would silently eat a chart's
+   bottom line.
+2. **Labels.** `commandButtonLabel` renders `[verify]`, never `[/verify]`: a control that spells
+   out its own keyboard shortcut is advertising the input method instead of naming the action.
+   The dispatched text is built independently in `commandButtonActivation` from `button.name`, so
+   the label and the command are structurally incapable of drifting — asserted directly by the
+   "dropping the slash cannot change what the button runs" test.
+3. **Grouping.** `COMMAND_BUTTON_GROUPS` splits the buttons by what the operator is doing to the
+   work: `launch` (train/finetune/verify/benchmark — puts work in flight), `inspect`
+   (watch/model/custody/spine/observatory/cockpit — reads state), `govern`
+   (admit/designate/goal — changes what the system is bound to), and `more`, the catch-all. Each
+   group opens its own row with a dim caption, padded to a fixed column where the pane can afford
+   it; the run controls carry their own `run control` caption row, and their UPPERCASE labels
+   contrast with the lowercase command labels, so the two blocks never read as one list.
+   `/resume` sits in `more` deliberately: a lowercase `[resume]` inside a run group directly under
+   `[RESUME]` would read as two spellings of one control.
+
+The grouping does NOT reintroduce the second-list defect below. Membership is a presentation hint;
+the final group claims everything unnamed, so a newly registered skill, plugin, or MCP command is
+grouped and rendered with no edit anywhere. That totality is asserted against the LIVE registry.
+
+Captions are suppressed entirely below a two-row budget — a one-row bar is one fragment of one
+group, and a caption there would spend scarce columns saying nothing while pushing buttons onto a
+page they need not be on.
+
+The bar is NOT suppressed while the slash palette is open. The pre-#1399 reason for suppressing it
+was row contention: both surfaces wanted the rows just above the composer. They are now in
+different columns, and blanking a block of the live-run pane on every `/` keystroke would reflow
+the charts beneath it.
+
 ## Contract: `components/command-bar-pane.ts`
 
-Renders the button model above the composer, using the affordance the run controls established:
-`[...]` shape, green enabled, gray disabled, inverse on hover. Disabled buttons KEEP their click
-handler on purpose — the activation returns `rejected` with a reason that renders on the notice
-row, so clicking an unavailable command says why instead of behaving like a dead pixel.
+Renders the button model wherever it is mounted, using the affordance the run controls
+established: `[...]` shape, green enabled, gray disabled, inverse on hover. Disabled buttons KEEP
+their click handler on purpose — the activation returns `rejected` with a reason that renders on
+the notice row, so clicking an unavailable command says why instead of behaving like a dead pixel.
+Group captions are the one cell kind with NO handler: a third thing that looks clickable and
+dispatches nothing is the defect this component exists to remove.
 
 ### Width and height legibility (DONE-bar acceptance)
 
@@ -97,8 +142,10 @@ row, so clicking an unavailable command says why instead of behaving like a dead
     the count. Enforced by `screens/width-sweep-probe.test.ts`, which mounts the real screen at
     40x24 / 60x20 / 80x24 / 100x30 / 140x40 and reaches every command in the LIVE registry using
     real SGR mouse clicks only.
-- `commandBarMaxRows(terminalRows)` spends 3 rows at ≥40 rows, 2 at ≥24, and 1 below that: the
-  bar is chrome competing with the transcript and never crowds a short terminal.
+- `commandBarMaxRows(terminalRows)` spends 6 rows at ≥40, 5 at ≥30, 4 at ≥24, and 2 below that.
+  Every tier rose with #1399: the bar no longer competes with the TRANSCRIPT, it competes with
+  telemetry charts that already disclose their own hidden count and shrink gracefully, and it now
+  spends a row per group caption.
 
 ## Contract: `screens/repl.ts` wiring
 
@@ -107,15 +154,19 @@ row, so clicking an unavailable command says why instead of behaving like a dead
   the command is QUEUED, never injected over what is being typed.
 - `prefill` writes `/name ` into an EMPTY composer only; with text already present the usage
   line is surfaced on the notice row instead. A button click is never allowed to destroy typing.
-- The bar is suppressed while the slash palette is open — the palette owns those rows and is
-  itself a command surface; both at once would be two competing command lists on screen.
+- The bar is NOT suppressed while the slash palette is open (changed by #1399 — see the section
+  above; the two surfaces no longer share rows, and suppressing would reflow the charts under the
+  bar on every `/` keystroke).
 - The screen's command-button state (`hoveredCommand`, `commandBarNotice`, the page index) is
   disjoint from the operator surface's `paneFocused` / `focusedControlIndex`. No activation branch
   writes either, so the keyboard path is unchanged by construction.
 - The notice row is cleared the moment the operator acts on it — on the next keystroke and on
   submit. A notice describes a command the operator was ABOUT to run; once they have moved on it
   is stale, and it costs a permanent row of chrome to keep saying something untrue.
-- The page index is stored WITH the layout signature it was chosen under (pane width, row budget,
+- The page index is stored WITH the layout signature it was chosen under (LIVE-RUN pane inner
+  width since #1399, not the transcript column's — a resize that changes only the transcript must
+  not discard a still-valid page, and one that changes only the pane must not keep a stale one; row
+  budget,
   registry command names). A resize or a registry change produces a different signature and the
   index is discarded rather than clamped, so the bar reopens at the first page instead of on a
   page whose commands no longer exist.
@@ -124,7 +175,8 @@ row, so clicking an unavailable command says why instead of behaving like a dead
 
 1. Every command in a registry renders a button — asserted against the registry, not a fixture
    list, including a registry mutated at test time (an added command gains a button with no
-   change to component or screen).
+   change to component or screen), and lands in exactly one group including when no group names
+   it.
 2. A click on an argument-free command dispatches `/name` through the real injector path.
 3. A click on an `argumentHint` command composes `/name ` and dispatches nothing.
 4. A prefill click with text already in the composer preserves that text.
@@ -134,3 +186,11 @@ row, so clicking an unavailable command says why instead of behaving like a dead
    honoured, and EVERY registered command is reachable by mouse — directly or through the pager —
    proved by real clicks against the real screen, not by a layout assertion.
 8. A skill declaring `argument-hint:` produces a button that composes rather than dispatches.
+9. (#1399) No rendered label carries a slash, and every label's activation still dispatches
+   `/name`, asserted as one statement so the two cannot be edited apart.
+10. (#1399) Every group caption opens its own row and is never spliced between buttons; captions
+    carry no click handler and are never counted as buttons.
+11. (#1399) The buttons render inside the live-run pane adjacent to the run controls, proved by
+    frames captured from the real screen at five widths —
+    `build-tools/capture-command-buttons-frame.ts`, receipts in
+    `receipts/ember-cli-1399-command-buttons/`.

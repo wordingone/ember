@@ -58,10 +58,14 @@ function assertPaletteDoesNotContaminatePrompt(lines: string[], width: number): 
   for (let row = promptTop; row <= promptBottom; row++) {
     expect(lines[row] ?? "").not.toMatch(commandRow);
   }
+  // Scoped to the TRANSCRIPT column (#1399). The command bar moved into the live-run pane, which
+  // renders its own "+N more" pager on the same frame rows; counting whole lines would fold that
+  // pager's hidden-count into the palette's own overflow and make this arithmetic lie.
+  const column = lines.map((line) => line.slice(0, width));
   const renderedCommands = commandNames.filter((name) =>
-    lines.some((line) => new RegExp(`/${name}\\b`).test(line)),
+    column.some((line) => new RegExp(`/${name}\\b`).test(line)),
   ).length;
-  const shortfall = lines.reduce((count, line) => {
+  const shortfall = column.reduce((count, line) => {
     const match = line.match(/\+(\d+) more\b/);
     return count + (match ? Number(match[1]) : 0);
   }, 0);
@@ -125,8 +129,12 @@ describe("repl operator surface layout", () => {
       // #894: the old unbounded TRAINING/LOSS + RESOURCE EFFICIENCY stream has been replaced by
       // independently bounded chart cards. At every supported size at least one card title and
       // one complete horizontal card boundary must survive the actual Repl resize path.
-      expect(lines.some((line) => /\+\s*(HOST|LOSS|TOKENS|LEARNING|ENERGY|GPU)/u.test(line))).toBe(true);
-      expect(lines.some((line) => /\+-{3,}\+/u.test(line))).toBe(true);
+      // The size travels with the assertion: this loop covers four of them, and "expected true,
+      // got false" alone does not say which one regressed.
+      expect({ size: `${columns}x${rows}`, cardTitle: lines.some((line) => /\+\s*(HOST|LOSS|TOKENS|LEARNING|ENERGY|GPU)/u.test(line)) })
+        .toEqual({ size: `${columns}x${rows}`, cardTitle: true });
+      expect({ size: `${columns}x${rows}`, cardBorder: lines.some((line) => /\+-{3,}\+/u.test(line)) })
+        .toEqual({ size: `${columns}x${rows}`, cardBorder: true });
       expect(lines.some((line) => line.includes("TRAINING/LOSS"))).toBe(false);
       if (columns <= 40) {
         // Content may never overwrite the pane's own right border column.

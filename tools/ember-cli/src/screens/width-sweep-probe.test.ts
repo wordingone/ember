@@ -103,23 +103,23 @@ describe("command-bar width sweep (issue #1370 acceptance #6)", () => {
           const current = lines();
           const joined = current.join("\n");
           for (const name of names) {
-            if (!joined.includes(`[/${name}]`)) continue;
+            if (!joined.includes(`[${name}]`)) continue;
             reached.add(name);
             if (hop === 0) firstPage.add(name);
           }
           if (reached.size === names.length) break;
-          // The pager sits on a COMMAND-BAR row — one that also carries a "[/" label — searched
-          // bottom-up. The telemetry pane has its own "… N more charts" caption, which a naive
-          // whole-frame search for "more" hits first and clicks instead.
+          // The pager is matched by its OWN shape rather than by proximity to a button label:
+          // "+N more", or the "›" glyph it degrades to when the pane cannot afford the caption.
+          // Since #1399 the bar shares the live-run pane with the telemetry cards, whose
+          // "… N more charts" caption a naive search for "more" hits first and clicks instead —
+          // that caption has no "+", so the pattern below cannot match it.
           let at: { col: number; row: number } | undefined;
           for (let row = current.length - 1; row >= 0 && !at; row--) {
             const line = current[row]!;
-            const barCol = line.indexOf("[/");
-            if (barCol < 0) continue;
-            for (const marker of ["+", "›"]) {
-              const col = line.indexOf(marker, barCol);
-              if (col >= 0) { at = { col, row }; break; }
-            }
+            const plus = /\+\d+ more/.exec(line);
+            if (plus && plus.index >= 0) { at = { col: plus.index, row }; break; }
+            const glyph = line.indexOf("›");
+            if (glyph >= 0) { at = { col: glyph, row }; break; }
           }
           if (!at) break;
           stdin.emit("data", Buffer.from(sgrLeftClick(at.col + 1, at.row)));
