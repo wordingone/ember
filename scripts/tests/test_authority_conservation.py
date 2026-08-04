@@ -1530,6 +1530,177 @@ def test_renamed_control_cannot_drop_binding_or_escape_by_path(tmp_path: Path) -
     }, payload
 
 
+def _write_sidecar(
+    tmp_path: Path,
+    artifact_relative: str,
+    artifact_bytes: bytes,
+    *,
+    digest: str | None = None,
+    artifact_path: str | None = None,
+    goal_id: str = "EMBER-02",
+    workstream_id: str = "EMBER-02A",
+    next_executed_outcome: str = (
+        "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+    ),
+) -> Path:
+    """Write an artifact plus a `<name>.authority.json` sidecar beside it."""
+    artifact = tmp_path / artifact_relative
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.write_bytes(artifact_bytes)
+    sidecar = {
+        "schema_version": "ember-content-addressed-authority-binding/v1",
+        "artifact_path": artifact_path if artifact_path is not None else artifact_relative,
+        "artifact_sha256": digest
+        if digest is not None
+        else hashlib.sha256(artifact_bytes).hexdigest(),
+        "authority": {
+            "goal_id": goal_id,
+            "workstream_id": workstream_id,
+            "next_executed_outcome": next_executed_outcome,
+        },
+    }
+    sidecar_path = Path(str(artifact).rsplit(".", 1)[0] + ".authority.json")
+    sidecar_path.write_text(json.dumps(sidecar, indent=2) + "\n", encoding="utf-8")
+    return artifact
+
+
+def test_sidecar_binds_an_artifact_that_cannot_carry_the_binding_inline(
+    tmp_path: Path,
+) -> None:
+    write_valid_fixture(tmp_path)
+    git_fixture(tmp_path, "init")
+    git_fixture(tmp_path, "config", "user.email", "fixture@example.invalid")
+    git_fixture(tmp_path, "config", "user.name", "fixture")
+    git_fixture(tmp_path, "add", ".")
+    git_fixture(tmp_path, "commit", "-m", "fixture")
+
+    relative = "receipts/frozen/evidence.json"
+    _write_sidecar(
+        tmp_path, relative, b'{"schema":"frozen-v1","note":"no inline binding"}'
+    )
+    git_fixture(
+        tmp_path,
+        "add",
+        relative,
+        "receipts/frozen/evidence.authority.json",
+    )
+
+    result = run_verifier(tmp_path, extra_args=("--staged",))
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_sidecar_with_wrong_goal_binding_still_fails_leg4(tmp_path: Path) -> None:
+    write_valid_fixture(tmp_path)
+    git_fixture(tmp_path, "init")
+    git_fixture(tmp_path, "config", "user.email", "fixture@example.invalid")
+    git_fixture(tmp_path, "config", "user.name", "fixture")
+    git_fixture(tmp_path, "add", ".")
+    git_fixture(tmp_path, "commit", "-m", "fixture")
+
+    relative = "receipts/frozen/evidence.json"
+    _write_sidecar(
+        tmp_path,
+        relative,
+        b'{"schema":"frozen-v1","note":"wrong goal"}',
+        goal_id="EMBER-01",
+    )
+    git_fixture(
+        tmp_path,
+        "add",
+        relative,
+        "receipts/frozen/evidence.authority.json",
+    )
+
+    result = run_verifier(tmp_path, extra_args=("--staged",))
+    assert result.returncode == 1, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert "artifact.goal_binding" in {
+        item["code"] for item in payload["errors"]
+    }, payload
+
+
+def test_sidecar_digest_mismatch_is_rejected_not_exempted(tmp_path: Path) -> None:
+    write_valid_fixture(tmp_path)
+    git_fixture(tmp_path, "init")
+    git_fixture(tmp_path, "config", "user.email", "fixture@example.invalid")
+    git_fixture(tmp_path, "config", "user.name", "fixture")
+    git_fixture(tmp_path, "add", ".")
+    git_fixture(tmp_path, "commit", "-m", "fixture")
+
+    relative = "receipts/frozen/evidence.json"
+    _write_sidecar(
+        tmp_path,
+        relative,
+        b'{"schema":"frozen-v1","note":"digest will not match"}',
+        digest="0" * 64,
+    )
+    git_fixture(
+        tmp_path,
+        "add",
+        relative,
+        "receipts/frozen/evidence.authority.json",
+    )
+
+    result = run_verifier(tmp_path, extra_args=("--staged",))
+    assert result.returncode == 1, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert "artifact.goal_binding" in {
+        item["code"] for item in payload["errors"]
+    }, payload
+
+
+def test_sidecar_pointed_at_a_different_path_does_not_bind(tmp_path: Path) -> None:
+    write_valid_fixture(tmp_path)
+    git_fixture(tmp_path, "init")
+    git_fixture(tmp_path, "config", "user.email", "fixture@example.invalid")
+    git_fixture(tmp_path, "config", "user.name", "fixture")
+    git_fixture(tmp_path, "add", ".")
+    git_fixture(tmp_path, "commit", "-m", "fixture")
+
+    relative = "receipts/frozen/evidence.json"
+    _write_sidecar(
+        tmp_path,
+        relative,
+        b'{"schema":"frozen-v1","note":"sidecar names a different artifact"}',
+        artifact_path="receipts/frozen/other.json",
+    )
+    git_fixture(
+        tmp_path,
+        "add",
+        relative,
+        "receipts/frozen/evidence.authority.json",
+    )
+
+    result = run_verifier(tmp_path, extra_args=("--staged",))
+    assert result.returncode == 1, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert "artifact.goal_binding" in {
+        item["code"] for item in payload["errors"]
+    }, payload
+
+
+def test_unknown_artifact_without_sidecar_fails_as_today(tmp_path: Path) -> None:
+    write_valid_fixture(tmp_path)
+    git_fixture(tmp_path, "init")
+    git_fixture(tmp_path, "config", "user.email", "fixture@example.invalid")
+    git_fixture(tmp_path, "config", "user.name", "fixture")
+    git_fixture(tmp_path, "add", ".")
+    git_fixture(tmp_path, "commit", "-m", "fixture")
+
+    relative = "receipts/frozen/evidence.json"
+    path = tmp_path / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('{"schema":"frozen-v1","note":"no sidecar at all"}', encoding="utf-8")
+    git_fixture(tmp_path, "add", relative)
+
+    result = run_verifier(tmp_path, extra_args=("--staged",))
+    assert result.returncode == 1, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert "artifact.goal_binding" in {
+        item["code"] for item in payload["errors"]
+    }, payload
+
+
 @pytest.mark.parametrize(
     ("field", "code"),
     [

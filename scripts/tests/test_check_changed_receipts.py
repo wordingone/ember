@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -37,6 +38,20 @@ class ChangedReceiptGateTests(unittest.TestCase):
             check=False,
         )
 
+    def seed(self, td: str, *entries: dict[str, str]) -> Path:
+        """Root with a valid frozen-receipt exceptions policy (empty by default).
+
+        The policy is parsed on every run and is fail-closed, so every fixture
+        root needs one exactly as a real clone does.
+        """
+        root = Path(td)
+        self.write_json(
+            root,
+            "tools/frozen-receipt-exceptions.json",
+            {"schema": "frozen-receipt-exceptions-v1", "entries": list(entries)},
+        )
+        return root
+
     def write_json(self, root: Path, relative: str, payload: object) -> None:
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -47,7 +62,7 @@ class ChangedReceiptGateTests(unittest.TestCase):
 
     def test_rejects_changed_post_genesis_receipt_without_invariant_stamp(self) -> None:
         with tempfile.TemporaryDirectory() as td:
-            root = Path(td)
+            root = self.seed(td)
             self.write_json(
                 root,
                 "receipts/new.json",
@@ -61,7 +76,7 @@ class ChangedReceiptGateTests(unittest.TestCase):
 
     def test_accepts_changed_receipt_with_correct_invariant_stamp(self) -> None:
         with tempfile.TemporaryDirectory() as td:
-            root = Path(td)
+            root = self.seed(td)
             self.write_json(
                 root,
                 "receipts/nested/new.json",
@@ -80,7 +95,7 @@ class ChangedReceiptGateTests(unittest.TestCase):
 
     def test_rejects_malformed_changed_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as td:
-            root = Path(td)
+            root = self.seed(td)
             path = root / "receipts" / "broken.json"
             path.parent.mkdir(parents=True)
             path.write_text("{", encoding="utf-8")
@@ -92,7 +107,7 @@ class ChangedReceiptGateTests(unittest.TestCase):
 
     def test_ignores_non_receipt_paths_and_training_config(self) -> None:
         with tempfile.TemporaryDirectory() as td:
-            root = Path(td)
+            root = self.seed(td)
             self.write_json(root, "receipts/train_config.json", {"batch_size": 1})
             (root / "README.md").write_text("not a receipt\n", encoding="utf-8")
 
@@ -108,7 +123,7 @@ class ChangedReceiptGateTests(unittest.TestCase):
 
     def test_validates_approved_disposition_packet_with_native_schema(self) -> None:
         with tempfile.TemporaryDirectory() as td:
-            root = Path(td)
+            root = self.seed(td)
             source = (
                 REPO
                 / "receipts"
@@ -131,7 +146,7 @@ class ChangedReceiptGateTests(unittest.TestCase):
 
     def test_rejects_malformed_approved_disposition_packet(self) -> None:
         with tempfile.TemporaryDirectory() as td:
-            root = Path(td)
+            root = self.seed(td)
             relative = (
                 "receipts/oldest-issue-disposition/approved/broken.json"
             )
@@ -151,7 +166,7 @@ class ChangedReceiptGateTests(unittest.TestCase):
 
     def test_null_delimited_input_preserves_space_bearing_receipt_path(self) -> None:
         with tempfile.TemporaryDirectory() as td:
-            root = Path(td)
+            root = self.seed(td)
             relative = "receipts/name with spaces.json"
             self.write_json(
                 root,
@@ -163,6 +178,91 @@ class ChangedReceiptGateTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 1, self.output(result))
             self.assertIn("MISSING_INVARIANT_SHA256", self.output(result))
+
+    def frozen_fixture(self, root: Path) -> tuple[str, str]:
+        """Write a floor-violating receipt and return its path and digest."""
+        relative = "receipts/frozen/evidence.json"
+        self.write_json(root, relative, {"schema": "frozen-v1", "note": "no ticket"})
+        digest = hashlib.sha256((root / relative).read_bytes()).hexdigest()
+        return relative, digest
+
+    def test_exempts_frozen_evidence_matching_its_recorded_digest(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = self.seed(td)
+            relative, digest = self.frozen_fixture(root)
+            self.write_json(
+                root,
+                "tools/frozen-receipt-exceptions.json",
+                {
+                    "schema": "frozen-receipt-exceptions-v1",
+                    "entries": [
+                        {
+                            "path": relative,
+                            "sha256": digest,
+                            "reason": "frozen evidence copied in verbatim",
+                        }
+                    ],
+                },
+            )
+
+            result = self.run_checker(root, relative)
+
+            self.assertEqual(result.returncode, 0, self.output(result))
+            self.assertIn("frozen=1", self.output(result))
+
+    def test_rejects_frozen_entry_whose_content_drifted(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = self.seed(td)
+            relative, _ = self.frozen_fixture(root)
+            self.write_json(
+                root,
+                "tools/frozen-receipt-exceptions.json",
+                {
+                    "schema": "frozen-receipt-exceptions-v1",
+                    "entries": [
+                        {
+                            "path": relative,
+                            "sha256": "0" * 64,
+                            "reason": "digest deliberately does not match",
+                        }
+                    ],
+                },
+            )
+
+            result = self.run_checker(root, relative)
+
+            self.assertEqual(result.returncode, 1, self.output(result))
+            self.assertIn("does not match its recorded digest", self.output(result))
+
+    def test_path_alone_never_exempts_an_unenumerated_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = self.seed(td)
+            relative, _ = self.frozen_fixture(root)
+
+            result = self.run_checker(root, relative)
+
+            self.assertEqual(result.returncode, 1, self.output(result))
+            self.assertIn("MISSING_REQUIRED", self.output(result))
+
+    def test_unusable_exceptions_policy_fails_closed_on_a_clean_run(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "tools").mkdir(parents=True)
+            (root / "tools" / "frozen-receipt-exceptions.json").write_text(
+                "{", encoding="utf-8"
+            )
+
+            result = self.run_checker(root, "README.md")
+
+            self.assertEqual(result.returncode, 1, self.output(result))
+            self.assertIn("exceptions policy unusable", self.output(result))
+
+    def test_absent_exceptions_policy_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            result = self.run_checker(Path(td), "README.md")
+
+            self.assertEqual(result.returncode, 1, self.output(result))
+            self.assertIn("exceptions policy unusable", self.output(result))
 
 
 if __name__ == "__main__":
