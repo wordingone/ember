@@ -141,6 +141,8 @@ import {
 import { useReceiptLandingPoller, formatLastReceiptLine } from "../services/receipt-landing-poller.ts";
 import path from "node:path";
 import { OperatorSurfacePane } from "../components/operator-surface-pane.ts";
+import { CommandBarPane, commandBarMaxRows } from "../components/command-bar-pane.ts";
+import type { CommandButtonActivation } from "../services/command-buttons.ts";
 import { verifySourceBinding } from "../entrypoints/source-binding-verifier.ts";
 
 // ---------------------------------------------------------------------------
@@ -738,6 +740,12 @@ export function ReplScreen({
   const [hoveredControl, setHoveredControl] = useState<OperatorControlAction | undefined>(undefined);
   const [activityScrollOffset, setActivityScrollOffset] = useState(0);
   const [controlDisabledReason, setControlDisabledReason] = useState<string | undefined>(undefined);
+
+  // #1370: pointer state for the registry-driven command bar. Deliberately SEPARATE from
+  // paneFocused/focusedControlIndex — clicking a command button must never move keyboard focus,
+  // so the bar owns no focus state at all, only a hover name and a one-line notice.
+  const [hoveredCommand, setHoveredCommand] = useState<string | undefined>(undefined);
+  const [commandBarNotice, setCommandBarNotice] = useState<string | undefined>(undefined);
 
   const [permMode,         setPermMode]        = useState<ReplPermissionMode>(config.permissionMode);
   const permModeRef = useRef<ReplPermissionMode>(permMode);
@@ -1825,6 +1833,45 @@ export function ReplScreen({
   });
 
   // ---------------------------------------------------------------------------
+  // #1370 — command-button activation
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Turns a command-button click into exactly what typing would have done, and nothing more.
+   *
+   *  - `dispatch` goes through the SAME OperatorInjector the operator pipe uses, so the click
+   *    inherits its keyboard-priority gate for free: with half-typed text in the composer or a
+   *    turn in flight, the command is QUEUED rather than clobbering what is being typed.
+   *  - `prefill` writes `/name ` into an EMPTY composer only. With text already there, the
+   *    usage line is surfaced instead — a button click is never allowed to destroy typing.
+   *  - `rejected` surfaces the disabled command's named reason.
+   *
+   * No branch touches `paneFocused` or `focusedControlIndex`: clicking a command button cannot
+   * move keyboard focus, which is what keeps these buttons equivalents of the keyboard path
+   * rather than a replacement for it.
+   */
+  const handleCommandButton = (activation: CommandButtonActivation): void => {
+    if (activation.kind === "rejected") {
+      setCommandBarNotice(activation.reason);
+      return;
+    }
+    if (activation.kind === "prefill") {
+      const usage = activation.hint ? `usage: ${activation.hint}` : `${activation.text.trim()} needs arguments`;
+      if (inputStateRef.current.text.trim().length > 0) {
+        setCommandBarNotice(usage);
+        return;
+      }
+      inputActions.setText(activation.text);
+      setCommandBarNotice(usage);
+      return;
+    }
+    const outcome = operatorInjectorRef.current?.handleLine(activation.text);
+    setCommandBarNotice(
+      outcome === "queued" ? `${activation.text} queued behind the current input` : undefined,
+    );
+  };
+
+  // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
 
@@ -1869,6 +1916,22 @@ export function ReplScreen({
             width:         mainColumnWidth,
           })
         : null,
+      // #1370: the clickable equivalent of every registered slash command, immediately above the
+      // composer it types into. Suppressed while the slash palette is open — the palette already
+      // owns those rows AND is itself a command surface, so rendering both would be two competing
+      // command lists on screen at once.
+      dropdownOpen
+        ? null
+        : React.createElement(CommandBarPane, {
+            key:            "command-bar",
+            commands:       slashCommands,
+            width:          mainColumnWidth,
+            maxRows:        commandBarMaxRows(terminalRows),
+            hoveredCommand,
+            onHoverCommand: setHoveredCommand,
+            onActivate:     handleCommandButton,
+            notice:         commandBarNotice,
+          }),
       React.createElement(PromptInput, {
         key:            "input",
         state:          inputState,
