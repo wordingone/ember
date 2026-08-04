@@ -141,7 +141,7 @@ import {
 import { useReceiptLandingPoller, formatLastReceiptLine } from "../services/receipt-landing-poller.ts";
 import path from "node:path";
 import { OperatorSurfacePane } from "../components/operator-surface-pane.ts";
-import { CommandBarPane, commandBarMaxRows } from "../components/command-bar-pane.ts";
+import { commandBarMaxRows } from "../components/command-bar-pane.ts";
 import type { CommandButtonActivation } from "../services/command-buttons.ts";
 import { verifySourceBinding } from "../entrypoints/source-binding-verifier.ts";
 
@@ -1894,7 +1894,12 @@ export function ReplScreen({
   // The page index the bar renders, valid only for the layout it was chosen under: a narrower
   // terminal or a changed registry repacks the pages, and a page-3 index remembered across that
   // change points at commands that are no longer there.
-  const commandBarSignature = `${mainColumnWidth}:${commandBarMaxRows(terminalRows)}:${slashCommands
+  // The bar now lives inside the operator surface (#1399), so its layout signature is keyed on
+  // THAT pane's inner content width — the operator surface reserves its border and paddingX, four
+  // columns in total. Keying on the transcript column would let a resize that changes only the
+  // transcript discard a still-valid page, and worse, let a resize that changes only the pane keep
+  // a stale one.
+  const commandBarSignature = `${Math.max(1, paneWidth - 4)}:${commandBarMaxRows(terminalRows)}:${slashCommands
     .map((command) => command.name)
     .join(",")}`;
   const commandBarPageIndex =
@@ -1945,25 +1950,6 @@ export function ReplScreen({
             width:         mainColumnWidth,
           })
         : null,
-      // #1370: the clickable equivalent of every registered slash command, immediately above the
-      // composer it types into. Suppressed while the slash palette is open — the palette already
-      // owns those rows AND is itself a command surface, so rendering both would be two competing
-      // command lists on screen at once.
-      dropdownOpen
-        ? null
-        : React.createElement(CommandBarPane, {
-            key:            "command-bar",
-            commands:       slashCommands,
-            width:          mainColumnWidth,
-            maxRows:        commandBarMaxRows(terminalRows),
-            hoveredCommand,
-            onHoverCommand: setHoveredCommand,
-            onActivate:     handleCommandButton,
-            page:           commandBarPageIndex,
-            onPageChange:   (index: number) =>
-              setCommandBarPageState({ signature: commandBarSignature, index }),
-            notice:         commandBarNotice,
-          }),
       React.createElement(PromptInput, {
         key:            "input",
         state:          inputState,
@@ -2006,6 +1992,20 @@ export function ReplScreen({
       onControlHover: setHoveredControl,
       activityScrollOffset,
       onActivityScroll: (deltaY) => setActivityScrollOffset((value) => Math.max(0, value + (deltaY < 0 ? 1 : -1))),
+      // #1370's clickable equivalent of every registered slash command, rehomed by #1399 next to
+      // the run controls the operator already reaches for. It is NOT suppressed while the slash
+      // palette is open: the palette owns rows in the transcript column, so there is no longer a
+      // row conflict, and blanking a whole block of the live-run pane every time a `/` is typed
+      // would reflow the charts underneath it on every keystroke.
+      commands: slashCommands,
+      commandBarMaxRows: commandBarMaxRows(terminalRows),
+      hoveredCommand,
+      onHoverCommand: setHoveredCommand,
+      onCommandActivate: handleCommandButton,
+      commandPage: commandBarPageIndex,
+      onCommandPageChange: (index: number) =>
+        setCommandBarPageState({ signature: commandBarSignature, index }),
+      commandNotice: commandBarNotice,
     }),
   );
 }

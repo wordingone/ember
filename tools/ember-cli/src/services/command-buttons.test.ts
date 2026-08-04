@@ -15,7 +15,10 @@ import {
   commandBarLayout,
   commandBarPages,
   commandButtonActivation,
+  commandButtonGroupId,
   commandButtonLabel,
+  commandBarRowCount,
+  groupCommandButtons,
   packCommandBarRows,
   resolveCommandBarPage,
   type CommandBarCell,
@@ -49,7 +52,7 @@ describe("buildCommandButtons — derived from the registry, never declared", ()
       const buttons = buildCommandButtons(commands);
       expect(buttons.map((b) => b.name)).toEqual(commands.map((c) => c.name));
       expect(buttons.length).toBeGreaterThan(0);
-      for (const button of buttons) expect(button.label).toBe(`[/${button.name}]`);
+      for (const button of buttons) expect(button.label).toBe(`[${button.name}]`);
     } finally {
       resetCommandRegistryForTests();
     }
@@ -112,8 +115,19 @@ describe("buildCommandButtons — derived from the registry, never declared", ()
     }
   });
 
-  test("commandButtonLabel is the run-controls button shape", () => {
-    expect(commandButtonLabel("verify")).toBe("[/verify]");
+  test("commandButtonLabel is the run-controls button shape, WITHOUT the slash (#1399)", () => {
+    expect(commandButtonLabel("verify")).toBe("[verify]");
+  });
+
+  test("dropping the slash from the label cannot change what the button runs (#1399)", () => {
+    // The regression this forecloses is a relabel that quietly relabels the DISPATCH too. Label
+    // and activation are asserted against each other here, over the live registry, so the two can
+    // never be edited apart.
+    const buttons = buildCommandButtons([cmd("verify"), cmd("train")]);
+    for (const button of buttons) {
+      expect(button.label).not.toContain("/");
+      expect(commandButtonActivation(button)).toEqual({ kind: "dispatch", text: `/${button.name}` });
+    }
   });
 });
 
@@ -154,14 +168,14 @@ describe("width-bounded layout", () => {
   test("packs into as few rows as fit and never splits a label", () => {
     const buttons = buildCommandButtons([cmd("aa"), cmd("bb"), cmd("cc")]);
     const cells: CommandBarCell[] = buttons.map((b) => ({ kind: "button", label: b.label, button: b }));
-    // "[/aa] " is 7 columns including its trailing gap.
-    const rows = packCommandBarRows(cells, 14);
+    // "[aa] " is 5 columns including its trailing gap.
+    const rows = packCommandBarRows(cells, 11);
     expect(rows.map((row) => row.map((cell) => cell.label))).toEqual([
-      ["[/aa]", "[/bb]"],
-      ["[/cc]"],
+      ["[aa]", "[bb]"],
+      ["[cc]"],
     ]);
     for (const row of rows) {
-      for (const cell of row) expect(cell.label).toMatch(/^\[\/[a-z-]+\]$/);
+      for (const cell of row) expect(cell.label).toMatch(/^\[[a-z-]+\]$/);
     }
   });
 
@@ -170,7 +184,7 @@ describe("width-bounded layout", () => {
     const cells: CommandBarCell[] = buttons.map((b) => ({ kind: "button", label: b.label, button: b }));
     const rows = packCommandBarRows(cells, 8);
     expect(rows).toHaveLength(2);
-    expect(rows[1]![0]!.label).toBe("[/an-extremely-long-command-name]");
+    expect(rows[1]![0]!.label).toBe("[an-extremely-long-command-name]");
   });
 
   test("overflow beyond the row budget is disclosed as +N more, never silently dropped", () => {
@@ -239,7 +253,10 @@ describe("commandBarPages", () => {
         const pages = commandBarPages(buttons, width, maxRows);
         expect(pages.length).toBeGreaterThan(0);
         const shown = pages.flatMap((page) => buttonCells(page.rows));
-        expect(shown).toEqual(buttons.map((b) => b.label));
+        // Grouped order (#1399) reorders the buttons, so the partition is proved as a SET plus a
+        // no-duplicates check rather than by registry sequence: every command appears, once.
+        expect(shown.length).toBe(buttons.length);
+        expect([...shown].sort()).toEqual(buttons.map((b) => b.label).sort());
       }
     }
   });
@@ -280,5 +297,80 @@ describe("commandBarPages", () => {
     expect(resolveCommandBarPage(-1, 3)).toBe(2);
     expect(resolveCommandBarPage(5, 0)).toBe(0);
     expect(resolveCommandBarPage(Number.NaN, 3)).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #1399 — grouping
+// ---------------------------------------------------------------------------
+
+describe("command-button groups (#1399)", () => {
+  test("every LIVE registry command lands in exactly one group, none dropped", async () => {
+    resetCommandRegistryForTests();
+    try {
+      const buttons = buildCommandButtons(await getCommands(process.cwd()));
+      const groups = groupCommandButtons(buttons);
+      const grouped = groups.flatMap((group) => group.buttons.map((button) => button.name));
+      expect(grouped.length).toBe(buttons.length);
+      expect([...grouped].sort()).toEqual(buttons.map((b) => b.name).sort());
+      // Non-empty groups only: a caption with nothing under it is chrome that says nothing.
+      for (const group of groups) expect(group.buttons.length).toBeGreaterThan(0);
+    } finally {
+      resetCommandRegistryForTests();
+    }
+  });
+
+  test("an unclassified command still gets a button — grouping is not a second registry", () => {
+    // This is the #1370 class-kill re-asserted against the #1399 grouping: a command no group
+    // names must still appear, or the group table has quietly become the list of what exists.
+    expect(commandButtonGroupId("a-skill-nobody-classified")).toBe("more");
+    const buttons = buildCommandButtons([cmd("verify"), cmd("a-skill-nobody-classified")]);
+    const grouped = groupCommandButtons(buttons).flatMap((group) => group.buttons.map((b) => b.name));
+    expect(grouped.sort()).toEqual(["a-skill-nobody-classified", "verify"]);
+  });
+
+  test("the stated grouping logic is the one that ships", () => {
+    expect(commandButtonGroupId("train")).toBe("launch");
+    expect(commandButtonGroupId("verify")).toBe("launch");
+    expect(commandButtonGroupId("model")).toBe("inspect");
+    expect(commandButtonGroupId("custody")).toBe("inspect");
+    expect(commandButtonGroupId("designate")).toBe("govern");
+    expect(commandButtonGroupId("goal")).toBe("govern");
+    // /resume is session resume and deliberately NOT in a run group: a lowercase [resume] sitting
+    // under the run control [RESUME] would read as two spellings of one control.
+    expect(commandButtonGroupId("resume")).toBe("more");
+  });
+
+  test("a group caption always opens its own row, so groups read as blocks", () => {
+    const buttons = buildCommandButtons([cmd("train"), cmd("verify"), cmd("model"), cmd("goal")]);
+    const pages = commandBarPages(buttons, 200, 8);
+    const rows = pages[0]!.rows;
+    for (const row of rows) {
+      const captions = row.filter((cell) => cell.kind === "group");
+      expect(captions.length).toBeLessThanOrEqual(1);
+      // A caption is only ever the FIRST cell of a row — never spliced between buttons.
+      if (captions.length === 1) expect(row[0]!.kind).toBe("group");
+    }
+    expect(rows.length).toBe(3); // launch, inspect, govern — one row each at this width
+  });
+
+  test("captions are never clickable cells and never counted as buttons", () => {
+    const buttons = buildCommandButtons([cmd("train"), cmd("model")]);
+    const cells = commandBarPages(buttons, 200, 4)[0]!.rows.flat();
+    expect(cells.filter((cell) => cell.kind === "group").length).toBe(2);
+    expect(buttonCells([cells])).toEqual(["[train]", "[model]"]);
+  });
+
+  test("commandBarRowCount is the height the bar actually draws", () => {
+    const buttons = buildCommandButtons([cmd("train"), cmd("verify"), cmd("model")]);
+    for (const width of [16, 24, 40, 80, 160]) {
+      for (const maxRows of [1, 2, 4, 6]) {
+        const pages = commandBarPages(buttons, width, maxRows);
+        const rendered = pages[0]!.rows.length;
+        expect(commandBarRowCount(buttons, width, maxRows, 0, false)).toBe(rendered);
+        expect(commandBarRowCount(buttons, width, maxRows, 0, true)).toBe(rendered + 1);
+      }
+    }
+    expect(commandBarRowCount([], 80, 3)).toBe(0);
   });
 });

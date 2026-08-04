@@ -24,7 +24,7 @@ import { describe, it, expect } from "bun:test";
 import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
 import { App } from "../ink/components.ts";
-import { ReplScreen } from "./repl.ts";
+import { ReplScreen, operatorSurfaceWidth } from "./repl.ts";
 import { _deliverKeyEvent } from "../ink/hooks.ts";
 import { resetCommandRegistryForTests, getCommands } from "../command-registry.ts";
 
@@ -80,15 +80,23 @@ async function flush(): Promise<void> {
  * frame being checked right now. Also requires exactly one indicator row when there is a
  * shortfall, and none when there isn't -- more than one surviving in the current frame is its own
  * defect (a stale row that repaint failed to clear), not something to silently sum away. */
-function assertContract(fullOutput: string, allNames: string[], stage: string): void {
+function assertContract(fullOutput: string, allNames: string[], stage: string, columns: number): void {
   const rows = reconstructRows(fullOutput);
+  // The contract is about the PALETTE, which lives in the transcript column. Since #1399 the
+  // live-run pane on the right of the SAME rows carries the command bar, whose pager renders its
+  // own "+N more" — a whole-row scan sees two indicators and reads the second as a stale row the
+  // repaint failed to clear. Every row is therefore trimmed to the transcript column first.
+  const mainColumnWidth = Math.max(20, columns - operatorSurfaceWidth(columns));
+  const paletteRows = new Map<number, string>(
+    [...rows].map(([row, text]) => [row, text.slice(0, mainColumnWidth)] as const),
+  );
 
   // (a) zero palette rows fused onto the prompt row: any row containing a registered command's
   // name must start with the dropdown's own left border ("│") -- the master reproduction of this
   // exact defect showed entry text landing on "❯ / /observatory ..." with NO leading "│" at all,
   // because it had been painted directly onto the prompt input's own row instead of the box's own.
   const renderedNames = new Set<string>();
-  for (const [row, text] of rows) {
+  for (const [row, text] of paletteRows) {
     const namesOnThisRow = allNames.filter((name) => text.includes(`/${name}`));
     if (namesOnThisRow.length === 0) continue;
     expect(
@@ -100,7 +108,7 @@ function assertContract(fullOutput: string, allNames: string[], stage: string): 
 
   // (b) rendered count + explicit shortfall == full match count, read from the CURRENT frame only.
   const indicatorRows: { row: number; count: number }[] = [];
-  for (const [row, text] of rows) {
+  for (const [row, text] of paletteRows) {
     const m = text.match(/\+(\d+) more/);
     if (m) indicatorRows.push({ row, count: parseInt(m[1]!, 10) });
   }
@@ -174,21 +182,21 @@ describe("palette resize cycle 80x24 -> 40x24 -> 80x24 (countersigned cross-lane
       await flush();
       _deliverKeyEvent("/", {});
       await flush();
-      assertContract(chunks.join(""), allNames, "80x24 (initial)");
+      assertContract(chunks.join(""), allNames, "80x24 (initial)", 80);
 
       // Resize down to a genuinely cramped height.
       Object.defineProperty(process.stdout, "columns", { value: 40, configurable: true });
       Object.defineProperty(process.stdout, "rows",    { value: 24, configurable: true });
       process.stdout.emit("resize");
       await flush();
-      assertContract(chunks.join(""), allNames, "40x24 (cramped)");
+      assertContract(chunks.join(""), allNames, "40x24 (cramped)", 40);
 
       // Resize back up.
       Object.defineProperty(process.stdout, "columns", { value: 80, configurable: true });
       Object.defineProperty(process.stdout, "rows",    { value: 24, configurable: true });
       process.stdout.emit("resize");
       await flush();
-      assertContract(chunks.join(""), allNames, "80x24 (restored)");
+      assertContract(chunks.join(""), allNames, "80x24 (restored)", 80);
     } finally {
       handle?.unmount();
       Object.defineProperty(process.stdout, "columns", { value: origColumns, configurable: true });
