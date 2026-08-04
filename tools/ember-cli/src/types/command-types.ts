@@ -34,4 +34,13 @@ export interface RegistryCommand {
   isDynamic?: boolean;
   isMcpSkill?: boolean;
   whenToUse?: string;
+  /**
+   * Shape of the arguments this command CANNOT run without, e.g.
+   * `"--workspace <path> --descriptor <path>"`. Presence is the single declaration that a bare
+   * `/name` invocation is a usage error — the command bar reads it here, from the registry
+   * itself, so clicking such a command's button composes `/name ` for the operator to finish
+   * instead of dispatching an invocation that can only fail. Commands whose bare form does
+   * something useful (`/model` -> status, `/benchmark` -> table) leave this unset.
+   */
+  argumentHint?: string;
 }
