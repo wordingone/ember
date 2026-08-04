@@ -19,6 +19,7 @@ sys.path.insert(0, str(SCRIPT_ROOT))
 
 import census as census_module  # noqa: E402
 from census import (  # noqa: E402
+    TIMING_FIELD,
     build_duplicate_groups,
     classify_discovery_snapshot_change,
     build_root_census,
@@ -557,6 +558,9 @@ def test_missing_required_external_root_with_closed_attestation_is_resolved() ->
         {},
     )
 
+    # An absent root is still timed (#1397), and its wall clock is the one
+    # field here that cannot be asserted by value; every attested field is.
+    assert result["roots"][0].pop(TIMING_FIELD)["duration_seconds"] >= 0
     assert result["roots"] == [
         {
             "root_id": "external-auditor",
@@ -805,6 +809,89 @@ def test_canonical_root_identity_excludes_mtime_receipt_metadata(tmp_path: Path)
     assert canonical_root_identity(first) == canonical_root_identity(second)
 
 
+def test_census_records_per_root_and_per_phase_wall_clock(tmp_path: Path) -> None:
+    bound = tmp_path / "bound"
+    bound.mkdir()
+    (bound / "payload.bin").write_bytes(b"x" * 4096)
+    (bound / "nested").mkdir()
+    (bound / "nested" / "more.bin").write_bytes(b"y" * 4096)
+    spec = {
+        "roots": [
+            {"root_id": "bound-tree", "required": False, "scan": "files"},
+            # An alias contributes no artifacts (#1386 single-scan) and leaves
+            # the loop early; it must still be timed, and its near-zero
+            # duration is what makes the saved scan visible in the receipt.
+            {
+                "root_id": "alias-tree",
+                "required": False,
+                "scan": "files",
+                "source_root_id": "bound-tree",
+                "alias_of_root_id": "bound-tree",
+            },
+            # An absent root leaves the loop even earlier.
+            {"root_id": "absent-tree", "required": False, "scan": "files"},
+        ]
+    }
+    result = build_root_census(spec, {"bound-tree": bound})
+
+    census_timings = result[TIMING_FIELD]
+    assert census_timings["clock"] == "time.perf_counter"
+    assert census_timings["total_seconds"] >= 0
+    phase_seconds = census_timings["phase_seconds"]
+    assert set(phase_seconds) == {
+        "root_scan",
+        "final_discovery_verification",
+        "final_git_verification",
+        "final_membership_verification",
+        "final_byte_verification",
+        "aggregation",
+    }
+    assert all(seconds >= 0 for seconds in phase_seconds.values())
+    assert census_timings["total_seconds"] >= sum(phase_seconds.values()) - 0.05
+
+    # Every declared root is timed, including the ones that never hash a byte.
+    root_timings = {
+        row["root_id"]: row[TIMING_FIELD] for row in result["roots"] if TIMING_FIELD in row
+    }
+    assert set(root_timings) == {"bound-tree", "alias-tree", "absent-tree"}
+    for timing in root_timings.values():
+        assert timing["duration_seconds"] >= 0
+        assert all(seconds >= 0 for seconds in timing["phase_seconds"].values())
+        assert set(timing["phase_seconds"]) <= {
+            "discovery",
+            "hashing",
+            "membership_snapshot",
+        }
+        assert (
+            sum(timing["phase_seconds"].values())
+            <= timing["duration_seconds"] + 0.05
+        )
+    assert "hashing" in root_timings["bound-tree"]["phase_seconds"]
+
+    # The per-root clocks account for the scan phase: they are the same wall
+    # clock, sliced by root, so their sum tracks it within loop overhead.
+    scanned = sum(timing["duration_seconds"] for timing in root_timings.values())
+    assert abs(scanned - phase_seconds["root_scan"]) <= max(
+        0.05, phase_seconds["root_scan"] * 0.25
+    )
+
+
+def test_timings_are_stripped_from_canonical_root_identity(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "payload.bin").write_bytes(b"same")
+    spec = {"roots": [{"root_id": "root", "required": True, "scan": "files"}]}
+    first = build_root_census(spec, {"root": root})
+    second = build_root_census(spec, {"root": root})
+    assert first[TIMING_FIELD] and second[TIMING_FIELD]
+    canonical = canonical_root_identity(first)
+    assert TIMING_FIELD not in canonical
+    assert all(TIMING_FIELD not in row for row in canonical["roots"])
+    # Two runs over identical bytes still produce one identity, so the census
+    # digest and the canonical manifest built on it do not move.
+    assert canonical == canonical_root_identity(second)
+
+
 def test_remote_and_worktree_registry_modes_use_source_repo(tmp_path: Path) -> None:
     root = tmp_path / "repo"
     root.mkdir()
@@ -943,6 +1030,13 @@ def test_cli_output_is_byte_stable_for_unchanged_read_only_roots(
     normalized_payloads = [json.loads(path.read_text(encoding="utf-8")) for path in outputs]
     for row in normalized_payloads:
         row["run_identity"].pop("execution_id")
+        # Run timings (#1397) are wall-clock observability, not custody
+        # evidence — no more reproducible than execution_id, and popped for the
+        # same reason. Every authoritative field below is still compared, and
+        # canonical_manifest_sha256 (which strips timings) must still match.
+        assert row["root_census"].pop(TIMING_FIELD)["total_seconds"] >= 0
+        for census_root in row["root_census"]["roots"]:
+            assert census_root.pop(TIMING_FIELD)["duration_seconds"] >= 0
     assert normalized_payloads[0] == normalized_payloads[1]
     sidecar_payloads = [json.loads(path.read_text(encoding="utf-8")) for path in sidecars]
     identities = [row["run_identity"] for row in sidecar_payloads]
