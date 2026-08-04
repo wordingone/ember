@@ -433,6 +433,11 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                 ),
                 "completion checkout head",
             ),
+            # Post-#1419 a differing head is checked for ANCESTRY instead of
+            # equality; the fixture repo has no git history, so the check fails
+            # CLOSED rather than silently accepting an unrelated head. The
+            # ancestor-accepted and non-ancestor-refused paths are covered in
+            # CompletionHeadAncestorTests.
             "linked checkout head differs from declared master": (
                 lambda paths: _rewrite_completion(
                     paths,
@@ -440,7 +445,7 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                         "head", "c" * 40
                     ),
                 ),
-                "completion checkout head does not match",
+                "ancestry is unprovable",
             ),
         }
         for label, (mutate, error) in cases.items():
@@ -1297,6 +1302,358 @@ class GuardFloorCertificateTests(unittest.TestCase):
                     paths["run_spec"],
                 )
             self.assertEqual(launch.public_master_sha, SHA)
+
+
+ANCESTOR_SHA = "e" * 40
+
+
+def valid_training_verify_receipt(
+    repo: pathlib.Path, closure_sha256: str
+) -> dict[str, object]:
+    """Mirrors runtime/ember-lab/src/training_verify.rs::run's receipt."""
+
+    return {
+        "schema_version": "ember-lab-training-verify-receipt-v1",
+        "ok": True,
+        "root": str(repo),
+        "started_at_ms": 1_754_300_000_000,
+        "finished_at_ms": 1_754_300_000_112,
+        "duration_ms": 112,
+        "closure": {"declared_files": 4, "closure_sha256": closure_sha256},
+        "input_identity": {
+            "artifact_id": "owned-four-domain-production-rung-v1",
+            "identity_manifest_path": "manifests/input-identity.json",
+            "shard_path": "data/shard.json",
+            "shard_sha256": EVIDENCE_SHA256,
+            "shard_bytes": 1024,
+            "admission_receipt_path": "data/shard.receipt.json",
+            "admission_receipt_sha256": EVIDENCE_SHA256,
+        },
+        "model_tokenizer": {
+            "tokenizer_sha256": EVIDENCE_SHA256,
+            "config_sha256": EVIDENCE_SHA256,
+        },
+        "certificate": {
+            "path": "spine-certified.json",
+            "closure_sha256_matches": True,
+            "pin_is_ancestor": True,
+        },
+        "checks": [
+            {"name": "closure_members_present", "ok": True, "detail": "4 declared files present"},
+            {"name": "input_identity_admission_chain", "ok": True, "detail": "artifact_id=owned"},
+            {"name": "model_tokenizer_identity", "ok": True, "detail": "hashed"},
+            {
+                "name": "certificate_closure_and_pin",
+                "ok": True,
+                "detail": "closure_sha256_matches=true pin_is_ancestor=true",
+            },
+        ],
+        "ember_lab_binary_sha256": EVIDENCE_SHA256,
+        "ember_lab_source_sha256": EVIDENCE_SHA256,
+    }
+
+
+class CompletionHeadAncestorTests(unittest.TestCase):
+    """Issue #1419: EMBER-01 completion is a historical fact validated at its own
+    head (an ANCESTOR of the pin); pin freshness comes from the #1400/#1418
+    training-scoped verify receipt, not from re-running the whole-repo census."""
+
+    def _ancestor_bundle(
+        self, directory: str, mutate_receipt=None, mutate_run_spec=None
+    ) -> tuple[dict[str, pathlib.Path], str]:
+        paths = write_valid_bundle(pathlib.Path(directory))
+        closure_sha256 = install_closure(paths["repo"])
+        _rewrite_completion(
+            paths,
+            lambda receipt: receipt["checkout"].__setitem__("head", ANCESTOR_SHA),
+        )
+        rewrite_certificate(
+            paths, lambda cert: cert.update({"closure_sha256": closure_sha256})
+        )
+
+        receipt = valid_training_verify_receipt(paths["repo"], closure_sha256)
+        if mutate_receipt is not None:
+            mutate_receipt(receipt)
+        receipt_path = paths["custody_root"] / "training-verify.json"
+        write_json(receipt_path, receipt)
+
+        run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+        run_spec["training_verify_receipt_path"] = str(receipt_path)
+        if mutate_run_spec is not None:
+            mutate_run_spec(run_spec)
+        write_json(paths["run_spec"], run_spec)
+        return paths, closure_sha256
+
+    @contextlib.contextmanager
+    def _patched(self, module, is_ancestor: bool = True):
+        with mock.patch.object(
+            module, "read_current_master", return_value=SHA
+        ), mock.patch.object(
+            module, "read_pin_is_ancestor", return_value=True
+        ), mock.patch.object(
+            module, "read_commit_is_ancestor", return_value=is_ancestor
+        ):
+            yield
+
+    def test_ancestor_head_with_green_training_receipt_is_accepted(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths, closure_sha256 = self._ancestor_bundle(directory)
+            with self._patched(module):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            self.assertEqual(launch.closure_sha256, closure_sha256)
+            self.assertEqual(launch.public_master_sha, SHA)
+
+    def test_equal_head_without_training_receipt_stays_accepted(self) -> None:
+        """Back-compat: the pre-#1419 shape needs no new evidence and no git."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            with mock.patch.object(
+                module, "read_current_master", return_value=SHA
+            ), mock.patch.object(
+                module,
+                "read_commit_is_ancestor",
+                side_effect=AssertionError(
+                    "an equal head is an ancestor of itself; git must not be consulted"
+                ),
+            ):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            self.assertEqual(launch.public_master_sha, SHA)
+
+    def test_non_ancestor_completion_head_is_refused(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths, _ = self._ancestor_bundle(directory)
+            with self._patched(module, is_ancestor=False):
+                with self.assertRaisesRegex(
+                    ValueError, "head is not an ancestor of declared public master"
+                ):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_ancestor_head_without_training_receipt_is_refused(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths, _ = self._ancestor_bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.pop("training_verify_receipt_path"),
+            )
+            with self._patched(module):
+                with self.assertRaisesRegex(
+                    ValueError, "must supply training_verify_receipt_path"
+                ):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_stale_or_red_training_receipt_is_refused(self) -> None:
+        module = load_module()
+        cases = {
+            "red receipt": (
+                lambda receipt: receipt.__setitem__("ok", False),
+                "not green",
+            ),
+            "red check inside a green receipt": (
+                lambda receipt: receipt["checks"][3].__setitem__("ok", False),
+                "check is red: certificate_closure_and_pin",
+            ),
+            "stale closure": (
+                lambda receipt: receipt["closure"].__setitem__(
+                    "closure_sha256", "d" * 64
+                ),
+                "does not bind the certificate's training dependency closure",
+            ),
+            "receipt from another checkout": (
+                lambda receipt: receipt.__setitem__("root", "B:/some-other-tree"),
+                "produced against a different tree",
+            ),
+            "wrong schema": (
+                lambda receipt: receipt.__setitem__(
+                    "schema_version", "ember-01-completion-receipt-v1"
+                ),
+                "training verify receipt schema",
+            ),
+            "unknown receipt key": (
+                lambda receipt: receipt.__setitem__("smuggled", True),
+                "training verify receipt schema keys",
+            ),
+        }
+        for label, (mutate, error) in cases.items():
+            with self.subTest(label=label):
+                with tempfile.TemporaryDirectory() as directory:
+                    paths, _ = self._ancestor_bundle(
+                        directory, mutate_receipt=mutate
+                    )
+                    with self._patched(module):
+                        with self.assertRaisesRegex(ValueError, error):
+                            module.validate_certified_request(
+                                paths["repo"],
+                                paths["certificate"],
+                                paths["ledger"],
+                                paths["run_spec"],
+                            )
+
+    def test_missing_training_receipt_file_is_refused(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths, _ = self._ancestor_bundle(directory)
+            (paths["custody_root"] / "training-verify.json").unlink()
+            with self._patched(module):
+                with self.assertRaisesRegex(
+                    ValueError, "training verify receipt is unreadable"
+                ):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_training_receipt_without_closure_bound_certificate_is_refused(
+        self,
+    ) -> None:
+        """A pre-#1332 certificate has no closure to bind the receipt to."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths, _ = self._ancestor_bundle(directory)
+            rewrite_certificate(paths, lambda cert: cert.pop("closure_sha256"))
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["training_verify_receipt_path"] = str(
+                paths["custody_root"] / "training-verify.json"
+            )
+            write_json(paths["run_spec"], run_spec)
+            with self._patched(module):
+                with self.assertRaisesRegex(
+                    ValueError, "requires a closure-bound certificate"
+                ):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_relative_training_receipt_path_resolves_against_the_run_spec(
+        self,
+    ) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths, _ = self._ancestor_bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "training_verify_receipt_path", "training-verify.json"
+                ),
+            )
+            with self._patched(module):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            self.assertEqual(launch.public_master_sha, SHA)
+
+    def test_unknown_run_spec_key_is_still_refused(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths, _ = self._ancestor_bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.update({"smuggled_key": "x"}),
+            )
+            with self._patched(module):
+                with self.assertRaisesRegex(ValueError, "run spec schema keys"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_training_verify_receipt_path_is_the_only_optional_run_spec_key(
+        self,
+    ) -> None:
+        module = load_module()
+        self.assertEqual(
+            module.OPTIONAL_RUN_SPEC_KEYS, {"training_verify_receipt_path"}
+        )
+
+    def test_receipt_fixture_keys_match_the_rust_producer(self) -> None:
+        """Bind the consumer's closed key set to runtime/ember-lab/src/
+        training_verify.rs::run, so producer drift breaks CI, not the launch."""
+
+        module = load_module()
+        fixture_keys = set(
+            valid_training_verify_receipt(pathlib.Path("."), "0" * 64)
+        )
+        self.assertEqual(fixture_keys, module.TRAINING_VERIFY_RECEIPT_KEYS)
+
+        source = (
+            ROOT / "runtime" / "ember-lab" / "src" / "training_verify.rs"
+        ).read_text(encoding="utf-8")
+        marker = f'"schema_version": "{module.TRAINING_VERIFY_RECEIPT_SCHEMA}"'
+        self.assertIn(marker, source)
+        body = source[source.index(marker) :]
+        for key in module.TRAINING_VERIFY_RECEIPT_KEYS:
+            self.assertIn(f'"{key}":', body, f"producer stopped emitting {key}")
+
+    def test_read_commit_is_ancestor_answers_from_real_git_history(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            repo = pathlib.Path(directory) / "repo"
+            repo.mkdir()
+
+            def git(*arguments: str) -> str:
+                return subprocess.run(
+                    ["git", "-C", str(repo), *arguments],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+
+            git("init", "-q")
+            git("config", "user.email", "test@example.invalid")
+            git("config", "user.name", "ancestor test")
+            (repo / "first.txt").write_text("first\n", encoding="utf-8")
+            git("add", "first.txt")
+            git("commit", "-qm", "first")
+            first = git("rev-parse", "HEAD")
+            (repo / "second.txt").write_text("second\n", encoding="utf-8")
+            git("add", "second.txt")
+            git("commit", "-qm", "second")
+            second = git("rev-parse", "HEAD")
+            git("checkout", "-q", "-b", "sidebranch", first)
+            (repo / "side.txt").write_text("side\n", encoding="utf-8")
+            git("add", "side.txt")
+            git("commit", "-qm", "side")
+            side = git("rev-parse", "HEAD")
+
+            self.assertTrue(module.read_commit_is_ancestor(repo, first, second))
+            self.assertTrue(module.read_commit_is_ancestor(repo, first, first))
+            self.assertFalse(module.read_commit_is_ancestor(repo, second, first))
+            self.assertFalse(module.read_commit_is_ancestor(repo, side, second))
+            # Fail CLOSED: an unresolvable commit yields no ancestry evidence.
+            with self.assertRaisesRegex(ValueError, "unprovable"):
+                module.read_commit_is_ancestor(repo, "d" * 40, second)
 
 
 if __name__ == "__main__":
