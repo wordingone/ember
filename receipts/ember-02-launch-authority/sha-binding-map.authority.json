@@ -8,7 +8,7 @@
   "artifact_path": "receipts/ember-02-launch-authority/sha-binding-map.json",
   "artifact_sha256": "d4bbfafa7f84a620849690392671816c64ead433ccf47ffcb80936de3e1f40f3",
   "ticket": "1401",
-  "ts": "2026-08-04T15:20:00Z",
+  "ts": "2026-08-04T19:39:52Z",
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "reason": "documentation sidecar naming the source each certificate sha256 was read from"

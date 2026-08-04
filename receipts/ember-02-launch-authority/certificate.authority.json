@@ -6,9 +6,9 @@
   },
   "schema_version": "ember-content-addressed-authority-binding/v1",
   "artifact_path": "receipts/ember-02-launch-authority/certificate.json",
-  "artifact_sha256": "54882a9a831685e2552fbfce79e4bd35cad0fedb974a6048e16bf7b40ede606e",
+  "artifact_sha256": "10696f763a682e47e243d3b72cf6e85e24b128faeda43b69ee494e7438fcd8a0",
   "ticket": "1401",
-  "ts": "2026-08-04T15:20:00Z",
+  "ts": "2026-08-04T19:39:52Z",
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "reason": "the SPINE_CERTIFIED declaration; its sha256 is its identity and is cited by the declaration ledger and the run-spec, so no field may be added to it"

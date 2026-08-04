@@ -1,14 +1,14 @@
 {
   "schema": "ember-01-completion-evidence-pack-index-v1",
   "ticket": "1401",
-  "ts": "2026-08-04T15:20:00Z",
+  "ts": "2026-08-04T19:39:52Z",
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "completion_subject_goal_id": "EMBER-01",
-  "public_master_sha": "3028f807995977449660f1407e538adc7a55c3d8",
+  "public_master_sha": "363177c981fb7543dabb77d890c1652aa455dc51",
   "purpose": "Make EMBER-01 completion provable from the public repository. Before this pack the nine-leg completion receipt, the fresh green verification, and the launch-authority declaration existed only on the operator machine, so the completion claim rested on assertion rather than committed evidence (issue #1401).",
   "artifacts": [
     {
@@ -23,45 +23,45 @@
     },
     {
       "path": "receipts/ember-01-completion/evidence-pack-v1/verifier-receipt-9leg-20260804.json",
-      "sha256": "48d98dc2aff79b71ad59ed00b4458c3d40d88709a97b9dd00badb72e64b89707",
+      "sha256": "752376cd1e67e966783b00975fa11916de7c424a8d98f094199aa44ed903da52",
       "schema": "ember-01-completion-receipt-v1",
-      "emitted_at_utc": "2026-08-04T13:06:12Z",
-      "pinned_commit": "3028f807995977449660f1407e538adc7a55c3d8",
+      "emitted_at_utc": "2026-08-04T17:19:52Z",
+      "pinned_commit": "363177c981fb7543dabb77d890c1652aa455dc51",
       "byte_state": "verbatim",
-      "proves": "The nine legs still stand resolved-true at the current public tip, not only at the older 2026-08-02 tip. Its checkout block records head 3028f807, clean=true, and closure_sha256 e8287af1551d6115c4bd5355bab73f1b8452ca21ed6b31b6de25a0a10c4a09bc. This is the document the certificate binds as completion_receipt_sha256.",
+      "proves": "The nine legs still stand resolved-true at the current public tip, not only at the older 2026-08-02 tip. Its checkout block records head 363177c9, clean=true, and closure_sha256 e8287af1551d6115c4bd5355bab73f1b8452ca21ed6b31b6de25a0a10c4a09bc. This is the document the certificate binds as completion_receipt_sha256.",
       "backs_legs": [1, 2, 3, 4, 5, 6, 7, 8, 9]
     },
     {
       "path": "receipts/ember-01-completion/evidence-pack-v1/verify-run-receipt-20260804.json",
-      "sha256": "c221c47d78c98fcbea93262bcf625bfc17138a0aa40962f338f1a81566aef505",
+      "sha256": "82052d7ad0db75557b68b202ab5e2f12404571952b93c69c0b2864b7076616d8",
       "schema": "ember-cli/verify-run-receipt@1",
-      "emitted_at_utc": "2026-08-04T13:06:15Z",
-      "pinned_commit": "3028f807995977449660f1407e538adc7a55c3d8",
+      "emitted_at_utc": "2026-08-04T17:19:54Z",
+      "pinned_commit": "363177c981fb7543dabb77d890c1652aa455dc51",
       "byte_state": "redacted",
       "redaction": "worktree_path rewritten to the <USER_HOME> token per REDACTIONS.md. No other byte changed; the file still parses and every non-path value is byte-identical to the emitted receipt.",
-      "proves": "The 2026-08-04 verification was a real executed run, not a replayed record: job verify-msemvz0yrvyq00, 2290682 ms wall, per-leg timings, detached worktree at the pinned commit, no reaped PIDs, ok=true.",
+      "proves": "The 2026-08-04 verification was a real executed run, not a replayed record: job verify-msevylf8fjeaii, 2270014 ms wall, per-leg timings, detached worktree at the pinned commit, no reaped PIDs, ok=true.",
       "backs_legs": []
     },
     {
       "path": "receipts/ember-02-launch-authority/certificate.json",
-      "sha256": "54882a9a831685e2552fbfce79e4bd35cad0fedb974a6048e16bf7b40ede606e",
+      "sha256": "10696f763a682e47e243d3b72cf6e85e24b128faeda43b69ee494e7438fcd8a0",
       "schema": "ember-spine-certified-declaration-v1",
-      "emitted_at_utc": "2026-08-04T13:10:37Z",
+      "emitted_at_utc": "2026-08-04T17:20:42Z",
       "byte_state": "verbatim",
-      "proves": "The EMBER-01 certificate. SPINE_CERTIFIED was declared on the strength of the nine-leg completion (declaration_conjuncts.nine_leg_completion=true, birth_failure_classes_disposed=true, record_coherent=true), binding public_master_sha 3028f807, closure_sha256 e8287af1, and completion_receipt_sha256 48d98dc2 — the verifier receipt in this pack. There is no separate EMBER-01 certificate file: this declaration is it.",
+      "proves": "The EMBER-01 certificate. SPINE_CERTIFIED was declared on the strength of the nine-leg completion (declaration_conjuncts.nine_leg_completion=true, birth_failure_classes_disposed=true, record_coherent=true), binding public_master_sha 363177c9, closure_sha256 e8287af1, and completion_receipt_sha256 752376cd — the verifier receipt in this pack. There is no separate EMBER-01 certificate file: this declaration is it.",
       "backs_legs": [1, 2, 3, 4, 5, 6, 7, 8, 9]
     },
     {
       "path": "receipts/ember-02-launch-authority/declaration-ledger.jsonl",
-      "sha256": "9fcfbdc607e7b37f89d95bbc45a139ea26a06b14801dfeb5efe50e4e6468ebc6",
+      "sha256": "d487c96ae88d06e57ba076ae5687bc049e78e0c005cb37f18f47cc833def1740",
       "schema": "ember-spine-declaration-ledger-row-v1",
       "byte_state": "verbatim",
-      "proves": "The declaration was ledgered under certificate_sha256 54882a9a, so the certificate above is the one that was actually declared rather than one produced afterwards.",
+      "proves": "The declaration was ledgered under certificate_sha256 10696f76, so the certificate above is the one that was actually declared rather than one produced afterwards.",
       "backs_legs": []
     },
     {
       "path": "receipts/ember-02-launch-authority/run-spec.json",
-      "sha256": "d336f3f79e2116ac9362d5952cb69180c24f6300415c7f8c3089358b6db983a9",
+      "sha256": "02ef9f24cbc5b5bcd7d1412e8b3d86897b5854c87d8c278acec2ab1d54ed88c8",
       "schema": "ember-certified-train-run-v1",
       "byte_state": "verbatim",
       "proves": "The R1 WARM-100 run authorized by that certificate: run_id r1-warm100-20260804, seed 830001, 100 optimizer steps, and a requested_scope that sits inside the certificate's execution_scope.",
@@ -80,27 +80,27 @@
   "binding_sidecars": [
     {
       "path": "receipts/ember-01-completion/evidence-pack-v1/verify-run-receipt-20260804.authority.json",
-      "sha256": "717518bf27edf127e9bf56495406e81a6325e8098993cb994109487be2985c0b",
+      "sha256": "f4da443cffde5fbe2a0da0e4e36e6f5beaf530a6a8e7de488322e8141932c8de",
       "binds": "receipts/ember-01-completion/evidence-pack-v1/verify-run-receipt-20260804.json"
     },
     {
       "path": "receipts/ember-02-launch-authority/certificate.authority.json",
-      "sha256": "734fa8463a139914803f4f7c152e14b8a3f504d427a5b6639bf6e141faf30ec3",
+      "sha256": "e2dba4bd45e16d0566ae779acdada46320f94f777562cb347e72b3590c2fd999",
       "binds": "receipts/ember-02-launch-authority/certificate.json"
     },
     {
       "path": "receipts/ember-02-launch-authority/declaration-ledger.authority.json",
-      "sha256": "b7a570a48b631a5320ae5da7da9e137630141c6c6f845961466a12a703cf44b9",
+      "sha256": "cdddc657c018d29c19d13499e8dbb27b6e1dc1d502e2e6307273c546691a538a",
       "binds": "receipts/ember-02-launch-authority/declaration-ledger.jsonl"
     },
     {
       "path": "receipts/ember-02-launch-authority/run-spec.authority.json",
-      "sha256": "b987d1e3631b5f80f538a3884adbd5f0014313aff8adade0bc206178acdf416c",
+      "sha256": "7b02602d2a4dc338243009ff2fcade33c9bd1756d62593cca2272516f96a0916",
       "binds": "receipts/ember-02-launch-authority/run-spec.json"
     },
     {
       "path": "receipts/ember-02-launch-authority/sha-binding-map.authority.json",
-      "sha256": "be7617dbaa5983c0875bde0522ed6e85cf1eadd1bdb21a44746d9f81daf4684b",
+      "sha256": "31dce719191963aeef63f4b42e53199f3640ad6afd611650b4a259816ff8428a",
       "binds": "receipts/ember-02-launch-authority/sha-binding-map.json"
     }
   ],
@@ -140,9 +140,9 @@
   },
   "verification_procedure": [
     "sha256 every path in artifacts[] and compare against the recorded digest; all seven must match.",
-    "sha256 receipts/ember-02-launch-authority/certificate.json and confirm it equals the certificate_sha256 in declaration-ledger.jsonl and run-spec.json (54882a9a831685e2552fbfce79e4bd35cad0fedb974a6048e16bf7b40ede606e).",
-    "sha256 the verifier receipt in this pack and confirm it equals the certificate's completion_receipt_sha256 (48d98dc2aff79b71ad59ed00b4458c3d40d88709a97b9dd00badb72e64b89707).",
-    "confirm the certificate's public_master_sha equals the verifier receipt's checkout.head (3028f807995977449660f1407e538adc7a55c3d8), and that both closure_sha256 values agree.",
+    "sha256 receipts/ember-02-launch-authority/certificate.json and confirm it equals the certificate_sha256 in declaration-ledger.jsonl and run-spec.json (10696f763a682e47e243d3b72cf6e85e24b128faeda43b69ee494e7438fcd8a0).",
+    "sha256 the verifier receipt in this pack and confirm it equals the certificate's completion_receipt_sha256 (752376cd1e67e966783b00975fa11916de7c424a8d98f094199aa44ed903da52).",
+    "confirm the certificate's public_master_sha equals the verifier receipt's checkout.head (363177c981fb7543dabb77d890c1652aa455dc51), and that both closure_sha256 values agree.",
     "confirm every leg in the two nine-leg receipts reads resolved-true and that leg_summary.unresolved is empty.",
     "re-run legs 7 and 8 from a fresh clone; expect them to resolve true. Legs 1, 2, 5, 6 and 9 will report UNRESOLVED off the operator machine, which is the honest result, not a failure."
   ],

@@ -6,9 +6,9 @@
   },
   "schema_version": "ember-content-addressed-authority-binding/v1",
   "artifact_path": "receipts/ember-01-completion/evidence-pack-v1/verify-run-receipt-20260804.json",
-  "artifact_sha256": "c221c47d78c98fcbea93262bcf625bfc17138a0aa40962f338f1a81566aef505",
+  "artifact_sha256": "82052d7ad0db75557b68b202ab5e2f12404571952b93c69c0b2864b7076616d8",
   "ticket": "1401",
-  "ts": "2026-08-04T15:20:00Z",
+  "ts": "2026-08-04T19:39:52Z",
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "reason": "frozen ember-cli verify run receipt; its schema is fixed by the emitting tool and it carries no authority block of its own"

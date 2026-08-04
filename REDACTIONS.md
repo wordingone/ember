@@ -174,7 +174,7 @@ Enumerated individually in `PATHPAT_EXCLUDE` in `tools/repo-guard.sh`. The
 operator-name checks still cover both files in full.
 
 - `receipts/ember-02-launch-authority/certificate.json`
-  (sha256: `54882a9a831685e2552fbfce79e4bd35cad0fedb974a6048e16bf7b40ede606e`)
+  (sha256: `10696f763a682e47e243d3b72cf6e85e24b128faeda43b69ee494e7438fcd8a0`)
   — the SPINE_CERTIFIED declaration. This digest is its identity: it is cited by
   `declaration-ledger.jsonl` and by `run-spec.json`, and issue #1401 acceptance
   clause 4 requires a stranger to reproduce it from the committed bytes. Contains:
@@ -182,7 +182,7 @@ operator-name checks still cover both files in full.
   `execution_scope` custody/artifact roots carrying the project drive.
 
 - `receipts/ember-02-launch-authority/run-spec.json`
-  (sha256: `d336f3f79e2116ac9362d5952cb69180c24f6300415c7f8c3089358b6db983a9`)
+  (sha256: `02ef9f24cbc5b5bcd7d1412e8b3d86897b5854c87d8c278acec2ab1d54ed88c8`)
   — the certified run-spec bound to that certificate. Its `requested_scope` roots are
   compared literally against the certificate's `execution_scope`; redacting one side
   of that comparison and not the other would make a consistent pair read as a
