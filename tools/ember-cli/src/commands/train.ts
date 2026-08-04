@@ -403,7 +403,15 @@ function _interpretCertifiedResult(
   }
   let execution: Record<string, unknown>;
   try {
-    const parsedResult: unknown = JSON.parse(certifiedResult.stdout);
+    // Defense in depth (issue #1408): the consumer redirects its child's
+    // stdout away from its own, so this should already be a single pure
+    // JSON line -- but parse only the LAST non-empty line rather than the
+    // whole stream, so a fixed runner that still leaks noise ahead of the
+    // handshake (or a future consumer regression) does not corrupt the
+    // cockpit's ability to register a successful certified launch.
+    const lines = certifiedResult.stdout.split(/\r?\n/).filter((line) => line.trim() !== "");
+    const lastLine = lines.length > 0 ? lines[lines.length - 1] : certifiedResult.stdout;
+    const parsedResult: unknown = JSON.parse(lastLine);
     if (typeof parsedResult !== "object" || parsedResult === null) {
       throw new Error("not an object");
     }
