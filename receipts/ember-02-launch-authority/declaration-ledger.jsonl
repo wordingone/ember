@@ -1,1 +1,1 @@
-{"certificate_sha256":"54882a9a831685e2552fbfce79e4bd35cad0fedb974a6048e16bf7b40ede606e","declared_by_role":"EMBER_CERTIFICATE_AUTHORITY","event_kind":"SPINE_CERTIFIED","schema_version":"ember-spine-declaration-ledger-row-v1"}
+{"certificate_sha256":"10696f763a682e47e243d3b72cf6e85e24b128faeda43b69ee494e7438fcd8a0","declared_by_role":"EMBER_CERTIFICATE_AUTHORITY","event_kind":"SPINE_CERTIFIED","schema_version":"ember-spine-declaration-ledger-row-v1"}
