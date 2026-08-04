@@ -1237,6 +1237,52 @@ class GuardFloorCertificateTests(unittest.TestCase):
                         paths["run_spec"],
                     )
 
+    def test_guard_floor_certificate_refuses_drive_root_relative_path(self) -> None:
+        # On Windows "/M/ember/custody/x.json" is not is_absolute() and has no
+        # ".." part, but resolves outside the certificate directory.
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            self._mutate_guard_floor(
+                paths,
+                extra=lambda certificate: certificate.update(
+                    {"completion_receipt_path": "/M/ember/custody/x.json"}
+                ),
+            )
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(
+                    ValueError, "completion_receipt_path must not name a drive or root anchor"
+                ):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_guard_floor_certificate_refuses_drive_relative_path(self) -> None:
+        # "C:x.json" is drive-anchored: what it names depends on the drive the
+        # certificate sits on, so it is not custody-portable.
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            self._mutate_guard_floor(
+                paths,
+                extra=lambda certificate: certificate.update(
+                    {"completion_receipt_path": "C:x.json"}
+                ),
+            )
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(
+                    ValueError, "completion_receipt_path must not name a drive or root anchor"
+                ):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
     def test_legacy_certificate_without_guard_floor_keeps_absolute_path(self) -> None:
         # Existing committed triples predate #1410 and stay digest-pinned; the
         # absolute-path refusal applies only to guard-floor certificates.

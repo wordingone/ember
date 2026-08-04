@@ -511,6 +511,25 @@ def validate_certified_request(
                 "certificate completion_receipt_path must not traverse above "
                 "the certificate directory"
             )
+        # is_absolute() is False on Windows for anchored-but-incomplete paths:
+        # "/M/ember/x.json" (drive-root-relative) and "C:x.json" (drive-relative)
+        # both carry an anchor with no ".." part, so the two checks above admit
+        # them. Neither is custody-portable -- what they name depends on the
+        # drive the certificate happens to sit on.
+        if completion_path.drive or completion_path.root:
+            raise ValueError(
+                "certificate completion_receipt_path must not name a drive or "
+                "root anchor"
+            )
+        # Resolved backstop for anything the syntactic checks miss (a symlinked
+        # segment, a differing drive letter).
+        certificate_directory = certificate_path.parent.resolve()
+        resolved = (certificate_path.parent / completion_path).resolve()
+        if not resolved.is_relative_to(certificate_directory):
+            raise ValueError(
+                "certificate completion_receipt_path must resolve under the "
+                "certificate directory"
+            )
     if not completion_path.is_absolute():
         completion_path = certificate_path.parent / completion_path
     completion = _load_json(completion_path, "completion receipt")
