@@ -83,6 +83,18 @@ class EmberRootLauncherTests(unittest.TestCase):
             check=False,
         )
 
+    def assert_logged_cwd(self, log: str, expected: Path) -> None:
+        """The fake runtime records %CD%, which Windows renders in the filesystem's own
+        canonical casing no matter how TEMP is spelled in the environment. Compare path
+        identity rather than spelling so the suite passes under any TEMP casing (#1395)."""
+        recorded = [line[len("cwd=") :] for line in log.splitlines() if line.startswith("cwd=")]
+        self.assertEqual(len(recorded), 1, log)
+        self.assertEqual(
+            os.path.normcase(recorded[0]),
+            os.path.normcase(str(expected)),
+            f"launcher ran in {recorded[0]}, expected {expected}",
+        )
+
     def test_public_launcher_and_implementation_are_visible(self) -> None:
         self.assertTrue(PUBLIC_LAUNCHER.is_file())
         self.assertTrue(LAUNCH_IMPL.is_file())
@@ -96,7 +108,7 @@ class EmberRootLauncherTests(unittest.TestCase):
         result = self.run_launcher(root, runtime)
         self.assertEqual(result.returncode, 0, result.stdout)
         log = (root / "launch.log").read_text(encoding="utf-8")
-        self.assertIn(f"cwd={root / 'tools' / 'ember-cli' / 'src'}", log)
+        self.assert_logged_cwd(log, root / "tools" / "ember-cli" / "src")
         self.assertIn("args=run entrypoints/main.ts", log)
         self.assertIn("gpu_free=1", log)
         self.assertNotIn("entrypoints\\main.ts", result.stdout)
