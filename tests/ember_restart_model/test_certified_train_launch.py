@@ -1117,5 +1117,141 @@ class ClosureCrossConsumerAgreementTest(unittest.TestCase):
         self.assertEqual(value, launch.read_live_closure_sha256(ROOT))
 
 
+class GuardFloorCertificateTests(unittest.TestCase):
+    """Issue #1410: guard-floor keys accepted; unknown keys still refused;
+    guard-floor certificates carry a relative completion_receipt_path."""
+
+    GUARD_FLOOR = {
+        "ticket": "issue-1410",
+        "ts": "20260804T120000Z",
+        "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+        "goal_id": "EMBER-02",
+        "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    }
+
+    def _mutate_guard_floor(self, paths: dict[str, pathlib.Path], extra=None) -> None:
+        def mutate(certificate: dict) -> None:
+            certificate.update(self.GUARD_FLOOR)
+            certificate["completion_receipt_path"] = "ember-01-completion.json"
+            if extra is not None:
+                extra(certificate)
+
+        rewrite_certificate(paths, mutate)
+
+    def test_guard_floor_certificate_is_accepted(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            self._mutate_guard_floor(paths)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            self.assertEqual(launch.public_master_sha, SHA)
+
+    def test_guard_floor_keys_are_optional_in_the_key_template(self) -> None:
+        module = load_module()
+        self.assertEqual(set(self.GUARD_FLOOR), module.GUARD_FLOOR_CERTIFICATE_KEYS)
+        self.assertLessEqual(
+            module.GUARD_FLOOR_CERTIFICATE_KEYS, module.OPTIONAL_CERTIFICATE_KEYS
+        )
+
+    def test_guard_floor_plus_unknown_key_is_still_rejected(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            self._mutate_guard_floor(
+                paths, extra=lambda certificate: certificate.update({"surprise": "x"})
+            )
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "certificate schema keys"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_guard_floor_value_must_be_a_non_empty_string(self) -> None:
+        module = load_module()
+        for key, bad in (("ticket", ""), ("ts", 20260804), ("goal_id", None)):
+            with tempfile.TemporaryDirectory() as directory:
+                paths = write_valid_bundle(pathlib.Path(directory))
+                self._mutate_guard_floor(
+                    paths, extra=lambda certificate: certificate.update({key: bad})
+                )
+                with mock.patch.object(module, "read_current_master", return_value=SHA):
+                    with self.assertRaisesRegex(
+                        ValueError, f"certificate {key} must be a non-empty string"
+                    ):
+                        module.validate_certified_request(
+                            paths["repo"],
+                            paths["certificate"],
+                            paths["ledger"],
+                            paths["run_spec"],
+                        )
+
+    def test_guard_floor_certificate_refuses_absolute_completion_path(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            absolute = str(paths["completion"])
+
+            def mutate(certificate: dict) -> None:
+                certificate.update(self.GUARD_FLOOR)
+                certificate["completion_receipt_path"] = absolute
+
+            rewrite_certificate(paths, mutate)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(
+                    ValueError, "completion_receipt_path must be relative"
+                ):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_guard_floor_certificate_refuses_parent_traversal(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            self._mutate_guard_floor(
+                paths,
+                extra=lambda certificate: certificate.update(
+                    {"completion_receipt_path": "../custody/ember-01-completion.json"}
+                ),
+            )
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(
+                    ValueError, "must not traverse above"
+                ):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_legacy_certificate_without_guard_floor_keeps_absolute_path(self) -> None:
+        # Existing committed triples predate #1410 and stay digest-pinned; the
+        # absolute-path refusal applies only to guard-floor certificates.
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            self.assertEqual(launch.public_master_sha, SHA)
+
+
 if __name__ == "__main__":
     unittest.main()

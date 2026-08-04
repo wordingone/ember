@@ -26,7 +26,24 @@ from typing import Any, NamedTuple
 # out-of-repo mint producer reads (it already exec-loads this module), so
 # producer and consumer cannot skew.
 CLOSURE_MODULE_RELATIVE_PATH = "scripts/training_closure.py"
-OPTIONAL_CERTIFICATE_KEYS = {"closure_sha256"}
+# Guard-floor keys (issue #1410): the remote guard's receipt_check requires
+# ticket/ts/sha_convention on any receipt carrying sha256 fields, and authority
+# leg 4 requires goal_id/next_executed_outcome on committed artifacts. They are
+# ACCEPTED as validated optional keys -- each shape-checked below, and any key
+# outside this enumeration still hard-fails -- so a minted triple can be born
+# guard-compliant instead of riding frozen-receipt exceptions. Presence of any
+# guard-floor key marks a post-#1410 certificate, which must carry a RELATIVE
+# completion_receipt_path (resolved against the certificate's own directory
+# inside the custody root) so no absolute local path is baked into the
+# sha-cited payload.
+GUARD_FLOOR_CERTIFICATE_KEYS = {
+    "ticket",
+    "ts",
+    "sha_convention",
+    "goal_id",
+    "next_executed_outcome",
+}
+OPTIONAL_CERTIFICATE_KEYS = {"closure_sha256"} | GUARD_FLOOR_CERTIFICATE_KEYS
 CERTIFICATE_KEYS = {
     "schema_version",
     "event_kind",
@@ -462,6 +479,11 @@ def validate_certified_request(
     for key in CERTIFICATE_SHA256_KEYS:
         _require_sha256(certificate[key], f"certificate {key}")
     _require_git_sha(certificate["public_master_sha"], "certificate public_master_sha")
+    guard_floor_present = GUARD_FLOOR_CERTIFICATE_KEYS & set(certificate)
+    for key in sorted(guard_floor_present):
+        value = certificate[key]
+        if not isinstance(value, str) or not value:
+            raise ValueError(f"certificate {key} must be a non-empty string")
 
     certificate_sha256 = _canonical_sha256(certificate)
     ledger_rows = _load_ledger(declaration_ledger_path)
@@ -470,7 +492,25 @@ def validate_certified_request(
     ):
         raise ValueError("declaration ledger membership is missing")
 
-    completion_path = pathlib.Path(certificate["completion_receipt_path"])
+    completion_receipt_path = certificate["completion_receipt_path"]
+    if not isinstance(completion_receipt_path, str) or not completion_receipt_path:
+        raise ValueError("certificate completion_receipt_path must be a non-empty string")
+    completion_path = pathlib.Path(completion_receipt_path)
+    if guard_floor_present:
+        # Post-#1410 certificates: the path must be custody-portable. An
+        # absolute local path baked into a sha-cited payload is unredactable
+        # post-mint; a ".." segment would let the sha-cited payload reference
+        # bytes outside the custody root.
+        if completion_path.is_absolute():
+            raise ValueError(
+                "certificate completion_receipt_path must be relative to the "
+                "certificate directory, not absolute"
+            )
+        if ".." in completion_path.parts:
+            raise ValueError(
+                "certificate completion_receipt_path must not traverse above "
+                "the certificate directory"
+            )
     if not completion_path.is_absolute():
         completion_path = certificate_path.parent / completion_path
     completion = _load_json(completion_path, "completion receipt")
