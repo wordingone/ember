@@ -151,6 +151,9 @@ describe("createVerifyCommand", () => {
     expect((capturedDeps as { bindings: string[] }).bindings).toContain(
       "public-repository=B:/tmp/public",
     );
+    // #1371: verify.ts forwards a git executable through to the pipeline -- the pipeline
+    // needs it to pin the managed worktree's exact commit before any repo-scoped leg runs.
+    expect((capturedDeps as { gitBin: string }).gitBin).toBe("git");
   });
 
   it("refuses to start a second job while one is already running", async () => {
@@ -207,6 +210,32 @@ describe("createVerifyCommand", () => {
     expect(message).toContain("resolved-false");
     expect(message).toContain("EMBER_VERIFY_SELECTION: SET");
     expect(message).toContain("custody-census-output.json");
+  });
+
+  it("/verify status discloses the pinned commit and dedicated verification worktree when set -- #1371", async () => {
+    const running: VerifyJobState = {
+      jobId: "job-pinned",
+      status: "running",
+      phase: "verifying",
+      startedAt: "2026-08-03T00:00:00.000Z",
+      envBindings: buildEnvBindingReport(ALL_SET_ENV),
+      stdoutTail: "",
+      pinnedCommit: "b".repeat(40),
+      // Deliberately not an absolute machine path: repo-guard's [paths] check refuses
+      // absolute local filesystem paths in tracked content, and this value is only ever
+      // compared as a substring of the rendered status line.
+      worktreePath: "ember-verify-worktrees/job-pinned",
+    };
+    const cmd = createVerifyCommand({
+      repoRoot: "/repo",
+      env: ALL_SET_ENV,
+      bindingsFs: {},
+      getVerifyStateFn: () => running,
+    });
+    const result = await cmd.execute("status", mockCtx);
+    const message = result && "message" in result ? result.message : "";
+    expect(message).toContain(`pinned commit: ${"b".repeat(40)}`);
+    expect(message).toContain("ember-verify-worktrees/job-pinned");
   });
 
   it("/verify status with no prior job reports that plainly rather than crashing", async () => {
