@@ -1388,11 +1388,18 @@ def _c11_horizon_receipt(horizon, n_novel, n_total, n_passed, post_seed,
     }
 
 
-def _c11_deletion_receipt(baseline_hash):
+def _c11_deletion_receipt(baseline_hash, strip_arm_execution=False):
     def arm(tag, n_passed, seed):
+        items = _c11_items(20, n_passed, tag)
+        if strip_arm_execution:
+            # [rev-107 B-1] The exact hole the reviewer executed: arm rows with
+            # the execution block removed and the pass counts hand-set. Before
+            # the cure this still scored GREEN.
+            for row in items:
+                row.pop("execution", None)
         return {
             "checkpoint_hash": f"sha256:{sha256_bytes(seed.encode())}",
-            "items": _c11_items(20, n_passed, tag),
+            "items": items,
         }
     return {
         "ticket": "EMBER-C11-EXPERIENCE-HORIZON-DELETION",
@@ -1411,11 +1418,19 @@ def _c11_deletion_receipt(baseline_hash):
 
 
 def build_c11_horizon(variant):
-    """variant: 'pos' | 'neg_ordering' | 'neg_identical_checkpoint' |
-    'neg_merkle' | 'neg_fabricated' | 'neg_wrong_baseline'.
+    """POS is a fully-conforming short/medium/long + deletion set. Each NEG
+    targets one check's sharp tooth; every one of the nine checks has a negative
+    control. Variants:
 
-    POS is a fully-conforming short/medium/long + deletion set; each NEG breaks
-    exactly one check's sharp tooth and leaves the rest conforming."""
+      pos, neg_ordering (CHK-1), neg_duplicate_ids (CHK-2),
+      neg_identical_checkpoint (CHK-3), neg_merkle (CHK-4), neg_empty_steps
+      (CHK-4 present-but-empty), neg_noise_floor (CHK-5), neg_contamination
+      (CHK-6), neg_fabricated (CHK-7), neg_wrong_baseline (CHK-8),
+      neg_arm_fabricated (CHK-8 arm re-execution), neg_invalid_token (CHK-9).
+
+    [rev-107] neg_ordering is the one variant that trips two checks (CHK-1 and,
+    because the superset rule implies increasing counts, CHK-2). That coupling
+    is inherent to the nested-horizon reading, not a fixture defect."""
     root = fresh_dir(os.path.join(FIXTURES_DIR, f"c11_{variant}"))
     write_readme(root, _CURE7_ISOLATION_NOTE)
 
@@ -1428,6 +1443,7 @@ def build_c11_horizon(variant):
 
     long_novel = 12
     long_post_seed = "post-long"
+    long_passed = 18
     stray = None
     strip_exec = False
     if variant == "neg_ordering":
@@ -1440,16 +1456,35 @@ def build_c11_horizon(variant):
         stray = "np-9999"
     if variant == "neg_fabricated":
         strip_exec = True
-    long_r = _c11_horizon_receipt("long", long_novel, 20, 18, long_post_seed,
+    if variant == "neg_noise_floor":
+        # Long reaches exactly medium's held-out score -> no delta above the
+        # pre-registered floor, so the longer horizon buys nothing.
+        long_passed = 14
+    long_r = _c11_horizon_receipt("long", long_novel, 20, long_passed,
+                                   long_post_seed,
                                    stray_gradient_problem_id=stray,
                                    strip_execution_on_first_row=strip_exec)
+
+    if variant == "neg_duplicate_ids":
+        # A repeated row re-hashed is not new experience.
+        long_r["novel_problems"]["problem_ids"].append("np-0000")
+    if variant == "neg_contamination":
+        # A held-out item that was actually trained on.
+        long_r["heldout"]["items"][0]["item_id"] = "np-0000"
+    if variant == "neg_empty_steps":
+        # Present-but-EMPTY claim: learning_update is there, still asserts a
+        # merkle_root, and backs it with no steps at all (rev-107 B-2).
+        long_r["learning_update"]["gradient_steps"] = []
+    if variant == "neg_invalid_token":
+        long_r["verdict"] = "unearned_duration"
 
     baseline = short["learning_update"]["post_param_hash"]
     if variant == "neg_wrong_baseline":
         # Deletion measured against the untrained base instead of the
         # short-horizon checkpoint.
         baseline = f"sha256:{sha256_bytes(b'untrained-base')}"
-    deletion = _c11_deletion_receipt(baseline)
+    deletion = _c11_deletion_receipt(
+        baseline, strip_arm_execution=(variant == "neg_arm_fabricated"))
 
     for key, obj in (("short", short), ("medium", medium),
                      ("long", long_r), ("deletion", deletion)):
@@ -2624,10 +2659,16 @@ def main(argv=None):
     _C11_LANE = "15 ISSUE#107 C11 experience-horizon contract"
     record(_C11_LANE, "POS short/medium/long + deletion, all 9 checks conform", "test_c11.py", build_c11_horizon("pos"), "GREEN")
     record(_C11_LANE, "NEG CHK-1 long horizon has FEWER novel problems than medium, only wall_seconds rises (clock_in_disguise)", "test_c11.py", build_c11_horizon("neg_ordering"), "RED")
+    record(_C11_LANE, "NEG CHK-2 a repeated problem_id re-hashed as new experience (novelty_spoof)", "test_c11.py", build_c11_horizon("neg_duplicate_ids"), "RED")
     record(_C11_LANE, "NEG CHK-3 long post_param_hash identical to medium's (same checkpoint, nothing learned)", "test_c11.py", build_c11_horizon("neg_identical_checkpoint"), "RED")
     record(_C11_LANE, "NEG CHK-4 a gradient step cites a problem_id outside the horizon's novel set (steps not Merkle-bound to novelty)", "test_c11.py", build_c11_horizon("neg_merkle"), "RED")
+    record(_C11_LANE, "NEG CHK-4 present-but-EMPTY gradient_steps still asserting a merkle_root (rev-107 B-2: empty is a failed claim, not an absent input)", "test_c11.py", build_c11_horizon("neg_empty_steps"), "RED")
+    record(_C11_LANE, "NEG CHK-5 long held-out score equals medium's, no delta above the noise floor", "test_c11.py", build_c11_horizon("neg_noise_floor"), "RED")
+    record(_C11_LANE, "NEG CHK-6 a held-out item_id is also a trained novel problem (contamination)", "test_c11.py", build_c11_horizon("neg_contamination"), "RED")
     record(_C11_LANE, "NEG CHK-7 a held-out row asserts passed with no execution block (fabricated_outcomes)", "test_c11.py", build_c11_horizon("neg_fabricated"), "RED")
     record(_C11_LANE, "NEG CHK-8 deletion measured against the untrained base, not the short-horizon checkpoint (deletion_uses_wrong_baseline)", "test_c11.py", build_c11_horizon("neg_wrong_baseline"), "RED")
+    record(_C11_LANE, "NEG CHK-8 deletion arm rows assert pass counts with NO execution block (rev-107 B-1: the ablation was hand-typeable)", "test_c11.py", build_c11_horizon("neg_arm_fabricated"), "RED")
+    record(_C11_LANE, "NEG CHK-9 a receipt stamps itself with the unearned_duration invalid-token", "test_c11.py", build_c11_horizon("neg_invalid_token"), "RED")
 
     c3_pos = build_cure2_c3("pos")
     record("16 ISSUE#97-cure2 C3 equal_within_tolerance value", "POS wall_time measured equal within tolerance", "test_c3.py", c3_pos, "GREEN")

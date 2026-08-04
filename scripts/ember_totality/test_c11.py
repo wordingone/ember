@@ -122,12 +122,37 @@ def merkle_root(leaf_hexes):
     return level[0]
 
 
+def claim_array(container, block_key, array_key):
+    """Resolve a claim-bearing array, distinguishing ABSENT from EMPTY.
+
+    [rev-107 B-2] "Absent" means the block or the key is missing -- nothing has
+    been claimed, so the check reports GAP. A block that is PRESENT and carries
+    an empty (or non-list) array is a present claim that fails: a receipt
+    asserting a learning_update whose gradient_steps list is empty has made a
+    claim and not backed it, and must go RED rather than reading as
+    pending-evidence.
+
+    Returns (status, value_or_detail): (GAP, detail) | (FAIL, detail) |
+    (PASS, list)."""
+    block = container.get(block_key)
+    if not isinstance(block, dict):
+        return GAP, f"'{block_key}' block absent"
+    if array_key not in block:
+        return GAP, f"'{block_key}.{array_key}' absent"
+    value = block[array_key]
+    if not isinstance(value, list):
+        return FAIL, (f"'{block_key}.{array_key}' is present but not a list "
+                      f"({type(value).__name__}) -> a present claim that cannot hold")
+    if not value:
+        return FAIL, (f"'{block_key}.{array_key}' is present but EMPTY -> the "
+                      f"receipt claims this block and backs it with no rows")
+    return PASS, value
+
+
 def problem_ids(receipt):
+    """Best-effort id list for cross-check use (contamination, Merkle
+    membership). Presence/emptiness is adjudicated by claim_array."""
     return ((receipt.get("novel_problems") or {}).get("problem_ids")) or []
-
-
-def heldout_items(receipt):
-    return ((receipt.get("heldout") or {}).get("items")) or []
 
 
 def recompute_score(items):
@@ -141,6 +166,44 @@ def recompute_score(items):
         if isinstance(it, dict) and it.get("passed") is True:
             passed += 1
     return passed / float(len(items))
+
+
+def validate_execution_rows(label, items):
+    """Per-row live-re-execution validation. Returns a failure detail string, or
+    None if every row is clean.
+
+    [rev-107 B-1] Shared by CHK-7 (horizon held-out rows) and CHK-8 (deletion
+    arm rows). Before this was factored out, CHK-7 iterated horizons only and
+    nothing ever inspected deletion.arms[*].items[*].execution -- so the
+    load-bearing half of C11, the ablation, could be a hand-typed boolean array
+    while the probe still reported GREEN and its own GREEN line claimed every
+    row had been re-executed."""
+    for it in items:
+        if not isinstance(it, dict):
+            return f"{label} carries a non-object row"
+        row_id = it.get("item_id")
+        ex = it.get("execution")
+        if not isinstance(ex, dict):
+            return (f"{label} row '{row_id}' carries a passed flag with NO "
+                    f"execution block -> asserted outcome, nothing was "
+                    f"re-executed (fabricated_outcomes)")
+        for field in ("executor", "exit_code", "stdout_sha256"):
+            if ex.get(field) in (None, ""):
+                return (f"{label} row '{row_id}' execution block missing "
+                        f"'{field}' -> the re-execution is not evidenced "
+                        f"(fabricated_outcomes)")
+        if not isinstance(ex.get("exit_code"), int):
+            return (f"{label} row '{row_id}' exit_code is not an integer -> no "
+                    f"live re-execution")
+        dur = ex.get("duration_s")
+        if dur is not None and not (isinstance(dur, (int, float)) and dur > 0):
+            return f"{label} row '{row_id}' duration_s={dur!r} -> nothing ran"
+        if bool(it.get("passed")) != (ex["exit_code"] == 0):
+            return (f"{label} row '{row_id}' passed={it.get('passed')!r} "
+                    f"disagrees with its own exit_code {ex['exit_code']} -> the "
+                    f"pass flag is not what the execution produced "
+                    f"(fabricated_outcomes)")
+    return None
 
 
 def strip_durations(node):
@@ -172,10 +235,10 @@ def chk1_horizon_ordering(receipts):
         return GAP, f"horizon receipt(s) absent: {missing}"
     counts = {}
     for h in HORIZONS:
-        ids = problem_ids(receipts[h])
-        if not ids:
-            return GAP, f"'{h}' carries no novel_problems.problem_ids"
-        counts[h] = len(set(ids))
+        st, val = claim_array(receipts[h], "novel_problems", "problem_ids")
+        if st != PASS:
+            return st, f"'{h}': {val}"
+        counts[h] = len(set(val))
     if not (counts["short"] < counts["medium"] < counts["long"]):
         return FAIL, (f"novel-problem counts not strictly increasing "
                       f"(short={counts['short']} medium={counts['medium']} "
@@ -194,9 +257,9 @@ def chk2_novelty_integrity(receipts):
         r = receipts.get(h)
         if r is None:
             continue
-        ids = problem_ids(r)
-        if not ids:
-            return GAP, f"'{h}' carries no novel_problems.problem_ids"
+        st, ids = claim_array(r, "novel_problems", "problem_ids")
+        if st != PASS:
+            return st, f"'{h}': {ids}"
         if len(set(ids)) != len(ids):
             dupes = len(ids) - len(set(ids))
             return FAIL, (f"'{h}' problem_ids contains {dupes} repeated row(s) "
@@ -260,12 +323,24 @@ def chk4_merkle_binding(receipts):
         if r is None:
             continue
         lu = r.get("learning_update") or {}
-        steps = lu.get("gradient_steps")
+        st, steps = claim_array(r, "learning_update", "gradient_steps")
+        if st != PASS:
+            return st, f"'{h}': {steps}"
+        if "merkle_root" not in lu:
+            return GAP, f"'{h}' learning_update.merkle_root absent"
         claimed = strip_hash_prefix(lu.get("merkle_root"))
-        if not steps or not claimed:
-            return GAP, (f"'{h}' missing learning_update.gradient_steps/"
-                         f"merkle_root")
-        ids = set(problem_ids(r))
+        if not claimed:
+            return FAIL, (f"'{h}' learning_update.merkle_root is present but "
+                          f"empty -> gradient steps are bound to nothing")
+        # The binding needs BOTH halves. An absent novel-problem block is an
+        # absent input (GAP), consistent with CHK-1/CHK-2; a present-but-empty
+        # one is a failed claim (FAIL). Only once the set genuinely exists can
+        # an out-of-set step id be judged.
+        id_st, id_val = claim_array(r, "novel_problems", "problem_ids")
+        if id_st != PASS:
+            return id_st, (f"'{h}': {id_val} -> gradient steps have no declared "
+                           f"novel-problem set to be bound to")
+        ids = set(id_val)
         leaves = []
         for st in steps:
             if not isinstance(st, dict) or "step" not in st or "problem_id" not in st:
@@ -298,14 +373,25 @@ def chk5_heldout_delta(receipts):
         return GAP, f"horizon receipt(s) absent: {missing}"
     scores = {}
     for h in HORIZONS:
-        items = heldout_items(receipts[h])
+        st, items = claim_array(receipts[h], "heldout", "items")
+        if st != PASS:
+            return st, f"'{h}': {items}"
         s = recompute_score(items)
-        if s is None:
-            return GAP, f"'{h}' carries no heldout.items to recompute a score from"
-        claimed = (receipts[h].get("heldout") or {}).get("claimed_score")
-        if isinstance(claimed, (int, float)) and abs(claimed - s) > 1e-9:
-            return FAIL, (f"'{h}' claimed_score {claimed} != score {s:.4f} "
-                          f"recomputed from its own {len(items)} held-out rows")
+        heldout = receipts[h].get("heldout") or {}
+        # [rev-107 N-1] A claimed_score that is present but not numeric (e.g.
+        # the string "0.99") previously slipped past the comparison entirely.
+        # The spec says a mismatch is a failure, not a tiebreak -- so a claim
+        # that cannot even be compared is a failure too, never a skip.
+        if "claimed_score" in heldout:
+            claimed = heldout["claimed_score"]
+            if isinstance(claimed, bool) or not isinstance(claimed, (int, float)):
+                return FAIL, (f"'{h}' claimed_score {claimed!r} is present but "
+                              f"non-numeric -> the receipt's own summary cannot "
+                              f"be compared to the {s:.4f} recomputed from its "
+                              f"{len(items)} held-out rows")
+            if abs(claimed - s) > 1e-9:
+                return FAIL, (f"'{h}' claimed_score {claimed} != score {s:.4f} "
+                              f"recomputed from its own {len(items)} held-out rows")
         scores[h] = s
     gaps = {
         "medium-short": scores["medium"] - scores["short"],
@@ -334,9 +420,9 @@ def chk6_heldout_contamination(receipts):
         if r is None:
             continue
         trained |= set(problem_ids(r))
-        items = heldout_items(r)
-        if not items:
-            return GAP, f"'{h}' carries no heldout.items"
+        st, items = claim_array(r, "heldout", "items")
+        if st != PASS:
+            return st, f"'{h}': {items}"
         for it in items:
             if not isinstance(it, dict) or "item_id" not in it:
                 return FAIL, f"'{h}' held-out row without an item_id"
@@ -362,37 +448,13 @@ def chk7_live_reexecution(receipts):
         r = receipts.get(h)
         if r is None:
             continue
-        items = heldout_items(r)
-        if not items:
-            return GAP, f"'{h}' carries no heldout.items"
-        for it in items:
-            ex = (it or {}).get("execution")
-            if not isinstance(ex, dict):
-                return FAIL, (f"'{h}' held-out row '{it.get('item_id')}' carries a "
-                              f"passed flag with NO execution block -> asserted "
-                              f"outcome, nothing was re-executed "
-                              f"(fabricated_outcomes)")
-            for field in ("executor", "exit_code", "stdout_sha256"):
-                if ex.get(field) in (None, ""):
-                    return FAIL, (f"'{h}' held-out row '{it.get('item_id')}' "
-                                  f"execution block missing '{field}' -> the "
-                                  f"re-execution is not evidenced "
-                                  f"(fabricated_outcomes)")
-            if not isinstance(ex.get("exit_code"), int):
-                return FAIL, (f"'{h}' held-out row '{it.get('item_id')}' exit_code "
-                              f"is not an integer -> no live re-execution")
-            dur = ex.get("duration_s")
-            if dur is not None and not (isinstance(dur, (int, float)) and dur > 0):
-                return FAIL, (f"'{h}' held-out row '{it.get('item_id')}' "
-                              f"duration_s={dur!r} -> nothing ran")
-            derived = (ex["exit_code"] == 0)
-            if bool(it.get("passed")) != derived:
-                return FAIL, (f"'{h}' held-out row '{it.get('item_id')}' passed="
-                              f"{it.get('passed')!r} disagrees with its own "
-                              f"exit_code {ex['exit_code']} -> the pass flag is "
-                              f"not what the execution produced "
-                              f"(fabricated_outcomes)")
-            total += 1
+        st, items = claim_array(r, "heldout", "items")
+        if st != PASS:
+            return st, f"'{h}': {items}"
+        failure = validate_execution_rows(f"'{h}' held-out", items)
+        if failure:
+            return FAIL, failure
+        total += len(items)
     if total == 0:
         return GAP, "no held-out rows to re-derive from"
     return PASS, (f"{total} held-out rows carry execution evidence agreeing with "
@@ -433,11 +495,20 @@ def chk8_deletion_baseline(receipts):
                       "distinct checkpoints")
 
     scores = {}
+    arm_rows = 0
     for a in DELETION_ARMS:
-        s = recompute_score((arms[a] or {}).get("items") or [])
-        if s is None:
-            return GAP, f"deletion arm '{a}' carries no items to recompute a score from"
-        scores[a] = s
+        st, items = claim_array(arms, a, "items")
+        if st != PASS:
+            return st, f"deletion arm '{a}': {items}"
+        # [rev-107 B-1] Arm rows are held to the SAME live-re-execution bar as
+        # the held-out rows. The ablation is what separates C11 from a two-number
+        # capability chart; scoring it off bare `passed` booleans made the
+        # load-bearing half of the condition hand-typeable.
+        failure = validate_execution_rows(f"deletion arm '{a}'", items)
+        if failure:
+            return FAIL, failure
+        scores[a] = recompute_score(items)
+        arm_rows += len(items)
     lo, dele, sh = scores["long"], scores["long_minus_consolidation"], scores["short"]
     if not (lo > dele):
         return FAIL, (f"deleting the long-horizon consolidation did not degrade "
@@ -447,9 +518,9 @@ def chk8_deletion_baseline(receipts):
         return FAIL, (f"deleted arm {dele:.4f} is not closer to the short-horizon "
                       f"level {sh:.4f} than to the long-horizon level {lo:.4f} -> "
                       f"the degradation does not return toward the short horizon")
-    return PASS, (f"baseline is the short-horizon checkpoint; recomputed "
-                  f"long={lo:.4f} > deleted={dele:.4f}, and deleted sits closer "
-                  f"to short={sh:.4f} than to long")
+    return PASS, (f"baseline is the short-horizon checkpoint; {arm_rows} arm rows "
+                  f"live re-executed; recomputed long={lo:.4f} > deleted={dele:.4f}, "
+                  f"and deleted sits closer to short={sh:.4f} than to long")
 
 
 CORE_CHECKS = [
@@ -584,8 +655,9 @@ def main():
          "no repeats/pretrain overlap, real pre!=post parameter change with "
          "distinct checkpoints, gradient steps Merkle-bound to the novel problem "
          "ids, recomputed held-out delta short<medium<long beyond the "
-         f"{NOISE_FLOOR} noise floor, held-out uncontaminated, every row live "
-         "re-executed, deletion measured against the short-horizon checkpoint "
+         f"{NOISE_FLOOR} noise floor, held-out uncontaminated, every held-out AND "
+         "deletion-arm row live re-executed, deletion measured against the "
+         "short-horizon checkpoint "
          "degrading long capability back toward it, and the verdict unchanged "
          "with all duration fields stripped.")
 

@@ -109,9 +109,18 @@ Arm `items` carry the same per-item shape as `heldout.items`, including the
 
 ## The nine recomputed checks
 
-Every check derives its own numbers from raw rows. No scalar the receipt reports
-about itself is trusted; where a receipt states a summary (`claimed_score`,
-`merkle_root`), the check recomputes it and compares.
+Every check derives its own **aggregate** numbers from raw rows. Where a receipt
+states a summary (`claimed_score`, `merkle_root`), the check recomputes it from
+the rows beneath it and compares; a summary that is present but not comparable
+(a non-numeric `claimed_score`) fails rather than being skipped. This is a
+statement about aggregates only — see "What this checker cannot prove" below for
+the fields that are, unavoidably, taken at face value.
+
+**Absent vs empty.** A check reports a gap (UNEVALUABLE) only when its
+claim-bearing block or key is *missing* — nothing has been asserted. A block
+that is present and carries an **empty** array is a present claim backed by
+nothing, and fails (RED). An empty `gradient_steps` under a `learning_update`
+that still asserts a `merkle_root` is a failed claim, not a pending input.
 
 **CHK-1 — horizon ordering by novel-problem count.** Recount distinct novel
 problem ids per horizon and require
@@ -123,6 +132,15 @@ no repeats (`len(set) == len(list)`; a repeated row re-hashed is not new
 experience), `pretrain_overlap_ids` is empty, and each longer horizon's id set is
 a strict superset of the shorter one's (a longer horizon has seen everything the
 shorter one saw, plus more). Violation → `novelty_spoof`.
+
+The nested (strict-superset) reading was chosen over a disjoint-extension
+reading, under which the three horizons would be independent training runs.
+`conditions-v1.md`'s deletion clause settles it: removing long-horizon
+consolidation must degrade capability *back toward the short-horizon level*, and
+that sentence names no gradient unless long's experience contains short's. A
+consequence worth stating: because a strict superset implies a larger count,
+CHK-1 has no tooth independent of CHK-2 — a receipt that breaks the ordering
+breaks both.
 
 **CHK-3 — real parameter change.** Per horizon `pre_param_hash != post_param_hash`,
 and the three horizons' `post_param_hash` values are pairwise distinct. Identical
@@ -139,8 +157,10 @@ novelty; without it the two halves of the receipt are unrelated.
 **CHK-5 — held-out capability delta strictly increasing.** Recompute each
 horizon's score as the mean of its held-out `passed` rows and require
 `long > medium > short`, each gap exceeding the pre-registered noise floor
-(`NOISE_FLOOR`, 0.02 absolute in v1). `claimed_score` is compared to the
-recomputed value and a mismatch is a failure, not a tiebreak.
+(`NOISE_FLOOR`, 0.02 absolute in v1). `claimed_score`, if present, is compared to
+the recomputed value; a mismatch is a failure, not a tiebreak, and a present
+`claimed_score` that is not numeric fails too — a summary that cannot be
+compared has not been checked.
 
 **CHK-6 — held-out contamination.** The union of all three horizons' training
 problem ids must not intersect any held-out `item_id`. A capability delta
@@ -148,16 +168,26 @@ measured on problems that were trained on is not a delta.
 
 **CHK-7 — live re-execution of sampled solutions.** Every held-out item carries
 an `execution` block with an executor identity, an integer `exit_code`, a
-`stdout_sha256`, and `duration_s > 0`. The pass rate recomputed from
-`exit_code == 0` must agree with the `passed` flags. A `passed` array without
+`stdout_sha256`, and `duration_s` (if recorded) greater than zero. Each row's
+`passed` flag must agree with its own `exit_code == 0`. A `passed` array without
 execution evidence is `fabricated_outcomes` — the receipt is asserting outcomes
 rather than having run anything.
+
+`duration_s` is required to be positive only when present, not required to be
+present: CHK-9 re-derives every check with duration fields stripped, so a hard
+requirement would make that re-derivation fail by construction.
+
+This per-row validation is applied identically to the deletion arm rows under
+CHK-8. It is factored into one routine precisely so the two callers cannot drift
+apart — an earlier revision of this checker validated held-out rows only, which
+left the ablation scoreable off hand-typed booleans.
 
 **CHK-8 — deletion measured against the short-horizon checkpoint.**
 `baseline_checkpoint_hash` must equal `horizon-short.json`'s `post_param_hash`
 (deletion against the untrained base is `deletion_uses_wrong_baseline`), the
-three arm checkpoint hashes must be distinct, and, recomputing all three arm
-scores from their own items: `long > long_minus_consolidation`, and
+three arm checkpoint hashes must be distinct, **every arm row must pass the CHK-7
+per-row re-execution validation**, and, recomputing all three arm scores from
+their own items: `long > long_minus_consolidation`, and
 `long_minus_consolidation` must sit closer to `short` than to `long` — the
 consolidation being removed drags capability back toward the short-horizon
 level, which is what "load-bearing" means here.
@@ -172,6 +202,39 @@ any of the five invalid tokens appearing as a live value.
 CHK-9 deliberately re-runs the other eight rather than inspecting a flag: a
 condition whose whole point is that duration is not the lever is best proven by
 showing the verdict survives duration's removal.
+
+Be clear about what that buys. CHK-9's first half is **proof by invariance, not
+detection**: no check in CHK-1..CHK-8 reads a duration field in a pass-producing
+direction, so stripping durations structurally *cannot* flip a GREEN to RED. It
+is a standing guarantee that no future edit quietly reintroduces the clock as a
+lever — the day someone adds a duration-reading branch, this check starts failing.
+It is not a live tooth against today's receipts, and should never be read as one.
+CHK-9's second half, the invalid-token sweep, does ordinary detection work.
+
+## What this checker cannot prove
+
+A receipt checker verifies internal consistency. Several fields here are, and
+must be, taken at face value, because nothing in the JSON binds them to the
+world:
+
+- **Parameter hashes.** `pre_param_hash` and `post_param_hash` are free strings.
+  CHK-3 proves they differ and that the horizons do not share one; it cannot
+  prove either corresponds to a checkpoint that exists, or that any tensor
+  changed.
+- **`stdout_sha256` and executor identity.** CHK-7 proves each row carries
+  execution evidence and that the pass flag agrees with the recorded exit code.
+  It cannot prove a process ran, or that the digest is of anything.
+- **The Merkle root.** Recomputed from the receipt's own leaves, so it proves the
+  step list and the root agree with each other and that every step cites an
+  in-set problem id. It does not prove a gradient step occurred.
+- **Run provenance.** Nothing here resolves a receipt to a run. Issue #107 carries
+  "run provenance must resolve" forward from #98 as binding; that obligation is
+  met at the evidence stage by independent replay, not by this file.
+
+So a GREEN from `test_c11.py` means "this receipt set is internally consistent
+and self-consistent with the C11 contract" — never, on its own, "a model was
+trained." The closure falsifier on #107 requires an independently replayed
+owned-3B receipt set for the latter, and that is the right place for it.
 
 ## What is still outstanding
 
