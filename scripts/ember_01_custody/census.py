@@ -14,6 +14,7 @@ import secrets
 import re
 import subprocess
 import tempfile
+import time
 from collections import defaultdict
 from collections.abc import Callable
 from pathlib import Path
@@ -40,6 +41,59 @@ DIRECT_MANDATE_IDS = {
 
 
 HASH_ALGORITHM = "sha256-byte-stream-v1"
+
+
+# ---------------------------------------------------------------------------
+# Run timings (#1397).
+#
+# A census run's wall clock was only ever observable as one whole-leg number
+# (run verify-msemvz0yrvyq00: 37.9 minutes, no interior structure), so whether
+# the cost is driven by bytes hashed or by file count was unsettleable from the
+# receipts themselves. These fields make each root's and each phase's share of
+# the clock part of the artifact the run already writes.
+#
+# They are observability, never evidence: a duration cannot be reproduced, so
+# it is named `_non_authoritative` and stripped by `canonical_root_identity`
+# exactly as `mtime_ns_non_authoritative` is. Every custody digest — the
+# canonical root census hash, and the canonical manifest hash built on it — is
+# byte-identical to what the same bytes produced before timings existed.
+TIMING_FIELD = "timings_non_authoritative"
+TIMING_CLOCK = "time.perf_counter"
+
+
+def _elapsed_seconds(value: float) -> float:
+    return round(value, 6)
+
+
+class _PhaseClock:
+    """Monotonic wall-clock accumulated per named phase.
+
+    `start` closes whichever phase is open, so a control-flow path that leaves
+    a phase open (any of the early `continue`s in the per-root loop) still has
+    its time attributed rather than lost; `stop` closes the last one.
+    """
+
+    def __init__(self) -> None:
+        self.totals: dict[str, float] = defaultdict(float)
+        self._phase: str | None = None
+        self._started = 0.0
+
+    def start(self, phase: str) -> None:
+        self.stop()
+        self._phase = phase
+        self._started = time.perf_counter()
+
+    def stop(self) -> None:
+        if self._phase is None:
+            return
+        self.totals[self._phase] += time.perf_counter() - self._started
+        self._phase = None
+
+    def phase_seconds(self) -> dict[str, float]:
+        return {
+            phase: _elapsed_seconds(seconds)
+            for phase, seconds in sorted(self.totals.items())
+        }
 
 
 def hash_file_streaming(
@@ -623,6 +677,11 @@ def canonical_root_identity(payload: Mapping[str, Any]) -> dict[str, Any]:
     encoded = json.loads(json.dumps(payload))
     for artifact in encoded.get("artifacts", []):
         artifact.pop("mtime_ns_non_authoritative", None)
+    # Timings (#1397) are run observability, not custody evidence: two runs over
+    # identical bytes must still produce an identical canonical identity.
+    encoded.pop(TIMING_FIELD, None)
+    for root_row in encoded.get("roots", []):
+        root_row.pop(TIMING_FIELD, None)
     return encoded
 
 
@@ -1045,14 +1104,44 @@ def build_root_census(
                     "resolution": "unresolved_preserve_all",
                 }
             )
+    # #1397 timing scaffolding. The per-root clock is opened after the root's
+    # row exists and closed at the top of the NEXT iteration (and once after the
+    # loop), so every exit path out of the long loop body — the absent-root
+    # `continue`, the verified-alias `continue`, the git_remote and
+    # git_worktree_registry `continue`s, the root_scan_failed handler — is
+    # covered without wrapping 650 lines in a `try/finally`.
+    census_clock = _PhaseClock()
+    census_started = time.perf_counter()
+    open_root_timing: list[tuple[dict[str, Any], _PhaseClock, float]] = []
+
+    def open_root_clock(row: dict[str, Any]) -> _PhaseClock:
+        close_root_clock()
+        clock = _PhaseClock()
+        clock.start("discovery")
+        open_root_timing.append((row, clock, time.perf_counter()))
+        return clock
+
+    def close_root_clock() -> None:
+        while open_root_timing:
+            row, clock, started = open_root_timing.pop()
+            clock.stop()
+            row[TIMING_FIELD] = {
+                "duration_seconds": _elapsed_seconds(
+                    time.perf_counter() - started
+                ),
+                "phase_seconds": clock.phase_seconds(),
+            }
+
     physical_hash_cache: dict[tuple[object, ...], str] = {}
     final_byte_records: dict[tuple[object, ...], dict[str, Any]] = {}
     final_membership_records: list[dict[str, Any]] = []
     final_git_records: list[dict[str, Any]] = []
     final_discovery_records: list[dict[str, Any]] = []
+    census_clock.start("root_scan")
     for root_spec in sorted(
         specification.get("roots", []), key=lambda row: row["root_id"]
     ):
+        close_root_clock()
         root_id = root_spec["root_id"]
         scan = root_spec.get("scan", "files")
         runtime_state_exclusions = _normalize_runtime_state_exclusions(
@@ -1090,6 +1179,7 @@ def build_root_census(
         if isinstance(alias_of_root_id, str):
             root_row["alias_of_root_id"] = alias_of_root_id
         roots.append(root_row)
+        root_clock = open_root_clock(root_row)
         if not present:
             if absence_policy is not None and not absence_attested:
                 contradictions.append(
@@ -1534,6 +1624,12 @@ def build_root_census(
                 **error,
                 "resolution": "unresolved_preserve_directory",
             })
+        # For git_ignored_registry `candidates` is the lazy spooling generator,
+        # so that scan's enumeration is interleaved with hashing and lands in
+        # this phase rather than in `discovery` — the one scan mode where the
+        # two phases are not separable without re-materializing the row list
+        # the bounded-memory scan deliberately never builds.
+        root_clock.start("hashing")
         for relative, path in candidates:
             artifact_key = f"{root_id}:{relative}"
             base_row = {
@@ -1673,6 +1769,7 @@ def build_root_census(
                 }
                 final_byte_records[physical_key] = final_record
             final_record["sources"].append((root_id, relative))
+        root_clock.start("membership_snapshot")
         if membership_deferred and pending_membership_record is not None:
             # The spooling generator above has now been fully drained by the
             # hash loop that just finished, so the spool file holds exactly
@@ -1707,6 +1804,8 @@ def build_root_census(
                 }
                 for entry in runtime_state_exclusions
             ]
+    close_root_clock()
+    census_clock.start("final_discovery_verification")
     for record in final_discovery_records:
         try:
             final_discovery_snapshot = _current_discovery_snapshot(
@@ -1740,6 +1839,7 @@ def build_root_census(
             record["root_row"]["discovery_live_state_churn"] = change[
                 "live_state_churn"
             ]
+    census_clock.start("final_git_verification")
     for record in final_git_records:
         try:
             final_git_summary = git_repository_summary(
@@ -1756,6 +1856,7 @@ def build_root_census(
                 "root_id": record["root_id"],
                 "resolution": "unresolved_retry_snapshot",
             })
+    census_clock.start("final_membership_verification")
     for record in final_membership_records:
         if record.get("membership_representation") == "sha256":
             # Bounded-memory path (git_ignored_registry): the initial
@@ -1804,6 +1905,7 @@ def build_root_census(
                 "root_id": record["root_id"],
                 "resolution": "unresolved_retry_snapshot",
             })
+    census_clock.start("final_byte_verification")
     for record in sorted(
         final_byte_records.values(),
         key=lambda row: str(row["path"]).replace("\\", "/").casefold(),
@@ -1840,6 +1942,7 @@ def build_root_census(
                 }
                 for root_id, relative in sorted(record["sources"])
             )
+    census_clock.start("aggregation")
     artifacts.sort(
         key=lambda row: (
             row["source"]["root_id"],
@@ -1852,18 +1955,28 @@ def build_root_census(
         for root_row in roots
         for entry in root_row.get("runtime_state_exclusions", [])
     )
+    duplicate_groups = build_duplicate_groups(artifacts)
+    sorted_contradictions = sorted(
+        contradictions,
+        key=lambda row: (row["code"], row.get("root_id", ""), row.get("artifact_id", "")),
+    )
+    census_clock.stop()
     return {
         "schema": "ember-01-root-census-v1",
         "hash_algorithm": HASH_ALGORITHM,
         "proof_mode": "current_bytes_rehashed",
+        TIMING_FIELD: {
+            "clock": TIMING_CLOCK,
+            "total_seconds": _elapsed_seconds(
+                time.perf_counter() - census_started
+            ),
+            "phase_seconds": census_clock.phase_seconds(),
+        },
         "roots": roots,
         "artifacts": artifacts,
-        "duplicate_groups": build_duplicate_groups(artifacts),
+        "duplicate_groups": duplicate_groups,
         "runtime_state_excluded_artifact_count": runtime_state_excluded_artifact_count,
-        "contradictions": sorted(
-            contradictions,
-            key=lambda row: (row["code"], row.get("root_id", ""), row.get("artifact_id", "")),
-        ),
+        "contradictions": sorted_contradictions,
     }
 
 
