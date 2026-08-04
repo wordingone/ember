@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -13,6 +14,14 @@ from pathlib import Path
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]
+#: An 8.3 short-name component, e.g. the `RUNNER~1` GitHub's windows-latest puts in TEMP.
+SHORT_NAME_COMPONENT = re.compile(r"~\d")
+
+
+def canonical(path: str | Path) -> str:
+    """One spelling per real directory: 8.3 short names expanded, casing normalized.
+    `realpath` is what expands the short form on Windows -- `abspath` leaves it alone."""
+    return os.path.normcase(os.path.realpath(path))
 PUBLIC_LAUNCHER = REPOSITORY / "Ember.cmd"
 LAUNCH_IMPL = REPOSITORY / "scripts" / "launch-ember-cli.ps1"
 LAUNCH_STAGING = REPOSITORY / "scripts" / "ember-launch-staging.ps1"
@@ -85,14 +94,25 @@ class EmberRootLauncherTests(unittest.TestCase):
 
     def assert_logged_cwd(self, log: str, expected: Path) -> None:
         """The fake runtime records %CD%, which Windows renders in the filesystem's own
-        canonical casing no matter how TEMP is spelled in the environment. Compare path
-        identity rather than spelling so the suite passes under any TEMP casing (#1395)."""
+        canonical spelling no matter how TEMP is spelled in the environment: canonical
+        casing (#1395) and the long form of any 8.3 short name (#1390 -- GitHub's
+        windows-latest sets TEMP under `RUNNER~1`, so the fixture path Python builds is
+        short while the one the launcher reports is long). Compare path identity rather
+        than spelling so the suite passes under any TEMP shape."""
         recorded = [line[len("cwd=") :] for line in log.splitlines() if line.startswith("cwd=")]
         self.assertEqual(len(recorded), 1, log)
         self.assertEqual(
-            os.path.normcase(recorded[0]),
-            os.path.normcase(str(expected)),
+            canonical(recorded[0]),
+            canonical(expected),
             f"launcher ran in {recorded[0]}, expected {expected}",
+        )
+        # The launcher canonicalizes on its own (Ember.cmd's %~dp0 and PowerShell's
+        # $PSScriptRoot both yield the long form), and callers see the path it reports.
+        # Pin that here so a change that starts echoing the caller's spelling fails by
+        # name instead of surfacing as an unexplained mismatch on one runner.
+        self.assertIsNone(
+            SHORT_NAME_COMPONENT.search(recorded[0]),
+            f"launcher reported an 8.3 short path instead of canonicalizing: {recorded[0]}",
         )
 
     def test_public_launcher_and_implementation_are_visible(self) -> None:
