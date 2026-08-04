@@ -160,8 +160,7 @@ pre-epoch history.
   pre/post checkpoints; deletion vs the untrained base instead of the short-horizon checkpoint. ✗
   `unearned_duration`, `clock_in_disguise`, `fabricated_outcomes`, `novelty_spoof`,
   `deletion_uses_wrong_baseline`. CHK: `test_c11.py` (9 recomputed checks, no trusted scalars). Spec:
-  `docs/c11-experience-horizon-spec.md` (absent as of 2026-08-01 in this contract tree, unmerged
-  to master).
+  `docs/c11-experience-horizon-spec.md` (merged to master in PR #1373).
 - **C12 — State-dependent cognitive modes.** R: modes selected by state (observe/orient/hypothesize/
   simulate/act/verify/consolidate/sleep/ask/refuse/rollback/report), triggered by evidence/uncertainty/
   verifier-state/headroom/blocker/risk; deleting the mode selector or replacing it with fixed time
