@@ -6,7 +6,7 @@ name: ci-pr
 on:
   pull_request:
     branches: [master]
-    types: [opened, synchronize, reopened, ready_for_review, edited, labeled, unlabeled, milestoned, demilestoned]
+    types: [opened, synchronize, reopened, ready_for_review]
   merge_group:
 
 permissions:

@@ -313,6 +313,94 @@ jobs:
             errors,
         )
 
+    def test_metadata_only_pr_types_under_cancellation_are_rejected(self) -> None:
+        path = self._write(
+            """
+name: bad
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, labeled, edited]
+permissions:
+  contents: read
+concurrency:
+  group: bad-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+"""
+        )
+        errors = workflow_policy.validate_workflow(path)
+        self.assertTrue(
+            any("metadata-only activity" in error for error in errors), errors
+        )
+        self.assertTrue(any("'edited'" in error and "'labeled'" in error for error in errors), errors)
+
+    def test_metadata_only_pr_types_are_allowed_without_cancellation(self) -> None:
+        path = self._write(
+            """
+name: fine
+on:
+  pull_request_target:
+    branches: [master]
+    types: [opened, synchronize, labeled, unlabeled]
+permissions:
+  contents: read
+concurrency:
+  group: fine-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+"""
+        )
+        errors = workflow_policy.validate_workflow(path)
+        self.assertEqual([], errors)
+
+    def test_job_level_cancellation_also_rejects_metadata_only_types(self) -> None:
+        path = self._write(
+            """
+name: bad
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, milestoned]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: bad-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+"""
+        )
+        errors = workflow_policy.validate_workflow(path)
+        self.assertTrue(
+            any("metadata-only activity" in error for error in errors), errors
+        )
+
+    def test_required_pr_workflows_do_not_subscribe_to_metadata_only_types(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        for name in ("ci-pr.yml", "pr-policy.yml", "repo-policy-gate.yml"):
+            path = root / ".github" / "workflows" / name
+            with self.subTest(workflow=name):
+                self.assertEqual([], workflow_policy.validate_workflow(path))
+                workflow = yaml.safe_load(path.read_text(encoding="utf-8", errors="strict"))
+                if True in workflow and "on" not in workflow:
+                    workflow["on"] = workflow.pop(True)
+                self.assertEqual({}, workflow_policy._metadata_only_pr_types(workflow["on"]))
+
     def test_labels_sync_confines_write_authority_to_trusted_master_apply(self) -> None:
         root = Path(__file__).resolve().parents[2]
         path = root / ".github" / "workflows" / "labels-sync.yml"

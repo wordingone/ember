@@ -33,6 +33,17 @@ WRITE_KEYS = {
     "statuses",
 }
 PR_EVENTS = {"pull_request", "pull_request_target"}
+# Activity types that fire on pull-request metadata alone, with no new head
+# commit. Under `cancel-in-progress: true` each one starts a check suite that
+# the next event cancels before any job exists, and branch protection binds the
+# required context to that empty suite (#1375).
+METADATA_ONLY_PR_TYPES = {
+    "edited",
+    "labeled",
+    "unlabeled",
+    "milestoned",
+    "demilestoned",
+}
 TRUSTED_CODEQL_PR_ACTIONS = (
     "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
     "github/codeql-action/init@3b0bd1d116c0bde30213346b22d4f634d96a2fb0",
@@ -66,6 +77,28 @@ def _event_names(events: Any) -> set[str]:
     if isinstance(events, list):
         return {str(event) for event in events}
     return set()
+
+
+def _cancels_in_progress(value: Any) -> bool:
+    return isinstance(value, dict) and value.get("cancel-in-progress") is True
+
+
+def _metadata_only_pr_types(events: Any) -> dict[str, list[str]]:
+    """Metadata-only activity types subscribed per pull-request event."""
+    if not isinstance(events, dict):
+        return {}
+    found: dict[str, list[str]] = {}
+    for event in PR_EVENTS:
+        config = events.get(event)
+        if not isinstance(config, dict):
+            continue
+        types = config.get("types")
+        if not isinstance(types, list):
+            continue
+        offenders = [str(t) for t in types if str(t) in METADATA_ONLY_PR_TYPES]
+        if offenders:
+            found[event] = sorted(offenders)
+    return found
 
 
 def _effective_permissions(workflow: dict[str, Any], job: dict[str, Any]) -> Any:
@@ -204,6 +237,16 @@ def validate_workflow(path: Path) -> list[str]:
         return errors + [f"{path.name}: jobs must be a nonempty mapping"]
     events = workflow.get("on")
     event_names = _event_names(events)
+    if _cancels_in_progress(workflow.get("concurrency")) or any(
+        isinstance(job, dict) and _cancels_in_progress(job.get("concurrency"))
+        for job in jobs.values()
+    ):
+        for event, offenders in sorted(_metadata_only_pr_types(events).items()):
+            errors.append(
+                f"{path.name}: {event} subscribes to metadata-only activity "
+                f"{offenders} under cancel-in-progress concurrency; these runs "
+                "are cancelled before any job exists and strand required checks"
+            )
     for job_name, job in jobs.items():
         context = f"{path.name}:{job_name}"
         if not isinstance(job, dict):
