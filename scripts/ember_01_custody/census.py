@@ -667,13 +667,18 @@ def _current_root_membership(
     root_spec: Mapping[str, Any],
     initial_membership: list[str],
     owners: Mapping[str, list[str]] | None = None,
+    exclusions: list[dict[str, str]] | None = None,
 ) -> list[str]:
     # Must apply the exact same runtime-state exclusion filter as the
     # initial scan in build_root_census (#1365) — otherwise an excluded
     # path would be present in one snapshot and absent from the other,
     # manufacturing a spurious directory_membership_changed_during_scan
     # contradiction purely from the filter mismatch, not a real mutation.
-    exclusions = _normalize_runtime_state_exclusions(root_spec)
+    # The caller passes the list it actually applied (spec defaults merged
+    # with this root's own entries, #1384); re-deriving from `root_spec`
+    # alone would reintroduce exactly that mismatch.
+    if exclusions is None:
+        exclusions = _normalize_runtime_state_exclusions(root_spec)
     discard_counts: dict[str, int] = defaultdict(int)
     if scan == "git_repository":
         rows, _ = _material_file_rows(
@@ -829,6 +834,64 @@ def _current_discovery_snapshot(
     return snapshot
 
 
+# ---------------------------------------------------------------------------
+# Discovery-snapshot churn classification (#1384).
+#
+# A discovery root's snapshot is a list of children, and for every child that
+# is a git tree it embeds that tree's whole live summary — HEAD, refs, status.
+# Comparing the two snapshots whole meant any sanctioned concurrent commit, or
+# any working-tree noise in any discovered tree, contradicted the run: the
+# `ember-named-root-discovery` snapshot alone carries 39 children, several with
+# thousands of status entries. The non-blocking-verify directive (#1371) says
+# that work continues during verification, so a check that fails on it makes
+# verify unpassable rather than making it strict.
+#
+# The split is by what the census took custody OF. Which children exist, and
+# what kind each one is, is the membership this root attests — churn there is
+# still a contradiction, because the census's own enumeration is then wrong.
+# A child that is still present and still the same kind, whose git tree simply
+# moved forward underneath it, is churn in a path the census enumerated but
+# does not own: tolerated, and receipted with the child and the fields that
+# moved. Nothing here relaxes the byte-level custody check — every file the
+# census hashed is still re-verified byte-for-byte at the end of the run.
+def _discovery_membership_key(row: Mapping[str, Any]) -> tuple[str, str]:
+    return str(row.get("name", "")), str(row.get("normalized_path", ""))
+
+
+def classify_discovery_snapshot_change(
+    initial: Iterable[Mapping[str, Any]],
+    final: Iterable[Mapping[str, Any]],
+) -> dict[str, Any]:
+    before = {_discovery_membership_key(row): row for row in initial}
+    after = {_discovery_membership_key(row): row for row in final}
+    added = sorted(key[0] for key in after.keys() - before.keys())
+    removed = sorted(key[0] for key in before.keys() - after.keys())
+    kind_changed: list[str] = []
+    live_state_churn: list[dict[str, Any]] = []
+    for key in sorted(before.keys() & after.keys()):
+        was, now = before[key], after[key]
+        if was.get("kind") != now.get("kind"):
+            kind_changed.append(key[0])
+            continue
+        if was == now:
+            continue
+        changed_fields = sorted(
+            field
+            for field in set(was.get("git") or {}) | set(now.get("git") or {})
+            if (was.get("git") or {}).get(field) != (now.get("git") or {}).get(field)
+        )
+        live_state_churn.append(
+            {"name": key[0], "changed_fields": changed_fields}
+        )
+    return {
+        "added": added,
+        "removed": removed,
+        "kind_changed": kind_changed,
+        "membership_changed": bool(added or removed or kind_changed),
+        "live_state_churn": live_state_churn,
+    }
+
+
 _EXTERNAL_ABSENCE_POLICY = "external_party_evidence_absent_by_design"
 
 
@@ -864,14 +927,37 @@ def _valid_required_absence_policy(root_spec: Mapping[str, Any]) -> bool:
 # declare an exclusion is scanned in full, unconditionally; declaring one on
 # a root that never contains a match costs nothing (excluded_artifact_count
 # stays 0) but keeps every filesystem-mirroring root defended in advance.
+#
+# #1384 widened where the declaration may live, not what a declaration is. A
+# per-root-only list meant every new root had to remember the cockpit patterns
+# for itself, and `local-ignored-payload-registry` — which reaches the very
+# same `tools/ember-cli/state/` bytes through the ignored-payload scan — never
+# did, so the cockpit's own watermark and ledger writes red-lined the run that
+# the cockpit dispatched. The spec may now carry a top-level
+# `runtime_state_exclusion_defaults` list that applies to every root, merged
+# ahead of each root's own entries. It is still read ONLY from the
+# version-controlled spec document: a spec that declares no defaults excludes
+# nothing anywhere, exactly as before.
 def _normalize_runtime_state_exclusions(
     root_spec: Mapping[str, Any],
+    defaults: list[dict[str, str]] | None = None,
 ) -> list[dict[str, str]]:
-    raw = root_spec.get("runtime_state_exclusions")
-    if not isinstance(raw, list):
-        return []
+    declared = _exclusion_entries(root_spec.get("runtime_state_exclusions"))
     normalized: list[dict[str, str]] = []
     seen_patterns: set[str] = set()
+    for entry in [*(defaults or []), *declared]:
+        pattern = entry["pattern"]
+        if pattern in seen_patterns:
+            continue
+        normalized.append({"pattern": pattern, "reason": entry["reason"]})
+        seen_patterns.add(pattern)
+    return normalized
+
+
+def _exclusion_entries(raw: Any) -> list[dict[str, str]]:
+    if not isinstance(raw, list):
+        return []
+    entries: list[dict[str, str]] = []
     for entry in raw:
         if not isinstance(entry, Mapping):
             continue
@@ -882,11 +968,15 @@ def _normalize_runtime_state_exclusions(
             and pattern.strip()
             and isinstance(reason, str)
             and reason.strip()
-            and pattern not in seen_patterns
         ):
-            normalized.append({"pattern": pattern, "reason": reason})
-            seen_patterns.add(pattern)
-    return normalized
+            entries.append({"pattern": pattern, "reason": reason})
+    return entries
+
+
+def _specification_exclusion_defaults(
+    specification: Mapping[str, Any],
+) -> list[dict[str, str]]:
+    return _exclusion_entries(specification.get("runtime_state_exclusion_defaults"))
 
 
 def _runtime_state_exclusion_match(
@@ -939,6 +1029,7 @@ def build_root_census(
     # from current bytes; metadata can be restored without restoring bytes.
     if journal_path:
         load_hash_journal(journal_path)
+    exclusion_defaults = _specification_exclusion_defaults(specification)
     direct_paths = bound_root_paths(specification, bindings)
     specs_by_id = {
         row["root_id"]: row
@@ -964,7 +1055,9 @@ def build_root_census(
     ):
         root_id = root_spec["root_id"]
         scan = root_spec.get("scan", "files")
-        runtime_state_exclusions = _normalize_runtime_state_exclusions(root_spec)
+        runtime_state_exclusions = _normalize_runtime_state_exclusions(
+            root_spec, exclusion_defaults
+        )
         runtime_state_exclusion_hits: dict[str, int] = defaultdict(int)
         source_root_id = root_spec.get("source_root_id")
         binding_id = source_root_id if isinstance(source_root_id, str) else root_id
@@ -1397,6 +1490,7 @@ def build_root_census(
                     "scan": scan,
                     "bound": bound,
                     "root_spec": dict(root_spec),
+                    "runtime_state_exclusions": runtime_state_exclusions,
                     "membership_representation": "sha256",
                     # Patched in right after the per-file hash loop below
                     # finishes spooling this root's rows — see the
@@ -1410,6 +1504,7 @@ def build_root_census(
                     "scan": scan,
                     "bound": bound,
                     "root_spec": dict(root_spec),
+                    "runtime_state_exclusions": runtime_state_exclusions,
                     "membership_representation": "list",
                     "initial_membership": list(initial_membership),
                 }
@@ -1427,6 +1522,7 @@ def build_root_census(
                 {
                     "root_id": root_id,
                     "bound": bound,
+                    "root_row": root_row,
                     "patterns": list(root_spec["name_patterns"]),
                     "initial_snapshot": initial_discovery_snapshot,
                 }
@@ -1626,12 +1722,24 @@ def build_root_census(
                 )
             )
             continue
-        if final_discovery_snapshot != record["initial_snapshot"]:
+        if final_discovery_snapshot == record["initial_snapshot"]:
+            continue
+        change = classify_discovery_snapshot_change(
+            record["initial_snapshot"], final_discovery_snapshot
+        )
+        if change["membership_changed"]:
             contradictions.append({
                 "code": "directory_snapshot_changed_during_scan",
                 "root_id": record["root_id"],
+                "added": change["added"],
+                "removed": change["removed"],
+                "kind_changed": change["kind_changed"],
                 "resolution": "unresolved_retry_snapshot",
             })
+        if change["live_state_churn"]:
+            record["root_row"]["discovery_live_state_churn"] = change[
+                "live_state_churn"
+            ]
     for record in final_git_records:
         try:
             final_git_summary = git_repository_summary(
@@ -1658,7 +1766,7 @@ def build_root_census(
             try:
                 final_membership_sha256 = _compute_ignored_membership_sha256(
                     record["bound"],
-                    _normalize_runtime_state_exclusions(record["root_spec"]),
+                    record["runtime_state_exclusions"],
                 )
             except Exception as exc:
                 contradictions.append(
@@ -1681,6 +1789,7 @@ def build_root_census(
                 record["root_spec"],
                 record["initial_membership"],
                 direct_paths,
+                record["runtime_state_exclusions"],
             )
         except Exception as exc:
             contradictions.append(
