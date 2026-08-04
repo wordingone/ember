@@ -22,7 +22,7 @@ const DECLARED_COMMIT_TOTAL_BYTES: u64 = 80 * GIB;
 const DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES: u64 = 16 * GIB;
 const MAXIMUM_JOB_MEMORY_BYTES: u64 =
     DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES - HOST_COMMIT_RESERVE_BYTES;
-const SIMULATED_PEAK_COMMIT_BYTES: u64 = 1 * GIB;
+const SIMULATED_PEAK_COMMIT_BYTES: u64 = GIB;
 
 fn host_capacity(available_maximum_commit_bytes: u64) -> HostCommitCapacity {
     HostCommitCapacity {
@@ -171,7 +171,10 @@ fn dispatch_manifest_hashes_preflights_and_governs_spawn() {
         "5326043c344227c1b145a4ddbb3519cfa62d4943"
     );
     assert_eq!(receipt["dispatch_manifest_sha256"], sha256(&manifest));
-    assert_eq!(receipt["workload_profile"]["profile_id"], "evidence_verifier");
+    assert_eq!(
+        receipt["workload_profile"]["profile_id"],
+        "evidence_verifier"
+    );
     assert_eq!(
         receipt["workload_profile"]["pinned_host_producers"][0]["kind"],
         "receipt_verifier"
@@ -557,8 +560,7 @@ fn dispatch_job_memory_ceiling_terminates_an_over_allocation_probe() {
     payload["required_available_maximum_commit_bytes"] = json!(declared_available);
     payload["maximum_job_memory_bytes"] = json!(134_217_728u64);
     payload["simulated_peak_commit_bytes"] = json!(67_108_864u64);
-    payload["workload_profile"]["pinned_host_producers"][0]["maximum_bytes"] =
-        json!(67_108_864u64);
+    payload["workload_profile"]["pinned_host_producers"][0]["maximum_bytes"] = json!(67_108_864u64);
     payload["env"]["EMBER_LAB_DISPATCH_ALLOCATE_BYTES"] = json!(536_870_912u64.to_string());
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
     let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
@@ -633,8 +635,7 @@ fn dispatch_manifest_requires_a_closed_workload_profile_before_spawn() {
         (
             "duplicate-producer",
             Box::new(|payload: &mut Value| {
-                let duplicate =
-                    payload["workload_profile"]["pinned_host_producers"][0].clone();
+                let duplicate = payload["workload_profile"]["pinned_host_producers"][0].clone();
                 payload["workload_profile"]["pinned_host_producers"]
                     .as_array_mut()
                     .unwrap()
@@ -658,8 +659,7 @@ fn dispatch_manifest_requires_a_closed_workload_profile_before_spawn() {
         let root = sandbox(&format!("profile-{name}"));
         let job_id = format!("dispatch-profile-{name}");
         let manifest = write_manifest(&root, &job_id, 10_000);
-        let mut payload: Value =
-            serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+        let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
         mutate(&mut payload);
         fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
         let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
@@ -931,7 +931,9 @@ fn dispatch_manifest_snapshots_are_bounded_after_semantic_preflight() {
             Err(EmberLabError::DispatchHostCommitReserve { .. })
         ));
     }
-    let snapshots = root.join("ember-lab.sqlite3.logs").join("dispatch-manifests");
+    let snapshots = root
+        .join("ember-lab.sqlite3.logs")
+        .join("dispatch-manifests");
     let count = fs::read_dir(&snapshots).unwrap().count();
     assert_eq!(count, 64);
 }
@@ -942,7 +944,9 @@ fn duplicate_snapshot_at_capacity_preserves_every_unrelated_snapshot() {
     let duplicate_bytes = fs::read(&manifest).unwrap();
     let duplicate_digest = format!("{:x}", Sha256::digest(&duplicate_bytes));
     let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
-    let snapshots = root.join("ember-lab.sqlite3.logs").join("dispatch-manifests");
+    let snapshots = root
+        .join("ember-lab.sqlite3.logs")
+        .join("dispatch-manifests");
     fs::create_dir_all(&snapshots).unwrap();
     for index in 0..63 {
         fs::write(

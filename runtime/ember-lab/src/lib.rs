@@ -530,7 +530,6 @@ impl ProtectiveStopContext {
     }
 
     fn finalize_stopped(&self, job_id: &str, row: &JobProcessRow, seal_logs: bool) -> Result<()> {
-
         let mut conn = self.conn()?;
         finalize_stopped_in_connection(&mut conn, job_id, row, seal_logs)
     }
@@ -847,6 +846,27 @@ impl Drop for Daemon {
     }
 }
 
+/// Column order of `SELECT ... FROM schedule_runs` in `schedule_alarm_state_at`;
+/// the tuple field indices below are positional against this alias.
+type ScheduleRunRow = (
+    String,
+    String,
+    i64,
+    i64,
+    i64,
+    i64,
+    i64,
+    String,
+    String,
+    Option<i64>,
+    Option<i64>,
+    Option<i64>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+
 impl Daemon {
     pub fn open(path: &Path) -> Result<Self> {
         if let Some(parent) = path.parent() {
@@ -1134,24 +1154,7 @@ impl Daemon {
         let mut statement = conn.prepare(
             "SELECT job_id,artifact_class,predicted_at_ms,predicted_duration_ms,predicted_tokens,predicted_program_completion_ms,absolute_deadline_ms,prediction_daemon_binary_sha256,prediction_daemon_source_sha256,measured_at_ms,measured_duration_ms,measured_tokens,measurement_outcome,measurement_receipt_sha256,measurement_daemon_binary_sha256,measurement_daemon_source_sha256 FROM schedule_runs ORDER BY predicted_at_ms,job_id",
         )?;
-        let records: Vec<(
-            String,
-            String,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            String,
-            String,
-            Option<i64>,
-            Option<i64>,
-            Option<i64>,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-        )> = statement
+        let records: Vec<ScheduleRunRow> = statement
             .query_map([], |row| {
                 Ok((
                     row.get(0)?,
@@ -1770,7 +1773,7 @@ impl Daemon {
                 "job_id": &manifest.job_id,
                 "source_commit": &manifest.source_commit,
                 "observed_at_ms": observed_at_ms,
-                "dispatch_manifest_sha256": hash_bytes(&manifest_bytes),
+                "dispatch_manifest_sha256": hash_bytes(manifest_bytes),
                 "host_commit": {
                     "basis": "maximum_configured_capacity",
                     "required_available_maximum_commit_bytes": manifest.required_available_maximum_commit_bytes,
@@ -1900,7 +1903,7 @@ impl Daemon {
             &verified_bindings,
             &custody_root,
         )?;
-        let manifest_sha256 = hash_bytes(&manifest_bytes);
+        let manifest_sha256 = hash_bytes(manifest_bytes);
         let args_sha256 = hash_bytes(&serde_json::to_vec(&manifest.args)?);
         let env_sha256 = hash_bytes(&serde_json::to_vec(&manifest.env)?);
         let receipt_payload = json!({
@@ -2544,13 +2547,16 @@ impl Daemon {
         }
         #[cfg(windows)]
         if let Err(error) = terminate_live(&live) {
-            self.live.lock().map_err(|_| EmberLabError::Poisoned)?.insert(
-                job_id.into(),
-                RetainedProcess {
-                    live,
-                    monitored: false,
-                },
-            );
+            self.live
+                .lock()
+                .map_err(|_| EmberLabError::Poisoned)?
+                .insert(
+                    job_id.into(),
+                    RetainedProcess {
+                        live,
+                        monitored: false,
+                    },
+                );
             return Err(error);
         }
         #[cfg(not(windows))]
@@ -3410,26 +3416,27 @@ fn validate_dispatch_workload_profile(
         ]
         .into_iter()
         .collect(),
-        DispatchWorkloadProfileId::EvidenceVerifier => [
-            DispatchPinnedHostProducerKind::ReceiptVerifier,
-        ]
-        .into_iter()
-        .collect(),
-        DispatchWorkloadProfileId::Cockpit => [
-            DispatchPinnedHostProducerKind::TelemetryBuffer,
-        ]
-        .into_iter()
-        .collect(),
+        DispatchWorkloadProfileId::EvidenceVerifier => {
+            [DispatchPinnedHostProducerKind::ReceiptVerifier]
+                .into_iter()
+                .collect()
+        }
+        DispatchWorkloadProfileId::Cockpit => [DispatchPinnedHostProducerKind::TelemetryBuffer]
+            .into_iter()
+            .collect(),
     };
     if seen != expected {
         return Err(EmberLabError::InvalidDispatchManifest {
-            detail: "dispatch workload profile declares unsupported or incomplete pinned-host producers".into(),
+            detail:
+                "dispatch workload profile declares unsupported or incomplete pinned-host producers"
+                    .into(),
         });
     }
     let expects_ui = profile.profile_id == DispatchWorkloadProfileId::Cockpit;
     if profile.requires_ui_responsiveness != expects_ui {
         return Err(EmberLabError::InvalidDispatchManifest {
-            detail: "dispatch workload profile UI-responsiveness declaration is inconsistent".into(),
+            detail: "dispatch workload profile UI-responsiveness declaration is inconsistent"
+                .into(),
         });
     }
     let governed_vertical = args.iter().any(|arg| arg == "governed-vertical");
@@ -3630,11 +3637,12 @@ fn validate_resume_registry_binding_closure(
                 ),
             });
         }
-        let entry = records[0]
-            .as_object()
-            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
-                detail: format!("resume realization registry {field} entry is not an object"),
-            })?;
+        let entry =
+            records[0]
+                .as_object()
+                .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                    detail: format!("resume realization registry {field} entry is not an object"),
+                })?;
         let expected_entry_keys: &[&str] = match field {
             "verifiers" => &["path", "sha256", "evidence_classes", "criterion_ids"],
             "realization_receipts" => &[
@@ -3728,11 +3736,11 @@ pub fn probe_host_commit_capacity() -> Result<HostCommitCapacity> {
     let page_size = info.PageSize as u64;
     let physical_available_bytes = (info.PhysicalAvailable as u64).checked_mul(page_size);
     let pages_to_bytes = |pages: usize, label: &str| {
-        (pages as u64)
-            .checked_mul(page_size)
-            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+        (pages as u64).checked_mul(page_size).ok_or_else(|| {
+            EmberLabError::InvalidDispatchManifest {
                 detail: format!("Windows host commit probe overflowed {label}"),
-            })
+            }
+        })
     };
     let physical_ram_bytes = pages_to_bytes(info.PhysicalTotal, "physical RAM bytes")?;
     let commit_total_bytes = pages_to_bytes(info.CommitTotal, "committed bytes")?;
@@ -3807,7 +3815,7 @@ fn configured_pagefile_maximum_bytes() -> Result<(u64, String)> {
             &mut bytes,
         )
     };
-    if first != ERROR_SUCCESS || bytes < 4 || bytes % 2 != 0 {
+    if first != ERROR_SUCCESS || bytes < 4 || !bytes.is_multiple_of(2) {
         return Err(EmberLabError::InvalidDispatchManifest {
             detail: format!("fixed pagefile maximum registry size probe failed: {first}"),
         });
@@ -3898,10 +3906,11 @@ fn available_free_vram_bytes() -> Result<u64> {
             detail: format!("nvidia-smi VRAM probe failed with {}", output.status),
         });
     }
-    let stdout =
-        String::from_utf8(output.stdout).map_err(|error| EmberLabError::InvalidDispatchManifest {
+    let stdout = String::from_utf8(output.stdout).map_err(|error| {
+        EmberLabError::InvalidDispatchManifest {
             detail: format!("nvidia-smi VRAM output was not UTF-8: {error}"),
-        })?;
+        }
+    })?;
     let values = stdout
         .lines()
         .filter(|line| !line.trim().is_empty())
@@ -4325,10 +4334,9 @@ fn spawn_resource_guard_monitor(
                 let grace_ms = protective_checkpoint_monitor_grace_ms(job_ids.len());
 
                 for job_id in job_ids {
-                    if let Err(error) = context.protective_owned_stop(
-                        &job_id,
-                        Duration::from_millis(grace_ms),
-                    ) {
+                    if let Err(error) =
+                        context.protective_owned_stop(&job_id, Duration::from_millis(grace_ms))
+                    {
                         record_protective_owned_stop_failure(&db, &job_id, &error);
                     }
                 }
@@ -5482,13 +5490,13 @@ fn spawn_managed(
 fn inspect_process(pid: u32) -> Result<ProcessIdentity> {
     let exe = fs::read_link(format!("/proc/{pid}/exe"))?;
     let stat = fs::read_to_string(format!("/proc/{pid}/stat"))?;
-    let token = stat
-        .split_whitespace()
-        .nth(21)
-        .ok_or_else(|| EmberLabError::ProcessUnavailable {
-            job_id: String::new(),
-            pid,
-        })?;
+    let token =
+        stat.split_whitespace()
+            .nth(21)
+            .ok_or_else(|| EmberLabError::ProcessUnavailable {
+                job_id: String::new(),
+                pid,
+            })?;
     Ok(ProcessIdentity {
         start_token: token.into(),
         executable: exe.to_string_lossy().into_owned(),
@@ -5530,7 +5538,10 @@ mod dispatch_binding_snapshot_tests {
         fs::write(&registry, br#"{"schema_version":"replaced"}"#).unwrap();
 
         let error = read_verified_json_snapshot(&registry, &initially_bound).unwrap_err();
-        assert!(matches!(error, EmberLabError::DispatchBindingMismatch { .. }));
+        assert!(matches!(
+            error,
+            EmberLabError::DispatchBindingMismatch { .. }
+        ));
         fs::remove_dir_all(root).unwrap();
     }
 

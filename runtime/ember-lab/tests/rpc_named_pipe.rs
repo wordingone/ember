@@ -20,8 +20,10 @@ fn sandbox(name: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let path =
-        std::env::temp_dir().join(format!("ember-lab-rpc-{name}-{}-{nonce}", std::process::id()));
+    let path = std::env::temp_dir().join(format!(
+        "ember-lab-rpc-{name}-{}-{nonce}",
+        std::process::id()
+    ));
     fs::create_dir_all(&path).unwrap();
     path
 }
@@ -194,10 +196,10 @@ fn write_dispatch_manifest(root: &Path, job_id: &str) -> PathBuf {
 
 fn pad_dispatch_manifest_to_exact_bytes(path: &Path, target_bytes: usize) {
     let mut manifest: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
-    manifest["env"]
-        .as_object_mut()
-        .unwrap()
-        .insert("EMBER_LAB_TEST_PADDING".into(), Value::String(String::new()));
+    manifest["env"].as_object_mut().unwrap().insert(
+        "EMBER_LAB_TEST_PADDING".into(),
+        Value::String(String::new()),
+    );
     let encoded_without_padding = serde_json::to_vec(&manifest).unwrap();
     assert!(encoded_without_padding.len() <= target_bytes);
     let remaining = target_bytes - encoded_without_padding.len();
