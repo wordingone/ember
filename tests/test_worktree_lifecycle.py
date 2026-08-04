@@ -823,6 +823,134 @@ def test_reconcile_refuses_a_legacy_snapshot_path(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# --detach (#1371): certification consumers refuse a branch-attached checkout
+# ---------------------------------------------------------------------------
+
+
+def test_create_detach_leaves_head_detached_and_mints_no_branch_ref(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    target = tmp_path / "detached-wt"
+
+    result = lifecycle(
+        repo,
+        "create",
+        "--path",
+        str(target),
+        "--detach",
+        "--owner",
+        "ember-cli-verify",
+        "--purpose",
+        "verify dispatch",
+        "--expires",
+        "2999-01-01",
+    )
+    payload = json.loads(result.stdout)
+
+    assert payload["status"] == "CREATED"
+    assert payload["detached"] is True
+    assert payload["branch"] is None
+    # The property the verifier actually reads: symbolic-ref fails on a detached HEAD.
+    assert git(target, "symbolic-ref", "--quiet", "HEAD", check=False).returncode != 0
+    # No refs/heads/* accumulates per run -- the leak the attached mode caused.
+    assert git(repo, "for-each-ref", "--format=%(refname)", "refs/heads/").stdout.strip() == (
+        "refs/heads/master"
+    )
+    state = json.loads(state_path(repo).read_text(encoding="utf-8"))
+    row = next(iter(state["managed"].values()))
+    assert row["detached"] is True
+    assert row["branch"] is None
+
+
+def test_create_refuses_detach_together_with_branch_and_refuses_neither(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+
+    both = lifecycle(
+        repo, "create", "--path", str(tmp_path / "a"), "--detach", "--branch", "x",
+        "--owner", "o", "--purpose", "p", "--expires", "2999-01-01", check=False,
+    )
+    assert both.returncode == 2
+    assert "DETACH_WITH_BRANCH" in both.stderr
+
+    neither = lifecycle(
+        repo, "create", "--path", str(tmp_path / "b"),
+        "--owner", "o", "--purpose", "p", "--expires", "2999-01-01", check=False,
+    )
+    assert neither.returncode == 2
+    assert "BRANCH_REQUIRED" in neither.stderr
+
+
+def test_retire_of_a_detached_row_archives_its_head(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    target = tmp_path / "detached-retire"
+    lifecycle(
+        repo, "create", "--path", str(target), "--detach",
+        "--owner", "ember-cli-verify", "--purpose", "p", "--expires", "2999-01-01",
+    )
+
+    payload = json.loads(lifecycle(repo, "retire", "--path", str(target)).stdout)
+
+    assert payload["status"] == "RETIRED"
+    assert payload["archive_ref"]
+    assert git(repo, "rev-parse", payload["archive_ref"]).stdout.strip() == payload["head"]
+
+
+# ---------------------------------------------------------------------------
+# --force-owner retire (#1371 N3): a killed pipeline leaves its own scratch behind
+# ---------------------------------------------------------------------------
+
+
+def test_force_owner_retires_a_dirty_worktree_only_for_the_owner_that_created_it(
+    tmp_path: Path,
+) -> None:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    target = tmp_path / "dirty-wt"
+    lifecycle(
+        repo, "create", "--path", str(target), "--detach",
+        "--owner", "ember-cli-verify", "--purpose", "p", "--expires", "2999-01-01",
+    )
+    # Exactly the residue a timeout leaves: verifier scratch nobody else wrote.
+    (target / ".ember01-verify-custody.tmp.json").write_text("{}", encoding="utf-8")
+
+    plain = lifecycle(repo, "retire", "--path", str(target), check=False)
+    assert plain.returncode == 2
+    assert "DIRTY_WORKTREE" in plain.stderr
+
+    wrong_owner = lifecycle(
+        repo, "retire", "--path", str(target), "--force-owner", "someone-else", check=False,
+    )
+    assert wrong_owner.returncode == 2
+    assert "DIRTY_WORKTREE" in wrong_owner.stderr
+    assert target.exists()
+
+    forced = json.loads(
+        lifecycle(repo, "retire", "--path", str(target), "--force-owner", "ember-cli-verify").stdout
+    )
+    assert forced["status"] == "RETIRED"
+    assert forced["forced"] is True
+    assert not target.exists()
+
+
+def test_force_owner_does_not_weaken_a_clean_retire(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    target = tmp_path / "clean-wt"
+    lifecycle(
+        repo, "create", "--path", str(target), "--detach",
+        "--owner", "ember-cli-verify", "--purpose", "p", "--expires", "2999-01-01",
+    )
+
+    payload = json.loads(
+        lifecycle(repo, "retire", "--path", str(target), "--force-owner", "ember-cli-verify").stdout
+    )
+    # Nothing was dirty, so nothing was forced -- force is a fallback, not a mode.
+    assert payload["forced"] is False
+
+
+# ---------------------------------------------------------------------------
 # sweep-time deregistration: stale registrations must fail mechanically (#1366)
 # ---------------------------------------------------------------------------
 
@@ -1320,3 +1448,111 @@ def test_strict_probe_is_the_census_probe(tmp_path: Path) -> None:
                     commands = ast.literal_eval(statement.value)
     assert commands is not None, "census._git_material_paths no longer defines `commands`"
     assert tuple(commands) == module.CENSUS_MATERIAL_PROBES
+
+
+# ---------------------------------------------------------------------------
+# --detach (#1371) meets the strict registry inventory (#1366)
+# ---------------------------------------------------------------------------
+
+
+def _detached(repo: Path, tmp_path: Path, name: str, owner: str = "ember-cli-verify") -> Path:
+    path = tmp_path / name
+    lifecycle(
+        repo, "create",
+        "--path", str(path),
+        "--detach",
+        "--owner", owner,
+        "--purpose", f"detached-{name}",
+        "--expires", "2999-01-01",
+    )
+    return path
+
+
+def test_strict_audit_is_green_on_a_healthy_detached_worktree(tmp_path: Path) -> None:
+    """A detached worktree is a legitimate registration, not a contradiction.
+
+    The strict inventory probes every managed row with the census's own git commands
+    and reports each finding with the row's `branch`. A detached row has no branch,
+    which is the one shape that did not exist when the inventory was written -- so the
+    union of the two features is only sound if a healthy detached row reads as PASS
+    rather than as a stale or unscannable registration.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    _detached(repo, tmp_path, "detached-live")
+
+    result = strict(repo)
+
+    assert result.returncode == 0
+    assert json.loads(result.stdout)["status"] == "PASS"
+    assert contradictions_of(result) == []
+
+
+def test_strict_audit_reports_a_stale_detached_row_with_a_null_branch(tmp_path: Path) -> None:
+    """And when a detached row DOES go stale, it is reported like any other.
+
+    The finding carries `branch: null` -- the honest answer for a detached checkout --
+    and the printed cure still clears it.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    gone = _detached(repo, tmp_path, "detached-doomed")
+    shutil.rmtree(gone)
+
+    result = strict(repo)
+    findings = [item for item in contradictions_of(result) if item["path"].endswith("detached-doomed")]
+
+    assert result.returncode != 0
+    assert len(findings) == 1
+    assert findings[0]["code"] == "stale_registration"
+    assert findings[0]["severity"] == "error"
+    assert findings[0]["branch"] is None
+
+    lifecycle(repo, "reconcile", "--path", str(gone))
+    assert strict(repo).returncode == 0
+
+
+def test_retiring_a_detached_row_tombstones_it_as_detached(tmp_path: Path) -> None:
+    """`branch: null` alone cannot distinguish "detached" from "unknown", so the
+    tombstone records the flag. Without it the custody log loses the very property
+    the certification consumers require."""
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    target = _detached(repo, tmp_path, "detached-retired")
+
+    payload = json.loads(
+        lifecycle(repo, "retire", "--path", str(target), "--reason", "certification finished").stdout
+    )
+    tombstone = read_state(repo)["retired"][path_key_of(target)]
+
+    assert payload["status"] == "RETIRED"
+    assert payload["archive_ref"], "a detached head must be archived before its row goes"
+    assert tombstone["verb"] == "retire"
+    assert tombstone["detached"] is True
+    assert tombstone["branch"] is None
+    assert tombstone["reason"] == "certification finished"
+
+
+def test_a_forced_retirement_says_so_on_its_own_tombstone(tmp_path: Path) -> None:
+    """Forcing discards uncommitted bytes. That is the one retirement whose stated
+    reason is incomplete on its own, so the record discloses the force itself."""
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    target = _detached(repo, tmp_path, "detached-dirty")
+    (target / "scratch.bin").write_text("interrupted leg residue", encoding="utf-8")
+
+    payload = json.loads(
+        lifecycle(
+            repo, "retire",
+            "--path", str(target),
+            "--reason", "lane killed mid-run",
+            "--force-owner", "ember-cli-verify",
+        ).stdout
+    )
+    tombstone = read_state(repo)["retired"][path_key_of(target)]
+
+    assert payload["forced"] is True
+    assert tombstone["reason"].startswith("lane killed mid-run")
+    assert "forced" in tombstone["reason"]
+    assert "ember-cli-verify" in tombstone["reason"]
+    assert strict(repo).returncode == 0, "a forced retirement must leave no removal intent"
