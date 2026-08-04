@@ -4,18 +4,35 @@
 
 // commands/verify-training.test.ts — unit tests for the /verify-training command.
 //
-// runProcess/readReceipt are injected so these tests never spawn the real ember-lab binary
-// or touch the filesystem; the Rust implementation itself is covered separately in
+// runProcess/readReceipt are injected so most of these tests never spawn the real ember-lab
+// binary or touch the filesystem; the Rust implementation itself is covered separately in
 // runtime/ember-lab's own test suite (cargo test), including the byte-parity golden fixture.
+//
+// ONE exception, load-bearing (rev-1400 finding): "still reads and renders the receipt on a
+// genuine completed-red run" drives the REAL compiled ember-lab.exe through a REAL FAIL case
+// (a certificate with a deliberately wrong closure_sha256/public_master_sha) instead of
+// fabricating an error object by hand. The original version of this test hand-built an Error
+// whose .message matched a regex the production code used to classify a completed-red run --
+// but Node's real child_process rejection carries the exit code as a NUMBER on `.code`, and
+// its real .message is just "Command failed: <cmd>\n", which never matched that regex. The
+// hand-fabricated test therefore passed while every genuine FAIL in production rendered as an
+// infra crash. Driving the real binary is the only way this shape of bug cannot recur here:
+// the test's error object is whatever Node's child_process module actually produces, not a
+// guess at its shape.
 
 import { describe, it, expect } from "bun:test";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import {
   createVerifyTrainingCommand,
   resolveEmberLabBinary,
   renderVerifyTrainingResult,
 } from "./verify-training.ts";
 import type { CommandContext } from "../types/command-types.ts";
+
+// tools/ember-cli/src/commands/ -> tools/ember-cli/src -> tools/ember-cli -> tools -> repo root
+const REPO_ROOT = resolve(import.meta.dir, "..", "..", "..", "..");
 
 const mockCtx: CommandContext = { sessionId: "test-session", mode: "test", cwd: "/repo" };
 
@@ -157,7 +174,12 @@ describe("createVerifyTrainingCommand", () => {
     expect(result && "exitCode" in result ? result.exitCode : undefined).toBe(1);
   });
 
-  it("still reads and renders the receipt when ember-lab exits 1 for a completed red run", async () => {
+  it("classifies a completed-red run by the NUMERIC .code Node's child_process actually attaches, never by message text", async () => {
+    // Node's real rejection for a nonzero exit carries `code` as a number and a message of
+    // just "Command failed: <cmd>\n" -- never the strings "code: 1" or "exit code 1" the
+    // pre-fix classifier regex looked for. This mock is honest about that shape (numeric
+    // .code, unrelated message text) specifically so it cannot pass the way the old
+    // message-regex classifier's own hand-fabricated test used to.
     const redReceipt = {
       ...PASS_RECEIPT,
       ok: false,
@@ -166,8 +188,7 @@ describe("createVerifyTrainingCommand", () => {
     const command = createVerifyTrainingCommand({
       repoRoot: "/repo",
       runProcess: async () => {
-        const error = new Error("Command failed with exit code 1: ember-lab verify-training ...");
-        throw error;
+        throw Object.assign(new Error("Command failed: ember-lab verify-training ...\n"), { code: 1 });
       },
       readReceipt: () => redReceipt as any,
     });
@@ -175,6 +196,38 @@ describe("createVerifyTrainingCommand", () => {
     expect(result && "message" in result ? result.message : "").toContain("verify-training: FAIL");
     expect(result && "exitCode" in result ? result.exitCode : undefined).toBe(1);
   });
+
+  it("drives the REAL compiled ember-lab.exe through a genuine completed-red run (rev-1400 regression test)", async () => {
+    // No mocks at all below this line except readReceipt's path is whatever the command
+    // computes -- this is the actual binary, the actual repo tree, an actual subprocess exit.
+    const scratchDir = mkdtempSync(join(tmpdir(), "verify-training-red-run-"));
+    const wrongCertificatePath = join(scratchDir, "wrong-certificate.json");
+    writeFileSync(
+      wrongCertificatePath,
+      JSON.stringify({
+        // Deliberately wrong on both fields the certificate check binds: neither will match
+        // the live closure hash nor be an ancestor of HEAD, so ember-lab genuinely completes
+        // with ok=false and exits 1 -- not a crash, a real red verdict.
+        closure_sha256: "0".repeat(64),
+        public_master_sha: "0".repeat(40),
+      }),
+    );
+
+    const command = createVerifyTrainingCommand({ repoRoot: REPO_ROOT });
+    const result = await command.execute(`--certificate ${wrongCertificatePath}`, {
+      sessionId: "real-binary-test",
+      mode: "test",
+      cwd: REPO_ROOT,
+    });
+
+    rmSync(scratchDir, { recursive: true, force: true });
+
+    const message = result && "message" in result ? result.message : "";
+    expect(message).toContain("verify-training: FAIL");
+    expect(message).toContain("closure_sha256_matches=false");
+    expect(message).toContain("pin_is_ancestor=false");
+    expect(result && "exitCode" in result ? result.exitCode : undefined).toBe(1);
+  }, 30_000);
 
   it("reports an infra error (never a fabricated receipt) when the process cannot start at all", async () => {
     const command = createVerifyTrainingCommand({

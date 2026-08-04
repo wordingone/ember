@@ -169,10 +169,20 @@ export function createVerifyTrainingCommand(deps: VerifyTrainingCommandDeps = {}
         // receipt still exists and is the thing to render, never swallowed as a bare
         // subprocess failure. Any other failure (ENOENT, timeout, crash) has no receipt to
         // read and is reported as an infra error.
-        const message = err instanceof Error ? err.message : String(err);
-        const looksLikeCompletedRedRun =
-          /\bcode:\s*1\b/.test(message) || /exit code 1/i.test(message);
+        //
+        // `code` here is the NUMERIC exit code Node's child_process attaches to the
+        // rejected error object -- never a string to pattern-match. Node's real message for
+        // a nonzero exit is just "Command failed: <cmd>\n"; it never contains the literal
+        // text "code: 1" or "exit code 1", so a message-regex classifier here silently
+        // never matches and every genuine FAIL used to render as an infra crash instead of
+        // showing the receipt (rev-1400 finding, reproduced by driving the real compiled
+        // binary -- see verify-training.test.ts).
+        const code = typeof err === "object" && err !== null && "code" in err
+          ? (err as { code?: unknown }).code
+          : undefined;
+        const looksLikeCompletedRedRun = code === 1;
         if (!looksLikeCompletedRedRun) {
+          const message = err instanceof Error ? err.message : String(err);
           return {
             type: "message" as const,
             message: `error: ember-lab verify-training could not run: ${message}`,
