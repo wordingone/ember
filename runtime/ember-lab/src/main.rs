@@ -2,7 +2,10 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-use ember_lab::{rpc::serve_named_pipe, Daemon, MAX_DISPATCH_MANIFEST_BYTES};
+use ember_lab::{
+    ember_lab_source_hash, hash_file, rpc::serve_named_pipe, training_verify, Daemon,
+    MAX_DISPATCH_MANIFEST_BYTES,
+};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::fs::OpenOptions;
@@ -11,17 +14,51 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 fn usage() -> &'static str {
-    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>"
+    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]"
 }
 
 enum Command {
-    Serve { db: PathBuf, pipe: String },
-    Dispatch { pipe: String, manifest: PathBuf },
+    Serve {
+        db: PathBuf,
+        pipe: String,
+    },
+    Dispatch {
+        pipe: String,
+        manifest: PathBuf,
+    },
+    VerifyTraining {
+        root: PathBuf,
+        receipt: PathBuf,
+        certificate: Option<PathBuf>,
+    },
 }
 
 fn parse_args() -> Result<Command, String> {
     let mut args = std::env::args().skip(1);
     let command = args.next().ok_or_else(|| usage().to_string())?;
+
+    if command == "verify-training" {
+        let mut root = None;
+        let mut receipt = None;
+        let mut certificate = None;
+        while let Some(flag) = args.next() {
+            let value = args
+                .next()
+                .ok_or_else(|| format!("missing value for {flag}\n{}", usage()))?;
+            match flag.as_str() {
+                "--root" => root = Some(PathBuf::from(value)),
+                "--receipt" => receipt = Some(PathBuf::from(value)),
+                "--certificate" => certificate = Some(PathBuf::from(value)),
+                _ => return Err(format!("unknown argument {flag}\n{}", usage())),
+            }
+        }
+        return Ok(Command::VerifyTraining {
+            root: root.ok_or_else(|| format!("missing --root\n{}", usage()))?,
+            receipt: receipt.ok_or_else(|| format!("missing --receipt\n{}", usage()))?,
+            certificate,
+        });
+    }
+
     let mut db = None;
     let mut pipe = None;
     let mut manifest = None;
@@ -49,6 +86,26 @@ fn parse_args() -> Result<Command, String> {
         "serve" | "dispatch" => Err(format!("arguments do not match {command}\n{}", usage())),
         _ => Err(format!("unknown command {command}\n{}", usage())),
     }
+}
+
+/// `verify-training`: synchronous, GitHub-free check of exactly the training dependency
+/// closure (#1400). Never touches the daemon/named-pipe surface -- this is a stateless,
+/// seconds-scale check with no reason to require a resident `ember-lab serve` process.
+fn run_verify_training(
+    root: &Path,
+    receipt_path: &Path,
+    certificate: Option<&Path>,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let ember_lab_binary_sha256 = hash_file(&std::env::current_exe()?)?;
+    let ember_lab_source_sha256 = ember_lab_source_hash();
+    let outcome = training_verify::run(
+        root,
+        certificate,
+        &ember_lab_binary_sha256,
+        &ember_lab_source_sha256,
+    )?;
+    training_verify::write_receipt(receipt_path, &outcome.receipt)?;
+    Ok(outcome.ok)
 }
 
 fn dispatch(pipe: &str, manifest: &Path) -> Result<Value, Box<dyn std::error::Error>> {
@@ -103,6 +160,27 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         Command::Dispatch { pipe, manifest } => {
             println!("{}", serde_json::to_string(&dispatch(&pipe, &manifest)?)?);
+        }
+        Command::VerifyTraining {
+            root,
+            receipt,
+            certificate,
+        } => {
+            let ok = run_verify_training(&root, &receipt, certificate.as_deref())?;
+            println!(
+                "verify-training: {} -- receipt written to {}",
+                if ok { "PASS" } else { "FAIL" },
+                receipt.display()
+            );
+            if !ok {
+                // Mirrors scripts/training_closure.py's own CLI convention: a completed-but-
+                // red run is exit 1, distinct from the process::exit(1) `main()` already
+                // takes on an infra-level Err from run_verify_training above (a malformed
+                // manifest, unreadable file, etc.) -- both currently read as exit 1 to the
+                // shell, so a caller that needs to tell them apart reads the receipt's `ok`
+                // field, not the exit code alone.
+                std::process::exit(1);
+            }
         }
     }
     Ok(())
