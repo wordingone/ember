@@ -10,6 +10,11 @@
 // registry-derived model, using the same visual affordance the run controls established:
 // green = available, gray = unavailable, inverse = hovered, `[...]` = clickable.
 //
+// Since #1399 this pane is mounted INSIDE the live-run pane, directly under those four run
+// controls, and its buttons are captioned group blocks (`launch` / `inspect` / `govern` / `more`)
+// with plain labels — `[verify]`, not `[/verify]`. It renders wherever it is mounted; the choice
+// of home belongs to components/operator-surface-pane.ts, and nothing here assumes one.
+//
 // Two invariants this component exists to hold:
 //
 //  1. It never enumerates commands itself. It receives `RegistryCommand[]` and renders whatever
@@ -31,7 +36,10 @@ import {
 } from "../services/command-buttons.ts";
 
 export interface CommandBarPaneProps {
-  /** The live registry. Rendered as-is; this component never filters or reorders it. */
+  /** The live registry. Every entry gets a button; this component never FILTERS it. Since #1399
+   *  the buttons are laid out in group order rather than raw registry order — a presentation
+   *  regrouping applied by `groupCommandButtons`, under which every command still appears exactly
+   *  once, including commands no group claims. */
   commands: readonly RegistryCommand[];
   /** Total columns the bar may occupy. */
   width: number;
@@ -56,14 +64,18 @@ export interface CommandBarPaneProps {
 export const DEFAULT_COMMAND_BAR_MAX_ROWS = 2;
 
 /**
- * Row budget for a terminal `rows` tall. The bar is chrome competing with the transcript, so it
- * only widens its footprint when there is genuine height to spend, and never takes more than one
- * row on a short terminal.
+ * Row budget for a terminal `rows` tall.
+ *
+ * Raised at every tier by #1399: the bar no longer competes with the TRANSCRIPT — it lives in the
+ * live-run pane, where it competes with telemetry charts that already disclose their own hidden
+ * count and shrink gracefully. It also now spends a row per group caption, so the pre-#1399
+ * budget of 1–3 rows would have turned a four-group layout into pure paging at every size.
  */
 export function commandBarMaxRows(terminalRows: number): number {
-  if (terminalRows >= 40) return 3;
-  if (terminalRows >= 24) return DEFAULT_COMMAND_BAR_MAX_ROWS;
-  return 1;
+  if (terminalRows >= 40) return 6;
+  if (terminalRows >= 30) return 5;
+  if (terminalRows >= 24) return 4;
+  return DEFAULT_COMMAND_BAR_MAX_ROWS;
 }
 
 export function CommandBarPane(props: CommandBarPaneProps): React.ReactElement | null {
@@ -84,6 +96,19 @@ export function CommandBarPane(props: CommandBarPaneProps): React.ReactElement |
     cell: (typeof page.rows)[number][number],
     key: string,
   ): React.ReactElement => {
+    if (cell.kind === "group") {
+      // A caption, deliberately NOT a click target: it names the group, and giving it a handler
+      // would make a third thing that looks clickable and dispatches nothing.
+      return React.createElement(
+        Box,
+        { key, flexShrink: 0, paddingRight: 1 },
+        React.createElement(
+          Text,
+          { dimColor: true, bold: true, wrap: "truncate-end" },
+          cell.label,
+        ),
+      );
+    }
     if (cell.kind === "overflow") {
       // The pager is a BUTTON, not a caption. Clicking it advances a page and wraps at the end,
       // so every command the bar cannot show at this width is still a bounded number of clicks

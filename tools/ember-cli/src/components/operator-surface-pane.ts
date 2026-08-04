@@ -15,6 +15,14 @@ import {
   type ActivityFeedLine,
 } from "./activity-feed-pane.ts";
 import { renderChart, sparklineRow } from "../ink/chart.ts";
+import { CommandBarPane, DEFAULT_COMMAND_BAR_MAX_ROWS } from "./command-bar-pane.ts";
+import {
+  buildCommandButtons,
+  commandBarRowCount,
+  type CommandButton,
+  type CommandButtonActivation,
+} from "../services/command-buttons.ts";
+import type { RegistryCommand } from "../types/command-types.ts";
 import { HOST_METRIC_IDS, type HostMetricId, type HostMetricSeries, type HostTelemetrySnapshot } from "../services/host-telemetry-poller.ts";
 
 export interface OperatorSourceIdentity {
@@ -718,6 +726,22 @@ export interface OperatorSurfacePaneProps extends OperatorSurfaceInput {
   /** Reason surfaced when a disabled control's accelerator or activation was attempted (R2b
    *  acceptance row 7) — silently doing nothing is the exact failure R2 was filed for. */
   disabledActionReason?: string;
+
+  // -------------------------------------------------------------------------
+  // #1399 — the command buttons live HERE, with the run controls
+  // -------------------------------------------------------------------------
+  /** The live command registry. Present -> the command bar renders directly under the run
+   *  controls; absent -> the pane is exactly what it was before #1399, which is what keeps every
+   *  existing mount of this component (and its tests) meaningful. */
+  commands?: readonly RegistryCommand[];
+  /** Row budget for the command bar, from `commandBarMaxRows(terminalRows)`. */
+  commandBarMaxRows?: number;
+  hoveredCommand?: string;
+  onHoverCommand?: (name: string | undefined) => void;
+  onCommandActivate?: (activation: CommandButtonActivation, button: CommandButton) => void;
+  commandPage?: number;
+  onCommandPageChange?: (page: number) => void;
+  commandNotice?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -1047,6 +1071,14 @@ export function OperatorSurfacePane({
   onControl,
   focusedControlIndex,
   disabledActionReason,
+  commands,
+  commandBarMaxRows,
+  hoveredCommand,
+  onHoverCommand,
+  onCommandActivate,
+  commandPage,
+  onCommandPageChange,
+  commandNotice,
   ...input
 }: OperatorSurfacePaneProps): React.ReactElement {
   const terminalWidth = finiteNumber(terminalColumns) ? terminalColumns : 1727;
@@ -1131,9 +1163,12 @@ export function OperatorSurfacePane({
         ),
       );
 
-  // Reserve exact rows for borders, status, controls, provenance, and activity. The remaining
-  // budget belongs exclusively to whole bounded chart cards; hidden cards are disclosed rather
-  // than relying on Ink to collapse arbitrary middle rows.
+  // #1399: the command buttons render HERE, immediately under the run controls, because that is
+  // where the operator looks for a control. Two things make the two groups read as distinct
+  // blocks rather than one long bracket run: the run controls carry an UPPERCASE label set under
+  // their own `run control` caption, and every command group opens with its own dim caption
+  // (`launch`, `inspect`, `govern`, `more`) supplied by the bar itself.
+  const commandButtons = commands ? buildCommandButtons(commands) : [];
   const disabledReasonLines = disabledActionReason
     ? [boundedSurfaceLine(`${disabledActionReason}`, innerWidth)]
     : [];
@@ -1141,7 +1176,62 @@ export function OperatorSurfacePane({
   // one intentionally blank row. Counting only compactAgentLines.length allowed Yoga to reclaim
   // the RUNNING/IDLE status row whenever the feed was empty.
   const activityViewportRows = 2;
-  const fixedChromeRows = 2 + 1 + controlRows.length + disabledReasonLines.length + compactMetrics.length + 1 + activityViewportRows;
+  // Chrome this pane owes before the command bar asks for anything: borders, status, controls,
+  // any disabled-action reason, metrics, provenance, activity.
+  const baseChromeRows = 2 + 1 + controlRows.length + disabledReasonLines.length
+    + compactMetrics.length + 1 + activityViewportRows;
+  // #1399 review: the bar must never be able to eat the graph budget whole. The rows it may spend
+  // are capped so that ONE WHOLE CHART CARD still fits — the legibility bar is "a card survives at
+  // every supported size", and leaving that to arithmetic that happens to work out at today's
+  // sizes is how it silently stops being true at tomorrow's. Rows the cap takes away are not rows
+  // of commands lost: the bar PAGES, so a tighter budget means more pager clicks and never a
+  // command without a button (#1370). The bar keeps a one-row floor of its own for the same
+  // reason — a pane too short for both still owes the operator a reachable command surface, and
+  // the graph side already discloses its own shortfall as "… N more charts".
+  // MIN_HEIGHT + 1, not MIN_HEIGHT: `operatorGraphCardLayout` takes a row for its own
+  // hidden-card disclosure before it divides the rest into cards, so a budget of exactly one
+  // card's height yields ZERO cards and a lone "… N more charts" row. The floor has to buy what a
+  // visible card actually costs — the card plus the count beside it — or it buys nothing.
+  const graphFloorRows = OPERATOR_GRAPH_CARD_MIN_HEIGHT + 1;
+  const commandBarCeiling = Math.max(0, effectiveHeight - baseChromeRows - graphFloorRows);
+  // The caption is the first thing to go when rows are that scarce: it names a group the operator
+  // can already see, where a button row IS the surface.
+  const controlsCaption = commandButtons.length > 0 && commandBarCeiling >= 2 ? "run control" : undefined;
+  const commandRowBudget = Math.max(
+    1,
+    Math.min(
+      commandBarMaxRows ?? DEFAULT_COMMAND_BAR_MAX_ROWS,
+      commandBarCeiling - (controlsCaption ? 1 : 0),
+    ),
+  );
+  const commandBarRows = commandButtons.length === 0
+    ? 0
+    : commandBarRowCount(
+        commandButtons,
+        innerWidth,
+        commandRowBudget,
+        commandPage ?? 0,
+        commandNotice !== undefined,
+      );
+  const commandBarElement = commandButtons.length === 0
+    ? null
+    : React.createElement(CommandBarPane, {
+        key: "command-bar",
+        commands: commands!,
+        width: innerWidth,
+        maxRows: commandRowBudget,
+        ...(hoveredCommand !== undefined ? { hoveredCommand } : {}),
+        ...(onHoverCommand ? { onHoverCommand } : {}),
+        ...(onCommandActivate ? { onActivate: onCommandActivate } : {}),
+        page: commandPage ?? 0,
+        ...(onCommandPageChange ? { onPageChange: onCommandPageChange } : {}),
+        ...(commandNotice !== undefined ? { notice: commandNotice } : {}),
+      });
+
+  // Reserve exact rows for borders, status, controls, the command bar, provenance, and activity.
+  // The remaining budget belongs exclusively to whole bounded chart cards; hidden cards are
+  // disclosed rather than relying on Ink to collapse arbitrary middle rows.
+  const fixedChromeRows = baseChromeRows + (controlsCaption ? 1 : 0) + commandBarRows;
   const graphRowBudget = effectiveHeight - fixedChromeRows;
   // Card height responds only within the tested three-to-five-row legibility range. Constrained
   // panes retain deterministic leading cards and one explicit hidden-card count.
@@ -1163,7 +1253,13 @@ export function OperatorSurfacePane({
       paddingX: 1,
     },
     React.createElement(Box, { key: "status-row", height: 1, flexShrink: 0 }, React.createElement(Text, { color: statusColor, bold: true, wrap: "truncate-end" }, snapshot.status)),
+    controlsCaption
+      ? React.createElement(Box, { key: "controls-caption", height: 1, flexShrink: 0 },
+          React.createElement(Text, { dimColor: true, bold: true, wrap: "truncate-end" },
+            boundedSurfaceLine(controlsCaption, innerWidth)))
+      : null,
     controlsElement,
+    commandBarElement,
     ...disabledReasonLines.map((line) => React.createElement(Box, { key: `disabled-reason-${line}`, height: 1, flexShrink: 0 }, React.createElement(Text, { color: "yellow", wrap: "truncate-end" }, line))),
     ...compactMetrics.map((metric) => React.createElement(Box, { key: metric, height: 1, flexShrink: 0 }, React.createElement(Text, { wrap: "truncate-end" }, metric))),
     React.createElement(Box, { key: "source-row", height: 1, flexShrink: 0 }, React.createElement(Text, { dimColor: true, wrap: "truncate-end" }, sourceLineText)),

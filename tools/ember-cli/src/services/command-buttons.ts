@@ -52,9 +52,17 @@ export type CommandButtonActivation =
   | { readonly kind: "prefill"; readonly text: string; readonly hint?: string }
   | { readonly kind: "rejected"; readonly reason: string };
 
-/** Button-shaped label, matching the operator controls' `[START]`-style affordance. */
+/**
+ * Button-shaped label, matching the operator controls' `[START]`-style affordance.
+ *
+ * The slash is NOT part of the label (#1399): the operator reads a control surface, and a control
+ * reading `[/verify]` advertises its own keyboard spelling instead of naming what it does. What a
+ * click MEANS is built independently in `commandButtonActivation` from `button.name`, so the
+ * dispatched text is `/verify` whatever this function renders — dropping the slash here cannot
+ * silently change what any button runs.
+ */
 export function commandButtonLabel(name: string): string {
-  return `[/${name}]`;
+  return `[${name}]`;
 }
 
 const DEFAULT_DISABLED_REASON = "the command reports itself unavailable in this context";
@@ -121,20 +129,107 @@ export function commandButtonActivation(button: CommandButton): CommandButtonAct
 }
 
 // ---------------------------------------------------------------------------
+// Grouping (#1399)
+// ---------------------------------------------------------------------------
+
+/**
+ * The grouping logic, stated (issue #1399 acceptance 3): commands are grouped by WHAT THE
+ * OPERATOR IS DOING TO THE WORK, which is the same axis the run controls already sit on.
+ *
+ *  - `launch`  — puts work in flight or qualifies it: /train, /finetune, /verify, /benchmark.
+ *    These are the commands that sit conceptually next to [START]: they begin something.
+ *  - `inspect` — read the state of the system without changing it: /watch, /model, /custody,
+ *    /spine, /observatory, /cockpit.
+ *  - `govern`  — change what the system is BOUND to (identity, seat, objective): /admit,
+ *    /designate, /goal. These are the commands that alter authority rather than run anything.
+ *  - `more`    — the catch-all, and the reason grouping does not reintroduce the second-list
+ *    failure #1370 killed. Every command that matches no group above lands here and still gets a
+ *    button, so a newly registered command (a skill, a plugin, an MCP command, /resume) is
+ *    grouped without anyone editing this file. Membership below is a PRESENTATION hint layered
+ *    over the registry, never a gate on which commands exist.
+ *
+ * Note the deliberate separation of `/resume` (session resume, lands in `more`) from the run
+ * control `[RESUME]`: putting a lowercase `[resume]` inside the run-lifecycle group directly
+ * under `[RESUME]` would read as two spellings of one control.
+ */
+export type CommandButtonGroupId = "launch" | "inspect" | "govern" | "more";
+
+export interface CommandButtonGroupDef {
+  readonly id: CommandButtonGroupId;
+  /** Rendered caption at the head of the group's first row. */
+  readonly caption: string;
+  /** Names in this group. Empty means "everything not claimed above" (the catch-all). */
+  readonly members: readonly string[];
+}
+
+export const COMMAND_BUTTON_GROUPS: readonly CommandButtonGroupDef[] = [
+  { id: "launch", caption: "launch", members: ["train", "finetune", "verify", "benchmark"] },
+  { id: "inspect", caption: "inspect", members: ["watch", "model", "custody", "spine", "observatory", "cockpit"] },
+  { id: "govern", caption: "govern", members: ["admit", "designate", "goal"] },
+  { id: "more", caption: "more", members: [] },
+];
+
+/** The group a command name belongs to. Total by construction: the last group is the catch-all. */
+export function commandButtonGroupId(name: string): CommandButtonGroupId {
+  for (const group of COMMAND_BUTTON_GROUPS) {
+    if (group.members.includes(name)) return group.id;
+  }
+  return COMMAND_BUTTON_GROUPS[COMMAND_BUTTON_GROUPS.length - 1]!.id;
+}
+
+export interface CommandButtonGroup {
+  readonly id: CommandButtonGroupId;
+  readonly caption: string;
+  readonly buttons: CommandButton[];
+}
+
+/**
+ * Partitions `buttons` into the groups above, in group order, each group holding its members in
+ * REGISTRY order. Empty groups are dropped — a caption with nothing under it is chrome that says
+ * nothing. Every input button appears in exactly one output group; nothing is filtered.
+ */
+export function groupCommandButtons(buttons: readonly CommandButton[]): CommandButtonGroup[] {
+  return COMMAND_BUTTON_GROUPS
+    .map((group) => ({
+      id: group.id,
+      caption: group.caption,
+      buttons: buttons.filter((button) => commandButtonGroupId(button.name) === group.id),
+    }))
+    .filter((group) => group.buttons.length > 0);
+}
+
+// ---------------------------------------------------------------------------
 // Width-bounded layout
 // ---------------------------------------------------------------------------
 
 /**
- * One rendered cell of the bar: a real button, or the pager.
+ * One rendered cell of the bar: a group caption, a real button, or the pager.
  *
  * The pager is a CELL, not a caption: it carries the count it is hiding so the component can
  * render it, and the component gives it a click handler that advances the page. An overflow
  * marker with no handler was the #1370 review's blocking finding — at 80x24 it made half the
  * registry mouse-unreachable, which is the exact keyboard-only state the issue exists to end.
+ *
+ * A `group` cell is the only cell that is NOT clickable: it is the caption that opens its group's
+ * first row, and it always starts a row (see `packCommandBarRows`) so the groups read as blocks
+ * rather than as one undifferentiated stream of brackets.
  */
 export type CommandBarCell =
+  | { readonly kind: "group"; readonly label: string; readonly group: CommandButtonGroupId }
   | { readonly kind: "button"; readonly label: string; readonly button: CommandButton }
   | { readonly kind: "overflow"; readonly label: string; readonly hiddenCount: number };
+
+/** Caption column width, so every group's buttons start at the same column. Spent only when the
+ *  pane can afford it; below this the caption takes exactly its own text and the buttons follow. */
+const GROUP_CAPTION_COLUMN = 8;
+const GROUP_CAPTION_MIN_WIDTH = 32;
+
+function groupCell(group: CommandButtonGroup, availableWidth: number): CommandBarCell {
+  const caption = availableWidth >= GROUP_CAPTION_MIN_WIDTH
+    ? group.caption.padEnd(GROUP_CAPTION_COLUMN, " ")
+    : group.caption;
+  return { kind: "group", label: caption, group: group.id };
+}
 
 export interface CommandBarLayout {
   readonly rows: CommandBarCell[][];
@@ -179,7 +274,10 @@ export function packCommandBarRows(
   for (const cell of cells) {
     const width = cellWidth(cell);
     const current = rows[rows.length - 1]!;
-    if (current.length > 0 && used + width > availableWidth) {
+    // A group caption ALWAYS opens a row (#1399). Letting it flow inline would put the caption
+    // for one group in the middle of the previous group's buttons, which is exactly the
+    // undifferentiated bracket stream the issue was filed about.
+    if (current.length > 0 && (cell.kind === "group" || used + width > availableWidth)) {
       rows.push([cell]);
       used = width;
     } else {
@@ -188,6 +286,15 @@ export function packCommandBarRows(
     }
   }
   return rows;
+}
+
+/** Drops a trailing row that is nothing but captions — a group header whose buttons all landed on
+ *  the next page is a row of chrome introducing nothing. */
+function dropDanglingCaptionRow(rows: CommandBarCell[][]): CommandBarCell[][] {
+  const last = rows[rows.length - 1];
+  return last && last.length > 0 && last.every((cell) => cell.kind === "group")
+    ? rows.slice(0, -1)
+    : rows;
 }
 
 /** One page of the bar: the rows to render, and which slice of the registry they cover. */
@@ -218,31 +325,53 @@ export function commandBarPages(
   maxRows: number,
 ): CommandBarPage[] {
   if (buttons.length === 0 || maxRows <= 0) return [];
-  const cells: CommandBarCell[] = buttons.map((button) => ({
-    kind: "button" as const,
-    label: button.label,
-    button,
-  }));
+  const groups = groupCommandButtons(buttons);
+  // Grouped order, flattened. Paging slices THIS, not the raw registry order, so a page is always
+  // a contiguous run of the grouped layout and every command still appears exactly once.
+  const flat = groups.flatMap((group) =>
+    group.buttons.map((button) => ({ button, group })),
+  );
+
+  // A one-row bar has nothing to group: the single row is one fragment of one group, and a caption
+  // on it would spend scarce columns saying so while pushing buttons onto a page they need not be
+  // on. Below two rows the bar reverts to exactly its pre-#1399 shape — plain labels, no captions.
+  const captionsAllowed = maxRows >= 2;
+
+  /** Cells for `flat[start .. start+shown)`, re-emitting the caption of whichever group the slice
+   *  opens in. Without the re-emit, a page starting mid-group would show captionless buttons. */
+  const sliceCells = (start: number, shown: number, pager?: CommandBarCell): CommandBarCell[] => {
+    const cells: CommandBarCell[] = [];
+    let currentGroup: CommandButtonGroupId | undefined;
+    for (let index = start; index < start + shown; index++) {
+      const entry = flat[index]!;
+      if (captionsAllowed && entry.group.id !== currentGroup) {
+        cells.push(groupCell(entry.group, availableWidth));
+        currentGroup = entry.group.id;
+      }
+      cells.push({ kind: "button", label: entry.button.label, button: entry.button });
+    }
+    if (pager) cells.push(pager);
+    return cells;
+  };
 
   // Fast path: the whole registry fits, so there is no pager and no paging.
-  const full = packCommandBarRows(cells, availableWidth);
+  const full = packCommandBarRows(sliceCells(0, flat.length), availableWidth);
   if (full.length <= maxRows) {
-    return [{ rows: full, startIndex: 0, count: cells.length, hiddenCount: 0 }];
+    return [{ rows: full, startIndex: 0, count: flat.length, hiddenCount: 0 }];
   }
 
   const pages: CommandBarPage[] = [];
   let start = 0;
-  while (start < cells.length) {
-    const remaining = cells.length - start;
+  while (start < flat.length) {
+    const remaining = flat.length - start;
     let count = 0;
     let rows: CommandBarCell[][] | undefined;
     // Caption first, glyph only if the caption cannot be afforded at this width.
     for (const compact of [false, true]) {
       for (let shown = remaining; shown >= 1; shown--) {
-        const hidden = cells.length - shown;
-        const candidate = packCommandBarRows(
-          [...cells.slice(start, start + shown), overflowCell(hidden, compact)],
-          availableWidth,
+        const hidden = flat.length - shown;
+        const candidate = dropDanglingCaptionRow(
+          packCommandBarRows(sliceCells(start, shown, overflowCell(hidden, compact)), availableWidth),
         );
         if (candidate.length <= maxRows) {
           count = shown;
@@ -258,14 +387,34 @@ export function commandBarPages(
       // is strictly better than a command with no button at all.
       count = 1;
       rows = packCommandBarRows(
-        [...cells.slice(start, start + 1), overflowCell(cells.length - 1, true)],
+        sliceCells(start, 1, overflowCell(flat.length - 1, true)),
         availableWidth,
       );
     }
-    pages.push({ rows, startIndex: start, count, hiddenCount: cells.length - count });
+    pages.push({ rows, startIndex: start, count, hiddenCount: flat.length - count });
     start += count;
   }
   return pages;
+}
+
+/**
+ * How many terminal rows the bar will actually occupy for this input — the number the enclosing
+ * pane must reserve before it hands the rest of its height to charts. Derived from the SAME
+ * `commandBarPages` call the component renders from, so the reservation and the render can never
+ * disagree about the bar's height (a pane that reserves fewer rows than the bar draws is how a
+ * chart silently loses its bottom line).
+ */
+export function commandBarRowCount(
+  buttons: readonly CommandButton[],
+  availableWidth: number,
+  maxRows: number,
+  pageIndex: number = 0,
+  hasNotice: boolean = false,
+): number {
+  const pages = commandBarPages(buttons, availableWidth, maxRows);
+  if (pages.length === 0) return 0;
+  const page = pages[resolveCommandBarPage(pageIndex, pages.length)]!;
+  return page.rows.length + (hasNotice ? 1 : 0);
 }
 
 /**

@@ -55,6 +55,26 @@ function findGlyph(lines: string[], needle: string): { col: number; row: number 
   return undefined;
 }
 
+/** The command bar's pager as it currently renders: the "+N more" caption, or the compact glyph
+ *  it degrades to at narrow widths. Returned as the exact on-screen text so the click lands on the
+ *  pager and not on the telemetry pane's own "... N more charts" caption, which shares the pane
+ *  with the bar since #1399. */
+function pagerNeedle(lines: string[]): string | undefined {
+  for (const line of lines) {
+    const match = /\+\d+ more/.exec(line);
+    if (match) return match[0];
+  }
+  return lines.some((line) => line.includes("›")) ? "›" : undefined;
+}
+
+/** Clicks whatever the pager reads as RIGHT NOW. Re-located on every hop on purpose: the caption
+ *  carries the count it is hiding, so it is "+9 more" on one page and "+11 more" on the next — a
+ *  needle captured once goes stale the moment the first click lands. */
+async function clickPager(harness: Harness): Promise<boolean> {
+  const needle = pagerNeedle(harness.lines());
+  return needle === undefined ? false : harness.click(needle);
+}
+
 /** One SGR left-button-press sequence for a zero-based (col, row) terminal cell. */
 function sgrLeftClick(col: number, row: number): string {
   return `\x1b[<0;${col + 1};${row + 1}M`;
@@ -147,7 +167,7 @@ describe("command-button click drives the real registered command", () => {
     startTelemetryWatch().stop();
     const harness = mountRepl();
     try {
-      expect(await harness.click("[/probeone]")).toBe(true);
+      expect(await harness.click("[probeone]")).toBe(true);
       const rendered = await harness.waitFor((l) => l.some((line) => line.includes("PROBEONE-EXECUTED")));
       expect(rendered).toBe(true);
       // The command really ran, once, with empty arguments — not a handler that fired into a void.
@@ -176,12 +196,15 @@ describe("command-button click drives the real registered command", () => {
     startTelemetryWatch().stop();
     const harness = mountRepl();
     try {
-      expect(await harness.click("[/needsargs]")).toBe(true);
+      expect(await harness.click("[needsargs]")).toBe(true);
       // The composer receives the prefix and the usage line is surfaced. The match deliberately
-      // EXCLUDES the button's own "[/needsargs]" label, which would otherwise satisfy a naive
+      // EXCLUDES the button's own "[needsargs]" label, which would otherwise satisfy a naive
       // substring search whether or not the composer was ever touched.
+      // The slash spelling now appears ONLY in the composer and the usage line — the button's own
+      // label lost it in #1399 — so a bare "/needsargs" match can no longer be satisfied by the
+      // button itself. The label exclusion is kept anyway: it costs nothing and states the intent.
       const composed = await harness.waitFor((l) =>
-        l.some((line) => line.includes("/needsargs") && !line.includes("[/needsargs]")),
+        l.some((line) => line.includes("/needsargs") && !line.includes("[needsargs]")),
       );
       expect(composed).toBe(true);
       const usageShown = await harness.waitFor((l) =>
@@ -220,7 +243,7 @@ describe("command-button click drives the real registered command", () => {
     startTelemetryWatch().stop();
     const harness = mountRepl();
     try {
-      expect(await harness.click("[/offlinecmd]")).toBe(true);
+      expect(await harness.click("[offlinecmd]")).toBe(true);
       const reasonShown = await harness.waitFor((l) =>
         l.some((line) => line.includes("/offlinecmd is not available")),
       );
@@ -250,12 +273,12 @@ describe("command-button click drives the real registered command", () => {
     const harness = mountRepl();
     try {
       // Type into the composer first, then click a button.
-      await harness.waitFor((l) => findGlyph(l, "[/probeone]") !== undefined);
+      await harness.waitFor((l) => findGlyph(l, "[probeone]") !== undefined);
       harness.stdin.emit("data", Buffer.from("halftyped"));
       const typed = await harness.waitFor((l) => l.some((line) => line.includes("halftyped")));
       expect(typed).toBe(true);
 
-      expect(await harness.click("[/probeone]")).toBe(true);
+      expect(await harness.click("[probeone]")).toBe(true);
       await flushRepl(20);
       await new Promise<void>((resolve) => setTimeout(resolve, 200));
 
@@ -296,27 +319,29 @@ describe("paging reaches the commands the bar has no room to show", () => {
     const harness = mountRepl(80, 24);
     try {
       // Find a command the first page genuinely cannot show — the review's exact failure mode.
-      await harness.waitFor((l) => findGlyph(l, "[/alphacmd]") !== undefined);
+      await harness.waitFor((l) => findGlyph(l, "[alphacmd]") !== undefined);
       const firstPage = harness.lines().join("\n");
-      const hidden = registry.map((c) => c.name).filter((name) => !firstPage.includes(`[/${name}]`));
+      const hidden = registry.map((c) => c.name).filter((name) => !firstPage.includes(`[${name}]`));
       expect(hidden.length).toBeGreaterThan(0);
 
-      // The pager is on screen, and it is a real click target rather than a caption.
-      const pagerLabel = firstPage.includes(" more") ? "more" : "›";
-      expect(await harness.click(pagerLabel)).toBe(true);
+      // The pager is on screen, and it is a real click target rather than a caption. Matched by
+      // its own "+N more" shape: since #1399 the bar shares the live-run pane with the charts'
+      // "... N more charts" caption, and a bare " more" search hits that caption instead.
+      expect(pagerNeedle(harness.lines())).toBeDefined();
+      expect(await clickPager(harness)).toBe(true);
 
       // Page forward until the hidden command has a button, then click THAT button and prove the
       // command really ran. Bounded by the registry size: paging that never arrives is a failure.
       let reached = false;
       for (let hop = 0; hop < registry.length && !reached; hop++) {
-        if (await harness.waitFor((l) => findGlyph(l, `[/${hidden[0]}]`) !== undefined, 4)) {
+        if (await harness.waitFor((l) => findGlyph(l, `[${hidden[0]}]`) !== undefined, 4)) {
           reached = true;
           break;
         }
-        await harness.click(pagerLabel);
+        await clickPager(harness);
       }
       expect(reached).toBe(true);
-      expect(await harness.click(`[/${hidden[0]}]`)).toBe(true);
+      expect(await harness.click(`[${hidden[0]}]`)).toBe(true);
       const ran = await harness.waitFor((l) =>
         l.some((line) => line.includes(`${hidden[0]!.toUpperCase()}-EXECUTED`)),
       );
@@ -334,16 +359,16 @@ describe("paging reaches the commands the bar has no room to show", () => {
     startTelemetryWatch().stop();
     const harness = mountRepl(40, 24);
     try {
-      await harness.waitFor((l) => findGlyph(l, "[/alphacmd]") !== undefined);
+      await harness.waitFor((l) => findGlyph(l, "[alphacmd]") !== undefined);
       const seen = new Set<string>();
-      const pagerLabel = harness.lines().join("\n").includes(" more") ? "more" : "›";
+      expect(pagerNeedle(harness.lines())).toBeDefined();
       // One full cycle of the pager must expose the whole registry; the loop is bounded so a
       // pager that silently stops advancing fails rather than hangs.
       for (let hop = 0; hop < registry.length * 2 && seen.size < registry.length; hop++) {
         for (const command of registry) {
-          if (findGlyph(harness.lines(), `[/${command.name}]`)) seen.add(command.name);
+          if (findGlyph(harness.lines(), `[${command.name}]`)) seen.add(command.name);
         }
-        await harness.click(pagerLabel);
+        await clickPager(harness);
         await harness.waitFor(() => true, 2);
       }
       expect([...seen].sort()).toEqual(registry.map((c) => c.name).sort());
@@ -368,7 +393,7 @@ describe("the notice row clears instead of going stale", () => {
     startTelemetryWatch().stop();
     const harness = mountRepl();
     try {
-      expect(await harness.click("[/offlinecmd]")).toBe(true);
+      expect(await harness.click("[offlinecmd]")).toBe(true);
       expect(await harness.waitFor((l) => l.some((line) => line.includes("is not available")))).toBe(true);
 
       // A single ordinary keystroke — no slash, so the palette never opens and cannot be what
@@ -398,7 +423,7 @@ describe("the notice row clears instead of going stale", () => {
     startTelemetryWatch().stop();
     const harness = mountRepl();
     try {
-      expect(await harness.click("[/needsargs]")).toBe(true);
+      expect(await harness.click("[needsargs]")).toBe(true);
       expect(await harness.waitFor((l) => l.some((line) => line.includes("--target <path>")))).toBe(true);
 
       // Submit the prefilled composer. Its trailing space closes the palette, so Enter really is
