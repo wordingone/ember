@@ -35,6 +35,11 @@ function readRunReceipt(jobDir: string): Record<string, unknown> {
 
 const PINNED_COMMIT = "a".repeat(40);
 
+/** One recorded subprocess invocation. `cwd` is captured too: the pipeline is supposed to
+ *  run every leg from repoRoot even while the leg READS the pinned worktree, and a mock
+ *  that silently drops the argument cannot catch a regression there. */
+type MockCall = { executable: string; args: string[]; cwd?: string };
+
 function envSet(name: string, value = `/path/${name}`): EnvBindingStatus {
   return { envVar: name, set: true, value };
 }
@@ -70,14 +75,18 @@ async function waitForSettled(timeoutMs = 2000): Promise<void> {
  *  call, and lets the caller supply the three original-pipeline leg behaviors. */
 function mockRunner(opts: {
   worktreePath: string;
-  calls: { executable: string; args: string[] }[];
+  calls: MockCall[];
   onGh?: (args: string[]) => Promise<VerifyProcessResult> | VerifyProcessResult;
   onIssueCensus?: (args: string[]) => Promise<VerifyProcessResult> | VerifyProcessResult;
   onVerifier?: (args: string[]) => Promise<VerifyProcessResult> | VerifyProcessResult;
   onRetire?: (args: string[]) => Promise<VerifyProcessResult> | VerifyProcessResult;
 }) {
-  return async (executable: string, args: string[]): Promise<VerifyProcessResult> => {
-    opts.calls.push({ executable, args });
+  return async (
+    executable: string,
+    args: string[],
+    cwd?: string,
+  ): Promise<VerifyProcessResult> => {
+    opts.calls.push({ executable, args, ...(cwd === undefined ? {} : { cwd }) });
     if (executable === "git" && args[0] === "rev-parse") {
       return { status: 0, stdout: `${PINNED_COMMIT}\n`, stderr: "" };
     }
@@ -116,7 +125,7 @@ describe("startVerifyRun", () => {
   it("creates a pinned managed worktree BEFORE any repo-scoped leg, then targets every repo-scoped leg at it (never repoRoot) -- #1371", async () => {
     const jobDir = tmpJobDir();
     const worktreePath = path.join(os.tmpdir(), "verify-wt-job-1");
-    const calls: { executable: string; args: string[] }[] = [];
+    const calls: MockCall[] = [];
 
     const runProcess = mockRunner({
       worktreePath,
@@ -185,7 +194,7 @@ describe("startVerifyRun", () => {
   it("omits --identity-manifest/--checkpoint-manifest/--model-config when those env vars are unset, never substituting a default", async () => {
     const jobDir = tmpJobDir();
     const worktreePath = path.join(os.tmpdir(), "verify-wt-job-2");
-    const calls: { executable: string; args: string[] }[] = [];
+    const calls: MockCall[] = [];
     let verifierArgs: string[] = [];
 
     const runProcess = mockRunner({
@@ -229,7 +238,7 @@ describe("startVerifyRun", () => {
   it("fails the job when gh issue-list exits non-zero, and never invokes the later legs -- but the worktree is still retired", async () => {
     const jobDir = tmpJobDir();
     const worktreePath = path.join(os.tmpdir(), "verify-wt-job-3");
-    const calls: { executable: string; args: string[] }[] = [];
+    const calls: MockCall[] = [];
 
     const runProcess = mockRunner({
       worktreePath,
@@ -264,7 +273,7 @@ describe("startVerifyRun", () => {
   it("fails the job when the verifier itself crashes (exit code outside {0,1}), and still retires the worktree", async () => {
     const jobDir = tmpJobDir();
     const worktreePath = path.join(os.tmpdir(), "verify-wt-job-4");
-    const calls: { executable: string; args: string[] }[] = [];
+    const calls: MockCall[] = [];
 
     const runProcess = mockRunner({
       worktreePath,
@@ -295,7 +304,7 @@ describe("startVerifyRun", () => {
   it("fails at phase preparing-worktree, before any repo-scoped leg runs, when the managed worktree cannot be created (e.g. WORKTREE_CEILING)", async () => {
     const jobDir = tmpJobDir();
     const worktreePath = path.join(os.tmpdir(), "verify-wt-job-5");
-    const calls: { executable: string; args: string[] }[] = [];
+    const calls: MockCall[] = [];
 
     const runProcess = async (executable: string, args: string[]): Promise<VerifyProcessResult> => {
       calls.push({ executable, args });
@@ -336,7 +345,7 @@ describe("startVerifyRun", () => {
   it("does not fail the run when worktree retirement itself fails -- discloses worktreeRetireError instead", async () => {
     const jobDir = tmpJobDir();
     const worktreePath = path.join(os.tmpdir(), "verify-wt-job-6");
-    const calls: { executable: string; args: string[] }[] = [];
+    const calls: MockCall[] = [];
 
     const runProcess = mockRunner({
       worktreePath,
@@ -393,7 +402,7 @@ describe("resolveVerifyTimeoutMs", () => {
   it("spends ONE run-wide budget across the legs rather than giving each leg the full timeout", async () => {
     const jobDir = tmpJobDir();
     const worktreePath = path.join(os.tmpdir(), "verify-wt-job-timeout-arg");
-    const calls: { executable: string; args: string[] }[] = [];
+    const calls: MockCall[] = [];
     const seenTimeouts: (number | undefined)[] = [];
     const inner = mockRunner({
       worktreePath,
@@ -424,6 +433,11 @@ describe("resolveVerifyTimeoutMs", () => {
     });
 
     await waitForSettled();
+    // Every leg runs FROM repoRoot (it is the pinned worktree the repo-scoped legs read,
+    // not the directory they run in), and the mock records the cwd it was actually
+    // handed rather than dropping the argument.
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls.every((c) => c.cwd === "/repo")).toBe(true);
     expect(seenTimeouts.length).toBeGreaterThan(1);
     const budget = 45 * 60_000;
     // Every leg is bounded by what is LEFT of the one budget...
@@ -443,11 +457,12 @@ describe("resolveVerifyTimeoutMs", () => {
 describe("tree reap on timeout", () => {
   it("kills the descendant TREE on Windows, not just the direct child (the orphaned census grandchild ran 84 min past its parent)", () => {
     const cmd = _buildTreeKillCommand(4242, "win32");
-    expect(cmd.executable).toBe("taskkill");
-    expect(cmd.args).toEqual(["/PID", "4242", "/T", "/F"]);
+    expect(cmd).not.toBeNull();
+    expect(cmd!.executable).toBe("taskkill");
+    expect(cmd!.args).toEqual(["/PID", "4242", "/T", "/F"]);
     // /T is the tree flag; without it the grandchild survives. Assert it explicitly so a
     // future edit cannot quietly drop it back to a single-process kill.
-    expect(cmd.args).toContain("/T");
+    expect(cmd!.args).toContain("/T");
   });
 
   it("uses no argv on posix -- legs are spawned detached and the whole process GROUP is signalled", () => {
@@ -480,7 +495,7 @@ describe("run receipt", () => {
   it("writes receipt.json ON TIMEOUT with ok:false, failure_kind timeout, phase, timings and reaped PIDs -- the 2026-08-04 run wrote nothing at all", async () => {
     const jobDir = tmpJobDir();
     const worktreePath = path.join(os.tmpdir(), "verify-wt-job-timeout");
-    const calls: { executable: string; args: string[] }[] = [];
+    const calls: MockCall[] = [];
 
     const runProcess = mockRunner({
       worktreePath,
@@ -560,7 +575,7 @@ describe("run receipt", () => {
   it("writes receipt.json on a GREEN run, carrying the verifier's leg vector and pointing at the verifier's own receipt", async () => {
     const jobDir = tmpJobDir();
     const worktreePath = path.join(os.tmpdir(), "verify-wt-job-green");
-    const calls: { executable: string; args: string[] }[] = [];
+    const calls: MockCall[] = [];
 
     const runProcess = mockRunner({
       worktreePath,
@@ -602,7 +617,7 @@ describe("run receipt", () => {
   it("writes receipt.json with ok:false and failure_kind verifier-not-ok on a RED but completed run", async () => {
     const jobDir = tmpJobDir();
     const worktreePath = path.join(os.tmpdir(), "verify-wt-job-red");
-    const calls: { executable: string; args: string[] }[] = [];
+    const calls: MockCall[] = [];
 
     const runProcess = mockRunner({
       worktreePath,
@@ -639,7 +654,7 @@ describe("run receipt", () => {
   it("writes receipt.json when an infra leg (gh) fails", async () => {
     const jobDir = tmpJobDir();
     const worktreePath = path.join(os.tmpdir(), "verify-wt-job-ghfail");
-    const calls: { executable: string; args: string[] }[] = [];
+    const calls: MockCall[] = [];
 
     startVerifyRun({
       repoRoot: "/repo",
@@ -674,7 +689,7 @@ describe("pinned worktree lifecycle", () => {
   it("creates the worktree DETACHED and never mints a branch -- the verifier refuses a branch-attached checkout", async () => {
     const jobDir = tmpJobDir();
     const worktreePath = path.join(os.tmpdir(), "verify-wt-detach");
-    const calls: { executable: string; args: string[] }[] = [];
+    const calls: MockCall[] = [];
 
     startVerifyRun({
       repoRoot: "/repo",
@@ -705,7 +720,7 @@ describe("pinned worktree lifecycle", () => {
 
   it("refuses a create that reports success WITHOUT detachment, rather than running a verification that could never go green", async () => {
     const jobDir = tmpJobDir();
-    const calls: { executable: string; args: string[] }[] = [];
+    const calls: MockCall[] = [];
 
     startVerifyRun({
       repoRoot: "/repo",
@@ -748,7 +763,7 @@ describe("pinned worktree lifecycle", () => {
     // exactly the partial-create shape (git worktree add ran, the state row never landed).
     const worktreeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "verify-wt-partial-"));
     fs.mkdirSync(path.join(worktreeRoot, "job-partial"), { recursive: true });
-    const calls: { executable: string; args: string[] }[] = [];
+    const calls: MockCall[] = [];
 
     startVerifyRun({
       repoRoot: "/repo",
@@ -779,7 +794,10 @@ describe("pinned worktree lifecycle", () => {
     expect(removal).toBeDefined();
     expect(removal!.args).toContain("--force");
     expect(removal!.args).toContain(path.join(worktreeRoot, "job-partial"));
-    expect(calls.some((c) => c.executable === "git" && c.args.includes("prune"))).toBe(true);
+    // ...and nothing repository-wide: `git worktree prune` would reap every
+    // missing-directory worktree record on the machine as a side effect of one create
+    // failure, and `remove --force` already cleared this worktree's own record.
+    expect(calls.some((c) => c.executable === "git" && c.args.includes("prune"))).toBe(false);
 
     const receipt = readRunReceipt(jobDir);
     expect(receipt["failure_kind"]).toBe("timeout");
@@ -791,7 +809,7 @@ describe("pinned worktree lifecycle", () => {
   it("escalates to an owner-scoped forced retire when a killed leg left the worktree dirty -- #1371 N3", async () => {
     const jobDir = tmpJobDir();
     const worktreePath = path.join(os.tmpdir(), "verify-wt-dirty-release");
-    const calls: { executable: string; args: string[] }[] = [];
+    const calls: MockCall[] = [];
 
     startVerifyRun({
       repoRoot: "/repo",

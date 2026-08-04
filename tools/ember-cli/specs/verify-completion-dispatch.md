@@ -104,11 +104,13 @@ implementation: `node:child_process.spawn`, buffered async, timeout-bounded at
    4. If the worktree was never REGISTERED — create was killed mid-`git worktree add`, so
       git knows about a worktree that has no managed row — `retire` would refuse it as
       `UNMANAGED_WORKTREE` forever and `audit` would report it as a violation for
-      everyone. That case is cleaned up with `git worktree remove --force` + `git worktree
-      prune` against the path this run intended to create, which is recorded in state
-      BEFORE the create leg spawns for exactly this reason. When the path does not exist
-      (create refused before touching the filesystem, e.g. `WORKTREE_CEILING`) nothing is
-      attempted.
+      everyone. That case is cleaned up with `git worktree remove --force` against the
+      path this run intended to create, which is recorded in state BEFORE the create leg
+      spawns for exactly this reason. When the path does not exist (create refused before
+      touching the filesystem, e.g. `WORKTREE_CEILING`) nothing is attempted. No
+      `git worktree prune` is run: it is repository-wide, so it would reap every
+      missing-directory worktree record on the machine as a side effect of one `/verify`
+      create failing, and `remove --force` already clears this worktree's own record.
 
    Release is best-effort throughout: a failure at any step is disclosed as
    `worktreeRetireError` on the job state, never escalated into a run failure (the run's

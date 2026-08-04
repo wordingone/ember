@@ -779,7 +779,10 @@ export function startVerifyRun(deps: VerifyPipelineDeps): VerifyJobState {
         });
         return;
       }
-      await runProcess(gitBin, ["worktree", "prune"], deps.repoRoot, RELEASE_GRACE_MS);
+      // Deliberately NO `git worktree prune` here: it is repository-wide, so it would
+      // reap every missing-directory worktree record on the machine as a side effect of
+      // one /verify create failing -- and it is redundant, because `worktree remove
+      // --force` already clears this worktree's own record.
     } catch (err) {
       if (_state?.jobId !== deps.jobId) return;
       _update(deps.jobId, {
