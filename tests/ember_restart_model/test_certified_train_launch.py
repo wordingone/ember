@@ -4,8 +4,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import importlib.util
+import io
 import json
 import pathlib
 import shutil
@@ -604,6 +606,63 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                 any(receipt["claim_scope"].values()),
                 "execution receipt must not claim capability or admission",
             )
+
+    def test_child_stdout_is_redirected_to_a_custody_log_not_inherited(
+        self,
+    ) -> None:
+        """Regression for #1408: the fixed runner must never inherit this
+        consumer's stdout. A noisy child (training-log lines before any JSON)
+        must not corrupt the consumer's own final stdout line, which the
+        cockpit parses as the certified-launch handshake."""
+        module = load_module()
+        calls: list[dict[str, object]] = []
+
+        def noisy_run(argv, **kwargs):
+            calls.append(kwargs)
+            child_stdout = kwargs.get("stdout")
+            self.assertIsNotNone(
+                child_stdout,
+                "child stdout must be redirected (not inherited) so it "
+                "cannot land in the consumer's own stdout stream",
+            )
+            child_stdout.write(b"epoch 1/10 loss=0.42\nepoch 2/10 loss=0.31\n")
+            child_stdout.flush()
+            self.assertEqual(
+                kwargs.get("stderr"),
+                subprocess.STDOUT,
+                "child stderr must be merged into the same redirected log",
+            )
+            return subprocess.CompletedProcess(argv, 0)
+
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with contextlib.redirect_stdout(io.StringIO()) as captured:
+                    exit_code = module.certify_and_execute(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                        run_process=noisy_run,
+                    )
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(len(calls), 1)
+            # The consumer itself printed nothing to real stdout during the
+            # child's run (main() prints its single JSON line separately) --
+            # the noisy child lines never touched this process's stdout.
+            self.assertEqual(captured.getvalue(), "")
+
+            execution_receipt = (
+                paths["custody_root"] / "runner-receipt-certified-launch.json"
+            )
+            receipt = json.loads(execution_receipt.read_text(encoding="utf-8"))
+            self.assertIsInstance(receipt.get("child_log"), str)
+            child_log_path = pathlib.Path(receipt["child_log"])
+            self.assertTrue(
+                child_log_path.is_relative_to(paths["custody_root"]),
+                "child log must live under custody_root, not be devnulled",
+            )
+            self.assertIn("epoch 1/10", child_log_path.read_text(encoding="utf-8"))
 
     def test_child_failure_is_propagated_and_receipted(self) -> None:
         module = load_module()

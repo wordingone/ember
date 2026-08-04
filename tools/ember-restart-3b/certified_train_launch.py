@@ -604,8 +604,21 @@ def build_runner_argv(
     ]
 
 
+def _child_log_path(launch: ValidatedLaunch) -> pathlib.Path:
+    """Log file the fixed runner's stdout+stderr are redirected to.
+
+    Lives under custody_root (preserved, not devnulled) so the consumer's own
+    stdout stays a single pure JSON line for the cockpit handshake. Named
+    alongside the runner receipt so the two are trivially correlated.
+    """
+    return launch.custody_root / f"{launch.runner_receipt.stem}-child.log"
+
+
 def _write_execution_receipt(
-    launch: ValidatedLaunch, argv: list[str], exit_code: int
+    launch: ValidatedLaunch,
+    argv: list[str],
+    exit_code: int,
+    child_log_path: pathlib.Path | None = None,
 ) -> pathlib.Path:
     receipt_path = _execution_receipt_path(launch)
     receipt = {
@@ -618,6 +631,7 @@ def _write_execution_receipt(
         "exit_code": exit_code,
         "artifact_root": str(launch.artifact_root),
         "runner_receipt": str(launch.runner_receipt),
+        "child_log": str(child_log_path) if child_log_path is not None else None,
         "claim_scope": {
             "capability_claimed": False,
             "admission_claimed": False,
@@ -660,15 +674,26 @@ def execute_validated_launch(
     # of an -B argv insertion, which would shift that pinned position.
     child_env = os.environ.copy()
     child_env["PYTHONDONTWRITEBYTECODE"] = "1"
-    result = run_process(
-        argv,
-        shell=False,
-        check=False,
-        cwd=repo_root,
-        env=child_env,
-    )
+    # The child (disk_budget_runner -> run_vertical_slice) must NEVER inherit
+    # this consumer's stdout: this process's own final line is the cockpit's
+    # machine-readable handshake (main()'s json.dumps), and any training-log
+    # noise interleaved ahead of it breaks JSON.parse on the whole stream
+    # (issue #1408). Redirect the child's stdout+stderr to a log file under
+    # custody_root instead -- preserved for debugging, never devnulled.
+    child_log_path = _child_log_path(launch)
+    child_log_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(child_log_path, "wb") as child_log:
+        result = run_process(
+            argv,
+            shell=False,
+            check=False,
+            cwd=repo_root,
+            env=child_env,
+            stdout=child_log,
+            stderr=subprocess.STDOUT,
+        )
     exit_code = int(result.returncode)
-    _write_execution_receipt(launch, argv, exit_code)
+    _write_execution_receipt(launch, argv, exit_code, child_log_path=child_log_path)
     return exit_code
 
 
