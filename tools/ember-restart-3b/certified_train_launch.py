@@ -102,6 +102,15 @@ RUN_SPEC_KEYS = {
     "runner_receipt",
     "requested_scope",
 }
+# Pin-freshness evidence (issue #1419) rides the RUN SPEC, not the certificate:
+# the certificate is a frozen sha-cited payload minted at verification time,
+# while this receipt must be newer than it (it proves the closure is still
+# intact at the tip being launched from). The run spec is the launch-time
+# document -- it already names the runner receipt -- so it is the only place a
+# per-launch artifact can be named without re-minting. Optional-key handling
+# mirrors OPTIONAL_CERTIFICATE_KEYS: anything outside the enumeration still
+# hard-fails.
+OPTIONAL_RUN_SPEC_KEYS = {"training_verify_receipt_path"}
 AUTHORIZED_SCOPE_KEYS = {
     "purpose",
     "allowed_modes",
@@ -155,6 +164,24 @@ COMPLETION_RECEIPT_KEYS = {
 }
 # scripts/verify_ember01_completion.py RESOLVED_TRUE -- lowercase-hyphen form.
 COMPLETION_LEG_RESOLVED_TRUE = "resolved-true"
+
+# Mirrors the receipt runtime/ember-lab/src/training_verify.rs::run assembles.
+TRAINING_VERIFY_RECEIPT_SCHEMA = "ember-lab-training-verify-receipt-v1"
+TRAINING_VERIFY_RECEIPT_KEYS = {
+    "schema_version",
+    "ok",
+    "root",
+    "started_at_ms",
+    "finished_at_ms",
+    "duration_ms",
+    "closure",
+    "input_identity",
+    "model_tokenizer",
+    "certificate",
+    "checks",
+    "ember_lab_binary_sha256",
+    "ember_lab_source_sha256",
+}
 
 
 class ValidatedLaunch(NamedTuple):
@@ -340,6 +367,48 @@ def read_pin_is_ancestor(repo_root: pathlib.Path, pin: str) -> bool:
     return result.returncode == 0
 
 
+def read_commit_is_ancestor(
+    repo_root: pathlib.Path, ancestor: str, descendant: str
+) -> bool:
+    """Whether `ancestor` is reachable from `descendant` in the local history.
+
+    Fails CLOSED by raising: a `git` that is missing, or that cannot resolve
+    either commit, yields no evidence of ancestry, and "no evidence" must never
+    read as "related". Distinguished from `read_pin_is_ancestor`, which answers
+    the different question (pin vs live HEAD) and tolerates a silent no.
+    """
+
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo_root),
+                "merge-base",
+                "--is-ancestor",
+                ancestor,
+                descendant,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            shell=False,
+            env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
+        )
+    except OSError as error:
+        raise ValueError(
+            "git is unavailable, so completion-head ancestry cannot be proven"
+        ) from error
+    if result.returncode == 0:
+        return True
+    if result.returncode == 1:
+        return False
+    raise ValueError(
+        "completion-head ancestry is unprovable in this repository "
+        f"({ancestor[:12]} vs {descendant[:12]})"
+    )
+
+
 def read_current_master(repo_root: pathlib.Path) -> str:
     result = subprocess.run(
         ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
@@ -354,8 +423,21 @@ def read_current_master(repo_root: pathlib.Path) -> str:
 
 
 def _validate_completion_receipt(
-    value: dict[str, Any], public_master_sha: str
-) -> None:
+    value: dict[str, Any], public_master_sha: str, repo_root: pathlib.Path
+) -> bool:
+    """Validate the EMBER-01 completion receipt; return whether its head IS the pin.
+
+    EMBER-01 completion is a HISTORICAL fact, established once at the commit the
+    census actually ran against. Demanding that commit EQUAL a newly minted
+    certificate's `public_master_sha` made every new pin require a fresh
+    whole-repo census -- re-importing the exact freeze #1400 removed from the
+    launch path (issue #1419). The receipt is therefore validated at its OWN
+    recorded head, which must be an ANCESTOR of the pin (equality still passes:
+    a commit is an ancestor of itself). Ancestry alone is not freshness, so the
+    caller requires a training-verify receipt whenever the head is strictly
+    behind the pin.
+    """
+
     _require_keys(value, COMPLETION_RECEIPT_KEYS, "completion receipt")
     if value["schema"] != "ember-01-completion-receipt-v1" or value["ok"] is not True:
         raise ValueError("completion receipt is not a successful EMBER-01 receipt")
@@ -371,9 +453,12 @@ def _validate_completion_receipt(
     checkout_head = _require_git_sha(
         checkout.get("head"), "completion checkout head"
     )
-    if checkout_head != public_master_sha:
+    head_is_pin = checkout_head == public_master_sha
+    if not head_is_pin and not read_commit_is_ancestor(
+        repo_root, checkout_head, public_master_sha
+    ):
         raise ValueError(
-            "completion checkout head does not match declared public master"
+            "completion checkout head is not an ancestor of declared public master"
         )
     if not (
         checkout.get("clean") is True
@@ -387,6 +472,62 @@ def _validate_completion_receipt(
     selection = _require_object(value["selection"], "completion selection")
     if selection.get("unchanged_during_verification") is not True:
         raise ValueError("completion selection integrity")
+    return head_is_pin
+
+
+def _validate_training_verify_receipt(
+    receipt_path: pathlib.Path,
+    repo_root: pathlib.Path,
+    certificate_closure_sha256: str,
+) -> None:
+    """Pin-freshness evidence: the #1400/#1418 training-scoped verify receipt.
+
+    Freshness is proven STRUCTURALLY, never by a clock: the receipt's closure
+    hash must equal the certificate's, which the caller has already equated to
+    the closure recomputed from live tree bytes. A receipt taken before any
+    closure-touching merge therefore cannot pass, and a receipt from a different
+    checkout is refused outright by the root binding.
+    """
+
+    receipt = _load_json(receipt_path, "training verify receipt")
+    _require_keys(
+        receipt, TRAINING_VERIFY_RECEIPT_KEYS, "training verify receipt"
+    )
+    if receipt["schema_version"] != TRAINING_VERIFY_RECEIPT_SCHEMA:
+        raise ValueError("training verify receipt schema")
+    if receipt["ok"] is not True:
+        raise ValueError("training verify receipt is not green")
+
+    receipt_root = receipt["root"]
+    if not isinstance(receipt_root, str) or not receipt_root:
+        raise ValueError("training verify receipt root must be a non-empty string")
+    if pathlib.Path(receipt_root).resolve(strict=False) != repo_root.resolve(
+        strict=False
+    ):
+        raise ValueError(
+            "training verify receipt was produced against a different tree"
+        )
+
+    closure = _require_object(receipt["closure"], "training verify closure")
+    receipt_closure_sha256 = _require_sha256(
+        closure.get("closure_sha256"), "training verify closure_sha256"
+    )
+    if receipt_closure_sha256 != certificate_closure_sha256:
+        raise ValueError(
+            "training verify receipt does not bind the certificate's training "
+            "dependency closure"
+        )
+
+    checks = receipt["checks"]
+    if not isinstance(checks, list) or not checks:
+        raise ValueError("training verify receipt carries no checks")
+    for index, check in enumerate(checks, start=1):
+        check = _require_object(check, f"training verify check {index}")
+        if check.get("ok") is not True:
+            raise ValueError(
+                "training verify check is red: "
+                f"{check.get('name', f'check {index}')}"
+            )
 
 
 def _require_scope_subset(
@@ -537,7 +678,9 @@ def validate_certified_request(
         completion_path, "completion receipt"
     ) != certificate["completion_receipt_sha256"]:
         raise ValueError("completion receipt hash mismatch")
-    _validate_completion_receipt(completion, certificate["public_master_sha"])
+    completion_head_is_pin = _validate_completion_receipt(
+        completion, certificate["public_master_sha"], repo_root
+    )
 
     conjuncts = _require_object(
         certificate["declaration_conjuncts"], "declaration conjuncts"
@@ -571,7 +714,8 @@ def validate_certified_request(
             )
 
     run_spec = _load_json(run_spec_path, "run spec")
-    _require_keys(run_spec, RUN_SPEC_KEYS, "run spec")
+    if set(run_spec) - OPTIONAL_RUN_SPEC_KEYS != RUN_SPEC_KEYS:
+        raise ValueError("run spec schema keys mismatch")
     if run_spec["schema_version"] != "ember-certified-train-run-v1":
         raise ValueError("run spec schema")
     if run_spec["certificate_sha256"] != certificate_sha256:
@@ -585,6 +729,35 @@ def validate_certified_request(
         or not run_spec["runner_receipt"]
     ):
         raise ValueError("run spec scalar fields are invalid")
+
+    # Ancestor-head completion receipts carry no evidence about the pin, so the
+    # training-scoped verify receipt supplies it. An equal-head launch keeps the
+    # pre-#1419 shape exactly: the census already ran at this very commit.
+    training_verify_receipt_path = run_spec.get("training_verify_receipt_path")
+    if training_verify_receipt_path is not None:
+        if (
+            not isinstance(training_verify_receipt_path, str)
+            or not training_verify_receipt_path
+        ):
+            raise ValueError(
+                "run spec training_verify_receipt_path must be a non-empty string"
+            )
+        if certificate_closure_sha256 is None:
+            raise ValueError(
+                "training verify receipt requires a closure-bound certificate"
+            )
+        training_path = pathlib.Path(training_verify_receipt_path)
+        if not training_path.is_absolute():
+            training_path = run_spec_path.parent / training_path
+        _validate_training_verify_receipt(
+            training_path, repo_root, certificate_closure_sha256
+        )
+    elif not completion_head_is_pin:
+        raise ValueError(
+            "completion receipt predates the declared public master, so the run "
+            "spec must supply training_verify_receipt_path as pin-freshness "
+            "evidence"
+        )
 
     requested_scope = _require_object(
         run_spec["requested_scope"], "requested scope"
