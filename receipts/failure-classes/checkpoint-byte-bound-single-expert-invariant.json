@@ -12,8 +12,7 @@
   ],
   "related_class_ids": [
     "checkpoint-storage-projection-single-expert-route-invariant-vs-full-coverage-vertical",
-    "checkpoint-counter-single-expert-invariant-vs-full-coverage-root",
-    "checkpoint-storage-projection-single-route-lineage-invariant-vs-root-inherited-optimizer-state"
+    "checkpoint-counter-single-expert-invariant-vs-full-coverage-root"
   ],
   "schema_version": "ember-failure-class-v1",
   "sha_convention": "bytes on disk as-is (binary read, no normalization)",
