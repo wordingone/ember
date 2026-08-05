@@ -33,14 +33,17 @@ governed-vertical run. The *only* CLI subcommand in `run_vertical_slice.py` that
 continuation training, requires an existing checkpoint + parent/root manifests). `semantic`
 (which *does* take `--steps`) also has no telemetry flags wired in `main()`.
 
-And the certified/sanctioned launch surface makes this categorical, not incidental:
+And the certified/sanctioned launch surface makes this categorical for MODES, not incidental:
 `certified_train_launch.py::_require_scope_subset` hard-fails unless
-`authorized["allowed_modes"] == ["governed-vertical"]` (line ~787). **The currently issued
-launch certificate authorizes `governed-vertical` only** — `semantic`/`specialist`/plain
-`vertical` cannot be launched through the sanctioned path today at any step count, telemetry
-or not. Getting a real R1-E1 requires an engineering task (wire telemetry through a
-100+-step-capable mode, then extend/reissue the certificate's `allowed_modes`), not a
-different flag on an existing command.
+`authorized["allowed_modes"] == ["governed-vertical"]` exactly — so extending the
+certificate's `allowed_modes` is not the cure (any other list refuses every launch); the
+`specialist` route is instead authorized through the certificate's separate
+`allowed_training_capabilities` key (#1430/#1454, live at this head, `--telemetry-path`
+wiring included). The remaining R1 gap is that `governed-vertical` — the only allowed
+mode — wires no telemetry, and `specialist` is single-capability continuation training off
+an existing checkpoint, not a WARM-100 canary: a real R1-E1 still requires an engineering
+task (wire telemetry through a 100+-step-capable canary mode), not a different flag on an
+existing command.
 
 Two other same-day run directories exist beyond the one named in the brief:
 

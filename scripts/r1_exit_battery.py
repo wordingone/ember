@@ -39,21 +39,28 @@ that wires --telemetry-path/--telemetry-run-id as required arguments is
 checkpoint). `semantic` (which does take --steps) ALSO has no telemetry
 flags wired in main().
 
-And it is categorical, not incidental: certified_train_launch.py's
+And for MODES it is categorical, not incidental: certified_train_launch.py's
 _require_scope_subset hard-fails unless the certificate's
-authorized["allowed_modes"] == ["governed-vertical"] exactly. The currently
-issued launch certificate authorizes governed-vertical ONLY -- semantic /
-specialist / plain vertical cannot be launched through the sanctioned path
-today at any step count. A real R1-E1 needs an engineering task (wire
-telemetry through a 100+-step-capable mode, then extend/reissue the
-certificate), not a different flag on today's command.
+authorized["allowed_modes"] == ["governed-vertical"] exactly -- so extending
+allowed_modes is NOT a cure (any other list refuses every launch). The
+specialist route is instead authorized through the certificate's separate
+allowed_training_capabilities key (#1430/#1454, live at this head, with
+--telemetry-path wiring) -- but specialist is single-capability continuation
+training off an existing checkpoint, not a WARM-100 canary. A real R1-E1
+still needs an engineering task (wire telemetry through a 100+-step-capable
+canary mode), not a different flag on today's command.
 
 Net effect on this battery: 7 of R1's 8 exits (E1, E2, E4, E5, E6, E7, E8)
 are pure EVIDENCE-MISSING against every run this repo has ever produced --
-this script proves that with receipts rather than asserting it in prose,
-and is written so the day real evidence exists (telemetry file, second
-seed, A1 arm run, frontier receipt, forecast doc) it adjudicates in one
-command with zero further code changes. Only E3 yields a real, scoped,
+this script proves that with receipts rather than asserting it in prose.
+The zero-further-code-changes claim is scoped to E1/E2/E3/E7: the day their
+evidence exists (telemetry files, second seed, resume run) they adjudicate
+in one command. E4/E5/E6/E8 instead refuse-until-validatable: their MET is
+deliberately unreachable until the named validators/computations exist
+(tokens-per-s + MFU + host-utilization computation; a section-5.4
+frontier-receipt validator; a forecast-recalibration content validator;
+the A1 liveness/parity leg computations) -- a filename or marker-word
+match never mints MET. Only E3 yields a real, scoped,
 DERIVABLE-NOW sub-receipt today (checkpoint write-side hash integrity) --
 it stays NOT-MET overall because the restore leg has never been exercised
 (the one attempt crashed on a bookkeeping guard before reaching restore
@@ -91,10 +98,10 @@ SCOPE BOUNDARIES (disclosed, not silent gaps):
     2026-08-05) -- absence is reported as EVIDENCE_MISSING, not guessed at.
 
 Refusal reasons (R1ExitBatteryRefusal, always prefixed onto the message):
-  RUN_ROOT_MISSING, THRESHOLDS_UNREADABLE, THRESHOLDS_SCHEMA_INVALID,
-  THRESHOLDS_PIN_MISMATCH, THRESHOLDS_MISSING_IDS, CHECKPOINT_MANIFEST_MISSING,
+  THRESHOLDS_UNREADABLE, THRESHOLDS_SCHEMA_INVALID, THRESHOLDS_PIN_MISMATCH,
+  THRESHOLDS_MISSING_IDS, CHECKPOINT_MANIFEST_MISSING,
   CHECKPOINT_MANIFEST_UNREADABLE, CHECKPOINT_MANIFEST_SCHEMA_UNRECOGNIZED,
-  CHECKPOINT_AMBIGUOUS, OUTPUT_PATH_REQUIRED, UNKNOWN_EXIT_ID.
+  CHECKPOINT_AMBIGUOUS, UNKNOWN_EXIT_ID.
 
 Usage:
   python scripts/r1_exit_battery.py --selftest
@@ -133,7 +140,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_THRESHOLDS_PATH = REPO_ROOT / "docs" / "spec" / "ember02-preregistration-thresholds-v1.json"
 DEFAULT_FIXED_PRIOR_MANIFEST = REPO_ROOT / "manifests" / "ember-restart-3b" / "fixed-prior-manifest-v1.json"
 
-REQUIRED_THRESHOLD_IDS = {"T-01", "T-02", "T-03", "T-04", "T-05", "T-06", "T-07", "T-08", "T-09"}
+# F-11 is required alongside T-01..T-09: R1-E8's parity leg quotes its frozen
+# band formula from the thresholds document, never from a transcription here.
+REQUIRED_THRESHOLD_IDS = {"T-01", "T-02", "T-03", "T-04", "T-05", "T-06", "T-07", "T-08", "T-09", "F-11"}
 
 # The checkpoint schema this battery's write-integrity check understands.
 # ember-sparse-checkpoint-v3 (a different, undocumented-diff format -- see
@@ -346,7 +355,18 @@ def check_r1_e1(run_root: Path, thresholds: dict[str, Any], *, run_id: str | Non
         for field_name in ("loss", "grad_norm")
         if field_name in row and isinstance(row[field_name], (int, float)) and not math.isfinite(row[field_name])
     ]
-    met = len(steps_present) >= t01 and contiguous_from_1 and not non_finite_rows
+    # "zero NaN/Inf in loss and grad-norm fields" presupposes the fields EXIST:
+    # a canary step whose event carries no numeric loss/grad_norm cannot
+    # demonstrate the absence of NaN/Inf in it, so absence is NOT_MET, not a
+    # silent pass. Audited over the canary steps (1..T-01).
+    missing_field_rows = [
+        {"step": row["step"], "field": field_name, "present": field_name in row}
+        for row in series
+        if row["step"] <= t01
+        for field_name in ("loss", "grad_norm")
+        if not (isinstance(row.get(field_name), (int, float)) and not isinstance(row.get(field_name), bool))
+    ]
+    met = len(steps_present) >= t01 and contiguous_from_1 and not non_finite_rows and not missing_field_rows
     return {
         "status": "MET" if met else "NOT_MET",
         "run_id": selected_run_id,
@@ -356,23 +376,38 @@ def check_r1_e1(run_root: Path, thresholds: dict[str, Any], *, run_id: str | Non
         "contiguous_from_step_1": contiguous_from_1,
         "non_finite_count": len(non_finite_rows),
         "non_finite_rows": non_finite_rows[:20],
+        "missing_field_count": len(missing_field_rows),
+        "missing_field_rows": missing_field_rows[:20],
     }
 
 
 def check_r1_e2(run_root: Path, thresholds: dict[str, Any], *, run_id: str | None = None) -> dict[str, Any]:
     t01, t02, t03 = int(thresholds["T-01"]), int(thresholds["T-02"]), int(thresholds["T-03"])
     selected_run_id, series, counts = _select_series(run_root, run_id=run_id)
-    if len(series) < t02 + t03:
+    # The spec's windows are the first T-02 / final T-03 steps OF THE T-01-STEP
+    # CANARY (steps 1..T-01), not of whatever fragment happens to be present:
+    # an unanchored fragment (e.g. steps 41..140) must refuse, never adjudicate
+    # with windows the spec never defined. Precondition: the same series that
+    # would satisfy R1-E1's completeness bar (every step 1..T-01 present).
+    by_step = {row["step"]: row for row in series}
+    missing_steps = [step for step in range(1, t01 + 1) if step not in by_step]
+    if missing_steps:
         return {
             "status": "EVIDENCE_MISSING",
             "detail": (
-                f"need >= {t02 + t03} steps of loss telemetry (first {t02} + final {t03} "
-                f"windows) under {run_root}; found {len(series)} (run_ids_seen={counts!r})"
+                f"R1-E2's comparison windows are anchored to the T-01={t01}-step canary "
+                f"(first T-02={t02} and final T-03={t03} steps of steps 1..{t01}); the series "
+                f"under {run_root} is missing {len(missing_steps)} of those steps "
+                f"(absent step range {missing_steps[0]}..{missing_steps[-1]}; "
+                f"steps_present={len(series)}, run_ids_seen={counts!r}) -- an unanchored "
+                "fragment must not adjudicate E2"
             ),
-            "needs": f"a run producing >= {t01} consecutive steps with loss telemetry",
+            "missing_step_count": len(missing_steps),
+            "missing_step_span": [missing_steps[0], missing_steps[-1]],
+            "needs": f"the E1-complete series: consecutive steps 1..{t01} with loss telemetry",
         }
-    first_window = series[:t02]
-    final_window = series[-t03:]
+    first_window = [by_step[step] for step in range(1, t02 + 1)]
+    final_window = [by_step[step] for step in range(t01 - t03 + 1, t01 + 1)]
     if not all(isinstance(row.get("loss"), (int, float)) and math.isfinite(row["loss"]) for row in first_window + final_window):
         return {
             "status": "NOT_MET",
@@ -530,9 +565,66 @@ def find_resume_attempts(sibling_roots: list[Path], *, target_checkpoint_dir: Pa
                 "exit_code": exit_code,
                 "child_log": child_log_field,
                 "traceback_tail": traceback_tail,
-                "resumed_artifact_root": None,  # filled by caller if it locates the successor checkpoint
+                "resumed_artifact_root": None,  # filled by check_r1_e3 when cursor advancement is verified
             })
     return attempts
+
+
+def _find_cursor_advance(
+    resuming_root: Path,
+    *,
+    source_manifest_path: Path,
+    source_global_step: int | None,
+) -> dict[str, Any]:
+    """The restore leg's spec bar is "reloaded, cursor advances correctly" --
+    a resume exit_code of 0 alone proves neither. Scan the RESUMING run's
+    root for successor checkpoint manifests (same v5 schema this battery
+    understands; anything else cannot be verified and therefore does not
+    count) and report the one whose data_cursor.global_step advanced
+    furthest past the source checkpoint's."""
+    out: dict[str, Any] = {
+        "verified": False,
+        "source_global_step": source_global_step,
+        "successor_manifest": None,
+        "successor_global_step": None,
+        "successor_manifests_inspected": 0,
+        "reason": None,
+    }
+    if source_global_step is None:
+        out["reason"] = "SOURCE_CURSOR_UNREADABLE: source manifest carries no integer data_cursor.global_step to advance past"
+        return out
+    ckpt_root = resuming_root / "artifacts" / "checkpoints"
+    candidates = sorted(ckpt_root.glob("*/checkpoint-manifest.json")) if ckpt_root.is_dir() else []
+    try:
+        source_resolved = source_manifest_path.resolve()
+    except OSError:
+        source_resolved = source_manifest_path
+    best: tuple[Path, int] | None = None
+    for candidate in candidates:
+        try:
+            if candidate.resolve() == source_resolved:
+                continue  # the source checkpoint itself is never its own successor
+        except OSError:
+            pass
+        out["successor_manifests_inspected"] += 1
+        try:
+            manifest = json.loads(candidate.read_bytes())
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        if not isinstance(manifest, dict) or manifest.get("schema_version") != SUPPORTED_CHECKPOINT_SCHEMA:
+            continue
+        cursor = manifest.get("data_cursor")
+        step = cursor.get("global_step") if isinstance(cursor, dict) else None
+        if type(step) is int and step > source_global_step and (best is None or step > best[1]):
+            best = (candidate, step)
+    if best is not None:
+        out.update(verified=True, successor_manifest=str(best[0]), successor_global_step=best[1])
+    else:
+        out["reason"] = (
+            f"NO_ADVANCED_SUCCESSOR: no {SUPPORTED_CHECKPOINT_SCHEMA} checkpoint manifest under "
+            f"the resuming root advances data_cursor.global_step past {source_global_step}"
+        )
+    return out
 
 
 def check_r1_e3(
@@ -546,10 +638,37 @@ def check_r1_e3(
     checkpoint_dir = manifest_path.parent
     resume_attempts = find_resume_attempts(sibling_roots or [], target_checkpoint_dir=checkpoint_dir)
 
-    successful_resumes = [a for a in resume_attempts if a.get("exit_code") == 0]
+    source_cursor = write_integrity.get("data_cursor")
+    source_global_step = source_cursor.get("global_step") if isinstance(source_cursor, dict) else None
+    if type(source_global_step) is not int:
+        source_global_step = None
+
+    # Spec bar: "written, reloaded, cursor advances correctly." A zero exit
+    # code is only the "reloaded" half -- SUCCEEDED additionally requires a
+    # successor checkpoint under the resuming root whose data_cursor advanced
+    # past the source's. A zero-exit resume without that evidence caps at
+    # ATTEMPTED_UNVERIFIED, which is NOT_MET.
+    verified = False
+    attempted_unverified = False
+    for attempt in resume_attempts:
+        if attempt.get("exit_code") != 0:
+            continue
+        advance = _find_cursor_advance(
+            Path(attempt["run_root"]),
+            source_manifest_path=manifest_path,
+            source_global_step=source_global_step,
+        )
+        attempt["cursor_advance"] = advance
+        if advance["verified"]:
+            attempt["resumed_artifact_root"] = str(Path(advance["successor_manifest"]).parent)
+            verified = True
+        else:
+            attempted_unverified = True
     restore_status = "NOT_ATTEMPTED"
-    if successful_resumes:
+    if verified:
         restore_status = "SUCCEEDED"
+    elif attempted_unverified:
+        restore_status = "ATTEMPTED_UNVERIFIED"
     elif resume_attempts:
         restore_status = "FAILED"
 
@@ -565,6 +684,13 @@ def check_r1_e3(
             None if overall_met else
             "write-side hash integrity verified; restore leg never attempted (no sibling-root supplied or none found)" if restore_status == "NOT_ATTEMPTED" and write_integrity["all_shards_ok"]
             else "restore leg attempted and failed before or during reload" if restore_status == "FAILED"
+            else (
+                "resume exited 0 but cursor advancement is UNVERIFIED: no successor checkpoint "
+                "manifest under the resuming root advances data_cursor.global_step past the "
+                "source's -- the spec bar is 'reloaded, cursor advances correctly', so a zero "
+                "exit code alone never mints the restore leg (see "
+                "components.restore_round_trip.attempts[].cursor_advance)"
+            ) if restore_status == "ATTEMPTED_UNVERIFIED"
             else "write-side hash integrity check found a mismatch -- see components.write_integrity.shards"
         ),
         "components": {
@@ -652,22 +778,61 @@ def check_r1_e4(run_root: Path) -> dict[str, Any]:
 # DEGRADED_PROXY.
 # ---------------------------------------------------------------------------
 
-def check_r1_e5(run_root: Path, *, repo_root: Path = REPO_ROOT, fixed_prior_manifest_path: Path | None = None) -> dict[str, Any]:
+def check_r1_e5(run_root: Path, thresholds: dict[str, Any], *, repo_root: Path = REPO_ROOT, fixed_prior_manifest_path: Path | None = None) -> dict[str, Any]:
+    t01 = int(thresholds["T-01"])
+    t06 = float(thresholds["T-06"])
     fixed_prior_manifest_path = fixed_prior_manifest_path or DEFAULT_FIXED_PRIOR_MANIFEST
     fixed_prior_present = fixed_prior_manifest_path.is_file()
     fixed_prior_sha256 = _sha256_file(fixed_prior_manifest_path) if fixed_prior_present else None
 
-    frontier_receipt_candidates = list(run_root.rglob("*frontier*receipt*.json")) if run_root.is_dir() else []
+    frontier_receipt_candidates = sorted(run_root.rglob("*frontier*receipt*.json")) if run_root.is_dir() else []
     energy_receipt_candidates = [
         p for p in (run_root.rglob("*.json") if run_root.is_dir() else [])
         if "energy" in p.name.lower()
     ]
 
-    met = bool(frontier_receipt_candidates)
+    # A filename match is a CANDIDATE pointer, never §5.4 evidence. The only
+    # spec-frozen, checkable-today content is the energy block (§5.3's shape:
+    # energy.energy_boundary, energy.sample_coverage_fraction vs T-06) -- run
+    # those checks per candidate and record them, but MET stays unreachable
+    # until a full §5.4 validator exists (legs: ledger completeness,
+    # fixed-prior + learned-import attestation, capability, time,
+    # reproducibility, advantage-if-claimed, INVARIANT stamps -- their
+    # receipt schema is defined nowhere yet; inventing one here is exactly
+    # the invention this battery prohibits).
+    candidate_validation: list[dict[str, Any]] = []
+    for candidate_path in frontier_receipt_candidates:
+        row: dict[str, Any] = {"path": str(candidate_path), "parse_ok": False}
+        try:
+            doc = json.loads(candidate_path.read_bytes())
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            doc = None
+        if isinstance(doc, dict):
+            row["parse_ok"] = True
+            energy = doc.get("energy") if isinstance(doc.get("energy"), dict) else {}
+            boundary = energy.get("energy_boundary", doc.get("energy_boundary"))
+            coverage = energy.get("sample_coverage_fraction", doc.get("sample_coverage_fraction"))
+            row["energy_boundary"] = boundary
+            row["energy_boundary_ok"] = boundary == "DEGRADED_PROXY"
+            row["sample_coverage_fraction"] = _json_safe_number(coverage)
+            row["sample_coverage_ok"] = (
+                isinstance(coverage, (int, float)) and not isinstance(coverage, bool)
+                and math.isfinite(coverage) and coverage >= t06
+            )
+        candidate_validation.append(row)
+
     return {
-        "status": "MET" if met else "EVIDENCE_MISSING",
+        "status": "EVIDENCE_MISSING",
+        "frontier_receipt_validation": "PARTIAL_UNIMPLEMENTED",
         "detail": (
-            None if met else
+            (
+                f"{len(frontier_receipt_candidates)} frontier-receipt-shaped candidate file(s) found, "
+                "recorded with the spec-frozen energy-block checks only (energy_boundary == "
+                f"'DEGRADED_PROXY', sample_coverage_fraction >= T-06={t06}) -- a validated §5.4 "
+                "frontier receipt is still missing because no validator exists for the remaining "
+                "§5.4 legs (ledger, fixed-prior + learned-import attestation, capability, time, "
+                "reproducibility, advantage, INVARIANT stamps); a filename match must never mint MET"
+            ) if frontier_receipt_candidates else
             "no frontier-receipt-shaped file under this run root, and no frontier-receipt generator "
             "exists anywhere in scripts/ (repo-wide grep, zero hits, 2026-08-05); no energy-proxy "
             "sampling occurred for this run (scripts/energy_proxy_logger.py exists but was not invoked)"
@@ -677,9 +842,16 @@ def check_r1_e5(run_root: Path, *, repo_root: Path = REPO_ROOT, fixed_prior_mani
             "fixed_prior_manifest_path": str(fixed_prior_manifest_path),
             "fixed_prior_manifest_sha256": fixed_prior_sha256,
             "frontier_receipt_candidates": [str(p) for p in frontier_receipt_candidates],
+            "candidate_validation": candidate_validation,
             "energy_receipt_candidates": [str(p) for p in energy_receipt_candidates],
         },
-        "needs": "a frontier-receipt assembly script (does not exist yet) run against a real >=100-step canary with energy-proxy sampling coverage >= T-06 -- this is an engineering task, not just an execution one",
+        "needs": (
+            f"a §5.4-validated closed-boundary frontier receipt (all 8 legs; energy_boundary "
+            f"'DEGRADED_PROXY'; sample_coverage_fraction >= T-06={t06}) from a real >= T-01={t01}-step "
+            "canary with energy-proxy sampling -- which first needs BOTH a frontier-receipt assembly "
+            "script and a §5.4 validator (neither exists yet): an engineering task, not just an "
+            "execution one"
+        ),
     }
 
 
@@ -687,24 +859,54 @@ def check_r1_e5(run_root: Path, *, repo_root: Path = REPO_ROOT, fixed_prior_mani
 # R1-E6 -- forecast-recalibration receipt.
 # ---------------------------------------------------------------------------
 
-def check_r1_e6(run_root: Path, *, repo_root: Path = REPO_ROOT) -> dict[str, Any]:
-    forecast_candidates = list(run_root.rglob("*forecast*.json")) if run_root.is_dir() else []
-    recalibration_candidates = list(run_root.rglob("*recalibrat*.json")) if run_root.is_dir() else []
-    met = bool(forecast_candidates and recalibration_candidates)
+def check_r1_e6(run_root: Path, thresholds: dict[str, Any], *, repo_root: Path = REPO_ROOT) -> dict[str, Any]:
+    t01 = int(thresholds["T-01"])
+    forecast_matches = set(run_root.rglob("*forecast*.json")) if run_root.is_dir() else set()
+    recalibration_matches = set(run_root.rglob("*recalibrat*.json")) if run_root.is_dir() else set()
+    # Deduped union: one file named e.g. forecast-recalibration.json matches
+    # BOTH name patterns -- it is one candidate document, not two satisfied
+    # requirements. Name matches are candidate pointers only; §3's closing-
+    # receipts clause defines the required CONTENT (predicted vs measured
+    # step time, tokens/s, proxy-joules/token, peak VRAM, loss trajectory)
+    # and no content validator (or generator) exists yet, so MET stays
+    # unreachable until one does.
+    candidate_documents = [
+        {
+            "path": str(p),
+            "name_matches": [
+                name for name, hit in (("forecast", p in forecast_matches), ("recalibration", p in recalibration_matches)) if hit
+            ],
+        }
+        for p in sorted(forecast_matches | recalibration_matches)
+    ]
     return {
-        "status": "MET" if met else "EVIDENCE_MISSING",
+        "status": "EVIDENCE_MISSING",
+        "forecast_recalibration_validation": "UNIMPLEMENTED",
         "detail": (
-            None if met else
+            (
+                f"{len(candidate_documents)} name-matched candidate document(s) found but a validated "
+                "forecast-recalibration receipt is still missing: no content validator exists for the "
+                "§3-required predicted-vs-measured fields (step time, tokens/s, proxy-joules/token, "
+                "peak VRAM, loss trajectory), and a filename match -- a single file can match both "
+                "name patterns -- must never mint MET"
+            ) if candidate_documents else
             "no forecast document and no recalibration receipt found under this run root, and a "
             "repo-wide grep for forecast_recalibration/ForecastRecalibration finds no generator "
             "anywhere in this repo (2026-08-05); recalibration additionally needs a measured "
-            ">=100-step baseline (R1-E1/E2/E4), which does not exist yet either"
+            f">={t01}-step baseline (R1-E1/E2/E4), which does not exist yet either"
         ),
         "components": {
-            "forecast_candidates": [str(p) for p in forecast_candidates],
-            "recalibration_candidates": [str(p) for p in recalibration_candidates],
+            "candidate_documents": candidate_documents,
+            "required_predicted_vs_measured": [
+                "step_time", "tokens_per_second", "proxy_joules_per_token", "peak_vram", "loss_trajectory",
+            ],
         },
-        "needs": "a predicted-vs-measured forecast document (does not exist) plus a real measured >=100-step run to recalibrate against",
+        "needs": (
+            "a forecast-recalibration receipt whose CONTENT carries predicted vs measured step time, "
+            "tokens/s, proxy-joules/token, peak VRAM, and loss trajectory (prereg §3 closing-receipts "
+            "clause), a content validator for those fields (does not exist), plus a real measured "
+            f">= T-01={t01}-step run to recalibrate against"
+        ),
     }
 
 
@@ -740,29 +942,60 @@ def pooled_sigma_seed(seed_series: dict[str, list[dict[str, Any]]], *, metric: s
 
 
 def check_r1_e7(seed_roots: list[Path], thresholds: dict[str, Any]) -> dict[str, Any]:
+    t01 = int(thresholds["T-01"])
     t07 = int(thresholds["T-07"])
+    # The thresholds document's own sigma_definition: "pooled standard
+    # deviation ... at matched step counts, measured at R1 scale with >= T-07
+    # seeds". R1 scale IS T-01 steps (the "R1 step count" entry) -- a seed
+    # counts only with >= T-01 steps of telemetry, and the pooled sigma
+    # itself only qualifies over >= T-01 matched steps. Two 4-step roots are
+    # not a seed-noise measurement.
     seed_series: dict[str, list[dict[str, Any]]] = {}
-    seeds_with_usable_telemetry = 0
+    seeds_usable_at_r1_scale = 0
     per_root: list[dict[str, Any]] = []
     for root in seed_roots:
         run_id, series, counts = _select_series(root, run_id=None)
-        usable = len(series) > 0
-        seeds_with_usable_telemetry += int(usable)
-        per_root.append({"run_root": str(root), "run_id": run_id, "steps": len(series), "run_ids_seen": counts})
+        usable = len(series) >= t01
+        seeds_usable_at_r1_scale += int(usable)
+        per_root.append({
+            "run_root": str(root),
+            "run_id": run_id,
+            "steps": len(series),
+            "usable_at_r1_scale": usable,
+            "run_ids_seen": counts,
+        })
         if usable:
             seed_series[str(root)] = series
-    if seeds_with_usable_telemetry < t07:
+    if seeds_usable_at_r1_scale < t07:
         return {
             "status": "EVIDENCE_MISSING",
             "detail": (
-                f"T-07={t07} seed replicas with usable R1-scale telemetry required; "
-                f"{len(seed_roots)} seed root(s) supplied, {seeds_with_usable_telemetry} with any usable telemetry"
+                f"T-07={t07} seed replicas each with >= T-01={t01} steps of telemetry (R1 scale) "
+                f"required; {len(seed_roots)} seed root(s) supplied, {seeds_usable_at_r1_scale} "
+                "usable at R1 scale (per-seed step counts in components.per_seed_root)"
             ),
             "components": {"per_seed_root": per_root},
-            "needs": f">= {t07} independent-seed R1-scale runs, each producing train_step telemetry (none of this repo's CLI paths currently wire telemetry through a >=T-01-step run -- see module docstring)",
+            "needs": f">= {t07} independent-seed runs each with >= T-01={t01} steps of train_step telemetry (none of this repo's CLI paths currently wire telemetry through a >=T-01-step run -- see module docstring)",
         }
     sigma_loss = pooled_sigma_seed(seed_series, metric="loss")
     sigma_grad_norm = pooled_sigma_seed(seed_series, metric="grad_norm")
+    matched_ok = (
+        sigma_loss["matched_step_count"] >= t01 and sigma_grad_norm["matched_step_count"] >= t01
+    )
+    if not matched_ok:
+        # Sub-scale sigma values are deliberately NOT disclosed here -- a
+        # number computed below the frozen scale must not exist to be quoted.
+        return {
+            "status": "EVIDENCE_MISSING",
+            "detail": (
+                f"sigma_seed must be pooled over >= T-01={t01} matched steps across all counted "
+                "seeds (thresholds sigma_definition: 'at matched step counts, measured at R1 "
+                f"scale'); matched_step_count: loss={sigma_loss['matched_step_count']}, "
+                f"grad_norm={sigma_grad_norm['matched_step_count']}"
+            ),
+            "components": {"per_seed_root": per_root},
+            "needs": f">= {t07} independent-seed runs sharing >= T-01={t01} matched telemetry steps",
+        }
     met = sigma_loss["sigma_seed"] is not None and sigma_grad_norm["sigma_seed"] is not None
     return {
         "status": "MET" if met else "NOT_MET",
@@ -816,7 +1049,10 @@ def _marker_scan_strings(obj: Any) -> list[str]:
     return out
 
 
-def check_r1_e8(search_roots: list[Path]) -> dict[str, Any]:
+def check_r1_e8(search_roots: list[Path], thresholds: dict[str, Any]) -> dict[str, Any]:
+    t08 = float(thresholds["T-08"])
+    t09 = int(thresholds["T-09"])
+    f11_formula = str(thresholds["F-11"])
     candidates: list[str] = []
     for root in search_roots:
         if not root.is_dir():
@@ -829,18 +1065,61 @@ def check_r1_e8(search_roots: list[Path]) -> dict[str, Any]:
             haystack = _normalize_separators(" ".join(_marker_scan_strings(manifest)))
             if _A1_MARKER_RE.search(haystack):
                 candidates.append(str(manifest_path))
-    met = bool(candidates)
+    # The marker scan only LOCATES candidate A1 evidence -- it is never the
+    # exit itself. R1-E8 adjudicates two computed legs (§4-A1): liveness
+    # (equal-budget token ratio vs A3, floor T-08) and, iff the fallback tier
+    # is invoked, parity (per-step loss/grad-norm trajectories vs the
+    # CPU-offloaded full-state AdamW reference over T-09 matched steps,
+    # inside the F-11 band, which itself consumes sigma_seed from a green
+    # R1-E7). None of those inputs exists in any receiptable form, so MET is
+    # deliberately unreachable: status stays EVIDENCE_MISSING until the leg
+    # computations are implemented AND their evidence exists.
+    liveness_leg = {
+        "status": "EVIDENCE_MISSING",
+        "bar": {"threshold_id": "T-08", "floor_fraction": t08, "meaning": "A1 equal-budget tokens vs A3 (leg 1)"},
+        "missing": [
+            "an A1 tier-1 (CPU-offloaded full-state AdamW) run with measured tokens/s and proxy-joules/token",
+            "the matched A3 equal-budget token count to ratio against",
+        ],
+    }
+    parity_leg = {
+        "status": "EVIDENCE_MISSING",
+        "required_when": "the fallback tier 2 mechanism is invoked (Tier 1 below the T-08 liveness floor)",
+        "bar": {"threshold_ids": ["T-09", "F-11"], "matched_steps_required": t09, "band_formula": f11_formula},
+        "missing": [
+            "candidate-mechanism per-step loss/grad-norm trajectory over T-09 matched steps",
+            "CPU-offloaded full-state AdamW reference trajectory (same model/data/seed)",
+            "sigma_seed(loss) and sigma_seed(grad_norm_ratio) from a green R1-E7",
+        ],
+    }
     return {
-        "status": "MET" if met else "EVIDENCE_MISSING",
+        "status": "EVIDENCE_MISSING",
         "detail": (
-            None if met else
+            (
+                f"{len(candidates)} manifest(s) carry A1 marker words -- recorded as candidate "
+                f"pointers ONLY; R1-E8 adjudicates the computed liveness leg (floor T-08={t08}) "
+                f"and conditional parity leg (T-09={t09} matched steps inside the F-11 band), and "
+                "neither is computable from any evidence on disk (a marker word in a manifest is "
+                "not a leg receipt)"
+            ) if candidates else
             "no A1 (dense) arm run found under any given search root -- every checkpoint inspected is "
             "architecture_revision ember-sparse-3b-v2 (A3's role-prior sparse architecture); repo-wide "
             "grep for tier1/offload/Q-GaLore mechanisms in tools/ember-restart-3b finds zero hits "
             "beyond the preregistration text itself (2026-08-05)"
         ),
-        "components": {"candidate_manifests": candidates},
-        "needs": "an A1 tier-1 (CPU-offloaded full-state AdamW) run + liveness leg (T-08 tokens ratio vs A3) + parity leg (T-09 matched steps vs offloaded-AdamW reference, F-11 band) -- no A1 execution path exists anywhere in this repo yet; this is an engineering task before it is an execution one",
+        "components": {
+            "candidate_manifests": candidates,
+            "liveness_leg": liveness_leg,
+            "parity_leg": parity_leg,
+        },
+        "needs": (
+            f"an A1 tier-1 (CPU-offloaded full-state AdamW) run, its liveness leg computed against "
+            f"T-08={t08} (equal-budget tokens vs A3), and -- if the fallback tier is invoked -- the "
+            f"parity leg over T-09={t09} matched steps inside the F-11 band (formula in "
+            "components.parity_leg.bar.band_formula, consuming sigma_seed from a green R1-E7) -- "
+            "no A1 execution path exists anywhere in this repo yet; this is an engineering task "
+            "before it is an execution one"
+        ),
     }
 
 
@@ -958,29 +1237,41 @@ def _run_one_exit(
     explicit_manifest: Path | None,
     thresholds: dict[str, Any],
     thresholds_sha256: str,
+    run_id: str | None = None,
 ) -> dict[str, Any]:
+    seed_roots_effective = list(seed_roots) or [run_root]
     if exit_id == "e1":
-        result = check_r1_e1(run_root, thresholds)
+        result = check_r1_e1(run_root, thresholds, run_id=run_id)
     elif exit_id == "e2":
-        result = check_r1_e2(run_root, thresholds)
+        result = check_r1_e2(run_root, thresholds, run_id=run_id)
     elif exit_id == "e3":
         result = check_r1_e3(run_root, sibling_roots=sibling_roots, explicit_manifest=explicit_manifest)
     elif exit_id == "e4":
         result = check_r1_e4(run_root)
     elif exit_id == "e5":
-        result = check_r1_e5(run_root)
+        result = check_r1_e5(run_root, thresholds)
     elif exit_id == "e6":
-        result = check_r1_e6(run_root)
+        result = check_r1_e6(run_root, thresholds)
     elif exit_id == "e7":
-        result = check_r1_e7(seed_roots or [run_root], thresholds)
+        result = check_r1_e7(seed_roots_effective, thresholds)
     elif exit_id == "e8":
-        result = check_r1_e8(sibling_roots + [run_root])
+        result = check_r1_e8(sibling_roots + [run_root], thresholds)
     else:
         raise R1ExitBatteryRefusal(f"UNKNOWN_EXIT_ID: {exit_id!r}")
+    subject: dict[str, Any] = {
+        "run_root": str(run_root),
+        "sibling_roots": [str(p) for p in sibling_roots],
+        # R1-E7 adjudicates the EFFECTIVE seed set (defaulting to the run root
+        # when no --seed-root is supplied) -- the receipt records what was
+        # adjudicated, never an empty list the check did not use.
+        "seed_roots": [str(p) for p in (seed_roots_effective if exit_id == "e7" else seed_roots)],
+    }
+    if run_id is not None:
+        subject["run_id"] = run_id
     return build_receipt(
         ticket=f"r1-exit-battery-{exit_id}",
         exit_criterion=f"R1-{exit_id.upper()}",
-        subject={"run_root": str(run_root), "sibling_roots": [str(p) for p in sibling_roots], "seed_roots": [str(p) for p in seed_roots]},
+        subject=subject,
         thresholds_sha256=thresholds_sha256,
         result=result,
     )
@@ -993,6 +1284,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--sibling-root", type=Path, action="append", default=[], help="another run directory to search for resume/A1 evidence (repeatable)")
     ap.add_argument("--seed-root", type=Path, action="append", default=[], help="a run directory representing one seed replica, for R1-E7 (repeatable; defaults to --run-root alone)")
     ap.add_argument("--checkpoint-manifest", type=Path, default=None, help="explicit checkpoint-manifest.json path for R1-E3 (default: auto-glob under --run-root)")
+    ap.add_argument("--run-id", type=str, default=None, help="explicit telemetry run_id to adjudicate for R1-E1/E2 (default: the single run_id present under --run-root; multiple run_ids without this flag refuse)")
     ap.add_argument("--thresholds", type=Path, default=None, help="override thresholds JSON path")
     ap.add_argument("--exit", dest="exit_id", choices=(*EXIT_IDS, "all"), default="all")
     ap.add_argument("--out-dir", type=Path, default=Path("receipts") / "ember-02-r1-exits")
@@ -1023,6 +1315,7 @@ def main(argv: list[str] | None = None) -> int:
                 explicit_manifest=args.checkpoint_manifest,
                 thresholds=thresholds,
                 thresholds_sha256=thresholds_sha256,
+                run_id=args.run_id,
             )
         except R1ExitBatteryRefusal as exc:
             receipt = build_receipt(
@@ -1069,7 +1362,7 @@ def _synthetic_train_step_events(*, run_id: str, n_steps: int, start_ts: int = 1
     return events
 
 
-def _synthetic_checkpoint(tmp_dir: Path, *, seed: int = 830001, corrupt_shard: bool = False, corrupt_cross_ref: bool = False) -> Path:
+def _synthetic_checkpoint(tmp_dir: Path, *, seed: int = 830001, corrupt_shard: bool = False, corrupt_cross_ref: bool = False, global_step: int = 4) -> Path:
     ckpt_dir = tmp_dir / "artifacts" / "checkpoints" / f"checkpoint-vertical-slice-seed-{seed}"
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     shard_specs = [
@@ -1101,7 +1394,7 @@ def _synthetic_checkpoint(tmp_dir: Path, *, seed: int = 830001, corrupt_shard: b
     manifest = {
         "schema_version": SUPPORTED_CHECKPOINT_SCHEMA,
         "shards": shards,
-        "data_cursor": {"global_step": 4, "record_index": 4, "tokens_seen": 36, "shard": "SELFTEST_FIXTURE_shard"},
+        "data_cursor": {"global_step": global_step, "record_index": global_step, "tokens_seen": 36, "shard": "SELFTEST_FIXTURE_shard"},
         **top_level_sha,
     }
     (ckpt_dir / "checkpoint-manifest.json").write_bytes(json.dumps(manifest, indent=2).encode("utf-8"))
@@ -1142,6 +1435,17 @@ def run_selftest() -> None:
         r3 = check_r1_e1(short_root, thresholds)
         assert r3["status"] == "NOT_MET" and r3["steps_observed"] == 4, r3
 
+        # --- E1 (R-13): 100 events with NO loss field cannot demonstrate "zero NaN/Inf in loss" -> NOT_MET ---
+        fieldless_root = tmp_path / "fieldless_run"
+        fieldless_events = []
+        for step in range(1, 101):
+            ts = datetime.fromtimestamp(1785900000 + step, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+            fieldless_events.append({"ts": ts, "kind": "train_step", "source": "ember-restart-3b", "payload": {"run_id": "SELFTEST_FIXTURE_run", "step": step, "grad_norm": 1.0}})
+        _write_jsonl(fieldless_root / "telemetry.jsonl", fieldless_events)
+        r4 = check_r1_e1(fieldless_root, thresholds)
+        assert r4["status"] == "NOT_MET" and r4["missing_field_count"] == 100, r4
+        assert r4["missing_field_rows"][0] == {"step": 1, "field": "loss", "present": False}, r4
+
         # --- E2: decreasing loss over clean_root -> MET ---
         e2 = check_r1_e2(clean_root, thresholds)
         assert e2["status"] == "MET", e2
@@ -1159,6 +1463,24 @@ def run_selftest() -> None:
         _write_jsonl(flat_root / "telemetry.jsonl", flat_events)
         e2_flat = check_r1_e2(flat_root, thresholds)
         assert e2_flat["status"] == "NOT_MET", e2_flat
+
+        # --- E2 (R-5): an unanchored mid-run fragment (steps 41..140, decreasing) must refuse, not adjudicate ---
+        fragment_root = tmp_path / "fragment_run"
+        fragment_events = []
+        for step in range(41, 141):
+            ts = datetime.fromtimestamp(1785900000 + step, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+            fragment_events.append({"ts": ts, "kind": "train_step", "source": "ember-restart-3b", "payload": {"run_id": "SELFTEST_FIXTURE_run", "step": step, "loss": 2.0 - 0.01 * step, "grad_norm": 1.0}})
+        _write_jsonl(fragment_root / "telemetry.jsonl", fragment_events)
+        e2_fragment = check_r1_e2(fragment_root, thresholds)
+        assert e2_fragment["status"] == "EVIDENCE_MISSING", e2_fragment
+        assert e2_fragment["missing_step_span"] == [1, 40], e2_fragment
+
+        # --- E2 (R-5): a 20-step run fills both windows but is not the T-01 canary -> refuse ---
+        twenty_root = tmp_path / "twenty_run"
+        _write_jsonl(twenty_root / "telemetry.jsonl", _synthetic_train_step_events(run_id="SELFTEST_FIXTURE_run", n_steps=20))
+        e2_twenty = check_r1_e2(twenty_root, thresholds)
+        assert e2_twenty["status"] == "EVIDENCE_MISSING", e2_twenty
+        assert e2_twenty["missing_step_span"] == [21, 100], e2_twenty
 
         # --- E3: intact checkpoint, no resume evidence -> NOT_MET (write ok, restore NOT_ATTEMPTED) ---
         ok_ckpt_root = tmp_path / "e3_ok_run"
@@ -1199,7 +1521,7 @@ def run_selftest() -> None:
         assert e3_failed_resume["status"] == "NOT_MET", e3_failed_resume
         assert "no remaining authorized records" in e3_failed_resume["components"]["restore_round_trip"]["attempts"][0]["traceback_tail"], e3_failed_resume
 
-        # --- E3: a sibling root with a SUCCESSFUL resume attempt -> overall MET ---
+        # --- E3 (R-1): a zero-exit resume with NO successor checkpoint -> ATTEMPTED_UNVERIFIED, NOT_MET ---
         resume_sibling_ok = tmp_path / "e3_resume_sibling_ok"
         resume_sibling_ok.mkdir()
         launch_receipt_ok = {
@@ -1208,9 +1530,26 @@ def run_selftest() -> None:
             "child_log": None,
         }
         (resume_sibling_ok / "disk-budget-runner-receipt-certified-launch.json").write_bytes(json.dumps(launch_receipt_ok).encode("utf-8"))
+        e3_unverified = check_r1_e3(ok_ckpt_root, sibling_roots=[resume_sibling_ok])
+        assert e3_unverified["components"]["restore_round_trip"]["status"] == "ATTEMPTED_UNVERIFIED", e3_unverified
+        assert e3_unverified["status"] == "NOT_MET", e3_unverified
+        assert e3_unverified["components"]["restore_round_trip"]["attempts"][0]["cursor_advance"]["verified"] is False, e3_unverified
+
+        # --- E3 (R-1): successor checkpoint present but cursor NOT advanced (global_step equal) -> still unverified ---
+        _synthetic_checkpoint(resume_sibling_ok, seed=830002, global_step=4)
+        e3_stale = check_r1_e3(ok_ckpt_root, sibling_roots=[resume_sibling_ok])
+        assert e3_stale["components"]["restore_round_trip"]["status"] == "ATTEMPTED_UNVERIFIED", e3_stale
+        assert e3_stale["status"] == "NOT_MET", e3_stale
+
+        # --- E3 (R-1): successor checkpoint with an ADVANCED cursor -> SUCCEEDED, overall MET ---
+        _synthetic_checkpoint(resume_sibling_ok, seed=830003, global_step=5)
         e3_ok_resume = check_r1_e3(ok_ckpt_root, sibling_roots=[resume_sibling_ok])
         assert e3_ok_resume["components"]["restore_round_trip"]["status"] == "SUCCEEDED", e3_ok_resume
         assert e3_ok_resume["status"] == "MET", e3_ok_resume
+        advance = e3_ok_resume["components"]["restore_round_trip"]["attempts"][0]["cursor_advance"]
+        assert advance["verified"] is True and advance["source_global_step"] == 4 and advance["successor_global_step"] == 5, e3_ok_resume
+        resumed_root = e3_ok_resume["components"]["restore_round_trip"]["attempts"][0]["resumed_artifact_root"]
+        assert str(resumed_root).endswith("checkpoint-vertical-slice-seed-830003"), e3_ok_resume
 
         # --- E3: manifest with unrecognized schema (v3) -> refuses cleanly ---
         v3_root = tmp_path / "e3_v3_run"
@@ -1242,12 +1581,43 @@ def run_selftest() -> None:
         assert e4_result["context"]["pre_run_vram_preflight"]["total_gb"] == 25.76, e4_result
 
         # --- E5/E6: EVIDENCE_MISSING against an empty root; fixed-prior manifest presence is reported ---
-        e5 = check_r1_e5(empty_root)
+        e5 = check_r1_e5(empty_root, thresholds)
         assert e5["status"] == "EVIDENCE_MISSING", e5
         assert e5["components"]["fixed_prior_manifest_present"] is True, e5  # real repo file, checked via REPO_ROOT default
 
-        e6 = check_r1_e6(empty_root)
+        # --- E5 (R-2): a name-matched JUNK file must NOT mint MET; partial validation is recorded ---
+        e5_junk_root = tmp_path / "e5_junk_run"
+        e5_junk_root.mkdir()
+        (e5_junk_root / "SELFTEST_FIXTURE-frontier-receipt.json").write_bytes(json.dumps({"note": "SELFTEST_FIXTURE junk"}).encode("utf-8"))
+        e5_junk = check_r1_e5(e5_junk_root, thresholds)
+        assert e5_junk["status"] == "EVIDENCE_MISSING", e5_junk
+        assert e5_junk["frontier_receipt_validation"] == "PARTIAL_UNIMPLEMENTED", e5_junk
+        junk_row = e5_junk["components"]["candidate_validation"][0]
+        assert junk_row["parse_ok"] is True and junk_row["energy_boundary_ok"] is False and junk_row["sample_coverage_ok"] is False, e5_junk
+
+        # --- E5 (R-2): even a candidate passing every IMPLEMENTED energy check refuses MET (no full §5.4 validator) ---
+        e5_energy_root = tmp_path / "e5_energy_run"
+        e5_energy_root.mkdir()
+        (e5_energy_root / "SELFTEST_FIXTURE-frontier-receipt.json").write_bytes(json.dumps({
+            "energy": {"energy_boundary": "DEGRADED_PROXY", "sample_coverage_fraction": float(thresholds["T-06"])},
+        }).encode("utf-8"))
+        e5_energy = check_r1_e5(e5_energy_root, thresholds)
+        assert e5_energy["status"] == "EVIDENCE_MISSING", e5_energy
+        energy_row = e5_energy["components"]["candidate_validation"][0]
+        assert energy_row["energy_boundary_ok"] is True and energy_row["sample_coverage_ok"] is True, e5_energy
+
+        e6 = check_r1_e6(empty_root, thresholds)
         assert e6["status"] == "EVIDENCE_MISSING", e6
+
+        # --- E6 (R-3): ONE file matching BOTH name patterns is deduped to one candidate and never MET ---
+        e6_dual_root = tmp_path / "e6_dual_run"
+        e6_dual_root.mkdir()
+        (e6_dual_root / "forecast-recalibration.json").write_bytes(json.dumps({"SELFTEST_FIXTURE": True}).encode("utf-8"))
+        e6_dual = check_r1_e6(e6_dual_root, thresholds)
+        assert e6_dual["status"] == "EVIDENCE_MISSING", e6_dual
+        assert e6_dual["forecast_recalibration_validation"] == "UNIMPLEMENTED", e6_dual
+        dual_docs = e6_dual["components"]["candidate_documents"]
+        assert len(dual_docs) == 1 and sorted(dual_docs[0]["name_matches"]) == ["forecast", "recalibration"], e6_dual
 
         # --- E7: single seed root -> EVIDENCE_MISSING naming T-07 ---
         e7_single = check_r1_e7([clean_root], thresholds)
@@ -1275,17 +1645,44 @@ def run_selftest() -> None:
         assert e7["sigma_seed"]["loss"]["matched_step_count"] == 100, e7
         assert e7["sigma_seed"]["grad_norm"]["sigma_seed"] == 0.0, e7  # identical grad_norm across seeds -> zero variance
 
-        # --- E8: no A1 evidence anywhere -> EVIDENCE_MISSING ---
-        e8_missing = check_r1_e8([ok_ckpt_root, empty_root])
-        assert e8_missing["status"] == "EVIDENCE_MISSING", e8_missing
+        # --- E7 (R-6): two 4-step seed roots are NOT an R1-scale seed-noise measurement -> refuse ---
+        seed_short_a = tmp_path / "seed_short_a"
+        seed_short_b = tmp_path / "seed_short_b"
+        _write_jsonl(seed_short_a / "telemetry.jsonl", _synthetic_train_step_events(run_id="SELFTEST_FIXTURE_ssa", n_steps=4))
+        _write_jsonl(seed_short_b / "telemetry.jsonl", _synthetic_train_step_events(run_id="SELFTEST_FIXTURE_ssb", n_steps=4))
+        e7_short = check_r1_e7([seed_short_a, seed_short_b], thresholds)
+        assert e7_short["status"] == "EVIDENCE_MISSING", e7_short
+        assert "T-01=100" in e7_short["detail"], e7_short
+        assert all(row["usable_at_r1_scale"] is False for row in e7_short["components"]["per_seed_root"]), e7_short
 
-        # --- E8: a manifest mentioning an A1 marker -> MET ---
+        # --- E7 (R-6): two 100-step seeds whose MATCHED overlap is below T-01 -> refuse, no sub-scale sigma ---
+        seed_offset = tmp_path / "seed_offset"
+        offset_events = []
+        for step in range(51, 151):
+            ts = datetime.fromtimestamp(1785900000 + step, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+            offset_events.append({"ts": ts, "kind": "train_step", "source": "ember-restart-3b", "payload": {"run_id": "SELFTEST_FIXTURE_offset", "step": step, "loss": 1.0, "grad_norm": 1.0}})
+        _write_jsonl(seed_offset / "telemetry.jsonl", offset_events)
+        e7_offset = check_r1_e7([seed_a, seed_offset], thresholds)
+        assert e7_offset["status"] == "EVIDENCE_MISSING", e7_offset
+        assert "matched_step_count: loss=50" in e7_offset["detail"], e7_offset
+        assert "sigma_seed" not in e7_offset, e7_offset
+
+        # --- E8 (R-4): no A1 evidence anywhere -> EVIDENCE_MISSING, frozen bars quoted from the thresholds dict ---
+        e8_missing = check_r1_e8([ok_ckpt_root, empty_root], thresholds)
+        assert e8_missing["status"] == "EVIDENCE_MISSING", e8_missing
+        assert e8_missing["components"]["candidate_manifests"] == [], e8_missing
+        assert e8_missing["components"]["liveness_leg"]["bar"]["floor_fraction"] == thresholds["T-08"], e8_missing
+        assert e8_missing["components"]["parity_leg"]["bar"]["matched_steps_required"] == thresholds["T-09"], e8_missing
+        assert e8_missing["components"]["parity_leg"]["bar"]["band_formula"] == thresholds["F-11"], e8_missing
+
+        # --- E8 (R-4): a manifest carrying A1 marker words is a CANDIDATE pointer only -- never MET ---
         a1_root = tmp_path / "a1_run"
         a1_ckpt_dir = a1_root / "artifacts" / "checkpoints" / "checkpoint-a1"
         a1_ckpt_dir.mkdir(parents=True)
         (a1_ckpt_dir / "checkpoint-manifest.json").write_bytes(json.dumps({"schema_version": "SELFTEST_FIXTURE", "arm": "A1_dense_tier1_offload"}).encode("utf-8"))
-        e8_found = check_r1_e8([a1_root])
-        assert e8_found["status"] == "MET", e8_found
+        e8_found = check_r1_e8([a1_root], thresholds)
+        assert e8_found["status"] == "EVIDENCE_MISSING", e8_found
+        assert len(e8_found["components"]["candidate_manifests"]) == 1, e8_found
 
         # --- Receipt envelope + write path: build + write one receipt per exit id, verify schema-floor-clean ---
         import receipt_check
