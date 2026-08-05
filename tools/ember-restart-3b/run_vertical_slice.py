@@ -2684,6 +2684,14 @@ def run(
             episode_slice = specialist_execution_slice_receipt(
                 records[published_specialist_records:processed_records],
                 source_start_record=int(planned_slice["start_record"]) + published_specialist_records,
+                # The lineage spread below keeps scene_split_selection, and checkpoint_
+                # artifacts._specialist_lineage requires the slice to carry the selection's
+                # count whenever that key is present -- an episode slice without it can
+                # never publish a vision checkpoint (#1457: the first certified image
+                # canary trained 200 records and died at final publication on exactly
+                # this). The planned slice's value already passed startup validation as
+                # selected_record_count; None for the three capabilities with no split.
+                scene_split_record_count=planned_slice.get("scene_split_record_count"),
             )
             current_lineage = {
                 **specialist_lineage,

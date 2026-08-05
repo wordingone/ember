@@ -107,7 +107,7 @@ class SpecialistLineageTests(unittest.TestCase):
         candidate._activate_expert("vision")
         return parent, manifest_path, candidate, optimizer
 
-    def _write_vision_successor(self, base: Path, *, parent_manifest: Path | None = None, root_manifest: Path | None = None, trained: list[str] | None = None, max_serialized_bytes: int | None = None, verification: dict[str, object] | None = None) -> dict[str, object]:
+    def _write_vision_successor(self, base: Path, *, parent_manifest: Path | None = None, root_manifest: Path | None = None, trained: list[str] | None = None, max_serialized_bytes: int | None = None, verification: dict[str, object] | None = None, execution_slice: dict[str, object] | None = None) -> dict[str, object]:
         parent, default_manifest, candidate, optimizer = self._root_and_candidate(base)
         parent_manifest = parent_manifest or default_manifest
         root_manifest = root_manifest or default_manifest
@@ -122,7 +122,7 @@ class SpecialistLineageTests(unittest.TestCase):
                 "root_manifest": root_manifest,
                 "trained_expert_ids": trained if trained is not None else ["vision"],
                 "data_verification_receipt": _verification() if verification is None else verification,
-                "execution_slice": _execution_slice(scene=True),
+                "execution_slice": _execution_slice(scene=True) if execution_slice is None else execution_slice,
                 "scene_split_selection": _scene_selection(),
             },
             max_serialized_bytes=max_serialized_bytes,
@@ -146,6 +146,35 @@ class SpecialistLineageTests(unittest.TestCase):
         self.assertNotIn("parent_manifest", json.dumps(receipt))
         self.assertNotIn("root_manifest", json.dumps(receipt))
         self.assertEqual(parent["active_expert_ids"], ["shared"])
+
+    def test_vision_episode_slice_from_runner_builder_publishes_and_sceneless_is_refused(self) -> None:
+        """#1457: the publication callback rebuilds the execution slice per episode with
+        run_vertical_slice.specialist_execution_slice_receipt. For a vision lineage the
+        rebuild must thread the planned slice's scene_split_record_count through — the
+        first certified image canary trained its full 200 records and then failed every
+        publication because the episode rebuild dropped the key while the lineage spread
+        kept scene_split_selection. This test binds the runner's builder to this writer's
+        vision shape requirement so the two cannot silently disagree again."""
+        from run_vertical_slice import specialist_execution_slice_receipt
+
+        records = [
+            {"token_ids": list(range(16)), "scene_split": "train", "active_expert": "vision"},
+            {"token_ids": list(range(16)), "scene_split": "train", "active_expert": "vision"},
+        ]
+        planned = specialist_execution_slice_receipt(records, source_start_record=0, scene_split_record_count=2)
+        episode = specialist_execution_slice_receipt(
+            records[0:2],
+            source_start_record=int(planned["start_record"]) + 0,
+            scene_split_record_count=planned.get("scene_split_record_count"),
+        )
+        sceneless_episode = specialist_execution_slice_receipt(records[0:2], source_start_record=0)
+
+        with tempfile.TemporaryDirectory() as directory:
+            receipt = self._write_vision_successor(Path(directory), execution_slice=episode)
+            self.assertEqual(receipt["lineage"]["episode"]["execution_slice"]["scene_split_record_count"], 2)
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, "execution slice has an invalid shape"):
+                self._write_vision_successor(Path(directory), execution_slice=sceneless_episode)
 
     def test_specialist_successor_rejects_semantic_admission_or_runtime_contract_drift(self) -> None:
         for name, mutate, expected in [
