@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """sp-6 duty-battery selftest (#269, both halves).
 
 Content half: 20 episodes, 4 families x 5, unique ids, verbs from the closed
@@ -13,8 +16,8 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-BATTERY = Path(__file__).resolve().parent.parent / "docs" / "sp6-duty-battery.jsonl"
-ENCODINGS = Path(__file__).resolve().parent.parent / "docs" / "sp6-duty-battery-encodings.jsonl"
+BATTERY = Path(__file__).resolve().parent.parent / "docs" / "archive" / "pre-restart" / "sp6-duty-battery.jsonl"
+ENCODINGS = Path(__file__).resolve().parent.parent / "docs" / "archive" / "pre-restart" / "sp6-duty-battery-encodings.jsonl"
 
 # #260 event-loop shape contract (scripts/nck/event_loop.py):
 # Event(source, kind, payload, ts). MailSource is stub pending #259 — the

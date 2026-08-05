@@ -17,7 +17,7 @@ disposed at all, since Class is set once at row creation and is exactly the
 kind of token (ACTIVE-BLOCKER etc.) the scan matches on.
 
 This drives the real script as a subprocess against a synthetic
-docs/ember-debt-ledger.md, matching test_c_invariant.py's EMBER_TOTALITY_ROOT
+docs/ledgers/ember-debt-ledger.md, matching test_c_invariant.py's EMBER_TOTALITY_ROOT
 override convention, so the fix is proven against the actual executable, not
 a reimplementation.
 """
@@ -50,7 +50,7 @@ def _minimal_env() -> dict:
 
 
 def _write_ledger(root: Path, table_body: str) -> None:
-    docs = root / "docs"
+    docs = root / "docs" / "ledgers"
     docs.mkdir(parents=True, exist_ok=True)
     (docs / "ember-debt-ledger.md").write_text(
         "# Ember Technical And Cognitive Debt Ledger\n\n"

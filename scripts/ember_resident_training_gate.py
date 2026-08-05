@@ -28,8 +28,8 @@ TICKET = "EMBER-RESIDENT-TRAINING-GATE"
 SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
 REQUIRED_PAPERS = {"RLM", "iGRPO"}
 SUPERSEDED_PARALLEL_SPECS = [
-    Path("docs/ember-mvp-v0.md"),
-    Path("docs/20260617-maximally-viable-product.md"),
+    Path("docs/archive/pre-restart/ember-mvp-v0.md"),
+    Path("docs/archive/pre-restart/20260617-maximally-viable-product.md"),
 ]
 def _repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
@@ -294,9 +294,9 @@ def load_paper_sources(index_path: Path) -> tuple[dict[str, Any], list[str]]:
 
 def inspect_clean_room_harness(repo: Path, full_parity_receipt: Path | None = None) -> tuple[dict[str, Any], list[str]]:
     required = [
-        Path("docs/sp5-nck-harness-port-spec-v0.md"),
-        Path("docs/nck-event-loop-v0.md"),
-        Path("docs/nck-invariants-v0.md"),
+        Path("docs/archive/pre-restart/sp5-nck-harness-port-spec-v0.md"),
+        Path("docs/archive/pre-restart/nck-event-loop-v0.md"),
+        Path("docs/archive/pre-restart/nck-invariants-v0.md"),
         Path("scripts/nck/event_loop.py"),
         Path("scripts/nck/invariants.py"),
         Path("scripts/nck/nck_e2e_proof.py"),
@@ -1109,7 +1109,7 @@ def build_gate_receipt(
     full_parity_receipt: Path | None = None,
 ) -> dict[str, Any]:
     goal_path = repo / "GOAL.md"
-    debt_path = repo / "docs/ember-debt-ledger.md"
+    debt_path = repo / "docs/ledgers/ember-debt-ledger.md"
     errors: list[str] = []
     if not goal_path.exists():
         errors.append("goal_source.missing")
@@ -1127,7 +1127,7 @@ def build_gate_receipt(
     candidate, candidate_errors = _validate_candidate_manifest(candidate_manifest, floor_contracts)
     errors.extend(candidate_errors)
 
-    # DT-6 loop-economics conjunct (docs/dt6-loop-economics-gate-amendment.md,
+    # DT-6 loop-economics conjunct (docs/archive/pre-restart/dt6-loop-economics-gate-amendment.md,
     # gh #128): check_econ_gate is invoked unconditionally here -- never only
     # inside an `if status == "PASS"` branch -- so a PASS with the econ leg
     # unevaluated is impossible by construction. A missing candidate or
@@ -1297,7 +1297,7 @@ def build_fixture_repo(root: Path) -> tuple[Path, Path, Path]:
             "RLM, iGRPO, and the clean-room\nBinding floor-contract surfaces imported into this goal\n"
             "Existing neural infrastructure is not missing: `scripts/train_multimodal_v0.py`\n"
         ),
-        "docs/ember-debt-ledger.md": "ledger\n",
+        "docs/ledgers/ember-debt-ledger.md": "ledger\n",
         "docs/ember-floor-contract.md": (
             "<!-- EMBER_CONSERVATION_V1\n"
             "minimum_new_network_parameters=3000000000\n"
@@ -1328,11 +1328,11 @@ def build_fixture_repo(root: Path) -> tuple[Path, Path, Path]:
             "No modality, mechanism family, benchmark obligation, or whole-stack requirement\n"
             "can be deferred out of the foundation model.\n"
         ),
-        "docs/ember-mvp-v0.md": "# SUPERSEDED fixture\n\nGOAL.md is the sole active goal file; no scope is reduced; resident_training_gate_status=PASS required.\n",
-        "docs/20260617-maximally-viable-product.md": "# SUPERSEDED fixture\n\nGOAL.md is the sole active goal file; no scope is reduced; resident_training_gate_status=PASS required.\n",
-        "docs/sp5-nck-harness-port-spec-v0.md": "clean-room spec\n",
-        "docs/nck-event-loop-v0.md": "event loop\n",
-        "docs/nck-invariants-v0.md": "invariants\n",
+        "docs/archive/pre-restart/ember-mvp-v0.md": "# SUPERSEDED fixture\n\nGOAL.md is the sole active goal file; no scope is reduced; resident_training_gate_status=PASS required.\n",
+        "docs/archive/pre-restart/20260617-maximally-viable-product.md": "# SUPERSEDED fixture\n\nGOAL.md is the sole active goal file; no scope is reduced; resident_training_gate_status=PASS required.\n",
+        "docs/archive/pre-restart/sp5-nck-harness-port-spec-v0.md": "clean-room spec\n",
+        "docs/archive/pre-restart/nck-event-loop-v0.md": "event loop\n",
+        "docs/archive/pre-restart/nck-invariants-v0.md": "invariants\n",
         "docs/nc2-own-technique-contract.md": (
             "# Owned architecture and mechanism research contract (fixture mirror)\n\n"
             "## Unified decoder contract\n\n"
@@ -1617,7 +1617,7 @@ def main() -> int:
     changed = [Path(p) for p in args.changed_path] or [
         Path("scripts/ember_resident_training_gate.py"),
         Path("scripts/ember_resident_training_gate_selftest.py"),
-        Path("docs/ember-debt-ledger.md"),
+        Path("docs/ledgers/ember-debt-ledger.md"),
         Path("GOAL.md"),
     ]
     receipt = build_gate_receipt(

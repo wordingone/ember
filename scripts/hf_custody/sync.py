@@ -70,7 +70,7 @@ HARD INVARIANTS (encoded here, not just documented):
     — moot once N1 is fixed: one commit, one revision, covering both).
 
 Deletion of a mirrored HF path is never automated by this tool or any tool
-in this package — see docs/hf-custody/SYNC.md.
+in this package — see docs/custody/hf-sync.md.
 """
 from __future__ import annotations
 

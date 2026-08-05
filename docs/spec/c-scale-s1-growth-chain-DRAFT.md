@@ -222,7 +222,7 @@ rungs reachable without new code is repeated doubling from the current landed po
 
 VRAM formula (same convention `docs/spec/growth-v1.md` §8 already uses, computed here exactly per
 rung rather than by an approximate 90/10 split): Muon-optimized hidden-2D matrices (attention +
-MLP, `docs/fp44-multimodal-optimizer-decision.md`'s default) at **8 B/param** (2 bf16 weight + 2 bf16
+MLP, `docs/design/fp44-multimodal-optimizer-decision.md`'s default) at **8 B/param** (2 bf16 weight + 2 bf16
 grad + 4 fp32 momentum, no `v`, no fp32 master); AdamW-optimized embed/norm/head/MTP-head matrices at
 **16 B/param** (full state). Per rung: `params_muon(ff) = 83,886,080 + 61,440*ff`; `params_adamw =
 131,113,984` (constant — embed/head/norms/MTP fixed regardless of ff, using the state-dict-sum
@@ -490,7 +490,7 @@ docstring), confirmed directly against `receipts/citation-check-20260703T122221Z
 
 `GOAL.md` · `docs/spec/conditions-v1.md` · `docs/spec/growth-v1.md` ·
 `docs/spec/c-scale-s2-token-bill-protocol.md` · `docs/spec/ceff-lever-ladder.md` ·
-`docs/fp44-multimodal-optimizer-decision.md` · `scripts/ember_totality/test_c_scale.py` ·
+`docs/design/fp44-multimodal-optimizer-decision.md` · `scripts/ember_totality/test_c_scale.py` ·
 `scripts/v0_pretrain_launch_gate.py` · `scripts/cbase_grow_dryrun.py` · `scripts/cbase_grow_live.py` ·
 `scripts/timeshare_pretrain.py` · `scripts/check_goal_citations.py` ·
 `configs/v0-pretrain-config.json` ·

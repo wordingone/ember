@@ -1,8 +1,11 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Heartbeat runner — deterministic round-lifecycle machine.
 
 Phase machine: IDLE -> DISPATCH -> RUN -> TERMINAL -> PROBE -> GATES -> DECIDE -> {NEXT | HALT}
 
-Hard rails (from docs/heartbeat-runner-spec-v0.md):
+Hard rails (from docs/archive/pre-restart/heartbeat-runner-spec-v0.md):
   1. Scope-frozen: runner executes the authorized sequence only. Config hash mismatch => HALT.
   2. Fail-closed everywhere: absent receipt, schema mismatch, governor violation,
      heartbeat write failure => HALT. No fix-forward.

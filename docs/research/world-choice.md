@@ -7,7 +7,7 @@ ARC-AGI is still near-superintelligent — so ARC failure is not proof of
 non-intelligence, and ARC success is not proof of generalization. Think hard
 about whether ARC is the right call.*
 
-*Companion formalism: `docs/formalization-v0.md` §3, §7.*
+*Companion formalism: `docs/archive/pre-restart/formalization-v0.md` §3, §7.*
 
 ---
 

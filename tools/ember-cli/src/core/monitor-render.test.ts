@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // core/monitor-render.test.ts — unit coverage for the `monitor` cockpit surface's pure
 // rendering helpers (issue: monitor verb was an unusable per-row verdict dump + a pct_complete
 // field-read bug reading zero). Covers: truncation rules, color on/off fallback, not-green-first
@@ -55,7 +59,7 @@ function stateWith(conditions: Claim[], overrides: Partial<EmberWorldState["moni
     interact: { ledgerRows: [] },
     sources: {
       goal: { path: "GOAL.md", sha256: "x" },
-      ledger: { path: "docs/ember-debt-ledger.md", sha256: "x" },
+      ledger: { path: "docs/ledgers/ember-debt-ledger.md", sha256: "x" },
       board: { path: "scripts/ember_totality/receipts-totality/fixture.json", sha256: "x" },
     },
   };

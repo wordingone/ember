@@ -510,7 +510,7 @@ def cosine_warmup_frac(step: int, total_steps: int, *,
     still used verbatim by the dry-run leg).
 
     warmup_steps (optional, additive -- issue #118 P1 envelope sweep,
-    2026-07-08, docs/deviations.md DEV-003): when given, OVERRIDES
+    2026-07-08, docs/ledgers/deviations.md DEV-003): when given, OVERRIDES
     warmup_frac*total_steps as the EXACT number of warmup steps, never
     re-derived from a fraction (avoids an int()-truncation round-trip for a
     caller that already computed an absolute step count, e.g. prereg
@@ -1061,7 +1061,7 @@ def assert_disjoint_from_training(held_out_start: int, ceiling_steps: int,
 #                                     corpus_id -- the corpus dir's own
 #                                     basename ('shards-v0' is already the
 #                                     established repo-wide name for this
-#                                     corpus: docs/density-ab-spec-v1.md,
+#                                     corpus: docs/archive/pre-restart/density-ab-spec-v1.md,
 #                                     scripts/token_shards_v0.py) -- plus the
 #                                     manifest's own combined_sha256, which
 #                                     pins CONTENT strictly more precisely
@@ -2125,7 +2125,7 @@ def run_phase2_live(cfg_real: dict, real_arch: dict, *, ceiling_steps: int,
     any gate decision -- purely a side-channel write.
 
     warmup_steps: optional, additive (issue #118 P1 envelope sweep,
-    2026-07-08, docs/deviations.md DEV-003) -- passed straight through to
+    2026-07-08, docs/ledgers/deviations.md DEV-003) -- passed straight through to
     apply_cosine_warmup's own warmup_steps override (see its docstring).
     Default None preserves this function's EXACT prior schedule (10% of
     ceiling_steps) for every pre-existing caller (main_live never passes

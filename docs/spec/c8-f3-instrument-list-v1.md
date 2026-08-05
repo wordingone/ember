@@ -65,7 +65,7 @@ impossible.
 
 **Not a candidate, recorded so its absence is not read as oversight:** GPQA-diamond, which the
 freeze declaration marks `EXCLUDED from v1` (PIN-PENDING, licence-consent gate,
-`docs/deviations.md` DEV-004). It is unavailable to F3 unless it lands in a suite v2 under the
+`docs/ledgers/deviations.md` DEV-004). It is unavailable to F3 unless it lands in a suite v2 under the
 escape hatch above.
 
 ## 3. What "provenance-disjoint" means here, and against what
@@ -316,7 +316,7 @@ a strong signal in any one member could carry the check.
 ## 7. Re-verification trigger (the disjointness rationale has an expiry)
 
 Every measured-overlap leg in §5 is the 2026-07-09 scan against the corpus **as it then stood**.
-The AI-Lab Corpus Charter (`docs/ai-lab-corpus-charter.md`) commits to acquiring domains that
+The AI-Lab Corpus Charter (`docs/charter/ai-lab-corpus-charter.md`) commits to acquiring domains that
 `receipts/corpus-census-20260710.json` grades at NONE, and the census names the intended sources
 by name. Several would land directly on top of a candidate's provenance:
 

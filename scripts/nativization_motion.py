@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """
 Static import census runner for nativization measurement.
 
@@ -368,7 +371,7 @@ def run_nativization_motion(repo_root: Path) -> str:
     Returns path to the written receipt.
     """
     # Find diagnostic and receipts paths
-    diagnostic_path = repo_root / "docs" / "ember-owned-substrate-diagnostic.md"
+    diagnostic_path = repo_root / "docs" / "design" / "ember-owned-substrate-diagnostic.md"
     receipts_dir = repo_root / "receipts" / "nativization-motion"
 
     if not diagnostic_path.exists():

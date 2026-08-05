@@ -7,7 +7,7 @@
 > two independent auxiliary vocabulary-projection heads. The implemented
 > heads are neither DeepSeek sequential MTP nor a speculative drafter and
 > receive no drafter or quality credit. See
-> `docs/mtp-parameter-accounting-and-mechanism-identity-v1.md`.
+> `docs/ember-restart/mtp-parameter-accounting-and-mechanism-identity-v1.md`.
 
 **Status:** DRAFT  
 **Scope:** Component pinning for the NC2-own pretrain loop at ~0.5–1B params / 20B tokens, RTX 4090 single-GPU feasibility.  

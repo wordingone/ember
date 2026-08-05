@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """NC-K resident event-loop — closes #260, extended for C10 (#340).
 
 Architecture:
@@ -268,7 +271,7 @@ class MailSource(EventSource):
 
     Implements issue #259: ember mailbox identity + founders.yaml signal wiring.
     Emits Event(source="mail", kind="mail_arrived", payload={id,from,subject,body,channel})
-    per the frozen sp6 interface (docs/sp6-duty-battery-v0.md §Encoding half).
+    per the frozen sp6 interface (docs/archive/pre-restart/sp6-duty-battery-v0.md §Encoding half).
 
     signal_path  — path to the founder's signal file (written by mailbox binary on new mail)
     db_path      — path to mailbox.db (SQLite)

@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp39_density_power_audit.py — unit-of-analysis audit of the density A/B verdict.
 
 The density A/B (#359 half-2 / verdict DENSITY-AB-VERDICT) reported
@@ -54,7 +57,7 @@ sys.path.insert(0, HERE)
 from receipt_write import checked_write  # noqa: E402
 
 RECEIPTS = f"{NC}/receipts"
-SPEC_CLAIMED_MDE_PP = 3.85   # docs/c04-token-budget-v1.md F-4: n=400 -> 3.85pp
+SPEC_CLAIMED_MDE_PP = 3.85   # docs/archive/pre-restart/c04-token-budget-v1.md F-4: n=400 -> 3.85pp
 EXTREME_TOL = 1e-9
 REAL_VERDICTS = {"DENSITY_CONFIRMED", "DENSITY_MARGINAL",
                  "DENSITY_REVERSED", "DENSITY_FLAT"}

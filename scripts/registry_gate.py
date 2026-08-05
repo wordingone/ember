@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# goal_id: EMBER-00
-# next_executed_outcome: EMBER-01 clean 3B custody and identity spine
+# workstream_id: EMBER-02A
+# goal_id: EMBER-02
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Technique-registry dispatch gate — reference implementation (#256, sp-7).
 
 Contract: docs/registry-dispatch-gate-spec-v0.md. The daemon calls this as a
@@ -18,7 +19,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-REGISTRY = ROOT / "docs" / "technique-registry.jsonl"
+REGISTRY = ROOT / "docs" / "ledgers" / "technique-registry.jsonl"
 RECEIPT_LOG = ROOT / "receipts" / "registry-gate.jsonl"
 
 # Evidence states preserve observations without deleting research families.

@@ -883,7 +883,7 @@ def build_manifest(repo_root: Path) -> Dict[str, "FloorRow"]:
     Returns:
         dict mapping FloorRow.key -> FloorRow with real source_hash values.
     """
-    floor_path = repo_root / "docs" / "ember-floor-contract.md"
+    floor_path = repo_root / "docs" / "charter" / "ember-floor-contract.md"
     nc2_path = repo_root / "nc2-own-technique-contract.md"
     native_engine_path = repo_root / NATIVE_ENGINE_SOURCE
 

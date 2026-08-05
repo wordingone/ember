@@ -21,7 +21,7 @@ C11 -- Experience-horizon capability delta (duration-as-wall-clock is a timer,
      novelty_spoof, deletion_uses_wrong_baseline
   CHK: this file -- 9 recomputed checks, no trusted scalars.
 
-Spec: docs/c11-experience-horizon-spec.md (authored under issue #107; it is the
+Spec: docs/design/c11-experience-horizon-spec.md (authored under issue #107; it is the
 machine-checkable form of the conditions-v1.md C11 row and this probe implements
 it check-for-check).
 
@@ -54,7 +54,7 @@ ROOT = next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)
 # The canonical spec this probe implements. Resolved against REPO_ROOT (this
 # file's own repository), NOT the possibly-overridden evidence ROOT: a control
 # fixture root supplies receipts, never the version-controlled contract.
-SPEC_REL = os.path.join("docs", "c11-experience-horizon-spec.md")
+SPEC_REL = os.path.join("docs", "design", "c11-experience-horizon-spec.md")
 
 RECEIPT_DIR_REL = os.path.join("receipts", "ember-mvp", "c11-experience-horizon")
 

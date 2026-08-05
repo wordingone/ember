@@ -111,7 +111,7 @@ certificate).
 Binding on all: fail-closed engagement assertions before artifact write; mechanism metrics
 co-primary with trajectory bands (loss-only certifies zombies); ρ_batch stamped on every
 Muon-bearing cell; pins read from live objects, never configs; pre-registered signs frozen
-in docstrings; deviations → docs/deviations.md.
+in docstrings; deviations → docs/ledgers/deviations.md.
 
 ## 6. Verification ledger (what the sonnet legs corrected — kept so numbers stay honest)
 

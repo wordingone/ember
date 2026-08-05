@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_p1_envelope_sweep.py -- schedule-shape + receipt-schema tests for
 scripts/p1_envelope_sweep.py (issue #118, this lane's frozen build spec).
 
@@ -97,7 +100,7 @@ def test_lr_curve_endpoints_match_actually_applied_schedule():
 
 
 # ---------------------------------------------------------------------------
-# warmup_steps override (docs/deviations.md DEV-003, ruling d): additive
+# warmup_steps override (docs/ledgers/deviations.md DEV-003, ruling d): additive
 # reuse on scripts/w1_collapse_control_run.py's cosine_warmup_frac /
 # apply_cosine_warmup / run_phase2_live -- default None must be BYTE-
 # IDENTICAL to pre-DEV-003 behavior (regression), and an explicit override

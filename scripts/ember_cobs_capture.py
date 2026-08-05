@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """ember_cobs_capture.py -- C-OBS cockpit proof-pack capture harness (gh issue #10).
 
 Runs the REAL observatory proof-pack -- tools/ember-cli/src/core/ember-world-state-repl.ts --
@@ -22,7 +25,7 @@ wrap long paths across render columns, defeating substring redaction), and the S
 (spawns any exe/args pair, records raw+chunks+driver-receipt).
 
 Read-only w.r.t. training/GPU: this harness never touches a training process, never imports torch,
-never opens the GPU. It reads the goalforge contract tree's GOAL.md / docs/ember-debt-ledger.md /
+never opens the GPU. It reads the goalforge contract tree's GOAL.md / docs/ledgers/ember-debt-ledger.md /
 newest totality-board receipt (via the adapter it drives), and writes only under this tree's
 scratch/ and receipts/, plus an import-edition copy into the goalforge tree's receipts/ (the only
 tree test_c_obs.py's evidence scan inspects).
@@ -330,7 +333,7 @@ def main() -> int:
             "summary": (
                 "Real GOAL/ledger/receipts -> EmberWorldState adapter binding: "
                 "tools/ember-cli/src/core/ember-world-state.ts's buildEmberWorldState() reads the "
-                "goalforge contract tree's GOAL.md, docs/ember-debt-ledger.md, and the newest "
+                "goalforge contract tree's GOAL.md, docs/ledgers/ember-debt-ledger.md, and the newest "
                 "scripts/ember_totality/receipts-totality board receipt fresh on every call -- no "
                 "hand-maintained mirror -- and returns a typed EmberWorldState object (monitor / "
                 "understand / interact claims, each carrying an EvidenceRef back to its real "

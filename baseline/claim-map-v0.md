@@ -16,7 +16,7 @@ Evidence inspected:
 - `<exec-tree>\GOAL.md`: current integrated goal spans cockpit, visible/steerable training, M10 CLI margin, research harness, repo legibility, signature surfaces, and hard-problem tracking. Completion requires fresh receipts, 100% tally, C8 field-level receipt, and C-SCALE receipt.
 - `<exec-tree>\configs\v0-pretrain-config.json`: historical `ember-v0` c03 config, 368,354,304 base parameters excluding MTP plus 65,536,000 parameters in two independent auxiliary heads = 433,890,304 declared realized parameters; seq 1024, hidden 1024, 20 layers, 16 heads, bf16 base, QAT enabled, Muon/AdamW split, WSD schedule, 6.973B real tokens, historical 7.367B base-only token target, 4090-governed VRAM fraction 0.80.
 
-> **[ACCOUNTING ERRATUM]** The heads are independent hidden-to-vocabulary projections, not DeepSeek sequential MTP and not a speculative drafter. See `docs/mtp-parameter-accounting-and-mechanism-identity-v1.md`. Live ownership and pricing proof remains #688.
+> **[ACCOUNTING ERRATUM]** The heads are independent hidden-to-vocabulary projections, not DeepSeek sequential MTP and not a speculative drafter. See `docs/ember-restart/mtp-parameter-accounting-and-mechanism-identity-v1.md`. Live ownership and pricing proof remains #688.
 - `<exec-tree>\configs\v0-multimodal-config.json`: multimodal extension with reserved ids 0-7, image soft-token path, 2D RoPE, qk_norm, vision embedder, and missing/build notes for `inputs_embeds` and bidirectional spans.
 
 ## Claim Families

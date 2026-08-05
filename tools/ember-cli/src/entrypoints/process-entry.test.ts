@@ -2060,11 +2060,11 @@ describe("process-entry — dispatchFastPath('--watch') execution binding", () =
     );
     const boardDir = join(root, "scripts", "ember_totality", "receipts-totality");
     await mkdir(boardDir, { recursive: true });
-    await mkdir(join(root, "docs"), { recursive: true });
+    await mkdir(join(root, "docs", "ledgers"), { recursive: true });
     await mkdir(join(root, "receipts"), { recursive: true });
     await writeFile(join(root, "GOAL.md"), "# Watch Fixture Goal\n\n## Topology\n\nbody\n");
     await writeFile(
-      join(root, "docs", "ember-debt-ledger.md"),
+      join(root, "docs", "ledgers", "ember-debt-ledger.md"),
       "## Current Blocker Packet\n\n(none)\n\n## Active Rows\n\n| ID | Class | Debt | X | Y | Status |\n| --- | --- | --- | --- | --- | --- |\n",
     );
     const receipt = {

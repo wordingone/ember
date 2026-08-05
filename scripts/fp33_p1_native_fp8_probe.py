@@ -1,10 +1,13 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp33_p1_native_fp8_probe.py — native-Windows torch._scaled_mm fp8 probe.
 
 Tests whether CUTLASS fp8 GEMM initializes on native-Windows CUDA (sm89/4090).
 E5 confirmed CUTLASS init fail on WSL2 (torch 2.6+cu124). This probe runs on
 native Windows Python (torch 2.10+cu126) — different CUDA driver stack.
 
-Routing spec: docs/fp33-kernel-route-v0.md
+Routing spec: docs/archive/pre-restart/fp33-kernel-route-v0.md
 P1 PASS → fp8 training runs on native-Windows Python side (integration only)
 P1 FAIL → P2 CUTLASS-direct kernel authoring in WSL2
 

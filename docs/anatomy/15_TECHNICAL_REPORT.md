@@ -24,7 +24,7 @@ map to that receipt, not a replacement for reading it.
 
 ## H4 — verifier-free judgment (honest status)
 
-`docs/hardest-problems-register-v1.md`'s H4 entry ("O6: verifier-free
+`docs/ledgers/hardest-problems-register-v1.md`'s H4 entry ("O6: verifier-free
 judgment") is explicit: **"Status: OPEN, untouched, honestly not on the S5
 critical path... named so the deferral is a recorded decision, not drift."**
 This anatomy set does not claim H4 is solved — it isn't. What this set does
@@ -38,7 +38,7 @@ statement) rather than letting the gap drift unrecorded across an anatomy
 set that otherwise looks complete. Anyone reading `C-ANAT` GREEN alongside
 this report should read this section as the load-bearing caveat: verifier-free
 judgment remains H4's open problem, tracked in
-`docs/hardest-problems-register-v1.md`, not resolved by this doc set.
+`docs/ledgers/hardest-problems-register-v1.md`, not resolved by this doc set.
 
 ## Current gaps — honestly stated
 

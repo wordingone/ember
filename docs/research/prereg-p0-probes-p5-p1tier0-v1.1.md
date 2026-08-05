@@ -6,7 +6,7 @@ v1.1 note: v1 was adversarially reviewed BEFORE first execution (Fable verdict l
 closed, assertion semantics repaired, verdict bands made coherent, cell count corrected).
 Pre-execution amendment lands clean per the freeze rule below; nothing has run against v1.
 Freeze rule: this spec is frozen at v1.1. Any change after first execution = v1.x with a
-dated deviation entry here AND in docs/deviations.md. Silent iteration voids receipts.
+dated deviation entry here AND in docs/ledgers/deviations.md. Silent iteration voids receipts.
 Zombie rule (binding on both probes): loss/trajectory bands alone certify NOTHING here;
 mechanism metrics are co-primary. A run whose engagement assertions did not fire writes NO
 metrics artifact (fail-closed, #216) — it writes a FAILED-ENGAGEMENT receipt.

@@ -1,6 +1,7 @@
 # EMBER_ARTIFACT_CLASS=historical_only
-# goal_id: EMBER-00
-# next_executed_outcome: EMBER-01 clean 3B custody and identity spine
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """train_multimodal_v0.py — multimodal-unified v0 pretrain harness (eng-40 / #427).
 
 Wires all four multimodal locks into a single pretrain entry point:
@@ -2369,7 +2370,7 @@ def _run_er4(args) -> None:
 
     Validates that image-present vs image-ablated ΔNLL is measurable and
     the paired Wilcoxon test is implementable. Per prereg:
-    docs/v0-multimodal-floor-probe-prereg.md (MR-8).
+    docs/archive/pre-restart/v0-multimodal-floor-probe-prereg.md (MR-8).
 
     Receipt: harness_built=true, validated_on_local_holdout=true,
              mechanism_proven=true, er4_pass=true.
@@ -2853,7 +2854,7 @@ def _run_loop_econ_multimodal(args) -> None:
 
     Sweeps B=[4,8] with AdamW baseline, Muon AB, and torch.compile AB on the
     StreamingMatchedPairLoader multimodal path using the local b-multi-1 sample.
-    Enumerates all 6 EFFICIENCY_LEVERS per H1 (docs/hardest-problems-register-v1.md).
+    Enumerates all 6 EFFICIENCY_LEVERS per H1 (docs/ledgers/hardest-problems-register-v1.md).
     Config SHA bound to v0-multimodal-config.json (not the text pretrain config).
     """
     import hashlib as _hl

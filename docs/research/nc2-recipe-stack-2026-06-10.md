@@ -6,7 +6,7 @@
 > auxiliary vocabulary-projection heads implemented by historical v0. Those
 > heads are neither DeepSeek sequential MTP nor a speculative drafter. The
 > authoritative current disposition is
-> `docs/mtp-parameter-accounting-and-mechanism-identity-v1.md`.
+> `docs/ember-restart/mtp-parameter-accounting-and-mechanism-identity-v1.md`.
 
 **Status:** PINNED (supersedes the 2026-06-10 draft in the lead's state dir)
 **Scope:** Component pinning for the NC2-own pretrain loop at ~0.5–1B params /

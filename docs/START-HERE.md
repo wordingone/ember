@@ -32,14 +32,14 @@ for the full registry.
 
 **Receipts.** A receipt is one JSON file under `receipts/`, produced by an executed local job,
 that a checker script can validate. Claims are gated exclusively by receipts — prose never
-carries a claim (`README.md`, `docs/index.md` "Evidence model"). Schema floor:
+carries a claim (`README.md`, `docs/archive/pre-restart/index.md` "Evidence model"). Schema floor:
 `scripts/receipt_check.py`.
 
 **D-gate / P-gate.** Two standing tests every claimed gain must pass to count as burned into
 weights: **D-gate** — the gain disappears when the artifact (the adapter, the checkpoint delta)
 is deleted, proving the gain actually lives in that artifact and isn't a fluke of the harness;
 **P-gate** — the gain persists across a process restart, proving it isn't an in-memory illusion.
-(`README.md` opening; `docs/index.md` "Standing audits".)
+(`README.md` opening; `docs/archive/pre-restart/index.md` "Standing audits".)
 
 **GATE-0 / GATE-1 (/ GATE-2 / ASSEMBLY).** A local sequencing convention used inside individual
 protocols to order CPU-only steps before the one GPU job. For the C-E2B paired-run protocol
@@ -49,14 +49,14 @@ GPU job — the E2B `ember_work` arm actually runs, under the resource governor;
 `founder_likeness` sessions (owned arm, then E2B arm), sequential; **ASSEMBLY** = the one receipt
 under `receipts/` that ties both legs together. This numbering is local to whichever protocol
 defines it — it is not a single global gate list, and it is unrelated to the board's `GATE-001`
-.. `GATE-006` rows in `docs/ember-debt-ledger.md`, which are a separate, differently-scoped
+.. `GATE-006` rows in `docs/ledgers/ember-debt-ledger.md`, which are a separate, differently-scoped
 trigger list.
 
 **The bottleneck-ledger walls (B1–B5) — and the unrelated W1/W2.** The standing dispatch
 authority for what blocks full local FM creation is issue #207, "BOTTLENECK LEDGER", and its rows
 are named **B1 DATA WALL**, **B2 TRAINING-STATE MEMORY WALL**, **B3 COMPUTE/WALL-CLOCK WALL**,
 **B4 INFERENCE→TRAINING TRANSFER**, **B5 THE QUALITY BAR**. Separately, and confusingly similar
-in shape, `docs/spec/w2-scale-preregistration-v1.md` and `docs/c-scale-execution-graph.md` use
+in shape, `docs/spec/w2-scale-preregistration-v1.md` and `docs/archive/pre-restart/c-scale-execution-graph.md` use
 **W1** and **W2** as names for two C-SCALE experiment *windows* (W1 = pretrain-scale token-bill
 collapse test; W2 = native finetune-scale adaptation test) — these are not walls, there is no W3
 or W4, and W1/W2 do not correspond one-to-one to any B-numbered wall. Do not conflate the two;
@@ -149,7 +149,7 @@ embeddings, norms, the head, and `mtp_heads` — shape-invariant across a growth
 need no pushforward rule at all. Only Muon-routed FF tensors are touched by net2net widening.
 
 **MFU (Model FLOPs Utilization).** Measured throughput as a fraction of theoretical peak GPU
-FLOPs: `MFU = (FLOPs/token × tokens/s_raw) / peak_FLOPs` (`docs/compute-ceiling-program-v1.md`).
+FLOPs: `MFU = (FLOPs/token × tokens/s_raw) / peak_FLOPs` (`docs/archive/pre-restart/compute-ceiling-program-v1.md`).
 It is one of the three required fields (alongside measured throughput and a required-tokens
 projection) in the `C-EFF` efficiency-closure receipt (`docs/spec/conditions-v1.md` §4.1).
 
@@ -206,7 +206,7 @@ cited artifact is not yet in this repository, that is the honest answer for that
 something to paper over by trusting the prose instead.
 
 Everything below runs with only Python 3.11+, no external packages, no model weights, no
-credentials, no GPU (`docs/REPRODUCIBILITY.md`, "Checks that require no model weights and no
+credentials, no GPU (`docs/charter/REPRODUCIBILITY.md`, "Checks that require no model weights and no
 GPU"):
 
 ```bash

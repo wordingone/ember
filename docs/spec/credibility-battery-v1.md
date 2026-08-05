@@ -128,7 +128,7 @@ training-claim dense control (W2 S-arm) is designed but not yet executed.
   sibling `w2-garm-*-w2-garm-dryrun-20260706T043654Z.json` files — the W2 S-arm design
   ([issue #108](https://github.com/wordingone/ember/issues/108)), captured as a **dry-run**, not a
   live execution — matching issue #487's "designed but never executed."
-- `docs/c-scale-execution-graph.md` §"W2 Window" — states plainly that W2's fields are
+- `docs/archive/pre-restart/c-scale-execution-graph.md` §"W2 Window" — states plainly that W2's fields are
   fixture-only (`ts 20990101`), no live receipt yet.
 
 ## Q5 — Reusable capacity vs. overfitting / leakage / bookkeeping
@@ -180,7 +180,7 @@ of training, against the 24 GB card.
 - `receipts/cbase-grow-rung2-gpu-offload-probe-20260708T172949Z.json` — real, measured (not
   synthetic-estimated) VRAM: `total_gib: 23.988`, peak `used_gib: 19.465` under contended
   conditions (resident server never stopped).
-- `docs/deviations.md` (the rung-2 production-stabilization deviation entry) — the frozen spec's
+- `docs/ledgers/deviations.md` (the rung-2 production-stabilization deviation entry) — the frozen spec's
   VRAM-resident-AdamW config is measured at an estimated **30.903 GiB required vs. 23.988 GiB
   total** — infeasible outright. Cure path:
   [issue #480](https://github.com/wordingone/ember/issues/480).
@@ -212,7 +212,7 @@ offload configuration itself is still unpriced.
 - `receipts/cbase-grow-rung2-gpu-offload-probe-20260708T172949Z.json` — a real CPU-offloaded
   optimizer + micro-batch/accum configuration (`arm: rung2-cpu-offload-cure-gpu-measured`, PR
   #429), including its own disclosed crash history (issue #446) and the mitigation used.
-- `docs/deviations.md` — candidate cures (gradient checkpointing, batch reduction + grad
+- `docs/ledgers/deviations.md` — candidate cures (gradient checkpointing, batch reduction + grad
   accumulation) priced against the same receipt, with `MEASURE` slots explicitly marked
   `REGISTERED-PENDING` rather than asserted.
 

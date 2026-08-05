@@ -143,7 +143,7 @@ def inspect_train_multimodal(repo: Path) -> dict[str, Any]:
 
 
 def inspect_floor_contract(repo: Path) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
-    floor = repo / "docs" / "ember-floor-contract.md"
+    floor = repo / "docs" / "charter" / "ember-floor-contract.md"
     nc2 = repo / "nc2-own-technique-contract.md"
     floor_text = read_text(floor)
     nc2_text = read_text(nc2)

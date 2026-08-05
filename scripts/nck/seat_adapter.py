@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """sp-6c seat adapter — frozen prompt template + output grammar + parser (#307).
 
 The B3 instrument's seat-facing half: binds ANY text-generation backend into
 the replay rig's core interface so both seats (ember core, Gemma E2B) receive
 byte-identical prompts per episode and are scored by one deterministic parser.
 
-Contract (frozen; docs/sp6c-seat-adapter-v0.md):
+Contract (frozen; docs/archive/pre-restart/sp6c-seat-adapter-v0.md):
 - build_prompt(event, sandbox_dir) -> str: deterministic, machine-invariant.
   Sandbox absolute paths are reverse-substituted to '{root}' so the prompt is
   identical across runs/machines (replay-identical rule, fp33 prereg B3).

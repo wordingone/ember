@@ -1,10 +1,13 @@
 #!/usr/bin/env python
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """c04_pick_rehearsal.py - verdict-chain dress rehearsal (ledger standing
 class): the c04-pick-decision-table-v1 routing as EXECUTABLE logic, tested
 against synthetic receipt fixtures BEFORE live receipts land. the engineer's verdict
 script imports route() so the doc and the code cannot drift.
 
-Cells quote docs/c04-pick-decision-table-v1.md @0524545 verbatim-class.
+Cells quote docs/archive/pre-restart/c04-pick-decision-table-v1.md @0524545 verbatim-class.
 """
 import argparse, json, time
 

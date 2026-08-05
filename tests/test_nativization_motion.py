@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """
 TDD tests for nativization_motion runner.
 
@@ -365,8 +368,8 @@ class TestEndToEnd:
     def test_run_nativization_motion_fixture(self, tmp_path):
         """Test full runner with fixture mini-tree."""
         # Create fixture structure
-        docs_dir = tmp_path / "docs"
-        docs_dir.mkdir()
+        docs_dir = tmp_path / "docs" / "design"
+        docs_dir.mkdir(parents=True)
 
         diagnostic_file = docs_dir / "ember-owned-substrate-diagnostic.md"
         diagnostic_file.write_text(
@@ -444,8 +447,8 @@ import torch
     def test_run_nativization_motion_delta_receipt(self, tmp_path):
         """Test that second receipt computes deltas correctly."""
         # Create fixture structure
-        docs_dir = tmp_path / "docs"
-        docs_dir.mkdir()
+        docs_dir = tmp_path / "docs" / "design"
+        docs_dir.mkdir(parents=True)
 
         diagnostic_file = docs_dir / "ember-owned-substrate-diagnostic.md"
         diagnostic_file.write_text(

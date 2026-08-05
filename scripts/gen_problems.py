@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Generate docs/PROBLEMS.md — the single human-readable Ember problem ledger.
 
 Hands-off by design: STATUS (OPEN/CLAIMED/SOLVED) is DERIVED from the JSON
@@ -170,7 +173,7 @@ def main():
 
     # meta-problems
     L.append("---\n\n## Meta-problems — the roots (why everything below is hard)\n")
-    L.append("_Full prose + proof obligations: `docs/hardest-problems-register-v1.md`._\n")
+    L.append("_Full prose + proof obligations: `docs/ledgers/hardest-problems-register-v1.md`._\n")
     for m in sorted(meta.get("meta_problems", []), key=lambda x: x.get("meta_rank", 50)):
         L.append("- **%s — %s** · %s · gates %s" % (
             m["id"], m["title"], m.get("status", "OPEN"), ", ".join(m.get("gates", [])) or "—"))

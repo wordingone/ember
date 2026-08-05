@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Bind a model-card/publication's identity to a validated subject manifest, fail-closed.
 
-cond3 increment (GAP-2, publication consumer): ``docs/ember-01-identity/contract-consumer-map.md``
+cond3 increment (GAP-2, publication consumer): ``docs/charter/ember-01-identity-contract-consumer-map.md``
 names the model-card/paper boundary as a REQUIRED-and-missing consumer (line 229: "No tracked
 file named as a model card was found ... Publication can proceed from ad hoc receipts/docs. No
 consumer guarantees published results bind the exact subject manifest.") and the integration

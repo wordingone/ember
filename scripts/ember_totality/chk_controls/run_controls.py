@@ -1300,7 +1300,7 @@ def build_cure7_c_port():
 # re-earn contract, which conditions-v1.md superseded: C11 is an
 # experience-horizon capability delta, and duration is a timer, not a lever.
 # These fixtures exercise the sharp tooth of each of the nine recomputed
-# checks in docs/c11-experience-horizon-spec.md, one at a time, against an
+# checks in docs/design/c11-experience-horizon-spec.md, one at a time, against an
 # otherwise fully-conforming short/medium/long + deletion receipt set.
 
 _C11_RECEIPT_DIR_REL = os.path.join("receipts", "ember-mvp", "c11-experience-horizon")

@@ -73,7 +73,7 @@ gh pr checks <n> --repo wordingone/ember
 ```
 Every label FAMILY (`affects:`/`area:`/`kind:`/`needs:`/`priority:`/
 `review:`/`state:`) needs exactly one label; the PR body needs every
-required section filled (see `docs/probe-authoring-contract.md`-adjacent PR
+required section filled (see `docs/charter/probe-authoring-contract.md`-adjacent PR
 template conventions) with real content, `Exact base SHA` matching the LIVE
 `origin/master` tip at check-run time (not the branch's git merge-base if
 master has since moved), and `Affected milestones` containing the milestone
@@ -84,5 +84,5 @@ title verbatim.
 This runbook covers the workflow this doc set's own authoring session
 actually exercised. It is not a complete operator manual — training-launch,
 GPU-window, and eval-harness runbooks live in their own docs
-(`docs/ember-restart-3b-governed-runner-v1.md` and similar) and are not
+(`docs/ember-restart/ember-restart-3b-governed-runner-v1.md` and similar) and are not
 duplicated here.

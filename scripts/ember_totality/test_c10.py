@@ -15,11 +15,11 @@ C10 — No deferred-work escape hatch.
      "out of scope / v2 / later / post-MVP / stretch / deferred to post-X."
   Invalid-token (?): invalid_deferred_remains
   CHK: zero ACTIVE / ACTIVE-BLOCKER / OPEN / triggerless-DEFERRED rows remain in
-       docs/ember-debt-ledger.md; every disposition has its receipt.
+       docs/ledgers/ember-debt-ledger.md; every disposition has its receipt.
 
 Gloss (task): no deferred-work escape hatch: zero ACTIVE/OPEN/triggerless-
   DEFERRED rows in the debt ledger; every disposition has its receipt.
-Receipt hint: docs/ember-debt-ledger.md.
+Receipt hint: docs/ledgers/ember-debt-ledger.md.
 
 This is a STATUS PROBE. It always exits 0 and prints exactly one line
 beginning with "RED " or "GREEN ". RED/GREEN is determined by really
@@ -53,7 +53,7 @@ CANDIDATE_ROOTS = [
 ]
 ROOT = next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)
 
-LEDGER_REL = os.path.join("docs", "ember-debt-ledger.md")
+LEDGER_REL = os.path.join("docs", "ledgers", "ember-debt-ledger.md")
 
 # --- Invalid-tokens (negative assertions) ------------------------------------
 # C10's explicit ? token PLUS the banned scope-reduction language that C10

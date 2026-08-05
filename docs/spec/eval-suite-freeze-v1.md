@@ -117,4 +117,4 @@ As of 2026-07-08, the following datasets have been successfully pinned and verif
 
 ## Amendments
 
-Amendments to this frozen specification require entries in `docs/deviations.md` under the battery-14 section. The deviation rule is: only deviations from this freeze are documented in that file; the document itself is immutable except via that mechanism.
+Amendments to this frozen specification require entries in `docs/ledgers/deviations.md` under the battery-14 section. The deviation rule is: only deviations from this freeze are documented in that file; the document itself is immutable except via that mechanism.
