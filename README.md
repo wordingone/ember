@@ -99,10 +99,33 @@ No current checkpoint is an admissible Ember model.
 - No complete neural verified-experience self-improvement cycle or field-level
   breakthrough is currently proven.
 
-The current active work is the executable EMBER-02 rung: specialist semantic
-training, frozen checkpoint-bound evaluation, sufficient-pretraining evidence,
-and clean-checkout owned serving/ember-cli integration. The one-step 3B
-checkpoint is an instrument for that work, never the destination.
+The current active work is EMBER-02's R1 (WARM-100) rung-exit evidence. The
+fail-closed R1 exit battery landed 2026-08-05: seven of the eight preregistered
+R1 exits are `EVIDENCE_MISSING` and the eighth holds only a checkpoint
+write-integrity sub-receipt (`receipts/ember-02-r1-exits/`,
+[docs/r1-exit-evidence-inventory-20260805.md](docs/r1-exit-evidence-inventory-20260805.md)).
+The newest training-shaped run (2026-08-04) was a four-record governed-vertical
+structural check, not a WARM-100 canary. The step-2 3B candidate above remains
+the only execution-authorized owned checkpoint
+(`manifests/ember-restart-execution-authorities-v1.json`) and is an instrument
+for that work, never the destination.
+
+## Roadmap status
+
+The twelve-milestone decomposition and its public contracts live in
+[docs/roadmap/README.md](docs/roadmap/README.md). Milestone completion is
+claimed only through a public certificate record under
+[docs/roadmap/certificates/](docs/roadmap/certificates/); issue counts and
+progress bars are never completion evidence.
+
+- **EMBER-01 — custody, identity, and experiment spine: CERTIFIED 2026-08-05.**
+  Nine of nine certificate legs resolved-true, zero unresolved failures, bound
+  to public commit `323be9da58a7527f3526d4a9a839ae2b5765bfd1`. Record:
+  [docs/roadmap/certificates/EMBER-01.md](docs/roadmap/certificates/EMBER-01.md).
+  The certificate credits no model, no training, and no capability to EMBER-01.
+- **EMBER-02 — three-billion-parameter foundation birth** is the active goal
+  (`GOAL.md`; execution boundary in [CONTINUITY.md](CONTINUITY.md)). It is not
+  complete; no current checkpoint is an admissible Ember model.
 
 ## Non-negotiable model floor
 
@@ -126,6 +149,7 @@ selection.
 
 - INVARIANT.md - unamendable identity
 - GOAL.md - complete project and machine contract
+- docs/roadmap/README.md - public milestone decomposition and completion certificates
 - STATE.md - compatibility pointer only; exact artifact identities and maturity live in CONTINUITY.md
 - docs/goal-clear-protocol.md - proof required for completion
 - docs/ember-authority-matrix.md - D-001 through D-062 conservation matrix
