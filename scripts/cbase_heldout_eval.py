@@ -1,7 +1,12 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Fail-closed heldout NLL evaluator for timeshare/cbase checkpoints (#760)."""
+"""Fail-closed heldout NLL evaluator for timeshare/cbase checkpoints (#760).
+
+verify_slice_excludes_ruled_sources() consumes scripts/fineweb_exclusion.py
+(#1436) to prove the frozen slice touches no byte owned by a RULED-excluded
+source (fineweb_edu today) before any window is scored -- never re-derives
+exclusion offsets or overlap arithmetic itself."""
 from __future__ import annotations
 import hashlib, json, math, re
 from collections import defaultdict
@@ -147,6 +152,80 @@ def load_frozen_slice_manifest(path: str|Path, expected_sha256: str) -> dict:
     if expected != len(windows)*seq: raise HeldoutEvalRefusal(f"TRUNCATED_SLICE: expected_scored_token_count={expected} derived={len(windows)*seq}")
     return value
 
+def _fineweb_exclusion_module():
+    """Import scripts/fineweb_exclusion.py (#1436) as a sibling module.
+    Explicit sys.path insertion mirrors that module's own pattern for
+    importing token_shards_v0 -- defensive against pytest invocation
+    contexts that don't already have scripts/ on sys.path."""
+    import sys
+    here=str(Path(__file__).resolve().parent)
+    if here not in sys.path: sys.path.insert(0,here)
+    try:
+        import fineweb_exclusion
+    except ImportError as exc:
+        raise HeldoutEvalRefusal(f"FINEWEB_EXCLUSION_MODULE_UNAVAILABLE: {exc}") from exc
+    return fineweb_exclusion
+
+def verify_slice_excludes_ruled_sources(manifest: Mapping[str,Any], *, shard_dir: str|Path, nc: str|Path|None=None) -> list[tuple[int,int]]:
+    """Fail-closed: prove no window in `manifest` touches a byte owned by a
+    RULED-excluded source (fineweb_edu today; any future DROP-ruled source
+    automatically -- fineweb_exclusion.ruled_excluded_sources reads the
+    ruling receipt itself, not a hardcoded set, so a later exclusion is
+    enforced here with no code change).
+
+    This is a SEPARATE cross-check from load_frozen_slice_manifest's pure
+    schema/self-consistency validation, deliberately: load_frozen_slice_manifest
+    is exercised by hermetic tests against synthetic manifests whose
+    source_corpus.receipt_path names no real on-disk receipt, and baking a
+    real-corpus lookup into it would break every one of those tests. This
+    function instead requires the caller to supply a real shard_dir and is
+    invoked only from the CLI's production path, against production receipts
+    -- #760 build spec: "your harness must not re-implement exclusion;
+    consume the same module" (scripts/fineweb_exclusion.py, #1436).
+
+    Checks each window's FULL read span -- global_token_start through
+    source_global_token_end_exclusive when present (the seq+1+n_mtp bytes
+    the loader actually reads off disk for MTP lookahead), falling back to
+    global_token_end_exclusive otherwise -- against the excluded ranges, via
+    fineweb_exclusion's own overlap primitive (never re-derived here: a
+    degenerate empty-range special case already had to be discovered once,
+    documented in that module's _overlaps docstring).
+
+    Returns the excluded ranges that were checked (for receipting). Raises
+    HeldoutEvalRefusal("SLICE_OVERLAPS_EXCLUDED_SOURCE: ...") on any overlap,
+    or HeldoutEvalRefusal("EXCLUSION_DERIVATION_FAILED: ...") if the shard
+    receipt the manifest itself declares (source_corpus.receipt_path) is not
+    on disk or fails byte-true validation -- an undecidable exclusion is a
+    refusal, never a silent pass. A validated receipt whose corpus simply
+    carries no ruled-excluded source (e.g. a hermetic test fixture) is NOT
+    a refusal -- enforcement_for_validated_receipt returns an empty range
+    with a stated reason, mirroring fineweb_exclusion's own loader-default
+    policy so this check and the loader can never disagree about what
+    "nothing to exclude" means."""
+    fx=_fineweb_exclusion_module()
+    root=Path(nc) if nc is not None else Path(__file__).resolve().parents[1]
+    receipt_name=Path(manifest["source_corpus"]["receipt_path"]).name
+    receipt_path=root/"receipts"/receipt_name
+    if not receipt_path.is_file(): raise HeldoutEvalRefusal(f"EXCLUSION_DERIVATION_FAILED: shard receipt not on disk: {receipt_path}")
+    receipt=_json(receipt_path)
+    violations=fx.validate_shards_receipt(receipt,str(root),shard_dir_override=str(shard_dir))
+    if violations: raise HeldoutEvalRefusal(f"EXCLUSION_DERIVATION_FAILED: {receipt_name} FAILS validation against on-disk shard bytes: {violations}")
+    # assembly_name comes from the shard receipt's OWN pinned premise, not
+    # fineweb_exclusion's default constant -- a receipt already declares which
+    # assembly it was built against (resolve_excluded_ranges_for_stream does
+    # the same lookup for the same reason).
+    assembly_name=((receipt.get("premises") or {}).get("assembly_receipt") or {}).get("name")
+    if not assembly_name: raise HeldoutEvalRefusal(f"EXCLUSION_DERIVATION_FAILED: {receipt_name} has no premises.assembly_receipt.name")
+    try:
+        ranges,_reason=fx.enforcement_for_validated_receipt(receipt,nc=str(root),assembly_name=assembly_name)
+    except ValueError as exc:
+        raise HeldoutEvalRefusal(f"EXCLUSION_DERIVATION_FAILED: {exc}") from exc
+    for row in manifest["windows"]:
+        gs=int(row["global_token_start"]); ge=int(row.get("source_global_token_end_exclusive",row["global_token_end_exclusive"]))
+        for es,ee in ranges:
+            if fx._overlaps(gs,ge,es,ee): raise HeldoutEvalRefusal(f"SLICE_OVERLAPS_EXCLUDED_SOURCE: window={row['window_index']} eval=[{gs},{ge}) excluded=[{es},{ee})")
+    return ranges
+
 def read_eval_windows(shard_dir: str|Path, manifest: Mapping[str,Any]) -> list[dict]:
     root=Path(shard_dir); sequence=manifest["sequence"]; seq=int(sequence["seq"]); separator=int(sequence["separator_id"])
     source={row["name"]:row for row in manifest["source_corpus"]["shards"]}; used={row["shard_name"] for row in manifest["windows"]}
@@ -200,8 +279,8 @@ def evaluate_teacher_forced(model, windows: Sequence[Mapping[str,Any]], *, devic
     low,high=[float(v) for v in np.quantile(draws,[0.025,0.975])]; mean=float(sum(first[1])/len(first[1]))
     return {"seed":seed,"dtype":dtype,"device":device,"batch_count":len(windows),"token_count":len(first[1]),"document_count":len(doc_means),"per_shard_document_counts":{k:len(v) for k,v in sorted(per_shard.items())},"mean_nll":mean,"bits_per_packed_byte":mean/math.log(2.0)/packed_bytes_per_token,"packed_bytes_per_token":packed_bytes_per_token,"bootstrap_samples":bootstrap_samples,"bootstrap_ci95":{"low":low,"high":high,"half_width":(high-low)/2.0,"unit":"document_mean_nll"},"per_batch_loss_vector_sha256":h1,"repeat_run_hashes":[h1,h2],"repeat_run_match":True}
 
-def build_receipt(*,checkpoint: Mapping[str,Any],checkpoint_identity: Mapping[str,Any],slice_manifest_sha256: str,slice_manifest: Mapping[str,Any],evaluation: Mapping[str,Any]) -> dict:
-    return {"schema":"cbase-heldout-eval/v1","issue":"#760","ts":datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),"scale":slice_manifest["scale"],"checkpoint":dict(checkpoint),"checkpoint_identity":dict(checkpoint_identity),"slice_manifest_sha256":slice_manifest_sha256,"evaluation":dict(evaluation),"api_spend_usd":0.0,"paid_api_surface_used":False,"claim_boundary":"heldout NLL/BPB measurement only; no capability, same-quality, or milestone-completion claim","markers":["HELDOUT_EVAL_DETERMINISM_PASS","HELDOUT_EVAL_NEGATIVE_FIXTURES_PASS","HELDOUT_SLICE_DISJOINT_PASS"]}
+def build_receipt(*,checkpoint: Mapping[str,Any],checkpoint_identity: Mapping[str,Any],slice_manifest_sha256: str,slice_manifest: Mapping[str,Any],evaluation: Mapping[str,Any],excluded_source_ranges: Sequence[tuple[int,int]]=()) -> dict:
+    return {"schema":"cbase-heldout-eval/v1","issue":"#760","ts":datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),"scale":slice_manifest["scale"],"checkpoint":dict(checkpoint),"checkpoint_identity":dict(checkpoint_identity),"slice_manifest_sha256":slice_manifest_sha256,"evaluation":dict(evaluation),"excluded_source_ranges_verified":[list(r) for r in excluded_source_ranges],"api_spend_usd":0.0,"paid_api_surface_used":False,"claim_boundary":"heldout NLL/BPB measurement only; no capability, same-quality, or milestone-completion claim","markers":["HELDOUT_EVAL_DETERMINISM_PASS","HELDOUT_EVAL_NEGATIVE_FIXTURES_PASS","HELDOUT_SLICE_DISJOINT_PASS"]}
 
 FROZEN_SLICE_PATH = Path(__file__).resolve().parents[1] / "manifests" / "cbase-heldout-slice-v1.json"
 FROZEN_SLICE_SHA256 = "32052288e761d8a01375bec40bc04785fcd46d75db58b325b73090f23dd74c14"
@@ -243,14 +322,15 @@ def _write_receipt(path: Path, value: Mapping[str,Any]):
 
 def main(argv=None) -> int:
     import argparse, sys
-    parser=argparse.ArgumentParser(description=__doc__); parser.add_argument("--validate-only",action="store_true"); parser.add_argument("--evaluate",action="store_true"); parser.add_argument("--slice-manifest",default=str(FROZEN_SLICE_PATH)); parser.add_argument("--expected-slice-sha256",default=FROZEN_SLICE_SHA256); parser.add_argument("--shard-dir",required=True); parser.add_argument("--checkpoint-dir"); parser.add_argument("--checkpoint-kind",choices=sorted(CHECKPOINT_PINS)); parser.add_argument("--device",default="cpu"); parser.add_argument("--seed",type=int,default=83); parser.add_argument("--bootstrap-samples",type=int,default=2000); parser.add_argument("--out")
+    parser=argparse.ArgumentParser(description=__doc__); parser.add_argument("--validate-only",action="store_true"); parser.add_argument("--evaluate",action="store_true"); parser.add_argument("--slice-manifest",default=str(FROZEN_SLICE_PATH)); parser.add_argument("--expected-slice-sha256",default=FROZEN_SLICE_SHA256); parser.add_argument("--shard-dir",required=True); parser.add_argument("--nc",default=None,help="repo root for the fineweb-exclusion receipt lookup (default: this script's own checkout); override lets hermetic fixtures point at a self-contained receipts/ tree instead of the real repo's"); parser.add_argument("--checkpoint-dir"); parser.add_argument("--checkpoint-kind",choices=sorted(CHECKPOINT_PINS)); parser.add_argument("--device",default="cpu"); parser.add_argument("--seed",type=int,default=83); parser.add_argument("--bootstrap-samples",type=int,default=2000); parser.add_argument("--out")
     args=parser.parse_args(argv)
     try:
         manifest=load_frozen_slice_manifest(args.slice_manifest,args.expected_slice_sha256); windows=read_eval_windows(args.shard_dir,manifest)
+        excluded_ranges=verify_slice_excludes_ruled_sources(manifest,shard_dir=args.shard_dir,nc=args.nc)
         print("HELDOUT_SLICE_DISJOINT_PASS")
         if args.validate_only and not args.evaluate: return 0
         if not args.evaluate or not args.checkpoint_dir or not args.checkpoint_kind or not args.out: raise HeldoutEvalRefusal("EVALUATION_ARGUMENTS_MISSING")
-        model,identity,checkpoint=load_live_model(args.checkpoint_dir,args.checkpoint_kind,args.device,args.seed); evaluation=evaluate_teacher_forced(model,windows,device=args.device,dtype="bfloat16",seed=args.seed,packed_bytes_per_token=float(manifest["sequence"]["packed_bytes_per_token"]),bootstrap_samples=args.bootstrap_samples); receipt=build_receipt(checkpoint=checkpoint,checkpoint_identity=identity,slice_manifest_sha256=args.expected_slice_sha256,slice_manifest=manifest,evaluation=evaluation); receipt["receipt_sha256"]=_write_receipt(Path(args.out),receipt); print("HELDOUT_EVAL_DETERMINISM_PASS"); print(json.dumps({"out":args.out,"mean_nll":evaluation["mean_nll"],"bits_per_packed_byte":evaluation["bits_per_packed_byte"],"scale":receipt["scale"]},sort_keys=True)); return 0
+        model,identity,checkpoint=load_live_model(args.checkpoint_dir,args.checkpoint_kind,args.device,args.seed); evaluation=evaluate_teacher_forced(model,windows,device=args.device,dtype="bfloat16",seed=args.seed,packed_bytes_per_token=float(manifest["sequence"]["packed_bytes_per_token"]),bootstrap_samples=args.bootstrap_samples); receipt=build_receipt(checkpoint=checkpoint,checkpoint_identity=identity,slice_manifest_sha256=args.expected_slice_sha256,slice_manifest=manifest,evaluation=evaluation,excluded_source_ranges=excluded_ranges); receipt["receipt_sha256"]=_write_receipt(Path(args.out),receipt); print("HELDOUT_EVAL_DETERMINISM_PASS"); print(json.dumps({"out":args.out,"mean_nll":evaluation["mean_nll"],"bits_per_packed_byte":evaluation["bits_per_packed_byte"],"scale":receipt["scale"]},sort_keys=True)); return 0
     except HeldoutEvalRefusal as exc:
         print(f"CBASE_HELDOUT_EVAL_REFUSED: {exc}",file=sys.stderr); return 2
 
