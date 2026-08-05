@@ -30,10 +30,15 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install "pytest==8.4.1" "PyYAML==6.0.2" "jsonschema==4.26.0" "cryptography==49.0.0"
+      # No -x, and no `set -e` abort between the two suites: a nightly exists to report
+      # everything that is broken in one pass. Fail-fast turned each night into a
+      # single-failure telescope and hid the rest until the next run (#1390).
       - name: Extended CPU-safe suites
         run: |
-          python -B -m pytest -q scripts/tests -x
-          python -B -m pytest -q tests -x --ignore=tests/ember_restart_model/test_checkpoint_artifacts.py
+          status=0
+          python -B -m pytest -q scripts/tests || status=1
+          python -B -m pytest -q tests --ignore=tests/ember_restart_model/test_checkpoint_artifacts.py || status=1
+          exit "${status}"
       - name: Explain scheduled boundary
         if: always()
         run: echo "Nightly failure is an actionable diagnostic, not a claim that recent work is worthless."
