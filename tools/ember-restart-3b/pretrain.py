@@ -71,12 +71,26 @@ def _expert_routing_entropy(counts: Mapping[str, int]) -> tuple[float, dict[str,
     p_i = count_i / total; H = -sum(p_i * log(p_i)) in nats (natural log), applying the
     0 * log(0) = 0 convention for experts not yet selected. Before any routed expert has
     been selected (total == 0) entropy and every utilization fraction are 0.0.
+
+    COUNTING WINDOW: `counts` is the caller's counter, cumulative since the start of the
+    current run_pretraining_segment / run_selection_pretraining_segment call -- NOT since
+    training began. That counter is reinitialized to all-zero at the top of every such
+    call (see expert_examples there), so this entropy resets to 0.0 (fully concentrated)
+    at the first routed step after every resume. A telemetry consumer watching a real
+    multi-segment run will see it ramp from zero at every resume; that is a counting-
+    window artifact of the call boundary, not evidence of router collapse-and-recovery.
     """
     total = sum(counts.values())
     if total <= 0:
         return 0.0, {name: 0.0 for name in counts}
     utilization = {name: count / total for name, count in counts.items()}
     entropy = -sum(fraction * math.log(fraction) for fraction in utilization.values() if fraction > 0.0)
+    # A single 1.0 * log(1.0) term negated is -0.0 in IEEE 754 (all traffic on one
+    # expert). json.dumps(-0.0) serializes the literal "-0.0" into the receipted
+    # telemetry JSONL, which is a spurious sign on a value that is definitionally
+    # nonnegative -- normalize it away rather than let a persisted receipt carry it.
+    if entropy == 0.0:
+        entropy = 0.0
     return entropy, utilization
 
 
@@ -156,6 +170,11 @@ def run_pretraining_segment(
             # gradient norm. The float() conversion below piggybacks on the device
             # sync the loss capture above already forced, so it adds no new
             # synchronization barrier and no measurable step-time regression.
+            #
+            # router_entropy_nats / expert_utilization: see _expert_routing_entropy's
+            # docstring -- counted since THIS call started (expert_examples above is
+            # reinitialized to all-zero on every call), not since training began, so
+            # it resets to 0.0 at the first routed step after every resume.
             expert_entropy, expert_utilization = _expert_routing_entropy(expert_examples)
             progress_callback({
                 "step": global_step,
@@ -266,6 +285,9 @@ def run_selection_pretraining_segment(
         if progress_callback is not None:
             # See run_pretraining_segment: piggybacks on the loss sync above, and
             # grad_norm_tensor is the pre-clip norm clip_grad_norm_ already returns.
+            # router_entropy_nats / expert_utilization: see _expert_routing_entropy's
+            # docstring -- counted since THIS call started (expert_examples above is
+            # reinitialized to all-zero on every call), not since training began.
             expert_entropy, expert_utilization = _expert_routing_entropy(expert_examples)
             progress_callback({
                 "step": global_step, "total_steps": None, "loss": losses[-1],
