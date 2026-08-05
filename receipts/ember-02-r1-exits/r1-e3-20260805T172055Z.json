@@ -1,0 +1,176 @@
+{
+  "ticket": "r1-exit-battery-e3",
+  "ts": "20260805T172055Z",
+  "schema": "r1-exit-battery/v1",
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "issue_refs": [
+    "#1463"
+  ],
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization) for checkpoint/manifest/telemetry/threshold files",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "prereg": {
+    "document": "docs/spec/ember02-preregistration-v1.md",
+    "pin": "3d48d3870919bd04cec735f68d0fad45fcfae0b2",
+    "thresholds_sha256": "12c83ca9ac90f85d5e8c0ce2c8156ac0c2cf9695929b211971ee277582a5eeb5"
+  },
+  "exit_criterion": "R1-E3",
+  "subject": {
+    "run_root": "<custody>\\r1-warm100-20260804",
+    "sibling_roots": [
+      "<custody>\\r2-resume-20260804",
+      "<custody>\\r1-warm100-20260802",
+      "<custody>\\r1-chainproof-20260804"
+    ],
+    "seed_roots": []
+  },
+  "status": "NOT_MET",
+  "result": {
+    "status": "NOT_MET",
+    "detail": "restore leg attempted and failed before or during reload",
+    "components": {
+      "write_integrity": {
+        "manifest_path": "<custody>\\r1-warm100-20260804\\artifacts\\checkpoints\\checkpoint-vertical-slice-seed-830001\\checkpoint-manifest.json",
+        "manifest_sha256": "4655a76b7e5b40396be8637f9aa0898ae94fc2321f2e75630d8f4ab83b555c0b",
+        "schema_version": "ember-sparse-checkpoint-v5",
+        "data_cursor": {
+          "global_step": 4,
+          "governor": {
+            "canonical_disk_budget_runner": {
+              "assertion_sha256": "7a0f6d1a574f292d3b09fcbf469b700f8ec304427e7afad02980aab4ced7c024",
+              "cache_bindings_sha256": "8919dfb95a84bb76505d1f4eb8baeeb995310a4de2f7bf1c82f4cc4c35860806",
+              "checkpoint_byte_bound": 16430389248,
+              "config_sha256": "33a82113cfa42fcd62d70688fea39c62b3793630c7ea48fdb5b884681a8e1781",
+              "runner_source_sha256": "10614a93bd6974069ab796821ac12ca02ab6e74886dfe1f42cfbbeb6aac4e369",
+              "schema_version": "ember-canonical-disk-budget-startup-v1",
+              "write_budget_bytes": 36507222016
+            },
+            "free_gb": 24.1,
+            "governor_source_sha256": "6df17c2946ccdb8ab09b132f6cfc57b7828258f145987c252d48bf4e156c5d06",
+            "margin_gb": 4.0,
+            "total_gb": 25.76,
+            "vram_fraction": 0.85
+          },
+          "input_identity_receipt_sha256": "c10947501c8d7a667a31bd86041d50df61899cb304864b1ed07b3c32238a11ae",
+          "record_index": 4,
+          "shard": "data/ember-restart-3b/owned-four-domain-production-rung-v1.json",
+          "tokens_seen": 36
+        },
+        "shard_count": 7,
+        "all_shards_ok": true,
+        "shards": [
+          {
+            "path": "shared-model.pt",
+            "role": "shared_model",
+            "declared_bytes": 2041216535,
+            "actual_bytes": 2041216535,
+            "size_ok": true,
+            "declared_sha256": "4fc54afb85f1f3a512d63d4b9faf4e79ea9286fcb4e78caff011c0ad108b6ad7",
+            "actual_sha256": "4fc54afb85f1f3a512d63d4b9faf4e79ea9286fcb4e78caff011c0ad108b6ad7",
+            "hash_ok": true,
+            "cross_ref_field": "shared_model_shard_sha256",
+            "cross_ref_ok": true,
+            "ok": true
+          },
+          {
+            "path": "optimizer-state.pt",
+            "role": "optimizer_state",
+            "declared_bytes": 7798912579,
+            "actual_bytes": 7798912579,
+            "size_ok": true,
+            "declared_sha256": "c31b51b8a7d502fe000ea2a951d7cbb450aea995c2442dda460d48b289590e3c",
+            "actual_sha256": "c31b51b8a7d502fe000ea2a951d7cbb450aea995c2442dda460d48b289590e3c",
+            "hash_ok": true,
+            "cross_ref_field": "optimizer_state_shard_sha256",
+            "cross_ref_ok": true,
+            "ok": true
+          },
+          {
+            "path": "replay-state.pt",
+            "role": "replay_state",
+            "declared_bytes": 7909,
+            "actual_bytes": 7909,
+            "size_ok": true,
+            "declared_sha256": "425a20b1adfc3246dcd4ac742d074a426c194a95abe09160fd5c32bb76483354",
+            "actual_sha256": "425a20b1adfc3246dcd4ac742d074a426c194a95abe09160fd5c32bb76483354",
+            "hash_ok": true,
+            "cross_ref_field": null,
+            "cross_ref_ok": true,
+            "ok": true
+          },
+          {
+            "path": "expert-vision.pt",
+            "role": "expert_vision",
+            "declared_bytes": 1409295439,
+            "actual_bytes": 1409295439,
+            "size_ok": true,
+            "declared_sha256": "07cff223f23a2ccfbe507b85206763b3fb009b8e753548938704dac54a4f6f94",
+            "actual_sha256": "07cff223f23a2ccfbe507b85206763b3fb009b8e753548938704dac54a4f6f94",
+            "hash_ok": true,
+            "cross_ref_field": "expert_checkpoint_sha256['vision']",
+            "cross_ref_ok": true,
+            "ok": true
+          },
+          {
+            "path": "expert-audio.pt",
+            "role": "expert_audio",
+            "declared_bytes": 1409295439,
+            "actual_bytes": 1409295439,
+            "size_ok": true,
+            "declared_sha256": "8801b7f95f69cae3d268dda0a30adbdf9c54fdc6c1f6517acca009a9b9e5ab0b",
+            "actual_sha256": "8801b7f95f69cae3d268dda0a30adbdf9c54fdc6c1f6517acca009a9b9e5ab0b",
+            "hash_ok": true,
+            "cross_ref_field": "expert_checkpoint_sha256['audio']",
+            "cross_ref_ok": true,
+            "ok": true
+          },
+          {
+            "path": "expert-reasoning.pt",
+            "role": "expert_reasoning",
+            "declared_bytes": 1409295567,
+            "actual_bytes": 1409295567,
+            "size_ok": true,
+            "declared_sha256": "992923c2abc11e8d226fb0c809e8f12f83c4640deb12d535f727295412c8376e",
+            "actual_sha256": "992923c2abc11e8d226fb0c809e8f12f83c4640deb12d535f727295412c8376e",
+            "hash_ok": true,
+            "cross_ref_field": "expert_checkpoint_sha256['reasoning']",
+            "cross_ref_ok": true,
+            "ok": true
+          },
+          {
+            "path": "expert-tool.pt",
+            "role": "expert_tool",
+            "declared_bytes": 1409295375,
+            "actual_bytes": 1409295375,
+            "size_ok": true,
+            "declared_sha256": "550f50733ea3d78d9efc42afb946ea9d1e0b6f3e2f9bde712b8ebb68e5de1e5c",
+            "actual_sha256": "550f50733ea3d78d9efc42afb946ea9d1e0b6f3e2f9bde712b8ebb68e5de1e5c",
+            "hash_ok": true,
+            "cross_ref_field": "expert_checkpoint_sha256['tool']",
+            "cross_ref_ok": true,
+            "ok": true
+          }
+        ]
+      },
+      "restore_round_trip": {
+        "status": "FAILED",
+        "attempts": [
+          {
+            "launch_receipt": "<custody>\\r2-resume-20260804\\disk-budget-runner-receipt-certified-launch.json",
+            "run_root": "<custody>\\r2-resume-20260804",
+            "exit_code": 1,
+            "child_log": "<custody>\\r2-resume-20260804\\disk-budget-runner-receipt-child.log",
+            "traceback_tail": "Traceback (most recent call last):\r\n  File \"<abs>/ember-restart-3b/run_vertical_slice.py\", line 3215, in <module>\r\n    main()\r\n  File \"<abs>/ember-restart-3b/run_vertical_slice.py\", line 3185, in main\r\n    result = run_governed_vertical(seed=args.seed, artifact_root=args.artifact_root, write_budget_bytes=args.write_budget_bytes, max_records=args.max_records, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt, resume_realization_registry=args.resume_realization_registry, resume_optimizer_transition_registry=args.resume_optimizer_transition_registry, resume_optimizer_transition_registry_sha256=args.resume_optimizer_transition_registry_sha256)\r\n  File \"<abs>/ember-restart-3b/run_vertical_slice.py\", line 164, in run_governed_vertical\r\n    return run(seed=seed, artifact_root=resolved_artifact_root, resume_checkpoint=resume_checkpoint, resume_counter_receipt=resume_counter_receipt, resume_realization_registry=resume_realization_registry, resume_optimizer_transition_registry=resume_optimizer_transition_registry, resume_optimizer_transition_registry_sha256=resume_optimizer_transition_registry_sha256, write_budget_bytes=write_budget_bytes, max_records=max_records, canonical_runner_authority=authority)\r\n  File \"<abs>/ember-restart-3b/run_vertical_slice.py\", line 2600, in run\r\n    raise RuntimeError(\"production resume cursor has no remaining authorized records\")\r\nRuntimeError: production resume cursor has no remaining authorized records\r\n",
+            "resumed_artifact_root": null
+          }
+        ]
+      }
+    },
+    "needs": "a fresh governed-vertical launch that leaves >=1 authorized record unconsumed (e.g. --max-records 2 against the 4-record owned-four-domain shard), then a second governed-vertical launch with --resume-checkpoint/--resume-counter-receipt pointing at that partial checkpoint, expected exit_code 0 and a successor checkpoint whose data_cursor.global_step advanced past the partial checkpoint's -- see needs-execution plan"
+  },
+  "api_spend_usd": 0.0,
+  "paid_api_surface_used": false
+}
