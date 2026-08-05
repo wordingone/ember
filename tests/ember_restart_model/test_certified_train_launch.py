@@ -2190,8 +2190,12 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
             self.assertEqual(launch.resume_evidence_path, paths["evidence"])
 
     def test_resume_flags_match_the_runner_argparse(self) -> None:
-        """Bind the consumer's flag spelling to run_vertical_slice's governed
-        -vertical parser, so a renamed runner flag breaks CI, not a launch."""
+        """Bind the consumer's flag spelling to run_vertical_slice's parsers,
+        so a renamed runner flag breaks CI, not a launch. Issue #1452: the two
+        relocation flags are specialist-only (governed-vertical declares
+        neither -- see ResumeRelocationCustodyTests), but this check is a
+        plain literal-text binding across the whole runner file, not scoped
+        to one subparser, so their spelling belongs here too."""
 
         module = load_module()
         runner = (
@@ -2201,6 +2205,8 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
             *module.RESUME_EVIDENCE_RUN_SPEC_FLAGS.values(),
             "--resume-checkpoint",
             "--resume-optimizer-transition-registry-sha256",
+            "--c-relocated-under-disk-budget-runner",
+            "--relocation-custody-root",
         ):
             self.assertIn(f'"{flag}"', runner)
 
@@ -3290,10 +3296,13 @@ class ResumeRelocationCustodyTests(_ResumeBundleMixin, unittest.TestCase):
                     }
                 ),
             )
+            # Pins the #1462 citation too, not just the leading clause -- a
+            # future edit that dropped the citation (the refusal's only
+            # pointer to the cure path) would otherwise pass this untested.
             self._refused(
                 paths,
                 "governed-vertical route cannot express a relocated resume "
-                "checkpoint",
+                "checkpoint.*issue #1462",
             )
 
     def test_governed_vertical_route_with_b_rooted_resume_is_unaffected(self) -> None:
@@ -3426,9 +3435,19 @@ class ResumeRelocationCustodyTests(_ResumeBundleMixin, unittest.TestCase):
             )
 
     def test_malformed_relocation_custody_root_fails_closed(self) -> None:
-        for label, declared in (
-            ("empty string", ""),
-            ("not a string", 7),
+        for label, declared, pattern in (
+            ("empty string", "", "must be a non-empty string"),
+            ("not a string", 7, "must be a non-empty string"),
+            # F1: a relative declaration would resolve against THIS
+            # PROCESS's own cwd (_authorized_resume_relocation_custody_root's
+            # resolve(strict=False)) rather than a certificate-fixed
+            # location -- a non-empty string, so it clears the check above
+            # and must be caught by its own, later one.
+            (
+                "relative path",
+                "relative/custody/root",
+                "must be an absolute path",
+            ),
         ):
             with self.subTest(declared=label), tempfile.TemporaryDirectory() as directory:
                 paths = self._bundle(directory)
@@ -3448,7 +3467,7 @@ class ResumeRelocationCustodyTests(_ResumeBundleMixin, unittest.TestCase):
                 )
                 self._refused(
                     paths,
-                    "resume_relocation_custody_root must be a non-empty string",
+                    f"resume_relocation_custody_root {pattern}",
                 )
 
 

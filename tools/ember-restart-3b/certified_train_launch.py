@@ -715,7 +715,10 @@ def _authorized_resume_relocation_custody_root(
 
     None when undeclared; _validate_resume_request is the one that decides
     whether that absence is fatal (only when the authorized checkpoint
-    actually resolves off B:).
+    actually resolves off B:). Must be absolute: a relative declaration
+    would resolve against THIS PROCESS's own cwd (below), which is exactly
+    the "derive it locally" shape the module doctrine above refuses -- a
+    conspiring cwd could otherwise make an unauthorized root validate.
     """
 
     declared = authorized.get("resume_relocation_custody_root")
@@ -725,6 +728,12 @@ def _authorized_resume_relocation_custody_root(
         raise ValueError(
             "certificate resume_relocation_custody_root must be a non-empty "
             "string"
+        )
+    if not pathlib.Path(declared).is_absolute():
+        raise ValueError(
+            "certificate resume_relocation_custody_root must be an absolute "
+            "path (a relative one would resolve against this process's own "
+            "cwd, not a certificate-fixed location)"
         )
     return pathlib.Path(declared).resolve(strict=False)
 
