@@ -54,6 +54,7 @@ sys.path.insert(0, HERE)
 from token_shards_v0 import (                      # noqa: E402
     ASSEMBLY_RECEIPT, TICKET as SHARD_TICKET, validate_shards_receipt,
 )
+import receipt_check                               # noqa: E402
 
 EXCLUSION_TICKET = "FINEWEB-EDU-EXCLUSION-PREFLIGHT"
 # AUDITED BASELINE, not the enforced set. The enforced set is read from the
@@ -564,7 +565,16 @@ def resolve_excluded_ranges_for_stream(shard_dir, n_tokens, nc=NC,
     fail-closed: `excluded_token_ranges` re-validates the receipt against the
     on-disk shard bytes and raises on any drift. A caller on the tainted stream
     therefore either gets proven-clean windows or an exception -- never an
-    unfiltered stream."""
+    unfiltered stream.
+
+    The UNIDENTIFIED case returning ([], reason) is deliberate and is NOT the
+    whole safety story: a production launch is protected by the launch gate's
+    own cross-check (`v0_pretrain_launch_gate._shards_exclusion_check`), which
+    independently re-derives this identification and BLOCKS --live when the
+    declared stream would not bind to a receipt. A direct `PackedShardLoader`
+    caller bypassing the gate must not assume the loader alone proves
+    cleanliness for an arbitrary stream -- it proves it only for streams this
+    function can identify."""
     name = identify_stream_receipt(n_tokens, nc)
     if name is None:
         return [], (f"no TOKEN-SHARDS-V0 receipt declares a {n_tokens}-token "
@@ -631,6 +641,16 @@ def run_preflight(nc=NC, shard_dir=None, shard_receipt_name=DEFAULT_SHARD_RECEIP
         "clean_content_tokens": clean_content_tokens,
         "stream_content_tokens": receipt["content_total_tokens"],
         "no_gpu": True,
+        # Every post-genesis receipt must carry the constitutional invariant
+        # hash (guard changed-receipts leg -> receipt_check, which refuses
+        # MISSING_INVARIANT_SHA256). Read from receipt_check -- the component
+        # that ENFORCES the value -- never copied, so the two cannot drift.
+        # And any receipt carrying a *sha256* field must declare its
+        # sha_convention (receipt_check SHA-CONVENTION rule); the string
+        # matches the fleet's standing convention for constitutional-hash-
+        # only receipts (e.g. attribution-702 revalidation).
+        "invariant_sha256": receipt_check.INVARIANT_SHA256,
+        "sha_convention": "bytes on disk as-is (binary read, no normalization)",
         "authority": {
             "goal_id": "EMBER-02",
             "workstream_id": "EMBER-02A",
@@ -958,6 +978,20 @@ def _selftest_fail_closed_against_real_schema():
             raise AssertionError("expected ValueError for a missing ruling")
         except ValueError as e:
             assert "not on disk" in str(e)
+        # a DAMAGED ruling (malformed JSON line) is a refusal, never a
+        # partial read -- this branch previously had zero coverage anywhere
+        # (independent review of e55446a, finding 1), so a regression could
+        # have silently turned "damaged" into "skip the bad line"
+        with open(f"{td}/receipts/damaged-ruling.jsonl", "w",
+                  encoding="utf-8") as fh:
+            fh.write(json.dumps({"source": "fineweb_edu",
+                                 "action": "DROP"}) + "\n")
+            fh.write("{this line is not JSON\n")
+        try:
+            ruled_excluded_sources(td, ruling_name="damaged-ruling.jsonl")
+            raise AssertionError("expected ValueError for a damaged ruling")
+        except ValueError as e:
+            assert "damaged ruling" in str(e)
         # a NEW source ruled DROP is picked up with no code change -- the
         # anti-rot property, proven rather than asserted in prose
         with open(f"{td}/receipts/future-ruling.jsonl", "w", encoding="utf-8") as fh:

@@ -1,6 +1,6 @@
 {
   "ticket": "FINEWEB-EDU-EXCLUSION-PREFLIGHT",
-  "ts": "20260805T061442Z",
+  "ts": "20260805T140123Z",
   "shard_receipt": "token-shards-v0-20260611T170047Z.json",
   "assembly_receipt": "eng36-assembly-20260611T052337Z.json",
   "excluded_sources": [
@@ -24,6 +24,8 @@
   "clean_content_tokens": 5306794511,
   "stream_content_tokens": 6973632300,
   "no_gpu": true,
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "bytes on disk as-is (binary read, no normalization)",
   "authority": {
     "goal_id": "EMBER-02",
     "workstream_id": "EMBER-02A",
