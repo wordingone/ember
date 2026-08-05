@@ -21,8 +21,80 @@ def write_json(path, value):
     Path(path).write_text(json.dumps(value, sort_keys=True, separators=(",", ":"))+"\n", encoding="utf-8", newline="\n")
     return sha(path)
 
-def manifest(shard_sha):
-    return {"schema":"cbase-heldout-slice/v1","issue":"#760","captured_public_master":"e"*40,"source_corpus":{"combined_sha256":"a"*64,"receipt_path":"receipts/source.json","receipt_sha256":"b"*64,"shards":[{"name":"v0-00000.bin","sha256":shard_sha,"n_tokens":40}]},"selection_evidence":{"path":"receipts/selection.json","sha256":"c"*64,"batch_sha256":"d"*64,"verdict":"CLEAN"},"sequence":{"dtype":"<u2","seq":4,"n_mtp":0,"separator_id":0,"packed_bytes_per_token":2.0,"scoring":"primary_next_token_only"},"training_consumption":[{"source":"fixture","global_token_start":0,"global_token_end_exclusive":8}],"windows":[{"window_index":2,"shard_name":"v0-00000.bin","shard_token_start":8,"shard_token_end_exclusive":13,"global_token_start":8,"global_token_end_exclusive":13},{"window_index":4,"shard_name":"v0-00000.bin","shard_token_start":16,"shard_token_end_exclusive":21,"global_token_start":16,"global_token_end_exclusive":21}],"expected_scored_token_count":8,"scale":"W1_FROM_SCRATCH_PILOT_BASELINE","availability":{"status":"AVAILABLE","missing":[],"note":"fixture"},"claim_boundary":"fixture"}
+def manifest(shard_sha, *, receipt_path="receipts/source.json"):
+    return {"schema":"cbase-heldout-slice/v1","issue":"#760","captured_public_master":"e"*40,"source_corpus":{"combined_sha256":"a"*64,"receipt_path":receipt_path,"receipt_sha256":"b"*64,"shards":[{"name":"v0-00000.bin","sha256":shard_sha,"n_tokens":40}]},"selection_evidence":{"path":"receipts/selection.json","sha256":"c"*64,"batch_sha256":"d"*64,"verdict":"CLEAN"},"sequence":{"dtype":"<u2","seq":4,"n_mtp":0,"separator_id":0,"packed_bytes_per_token":2.0,"scoring":"primary_next_token_only"},"training_consumption":[{"source":"fixture","global_token_start":0,"global_token_end_exclusive":8}],"windows":[{"window_index":2,"shard_name":"v0-00000.bin","shard_token_start":8,"shard_token_end_exclusive":13,"global_token_start":8,"global_token_end_exclusive":13},{"window_index":4,"shard_name":"v0-00000.bin","shard_token_start":16,"shard_token_end_exclusive":21,"global_token_start":16,"global_token_end_exclusive":21}],"expected_scored_token_count":8,"scale":"W1_FROM_SCRATCH_PILOT_BASELINE","availability":{"status":"AVAILABLE","missing":[],"note":"fixture"},"claim_boundary":"fixture"}
+
+def build_real_corpus_fixture(nc_root, shard_root, *, clean_tokens=2000, fineweb_tokens=1000,
+                               shard_name="v0-00000.bin", receipt_name="token-shards-v0-fixture.json"):
+    """Build a complete, valid, hermetic TOKEN-SHARDS-V0 + assembly +
+    tokenizer-freeze + provenance-ruling fixture tree: `clean_tokens` of
+    code_github_clean content followed by `fineweb_tokens` of ruled-excluded
+    fineweb_edu content, in one shard. Mirrors fineweb_exclusion.py's own
+    _selftest_fail_closed_against_real_schema fixture (same schema, same
+    field set -- that fixture is the proof this shape validates cleanly
+    against token_shards_v0.validate_shards_receipt).
+
+    nc_root and shard_root may be the same directory (CLI --shard-dir tests,
+    which place the .bin flat next to --nc) or different (direct-call tests
+    that keep shard bytes under nc_root/shards/, matching the receipt's own
+    declared shard_dir for readability). Returns a dict describing what was
+    written, including the exact fineweb_edu byte range so callers can place
+    windows precisely inside or outside it."""
+    import struct, sys
+    scripts_dir = str(Path(__file__).resolve().parent)
+    if scripts_dir not in sys.path: sys.path.insert(0, scripts_dir)
+    import token_shards_v0 as tsv
+    nc_root = Path(nc_root); shard_root = Path(shard_root)
+    (nc_root/"receipts").mkdir(parents=True, exist_ok=True)
+    (nc_root/"tokenizer").mkdir(parents=True, exist_ok=True)
+    shard_root.mkdir(parents=True, exist_ok=True)
+    prem_names = {"assembly_receipt": "fixture-assembly.json", "tokenizer_freeze_receipt": "fixture-tokfreeze.json"}
+    for nm in prem_names.values():
+        write_json(nc_root/"receipts"/nm, {"ticket": "FIXTURE", "ts": "20260101T000000Z"})
+    write_json(nc_root/"tokenizer"/"tokenizer.json", {"vocab_size": 32000})
+    with open(nc_root/"receipts"/"v1-provenance-manifest-20260706.jsonl", "w", encoding="utf-8") as fh:
+        fh.write(json.dumps({"source": "code_github_clean", "provenance_verdict": "CLEAN"}) + "\n")
+        fh.write(json.dumps({"source": "fineweb_edu", "action": "DROP",
+                             "provenance_verdict": "EXCLUDED (fail-closed per clause 3)"}) + "\n")
+    total = clean_tokens + fineweb_tokens
+    ids = [8 + (i % 100) for i in range(total)]   # avoid separator(0) and reserved band(1..7)
+    shard_path = shard_root / shard_name
+    with open(shard_path, "wb") as fh:
+        fh.write(b"".join(struct.pack("<H", x) for x in ids))
+    shard_sha = sha(shard_path)
+    per_source = {s: {"content_tokens": 0, "separator_tokens": 0, "stream_tokens": 0} for s in tsv.EXPECTED_SOURCES}
+    per_source["code_github_clean"] = {"content_tokens": clean_tokens, "separator_tokens": 0, "stream_tokens": clean_tokens}
+    per_source["fineweb_edu"] = {"content_tokens": fineweb_tokens, "separator_tokens": 0, "stream_tokens": fineweb_tokens}
+    receipt = {
+        "ticket": tsv.TICKET, "ts": "20260611T000000Z", "shard_dir": "shards",
+        "shards": [{"name": shard_name, "sha256": shard_sha, "n_tokens": total}],
+        "total_stream_tokens": total, "content_total_tokens": total,
+        "per_source": per_source, "separator_id": tsv.SEPARATOR_ID,
+        "reserved_band_guard": {"reserved_ids": tsv.RESERVED_IDS, "max_id_lt": tsv.VOCAB_SIZE,
+                                "reserved_ids_observed_in_stream": 0},
+        "loader_windows": {"seq": tsv.SEQ, "n_mtp": tsv.N_MTP, "block_len": tsv.BLOCK_LEN,
+                           "n_windows": max(0, (total - tsv.BLOCK_LEN) // tsv.SEQ + 1)},
+        "premises": {
+            "assembly_receipt": {"name": prem_names["assembly_receipt"],
+                                 "sha256": sha(nc_root/"receipts"/prem_names["assembly_receipt"])},
+            "tokenizer_freeze_receipt": {"name": prem_names["tokenizer_freeze_receipt"],
+                                         "sha256": sha(nc_root/"receipts"/prem_names["tokenizer_freeze_receipt"])},
+            "tokenizer_json": {"path": "tokenizer/tokenizer.json", "sha256": sha(nc_root/"tokenizer"/"tokenizer.json")},
+        },
+        "sha_convention": tsv.SHA_CONVENTION, "no_gpu": True,
+    }
+    assembly = {"ticket": "FIXTURE", "ts": "20260101T000000Z", "sources": [
+        {"source": "code_github_clean", "fp22_row": 1},
+        {"source": "fineweb_edu", "fp22_row": 2},
+        {"source": "wikipedia_en", "fp22_row": 3},
+        {"source": "gutenberg_en", "fp22_row": 4},
+        {"source": "ledger_mit", "fp22_row": 5},
+    ]}
+    write_json(nc_root/"receipts"/prem_names["assembly_receipt"], assembly)
+    receipt["premises"]["assembly_receipt"]["sha256"] = sha(nc_root/"receipts"/prem_names["assembly_receipt"])
+    write_json(nc_root/"receipts"/receipt_name, receipt)
+    return {"receipt_name": receipt_name, "shard_name": shard_name, "total_tokens": total,
+           "shard_sha256": shard_sha, "fineweb_range": (clean_tokens, total)}
 
 class TinyTiedModel(torch.nn.Module):
     def __init__(self):
@@ -75,14 +147,67 @@ def test_nonfinite_loss_refused():
     with pytest.raises(m.HeldoutEvalRefusal,match="NONFINITE_LOSS"): m.evaluate_teacher_forced(Bad(),rows,device="cpu",dtype="float32",seed=83,packed_bytes_per_token=2.0,bootstrap_samples=20)
 
 
+def _manifest_for_fixture(fixture, **overrides):
+    """manifest() pointed at a build_real_corpus_fixture()'s real receipt,
+    with source_corpus.shards[0].n_tokens corrected to the fixture's actual
+    size (manifest()'s own default of 40 would otherwise mismatch and trip
+    SHARD_SIZE_MISMATCH / SLICE_WINDOW_OUT_OF_RANGE against real fixture
+    bytes). Any further overrides (e.g. windows/training_consumption) are
+    applied on top."""
+    doc=manifest(fixture["shard_sha256"],receipt_path=f"receipts/{fixture['receipt_name']}")
+    doc["source_corpus"]["shards"][0]["n_tokens"]=fixture["total_tokens"]
+    doc.update(overrides)
+    return doc
+
 def test_cli_validate_only_checks_real_slice_bytes(tmp_path):
     import subprocess, sys
-    shard=tmp_path/"v0-00000.bin"; np.arange(40,dtype="<u2").tofile(shard); p=tmp_path/"slice.json"; expected=write_json(p,manifest(sha(shard)))
-    cmd=[sys.executable,"-B",str(SCRIPT),"--validate-only","--slice-manifest",str(p),"--expected-slice-sha256",expected,"--shard-dir",str(tmp_path)]
+    # clean_tokens=2000 both keeps manifest()'s windows ([8,13) and [16,21))
+    # entirely below the fineweb_edu split and clears validate_shards_receipt's
+    # own minimum-size floor (stream must be >= BLOCK_LEN=1027 tokens), so
+    # validate-only sees a genuinely clean, genuinely valid slice under the
+    # new exclusion check rather than a fixture the check has to be blind to.
+    fixture=build_real_corpus_fixture(tmp_path,tmp_path,clean_tokens=2000,fineweb_tokens=1000,shard_name="v0-00000.bin")
+    shard=tmp_path/"v0-00000.bin"
+    p=tmp_path/"slice.json"; expected=write_json(p,_manifest_for_fixture(fixture))
+    cmd=[sys.executable,"-B",str(SCRIPT),"--validate-only","--slice-manifest",str(p),"--expected-slice-sha256",expected,"--shard-dir",str(tmp_path),"--nc",str(tmp_path)]
     good=subprocess.run(cmd,text=True,capture_output=True,check=False)
     assert good.returncode==0 and "HELDOUT_SLICE_DISJOINT_PASS" in good.stdout
     shard.unlink(); missing=subprocess.run(cmd,text=True,capture_output=True,check=False)
     assert missing.returncode==2 and "SHARD_MISSING" in missing.stderr
+
+def test_verify_slice_excludes_ruled_sources_pass_and_refuse(tmp_path):
+    """#760 x #1436: a slice window inside the ruled-excluded fineweb_edu
+    range is refused; the same corpus's clean region passes and reports the
+    exact range it checked. Proves verify_slice_excludes_ruled_sources against
+    a real TOKEN-SHARDS-V0 + assembly + ruling fixture tree, not just schema
+    shapes -- the fixture is what build_real_corpus_fixture mirrors from
+    fineweb_exclusion.py's own proven-valid selftest fixture."""
+    m=load_module()
+    nc_root=tmp_path/"nc"; shard_root=nc_root/"shards"
+    fixture=build_real_corpus_fixture(nc_root,shard_root,clean_tokens=2000,fineweb_tokens=1000)
+    fineweb_start,fineweb_end=fixture["fineweb_range"]
+
+    clean=_manifest_for_fixture(fixture)
+    loaded_clean=m.load_frozen_slice_manifest(tmp_path/"clean.json",write_json(tmp_path/"clean.json",clean))
+    ranges=m.verify_slice_excludes_ruled_sources(loaded_clean,shard_dir=str(shard_root),nc=str(nc_root))
+    assert ranges==[(fineweb_start,fineweb_end)]
+
+    tainted_window=[{"window_index":9,"shard_name":"v0-00000.bin","shard_token_start":fineweb_start,"shard_token_end_exclusive":fineweb_start+5,"global_token_start":fineweb_start,"global_token_end_exclusive":fineweb_start+5}]
+    tainted=_manifest_for_fixture(fixture,windows=tainted_window,training_consumption=[],expected_scored_token_count=4)
+    loaded_tainted=m.load_frozen_slice_manifest(tmp_path/"tainted.json",write_json(tmp_path/"tainted.json",tainted))
+    with pytest.raises(m.HeldoutEvalRefusal,match="SLICE_OVERLAPS_EXCLUDED_SOURCE"):
+        m.verify_slice_excludes_ruled_sources(loaded_tainted,shard_dir=str(shard_root),nc=str(nc_root))
+
+def test_verify_slice_excludes_ruled_sources_refuses_unproven_receipt(tmp_path):
+    """A manifest whose declared source_corpus.receipt_path names no real
+    on-disk receipt is a hard refusal, never a silent 'nothing to exclude' --
+    the whole point is independently proving the corpus claim, not trusting
+    what the manifest says about itself."""
+    m=load_module()
+    doc=manifest("0"*64)   # default receipt_path -> receipts/source.json, never written
+    loaded=m.load_frozen_slice_manifest(tmp_path/"m.json",write_json(tmp_path/"m.json",doc))
+    with pytest.raises(m.HeldoutEvalRefusal,match="EXCLUSION_DERIVATION_FAILED"):
+        m.verify_slice_excludes_ruled_sources(loaded,shard_dir=str(tmp_path),nc=str(tmp_path))
 
 def test_manifest_provenance_and_closed_shape_fail_closed(tmp_path):
     m=load_module(); shard=tmp_path/"v0-00000.bin"; np.arange(40,dtype="<u2").tofile(shard); p=tmp_path/"slice.json"; doc=manifest(sha(shard))
