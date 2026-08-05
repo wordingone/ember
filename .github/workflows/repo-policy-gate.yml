@@ -8,7 +8,7 @@ on:
     branches: [master]
   pull_request_target:
     branches: [master]
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, edited, labeled, unlabeled, milestoned, demilestoned]
 
 permissions:
   contents: read
@@ -16,7 +16,11 @@ permissions:
 
 concurrency:
   group: repo-policy-gate-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: true
+  # Cancel only when a new head supersedes this run. Metadata activity (body
+  # edit, label, milestone) changes inputs live_pr_policy reads, so those runs
+  # must reach a real conclusion instead of being cancelled before any job
+  # exists -- a zero-run suite is what branch protection strands on (#1375).
+  cancel-in-progress: ${{ github.event.action == 'synchronize' }}
 
 jobs:
   guard:

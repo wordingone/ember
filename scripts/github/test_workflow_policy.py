@@ -390,16 +390,123 @@ jobs:
             any("metadata-only activity" in error for error in errors), errors
         )
 
-    def test_required_pr_workflows_do_not_subscribe_to_metadata_only_types(self) -> None:
+    def test_expression_cancel_in_progress_permits_metadata_types(self) -> None:
+        path = self._write(
+            """
+name: fine
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, labeled, edited]
+permissions:
+  contents: read
+concurrency:
+  group: fine-${{ github.event.pull_request.number }}
+  cancel-in-progress: ${{ github.event.action == 'synchronize' }}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+"""
+        )
+        self.assertEqual([], workflow_policy.validate_workflow(path))
+
+    def test_live_pr_reader_without_covering_trigger_is_rejected(self) -> None:
+        path = self._write(
+            """
+name: bad
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: python -m scripts.github.live_pr_policy --root .
+"""
+        )
+        errors = workflow_policy.validate_workflow(path)
+        self.assertTrue(any("could never re-validate" in error for error in errors), errors)
+        self.assertTrue(any("'edited'" in error and "'labeled'" in error for error in errors), errors)
+
+    def test_omitted_types_do_not_silently_satisfy_coverage(self) -> None:
+        path = self._write(
+            """
+name: bad
+on:
+  pull_request:
+    branches: [master]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: python scripts/check_pr_authority_binding.py --body-file body.txt
+"""
+        )
+        errors = workflow_policy.validate_workflow(path)
+        self.assertTrue(any("could never re-validate" in error for error in errors), errors)
+
+    def test_body_reader_covered_by_edited_passes(self) -> None:
+        path = self._write(
+            """
+name: fine
+on:
+  pull_request_target:
+    branches: [master]
+    types: [opened, synchronize, reopened, edited]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: python scripts/check_pr_authority_binding.py --body-file body.txt
+"""
+        )
+        self.assertEqual([], workflow_policy.validate_workflow(path))
+
+    def test_required_pr_workflows_keep_their_live_input_cure_path(self) -> None:
+        """ci-pr and repo-policy-gate both run live_pr_policy, which reads the
+        live title, body, labels and milestone. Each must stay triggered on the
+        activity that changes those inputs, and must not cancel unconditionally,
+        or a body/label/milestone fix has no path back to green (#1375)."""
         root = Path(__file__).resolve().parents[2]
-        for name in ("ci-pr.yml", "pr-policy.yml", "repo-policy-gate.yml"):
+        readers_required = workflow_policy.LIVE_PR_INPUT_READERS["live_pr_policy"][1]
+        for name in ("ci-pr.yml", "repo-policy-gate.yml"):
             path = root / ".github" / "workflows" / name
             with self.subTest(workflow=name):
                 self.assertEqual([], workflow_policy.validate_workflow(path))
                 workflow = yaml.safe_load(path.read_text(encoding="utf-8", errors="strict"))
                 if True in workflow and "on" not in workflow:
                     workflow["on"] = workflow.pop(True)
-                self.assertEqual({}, workflow_policy._metadata_only_pr_types(workflow["on"]))
+                subscribed = workflow_policy._subscribed_pr_types(workflow["on"])
+                covered = frozenset().union(*subscribed.values())
+                self.assertEqual(frozenset(), readers_required - covered)
+                self.assertFalse(
+                    workflow_policy._cancels_in_progress(workflow["concurrency"])
+                )
+
+    def test_pr_policy_reads_no_live_state_and_stays_stripped(self) -> None:
+        """pr-policy validates in-tree sources only, so it is the one required
+        PR workflow that may drop every metadata trigger outright."""
+        root = Path(__file__).resolve().parents[2]
+        path = root / ".github" / "workflows" / "pr-policy.yml"
+        self.assertEqual([], workflow_policy.validate_workflow(path))
+        workflow = yaml.safe_load(path.read_text(encoding="utf-8", errors="strict"))
+        if True in workflow and "on" not in workflow:
+            workflow["on"] = workflow.pop(True)
+        self.assertEqual({}, workflow_policy._live_pr_input_readers(workflow["jobs"]))
+        self.assertEqual({}, workflow_policy._metadata_only_pr_types(workflow["on"]))
 
     def test_labels_sync_confines_write_authority_to_trusted_master_apply(self) -> None:
         root = Path(__file__).resolve().parents[2]
