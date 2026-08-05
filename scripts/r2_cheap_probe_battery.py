@@ -526,6 +526,24 @@ def _require_named_subject(identity: Mapping[str, Any]) -> None:
         )
 
 
+def _iter_checkpoint_subjects(checkpoint: Any) -> list[Mapping[str, Any]]:
+    """A receipt's `checkpoint` block comes in exactly two shapes today: a
+    single flat identity (R2-E4 -- checkpoint_manifest_sha256 at the top
+    level) or an arm-label -> identity mapping (R2-E3 -- e.g. {"A3": {...},
+    "control": {...}}). Returns every identity dict that must independently
+    name a subject. Anything that is not one of these two recognized shapes
+    (wrong type, empty, a value that is not itself a mapping) returns an
+    empty list -- this function never partially validates a shape it does
+    not recognize; build_receipt treats an empty list as CHECKPOINT_UNBOUND."""
+    if not isinstance(checkpoint, Mapping) or not checkpoint:
+        return []
+    if "checkpoint_manifest_sha256" in checkpoint:
+        return [checkpoint]
+    if all(isinstance(value, Mapping) for value in checkpoint.values()):
+        return list(checkpoint.values())
+    return []
+
+
 # ---------------------------------------------------------------------------
 # Scoring interface -- deliberately abstract. See module docstring "SCOPE
 # BOUNDARIES": no live 3B forward pass is wired in this PR.
@@ -807,6 +825,21 @@ def build_receipt(
     result: dict | None = None,
     extra: dict | None = None,
 ) -> dict:
+    # Do not trust the caller: verify_checkpoint/_require_named_subject were
+    # very likely already run upstream (run_r2e4/run_r2e3, both CLI paths
+    # today), but that is caller discipline, not this function's own
+    # contract -- a future call site (the live-scorer PR's success-path
+    # receipt, most obviously) could reach here without repeating that
+    # check. Re-verify every subject the checkpoint block claims to name.
+    subjects = _iter_checkpoint_subjects(checkpoint)
+    if not subjects:
+        raise R2ProbeBatteryRefusal(
+            "CHECKPOINT_UNBOUND: checkpoint block does not resolve to a recognized "
+            "single-identity or arm-label-mapping shape -- refusing to emit a receipt "
+            "that cannot name its subject"
+        )
+    for subject in subjects:
+        _require_named_subject(subject)
     import receipt_check  # sole authority for INVARIANT_SHA256 -- never hardcoded here
     receipt: dict[str, Any] = {
         "ticket": ticket,
@@ -1315,13 +1348,12 @@ def _cli_load_registry(args) -> tuple[list[ProbeSpec], dict | None]:
 
 
 def _cli_run_r2e4(args) -> int:
-    if not args.out:
-        print("R2_CHEAP_PROBE_BATTERY_REFUSED: OUTPUT_PATH_REQUIRED: --out is required for --run-r2e4", file=sys.stderr)
-        return 3
     try:
+        if not args.out:
+            raise R2ProbeBatteryRefusal("OUTPUT_PATH_REQUIRED: --out is required for --run-r2e4")
         checkpoint_identity = verify_checkpoint(args.checkpoint_manifest, args.model_config)
     except R2ProbeBatteryRefusal as exc:
-        # Cannot name the subject at all -- no receipt is possible.
+        # No output path, or cannot name the subject at all -- no receipt is possible.
         print(f"R2_CHEAP_PROBE_BATTERY_REFUSED: {exc}", file=sys.stderr)
         return 3
 
@@ -1359,13 +1391,13 @@ def _cli_run_r2e4(args) -> int:
 
 
 def _cli_run_r2e3(args) -> int:
-    if not args.out:
-        print("R2_CHEAP_PROBE_BATTERY_REFUSED: OUTPUT_PATH_REQUIRED: --out is required for --run-r2e3", file=sys.stderr)
-        return 3
     try:
+        if not args.out:
+            raise R2ProbeBatteryRefusal("OUTPUT_PATH_REQUIRED: --out is required for --run-r2e3")
         identity_a3 = verify_checkpoint(args.checkpoint_manifest_a3, args.model_config_a3)
         identity_control = verify_checkpoint(args.checkpoint_manifest_control, args.model_config_control)
     except R2ProbeBatteryRefusal as exc:
+        # No output path, or cannot name a subject at all -- no receipt is possible.
         print(f"R2_CHEAP_PROBE_BATTERY_REFUSED: {exc}", file=sys.stderr)
         return 3
 

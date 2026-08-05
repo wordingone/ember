@@ -617,6 +617,47 @@ def test_build_receipt_with_result():
     assert "refusal_reason" not in receipt
 
 
+def test_build_receipt_rejects_unnamed_subject_flat():
+    # build_receipt must not trust its caller: called directly (bypassing
+    # verify_checkpoint/_require_named_subject entirely) with a flat R2-E4-shaped
+    # checkpoint block missing checkpoint_manifest_sha256, it must refuse rather
+    # than emit a receipt that cannot name its subject.
+    with pytest.raises(battery.R2ProbeBatteryRefusal, match="CHECKPOINT_UNBOUND"):
+        battery.build_receipt(
+            ticket="TEST-1435", exit_criterion="R2-E4",
+            checkpoint={"arm": "A3"},
+            probe_manifest_meta=None, status="REFUSED", refusal_reason="BATTERY_UNDEFINED",
+        )
+
+
+def test_build_receipt_rejects_unnamed_subject_in_arm_mapping():
+    # The R2-E3-shaped checkpoint block is an arm-label -> identity mapping.
+    # A subject missing its hash on EITHER arm must refuse -- this is the
+    # per-subject iteration _iter_checkpoint_subjects exists to perform; a
+    # single top-level _require_named_subject(checkpoint) call could not see
+    # into this shape at all.
+    with pytest.raises(battery.R2ProbeBatteryRefusal, match="CHECKPOINT_UNBOUND"):
+        battery.build_receipt(
+            ticket="TEST-1435", exit_criterion="R2-E3",
+            checkpoint={
+                "A3": {"checkpoint_manifest_sha256": "a" * 64, "arm": "A3"},
+                "control": {"arm": "A2"},  # missing checkpoint_manifest_sha256
+            },
+            probe_manifest_meta=None, status="REFUSED", refusal_reason="BATTERY_UNDEFINED",
+        )
+
+
+def test_build_receipt_rejects_unrecognized_checkpoint_shape():
+    # Neither a flat identity nor an arm-label mapping -- e.g. an empty dict --
+    # must also refuse rather than silently pass validation.
+    with pytest.raises(battery.R2ProbeBatteryRefusal, match="CHECKPOINT_UNBOUND"):
+        battery.build_receipt(
+            ticket="TEST-1435", exit_criterion="R2-E4",
+            checkpoint={},
+            probe_manifest_meta=None, status="REFUSED", refusal_reason="BATTERY_UNDEFINED",
+        )
+
+
 def test_write_receipt_round_trips(tmp_path):
     receipt = battery.build_receipt(
         ticket="TEST-1435", exit_criterion="R2-E3",
@@ -688,15 +729,30 @@ def test_cli_r2e4_nonempty_manifest_refuses_scorer_backend_not_configured(tmp_pa
     assert receipt["probe_manifest"]["probe_count"] == 1
 
 
-def test_cli_r2e4_requires_out():
+def test_cli_r2e4_requires_out(tmp_path):
+    # --out is checked before checkpoint verification (folded into the same
+    # R2ProbeBatteryRefusal try/except as CHECKPOINT_* -- OUTPUT_PATH_REQUIRED
+    # is not a special case), so nonexistent checkpoint paths here never mask
+    # the refusal this test targets.
     rc = battery.main(["--run-r2e4", "--checkpoint-manifest", "x", "--model-config", "y"])
     assert rc == 3
+    assert not (tmp_path / "receipt.json").exists()
 
 
 def test_cli_r2e4_missing_required_args_is_argparse_error():
     with pytest.raises(SystemExit) as excinfo:
         battery.main(["--run-r2e4"])
     assert excinfo.value.code == 2
+
+
+def test_cli_r2e3_requires_out():
+    # Same OUTPUT_PATH_REQUIRED fold-in as r2e4, exercised on the r2e3 entrypoint.
+    rc = battery.main([
+        "--run-r2e3",
+        "--checkpoint-manifest-a3", "x", "--model-config-a3", "y",
+        "--checkpoint-manifest-control", "x", "--model-config-control", "y",
+    ])
+    assert rc == 3
 
 
 def test_cli_r2e3_real_checkpoints_battery_undefined_writes_receipt(tmp_path):
