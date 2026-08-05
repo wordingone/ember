@@ -325,5 +325,86 @@ class FinalPublicationLowCommitRetryTests(unittest.TestCase):
         self.assertLess(preflight_index, source.index("model.state_dict()"))
 
 
+class PublicationProjectionTeardownOrderingTests(unittest.TestCase):
+    """#1473 verified at the bytes: the #1469 final-retry teardown frees
+    gradients and record buffers ONLY -- optimizer moments, the storage
+    projection's input, are checkpointable state the release never touches.
+    The first pin fails if a future teardown extension starts freeing
+    optimizer state ahead of the retried publication; the second pins the
+    issue-title shape (publication against actually torn-down optimizer
+    state) to the exact contract refusal."""
+
+    def _vision_step_fixture(self) -> tuple[object, object, dict[str, object], dict[str, int]]:
+        import torch
+        from model import RestartDecoderConfig, UnifiedDecoder
+
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+        )
+        model = UnifiedDecoder(config, genesis_seed=192)
+        model._activate_expert("vision")
+        optimizer = torch.optim.AdamW(
+            (parameter for parameter in model.parameters() if parameter.requires_grad),
+            lr=1e-4,
+        )
+        model(
+            torch.tensor([[1, 2, 3]], dtype=torch.long),
+            active_expert="vision",
+        ).float().square().mean().backward()
+        optimizer.step()
+        optimizer_payload = {"optimizer": optimizer.state_dict()}
+        floor = checkpoint_artifacts._unique_tensor_storage_bytes(optimizer_payload)
+        bounds = {
+            "shared-model.pt": 100,
+            "optimizer-state.pt": floor,
+            "replay-state.pt": 100,
+            **{f"expert-{name}.pt": 100 for name in checkpoint_artifacts.EXPERT_NAMES},
+        }
+        return model, optimizer, optimizer_payload, bounds
+
+    def _derive(self, model: object, optimizer: object, optimizer_payload: dict[str, object], bounds: dict[str, int]) -> dict[str, object]:
+        return checkpoint_artifacts._derive_checkpoint_storage_projection(
+            model=model,
+            optimizer=optimizer,
+            optimizer_file_payload=optimizer_payload,
+            shard_storage_lower_bounds=bounds,
+            shard_sha256={path: "a" * 64 for path in bounds},
+            publication_modes={path: "written" for path in bounds},
+            global_step=1,
+            max_transient_scratch_bytes=1024**3,
+            max_serialized_bytes=1024**3,
+            specialist_parent_optimizer_routes=(),
+        )
+
+    def test_ballast_release_never_invalidates_projection_optimizer_inputs(self) -> None:
+        model, optimizer, optimizer_payload, bounds = self._vision_step_fixture()
+        routes_before = checkpoint_artifacts._optimizer_tensor_storage_by_route(model, optimizer)
+        records = [{"token_ids": [1], "payload": "y" * 32} for _ in range(3)]
+
+        run_vertical_slice._release_final_publication_ballast(records, model=model)
+
+        self.assertEqual(records, [])
+        self.assertTrue(all(parameter.grad is None for parameter in model.parameters()))
+        self.assertEqual(
+            checkpoint_artifacts._optimizer_tensor_storage_by_route(model, optimizer),
+            routes_before,
+        )
+        projection = self._derive(model, optimizer, {"optimizer": optimizer.state_dict()}, bounds)
+        self.assertEqual(projection["optimizer_state_active_expert_ids"], ["vision"])
+        self.assertGreater(
+            projection["optimizer_state_tensor_storage_lower_bound_bytes"], 0
+        )
+
+    def test_projection_rejects_actually_torn_down_optimizer_state(self) -> None:
+        model, optimizer, _optimizer_payload, bounds = self._vision_step_fixture()
+        optimizer.state.clear()
+        bounds = {**bounds, "optimizer-state.pt": 0}
+        with self.assertRaisesRegex(
+            ValueError,
+            "checkpoint storage projection requires one post-update optimizer state",
+        ):
+            self._derive(model, optimizer, {"optimizer": optimizer.state_dict()}, bounds)
+
+
 if __name__ == "__main__":
     unittest.main()
