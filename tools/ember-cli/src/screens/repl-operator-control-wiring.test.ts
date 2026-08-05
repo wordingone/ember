@@ -62,8 +62,24 @@ function sgrLeftClick(col: number, row: number): string {
   return `\x1b[<0;${col + 1};${row + 1}M`;
 }
 
+/** Like findGlyph, but scanning only rows at/after `fromRow` and columns at/after `fromCol` —
+ *  used to locate SELECT PROCESS dropdown rows inside the operator pane's column range without
+ *  matching the same word rendered by the homescreen/transcript on the left. */
+function findGlyphFrom(
+  lines: string[],
+  needle: string,
+  fromRow: number,
+  fromCol: number,
+): { col: number; row: number } | undefined {
+  for (let row = fromRow; row < lines.length; row++) {
+    const col = lines[row]!.indexOf(needle, fromCol);
+    if (col >= 0) return { col, row };
+  }
+  return undefined;
+}
+
 describe("operator-surface pane control click drives a real effect on the run", () => {
-  test("clicking START enters the real /train flow and surfaces its refusal instead of appending a dead start row", async () => {
+  test("#1475 click-first path: SELECT PROCESS -> train -> START enters the real /train flow and surfaces its refusal", async () => {
     resetCommandRegistryForTests();
     startTelemetryWatch().stop();
     const telemetryPath = join(tmpdir(), `test-repl-start-telemetry-${Date.now()}-${Math.random()}.jsonl`);
@@ -99,16 +115,47 @@ describe("operator-surface pane control click drives a real effect on the run", 
     const stopBridge = startStdinBridge({ stdin: stdin as never, emitKeypressEvents: () => {} });
 
     try {
+      // (1) The reorganized pane: [SELECT PROCESS ▾] sits under the state line where the gray
+      // "run control" caption used to be, and the launch cluster is out of the command bar —
+      // [train] has no bar button, the dropdown is its one home.
       let lines: string[] = [];
+      let toggleAt: { col: number; row: number } | undefined;
+      for (let attempt = 0; attempt < 30 && !toggleAt; attempt += 1) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 50));
+        await flushRepl();
+        lines = renderedLines(raw, columns, rows);
+        if (lines.some((line) => line.includes("IDLE"))) toggleAt = findGlyph(lines, "[SELECT PROCESS");
+      }
+      expect(toggleAt).toBeDefined();
+      expect(lines.some((line) => line.includes("run control"))).toBe(false);
+      expect(lines.some((line) => line.includes("[train]"))).toBe(false);
+
+      // (2) Click the toggle: the dropdown dialog opens where the button is, listing train.
+      stdin.emit("data", Buffer.from(sgrLeftClick(toggleAt!.col + 1, toggleAt!.row)));
+      let trainAt: { col: number; row: number } | undefined;
+      for (let attempt = 0; attempt < 30 && !trainAt; attempt += 1) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 50));
+        await flushRepl();
+        lines = renderedLines(raw, columns, rows);
+        trainAt = findGlyphFrom(lines, "train", toggleAt!.row + 1, Math.max(0, toggleAt!.col - 2));
+      }
+      expect(trainAt).toBeDefined();
+
+      // (3) Click train: the menu closes, the toggle re-labels with the selection, and START is
+      // armed (present and clickable).
+      stdin.emit("data", Buffer.from(sgrLeftClick(trainAt!.col + 1, trainAt!.row)));
       let startAt: { col: number; row: number } | undefined;
       for (let attempt = 0; attempt < 30 && !startAt; attempt += 1) {
         await new Promise<void>((resolve) => setTimeout(resolve, 50));
         await flushRepl();
         lines = renderedLines(raw, columns, rows);
-        if (lines.some((line) => line.includes("IDLE"))) startAt = findGlyph(lines, "[START]");
+        if (lines.some((line) => line.includes("[PROCESS: train"))) startAt = findGlyph(lines, "[START]");
       }
       expect(startAt).toBeDefined();
 
+      // (4) Click START: enters the REAL /train dispatcher — the nonexistent python fails the
+      // preflight closed and the refusal renders; nothing ever touches the legacy control
+      // channel (no dead start row).
       stdin.emit("data", Buffer.from(sgrLeftClick(startAt!.col + 1, startAt!.row)));
       let refusalVisible = false;
       for (let attempt = 0; attempt < 40 && !refusalVisible; attempt += 1) {
@@ -133,7 +180,7 @@ describe("operator-surface pane control click drives a real effect on the run", 
         unlink(controlPath).catch(() => {}),
       ]);
     }
-  }, 15000);
+  }, 20000);
 
   test("clicking [PAUSE] via the real mouse-click path appends a real pause command to the control channel", async () => {
     resetCommandRegistryForTests();

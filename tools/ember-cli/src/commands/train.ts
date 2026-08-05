@@ -314,6 +314,24 @@ interface TrainOffer {
 const trainOffers = new Map<string, TrainOffer>();
 let trainOfferCounter = 0;
 
+/**
+ * The newest outstanding offer minted by `sessionId`, if any (#1475: the cockpit's START control
+ * reads this to render its confirm stage and to build the exact `/train confirm <id>` text the
+ * offer surfaced). READ-ONLY by construction: the returned id can only be SPENT by dispatching
+ * "/train confirm <id>" back through this command, where every membrane check (single-use,
+ * session-binding, fail-closed) still runs. Map insertion order is mint order, so the last
+ * matching entry is the newest offer.
+ */
+export function outstandingTrainOfferForSession(
+  sessionId: string,
+): { offerId: string; ts: string } | undefined {
+  let newest: TrainOffer | undefined;
+  for (const offer of trainOffers.values()) {
+    if (offer.sessionId === sessionId) newest = offer;
+  }
+  return newest ? { offerId: newest.offerId, ts: newest.ts } : undefined;
+}
+
 function _mintOfferId(): string {
   trainOfferCounter += 1;
   const entropy = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
