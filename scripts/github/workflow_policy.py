@@ -33,6 +33,33 @@ WRITE_KEYS = {
     "statuses",
 }
 PR_EVENTS = {"pull_request", "pull_request_target"}
+# Activity types that fire on pull-request metadata alone, with no new head
+# commit. Under an unconditional `cancel-in-progress: true` each one starts a
+# check suite that the next event cancels before any job exists, and branch
+# protection binds the required context to that empty suite (#1375).
+METADATA_ONLY_PR_TYPES = {
+    "edited",
+    "labeled",
+    "unlabeled",
+    "milestoned",
+    "demilestoned",
+}
+# Activity types GitHub subscribes a pull-request event to when `types` is omitted.
+DEFAULT_PR_TYPES = frozenset({"opened", "synchronize", "reopened"})
+# A workflow that validates live pull-request state must be triggered by every
+# activity that can change what it reads, or its verdict is bound to a stale
+# snapshot with no path back to green short of manual rerun surgery. Each entry
+# maps a token appearing in a run step to the activity types its inputs move on.
+# Extend this table whenever a checker starts reading a new live PR field.
+LIVE_PR_INPUT_READERS: dict[str, tuple[str, frozenset[str]]] = {
+    # live_pr_policy reads title, body, labels and milestone off the live PR.
+    "live_pr_policy": (
+        "live PR title, body, labels and milestone",
+        frozenset({"edited", "labeled", "unlabeled", "milestoned", "demilestoned"}),
+    ),
+    # check_pr_authority_binding reads the PR body only.
+    "check_pr_authority_binding": ("live PR body", frozenset({"edited"})),
+}
 TRUSTED_CODEQL_PR_ACTIONS = (
     "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
     "github/codeql-action/init@3b0bd1d116c0bde30213346b22d4f634d96a2fb0",
@@ -66,6 +93,65 @@ def _event_names(events: Any) -> set[str]:
     if isinstance(events, list):
         return {str(event) for event in events}
     return set()
+
+
+def _cancels_in_progress(value: Any) -> bool:
+    """True only for an unconditional cancel-in-progress.
+
+    An expression (``${{ ... }}``) is conditional by construction: it is how a
+    workflow says "cancel only when a new head supersedes this run", which is
+    exactly the shape that keeps metadata-driven runs alive.
+    """
+    return isinstance(value, dict) and value.get("cancel-in-progress") is True
+
+
+def _subscribed_pr_types(events: Any) -> dict[str, frozenset[str]]:
+    """Activity types each pull-request event is subscribed to.
+
+    An omitted ``types`` key is GitHub's default set, not "everything", so a
+    workflow that never declares types still fails coverage fail-closed.
+    """
+    if not isinstance(events, dict):
+        return {}
+    subscribed: dict[str, frozenset[str]] = {}
+    for event in PR_EVENTS:
+        if event not in events:
+            continue
+        config = events.get(event)
+        types = config.get("types") if isinstance(config, dict) else None
+        if isinstance(types, list):
+            subscribed[event] = frozenset(str(item) for item in types)
+        else:
+            subscribed[event] = DEFAULT_PR_TYPES
+    return subscribed
+
+
+def _metadata_only_pr_types(events: Any) -> dict[str, list[str]]:
+    """Metadata-only activity types subscribed per pull-request event."""
+    return {
+        event: sorted(types & METADATA_ONLY_PR_TYPES)
+        for event, types in _subscribed_pr_types(events).items()
+        if types & METADATA_ONLY_PR_TYPES
+    }
+
+
+def _live_pr_input_readers(jobs: Any) -> dict[str, tuple[str, frozenset[str]]]:
+    """Live-PR checkers invoked by any run step, keyed by reader token."""
+    if not isinstance(jobs, dict):
+        return {}
+    found: dict[str, tuple[str, frozenset[str]]] = {}
+    for job in jobs.values():
+        steps = job.get("steps") if isinstance(job, dict) else None
+        if not isinstance(steps, list):
+            continue
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
+            run = str(step.get("run", ""))
+            for token, requirement in LIVE_PR_INPUT_READERS.items():
+                if token in run:
+                    found[token] = requirement
+    return found
 
 
 def _effective_permissions(workflow: dict[str, Any], job: dict[str, Any]) -> Any:
@@ -204,6 +290,34 @@ def validate_workflow(path: Path) -> list[str]:
         return errors + [f"{path.name}: jobs must be a nonempty mapping"]
     events = workflow.get("on")
     event_names = _event_names(events)
+    # Coverage: a workflow that validates live pull-request state must be
+    # triggered by every activity that changes what it reads. Without this a
+    # body fix cannot re-run the checker that rejected the body, and the only
+    # way back to green is manual rerun surgery (#1375 review receipt: PR 1404).
+    subscribed = _subscribed_pr_types(events)
+    if subscribed:
+        covered = frozenset().union(*subscribed.values())
+        for token, (inputs, required) in sorted(_live_pr_input_readers(jobs).items()):
+            missing = sorted(required - covered)
+            if missing:
+                errors.append(
+                    f"{path.name}: runs {token}, which reads {inputs}, but is not "
+                    f"triggered on {missing}; those edits could never re-validate"
+                )
+    # No husk: covering those activities is only safe if the resulting run can
+    # reach a real conclusion. An unconditional cancel-in-progress cancels the
+    # run before any job exists, and branch protection binds the required
+    # context to that empty suite.
+    if _cancels_in_progress(workflow.get("concurrency")) or any(
+        isinstance(job, dict) and _cancels_in_progress(job.get("concurrency"))
+        for job in jobs.values()
+    ):
+        for event, offenders in sorted(_metadata_only_pr_types(events).items()):
+            errors.append(
+                f"{path.name}: {event} subscribes to metadata-only activity "
+                f"{offenders} under unconditional cancel-in-progress; these runs "
+                "are cancelled before any job exists and strand required checks"
+            )
     for job_name, job in jobs.items():
         context = f"{path.name}:{job_name}"
         if not isinstance(job, dict):
