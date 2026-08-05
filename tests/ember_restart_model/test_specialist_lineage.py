@@ -477,5 +477,107 @@ class SpecialistLineageTests(unittest.TestCase):
                 )
             self.assertFalse((base / "too-large").exists())
             self.assertFalse(list(base.glob(".too-large.*.staging")))
+
+
+class SpecialistInheritedOptimizerRouteTests(unittest.TestCase):
+    """#1473: the first R2 specialist entry exact-resumed the full-coverage r1
+    root, inherited its four-route post-update optimizer state verbatim through
+    load_checkpoint_artifacts' optimizer.load_state_dict, trained one routed
+    family, and lost its whole trained segment when
+    _derive_checkpoint_storage_projection admitted only [active] for a lineage
+    episode. These bind the cured admission end to end: a parent whose
+    digest-bound storage projection attests all four initialized routes makes
+    the inherited state publishable, while a parent that attests nothing keeps
+    the strict single-route refusal."""
+
+    def _full_coverage_root(self, base: Path, *, with_projection: bool) -> tuple[dict[str, object], Path]:
+        from checkpoint_artifacts import EXPERT_NAMES
+
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=83)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        for expert in EXPERT_NAMES:
+            optimizer.zero_grad(set_to_none=True)
+            model(torch.tensor([[1, 2, 3]], dtype=torch.long), active_expert=expert).float().square().mean().backward()
+            optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+        caps = {"max_transient_scratch_bytes": 1024**3, "max_serialized_bytes": 1024**3} if with_projection else {}
+        receipt = write_checkpoint_artifacts(
+            model, optimizer, base / "root", launch_seed=83, rng_state=_rng_state(),
+            data_cursor={"shard": "TOKEN-SHARDS-V0:test", "record_index": 4, "global_step": 4, "tokens_seen": 12},
+            model_config_sha256="c" * 64, contract_sha256="d" * 64,
+            expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+            **caps,
+        )
+        return receipt, base / "root" / "checkpoint-manifest.json"
+
+    def _resumed_vision_candidate(self, base: Path, root_receipt: dict[str, object], manifest_path: Path) -> tuple[UnifiedDecoder, torch.optim.Optimizer]:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        candidate = UnifiedDecoder(config, genesis_seed=991)
+        optimizer = torch.optim.AdamW(candidate.parameters(), lr=1e-4)
+        load_checkpoint_artifacts(candidate, optimizer, base / "root", {**root_receipt, "checkpoint_manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest()})
+        candidate._activate_expert("vision")
+        optimizer.zero_grad(set_to_none=True)
+        candidate(torch.tensor([[1, 2, 3]], dtype=torch.long), active_expert="vision").float().square().mean().backward()
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+        return candidate, optimizer
+
+    def _publish_vision_successor(self, base: Path, candidate: UnifiedDecoder, optimizer: torch.optim.Optimizer, root_receipt: dict[str, object], manifest_path: Path) -> dict[str, object]:
+        return write_checkpoint_artifacts(
+            candidate, optimizer, base / "candidate", launch_seed=999, rng_state=_rng_state(),
+            data_cursor={"shard": "verified-vision", "record_index": 2, "global_step": 6, "tokens_seen": 44},
+            model_config_sha256="c" * 64, contract_sha256="d" * 64,
+            expert_genesis_sha256=root_receipt["expert_genesis_sha256"],
+            specialist_lineage={
+                "parent_manifest": manifest_path, "root_manifest": manifest_path,
+                "trained_expert_ids": ["vision"], "data_verification_receipt": _verification(),
+                "execution_slice": _execution_slice(scene=True), "scene_split_selection": _scene_selection(),
+            },
+            max_transient_scratch_bytes=1024**3, max_serialized_bytes=1024**3,
+        )
+
+    def test_root_resumed_specialist_episode_publishes_inherited_four_route_state(self) -> None:
+        import checkpoint_artifacts
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root_receipt, manifest_path = self._full_coverage_root(base, with_projection=True)
+            self.assertEqual(
+                root_receipt["storage_projection"]["optimizer_state_active_expert_ids"],
+                list(checkpoint_artifacts.EXPERT_NAMES),
+            )
+            candidate, optimizer = self._resumed_vision_candidate(base, root_receipt, manifest_path)
+            receipt = self._publish_vision_successor(base, candidate, optimizer, root_receipt, manifest_path)
+            projection = receipt["storage_projection"]
+            self.assertEqual(projection["active_expert"], "vision")
+            self.assertEqual(
+                projection["optimizer_state_active_expert_ids"],
+                list(checkpoint_artifacts.EXPERT_NAMES),
+            )
+            for route in ("shared", *checkpoint_artifacts.EXPERT_NAMES):
+                self.assertGreater(projection["optimizer_state_tensor_storage_by_route_bytes"][route], 0)
+            # Inherited full realization projects at factor 1: the state itself
+            # is already the all-expert floor.
+            self.assertEqual(
+                projection["projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes"],
+                projection["optimizer_state_tensor_storage_lower_bound_bytes"],
+            )
+            self.assertEqual(receipt["lineage"]["trained_expert_ids"], ["vision"])
+            checkpoint_artifacts._validate_checkpoint_storage_projection(projection)
+            checkpoint_artifacts._measure_candidate_storage_projection(base / "candidate", projection)
+
+    def test_unattested_parent_keeps_strict_single_route_refusal(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root_receipt, manifest_path = self._full_coverage_root(base, with_projection=False)
+            self.assertNotIn("storage_projection", root_receipt)
+            candidate, optimizer = self._resumed_vision_candidate(base, root_receipt, manifest_path)
+            with self.assertRaisesRegex(ValueError, "requires one post-update optimizer state"):
+                self._publish_vision_successor(base, candidate, optimizer, root_receipt, manifest_path)
+            self.assertFalse((base / "candidate").exists())
+            self.assertFalse(list(base.glob(".candidate.*.staging")))
+
+
 if __name__ == "__main__":
     unittest.main()
