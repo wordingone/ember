@@ -23,6 +23,18 @@ import {
   type CommandButtonActivation,
 } from "../services/command-buttons.ts";
 import type { RegistryCommand } from "../types/command-types.ts";
+import {
+  buildProcessOptions,
+  processMenuLayout,
+  processMenuRowBudget,
+  selectProcessButtonLabel,
+  startControlLabel,
+  startStage,
+  subordinateCommands,
+  START_NEEDS_SELECTION_REASON,
+  type ProcessOffer,
+  type StartStage,
+} from "../services/process-select.ts";
 import { HOST_METRIC_IDS, type HostMetricId, type HostMetricSeries, type HostTelemetrySnapshot } from "../services/host-telemetry-poller.ts";
 
 export interface OperatorSourceIdentity {
@@ -742,7 +754,33 @@ export interface OperatorSurfacePaneProps extends OperatorSurfaceInput {
   commandPage?: number;
   onCommandPageChange?: (page: number) => void;
   commandNotice?: string;
+
+  // -------------------------------------------------------------------------
+  // #1475 — click-first SELECT PROCESS run control
+  // -------------------------------------------------------------------------
+  /** The process currently armed for START, if any. A name from the registry's process slice
+   *  (services/process-select.ts); the screen owns the state, this pane only renders it. */
+  selectedProcess?: string;
+  /** Whether the SELECT PROCESS dropdown dialog is open (toggled by the button that replaced
+   *  the old gray "run control" caption). */
+  processMenuOpen?: boolean;
+  /** Which dropdown page is showing when the options overflow the height budget. */
+  processMenuPage?: number;
+  onProcessMenuToggle?: () => void;
+  onProcessSelect?: (name: string) => void;
+  onProcessMenuPageChange?: (page: number) => void;
+  /** Outstanding confirm-only membrane offer, read from the process's own store by the screen.
+   *  Drives START's confirm stage when it names the selected process. */
+  processOffer?: ProcessOffer;
+  /** Hover state for the dropdown: an option name, or SELECT_PROCESS_TOGGLE_HOVER for the
+   *  toggle button itself. */
+  hoveredProcess?: string;
+  onHoverProcess?: (name: string | undefined) => void;
 }
+
+/** Sentinel `hoveredProcess` value meaning the SELECT PROCESS toggle button itself — never a
+ *  legal command name (contains characters the registry forbids). */
+export const SELECT_PROCESS_TOGGLE_HOVER = "::select-process-toggle::";
 
 // ---------------------------------------------------------------------------
 // R2b — keyboard-reachable operator controls
@@ -761,7 +799,9 @@ export function operatorControlLabel(action: OperatorControlAction): string {
 }
 
 const OPERATOR_CONTROL_DISABLED_REASONS: Record<OperatorControlAction, string> = {
-  START: "a run is already active",
+  // #1475: START's gate is the process selection, not the run status — the selected command's
+  // own preflight/membrane is the authority on whether it may run right now.
+  START: START_NEEDS_SELECTION_REASON,
   PAUSE: "no running run",
   RESUME: "no paused run",
   RESTART: "no stale or offline run to restart",
@@ -777,13 +817,16 @@ export function operatorControlDisabledReason(action: OperatorControlAction): st
 /** Same enablement rule the pane's own render uses, exported so repl.ts's keyboard traversal
  *  and accelerator dispatch can skip/reject a disabled control using the IDENTICAL predicate —
  *  a second, hand-copied version of this rule is exactly how "looks reachable, isn't" bugs are
- *  born. */
+ *  born. #1475: START is armed by the process SELECTION, not by run status — "run prerequisite
+ *  checks as needed, then execute" belongs to the selected command's own preflight/membrane,
+ *  which is the fail-closed authority on whether it may run right now. */
 export function isOperatorControlEnabled(
   action: OperatorControlAction,
   status: OperatorRunStatus,
   telemetry: TelemetryState,
+  selectedProcess?: string,
 ): boolean {
-  return action === "START" ? status === "IDLE"
+  return action === "START" ? selectedProcess !== undefined
     : action === "PAUSE" ? status === "RUNNING"
     : action === "RESUME" ? telemetry.runStatus?.phase === "PAUSED"
     : status === "STALE" || status === "OFFLINE";
@@ -948,10 +991,11 @@ const FOCUS_MARKER_OFF = "  ";
 /** Per-action label width including its own trailing gap (paddingRight:1 on the control's own
  *  Box) — used to pack controls into rows that never split a label mid-word (legibility bar,
  *  2026-07-26: "no control label is truncated — controls are the last thing to lose
- *  characters, never the first"). Measures the DECORATED label (accelerator-annotated, R2b),
- *  since that is what actually renders — measuring the bare action name would under-count. */
-function controlLabelWidth(action: OperatorControlAction): number {
-  return FOCUS_MARKER_WIDTH + operatorControlLabel(action).length + 1;
+ *  characters, never the first"). Measures the RENDERED label via `labelFor`, since that is
+ *  what actually paints — #1475's START renders a stage-dependent label ([CONFIRM START]), so
+ *  measuring the bare action name would under-count exactly when the label is at its widest. */
+function controlLabelWidth(action: string, labelFor: (action: string) => string): number {
+  return FOCUS_MARKER_WIDTH + labelFor(action).length + 1;
 }
 
 /** Packs the four control labels into as few rows as fit `availableWidth`, greedily, never
@@ -961,12 +1005,18 @@ function controlLabelWidth(action: OperatorControlAction): number {
  *  `flexWrap` property but never actually implements wrapping (dead prop, verified by reading
  *  layout-engine.ts), so a too-narrow controls row used to run past the pane and get raw-clipped
  *  by the outer overflow:"hidden" box with no marker at all ("[START] [PAUSE] [RESUME] [RES").
- *  Reflowing into rows here needs no layout-engine change and never truncates anything. */
-export function layoutControlRows(actions: readonly string[], availableWidth: number): string[][] {
+ *  Reflowing into rows here needs no layout-engine change and never truncates anything.
+ *  `labelFor` defaults to the plain action label so existing callers measure exactly what they
+ *  measured before; the pane passes its own stage-aware renderer. */
+export function layoutControlRows(
+  actions: readonly string[],
+  availableWidth: number,
+  labelFor: (action: string) => string = (action) => operatorControlLabel(action as OperatorControlAction),
+): string[][] {
   const rows: string[][] = [[]];
   let used = 0;
   for (const action of actions) {
-    const w = controlLabelWidth(action as OperatorControlAction);
+    const w = controlLabelWidth(action, labelFor);
     const current = rows[rows.length - 1]!;
     if (current.length > 0 && used + w > availableWidth) {
       rows.push([action]);
@@ -1079,6 +1129,15 @@ export function OperatorSurfacePane({
   commandPage,
   onCommandPageChange,
   commandNotice,
+  selectedProcess,
+  processMenuOpen,
+  processMenuPage,
+  onProcessMenuToggle,
+  onProcessSelect,
+  onProcessMenuPageChange,
+  processOffer,
+  hoveredProcess,
+  onHoverProcess,
   ...input
 }: OperatorSurfacePaneProps): React.ReactElement {
   const terminalWidth = finiteNumber(terminalColumns) ? terminalColumns : 1727;
@@ -1115,33 +1174,57 @@ export function OperatorSurfacePane({
   const sourceLineText = boundedSurfaceLine(snapshot.source, innerWidth);
 
   const CONTROL_ACTIONS = OPERATOR_CONTROL_ACTIONS;
+  // #1475 — click-first SELECT PROCESS. Everything below derives from the SAME registry prop the
+  // command bar reads: the launch/more slice becomes the dropdown, inspect/govern stay in the
+  // (subordinate) bar. Together the two slices partition the registry exactly — no command
+  // loses its click surface, and no second list exists anywhere.
+  const processOptions = commands ? buildProcessOptions(commands) : [];
+  const barCommands = commands ? subordinateCommands(commands) : undefined;
+  const startControlStage: StartStage = startStage(selectedProcess, processOffer);
+  const controlLabelFor = (action: string): string =>
+    action === "START" ? startControlLabel(startControlStage) : operatorControlLabel(action as OperatorControlAction);
   const controlEnabled = (action: (typeof CONTROL_ACTIONS)[number]): boolean =>
-    isOperatorControlEnabled(action, snapshot.status, input.telemetry);
+    isOperatorControlEnabled(action, snapshot.status, input.telemetry, selectedProcess);
   const selectedControlRunId = input.telemetry.runStatus?.phase === "PAUSED"
     ? telemetryRunStatusId(input.telemetry) ?? snapshot.graphs.runId
     : snapshot.graphs.runId;
   const renderControl = (action: (typeof CONTROL_ACTIONS)[number]): React.ReactElement => {
     const enabled = controlEnabled(action);
     const focused = focusedControlIndex === CONTROL_ACTIONS.indexOf(action);
-    const hovered = enabled && hoveredControl === action;
+    // An unarmed START stays clickable so the click can SAY "select a process first" (the same
+    // named-reason discipline the command bar's disabled buttons follow) instead of being
+    // indistinguishable from a dead pixel.
+    const isStart = action === "START";
+    const clickable = enabled || isStart;
+    const hovered = clickable && hoveredControl === action;
+    // Directive step 3: once a process is selected, START HIGHLIGHTS — inverse+bold, the same
+    // visual weight a hover carries, held for as long as the selection stands. The confirm
+    // stage swaps to yellow with the [CONFIRM START] label: the next click is the explicit
+    // confirm act and the button says so.
+    const highlighted = isStart && startControlStage !== "unarmed";
+    const startColor = startControlStage === "confirm" ? "yellow" : startControlStage === "armed" ? "green" : "gray";
     return React.createElement(
       Box,
       {
         key: `control-${action}`,
         flexShrink: 0,
         paddingRight: 1,
-        onClick: enabled ? () => onControl?.(action, selectedControlRunId) : undefined,
-        onMouseEnter: enabled ? () => onControlHover?.(action) : undefined,
-        onMouseLeave: enabled ? () => onControlHover?.(undefined) : undefined,
+        onClick: clickable ? () => onControl?.(action, selectedControlRunId) : undefined,
+        onMouseEnter: clickable ? () => onControlHover?.(action) : undefined,
+        onMouseLeave: clickable ? () => onControlHover?.(undefined) : undefined,
       },
       React.createElement(
         Text,
-        { color: focused ? "cyan" : enabled ? "green" : "gray", bold: focused || hovered, inverse: hovered },
-        `${focused ? FOCUS_MARKER_ON : FOCUS_MARKER_OFF}${operatorControlLabel(action)}`,
+        {
+          color: focused ? "cyan" : isStart ? startColor : enabled ? "green" : "gray",
+          bold: focused || hovered || highlighted,
+          inverse: hovered || highlighted,
+        },
+        `${focused ? FOCUS_MARKER_ON : FOCUS_MARKER_OFF}${controlLabelFor(action)}`,
       ),
     );
   };
-  const controlRows = layoutControlRows(CONTROL_ACTIONS, innerWidth);
+  const controlRows = layoutControlRows(CONTROL_ACTIONS, innerWidth, controlLabelFor);
   // Single row -> render flat, exactly as before (preserves the existing flat "controls" shape
   // at every width wide enough to hold all four labels). Multiple rows only when the pane is too
   // narrow for one row -> each row is its own full-width labels, never a clipped one.
@@ -1163,12 +1246,23 @@ export function OperatorSurfacePane({
         ),
       );
 
-  // #1399: the command buttons render HERE, immediately under the run controls, because that is
-  // where the operator looks for a control. Two things make the two groups read as distinct
-  // blocks rather than one long bracket run: the run controls carry an UPPERCASE label set under
-  // their own `run control` caption, and every command group opens with its own dim caption
-  // (`launch`, `inspect`, `govern`, `more`) supplied by the bar itself.
-  const commandButtons = commands ? buildCommandButtons(commands) : [];
+  // #1475: the SELECT PROCESS button replaces the old gray "run control" caption — the one
+  // obvious path opens with a CONTROL, not a label. Rendered whenever the registry offers at
+  // least one process, which is exactly when START has anything to arm. The dropdown is a
+  // bordered dialog rendered where the button is; its rows are counted into the chrome budget
+  // below so the graph arithmetic stays exact while it is open.
+  const selectRowCount = processOptions.length > 0 ? 1 : 0;
+  const menuLayout = processMenuOpen && processOptions.length > 0
+    ? processMenuLayout(processOptions, processMenuRowBudget(effectiveHeight), processMenuPage ?? 0)
+    : undefined;
+  const menuRowCount = menuLayout
+    ? menuLayout.visible.length + (menuLayout.hiddenCount > 0 ? 1 : 0) + 2
+    : 0;
+
+  // #1399/#1475: the command bar renders immediately under the run controls, but carries only
+  // the SUBORDINATE registry slice (inspect/govern) — every launch/more command now lives in the
+  // SELECT PROCESS dropdown, so a first-time operator sees exactly one way to run something.
+  const commandButtons = barCommands ? buildCommandButtons(barCommands) : [];
   const disabledReasonLines = disabledActionReason
     ? [boundedSurfaceLine(`${disabledActionReason}`, innerWidth)]
     : [];
@@ -1176,10 +1270,11 @@ export function OperatorSurfacePane({
   // one intentionally blank row. Counting only compactAgentLines.length allowed Yoga to reclaim
   // the RUNNING/IDLE status row whenever the feed was empty.
   const activityViewportRows = 2;
-  // Chrome this pane owes before the command bar asks for anything: borders, status, controls,
-  // any disabled-action reason, metrics, provenance, activity.
-  const baseChromeRows = 2 + 1 + controlRows.length + disabledReasonLines.length
-    + compactMetrics.length + 1 + activityViewportRows;
+  // Chrome this pane owes before the command bar asks for anything: borders, status, the select
+  // button and its open dialog, controls, any disabled-action reason, metrics, provenance,
+  // activity.
+  const baseChromeRows = 2 + 1 + selectRowCount + menuRowCount + controlRows.length
+    + disabledReasonLines.length + compactMetrics.length + 1 + activityViewportRows;
   // #1399 review: the bar must never be able to eat the graph budget whole. The rows it may spend
   // are capped so that ONE WHOLE CHART CARD still fits — the legibility bar is "a card survives at
   // every supported size", and leaving that to arithmetic that happens to work out at today's
@@ -1194,14 +1289,11 @@ export function OperatorSurfacePane({
   // visible card actually costs — the card plus the count beside it — or it buys nothing.
   const graphFloorRows = OPERATOR_GRAPH_CARD_MIN_HEIGHT + 1;
   const commandBarCeiling = Math.max(0, effectiveHeight - baseChromeRows - graphFloorRows);
-  // The caption is the first thing to go when rows are that scarce: it names a group the operator
-  // can already see, where a button row IS the surface.
-  const controlsCaption = commandButtons.length > 0 && commandBarCeiling >= 2 ? "run control" : undefined;
   const commandRowBudget = Math.max(
     1,
     Math.min(
       commandBarMaxRows ?? DEFAULT_COMMAND_BAR_MAX_ROWS,
-      commandBarCeiling - (controlsCaption ? 1 : 0),
+      commandBarCeiling,
     ),
   );
   const commandBarRows = commandButtons.length === 0
@@ -1217,7 +1309,7 @@ export function OperatorSurfacePane({
     ? null
     : React.createElement(CommandBarPane, {
         key: "command-bar",
-        commands: commands!,
+        commands: barCommands!,
         width: innerWidth,
         maxRows: commandRowBudget,
         ...(hoveredCommand !== undefined ? { hoveredCommand } : {}),
@@ -1228,10 +1320,112 @@ export function OperatorSurfacePane({
         ...(commandNotice !== undefined ? { notice: commandNotice } : {}),
       });
 
-  // Reserve exact rows for borders, status, controls, the command bar, provenance, and activity.
-  // The remaining budget belongs exclusively to whole bounded chart cards; hidden cards are
-  // disclosed rather than relying on Ink to collapse arbitrary middle rows.
-  const fixedChromeRows = baseChromeRows + (controlsCaption ? 1 : 0) + commandBarRows;
+  // The SELECT PROCESS button row: the pane's primary control, directly under the status line.
+  const selectButtonElement = selectRowCount === 0
+    ? null
+    : React.createElement(
+        Box,
+        { key: "select-process", height: 1, flexShrink: 0, flexDirection: "row" },
+        React.createElement(
+          Box,
+          {
+            flexShrink: 0,
+            onClick: onProcessMenuToggle ? () => onProcessMenuToggle() : undefined,
+            onMouseEnter: onHoverProcess ? () => onHoverProcess(SELECT_PROCESS_TOGGLE_HOVER) : undefined,
+            onMouseLeave: onHoverProcess ? () => onHoverProcess(undefined) : undefined,
+          },
+          React.createElement(
+            Text,
+            {
+              color: "cyan",
+              bold: true,
+              inverse: hoveredProcess === SELECT_PROCESS_TOGGLE_HOVER,
+              wrap: "truncate-end",
+            },
+            boundedSurfaceLine(selectProcessButtonLabel(selectedProcess), innerWidth),
+          ),
+        ),
+      );
+
+  // The dropdown dialog. One clickable row per option on the current page, plus a clickable
+  // `+N more` pager that wraps — every process stays mouse-reachable at every height (#1370's
+  // guarantee, kept). Option rows reuse the slash palette's visual vocabulary: ❯ marks the
+  // current selection, green/gray carries enablement, inverse carries hover, and the
+  // description is dim and marked-truncated, never raw-clipped.
+  const menuInnerWidth = Math.max(1, innerWidth - 2);
+  const menuElement = !menuLayout
+    ? null
+    : React.createElement(
+        Box,
+        {
+          key: "process-menu",
+          flexDirection: "column",
+          borderStyle: "single",
+          borderColor: "cyan",
+          borderTitle: "SELECT PROCESS",
+          width: innerWidth,
+          flexShrink: 0,
+          overflow: "hidden",
+        },
+        ...menuLayout.visible.map((option) => {
+          const isSelected = option.name === selectedProcess;
+          const isHovered = hoveredProcess === option.name;
+          const nameText = `${isSelected ? "❯ " : "  "}${option.name}`;
+          const descBudget = menuInnerWidth - nameText.length - 2;
+          const descText = option.description && descBudget > 4
+            ? `  ${boundedSurfaceLine(option.description, descBudget)}`
+            : "";
+          return React.createElement(
+            Box,
+            {
+              key: `process-option-${option.name}`,
+              height: 1,
+              flexShrink: 0,
+              flexDirection: "row",
+              onClick: onProcessSelect ? () => onProcessSelect(option.name) : undefined,
+              onMouseEnter: onHoverProcess ? () => onHoverProcess(option.name) : undefined,
+              onMouseLeave: onHoverProcess ? () => onHoverProcess(undefined) : undefined,
+            },
+            React.createElement(
+              Text,
+              {
+                color: isSelected ? "cyan" : option.enabled ? "green" : "gray",
+                bold: isSelected || isHovered,
+                inverse: isHovered,
+                wrap: "truncate-end",
+              },
+              nameText,
+            ),
+            descText === ""
+              ? null
+              : React.createElement(Text, { dimColor: true, wrap: "truncate-end" }, descText),
+          );
+        }),
+        menuLayout.hiddenCount > 0
+          ? React.createElement(
+              Box,
+              {
+                key: "process-menu-pager",
+                height: 1,
+                flexShrink: 0,
+                onClick: onProcessMenuPageChange
+                  ? () => onProcessMenuPageChange(menuLayout.page + 1)
+                  : undefined,
+              },
+              React.createElement(
+                Text,
+                { color: onProcessMenuPageChange ? "green" : undefined, dimColor: !onProcessMenuPageChange, wrap: "truncate-end" },
+                `  +${menuLayout.hiddenCount} more`,
+              ),
+            )
+          : null,
+      );
+
+  // Reserve exact rows for borders, status, the select control and its open dialog, controls,
+  // the command bar, provenance, and activity. The remaining budget belongs exclusively to whole
+  // bounded chart cards; hidden cards are disclosed rather than relying on Ink to collapse
+  // arbitrary middle rows.
+  const fixedChromeRows = baseChromeRows + commandBarRows;
   const graphRowBudget = effectiveHeight - fixedChromeRows;
   // Card height responds only within the tested three-to-five-row legibility range. Constrained
   // panes retain deterministic leading cards and one explicit hidden-card count.
@@ -1253,11 +1447,8 @@ export function OperatorSurfacePane({
       paddingX: 1,
     },
     React.createElement(Box, { key: "status-row", height: 1, flexShrink: 0 }, React.createElement(Text, { color: statusColor, bold: true, wrap: "truncate-end" }, snapshot.status)),
-    controlsCaption
-      ? React.createElement(Box, { key: "controls-caption", height: 1, flexShrink: 0 },
-          React.createElement(Text, { dimColor: true, bold: true, wrap: "truncate-end" },
-            boundedSurfaceLine(controlsCaption, innerWidth)))
-      : null,
+    selectButtonElement,
+    menuElement,
     controlsElement,
     commandBarElement,
     ...disabledReasonLines.map((line) => React.createElement(Box, { key: `disabled-reason-${line}`, height: 1, flexShrink: 0 }, React.createElement(Text, { color: "yellow", wrap: "truncate-end" }, line))),

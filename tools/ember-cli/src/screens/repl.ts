@@ -143,6 +143,11 @@ import path from "node:path";
 import { OperatorSurfacePane } from "../components/operator-surface-pane.ts";
 import { commandBarMaxRows } from "../components/command-bar-pane.ts";
 import type { CommandButtonActivation } from "../services/command-buttons.ts";
+import {
+  buildProcessOptions,
+  outstandingProcessOffer,
+  startActivation,
+} from "../services/process-select.ts";
 import { verifySourceBinding } from "../entrypoints/source-binding-verifier.ts";
 
 // ---------------------------------------------------------------------------
@@ -709,21 +714,28 @@ export function ReplScreen({
     };
   }, [env, cwd]);
 
-  // START is a launch request, so its click must enter the same governed /train command path as
-  // typed operator input. The ref is populated with the current submitPrompt closure below and
-  // lets this early-declared pointer handler remain stable without capturing a stale callback.
+  // Every launch request (#1475: START dispatches the SELECTED process) must enter the same
+  // governed slash-command path as typed operator input. The ref is populated with the current
+  // submitPrompt closure below and lets early-declared handlers remain stable without capturing
+  // a stale callback.
   const submitPromptRef = useRef<(text: string, origin?: "keyboard" | "operator") => Promise<void>>(
     async () => {},
   );
 
   // PAUSE/RESUME/RESTART remain runtime-control intents for an already identified run and are
   // appended to the governed finetune control channel. START must not use that legacy channel:
-  // no production poller consumes a start row, and doing so bypasses /train's preflight and
-  // single-use confirmation boundary.
+  // no production poller consumes a start row, and doing so bypasses each command's preflight
+  // and /train's single-use confirmation boundary.
+  //
+  // #1475: START activates the SELECTED process (SELECT PROCESS dropdown) rather than a
+  // hardwired /train. The activation is built and dispatched by activateStartRef's closure —
+  // assigned every render, below, once the registry state and handleCommandButton exist — so
+  // this early-declared, referentially-stable handler never captures stale selection state.
+  const activateStartRef = useRef<() => void>(() => {});
   const operatorControlChannelPath = env["EMBER_FINETUNE_CONTROL_PATH"];
   const handleOperatorControl = useCallback((action: OperatorControlAction, runId?: string) => {
     if (action === "START") {
-      void submitPromptRef.current("/train", "operator");
+      activateStartRef.current();
       return;
     }
     void driveOperatorControl(action, runId, { channelPath: operatorControlChannelPath });
@@ -740,6 +752,15 @@ export function ReplScreen({
   const [hoveredControl, setHoveredControl] = useState<OperatorControlAction | undefined>(undefined);
   const [activityScrollOffset, setActivityScrollOffset] = useState(0);
   const [controlDisabledReason, setControlDisabledReason] = useState<string | undefined>(undefined);
+
+  // #1475: click-first SELECT PROCESS run control. The selection is the START control's arming
+  // state; the open/page/hover values are pure dropdown presentation. Like the command bar, the
+  // dropdown owns NO keyboard focus — selecting a process never takes the keyboard away from
+  // the prompt.
+  const [selectedProcessState, setSelectedProcess] = useState<string | undefined>(undefined);
+  const [processMenuOpen, setProcessMenuOpen] = useState(false);
+  const [processMenuPage, setProcessMenuPage] = useState(0);
+  const [hoveredProcess, setHoveredProcess] = useState<string | undefined>(undefined);
 
   // #1370: pointer state for the registry-driven command bar. Deliberately SEPARATE from
   // paneFocused/focusedControlIndex — clicking a command button must never move keyboard focus,
@@ -1219,6 +1240,20 @@ export function ReplScreen({
   const dropdownMatches = dropdownOpen
     ? filterSlashCommands(slashCommands, slashQueryFrom(inputState.text))
     : [];
+
+  // #1475: the SELECT PROCESS options derive from the SAME registry the slash palette lists,
+  // and a selection only counts while its command still exists there — a registry change
+  // (plugin unload, availability flip) disarms START instead of leaving it armed at a command
+  // that can no longer dispatch.
+  const processOptions = buildProcessOptions(slashCommands);
+  const selectedProcess = processOptions.some((option) => option.name === selectedProcessState)
+    ? selectedProcessState
+    : undefined;
+  // The outstanding confirm-only membrane offer for THIS session, read fresh each render from
+  // the membrane's own store (commands/train.ts) — never parsed out of transcript text. It is
+  // current by construction: the turn that mints or spends an offer ends in state updates that
+  // re-render this screen.
+  const processOffer = outstandingProcessOffer(sessionIdRef.current);
   // Single source of truth for what <Homescreen> is actually given -- used below both to render
   // it AND to size the palette against its real (not guessed) row count. Declared here (hoisted
   // above the JSX return) so both use sites reference the exact same object; the JSX render call
@@ -1696,7 +1731,7 @@ export function ReplScreen({
     if (paneFocused) {
       const { status, runId } = operatorControlStatus(telemetry);
       const enabledMask = OPERATOR_CONTROL_ACTIONS.map((action) =>
-        isOperatorControlEnabled(action, status, telemetry),
+        isOperatorControlEnabled(action, status, telemetry, selectedProcess),
       );
 
       // Escape always returns focus to the prompt, from anywhere in the set.
@@ -1780,7 +1815,7 @@ export function ReplScreen({
       if (!dropdownOpen) {
         const { status } = operatorControlStatus(telemetry);
         const enabledMask = OPERATOR_CONTROL_ACTIONS.map((action) =>
-          isOperatorControlEnabled(action, status, telemetry),
+          isOperatorControlEnabled(action, status, telemetry, selectedProcess),
         );
         const entryIndex = nextOperatorFocusIndex(-1, 1, enabledMask);
         setFocusedControlIndex(entryIndex ?? 0);
@@ -1879,6 +1914,25 @@ export function ReplScreen({
     setCommandBarNotice(
       outcome === "queued" ? `${activation.text} queued behind the current input` : undefined,
     );
+  };
+
+  // #1475: START's activation — the selected process, through the IDENTICAL path a command
+  // button click takes (handleCommandButton -> OperatorInjector -> submitPrompt -> the slash
+  // dispatcher). No second dispatch path: START on train IS "/train", and START on an offered
+  // train IS the "/train confirm <id>" the offer surfaced, so the membrane's own validation
+  // decides exactly as it does for typed input. A rejected activation (nothing selected, or a
+  // disabled command) surfaces its named reason on the controls' own reason row. Assigned every
+  // render so the closure always sees the LIVE selection/offer (see activateStartRef's
+  // declaration next to handleOperatorControl).
+  activateStartRef.current = () => {
+    const selected = processOptions.find((option) => option.name === selectedProcess);
+    const activation = startActivation(selected, processOffer);
+    if (activation.kind === "rejected") {
+      setControlDisabledReason(activation.reason);
+      return;
+    }
+    setControlDisabledReason(undefined);
+    handleCommandButton(activation);
   };
 
   /**
@@ -2006,6 +2060,22 @@ export function ReplScreen({
       onCommandPageChange: (index: number) =>
         setCommandBarPageState({ signature: commandBarSignature, index }),
       commandNotice: commandBarNotice,
+      // #1475: the click-first SELECT PROCESS run control. Selecting arms START and closes the
+      // dialog; the stale reason row clears because the operator just did the thing it asked.
+      selectedProcess,
+      processMenuOpen,
+      processMenuPage,
+      onProcessMenuToggle: () => setProcessMenuOpen((open) => !open),
+      onProcessSelect: (name: string) => {
+        setSelectedProcess(name);
+        setProcessMenuOpen(false);
+        setProcessMenuPage(0);
+        setControlDisabledReason(undefined);
+      },
+      onProcessMenuPageChange: setProcessMenuPage,
+      processOffer,
+      hoveredProcess,
+      onHoverProcess: setHoveredProcess,
     }),
   );
 }
