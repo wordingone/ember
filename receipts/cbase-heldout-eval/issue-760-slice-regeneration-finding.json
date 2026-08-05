@@ -1,1 +1,56 @@
-{"api_spend_usd":0.0,"blocker":{"resolution_paths":["port contamination_recheck into a standalone, non-execution-denied module, mirroring how cbase_heldout_eval.py's own eval_loss mechanism was ported out of the same file for #760 Deliverable 1 (named follow-up, not attempted here)","an explicit operator decision to accept range-arithmetic-only disjointness for this specific replacement slice, promoting the candidate manifest by hand"],"what":"n-gram contamination_recheck was not re-run for the candidate windows","why_not_run":"the only implementation is scripts/w1_collapse_control_run.py:contamination_recheck; that file imports timeshare_pretrain at module scope (line 76), and timeshare_pretrain.py raises SystemExit at module scope under the 2026-07-12 historical_only execution-denial lock -- importing either to call it would violate that lock"},"candidate_slice":{"decontamination_verified":false,"exclusion_ranges_checked":[[4055121325,5723508974]],"exclusion_verified":true,"shard":"v0-00022.bin","shard_global_range":[5905580032,6174015488],"training_disjointness_method":"range arithmetic only (see training_consumption source)","training_disjointness_verified":true,"window_count":16},"goal_id":"EMBER-02","invalidated_slice":{"path":"manifests/cbase-heldout-slice-v1.json","proof":"python -B scripts/cbase_heldout_eval.py --validate-only --shard-dir <real shards> exits 2 with SLICE_OVERLAPS_EXCLUDED_SOURCE against the committed manifest, using the verify_slice_excludes_ruled_sources check added in this same change","reason":"entirely inside the ruled-excluded fineweb_edu range [4055121325, 5723508974); the exclusion ruling (2026-08-04 L3 audit, #1436) postdates this slice's PR (#1228, merged 2026-07-30) by 5 days","shard":"v0-00016.bin","shard_global_range":[4294967296,4563402752]},"issue":"#760","limitations":["MAX_RECEIPTED_TRAINING_WINDOW_CEILING (24527 windows / 25,116,675 tokens) is the highest value found by grepping receipts/ for max_training_window_index_at_ceiling as of 2026-08-05, not a query against a single aggregate consumption ledger -- no such ledger exists yet. The candidate shard starts at global token 5,905,580,032, ~235x that ceiling, so this is not a close call, but it is a grep-derived bound, not a closed-form proof."],"next_executed_outcome":"EMBER-02 first sufficiently pretrained clean-genesis 3B Ember","no_gpu":true,"paid_api_surface_used":false,"status":"FROZEN_SLICE_INVALIDATED_REPLACEMENT_BLOCKED","ticket":"ISSUE-760-SLICE-REGENERATION-FINDING","ts":"20260805T143541Z","workstream_id":"EMBER-02A"}
+{
+  "api_spend_usd": 0.0,
+  "blocker": {
+    "resolution_paths": [
+      "port contamination_recheck into a standalone, non-execution-denied module, mirroring how cbase_heldout_eval.py's own eval_loss mechanism was ported out of the same file for #760 Deliverable 1 (named follow-up, not attempted here)",
+      "an explicit operator decision to accept range-arithmetic-only disjointness for this specific replacement slice, promoting the candidate manifest by hand"
+    ],
+    "what": "n-gram contamination_recheck was not re-run for the candidate windows",
+    "why_not_run": "the only implementation is scripts/w1_collapse_control_run.py:contamination_recheck; that file imports timeshare_pretrain at module scope (line 76), and timeshare_pretrain.py raises SystemExit at module scope under the 2026-07-12 historical_only execution-denial lock -- importing either to call it would violate that lock"
+  },
+  "candidate_slice": {
+    "decontamination_verified": false,
+    "exclusion_ranges_checked": [
+      [
+        4055121325,
+        5723508974
+      ]
+    ],
+    "exclusion_verified": true,
+    "shard": "v0-00022.bin",
+    "shard_global_range": [
+      5905580032,
+      6174015488
+    ],
+    "training_disjointness_method": "range arithmetic only (see training_consumption source)",
+    "training_disjointness_verified": true,
+    "window_count": 16
+  },
+  "invalidated_slice": {
+    "path": "manifests/cbase-heldout-slice-v1.json",
+    "proof": "python -B scripts/cbase_heldout_eval.py --validate-only --shard-dir <real shards> exits 2 with SLICE_OVERLAPS_EXCLUDED_SOURCE against the committed manifest, using the verify_slice_excludes_ruled_sources check added in this same change",
+    "reason": "entirely inside the ruled-excluded fineweb_edu range [4055121325, 5723508974); the exclusion ruling (2026-08-04 L3 audit, #1436) postdates this slice's PR (#1228, merged 2026-07-30) by 5 days",
+    "shard": "v0-00016.bin",
+    "shard_global_range": [
+      4294967296,
+      4563402752
+    ]
+  },
+  "issue": "#760",
+  "limitations": [
+    "MAX_RECEIPTED_TRAINING_WINDOW_CEILING (24527 windows / 25,116,675 tokens) is the highest value found by grepping receipts/ for max_training_window_index_at_ceiling as of 2026-08-05, not a query against a single aggregate consumption ledger -- no such ledger exists yet. The candidate shard starts at global token 5,905,580,032, ~235x that ceiling, so this is not a close call, but it is a grep-derived bound, not a closed-form proof."
+  ],
+  "no_gpu": true,
+  "paid_api_surface_used": false,
+  "status": "FROZEN_SLICE_INVALIDATED_REPLACEMENT_BLOCKED",
+  "ticket": "ISSUE-760-SLICE-REGENERATION-FINDING",
+  "ts": "20260805T143541Z",
+  "schema": "cbase-heldout-slice-regeneration-finding/v1",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  }
+}

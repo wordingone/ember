@@ -201,7 +201,7 @@ def build_candidate(*, shard_dir: Path, window_count: int) -> tuple[dict, dict]:
                          f"!= receipted {shard_meta['sha256'][:12]}")
 
     seq, n_mtp = tsv.SEQ, tsv.N_MTP
-    training_ceiling_token = (MAX_RECEIPTED_TRAINING_WINDOW_CEILING + 1) * seq
+    training_ceiling_token = MAX_RECEIPTED_TRAINING_WINDOW_CEILING * seq + tsv.BLOCK_LEN
     windows = select_windows(shard_name, shard_start, shard_meta["n_tokens"], seq=seq, n_mtp=n_mtp,
                              count=window_count, training_ceiling_token=training_ceiling_token)
     for row in windows:
