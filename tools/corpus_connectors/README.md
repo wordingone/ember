@@ -1,9 +1,15 @@
 # corpus_connectors
 
+<!-- goal_id: EMBER-02 -->
+<!-- workstream_id: EMBER-02A -->
+<!-- next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember -->
+
 Minimal, receipted fetch CLIs for the corpus program (deliverable D4, charter
-refs #590, #648). Five thin per-source connectors over one shared receipt
-core. No GPU, no model inference, no dedup/decontamination, no scheduling --
-this package is fetch-only.
+refs #590, #648). Six thin per-source connectors over one shared receipt
+core, plus a resumable chunked-bulk transport engine (issue #1440) for
+sources too large for the ordinary single-fetch cap. No GPU, no model
+inference, no dedup/decontamination, no scheduling -- this package is
+fetch-only.
 
 ## L3 / L4 / L5 contract statement
 
@@ -29,13 +35,19 @@ this package is fetch-only.
 tools/corpus_connectors/
   README.md            # this file
   receipt.py           # shared: hashing, receipt schema, license/credential gates,
-                        # download helper, manifest.jsonl compatibility shim
+                        # download helper (512 MiB single-fetch cap), manifest.jsonl shim
   hf_fetch.py           # HuggingFace datasets/files
   arxiv_fetch.py        # arXiv API (Atom) metadata + per-paper license filter + PDF/source
   openreview_fetch.py   # OpenReview API v2 (anonymous read) metadata + license-clean PDFs
   kaggle_fetch.py        # Kaggle CLI wrapper -- refuses cleanly when credentials absent
   http_fetch.py          # plain HTTP(S) for named-source pulls (OpenStax/archive.org/NIST/etc.)
-  tests/                 # offline unit tests + one mocked fetch per CLI (no network)
+  chunked_download.py    # shared engine: resumable HTTP-Range chunked transport, its own
+                          # declared byte budget, independent of receipt.py's 512 MiB cap
+  bulk_fetch.py           # CLI over chunked_download.py, for dumps that exceed the single-fetch
+                           # cap (Wikipedia/PMC/Stack Exchange/USPTO/... bulk packages)
+  tests/                 # offline unit tests (no external network); one mocked fetch per
+                          # single-shot connector, plus a real 127.0.0.1 Range-request fixture
+                          # server (tests/_range_fixture.py) for chunked_download.py/bulk_fetch.py
 ```
 
 ## Dependency posture (per §6 of the frozen build spec)
@@ -156,6 +168,102 @@ never downloads content; it writes one JSON listing of the returned entries.
 One receipt per invocation: the top-level `license` field summarizes the
 eligible set, per-paper detail is always recorded in `notes`.
 
+### `bulk_fetch.py` -- resumable chunked-bulk transport (issue #1440)
+
+```
+python bulk_fetch.py URL --budget-bytes N [--chunk-size-bytes N]
+                     [--disk-margin-bytes N] [--sha256 EXPECTED]
+                     [--license STR --license-evidence STR]
+                     [--dest DIR] [--allow-unverified-license] [--timeout N]
+```
+
+For bulk dumps that exceed `receipt.py`'s 512 MiB single-fetch cap (Wikipedia
+XML dumps, PMC OA packages, Stack Exchange 7z dumps, USPTO bulk grants,
+arXiv bulk packages, ...). Stdlib-only (`urllib.request`), fetched serially
+as a sequence of HTTP Range requests via the `chunked_download.py` engine.
+`--budget-bytes` is **required** -- the caller always states the total byte
+budget up front; the fetch refuses to start, or to continue past a resume,
+if the remote size would exceed it. This budget is entirely independent of
+the 512 MiB cap: `chunked_download.py` never calls `receipt.download_url()`
+and never widens `MAX_DOWNLOAD_BYTES` -- the ordinary single-fetch connectors
+are untouched by this module.
+
+**Resumable.** The first chunk request doubles as the Range-support probe:
+any non-206 response (including a 200 that silently ignores the Range
+header) is refused (`RangeNotSupportedError`) rather than treated as data --
+accepting a 200 would silently re-read from byte 0 on every "chunk". Progress
+is fsync'd to a `<file>.partial` and mirrored, chunk by chunk, into a
+`<file>.bulkstate.json` sidecar. Re-running the identical command (same URL/
+`--dest`/`--chunk-size-bytes`/`--budget-bytes`) against a destination with an
+in-progress sidecar resumes automatically from the last durably-committed
+chunk -- no separate `--resume` flag. On resume, every previously-committed
+chunk's on-disk bytes are re-hashed against its recorded sha256 *before* any
+new network request; a mismatch (external corruption/truncation of the
+partial file) is `ChunkDigestMismatchError` -- a corrupted resume is refused,
+never silently trusted or silently restarted. A `.partial` found with no
+matching sidecar is also refused (`ResumeStateMismatchError`) rather than
+guessed at.
+
+**Fail-closed on every ambiguity**, each its own machine-readable
+`BlockedError` subclass (ten in total, all defined in `chunked_download.py`):
+`RangeNotSupportedError`, `ChunkFetchError` (unexpected HTTP status --
+including a real 4xx/5xx, which `urllib.request.urlopen` raises as an
+`HTTPError` rather than returning as a normal response; that is caught and
+routed through the same status check, not left to leak out as a raw
+`urllib.error.HTTPError`), `BudgetExceededError`, `DiskMarginError`,
+`RemoteIdentityChangedError` (ETag/Last-Modified/total-size changed
+mid-transfer), `ChunkLengthMismatchError` (a chunk delivered fewer bytes than
+its own `Content-Range` promised -- this one condition covers a truncated
+final chunk and any mid-file truncation uniformly, since the check is "bytes
+received vs. bytes `Content-Range` promised for *this* response", not a
+last-chunk special case), `ResumeStateMismatchError`,
+`PartialFileSizeMismatchError`, `ChunkDigestMismatchError`,
+`WholeFileDigestMismatchError`. None of these ever produce a partial
+success: every refusal either writes zero bytes (the budget/disk-margin/
+Range-unsupported checks all happen before any chunk bytes are written to
+disk) or leaves the `.partial`+sidecar exactly at the last verified-good
+chunk boundary for a later resume.
+
+**The server-supplied `Content-Range` end is never trusted past what was
+actually asked for.** `resp_end` is server-controlled; before it is allowed
+to drive how many body bytes get read, `_fetch_one_chunk` checks
+`resp_start <= resp_end <= min(requested_end, resp_total - 1)`. A server --
+hostile or merely broken -- that answers a small requested range with a much
+larger `Content-Range` is refused (`RangeNotSupportedError`) *before a
+single byte of the oversized body is read*, mirroring `receipt.py`'s
+`download_url()`: the ceiling is checked before the write, so overshoot is
+bounded to one block (here, one chunk, never read at all once out of
+bounds). This closed a real gap found in review (`ContentRangeBoundExploitTests`
+in `tests/test_chunked_download.py` is the permanent regression coverage):
+previously the oversized body was read and written in full, and only the
+(real, but too-late) whole-file size check at the end of the transfer
+caught it.
+
+**Disk safety.** `shutil.disk_usage()` on the destination volume is checked
+against `--budget-bytes` + `--disk-margin-bytes` (default 1 GiB margin)
+before any network call, *and again before every individual chunk write* --
+a multi-hour bulk pull can outlast the volume's free space partway through,
+and that must surface as a clean `DiskMarginError` (leaving the `.partial`+
+state resumable at exactly the last good chunk) rather than a raw `OSError`
+out of `write()`/`fsync()` several chunks in.
+
+**License + evidence**, exactly like `http_fetch.py`: `--license`/
+`--license-evidence` must be supplied together or not at all (absent =
+`UNVERIFIED`, gated by `--allow-unverified-license`).
+
+**Per-chunk receipts.** On success, in addition to the standard
+`corpus-connector-receipt-v1` receipt (`source: "http-bulk"`) and
+`manifest.jsonl` row every connector produces, a
+`corpus-bulk-chunk-manifest-v1` JSON is written to
+`<dest>/_manifests/<ts>-<key>.chunks.json`: every chunk's index, byte
+offsets, per-chunk sha256, and fetch timestamp, plus the whole-file sha256
+and total byte count -- enough for a later auditor to verify the assembled
+file's provenance chunk-by-chunk without re-downloading anything. The
+standard receipt's `notes` field records the chunk manifest's relative path,
+chunk count/size, budget, and whether this run resumed a prior attempt. The
+ephemeral `.bulkstate.json` (whose only job is enabling resume) is deleted
+on success; the chunk manifest is the permanent audit artifact.
+
 ### `openreview_fetch.py` -- OpenReview API v2, anonymous read
 
 ```
@@ -201,22 +309,42 @@ calling spec supplies it) -- this tool never guesses it from the URL or
 response headers. **Implementation choice:** `--license`/`--license-evidence`
 are optional (not hard-required), because the frozen receipt schema already
 has a uniform "absent/unclear = `UNVERIFIED`, gated by
-`--allow-unverified-license`" rule (§2) -- reusing that one gate across all
-five connectors is simpler than a one-off required-argument shape for just
-this CLI. If one of the pair is given without the other, the CLI refuses
+`--allow-unverified-license`" rule (§2) -- reusing that one gate across every
+connector (including `bulk_fetch.py`, added later) is simpler than a one-off
+required-argument shape for just this CLI. If one of the pair is given without the other, the CLI refuses
 (`BLOCKED`) rather than guessing which was meant. `--sha256 EXPECTED`
 verifies the download and deletes the partial file on mismatch.
 
 ## Tests
 
-`tests/` -- offline, no network: `test_receipt.py` covers the shared core
-(schema shape, hashing, the manifest-compatibility shim, license/credential
+`tests/` -- offline, no external network: `test_receipt.py` covers the shared
+core (schema shape, hashing, the manifest-compatibility shim, license/credential
 gates, the download helper, and fail-closed behavior on a receipt-write
-failure); one `test_<connector>_fetch.py` per CLI mocks that connector's
-external calls (HfApi/snapshot_download; a canned arXiv Atom XML payload; a
-canned OpenReview JSON payload; a fake `kaggle` CLI subprocess runner; a fake
-`urlopen`) and exercises both the success (`RECEIPT`) and refusal
-(`BLOCKED`) paths. Run with either:
+failure); one `test_<connector>_fetch.py` per single-shot CLI mocks that
+connector's external calls (HfApi/snapshot_download; a canned arXiv Atom XML
+payload; a canned OpenReview JSON payload; a fake `kaggle` CLI subprocess
+runner; a fake `urlopen`) and exercises both the success (`RECEIPT`) and
+refusal (`BLOCKED`) paths.
+
+`test_chunked_download.py`/`test_bulk_fetch.py` use a different, stronger
+strategy: `tests/_range_fixture.py` runs a real `http.server` bound to
+`127.0.0.1` on an OS-assigned ephemeral port (loopback only -- no external
+network, but real `urllib.request`/`http.client` wire behavior: actual
+`Range`/`Content-Range`/`ETag` headers, actual socket framing). This matters
+here specifically because the failure modes this connector must detect --
+a server that silently ignores `Range` and returns 200, a response body cut
+short of what its own `Content-Range`/`Content-Length` promised, a
+mid-transfer `ETag` flip -- are wire-level phenomena a hand-rolled fake
+response object can only approximate; a real server exercises the actual
+header-parsing and short-read-detection code paths. Interruption (for the
+resume tests) is injected client-side via `_range_fixture.flaky_opener()`,
+which wraps the real `urllib.request.urlopen` and lets the first N real
+requests through before raising `ConnectionError` -- the server itself stays
+simple and fully healthy throughout, matching how a real interruption
+(client/network drop, not server misbehavior) actually happens. The resume
+test asserts against the fixture server's own request log that the two
+chunks completed before interruption are never re-requested after resume.
+Run with either:
 
 ```
 python -m pytest tests/
@@ -256,7 +384,40 @@ recorded here for audit:
   reflects the spec's own framing ("arXiv-perpetual license papers are
   metadata-only unless filter widened") that the perpetual license is a
   KNOWN quantity, not an unresolved one.
-- **No overwrite / no force flag.** None of the five CLIs accept a
-  destination-overwrite override; a pre-existing file/dir at the resolved
-  destination is always a `BLOCKED dest collision`. Re-running a pull against
-  a fresh `--dest` (or after clearing the prior one) is the intended flow.
+- **No overwrite / no force flag.** None of the CLIs accept a
+  destination-overwrite override; a pre-existing *final* file/dir at the
+  resolved destination is always a `BLOCKED dest collision`. Re-running a
+  pull against a fresh `--dest` (or after clearing the prior one) is the
+  intended flow. `bulk_fetch.py` is the one deliberate exception to "a prior
+  run's leftovers are always a collision": an in-progress `.bulkstate.json` +
+  `.partial` pair at the destination is not a collision but a resume point --
+  see its own section above.
+- **`bulk_fetch.py`'s `source` field is `"http-bulk"`, not `"http"`.** Even
+  though it is HTTP(S) under the hood, resumable chunked transfer has
+  materially different operational properties (sidecars, multi-request,
+  budget-gated) than `http_fetch.py`'s single-shot pull; a distinct `source`
+  value lets any downstream consumer/dashboard filter or reason about the two
+  separately without parsing `connector.name`. `receipt.py`'s `source` field
+  is a free string, not a closed enum, so this is additive and non-breaking.
+- **Per-chunk audit trail lives in its own JSON, not in the frozen receipt.**
+  The frozen `corpus-connector-receipt-v1` schema's `notes` field is prose
+  everywhere else in this package (human-readable summaries, license
+  breakdowns); stuffing a potentially-thousand-entry chunk list into it would
+  both violate that convention and make `notes` unreadable. Instead
+  `bulk_fetch.py` writes a separate `corpus-bulk-chunk-manifest-v1` JSON
+  under `_manifests/` (parallel to the receipt's own manifest JSON) and
+  records only its relative path plus a one-line summary in `notes` --
+  matching how this package already normalizes new structured data onto its
+  own artifact rather than overloading an existing field (see the
+  `manifest.jsonl` compatibility shim above).
+- **Chunk size default (64 MiB) and disk margin default (1 GiB) are builder
+  judgment, not spec-pinned.** Both are overridable per-invocation
+  (`--chunk-size-bytes`, `--disk-margin-bytes`); 64 MiB keeps a 50 GiB wave
+  fetch to roughly 800 chunks (each individually resumable, each its own
+  fsync'd durability point) without an excessive number of HTTP round trips.
+- **Resume is automatic, not flag-gated.** A `--resume` flag was considered
+  and rejected: the sidecar state file already unambiguously records whether
+  a resumable attempt exists for this exact URL/dest/chunk_size/budget
+  combination, and any mismatch on those fields is refused
+  (`ResumeStateMismatchError`) rather than silently reinterpreted -- an
+  explicit flag would only add a way to forget to pass it.
