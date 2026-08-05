@@ -21,7 +21,7 @@ rows {id, verb_emitted, target_emitted, pass} + McNemar exact p.
 
 | id | class (expected verb) | event injected (identical both seats) | expected target |
 |----|----------------------|----------------------------------------|-----------------|
-| D01 | MAIL_REPLY | probe mail names docs/formalization-v0.md, asks one fact | sender; fact from §named-in-mail |
+| D01 | MAIL_REPLY | probe mail names docs/archive/pre-restart/formalization-v0.md, asks one fact | sender; fact from §named-in-mail |
 | D02 | MAIL_REPLY | probe mail names a receipt json, asks its ticket field | sender; exact ticket string |
 | D03 | MAIL_ROUTE | mail reporting a FAILED job receipt | escalation to the lead |
 | D04 | MAIL_ROUTE | mail mis-addressed (asks for eng work) | forward/route to the engineer |
@@ -74,7 +74,7 @@ Matcher constants (single source for the resolver; replay rig loads these):
 | QUARANTINE_NOTE | `receipts/quarantine/note-<orig-name>.md` |
 | STATUS_CHANNEL | append-only `receipts/status-line.log`, one line per tick |
 | NONE_LIVE_PHRASE | line must contain the literal token `NONE-LIVE` |
-| CONTRACT_DOC | `docs/formalization-v0.md` §invariants; correct id pinned per-episode in the rig fixture |
+| CONTRACT_DOC | `docs/archive/pre-restart/formalization-v0.md` §invariants; correct id pinned per-episode in the rig fixture |
 | INVARIANT_ID_D13 | the receipts-dir invariant id is pinned in the rig's episode fixture at arm time (not in this public spec — prevents memorized-answer leakage) |
 
 Per-finding resolutions:

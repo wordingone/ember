@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """power_helper.py — MDE/power sizing table for gate statistics (eng #346).
 
 Given (n, p0, alpha=0.05, power=0.80), emits a three-column sizing table:
@@ -21,7 +24,7 @@ Selftest anchors (gate-stats-review-v1 §4):
   (3) mcnemar_min_discordant(alpha=0.05) == 6
       b=6, c=0 → exact p ≈ 0.031 < 0.05; b=5, c=0 → exact p ≈ 0.063 ≥ 0.05
 
-Spec: docs/gate-stats-review-v1.md §4 (frozen 2026-06-12).
+Spec: docs/archive/pre-restart/gate-stats-review-v1.md §4 (frozen 2026-06-12).
 """
 
 import argparse

@@ -10,7 +10,7 @@ are past ERRATA_CUTOFF_TS, so errata coverage is closed for all of them
 (scripts/ember_totality/test_c_invariant.py). Some of that residual set
 already has bespoke public-lineage revalidation producers (land210g/h/i/j,
 ind3/ind4/ind5, cbase-grow-rung, 580rerun, attribution-702 -- 16 rows already
-in docs/receipt-supersessions.jsonl). This script covers the next slice:
+in docs/ledgers/receipt-supersessions.jsonl). This script covers the next slice:
 15 receipts whose original producers are not safely re-executable right now
 (deleted landing worktrees, GPU/training-window paths, or evaluator runs
 that would need a live model/checkpoint this session does not have) but
@@ -293,7 +293,7 @@ def main() -> int:
         results.append({"old_path": old_path, "new_path": new_rel, "ticket": ticket})
         print(json.dumps({"status": "PASS", "old_path": old_path, "new_path": new_rel}, sort_keys=True))
 
-    supersessions_file = root / "docs" / "receipt-supersessions.jsonl"
+    supersessions_file = root / "docs" / "ledgers" / "receipt-supersessions.jsonl"
     with supersessions_file.open("a", encoding="utf-8", newline="\n") as fh:
         for row in supersession_rows:
             fh.write(json.dumps(row, sort_keys=True))

@@ -8,7 +8,7 @@ Mechanizes the three-conjunct gate `docs/spec/publication-v1.md` §3 names as th
 build target (its own §"Validation hook" paragraph). Checks, from ON-DISK evidence only,
 never from a spec's prose or a model's self-report:
 
-  (a) kernel_fired            — `docs/kernel-v1-freeze-spec.md` §5 freeze artifact
+  (a) kernel_fired            — `docs/archive/pre-restart/kernel-v1-freeze-spec.md` §5 freeze artifact
                                  (`kernel-v1.0.manifest`, anywhere under the repo) PLUS a
                                  receipt demonstrating the math-core §9 flywheel-turn
                                  condition `dB/dround > 0 ∧ G1_delta > 0`.
@@ -284,7 +284,7 @@ def check_kernel_fired():
     manifest_ok = len(manifest_hits) > 0
     if not manifest_ok:
         reasons.append("no kernel-v1.0.manifest found anywhere under the repo "
-                        "(freeze procedure, docs/kernel-v1-freeze-spec.md sec5, never executed)")
+                        "(freeze procedure, docs/archive/pre-restart/kernel-v1-freeze-spec.md sec5, never executed)")
 
     flywheel_receipts = []
     parse_errors = 0

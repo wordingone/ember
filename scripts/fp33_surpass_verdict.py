@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp33_surpass_verdict.py — the E2B-SURPASS terminal-gate aggregator.
 
 Computes the frozen conjunction verdict from the seven leg receipts:
 
     SURPASS = A1 AND A2 AND A3 AND B1 AND B2 AND B3 AND B4
 
-against the FROZEN prereg `docs/fp33-surpass-prereg-v1.md` (the 2nd of the
+against the FROZEN prereg `docs/archive/pre-restart/fp33-surpass-prereg-v1.md` (the 2nd of the
 goal's two completion conditions; the 1st is ember_tally == 100%). This script
 holds the *decision logic*; the prereg holds the *contract*. The means (base
 pick, training plan) gate elsewhere (#255) and never touch this verdict.

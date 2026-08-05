@@ -4,7 +4,7 @@
 web-verified citations, instructed to kill not protect), synthesized 2026-06-10;
 gated by the lead. Verdict: no candidate killed outright, none survives as stated in
 formalization v0 — all four narrowed. The v0 verbatim forms are retracted as
-over-claims; docs/formalization-v0.md S9 now carries the narrowed statements.*
+over-claims; docs/archive/pre-restart/formalization-v0.md S9 now carries the narrowed statements.*
 
 No cluster returned ALREADY-DONE for any candidate's full stated form, so nothing is outright killed. But every candidate drew PARTIAL-OVERLAP in at least one cluster, so all four are narrowed. The full v0 statements as written over-claim and must not be used verbatim.
 

@@ -504,7 +504,7 @@ cutting away inherited execution clutter.
 - **Floor-contract rows.** `docs/ember-floor-contract.md` preserves launch
   vehicle deferrals such as diffusion/dLLM and external research intake. These
   are watch rows, not first MVP blockers.
-- **Multimodal placeholders.** `docs/ember-multimodal-v0-config-spec.md`
+- **Multimodal placeholders.** `docs/ember-restart/ember-multimodal-v0-config-spec.md`
   reserves multimodal token plumbing, but Stage-1 remains FAIL until
   bidirectional heldout PASS; do not treat reserved ids as multimodal training
   evidence.
@@ -694,7 +694,7 @@ The goal requirement is satisfied inside this single document as follows:
 | Identify drift and misunderstandings | `Drift and Misunderstandings To Prevent`, `Do Not Infer`, Kaggle lane separation, readiness-vs-loop language, and branch/stale-prose warnings name the drift modes that would misdirect execution. | Satisfied for the current source set. |
 | Preserve lost ideas, techniques, stubs, and planned/deferred work | `Lost Ideas, Stubs, And Deferred Work To Reattach Deliberately`, `Inheritance Map`, closed issue classes, STATE pending/cancelled layers, prereg invariants, and receipt families assign each inherited thread to MVP-critical, prerequisite, post-MVP, dormant trigger-gated, or excluded status. | Satisfied for the current source set. |
 | Define what `MAXIMALLY` means | `What Maximally Means` defines maximally as the smallest artifact that inherits every load-bearing thread by executing, prerequiring, deferring with trigger/proof boundary, or excluding with reason; it rejects readiness and size as substitutes for the first externally scored self-improving loop. | Satisfied. |
-| Keep final specs non-fragmented | This file is the active Codex goal source for the active/resumable goal. Repo `GOAL.md` must be byte-synced to this text before goal-mode execution; if it is not, the first valid action is source reconciliation with `invalid_goal_source_split`, not Ember-cycle work. Sidecars such as `docs/ember-debt-ledger.md` support the packet but cannot override it. | Satisfied locally only when sync and git preservation receipts exist. |
+| Keep final specs non-fragmented | This file is the active Codex goal source for the active/resumable goal. Repo `GOAL.md` must be byte-synced to this text before goal-mode execution; if it is not, the first valid action is source reconciliation with `invalid_goal_source_split`, not Ember-cycle work. Sidecars such as `docs/ledgers/ember-debt-ledger.md` support the packet but cannot override it. | Satisfied locally only when sync and git preservation receipts exist. |
 
 The completion boundary is not "all possible future rereads of every old
 artifact." It is current-state inheritance of decision-changing historical

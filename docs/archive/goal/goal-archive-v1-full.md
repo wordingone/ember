@@ -1,4 +1,4 @@
-Full historical context: docs/goal-archive.md
+Full historical context: docs/archive/goal/goal-archive.md
 
 # Ember Breakthrough Loop - Self-Improvement Plan
 
@@ -71,7 +71,7 @@ Precedence order for goal-mode execution:
 1. `Authority And Precedence` and `Current Blocker Packet` in this file.
 2. `Goal Injection Contract` and `Goal Clear Condition` in this file.
 3. `Do Not Infer` and the active `Next` section in this file.
-4. `docs/ember-debt-ledger.md`, only when it agrees with the packet.
+4. `docs/ledgers/ember-debt-ledger.md`, only when it agrees with the packet.
 5. Historical evidence, original `GOAL.md` text, readiness receipts, D3/Kaggle
    receipt chronicles, old issue trackers, and founder-side context.
 
@@ -543,13 +543,13 @@ or newly written harness is never enough if the hardest core blocker and the
 known deferred-work ledger are not resolved by executed receipts.
 
 The canonical technical and cognitive debt index is
-`docs/ember-debt-ledger.md`. It consolidates the maintainer's 2026-06-19 captured debt
+`docs/ledgers/ember-debt-ledger.md`. It consolidates the maintainer's 2026-06-19 captured debt
 list with this goal, the completeness manifest, the active receipt index, and
 the architecture audit. Goal-clear review must scan that ledger. Any row marked
 `ACTIVE-BLOCKER`, `ACTIVE-NEXT`, `OPEN`, or triggerless `DEFERRED` blocks
 completion unless a newer receipt updates the row to `DONE`, `KILLED`,
 `EXCLUDED`, or a valid `GATED:<trigger>` state.
-If `docs/ember-debt-ledger.md` is missing, stale, or contradictory,
+If `docs/ledgers/ember-debt-ledger.md` is missing, stale, or contradictory,
 goal mode may repair only the rows needed to preserve this Current Blocker
 Packet and must then return to the packet. Ledger repair is not progress toward
 Ember unless it directly changes the resident-training gate receipt. Unknown

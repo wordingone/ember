@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-DOC = ROOT / "docs" / "custody-disposition-20260731-wave031.md"
+DOC = ROOT / "docs" / "custody" / "custody-disposition-20260731-wave031.md"
 REGISTRY = (
     ROOT
     / "receipts"

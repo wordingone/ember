@@ -62,12 +62,12 @@ def _valid_table() -> str:
 
 def _write_fixture(root: Path, table: str | None = None) -> None:
     (root / "docs" / "design").mkdir(parents=True)
-    (root / "docs" / "inference-to-training-translation-v1.md").write_text(
+    (root / "docs" / "design" / "inference-to-training-translation-v1.md").write_text(
         table or _valid_table(), encoding="utf-8"
     )
-    link = "docs/inference-to-training-translation-v1.md"
-    (root / "docs" / "sota-stack-floor-spec.md").write_text(link, encoding="utf-8")
-    (root / "docs" / "sota-stack-floor.md").write_text(link, encoding="utf-8")
+    link = "docs/design/inference-to-training-translation-v1.md"
+    (root / "docs" / "design" / "sota-stack-floor-spec.md").write_text(link, encoding="utf-8")
+    (root / "docs" / "design" / "sota-stack-floor.md").write_text(link, encoding="utf-8")
     (root / "docs" / "design" / "scale-architecture-frontier-20260703.md").write_text(
         f"## 6. Training translation\n\n{link}\n\nC-SCALE(ii)\n",
         encoding="utf-8",
@@ -119,7 +119,7 @@ class TranslationCheckerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             _write_fixture(root)
-            (root / "docs" / "sota-stack-floor.md").write_text(
+            (root / "docs" / "design" / "sota-stack-floor.md").write_text(
                 "# Missing canonical translation link\n", encoding="utf-8"
             )
             result = self._run(root)

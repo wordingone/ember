@@ -161,7 +161,7 @@ itself is not yet fully clean.
 **Check it yourself:**
 - `docs/START-HERE.md` §3 — the `b3` receipt's `u_pre` provenance falsification and its
   correction, worked end to end.
-- `docs/custody-disposition-20260708.md` — the dated, row-by-row disposition record for every
+- `docs/custody/custody-disposition-20260708.md` — the dated, row-by-row disposition record for every
   currently-cited-but-missing receipt path (governed by
   [issue #415](https://github.com/wordingone/ember/issues/415) and
   [PR #432](https://github.com/wordingone/ember/pull/432)).
@@ -180,7 +180,7 @@ of training, against the 24 GB card.
 - `receipts/cbase-grow-rung2-gpu-offload-probe-20260708T172949Z.json` — real, measured (not
   synthetic-estimated) VRAM: `total_gib: 23.988`, peak `used_gib: 19.465` under contended
   conditions (resident server never stopped).
-- `docs/deviations.md` (the rung-2 production-stabilization deviation entry) — the frozen spec's
+- `docs/ledgers/deviations.md` (the rung-2 production-stabilization deviation entry) — the frozen spec's
   VRAM-resident-AdamW config is measured at an estimated **30.903 GiB required vs. 23.988 GiB
   total** — infeasible outright. Cure path:
   [issue #480](https://github.com/wordingone/ember/issues/480).
@@ -212,7 +212,7 @@ offload configuration itself is still unpriced.
 - `receipts/cbase-grow-rung2-gpu-offload-probe-20260708T172949Z.json` — a real CPU-offloaded
   optimizer + micro-batch/accum configuration (`arm: rung2-cpu-offload-cure-gpu-measured`, PR
   #429), including its own disclosed crash history (issue #446) and the mitigation used.
-- `docs/deviations.md` — candidate cures (gradient checkpointing, batch reduction + grad
+- `docs/ledgers/deviations.md` — candidate cures (gradient checkpointing, batch reduction + grad
   accumulation) priced against the same receipt, with `MEASURE` slots explicitly marked
   `REGISTERED-PENDING` rather than asserted.
 

@@ -35,7 +35,7 @@ import path from "path";
 export const GOALFORGE_ROOT = process.env.EMBER_GOALFORGE_ROOT || "";
 
 const GOAL_PATH = "GOAL.md";
-const LEDGER_PATH = "docs/ember-debt-ledger.md";
+const LEDGER_PATH = "docs/ledgers/ember-debt-ledger.md";
 const BOARD_DIR = "scripts/ember_totality/receipts-totality";
 
 // ---------------------------------------------------------------------------
@@ -404,7 +404,7 @@ async function readWithSha(
 }
 
 /**
- * Builds a fresh EmberWorldState by binding the real goalforge GOAL.md, docs/ember-debt-ledger.md,
+ * Builds a fresh EmberWorldState by binding the real goalforge GOAL.md, docs/ledgers/ember-debt-ledger.md,
  * and the newest scripts/ember_totality/receipts-totality board receipt. No caching, no mirror --
  * every call re-reads the three source files as they exist on disk right now.
  */

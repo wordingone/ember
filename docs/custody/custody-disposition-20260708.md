@@ -174,7 +174,7 @@ independently re-hashed by the VOID receipt: **5/5 hash mismatches** against the
 claimed sha256 values. This rules out the cheap fix (strip the stray `real-` prefix and point at
 the near-name file) — the content at the corrected name is demonstrably *different* from what the
 receipt claims, not just differently-named. Row 13 (the main file, cited under the `real-` prefix
-by three other receipts: `docs/goal-archive-v1-full.md`,
+by three other receipts: `docs/archive/goal/goal-archive-v1-full.md`,
 `receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T152000Z-final.json`,
 `receipts/ember-resident-training-gate/resident-training-gate-20260622T152500Z-final.json`) was
 never written under that claimed identity at all. **Disposition: VOID via supersession** (receipt

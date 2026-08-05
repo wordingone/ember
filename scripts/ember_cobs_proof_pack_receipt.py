@@ -14,7 +14,7 @@ synthetic/hardcoded:
      memory "Ember=1 tree"). Each command's REAL exit code is recorded -- never assumed 0.
   2. Writes a structured JSON receipt under receipts/ember-c-obs-proof-pack/<ts>/receipt.json
      carrying:
-       - emberworldstate_adapter: binds=true, sources=[GOAL.md, docs/ember-debt-ledger.md,
+       - emberworldstate_adapter: binds=true, sources=[GOAL.md, docs/ledgers/ember-debt-ledger.md,
          the newest totality-board receipt] (spans GOAL/ledger/receipt categories, each
          resolved in-tree by test_c_obs.py's _check_worldstate_binding), plus
          adapter_path/adapter_sha256 sha-pinning core/ember-world-state.ts (the real adapter
@@ -26,7 +26,7 @@ synthetic/hardcoded:
          no silent-steer fallback) -- the (b)/(c) lighter keyword legs.
 
 No leg here touches a GPU or a training process. This receipt generator, the runner it invokes,
-and everything they read (GOAL.md, docs/ember-debt-ledger.md, the totality-board receipt) are
+and everything they read (GOAL.md, docs/ledgers/ember-debt-ledger.md, the totality-board receipt) are
 pure filesystem/process-exit-code operations.
 
 Run:  python scripts/ember_cobs_proof_pack_receipt.py
@@ -123,7 +123,7 @@ def main() -> int:
 
     sources = [
         "GOAL.md",
-        "docs/ember-debt-ledger.md",
+        "docs/ledgers/ember-debt-ledger.md",
         _latest_totality_receipt(),
     ]
 

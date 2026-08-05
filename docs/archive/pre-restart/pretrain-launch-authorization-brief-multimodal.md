@@ -11,7 +11,7 @@ pre-written so the moment readiness hits 3/3 the launch is execution, not
 improvisation. **Authoring this is pre-staging, not launching** — no run starts
 from this doc.
 
-Companion: `docs/ember-multimodal-v0-config-spec.md` (the architecture — the 4
+Companion: `docs/ember-restart/ember-multimodal-v0-config-spec.md` (the architecture — the 4
 locks, carry envelope, embedder, the §IV core-size decision). This brief is the
 *authorization* layer on top of it.
 

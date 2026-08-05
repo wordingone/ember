@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """sp-6b replay rig — deterministic B3 episode replay + scoring (#282).
 
 Instrument contract:
@@ -53,8 +56,8 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-BATTERY_PATH = REPO_ROOT / "docs" / "sp6-duty-battery.jsonl"
-ENCODINGS_PATH = REPO_ROOT / "docs" / "sp6-duty-battery-encodings.jsonl"
+BATTERY_PATH = REPO_ROOT / "docs" / "archive" / "pre-restart" / "sp6-duty-battery.jsonl"
+ENCODINGS_PATH = REPO_ROOT / "docs" / "archive" / "pre-restart" / "sp6-duty-battery-encodings.jsonl"
 
 # Fixed epoch for deterministic mtime_offset_s application.
 # 2026-06-22T00:00:00Z — the Ember June-22 target date, before any episode ts.

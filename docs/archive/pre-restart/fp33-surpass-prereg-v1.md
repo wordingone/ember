@@ -2,7 +2,7 @@
 
 Status: FROZEN at merge commit (this file's landing SHA). Any post-freeze
 change is a registered deviation per the fp-30b deviation protocol — file the
-deviation note in docs/deviations.md BEFORE the changed run, never after.
+deviation note in docs/ledgers/deviations.md BEFORE the changed run, never after.
 
 This prereg freezes the MEASUREMENT contract for the E2B-SURPASS MILESTONE
 (GOAL.md 2026-06-12). It deliberately does NOT freeze the means (base pick,

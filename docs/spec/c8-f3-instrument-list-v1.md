@@ -65,7 +65,7 @@ impossible.
 
 **Not a candidate, recorded so its absence is not read as oversight:** GPQA-diamond, which the
 freeze declaration marks `EXCLUDED from v1` (PIN-PENDING, licence-consent gate,
-`docs/deviations.md` DEV-004). It is unavailable to F3 unless it lands in a suite v2 under the
+`docs/ledgers/deviations.md` DEV-004). It is unavailable to F3 unless it lands in a suite v2 under the
 escape hatch above.
 
 ## 3. What "provenance-disjoint" means here, and against what

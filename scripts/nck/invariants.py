@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """NC-K protected-invariant boot-checksum layer (Closes #261).
 
 Design goal: ACCIDENTAL self-modification by the resident is the threat
@@ -29,7 +32,7 @@ Architecture
     dedup_contract dict naming the journal field used for deduplication.
 
 Clean-room rule: no the predecessor CLI source was read.  Only in-repo spec docs and
-the #260 event_loop.py were consulted.  See docs/nck-invariants-v0.md for
+the #260 event_loop.py were consulted.  See docs/archive/pre-restart/nck-invariants-v0.md for
 full provenance attestation.
 """
 

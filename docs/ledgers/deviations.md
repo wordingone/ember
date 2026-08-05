@@ -80,7 +80,7 @@ before any capability claim cites the suite** (no eval-reference leg has run; th
 declaration receipt lands in the same PR as this entry). **Frozen artifact:**
 `docs/spec/eval-suite-freeze-v1.md` (Status: Frozen, effective 2026-07-08); this entry
 uses that doc's own amendment mechanism ("Amendments to this frozen specification
-require entries in `docs/deviations.md` under the battery-14 section").
+require entries in `docs/ledgers/deviations.md` under the battery-14 section").
 
 **What changes:** GPQA-diamond's status moves from PIN-PENDING ("queued for when the
 operator is next active") to **EXCLUDED from suite v1**. Suite (b) of the A1 freeze
@@ -272,7 +272,7 @@ e4a3e05). Relates to issues #411, #406.
 ## DEV-001 — fp-33 surpass contract: add A4 (multimodal paired bar)
 
 **Date filed:** 2026-06-14 (the lead). **Filed pre-run** (no surpass run has executed;
-the multimodal v0 is pre-launch). **Frozen artifact:** `docs/fp33-surpass-prereg-v1.md`
+the multimodal v0 is pre-launch). **Frozen artifact:** `docs/archive/pre-restart/fp33-surpass-prereg-v1.md`
 (FROZEN 2026-06-12).
 
 **What changes:** add a binding **A4 — multimodal paired bar** to Leg A, and

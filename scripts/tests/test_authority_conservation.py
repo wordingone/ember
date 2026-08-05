@@ -661,7 +661,8 @@ def test_explicitly_historical_document_has_no_live_authority(tmp_path: Path) ->
 
 def test_registry_status_cannot_erase_a_research_family(tmp_path: Path) -> None:
     write_valid_fixture(tmp_path)
-    registry = tmp_path / "docs" / "technique-registry.jsonl"
+    registry = tmp_path / "docs" / "ledgers" / "technique-registry.jsonl"
+    registry.parent.mkdir(parents=True, exist_ok=True)
     registry.write_text(
         json.dumps({"id": "exact-twin", "status": "KILL"}) + "\n",
         encoding="utf-8",

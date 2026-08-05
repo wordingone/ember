@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """sp-5 spec selftest: every goal-clause noun maps to a section of the spec.
 
 Fail-closed: missing coverage = exit 1 with the missing term named.
@@ -7,7 +10,7 @@ import re
 import sys
 from pathlib import Path
 
-SPEC = Path(__file__).resolve().parent.parent / "docs" / "sp5-nck-harness-port-spec-v0.md"
+SPEC = Path(__file__).resolve().parent.parent / "docs" / "archive" / "pre-restart" / "sp5-nck-harness-port-spec-v0.md"
 
 # goal-clause noun -> regex that must appear in the spec body
 REQUIRED = {

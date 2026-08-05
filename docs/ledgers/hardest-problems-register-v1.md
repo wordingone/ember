@@ -17,7 +17,7 @@ register only by receipt, never by prose.
 before 06-22 and zero design-space exploration. Everything downstream,
 including ember's nature, is gated on shattering this.
 
-**Proof obligation + program:** `docs/compute-ceiling-program-v1.md` —
+**Proof obligation + program:** `docs/archive/pre-restart/compute-ceiling-program-v1.md` —
 roofline MFU math, 8-lever stack (each lands by single-variable A/B
 receipt), shatter criterion v1 = pretrain-from-scratch ≤1 governed day
 (≥3.3× compound, stretch 5×), no-defer rule: ≥1 lever in flight at every

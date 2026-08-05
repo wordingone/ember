@@ -8,7 +8,7 @@ mechanism_erasure=forbidden
 
 # Technique evidence graph
 
-`docs/technique-registry.jsonl` is the permanent machine-readable evidence
+`docs/ledgers/technique-registry.jsonl` is the permanent machine-readable evidence
 graph for training, inference, architecture, memory, routing, and systems
 mechanisms studied around Ember. It is subordinate to `GOAL.md` and cannot
 authorize a network, change a required capability, or define Ember by itself.

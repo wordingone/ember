@@ -15,10 +15,10 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 
-TABLE_PATH = Path("docs/inference-to-training-translation-v1.md")
+TABLE_PATH = Path("docs/design/inference-to-training-translation-v1.md")
 INTEGRATION_PATHS = (
-    Path("docs/sota-stack-floor-spec.md"),
-    Path("docs/sota-stack-floor.md"),
+    Path("docs/design/sota-stack-floor-spec.md"),
+    Path("docs/design/sota-stack-floor.md"),
     Path("docs/design/scale-architecture-frontier-20260703.md"),
 )
 CANONICAL_LINK = TABLE_PATH.as_posix()

@@ -5,7 +5,7 @@
 """sp-6b B-run designation resolver (part of #282).
 
 Mechanically resolves THE ember checkpoint for the official B3 run per the
-frozen rule (docs/sp6b-designation-rule-v0.md): highest-step COMPLETE
+frozen rule (docs/archive/pre-restart/sp6b-designation-rule-v0.md): highest-step COMPLETE
 checkpoint across the named lineage dirs, inside the resolution window.
 Pure function of the checkpoint dirs + clock — reads NOTHING from receipts/
 (battery scores cannot reach the choice).
@@ -37,7 +37,7 @@ except ImportError:
     from seat_adapter import TEMPLATE_HASH  # type: ignore[no-redef]
 
 RULE_VERSION = "sp6b-designation-rule-v0"
-RULE_DOC = Path(__file__).resolve().parent.parent.parent / "docs" / "sp6b-designation-rule-v0.md"
+RULE_DOC = Path(__file__).resolve().parent.parent.parent / "docs" / "archive" / "pre-restart" / "sp6b-designation-rule-v0.md"
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 # Frozen resolution window (UTC) — refusal outside unless registered deviation

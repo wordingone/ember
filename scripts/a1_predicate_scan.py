@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """a1_predicate_scan.py -- ember issue #593 deliverable 3: FIRST-EVER
 execution of the eval-suite-freeze-v1.md contamination-auditable predicate
 (refs #440): scans suite (a) [W2 sec.4 decontaminated held-out batch] +
@@ -486,7 +489,7 @@ def load_suite_b_rows(eval_suite_dir: str, freeze_receipt: dict, tk):
                 "status": "PIN-PENDING",
                 "n_items": 0,
                 "n_windows_contributed": 0,
-                "reason": "excluded from v1 per eval-suite-freeze-v1.md; see docs/deviations.md",
+                "reason": "excluded from v1 per eval-suite-freeze-v1.md; see docs/ledgers/deviations.md",
             }
             continue
 

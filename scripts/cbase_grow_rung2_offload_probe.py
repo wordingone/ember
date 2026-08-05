@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """cbase_grow_rung2_offload_probe.py — CPU-verifiable equivalence probes for
 the DEV-002 cure (CPU-offloaded optimizer states + micro-batch/grad
 accumulation). Companion to scripts/cbase_grow_rung2_dryrun.py; does NOT run
@@ -222,7 +225,7 @@ def main() -> int:
         "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
         "experiment": "C-BASE-clause-d-cure",
         "arm": "cpu-offload-probe",
-        "spec_ref": "state/rung2-cure-pr-spec-20260708.md; docs/deviations.md DEV-002",
+        "spec_ref": "state/rung2-cure-pr-spec-20260708.md; docs/ledgers/deviations.md DEV-002",
         "scope": ("CPU-only equivalence probes for the DEV-002 cure (CPU-offloaded "
                   "optimizer states + micro-batch/grad accumulation). Does NOT run the "
                   "measured production-scale dry-run (real 2.2B, nvidia-smi sampling) -- "

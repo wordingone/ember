@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """NC-K invariant boot-checksum layer selftest (issue #261).
 
 Runs 6 cases in temp-dir fixtures.  No network, no GPU, no model.
@@ -78,7 +81,7 @@ def _make_fixture_tree(tmp: str) -> dict:
     paths = {}
 
     # Three-test gain gate doc
-    gain_gate = os.path.join(tmp, "docs", "formalization-v0.md")
+    gain_gate = os.path.join(tmp, "docs", "archive", "pre-restart", "formalization-v0.md")
     os.makedirs(os.path.dirname(gain_gate), exist_ok=True)
     with open(gain_gate, "w", encoding="utf-8", newline="\n") as f:
         f.write("# Gain gate (fixture)\n\nThree-test gain gate placeholder.\n")

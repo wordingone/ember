@@ -1,7 +1,7 @@
 # DT-6 — Loop-economics gate, made explicit (prereg amendment)
 
 **Status:** authored 2026-06-14 (the lead). Amends the DT-1 delta-rule diagnostic prereg
-(`docs/delta-rule-diagnostic-prereg.md`) and binds **all** DT diagnostics, fp/sp gate
+(`docs/archive/pre-restart/delta-rule-diagnostic-prereg.md`) and binds **all** DT diagnostics, fp/sp gate
 verdicts, and the **pretrain readiness gate**. Origin: an agent flag 15051.
 
 ## The defect this closes

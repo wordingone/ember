@@ -12,7 +12,7 @@ B-run; after the first B-run, edits void that run).**
 
 ## Episode set
 
-`docs/sp6-duty-battery.jsonl` — 20 episodes, 4 families x 5:
+`docs/archive/pre-restart/sp6-duty-battery.jsonl` — 20 episodes, 4 families x 5:
 mail-triage (M1-M5), receipt-gating (R1-R5), schedule (S1-S5),
 file-hygiene (F1-F5). Each row: {id, family, event, expected_verb,
 target_pattern, notes}.
@@ -45,7 +45,7 @@ scored separately per the prereg.
 
 ## Encoding half (landed — closes #269)
 
-`docs/sp6-duty-battery-encodings.jsonl` — one row per episode:
+`docs/archive/pre-restart/sp6-duty-battery-encodings.jsonl` — one row per episode:
 `{id, events: [{source, kind, ts, payload}], fixtures: [{relpath,
 content_json|content_text, mtime_offset_s?}], notes}`. Selftest-enforced
 contract (scripts/sp6_battery_selftest.py):

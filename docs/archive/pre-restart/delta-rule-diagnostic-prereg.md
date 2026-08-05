@@ -51,6 +51,6 @@ raise effective local learning rate under the single-4090 residency constraint,
 not to relabel a borrowed-economics run as owned.
 
 ## Citation lineage (required, per policy)
-`docs/citation-policy-search-to-ember.md`: header = source step0778/step0785;
+`docs/charter/citation-policy-search-to-ember.md`: header = source step0778/step0785;
 direct prior Widrow-Hoff (1960); [UNIQUE] warm-init delta-rule × next-token LM,
 and local-update × low-bit weights (validated by no one).

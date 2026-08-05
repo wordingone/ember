@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_c_obs.py — STATUS PROBE for Ember goal condition C-OBS.
 
 Condition (authoritative, <spec> §4.2 / §4.4):
@@ -17,7 +20,7 @@ Condition (authoritative, <spec> §4.2 / §4.4):
   CHK: adapters bind real receipts; membrane has no silent-steer path; the
        proof-pack commands run and emit live state.
 
-[ISSUE #749 cure, docs/probe-authoring-contract.md] Execution-binding hardening.
+[ISSUE #749 cure, docs/charter/probe-authoring-contract.md] Execution-binding hardening.
 The pre-cure (a) worldstate-binding and (d) proof-pack conjuncts were pure
 keyword/prose scans over any evidence-subdir file -- a hand-authored .md or
 .json containing the right words satisfied CHK with zero recompute. Both are
@@ -152,7 +155,7 @@ def _iter_evidence_files(root: Path):
 def _iter_evidence_json(root: Path):
     """Yield (path, parsed_dict) for .json files under evidence-surface subtrees
     (receipts/, ledger/, baseline/) that parse as a JSON object. [ISSUE #749
-    cure, docs/probe-authoring-contract.md] The decisive (a) worldstate-binding
+    cure, docs/charter/probe-authoring-contract.md] The decisive (a) worldstate-binding
     and (d) proof-pack conjuncts require a REAL structured receipt whose claimed
     pointers (source paths, runner path, sha256, exit codes) can be resolved and
     recomputed -- never a keyword match against prose (.md is excluded here on

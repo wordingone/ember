@@ -1,6 +1,9 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp34_band_owned.py — owned-core band freeze + prong-A verdict (#264, fp-34).
 
-Prereg: docs/fp34-owned-band-prereg-v1.md (FROZEN before round-1 receipts
+Prereg: docs/archive/pre-restart/fp34-owned-band-prereg-v1.md (FROZEN before round-1 receipts
 exist). Predicate: band_owned(t) = s_r1>0 AND laplace_phat(s_r1,n_r1) <= 0.5.
 Bars: ratio 1.5 / perm p<0.05 / 10k shuffles / seed 19. Estimator machinery
 imported from fp15_bandtransfer — shared code, never reimplemented.

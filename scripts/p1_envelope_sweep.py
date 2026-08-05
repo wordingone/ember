@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """p1_envelope_sweep.py -- P1 envelope-sweep point runner (issue #118).
 
 Executes ONE sweep point (--point k in [3..8]) of the frozen run protocol in
@@ -35,7 +38,7 @@ DISCLOSED DESIGN DECISIONS / CONFLICTS (reported to the coordinator, never
 silently resolved -- prereg-vs-spec conflicts are supposed to be reported;
 these are prereg-internal gaps/inconsistencies this lane hit while making
 section 2 executable). Items 1 and 3 below were RULED on by the coordinator
-2026-07-08 and are recorded as docs/deviations.md DEV-003 (a pre-first-
+2026-07-08 and are recorded as docs/ledgers/deviations.md DEV-003 (a pre-first-
 -launch, clerical+operational, non-threshold-relaxing amendment to the
 frozen prereg); this docstring keeps the original finding for context and
 notes each ruling inline.
@@ -610,7 +613,7 @@ def run_point_live(args: argparse.Namespace, point_info: dict, ts: str,
                 "prereg_intended_warmup_steps": intended_warmup,
                 "prereg_intended_warmup_rule": "min(2% of budget, c03 recipe absolute warmup cap)",
                 "warmup_resolution": (
-                    "RESOLVED (docs/deviations.md DEV-003, ruling d): run_phase2_live "
+                    "RESOLVED (docs/ledgers/deviations.md DEV-003, ruling d): run_phase2_live "
                     "now accepts an additive warmup_steps override (default None, "
                     "unchanged for every other caller); this run passes "
                     "warmup_steps=intended_warmup explicitly, so the prereg-intended "

@@ -49,7 +49,7 @@ GPU job — the E2B `ember_work` arm actually runs, under the resource governor;
 `founder_likeness` sessions (owned arm, then E2B arm), sequential; **ASSEMBLY** = the one receipt
 under `receipts/` that ties both legs together. This numbering is local to whichever protocol
 defines it — it is not a single global gate list, and it is unrelated to the board's `GATE-001`
-.. `GATE-006` rows in `docs/ember-debt-ledger.md`, which are a separate, differently-scoped
+.. `GATE-006` rows in `docs/ledgers/ember-debt-ledger.md`, which are a separate, differently-scoped
 trigger list.
 
 **The bottleneck-ledger walls (B1–B5) — and the unrelated W1/W2.** The standing dispatch
@@ -149,7 +149,7 @@ embeddings, norms, the head, and `mtp_heads` — shape-invariant across a growth
 need no pushforward rule at all. Only Muon-routed FF tensors are touched by net2net widening.
 
 **MFU (Model FLOPs Utilization).** Measured throughput as a fraction of theoretical peak GPU
-FLOPs: `MFU = (FLOPs/token × tokens/s_raw) / peak_FLOPs` (`docs/compute-ceiling-program-v1.md`).
+FLOPs: `MFU = (FLOPs/token × tokens/s_raw) / peak_FLOPs` (`docs/archive/pre-restart/compute-ceiling-program-v1.md`).
 It is one of the three required fields (alongside measured throughput and a required-tokens
 projection) in the `C-EFF` efficiency-closure receipt (`docs/spec/conditions-v1.md` §4.1).
 

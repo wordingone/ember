@@ -99,9 +99,9 @@ and in-repo Python.
 
 | File read | Role |
 |---|---|
-| `docs/sp5-nck-harness-port-spec-v0.md` | Primary spec: resident form (§2), harness invariants (§3/§5), communicability (§4) |
-| `docs/sp6-duty-battery-v0.md` | Duty battery spec: verb classes, selectivity episodes, episode families |
-| `docs/sp6-duty-battery.jsonl` | 20 episode rows: event/expected_verb/target_pattern for the four families |
+| `docs/archive/pre-restart/sp5-nck-harness-port-spec-v0.md` | Primary spec: resident form (§2), harness invariants (§3/§5), communicability (§4) |
+| `docs/archive/pre-restart/sp6-duty-battery-v0.md` | Duty battery spec: verb classes, selectivity episodes, episode families |
+| `docs/archive/pre-restart/sp6-duty-battery.jsonl` | 20 episode rows: event/expected_verb/target_pattern for the four families |
 | `docs/charter/nck-invariant-contract-v0.md` | 15 invariants: uniform tool interface (inv 5), dispatch (inv 6/7), state persistence (inv 12/13) |
 | `docs/archive/pre-restart/nck-spec-v0.md` | Process shape, write surface, five un-removable invariants with mechanisms |
 | `origin/eng/254-heartbeat-runner:scripts/heartbeat_runner.py` | Pattern reference only: phase machine, halt receipts, native subprocess, journal append pattern |
