@@ -211,7 +211,7 @@ class FinalPublicationLowCommitRetryTests(unittest.TestCase):
                     checkpoint_parent=checkpoint_parent, config_path=config_path, global_step=200,
                     last_checkpointed_step=0, deferral_state=state, publish=self._probe_bound_publish(),
                     telemetry_path=telemetry_path, telemetry_run_id="run-1", policy_path=policy_path,
-                    release_for_final_retry=lambda: run_vertical_slice._release_training_record_buffers(records),
+                    release_for_final_retry=lambda: run_vertical_slice._release_final_publication_ballast(records),
                 )
             self.assertIsNone(result)
             self.assertEqual(probe.call_count, 2)
@@ -225,6 +225,10 @@ class FinalPublicationLowCommitRetryTests(unittest.TestCase):
             receipt = json.loads(receipts[0].read_text(encoding="utf-8"))
             self.assertEqual(receipt["schema_version"], "ember-checkpoint-deferred-low-commit-v1")
             self.assertEqual(receipt["status"], "DEFERRED_LOW_COMMIT")
+            # Both boundary measurements are receipted: pre-teardown
+            # (available_commit_bytes) and post-teardown
+            # (retry_observed_commit_bytes), so analysis can read exactly how
+            # much the teardown returned.
             self.assertEqual(receipt["available_commit_bytes"], _INCIDENT_FIRST_LOW_BYTES)
             self.assertEqual(receipt["required_commit_bytes"], _INCIDENT_REQUIRED_BYTES)
             self.assertEqual(receipt["retry_observed_commit_bytes"], _INCIDENT_SECOND_LOW_BYTES)
@@ -278,12 +282,20 @@ class FinalPublicationLowCommitRetryTests(unittest.TestCase):
             self.assertNotIn("retry_required_commit_bytes", receipt)
             self.assertNotIn("released_record_count", receipt)
 
-    def test_release_helper_empties_aliased_record_dicts(self) -> None:
+    def test_release_helper_frees_gradients_and_aliased_record_dicts(self) -> None:
+        import torch
+
         records = [{"token_ids": [1], "payload": "y" * 32} for _ in range(4)]
         segment_view = list(records)
         scene_split_view = [records[0], records[2]]
-        evidence = run_vertical_slice._release_training_record_buffers(records)
+        model = torch.nn.Linear(2, 2)
+        model(torch.ones(1, 2)).sum().backward()
+        self.assertTrue(any(parameter.grad is not None for parameter in model.parameters()))
+        evidence = run_vertical_slice._release_final_publication_ballast(records, model=model)
         self.assertEqual(evidence, {"released_record_count": 4})
+        # Gradients are the several-GiB structural ballast in production and are
+        # never part of any checkpoint artifact; parameters stay untouched.
+        self.assertTrue(all(parameter.grad is None for parameter in model.parameters()))
         self.assertEqual(records, [])
         self.assertTrue(all(record == {} for record in segment_view))
         self.assertTrue(all(record == {} for record in scene_split_view))
@@ -292,7 +304,7 @@ class FinalPublicationLowCommitRetryTests(unittest.TestCase):
         source = inspect.getsource(run_vertical_slice.run)
         self.assertIn("segment_final_record_index", source)
         self.assertIn("release_for_final_retry=", source)
-        self.assertIn("_release_training_record_buffers(records)", source)
+        self.assertIn("_release_final_publication_ballast(records, model=model)", source)
         self.assertIn('int(data_cursor["record_index"]) >= segment_final_record_index', source)
         # Today's fail-closed contract stays: a run whose retry also lands short
         # still ends in this exact raise.

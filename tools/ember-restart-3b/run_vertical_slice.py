@@ -619,17 +619,36 @@ def _write_low_commit_deferral_receipt(
     return target
 
 
-def _release_training_record_buffers(records: list[dict[str, object]]) -> dict[str, object]:
-    """Free the parsed training record buffers ahead of the final-publication retry.
+def _release_final_publication_ballast(
+    records: list[dict[str, object]], *, model: torch.nn.Module | None = None,
+) -> dict[str, object]:
+    """Tear down every non-checkpointable allocation ahead of the final retry.
 
-    Legal only after every receipt input derived from record CONTENT is already
-    bound (execution-slice receipt, data cursor): each record dict is emptied in
-    place, so every frame that still references the same dicts -- the segment
-    loop's bounded slice, a caller's scene-split list -- drops the token and
-    media payloads with it, and the allocator returns the pages before the
-    commit probe re-measures. Model and optimizer state are never touched.
+    The commit trough at final publication is structural, not contention luck:
+    across canary runs the run's own footprint grew into whatever headroom the
+    host offered (identical required bytes, near-identical trough, despite a
+    multi-GiB higher launch baseline), so no pre-launch floor can cure it and a
+    bare re-measure loop would observe the same number forever. The retry is
+    only meaningful after real teardown:
+
+    - parameter GRADIENTS (``zero_grad(set_to_none=True)``): the largest single
+      releasable block, several GiB across shared plus the active expert -- and
+      never part of any checkpoint artifact (checkpoints serialize parameters,
+      optimizer moments, rng, cursor; ``.grad`` is not in any of them);
+    - the parsed record buffers: each record dict is emptied in place, so every
+      frame that still references the same dicts -- the segment loop's bounded
+      slice, a caller's scene-split list -- drops the token and media payloads
+      with it. Legal only after every receipt input derived from record content
+      is already bound (execution-slice receipt, data cursor);
+    - then ``gc.collect()`` + ``torch.cuda.empty_cache()`` so the allocator
+      actually returns the pages before the commit probe re-measures.
+
+    Parameters and optimizer moments -- the checkpointable state -- are never
+    touched.
     """
 
+    if model is not None:
+        model.zero_grad(set_to_none=True)
     released_record_count = len(records)
     for record in records:
         record.clear()
@@ -668,10 +687,15 @@ def _publish_checkpoint_with_low_commit_deferral(
     ``release_for_final_retry`` may be passed ONLY for a segment's final
     publication boundary (#1465): a final boundary has no later interval to
     absorb a deferral, so deferring forfeits the whole trained segment. On the
-    first low-commit refusal the callable releases host memory that carries no
-    checkpointable state, the publication is retried exactly once against the
-    re-measured headroom, and a retry that still lands short falls through to
-    the exact deferral receipt + fail-closed behavior below.
+    first low-commit refusal the callable performs real teardown of state that
+    is not part of any checkpoint artifact (parameter gradients, parsed record
+    buffers -- see :func:`_release_final_publication_ballast`), the publication
+    is retried exactly once against the re-measured headroom, and a retry that
+    still lands short falls through to the exact deferral receipt + fail-closed
+    behavior below. The receipt then carries both measurements -- pre-teardown
+    (``available_commit_bytes``) and post-teardown
+    (``retry_observed_commit_bytes``) -- so analysis can read how much the
+    teardown actually returned.
     """
     policy = checkpoint_low_commit_deferral_policy(
         policy_path if policy_path is not None else default_checkpoint_low_commit_deferral_policy_path()
@@ -2831,10 +2855,10 @@ def run(
             telemetry_run_id=telemetry_run_id,
             # Armed only at the final boundary, where episode_slice/data_cursor --
             # the only receipt inputs derived from record content -- are already
-            # built above, so releasing the record buffers loses nothing
-            # checkpointable (#1465).
+            # built above and no further optimizer step follows, so tearing down
+            # gradients and record buffers loses nothing checkpointable (#1465).
             release_for_final_retry=(
-                (lambda: _release_training_record_buffers(records))
+                (lambda: _release_final_publication_ballast(records, model=model))
                 if int(data_cursor["record_index"]) >= segment_final_record_index
                 else None
             ),
