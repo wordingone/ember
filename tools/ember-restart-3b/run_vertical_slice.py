@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import contextlib
 import ctypes
+import gc
 import hashlib
 import importlib.util
 import json
@@ -20,7 +21,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Iterable, Mapping
 
 import tokenizers
 import torch
@@ -296,28 +297,53 @@ def bind_specialist_execution_slice(
     return selected, specialist_execution_slice_receipt(selected, source_start_record=start_record, scene_split_record_count=scene_split_record_count)
 
 
+def _sha256_of_canonical_json_array(items: Iterable[object], *, sort_keys: bool) -> str:
+    """Hash a top-level JSON array in bounded memory, byte-identical to
+    ``json.dumps(list(items), sort_keys=..., separators=(",", ":")).encode("utf-8")``.
+
+    With these separators a JSON array is exactly the element encodings joined
+    by ``,`` inside ``[`` ``]``, so hashing element-by-element never changes a
+    byte while capping the transient buffer at one element's encoding. The
+    monolithic dumps of a whole record slice was the single largest host
+    allocation of a specialist run, sat outside every commit guard, and died
+    with MemoryError at final publication under host contention (#1465).
+    """
+
+    digest = hashlib.sha256()
+    digest.update(b"[")
+    for index, item in enumerate(items):
+        if index:
+            digest.update(b",")
+        digest.update(json.dumps(item, sort_keys=sort_keys, separators=(",", ":")).encode("utf-8"))
+    digest.update(b"]")
+    return digest.hexdigest()
+
+
 def specialist_execution_slice_receipt(
     records: list[dict[str, object]], *, source_start_record: int, scene_split_record_count: int | None = None,
 ) -> dict[str, object]:
-    """Content-address records executed since the immediate checkpoint parent."""
+    """Content-address records executed since the immediate checkpoint parent.
+
+    Canonical bytes never leave this function -- only their digests do -- so the
+    streaming canonicalization above is observationally identical to the former
+    monolithic ``json.dumps`` while never materializing the whole slice.
+    """
 
     if type(source_start_record) is not int or source_start_record < 0 or not records:
         raise ValueError("specialist execution slice selected no verified records")
-    token_rows: list[list[int]] = []
+    token_count = 0
     for record in records:
         token_ids = record.get("token_ids")
         if not isinstance(token_ids, list) or not token_ids or any(type(token) is not int or token < 0 for token in token_ids):
             raise ValueError("specialist execution slice requires nonempty nonnegative token_ids")
-        token_rows.append(list(token_ids))
-    canonical_records = json.dumps(records, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    canonical_tokens = json.dumps(token_rows, separators=(",", ":")).encode("utf-8")
+        token_count += len(token_ids)
     receipt: dict[str, object] = {
         "schema_version": "ember-specialist-execution-slice-v1",
         "start_record": source_start_record,
         "record_count": len(records),
-        "token_count": sum(len(row) for row in token_rows),
-        "records_sha256": hashlib.sha256(canonical_records).hexdigest(),
-        "tokens_sha256": hashlib.sha256(canonical_tokens).hexdigest(),
+        "token_count": token_count,
+        "records_sha256": _sha256_of_canonical_json_array(records, sort_keys=True),
+        "tokens_sha256": _sha256_of_canonical_json_array((record["token_ids"] for record in records), sort_keys=False),
     }
     if scene_split_record_count is not None:
         if type(scene_split_record_count) is not int or scene_split_record_count < len(records):
@@ -556,11 +582,15 @@ def _write_low_commit_deferral_receipt(
     deferral_count: int,
     uncheckpointed_step_distance: int,
     error: CheckpointDeferredLowCommit,
+    retry_error: CheckpointDeferredLowCommit | None = None,
+    released_record_count: int | None = None,
 ) -> Path:
     """Bounded, receipted evidence for one DEFERRED_LOW_COMMIT checkpoint boundary.
 
     Never overlaps the published-checkpoint or staging namespaces, so it can never
-    be mistaken for a selectable checkpoint candidate.
+    be mistaken for a selectable checkpoint candidate. When a final-publication
+    release+retry was attempted (#1465) the receipt gains additive retry keys;
+    every v1 field keeps its exact meaning (the boundary's first measurement).
     """
     receipts_dir = checkpoint_parent / ".checkpoint-deferrals"
     receipts_dir.mkdir(parents=True, exist_ok=True)
@@ -576,6 +606,10 @@ def _write_low_commit_deferral_receipt(
         "reserve_bytes": error.reserve_bytes,
         "observed_at_ns": time.time_ns(),
     }
+    if retry_error is not None:
+        payload["retry_observed_commit_bytes"] = retry_error.available_commit_bytes
+        payload["retry_required_commit_bytes"] = retry_error.required_commit_bytes
+        payload["released_record_count"] = released_record_count
     encoded = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
     if len(encoded) >= _LOW_COMMIT_DEFERRAL_RECEIPT_LIMIT:
         raise RuntimeError("checkpoint low-commit deferral receipt exceeds its bounded retention limit")
@@ -583,6 +617,27 @@ def _write_low_commit_deferral_receipt(
     target = receipts_dir / f"deferred-low-commit-step-{global_step}-{digest[:16]}.json"
     atomic_create_durable(target, encoded)
     return target
+
+
+def _release_training_record_buffers(records: list[dict[str, object]]) -> dict[str, object]:
+    """Free the parsed training record buffers ahead of the final-publication retry.
+
+    Legal only after every receipt input derived from record CONTENT is already
+    bound (execution-slice receipt, data cursor): each record dict is emptied in
+    place, so every frame that still references the same dicts -- the segment
+    loop's bounded slice, a caller's scene-split list -- drops the token and
+    media payloads with it, and the allocator returns the pages before the
+    commit probe re-measures. Model and optimizer state are never touched.
+    """
+
+    released_record_count = len(records)
+    for record in records:
+        record.clear()
+    records.clear()
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    return {"released_record_count": released_record_count}
 
 
 def _publish_checkpoint_with_low_commit_deferral(
@@ -596,6 +651,7 @@ def _publish_checkpoint_with_low_commit_deferral(
     telemetry_path: Path | None,
     telemetry_run_id: str | None,
     policy_path: Path | None = None,
+    release_for_final_retry: Callable[[], dict[str, object]] | None = None,
 ) -> tuple[dict[str, object], dict[str, object]] | None:
     """Publish one checkpoint boundary, deferring (never silently dropping, never
     continuing indefinitely) on insufficient host commit headroom.
@@ -608,18 +664,40 @@ def _publish_checkpoint_with_low_commit_deferral(
     deferral count or uncheckpointed-step distance bound configured in the policy
     file (default: :func:`default_checkpoint_low_commit_deferral_policy_path`) is
     exceeded.
+
+    ``release_for_final_retry`` may be passed ONLY for a segment's final
+    publication boundary (#1465): a final boundary has no later interval to
+    absorb a deferral, so deferring forfeits the whole trained segment. On the
+    first low-commit refusal the callable releases host memory that carries no
+    checkpointable state, the publication is retried exactly once against the
+    re-measured headroom, and a retry that still lands short falls through to
+    the exact deferral receipt + fail-closed behavior below.
     """
     policy = checkpoint_low_commit_deferral_policy(
         policy_path if policy_path is not None else default_checkpoint_low_commit_deferral_policy_path()
     )
-    try:
+
+    def attempt() -> tuple[dict[str, object], dict[str, object]]:
         return _retain_after_success(
             checkpoint_parent,
             max_serialized_bytes=checkpoint_retention_budget_bytes(config_path),
             receipt_aware=True,
             operation=publish,
         )
+
+    try:
+        return attempt()
     except CheckpointDeferredLowCommit as error:
+        retry_error: CheckpointDeferredLowCommit | None = None
+        released_record_count: int | None = None
+        if release_for_final_retry is not None:
+            release_evidence = release_for_final_retry()
+            released = release_evidence.get("released_record_count")
+            released_record_count = released if type(released) is int else 0
+            try:
+                return attempt()
+            except CheckpointDeferredLowCommit as second_error:
+                retry_error = second_error
         deferral_state["count"] += 1
         distance = global_step - last_checkpointed_step
         receipt_path = _write_low_commit_deferral_receipt(
@@ -628,6 +706,8 @@ def _publish_checkpoint_with_low_commit_deferral(
             deferral_count=deferral_state["count"],
             uncheckpointed_step_distance=distance,
             error=error,
+            retry_error=retry_error,
+            released_record_count=released_record_count,
         )
         if telemetry_path is not None and telemetry_run_id is not None:
             append_training_telemetry(telemetry_path, kind="checkpoint_deferred", payload={
@@ -641,6 +721,7 @@ def _publish_checkpoint_with_low_commit_deferral(
                 "streaming_peak_bytes": error.streaming_peak_bytes,
                 "reserve_bytes": error.reserve_bytes,
                 "receipt_sha256": _sha256(receipt_path),
+                **({"retry_observed_commit_bytes": retry_error.available_commit_bytes} if retry_error is not None else {}),
             })
         if (
             deferral_state["count"] > policy["max_deferrals"]
@@ -2665,6 +2746,14 @@ def run(
     published_specialist_records = 0
     low_commit_deferral_state = {"count": 0}
     last_checkpointed_step = int(resume_cursor["global_step"])
+    # The exact record index the bounded segment stops at: run_pretraining_segment
+    # slices records[cursor:cursor + max_records], so min() mirrors its clamped
+    # end. Only the boundary that reaches this index may release record buffers
+    # for a low-commit retry -- every earlier boundary still trains from them.
+    segment_final_record_index = (
+        len(records) if max_records is None
+        else min(len(records), int(resume_cursor["record_index"]) + max_records)
+    )
 
     def checkpoint_callback(global_step: int, state: dict[str, Any]) -> None:
         nonlocal checkpoint, parameter_receipt, latest_parent_manifest, published_specialist_records, last_checkpointed_step
@@ -2740,6 +2829,15 @@ def run(
             publish=publish_and_verify,
             telemetry_path=telemetry_path,
             telemetry_run_id=telemetry_run_id,
+            # Armed only at the final boundary, where episode_slice/data_cursor --
+            # the only receipt inputs derived from record content -- are already
+            # built above, so releasing the record buffers loses nothing
+            # checkpointable (#1465).
+            release_for_final_retry=(
+                (lambda: _release_training_record_buffers(records))
+                if int(data_cursor["record_index"]) >= segment_final_record_index
+                else None
+            ),
         )
         if result is None:
             return
