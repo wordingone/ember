@@ -32,14 +32,14 @@ for the full registry.
 
 **Receipts.** A receipt is one JSON file under `receipts/`, produced by an executed local job,
 that a checker script can validate. Claims are gated exclusively by receipts — prose never
-carries a claim (`README.md`, `docs/index.md` "Evidence model"). Schema floor:
+carries a claim (`README.md`, `docs/archive/pre-restart/index.md` "Evidence model"). Schema floor:
 `scripts/receipt_check.py`.
 
 **D-gate / P-gate.** Two standing tests every claimed gain must pass to count as burned into
 weights: **D-gate** — the gain disappears when the artifact (the adapter, the checkpoint delta)
 is deleted, proving the gain actually lives in that artifact and isn't a fluke of the harness;
 **P-gate** — the gain persists across a process restart, proving it isn't an in-memory illusion.
-(`README.md` opening; `docs/index.md` "Standing audits".)
+(`README.md` opening; `docs/archive/pre-restart/index.md` "Standing audits".)
 
 **GATE-0 / GATE-1 (/ GATE-2 / ASSEMBLY).** A local sequencing convention used inside individual
 protocols to order CPU-only steps before the one GPU job. For the C-E2B paired-run protocol
@@ -56,7 +56,7 @@ trigger list.
 authority for what blocks full local FM creation is issue #207, "BOTTLENECK LEDGER", and its rows
 are named **B1 DATA WALL**, **B2 TRAINING-STATE MEMORY WALL**, **B3 COMPUTE/WALL-CLOCK WALL**,
 **B4 INFERENCE→TRAINING TRANSFER**, **B5 THE QUALITY BAR**. Separately, and confusingly similar
-in shape, `docs/spec/w2-scale-preregistration-v1.md` and `docs/c-scale-execution-graph.md` use
+in shape, `docs/spec/w2-scale-preregistration-v1.md` and `docs/archive/pre-restart/c-scale-execution-graph.md` use
 **W1** and **W2** as names for two C-SCALE experiment *windows* (W1 = pretrain-scale token-bill
 collapse test; W2 = native finetune-scale adaptation test) — these are not walls, there is no W3
 or W4, and W1/W2 do not correspond one-to-one to any B-numbered wall. Do not conflate the two;
@@ -206,7 +206,7 @@ cited artifact is not yet in this repository, that is the honest answer for that
 something to paper over by trusting the prose instead.
 
 Everything below runs with only Python 3.11+, no external packages, no model weights, no
-credentials, no GPU (`docs/REPRODUCIBILITY.md`, "Checks that require no model weights and no
+credentials, no GPU (`docs/charter/REPRODUCIBILITY.md`, "Checks that require no model weights and no
 GPU"):
 
 ```bash

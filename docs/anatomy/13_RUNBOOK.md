@@ -84,5 +84,5 @@ title verbatim.
 This runbook covers the workflow this doc set's own authoring session
 actually exercised. It is not a complete operator manual — training-launch,
 GPU-window, and eval-harness runbooks live in their own docs
-(`docs/ember-restart-3b-governed-runner-v1.md` and similar) and are not
+(`docs/ember-restart/ember-restart-3b-governed-runner-v1.md` and similar) and are not
 duplicated here.

@@ -312,7 +312,7 @@ ADVANCE-e named but did not operationalize the strong test: "whether the same re
 *parameterization* transfers across the two instances." (e)'s verdict ("both ground =>
 one mechanism") is the WEAK test — two instances passing independently is consistent
 with two coincidental per-world taxonomies. ADVANCE-f freezes the strong test as a
-standalone prereg (`docs/wmc-cross-world-transfer-prereg.md`):
+standalone prereg (`docs/archive/pre-restart/wmc-cross-world-transfer-prereg.md`):
 
 - **Decompose** the resolver into a transferable CORE (query-projection `Q` +
   attention) and an address-space-specific SHIM (`K,V` projections over the keys).

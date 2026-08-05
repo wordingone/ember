@@ -166,8 +166,8 @@ and in-repo Python.
 | `scripts/nck/event_loop.py` | Module to surgically edit; boot-check wiring point |
 | `docs/nck-event-loop-v0.md` | Architecture doc for #260 (provenance + ambiguity resolutions) |
 | `scripts/nck/selftest_event_loop.py` | Existing selftest: extended with `_skip_invariant_check` |
-| `docs/nck-spec-v0.md` | Five invariants with enforcement mechanisms |
-| `docs/nck-invariant-contract-v0.md` | 15 behavioral invariants; uniform tool interface (inv 5) |
+| `docs/archive/pre-restart/nck-spec-v0.md` | Five invariants with enforcement mechanisms |
+| `docs/charter/nck-invariant-contract-v0.md` | 15 behavioral invariants; uniform tool interface (inv 5) |
 | `GOAL.md` | Source of receipts-only-truth statement (invariant 4); hash target |
 | `docs/formalization-v0.md` | Three-test gain gate (§4); hash target |
 | `configs/v0-pretrain-config.json` | Governor + headroom config; hash target |

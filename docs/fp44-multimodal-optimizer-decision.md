@@ -4,7 +4,7 @@
 
 **Status:** decision-record, authored 2026-06-14 (the lead). Resolves #21 (the fp-44
 ≤1-governed-day / optimizer pick for the multimodal-unified v0 launch). Companion
-to `docs/pretrain-launch-authorization-brief-multimodal.md` — fills its
+to `docs/archive/pre-restart/pretrain-launch-authorization-brief-multimodal.md` — fills its
 `optimizer: [#414 pick]` slot with a **default + revision trigger**, so the launch
 is not blocked on the pick and the maintainer is not asked to choose. Made inside the goal
 (the maintainer overrides); not escalated.

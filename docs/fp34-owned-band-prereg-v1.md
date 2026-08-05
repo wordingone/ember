@@ -6,7 +6,7 @@ fitted to the data it will judge. Post-freeze edits = registered deviation
 (fp-30b protocol).
 
 Lineage: fp-21b prong-A is DORMANT with its borrowed-world freeze untouched
-(docs/fp21b-prong-a-disposition.md). This is the re-instantiated carrier of
+(docs/archive/pre-restart/fp21b-prong-a-disposition.md). This is the re-instantiated carrier of
 the underlying question — does band membership predict downstream value —
 on OWNED-core data, same bars, fresh seed.
 

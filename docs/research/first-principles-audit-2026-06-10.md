@@ -224,7 +224,7 @@ makes each verified episode carry more surprise, and it generates faster.
 37.1 bits). Caveats flagged on the receipt: uncapped/undeduped; ext-FPR
 inflation ~22% at 3B, UNMEASURED at 1.5B.
 
-**Why this does not flip round-2 (frozen, docs/r2-prereg.md):** bits only
+**Why this does not flip round-2 (frozen, docs/archive/pre-restart/r2-prereg.md):** bits only
 matter if they train — round-1 proved objective dominates count (plain
 SFT flat on 252 naive bits; MTP positive on the same data). The
 sampling-side win is necessary, not sufficient.

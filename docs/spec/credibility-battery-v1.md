@@ -128,7 +128,7 @@ training-claim dense control (W2 S-arm) is designed but not yet executed.
   sibling `w2-garm-*-w2-garm-dryrun-20260706T043654Z.json` files — the W2 S-arm design
   ([issue #108](https://github.com/wordingone/ember/issues/108)), captured as a **dry-run**, not a
   live execution — matching issue #487's "designed but never executed."
-- `docs/c-scale-execution-graph.md` §"W2 Window" — states plainly that W2's fields are
+- `docs/archive/pre-restart/c-scale-execution-graph.md` §"W2 Window" — states plainly that W2's fields are
   fixture-only (`ts 20990101`), no live receipt yet.
 
 ## Q5 — Reusable capacity vs. overfitting / leakage / bookkeeping

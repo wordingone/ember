@@ -1582,7 +1582,7 @@ Receipts only; fp-33 freezes the paired protocol before any verdict.
 **LOOP (binding on the lead):** receiving this goal means looping until the
 surpass receipt exists Ã¢â‚¬â€ gate the latest receipts, solve the current binding
 constraint (GPU-kernel or mathematical-architecture, burned into
-docs/technique-registry.md), launch the next governed job, re-derive GPU
+docs/ledgers/technique-registry.md), launch the next governed job, re-derive GPU
 allocation at each segment boundary. Idle with this milestone open is a
 named failure. Core size grows only when receipts show size Ã¢â‚¬â€ not technique Ã¢â‚¬â€
 is the binding constraint.

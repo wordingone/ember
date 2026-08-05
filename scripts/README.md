@@ -1,3 +1,6 @@
+<!-- goal_id: EMBER-02 -->
+<!-- workstream_id: EMBER-02A -->
+<!-- next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember -->
 # scripts/
 
 This file plus the root `README.md` (see its "Repository layout" table and
@@ -27,7 +30,7 @@ find scripts -type f | wc -l                  # total
 ## Canonical entry points
 
 These are the scripts a new reader should run first — all already documented
-in root `README.md` / `docs/REPRODUCIBILITY.md`; listed here so `scripts/`
+in root `README.md` / `docs/charter/REPRODUCIBILITY.md`; listed here so `scripts/`
 is self-describing without a second hop:
 
 | script | what it is |
@@ -46,7 +49,7 @@ is self-describing without a second hop:
 | dir | files | contents |
 |---|---|---|
 | `ember_totality/` | 47 | the condition-registry test suite — `test_c0.py`..`test_c15.py` etc. map 1:1 to the numbered conditions in `docs/spec/conditions-v1.md`, plus `ember_totality_spec.py` (the totality/tally spec) and `enforcement_leg_test.py` |
-| `nck/` | 19 | NC-K, the resident event-driven harness kernel (`docs/nck-spec-v0.md`) — event loop, invariants, checkpoint/activation receipts, e2e proof, selftests. Frozen and sha256-pinned per script in `kernel-v1.0.manifest` |
+| `nck/` | 19 | NC-K, the resident event-driven harness kernel (`docs/archive/pre-restart/nck-spec-v0.md`) — event loop, invariants, checkpoint/activation receipts, e2e proof, selftests. Frozen and sha256-pinned per script in `kernel-v1.0.manifest` |
 | `w2_heldout/` | 10 | W2-stage held-out/decontamination batch building (`build_decontam_batch*.py`, `decon_scan_worker.py`, `launch_gate.py`) |
 | `ember_phase5_c7/` | 9 | phase-5 work on condition C7 (self-growing operator): curriculum corpus, cycle runner, deletion test |
 | `ember_phase3_c14/` | 6 | phase-3 work on condition C14: iGRPO trainer, floor-contract manifest, resident-arch spec, ABC-deleted harness |
