@@ -1603,6 +1603,11 @@ class CompletionHeadAncestorTests(unittest.TestCase):
                 "resume_realization_registry",
                 "resume_optimizer_transition_registry",
                 "resume_optimizer_transition_registry_sha256",
+                "training_data_manifest",
+                "training_capability",
+                "training_checkpoint_interval",
+                "training_telemetry_path",
+                "training_model_chat_restore_not_before",
             },
         )
 
@@ -1707,6 +1712,25 @@ def authorize_resume_roots(
         paths,
         lambda certificate: certificate["execution_scope"].__setitem__(
             "allowed_resume_roots", [str(root) for root in roots]
+        ),
+    )
+
+
+def authorize_training_capabilities(
+    paths: dict[str, pathlib.Path], *capabilities: str
+) -> None:
+    """Give the bundle's certificate the #1430 specialist-capability allowlist.
+
+    Kept OUT of valid_scope for the same reason authorize_resume_roots is:
+    every non-specialist test then proves a certificate without the key takes
+    no new code path (test_plain_bundle_has_no_specialist_route), and a test
+    that wants a specialist route opts in explicitly.
+    """
+
+    rewrite_certificate(
+        paths,
+        lambda certificate: certificate["execution_scope"].__setitem__(
+            "allowed_training_capabilities", list(capabilities)
         ),
     )
 
@@ -2340,10 +2364,753 @@ class ResumeRootAuthorizationTests(_ResumeBundleMixin, unittest.TestCase):
     ) -> None:
         module = load_module()
         self.assertEqual(
-            module.OPTIONAL_AUTHORIZED_SCOPE_KEYS, {"allowed_resume_roots"}
+            module.OPTIONAL_AUTHORIZED_SCOPE_KEYS,
+            {"allowed_resume_roots", "allowed_training_capabilities"},
         )
         self.assertFalse(
             module.OPTIONAL_AUTHORIZED_SCOPE_KEYS & module.AUTHORIZED_SCOPE_KEYS
+        )
+
+
+class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
+    """Issue #1430: build_runner_argv could only ever emit "governed-vertical",
+    so an admitted ember-owned-training-data-v1 manifest was reachable only by
+    calling the runner directly -- training with no certificate. Specialist
+    routing is expressed as optional run-spec keys, validated fail-closed
+    before argv, mirroring how ResumePlumbingTests covers #1425. Reuses
+    _ResumeBundleMixin (#1426) for the resume triple + allowlist authorization
+    every specialist launch also requires -- a specialist fixture that skipped
+    it would refuse on the allowlist instead of exercising the routing logic
+    under test."""
+
+    def _bundle(
+        self,
+        directory: str,
+        *,
+        mutate_run_spec=None,
+        capability: str = "image",
+        manifest_capability: str | None = None,
+        manifest_schema: str = "ember-owned-training-data-v1",
+        config_revision: str = ARCHITECTURE_REVISION,
+        checkpoint_revision: str | None = ARCHITECTURE_REVISION,
+        authorize_capability: bool = True,
+        authorized_capabilities: list[str] | None = None,
+    ) -> dict[str, pathlib.Path]:
+        # The base mixin builds the resume triple AND authorizes it (default
+        # authorize_resume=True roots the allowlist at custody_root, which is
+        # exactly where it installs the checkpoint) -- specialist layers a
+        # tokenizer, an admitted manifest, and its own run-spec keys on top,
+        # applying mutate_run_spec AFTER those keys exist so a test can target
+        # either the resume keys or the specialist keys.
+        paths = super()._bundle(
+            directory,
+            config_revision=config_revision,
+            checkpoint_revision=checkpoint_revision,
+        )
+
+        tokenizer_path = paths["repo"] / "tokenizer" / "tokenizer.json"
+        write_json(tokenizer_path, {})
+        paths["tokenizer"] = tokenizer_path
+
+        # In-tree, mirroring build_specialist_bundle.py's OWN emission path
+        # (output_root/manifests/<capability>.json, with output_root required
+        # below repo_root) -- the only location the runner and the bundle
+        # producer will ever accept. Issue #1430 review Defect 1/2: a
+        # custody_root fixture location could never be a real admitted
+        # manifest, so this fixture could not catch a launcher that resolved
+        # relative manifests outside the tree (custody_root is by
+        # construction outside repo_root -- see write_valid_bundle).
+        manifest_path = paths["repo"] / "manifests" / f"{capability}.json"
+        write_json(
+            manifest_path,
+            {
+                "schema_version": manifest_schema,
+                "capability": (
+                    capability if manifest_capability is None else manifest_capability
+                ),
+                "data_class": "SEMANTIC_PRETRAINING",
+            },
+        )
+        paths["manifest"] = manifest_path
+        paths["telemetry"] = paths["custody_root"] / "telemetry.jsonl"
+
+        run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+        run_spec["training_data_manifest"] = str(manifest_path)
+        run_spec["training_capability"] = capability
+        run_spec["training_checkpoint_interval"] = 8_192
+        run_spec["training_telemetry_path"] = str(paths["telemetry"])
+        run_spec["training_model_chat_restore_not_before"] = "2026-07-18T11:00:00-07:00"
+        if mutate_run_spec is not None:
+            mutate_run_spec(run_spec)
+        write_json(paths["run_spec"], run_spec)
+
+        # Issue #1430 review Defect 3: the certificate, not the run spec,
+        # decides which capabilities may route to the specialist runner.
+        # Default-authorize the capability this bundle declares (mirrors
+        # authorize_resume=True's default in the base mixin) so every
+        # existing routing/coherence test keeps exercising ITS OWN check
+        # rather than tripping the new authorization gate; tests targeting
+        # authorization itself opt out or override explicitly.
+        if authorize_capability:
+            authorize_training_capabilities(
+                paths,
+                *(
+                    [capability]
+                    if authorized_capabilities is None
+                    else authorized_capabilities
+                ),
+            )
+        return paths
+
+    def test_valid_specialist_route_is_accepted_and_reaches_the_runner_argv(
+        self,
+    ) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory)
+            launch = self._validate(module, paths)
+            parent_manifest = paths["checkpoint"] / "checkpoint-manifest.json"
+            self.assertEqual(launch.specialist_capability, "image")
+            # Issue #1430 review Defect F3: the launcher now returns the
+            # RESOLVED manifest path (see _validate_specialist_request), not
+            # the syntactically-different-but-equivalent form the fixture
+            # happens to spell it in -- paths["manifest"] itself is left
+            # unresolved here deliberately, since other tests in this class
+            # reuse the same unresolved-spelling fixture to prove the
+            # traversal check normalizes it before comparing.
+            self.assertEqual(
+                launch.specialist_data_manifest, paths["manifest"].resolve()
+            )
+            self.assertEqual(launch.specialist_tokenizer_path, paths["tokenizer"])
+            self.assertEqual(launch.specialist_parent_manifest, parent_manifest)
+            self.assertEqual(launch.specialist_root_manifest, parent_manifest)
+            self.assertEqual(launch.specialist_checkpoint_interval, 8_192)
+            self.assertEqual(launch.specialist_write_budget_gib, 16)
+            self.assertEqual(launch.specialist_telemetry_path, paths["telemetry"])
+            # Derived from run_spec["run_id"] (valid_run_spec's fixed value),
+            # not a separately declared key -- see the reasoning note above
+            # _validate_specialist_request.
+            self.assertEqual(
+                launch.specialist_telemetry_run_id, "owned-3b-canary-test"
+            )
+            self.assertEqual(
+                launch.specialist_model_chat_restore_not_before,
+                "2026-07-18T11:00:00-07:00",
+            )
+
+            self.assertEqual(
+                module.build_runner_argv(paths["repo"], launch),
+                [
+                    sys.executable,
+                    str(
+                        paths["repo"]
+                        / "tools"
+                        / "ember-restart-3b"
+                        / "disk_budget_runner.py"
+                    ),
+                    "--max-c-write-gib",
+                    "0.0",
+                    "--max-b-write-gib",
+                    "16.0",
+                    "--receipt",
+                    str(paths["custody_root"] / "runner-receipt.json"),
+                    "--write-root",
+                    f"custody={paths['custody_root']}",
+                    "--write-root",
+                    f"artifacts={paths['artifact_root']}",
+                    "--",
+                    sys.executable,
+                    str(
+                        paths["repo"]
+                        / "tools"
+                        / "ember-restart-3b"
+                        / "run_vertical_slice.py"
+                    ),
+                    "specialist",
+                    "--seed",
+                    "83",
+                    "--artifact-root",
+                    str(paths["artifact_root"]),
+                    "--data-manifest",
+                    str(paths["manifest"].resolve()),
+                    "--tokenizer",
+                    str(paths["tokenizer"]),
+                    "--capability",
+                    "image",
+                    "--resume-checkpoint",
+                    str(paths["checkpoint"]),
+                    "--resume-counter-receipt",
+                    str(paths["evidence"]),
+                    "--parent-manifest",
+                    str(parent_manifest),
+                    "--root-manifest",
+                    str(parent_manifest),
+                    "--max-records",
+                    "1",
+                    "--checkpoint-interval",
+                    "8192",
+                    "--write-budget-gib",
+                    "16",
+                    "--telemetry-path",
+                    str(paths["telemetry"]),
+                    "--telemetry-run-id",
+                    "owned-3b-canary-test",
+                    "--model-chat-restore-not-before",
+                    "2026-07-18T11:00:00-07:00",
+                ],
+            )
+
+    def test_plain_bundle_has_no_specialist_route(self) -> None:
+        """A run spec with neither training_data_manifest nor
+        training_capability is the pre-#1430 shape -- ResumePlumbingTests'
+        test_run_spec_without_resume_keys_builds_the_pre_1425_argv already
+        proves this bundle's argv stays byte-identical; this pins the launch
+        field driving that decision."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            launch = self._validate(module, paths)
+            self.assertIsNone(launch.specialist_capability)
+
+    def test_exactly_one_specialist_key_is_refused(self) -> None:
+        for missing in ("training_data_manifest", "training_capability"):
+            with self.subTest(missing=missing), tempfile.TemporaryDirectory() as directory:
+                paths = self._bundle(
+                    directory,
+                    mutate_run_spec=lambda spec, missing=missing: spec.pop(missing),
+                )
+                self._refused(paths, f"requires {missing}, which is absent")
+
+    def test_specialist_companion_key_missing_is_refused(self) -> None:
+        for missing in (
+            "training_checkpoint_interval",
+            "training_telemetry_path",
+            "training_model_chat_restore_not_before",
+        ):
+            with self.subTest(missing=missing), tempfile.TemporaryDirectory() as directory:
+                paths = self._bundle(
+                    directory,
+                    mutate_run_spec=lambda spec, missing=missing: spec.pop(missing),
+                )
+                self._refused(paths, f"requires {missing}, which is absent")
+
+    def test_specialist_companion_without_pair_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: (
+                    spec.pop("training_data_manifest"),
+                    spec.pop("training_capability"),
+                ),
+            )
+            self._refused(
+                paths, "requires training_data_manifest and training_capability"
+            )
+
+    def test_invalid_capability_value_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "training_capability", "text"
+                ),
+            )
+            self._refused(paths, "training_capability must be one of")
+
+    def test_certificate_without_allowed_training_capabilities_is_refused(
+        self,
+    ) -> None:
+        """Issue #1430 review Defect 3: allowed_modes == ["governed-vertical"]
+        alone never stopped a specialist route (build_runner_argv reads only
+        run-spec content), so a certificate carrying no
+        allowed_training_capabilities at all is the pre-#1430 population --
+        fail-closed on it, same reasoning #1426 applied to resume roots. A
+        plain (non-specialist) bundle is unaffected: proven separately by
+        test_plain_bundle_has_no_specialist_route, whose certificate also
+        carries no allowed_training_capabilities."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory, authorize_capability=False)
+            certificate = json.loads(
+                paths["certificate"].read_text(encoding="utf-8")
+            )
+            self.assertNotIn(
+                "allowed_training_capabilities", certificate["execution_scope"]
+            )
+            self._refused(paths, "declares no allowed_training_capabilities")
+
+    def test_empty_allowed_training_capabilities_authorizes_nothing(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory, authorized_capabilities=[])
+            self._refused(
+                paths, "run scope exceeds certificate: training_capability"
+            )
+
+    def test_capability_not_in_allowed_training_capabilities_is_refused(
+        self,
+    ) -> None:
+        """A certificate that authorizes a DIFFERENT capability than the one
+        the run spec requests -- not absent, not empty, just disagreeing."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(
+                directory, capability="image", authorized_capabilities=["audio"]
+            )
+            self._refused(
+                paths, "run scope exceeds certificate: training_capability"
+            )
+
+    def test_malformed_allowed_training_capabilities_fails_closed(self) -> None:
+        for declared in ("not-a-list", [""], [None], ["image", 7]):
+            with self.subTest(declared=declared), tempfile.TemporaryDirectory() as directory:
+                paths = self._bundle(directory)
+                rewrite_certificate(
+                    paths,
+                    lambda certificate, declared=declared: certificate[
+                        "execution_scope"
+                    ].__setitem__("allowed_training_capabilities", declared),
+                )
+                self._refused(
+                    paths,
+                    "allowed_training_capabilities must be a list of "
+                    "non-empty strings",
+                )
+
+    def test_manifest_schema_mismatch_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory, manifest_schema="some-other-schema-v1")
+            self._refused(
+                paths, "not an ember-owned-training-data-v1 manifest"
+            )
+
+    def test_manifest_capability_mismatch_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(
+                directory, capability="image", manifest_capability="audio"
+            )
+            self._refused(
+                paths, "does not match the manifest's own declared capability"
+            )
+
+    def test_out_of_tree_manifest_is_refused(self) -> None:
+        """Issue #1430 review Defect 1 (HIGH): the runner
+        (run_vertical_slice.py::load_verified_specialist_records) and the
+        bundle producer (build_specialist_bundle.py::emit_bundle) both refuse
+        any manifest that does not resolve below repo_root. An
+        operator-declared absolute path elsewhere must be refused before this
+        process reads it -- not accepted into a perfect-looking argv the
+        runner can never actually start."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            # A sibling of repo/, not below it -- and also outside
+            # custody_root, so this is unambiguously out-of-tree either way.
+            outside_manifest = pathlib.Path(directory) / "outside-manifest.json"
+            write_json(
+                outside_manifest,
+                {
+                    "schema_version": "ember-owned-training-data-v1",
+                    "capability": "image",
+                    "data_class": "SEMANTIC_PRETRAINING",
+                },
+            )
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "training_data_manifest", str(outside_manifest)
+                ),
+            )
+            self._refused(
+                paths, "training_data_manifest must resolve below repo_root"
+            )
+
+    def test_relative_manifest_resolves_against_repo_root(self) -> None:
+        """Issue #1430 review Defect 1: a RELATIVE training_data_manifest must
+        resolve against repo_root, not run_spec_path.parent (the custody
+        root) -- the custody root is outside the repo by construction (see
+        write_valid_bundle), so resolving against it would build unusable
+        argv for every relative-path launch, the exact defect found."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "training_data_manifest", "manifests/image.json"
+                ),
+            )
+            launch = self._validate(module, paths)
+            # .resolve() on both sides, not relying on WindowsPath.__eq__'s
+            # case-insensitive comparison to mask a real casing difference
+            # between the fixture's unresolved spelling and the launcher's
+            # resolved return value (see the sibling note in
+            # test_valid_specialist_route_is_accepted_and_reaches_the_runner_argv).
+            self.assertEqual(
+                launch.specialist_data_manifest, paths["manifest"].resolve()
+            )
+
+    def test_specialist_without_resume_checkpoint_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: (
+                    spec.pop("resume_checkpoint"),
+                    spec.pop("resume_counter_receipt"),
+                ),
+            )
+            self._refused(paths, "requires an authorized resume checkpoint")
+
+    def test_write_budget_not_exact_gib_multiple_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory)
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["requested_scope"]["write_budget_bytes"] = 16 * 1024**3 - 1
+            write_json(paths["run_spec"], run_spec)
+            self._refused(paths, "exact GiB multiple")
+
+    def test_write_budget_below_one_gib_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory)
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["requested_scope"]["write_budget_bytes"] = 0
+            write_json(paths["run_spec"], run_spec)
+            self._refused(paths, "at least 1 GiB")
+
+    def test_max_records_below_one_is_refused_for_specialist(self) -> None:
+        """Issue #1430 delta review Finding A (LOW): _require_scope_subset
+        only floors requested_scope.max_records at >= 0 -- correct for
+        governed-vertical, which tolerates 0 -- but the specialist runner
+        disagrees: bind_specialist_execution_slice refuses a zero or
+        negative slice ("specialist execution slice max records must be
+        positive"). Pre-fix, max_records=0 built parse-perfect argv the
+        runner then deterministically refused at subprocess time; this
+        certificate authorizes exactly 1 (see valid_scope), so 0 is the
+        boundary value that proves the floor without also tripping the
+        ceiling check above it."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory)
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["requested_scope"]["max_records"] = 0
+            write_json(paths["run_spec"], run_spec)
+            self._refused(paths, "max_records must be at least 1")
+
+    def test_fractional_max_records_is_refused(self) -> None:
+        """Issue #1430 delta review Finding A follow-up: max_records=int(...)
+        in validate_certified_request would otherwise silently truncate a
+        fractional value (e.g. 0.5 -> 0), quietly authorizing a slice the
+        run spec never actually asked for. Checked once, ahead of routing,
+        so it applies to both governed-vertical and specialist -- 0.5 is
+        below this certificate's max_records=1 ceiling (see valid_scope),
+        so this proves the truncation refusal fires before the specialist
+        floor above ever gets a chance to (a non-fractional message here
+        would mean the wrong check caught it)."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory)
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["requested_scope"]["max_records"] = 0.5
+            write_json(paths["run_spec"], run_spec)
+            self._refused(paths, "max_records must be an exact integer")
+
+    def test_run_id_over_128_characters_is_refused(self) -> None:
+        """Issue #1430 review Defect 5 (LOW): run_id doubles as
+        --telemetry-run-id, which run_vertical_slice.py bounds to 128
+        characters ("training telemetry run id is invalid"); unbounded here
+        would build argv the runner refuses at parse time."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "run_id", "r" * 129
+                ),
+            )
+            self._refused(paths, "run_id must be at most 128 characters")
+
+    def test_model_chat_restore_not_before_accepts_the_chains_own_formats(
+        self,
+    ) -> None:
+        """Issue #1430 review Defect F1 (HIGH): an earlier version of this
+        field's validation used datetime.fromisoformat, which does not
+        accept a bare "Z" designator until CPython 3.11 -- this repo pins
+        3.10.11 (manifests/python-environment-v1.json) -- so it refused the
+        exact house convention every real timestamp producer in this chain
+        uses (mint_launch_authority.py's strftime("...Z"), this runner's own
+        telemetry writer's isoformat().replace("+00:00","Z"),
+        launch_packet.py's strftime("...Z")). Verified against both real
+        consumers of this specific field (run_vertical_slice.py's telemetry
+        write path; ember-cli's telemetry-watch.ts/telemetry-label.ts) that
+        NEITHER ever parses the value -- both only type-check it as a
+        string and either embed it verbatim in telemetry JSON or
+        string-interpolate it into a display label -- so the format check
+        was a bound this launcher does not own, and was removed. This is
+        the positive case the removed check's own test never covered: the
+        defect lived in the ACCEPTANCE direction, not the refusal one."""
+
+        module = load_module()
+        for value in (
+            "2026-07-18T11:00:00-07:00",  # the existing fixture's offset form
+            "2026-07-18T18:00:00Z",  # the house Z convention
+            "2026-07-18T18:00:00.123456Z",  # Z with fractional seconds
+            "20260718T180000Z",  # launch_packet.py's compact Z form
+        ):
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as directory:
+                paths = self._bundle(
+                    directory,
+                    mutate_run_spec=lambda spec, value=value: spec.__setitem__(
+                        "training_model_chat_restore_not_before", value
+                    ),
+                )
+                launch = self._validate(module, paths)
+                self.assertEqual(
+                    launch.specialist_model_chat_restore_not_before, value
+                )
+                argv = module.build_runner_argv(paths["repo"], launch)
+                self.assertEqual(argv[-1], value)
+
+    def test_empty_model_chat_restore_not_before_is_refused(self) -> None:
+        """The one bound this process still owns after Defect F1's format
+        check was removed: non-emptiness. run_vertical_slice.py's telemetry
+        group needs a truthy value, not merely a string, and this is
+        _require_specialist_string's pre-existing, independently justified
+        check -- not a format bound reintroduced under another name."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "training_model_chat_restore_not_before", ""
+                ),
+            )
+            self._refused(
+                paths,
+                "training_model_chat_restore_not_before must be a non-empty "
+                "string",
+            )
+
+    def test_telemetry_path_outside_custody_root_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "training_telemetry_path",
+                    str(pathlib.Path(directory) / "outside-telemetry.jsonl"),
+                ),
+            )
+            self._refused(
+                paths, "run scope exceeds certificate: training_telemetry_path"
+            )
+
+    def test_missing_canonical_tokenizer_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory)
+            paths["tokenizer"].unlink()
+            self._refused(paths, "canonical")
+
+    def test_specialist_flags_match_the_runner_argparse(self) -> None:
+        """Bind the consumer's flag spelling, required-ness, AND the
+        --capability enum to run_vertical_slice's specialist parser,
+        ast-parsed the way ProducerSchemaBindingTest binds completion-receipt
+        keys to their real producer. Issue #1430 review test-quality note: a
+        substring grep would still pass if a flag moved to another
+        subparser, if required-ness changed, or if a new required flag
+        appeared -- ast scoping by the (file-unique)
+        `specialist`/`specialist_resume` argparse variable names closes all
+        three, including the "shared with another subcommand" gap a
+        whole-file substring check cannot close (--seed/--artifact-root/
+        --resume-checkpoint/etc. also appear on vertical/governed-vertical;
+        scoping by the OWNER object, not just the flag string, is what binds
+        the check to THIS subparser's own requirements).
+
+        Issue #1430 delta review Defect F4 (LOW): the set this was checked
+        against used to be a hand-typed literal living only in this test --
+        it bound the runner's ast-derived required set to that literal, but
+        nothing bound the literal to what build_runner_argv actually emits,
+        so a future edit that stopped emitting a flag (or renamed one) would
+        pass this test right up until the runner rejected the argv at
+        subprocess time. The set below is now derived from calling the real
+        build_runner_argv against a synthetic ValidatedLaunch instead (a
+        plain NamedTuple, and build_runner_argv a pure function of it plus
+        repo_root, so constructing one directly here exercises the real
+        emission code, not an approximation of it) for each of the three
+        resume-evidence choices in turn, unioned -- so a flag build_runner_
+        argv stops emitting, or emits under the wrong spelling, now fails
+        here directly against the runner's own parser, with no hand-typed
+        literal in between to go stale.
+
+        Deliberately NOT asserted: each flag's argparse `type=`. Every argv
+        element this launcher emits is already a plain string (build_runner_
+        argv wraps every value in str(...) or takes an already-string field),
+        so a `type=` change cannot alter what this launcher emits -- it would
+        surface immediately as a runner-side parse failure on first use, not
+        as a silent contract drift the way a required-ness or enum change
+        would."""
+
+        import ast
+
+        runner_path = ROOT / "tools" / "ember-restart-3b" / "run_vertical_slice.py"
+        tree = ast.parse(runner_path.read_text(encoding="utf-8"))
+
+        def call_owner_attr(node: ast.AST) -> tuple[str, str] | None:
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+            ):
+                return node.func.value.id, node.func.attr
+            return None
+
+        def is_required_kw(call: ast.Call) -> bool:
+            # Issue #1430 delta review Finding B (NOTE): only recognizes a
+            # literal `required=True` -- a future `required=<name>` (a
+            # variable/expression instead of the literal) would be invisible
+            # here, and Pass 2 below would silently drop that flag from
+            # required_flags. Not a live defect: every add_argument in
+            # run_vertical_slice.py's specialist subparser spells `required`
+            # as a literal today (main(), the specialist block), and both
+            # drift directions already fail loud elsewhere if that changes --
+            # a flag ast can't see as required either never reaches
+            # required_groups/required_flags (Pass 1's assertTrue on
+            # required_groups, or the final required_flags == emitted_flags
+            # comparison, catches the mismatch) or build_runner_argv keeps
+            # emitting it regardless (real launches stay correct; only this
+            # test's bookkeeping would need the literal-only assumption
+            # revisited). Recorded so the next person does not have to
+            # re-derive that this is currently safe.
+            return any(
+                keyword.arg == "required"
+                and isinstance(keyword.value, ast.Constant)
+                and keyword.value.value is True
+                for keyword in call.keywords
+            )
+
+        # Pass 1: which group variables are a REQUIRED mutually-exclusive
+        # group owned directly by `specialist` (e.g. specialist_resume).
+        # Keyed off the literal owner name, not source order, so this does
+        # not depend on where in main() the specialist block sits.
+        required_groups: set[str] = set()
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+                continue
+            owner = call_owner_attr(node.value)
+            if (
+                owner == ("specialist", "add_mutually_exclusive_group")
+                and is_required_kw(node.value)
+                and isinstance(node.targets[0], ast.Name)
+            ):
+                required_groups.add(node.targets[0].id)
+        self.assertTrue(
+            required_groups,
+            "no required mutually-exclusive group found on the specialist "
+            "subparser -- the ast scoping below found nothing to bind",
+        )
+
+        # Pass 2: every --flag added directly to `specialist` with
+        # required=True, plus every --flag added to one of its required
+        # groups (argparse forbids required= on a group member -- membership
+        # alone makes it required, as exactly one of the group). Also
+        # extracts --capability's choices= tuple while we're already
+        # visiting its add_argument call.
+        required_flags: set[str] = set()
+        capability_choices: set[str] | None = None
+        for node in ast.walk(tree):
+            owner = call_owner_attr(node)
+            if owner is None or owner[1] != "add_argument":
+                continue
+            obj_name = owner[0]
+            if obj_name != "specialist" and obj_name not in required_groups:
+                continue
+            if not node.args or not isinstance(node.args[0], ast.Constant):
+                continue
+            flag = node.args[0].value
+            if not isinstance(flag, str) or not flag.startswith("--"):
+                continue
+            if obj_name == "specialist":
+                if is_required_kw(node):
+                    required_flags.add(flag)
+                if flag == "--capability":
+                    choices_node = next(
+                        (kw.value for kw in node.keywords if kw.arg == "choices"),
+                        None,
+                    )
+                    if isinstance(choices_node, (ast.Tuple, ast.List)) and all(
+                        isinstance(element, ast.Constant)
+                        and isinstance(element.value, str)
+                        for element in choices_node.elts
+                    ):
+                        capability_choices = {
+                            element.value for element in choices_node.elts
+                        }
+            else:
+                required_flags.add(flag)
+
+        module = load_module()
+        self.assertIsNotNone(
+            capability_choices,
+            "--capability's choices= could not be ast-extracted from the "
+            "specialist subparser",
+        )
+        self.assertEqual(capability_choices, module.TRAINING_CAPABILITIES)
+
+        # Pass 3: the PRODUCER side of the same binding -- what
+        # build_runner_argv actually emits, not a hand-typed guess at it.
+        # ValidatedLaunch is a plain NamedTuple and build_runner_argv a pure
+        # function of (repo_root, launch), so constructing one directly here
+        # exercises the real emission code with no fixture machinery in the
+        # way -- these placeholder values are never validated, only
+        # formatted into argv strings. Every specialist launch emits exactly
+        # one of the three resume-evidence flags (resume is mandatory --
+        # _validate_specialist_request refuses when absent, and exactly one
+        # evidence key is required by _validate_resume_request), so the
+        # UNION across all three choices is everything a specialist launch's
+        # argv can ever be required to carry -- which must equal the
+        # runner's required set exactly.
+        placeholder_fields = dict(
+            certificate_sha256="0" * 64,
+            run_spec_sha256="1" * 64,
+            public_master_sha="2" * 40,
+            closure_sha256="3" * 64,
+            artifact_root=pathlib.Path("artifacts"),
+            custody_root=pathlib.Path("custody"),
+            runner_receipt=pathlib.Path("receipt.json"),
+            seed=1,
+            write_budget_bytes=1,
+            max_records=1,
+            max_c_write_gib=1.0,
+            max_b_write_gib=1.0,
+            resume_checkpoint=pathlib.Path("checkpoint"),
+            resume_evidence_path=pathlib.Path("evidence.json"),
+            specialist_data_manifest=pathlib.Path("manifest.json"),
+            specialist_capability="image",
+            specialist_tokenizer_path=pathlib.Path("tokenizer.json"),
+            specialist_parent_manifest=pathlib.Path("parent.json"),
+            specialist_root_manifest=pathlib.Path("root.json"),
+            specialist_checkpoint_interval=1,
+            specialist_write_budget_gib=1,
+            specialist_telemetry_path=pathlib.Path("telemetry.jsonl"),
+            specialist_telemetry_run_id="run-id",
+            specialist_model_chat_restore_not_before="2026-01-01T00:00:00Z",
+        )
+        emitted_flags: set[str] = set()
+        for resume_evidence_flag in module.RESUME_EVIDENCE_RUN_SPEC_FLAGS.values():
+            launch = module.ValidatedLaunch(
+                resume_evidence_flag=resume_evidence_flag,
+                **placeholder_fields,
+            )
+            argv = module.build_runner_argv(pathlib.Path("/repo"), launch)
+            specialist_argv = argv[argv.index("specialist") + 1 :]
+            emitted_flags |= {
+                token for token in specialist_argv if token.startswith("--")
+            }
+
+        self.assertEqual(
+            required_flags,
+            emitted_flags,
+            "the runner's required specialist flags and what "
+            "build_runner_argv actually emits have diverged",
         )
 
 

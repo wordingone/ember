@@ -129,7 +129,43 @@ RESUME_RUN_SPEC_KEYS = {
     "resume_checkpoint",
     "resume_optimizer_transition_registry_sha256",
 } | set(RESUME_EVIDENCE_RUN_SPEC_FLAGS)
-OPTIONAL_RUN_SPEC_KEYS = {"training_verify_receipt_path"} | RESUME_RUN_SPEC_KEYS
+# Specialist routing (issue #1430) rides the RUN SPEC for the same reason the
+# resume triple does: which admitted training-data manifest and capability a
+# rung trains is a launch-time decision, while the certificate is a frozen
+# sha-cited payload. The pair is required together -- a manifest with no
+# declared capability cannot be scope-checked, and a capability with no
+# manifest names no data.
+SPECIALIST_RUN_SPEC_KEYS = {"training_data_manifest", "training_capability"}
+# The runner's own "specialist" subcommand (run_vertical_slice.py) additionally
+# REQUIRES a checkpoint publication cadence, a write budget, a telemetry sink,
+# and a model-chat cooldown floor before it will start -- none of which has an
+# existing certificate- or run-spec-bound source the way seed/artifact_root/
+# max_records/write_budget_bytes already do for governed-vertical. These ride
+# the run spec too, required only alongside the pair above. write-budget-gib is
+# NOT one of these: it is derived from the already-authorized
+# requested_scope.write_budget_bytes (see _validate_specialist_request) rather
+# than declared a second time, so a specialist launch cannot claim a larger
+# write budget than governed-vertical's own certificate-authorized ceiling.
+SPECIALIST_LAUNCH_RUN_SPEC_KEYS = {
+    "training_checkpoint_interval",
+    "training_telemetry_path",
+    "training_model_chat_restore_not_before",
+}
+TRAINING_DATA_MANIFEST_SCHEMA = "ember-owned-training-data-v1"
+TRAINING_CAPABILITIES = {"image", "audio", "reasoning", "tool"}
+# Mirrors production_rung.py::TOKENIZER_RELATIVE / launch_packet.py's
+# identity-manifest preflight / serve_owned_openai.py's _TRACKED_TOKENIZER_SOURCE
+# -- the one frozen tokenizer this tree trains and serves against. Not a
+# run-spec key: an operator-declared tokenizer path would let a specialist
+# launch train against different token identity than every other consumer of
+# this same tree without the certificate ever noticing.
+SPECIALIST_TOKENIZER_RELATIVE_PATH = "tokenizer/tokenizer.json"
+OPTIONAL_RUN_SPEC_KEYS = (
+    {"training_verify_receipt_path"}
+    | RESUME_RUN_SPEC_KEYS
+    | SPECIALIST_RUN_SPEC_KEYS
+    | SPECIALIST_LAUNCH_RUN_SPEC_KEYS
+)
 CHECKPOINT_MANIFEST_NAME = "checkpoint-manifest.json"
 CONFIG_RELATIVE_PATH = "configs/ember-restart-3b.json"
 CHECKPOINT_QUARANTINE_COMPONENT = ".checkpoint-quarantine"
@@ -151,14 +187,18 @@ AUTHORIZED_SCOPE_KEYS = {
     "wsl_allowed",
     "persistent_worker_allowed",
 }
-# Resume-root authorization (issue #1426) is declared one level DOWN from the
-# certificate's top-level key template, so the exact-match problem #1410 solved
-# for CERTIFICATE_KEYS recurs here: AUTHORIZED_SCOPE_KEYS is compared for
-# equality, so a certificate carrying the new key would be refused outright
-# without this subtraction. Same closed-enumeration discipline as
+# Resume-root authorization (issue #1426) and training-capability authorization
+# (issue #1430) are both declared one level DOWN from the certificate's
+# top-level key template, so the exact-match problem #1410 solved for
+# CERTIFICATE_KEYS recurs here: AUTHORIZED_SCOPE_KEYS is compared for equality,
+# so a certificate carrying either new key would be refused outright without
+# this subtraction. Same closed-enumeration discipline as
 # OPTIONAL_CERTIFICATE_KEYS -- a scope key outside these two sets still
 # hard-fails, so the mechanism cannot be used to smuggle an unvalidated key in.
-OPTIONAL_AUTHORIZED_SCOPE_KEYS = {"allowed_resume_roots"}
+OPTIONAL_AUTHORIZED_SCOPE_KEYS = {
+    "allowed_resume_roots",
+    "allowed_training_capabilities",
+}
 REQUESTED_SCOPE_KEYS = {
     "mode",
     "optimizer_steps",
@@ -233,6 +273,20 @@ class ValidatedLaunch(NamedTuple):
     resume_evidence_flag: str | None = None
     resume_evidence_path: pathlib.Path | None = None
     resume_optimizer_transition_registry_sha256: str | None = None
+    # Specialist routing is absent on a governed-vertical launch, and a launch
+    # that carries none of these builds byte-identical argv to a pre-#1430 one.
+    # specialist_capability is the field build_runner_argv reads to decide
+    # which runner subcommand to emit.
+    specialist_data_manifest: pathlib.Path | None = None
+    specialist_capability: str | None = None
+    specialist_tokenizer_path: pathlib.Path | None = None
+    specialist_parent_manifest: pathlib.Path | None = None
+    specialist_root_manifest: pathlib.Path | None = None
+    specialist_checkpoint_interval: int | None = None
+    specialist_write_budget_gib: int | None = None
+    specialist_telemetry_path: pathlib.Path | None = None
+    specialist_telemetry_run_id: str | None = None
+    specialist_model_chat_restore_not_before: str | None = None
 
 
 def _canonical_bytes(value: object) -> bytes:
@@ -765,6 +819,323 @@ def _validate_resume_request(
     )
 
 
+class SpecialistRequest(NamedTuple):
+    data_manifest: pathlib.Path
+    capability: str
+    tokenizer_path: pathlib.Path
+    parent_manifest: pathlib.Path
+    root_manifest: pathlib.Path
+    checkpoint_interval: int
+    write_budget_gib: int
+    telemetry_path: pathlib.Path
+    telemetry_run_id: str
+    model_chat_restore_not_before: str
+
+
+def _require_specialist_string(value: object, key: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"run spec {key} must be a non-empty string")
+    return value
+
+
+def _authorized_training_capabilities(
+    authorized: dict[str, Any]
+) -> set[str] | None:
+    """The certificate's declared specialist capabilities; None when undeclared.
+
+    Same absent-vs-empty split _authorized_resume_roots implements for resume
+    (issue #1426), applied to specialist routing: a certificate minted before
+    #1430 carries no allowed_training_capabilities at all, so it authorizes no
+    specialist route -- an accept-when-absent default would leave every
+    previously minted certificate (declared allowed_modes == ["governed-
+    vertical"] and nothing else) a standing bypass, since build_runner_argv
+    routes on run-spec content alone and never re-reads allowed_modes. A
+    certificate that DOES declare the key but lists no capabilities is a
+    different, deliberate statement -- still authorizes nothing, but
+    distinguished in the refusal message because the two are different
+    operator actions to cure.
+    """
+
+    declared = authorized.get("allowed_training_capabilities")
+    if declared is None:
+        return None
+    if not isinstance(declared, list) or not all(
+        isinstance(item, str) and item for item in declared
+    ):
+        raise ValueError(
+            "certificate allowed_training_capabilities must be a list of "
+            "non-empty strings"
+        )
+    return set(declared)
+
+
+def _require_authorized_training_capability(
+    capability: str, authorized_capabilities: set[str] | None
+) -> None:
+    if authorized_capabilities is None:
+        raise ValueError(
+            "certificate declares no allowed_training_capabilities, so run "
+            "spec training_capability is unauthorized (re-mint the "
+            "certificate to launch a specialist route)"
+        )
+    if capability not in authorized_capabilities:
+        raise ValueError("run scope exceeds certificate: training_capability")
+
+
+def _validate_specialist_request(
+    run_spec: dict[str, Any],
+    run_spec_path: pathlib.Path,
+    repo_root: pathlib.Path,
+    resume: ResumeRequest | None,
+    write_budget_bytes: int,
+    max_records: int,
+    authorized_training_capabilities: set[str] | None,
+) -> SpecialistRequest | None:
+    """Validate the optional specialist route, fail-closed, before any argv exists.
+
+    Returns None when the run spec declares no specialist route at all -- the
+    governed-vertical shape, which must stay exactly as it was. training_data_
+    manifest and training_capability are required together (mirrors
+    _validate_resume_request: a partially declared route is never "close
+    enough" -- a manifest with no declared capability cannot be scope-checked,
+    and a capability with no manifest names no data). Once both are present,
+    the runner's own "specialist" subcommand requires a checkpoint cadence, a
+    telemetry sink, a model-chat cooldown floor, and a positive max_records
+    before it will start, so those become required too -- and it requires an
+    AUTHORIZED resume checkpoint (unlike governed-vertical, where resume is
+    optional).
+    """
+
+    pair_present = {
+        key for key in SPECIALIST_RUN_SPEC_KEYS if run_spec.get(key) is not None
+    }
+    companions_present = {
+        key
+        for key in SPECIALIST_LAUNCH_RUN_SPEC_KEYS
+        if run_spec.get(key) is not None
+    }
+    if not pair_present and not companions_present:
+        return None
+    if len(pair_present) == 1:
+        missing = sorted(SPECIALIST_RUN_SPEC_KEYS - pair_present)[0]
+        raise ValueError(
+            f"run spec specialist launch requires {missing}, which is absent"
+        )
+    if not pair_present:
+        dangling = sorted(companions_present)[0]
+        raise ValueError(
+            f"run spec {dangling} requires training_data_manifest and "
+            "training_capability"
+        )
+    missing_companions = sorted(SPECIALIST_LAUNCH_RUN_SPEC_KEYS - companions_present)
+    if missing_companions:
+        raise ValueError(
+            "run spec specialist launch requires "
+            f"{missing_companions[0]}, which is absent"
+        )
+
+    capability = _require_specialist_string(
+        run_spec["training_capability"], "training_capability"
+    )
+    if capability not in TRAINING_CAPABILITIES:
+        raise ValueError(
+            "run spec training_capability must be one of "
+            + ", ".join(sorted(TRAINING_CAPABILITIES))
+        )
+    # Authorized before anything named by the run spec is opened: the
+    # certificate, not the run spec, decides which capabilities this launch
+    # may train -- otherwise a certificate scoped to governed-vertical alone
+    # (allowed_modes == ["governed-vertical"]) would still route to the
+    # specialist runner on any capability the run spec names (issue #1430
+    # review finding: routing read only run-spec content, never the
+    # certificate's authorized mode).
+    _require_authorized_training_capability(
+        capability, authorized_training_capabilities
+    )
+
+    data_manifest = pathlib.Path(
+        _require_specialist_string(
+            run_spec["training_data_manifest"], "training_data_manifest"
+        )
+    )
+    if not data_manifest.is_absolute():
+        data_manifest = pathlib.Path(repo_root) / data_manifest
+    # Authorize the manifest's LOCATION before this process reads a byte of
+    # it -- same discipline _require_authorized_resume_path applies to resume
+    # paths. Both the runner (run_vertical_slice.py::
+    # load_verified_specialist_records: "root not in manifest.parents") and
+    # the bundle producer (build_specialist_bundle.py::emit_bundle: "repo_root
+    # not in output_root.parents") refuse any manifest that does not resolve
+    # below repo_root, so a relative path resolved against run_spec_path.parent
+    # (the custody root, which is by construction OUTSIDE the repo -- see
+    # write_valid_bundle in the test fixtures) would build a perfect argv for a
+    # launch the runner can never actually start. Resolve against repo_root,
+    # matching tokenizer_path below, and refuse anything -- relative or
+    # absolute -- that resolves outside it.
+    resolved_repo_root = pathlib.Path(repo_root).resolve()
+    # Rebind to the RESOLVED form here, once, so every downstream use --
+    # _load_json below, SpecialistRequest.data_manifest, and the --data-
+    # manifest argv build_runner_argv emits -- carries the authorized path,
+    # not a syntactically-different-but-equivalent one (issue #1430 review
+    # Defect F3: authorizing resolved_data_manifest while continuing to use
+    # the unresolved data_manifest let a "manifests/../manifests/image.json"
+    # spelling through unchanged -- benign only because the runner
+    # re-resolves independently, the same "authorize A, use B" shape #1426
+    # cured for resume paths).
+    data_manifest = data_manifest.resolve(strict=False)
+    if resolved_repo_root not in data_manifest.parents:
+        raise ValueError(
+            "run spec training_data_manifest must resolve below repo_root "
+            "(the runner refuses to load a specialist manifest from anywhere "
+            "else)"
+        )
+    manifest = _load_json(data_manifest, "training data manifest")
+    if manifest.get("schema_version") != TRAINING_DATA_MANIFEST_SCHEMA:
+        raise ValueError(
+            "run spec training_data_manifest is not an "
+            f"{TRAINING_DATA_MANIFEST_SCHEMA} manifest "
+            f"(capability={capability!r})"
+        )
+    manifest_capability = manifest.get("capability")
+    if manifest_capability != capability:
+        raise ValueError(
+            "run spec training_capability does not match the manifest's own "
+            f"declared capability (declared={capability!r}, "
+            f"manifest={manifest_capability!r})"
+        )
+
+    # The runner's specialist CLI makes --resume-checkpoint and its evidence a
+    # REQUIRED (not optional) group -- unlike governed-vertical/vertical, a
+    # specialist route always trains a resumed expert family, never a clean
+    # genesis. Reject before any argv exists, same as every other specialist
+    # precondition.
+    if resume is None:
+        raise ValueError(
+            "run spec specialist launch requires an authorized resume "
+            "checkpoint (resume_checkpoint plus exactly one resume evidence "
+            "key)"
+        )
+
+    checkpoint_interval = run_spec["training_checkpoint_interval"]
+    if (
+        isinstance(checkpoint_interval, bool)
+        or not isinstance(checkpoint_interval, int)
+        or checkpoint_interval < 1
+    ):
+        raise ValueError(
+            "run spec training_checkpoint_interval must be a positive integer"
+        )
+
+    # write-budget-gib is derived, not declared: see SPECIALIST_LAUNCH_RUN_SPEC_KEYS.
+    # Refusing a non-exact GiB multiple keeps the derivation lossless -- a
+    # floor-divided value would silently authorize LESS than the certificate
+    # granted, which is a certificate the launch would then quietly disagree
+    # with rather than one that fails closed.
+    if write_budget_bytes % (1024**3) != 0:
+        raise ValueError(
+            "run spec requested_scope.write_budget_bytes must be an exact "
+            "GiB multiple for a specialist launch (the runner's "
+            "--write-budget-gib takes whole GiB)"
+        )
+    write_budget_gib = write_budget_bytes // (1024**3)
+    if write_budget_gib < 1:
+        raise ValueError(
+            "run spec requested_scope.write_budget_bytes must authorize at "
+            "least 1 GiB for a specialist launch"
+        )
+
+    # Issue #1430 delta review Finding A (LOW): _require_scope_subset only
+    # floors requested_scope.max_records at >= 0 (it is a shared ceiling
+    # check across every mode, governed-vertical included, and 0 is not
+    # inherently invalid there). The specialist runner disagrees --
+    # bind_specialist_execution_slice refuses a zero or negative slice
+    # ("specialist execution slice max records must be positive") -- so a
+    # certificate-and-scope-valid run spec with max_records=0 built
+    # parse-perfect argv the runner then deterministically refused at
+    # subprocess time. Specialist-only, checked here rather than tightened
+    # in the shared comparator, so governed-vertical's own (already correct)
+    # tolerance for 0 is untouched.
+    if max_records < 1:
+        raise ValueError(
+            "run spec requested_scope.max_records must be at least 1 for a "
+            "specialist launch (the runner refuses a zero or negative slice)"
+        )
+
+    # run_id doubles as --telemetry-run-id, which the runner bounds to 128
+    # characters ("training telemetry run id is invalid"). The top-level
+    # scalar-field check has already proved it is a non-empty string; this is
+    # the specialist-only length bound the runner additionally enforces.
+    run_id = run_spec["run_id"]
+    if len(run_id) > 128:
+        raise ValueError(
+            "run spec run_id must be at most 128 characters for a specialist "
+            "launch (the runner's --telemetry-run-id enforces this bound)"
+        )
+
+    telemetry_path = pathlib.Path(
+        _require_specialist_string(
+            run_spec["training_telemetry_path"], "training_telemetry_path"
+        )
+    )
+    if not telemetry_path.is_absolute():
+        telemetry_path = run_spec_path.parent / telemetry_path
+
+    # No format check: neither real consumer ever parses this value.
+    # run_vertical_slice.py only type-checks it as part of an all-or-none
+    # telemetry group (telemetry_path/telemetry_run_id/model_chat_restore_
+    # not_before together or not at all) and embeds it verbatim into a
+    # telemetry JSON payload at three call sites ("restore_not_before":
+    # model_chat_restore_not_before); ember-cli's telemetry-watch.ts only
+    # type-checks it as a string, and telemetry-label.ts only string-
+    # interpolates it into a display label -- Date.parse/new Date() never
+    # touch it either. A format bound invented here would be a bound this
+    # launcher does not own, the exact defect class the manifest-path fix
+    # above cured (issue #1430 review Defect F1). It could not even be made
+    # correct in general: this repo pins Python 3.10.11 (manifests/python-
+    # environment-v1.json), whose datetime.fromisoformat predates "Z"-
+    # designator support (CPython 3.11+), while "Z" is the house convention
+    # at every real timestamp producer in this chain (mint_launch_authority.
+    # py's strftime("...Z"), this runner's own telemetry writer's isoformat()
+    # .replace("+00:00","Z"), launch_packet.py's strftime("...Z")) -- a naive
+    # fromisoformat check refused the chain's own format outright. Non-
+    # emptiness is the one bound this process does own, checked above by
+    # _require_specialist_string.
+    model_chat_restore_not_before = _require_specialist_string(
+        run_spec["training_model_chat_restore_not_before"],
+        "training_model_chat_restore_not_before",
+    )
+
+    tokenizer_path = pathlib.Path(repo_root) / SPECIALIST_TOKENIZER_RELATIVE_PATH
+    if not tokenizer_path.is_file():
+        raise ValueError(
+            "run spec specialist launch requires the tree's canonical "
+            f"{SPECIALIST_TOKENIZER_RELATIVE_PATH}"
+        )
+
+    # Single-hop scope (no chaining): the checkpoint being resumed is both the
+    # immediate parent and the lineage root of this specialist generation.
+    # _validate_resume_request has already proven this manifest exists, is
+    # readable JSON, and matches this tree's architecture_revision -- reusing
+    # it here (rather than accepting a separately declared run-spec path) means
+    # a specialist launch's lineage always traces to the exact checkpoint whose
+    # architecture was just verified, never to an operator-named substitute.
+    parent_manifest = resume.checkpoint / CHECKPOINT_MANIFEST_NAME
+    root_manifest = parent_manifest
+
+    return SpecialistRequest(
+        data_manifest=data_manifest,
+        capability=capability,
+        tokenizer_path=tokenizer_path,
+        parent_manifest=parent_manifest,
+        root_manifest=root_manifest,
+        checkpoint_interval=checkpoint_interval,
+        write_budget_gib=write_budget_gib,
+        telemetry_path=telemetry_path,
+        telemetry_run_id=run_id,
+        model_chat_restore_not_before=model_chat_restore_not_before,
+    )
+
+
 def _require_scope_subset(
     requested: dict[str, Any], authorized: dict[str, Any]
 ) -> None:
@@ -1013,6 +1384,33 @@ def validate_certified_request(
         _authorized_resume_roots(authorized_scope),
     )
 
+    # Issue #1430 delta review Finding A: _require_scope_subset above has
+    # already proven requested_scope["max_records"] is a non-bool int-or-
+    # float within the certificate's ceiling, but a fractional value (e.g.
+    # 10.7) would still silently truncate at the int(...) cast below --
+    # refused here instead, on both routes, rather than quietly authorizing
+    # less than what the run spec actually asked for.
+    requested_max_records = requested_scope["max_records"]
+    if (
+        isinstance(requested_max_records, float)
+        and not requested_max_records.is_integer()
+    ):
+        raise ValueError(
+            "run spec requested_scope.max_records must be an exact integer "
+            "(a fractional value would be silently truncated)"
+        )
+    requested_max_records = int(requested_max_records)
+
+    specialist = _validate_specialist_request(
+        run_spec,
+        run_spec_path,
+        repo_root,
+        resume,
+        int(requested_scope["write_budget_bytes"]),
+        requested_max_records,
+        _authorized_training_capabilities(authorized_scope),
+    )
+
     custody_root = pathlib.Path(requested_scope["custody_root"])
     runner_receipt = pathlib.Path(run_spec["runner_receipt"])
     try:
@@ -1023,6 +1421,19 @@ def validate_certified_request(
         raise ValueError(
             "run scope exceeds certificate: runner_receipt"
         ) from error
+    if specialist is not None:
+        # The runner's telemetry sink is a write disk_budget_runner must be
+        # able to attribute, same reason runner_receipt is checked above: both
+        # are paths the wrapped child process writes to, and disk_budget_runner
+        # only ever authorizes writes under its declared --write-root roots.
+        try:
+            specialist.telemetry_path.resolve(strict=False).relative_to(
+                custody_root.resolve(strict=False)
+            )
+        except ValueError as error:
+            raise ValueError(
+                "run scope exceeds certificate: training_telemetry_path"
+            ) from error
 
     return ValidatedLaunch(
         certificate_sha256=certificate_sha256,
@@ -1034,7 +1445,7 @@ def validate_certified_request(
         runner_receipt=runner_receipt,
         seed=run_spec["seed"],
         write_budget_bytes=int(requested_scope["write_budget_bytes"]),
-        max_records=int(requested_scope["max_records"]),
+        max_records=requested_max_records,
         max_c_write_gib=float(requested_scope["max_c_write_gib"]),
         max_b_write_gib=float(requested_scope["max_b_write_gib"]),
         resume_checkpoint=None if resume is None else resume.checkpoint,
@@ -1042,6 +1453,24 @@ def validate_certified_request(
         resume_evidence_path=None if resume is None else resume.evidence_path,
         resume_optimizer_transition_registry_sha256=(
             None if resume is None else resume.optimizer_transition_registry_sha256
+        ),
+        specialist_data_manifest=None if specialist is None else specialist.data_manifest,
+        specialist_capability=None if specialist is None else specialist.capability,
+        specialist_tokenizer_path=None if specialist is None else specialist.tokenizer_path,
+        specialist_parent_manifest=None if specialist is None else specialist.parent_manifest,
+        specialist_root_manifest=None if specialist is None else specialist.root_manifest,
+        specialist_checkpoint_interval=(
+            None if specialist is None else specialist.checkpoint_interval
+        ),
+        specialist_write_budget_gib=(
+            None if specialist is None else specialist.write_budget_gib
+        ),
+        specialist_telemetry_path=None if specialist is None else specialist.telemetry_path,
+        specialist_telemetry_run_id=(
+            None if specialist is None else specialist.telemetry_run_id
+        ),
+        specialist_model_chat_restore_not_before=(
+            None if specialist is None else specialist.model_chat_restore_not_before
         ),
     )
 
@@ -1076,6 +1505,57 @@ def build_runner_argv(
             / "ember-restart-3b"
             / "run_vertical_slice.py"
         ),
+    ]
+    # A launch that declares no specialist route reaches only the
+    # governed-vertical tail below, so its argv is byte-identical to a
+    # pre-#1430 one. validate_certified_request has already proven a declared
+    # route is complete and coherent -- the training_data_manifest/
+    # training_capability pair, its required companions, and an authorized
+    # resume checkpoint -- so no partial specialist argv can be emitted.
+    if launch.specialist_capability is not None:
+        argv += [
+            "specialist",
+            "--seed",
+            str(launch.seed),
+            "--artifact-root",
+            str(launch.artifact_root),
+            "--data-manifest",
+            str(launch.specialist_data_manifest),
+            "--tokenizer",
+            str(launch.specialist_tokenizer_path),
+            "--capability",
+            launch.specialist_capability,
+            "--resume-checkpoint",
+            str(launch.resume_checkpoint),
+            launch.resume_evidence_flag,
+            str(launch.resume_evidence_path),
+        ]
+        if launch.resume_optimizer_transition_registry_sha256 is not None:
+            argv += [
+                "--resume-optimizer-transition-registry-sha256",
+                launch.resume_optimizer_transition_registry_sha256,
+            ]
+        argv += [
+            "--parent-manifest",
+            str(launch.specialist_parent_manifest),
+            "--root-manifest",
+            str(launch.specialist_root_manifest),
+            "--max-records",
+            str(launch.max_records),
+            "--checkpoint-interval",
+            str(launch.specialist_checkpoint_interval),
+            "--write-budget-gib",
+            str(launch.specialist_write_budget_gib),
+            "--telemetry-path",
+            str(launch.specialist_telemetry_path),
+            "--telemetry-run-id",
+            launch.specialist_telemetry_run_id,
+            "--model-chat-restore-not-before",
+            launch.specialist_model_chat_restore_not_before,
+        ]
+        return argv
+
+    argv += [
         "governed-vertical",
         "--seed",
         str(launch.seed),
