@@ -33,6 +33,7 @@ from receipt_check import validate_receipt          # noqa: E402
 import v0_config_check                              # noqa: E402
 import fp26_prereg                                  # noqa: E402
 import token_shards_v0                              # noqa: E402
+import fineweb_exclusion                            # noqa: E402
 
 # ---- binding pins (changing any of these is a contract change) -----------
 ASSEMBLY_RECEIPT = "eng36-assembly-20260611T052337Z.json"
@@ -201,7 +202,72 @@ def g_shards(shard_dir_override=None):
         d, NC, shard_dir_override=shard_dir_override)
     if viol:
         return "BLOCKED", f"{name} shard contract FAIL: {viol}"
-    return "GREEN", f"{name} shards present + byte-matched; --live input ready"
+    st, dt = _shards_exclusion_check(name, d)
+    if st != "GREEN":
+        return st, dt
+    return "GREEN", f"{name} shards present + byte-matched; --live input ready; {dt}"
+
+
+def _shards_exclusion_check(name, d):
+    """#1436: the bound stream must contain zero CONSUMABLE excluded-source
+    tokens before --live.
+
+    G-shards is where the training input is bound -- it is the row that already
+    re-validates the TOKEN-SHARDS-V0 receipt against the shard bytes -- so it is
+    where the exclusion has to be asserted. The standalone
+    `fineweb_exclusion.py --preflight` CLI is operator-invoked and gates
+    nothing; a script someone has to remember to run cannot stop a ruling from
+    rotting, which is the whole point of the issue's clause.
+
+    shards-v0 physically contains the tokens and always will (no v1 binary was
+    ever built), so the assertion is not "the bytes are absent" -- it is that
+    NO WINDOW A TRAINING RUN CAN DRAW reaches them, proven over the receipted
+    loader geometry, plus that the loader still enforces this BY DEFAULT.
+    Four ways to fail, all BLOCKED:
+      1. the ruling receipt is missing/damaged, or has been edited to re-admit
+         an audited-tainted source (fineweb_exclusion.ruled_excluded_sources);
+      2. a ruled-excluded source is in the stream but its offsets cannot be
+         derived from the validated receipt;
+      3. the receipted loader geometry cannot be proven to exclude those
+         offsets, or leaves no clean window at all;
+      4. PackedShardLoader's default has been reverted to opt-in, so a caller
+         that passes nothing would draw from the tainted range again.
+    """
+    try:
+        ranges, why = fineweb_exclusion.enforcement_for_validated_receipt(d, NC)
+    except ValueError as e:
+        return "BLOCKED", f"{name} excluded-source check FAIL: {e}"
+    if not ranges:
+        return "GREEN", f"exclusion: {why}"
+
+    total = d.get("total_stream_tokens")
+    geom = d.get("loader_windows") or {}
+    seq, block_len = geom.get("seq"), geom.get("block_len")
+    if not isinstance(seq, int) or not isinstance(block_len, int):
+        return "BLOCKED", (f"{name} declares excluded-source tokens but its "
+                           "loader_windows.seq/block_len are missing — the "
+                           "window exclusion cannot be proven")
+    plan = fineweb_exclusion.WindowPlan(total, seq, block_len, ranges)
+    if plan.n_windows <= 0:
+        return "BLOCKED", (f"{name} exclusion leaves zero usable windows over "
+                           f"{total:,} tokens — no clean training input")
+    try:
+        fineweb_exclusion.assert_plan_excludes_ranges(plan)
+    except AssertionError as e:
+        return "BLOCKED", f"{name} window-exclusion proof FAIL: {e}"
+
+    bound = fineweb_exclusion.identify_stream_receipt(total, NC)
+    if bound is None:
+        return "BLOCKED", (f"{name} declares a {total:,}-token stream that the "
+                           "loader's own default policy would not bind — "
+                           "enforcement would not engage at training time")
+    ok, detail = fineweb_exclusion.loader_default_is_enforcing()
+    if not ok:
+        return "BLOCKED", (f"{name} needs exclusion enforced, but the loader "
+                           f"default is not enforcing: {detail}")
+    dropped = plan.n_windows_full - plan.n_windows
+    return "GREEN", (f"exclusion {why}; {plan.n_windows:,} usable windows "
+                     f"({dropped:,} dropped), loader default binds {bound}")
 
 
 def g_shards_mm(
@@ -767,6 +833,51 @@ def _selftest():
         # a receipt present is GREEN only if its declared shards are present +
         # byte-matched; the validator is exercised in token_shards_v0 selftest.
         assert g_shards()[0] in ("GREEN", "BLOCKED")
+
+    # #1436 excluded-source assertion: exercised directly on _shards_exclusion_check
+    # with synthetic receipts, so it is covered whether or not the multi-GB
+    # shard bytes are present in this checkout.
+    _real_shard = f"{NC}/receipts/{fineweb_exclusion.DEFAULT_SHARD_RECEIPT}"
+    if os.path.exists(_real_shard):
+        _d = json.load(open(_real_shard, encoding="utf-8"))
+        # the real v0 receipt DOES carry fineweb_edu tokens -> the row must
+        # prove the windows exclude them, and must name the enforcement
+        st_x, dt_x = _shards_exclusion_check("fixture", _d)
+        assert st_x == "GREEN" and "usable windows" in dt_x, (st_x, dt_x)
+        assert "fineweb_edu" in dt_x, dt_x
+
+        # geometry stripped -> the exclusion cannot be proven -> BLOCKED
+        _no_geom = copy.deepcopy(_d)
+        _no_geom["loader_windows"] = {}
+        st_x, dt_x = _shards_exclusion_check("fixture", _no_geom)
+        assert st_x == "BLOCKED" and "cannot be proven" in dt_x, (st_x, dt_x)
+
+        # a receipt whose per_source lost fineweb_edu entirely is a derivation
+        # refusal (receipts disagree), never a silent "nothing to exclude"
+        _dropped = copy.deepcopy(_d)
+        _dropped["per_source"].pop("fineweb_edu", None)
+        st_x, dt_x = _shards_exclusion_check("fixture", _dropped)
+        assert st_x == "BLOCKED" and "excluded-source check FAIL" in dt_x, (st_x, dt_x)
+
+        # a stream length no receipt declares -> the loader default would never
+        # bind it -> BLOCKED rather than a green row over unenforced input.
+        # (a non-excluded source is grown by 1 alongside the total so the
+        # per_source sum still reconciles and the derivation itself succeeds)
+        _unbound = copy.deepcopy(_d)
+        _grow = next(s for s in _unbound["per_source"]
+                     if s != "fineweb_edu"
+                     and _unbound["per_source"][s].get("stream_tokens"))
+        _unbound["per_source"][_grow]["stream_tokens"] += 1
+        _unbound["total_stream_tokens"] = _d["total_stream_tokens"] + 1
+        st_x, dt_x = _shards_exclusion_check("fixture", _unbound)
+        assert st_x == "BLOCKED" and "would not bind" in dt_x, (st_x, dt_x)
+
+    # the "nothing to exclude" branches (source absent from the assembly, or
+    # present with zero tokens) are covered in fineweb_exclusion's own
+    # selftest, where the whole receipt tree is synthetic and controlled --
+    # a partial per_source here would only be checked against the REAL
+    # assembly and fail on an unrelated source.
+    fineweb_exclusion._selftest_fail_closed_against_real_schema()
     # budget: calendar fail-closed path (shatter_fit injected as False so the
     # calendar governs, regardless of which shatter receipts are on disk today).
     assert g_budget(date(2026, 6, 11), shatter_fit=(False, "no-proof"))[0] == "GREEN"
