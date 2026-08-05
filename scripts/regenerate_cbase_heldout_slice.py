@@ -79,6 +79,7 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 import fineweb_exclusion as fx      # noqa: E402
 import token_shards_v0 as tsv       # noqa: E402
+import receipt_check                # noqa: E402
 
 SHARD_RECEIPT_NAME = "token-shards-v0-20260611T170047Z.json"
 ISSUE = "#760"
@@ -88,7 +89,9 @@ SCALE = "W1_FROM_SCRATCH_PILOT_BASELINE"
 # repo as of 2026-08-05 (grepped across receipts/ -- the next-highest values
 # found were 159 and 2495; every other disjointness receipt in the tree
 # reuses this same W1 pilot number). window index is inclusive; the ceiling
-# TOKEN is (index+1)*seq. Re-grep before reusing this constant if training
+# TOKEN is index*seq + BLOCK_LEN (the last training window's full read span,
+# including its n_mtp+1 lookahead tail -- not (index+1)*seq, which undercounts
+# by n_mtp+1 tokens). Re-grep before reusing this constant if training
 # has advanced since this script was written -- it is a snapshot, not a
 # live query, because no single aggregate "all consumption ranges" receipt
 # exists yet (a real gap; see the emitted finding receipt's `notes`).
@@ -309,9 +312,21 @@ def build_candidate(*, shard_dir: Path, window_count: int) -> tuple[dict, dict]:
         "api_spend_usd": 0.0,
         "paid_api_surface_used": False,
         "no_gpu": True,
-        "goal_id": "EMBER-02",
-        "workstream_id": "EMBER-02A",
-        "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+        "schema": "cbase-heldout-slice-regeneration-finding/v1",
+        # Every post-genesis receipt must carry the constitutional invariant
+        # hash (guard changed-receipts leg -> receipt_check, which refuses
+        # MISSING_INVARIANT_SHA256). Read from receipt_check -- the component
+        # that ENFORCES the value -- never copied, so the two cannot drift.
+        # And any receipt carrying a *sha256* field must declare its
+        # sha_convention (receipt_check SHA-CONVENTION rule). Mirrors
+        # fineweb_exclusion.py's own --preflight receipt (:644-653).
+        "invariant_sha256": receipt_check.INVARIANT_SHA256,
+        "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+        "authority": {
+            "goal_id": "EMBER-02",
+            "workstream_id": "EMBER-02A",
+            "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+        },
     }
     return manifest, finding
 
@@ -346,8 +361,8 @@ def main(argv=None) -> int:
 
     receipt_out = Path(args.receipt_out)
     receipt_out.parent.mkdir(parents=True, exist_ok=True)
-    finding_payload = json.dumps(finding, sort_keys=True, separators=(",", ":")) + "\n"
-    receipt_out.write_text(finding_payload, encoding="utf-8", newline="\n")
+    from receipt_write import checked_write        # noqa: E402
+    checked_write(str(receipt_out), finding)
     manifest["selection_evidence"]["sha256"] = _sha256(receipt_out)
     manifest["selection_evidence"]["batch_sha256"] = manifest["selection_evidence"]["sha256"]
 
