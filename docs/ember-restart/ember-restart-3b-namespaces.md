@@ -4,7 +4,7 @@
 
 # Ember restart sparse 3B namespace and run contract
 
-[configs/ember-restart-3b.json](../configs/ember-restart-3b.json) version 2 supersedes the retired dense, positionless declaration before any production allocation. It describes a clean-random 14-layer H=2048 unified decoder with shared attention and four independently trainable SwiGLU banks per layer: vision, audio, reasoning, and tool.
+[configs/ember-restart-3b.json](../../configs/ember-restart-3b.json) version 2 supersedes the retired dense, positionless declaration before any production allocation. It describes a clean-random 14-layer H=2048 unified decoder with shared attention and four independently trainable SwiGLU banks per layer: vision, audio, reasoning, and tool.
 
 Each episode or batch declares exactly one active expert. All other expert banks are frozen for that episode, while shared attention, token embeddings, raw projectors, RMSNorm weights, and the selected bank remain trainable. This is capacity accounting, not a claim of completed training: total unique capacity is validated on a meta-instantiated model, and active cost is separately measured in run receipts.
 

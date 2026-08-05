@@ -35,17 +35,20 @@ with something in `archive/`, this wins.
   [`anatomy/00_INDEX.md`](anatomy/00_INDEX.md) and
   [`anatomy/01_CONSTITUTION_AND_AUTHORITY.md`](anatomy/01_CONSTITUTION_AND_AUTHORITY.md).
 - **[`charter/`](charter/)** — standing contracts and protocols that govern *how* work is
-  done here: reproducibility requirements, the floor contract, technique-ownership
-  contracts, doc-freshness protocol, the goal-clear and goal-mode mechanisms, the GitHub
-  work system. Start with [`charter/REPRODUCIBILITY.md`](charter/REPRODUCIBILITY.md),
-  [`charter/ember-floor-contract.md`](charter/ember-floor-contract.md), and
-  [`charter/nc2-own-technique-contract.md`](charter/nc2-own-technique-contract.md).
-- **[`ledgers/`](ledgers/)** — living, append-only registries: the completeness ledger, the
-  debt ledger, the authority matrix, deviations, work-ahead. These are read fresh every
-  time, never archived while active. Start with
-  [`ledgers/ember-completeness.md`](ledgers/ember-completeness.md),
-  [`ledgers/ember-debt-ledger.md`](ledgers/ember-debt-ledger.md), and
-  [`ledgers/ember-authority-matrix.md`](ledgers/ember-authority-matrix.md).
+  done here: reproducibility requirements, technique-ownership contracts, doc-freshness
+  protocol, the goal-clear and goal-mode mechanisms, the GitHub work system. Start with
+  [`charter/REPRODUCIBILITY.md`](charter/REPRODUCIBILITY.md). Two related contracts,
+  [`ember-floor-contract.md`](ember-floor-contract.md) and
+  [`nc2-own-technique-contract.md`](nc2-own-technique-contract.md), stay at `docs/` root
+  rather than here — they are hash-pinned by path in `GOAL.md`'s governing-surfaces policy
+  and `manifests/authority/issue-35-authority-supersession-crosswalk-v1.json`, so moving
+  them would break the authority-conservation check.
+- **[`ledgers/`](ledgers/)** — living, append-only registries: the debt ledger, deviations,
+  work-ahead, the technique registry. These are read fresh every time, never archived while
+  active. Start with [`ledgers/ember-debt-ledger.md`](ledgers/ember-debt-ledger.md). Two
+  related registries, [`ember-completeness.md`](ember-completeness.md) and
+  [`ember-authority-matrix.md`](ember-authority-matrix.md), stay at `docs/` root for the
+  same authority-pin reason as the charter exceptions above.
 - **[`design/`](design/)** — architecture and design decisions on the current line: the
   actual stack, the SOTA-stack floor, inference-to-training translation, the C-FED
   federation design. Start with [`design/the-actual-stack.md`](design/the-actual-stack.md)
@@ -56,9 +59,13 @@ with something in `archive/`, this wins.
   [`ember-restart/ember-restart-3b-governed-runner-v1.md`](ember-restart/ember-restart-3b-governed-runner-v1.md).
 - **[`custody/`](custody/)** — custody dispositions, branch manifests, deletion receipts,
   and the HF-custody sync note: what happened to which branch, checkpoint, or dataset, and
-  under what authority. Start with
-  [`custody/custody-disposition-20260708.md`](custody/custody-disposition-20260708.md) and
-  [`custody/branch-inventory.md`](custody/branch-inventory.md).
+  under what authority. Start with [`custody/branch-inventory.md`](custody/branch-inventory.md).
+  The wave-031 disposition record lives here too
+  ([`custody/custody-disposition-20260731-wave031.md`](custody/custody-disposition-20260731-wave031.md)),
+  but the original, [`custody-disposition-20260708.md`](custody-disposition-20260708.md), stays
+  at `docs/` root: the C-CUSTODY registry
+  (`receipts/ember-01-custody/documented-absent-custody-dispositions-v1.json`) hash-pins its
+  bytes against a specific historical commit at that exact path.
 
 ## Reference material (current, but not normative)
 
