@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime
 import hashlib
 import importlib.util
 import json
@@ -187,14 +188,18 @@ AUTHORIZED_SCOPE_KEYS = {
     "wsl_allowed",
     "persistent_worker_allowed",
 }
-# Resume-root authorization (issue #1426) is declared one level DOWN from the
-# certificate's top-level key template, so the exact-match problem #1410 solved
-# for CERTIFICATE_KEYS recurs here: AUTHORIZED_SCOPE_KEYS is compared for
-# equality, so a certificate carrying the new key would be refused outright
-# without this subtraction. Same closed-enumeration discipline as
+# Resume-root authorization (issue #1426) and training-capability authorization
+# (issue #1430) are both declared one level DOWN from the certificate's
+# top-level key template, so the exact-match problem #1410 solved for
+# CERTIFICATE_KEYS recurs here: AUTHORIZED_SCOPE_KEYS is compared for equality,
+# so a certificate carrying either new key would be refused outright without
+# this subtraction. Same closed-enumeration discipline as
 # OPTIONAL_CERTIFICATE_KEYS -- a scope key outside these two sets still
 # hard-fails, so the mechanism cannot be used to smuggle an unvalidated key in.
-OPTIONAL_AUTHORIZED_SCOPE_KEYS = {"allowed_resume_roots"}
+OPTIONAL_AUTHORIZED_SCOPE_KEYS = {
+    "allowed_resume_roots",
+    "allowed_training_capabilities",
+}
 REQUESTED_SCOPE_KEYS = {
     "mode",
     "optimizer_steps",
@@ -834,12 +839,57 @@ def _require_specialist_string(value: object, key: str) -> str:
     return value
 
 
+def _authorized_training_capabilities(
+    authorized: dict[str, Any]
+) -> set[str] | None:
+    """The certificate's declared specialist capabilities; None when undeclared.
+
+    Same absent-vs-empty split _authorized_resume_roots implements for resume
+    (issue #1426), applied to specialist routing: a certificate minted before
+    #1430 carries no allowed_training_capabilities at all, so it authorizes no
+    specialist route -- an accept-when-absent default would leave every
+    previously minted certificate (declared allowed_modes == ["governed-
+    vertical"] and nothing else) a standing bypass, since build_runner_argv
+    routes on run-spec content alone and never re-reads allowed_modes. A
+    certificate that DOES declare the key but lists no capabilities is a
+    different, deliberate statement -- still authorizes nothing, but
+    distinguished in the refusal message because the two are different
+    operator actions to cure.
+    """
+
+    declared = authorized.get("allowed_training_capabilities")
+    if declared is None:
+        return None
+    if not isinstance(declared, list) or not all(
+        isinstance(item, str) and item for item in declared
+    ):
+        raise ValueError(
+            "certificate allowed_training_capabilities must be a list of "
+            "non-empty strings"
+        )
+    return set(declared)
+
+
+def _require_authorized_training_capability(
+    capability: str, authorized_capabilities: set[str] | None
+) -> None:
+    if authorized_capabilities is None:
+        raise ValueError(
+            "certificate declares no allowed_training_capabilities, so run "
+            "spec training_capability is unauthorized (re-mint the "
+            "certificate to launch a specialist route)"
+        )
+    if capability not in authorized_capabilities:
+        raise ValueError("run scope exceeds certificate: training_capability")
+
+
 def _validate_specialist_request(
     run_spec: dict[str, Any],
     run_spec_path: pathlib.Path,
     repo_root: pathlib.Path,
     resume: ResumeRequest | None,
     write_budget_bytes: int,
+    authorized_training_capabilities: set[str] | None,
 ) -> SpecialistRequest | None:
     """Validate the optional specialist route, fail-closed, before any argv exists.
 
@@ -891,6 +941,16 @@ def _validate_specialist_request(
             "run spec training_capability must be one of "
             + ", ".join(sorted(TRAINING_CAPABILITIES))
         )
+    # Authorized before anything named by the run spec is opened: the
+    # certificate, not the run spec, decides which capabilities this launch
+    # may train -- otherwise a certificate scoped to governed-vertical alone
+    # (allowed_modes == ["governed-vertical"]) would still route to the
+    # specialist runner on any capability the run spec names (issue #1430
+    # review finding: routing read only run-spec content, never the
+    # certificate's authorized mode).
+    _require_authorized_training_capability(
+        capability, authorized_training_capabilities
+    )
 
     data_manifest = pathlib.Path(
         _require_specialist_string(
@@ -898,7 +958,27 @@ def _validate_specialist_request(
         )
     )
     if not data_manifest.is_absolute():
-        data_manifest = run_spec_path.parent / data_manifest
+        data_manifest = pathlib.Path(repo_root) / data_manifest
+    # Authorize the manifest's LOCATION before this process reads a byte of
+    # it -- same discipline _require_authorized_resume_path applies to resume
+    # paths. Both the runner (run_vertical_slice.py::
+    # load_verified_specialist_records: "root not in manifest.parents") and
+    # the bundle producer (build_specialist_bundle.py::emit_bundle: "repo_root
+    # not in output_root.parents") refuse any manifest that does not resolve
+    # below repo_root, so a relative path resolved against run_spec_path.parent
+    # (the custody root, which is by construction OUTSIDE the repo -- see
+    # write_valid_bundle in the test fixtures) would build a perfect argv for a
+    # launch the runner can never actually start. Resolve against repo_root,
+    # matching tokenizer_path below, and refuse anything -- relative or
+    # absolute -- that resolves outside it.
+    resolved_repo_root = pathlib.Path(repo_root).resolve()
+    resolved_data_manifest = data_manifest.resolve(strict=False)
+    if resolved_repo_root not in resolved_data_manifest.parents:
+        raise ValueError(
+            "run spec training_data_manifest must resolve below repo_root "
+            "(the runner refuses to load a specialist manifest from anywhere "
+            "else)"
+        )
     manifest = _load_json(data_manifest, "training data manifest")
     if manifest.get("schema_version") != TRAINING_DATA_MANIFEST_SCHEMA:
         raise ValueError(
@@ -954,6 +1034,17 @@ def _validate_specialist_request(
             "least 1 GiB for a specialist launch"
         )
 
+    # run_id doubles as --telemetry-run-id, which the runner bounds to 128
+    # characters ("training telemetry run id is invalid"). The top-level
+    # scalar-field check has already proved it is a non-empty string; this is
+    # the specialist-only length bound the runner additionally enforces.
+    run_id = run_spec["run_id"]
+    if len(run_id) > 128:
+        raise ValueError(
+            "run spec run_id must be at most 128 characters for a specialist "
+            "launch (the runner's --telemetry-run-id enforces this bound)"
+        )
+
     telemetry_path = pathlib.Path(
         _require_specialist_string(
             run_spec["training_telemetry_path"], "training_telemetry_path"
@@ -966,6 +1057,13 @@ def _validate_specialist_request(
         run_spec["training_model_chat_restore_not_before"],
         "training_model_chat_restore_not_before",
     )
+    try:
+        datetime.datetime.fromisoformat(model_chat_restore_not_before)
+    except ValueError as error:
+        raise ValueError(
+            "run spec training_model_chat_restore_not_before must be an ISO "
+            "8601 timestamp"
+        ) from error
 
     tokenizer_path = pathlib.Path(repo_root) / SPECIALIST_TOKENIZER_RELATIVE_PATH
     if not tokenizer_path.is_file():
@@ -993,7 +1091,7 @@ def _validate_specialist_request(
         checkpoint_interval=checkpoint_interval,
         write_budget_gib=write_budget_gib,
         telemetry_path=telemetry_path,
-        telemetry_run_id=run_spec["run_id"],
+        telemetry_run_id=run_id,
         model_chat_restore_not_before=model_chat_restore_not_before,
     )
 
@@ -1252,6 +1350,7 @@ def validate_certified_request(
         repo_root,
         resume,
         int(requested_scope["write_budget_bytes"]),
+        _authorized_training_capabilities(authorized_scope),
     )
 
     custody_root = pathlib.Path(requested_scope["custody_root"])
