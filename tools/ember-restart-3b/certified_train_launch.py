@@ -195,9 +195,15 @@ AUTHORIZED_SCOPE_KEYS = {
 # this subtraction. Same closed-enumeration discipline as
 # OPTIONAL_CERTIFICATE_KEYS -- a scope key outside these two sets still
 # hard-fails, so the mechanism cannot be used to smuggle an unvalidated key in.
+# resume_relocation_custody_root (issue #1452) rides the SAME mechanism: which
+# checkpoint may be resumed from is already a certificate decision here, and
+# the C: custody root the disk-budget runner relocated it under is exactly
+# that same kind of decision, for the same reason -- the launcher must never
+# derive it locally (from the checkpoint's own parents or any local default).
 OPTIONAL_AUTHORIZED_SCOPE_KEYS = {
     "allowed_resume_roots",
     "allowed_training_capabilities",
+    "resume_relocation_custody_root",
 }
 REQUESTED_SCOPE_KEYS = {
     "mode",
@@ -273,6 +279,14 @@ class ValidatedLaunch(NamedTuple):
     resume_evidence_flag: str | None = None
     resume_evidence_path: pathlib.Path | None = None
     resume_optimizer_transition_registry_sha256: str | None = None
+    # Set only when the authorized resume_checkpoint resolves off B: (issue
+    # #1452). This is the SINGLE predicate the governed-vertical route's
+    # relocation refusal and the specialist tail's flag emission both read --
+    # neither re-derives "does this resume need relocation" independently, so
+    # the two cannot drift apart. A B: resume leaves this None and
+    # build_runner_argv emits no relocation flags, byte-identical to a
+    # pre-#1452 launch.
+    resume_relocation_custody_root: pathlib.Path | None = None
     # Specialist routing is absent on a governed-vertical launch, and a launch
     # that carries none of these builds byte-identical argv to a pre-#1430 one.
     # specialist_capability is the field build_runner_argv reads to decide
@@ -625,6 +639,7 @@ class ResumeRequest(NamedTuple):
     evidence_flag: str
     evidence_path: pathlib.Path
     optimizer_transition_registry_sha256: str | None
+    relocation_custody_root: pathlib.Path | None
 
 
 def _reject_quarantined_resume_path(path: pathlib.Path, label: str) -> None:
@@ -683,6 +698,46 @@ def _authorized_resume_roots(
     return [pathlib.Path(item).resolve(strict=False) for item in declared]
 
 
+def _authorized_resume_relocation_custody_root(
+    authorized: dict[str, Any]
+) -> pathlib.Path | None:
+    """The certificate's declared C: relocation custody root, resolved.
+
+    Issue #1452: run_vertical_slice.authorize_production_resume_checkpoint
+    accepts a resume checkpoint that resolves off B: only when the runner is
+    also told c_relocated_under_disk_budget_runner=True with a
+    relocation_custody_root -- the disk-budget runner relocates custody
+    material off C: under pressure, and the escape hatch exists for exactly
+    that case. WHICH root is the certificate's call for the same reason
+    allowed_resume_roots is: naming it is authorizing it, so it belongs here
+    and never in something the launcher derives from the checkpoint path
+    itself (its parents, a default, anything else on local disk).
+
+    None when undeclared; _validate_resume_request is the one that decides
+    whether that absence is fatal (only when the authorized checkpoint
+    actually resolves off B:). Must be absolute: a relative declaration
+    would resolve against THIS PROCESS's own cwd (below), which is exactly
+    the "derive it locally" shape the module doctrine above refuses -- a
+    conspiring cwd could otherwise make an unauthorized root validate.
+    """
+
+    declared = authorized.get("resume_relocation_custody_root")
+    if declared is None:
+        return None
+    if not isinstance(declared, str) or not declared:
+        raise ValueError(
+            "certificate resume_relocation_custody_root must be a non-empty "
+            "string"
+        )
+    if not pathlib.Path(declared).is_absolute():
+        raise ValueError(
+            "certificate resume_relocation_custody_root must be an absolute "
+            "path (a relative one would resolve against this process's own "
+            "cwd, not a certificate-fixed location)"
+        )
+    return pathlib.Path(declared).resolve(strict=False)
+
+
 def _require_authorized_resume_path(
     path: pathlib.Path,
     label: str,
@@ -712,6 +767,7 @@ def _validate_resume_request(
     run_spec_path: pathlib.Path,
     repo_root: pathlib.Path,
     allowed_resume_roots: list[pathlib.Path] | None,
+    relocation_custody_root: pathlib.Path | None,
 ) -> ResumeRequest | None:
     """Validate the optional resume triple, fail-closed, before any argv exists.
 
@@ -782,6 +838,34 @@ def _validate_resume_request(
     )
     _require_authorized_resume_path(evidence, evidence_key, allowed_resume_roots)
 
+    # Issue #1452: authorize_production_resume_checkpoint (run_vertical_slice)
+    # accepts this checkpoint only when it resolves under B:, or when the
+    # runner is also told c_relocated_under_disk_budget_runner=True with a
+    # relocation_custody_root. Settled here, on the same terms as the
+    # authorization check just above (resolved form, before the path is
+    # opened), so a certificate that cannot express the relocation is refused
+    # before any argv exists -- not after the certificate is minted and the
+    # runner subprocess is the one that discovers it.
+    checkpoint_relocation_root: pathlib.Path | None = None
+    resolved_checkpoint = checkpoint.resolve(strict=False)
+    if resolved_checkpoint.drive.upper() != "B:":
+        if relocation_custody_root is None:
+            raise ValueError(
+                "run spec resume_checkpoint resolves off B:, so the "
+                "certificate must declare resume_relocation_custody_root "
+                "(re-mint the certificate to authorize the C: relocation)"
+            )
+        if (
+            relocation_custody_root.drive.upper() != "C:"
+            or resolved_checkpoint.drive.upper() != "C:"
+            or not resolved_checkpoint.is_relative_to(relocation_custody_root)
+        ):
+            raise ValueError(
+                "certificate resume_relocation_custody_root does not contain "
+                "the authorized resume_checkpoint"
+            )
+        checkpoint_relocation_root = relocation_custody_root
+
     if not checkpoint.is_dir():
         raise ValueError(
             "run spec resume_checkpoint must name an existing checkpoint directory"
@@ -816,6 +900,7 @@ def _validate_resume_request(
         evidence_flag=RESUME_EVIDENCE_RUN_SPEC_FLAGS[evidence_key],
         evidence_path=evidence,
         optimizer_transition_registry_sha256=registry_sha256,
+        relocation_custody_root=checkpoint_relocation_root,
     )
 
 
@@ -1382,6 +1467,7 @@ def validate_certified_request(
         run_spec_path,
         repo_root,
         _authorized_resume_roots(authorized_scope),
+        _authorized_resume_relocation_custody_root(authorized_scope),
     )
 
     # Issue #1430 delta review Finding A: _require_scope_subset above has
@@ -1410,6 +1496,36 @@ def validate_certified_request(
         requested_max_records,
         _authorized_training_capabilities(authorized_scope),
     )
+
+    # Issue #1452 / #1462: route determination is now settled (specialist is
+    # None exactly when this launch will take the governed-vertical tail in
+    # build_runner_argv). ONE predicate decides "this resume needs the
+    # relocation pair expressed" -- resume.relocation_custody_root is not
+    # None -- and it is read here, not re-derived: the SAME value rides onto
+    # ValidatedLaunch.resume_relocation_custody_root below and is what
+    # build_runner_argv's specialist tail checks to emit the flags, so the
+    # refusal below and the emission downstream cannot drift apart.
+    # run_vertical_slice.py's governed-vertical subparser declares neither
+    # --c-relocated-under-disk-budget-runner nor --relocation-custody-root,
+    # and run_governed_vertical's own signature has no parameters to receive
+    # them (issue #1462 tracks adding this capability) -- so emitting them
+    # on that tail would not silently misbehave, it would build argv the
+    # runner's argparse rejects outright. Refused here, before any argv
+    # exists, rather than after the certificate is minted and the runner
+    # subprocess is the one that discovers it.
+    resume_requires_relocation_expression = (
+        resume is not None and resume.relocation_custody_root is not None
+    )
+    if specialist is None and resume_requires_relocation_expression:
+        raise ValueError(
+            "governed-vertical route cannot express a relocated resume "
+            "checkpoint: run_governed_vertical has no relocation parameters "
+            "and the governed-vertical subparser declares neither "
+            "--c-relocated-under-disk-budget-runner nor "
+            "--relocation-custody-root (issue #1462 tracks adding this "
+            "capability). Route this launch through the specialist path, or "
+            "resume from a B: custody root, until then."
+        )
 
     custody_root = pathlib.Path(requested_scope["custody_root"])
     runner_receipt = pathlib.Path(run_spec["runner_receipt"])
@@ -1453,6 +1569,9 @@ def validate_certified_request(
         resume_evidence_path=None if resume is None else resume.evidence_path,
         resume_optimizer_transition_registry_sha256=(
             None if resume is None else resume.optimizer_transition_registry_sha256
+        ),
+        resume_relocation_custody_root=(
+            None if resume is None else resume.relocation_custody_root
         ),
         specialist_data_manifest=None if specialist is None else specialist.data_manifest,
         specialist_capability=None if specialist is None else specialist.capability,
@@ -1553,6 +1672,24 @@ def build_runner_argv(
             "--model-chat-restore-not-before",
             launch.specialist_model_chat_restore_not_before,
         ]
+        # Issue #1452 / #1462: validate_certified_request has already proven
+        # (fail-closed, before this argv exists) that a resume_checkpoint off
+        # B: carries a certificate-declared relocation_custody_root -- and,
+        # since the #1452/#1454 compose, that the governed-vertical route
+        # (the only OTHER route a launch could have taken) is refused
+        # outright whenever this value is set, because it cannot express
+        # relocation (issue #1462). So the specialist tail is the only argv
+        # this process ever builds when a resume is relocated. The value
+        # emitted here IS the certificate value -- never derived from
+        # launch.resume_checkpoint or anything else local -- so a specialist
+        # launch resuming from B: stays byte-identical to one with no
+        # relocation involved.
+        if launch.resume_relocation_custody_root is not None:
+            argv += [
+                "--c-relocated-under-disk-budget-runner",
+                "--relocation-custody-root",
+                str(launch.resume_relocation_custody_root),
+            ]
         return argv
 
     argv += [
@@ -1581,6 +1718,13 @@ def build_runner_argv(
                 "--resume-optimizer-transition-registry-sha256",
                 launch.resume_optimizer_transition_registry_sha256,
             ]
+    # Issue #1452 / #1462: this tail can never carry the two relocation flags
+    # -- validate_certified_request refuses fail-closed, before this function
+    # is ever reached, whenever a governed-vertical launch's resume is
+    # relocated (run_governed_vertical has neither the CLI flags nor the
+    # Python parameters to receive them). Structurally absent here, not just
+    # conditionally false, so a future edit to this tail cannot silently
+    # re-ship the argparse crash #1452 exists to prevent.
     return argv
 
 
