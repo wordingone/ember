@@ -61,6 +61,7 @@ import json
 import os
 import re
 import shutil
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -218,8 +219,17 @@ def _load_state(state_path: Path) -> Optional[dict]:
 # Disk margin
 # ---------------------------------------------------------------------------
 def _check_disk_margin(
-    target_dir: Path, budget_bytes: int, margin_bytes: int, disk_usage_fn: Callable[[str], object]
+    target_dir: Path,
+    required_bytes: int,
+    margin_bytes: int,
+    disk_usage_fn: Callable[[str], object],
+    context: str = "budget_bytes",
 ) -> None:
+    """Checked once up front against the whole declared budget (context=
+    "budget_bytes"), and again before every individual chunk write
+    (context="next_chunk_bytes") -- a volume that fills up partway through a
+    long transfer must surface as this clean DiskMarginError, not a raw OSError
+    out of write()/fsync() several chunks later."""
     probe = target_dir
     while not probe.exists():
         parent = probe.parent
@@ -227,11 +237,11 @@ def _check_disk_margin(
             break
         probe = parent
     usage = disk_usage_fn(str(probe))
-    required = budget_bytes + margin_bytes
+    required = required_bytes + margin_bytes
     if usage.free < required:
         raise DiskMarginError(
             f"free space {usage.free} bytes on {probe} is below required {required} "
-            f"(budget_bytes {budget_bytes} + disk_margin_bytes {margin_bytes})"
+            f"({context} {required_bytes} + disk_margin_bytes {margin_bytes})"
         )
 
 
@@ -281,7 +291,20 @@ def _fetch_one_chunk(
         req_headers.update(headers)
     request = urllib.request.Request(url, headers=req_headers)
     urlopen = opener or urllib.request.urlopen
-    with urlopen(request, timeout=timeout) as resp:
+    try:
+        response_cm = urlopen(request, timeout=timeout)
+    except urllib.error.HTTPError as exc:
+        # urlopen() raises HTTPError (rather than returning a normal response)
+        # for any non-2xx/3xx status by default -- a 404/416/500/etc. answer to
+        # a Range request never reaches the status check below unless it is
+        # caught here first and turned into the same ChunkFetchError that
+        # branch produces. (200 is never raised as an HTTPError -- it is
+        # never an error status -- so RangeNotSupportedError's "200 instead of
+        # 206" case is unaffected and still handled by the branch below.)
+        raise ChunkFetchError(
+            f"unexpected HTTP status {exc.code} for Range bytes={start}-{end}"
+        ) from exc
+    with response_cm as resp:
         status = getattr(resp, "status", None)
         if status is None:
             status = resp.getcode()
@@ -301,6 +324,35 @@ def _fetch_one_chunk(
                 f"requested Range start {start} but server responded with start "
                 f"{resp_start} (Content-Range: {get_header('Content-Range')!r}) -- "
                 f"Range is not honoured precisely; refusing"
+            )
+        # resp_end is server-controlled and must never be trusted past what this
+        # request actually asked for (or past what the server's own claimed total
+        # allows) BEFORE it drives how many body bytes get read. A server -- hostile
+        # or merely broken -- that answers a small requested range with a much larger
+        # Content-Range must be refused here, before a single byte of an oversized
+        # body is read into memory or written to the .partial file (mirrors
+        # receipt.py's download_url(): the ceiling is checked before the write, so
+        # overshoot is bounded to one block -- here, one chunk).
+        if resp_end < resp_start:
+            raise RangeNotSupportedError(
+                f"server's Content-Range end {resp_end} is before its own start "
+                f"{resp_start} (Content-Range: {get_header('Content-Range')!r}) -- "
+                f"malformed range; refusing before reading any body bytes"
+            )
+        if resp_end > end:
+            raise RangeNotSupportedError(
+                f"server's Content-Range end {resp_end} exceeds the requested end "
+                f"{end} (Content-Range: {get_header('Content-Range')!r}) -- a chunk is "
+                f"never trusted past what was actually requested, regardless of what "
+                f"the server claims to be sending; refusing before reading a single "
+                f"byte of the oversized body"
+            )
+        if resp_end >= resp_total:
+            raise RangeNotSupportedError(
+                f"server's Content-Range end {resp_end} is not less than its own "
+                f"reported total {resp_total} (Content-Range: "
+                f"{get_header('Content-Range')!r}) -- internally inconsistent; "
+                f"refusing before reading any body bytes"
             )
         expected_len = resp_end - resp_start + 1
         data = _read_exact(resp, expected_len)
@@ -461,6 +513,16 @@ def fetch_chunked(
                         f"{resp_last_modified!r} -- remote content changed underneath this transfer"
                     )
 
+            # Re-check disk margin before every chunk write, not just once up front --
+            # a multi-hour bulk pull can outlast the volume's free space, and this
+            # must surface as a clean DiskMarginError (leaving the .partial + state
+            # exactly at the last good chunk, resumable once space frees up) rather
+            # than a raw OSError out of write()/fsync() partway through a chunk.
+            _check_disk_margin(
+                dest_file.parent, len(data), disk_margin_bytes,
+                disk_usage_fn or shutil.disk_usage, context="next_chunk_bytes",
+            )
+
             if pf is None:
                 pf = partial_path.open("wb")
 
@@ -500,6 +562,13 @@ def fetch_chunked(
 
     final_size = partial_path.stat().st_size
     if total_bytes is not None and final_size != total_bytes:
+        # Terminal failure at the very end of a transfer this code believed was
+        # complete -- abandon it (delete both sidecars) exactly like the whole-file
+        # digest mismatch below, rather than leave a wrongly-sized .partial (and the
+        # disk it occupies) sitting around; a fresh fetch_chunked() call starts clean.
+        partial_path.unlink()
+        if state_path.exists():
+            state_path.unlink()
         raise PartialFileSizeMismatchError(f"assembled file is {final_size} bytes, expected {total_bytes}")
 
     whole_digest = rcpt.sha256_file(partial_path)

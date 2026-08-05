@@ -205,25 +205,47 @@ matching sidecar is also refused (`ResumeStateMismatchError`) rather than
 guessed at.
 
 **Fail-closed on every ambiguity**, each its own machine-readable
-`BlockedError` subclass (all defined in `chunked_download.py`):
-`RangeNotSupportedError`, `ChunkFetchError` (unexpected HTTP status),
-`BudgetExceededError`, `DiskMarginError`, `RemoteIdentityChangedError`
-(ETag/Last-Modified/total-size changed mid-transfer), `ChunkLengthMismatchError`
-(a chunk delivered fewer bytes than its own `Content-Range` promised -- this
-one condition covers a truncated final chunk and any mid-file truncation
-uniformly, since the check is "bytes received vs. bytes `Content-Range`
-promised for *this* response", not a last-chunk special case),
-`ResumeStateMismatchError`, `PartialFileSizeMismatchError`,
-`ChunkDigestMismatchError`, `WholeFileDigestMismatchError`. None of these
-ever produce a partial success: every refusal either writes zero bytes (the
-budget/disk-margin/Range-unsupported checks all happen before any chunk
-bytes are written to disk) or leaves the `.partial`+sidecar exactly at the
-last verified-good chunk boundary for a later resume.
+`BlockedError` subclass (ten in total, all defined in `chunked_download.py`):
+`RangeNotSupportedError`, `ChunkFetchError` (unexpected HTTP status --
+including a real 4xx/5xx, which `urllib.request.urlopen` raises as an
+`HTTPError` rather than returning as a normal response; that is caught and
+routed through the same status check, not left to leak out as a raw
+`urllib.error.HTTPError`), `BudgetExceededError`, `DiskMarginError`,
+`RemoteIdentityChangedError` (ETag/Last-Modified/total-size changed
+mid-transfer), `ChunkLengthMismatchError` (a chunk delivered fewer bytes than
+its own `Content-Range` promised -- this one condition covers a truncated
+final chunk and any mid-file truncation uniformly, since the check is "bytes
+received vs. bytes `Content-Range` promised for *this* response", not a
+last-chunk special case), `ResumeStateMismatchError`,
+`PartialFileSizeMismatchError`, `ChunkDigestMismatchError`,
+`WholeFileDigestMismatchError`. None of these ever produce a partial
+success: every refusal either writes zero bytes (the budget/disk-margin/
+Range-unsupported checks all happen before any chunk bytes are written to
+disk) or leaves the `.partial`+sidecar exactly at the last verified-good
+chunk boundary for a later resume.
 
-**Disk safety.** Before any network call, `shutil.disk_usage()` on the
-destination volume is checked against `--budget-bytes` +
-`--disk-margin-bytes` (default 1 GiB margin); insufficient free space is
-`DiskMarginError`.
+**The server-supplied `Content-Range` end is never trusted past what was
+actually asked for.** `resp_end` is server-controlled; before it is allowed
+to drive how many body bytes get read, `_fetch_one_chunk` checks
+`resp_start <= resp_end <= min(requested_end, resp_total - 1)`. A server --
+hostile or merely broken -- that answers a small requested range with a much
+larger `Content-Range` is refused (`RangeNotSupportedError`) *before a
+single byte of the oversized body is read*, mirroring `receipt.py`'s
+`download_url()`: the ceiling is checked before the write, so overshoot is
+bounded to one block (here, one chunk, never read at all once out of
+bounds). This closed a real gap found in review (`ContentRangeBoundExploitTests`
+in `tests/test_chunked_download.py` is the permanent regression coverage):
+previously the oversized body was read and written in full, and only the
+(real, but too-late) whole-file size check at the end of the transfer
+caught it.
+
+**Disk safety.** `shutil.disk_usage()` on the destination volume is checked
+against `--budget-bytes` + `--disk-margin-bytes` (default 1 GiB margin)
+before any network call, *and again before every individual chunk write* --
+a multi-hour bulk pull can outlast the volume's free space partway through,
+and that must surface as a clean `DiskMarginError` (leaving the `.partial`+
+state resumable at exactly the last good chunk) rather than a raw `OSError`
+out of `write()`/`fsync()` several chunks in.
 
 **License + evidence**, exactly like `http_fetch.py`: `--license`/
 `--license-evidence` must be supplied together or not at all (absent =

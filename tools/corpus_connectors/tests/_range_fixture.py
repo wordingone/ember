@@ -25,10 +25,20 @@ class RangeHandler(http.server.BaseHTTPRequestHandler):
     etag: str = '"fixture-etag-1"'
     last_modified: str = "Mon, 01 Jan 2026 00:00:00 GMT"
     ignore_range: bool = False
+    ignore_range_after: Optional[int] = None
     truncate_last_n_bytes: int = 0
     flip_etag_after: Optional[int] = None
     flip_payload_after: Optional[int] = None
     flipped_payload: bytes = b""
+    force_status: Optional[int] = None
+    hostile_content_range: Optional[Tuple[int, int, int]] = None  # (start, end, total) sent
+    # verbatim regardless of what was requested, with a synthetic body of that
+    # claimed length -- for reproducing a server (hostile or merely broken) that
+    # answers a small requested range with a much larger Content-Range.
+    hostile_content_range_after: int = 0  # requests 1..N behave normally (honouring
+    # the real payload/Range semantics); requests N+1 on send hostile_content_range
+    # verbatim. Lets a hostile response be isolated to a chunk whose requested
+    # start is nonzero, without also tripping the "wrong start" check.
     request_log: List[Optional[str]] = []
 
     protocol_version = "HTTP/1.1"
@@ -42,6 +52,28 @@ class RangeHandler(http.server.BaseHTTPRequestHandler):
         cls.request_log.append(range_header)
         n = len(cls.request_log)
 
+        if cls.force_status is not None:
+            body = b"forced-status-body"
+            self.send_response(cls.force_status)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            self.wfile.flush()
+            return
+
+        if cls.hostile_content_range is not None and n > cls.hostile_content_range_after:
+            h_start, h_end, h_total = cls.hostile_content_range
+            h_body = bytes((i * 13 + 5) % 256 for i in range(h_end - h_start + 1))
+            self.send_response(206)
+            self.send_header("Content-Range", f"bytes {h_start}-{h_end}/{h_total}")
+            self.send_header("Content-Length", str(len(h_body)))
+            self.send_header("ETag", cls.etag)
+            self.send_header("Last-Modified", cls.last_modified)
+            self.end_headers()
+            self.wfile.write(h_body)
+            self.wfile.flush()
+            return
+
         etag = cls.etag
         if cls.flip_etag_after is not None and n > cls.flip_etag_after:
             etag = cls.etag + "-flipped"
@@ -50,7 +82,11 @@ class RangeHandler(http.server.BaseHTTPRequestHandler):
         if cls.flip_payload_after is not None and n > cls.flip_payload_after:
             body = cls.flipped_payload
 
-        if cls.ignore_range or not range_header:
+        ignore_range_now = cls.ignore_range or (
+            cls.ignore_range_after is not None and n > cls.ignore_range_after
+        )
+
+        if ignore_range_now or not range_header:
             self.send_response(200)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("ETag", etag)
