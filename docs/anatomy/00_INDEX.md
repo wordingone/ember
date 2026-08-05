@@ -38,7 +38,7 @@ into prose that outruns the receipts.
 
 ## Authoring discipline (why this doc set exists in this shape)
 
-`docs/probe-authoring-contract.md` discloses that `test_c_anat.py`'s presence
+`docs/charter/probe-authoring-contract.md` discloses that `test_c_anat.py`'s presence
 check is filename-glob only — a zero-byte stub with the right name would
 satisfy it. This set is written to NOT exploit that: every doc below is
 substantive, cites real paths, and where a subsystem genuinely doesn't exist
@@ -46,7 +46,7 @@ substantive, cites real paths, and where a subsystem genuinely doesn't exist
 
 ## Consistency receipt
 
-`receipts/ember-anatomy/c-anat-anatomy-set-completion-20260801T230000Z.json`
+`receipts/ember-anatomy/c-anat-anatomy-set-completion-20260801T224944Z.json`
 (or its latest successor under `receipts/ember-anatomy/`) is the receipt that
 attests this set complete and consistent with the receipts, with H4
 (verifier-free-judgment risk) addressed — see 15_TECHNICAL_REPORT.md for what

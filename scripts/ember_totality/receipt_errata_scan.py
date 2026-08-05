@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""receipt_errata_scan.py -- mechanical generator for docs/receipt-errata.jsonl
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+"""receipt_errata_scan.py -- mechanical generator for docs/ledgers/receipt-errata.jsonl
 (gh issue #612, FROZEN SPEC).
 
 C-INV is RED after the #608 hardening: post-genesis receipts that lack a
@@ -26,7 +29,7 @@ scan that surfaced these violations ran as part of that hardening pass) --
 every row shares the same discovered_ts, which by construction predates or
 equals the cutoff that governs coverage eligibility.
 
-Run: python receipt_errata_scan.py [--out docs/receipt-errata.jsonl]
+Run: python receipt_errata_scan.py [--out docs/ledgers/receipt-errata.jsonl]
 Deterministic: sorted receipts/ walk, fixed field order, no wall-clock read
 anywhere in classification (discovered_ts is the frozen hardening constant,
 not datetime.now()).
@@ -121,7 +124,7 @@ def build_rows(violations, cutoff_epoch):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--out", default=str(ROOT / "docs" / "receipt-errata.jsonl"))
+    ap.add_argument("--out", default=str(ROOT / "docs" / "ledgers" / "receipt-errata.jsonl"))
     args = ap.parse_args()
 
     cutoff_epoch = c_inv._parse_receipt_ts(HARDENING_CUTOFF_TS)

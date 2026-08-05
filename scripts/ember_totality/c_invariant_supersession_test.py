@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """c_invariant_supersession_test.py -- LAUNDERING GUARD regression for
 test_c_invariant.py's supersession mechanism (gh issue #625, frozen spec
 point 2, acceptance criterion: "A regression test proving the laundering
@@ -104,7 +107,7 @@ def test_valid_same_class_stamped_is_covered(tmp_root: Path) -> None:
 
 
 def test_load_supersessions_skips_malformed_rows(tmp_root: Path) -> None:
-    ss_file = tmp_root / "docs" / "receipt-supersessions.jsonl"
+    ss_file = tmp_root / "docs" / "ledgers" / "receipt-supersessions.jsonl"
     ss_file.parent.mkdir(parents=True, exist_ok=True)
     ss_file.write_text(
         "not json at all\n"

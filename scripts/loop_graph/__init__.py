@@ -5,7 +5,7 @@
 
 Engine-agnostic: this package stores graphs and receipts as plain JSON /
 JSONL and never assumes a specific driving engine (Claude Code, codex, or
-a future Ember-native mind). See docs/loop-graph/ENGINE-CONTRACT.md.
+a future Ember-native mind). See docs/charter/loop-graph-engine-contract.md.
 """
 
 from __future__ import annotations

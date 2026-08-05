@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Selftest for the fail-closed Ember MVP readiness gate."""
 from __future__ import annotations
 
@@ -227,8 +230,8 @@ def _real_proof_fixture(root: Path) -> Path:
             "cycle_id": cycle_id,
             "goal_context_used": True,
             "goal_doc_hashes": [
-                {"path": "docs/20260617-maximally-viable-product.md", "sha256": "sha256:" + "c" * 64},
-                {"path": "docs/ember-mvp-v0.md", "sha256": "sha256:" + "d" * 64},
+                {"path": "docs/archive/pre-restart/20260617-maximally-viable-product.md", "sha256": "sha256:" + "c" * 64},
+                {"path": "docs/archive/pre-restart/ember-mvp-v0.md", "sha256": "sha256:" + "d" * 64},
             ],
             "dispatch_critical_state": {"next_action": "repeat_closed_cycle"},
             "preserves_dispatch_state": True,

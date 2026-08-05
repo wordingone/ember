@@ -38,9 +38,9 @@ async function makeFixtureRoot(receiptSummary: Record<string, unknown>): Promise
   const root = join(tmpdir(), `ember-world-state-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const boardDir = join(root, "scripts", "ember_totality", "receipts-totality");
   await mkdir(boardDir, { recursive: true });
-  await mkdir(join(root, "docs"), { recursive: true });
+  await mkdir(join(root, "docs", "ledgers"), { recursive: true });
   await writeFile(join(root, "GOAL.md"), FIXTURE_GOAL);
-  await writeFile(join(root, "docs", "ember-debt-ledger.md"), FIXTURE_LEDGER);
+  await writeFile(join(root, "docs", "ledgers", "ember-debt-ledger.md"), FIXTURE_LEDGER);
   const receipt = {
     ts: "20260703T120000Z",
     rows: [

@@ -1217,7 +1217,7 @@ def check_lower_precedence_authority(root: Path, errors: list[dict[str, Any]]) -
 
 
 def check_mechanism_registry(root: Path, errors: list[dict[str, Any]]) -> None:
-    path = root / "docs" / "technique-registry.jsonl"
+    path = root / "docs" / "ledgers" / "technique-registry.jsonl"
     erasure_statuses = {"KILL", "PARK", "EXCLUDED", "RETIRED"}
     registry_lines = read_text(path).splitlines() if path.is_file() else []
     for line_number, raw in enumerate(registry_lines, 1):

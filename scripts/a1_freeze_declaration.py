@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """a1_freeze_declaration.py -- ember issue #593 deliverable 1: the A1
 eval-freeze DECLARATION receipt.
 
@@ -13,7 +16,7 @@ Extends the freeze doc's receipt schema (docs/spec/eval-suite-freeze-v1.md
   - freeze_ts: UTC at declaration. Every governed launch_ts must exceed it.
   - suite (a): the W2 sec.4 decontaminated held-out batch, pinned by sha.
   - suite (b): eval-suite-v1's SEVEN pinned datasets (GPQA-diamond EXCLUDED
-    per docs/deviations.md DEV-004, battery-14 section).
+    per docs/ledgers/deviations.md DEV-004, battery-14 section).
 
 Usage:
   python scripts/a1_freeze_declaration.py \\
@@ -121,7 +124,7 @@ def main() -> int:
             "datasets": suite_b_datasets,
             "gpqa_diamond_exclusion": {
                 "status": "EXCLUDED from v1",
-                "mechanism": "docs/deviations.md DEV-004 (battery-14 section) -- "
+                "mechanism": "docs/ledgers/deviations.md DEV-004 (battery-14 section) -- "
                              "the freeze doc's own amendment mechanism",
                 "rule": "a dataset pinned later joins a future suite VERSION; it "
                         "is never appended to a frozen one",

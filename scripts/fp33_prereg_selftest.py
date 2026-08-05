@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp-33 prereg selftest: the frozen surpass protocol carries every binding element.
 
 Fail-closed: a missing element = exit 1 with the element named. Guards the
@@ -9,7 +12,7 @@ import re
 import sys
 from pathlib import Path
 
-PREREG = Path(__file__).resolve().parent.parent / "docs" / "fp33-surpass-prereg-v1.md"
+PREREG = Path(__file__).resolve().parent.parent / "docs" / "archive" / "pre-restart" / "fp33-surpass-prereg-v1.md"
 
 # binding element -> regex that must appear in the prereg body
 REQUIRED = {

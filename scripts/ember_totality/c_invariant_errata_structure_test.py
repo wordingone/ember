@@ -5,7 +5,7 @@
 """c_invariant_errata_structure_test.py -- regression for
 test_c_invariant.py's check_errata_structure() repoint (gh issue #625, frozen
 spec point 3: repoint from the never-created INVARIANT-ERRATA.md to the REAL
-docs/receipt-errata.jsonl, validating append-only + row schema + no
+docs/ledgers/receipt-errata.jsonl, validating append-only + row schema + no
 post-cutoff row).
 
 The append-only git-history check itself is untouched logic (already
@@ -49,7 +49,7 @@ VALID_ROW = {
 def _with_errata_file(tmp_root: Path, content: str | None):
     """Context-manager-free swap of m.ERRATA_FILE for one call; caller must
     restore. Returns the swapped path."""
-    ef = tmp_root / "docs" / "receipt-errata.jsonl"
+    ef = tmp_root / "docs" / "ledgers" / "receipt-errata.jsonl"
     ef.parent.mkdir(parents=True, exist_ok=True)
     if content is not None:
         ef.write_text(content, encoding="utf-8")
@@ -58,7 +58,7 @@ def _with_errata_file(tmp_root: Path, content: str | None):
 
 def test_absent_file_is_honest_green() -> None:
     with tempfile.TemporaryDirectory() as td:
-        ef = Path(td) / "docs" / "receipt-errata.jsonl"  # never created
+        ef = Path(td) / "docs" / "ledgers" / "receipt-errata.jsonl"  # never created
         prior = m.ERRATA_FILE
         m.ERRATA_FILE = ef
         try:
@@ -116,11 +116,11 @@ def test_post_cutoff_discovered_ts_is_red() -> None:
 
 def test_real_repo_errata_file_is_clean() -> None:
     """Sanity: the probe's default ERRATA_FILE (the real, live
-    docs/receipt-errata.jsonl, 101 append-only historical rows) passes structurally
+    docs/ledgers/receipt-errata.jsonl, 101 append-only historical rows) passes structurally
     -- proves the repoint didn't retroactively invalidate the existing annex."""
     ok, reason = m.check_errata_structure()
-    assert ok is True, f"the real, landed docs/receipt-errata.jsonl must pass structurally, got {reason!r}"
-    print(f"ok   real repo docs/receipt-errata.jsonl -> GREEN ({reason})")
+    assert ok is True, f"the real, landed docs/ledgers/receipt-errata.jsonl must pass structurally, got {reason!r}"
+    print(f"ok   real repo docs/ledgers/receipt-errata.jsonl -> GREEN ({reason})")
 
 
 def test_real_repo_annex_covers_complete_pre_cutoff_scan() -> None:

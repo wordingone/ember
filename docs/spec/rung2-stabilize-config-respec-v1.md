@@ -1,7 +1,7 @@
 # Rung-2 stabilize: config re-spec v1 (frozen)
 
 Refs: #480 (scope), #452, #449, #466, #513/PR#515 (buffer-keying fix + P-2/P-3 pre-registrations),
-#516 (serving topology), docs/spec/rung2-grow-spec-v1.md. Frozen per docs/deviations.md discipline:
+#516 (serving topology), docs/spec/rung2-grow-spec-v1.md. Frozen per docs/ledgers/deviations.md discipline:
 deviations from this spec require a deviations.md entry BEFORE the run.
 
 ## 1. The wall (measured inputs, not folklore)

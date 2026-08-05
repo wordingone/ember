@@ -632,7 +632,7 @@ CONVENTION_PATH_MAP = {
 #   this repo's HEAD-reachable history. The generating code was run ambient/ad-hoc
 #   and never committed to this tree (confirmed for fp32-l6-compile-ab and
 #   fp35-fused-muon-ab: both receipts landed in commits a63974a/9236963 that add
-#   ONLY receipts + docs/compute-ceiling-program-v1.md, no .py file).
+#   ONLY receipts + docs/archive/pre-restart/compute-ceiling-program-v1.md, no .py file).
 #
 # Evidence (c) MANUALLY-AUTHORED, NO GENERATOR BY DESIGN: the receipt's own
 #   schema/content proves it is a hand-typed review, audit, or adjudication
@@ -748,7 +748,7 @@ GENERATOR_ABSENT_HISTORICAL_BASENAMES = [
      "evidence (b) git-archaeology confirmed gone: added by commit 9236963 "
      "('ceiling verdict HARDENED...') alongside only "
      "receipts/fp35-fused-muon-kernel-ab-20260612T215202Z.json and "
-     "docs/compute-ceiling-program-v1.md -- no .py file in that commit; "
+     "docs/archive/pre-restart/compute-ceiling-program-v1.md -- no .py file in that commit; "
      "`git log HEAD -S \"fp32-l6-compile-ab-\"` (source-file-scoped) and "
      "`--diff-filter=D` both find no script anywhere in HEAD-reachable history."),
     (re.compile(r"^fp35-fused-muon-ab-.*\.json$"), "git_archaeology_gone",
@@ -756,7 +756,7 @@ GENERATOR_ABSENT_HISTORICAL_BASENAMES = [
      "('ceiling program: lever round-1 receipts gated...') alongside only "
      "receipts/fp32-step-econ-20260612T213856Z.json, "
      "receipts/fp35c-weight-cache-ab-20260612T214509Z.json and "
-     "docs/compute-ceiling-program-v1.md -- no .py file in that commit; distinct from the "
+     "docs/archive/pre-restart/compute-ceiling-program-v1.md -- no .py file in that commit; distinct from the "
      "resolvable fp35-fused-muon-KERNEL-ab-*.json (scripts/fp35_fused_muon_kernel_ab.py)."),
     (re.compile(r"^assembly-sha-as-manifest-adjudication-.*\.json$"), "manually_authored",
      "evidence (c) manually-authored: schema=='adjudication/v1', kind=='field_semantics' -- "

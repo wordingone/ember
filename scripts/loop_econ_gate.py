@@ -1,6 +1,9 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """loop_econ_gate.py — DT-6 loop-economics gate checker.
 
-Per docs/dt6-loop-economics-gate-amendment.md:
+Per docs/archive/pre-restart/dt6-loop-economics-gate-amendment.md:
 
 A PASS verdict is valid only if it reports verified signal-per-GPU-hour
 exceeding the equal-wall-clock band. Three ACs:

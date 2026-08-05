@@ -57,7 +57,7 @@ GUARD_SUPPORT_FILES = [
     "docs/registry-dispatch-gate-spec-v0.md",
     "docs/spec/autonomy-relinquishment-ladder-v1.md",
     "docs/spec/conditions-v1.md",
-    "docs/technique-registry.jsonl",
+    "docs/ledgers/technique-registry.jsonl",
     "configs/nck-baseline/nck-invariants.json",
     "configs/nck-c10.json",
     "configs/nck-invariants.json",

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_c_mile.py -- STATUS PROBE for Ember goal condition C-MILE.
 
 Registry text: docs/spec/conditions-v1.md SS4.2 C-MILE (Class-2 item 2, docs/audit/
@@ -35,7 +38,7 @@ Fail-closed: milestone_leg.py or enforcement_leg.py missing/unimportable = RED (
 itself is gone -- that IS the regression), never UNEVALUABLE. UNEVALUABLE is reserved for
 environment failure (no usable ROOT).
 
-[ISSUE #749 cure, docs/probe-authoring-contract.md] Execution-binding hardening. The
+[ISSUE #749 cure, docs/charter/probe-authoring-contract.md] Execution-binding hardening. The
 pre-cure checker trusted `run_milestone_leg()`'s IN-PROCESS return dict alone -- if
 milestone_leg.py were ever broken/tampered to fabricate a `{"executed": True,
 "verdict": "PASS", ...}` dict without actually launching the checker subprocess, this
