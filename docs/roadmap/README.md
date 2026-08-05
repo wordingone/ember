@@ -21,20 +21,24 @@ for a milestone's completion certificate.
 
 ## Milestones
 
-| ID | Public title | Depends on | Completion in plain language |
-|---|---|---|---|
-| [EMBER-00](milestones/EMBER-00.md) | Authority and totality lock | — | One non-contradictory public definition preserves Ember's entire intended destination. |
-| [EMBER-01](milestones/EMBER-01.md) | Custody, identity, and experiment spine | EMBER-00 | Every relevant artifact, issue, experiment, benchmark, and claim resolves through one verifiable identity system. |
-| [EMBER-02](milestones/EMBER-02.md) | Three-billion-parameter foundation birth | EMBER-01 | Ember first becomes a sufficiently trained, clean-genesis, native multimodal foundation model with reasoning and tool use. |
-| [EMBER-03](milestones/EMBER-03.md) | Body, tools, and operator relationship | EMBER-02 | The owned model operates through Ember's real local body, tools, permissions, and configurable operator relationship. |
-| [EMBER-04](milestones/EMBER-04.md) | Grounded memory, world model, and dreaming | EMBER-03 | Memory, learned environment prediction, replay, consolidation, and stateful reasoning produce verified model behavior. |
-| [EMBER-05](milestones/EMBER-05.md) | Three-billion-parameter Verified Expert Accretion rung | EMBER-04 | Verified experience causes useful, persistent expert growth under matched causal controls. |
-| [EMBER-06](milestones/EMBER-06.md) | Autonomous AI-research bootstrap | EMBER-05 | Ember repeatedly conducts bounded research cycles and transfers routine research burden from its founders. |
-| [EMBER-07](milestones/EMBER-07.md) | Seven-billion-parameter hard rung | EMBER-06 | The owned system reaches and sufficiently trains the 7B rung without losing native capabilities or lineage integrity. |
-| [EMBER-08](milestones/EMBER-08.md) | Fifteen-billion-parameter hard rung | EMBER-07 | The owned system reaches and sufficiently trains the 15B rung with verified scaling and causal evidence. |
-| [EMBER-09](milestones/EMBER-09.md) | Owned model above twenty-seven billion parameters | EMBER-08 | Ember reaches the 30–35B destination on one 24 GiB GPU and competes honestly with frozen 27B/31B references. |
-| [EMBER-10](milestones/EMBER-10.md) | General sovereign local AI laboratory | EMBER-09 | Ember's local laboratory creates a materially different clean-genesis intelligence of at least 3B parameters. |
-| [EMBER-11](milestones/EMBER-11.md) | Independent local ownership and scientific release | EMBER-10 | Another person can independently own, operate, reproduce, study, and continue the complete Ember system. |
+The [certificates/](certificates/) directory holds the public completion
+record of each certified milestone. A milestone without a record there is not
+certified, regardless of issue counts, progress bars, or closed children.
+
+| ID | Public title | Depends on | Completion in plain language | Public certificate |
+|---|---|---|---|---|
+| [EMBER-00](milestones/EMBER-00.md) | Authority and totality lock | — | One non-contradictory public definition preserves Ember's entire intended destination. | — |
+| [EMBER-01](milestones/EMBER-01.md) | Custody, identity, and experiment spine | EMBER-00 | Every relevant artifact, issue, experiment, benchmark, and claim resolves through one verifiable identity system. | [**CERTIFIED** 2026-08-05](certificates/EMBER-01.md) |
+| [EMBER-02](milestones/EMBER-02.md) | Three-billion-parameter foundation birth | EMBER-01 | Ember first becomes a sufficiently trained, clean-genesis, native multimodal foundation model with reasoning and tool use. | — |
+| [EMBER-03](milestones/EMBER-03.md) | Body, tools, and operator relationship | EMBER-02 | The owned model operates through Ember's real local body, tools, permissions, and configurable operator relationship. | — |
+| [EMBER-04](milestones/EMBER-04.md) | Grounded memory, world model, and dreaming | EMBER-03 | Memory, learned environment prediction, replay, consolidation, and stateful reasoning produce verified model behavior. | — |
+| [EMBER-05](milestones/EMBER-05.md) | Three-billion-parameter Verified Expert Accretion rung | EMBER-04 | Verified experience causes useful, persistent expert growth under matched causal controls. | — |
+| [EMBER-06](milestones/EMBER-06.md) | Autonomous AI-research bootstrap | EMBER-05 | Ember repeatedly conducts bounded research cycles and transfers routine research burden from its founders. | — |
+| [EMBER-07](milestones/EMBER-07.md) | Seven-billion-parameter hard rung | EMBER-06 | The owned system reaches and sufficiently trains the 7B rung without losing native capabilities or lineage integrity. | — |
+| [EMBER-08](milestones/EMBER-08.md) | Fifteen-billion-parameter hard rung | EMBER-07 | The owned system reaches and sufficiently trains the 15B rung with verified scaling and causal evidence. | — |
+| [EMBER-09](milestones/EMBER-09.md) | Owned model above twenty-seven billion parameters | EMBER-08 | Ember reaches the 30–35B destination on one 24 GiB GPU and competes honestly with frozen 27B/31B references. | — |
+| [EMBER-10](milestones/EMBER-10.md) | General sovereign local AI laboratory | EMBER-09 | Ember's local laboratory creates a materially different clean-genesis intelligence of at least 3B parameters. | — |
+| [EMBER-11](milestones/EMBER-11.md) | Independent local ownership and scientific release | EMBER-10 | Another person can independently own, operate, reproduce, study, and continue the complete Ember system. | — |
 
 ## Reading the contracts
 
