@@ -1,0 +1,32 @@
+{
+  "ticket": "FINEWEB-EDU-EXCLUSION-PREFLIGHT",
+  "ts": "20260805T061442Z",
+  "shard_receipt": "token-shards-v0-20260611T170047Z.json",
+  "assembly_receipt": "eng36-assembly-20260611T052337Z.json",
+  "excluded_sources": [
+    "fineweb_edu"
+  ],
+  "excluded_token_ranges": [
+    [
+      4055121325,
+      5723508974
+    ]
+  ],
+  "loader_geometry": {
+    "seq": 1024,
+    "n_mtp": 2,
+    "block_len": 1027
+  },
+  "n_windows_unenforced": 6814324,
+  "n_windows_enforced": 5185038,
+  "n_windows_dropped": 1629286,
+  "zero_overlap_verified": true,
+  "clean_content_tokens": 5306794511,
+  "stream_content_tokens": 6973632300,
+  "no_gpu": true,
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  }
+}

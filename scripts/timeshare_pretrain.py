@@ -1,6 +1,7 @@
 # EMBER_ARTIFACT_CLASS=historical_only
-# goal_id: EMBER-00
-# next_executed_outcome: EMBER-01 clean 3B custody and identity spine
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """timeshare_pretrain.py — pretrain segment runner for the v0 owned-core (#123, eng-33).
 
 Implements §3 of research/june22-critical-path.md (timeshare rule):
@@ -1376,7 +1377,8 @@ class PackedShardLoader:
 
     def __init__(self, shard_dir: str, seq: int, n_mtp: int, *,
                  mmap_cache_dir: str | None = None,
-                 expected_manifest_sha256: str | None = None):
+                 expected_manifest_sha256: str | None = None,
+                 excluded_ranges: "list[tuple[int, int]] | None" = None):
         import numpy as np
         self.seq = seq
         self.n_mtp = n_mtp
@@ -1409,14 +1411,46 @@ class PackedShardLoader:
         if self.n_tokens < self.block_len:
             raise ValueError(
                 f"stream {self.n_tokens} tokens < block_len {self.block_len}")
-        self.n_windows = (self.n_tokens - self.block_len) // self.seq + 1
+        # #1436: source-exclusion window filter. excluded_ranges is a list of
+        # half-open [start, end) token-offset ranges (derived fail-closed by
+        # scripts/fineweb_exclusion.excluded_token_ranges against a validated
+        # TOKEN-SHARDS-V0 receipt -- never hardcoded here) that must NEVER
+        # appear in a yielded window. None/empty is the legacy identity path,
+        # byte-for-byte unchanged for every caller that doesn't opt in.
+        self.excluded_ranges = list(excluded_ranges) if excluded_ranges else []
+        self._window_starts: "list[int] | None" = None
+        if self.excluded_ranges:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            from fineweb_exclusion import (assert_windows_exclude_ranges,
+                                           usable_window_starts)
+            starts = usable_window_starts(self.n_tokens, self.seq,
+                                          self.block_len, self.excluded_ranges)
+            if not starts:
+                raise ValueError(
+                    "PackedShardLoader: excluded_ranges leaves zero usable "
+                    f"windows over {self.n_tokens} tokens -- refusing to "
+                    "start a loader with no clean data")
+            # byte-exact re-verification at construction time, never sampled:
+            # not one usable window may overlap an excluded range.
+            assert_windows_exclude_ranges(starts, self.block_len,
+                                          self.excluded_ranges)
+            self._window_starts = starts
+            self.n_windows = len(starts)
+        else:
+            self.n_windows = (self.n_tokens - self.block_len) // self.seq + 1
         self.shards = shards
 
     def window_np(self, i: int):
         """Window i as (x, y_primary, [y_mtp...]) numpy int64 arrays. i is
         taken mod n_windows so dry-runs cycle deterministically; the
-        round-trip selftest uses i in [0, n_windows)."""
-        start = (i % self.n_windows) * self.seq
+        round-trip selftest uses i in [0, n_windows). When excluded_ranges was
+        given at construction, i indexes into the pre-filtered usable-window
+        list (#1436) -- every start yielded here is already proven to not
+        overlap any excluded range."""
+        if self._window_starts is not None:
+            start = self._window_starts[i % self.n_windows]
+        else:
+            start = (i % self.n_windows) * self.seq
         w = self.stream[start:start + self.block_len].astype("int64")
         x = w[:self.seq]
         y0 = w[1:self.seq + 1]
