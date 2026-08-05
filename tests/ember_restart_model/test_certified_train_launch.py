@@ -1589,12 +1589,21 @@ class CompletionHeadAncestorTests(unittest.TestCase):
                         paths["run_spec"],
                     )
 
-    def test_training_verify_receipt_path_is_the_only_optional_run_spec_key(
-        self,
-    ) -> None:
+    def test_optional_run_spec_keys_are_a_closed_enumeration(self) -> None:
+        """Every optional key is enumerated here, so a new one cannot slip in
+        unvalidated: anything outside this set still hard-fails the schema."""
+
         module = load_module()
         self.assertEqual(
-            module.OPTIONAL_RUN_SPEC_KEYS, {"training_verify_receipt_path"}
+            module.OPTIONAL_RUN_SPEC_KEYS,
+            {
+                "training_verify_receipt_path",
+                "resume_checkpoint",
+                "resume_counter_receipt",
+                "resume_realization_registry",
+                "resume_optimizer_transition_registry",
+                "resume_optimizer_transition_registry_sha256",
+            },
         )
 
     def test_receipt_fixture_keys_match_the_rust_producer(self) -> None:
@@ -1654,6 +1663,426 @@ class CompletionHeadAncestorTests(unittest.TestCase):
             # Fail CLOSED: an unresolvable commit yields no ancestry evidence.
             with self.assertRaisesRegex(ValueError, "unprovable"):
                 module.read_commit_is_ancestor(repo, "d" * 40, second)
+
+
+ARCHITECTURE_REVISION = "ember-sparse-3b-v2"
+REGISTRY_SHA256 = "c" * 64
+
+
+def install_model_config(
+    repo: pathlib.Path, revision: str = ARCHITECTURE_REVISION
+) -> None:
+    write_json(
+        repo / "configs" / "ember-restart-3b.json",
+        {"architecture_revision": revision},
+    )
+
+
+def install_checkpoint(
+    checkpoint: pathlib.Path,
+    *,
+    revision: str | None = ARCHITECTURE_REVISION,
+    manifest: bool = True,
+) -> pathlib.Path:
+    checkpoint.mkdir(parents=True, exist_ok=True)
+    if manifest:
+        write_json(
+            checkpoint / "checkpoint-manifest.json",
+            {"architecture_revision": revision, "global_step": 100},
+        )
+    return checkpoint
+
+
+class ResumePlumbingTests(unittest.TestCase):
+    """Issue #1425: the certified path built a FIXED argv with no resume flags,
+    so a resumed rung could only be launched OFF the certified path. Resume is
+    expressed as optional run-spec keys, validated fail-closed before argv."""
+
+    def _bundle(
+        self,
+        directory: str,
+        *,
+        mutate_run_spec=None,
+        config_revision: str = ARCHITECTURE_REVISION,
+        checkpoint_revision: str | None = ARCHITECTURE_REVISION,
+        checkpoint_manifest: bool = True,
+    ) -> dict[str, pathlib.Path]:
+        paths = write_valid_bundle(pathlib.Path(directory))
+        install_model_config(paths["repo"], config_revision)
+        checkpoint = install_checkpoint(
+            paths["custody_root"] / "checkpoint-000100",
+            revision=checkpoint_revision,
+            manifest=checkpoint_manifest,
+        )
+        evidence = paths["custody_root"] / "counter-success.json"
+        write_json(evidence, {"ok": True})
+        paths["checkpoint"] = checkpoint
+        paths["evidence"] = evidence
+
+        run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+        run_spec["resume_checkpoint"] = str(checkpoint)
+        run_spec["resume_counter_receipt"] = str(evidence)
+        if mutate_run_spec is not None:
+            mutate_run_spec(run_spec)
+        write_json(paths["run_spec"], run_spec)
+        return paths
+
+    def _validate(self, module, paths: dict[str, pathlib.Path]):
+        with mock.patch.object(module, "read_current_master", return_value=SHA):
+            return module.validate_certified_request(
+                paths["repo"],
+                paths["certificate"],
+                paths["ledger"],
+                paths["run_spec"],
+            )
+
+    def _refused(self, paths: dict[str, pathlib.Path], pattern: str) -> None:
+        module = load_module()
+        with self.assertRaisesRegex(ValueError, pattern):
+            self._validate(module, paths)
+
+    def test_valid_resume_triple_is_accepted_and_reaches_the_runner_argv(
+        self,
+    ) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory)
+            launch = self._validate(module, paths)
+            self.assertEqual(launch.resume_checkpoint, paths["checkpoint"])
+            self.assertEqual(launch.resume_evidence_path, paths["evidence"])
+            self.assertEqual(
+                launch.resume_evidence_flag, "--resume-counter-receipt"
+            )
+            self.assertIsNone(
+                launch.resume_optimizer_transition_registry_sha256
+            )
+
+            argv = module.build_runner_argv(paths["repo"], launch)
+            # The flags ride AFTER --max-records, in the order the runner's
+            # argparse declares them.
+            self.assertEqual(
+                argv[argv.index("--max-records") :],
+                [
+                    "--max-records",
+                    "1",
+                    "--resume-checkpoint",
+                    str(paths["checkpoint"]),
+                    "--resume-counter-receipt",
+                    str(paths["evidence"]),
+                ],
+            )
+
+    def test_each_evidence_key_maps_to_its_runner_flag(self) -> None:
+        module = load_module()
+        for key, flag in (
+            ("resume_counter_receipt", "--resume-counter-receipt"),
+            ("resume_realization_registry", "--resume-realization-registry"),
+            (
+                "resume_optimizer_transition_registry",
+                "--resume-optimizer-transition-registry",
+            ),
+        ):
+            with self.subTest(evidence=key), tempfile.TemporaryDirectory() as directory:
+                paths = self._bundle(
+                    directory,
+                    mutate_run_spec=lambda spec, key=key: spec.update(
+                        {key: spec.pop("resume_counter_receipt")}
+                    ),
+                )
+                launch = self._validate(module, paths)
+                argv = module.build_runner_argv(paths["repo"], launch)
+                self.assertEqual(
+                    argv[argv.index(flag) + 1], str(paths["evidence"])
+                )
+
+    def test_optimizer_transition_registry_sha256_rides_the_argv(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.update(
+                    {
+                        "resume_optimizer_transition_registry": spec.pop(
+                            "resume_counter_receipt"
+                        ),
+                        "resume_optimizer_transition_registry_sha256": REGISTRY_SHA256,
+                    }
+                ),
+            )
+            launch = self._validate(module, paths)
+            argv = module.build_runner_argv(paths["repo"], launch)
+            self.assertEqual(
+                argv[-4:],
+                [
+                    "--resume-optimizer-transition-registry",
+                    str(paths["evidence"]),
+                    "--resume-optimizer-transition-registry-sha256",
+                    REGISTRY_SHA256,
+                ],
+            )
+
+    def test_run_spec_without_resume_keys_builds_the_pre_1425_argv(self) -> None:
+        """The clean-genesis shape must be byte-identical to what shipped
+        before resume existed -- resume adds no new code path to it."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            launch = self._validate(module, paths)
+            self.assertIsNone(launch.resume_checkpoint)
+            self.assertEqual(
+                module.build_runner_argv(paths["repo"], launch),
+                [
+                    sys.executable,
+                    str(
+                        paths["repo"]
+                        / "tools"
+                        / "ember-restart-3b"
+                        / "disk_budget_runner.py"
+                    ),
+                    "--max-c-write-gib",
+                    "0.0",
+                    "--max-b-write-gib",
+                    "16.0",
+                    "--receipt",
+                    str(paths["custody_root"] / "runner-receipt.json"),
+                    "--write-root",
+                    f"custody={paths['custody_root']}",
+                    "--write-root",
+                    f"artifacts={paths['artifact_root']}",
+                    "--",
+                    sys.executable,
+                    str(
+                        paths["repo"]
+                        / "tools"
+                        / "ember-restart-3b"
+                        / "run_vertical_slice.py"
+                    ),
+                    "governed-vertical",
+                    "--seed",
+                    "83",
+                    "--artifact-root",
+                    str(paths["artifact_root"]),
+                    "--write-budget-bytes",
+                    str(16 * 1024**3),
+                    "--max-records",
+                    "1",
+                ],
+            )
+
+    def test_checkpoint_without_evidence_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.pop("resume_counter_receipt"),
+            )
+            self._refused(paths, "exactly one resume evidence key")
+
+    def test_two_evidence_keys_are_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.update(
+                    {"resume_realization_registry": spec["resume_counter_receipt"]}
+                ),
+            )
+            self._refused(paths, "exactly one resume evidence key")
+
+    def test_evidence_without_checkpoint_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.pop("resume_checkpoint"),
+            )
+            self._refused(paths, "requires resume_checkpoint")
+
+    def test_checkpoint_without_manifest_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory, checkpoint_manifest=False)
+            self._refused(paths, "not a resumable checkpoint")
+
+    def test_architecture_revision_mismatch_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory, checkpoint_revision="ember-sparse-3b-v1")
+            self._refused(paths, "architecture_revision does not match")
+
+    def test_checkpoint_manifest_without_revision_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory, checkpoint_revision=None)
+            self._refused(paths, "architecture_revision does not match")
+
+    def test_lexically_quarantined_checkpoint_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            install_model_config(paths["repo"])
+            checkpoint = install_checkpoint(
+                paths["custody_root"] / ".checkpoint-quarantine" / "checkpoint-000100"
+            )
+            evidence = paths["custody_root"] / "counter-success.json"
+            write_json(evidence, {"ok": True})
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["resume_checkpoint"] = str(checkpoint)
+            run_spec["resume_counter_receipt"] = str(evidence)
+            write_json(paths["run_spec"], run_spec)
+            self._refused(paths, "quarantined checkpoint")
+
+    def test_quarantined_checkpoint_behind_a_link_is_refused(self) -> None:
+        """The lexical check alone is defeated by a link whose own name is
+        clean; the resolved form is checked too."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            install_model_config(paths["repo"])
+            real = install_checkpoint(
+                paths["custody_root"] / ".checkpoint-quarantine" / "checkpoint-000100"
+            )
+            link = paths["custody_root"] / "clean-looking-checkpoint"
+            try:
+                link.symlink_to(real, target_is_directory=True)
+            except (OSError, NotImplementedError):
+                # Unprivileged Windows refuses symlinks but allows junctions,
+                # which resolve() follows the same way -- and a junction is the
+                # realistic shape here anyway.
+                if sys.platform != "win32" or subprocess.run(
+                    ["cmd", "/c", "mklink", "/J", str(link), str(real)],
+                    capture_output=True,
+                    check=False,
+                ).returncode != 0:
+                    self.skipTest("directory links unavailable in this environment")
+            self.assertEqual(link.resolve(), real.resolve())
+            evidence = paths["custody_root"] / "counter-success.json"
+            write_json(evidence, {"ok": True})
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["resume_checkpoint"] = str(link)
+            run_spec["resume_counter_receipt"] = str(evidence)
+            write_json(paths["run_spec"], run_spec)
+            self._refused(paths, "quarantined checkpoint")
+
+    def test_quarantined_evidence_path_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "resume_counter_receipt",
+                    str(
+                        pathlib.Path(spec["resume_counter_receipt"]).parent
+                        / ".checkpoint-quarantine"
+                        / "counter-success.json"
+                    ),
+                ),
+            )
+            self._refused(paths, "quarantined checkpoint")
+
+    def test_dangling_checkpoint_path_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "resume_checkpoint", spec["resume_checkpoint"] + "-absent"
+                ),
+            )
+            self._refused(paths, "existing checkpoint directory")
+
+    def test_checkpoint_pointing_at_a_file_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory)
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["resume_checkpoint"] = str(paths["evidence"])
+            write_json(paths["run_spec"], run_spec)
+            self._refused(paths, "existing checkpoint directory")
+
+    def test_dangling_evidence_path_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "resume_counter_receipt",
+                    spec["resume_counter_receipt"] + "-absent",
+                ),
+            )
+            self._refused(paths, "resume_counter_receipt must name an existing file")
+
+    def test_empty_resume_path_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "resume_checkpoint", ""
+                ),
+            )
+            # An empty string is a DECLARED resume that names nothing, so it is
+            # refused outright rather than read as an absent key.
+            self._refused(paths, "resume_checkpoint must be a non-empty string")
+
+    def test_registry_sha256_without_its_registry_key_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "resume_optimizer_transition_registry_sha256", REGISTRY_SHA256
+                ),
+            )
+            self._refused(
+                paths,
+                "resume_optimizer_transition_registry_sha256 is only legal",
+            )
+
+    def test_malformed_registry_sha256_is_refused(self) -> None:
+        for label, value in (
+            ("too short", "c" * 63),
+            ("uppercase", "C" * 64),
+            ("non hex", "z" * 64),
+        ):
+            with self.subTest(sha=label), tempfile.TemporaryDirectory() as directory:
+                paths = self._bundle(
+                    directory,
+                    mutate_run_spec=lambda spec, value=value: spec.update(
+                        {
+                            "resume_optimizer_transition_registry": spec.pop(
+                                "resume_counter_receipt"
+                            ),
+                            "resume_optimizer_transition_registry_sha256": value,
+                        }
+                    ),
+                )
+                self._refused(paths, "must be a lowercase SHA-256")
+
+    def test_relative_resume_paths_resolve_against_the_run_spec(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.update(
+                    {
+                        "resume_checkpoint": "checkpoint-000100",
+                        "resume_counter_receipt": "counter-success.json",
+                    }
+                ),
+            )
+            launch = self._validate(module, paths)
+            self.assertEqual(launch.resume_checkpoint, paths["checkpoint"])
+            self.assertEqual(launch.resume_evidence_path, paths["evidence"])
+
+    def test_resume_flags_match_the_runner_argparse(self) -> None:
+        """Bind the consumer's flag spelling to run_vertical_slice's governed
+        -vertical parser, so a renamed runner flag breaks CI, not a launch."""
+
+        module = load_module()
+        runner = (
+            ROOT / "tools" / "ember-restart-3b" / "run_vertical_slice.py"
+        ).read_text(encoding="utf-8")
+        for flag in (
+            *module.RESUME_EVIDENCE_RUN_SPEC_FLAGS.values(),
+            "--resume-checkpoint",
+            "--resume-optimizer-transition-registry-sha256",
+        ):
+            self.assertIn(f'"{flag}"', runner)
+
+    def test_config_revision_constant_matches_the_production_config(self) -> None:
+        config = json.loads(
+            (ROOT / "configs" / "ember-restart-3b.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(config["architecture_revision"], ARCHITECTURE_REVISION)
 
 
 if __name__ == "__main__":

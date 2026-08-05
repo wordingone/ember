@@ -110,7 +110,26 @@ RUN_SPEC_KEYS = {
 # per-launch artifact can be named without re-minting. Optional-key handling
 # mirrors OPTIONAL_CERTIFICATE_KEYS: anything outside the enumeration still
 # hard-fails.
-OPTIONAL_RUN_SPEC_KEYS = {"training_verify_receipt_path"}
+# Resume plumbing (issue #1425) rides the RUN SPEC for the same reason the
+# pin-freshness receipt does: which checkpoint a rung resumes from is a
+# launch-time decision, while the certificate is a frozen sha-cited payload.
+# The runner already accepts these flags; without them a resumed rung simply
+# cannot be expressed through the certified path, which pushes operators onto
+# the uncertified one. Evidence keys mirror the runner's mutually exclusive
+# group -- exactly one, never zero, never two.
+RESUME_EVIDENCE_RUN_SPEC_FLAGS = {
+    "resume_counter_receipt": "--resume-counter-receipt",
+    "resume_realization_registry": "--resume-realization-registry",
+    "resume_optimizer_transition_registry": "--resume-optimizer-transition-registry",
+}
+RESUME_RUN_SPEC_KEYS = {
+    "resume_checkpoint",
+    "resume_optimizer_transition_registry_sha256",
+} | set(RESUME_EVIDENCE_RUN_SPEC_FLAGS)
+OPTIONAL_RUN_SPEC_KEYS = {"training_verify_receipt_path"} | RESUME_RUN_SPEC_KEYS
+CHECKPOINT_MANIFEST_NAME = "checkpoint-manifest.json"
+CONFIG_RELATIVE_PATH = "configs/ember-restart-3b.json"
+CHECKPOINT_QUARANTINE_COMPONENT = ".checkpoint-quarantine"
 AUTHORIZED_SCOPE_KEYS = {
     "purpose",
     "allowed_modes",
@@ -197,6 +216,12 @@ class ValidatedLaunch(NamedTuple):
     max_records: int
     max_c_write_gib: float
     max_b_write_gib: float
+    # Resume plumbing is absent on a clean-genesis launch, and a launch that
+    # carries none of these builds byte-identical argv to a pre-#1425 one.
+    resume_checkpoint: pathlib.Path | None = None
+    resume_evidence_flag: str | None = None
+    resume_evidence_path: pathlib.Path | None = None
+    resume_optimizer_transition_registry_sha256: str | None = None
 
 
 def _canonical_bytes(value: object) -> bytes:
@@ -530,6 +555,134 @@ def _validate_training_verify_receipt(
             )
 
 
+class ResumeRequest(NamedTuple):
+    checkpoint: pathlib.Path
+    evidence_flag: str
+    evidence_path: pathlib.Path
+    optimizer_transition_registry_sha256: str | None
+
+
+def _reject_quarantined_resume_path(path: pathlib.Path, label: str) -> None:
+    """Refuse a quarantined checkpoint lexically AND after resolution.
+
+    Mirrors run_vertical_slice._reject_quarantined_checkpoint_path: quarantine
+    is a directory-name convention, so a symlink or junction that resolves INTO
+    quarantine must fail even though its lexical form is clean.
+    """
+
+    for candidate in (path, path.resolve(strict=False)):
+        if any(
+            str(part).casefold() == CHECKPOINT_QUARANTINE_COMPONENT
+            for part in candidate.parts
+        ):
+            raise ValueError(
+                f"run spec {label} names a quarantined checkpoint, which is "
+                "not selectable"
+            )
+
+
+def _require_resume_string(value: object, key: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"run spec {key} must be a non-empty string")
+    return value
+
+
+def _validate_resume_request(
+    run_spec: dict[str, Any],
+    run_spec_path: pathlib.Path,
+    repo_root: pathlib.Path,
+) -> ResumeRequest | None:
+    """Validate the optional resume triple, fail-closed, before any argv exists.
+
+    Returns None when the run spec declares no resume at all -- the clean-genesis
+    shape, which must stay exactly as it was. A partially declared resume is
+    never "close enough": a checkpoint without evidence would train from weights
+    whose realization was never proven, and evidence without a checkpoint names
+    nothing.
+    """
+
+    present = {
+        key for key in RESUME_RUN_SPEC_KEYS if run_spec.get(key) is not None
+    }
+    if not present:
+        return None
+
+    evidence_present = sorted(present & set(RESUME_EVIDENCE_RUN_SPEC_FLAGS))
+    if "resume_checkpoint" not in present:
+        raise ValueError(
+            "run spec resume evidence requires resume_checkpoint"
+        )
+    if len(evidence_present) != 1:
+        raise ValueError(
+            "run spec resume_checkpoint requires exactly one resume evidence "
+            "key, got " + (", ".join(evidence_present) or "none")
+        )
+    evidence_key = evidence_present[0]
+
+    registry_sha256 = run_spec.get("resume_optimizer_transition_registry_sha256")
+    if registry_sha256 is not None:
+        if evidence_key != "resume_optimizer_transition_registry":
+            raise ValueError(
+                "run spec resume_optimizer_transition_registry_sha256 is only "
+                "legal alongside resume_optimizer_transition_registry"
+            )
+        registry_sha256 = _require_sha256(
+            registry_sha256,
+            "run spec resume_optimizer_transition_registry_sha256",
+        )
+
+    checkpoint = pathlib.Path(
+        _require_resume_string(run_spec["resume_checkpoint"], "resume_checkpoint")
+    )
+    evidence = pathlib.Path(
+        _require_resume_string(run_spec[evidence_key], evidence_key)
+    )
+    _reject_quarantined_resume_path(checkpoint, "resume_checkpoint")
+    _reject_quarantined_resume_path(evidence, evidence_key)
+    if not checkpoint.is_absolute():
+        checkpoint = run_spec_path.parent / checkpoint
+    if not evidence.is_absolute():
+        evidence = run_spec_path.parent / evidence
+    _reject_quarantined_resume_path(checkpoint, "resume_checkpoint")
+    _reject_quarantined_resume_path(evidence, evidence_key)
+
+    if not checkpoint.is_dir():
+        raise ValueError(
+            "run spec resume_checkpoint must name an existing checkpoint directory"
+        )
+    manifest_path = checkpoint / CHECKPOINT_MANIFEST_NAME
+    if not manifest_path.is_file():
+        raise ValueError(
+            "run spec resume_checkpoint carries no "
+            f"{CHECKPOINT_MANIFEST_NAME}, so it is not a resumable checkpoint"
+        )
+    if not evidence.is_file():
+        raise ValueError(f"run spec {evidence_key} must name an existing file")
+
+    # Architecture agreement is the load-bearing check: resuming v1 weights into
+    # a v2 architecture silently trains a model nobody verified.
+    manifest = _load_json(manifest_path, "resume checkpoint manifest")
+    config = _load_json(
+        pathlib.Path(repo_root) / CONFIG_RELATIVE_PATH, "model config"
+    )
+    manifest_revision = manifest.get("architecture_revision")
+    config_revision = config.get("architecture_revision")
+    if not isinstance(config_revision, str) or not config_revision:
+        raise ValueError("model config carries no architecture_revision")
+    if manifest_revision != config_revision:
+        raise ValueError(
+            "resume checkpoint architecture_revision does not match this "
+            f"tree's config ({manifest_revision!r} vs {config_revision!r})"
+        )
+
+    return ResumeRequest(
+        checkpoint=checkpoint,
+        evidence_flag=RESUME_EVIDENCE_RUN_SPEC_FLAGS[evidence_key],
+        evidence_path=evidence,
+        optimizer_transition_registry_sha256=registry_sha256,
+    )
+
+
 def _require_scope_subset(
     requested: dict[str, Any], authorized: dict[str, Any]
 ) -> None:
@@ -759,6 +912,8 @@ def validate_certified_request(
             "evidence"
         )
 
+    resume = _validate_resume_request(run_spec, run_spec_path, repo_root)
+
     requested_scope = _require_object(
         run_spec["requested_scope"], "requested scope"
     )
@@ -791,6 +946,12 @@ def validate_certified_request(
         max_records=int(requested_scope["max_records"]),
         max_c_write_gib=float(requested_scope["max_c_write_gib"]),
         max_b_write_gib=float(requested_scope["max_b_write_gib"]),
+        resume_checkpoint=None if resume is None else resume.checkpoint,
+        resume_evidence_flag=None if resume is None else resume.evidence_flag,
+        resume_evidence_path=None if resume is None else resume.evidence_path,
+        resume_optimizer_transition_registry_sha256=(
+            None if resume is None else resume.optimizer_transition_registry_sha256
+        ),
     )
 
 
@@ -798,7 +959,7 @@ def build_runner_argv(
     repo_root: pathlib.Path, launch: ValidatedLaunch
 ) -> list[str]:
     repo_root = pathlib.Path(repo_root)
-    return [
+    argv = [
         sys.executable,
         str(
             repo_root
@@ -834,6 +995,22 @@ def build_runner_argv(
         "--max-records",
         str(launch.max_records),
     ]
+    # A launch with no resume returns here, so its argv is byte-identical to a
+    # pre-#1425 one. validate_certified_request has already proven the triple is
+    # complete and coherent, so no partial suffix can be emitted.
+    if launch.resume_checkpoint is not None:
+        argv += [
+            "--resume-checkpoint",
+            str(launch.resume_checkpoint),
+            launch.resume_evidence_flag,
+            str(launch.resume_evidence_path),
+        ]
+        if launch.resume_optimizer_transition_registry_sha256 is not None:
+            argv += [
+                "--resume-optimizer-transition-registry-sha256",
+                launch.resume_optimizer_transition_registry_sha256,
+            ]
+    return argv
 
 
 def _child_log_path(launch: ValidatedLaunch) -> pathlib.Path:
