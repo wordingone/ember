@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import base64
+import math
 import sys
 import unittest
 from pathlib import Path
@@ -250,6 +251,78 @@ class PretrainingSegmentTests(unittest.TestCase):
         self.assertEqual([event["total_steps"] for event in progress], [9, 9])
         self.assertEqual([event["loss"] for event in progress], result["losses"])
         self.assertTrue(all(isinstance(event["step_ms"], float) and event["step_ms"] > 0 for event in progress))
+        # grad_norm: clip_grad_norm_'s pre-clip return value, no longer discarded (#1434).
+        self.assertTrue(all(
+            isinstance(event["grad_norm"], float) and math.isfinite(event["grad_norm"]) and event["grad_norm"] > 0.0
+            for event in progress
+        ))
+        self.assertNotEqual(progress[0]["grad_norm"], progress[1]["grad_norm"])
+        # router/expert entropy + utilization derived from the cumulative expert_examples
+        # counts: step 1 routes only to "vision" (zero entropy, fully concentrated),
+        # step 2 adds "audio" (even split, entropy = ln(2)). Values that must move,
+        # not a runner that could pass by recording a constant.
+        self.assertEqual(progress[0]["router_entropy_nats"], 0.0)
+        self.assertAlmostEqual(progress[1]["router_entropy_nats"], math.log(2))
+        self.assertEqual(progress[0]["expert_utilization"], {"vision": 1.0, "audio": 0.0, "reasoning": 0.0, "tool": 0.0})
+        self.assertEqual(progress[1]["expert_utilization"], {"vision": 0.5, "audio": 0.5, "reasoning": 0.0, "tool": 0.0})
+
+    def test_expert_routing_entropy_matches_the_natural_log_definition_with_zero_count_convention(self) -> None:
+        """Pure math: p_i = count_i / total, H = -sum(p_i * log(p_i)), 0 * log(0) = 0."""
+        entropy, utilization = pretrain._expert_routing_entropy({"vision": 0, "audio": 0, "reasoning": 0, "tool": 0})
+        self.assertEqual(entropy, 0.0)
+        self.assertEqual(utilization, {"vision": 0.0, "audio": 0.0, "reasoning": 0.0, "tool": 0.0})
+
+        entropy, utilization = pretrain._expert_routing_entropy({"vision": 4, "audio": 0, "reasoning": 0, "tool": 0})
+        self.assertEqual(entropy, 0.0)
+        self.assertEqual(utilization, {"vision": 1.0, "audio": 0.0, "reasoning": 0.0, "tool": 0.0})
+
+        entropy, utilization = pretrain._expert_routing_entropy({"vision": 1, "audio": 1, "reasoning": 1, "tool": 1})
+        self.assertAlmostEqual(entropy, math.log(4))
+        self.assertEqual(utilization, {"vision": 0.25, "audio": 0.25, "reasoning": 0.25, "tool": 0.25})
+
+        entropy, utilization = pretrain._expert_routing_entropy({"vision": 3, "audio": 1, "reasoning": 0, "tool": 0})
+        expected_entropy = -(0.75 * math.log(0.75) + 0.25 * math.log(0.25))
+        self.assertAlmostEqual(entropy, expected_entropy)
+        self.assertEqual(utilization, {"vision": 0.75, "audio": 0.25, "reasoning": 0.0, "tool": 0.0})
+
+    def test_selection_progress_callback_records_grad_norm_and_router_entropy(self) -> None:
+        """run_selection_pretraining_segment mirrors run_pretraining_segment's telemetry (#1434)."""
+
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        records = [self._record(config, expert=expert, sample_id=f"selection-progress-{expert}") for expert in ("vision", "audio")]
+
+        class TwoRecordSelection:
+            receipt = {"schema_version": SELECTION_RECEIPT_SCHEMA_VERSION, "capability": "image"}
+
+            def iter_from(self, cursor: object = None):
+                start = 0 if cursor is None else int(cursor["next_source_index"])
+                for index in range(start, len(records)):
+                    yield records[index], {
+                        "schema_version": SELECTION_CURSOR_SCHEMA_VERSION,
+                        "selection_receipt_sha256": "b" * 64,
+                        "selection_rule_id": "image_scene_split_train_v1",
+                        "selected_ordinal": index + 1,
+                        "next_source_index": index + 1,
+                    }
+
+        model = UnifiedDecoder(config, genesis_seed=44)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        progress: list[dict[str, object]] = []
+        getattr(pretrain, "run_selection_pretraining_segment")(
+            model=model, optimizer=optimizer, selection=TwoRecordSelection(), config=config, device=torch.device("cpu"),
+            checkpoint_every=2, checkpoint_callback=lambda _step, _state: None,
+            progress_callback=progress.append, require_complete_coverage=False,
+        )
+        self.assertEqual([event["step"] for event in progress], [1, 2])
+        self.assertTrue(all(
+            isinstance(event["grad_norm"], float) and math.isfinite(event["grad_norm"]) and event["grad_norm"] > 0.0
+            for event in progress
+        ))
+        self.assertNotEqual(progress[0]["grad_norm"], progress[1]["grad_norm"])
+        self.assertEqual(progress[0]["router_entropy_nats"], 0.0)
+        self.assertAlmostEqual(progress[1]["router_entropy_nats"], math.log(2))
+        self.assertEqual(progress[0]["expert_utilization"], {"vision": 1.0, "audio": 0.0, "reasoning": 0.0, "tool": 0.0})
+        self.assertEqual(progress[1]["expert_utilization"], {"vision": 0.5, "audio": 0.5, "reasoning": 0.0, "tool": 0.0})
 
     def test_rejects_self_declared_reasoning_or_tool_without_executed_receipt(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
