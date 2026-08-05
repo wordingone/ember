@@ -1735,6 +1735,25 @@ def authorize_training_capabilities(
     )
 
 
+def authorize_resume_relocation(
+    paths: dict[str, pathlib.Path], root: pathlib.Path
+) -> None:
+    """Give the bundle's certificate the #1452 C: relocation custody root.
+
+    Kept as its own helper for the same reason authorize_resume_roots is: a
+    test that wants the key declares it explicitly, and a test that wants it
+    ABSENT (authorize_relocation=False on _bundle) proves the launcher
+    refuses a C:-rooted resume without it.
+    """
+
+    rewrite_certificate(
+        paths,
+        lambda certificate: certificate["execution_scope"].__setitem__(
+            "resume_relocation_custody_root", str(root)
+        ),
+    )
+
+
 def set_resume_paths(
     paths: dict[str, pathlib.Path],
     checkpoint: pathlib.Path,
@@ -1775,6 +1794,8 @@ class _ResumeBundleMixin:
         checkpoint_manifest: bool = True,
         resume_roots: list[pathlib.Path] | None = None,
         authorize_resume: bool = True,
+        authorize_relocation: bool = False,
+        relocation_root: pathlib.Path | None = None,
     ) -> dict[str, pathlib.Path]:
         paths = write_valid_bundle(pathlib.Path(directory))
         install_model_config(paths["repo"], config_revision)
@@ -1795,14 +1816,27 @@ class _ResumeBundleMixin:
             mutate_run_spec(run_spec)
         write_json(paths["run_spec"], run_spec)
         if authorize_resume:
-            authorize_resume_roots(
-                paths,
-                *(
-                    [paths["custody_root"]]
-                    if resume_roots is None
-                    else resume_roots
-                ),
+            roots = (
+                [paths["custody_root"]] if resume_roots is None else resume_roots
             )
+            authorize_resume_roots(paths, *roots)
+            # Issue #1452 / #1462 compose: a governed-vertical launch now
+            # refuses a relocated resume outright (it cannot express one), so
+            # auto-declaring a relocation root here by default -- as this
+            # helper did pre-compose -- would make every governed-vertical
+            # caller of this shared bundle newly refuse for a reason unrelated
+            # to what it is testing. authorize_relocation therefore defaults
+            # to False: ResumePlumbingTests/ResumeRootAuthorizationTests/
+            # SpecialistRoutingTests pass a real B:-drive directory (see their
+            # tempfile.TemporaryDirectory(dir="B:/tmp") callers below), so the
+            # checkpoint installed above already resolves under B: and this
+            # branch is never consulted. A caller that specifically wants an
+            # off-B:, relocation-authorized checkpoint opts in explicitly
+            # (see ResumeRelocationCustodyTests).
+            if authorize_relocation and roots:
+                authorize_resume_relocation(
+                    paths, roots[-1] if relocation_root is None else relocation_root
+                )
         return paths
 
     def _validate(self, module, paths: dict[str, pathlib.Path]):
@@ -1829,7 +1863,7 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
         self,
     ) -> None:
         module = load_module()
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory)
             launch = self._validate(module, paths)
             self.assertEqual(launch.resume_checkpoint, paths["checkpoint"])
@@ -1843,7 +1877,11 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
 
             argv = module.build_runner_argv(paths["repo"], launch)
             # The flags ride AFTER --max-records, in the order the runner's
-            # argparse declares them.
+            # argparse declares them. This bundle's checkpoint resolves under
+            # a real B:-drive tempdir (see _bundle's directory contract), so
+            # no relocation is needed and none is emitted -- byte-identical
+            # to a pre-#1452 launch.
+            self.assertIsNone(launch.resume_relocation_custody_root)
             self.assertEqual(
                 argv[argv.index("--max-records") :],
                 [
@@ -1866,7 +1904,7 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
                 "--resume-optimizer-transition-registry",
             ),
         ):
-            with self.subTest(evidence=key), tempfile.TemporaryDirectory() as directory:
+            with self.subTest(evidence=key), tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
                 paths = self._bundle(
                     directory,
                     mutate_run_spec=lambda spec, key=key: spec.update(
@@ -1881,7 +1919,7 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
 
     def test_optimizer_transition_registry_sha256_rides_the_argv(self) -> None:
         module = load_module()
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(
                 directory,
                 mutate_run_spec=lambda spec: spec.update(
@@ -1895,6 +1933,10 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
             )
             launch = self._validate(module, paths)
             argv = module.build_runner_argv(paths["repo"], launch)
+            # This bundle's checkpoint resolves under a real B:-drive tempdir
+            # (see _bundle's directory contract), so no relocation is needed
+            # and the optimizer-transition-registry pair rides last.
+            self.assertIsNone(launch.resume_relocation_custody_root)
             self.assertEqual(
                 argv[-4:],
                 [
@@ -1910,7 +1952,7 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
         before resume existed -- resume adds no new code path to it."""
 
         module = load_module()
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = write_valid_bundle(pathlib.Path(directory))
             launch = self._validate(module, paths)
             self.assertIsNone(launch.resume_checkpoint)
@@ -1955,7 +1997,7 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
             )
 
     def test_checkpoint_without_evidence_is_refused(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(
                 directory,
                 mutate_run_spec=lambda spec: spec.pop("resume_counter_receipt"),
@@ -1963,7 +2005,7 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
             self._refused(paths, "exactly one resume evidence key")
 
     def test_two_evidence_keys_are_refused(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(
                 directory,
                 mutate_run_spec=lambda spec: spec.update(
@@ -1973,7 +2015,7 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
             self._refused(paths, "exactly one resume evidence key")
 
     def test_evidence_without_checkpoint_is_refused(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(
                 directory,
                 mutate_run_spec=lambda spec: spec.pop("resume_checkpoint"),
@@ -1981,22 +2023,22 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
             self._refused(paths, "requires resume_checkpoint")
 
     def test_checkpoint_without_manifest_is_refused(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory, checkpoint_manifest=False)
             self._refused(paths, "not a resumable checkpoint")
 
     def test_architecture_revision_mismatch_is_refused(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory, checkpoint_revision="ember-sparse-3b-v1")
             self._refused(paths, "architecture_revision does not match")
 
     def test_checkpoint_manifest_without_revision_is_refused(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory, checkpoint_revision=None)
             self._refused(paths, "architecture_revision does not match")
 
     def test_lexically_quarantined_checkpoint_is_refused(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = write_valid_bundle(pathlib.Path(directory))
             install_model_config(paths["repo"])
             checkpoint = install_checkpoint(
@@ -2014,7 +2056,7 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
         """The lexical check alone is defeated by a link whose own name is
         clean; the resolved form is checked too."""
 
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = write_valid_bundle(pathlib.Path(directory))
             install_model_config(paths["repo"])
             real = install_checkpoint(
@@ -2043,7 +2085,7 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
             self._refused(paths, "quarantined checkpoint")
 
     def test_quarantined_evidence_path_is_refused(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(
                 directory,
                 mutate_run_spec=lambda spec: spec.__setitem__(
@@ -2058,7 +2100,7 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
             self._refused(paths, "quarantined checkpoint")
 
     def test_dangling_checkpoint_path_is_refused(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(
                 directory,
                 mutate_run_spec=lambda spec: spec.__setitem__(
@@ -2068,7 +2110,7 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
             self._refused(paths, "existing checkpoint directory")
 
     def test_checkpoint_pointing_at_a_file_is_refused(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory)
             run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
             run_spec["resume_checkpoint"] = str(paths["evidence"])
@@ -2076,7 +2118,7 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
             self._refused(paths, "existing checkpoint directory")
 
     def test_dangling_evidence_path_is_refused(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(
                 directory,
                 mutate_run_spec=lambda spec: spec.__setitem__(
@@ -2087,7 +2129,7 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
             self._refused(paths, "resume_counter_receipt must name an existing file")
 
     def test_empty_resume_path_is_refused(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(
                 directory,
                 mutate_run_spec=lambda spec: spec.__setitem__(
@@ -2099,7 +2141,7 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
             self._refused(paths, "resume_checkpoint must be a non-empty string")
 
     def test_registry_sha256_without_its_registry_key_is_refused(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(
                 directory,
                 mutate_run_spec=lambda spec: spec.__setitem__(
@@ -2117,7 +2159,7 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
             ("uppercase", "C" * 64),
             ("non hex", "z" * 64),
         ):
-            with self.subTest(sha=label), tempfile.TemporaryDirectory() as directory:
+            with self.subTest(sha=label), tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
                 paths = self._bundle(
                     directory,
                     mutate_run_spec=lambda spec, value=value: spec.update(
@@ -2133,7 +2175,7 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
 
     def test_relative_resume_paths_resolve_against_the_run_spec(self) -> None:
         module = load_module()
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(
                 directory,
                 mutate_run_spec=lambda spec: spec.update(
@@ -2183,7 +2225,7 @@ class ResumeRootAuthorizationTests(_ResumeBundleMixin, unittest.TestCase):
         a PRIOR run's custody, entirely outside this run's custody_root."""
 
         module = load_module()
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             prior = pathlib.Path(directory) / "prior-run-custody"
             checkpoint, evidence = install_resume_material(prior)
             paths = self._bundle(directory, resume_roots=[prior])
@@ -2199,7 +2241,7 @@ class ResumeRootAuthorizationTests(_ResumeBundleMixin, unittest.TestCase):
             )
 
     def test_resume_outside_every_allowed_root_is_refused(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             unlisted = pathlib.Path(directory) / "unlisted-bundle"
             checkpoint, evidence = install_resume_material(unlisted)
             paths = self._bundle(directory)
@@ -2214,7 +2256,7 @@ class ResumeRootAuthorizationTests(_ResumeBundleMixin, unittest.TestCase):
         check therefore has to run on the resolved path, which is also the one
         the runner would open."""
 
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             outside = pathlib.Path(directory) / "outside-custody"
             checkpoint, evidence = install_resume_material(outside)
             paths = self._bundle(directory)
@@ -2241,7 +2283,7 @@ class ResumeRootAuthorizationTests(_ResumeBundleMixin, unittest.TestCase):
         checkpoint. An authorized checkpoint admitted on realization evidence
         fetched from anywhere is still an unauthorized resume."""
 
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             unlisted = pathlib.Path(directory) / "unlisted-bundle"
             unlisted.mkdir(parents=True)
             evidence = unlisted / "counter-success.json"
@@ -2257,7 +2299,7 @@ class ResumeRootAuthorizationTests(_ResumeBundleMixin, unittest.TestCase):
         path is refused without this process reading a byte of it -- the
         refusal names authorization, not the missing directory."""
 
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             unlisted = pathlib.Path(directory) / "unlisted-bundle"
             paths = self._bundle(directory)
             set_resume_paths(
@@ -2274,7 +2316,7 @@ class ResumeRootAuthorizationTests(_ResumeBundleMixin, unittest.TestCase):
         the certificate is consulted: a quarantined checkpoint stays
         unselectable even inside an authorized root."""
 
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory)
             quarantined = install_checkpoint(
                 paths["custody_root"]
@@ -2291,7 +2333,7 @@ class ResumeRootAuthorizationTests(_ResumeBundleMixin, unittest.TestCase):
         certificate authorizes no resume root, so it cannot express a certified
         resume -- and the refusal says which action fixes it."""
 
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory, authorize_resume=False)
             certificate = json.loads(
                 paths["certificate"].read_text(encoding="utf-8")
@@ -2309,7 +2351,7 @@ class ResumeRootAuthorizationTests(_ResumeBundleMixin, unittest.TestCase):
         launch that worked before #1425."""
 
         module = load_module()
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = write_valid_bundle(pathlib.Path(directory))
             certificate = json.loads(
                 paths["certificate"].read_text(encoding="utf-8")
@@ -2324,7 +2366,7 @@ class ResumeRootAuthorizationTests(_ResumeBundleMixin, unittest.TestCase):
         """An explicitly empty allowlist is legal and authorizes nothing, the
         same way an empty allowed_artifact_roots does."""
 
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory, resume_roots=[])
             self._refused(
                 paths, "run scope exceeds certificate: resume_checkpoint"
@@ -2332,7 +2374,7 @@ class ResumeRootAuthorizationTests(_ResumeBundleMixin, unittest.TestCase):
 
     def test_malformed_allowed_resume_roots_fails_closed(self) -> None:
         for declared in ("not-a-list", [""], [None], [str(pathlib.Path.cwd()), 7]):
-            with self.subTest(declared=declared), tempfile.TemporaryDirectory() as directory:
+            with self.subTest(declared=declared), tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
                 paths = self._bundle(directory)
                 rewrite_certificate(
                     paths,
@@ -2349,7 +2391,7 @@ class ResumeRootAuthorizationTests(_ResumeBundleMixin, unittest.TestCase):
         """The optional-key mechanism admits exactly the enumerated key and
         does not open the scope template (the #1410 property, one level down)."""
 
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory)
             rewrite_certificate(
                 paths,
@@ -2365,7 +2407,11 @@ class ResumeRootAuthorizationTests(_ResumeBundleMixin, unittest.TestCase):
         module = load_module()
         self.assertEqual(
             module.OPTIONAL_AUTHORIZED_SCOPE_KEYS,
-            {"allowed_resume_roots", "allowed_training_capabilities"},
+            {
+                "allowed_resume_roots",
+                "allowed_training_capabilities",
+                "resume_relocation_custody_root",
+            },
         )
         self.assertFalse(
             module.OPTIONAL_AUTHORIZED_SCOPE_KEYS & module.AUTHORIZED_SCOPE_KEYS
@@ -2466,7 +2512,7 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
         self,
     ) -> None:
         module = load_module()
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory)
             launch = self._validate(module, paths)
             parent_manifest = paths["checkpoint"] / "checkpoint-manifest.json"
@@ -2568,14 +2614,14 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
         field driving that decision."""
 
         module = load_module()
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = write_valid_bundle(pathlib.Path(directory))
             launch = self._validate(module, paths)
             self.assertIsNone(launch.specialist_capability)
 
     def test_exactly_one_specialist_key_is_refused(self) -> None:
         for missing in ("training_data_manifest", "training_capability"):
-            with self.subTest(missing=missing), tempfile.TemporaryDirectory() as directory:
+            with self.subTest(missing=missing), tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
                 paths = self._bundle(
                     directory,
                     mutate_run_spec=lambda spec, missing=missing: spec.pop(missing),
@@ -2588,7 +2634,7 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
             "training_telemetry_path",
             "training_model_chat_restore_not_before",
         ):
-            with self.subTest(missing=missing), tempfile.TemporaryDirectory() as directory:
+            with self.subTest(missing=missing), tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
                 paths = self._bundle(
                     directory,
                     mutate_run_spec=lambda spec, missing=missing: spec.pop(missing),
@@ -2596,7 +2642,7 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
                 self._refused(paths, f"requires {missing}, which is absent")
 
     def test_specialist_companion_without_pair_is_refused(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(
                 directory,
                 mutate_run_spec=lambda spec: (
@@ -2609,7 +2655,7 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
             )
 
     def test_invalid_capability_value_is_refused(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(
                 directory,
                 mutate_run_spec=lambda spec: spec.__setitem__(
@@ -2630,7 +2676,7 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
         test_plain_bundle_has_no_specialist_route, whose certificate also
         carries no allowed_training_capabilities."""
 
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory, authorize_capability=False)
             certificate = json.loads(
                 paths["certificate"].read_text(encoding="utf-8")
@@ -2643,7 +2689,7 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
     def test_empty_allowed_training_capabilities_authorizes_nothing(
         self,
     ) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory, authorized_capabilities=[])
             self._refused(
                 paths, "run scope exceeds certificate: training_capability"
@@ -2655,7 +2701,7 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
         """A certificate that authorizes a DIFFERENT capability than the one
         the run spec requests -- not absent, not empty, just disagreeing."""
 
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(
                 directory, capability="image", authorized_capabilities=["audio"]
             )
@@ -2665,7 +2711,7 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
 
     def test_malformed_allowed_training_capabilities_fails_closed(self) -> None:
         for declared in ("not-a-list", [""], [None], ["image", 7]):
-            with self.subTest(declared=declared), tempfile.TemporaryDirectory() as directory:
+            with self.subTest(declared=declared), tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
                 paths = self._bundle(directory)
                 rewrite_certificate(
                     paths,
@@ -2680,14 +2726,14 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
                 )
 
     def test_manifest_schema_mismatch_is_refused(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory, manifest_schema="some-other-schema-v1")
             self._refused(
                 paths, "not an ember-owned-training-data-v1 manifest"
             )
 
     def test_manifest_capability_mismatch_is_refused(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(
                 directory, capability="image", manifest_capability="audio"
             )
@@ -2704,7 +2750,7 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
         process reads it -- not accepted into a perfect-looking argv the
         runner can never actually start."""
 
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             # A sibling of repo/, not below it -- and also outside
             # custody_root, so this is unambiguously out-of-tree either way.
             outside_manifest = pathlib.Path(directory) / "outside-manifest.json"
@@ -2734,7 +2780,7 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
         argv for every relative-path launch, the exact defect found."""
 
         module = load_module()
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(
                 directory,
                 mutate_run_spec=lambda spec: spec.__setitem__(
@@ -2752,7 +2798,7 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
             )
 
     def test_specialist_without_resume_checkpoint_is_refused(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(
                 directory,
                 mutate_run_spec=lambda spec: (
@@ -2763,7 +2809,7 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
             self._refused(paths, "requires an authorized resume checkpoint")
 
     def test_write_budget_not_exact_gib_multiple_is_refused(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory)
             run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
             run_spec["requested_scope"]["write_budget_bytes"] = 16 * 1024**3 - 1
@@ -2771,7 +2817,7 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
             self._refused(paths, "exact GiB multiple")
 
     def test_write_budget_below_one_gib_is_refused(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory)
             run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
             run_spec["requested_scope"]["write_budget_bytes"] = 0
@@ -2790,7 +2836,7 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
         boundary value that proves the floor without also tripping the
         ceiling check above it."""
 
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory)
             run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
             run_spec["requested_scope"]["max_records"] = 0
@@ -2808,7 +2854,7 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
         floor above ever gets a chance to (a non-fractional message here
         would mean the wrong check caught it)."""
 
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory)
             run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
             run_spec["requested_scope"]["max_records"] = 0.5
@@ -2821,7 +2867,7 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
         characters ("training telemetry run id is invalid"); unbounded here
         would build argv the runner refuses at parse time."""
 
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(
                 directory,
                 mutate_run_spec=lambda spec: spec.__setitem__(
@@ -2857,7 +2903,7 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
             "2026-07-18T18:00:00.123456Z",  # Z with fractional seconds
             "20260718T180000Z",  # launch_packet.py's compact Z form
         ):
-            with self.subTest(value=value), tempfile.TemporaryDirectory() as directory:
+            with self.subTest(value=value), tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
                 paths = self._bundle(
                     directory,
                     mutate_run_spec=lambda spec, value=value: spec.__setitem__(
@@ -2878,7 +2924,7 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
         _require_specialist_string's pre-existing, independently justified
         check -- not a format bound reintroduced under another name."""
 
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(
                 directory,
                 mutate_run_spec=lambda spec: spec.__setitem__(
@@ -2892,7 +2938,7 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
             )
 
     def test_telemetry_path_outside_custody_root_is_refused(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(
                 directory,
                 mutate_run_spec=lambda spec: spec.__setitem__(
@@ -2905,7 +2951,7 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
             )
 
     def test_missing_canonical_tokenizer_is_refused(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory)
             paths["tokenizer"].unlink()
             self._refused(paths, "canonical")
@@ -3112,6 +3158,298 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
             "the runner's required specialist flags and what "
             "build_runner_argv actually emits have diverged",
         )
+
+
+class ResumeRelocationCustodyTests(_ResumeBundleMixin, unittest.TestCase):
+    """Issue #1452: run_vertical_slice.authorize_production_resume_checkpoint
+    accepts a resume checkpoint that resolves off B: only when the runner also
+    receives --c-relocated-under-disk-budget-runner and a
+    --relocation-custody-root, and only the specialist subparser declares
+    them (issue #1462: governed-vertical has neither the CLI flags nor the
+    Python parameters -- verified directly against run_vertical_slice.py's
+    governed-vertical subparser and run_governed_vertical's own signature).
+    certified_train_launch.py emitted neither, so build_runner_argv could
+    build parse-perfect argv the runner deterministically refused the moment
+    the certificate's authorized resume root lived off B: -- after the
+    certificate was minted, the expensive place. The cure has two parts:
+    (1) the relocation custody root is a certificate decision, read from the
+    certificate and never derived from the checkpoint path or local disk
+    (mirrors #1426's allowed_resume_roots); (2) since governed-vertical
+    cannot express relocation at all, a governed-vertical launch whose resume
+    is relocated is refused fail-closed before any argv exists, instead of
+    emitting argv the runner would reject. ONE predicate --
+    resume.relocation_custody_root is not None, surfaced on ValidatedLaunch
+    as resume_relocation_custody_root -- drives both that refusal and the
+    specialist tail's flag emission, so the two cannot drift apart."""
+
+    def _specialist_bundle(self, directory: str) -> dict[str, pathlib.Path]:
+        """A fully valid specialist launch: everything SpecialistRoutingTests.
+        _bundle layers on top of the base resume triple (tokenizer, an
+        admitted manifest, the specialist run-spec keys, capability
+        authorization), built independently of that class's own fixture so a
+        future change to ITS defaults cannot silently change what THIS class
+        is testing. Does not itself relocate the checkpoint -- callers that
+        want a relocated resume repoint it with set_resume_paths, the same
+        way test_governed_vertical_route_with_b_rooted_resume_is_unaffected
+        below does."""
+
+        paths = self._bundle(directory)
+
+        tokenizer_path = paths["repo"] / "tokenizer" / "tokenizer.json"
+        write_json(tokenizer_path, {})
+        paths["tokenizer"] = tokenizer_path
+
+        manifest_path = paths["repo"] / "manifests" / "image.json"
+        write_json(
+            manifest_path,
+            {
+                "schema_version": "ember-owned-training-data-v1",
+                "capability": "image",
+                "data_class": "SEMANTIC_PRETRAINING",
+            },
+        )
+        paths["manifest"] = manifest_path
+        paths["telemetry"] = paths["custody_root"] / "telemetry.jsonl"
+
+        run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+        run_spec["training_data_manifest"] = str(manifest_path)
+        run_spec["training_capability"] = "image"
+        run_spec["training_checkpoint_interval"] = 8_192
+        run_spec["training_telemetry_path"] = str(paths["telemetry"])
+        run_spec["training_model_chat_restore_not_before"] = "2026-07-18T11:00:00-07:00"
+        write_json(paths["run_spec"], run_spec)
+
+        authorize_training_capabilities(paths, "image")
+        return paths
+
+    def test_specialist_route_with_relocated_resume_emits_both_flags(self) -> None:
+        """Matrix (a). The direct regression proof for the specialist tail:
+        against unfixed certified_train_launch.py this argv carries neither
+        flag. The declared custody root sits ONE LEVEL ABOVE checkpoint.parent
+        -- which coincide for every B:-rooted fixture elsewhere in this file
+        -- specifically so the emitted value can be shown to come from the
+        certificate, not from the checkpoint path."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._specialist_bundle(directory)
+            custody_root = paths["custody_root"]
+            checkpoint, evidence = install_resume_material(custody_root / "nested")
+            self.assertNotEqual(checkpoint.parent.resolve(), custody_root.resolve())
+            set_resume_paths(paths, checkpoint, evidence)
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate["execution_scope"].update(
+                    {
+                        "allowed_resume_roots": [str(custody_root)],
+                        "resume_relocation_custody_root": str(custody_root),
+                    }
+                ),
+            )
+
+            launch = self._validate(module, paths)
+            self.assertEqual(launch.specialist_capability, "image")
+            self.assertEqual(
+                launch.resume_relocation_custody_root, custody_root.resolve()
+            )
+            argv = module.build_runner_argv(paths["repo"], launch)
+            specialist_argv = argv[argv.index("specialist") + 1 :]
+            self.assertIn("--c-relocated-under-disk-budget-runner", specialist_argv)
+            self.assertIn("--relocation-custody-root", specialist_argv)
+            self.assertEqual(
+                argv[-3:],
+                [
+                    "--c-relocated-under-disk-budget-runner",
+                    "--relocation-custody-root",
+                    str(custody_root.resolve()),
+                ],
+            )
+
+    def test_governed_vertical_route_with_relocated_resume_is_refused(self) -> None:
+        """Matrix (b). A PLAIN (non-specialist) bundle whose resume is
+        properly authorized for relocation -- the certificate declares a
+        containing custody root, exactly as (a)'s does -- is still refused,
+        because governed-vertical cannot express the relocation at all
+        (issue #1462), not because the certificate is incomplete. Distinct
+        from test_c_rooted_resume_without_declared_custody_root_is_refused
+        below, which is the OTHER refusal (missing declaration, fires on
+        either route since _validate_resume_request runs before route
+        determination)."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory)
+            custody_root = paths["custody_root"]
+            checkpoint, evidence = install_resume_material(custody_root / "nested")
+            set_resume_paths(paths, checkpoint, evidence)
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate["execution_scope"].update(
+                    {
+                        "allowed_resume_roots": [str(custody_root)],
+                        "resume_relocation_custody_root": str(custody_root),
+                    }
+                ),
+            )
+            self._refused(
+                paths,
+                "governed-vertical route cannot express a relocated resume "
+                "checkpoint",
+            )
+
+    def test_governed_vertical_route_with_b_rooted_resume_is_unaffected(self) -> None:
+        """Matrix (c). B: resume behaves exactly as current master -- no
+        flags, no refusal, byte-identical argv -- proven against a REAL B:
+        path (B:/tmp, the convention test_runner_preflight.py already uses),
+        the only way to actually exercise the branch this drive check takes
+        rather than the off-B: branch a bare tempdir takes by construction on
+        this machine."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory(
+            dir="B:/tmp"
+        ) as b_directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            install_model_config(paths["repo"])
+            b_root = pathlib.Path(b_directory)
+            checkpoint, evidence = install_resume_material(b_root)
+            self.assertEqual(checkpoint.resolve().drive.upper(), "B:")
+            set_resume_paths(paths, checkpoint, evidence)
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate["execution_scope"].__setitem__(
+                    "allowed_resume_roots", [str(b_root)]
+                ),
+            )
+
+            launch = self._validate(module, paths)
+            self.assertIsNone(launch.resume_relocation_custody_root)
+            argv = module.build_runner_argv(paths["repo"], launch)
+            self.assertNotIn("--c-relocated-under-disk-budget-runner", argv)
+            self.assertNotIn("--relocation-custody-root", argv)
+            self.assertEqual(
+                argv[-2:],
+                ["--resume-counter-receipt", str(evidence)],
+            )
+
+    def test_governed_vertical_tail_structurally_never_carries_relocation_flags(
+        self,
+    ) -> None:
+        """Matrix (d). Defense in depth, independent of validate_certified_
+        request's refusal: constructs a ValidatedLaunch directly (bypassing
+        validation entirely, the same technique SpecialistRoutingTests.
+        test_specialist_flags_match_the_runner_argparse uses to exercise
+        build_runner_argv as a pure function) with specialist_capability=None
+        and resume_relocation_custody_root SET, and asserts the governed-
+        vertical argv build_runner_argv produces carries neither flag. This
+        pins build_runner_argv's OWN structure -- the governed-vertical tail
+        has no code path that can reach either flag string -- so a future
+        edit to that tail cannot silently reintroduce the argparse crash
+        #1452 exists to prevent, even if validate_certified_request's
+        refusal were ever weakened or bypassed."""
+
+        module = load_module()
+        launch = module.ValidatedLaunch(
+            certificate_sha256="0" * 64,
+            run_spec_sha256="1" * 64,
+            public_master_sha="2" * 40,
+            closure_sha256="3" * 64,
+            artifact_root=pathlib.Path("artifacts"),
+            custody_root=pathlib.Path("custody"),
+            runner_receipt=pathlib.Path("receipt.json"),
+            seed=1,
+            write_budget_bytes=1,
+            max_records=1,
+            max_c_write_gib=1.0,
+            max_b_write_gib=1.0,
+            resume_checkpoint=pathlib.Path("checkpoint"),
+            resume_evidence_flag="--resume-counter-receipt",
+            resume_evidence_path=pathlib.Path("evidence.json"),
+            resume_relocation_custody_root=pathlib.Path("C:/relocated-custody"),
+        )
+        self.assertIsNone(launch.specialist_capability)
+        argv = module.build_runner_argv(pathlib.Path("/repo"), launch)
+        self.assertIn("governed-vertical", argv)
+        self.assertNotIn("--c-relocated-under-disk-budget-runner", argv)
+        self.assertNotIn("--relocation-custody-root", argv)
+
+    def test_c_rooted_resume_without_declared_custody_root_is_refused(self) -> None:
+        """The other refusal: a non-B: authorized root with no declared
+        custody root refuses at validation, naming the missing declaration,
+        before build_runner_argv is ever reached -- not a guess, not a
+        fallback to some local default."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory)
+            custody_root = paths["custody_root"]
+            checkpoint, evidence = install_resume_material(custody_root / "nested")
+            set_resume_paths(paths, checkpoint, evidence)
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate["execution_scope"].__setitem__(
+                    "allowed_resume_roots", [str(custody_root)]
+                ),
+            )
+            certificate = json.loads(paths["certificate"].read_text(encoding="utf-8"))
+            self.assertNotIn(
+                "resume_relocation_custody_root", certificate["execution_scope"]
+            )
+            self._refused(paths, "resume_relocation_custody_root")
+
+    def test_relocation_custody_root_not_containing_the_checkpoint_is_refused(
+        self,
+    ) -> None:
+        """A declared custody root is authorization, not decoration: one that
+        does not actually contain the checkpoint is refused on the same
+        containment terms production_artifact_root enforces downstream, so
+        the mismatch is caught at the launcher instead of the runner. Uses
+        the specialist route so the refusal under test is the containment
+        check, not matrix (b)'s route refusal."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._specialist_bundle(directory)
+            custody_root = paths["custody_root"]
+            checkpoint, evidence = install_resume_material(custody_root / "nested")
+            set_resume_paths(paths, checkpoint, evidence)
+            unrelated = pathlib.Path(directory) / "unrelated-custody"
+            unrelated.mkdir()
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate["execution_scope"].update(
+                    {
+                        "allowed_resume_roots": [str(custody_root)],
+                        "resume_relocation_custody_root": str(unrelated),
+                    }
+                ),
+            )
+            self._refused(
+                paths, "resume_relocation_custody_root does not contain"
+            )
+
+    def test_malformed_relocation_custody_root_fails_closed(self) -> None:
+        for label, declared in (
+            ("empty string", ""),
+            ("not a string", 7),
+        ):
+            with self.subTest(declared=label), tempfile.TemporaryDirectory() as directory:
+                paths = self._bundle(directory)
+                custody_root = paths["custody_root"]
+                checkpoint, evidence = install_resume_material(custody_root / "nested")
+                set_resume_paths(paths, checkpoint, evidence)
+                rewrite_certificate(
+                    paths,
+                    lambda certificate, declared=declared: certificate[
+                        "execution_scope"
+                    ].update(
+                        {
+                            "allowed_resume_roots": [str(custody_root)],
+                            "resume_relocation_custody_root": declared,
+                        }
+                    ),
+                )
+                self._refused(
+                    paths,
+                    "resume_relocation_custody_root must be a non-empty string",
+                )
 
 
 if __name__ == "__main__":
