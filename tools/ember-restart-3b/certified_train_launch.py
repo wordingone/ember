@@ -129,7 +129,43 @@ RESUME_RUN_SPEC_KEYS = {
     "resume_checkpoint",
     "resume_optimizer_transition_registry_sha256",
 } | set(RESUME_EVIDENCE_RUN_SPEC_FLAGS)
-OPTIONAL_RUN_SPEC_KEYS = {"training_verify_receipt_path"} | RESUME_RUN_SPEC_KEYS
+# Specialist routing (issue #1430) rides the RUN SPEC for the same reason the
+# resume triple does: which admitted training-data manifest and capability a
+# rung trains is a launch-time decision, while the certificate is a frozen
+# sha-cited payload. The pair is required together -- a manifest with no
+# declared capability cannot be scope-checked, and a capability with no
+# manifest names no data.
+SPECIALIST_RUN_SPEC_KEYS = {"training_data_manifest", "training_capability"}
+# The runner's own "specialist" subcommand (run_vertical_slice.py) additionally
+# REQUIRES a checkpoint publication cadence, a write budget, a telemetry sink,
+# and a model-chat cooldown floor before it will start -- none of which has an
+# existing certificate- or run-spec-bound source the way seed/artifact_root/
+# max_records/write_budget_bytes already do for governed-vertical. These ride
+# the run spec too, required only alongside the pair above. write-budget-gib is
+# NOT one of these: it is derived from the already-authorized
+# requested_scope.write_budget_bytes (see _validate_specialist_request) rather
+# than declared a second time, so a specialist launch cannot claim a larger
+# write budget than governed-vertical's own certificate-authorized ceiling.
+SPECIALIST_LAUNCH_RUN_SPEC_KEYS = {
+    "training_checkpoint_interval",
+    "training_telemetry_path",
+    "training_model_chat_restore_not_before",
+}
+TRAINING_DATA_MANIFEST_SCHEMA = "ember-owned-training-data-v1"
+TRAINING_CAPABILITIES = {"image", "audio", "reasoning", "tool"}
+# Mirrors production_rung.py::TOKENIZER_RELATIVE / launch_packet.py's
+# identity-manifest preflight / serve_owned_openai.py's _TRACKED_TOKENIZER_SOURCE
+# -- the one frozen tokenizer this tree trains and serves against. Not a
+# run-spec key: an operator-declared tokenizer path would let a specialist
+# launch train against different token identity than every other consumer of
+# this same tree without the certificate ever noticing.
+SPECIALIST_TOKENIZER_RELATIVE_PATH = "tokenizer/tokenizer.json"
+OPTIONAL_RUN_SPEC_KEYS = (
+    {"training_verify_receipt_path"}
+    | RESUME_RUN_SPEC_KEYS
+    | SPECIALIST_RUN_SPEC_KEYS
+    | SPECIALIST_LAUNCH_RUN_SPEC_KEYS
+)
 CHECKPOINT_MANIFEST_NAME = "checkpoint-manifest.json"
 CONFIG_RELATIVE_PATH = "configs/ember-restart-3b.json"
 CHECKPOINT_QUARANTINE_COMPONENT = ".checkpoint-quarantine"
@@ -233,6 +269,20 @@ class ValidatedLaunch(NamedTuple):
     resume_evidence_flag: str | None = None
     resume_evidence_path: pathlib.Path | None = None
     resume_optimizer_transition_registry_sha256: str | None = None
+    # Specialist routing is absent on a governed-vertical launch, and a launch
+    # that carries none of these builds byte-identical argv to a pre-#1430 one.
+    # specialist_capability is the field build_runner_argv reads to decide
+    # which runner subcommand to emit.
+    specialist_data_manifest: pathlib.Path | None = None
+    specialist_capability: str | None = None
+    specialist_tokenizer_path: pathlib.Path | None = None
+    specialist_parent_manifest: pathlib.Path | None = None
+    specialist_root_manifest: pathlib.Path | None = None
+    specialist_checkpoint_interval: int | None = None
+    specialist_write_budget_gib: int | None = None
+    specialist_telemetry_path: pathlib.Path | None = None
+    specialist_telemetry_run_id: str | None = None
+    specialist_model_chat_restore_not_before: str | None = None
 
 
 def _canonical_bytes(value: object) -> bytes:
@@ -765,6 +815,189 @@ def _validate_resume_request(
     )
 
 
+class SpecialistRequest(NamedTuple):
+    data_manifest: pathlib.Path
+    capability: str
+    tokenizer_path: pathlib.Path
+    parent_manifest: pathlib.Path
+    root_manifest: pathlib.Path
+    checkpoint_interval: int
+    write_budget_gib: int
+    telemetry_path: pathlib.Path
+    telemetry_run_id: str
+    model_chat_restore_not_before: str
+
+
+def _require_specialist_string(value: object, key: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"run spec {key} must be a non-empty string")
+    return value
+
+
+def _validate_specialist_request(
+    run_spec: dict[str, Any],
+    run_spec_path: pathlib.Path,
+    repo_root: pathlib.Path,
+    resume: ResumeRequest | None,
+    write_budget_bytes: int,
+) -> SpecialistRequest | None:
+    """Validate the optional specialist route, fail-closed, before any argv exists.
+
+    Returns None when the run spec declares no specialist route at all -- the
+    governed-vertical shape, which must stay exactly as it was. training_data_
+    manifest and training_capability are required together (mirrors
+    _validate_resume_request: a partially declared route is never "close
+    enough" -- a manifest with no declared capability cannot be scope-checked,
+    and a capability with no manifest names no data). Once both are present,
+    the runner's own "specialist" subcommand requires a checkpoint cadence, a
+    telemetry sink and a model-chat cooldown floor before it will start, so
+    those become required too -- and it requires an AUTHORIZED resume
+    checkpoint (unlike governed-vertical, where resume is optional).
+    """
+
+    pair_present = {
+        key for key in SPECIALIST_RUN_SPEC_KEYS if run_spec.get(key) is not None
+    }
+    companions_present = {
+        key
+        for key in SPECIALIST_LAUNCH_RUN_SPEC_KEYS
+        if run_spec.get(key) is not None
+    }
+    if not pair_present and not companions_present:
+        return None
+    if len(pair_present) == 1:
+        missing = sorted(SPECIALIST_RUN_SPEC_KEYS - pair_present)[0]
+        raise ValueError(
+            f"run spec specialist launch requires {missing}, which is absent"
+        )
+    if not pair_present:
+        dangling = sorted(companions_present)[0]
+        raise ValueError(
+            f"run spec {dangling} requires training_data_manifest and "
+            "training_capability"
+        )
+    missing_companions = sorted(SPECIALIST_LAUNCH_RUN_SPEC_KEYS - companions_present)
+    if missing_companions:
+        raise ValueError(
+            "run spec specialist launch requires "
+            f"{missing_companions[0]}, which is absent"
+        )
+
+    capability = _require_specialist_string(
+        run_spec["training_capability"], "training_capability"
+    )
+    if capability not in TRAINING_CAPABILITIES:
+        raise ValueError(
+            "run spec training_capability must be one of "
+            + ", ".join(sorted(TRAINING_CAPABILITIES))
+        )
+
+    data_manifest = pathlib.Path(
+        _require_specialist_string(
+            run_spec["training_data_manifest"], "training_data_manifest"
+        )
+    )
+    if not data_manifest.is_absolute():
+        data_manifest = run_spec_path.parent / data_manifest
+    manifest = _load_json(data_manifest, "training data manifest")
+    if manifest.get("schema_version") != TRAINING_DATA_MANIFEST_SCHEMA:
+        raise ValueError(
+            "run spec training_data_manifest is not an "
+            f"{TRAINING_DATA_MANIFEST_SCHEMA} manifest "
+            f"(capability={capability!r})"
+        )
+    manifest_capability = manifest.get("capability")
+    if manifest_capability != capability:
+        raise ValueError(
+            "run spec training_capability does not match the manifest's own "
+            f"declared capability (declared={capability!r}, "
+            f"manifest={manifest_capability!r})"
+        )
+
+    # The runner's specialist CLI makes --resume-checkpoint and its evidence a
+    # REQUIRED (not optional) group -- unlike governed-vertical/vertical, a
+    # specialist route always trains a resumed expert family, never a clean
+    # genesis. Reject before any argv exists, same as every other specialist
+    # precondition.
+    if resume is None:
+        raise ValueError(
+            "run spec specialist launch requires an authorized resume "
+            "checkpoint (resume_checkpoint plus exactly one resume evidence "
+            "key)"
+        )
+
+    checkpoint_interval = run_spec["training_checkpoint_interval"]
+    if (
+        isinstance(checkpoint_interval, bool)
+        or not isinstance(checkpoint_interval, int)
+        or checkpoint_interval < 1
+    ):
+        raise ValueError(
+            "run spec training_checkpoint_interval must be a positive integer"
+        )
+
+    # write-budget-gib is derived, not declared: see SPECIALIST_LAUNCH_RUN_SPEC_KEYS.
+    # Refusing a non-exact GiB multiple keeps the derivation lossless -- a
+    # floor-divided value would silently authorize LESS than the certificate
+    # granted, which is a certificate the launch would then quietly disagree
+    # with rather than one that fails closed.
+    if write_budget_bytes % (1024**3) != 0:
+        raise ValueError(
+            "run spec requested_scope.write_budget_bytes must be an exact "
+            "GiB multiple for a specialist launch (the runner's "
+            "--write-budget-gib takes whole GiB)"
+        )
+    write_budget_gib = write_budget_bytes // (1024**3)
+    if write_budget_gib < 1:
+        raise ValueError(
+            "run spec requested_scope.write_budget_bytes must authorize at "
+            "least 1 GiB for a specialist launch"
+        )
+
+    telemetry_path = pathlib.Path(
+        _require_specialist_string(
+            run_spec["training_telemetry_path"], "training_telemetry_path"
+        )
+    )
+    if not telemetry_path.is_absolute():
+        telemetry_path = run_spec_path.parent / telemetry_path
+
+    model_chat_restore_not_before = _require_specialist_string(
+        run_spec["training_model_chat_restore_not_before"],
+        "training_model_chat_restore_not_before",
+    )
+
+    tokenizer_path = pathlib.Path(repo_root) / SPECIALIST_TOKENIZER_RELATIVE_PATH
+    if not tokenizer_path.is_file():
+        raise ValueError(
+            "run spec specialist launch requires the tree's canonical "
+            f"{SPECIALIST_TOKENIZER_RELATIVE_PATH}"
+        )
+
+    # Single-hop scope (no chaining): the checkpoint being resumed is both the
+    # immediate parent and the lineage root of this specialist generation.
+    # _validate_resume_request has already proven this manifest exists, is
+    # readable JSON, and matches this tree's architecture_revision -- reusing
+    # it here (rather than accepting a separately declared run-spec path) means
+    # a specialist launch's lineage always traces to the exact checkpoint whose
+    # architecture was just verified, never to an operator-named substitute.
+    parent_manifest = resume.checkpoint / CHECKPOINT_MANIFEST_NAME
+    root_manifest = parent_manifest
+
+    return SpecialistRequest(
+        data_manifest=data_manifest,
+        capability=capability,
+        tokenizer_path=tokenizer_path,
+        parent_manifest=parent_manifest,
+        root_manifest=root_manifest,
+        checkpoint_interval=checkpoint_interval,
+        write_budget_gib=write_budget_gib,
+        telemetry_path=telemetry_path,
+        telemetry_run_id=run_spec["run_id"],
+        model_chat_restore_not_before=model_chat_restore_not_before,
+    )
+
+
 def _require_scope_subset(
     requested: dict[str, Any], authorized: dict[str, Any]
 ) -> None:
@@ -1013,6 +1246,14 @@ def validate_certified_request(
         _authorized_resume_roots(authorized_scope),
     )
 
+    specialist = _validate_specialist_request(
+        run_spec,
+        run_spec_path,
+        repo_root,
+        resume,
+        int(requested_scope["write_budget_bytes"]),
+    )
+
     custody_root = pathlib.Path(requested_scope["custody_root"])
     runner_receipt = pathlib.Path(run_spec["runner_receipt"])
     try:
@@ -1023,6 +1264,19 @@ def validate_certified_request(
         raise ValueError(
             "run scope exceeds certificate: runner_receipt"
         ) from error
+    if specialist is not None:
+        # The runner's telemetry sink is a write disk_budget_runner must be
+        # able to attribute, same reason runner_receipt is checked above: both
+        # are paths the wrapped child process writes to, and disk_budget_runner
+        # only ever authorizes writes under its declared --write-root roots.
+        try:
+            specialist.telemetry_path.resolve(strict=False).relative_to(
+                custody_root.resolve(strict=False)
+            )
+        except ValueError as error:
+            raise ValueError(
+                "run scope exceeds certificate: training_telemetry_path"
+            ) from error
 
     return ValidatedLaunch(
         certificate_sha256=certificate_sha256,
@@ -1042,6 +1296,24 @@ def validate_certified_request(
         resume_evidence_path=None if resume is None else resume.evidence_path,
         resume_optimizer_transition_registry_sha256=(
             None if resume is None else resume.optimizer_transition_registry_sha256
+        ),
+        specialist_data_manifest=None if specialist is None else specialist.data_manifest,
+        specialist_capability=None if specialist is None else specialist.capability,
+        specialist_tokenizer_path=None if specialist is None else specialist.tokenizer_path,
+        specialist_parent_manifest=None if specialist is None else specialist.parent_manifest,
+        specialist_root_manifest=None if specialist is None else specialist.root_manifest,
+        specialist_checkpoint_interval=(
+            None if specialist is None else specialist.checkpoint_interval
+        ),
+        specialist_write_budget_gib=(
+            None if specialist is None else specialist.write_budget_gib
+        ),
+        specialist_telemetry_path=None if specialist is None else specialist.telemetry_path,
+        specialist_telemetry_run_id=(
+            None if specialist is None else specialist.telemetry_run_id
+        ),
+        specialist_model_chat_restore_not_before=(
+            None if specialist is None else specialist.model_chat_restore_not_before
         ),
     )
 
@@ -1076,6 +1348,57 @@ def build_runner_argv(
             / "ember-restart-3b"
             / "run_vertical_slice.py"
         ),
+    ]
+    # A launch that declares no specialist route reaches only the
+    # governed-vertical tail below, so its argv is byte-identical to a
+    # pre-#1430 one. validate_certified_request has already proven a declared
+    # route is complete and coherent -- the training_data_manifest/
+    # training_capability pair, its required companions, and an authorized
+    # resume checkpoint -- so no partial specialist argv can be emitted.
+    if launch.specialist_capability is not None:
+        argv += [
+            "specialist",
+            "--seed",
+            str(launch.seed),
+            "--artifact-root",
+            str(launch.artifact_root),
+            "--data-manifest",
+            str(launch.specialist_data_manifest),
+            "--tokenizer",
+            str(launch.specialist_tokenizer_path),
+            "--capability",
+            launch.specialist_capability,
+            "--resume-checkpoint",
+            str(launch.resume_checkpoint),
+            launch.resume_evidence_flag,
+            str(launch.resume_evidence_path),
+        ]
+        if launch.resume_optimizer_transition_registry_sha256 is not None:
+            argv += [
+                "--resume-optimizer-transition-registry-sha256",
+                launch.resume_optimizer_transition_registry_sha256,
+            ]
+        argv += [
+            "--parent-manifest",
+            str(launch.specialist_parent_manifest),
+            "--root-manifest",
+            str(launch.specialist_root_manifest),
+            "--max-records",
+            str(launch.max_records),
+            "--checkpoint-interval",
+            str(launch.specialist_checkpoint_interval),
+            "--write-budget-gib",
+            str(launch.specialist_write_budget_gib),
+            "--telemetry-path",
+            str(launch.specialist_telemetry_path),
+            "--telemetry-run-id",
+            launch.specialist_telemetry_run_id,
+            "--model-chat-restore-not-before",
+            launch.specialist_model_chat_restore_not_before,
+        ]
+        return argv
+
+    argv += [
         "governed-vertical",
         "--seed",
         str(launch.seed),

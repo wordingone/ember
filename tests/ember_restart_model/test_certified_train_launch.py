@@ -1603,6 +1603,11 @@ class CompletionHeadAncestorTests(unittest.TestCase):
                 "resume_realization_registry",
                 "resume_optimizer_transition_registry",
                 "resume_optimizer_transition_registry_sha256",
+                "training_data_manifest",
+                "training_capability",
+                "training_checkpoint_interval",
+                "training_telemetry_path",
+                "training_model_chat_restore_not_before",
             },
         )
 
@@ -2345,6 +2350,300 @@ class ResumeRootAuthorizationTests(_ResumeBundleMixin, unittest.TestCase):
         self.assertFalse(
             module.OPTIONAL_AUTHORIZED_SCOPE_KEYS & module.AUTHORIZED_SCOPE_KEYS
         )
+
+
+class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
+    """Issue #1430: build_runner_argv could only ever emit "governed-vertical",
+    so an admitted ember-owned-training-data-v1 manifest was reachable only by
+    calling the runner directly -- training with no certificate. Specialist
+    routing is expressed as optional run-spec keys, validated fail-closed
+    before argv, mirroring how ResumePlumbingTests covers #1425. Reuses
+    _ResumeBundleMixin (#1426) for the resume triple + allowlist authorization
+    every specialist launch also requires -- a specialist fixture that skipped
+    it would refuse on the allowlist instead of exercising the routing logic
+    under test."""
+
+    def _bundle(
+        self,
+        directory: str,
+        *,
+        mutate_run_spec=None,
+        capability: str = "image",
+        manifest_capability: str | None = None,
+        manifest_schema: str = "ember-owned-training-data-v1",
+        config_revision: str = ARCHITECTURE_REVISION,
+        checkpoint_revision: str | None = ARCHITECTURE_REVISION,
+    ) -> dict[str, pathlib.Path]:
+        # The base mixin builds the resume triple AND authorizes it (default
+        # authorize_resume=True roots the allowlist at custody_root, which is
+        # exactly where it installs the checkpoint) -- specialist layers a
+        # tokenizer, an admitted manifest, and its own run-spec keys on top,
+        # applying mutate_run_spec AFTER those keys exist so a test can target
+        # either the resume keys or the specialist keys.
+        paths = super()._bundle(
+            directory,
+            config_revision=config_revision,
+            checkpoint_revision=checkpoint_revision,
+        )
+
+        tokenizer_path = paths["repo"] / "tokenizer" / "tokenizer.json"
+        write_json(tokenizer_path, {})
+        paths["tokenizer"] = tokenizer_path
+
+        manifest_path = paths["custody_root"] / "vision-manifest.json"
+        write_json(
+            manifest_path,
+            {
+                "schema_version": manifest_schema,
+                "capability": (
+                    capability if manifest_capability is None else manifest_capability
+                ),
+                "data_class": "SEMANTIC_PRETRAINING",
+            },
+        )
+        paths["manifest"] = manifest_path
+        paths["telemetry"] = paths["custody_root"] / "telemetry.jsonl"
+
+        run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+        run_spec["training_data_manifest"] = str(manifest_path)
+        run_spec["training_capability"] = capability
+        run_spec["training_checkpoint_interval"] = 8_192
+        run_spec["training_telemetry_path"] = str(paths["telemetry"])
+        run_spec["training_model_chat_restore_not_before"] = "2026-07-18T11:00:00-07:00"
+        if mutate_run_spec is not None:
+            mutate_run_spec(run_spec)
+        write_json(paths["run_spec"], run_spec)
+        return paths
+
+    def test_valid_specialist_route_is_accepted_and_reaches_the_runner_argv(
+        self,
+    ) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory)
+            launch = self._validate(module, paths)
+            parent_manifest = paths["checkpoint"] / "checkpoint-manifest.json"
+            self.assertEqual(launch.specialist_capability, "image")
+            self.assertEqual(launch.specialist_data_manifest, paths["manifest"])
+            self.assertEqual(launch.specialist_tokenizer_path, paths["tokenizer"])
+            self.assertEqual(launch.specialist_parent_manifest, parent_manifest)
+            self.assertEqual(launch.specialist_root_manifest, parent_manifest)
+            self.assertEqual(launch.specialist_checkpoint_interval, 8_192)
+            self.assertEqual(launch.specialist_write_budget_gib, 16)
+            self.assertEqual(launch.specialist_telemetry_path, paths["telemetry"])
+            # Derived from run_spec["run_id"] (valid_run_spec's fixed value),
+            # not a separately declared key -- see the reasoning note above
+            # _validate_specialist_request.
+            self.assertEqual(
+                launch.specialist_telemetry_run_id, "owned-3b-canary-test"
+            )
+            self.assertEqual(
+                launch.specialist_model_chat_restore_not_before,
+                "2026-07-18T11:00:00-07:00",
+            )
+
+            self.assertEqual(
+                module.build_runner_argv(paths["repo"], launch),
+                [
+                    sys.executable,
+                    str(
+                        paths["repo"]
+                        / "tools"
+                        / "ember-restart-3b"
+                        / "disk_budget_runner.py"
+                    ),
+                    "--max-c-write-gib",
+                    "0.0",
+                    "--max-b-write-gib",
+                    "16.0",
+                    "--receipt",
+                    str(paths["custody_root"] / "runner-receipt.json"),
+                    "--write-root",
+                    f"custody={paths['custody_root']}",
+                    "--write-root",
+                    f"artifacts={paths['artifact_root']}",
+                    "--",
+                    sys.executable,
+                    str(
+                        paths["repo"]
+                        / "tools"
+                        / "ember-restart-3b"
+                        / "run_vertical_slice.py"
+                    ),
+                    "specialist",
+                    "--seed",
+                    "83",
+                    "--artifact-root",
+                    str(paths["artifact_root"]),
+                    "--data-manifest",
+                    str(paths["manifest"]),
+                    "--tokenizer",
+                    str(paths["tokenizer"]),
+                    "--capability",
+                    "image",
+                    "--resume-checkpoint",
+                    str(paths["checkpoint"]),
+                    "--resume-counter-receipt",
+                    str(paths["evidence"]),
+                    "--parent-manifest",
+                    str(parent_manifest),
+                    "--root-manifest",
+                    str(parent_manifest),
+                    "--max-records",
+                    "1",
+                    "--checkpoint-interval",
+                    "8192",
+                    "--write-budget-gib",
+                    "16",
+                    "--telemetry-path",
+                    str(paths["telemetry"]),
+                    "--telemetry-run-id",
+                    "owned-3b-canary-test",
+                    "--model-chat-restore-not-before",
+                    "2026-07-18T11:00:00-07:00",
+                ],
+            )
+
+    def test_plain_bundle_has_no_specialist_route(self) -> None:
+        """A run spec with neither training_data_manifest nor
+        training_capability is the pre-#1430 shape -- ResumePlumbingTests'
+        test_run_spec_without_resume_keys_builds_the_pre_1425_argv already
+        proves this bundle's argv stays byte-identical; this pins the launch
+        field driving that decision."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            launch = self._validate(module, paths)
+            self.assertIsNone(launch.specialist_capability)
+
+    def test_exactly_one_specialist_key_is_refused(self) -> None:
+        for missing in ("training_data_manifest", "training_capability"):
+            with self.subTest(missing=missing), tempfile.TemporaryDirectory() as directory:
+                paths = self._bundle(
+                    directory,
+                    mutate_run_spec=lambda spec, missing=missing: spec.pop(missing),
+                )
+                self._refused(paths, f"requires {missing}, which is absent")
+
+    def test_specialist_companion_key_missing_is_refused(self) -> None:
+        for missing in (
+            "training_checkpoint_interval",
+            "training_telemetry_path",
+            "training_model_chat_restore_not_before",
+        ):
+            with self.subTest(missing=missing), tempfile.TemporaryDirectory() as directory:
+                paths = self._bundle(
+                    directory,
+                    mutate_run_spec=lambda spec, missing=missing: spec.pop(missing),
+                )
+                self._refused(paths, f"requires {missing}, which is absent")
+
+    def test_specialist_companion_without_pair_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: (
+                    spec.pop("training_data_manifest"),
+                    spec.pop("training_capability"),
+                ),
+            )
+            self._refused(
+                paths, "requires training_data_manifest and training_capability"
+            )
+
+    def test_invalid_capability_value_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "training_capability", "text"
+                ),
+            )
+            self._refused(paths, "training_capability must be one of")
+
+    def test_manifest_schema_mismatch_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory, manifest_schema="some-other-schema-v1")
+            self._refused(
+                paths, "not an ember-owned-training-data-v1 manifest"
+            )
+
+    def test_manifest_capability_mismatch_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(
+                directory, capability="image", manifest_capability="audio"
+            )
+            self._refused(
+                paths, "does not match the manifest's own declared capability"
+            )
+
+    def test_specialist_without_resume_checkpoint_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: (
+                    spec.pop("resume_checkpoint"),
+                    spec.pop("resume_counter_receipt"),
+                ),
+            )
+            self._refused(paths, "requires an authorized resume checkpoint")
+
+    def test_write_budget_not_exact_gib_multiple_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory)
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["requested_scope"]["write_budget_bytes"] = 16 * 1024**3 - 1
+            write_json(paths["run_spec"], run_spec)
+            self._refused(paths, "exact GiB multiple")
+
+    def test_write_budget_below_one_gib_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory)
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["requested_scope"]["write_budget_bytes"] = 0
+            write_json(paths["run_spec"], run_spec)
+            self._refused(paths, "at least 1 GiB")
+
+    def test_telemetry_path_outside_custody_root_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "training_telemetry_path",
+                    str(pathlib.Path(directory) / "outside-telemetry.jsonl"),
+                ),
+            )
+            self._refused(
+                paths, "run scope exceeds certificate: training_telemetry_path"
+            )
+
+    def test_missing_canonical_tokenizer_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory)
+            paths["tokenizer"].unlink()
+            self._refused(paths, "canonical")
+
+    def test_specialist_flags_match_the_runner_argparse(self) -> None:
+        """Bind the consumer's flag spelling to run_vertical_slice's specialist
+        parser, so a renamed runner flag breaks CI, not a launch."""
+
+        runner = (
+            ROOT / "tools" / "ember-restart-3b" / "run_vertical_slice.py"
+        ).read_text(encoding="utf-8")
+        for flag in (
+            "--data-manifest",
+            "--tokenizer",
+            "--capability",
+            "--parent-manifest",
+            "--root-manifest",
+            "--checkpoint-interval",
+            "--write-budget-gib",
+            "--telemetry-path",
+            "--telemetry-run-id",
+            "--model-chat-restore-not-before",
+        ):
+            self.assertIn(f'"{flag}"', runner)
 
 
 if __name__ == "__main__":
