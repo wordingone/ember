@@ -6,6 +6,8 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
+import yaml
+
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -33,11 +35,24 @@ class LivePullRequestWorkflowIntegrationTests(unittest.TestCase):
         self.assertIn("python -m scripts.github.live_pr_policy", workflow)
         self.assertIn("--event-base-sha", workflow)
         self.assertIn("--event-head-sha", workflow)
-        # python, rust, cli, production-rung-replay -- every job checks out
-        # the exact PR head, never a moving branch ref.
+        # Every job that checks out does so at the exact PR head, never a moving
+        # branch ref. Asserted over the parsed steps rather than as a count of
+        # matching lines, so adding a job cannot drift the invariant and a correct
+        # new job does not have to bump a magic number.
+        checkouts = [
+            (name, step.get("with", {}).get("ref"))
+            for name, job in yaml.safe_load(workflow)["jobs"].items()
+            for step in job.get("steps", [])
+            if str(step.get("uses", "")).startswith("actions/checkout@")
+        ]
         self.assertEqual(
-            4, workflow.count("ref: ${{ github.event.pull_request.head.sha || github.sha }}")
+            {"python", "rust", "cli", "launcher", "production-rung-replay"},
+            {name for name, _ in checkouts},
         )
+        for name, ref in checkouts:
+            self.assertEqual(
+                "${{ github.event.pull_request.head.sha || github.sha }}", ref, name
+            )
 
     def test_live_policy_uses_package_safe_module_entrypoint(self) -> None:
         workflows = [
