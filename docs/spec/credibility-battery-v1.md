@@ -161,7 +161,7 @@ itself is not yet fully clean.
 **Check it yourself:**
 - `docs/START-HERE.md` §3 — the `b3` receipt's `u_pre` provenance falsification and its
   correction, worked end to end.
-- `docs/custody/custody-disposition-20260708.md` — the dated, row-by-row disposition record for every
+- `docs/custody-disposition-20260708.md` — the dated, row-by-row disposition record for every
   currently-cited-but-missing receipt path (governed by
   [issue #415](https://github.com/wordingone/ember/issues/415) and
   [PR #432](https://github.com/wordingone/ember/pull/432)).

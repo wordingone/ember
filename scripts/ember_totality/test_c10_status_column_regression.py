@@ -50,7 +50,7 @@ def _minimal_env() -> dict:
 
 
 def _write_ledger(root: Path, table_body: str) -> None:
-    docs = root / "docs"
+    docs = root / "docs" / "ledgers"
     docs.mkdir(parents=True, exist_ok=True)
     (docs / "ember-debt-ledger.md").write_text(
         "# Ember Technical And Cognitive Debt Ledger\n\n"
