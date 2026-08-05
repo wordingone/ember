@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import argparse
-import datetime
 import hashlib
 import importlib.util
 import json
@@ -889,6 +888,7 @@ def _validate_specialist_request(
     repo_root: pathlib.Path,
     resume: ResumeRequest | None,
     write_budget_bytes: int,
+    max_records: int,
     authorized_training_capabilities: set[str] | None,
 ) -> SpecialistRequest | None:
     """Validate the optional specialist route, fail-closed, before any argv exists.
@@ -900,9 +900,10 @@ def _validate_specialist_request(
     enough" -- a manifest with no declared capability cannot be scope-checked,
     and a capability with no manifest names no data). Once both are present,
     the runner's own "specialist" subcommand requires a checkpoint cadence, a
-    telemetry sink and a model-chat cooldown floor before it will start, so
-    those become required too -- and it requires an AUTHORIZED resume
-    checkpoint (unlike governed-vertical, where resume is optional).
+    telemetry sink, a model-chat cooldown floor, and a positive max_records
+    before it will start, so those become required too -- and it requires an
+    AUTHORIZED resume checkpoint (unlike governed-vertical, where resume is
+    optional).
     """
 
     pair_present = {
@@ -972,8 +973,17 @@ def _validate_specialist_request(
     # matching tokenizer_path below, and refuse anything -- relative or
     # absolute -- that resolves outside it.
     resolved_repo_root = pathlib.Path(repo_root).resolve()
-    resolved_data_manifest = data_manifest.resolve(strict=False)
-    if resolved_repo_root not in resolved_data_manifest.parents:
+    # Rebind to the RESOLVED form here, once, so every downstream use --
+    # _load_json below, SpecialistRequest.data_manifest, and the --data-
+    # manifest argv build_runner_argv emits -- carries the authorized path,
+    # not a syntactically-different-but-equivalent one (issue #1430 review
+    # Defect F3: authorizing resolved_data_manifest while continuing to use
+    # the unresolved data_manifest let a "manifests/../manifests/image.json"
+    # spelling through unchanged -- benign only because the runner
+    # re-resolves independently, the same "authorize A, use B" shape #1426
+    # cured for resume paths).
+    data_manifest = data_manifest.resolve(strict=False)
+    if resolved_repo_root not in data_manifest.parents:
         raise ValueError(
             "run spec training_data_manifest must resolve below repo_root "
             "(the runner refuses to load a specialist manifest from anywhere "
@@ -1034,6 +1044,23 @@ def _validate_specialist_request(
             "least 1 GiB for a specialist launch"
         )
 
+    # Issue #1430 delta review Finding A (LOW): _require_scope_subset only
+    # floors requested_scope.max_records at >= 0 (it is a shared ceiling
+    # check across every mode, governed-vertical included, and 0 is not
+    # inherently invalid there). The specialist runner disagrees --
+    # bind_specialist_execution_slice refuses a zero or negative slice
+    # ("specialist execution slice max records must be positive") -- so a
+    # certificate-and-scope-valid run spec with max_records=0 built
+    # parse-perfect argv the runner then deterministically refused at
+    # subprocess time. Specialist-only, checked here rather than tightened
+    # in the shared comparator, so governed-vertical's own (already correct)
+    # tolerance for 0 is untouched.
+    if max_records < 1:
+        raise ValueError(
+            "run spec requested_scope.max_records must be at least 1 for a "
+            "specialist launch (the runner refuses a zero or negative slice)"
+        )
+
     # run_id doubles as --telemetry-run-id, which the runner bounds to 128
     # characters ("training telemetry run id is invalid"). The top-level
     # scalar-field check has already proved it is a non-empty string; this is
@@ -1053,17 +1080,30 @@ def _validate_specialist_request(
     if not telemetry_path.is_absolute():
         telemetry_path = run_spec_path.parent / telemetry_path
 
+    # No format check: neither real consumer ever parses this value.
+    # run_vertical_slice.py only type-checks it as part of an all-or-none
+    # telemetry group (telemetry_path/telemetry_run_id/model_chat_restore_
+    # not_before together or not at all) and embeds it verbatim into a
+    # telemetry JSON payload at three call sites ("restore_not_before":
+    # model_chat_restore_not_before); ember-cli's telemetry-watch.ts only
+    # type-checks it as a string, and telemetry-label.ts only string-
+    # interpolates it into a display label -- Date.parse/new Date() never
+    # touch it either. A format bound invented here would be a bound this
+    # launcher does not own, the exact defect class the manifest-path fix
+    # above cured (issue #1430 review Defect F1). It could not even be made
+    # correct in general: this repo pins Python 3.10.11 (manifests/python-
+    # environment-v1.json), whose datetime.fromisoformat predates "Z"-
+    # designator support (CPython 3.11+), while "Z" is the house convention
+    # at every real timestamp producer in this chain (mint_launch_authority.
+    # py's strftime("...Z"), this runner's own telemetry writer's isoformat()
+    # .replace("+00:00","Z"), launch_packet.py's strftime("...Z")) -- a naive
+    # fromisoformat check refused the chain's own format outright. Non-
+    # emptiness is the one bound this process does own, checked above by
+    # _require_specialist_string.
     model_chat_restore_not_before = _require_specialist_string(
         run_spec["training_model_chat_restore_not_before"],
         "training_model_chat_restore_not_before",
     )
-    try:
-        datetime.datetime.fromisoformat(model_chat_restore_not_before)
-    except ValueError as error:
-        raise ValueError(
-            "run spec training_model_chat_restore_not_before must be an ISO "
-            "8601 timestamp"
-        ) from error
 
     tokenizer_path = pathlib.Path(repo_root) / SPECIALIST_TOKENIZER_RELATIVE_PATH
     if not tokenizer_path.is_file():
@@ -1344,12 +1384,30 @@ def validate_certified_request(
         _authorized_resume_roots(authorized_scope),
     )
 
+    # Issue #1430 delta review Finding A: _require_scope_subset above has
+    # already proven requested_scope["max_records"] is a non-bool int-or-
+    # float within the certificate's ceiling, but a fractional value (e.g.
+    # 10.7) would still silently truncate at the int(...) cast below --
+    # refused here instead, on both routes, rather than quietly authorizing
+    # less than what the run spec actually asked for.
+    requested_max_records = requested_scope["max_records"]
+    if (
+        isinstance(requested_max_records, float)
+        and not requested_max_records.is_integer()
+    ):
+        raise ValueError(
+            "run spec requested_scope.max_records must be an exact integer "
+            "(a fractional value would be silently truncated)"
+        )
+    requested_max_records = int(requested_max_records)
+
     specialist = _validate_specialist_request(
         run_spec,
         run_spec_path,
         repo_root,
         resume,
         int(requested_scope["write_budget_bytes"]),
+        requested_max_records,
         _authorized_training_capabilities(authorized_scope),
     )
 
@@ -1387,7 +1445,7 @@ def validate_certified_request(
         runner_receipt=runner_receipt,
         seed=run_spec["seed"],
         write_budget_bytes=int(requested_scope["write_budget_bytes"]),
-        max_records=int(requested_scope["max_records"]),
+        max_records=requested_max_records,
         max_c_write_gib=float(requested_scope["max_c_write_gib"]),
         max_b_write_gib=float(requested_scope["max_b_write_gib"]),
         resume_checkpoint=None if resume is None else resume.checkpoint,

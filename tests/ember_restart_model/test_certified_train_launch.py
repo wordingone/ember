@@ -2471,7 +2471,16 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
             launch = self._validate(module, paths)
             parent_manifest = paths["checkpoint"] / "checkpoint-manifest.json"
             self.assertEqual(launch.specialist_capability, "image")
-            self.assertEqual(launch.specialist_data_manifest, paths["manifest"])
+            # Issue #1430 review Defect F3: the launcher now returns the
+            # RESOLVED manifest path (see _validate_specialist_request), not
+            # the syntactically-different-but-equivalent form the fixture
+            # happens to spell it in -- paths["manifest"] itself is left
+            # unresolved here deliberately, since other tests in this class
+            # reuse the same unresolved-spelling fixture to prove the
+            # traversal check normalizes it before comparing.
+            self.assertEqual(
+                launch.specialist_data_manifest, paths["manifest"].resolve()
+            )
             self.assertEqual(launch.specialist_tokenizer_path, paths["tokenizer"])
             self.assertEqual(launch.specialist_parent_manifest, parent_manifest)
             self.assertEqual(launch.specialist_root_manifest, parent_manifest)
@@ -2523,7 +2532,7 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
                     "--artifact-root",
                     str(paths["artifact_root"]),
                     "--data-manifest",
-                    str(paths["manifest"]),
+                    str(paths["manifest"].resolve()),
                     "--tokenizer",
                     str(paths["tokenizer"]),
                     "--capability",
@@ -2733,7 +2742,14 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
                 ),
             )
             launch = self._validate(module, paths)
-            self.assertEqual(launch.specialist_data_manifest, paths["manifest"])
+            # .resolve() on both sides, not relying on WindowsPath.__eq__'s
+            # case-insensitive comparison to mask a real casing difference
+            # between the fixture's unresolved spelling and the launcher's
+            # resolved return value (see the sibling note in
+            # test_valid_specialist_route_is_accepted_and_reaches_the_runner_argv).
+            self.assertEqual(
+                launch.specialist_data_manifest, paths["manifest"].resolve()
+            )
 
     def test_specialist_without_resume_checkpoint_is_refused(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -2762,6 +2778,43 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
             write_json(paths["run_spec"], run_spec)
             self._refused(paths, "at least 1 GiB")
 
+    def test_max_records_below_one_is_refused_for_specialist(self) -> None:
+        """Issue #1430 delta review Finding A (LOW): _require_scope_subset
+        only floors requested_scope.max_records at >= 0 -- correct for
+        governed-vertical, which tolerates 0 -- but the specialist runner
+        disagrees: bind_specialist_execution_slice refuses a zero or
+        negative slice ("specialist execution slice max records must be
+        positive"). Pre-fix, max_records=0 built parse-perfect argv the
+        runner then deterministically refused at subprocess time; this
+        certificate authorizes exactly 1 (see valid_scope), so 0 is the
+        boundary value that proves the floor without also tripping the
+        ceiling check above it."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory)
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["requested_scope"]["max_records"] = 0
+            write_json(paths["run_spec"], run_spec)
+            self._refused(paths, "max_records must be at least 1")
+
+    def test_fractional_max_records_is_refused(self) -> None:
+        """Issue #1430 delta review Finding A follow-up: max_records=int(...)
+        in validate_certified_request would otherwise silently truncate a
+        fractional value (e.g. 0.5 -> 0), quietly authorizing a slice the
+        run spec never actually asked for. Checked once, ahead of routing,
+        so it applies to both governed-vertical and specialist -- 0.5 is
+        below this certificate's max_records=1 ceiling (see valid_scope),
+        so this proves the truncation refusal fires before the specialist
+        floor above ever gets a chance to (a non-fractional message here
+        would mean the wrong check caught it)."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory)
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["requested_scope"]["max_records"] = 0.5
+            write_json(paths["run_spec"], run_spec)
+            self._refused(paths, "max_records must be an exact integer")
+
     def test_run_id_over_128_characters_is_refused(self) -> None:
         """Issue #1430 review Defect 5 (LOW): run_id doubles as
         --telemetry-run-id, which run_vertical_slice.py bounds to 128
@@ -2777,22 +2830,65 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
             )
             self._refused(paths, "run_id must be at most 128 characters")
 
-    def test_malformed_model_chat_restore_not_before_is_refused(self) -> None:
-        """Issue #1430 review Defect 4 (LOW): the value is a cooldown floor
-        telemetry orders against, so a malformed timestamp must be refused
-        here rather than reaching a telemetry consumer as unparseable data."""
+    def test_model_chat_restore_not_before_accepts_the_chains_own_formats(
+        self,
+    ) -> None:
+        """Issue #1430 review Defect F1 (HIGH): an earlier version of this
+        field's validation used datetime.fromisoformat, which does not
+        accept a bare "Z" designator until CPython 3.11 -- this repo pins
+        3.10.11 (manifests/python-environment-v1.json) -- so it refused the
+        exact house convention every real timestamp producer in this chain
+        uses (mint_launch_authority.py's strftime("...Z"), this runner's own
+        telemetry writer's isoformat().replace("+00:00","Z"),
+        launch_packet.py's strftime("...Z")). Verified against both real
+        consumers of this specific field (run_vertical_slice.py's telemetry
+        write path; ember-cli's telemetry-watch.ts/telemetry-label.ts) that
+        NEITHER ever parses the value -- both only type-check it as a
+        string and either embed it verbatim in telemetry JSON or
+        string-interpolate it into a display label -- so the format check
+        was a bound this launcher does not own, and was removed. This is
+        the positive case the removed check's own test never covered: the
+        defect lived in the ACCEPTANCE direction, not the refusal one."""
+
+        module = load_module()
+        for value in (
+            "2026-07-18T11:00:00-07:00",  # the existing fixture's offset form
+            "2026-07-18T18:00:00Z",  # the house Z convention
+            "2026-07-18T18:00:00.123456Z",  # Z with fractional seconds
+            "20260718T180000Z",  # launch_packet.py's compact Z form
+        ):
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as directory:
+                paths = self._bundle(
+                    directory,
+                    mutate_run_spec=lambda spec, value=value: spec.__setitem__(
+                        "training_model_chat_restore_not_before", value
+                    ),
+                )
+                launch = self._validate(module, paths)
+                self.assertEqual(
+                    launch.specialist_model_chat_restore_not_before, value
+                )
+                argv = module.build_runner_argv(paths["repo"], launch)
+                self.assertEqual(argv[-1], value)
+
+    def test_empty_model_chat_restore_not_before_is_refused(self) -> None:
+        """The one bound this process still owns after Defect F1's format
+        check was removed: non-emptiness. run_vertical_slice.py's telemetry
+        group needs a truthy value, not merely a string, and this is
+        _require_specialist_string's pre-existing, independently justified
+        check -- not a format bound reintroduced under another name."""
 
         with tempfile.TemporaryDirectory() as directory:
             paths = self._bundle(
                 directory,
                 mutate_run_spec=lambda spec: spec.__setitem__(
-                    "training_model_chat_restore_not_before", "not-a-timestamp"
+                    "training_model_chat_restore_not_before", ""
                 ),
             )
             self._refused(
                 paths,
-                "training_model_chat_restore_not_before must be an ISO 8601 "
-                "timestamp",
+                "training_model_chat_restore_not_before must be a non-empty "
+                "string",
             )
 
     def test_telemetry_path_outside_custody_root_is_refused(self) -> None:
@@ -2829,6 +2925,22 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
         scoping by the OWNER object, not just the flag string, is what binds
         the check to THIS subparser's own requirements).
 
+        Issue #1430 delta review Defect F4 (LOW): the set this was checked
+        against used to be a hand-typed literal living only in this test --
+        it bound the runner's ast-derived required set to that literal, but
+        nothing bound the literal to what build_runner_argv actually emits,
+        so a future edit that stopped emitting a flag (or renamed one) would
+        pass this test right up until the runner rejected the argv at
+        subprocess time. The set below is now derived from calling the real
+        build_runner_argv against a synthetic ValidatedLaunch instead (a
+        plain NamedTuple, and build_runner_argv a pure function of it plus
+        repo_root, so constructing one directly here exercises the real
+        emission code, not an approximation of it) for each of the three
+        resume-evidence choices in turn, unioned -- so a flag build_runner_
+        argv stops emitting, or emits under the wrong spelling, now fails
+        here directly against the runner's own parser, with no hand-typed
+        literal in between to go stale.
+
         Deliberately NOT asserted: each flag's argparse `type=`. Every argv
         element this launcher emits is already a plain string (build_runner_
         argv wraps every value in str(...) or takes an already-string field),
@@ -2852,6 +2964,22 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
             return None
 
         def is_required_kw(call: ast.Call) -> bool:
+            # Issue #1430 delta review Finding B (NOTE): only recognizes a
+            # literal `required=True` -- a future `required=<name>` (a
+            # variable/expression instead of the literal) would be invisible
+            # here, and Pass 2 below would silently drop that flag from
+            # required_flags. Not a live defect: every add_argument in
+            # run_vertical_slice.py's specialist subparser spells `required`
+            # as a literal today (main(), the specialist block), and both
+            # drift directions already fail loud elsewhere if that changes --
+            # a flag ast can't see as required either never reaches
+            # required_groups/required_flags (Pass 1's assertTrue on
+            # required_groups, or the final required_flags == emitted_flags
+            # comparison, catches the mismatch) or build_runner_argv keeps
+            # emitting it regardless (real launches stay correct; only this
+            # test's bookkeeping would need the literal-only assumption
+            # revisited). Recorded so the next person does not have to
+            # re-derive that this is currently safe.
             return any(
                 keyword.arg == "required"
                 and isinstance(keyword.value, ast.Constant)
@@ -2926,29 +3054,64 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
             "specialist subparser",
         )
         self.assertEqual(capability_choices, module.TRAINING_CAPABILITIES)
-        # Every specialist launch emits exactly one of the three resume-
-        # evidence flags (resume is mandatory -- _validate_specialist_request
-        # refuses when absent, and exactly one evidence key is required by
-        # _validate_resume_request), so the UNION across all three choices is
-        # everything a specialist launch's argv can ever be required to
-        # carry -- which must equal the runner's required set exactly.
-        expected = {
-            "--seed",
-            "--artifact-root",
-            "--data-manifest",
-            "--tokenizer",
-            "--capability",
-            "--resume-checkpoint",
-            "--parent-manifest",
-            "--root-manifest",
-            "--max-records",
-            "--checkpoint-interval",
-            "--write-budget-gib",
-            "--telemetry-path",
-            "--telemetry-run-id",
-            "--model-chat-restore-not-before",
-        } | set(module.RESUME_EVIDENCE_RUN_SPEC_FLAGS.values())
-        self.assertEqual(required_flags, expected)
+
+        # Pass 3: the PRODUCER side of the same binding -- what
+        # build_runner_argv actually emits, not a hand-typed guess at it.
+        # ValidatedLaunch is a plain NamedTuple and build_runner_argv a pure
+        # function of (repo_root, launch), so constructing one directly here
+        # exercises the real emission code with no fixture machinery in the
+        # way -- these placeholder values are never validated, only
+        # formatted into argv strings. Every specialist launch emits exactly
+        # one of the three resume-evidence flags (resume is mandatory --
+        # _validate_specialist_request refuses when absent, and exactly one
+        # evidence key is required by _validate_resume_request), so the
+        # UNION across all three choices is everything a specialist launch's
+        # argv can ever be required to carry -- which must equal the
+        # runner's required set exactly.
+        placeholder_fields = dict(
+            certificate_sha256="0" * 64,
+            run_spec_sha256="1" * 64,
+            public_master_sha="2" * 40,
+            closure_sha256="3" * 64,
+            artifact_root=pathlib.Path("artifacts"),
+            custody_root=pathlib.Path("custody"),
+            runner_receipt=pathlib.Path("receipt.json"),
+            seed=1,
+            write_budget_bytes=1,
+            max_records=1,
+            max_c_write_gib=1.0,
+            max_b_write_gib=1.0,
+            resume_checkpoint=pathlib.Path("checkpoint"),
+            resume_evidence_path=pathlib.Path("evidence.json"),
+            specialist_data_manifest=pathlib.Path("manifest.json"),
+            specialist_capability="image",
+            specialist_tokenizer_path=pathlib.Path("tokenizer.json"),
+            specialist_parent_manifest=pathlib.Path("parent.json"),
+            specialist_root_manifest=pathlib.Path("root.json"),
+            specialist_checkpoint_interval=1,
+            specialist_write_budget_gib=1,
+            specialist_telemetry_path=pathlib.Path("telemetry.jsonl"),
+            specialist_telemetry_run_id="run-id",
+            specialist_model_chat_restore_not_before="2026-01-01T00:00:00Z",
+        )
+        emitted_flags: set[str] = set()
+        for resume_evidence_flag in module.RESUME_EVIDENCE_RUN_SPEC_FLAGS.values():
+            launch = module.ValidatedLaunch(
+                resume_evidence_flag=resume_evidence_flag,
+                **placeholder_fields,
+            )
+            argv = module.build_runner_argv(pathlib.Path("/repo"), launch)
+            specialist_argv = argv[argv.index("specialist") + 1 :]
+            emitted_flags |= {
+                token for token in specialist_argv if token.startswith("--")
+            }
+
+        self.assertEqual(
+            required_flags,
+            emitted_flags,
+            "the runner's required specialist flags and what "
+            "build_runner_argv actually emits have diverged",
+        )
 
 
 if __name__ == "__main__":
