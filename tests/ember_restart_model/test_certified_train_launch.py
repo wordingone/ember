@@ -2815,14 +2815,27 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
             self._refused(paths, "canonical")
 
     def test_specialist_flags_match_the_runner_argparse(self) -> None:
-        """Bind the consumer's flag spelling AND required-ness to
-        run_vertical_slice's specialist parser, ast-parsed the way
-        ProducerSchemaBindingTest binds completion-receipt keys to their real
-        producer. Issue #1430 review test-quality note: a substring grep
-        would still pass if a flag moved to another subparser, if
-        required-ness changed, or if a new required flag appeared -- ast
-        scoping by the (file-unique) `specialist`/`specialist_resume`
-        argparse variable names closes all three."""
+        """Bind the consumer's flag spelling, required-ness, AND the
+        --capability enum to run_vertical_slice's specialist parser,
+        ast-parsed the way ProducerSchemaBindingTest binds completion-receipt
+        keys to their real producer. Issue #1430 review test-quality note: a
+        substring grep would still pass if a flag moved to another
+        subparser, if required-ness changed, or if a new required flag
+        appeared -- ast scoping by the (file-unique)
+        `specialist`/`specialist_resume` argparse variable names closes all
+        three, including the "shared with another subcommand" gap a
+        whole-file substring check cannot close (--seed/--artifact-root/
+        --resume-checkpoint/etc. also appear on vertical/governed-vertical;
+        scoping by the OWNER object, not just the flag string, is what binds
+        the check to THIS subparser's own requirements).
+
+        Deliberately NOT asserted: each flag's argparse `type=`. Every argv
+        element this launcher emits is already a plain string (build_runner_
+        argv wraps every value in str(...) or takes an already-string field),
+        so a `type=` change cannot alter what this launcher emits -- it would
+        surface immediately as a runner-side parse failure on first use, not
+        as a silent contract drift the way a required-ness or enum change
+        would."""
 
         import ast
 
@@ -2870,8 +2883,11 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
         # Pass 2: every --flag added directly to `specialist` with
         # required=True, plus every --flag added to one of its required
         # groups (argparse forbids required= on a group member -- membership
-        # alone makes it required, as exactly one of the group).
+        # alone makes it required, as exactly one of the group). Also
+        # extracts --capability's choices= tuple while we're already
+        # visiting its add_argument call.
         required_flags: set[str] = set()
+        capability_choices: set[str] | None = None
         for node in ast.walk(tree):
             owner = call_owner_attr(node)
             if owner is None or owner[1] != "add_argument":
@@ -2887,10 +2903,29 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
             if obj_name == "specialist":
                 if is_required_kw(node):
                     required_flags.add(flag)
+                if flag == "--capability":
+                    choices_node = next(
+                        (kw.value for kw in node.keywords if kw.arg == "choices"),
+                        None,
+                    )
+                    if isinstance(choices_node, (ast.Tuple, ast.List)) and all(
+                        isinstance(element, ast.Constant)
+                        and isinstance(element.value, str)
+                        for element in choices_node.elts
+                    ):
+                        capability_choices = {
+                            element.value for element in choices_node.elts
+                        }
             else:
                 required_flags.add(flag)
 
         module = load_module()
+        self.assertIsNotNone(
+            capability_choices,
+            "--capability's choices= could not be ast-extracted from the "
+            "specialist subparser",
+        )
+        self.assertEqual(capability_choices, module.TRAINING_CAPABILITIES)
         # Every specialist launch emits exactly one of the three resume-
         # evidence flags (resume is mandatory -- _validate_specialist_request
         # refuses when absent, and exactly one evidence key is required by
