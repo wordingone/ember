@@ -520,13 +520,27 @@ def _derive_checkpoint_storage_projection(
     global_step: int,
     max_transient_scratch_bytes: int,
     max_serialized_bytes: int,
-    single_specialist_episode: bool,
+    specialist_parent_optimizer_routes: tuple[str, ...] | None,
 ) -> dict[str, Any]:
-    """Bind the post-update optimizer floor and four-expert checkpoint floor."""
+    """Bind the post-update optimizer floor and four-expert checkpoint floor.
+
+    ``specialist_parent_optimizer_routes`` is ``None`` for a non-lineage
+    publication; for a single-specialist lineage episode it is the (possibly
+    empty) closed set of expert routes the resumed parent's own digest-bound
+    storage projection attests as initialized -- the only authority on what
+    optimizer state the episode legitimately inherited (#1473).
+    """
 
     if type(global_step) is not int or global_step < 1:
         raise ValueError(
             "checkpoint storage projection requires post-update global_step"
+        )
+    if specialist_parent_optimizer_routes is not None and (
+        [name for name in EXPERT_NAMES if name in set(specialist_parent_optimizer_routes)]
+        != list(specialist_parent_optimizer_routes)
+    ):
+        raise ValueError(
+            "checkpoint storage projection parent optimizer routes are not closed"
         )
     route_names = ("shared", *EXPERT_NAMES)
     if model.active_expert not in route_names:
@@ -575,16 +589,27 @@ def _derive_checkpoint_storage_projection(
         route_valid = active_bytes > 0
         active_routes = [model.active_expert]
     else:
-        # Full-shard vertical training activates every record's routed expert
-        # (forward -> _activate_expert) before its single end-of-run
-        # checkpoint, so a valid post-update optimizer may hold state for the
-        # complete specialist set. Only the CLOSED full set is admissible;
-        # any partial multi-route state stays rejected, and a
-        # single-specialist lineage episode never admits extra routes.
+        # Post-update optimizer state on multiple expert routes has exactly two
+        # closed admissible shapes. (1) Full-shard vertical training with no
+        # lineage activates every record's routed expert (forward ->
+        # _activate_expert) before its single end-of-run checkpoint (#1316).
+        # (2) A single-specialist lineage episode that exact-resumed a parent
+        # whose own digest-bound storage projection attests initialized state
+        # on every route: load_checkpoint_artifacts restores the parent's
+        # moments verbatim and only the active route trains, so the full set
+        # persists through the episode (#1473 -- the first R2 entry inherited
+        # the r1 root's four routes and lost its trained segment to the
+        # previous single-route admission). Only the CLOSED full set is
+        # admissible either way; partial multi-route state stays rejected, and
+        # a lineage episode whose parent attests less than full coverage
+        # cannot have grown the extra routes legitimately.
         route_valid = (
-            not single_specialist_episode
-            and active_bytes > 0
+            active_bytes > 0
             and specialist_routes == list(EXPERT_NAMES)
+            and (
+                specialist_parent_optimizer_routes is None
+                or list(specialist_parent_optimizer_routes) == list(EXPERT_NAMES)
+            )
         )
         active_routes = list(specialist_routes)
     if optimizer_actual < 1 or not route_valid:
@@ -1142,10 +1167,34 @@ def preflight_specialist_lineage_sources(*, parent_manifest: Path, root_manifest
         "parent_history": list(history),
     }
 
+def _attested_parent_optimizer_expert_routes(parent: Mapping[str, Any]) -> tuple[str, ...]:
+    """Expert routes a lineage parent's digest-bound storage projection attests.
+
+    Fail-soft to the empty tuple: a parent without an internally valid,
+    digest-verified projection attests no optimizer-state inheritance, which
+    holds the successor's route admission at its strictest single-route shape
+    (#1473). Reuses the stored-projection revalidator so a re-signed or
+    widened id list is refused by the same closed authority everywhere.
+    """
+
+    projection = parent.get("storage_projection")
+    if not isinstance(projection, Mapping):
+        return ()
+    try:
+        validated = _validate_checkpoint_storage_projection(projection)
+    except (ValueError, TypeError):
+        return ()
+    return tuple(
+        name
+        for name in validated["optimizer_state_active_expert_ids"]
+        if name in EXPERT_NAMES
+    )
+
+
 def _specialist_lineage(
     lineage: Mapping[str, Any], *, active_expert: str, candidate_parameter_sha256: Mapping[str, str],
     data_cursor: Mapping[str, Any] | None = None,
-) -> tuple[dict[str, Any], dict[str, str], dict[str, str], Path]:
+) -> tuple[dict[str, Any], dict[str, str], dict[str, str], Path, tuple[str, ...]]:
     """Close one-family accretion against independently supplied parent/root bundles."""
 
     if active_expert not in EXPERT_NAMES:
@@ -1170,6 +1219,9 @@ def _specialist_lineage(
     root_path = Path(root_source).resolve()
     parent, parent_sha256 = _external_checkpoint_manifest(parent_path, label="parent")
     root, root_sha256 = _external_checkpoint_manifest(root_path, label="root genesis")
+    # Bound to the same one-byte manifest snapshot the lineage hashes: a second
+    # read here could attest routes from different bytes than parent_sha256.
+    parent_optimizer_routes = _attested_parent_optimizer_expert_routes(parent)
     parent_lineage = parent.get("lineage")
     if not isinstance(parent_lineage, Mapping):
         if parent_sha256 != root_sha256:
@@ -1214,7 +1266,7 @@ def _specialist_lineage(
             "root_genesis_checkpoint_sha256": root_sha256,
             "trained_expert_ids": list(trained),
             "episode": episode,
-        }, dict(root["expert_genesis_sha256"]), dict(parent_experts), parent_path.parent)
+        }, dict(root["expert_genesis_sha256"]), dict(parent_experts), parent_path.parent, parent_optimizer_routes)
     verification = lineage["data_verification_receipt"]
     capability_experts = {"image": "vision", "audio": "audio", "reasoning": "reasoning", "tool": "tool"}
     if not isinstance(verification, Mapping) or set(verification) != SPECIALIST_VERIFICATION_FIELDS:
@@ -1284,7 +1336,7 @@ def _specialist_lineage(
             "execution_slice_sha256": _canonical_sha256(execution_slice),
             **({"scene_split_selection": dict(scene_selection), "scene_split_selection_sha256": _canonical_sha256(scene_selection)} if scene_selection is not None else {}),
         },
-    }, dict(root["expert_genesis_sha256"]), dict(parent_experts), parent_path.parent)
+    }, dict(root["expert_genesis_sha256"]), dict(parent_experts), parent_path.parent, parent_optimizer_routes)
 def _link_or_copy_verified(
     source: Path,
     target: Path,
@@ -1597,8 +1649,9 @@ def _write_checkpoint_artifacts_impl(
     expert_parameter_sha256 = model.expert_bank_genesis_hashes()
     preflight_lineage = None
     preflight_genesis = None
+    specialist_parent_optimizer_routes: tuple[str, ...] | None = None
     if specialist_lineage is not None:
-        preflight_lineage, preflight_genesis, preflight_parent_shards, preflight_parent_root = _specialist_lineage(specialist_lineage, active_expert=model.active_expert, candidate_parameter_sha256=expert_parameter_sha256, data_cursor=data_cursor)
+        preflight_lineage, preflight_genesis, preflight_parent_shards, preflight_parent_root, specialist_parent_optimizer_routes = _specialist_lineage(specialist_lineage, active_expert=model.active_expert, candidate_parameter_sha256=expert_parameter_sha256, data_cursor=data_cursor)
     published_root = root
     if published_root.exists():
         raise FileExistsError(f"published checkpoint bundle already exists: {published_root}")
@@ -1733,7 +1786,7 @@ def _write_checkpoint_artifacts_impl(
                 global_step=int(data_cursor["global_step"]),
                 max_transient_scratch_bytes=max_transient_scratch_bytes,
                 max_serialized_bytes=int(max_serialized_bytes),
-                single_specialist_episode=specialist_lineage is not None,
+                specialist_parent_optimizer_routes=specialist_parent_optimizer_routes,
             )
 
         counts = measure_parameter_counts(model)

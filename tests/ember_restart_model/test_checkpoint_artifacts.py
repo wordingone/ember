@@ -1048,7 +1048,7 @@ class CheckpointArtifactTests(unittest.TestCase):
         lineage = {"parent_manifest": "parent/checkpoint-manifest.json", "root_manifest": "root/checkpoint-manifest.json", "trained_expert_ids": ["vision"], "episode": episode}
         candidate_parameters = {**genesis, "vision": "1" * 64}
         with patch.object(checkpoint_artifacts, "_external_checkpoint_manifest", side_effect=((parent, "9" * 64), (parent, "9" * 64))):
-            normalized, _, _, _ = checkpoint_artifacts._specialist_lineage(
+            normalized, _, _, _, _ = checkpoint_artifacts._specialist_lineage(
                 lineage, active_expert="vision", candidate_parameter_sha256=candidate_parameters,
                 data_cursor=candidate_cursor,
             )
@@ -1071,7 +1071,7 @@ class CheckpointArtifactTests(unittest.TestCase):
             "data_cursor": {"schema_version": TRAINING_CURSOR_SCHEMA_VERSION, "selection_cursor": p2b_end, "global_step": 5, "tokens_seen": 30},
         }
         with patch.object(checkpoint_artifacts, "_external_checkpoint_manifest", side_effect=((p2b_parent, "9" * 64), (root_parent, "8" * 64))):
-            normalized, _, _, _ = checkpoint_artifacts._specialist_lineage(
+            normalized, _, _, _, _ = checkpoint_artifacts._specialist_lineage(
                 chained_lineage, active_expert="vision", candidate_parameter_sha256=candidate_parameters,
                 data_cursor=chained_cursor,
             )
@@ -1369,7 +1369,7 @@ class CheckpointArtifactTests(unittest.TestCase):
             global_step=1,
             max_transient_scratch_bytes=optimizer_floor + 100,
             max_serialized_bytes=1024**3,
-            single_specialist_episode=False,
+            specialist_parent_optimizer_routes=None,
         )
 
         self.assertEqual(
@@ -1502,21 +1502,229 @@ class CheckpointArtifactTests(unittest.TestCase):
                 for name in checkpoint_artifacts.EXPERT_NAMES
             },
         }
-        with self.assertRaisesRegex(
-            ValueError, "post-update optimizer state"
+        # A lineage episode admits the full inherited set only when the parent's
+        # projection attests it: no attestation and partial attestation both
+        # keep the strict refusal.
+        for parent_routes in ((), ("vision",)):
+            with self.subTest(parent_routes=parent_routes), self.assertRaisesRegex(
+                ValueError, "post-update optimizer state"
+            ):
+                checkpoint_artifacts._derive_checkpoint_storage_projection(
+                    model=model,
+                    optimizer=optimizer,
+                    optimizer_file_payload=optimizer_payload,
+                    shard_storage_lower_bounds=bounds,
+                    shard_sha256={path: "a" * 64 for path in bounds},
+                    publication_modes={path: "written" for path in bounds},
+                    global_step=4,
+                    max_transient_scratch_bytes=1024**3,
+                    max_serialized_bytes=1024**3,
+                    specialist_parent_optimizer_routes=parent_routes,
+                )
+
+    def test_v5_storage_projection_admits_parent_attested_full_route_inheritance(self) -> None:
+        """#1473: a single-specialist lineage episode exact-resumed from the
+        full-coverage root carries the root's four inherited optimizer routes;
+        with the parent's digest-bound projection attesting the full set the
+        state is admissible and projects at factor 1 (already fully realized)."""
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+        )
+        model = UnifiedDecoder(config, genesis_seed=190)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        for expert in checkpoint_artifacts.EXPERT_NAMES:
+            optimizer.zero_grad(set_to_none=True)
+            model(
+                torch.tensor([[1, 2, 3]], dtype=torch.long),
+                active_expert=expert,
+            ).float().square().mean().backward()
+            optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+        model._activate_expert("vision")
+        optimizer_payload = {"optimizer": optimizer.state_dict()}
+        optimizer_floor = checkpoint_artifacts._unique_tensor_storage_bytes(
+            optimizer_payload
+        )
+        bounds = {
+            "shared-model.pt": 100,
+            "optimizer-state.pt": optimizer_floor,
+            "replay-state.pt": 100,
+            **{
+                f"expert-{name}.pt": 100
+                for name in checkpoint_artifacts.EXPERT_NAMES
+            },
+        }
+
+        projection = checkpoint_artifacts._derive_checkpoint_storage_projection(
+            model=model,
+            optimizer=optimizer,
+            optimizer_file_payload=optimizer_payload,
+            shard_storage_lower_bounds=bounds,
+            shard_sha256={path: "a" * 64 for path in bounds},
+            publication_modes={path: "written" for path in bounds},
+            global_step=5,
+            max_transient_scratch_bytes=1024**3,
+            max_serialized_bytes=1024**3,
+            specialist_parent_optimizer_routes=tuple(
+                checkpoint_artifacts.EXPERT_NAMES
+            ),
+        )
+
+        self.assertEqual(projection["active_expert"], "vision")
+        self.assertEqual(
+            projection["optimizer_state_active_expert_ids"],
+            list(checkpoint_artifacts.EXPERT_NAMES),
+        )
+        self.assertEqual(
+            projection[
+                "projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes"
+            ],
+            projection["optimizer_state_tensor_storage_lower_bound_bytes"],
+        )
+        checkpoint_artifacts._validate_checkpoint_storage_projection(projection)
+
+    def test_v5_storage_projection_rejects_unclosed_parent_route_declaration(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+        )
+        model = UnifiedDecoder(config, genesis_seed=191)
+        model._activate_expert("vision")
+        optimizer = torch.optim.AdamW(
+            (parameter for parameter in model.parameters() if parameter.requires_grad),
+            lr=1e-4,
+        )
+        model(
+            torch.tensor([[1, 2, 3]], dtype=torch.long),
+            active_expert="vision",
+        ).float().square().mean().backward()
+        optimizer.step()
+        optimizer_payload = {"optimizer": optimizer.state_dict()}
+        optimizer_floor = checkpoint_artifacts._unique_tensor_storage_bytes(
+            optimizer_payload
+        )
+        bounds = {
+            "shared-model.pt": 100,
+            "optimizer-state.pt": optimizer_floor,
+            "replay-state.pt": 100,
+            **{
+                f"expert-{name}.pt": 100
+                for name in checkpoint_artifacts.EXPERT_NAMES
+            },
+        }
+        for bad_routes in (
+            ("tool", "vision"),
+            ("vision", "vision"),
+            ("bogus",),
+            ("shared",),
         ):
-            checkpoint_artifacts._derive_checkpoint_storage_projection(
-                model=model,
-                optimizer=optimizer,
-                optimizer_file_payload=optimizer_payload,
-                shard_storage_lower_bounds=bounds,
-                shard_sha256={path: "a" * 64 for path in bounds},
-                publication_modes={path: "written" for path in bounds},
-                global_step=4,
-                max_transient_scratch_bytes=1024**3,
-                max_serialized_bytes=1024**3,
-                single_specialist_episode=True,
-            )
+            with self.subTest(bad_routes=bad_routes), self.assertRaisesRegex(
+                ValueError, "parent optimizer routes are not closed"
+            ):
+                checkpoint_artifacts._derive_checkpoint_storage_projection(
+                    model=model,
+                    optimizer=optimizer,
+                    optimizer_file_payload=optimizer_payload,
+                    shard_storage_lower_bounds=bounds,
+                    shard_sha256={path: "a" * 64 for path in bounds},
+                    publication_modes={path: "written" for path in bounds},
+                    global_step=1,
+                    max_transient_scratch_bytes=1024**3,
+                    max_serialized_bytes=1024**3,
+                    specialist_parent_optimizer_routes=bad_routes,
+                )
+
+    @staticmethod
+    def _signed_projection(*, active_expert: str, ids: list[str], route_bytes: dict[str, int], projected: int) -> dict[str, object]:
+        projection: dict[str, object] = {
+            "schema_version": "ember-checkpoint-storage-projection-v1",
+            "active_expert": active_expert,
+            "optimizer_state_after_global_step": 1,
+            "optimizer_state_active_expert_ids": ids,
+            "optimizer_state_tensor_storage_lower_bound_bytes": 10,
+            "optimizer_state_tensor_storage_by_route_bytes": route_bytes,
+            "projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes": projected,
+            "per_shard_tensor_storage_lower_bound_bytes": {
+                "shared-model.pt": 10,
+                "optimizer-state.pt": 10,
+                "replay-state.pt": 10,
+                "expert-vision.pt": 10,
+                "expert-audio.pt": 10,
+                "expert-reasoning.pt": 10,
+                "expert-tool.pt": 10,
+            },
+            "per_shard_sha256": {
+                "shared-model.pt": "a" * 64,
+                "optimizer-state.pt": "b" * 64,
+                "replay-state.pt": "c" * 64,
+                "expert-vision.pt": "d" * 64,
+                "expert-audio.pt": "e" * 64,
+                "expert-reasoning.pt": "f" * 64,
+                "expert-tool.pt": "0" * 64,
+            },
+            "transient_new_write_peak_lower_bound_bytes": 10,
+            "retained_shard_paths": [],
+            "all_expert_projected_tensor_storage_lower_bound_bytes": 60 + projected,
+            "max_transient_scratch_bytes": 100,
+            "max_serialized_bytes": 100,
+            "manifest_written_last": True,
+        }
+        projection["projection_sha256"] = checkpoint_artifacts._canonical_sha256(projection)
+        return projection
+
+    def test_attested_parent_optimizer_expert_routes_extraction(self) -> None:
+        """The successor's inheritance authority is the parent's digest-bound
+        projection: full attestation yields the full tuple, single-route yields
+        that route, shared yields nothing, and any missing or tampered
+        projection fails soft to no attestation (strictest admission)."""
+        full = self._signed_projection(
+            active_expert="vision",
+            ids=list(checkpoint_artifacts.EXPERT_NAMES),
+            route_bytes={"shared": 2, "vision": 8, "audio": 1, "reasoning": 1, "tool": 1},
+            projected=10,
+        )
+        self.assertEqual(
+            checkpoint_artifacts._attested_parent_optimizer_expert_routes(
+                {"storage_projection": full}
+            ),
+            tuple(checkpoint_artifacts.EXPERT_NAMES),
+        )
+        single = self._signed_projection(
+            active_expert="vision",
+            ids=["vision"],
+            route_bytes={"shared": 2, "vision": 8, "audio": 0, "reasoning": 0, "tool": 0},
+            projected=40,
+        )
+        self.assertEqual(
+            checkpoint_artifacts._attested_parent_optimizer_expert_routes(
+                {"storage_projection": single}
+            ),
+            ("vision",),
+        )
+        shared = self._signed_projection(
+            active_expert="shared",
+            ids=["shared"],
+            route_bytes={"shared": 2, "vision": 0, "audio": 0, "reasoning": 0, "tool": 0},
+            projected=10,
+        )
+        self.assertEqual(
+            checkpoint_artifacts._attested_parent_optimizer_expert_routes(
+                {"storage_projection": shared}
+            ),
+            (),
+        )
+        self.assertEqual(
+            checkpoint_artifacts._attested_parent_optimizer_expert_routes({}), ()
+        )
+        tampered = dict(full)
+        tampered["optimizer_state_tensor_storage_by_route_bytes"] = {
+            **full["optimizer_state_tensor_storage_by_route_bytes"], "audio": 0,
+        }
+        self.assertEqual(
+            checkpoint_artifacts._attested_parent_optimizer_expert_routes(
+                {"storage_projection": tampered}
+            ),
+            (),
+        )
 
     def test_v5_storage_projection_rejects_all_expert_aggregate_over_serialized_gate(self) -> None:
         config = RestartDecoderConfig.small_for_tests(
@@ -1560,7 +1768,7 @@ class CheckpointArtifactTests(unittest.TestCase):
                 global_step=1,
                 max_transient_scratch_bytes=per_shard_ceiling,
                 max_serialized_bytes=per_shard_ceiling,
-                single_specialist_episode=False,
+                specialist_parent_optimizer_routes=None,
             )
 
     def test_v5_storage_projection_rejects_rehashed_route_tamper(self) -> None:
