@@ -1693,10 +1693,53 @@ def install_checkpoint(
     return checkpoint
 
 
-class ResumePlumbingTests(unittest.TestCase):
-    """Issue #1425: the certified path built a FIXED argv with no resume flags,
-    so a resumed rung could only be launched OFF the certified path. Resume is
-    expressed as optional run-spec keys, validated fail-closed before argv."""
+def authorize_resume_roots(
+    paths: dict[str, pathlib.Path], *roots: pathlib.Path
+) -> None:
+    """Give the bundle's certificate the #1426 resume allowlist.
+
+    Kept OUT of valid_scope so the shared fixture stays the legacy shape: every
+    non-resume test then proves a certificate without the key takes no new code
+    path, and a test that wants the key opts into it explicitly.
+    """
+
+    rewrite_certificate(
+        paths,
+        lambda certificate: certificate["execution_scope"].__setitem__(
+            "allowed_resume_roots", [str(root) for root in roots]
+        ),
+    )
+
+
+def set_resume_paths(
+    paths: dict[str, pathlib.Path],
+    checkpoint: pathlib.Path,
+    evidence: pathlib.Path,
+) -> None:
+    """Repoint an already-built bundle's resume triple.
+
+    Safe after the certificate has been rewritten: the run spec's own digest is
+    computed at validation time, and only certificate_sha256 binds it back.
+    """
+
+    run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+    run_spec["resume_checkpoint"] = str(checkpoint)
+    run_spec["resume_counter_receipt"] = str(evidence)
+    write_json(paths["run_spec"], run_spec)
+
+
+def install_resume_material(directory: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
+    """A resumable checkpoint plus its realization evidence, under `directory`."""
+
+    checkpoint = install_checkpoint(directory / "checkpoint-000100")
+    evidence = directory / "counter-success.json"
+    write_json(evidence, {"ok": True})
+    return checkpoint, evidence
+
+
+class _ResumeBundleMixin:
+    """Bundle helpers shared by the #1425 plumbing and #1426 authorization
+    suites; not a TestCase, so the cases are collected once each."""
 
     def _bundle(
         self,
@@ -1706,6 +1749,8 @@ class ResumePlumbingTests(unittest.TestCase):
         config_revision: str = ARCHITECTURE_REVISION,
         checkpoint_revision: str | None = ARCHITECTURE_REVISION,
         checkpoint_manifest: bool = True,
+        resume_roots: list[pathlib.Path] | None = None,
+        authorize_resume: bool = True,
     ) -> dict[str, pathlib.Path]:
         paths = write_valid_bundle(pathlib.Path(directory))
         install_model_config(paths["repo"], config_revision)
@@ -1725,6 +1770,15 @@ class ResumePlumbingTests(unittest.TestCase):
         if mutate_run_spec is not None:
             mutate_run_spec(run_spec)
         write_json(paths["run_spec"], run_spec)
+        if authorize_resume:
+            authorize_resume_roots(
+                paths,
+                *(
+                    [paths["custody_root"]]
+                    if resume_roots is None
+                    else resume_roots
+                ),
+            )
         return paths
 
     def _validate(self, module, paths: dict[str, pathlib.Path]):
@@ -1740,6 +1794,12 @@ class ResumePlumbingTests(unittest.TestCase):
         module = load_module()
         with self.assertRaisesRegex(ValueError, pattern):
             self._validate(module, paths)
+
+
+class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
+    """Issue #1425: the certified path built a FIXED argv with no resume flags,
+    so a resumed rung could only be launched OFF the certified path. Resume is
+    expressed as optional run-spec keys, validated fail-closed before argv."""
 
     def test_valid_resume_triple_is_accepted_and_reaches_the_runner_argv(
         self,
@@ -2083,6 +2143,208 @@ class ResumePlumbingTests(unittest.TestCase):
             (ROOT / "configs" / "ember-restart-3b.json").read_text(encoding="utf-8")
         )
         self.assertEqual(config["architecture_revision"], ARCHITECTURE_REVISION)
+
+
+class ResumeRootAuthorizationTests(_ResumeBundleMixin, unittest.TestCase):
+    """Issue #1426: the resume paths sat at run-spec TOP LEVEL, outside
+    requested_scope, so they received none of the certificate authorization
+    every other launch-shaping parameter gets -- a certificate scoped to custody
+    X admitted a resume from any published bundle anywhere on the machine, and
+    was checked only for coherence. The cure is a certificate-side ALLOWLIST,
+    because containment ("inside this run's custody_root") would refuse the
+    primary use case."""
+
+    def test_resume_from_a_prior_runs_custody_is_accepted(self) -> None:
+        """The case that forbids a containment rule: an R1->R2 rung resumes from
+        a PRIOR run's custody, entirely outside this run's custody_root."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            prior = pathlib.Path(directory) / "prior-run-custody"
+            checkpoint, evidence = install_resume_material(prior)
+            paths = self._bundle(directory, resume_roots=[prior])
+            set_resume_paths(paths, checkpoint, evidence)
+
+            launch = self._validate(module, paths)
+            self.assertEqual(launch.resume_checkpoint, checkpoint)
+            self.assertEqual(launch.resume_evidence_path, evidence)
+            self.assertFalse(
+                checkpoint.resolve().is_relative_to(
+                    paths["custody_root"].resolve()
+                )
+            )
+
+    def test_resume_outside_every_allowed_root_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            unlisted = pathlib.Path(directory) / "unlisted-bundle"
+            checkpoint, evidence = install_resume_material(unlisted)
+            paths = self._bundle(directory)
+            set_resume_paths(paths, checkpoint, evidence)
+            self._refused(
+                paths, "run scope exceeds certificate: resume_checkpoint"
+            )
+
+    def test_parent_traversal_out_of_an_allowed_root_is_refused(self) -> None:
+        """The executed probe that found the defect: a path whose LEXICAL form
+        sits under the allowed root and whose RESOLVED form escapes it. The
+        check therefore has to run on the resolved path, which is also the one
+        the runner would open."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            outside = pathlib.Path(directory) / "outside-custody"
+            checkpoint, evidence = install_resume_material(outside)
+            paths = self._bundle(directory)
+            custody_root = paths["custody_root"]
+            traversed_checkpoint = (
+                custody_root / ".." / "outside-custody" / checkpoint.name
+            )
+            traversed_evidence = (
+                custody_root / ".." / "outside-custody" / evidence.name
+            )
+            # Lexically inside the allowed root, resolves outside it.
+            self.assertTrue(
+                str(traversed_checkpoint).startswith(str(custody_root))
+            )
+            self.assertEqual(traversed_checkpoint.resolve(), checkpoint.resolve())
+
+            set_resume_paths(paths, traversed_checkpoint, traversed_evidence)
+            self._refused(
+                paths, "run scope exceeds certificate: resume_checkpoint"
+            )
+
+    def test_evidence_outside_the_allowed_roots_is_refused(self) -> None:
+        """Authorization covers the evidence path on the same basis as the
+        checkpoint. An authorized checkpoint admitted on realization evidence
+        fetched from anywhere is still an unauthorized resume."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            unlisted = pathlib.Path(directory) / "unlisted-bundle"
+            unlisted.mkdir(parents=True)
+            evidence = unlisted / "counter-success.json"
+            write_json(evidence, {"ok": True})
+            paths = self._bundle(directory)
+            set_resume_paths(paths, paths["checkpoint"], evidence)
+            self._refused(
+                paths, "run scope exceeds certificate: resume_counter_receipt"
+            )
+
+    def test_unauthorized_path_is_refused_before_it_is_opened(self) -> None:
+        """Authorization precedes every coherence check, so an unauthorized
+        path is refused without this process reading a byte of it -- the
+        refusal names authorization, not the missing directory."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            unlisted = pathlib.Path(directory) / "unlisted-bundle"
+            paths = self._bundle(directory)
+            set_resume_paths(
+                paths,
+                unlisted / "checkpoint-000100",
+                unlisted / "counter-success.json",
+            )
+            self._refused(
+                paths, "run scope exceeds certificate: resume_checkpoint"
+            )
+
+    def test_quarantine_outranks_authorization(self) -> None:
+        """Quarantine is a property of the path itself, so it is settled before
+        the certificate is consulted: a quarantined checkpoint stays
+        unselectable even inside an authorized root."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory)
+            quarantined = install_checkpoint(
+                paths["custody_root"]
+                / ".checkpoint-quarantine"
+                / "checkpoint-000100"
+            )
+            set_resume_paths(paths, quarantined, paths["evidence"])
+            self._refused(paths, "quarantined checkpoint")
+
+    def test_certificate_without_the_key_refuses_a_requested_resume(
+        self,
+    ) -> None:
+        """Fail-closed on the population that carries the defect. A pre-#1426
+        certificate authorizes no resume root, so it cannot express a certified
+        resume -- and the refusal says which action fixes it."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory, authorize_resume=False)
+            certificate = json.loads(
+                paths["certificate"].read_text(encoding="utf-8")
+            )
+            self.assertNotIn(
+                "allowed_resume_roots", certificate["execution_scope"]
+            )
+            self._refused(paths, "declares no allowed_resume_roots")
+
+    def test_certificate_without_the_key_still_launches_clean_genesis(
+        self,
+    ) -> None:
+        """The other half of the decision: a certificate without the key is
+        untouched for every launch that requests no resume, which is every
+        launch that worked before #1425."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            certificate = json.loads(
+                paths["certificate"].read_text(encoding="utf-8")
+            )
+            self.assertNotIn(
+                "allowed_resume_roots", certificate["execution_scope"]
+            )
+            launch = self._validate(module, paths)
+            self.assertIsNone(launch.resume_checkpoint)
+
+    def test_empty_allowed_resume_roots_authorizes_nothing(self) -> None:
+        """An explicitly empty allowlist is legal and authorizes nothing, the
+        same way an empty allowed_artifact_roots does."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory, resume_roots=[])
+            self._refused(
+                paths, "run scope exceeds certificate: resume_checkpoint"
+            )
+
+    def test_malformed_allowed_resume_roots_fails_closed(self) -> None:
+        for declared in ("not-a-list", [""], [None], [str(pathlib.Path.cwd()), 7]):
+            with self.subTest(declared=declared), tempfile.TemporaryDirectory() as directory:
+                paths = self._bundle(directory)
+                rewrite_certificate(
+                    paths,
+                    lambda certificate, declared=declared: certificate[
+                        "execution_scope"
+                    ].__setitem__("allowed_resume_roots", declared),
+                )
+                self._refused(
+                    paths,
+                    "allowed_resume_roots must be a list of non-empty strings",
+                )
+
+    def test_unknown_execution_scope_key_is_still_refused(self) -> None:
+        """The optional-key mechanism admits exactly the enumerated key and
+        does not open the scope template (the #1410 property, one level down)."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory)
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate["execution_scope"].__setitem__(
+                    "smuggled_key", "x"
+                ),
+            )
+            self._refused(paths, "certificate execution scope schema keys")
+
+    def test_optional_execution_scope_keys_are_a_closed_enumeration(
+        self,
+    ) -> None:
+        module = load_module()
+        self.assertEqual(
+            module.OPTIONAL_AUTHORIZED_SCOPE_KEYS, {"allowed_resume_roots"}
+        )
+        self.assertFalse(
+            module.OPTIONAL_AUTHORIZED_SCOPE_KEYS & module.AUTHORIZED_SCOPE_KEYS
+        )
 
 
 if __name__ == "__main__":

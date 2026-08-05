@@ -117,6 +117,9 @@ RUN_SPEC_KEYS = {
 # cannot be expressed through the certified path, which pushes operators onto
 # the uncertified one. Evidence keys mirror the runner's mutually exclusive
 # group -- exactly one, never zero, never two.
+# WHICH checkpoint may be resumed from is a certificate decision, not a run-spec
+# one (issue #1426): these keys are validated for COHERENCE here and for
+# AUTHORIZATION against the certificate's allowed_resume_roots.
 RESUME_EVIDENCE_RUN_SPEC_FLAGS = {
     "resume_counter_receipt": "--resume-counter-receipt",
     "resume_realization_registry": "--resume-realization-registry",
@@ -148,6 +151,14 @@ AUTHORIZED_SCOPE_KEYS = {
     "wsl_allowed",
     "persistent_worker_allowed",
 }
+# Resume-root authorization (issue #1426) is declared one level DOWN from the
+# certificate's top-level key template, so the exact-match problem #1410 solved
+# for CERTIFICATE_KEYS recurs here: AUTHORIZED_SCOPE_KEYS is compared for
+# equality, so a certificate carrying the new key would be refused outright
+# without this subtraction. Same closed-enumeration discipline as
+# OPTIONAL_CERTIFICATE_KEYS -- a scope key outside these two sets still
+# hard-fails, so the mechanism cannot be used to smuggle an unvalidated key in.
+OPTIONAL_AUTHORIZED_SCOPE_KEYS = {"allowed_resume_roots"}
 REQUESTED_SCOPE_KEYS = {
     "mode",
     "optimizer_steps",
@@ -587,18 +598,81 @@ def _require_resume_string(value: object, key: str) -> str:
     return value
 
 
+def _authorized_resume_roots(
+    authorized: dict[str, Any]
+) -> list[pathlib.Path] | None:
+    """The certificate's declared resume roots, resolved; None when undeclared.
+
+    An ALLOWLIST, deliberately not a containment rule: cross-run resume is the
+    point of the feature (an R1->R2 rung resumes from a PRIOR run's custody), so
+    "must sit inside this run's custody_root" would refuse the primary use case.
+    The producer that authors the run spec also mints the certificate, so it
+    names the prior run's root at mint time -- the same producer/consumer split
+    allowed_artifact_roots already runs on.
+
+    Absent (None) and empty ([]) both authorize nothing; they are distinguished
+    only in the refusal message, because "your certificate predates #1426, re-
+    mint it" and "this certificate deliberately authorizes no resume" are
+    different operator actions.
+    """
+
+    declared = authorized.get("allowed_resume_roots")
+    if declared is None:
+        return None
+    if not isinstance(declared, list) or not all(
+        isinstance(item, str) and item for item in declared
+    ):
+        raise ValueError(
+            "certificate allowed_resume_roots must be a list of non-empty "
+            "strings"
+        )
+    return [pathlib.Path(item).resolve(strict=False) for item in declared]
+
+
+def _require_authorized_resume_path(
+    path: pathlib.Path,
+    label: str,
+    allowed_roots: list[pathlib.Path] | None,
+) -> None:
+    """Refuse a resume path the certificate never authorized.
+
+    Decided on the RESOLVED form, never the lexical one: the probe that found
+    this defect (issue #1426) named `<custody>/../outside-custody`, which reads
+    as "inside custody" lexically and resolves outside it -- and the resolved
+    form is what the runner will actually open. Roots are resolved on the same
+    terms so a linked root still compares.
+    """
+
+    if allowed_roots is None:
+        raise ValueError(
+            f"certificate declares no allowed_resume_roots, so run spec {label} "
+            "is unauthorized (re-mint the certificate to launch a resumed rung)"
+        )
+    resolved = path.resolve(strict=False)
+    if not any(resolved.is_relative_to(root) for root in allowed_roots):
+        raise ValueError(f"run scope exceeds certificate: {label}")
+
+
 def _validate_resume_request(
     run_spec: dict[str, Any],
     run_spec_path: pathlib.Path,
     repo_root: pathlib.Path,
+    allowed_resume_roots: list[pathlib.Path] | None,
 ) -> ResumeRequest | None:
     """Validate the optional resume triple, fail-closed, before any argv exists.
 
     Returns None when the run spec declares no resume at all -- the clean-genesis
-    shape, which must stay exactly as it was. A partially declared resume is
+    shape, which must stay exactly as it was, and the only shape a certificate
+    without allowed_resume_roots can still launch. A partially declared resume is
     never "close enough": a checkpoint without evidence would train from weights
     whose realization was never proven, and evidence without a checkpoint names
     nothing.
+
+    Authorization is settled BEFORE the paths are opened, so an unauthorized
+    checkpoint is refused without this process reading a byte of it. Quarantine
+    is settled earlier still: it is a property of the path itself, so a
+    quarantined checkpoint stays unselectable even under a certificate that
+    would have authorized its root.
     """
 
     present = {
@@ -646,6 +720,14 @@ def _validate_resume_request(
     _reject_quarantined_resume_path(checkpoint, "resume_checkpoint")
     _reject_quarantined_resume_path(evidence, evidence_key)
 
+    # The evidence path is authorized on exactly the same basis as the
+    # checkpoint. Authorizing only the checkpoint would let a certificate-named
+    # checkpoint be admitted on realization evidence fetched from anywhere.
+    _require_authorized_resume_path(
+        checkpoint, "resume_checkpoint", allowed_resume_roots
+    )
+    _require_authorized_resume_path(evidence, evidence_key, allowed_resume_roots)
+
     if not checkpoint.is_dir():
         raise ValueError(
             "run spec resume_checkpoint must name an existing checkpoint directory"
@@ -687,7 +769,8 @@ def _require_scope_subset(
     requested: dict[str, Any], authorized: dict[str, Any]
 ) -> None:
     _require_keys(requested, REQUESTED_SCOPE_KEYS, "requested scope")
-    _require_keys(authorized, AUTHORIZED_SCOPE_KEYS, "certificate execution scope")
+    if set(authorized) - OPTIONAL_AUTHORIZED_SCOPE_KEYS != AUTHORIZED_SCOPE_KEYS:
+        raise ValueError("certificate execution scope schema keys mismatch")
 
     if authorized["purpose"] != "BOUNDED_CANARY":
         raise ValueError("certificate execution scope is not a bounded canary")
@@ -912,15 +995,23 @@ def validate_certified_request(
             "evidence"
         )
 
-    resume = _validate_resume_request(run_spec, run_spec_path, repo_root)
-
     requested_scope = _require_object(
         run_spec["requested_scope"], "requested scope"
     )
     authorized_scope = _require_object(
         certificate["execution_scope"], "certificate execution scope"
     )
+    # Scope first: the resume paths are authorized AGAINST this scope, so the
+    # certificate's authority must be established and shape-checked before
+    # anything is measured against it.
     _require_scope_subset(requested_scope, authorized_scope)
+
+    resume = _validate_resume_request(
+        run_spec,
+        run_spec_path,
+        repo_root,
+        _authorized_resume_roots(authorized_scope),
+    )
 
     custody_root = pathlib.Path(requested_scope["custody_root"])
     runner_receipt = pathlib.Path(run_spec["runner_receipt"])
