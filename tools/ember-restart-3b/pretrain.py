@@ -8,6 +8,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import math
 import subprocess
 import sys
 import time
@@ -64,6 +65,35 @@ def _verified_capabilities(record: Mapping[str, object], *, active_expert: str) 
     return capabilities
 
 
+def _expert_routing_entropy(counts: Mapping[str, int]) -> tuple[float, dict[str, float]]:
+    """Derive router/expert entropy and per-expert utilization from cumulative routing counts.
+
+    p_i = count_i / total; H = -sum(p_i * log(p_i)) in nats (natural log), applying the
+    0 * log(0) = 0 convention for experts not yet selected. Before any routed expert has
+    been selected (total == 0) entropy and every utilization fraction are 0.0.
+
+    COUNTING WINDOW: `counts` is the caller's counter, cumulative since the start of the
+    current run_pretraining_segment / run_selection_pretraining_segment call -- NOT since
+    training began. That counter is reinitialized to all-zero at the top of every such
+    call (see expert_examples there), so this entropy resets to 0.0 (fully concentrated)
+    at the first routed step after every resume. A telemetry consumer watching a real
+    multi-segment run will see it ramp from zero at every resume; that is a counting-
+    window artifact of the call boundary, not evidence of router collapse-and-recovery.
+    """
+    total = sum(counts.values())
+    if total <= 0:
+        return 0.0, {name: 0.0 for name in counts}
+    utilization = {name: count / total for name, count in counts.items()}
+    entropy = -sum(fraction * math.log(fraction) for fraction in utilization.values() if fraction > 0.0)
+    # A single 1.0 * log(1.0) term negated is -0.0 in IEEE 754 (all traffic on one
+    # expert). json.dumps(-0.0) serializes the literal "-0.0" into the receipted
+    # telemetry JSONL, which is a spurious sign on a value that is definitionally
+    # nonnegative -- normalize it away rather than let a persisted receipt carry it.
+    if entropy == 0.0:
+        entropy = 0.0
+    return entropy, utilization
+
+
 def run_pretraining_segment(
     *,
     model: UnifiedDecoder,
@@ -117,7 +147,7 @@ def run_pretraining_segment(
         if not torch.isfinite(loss):
             raise RuntimeError(f"pretraining segment stopped on non-finite loss at step {initial_global_step + local_step}")
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        grad_norm_tensor = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
         losses.append(float(loss.detach().cpu()))
         tokens_seen += int(batch["input_ids"].numel())
@@ -134,11 +164,26 @@ def run_pretraining_segment(
             "expert_examples": dict(expert_examples), "active_expert": active_expert,
         }
         if progress_callback is not None:
+            # clip_grad_norm_ (torch 2.10: torch/nn/utils/clip_grad.py) computes the
+            # total norm via a sync-free foreach reduction and returns it BEFORE the
+            # in-place clip scaling is applied to .grad -- this is the pre-clip
+            # gradient norm. The float() conversion below piggybacks on the device
+            # sync the loss capture above already forced, so it adds no new
+            # synchronization barrier and no measurable step-time regression.
+            #
+            # router_entropy_nats / expert_utilization: see _expert_routing_entropy's
+            # docstring -- counted since THIS call started (expert_examples above is
+            # reinitialized to all-zero on every call), not since training began, so
+            # it resets to 0.0 at the first routed step after every resume.
+            expert_entropy, expert_utilization = _expert_routing_entropy(expert_examples)
             progress_callback({
                 "step": global_step,
                 "total_steps": final_global_step,
                 "loss": losses[-1],
                 "step_ms": float((time.perf_counter() - step_started) * 1000.0),
+                "grad_norm": float(grad_norm_tensor),
+                "router_entropy_nats": expert_entropy,
+                "expert_utilization": expert_utilization,
             })
         if global_step % checkpoint_every == 0 or local_step == len(remaining_records):
             checkpoint_callback(global_step, result)
@@ -215,7 +260,7 @@ def run_selection_pretraining_segment(
         if not torch.isfinite(loss):
             raise RuntimeError(f"pretraining selection stopped on non-finite loss at step {initial_global_step + completed + 1}")
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        grad_norm_tensor = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
         completed += 1
         tokens_seen += int(batch["input_ids"].numel())
@@ -238,9 +283,18 @@ def run_selection_pretraining_segment(
             "expert_examples": dict(expert_examples), "active_expert": active_expert,
         }
         if progress_callback is not None:
+            # See run_pretraining_segment: piggybacks on the loss sync above, and
+            # grad_norm_tensor is the pre-clip norm clip_grad_norm_ already returns.
+            # router_entropy_nats / expert_utilization: see _expert_routing_entropy's
+            # docstring -- counted since THIS call started (expert_examples above is
+            # reinitialized to all-zero on every call), not since training began.
+            expert_entropy, expert_utilization = _expert_routing_entropy(expert_examples)
             progress_callback({
                 "step": global_step, "total_steps": None, "loss": losses[-1],
                 "step_ms": float((time.perf_counter() - step_started) * 1000.0),
+                "grad_norm": float(grad_norm_tensor),
+                "router_entropy_nats": expert_entropy,
+                "expert_utilization": expert_utilization,
             })
         if global_step % checkpoint_every == 0:
             checkpoint_callback(global_step, last_result)
