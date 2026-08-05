@@ -14,9 +14,10 @@ order:
 From there, [`PROBLEMS.md`](PROBLEMS.md) (with `problems-meta.yaml`) is the live problem
 registry, and the sections below tell you where everything else lives.
 
-`docs/` root itself holds only three things: this map, `START-HERE.md`, and the problem
-registry. Everything else is filed under one of the directories below by what kind of thing
-it is, not by when it was written.
+`docs/` root itself holds only this map, `START-HERE.md`, the problem registry, and a
+small set of authority-pinned files that cannot move (each named in its section below).
+Everything else is filed under one of the directories below by what kind of thing it is,
+not by when it was written.
 
 ## Current, binding material
 
@@ -36,12 +37,16 @@ with something in `archive/`, this wins.
   [`anatomy/01_CONSTITUTION_AND_AUTHORITY.md`](anatomy/01_CONSTITUTION_AND_AUTHORITY.md).
 - **[`charter/`](charter/)** — standing contracts and protocols that govern *how* work is
   done here: reproducibility requirements, technique-ownership contracts, doc-freshness
-  protocol, the goal-clear and goal-mode mechanisms, the GitHub work system. Start with
-  [`charter/REPRODUCIBILITY.md`](charter/REPRODUCIBILITY.md). Two related contracts,
-  [`ember-floor-contract.md`](ember-floor-contract.md) and
-  [`nc2-own-technique-contract.md`](nc2-own-technique-contract.md), stay at `docs/` root
-  rather than here — they are hash-pinned by path in `GOAL.md`'s governing-surfaces policy
-  and `manifests/authority/issue-35-authority-supersession-crosswalk-v1.json`, so moving
+  protocol, the GitHub work system. Start with
+  [`charter/REPRODUCIBILITY.md`](charter/REPRODUCIBILITY.md). Five related contracts,
+  [`ember-floor-contract.md`](ember-floor-contract.md),
+  [`nc2-own-technique-contract.md`](nc2-own-technique-contract.md),
+  [`goal-clear-protocol.md`](goal-clear-protocol.md),
+  [`goal-mode-mechanism.md`](goal-mode-mechanism.md), and
+  [`registry-dispatch-gate-spec-v0.md`](registry-dispatch-gate-spec-v0.md), stay at
+  `docs/` root rather than here — they are hash-pinned by path in `GOAL.md`'s
+  governing-surfaces policy and
+  `manifests/authority/issue-35-authority-supersession-crosswalk-v1.json`, so moving
   them would break the authority-conservation check.
 - **[`ledgers/`](ledgers/)** — living, append-only registries: the debt ledger, deviations,
   work-ahead, the technique registry. These are read fresh every time, never archived while
@@ -107,9 +112,11 @@ deleting the trail. If you are deciding what to do next, do not cite `archive/` 
   snapshots and coverage matrices, retained for provenance. For the live goal, read the
   root [`../GOAL.md`](../GOAL.md), not anything under here.
 
-## Two documents that are byte-identical on purpose
+## Two filenames that deliberately resolve to one document
 
-`20260617-maximally-viable-product.md` and `archive/pre-restart/ember-mvp-v0.md` (after the
-2026-06-17 doc moved into archive alongside it) are the same content under two historically
-load-bearing filenames — several scripts probe for both. `20260617-maximally-viable-product.md`
-is now a two-line pointer to `ember-mvp-v0.md`; both paths keep resolving.
+`archive/pre-restart/ember-mvp-v0.md` and
+`archive/pre-restart/20260617-maximally-viable-product.md` are two historically
+load-bearing filenames for the same superseded MVP document — several scripts probe for
+both, and their references were rewritten to these archive paths in the same consolidation
+that moved the files. The 2026-06-17 file is a pointer stub to `ember-mvp-v0.md`; neither
+filename remains at `docs/` root.

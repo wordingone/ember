@@ -1,5 +1,15 @@
 # Ember scale-architecture frontier — operator questions 2026-07-03, grounded answers
 
+> **Dated record (2026-07-03).** The statuses and absence-claims in §1–§2 are frozen at
+> the audit date and are not all true against today's bytes: `GOAL.md` now carries an
+> explicit >27B total-parameter destination (`competitive_reference_parameters`,
+> `minimum_total_parameters_exclusive`), so ">27B total capacity — absent" no longer
+> holds; and `docs/spec/conditions-v1.md` does regulate sub-quadratic substitution
+> (`invalid_substrate_downgrade`), so read "zero mentions" as an audit-date claim at
+> best. §6 is the maintained tail — for the live frontier read
+> `docs/design/inference-to-training-translation-v1.md` and
+> `docs/design/sota-stack-floor.md`.
+
 Operator raised (2026-07-03 ~23:10, verbatim themes): (1) "you've been training ember on fp16 —
 what happened to quantization-native, 1.58-bit, subquadratic"; (2) "what is ember's total,
 physics-mandated parameter count on the 4090 given both training and inference must happen (and

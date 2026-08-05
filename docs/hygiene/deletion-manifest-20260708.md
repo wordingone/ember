@@ -4,6 +4,14 @@ Status: **evidence, not deletions.** Nothing in this document is deleted by
 this PR. It is the reviewed input to a follow-up deletion PR (issue #488
 acceptance criteria).
 
+> **Historical record (scanned 2026-07-08).** Every path, count, and location below
+> describes the tree as it stood on the scan date; the reference counts and zero-ref
+> verdicts were measured against those locations and are deliberately not re-derived.
+> The 2026-08-05 docs consolidation (#1441) later moved many of the listed `docs/`
+> files into `docs/archive/`, `docs/charter/`, `docs/custody/`, `docs/design/`,
+> `docs/ledgers/`, and `docs/ember-restart/` — resolve any listed name against
+> `docs/README.md`'s current layout.
+
 Scope: `docs/` (205 tracked files) and `scripts/` (601 tracked files),
 reference-scanned repo-wide; the untracked receipts on disk; and `.git`
 pack-directory cleanliness. Produced 2026-07-08.
