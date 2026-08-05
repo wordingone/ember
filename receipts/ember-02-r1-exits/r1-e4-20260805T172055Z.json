@@ -1,0 +1,63 @@
+{
+  "ticket": "r1-exit-battery-e4",
+  "ts": "20260805T172055Z",
+  "schema": "r1-exit-battery/v1",
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "issue_refs": [
+    "#1463"
+  ],
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization) for checkpoint/manifest/telemetry/threshold files",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "prereg": {
+    "document": "docs/spec/ember02-preregistration-v1.md",
+    "pin": "3d48d3870919bd04cec735f68d0fad45fcfae0b2",
+    "thresholds_sha256": "12c83ca9ac90f85d5e8c0ce2c8156ac0c2cf9695929b211971ee277582a5eeb5"
+  },
+  "exit_criterion": "R1-E4",
+  "subject": {
+    "run_root": "<custody>\\r1-warm100-20260804",
+    "sibling_roots": [
+      "<custody>\\r2-resume-20260804",
+      "<custody>\\r1-warm100-20260802",
+      "<custody>\\r1-chainproof-20260804"
+    ],
+    "seed_roots": []
+  },
+  "status": "EVIDENCE_MISSING",
+  "result": {
+    "status": "EVIDENCE_MISSING",
+    "detail": "none of {tokens/s, MFU, host utilization} exist in any receiptable form under this run root (tokens/s and MFU are never computed on the governed-vertical path; peak VRAM requires a captured *-child.log with the final JSON result line (peak_memory_bytes) -- none found under this run root)",
+    "components": {
+      "tokens_per_second": null,
+      "mfu": null,
+      "peak_vram_during_training_bytes": null,
+      "host_utilization": null
+    },
+    "context": {
+      "pre_run_vram_preflight": {
+        "canonical_disk_budget_runner": {
+          "assertion_sha256": "7a0f6d1a574f292d3b09fcbf469b700f8ec304427e7afad02980aab4ced7c024",
+          "cache_bindings_sha256": "8919dfb95a84bb76505d1f4eb8baeeb995310a4de2f7bf1c82f4cc4c35860806",
+          "checkpoint_byte_bound": 16430389248,
+          "config_sha256": "33a82113cfa42fcd62d70688fea39c62b3793630c7ea48fdb5b884681a8e1781",
+          "runner_source_sha256": "10614a93bd6974069ab796821ac12ca02ab6e74886dfe1f42cfbbeb6aac4e369",
+          "schema_version": "ember-canonical-disk-budget-startup-v1",
+          "write_budget_bytes": 36507222016
+        },
+        "free_gb": 24.1,
+        "governor_source_sha256": "6df17c2946ccdb8ab09b132f6cfc57b7828258f145987c252d48bf4e156c5d06",
+        "margin_gb": 4.0,
+        "total_gb": 25.76,
+        "vram_fraction": 0.85
+      },
+      "pre_run_vram_preflight_caveat": "BEFORE-load snapshot (governor.preflight()), not peak-during-training -- not a substitute for peak allocated/reserved VRAM"
+    },
+    "needs": "a run whose stdout is captured to a *-child.log (certified_train_launch.py does this automatically as of the #1408 fix) for peak VRAM, plus a telemetry-wired >=100-step run for tokens/s; MFU and host utilization have no computation path anywhere in this repo yet"
+  },
+  "api_spend_usd": 0.0,
+  "paid_api_surface_used": false
+}

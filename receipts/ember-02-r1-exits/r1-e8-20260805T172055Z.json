@@ -1,0 +1,41 @@
+{
+  "ticket": "r1-exit-battery-e8",
+  "ts": "20260805T172055Z",
+  "schema": "r1-exit-battery/v1",
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "issue_refs": [
+    "#1463"
+  ],
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization) for checkpoint/manifest/telemetry/threshold files",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "prereg": {
+    "document": "docs/spec/ember02-preregistration-v1.md",
+    "pin": "3d48d3870919bd04cec735f68d0fad45fcfae0b2",
+    "thresholds_sha256": "12c83ca9ac90f85d5e8c0ce2c8156ac0c2cf9695929b211971ee277582a5eeb5"
+  },
+  "exit_criterion": "R1-E8",
+  "subject": {
+    "run_root": "<custody>\\r1-warm100-20260804",
+    "sibling_roots": [
+      "<custody>\\r2-resume-20260804",
+      "<custody>\\r1-warm100-20260802",
+      "<custody>\\r1-chainproof-20260804"
+    ],
+    "seed_roots": []
+  },
+  "status": "EVIDENCE_MISSING",
+  "result": {
+    "status": "EVIDENCE_MISSING",
+    "detail": "no A1 (dense) arm run found under any given search root -- every checkpoint inspected is architecture_revision ember-sparse-3b-v2 (A3's role-prior sparse architecture); repo-wide grep for tier1/offload/Q-GaLore mechanisms in tools/ember-restart-3b finds zero hits beyond the preregistration text itself (2026-08-05)",
+    "components": {
+      "candidate_manifests": []
+    },
+    "needs": "an A1 tier-1 (CPU-offloaded full-state AdamW) run + liveness leg (T-08 tokens ratio vs A3) + parity leg (T-09 matched steps vs offloaded-AdamW reference, F-11 band) -- no A1 execution path exists anywhere in this repo yet; this is an engineering task before it is an execution one"
+  },
+  "api_spend_usd": 0.0,
+  "paid_api_surface_used": false
+}

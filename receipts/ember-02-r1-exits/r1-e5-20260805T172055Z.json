@@ -1,0 +1,45 @@
+{
+  "ticket": "r1-exit-battery-e5",
+  "ts": "20260805T172055Z",
+  "schema": "r1-exit-battery/v1",
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "issue_refs": [
+    "#1463"
+  ],
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization) for checkpoint/manifest/telemetry/threshold files",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "prereg": {
+    "document": "docs/spec/ember02-preregistration-v1.md",
+    "pin": "3d48d3870919bd04cec735f68d0fad45fcfae0b2",
+    "thresholds_sha256": "12c83ca9ac90f85d5e8c0ce2c8156ac0c2cf9695929b211971ee277582a5eeb5"
+  },
+  "exit_criterion": "R1-E5",
+  "subject": {
+    "run_root": "<custody>\\r1-warm100-20260804",
+    "sibling_roots": [
+      "<custody>\\r2-resume-20260804",
+      "<custody>\\r1-warm100-20260802",
+      "<custody>\\r1-chainproof-20260804"
+    ],
+    "seed_roots": []
+  },
+  "status": "EVIDENCE_MISSING",
+  "result": {
+    "status": "EVIDENCE_MISSING",
+    "detail": "no frontier-receipt-shaped file under this run root, and no frontier-receipt generator exists anywhere in scripts/ (repo-wide grep, zero hits, 2026-08-05); no energy-proxy sampling occurred for this run (scripts/energy_proxy_logger.py exists but was not invoked)",
+    "components": {
+      "fixed_prior_manifest_present": true,
+      "fixed_prior_manifest_path": "manifests/ember-restart-3b/fixed-prior-manifest-v1.json",
+      "fixed_prior_manifest_sha256": "f22bec480e38a2db413e0b45ca4860c3017f21790887cc427e17ba2257b4c8ef",
+      "frontier_receipt_candidates": [],
+      "energy_receipt_candidates": []
+    },
+    "needs": "a frontier-receipt assembly script (does not exist yet) run against a real >=100-step canary with energy-proxy sampling coverage >= T-06 -- this is an engineering task, not just an execution one"
+  },
+  "api_spend_usd": 0.0,
+  "paid_api_surface_used": false
+}
