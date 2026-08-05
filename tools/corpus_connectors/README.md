@@ -45,6 +45,8 @@ tools/corpus_connectors/
                           # declared byte budget, independent of receipt.py's 512 MiB cap
   bulk_fetch.py           # CLI over chunked_download.py, for dumps that exceed the single-fetch
                            # cap (Wikipedia/PMC/Stack Exchange/USPTO/... bulk packages)
+  wave_manifest.py         # issue #1439 wave-2 source table: routes each named charter-domain
+                            # source (and the six bulk veins) to its connector CLI invocation
   tests/                 # offline unit tests (no external network); one mocked fetch per
                           # single-shot connector, plus a real 127.0.0.1 Range-request fixture
                           # server (tests/_range_fixture.py) for chunked_download.py/bulk_fetch.py
@@ -314,6 +316,30 @@ connector (including `bulk_fetch.py`, added later) is simpler than a one-off
 required-argument shape for just this CLI. If one of the pair is given without the other, the CLI refuses
 (`BLOCKED`) rather than guessing which was meant. `--sha256 EXPECTED`
 verifies the download and deletes the partial file on mismatch.
+
+### `wave_manifest.py` -- wave-2 source routing table (issue #1439)
+
+```
+python wave_manifest.py [--domain LETTER] [--include-bulk]
+                        [--bulk-budget-bytes N] [--execute]
+```
+
+Encodes the per-charter-domain source table from
+`corpus-sizing-v1.md`'s "Wave-2 source list" as data (`WAVE2_SOURCES` for
+sources that fit the ordinary single-fetch cap, `WAVE2_BULK_VEINS` for the
+six deep bulk veins that route through `bulk_fetch.py`), so the routing
+decision -- which connector, which flags, which license basis, which
+charter domain(s) a source counts toward -- lives in one reviewable table
+instead of being re-derived by hand at fetch time. Performs no network I/O
+of its own: default mode prints each routed command; `--execute` shells out
+to the already-tested connector CLIs (inheriting their own license/receipt/
+fail-closed behavior unchanged). `--domain` filters to one charter letter;
+`--include-bulk` also lists the bulk veins (each needs `--bulk-budget-bytes`
+to actually dispatch under `--execute`, per the charter's per-wave disk cap
+-- there is no baked-in default budget). `domains_covered()` is the
+machine-checkable form of the sizing doc's claim that every charter domain
+A-K plus the Wikipedia baseline has at least one routed source; a test
+asserts it holds.
 
 ## Tests
 
