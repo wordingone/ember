@@ -1,0 +1,228 @@
+{
+  "api_spend_usd": 0,
+  "capability_claim": "NONE",
+  "fixture": {
+    "L0": {
+      "iterations": 20,
+      "max_s": 0.00012130000050092349,
+      "median_s": 6.579999990208307e-05,
+      "min_s": 6.399999983841553e-05,
+      "threads": 1
+    },
+    "L1": {
+      "reason": "bounded fixture does not substitute a compile receipt",
+      "status": "L1_UNAVAILABLE"
+    },
+    "L2": {
+      "fresh_subprocess_per_replicate": true,
+      "replicates": 3,
+      "status": "FIXTURE_ONLY",
+      "threads": {
+        "1": {
+          "iterations_per_replicate": 20,
+          "median_s": 6.645000030403025e-05,
+          "replicates": [
+            {
+              "iterations": 20,
+              "max_s": 7.540000024164328e-05,
+              "median_s": 6.689999963782611e-05,
+              "min_s": 6.450000000768341e-05,
+              "replicate": 0,
+              "threads": 1
+            },
+            {
+              "iterations": 20,
+              "max_s": 7.840000034775585e-05,
+              "median_s": 6.645000030403025e-05,
+              "min_s": 6.430000030377414e-05,
+              "replicate": 1,
+              "threads": 1
+            },
+            {
+              "iterations": 20,
+              "max_s": 7.679999998799758e-05,
+              "median_s": 6.625000014537363e-05,
+              "min_s": 6.440000015572878e-05,
+              "replicate": 2,
+              "threads": 1
+            }
+          ]
+        },
+        "16": {
+          "iterations_per_replicate": 20,
+          "median_s": 6.674999985989416e-05,
+          "replicates": [
+            {
+              "iterations": 20,
+              "max_s": 7.849999929021578e-05,
+              "median_s": 6.674999985989416e-05,
+              "min_s": 6.469999971159268e-05,
+              "replicate": 0,
+              "threads": 16
+            },
+            {
+              "iterations": 20,
+              "max_s": 7.880000066506909e-05,
+              "median_s": 6.64499998492829e-05,
+              "min_s": 6.399999983841553e-05,
+              "replicate": 1,
+              "threads": 16
+            },
+            {
+              "iterations": 20,
+              "max_s": 0.00012729999980365392,
+              "median_s": 6.71500001772074e-05,
+              "min_s": 6.329999996523838e-05,
+              "replicate": 2,
+              "threads": 16
+            }
+          ]
+        },
+        "24": {
+          "iterations_per_replicate": 20,
+          "median_s": 6.769999981770525e-05,
+          "replicates": [
+            {
+              "iterations": 20,
+              "max_s": 7.550000009359792e-05,
+              "median_s": 6.620000021939632e-05,
+              "min_s": 6.409999969037017e-05,
+              "replicate": 0,
+              "threads": 24
+            },
+            {
+              "iterations": 20,
+              "max_s": 0.00012659999993047677,
+              "median_s": 7.060000007186318e-05,
+              "min_s": 6.750000011379598e-05,
+              "replicate": 1,
+              "threads": 24
+            },
+            {
+              "iterations": 20,
+              "max_s": 8.119999984046444e-05,
+              "median_s": 6.769999981770525e-05,
+              "min_s": 6.450000000768341e-05,
+              "replicate": 2,
+              "threads": 24
+            }
+          ]
+        },
+        "32": {
+          "iterations_per_replicate": 20,
+          "median_s": 6.675000031464151e-05,
+          "replicates": [
+            {
+              "iterations": 20,
+              "max_s": 7.62999998187297e-05,
+              "median_s": 6.54499999654945e-05,
+              "min_s": 6.280000070546521e-05,
+              "replicate": 0,
+              "threads": 32
+            },
+            {
+              "iterations": 20,
+              "max_s": 0.00010150000071007526,
+              "median_s": 6.675000031464151e-05,
+              "min_s": 6.370000028255163e-05,
+              "replicate": 1,
+              "threads": 32
+            },
+            {
+              "iterations": 20,
+              "max_s": 8.040000011533266e-05,
+              "median_s": 6.785000005038455e-05,
+              "min_s": 6.409999969037017e-05,
+              "replicate": 2,
+              "threads": 32
+            }
+          ]
+        },
+        "8": {
+          "iterations_per_replicate": 20,
+          "median_s": 6.694999956380343e-05,
+          "replicates": [
+            {
+              "iterations": 20,
+              "max_s": 7.60000002628658e-05,
+              "median_s": 6.694999956380343e-05,
+              "min_s": 6.490000032499665e-05,
+              "replicate": 0,
+              "threads": 8
+            },
+            {
+              "iterations": 20,
+              "max_s": 0.00012199999946460593,
+              "median_s": 6.704999987050542e-05,
+              "min_s": 6.370000028255163e-05,
+              "replicate": 1,
+              "threads": 8
+            },
+            {
+              "iterations": 20,
+              "max_s": 7.80000000304426e-05,
+              "median_s": 6.470000062108738e-05,
+              "min_s": 6.209999992279336e-05,
+              "replicate": 2,
+              "threads": 8
+            }
+          ]
+        }
+      }
+    },
+    "claim_boundary": "no 434M/2.2B performance or training claim",
+    "status": "FIXTURE_ONLY_NOT_SCALE_EVIDENCE"
+  },
+  "implementation_basename": "factor1_lever_microbench.py",
+  "implementation_sha256": "71a6cc212b4091dad14dd7ee0241878c4bc4f00fe52630ad2fb7aa1e359e30eb",
+  "issue": "wordingone/ember#764",
+  "receipt_boundary": "fixture measurements are not exact-scale evidence; no training/checkpoint claim",
+  "scales": {
+    "2.2B": {
+      "preflight": {
+        "available_commit_gib": 58.892578125,
+        "available_physical_gib": 46.133201599121094,
+        "disk_free_gib": 266.0485534667969,
+        "refusal_reasons": [],
+        "required_working_set_gib": 24.90297,
+        "scale": "2.2B",
+        "sufficient": true
+      },
+      "shape": {
+        "adamw_elems_total": 98345984,
+        "muon_elems_total": 2097152000,
+        "n_adamw": 44,
+        "n_muon": 140
+      },
+      "status": "REFUSED_PRODUCTION_PATH_OR_PREFLIGHT",
+      "working_set_gib": 24.90297
+    },
+    "434M": {
+      "preflight": {
+        "available_commit_gib": 58.892578125,
+        "available_physical_gib": 46.13323974609375,
+        "disk_free_gib": 266.0485534667969,
+        "refusal_reasons": [],
+        "required_working_set_gib": 5.21547,
+        "scale": "434M",
+        "sufficient": true
+      },
+      "shape": {
+        "adamw_elems_total": 98345984,
+        "muon_elems_total": 335544320,
+        "n_adamw": 44,
+        "n_muon": 140
+      },
+      "status": "REFUSED_PRODUCTION_PATH_OR_PREFLIGHT",
+      "working_set_gib": 5.21547
+    }
+  },
+  "schema": "ember-factor1-lever-microbench-v1",
+  "source": {
+    "available": false,
+    "reason": "current public consumer explicitly denies sub-3B execution",
+    "source_basename": "timeshare_pretrain.py",
+    "source_sha256": "4278ee7bfd12f6e2f41af6b5a0b5835e6b92a27ba021499a6e051d4b5e121a7f",
+    "status": "PRODUCTION_PATH_UNAVAILABLE_HISTORICAL_ONLY"
+  }
+}
