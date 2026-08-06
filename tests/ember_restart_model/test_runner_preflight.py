@@ -754,6 +754,10 @@ class RunnerPreflightTests(unittest.TestCase):
                     call_order.append("model")
                 return model
             stack.enter_context(patch.object(run_vertical_slice, "UnifiedDecoder", side_effect=build_model))
+            # #1483: the byte-bound coverage decision measures the live optimizer;
+            # this fixture's model/optimizer are fakes with no routes to measure, so
+            # pin single-route coverage and keep the pre-#1483 bound these tests pin.
+            stack.enter_context(patch.object(run_vertical_slice, "optimizer_covers_every_expert_route", return_value=False))
             def measure(_model: object) -> dict[str, int]:
                 if specialist:
                     segment_kwargs["count_active_expert"] = model.active_expert
@@ -1103,10 +1107,23 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertGreater(bound, full_coverage_tensor_floor)
 
     def test_run_path_reserves_full_coverage_bound_for_nonspecialist_episodes(self) -> None:
+        # #1483: the selection moved into specialist_checkpoint_bound_active_parameters,
+        # whose own tests pin all four (lineage, coverage) combinations -- including
+        # that nonspecialist episodes always reserve the full-coverage bound. This pin
+        # keeps run() delegating to that closed selection rather than inlining a new one.
         source = inspect.getsource(run_vertical_slice.run)
         self.assertIn(
-            "active_parameters if specialist_lineage is not None else total_parameters",
+            "active_parameters=specialist_checkpoint_bound_active_parameters(",
             source,
+        )
+        self.assertEqual(
+            run_vertical_slice.specialist_checkpoint_bound_active_parameters(
+                specialist_lineage=None,
+                optimizer_full_route_coverage=False,
+                active_parameters=1_725_232_640,
+                total_parameters=3_839_161_856,
+            ),
+            3_839_161_856,
         )
 
     def test_governed_vertical_refuses_successor_four_gib_checkpoint_envelope(self) -> None:
