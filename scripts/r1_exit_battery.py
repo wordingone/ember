@@ -271,6 +271,13 @@ def find_telemetry_files(run_root: Path) -> list[Path]:
         return []
     found = []
     for candidate in sorted(run_root.rglob("*.jsonl")):
+        # Quarantined material is not evidence for ANY check that reads this
+        # loader (E1/E2/E4 alike): a .jsonl inside .checkpoint-quarantine must
+        # not poison series selection or vouch for a run (rev-1494 round-2
+        # item 3 -- the receipt globs already excluded quarantine, the
+        # telemetry loader did not).
+        if ".checkpoint-quarantine" in candidate.parts:
+            continue
         for event in _iter_jsonl_events(candidate):
             if event.get("source") == "ember-restart-3b":
                 found.append(candidate)
@@ -713,7 +720,15 @@ def check_r1_e3(
 # R1-E4 -- measured tokens/s, MFU, peak VRAM, host utilization.
 # ---------------------------------------------------------------------------
 
-def check_r1_e4(run_root: Path) -> dict[str, Any]:
+# Adjudication-pinned MFU basis (rev-1494 finding 3: receipt-supplied constants
+# were a tautology -- assumed_peak_flops moved reported MFU 2x with nothing
+# binding it). The receipt must carry EXACTLY these values; the battery, not
+# the producer, is the authority on the R1 flops model.
+E4_ACTIVE_PARAMETERS = 1_725_232_640
+E4_ASSUMED_PEAK_FLOPS = 165.2e12
+
+
+def check_r1_e4(run_root: Path, thresholds: dict[str, Any], *, run_id: str | None = None) -> dict[str, Any]:
     child_logs = sorted(run_root.glob("*-child.log"))
     context: dict[str, Any] = {}
     peak_memory_bytes = None
@@ -749,27 +764,167 @@ def check_r1_e4(run_root: Path) -> dict[str, Any]:
         context["peak_memory_bytes_from_child_log"] = peak_memory_bytes
         context["peak_memory_bytes_caveat"] = "torch.cuda.max_memory_allocated() at end of a 4-record structural run, not a 100-step canary -- disclosed context, not R1-E4 evidence"
 
-    have_tokens_per_second = False  # never computed anywhere on this path (see module docstring)
-    have_mfu = False
-    have_peak_vram_during_training = peak_memory_bytes is not None
-    have_host_utilization = False
+    # --- primary evidence: the running e4-measurement-receipt.json the specialist
+    # --- path upserts after every step (crash-proof against post-publication
+    # --- housekeeping failures by construction -- see run_vertical_slice.py) ---
+    receipt_candidates = sorted(
+        p for p in run_root.rglob("e4-measurement-receipt.json") if ".checkpoint-quarantine" not in p.parts
+    )
+    if not receipt_candidates:
+        return {
+            "status": "EVIDENCE_MISSING",
+            "detail": (
+                "no e4-measurement-receipt.json under this run root (the specialist path writes one "
+                "per step as of the R1-E4 wiring; older runs never produced it), and peak VRAM via "
+                f"child.log {'was recovered as disclosed context only' if peak_memory_bytes is not None else 'was not recoverable either'}"
+            ),
+            "components": {
+                "tokens_per_second": None,
+                "mfu": None,
+                "peak_vram_during_training_bytes": peak_memory_bytes,
+                "host_utilization": None,
+            },
+            "context": context,
+            "needs": "a certified specialist run at a head carrying the R1-E4 wiring, so the run root holds a step-current e4-measurement-receipt.json",
+        }
+    defects: list[str] = []
+    receipt: dict[str, Any] = {}
+    if len(receipt_candidates) > 1:
+        defects.append("ambiguous: multiple e4-measurement-receipt.json files under one run root: " + ", ".join(str(p) for p in receipt_candidates))
+    else:
+        try:
+            receipt = json.loads(receipt_candidates[0].read_text(encoding="utf-8"))
+        except (OSError, ValueError) as error:
+            defects.append(f"unreadable receipt: {error}")
+        if not isinstance(receipt, dict):
+            defects.append("receipt top level is not a JSON object")
+            receipt = {}
+    if not defects:
+        # Content checks run on the parsed receipt EVEN IF it is an empty
+        # object (rev-1494 finding 4: `if receipt:` let `{}` skip every check
+        # and then crash the MET formatter) -- every missing section below is
+        # its own defect, so `{}` fails closed with the full defect list.
+        t01 = int(thresholds["T-01"])
 
-    met = have_tokens_per_second and have_mfu and have_peak_vram_during_training and have_host_utilization
+        def _finite_pos(value: Any) -> bool:
+            return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value > 0
+
+        def _finite_nonneg(value: Any) -> bool:
+            return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value >= 0
+        if receipt.get("schema_version") != "ember02-r1-e4-measurement/v1":
+            defects.append(f"schema_version {receipt.get('schema_version')!r}")
+        if receipt.get("tokens_missing_steps") != 0:
+            defects.append(f"tokens_missing_steps={receipt.get('tokens_missing_steps')!r} -- some steps carried no per-step token count; throughput would be an extrapolation")
+        write_failures = receipt.get("write_failures", 0)
+        if not (isinstance(write_failures, int) and not isinstance(write_failures, bool) and write_failures >= 0):
+            defects.append(f"write_failures: not a nonnegative integer ({write_failures!r})")
+        steps = receipt.get("steps")
+        if type(steps) is not int:
+            defects.append(f"steps: not an integer ({steps!r})")
+        elif steps < t01:
+            defects.append(f"steps={steps} below T-01={t01} -- R1-E4 measures the credited >=T-01-step run, not a fragment (threshold via load_thresholds)")
+        # Series bind (rev-1494 findings 1+d, and the merge-ordering hazard both
+        # review comments name): the receipt's step count must agree with the
+        # SAME deduped telemetry series E1 counts, so a hand-written receipt in
+        # a telemetry-free root can never mint MET, and an E1/E4 disagreement
+        # is a named defect instead of a silent split verdict. The producer
+        # emits telemetry before accumulating, so telemetry may lead by at most
+        # one step at a crash boundary.
+        # run_id threads through from the dispatcher exactly as E1 receives it
+        # (rev-1494 round-2 item 2): on a multi-run_id root the operator's
+        # --run-id selects the SAME series for both checks, so E1 and E4 can
+        # never silently adjudicate different series.
+        selected_run_id, series, series_counts = _select_series(run_root, run_id=run_id)
+        if not series:
+            defects.append(
+                "no train_step telemetry series under this run root to bind the receipt against"
+                + (f" (run_ids seen: {sorted(series_counts)})" if len(series_counts) > 1 else "")
+                + " -- an E4 receipt must describe the same series E1 adjudicates"
+            )
+        else:
+            # The receipt must NAME the series it describes (rev-1494 round-2
+            # item 1, same class as the E6 decoy cure): step-count agreement
+            # alone would let a receipt describing a different run mint MET.
+            receipt_run_id = receipt.get("run_id")
+            if not isinstance(receipt_run_id, str) or not receipt_run_id:
+                defects.append(
+                    f"run_id: missing or not a non-empty string ({receipt_run_id!r}) -- the receipt "
+                    "must name the run it describes (the producer writes telemetry's run_id)"
+                )
+            elif receipt_run_id != selected_run_id:
+                defects.append(
+                    f"run_id {receipt_run_id!r} does not match the adjudicated series run_id "
+                    f"{selected_run_id!r} -- one run's receipt must not credit another's series"
+                )
+            if type(steps) is int:
+                series_steps = len(series)
+                if not (0 <= series_steps - steps <= 1):
+                    defects.append(
+                        f"steps={steps} disagrees with the deduped train_step series ({series_steps} steps, run_id {selected_run_id}) -- "
+                        "the receipt must describe the series E1 counts (telemetry may lead by at most 1: emit-before-accumulate)"
+                    )
+        tokens_total, wall_seconds, tps = receipt.get("tokens_total"), receipt.get("wall_seconds"), receipt.get("tokens_per_second")
+        for name, value in (("tokens_total", tokens_total), ("wall_seconds", wall_seconds), ("tokens_per_second", tps)):
+            if not _finite_pos(value):
+                defects.append(f"{name}: not finite-positive ({value!r})")
+        if _finite_pos(tokens_total) and _finite_pos(wall_seconds) and _finite_pos(tps) and abs(tps - tokens_total / wall_seconds) > 0.01 * tps:
+            defects.append("tokens_per_second inconsistent with its own tokens_total/wall_seconds")
+        mfu = receipt.get("mfu") if isinstance(receipt.get("mfu"), dict) else {}
+        mfu_value = mfu.get("value")
+        # The flops-model constants are ADJUDICATION-pinned, not receipt-trusted
+        # (rev-1494 finding 3): equality against the battery's own values, then
+        # the arithmetic re-derivation runs on those pinned values.
+        if mfu.get("active_parameters") != E4_ACTIVE_PARAMETERS:
+            defects.append(f"mfu.active_parameters={mfu.get('active_parameters')!r} differs from the adjudication pin {E4_ACTIVE_PARAMETERS} -- the battery, not the receipt, is the authority on the R1 flops model")
+        if not (isinstance(mfu.get("assumed_peak_flops"), (int, float)) and not isinstance(mfu.get("assumed_peak_flops"), bool) and math.isfinite(mfu.get("assumed_peak_flops")) and abs(mfu.get("assumed_peak_flops") - E4_ASSUMED_PEAK_FLOPS) <= 1e-6 * E4_ASSUMED_PEAK_FLOPS):
+            defects.append(f"mfu.assumed_peak_flops={mfu.get('assumed_peak_flops')!r} differs from the adjudication pin {E4_ASSUMED_PEAK_FLOPS:.4g} -- a movable denominator moves reported MFU with nothing binding it")
+        if not (isinstance(mfu_value, (int, float)) and not isinstance(mfu_value, bool) and math.isfinite(mfu_value) and 0 < mfu_value < 1):
+            defects.append(f"mfu.value: not a finite fraction in (0,1) ({mfu_value!r})")
+        elif _finite_pos(tokens_total) and _finite_pos(wall_seconds):
+            expected_mfu = (6.0 * E4_ACTIVE_PARAMETERS * tokens_total / wall_seconds) / E4_ASSUMED_PEAK_FLOPS
+            if abs(mfu_value - expected_mfu) > 0.01 * expected_mfu:
+                defects.append("mfu.value inconsistent with the pinned flops model 6*N*T/(t*peak)")
+        vram = receipt.get("peak_vram") if isinstance(receipt.get("peak_vram"), dict) else {}
+        if not (_finite_pos(vram.get("allocated_bytes")) and _finite_pos(vram.get("reserved_bytes"))):
+            defects.append(f"peak_vram allocated/reserved not finite-positive ({vram.get('allocated_bytes')!r}/{vram.get('reserved_bytes')!r})")
+        elif vram["reserved_bytes"] < vram["allocated_bytes"]:
+            defects.append("peak_vram.reserved_bytes below allocated_bytes -- allocator invariant violated")
+        host = receipt.get("host_utilization") if isinstance(receipt.get("host_utilization"), dict) else {}
+        frac, cpu_seconds, host_wall = host.get("process_cpu_fraction"), host.get("process_cpu_seconds"), host.get("wall_seconds")
+        if not (isinstance(frac, (int, float)) and not isinstance(frac, bool) and math.isfinite(frac) and frac >= 0):
+            defects.append(f"host_utilization.process_cpu_fraction: not a finite nonnegative number ({frac!r})")
+        # rev-1494 finding 2: the fraction was declared, never re-derived. Both
+        # inputs are now load-bearing and the arithmetic is checked.
+        if not _finite_nonneg(cpu_seconds):
+            defects.append(f"host_utilization.process_cpu_seconds: not a finite nonnegative number ({cpu_seconds!r})")
+        if not _finite_pos(host_wall):
+            defects.append(f"host_utilization.wall_seconds: not finite-positive ({host_wall!r})")
+        elif _finite_pos(wall_seconds) and abs(host_wall - wall_seconds) > 0.01 * wall_seconds:
+            defects.append(f"host_utilization.wall_seconds={host_wall!r} disagrees with the receipt's wall_seconds={wall_seconds!r} -- one clock, one duration")
+        if _finite_nonneg(cpu_seconds) and _finite_pos(host_wall) and isinstance(frac, (int, float)) and not isinstance(frac, bool) and math.isfinite(frac):
+            expected_frac = cpu_seconds / host_wall
+            if abs(frac - expected_frac) > 0.01 * max(1e-9, expected_frac):
+                defects.append(f"host_utilization.process_cpu_fraction={frac!r} inconsistent with its own process_cpu_seconds/wall_seconds={expected_frac:.6g}")
+    if defects:
+        return {
+            "status": "NOT_MET",
+            "detail": "e4-measurement-receipt present but invalid: " + "; ".join(defects),
+            "components": {"receipt_path": [str(p) for p in receipt_candidates], "defects": defects},
+            "context": context,
+            "needs": "a content-valid e4-measurement-receipt.json (every quantity finite and arithmetic-consistent with its own inputs)",
+        }
     return {
-        "status": "MET" if met else "EVIDENCE_MISSING",
-        "detail": (
-            "none of {tokens/s, MFU, host utilization} exist in any receiptable form under this run root "
-            f"(tokens/s and MFU are never computed on the governed-vertical path; peak VRAM "
-            f"{'was recovered from a captured child.log' if have_peak_vram_during_training else 'requires a captured *-child.log with the final JSON result line (peak_memory_bytes) -- none found under this run root'})"
-        ),
+        "status": "MET",
+        "detail": f"validated e4-measurement-receipt: {receipt_candidates[0]} (steps={receipt.get('steps')}, tokens/s={receipt.get('tokens_per_second'):.4g}, mfu={receipt['mfu']['value']:.3e})",
         "components": {
-            "tokens_per_second": None,
-            "mfu": None,
-            "peak_vram_during_training_bytes": peak_memory_bytes,
-            "host_utilization": None,
+            "tokens_per_second": receipt.get("tokens_per_second"),
+            "mfu": receipt["mfu"]["value"],
+            "peak_vram_during_training_bytes": receipt["peak_vram"]["allocated_bytes"],
+            "peak_vram_reserved_bytes": receipt["peak_vram"]["reserved_bytes"],
+            "host_utilization": receipt["host_utilization"]["process_cpu_fraction"],
+            "receipt_path": str(receipt_candidates[0]),
         },
         "context": context,
-        "needs": "a run whose stdout is captured to a *-child.log (certified_train_launch.py does this automatically as of the #1408 fix) for peak VRAM, plus a telemetry-wired >=100-step run for tokens/s; MFU and host utilization have no computation path anywhere in this repo yet",
     }
 
 
@@ -1419,7 +1574,7 @@ def _run_one_exit(
     elif exit_id == "e3":
         result = check_r1_e3(run_root, sibling_roots=sibling_roots, explicit_manifest=explicit_manifest)
     elif exit_id == "e4":
-        result = check_r1_e4(run_root)
+        result = check_r1_e4(run_root, thresholds, run_id=run_id)
     elif exit_id == "e5":
         result = check_r1_e5(run_root, thresholds)
     elif exit_id == "e6":
@@ -1735,7 +1890,7 @@ def run_selftest() -> None:
             assert "CHECKPOINT_MANIFEST_SCHEMA_UNRECOGNIZED" in str(exc), exc
 
         # --- E4: no child.log, no manifest -> EVIDENCE_MISSING, all components None ---
-        e4_empty = check_r1_e4(empty_root)
+        e4_empty = check_r1_e4(empty_root, thresholds)
         assert e4_empty["status"] == "EVIDENCE_MISSING", e4_empty
         assert e4_empty["components"]["peak_vram_during_training_bytes"] is None, e4_empty
 
@@ -1747,10 +1902,165 @@ def run_selftest() -> None:
         e4_manifest["data_cursor"]["governor"] = {"free_gb": 24.1, "total_gb": 25.76, "margin_gb": 4.0, "vram_fraction": 0.85}
         e4_manifest_path.write_bytes(json.dumps(e4_manifest).encode("utf-8"))
         (e4_root / "disk-budget-runner-receipt-child.log").write_bytes((json.dumps({"peak_memory_bytes": 12345678, "other": "noise"}) + "\n").encode("utf-8"))
-        e4_result = check_r1_e4(e4_root)
-        assert e4_result["status"] == "EVIDENCE_MISSING", e4_result  # tokens/s + MFU + host util still absent
+        e4_result = check_r1_e4(e4_root, thresholds)
+        assert e4_result["status"] == "EVIDENCE_MISSING", e4_result  # child.log alone is disclosed context, not the measurement receipt
         assert e4_result["components"]["peak_vram_during_training_bytes"] == 12345678, e4_result
         assert e4_result["context"]["pre_run_vram_preflight"]["total_gb"] == 25.76, e4_result
+
+        # --- E4 fixtures: receipt + the telemetry series the receipt must bind to ---
+        def _e4_receipt(steps: int = 100, tokens_total: int = 773, wall_seconds: float = 17.4) -> dict[str, Any]:
+            active, peak = E4_ACTIVE_PARAMETERS, E4_ASSUMED_PEAK_FLOPS
+            return {
+                "schema_version": "ember02-r1-e4-measurement/v1",
+                "run_id": "SELFTEST_FIXTURE_run",
+                "steps": steps, "tokens_total": tokens_total, "tokens_missing_steps": 0,
+                "write_failures": 0,
+                "wall_seconds": wall_seconds, "step_ms_sum": wall_seconds * 1000.0,
+                "tokens_per_second": tokens_total / wall_seconds,
+                "tokens_per_second_step_basis": tokens_total / wall_seconds,
+                "mfu": {"value": (6.0 * active * tokens_total / wall_seconds) / peak,
+                        "flops_model": "6 * active_parameters * tokens_total / wall_seconds",
+                        "active_parameters": active, "assumed_peak_flops": peak},
+                "peak_vram": {"allocated_bytes": 21_700_000_000, "reserved_bytes": 22_100_000_000},
+                "host_utilization": {"process_cpu_seconds": 8.7, "wall_seconds": wall_seconds, "process_cpu_fraction": 8.7 / wall_seconds},
+            }
+
+        def _e4_telemetry(root: Path, steps: int, run_id: str = "SELFTEST_FIXTURE_run") -> None:
+            (root / "telemetry").mkdir(parents=True, exist_ok=True)
+            rows = [json.dumps({"source": "ember-restart-3b", "kind": "train_step", "ts": f"2026-08-06T00:00:{i:02d}Z" if i < 60 else f"2026-08-06T00:{i // 60:02d}:{i % 60:02d}Z",
+                                "payload": {"run_id": run_id, "step": i, "loss": 1.0}}) for i in range(1, steps + 1)]
+            (root / "telemetry" / "selftest.jsonl").write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+        def _e4_case(name: str, receipt: dict[str, Any] | str, telemetry_steps: int | None) -> dict[str, Any]:
+            root = tmp_path / name
+            root.mkdir()
+            if telemetry_steps is not None:
+                _e4_telemetry(root, telemetry_steps)
+            (root / "e4-measurement-receipt.json").write_text(receipt if isinstance(receipt, str) else json.dumps(receipt), encoding="utf-8")
+            return check_r1_e4(root, thresholds)
+
+        # --- E4: content-valid receipt bound to a matching >=T-01 series -> MET ---
+        e4_met = _e4_case("e4_met_run", _e4_receipt(), telemetry_steps=100)
+        assert e4_met["status"] == "MET", e4_met
+        assert abs(e4_met["components"]["tokens_per_second"] - 773 / 17.4) < 1e-9, e4_met
+
+        # --- E4 (rev-1494 f1): steps below T-01 -> NOT_MET naming the threshold; non-integer steps -> NOT_MET ---
+        e4_short = _e4_case("e4_short_run", _e4_receipt(steps=99), telemetry_steps=99)
+        assert e4_short["status"] == "NOT_MET", e4_short
+        assert any("T-01" in d for d in e4_short["components"]["defects"]), e4_short
+        e4_frac = _e4_receipt()
+        e4_frac["steps"] = 100.5
+        e4_frac_res = _e4_case("e4_frac_run", e4_frac, telemetry_steps=100)
+        assert e4_frac_res["status"] == "NOT_MET", e4_frac_res
+        assert any("not an integer" in d for d in e4_frac_res["components"]["defects"]), e4_frac_res
+
+        # --- E4 (rev-1494 f1 + merge-ordering hazard): a hand-written receipt in a
+        # --- telemetry-free root -> NOT_MET on the series bind; series mismatch -> NOT_MET ---
+        e4_unbound = _e4_case("e4_unbound_run", _e4_receipt(), telemetry_steps=None)
+        assert e4_unbound["status"] == "NOT_MET", e4_unbound
+        assert any("no train_step telemetry series" in d for d in e4_unbound["components"]["defects"]), e4_unbound
+        e4_mismatch = _e4_case("e4_mismatch_run", _e4_receipt(steps=100), telemetry_steps=150)
+        assert e4_mismatch["status"] == "NOT_MET", e4_mismatch
+        assert any("disagrees with the deduped train_step series" in d for d in e4_mismatch["components"]["defects"]), e4_mismatch
+        # telemetry one step AHEAD (emit-before-accumulate crash window) stays MET
+        e4_ahead = _e4_case("e4_ahead_run", _e4_receipt(), telemetry_steps=101)
+        assert e4_ahead["status"] == "MET", e4_ahead
+
+        # --- E4 (rev-1494 round-2 item 1): the receipt must NAME the adjudicated
+        # --- series -- foreign, null, and absent run_id all refuse ---
+        e4_foreign = _e4_receipt()
+        e4_foreign["run_id"] = "SOME-OTHER-RUN"
+        e4_foreign_res = _e4_case("e4_foreign_run", e4_foreign, telemetry_steps=100)
+        assert e4_foreign_res["status"] == "NOT_MET", e4_foreign_res
+        assert any("must not credit another's series" in d for d in e4_foreign_res["components"]["defects"]), e4_foreign_res
+        e4_nullid = _e4_receipt()
+        e4_nullid["run_id"] = None
+        e4_nullid_res = _e4_case("e4_nullid_run", e4_nullid, telemetry_steps=100)
+        assert e4_nullid_res["status"] == "NOT_MET", e4_nullid_res
+        e4_noid = _e4_receipt()
+        del e4_noid["run_id"]
+        e4_noid_res = _e4_case("e4_noid_run", e4_noid, telemetry_steps=100)
+        assert e4_noid_res["status"] == "NOT_MET", e4_noid_res
+        assert any("must name the run it describes" in d for d in e4_noid_res["components"]["defects"]), e4_noid_res
+
+        # --- E4 (rev-1494 round-2 item 2): on a multi-run_id root the operator's
+        # --- run_id selects the SAME series for E4 that E1 adjudicates ---
+        e4_multi_root = tmp_path / "e4_multi_run"
+        e4_multi_root.mkdir()
+        _e4_telemetry(e4_multi_root, 100)
+        (e4_multi_root / "telemetry" / "other.jsonl").write_text(
+            "\n".join(json.dumps({"source": "ember-restart-3b", "kind": "train_step",
+                                  "ts": f"2026-08-06T01:00:{i:02d}Z",
+                                  "payload": {"run_id": "an-unrelated-attempt", "step": i, "loss": 9.9}})
+                      for i in range(1, 41)) + "\n", encoding="utf-8")
+        (e4_multi_root / "e4-measurement-receipt.json").write_text(json.dumps(_e4_receipt()), encoding="utf-8")
+        e4_multi = check_r1_e4(e4_multi_root, thresholds, run_id="SELFTEST_FIXTURE_run")
+        assert e4_multi["status"] == "MET", e4_multi
+
+        # --- E4 (rev-1494 round-2 item 3): quarantined telemetry is not evidence
+        # --- and cannot poison series selection ---
+        e4_quar_root = tmp_path / "e4_quar_run"
+        e4_quar_root.mkdir()
+        _e4_telemetry(e4_quar_root, 100)
+        quar_dir = e4_quar_root / ".checkpoint-quarantine" / "telemetry"
+        quar_dir.mkdir(parents=True)
+        (quar_dir / "poison.jsonl").write_text(
+            json.dumps({"source": "ember-restart-3b", "kind": "train_step",
+                        "ts": "2026-08-06T02:00:00Z",
+                        "payload": {"run_id": "quarantined-run", "step": 1, "loss": 0.0}}) + "\n",
+            encoding="utf-8")
+        (e4_quar_root / "e4-measurement-receipt.json").write_text(json.dumps(_e4_receipt()), encoding="utf-8")
+        e4_quar = check_r1_e4(e4_quar_root, thresholds)
+        assert e4_quar["status"] == "MET", e4_quar
+
+        # --- E4 (rev-1494 f2): declared cpu_fraction inconsistent with its own inputs -> NOT_MET ---
+        e4_cpu = _e4_receipt()
+        e4_cpu["host_utilization"]["process_cpu_fraction"] = 0.999
+        e4_cpu_res = _e4_case("e4_cpu_run", e4_cpu, telemetry_steps=100)
+        assert e4_cpu_res["status"] == "NOT_MET", e4_cpu_res
+        assert any("process_cpu_fraction" in d and "inconsistent" in d for d in e4_cpu_res["components"]["defects"]), e4_cpu_res
+
+        # --- E4 (rev-1494 f3): flops-model constants differing from the adjudication pins -> NOT_MET
+        # --- (a self-cohering fabricated MFU basis must not pass) ---
+        e4_pins = _e4_receipt()
+        e4_pins["mfu"]["active_parameters"] = 1.0
+        e4_pins["mfu"]["assumed_peak_flops"] = 1e6
+        e4_pins["mfu"]["value"] = (6.0 * 1.0 * e4_pins["tokens_total"] / e4_pins["wall_seconds"]) / 1e6
+        e4_pins_res = _e4_case("e4_pins_run", e4_pins, telemetry_steps=100)
+        assert e4_pins_res["status"] == "NOT_MET", e4_pins_res
+        assert any("adjudication pin" in d for d in e4_pins_res["components"]["defects"]), e4_pins_res
+
+        # --- E4 (rev-1494 f4): a receipt of exactly {} -> NOT_MET with the defect list, no crash ---
+        e4_brace = _e4_case("e4_brace_run", "{}", telemetry_steps=100)
+        assert e4_brace["status"] == "NOT_MET", e4_brace
+        assert len(e4_brace["components"]["defects"]) >= 5, e4_brace
+
+        # --- E4: write_failures disclosure -- negative refuses; positive discloses and stays MET ---
+        e4_wf_bad = _e4_receipt()
+        e4_wf_bad["write_failures"] = -1
+        e4_wf_bad_res = _e4_case("e4_wf_bad_run", e4_wf_bad, telemetry_steps=100)
+        assert e4_wf_bad_res["status"] == "NOT_MET", e4_wf_bad_res
+        e4_wf_ok = _e4_receipt()
+        e4_wf_ok["write_failures"] = 2
+        e4_wf_ok_res = _e4_case("e4_wf_ok_run", e4_wf_ok, telemetry_steps=100)
+        assert e4_wf_ok_res["status"] == "MET", e4_wf_ok_res
+
+        # --- E4: tokens_per_second inconsistent with its own inputs -> NOT_MET ---
+        e4_bad = _e4_receipt()
+        e4_bad["tokens_per_second"] = e4_bad["tokens_per_second"] * 3.0
+        e4_bad_result = _e4_case("e4_bad_run", e4_bad, telemetry_steps=100)
+        assert e4_bad_result["status"] == "NOT_MET", e4_bad_result
+        assert any("inconsistent" in d for d in e4_bad_result["components"]["defects"]), e4_bad_result
+
+        # --- E4: a partial run with missing per-step tokens (nulls) -> NOT_MET, never extrapolated ---
+        e4_null = _e4_receipt()
+        e4_null["tokens_missing_steps"] = 7
+        e4_null["tokens_total"] = None
+        e4_null["tokens_per_second"] = None
+        e4_null["mfu"]["value"] = None
+        e4_null_result = _e4_case("e4_null_run", e4_null, telemetry_steps=100)
+        assert e4_null_result["status"] == "NOT_MET", e4_null_result
+        assert any("tokens_missing_steps" in d for d in e4_null_result["components"]["defects"]), e4_null_result
 
         # --- E5/E6: EVIDENCE_MISSING against an empty root; fixed-prior manifest presence is reported ---
         e5 = check_r1_e5(empty_root, thresholds)
