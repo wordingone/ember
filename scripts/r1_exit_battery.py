@@ -749,27 +749,93 @@ def check_r1_e4(run_root: Path) -> dict[str, Any]:
         context["peak_memory_bytes_from_child_log"] = peak_memory_bytes
         context["peak_memory_bytes_caveat"] = "torch.cuda.max_memory_allocated() at end of a 4-record structural run, not a 100-step canary -- disclosed context, not R1-E4 evidence"
 
-    have_tokens_per_second = False  # never computed anywhere on this path (see module docstring)
-    have_mfu = False
-    have_peak_vram_during_training = peak_memory_bytes is not None
-    have_host_utilization = False
-
-    met = have_tokens_per_second and have_mfu and have_peak_vram_during_training and have_host_utilization
+    # --- primary evidence: the running e4-measurement-receipt.json the specialist
+    # --- path upserts after every step (crash-proof against post-publication
+    # --- housekeeping failures by construction -- see run_vertical_slice.py) ---
+    receipt_candidates = sorted(
+        p for p in run_root.rglob("e4-measurement-receipt.json") if ".checkpoint-quarantine" not in p.parts
+    )
+    if not receipt_candidates:
+        return {
+            "status": "EVIDENCE_MISSING",
+            "detail": (
+                "no e4-measurement-receipt.json under this run root (the specialist path writes one "
+                "per step as of the R1-E4 wiring; older runs never produced it), and peak VRAM via "
+                f"child.log {'was recovered as disclosed context only' if peak_memory_bytes is not None else 'was not recoverable either'}"
+            ),
+            "components": {
+                "tokens_per_second": None,
+                "mfu": None,
+                "peak_vram_during_training_bytes": peak_memory_bytes,
+                "host_utilization": None,
+            },
+            "context": context,
+            "needs": "a certified specialist run at a head carrying the R1-E4 wiring, so the run root holds a step-current e4-measurement-receipt.json",
+        }
+    defects: list[str] = []
+    receipt: dict[str, Any] = {}
+    if len(receipt_candidates) > 1:
+        defects.append("ambiguous: multiple e4-measurement-receipt.json files under one run root: " + ", ".join(str(p) for p in receipt_candidates))
+    else:
+        try:
+            receipt = json.loads(receipt_candidates[0].read_text(encoding="utf-8"))
+        except (OSError, ValueError) as error:
+            defects.append(f"unreadable receipt: {error}")
+        if not isinstance(receipt, dict):
+            defects.append("receipt top level is not a JSON object")
+            receipt = {}
+    if receipt:
+        def _finite_pos(value: Any) -> bool:
+            return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value > 0
+        if receipt.get("schema_version") != "ember02-r1-e4-measurement/v1":
+            defects.append(f"schema_version {receipt.get('schema_version')!r}")
+        if receipt.get("tokens_missing_steps") != 0:
+            defects.append(f"tokens_missing_steps={receipt.get('tokens_missing_steps')!r} -- some steps carried no per-step token count; throughput would be an extrapolation")
+        tokens_total, wall_seconds, tps = receipt.get("tokens_total"), receipt.get("wall_seconds"), receipt.get("tokens_per_second")
+        for name, value in (("steps", receipt.get("steps")), ("tokens_total", tokens_total), ("wall_seconds", wall_seconds), ("tokens_per_second", tps)):
+            if not _finite_pos(value):
+                defects.append(f"{name}: not finite-positive ({value!r})")
+        if _finite_pos(tokens_total) and _finite_pos(wall_seconds) and _finite_pos(tps) and abs(tps - tokens_total / wall_seconds) > 0.01 * tps:
+            defects.append("tokens_per_second inconsistent with its own tokens_total/wall_seconds")
+        mfu = receipt.get("mfu") if isinstance(receipt.get("mfu"), dict) else {}
+        mfu_value = mfu.get("value")
+        if not (isinstance(mfu_value, (int, float)) and not isinstance(mfu_value, bool) and math.isfinite(mfu_value) and 0 < mfu_value < 1):
+            defects.append(f"mfu.value: not a finite fraction in (0,1) ({mfu_value!r})")
+        elif _finite_pos(mfu.get("active_parameters")) and _finite_pos(mfu.get("assumed_peak_flops")) and _finite_pos(tokens_total) and _finite_pos(wall_seconds):
+            expected_mfu = (6.0 * mfu["active_parameters"] * tokens_total / wall_seconds) / mfu["assumed_peak_flops"]
+            if abs(mfu_value - expected_mfu) > 0.01 * expected_mfu:
+                defects.append("mfu.value inconsistent with its own declared flops model")
+        else:
+            defects.append("mfu.active_parameters/assumed_peak_flops missing, so the flops model cannot be re-derived")
+        vram = receipt.get("peak_vram") if isinstance(receipt.get("peak_vram"), dict) else {}
+        if not (_finite_pos(vram.get("allocated_bytes")) and _finite_pos(vram.get("reserved_bytes"))):
+            defects.append(f"peak_vram allocated/reserved not finite-positive ({vram.get('allocated_bytes')!r}/{vram.get('reserved_bytes')!r})")
+        elif vram["reserved_bytes"] < vram["allocated_bytes"]:
+            defects.append("peak_vram.reserved_bytes below allocated_bytes -- allocator invariant violated")
+        host = receipt.get("host_utilization") if isinstance(receipt.get("host_utilization"), dict) else {}
+        frac = host.get("process_cpu_fraction")
+        if not (isinstance(frac, (int, float)) and not isinstance(frac, bool) and math.isfinite(frac) and frac >= 0):
+            defects.append(f"host_utilization.process_cpu_fraction: not a finite nonnegative number ({frac!r})")
+    if defects:
+        return {
+            "status": "NOT_MET",
+            "detail": "e4-measurement-receipt present but invalid: " + "; ".join(defects),
+            "components": {"receipt_path": [str(p) for p in receipt_candidates], "defects": defects},
+            "context": context,
+            "needs": "a content-valid e4-measurement-receipt.json (every quantity finite and arithmetic-consistent with its own inputs)",
+        }
     return {
-        "status": "MET" if met else "EVIDENCE_MISSING",
-        "detail": (
-            "none of {tokens/s, MFU, host utilization} exist in any receiptable form under this run root "
-            f"(tokens/s and MFU are never computed on the governed-vertical path; peak VRAM "
-            f"{'was recovered from a captured child.log' if have_peak_vram_during_training else 'requires a captured *-child.log with the final JSON result line (peak_memory_bytes) -- none found under this run root'})"
-        ),
+        "status": "MET",
+        "detail": f"validated e4-measurement-receipt: {receipt_candidates[0]} (steps={receipt.get('steps')}, tokens/s={receipt.get('tokens_per_second'):.4g}, mfu={receipt['mfu']['value']:.3e})",
         "components": {
-            "tokens_per_second": None,
-            "mfu": None,
-            "peak_vram_during_training_bytes": peak_memory_bytes,
-            "host_utilization": None,
+            "tokens_per_second": receipt.get("tokens_per_second"),
+            "mfu": receipt["mfu"]["value"],
+            "peak_vram_during_training_bytes": receipt["peak_vram"]["allocated_bytes"],
+            "peak_vram_reserved_bytes": receipt["peak_vram"]["reserved_bytes"],
+            "host_utilization": receipt["host_utilization"]["process_cpu_fraction"],
+            "receipt_path": str(receipt_candidates[0]),
         },
         "context": context,
-        "needs": "a run whose stdout is captured to a *-child.log (certified_train_launch.py does this automatically as of the #1408 fix) for peak VRAM, plus a telemetry-wired >=100-step run for tokens/s; MFU and host utilization have no computation path anywhere in this repo yet",
     }
 
 
@@ -1748,9 +1814,55 @@ def run_selftest() -> None:
         e4_manifest_path.write_bytes(json.dumps(e4_manifest).encode("utf-8"))
         (e4_root / "disk-budget-runner-receipt-child.log").write_bytes((json.dumps({"peak_memory_bytes": 12345678, "other": "noise"}) + "\n").encode("utf-8"))
         e4_result = check_r1_e4(e4_root)
-        assert e4_result["status"] == "EVIDENCE_MISSING", e4_result  # tokens/s + MFU + host util still absent
+        assert e4_result["status"] == "EVIDENCE_MISSING", e4_result  # child.log alone is disclosed context, not the measurement receipt
         assert e4_result["components"]["peak_vram_during_training_bytes"] == 12345678, e4_result
         assert e4_result["context"]["pre_run_vram_preflight"]["total_gb"] == 25.76, e4_result
+
+        # --- E4: content-valid measurement receipt -> MET, components arithmetic-verified ---
+        def _e4_receipt(steps: int = 100, tokens_total: int = 773, wall_seconds: float = 17.4) -> dict[str, Any]:
+            active, peak = 1_725_232_640, 165.2e12
+            return {
+                "schema_version": "ember02-r1-e4-measurement/v1",
+                "run_id": "SELFTEST_FIXTURE_run",
+                "steps": steps, "tokens_total": tokens_total, "tokens_missing_steps": 0,
+                "wall_seconds": wall_seconds, "step_ms_sum": wall_seconds * 1000.0,
+                "tokens_per_second": tokens_total / wall_seconds,
+                "tokens_per_second_step_basis": tokens_total / wall_seconds,
+                "mfu": {"value": (6.0 * active * tokens_total / wall_seconds) / peak,
+                        "flops_model": "6 * active_parameters * tokens_total / wall_seconds",
+                        "active_parameters": active, "assumed_peak_flops": peak},
+                "peak_vram": {"allocated_bytes": 21_700_000_000, "reserved_bytes": 22_100_000_000},
+                "host_utilization": {"process_cpu_seconds": 8.7, "wall_seconds": wall_seconds, "process_cpu_fraction": 0.5},
+            }
+        e4_met_root = tmp_path / "e4_met_run"
+        e4_met_root.mkdir()
+        (e4_met_root / "e4-measurement-receipt.json").write_text(json.dumps(_e4_receipt()), encoding="utf-8")
+        e4_met = check_r1_e4(e4_met_root)
+        assert e4_met["status"] == "MET", e4_met
+        assert abs(e4_met["components"]["tokens_per_second"] - 773 / 17.4) < 1e-9, e4_met
+
+        # --- E4: tokens_per_second inconsistent with its own inputs -> NOT_MET ---
+        e4_bad = _e4_receipt()
+        e4_bad["tokens_per_second"] = e4_bad["tokens_per_second"] * 3.0
+        e4_bad_root = tmp_path / "e4_bad_run"
+        e4_bad_root.mkdir()
+        (e4_bad_root / "e4-measurement-receipt.json").write_text(json.dumps(e4_bad), encoding="utf-8")
+        e4_bad_result = check_r1_e4(e4_bad_root)
+        assert e4_bad_result["status"] == "NOT_MET", e4_bad_result
+        assert any("inconsistent" in d for d in e4_bad_result["components"]["defects"]), e4_bad_result
+
+        # --- E4: a partial run with missing per-step tokens (nulls) -> NOT_MET, never extrapolated ---
+        e4_null = _e4_receipt()
+        e4_null["tokens_missing_steps"] = 7
+        e4_null["tokens_total"] = None
+        e4_null["tokens_per_second"] = None
+        e4_null["mfu"]["value"] = None
+        e4_null_root = tmp_path / "e4_null_run"
+        e4_null_root.mkdir()
+        (e4_null_root / "e4-measurement-receipt.json").write_text(json.dumps(e4_null), encoding="utf-8")
+        e4_null_result = check_r1_e4(e4_null_root)
+        assert e4_null_result["status"] == "NOT_MET", e4_null_result
+        assert any("tokens_missing_steps" in d for d in e4_null_result["components"]["defects"]), e4_null_result
 
         # --- E5/E6: EVIDENCE_MISSING against an empty root; fixed-prior manifest presence is reported ---
         e5 = check_r1_e5(empty_root, thresholds)
