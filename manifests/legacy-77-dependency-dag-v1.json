@@ -1,0 +1,354 @@
+{
+  "schema_version": "legacy-77-dependency-dag-v1",
+  "repository": "wordingone/ember",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "public_master_sha": "d648d7f9f692134bf51478d3303267666b04e342",
+  "deletion_authority": "NOT_GRANTED",
+  "nodes": [
+    {
+      "id": "I0035",
+      "kind": "issue"
+    },
+    {
+      "id": "I0054",
+      "kind": "issue"
+    },
+    {
+      "id": "I0099",
+      "kind": "issue"
+    },
+    {
+      "id": "I0113",
+      "kind": "issue"
+    },
+    {
+      "id": "I0118",
+      "kind": "issue"
+    },
+    {
+      "id": "I0124",
+      "kind": "issue"
+    },
+    {
+      "id": "I0125",
+      "kind": "issue"
+    },
+    {
+      "id": "I0140",
+      "kind": "issue"
+    },
+    {
+      "id": "I0154",
+      "kind": "issue"
+    },
+    {
+      "id": "I0200",
+      "kind": "issue"
+    },
+    {
+      "id": "I0203",
+      "kind": "issue"
+    },
+    {
+      "id": "I0206",
+      "kind": "issue"
+    },
+    {
+      "id": "I0211",
+      "kind": "issue"
+    },
+    {
+      "id": "I0214",
+      "kind": "issue"
+    },
+    {
+      "id": "I0242",
+      "kind": "issue"
+    },
+    {
+      "id": "I0252",
+      "kind": "issue"
+    },
+    {
+      "id": "I0280",
+      "kind": "issue"
+    },
+    {
+      "id": "I0303",
+      "kind": "issue"
+    },
+    {
+      "id": "I0321",
+      "kind": "issue"
+    },
+    {
+      "id": "I0345",
+      "kind": "issue"
+    },
+    {
+      "id": "I0354",
+      "kind": "issue"
+    },
+    {
+      "id": "I0370",
+      "kind": "issue"
+    },
+    {
+      "id": "I0440",
+      "kind": "issue"
+    },
+    {
+      "id": "I0466",
+      "kind": "issue"
+    },
+    {
+      "id": "I0480",
+      "kind": "issue"
+    },
+    {
+      "id": "I0485",
+      "kind": "issue"
+    },
+    {
+      "id": "I0488",
+      "kind": "issue"
+    },
+    {
+      "id": "I0518",
+      "kind": "issue"
+    },
+    {
+      "id": "I0546",
+      "kind": "issue"
+    },
+    {
+      "id": "I0552",
+      "kind": "issue"
+    },
+    {
+      "id": "I0562",
+      "kind": "issue"
+    },
+    {
+      "id": "I0565",
+      "kind": "issue"
+    },
+    {
+      "id": "I0585",
+      "kind": "issue"
+    },
+    {
+      "id": "I0594",
+      "kind": "issue"
+    },
+    {
+      "id": "I0627",
+      "kind": "issue"
+    },
+    {
+      "id": "I0649",
+      "kind": "issue"
+    },
+    {
+      "id": "I0650",
+      "kind": "issue"
+    },
+    {
+      "id": "I0651",
+      "kind": "issue"
+    },
+    {
+      "id": "I0652",
+      "kind": "issue"
+    },
+    {
+      "id": "I0653",
+      "kind": "issue"
+    },
+    {
+      "id": "I0654",
+      "kind": "issue"
+    },
+    {
+      "id": "I0655",
+      "kind": "issue"
+    },
+    {
+      "id": "I0656",
+      "kind": "issue"
+    },
+    {
+      "id": "I0657",
+      "kind": "issue"
+    },
+    {
+      "id": "I0658",
+      "kind": "issue"
+    },
+    {
+      "id": "I0659",
+      "kind": "issue"
+    },
+    {
+      "id": "I0663",
+      "kind": "issue"
+    },
+    {
+      "id": "I0676",
+      "kind": "issue"
+    },
+    {
+      "id": "I0685",
+      "kind": "issue"
+    },
+    {
+      "id": "I0688",
+      "kind": "issue"
+    },
+    {
+      "id": "I0696",
+      "kind": "issue"
+    },
+    {
+      "id": "I0700",
+      "kind": "issue"
+    },
+    {
+      "id": "I0701",
+      "kind": "issue"
+    },
+    {
+      "id": "I0702",
+      "kind": "issue"
+    },
+    {
+      "id": "I0703",
+      "kind": "issue"
+    },
+    {
+      "id": "I0704",
+      "kind": "issue"
+    },
+    {
+      "id": "I0705",
+      "kind": "issue"
+    },
+    {
+      "id": "I0707",
+      "kind": "issue"
+    },
+    {
+      "id": "I0711",
+      "kind": "issue"
+    },
+    {
+      "id": "I0735",
+      "kind": "issue"
+    },
+    {
+      "id": "I0739",
+      "kind": "issue"
+    },
+    {
+      "id": "I0756",
+      "kind": "issue"
+    },
+    {
+      "id": "I0757",
+      "kind": "issue"
+    },
+    {
+      "id": "I0764",
+      "kind": "issue"
+    },
+    {
+      "id": "I0774",
+      "kind": "issue"
+    },
+    {
+      "id": "I0779",
+      "kind": "issue"
+    },
+    {
+      "id": "I0782",
+      "kind": "issue"
+    },
+    {
+      "id": "I0785",
+      "kind": "issue"
+    },
+    {
+      "id": "I0786",
+      "kind": "issue"
+    },
+    {
+      "id": "I0787",
+      "kind": "issue"
+    },
+    {
+      "id": "I0802",
+      "kind": "issue"
+    },
+    {
+      "id": "I0812",
+      "kind": "issue"
+    },
+    {
+      "id": "I0869",
+      "kind": "issue"
+    },
+    {
+      "id": "I0872",
+      "kind": "issue"
+    },
+    {
+      "id": "I0894",
+      "kind": "issue"
+    },
+    {
+      "id": "I0898",
+      "kind": "issue"
+    },
+    {
+      "id": "I0917",
+      "kind": "issue"
+    },
+    {
+      "id": "M702-CURRENT-NATIVE-CPUOFFLOAD",
+      "kind": "shared_mechanism"
+    },
+    {
+      "id": "M707-OPTIMIZER-IDENTITY",
+      "kind": "shared_mechanism"
+    }
+  ],
+  "edges": [
+    {
+      "from": "I0764",
+      "to": "I0702",
+      "reason": "#764 exact-scale evidence consumes the #702 producer/identity and rerun receipt."
+    },
+    {
+      "from": "I0702",
+      "to": "I0707",
+      "reason": "#702 optimizer/quality evidence consumes the #707 precision/identity boundary."
+    },
+    {
+      "from": "I0764",
+      "to": "M702-CURRENT-NATIVE-CPUOFFLOAD",
+      "reason": "The current-native producer is shared evidence for the #764 route."
+    },
+    {
+      "from": "I0702",
+      "to": "M702-CURRENT-NATIVE-CPUOFFLOAD",
+      "reason": "The governed #702 rerun uses the same producer identity."
+    }
+  ],
+  "topological_order": [
+    "M707-OPTIMIZER-IDENTITY",
+    "M702-CURRENT-NATIVE-CPUOFFLOAD",
+    "I0702",
+    "I0764"
+  ]
+}
