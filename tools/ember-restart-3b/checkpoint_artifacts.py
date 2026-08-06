@@ -509,6 +509,25 @@ def _optimizer_tensor_storage_by_route(
     }
 
 
+def optimizer_covers_every_expert_route(
+    model: UnifiedDecoder,
+    optimizer: torch.optim.Optimizer,
+) -> bool:
+    """True when the live optimizer holds initialized moments on every specialist route.
+
+    A lineage episode that exact-resumed a full-coverage parent restores the parent's
+    moments verbatim (#1473's second closed admissible shape), so its serialized
+    checkpoint legitimately carries full-coverage optimizer state at projection
+    factor 1. The byte bound the runner budgets for such an episode must be derived
+    from the SAME live measurement this module's storage projection later verifies:
+    budgeting shared-plus-one-expert while the projection admits the inherited full
+    set refused the by-design publication (#1483).
+    """
+
+    routed = _optimizer_tensor_storage_by_route(model, optimizer)
+    return all(routed[name] > 0 for name in EXPERT_NAMES)
+
+
 def _derive_checkpoint_storage_projection(
     *,
     model: UnifiedDecoder,
