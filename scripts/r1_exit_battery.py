@@ -123,7 +123,7 @@ import sys
 import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any, Mapping
 
 ISSUE_REF = "#1463"
@@ -860,6 +860,11 @@ def check_r1_e5(run_root: Path, thresholds: dict[str, Any], *, repo_root: Path =
 # ---------------------------------------------------------------------------
 
 RECALIBRATION_SCHEMA = "ember02-forecast-recalibration/v1"
+E6_FORECAST_SCHEMA = "ember02-r1-forecast/v1"
+# The ONE document a recalibration receipt may bind (rev-1490 round-2: without
+# this pin, any of the repo's 1,324 quantities-free JSON files was a valid-sha
+# decoy that silently disabled the whole value binding).
+E6_FORECAST_PATH = "docs/spec/ember02-r1-forecast-v1.json"
 E6_SCALAR_QUANTITIES = ("step_time_ms", "tokens_per_second", "proxy_joules_per_token", "peak_vram_gib")
 
 
@@ -867,12 +872,18 @@ def _validate_recalibration_content(path: Path, *, repo_root: Path, run_root: Pa
     """Return the list of content defects (empty = valid) for one candidate
     recalibration receipt, per §3's closing-receipts clause. Fail-closed: every
     check that cannot be performed is itself a defect. Three bindings must all
-    hold or the receipt is decorative (rev-1490 findings 1-3):
-      * document binding -- forecast_path must resolve INSIDE repo_root (no
-        absolute paths, no traversal) and its bytes must hash to forecast_sha256;
+    hold or the receipt is decorative (rev-1490 findings 1-3; round-2 finding):
+      * document binding -- forecast_path must name THE preregistered document
+        (E6_FORECAST_PATH, pinned), resolve INSIDE repo_root (no absolute
+        paths, no traversal), hash to forecast_sha256, and validate as a
+        forecast (E6_FORECAST_SCHEMA) -- binding any other repo JSON is a
+        decoy that would disable the value binding;
       * value binding -- every predicted value in the receipt must EQUAL the
         bound forecast's predicted value (sha alone proves the document is
-        unchanged, not that the receipt used its numbers);
+        unchanged, not that the receipt used its numbers); a quantity or
+        anchor the bound forecast supplies NO prediction for is itself a
+        defect, never a skipped comparison (round-2: the skip path was the
+        door);
       * run binding -- the receipt's run_root must resolve to the adjudicated
         run root, and steps_measured must reach T-01 (a 3-step recalibration
         of someone else's run must not credit this root's exit).
@@ -903,6 +914,7 @@ def _validate_recalibration_content(path: Path, *, repo_root: Path, run_root: Pa
         defects.append(f"steps_measured={steps_measured!r} below T-01={t01} -- recalibration requires the measured baseline the prereg names")
 
     forecast_predicted: dict[str, Any] = {}
+    forecast_bound = False  # True only once THE preregistered forecast is loaded and schema-validated
     forecast_rel = receipt.get("forecast_path")
     forecast_sha = receipt.get("forecast_sha256")
     if not isinstance(forecast_rel, str) or not isinstance(forecast_sha, str):
@@ -911,6 +923,8 @@ def _validate_recalibration_content(path: Path, *, repo_root: Path, run_root: Pa
         repo_resolved = repo_root.resolve()
         if Path(forecast_rel).is_absolute():
             defects.append(f"forecast_path is absolute ({forecast_rel!r}) -- the binding must be repo-relative so it names the preregistered document, not an arbitrary file")
+        elif PurePath(forecast_rel).as_posix() != E6_FORECAST_PATH:
+            defects.append(f"forecast_path {forecast_rel!r} does not name the preregistered forecast document ({E6_FORECAST_PATH}) -- binding any other repo file is refused (rev-1490 round-2: a quantities-free decoy JSON silently disabled the value binding)")
         else:
             forecast_abs = (repo_root / forecast_rel).resolve()
             if repo_resolved not in forecast_abs.parents and forecast_abs != repo_resolved:
@@ -922,9 +936,17 @@ def _validate_recalibration_content(path: Path, *, repo_root: Path, run_root: Pa
             else:
                 try:
                     forecast_doc = json.loads(forecast_abs.read_text(encoding="utf-8"))
-                    forecast_predicted = forecast_doc.get("quantities", {}) if isinstance(forecast_doc, dict) else {}
                 except ValueError as error:
                     defects.append(f"bound forecast document is not valid JSON: {error}")
+                else:
+                    if not isinstance(forecast_doc, dict) or forecast_doc.get("schema_version") != E6_FORECAST_SCHEMA:
+                        got = forecast_doc.get("schema_version") if isinstance(forecast_doc, dict) else type(forecast_doc).__name__
+                        defects.append(f"bound document is not the preregistered forecast: schema_version={got!r}, need {E6_FORECAST_SCHEMA!r}")
+                    elif not isinstance(forecast_doc.get("quantities"), dict) or not forecast_doc["quantities"]:
+                        defects.append("bound forecast supplies no quantities mapping -- there is no preregistered comparison basis")
+                    else:
+                        forecast_predicted = forecast_doc["quantities"]
+                        forecast_bound = True
 
     quantities = receipt.get("quantities")
     if not isinstance(quantities, dict):
@@ -939,8 +961,10 @@ def _validate_recalibration_content(path: Path, *, repo_root: Path, run_root: Pa
         for field_name, value in (("predicted", predicted), ("measured", measured)):
             if not _num(value):
                 defects.append(f"{label}.{field_name}: not a finite number ({value!r})")
-        if _num(predicted) and forecast_value is not None:
-            if not _num(forecast_value):
+        if forecast_bound and _num(predicted):
+            if forecast_value is None:
+                defects.append(f"{label}: bound forecast supplies no predicted value -- a receipt quantity without a preregistered basis is a defect, never a skipped comparison (rev-1490 round-2)")
+            elif not _num(forecast_value):
                 defects.append(f"{label}: bound forecast carries no finite predicted value to compare against")
             elif abs(predicted - forecast_value) > 1e-9 * max(1.0, abs(forecast_value)):
                 defects.append(f"{label}.predicted={predicted!r} differs from the bound forecast's {forecast_value!r} -- the receipt did not use the preregistered prediction")
@@ -955,7 +979,7 @@ def _validate_recalibration_content(path: Path, *, repo_root: Path, run_root: Pa
             defects.append(f"{name}: entry missing")
             continue
         forecast_entry = forecast_predicted.get(name) if isinstance(forecast_predicted.get(name), dict) else {}
-        _check_pair(name, entry, forecast_entry.get("predicted") if forecast_predicted else None)
+        _check_pair(name, entry, forecast_entry.get("predicted"))
 
     trajectory = quantities.get("loss_trajectory")
     anchors = trajectory.get("anchors") if isinstance(trajectory, dict) else None
@@ -964,13 +988,16 @@ def _validate_recalibration_content(path: Path, *, repo_root: Path, run_root: Pa
     if not isinstance(anchors, dict) or not anchors:
         defects.append("loss_trajectory.anchors: missing or empty")
     else:
-        if forecast_predicted and forecast_anchors and set(anchors) != set(forecast_anchors):
-            defects.append(f"loss_trajectory anchor set {sorted(anchors)} differs from the bound forecast's {sorted(forecast_anchors)}")
+        if forecast_bound:
+            if not forecast_anchors:
+                defects.append("loss_trajectory: bound forecast supplies no predicted_anchors -- the anchor set has no preregistered basis (defect, never a skip)")
+            elif set(anchors) != set(forecast_anchors):
+                defects.append(f"loss_trajectory anchor set {sorted(anchors)} differs from the bound forecast's {sorted(forecast_anchors)}")
         for key, anchor in sorted(anchors.items()):
             if not isinstance(anchor, dict):
                 defects.append(f"loss_trajectory.anchors[{key}]: not an object")
                 continue
-            _check_pair(f"loss_trajectory.anchors[{key}]", anchor, forecast_anchors.get(key) if forecast_predicted else None)
+            _check_pair(f"loss_trajectory.anchors[{key}]", anchor, forecast_anchors.get(key))
     return defects
 
 
@@ -1889,6 +1916,57 @@ def run_selftest() -> None:
         e6_stale = check_r1_e6(e6_met_root, thresholds, repo_root=e6_stale_repo)
         assert e6_stale["status"] == "NOT_MET", e6_stale
         assert any("forecast_sha256" in d for row in e6_stale["components"]["candidate_validation"] for d in row["defects"]), e6_stale
+
+        # --- E6 (rev-1490 round-2, blocking finding): a fully fabricated receipt sha-bound to a
+        # --- real repo JSON that is NOT the forecast must refuse on the path pin, never mint MET ---
+        decoy_bytes = json.dumps({"schema_version": "ember02-preregistration-thresholds-v1", "SELFTEST_FIXTURE": True, "frozen": True}).encode("utf-8")
+        (e6_repo / "docs" / "spec" / "decoy-thresholds.json").write_bytes(decoy_bytes)
+        e6_decoy = json.loads(json.dumps(e6_receipt))
+        e6_decoy["forecast_path"] = "docs/spec/decoy-thresholds.json"
+        e6_decoy["forecast_sha256"] = hashlib.sha256(decoy_bytes).hexdigest()
+        for name in E6_SCALAR_QUANTITIES:
+            e6_decoy["quantities"][name] = _e6_scalar(999.0, 999.0)
+        e6_decoy["quantities"]["loss_trajectory"] = {"anchors": {"step_1": {"predicted": 0.0, "measured": 0.0, "abs_error": 0.0}}}
+        e6_decoy_root = tmp_path / "e6_decoy_run"
+        e6_decoy_root.mkdir()
+        e6_decoy["run_root"] = str(e6_decoy_root)
+        (e6_decoy_root / "forecast-recalibration.json").write_text(json.dumps(e6_decoy), encoding="utf-8")
+        e6_decoy_res = check_r1_e6(e6_decoy_root, thresholds, repo_root=e6_repo)
+        assert e6_decoy_res["status"] == "NOT_MET", e6_decoy_res
+        assert any("does not name the preregistered forecast document" in d for row in e6_decoy_res["components"]["candidate_validation"] for d in row["defects"]), e6_decoy_res
+
+        # --- E6 (round-2): the canonical path occupied by a NON-forecast document -> schema defect ---
+        e6_swap_repo = tmp_path / "e6_swap_repo"
+        (e6_swap_repo / "docs" / "spec").mkdir(parents=True)
+        swap_bytes = json.dumps({"schema_version": "ember02-preregistration-thresholds-v1", "SELFTEST_FIXTURE": True}).encode("utf-8")
+        (e6_swap_repo / "docs" / "spec" / "ember02-r1-forecast-v1.json").write_bytes(swap_bytes)
+        e6_swap = json.loads(json.dumps(e6_receipt))
+        e6_swap["forecast_sha256"] = hashlib.sha256(swap_bytes).hexdigest()
+        e6_swap_root = tmp_path / "e6_swap_run"
+        e6_swap_root.mkdir()
+        e6_swap["run_root"] = str(e6_swap_root)
+        (e6_swap_root / "forecast-recalibration.json").write_text(json.dumps(e6_swap), encoding="utf-8")
+        e6_swap_res = check_r1_e6(e6_swap_root, thresholds, repo_root=e6_swap_repo)
+        assert e6_swap_res["status"] == "NOT_MET", e6_swap_res
+        assert any("is not the preregistered forecast" in d for row in e6_swap_res["components"]["candidate_validation"] for d in row["defects"]), e6_swap_res
+
+        # --- E6 (round-2): forecast valid but supplying NO prediction for one required quantity
+        # --- -> named defect, never a skipped comparison ---
+        e6_gap_repo = tmp_path / "e6_gap_repo"
+        (e6_gap_repo / "docs" / "spec").mkdir(parents=True)
+        gap_doc = json.loads(e6_forecast_bytes)
+        del gap_doc["quantities"]["proxy_joules_per_token"]
+        gap_bytes = json.dumps(gap_doc).encode("utf-8")
+        (e6_gap_repo / "docs" / "spec" / "ember02-r1-forecast-v1.json").write_bytes(gap_bytes)
+        e6_gap = json.loads(json.dumps(e6_receipt))
+        e6_gap["forecast_sha256"] = hashlib.sha256(gap_bytes).hexdigest()
+        e6_gap_root = tmp_path / "e6_gap_run"
+        e6_gap_root.mkdir()
+        e6_gap["run_root"] = str(e6_gap_root)
+        (e6_gap_root / "forecast-recalibration.json").write_text(json.dumps(e6_gap), encoding="utf-8")
+        e6_gap_res = check_r1_e6(e6_gap_root, thresholds, repo_root=e6_gap_repo)
+        assert e6_gap_res["status"] == "NOT_MET", e6_gap_res
+        assert any("supplies no predicted value" in d for row in e6_gap_res["components"]["candidate_validation"] for d in row["defects"]), e6_gap_res
 
         # --- E7: single seed root -> EVIDENCE_MISSING naming T-07 ---
         e7_single = check_r1_e7([clean_root], thresholds)

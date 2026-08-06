@@ -281,17 +281,31 @@ def load_t01() -> int:
 
 def repo_relative_forecast_path(forecast_path: Path) -> str:
     """The receipt binds the PREREGISTERED document, so the path it records must
-    be repo-relative and inside the repo -- an absolute or escaping path would
-    let a receipt bind an arbitrary file (rev-1490 finding 2). Refuses rather
-    than silently rewriting."""
+    be repo-relative, inside the repo, and equal to THE preregistered path the
+    battery pins (rev-1490 finding 2 + round-2: any other repo JSON is a decoy
+    the validator refuses -- refusing at generation time keeps the pair aligned
+    instead of writing a receipt adjudication will reject). Refuses rather than
+    silently rewriting. The canonical path is imported from the battery at
+    runtime, never copied."""
     resolved = forecast_path.resolve()
     try:
-        return resolved.relative_to(REPO_ROOT.resolve()).as_posix()
+        rel = resolved.relative_to(REPO_ROOT.resolve()).as_posix()
     except ValueError:
         raise RecalibrationRefusal(
             f"FORECAST_OUTSIDE_REPO: {forecast_path} does not live inside {REPO_ROOT}; the receipt "
             "must bind the committed preregistered document, not an arbitrary file"
         ) from None
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from r1_exit_battery import E6_FORECAST_PATH
+    except ImportError as error:
+        raise RecalibrationRefusal(f"BATTERY_UNIMPORTABLE: cannot bind the canonical forecast path: {error}") from error
+    if rel != E6_FORECAST_PATH:
+        raise RecalibrationRefusal(
+            f"FORECAST_NOT_PREREGISTERED: {rel} is not the preregistered forecast document "
+            f"({E6_FORECAST_PATH}); the battery refuses receipts bound to any other file"
+        )
+    return rel
 
 
 def build_receipt(forecast_path: Path, run_root: Path) -> dict[str, Any]:
