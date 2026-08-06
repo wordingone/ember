@@ -271,6 +271,13 @@ def find_telemetry_files(run_root: Path) -> list[Path]:
         return []
     found = []
     for candidate in sorted(run_root.rglob("*.jsonl")):
+        # Quarantined material is not evidence for ANY check that reads this
+        # loader (E1/E2/E4 alike): a .jsonl inside .checkpoint-quarantine must
+        # not poison series selection or vouch for a run (rev-1494 round-2
+        # item 3 -- the receipt globs already excluded quarantine, the
+        # telemetry loader did not).
+        if ".checkpoint-quarantine" in candidate.parts:
+            continue
         for event in _iter_jsonl_events(candidate):
             if event.get("source") == "ember-restart-3b":
                 found.append(candidate)
@@ -721,7 +728,7 @@ E4_ACTIVE_PARAMETERS = 1_725_232_640
 E4_ASSUMED_PEAK_FLOPS = 165.2e12
 
 
-def check_r1_e4(run_root: Path, thresholds: dict[str, Any]) -> dict[str, Any]:
+def check_r1_e4(run_root: Path, thresholds: dict[str, Any], *, run_id: str | None = None) -> dict[str, Any]:
     child_logs = sorted(run_root.glob("*-child.log"))
     context: dict[str, Any] = {}
     peak_memory_bytes = None
@@ -823,20 +830,39 @@ def check_r1_e4(run_root: Path, thresholds: dict[str, Any]) -> dict[str, Any]:
         # is a named defect instead of a silent split verdict. The producer
         # emits telemetry before accumulating, so telemetry may lead by at most
         # one step at a crash boundary.
-        selected_run_id, series, series_counts = _select_series(run_root, run_id=None)
+        # run_id threads through from the dispatcher exactly as E1 receives it
+        # (rev-1494 round-2 item 2): on a multi-run_id root the operator's
+        # --run-id selects the SAME series for both checks, so E1 and E4 can
+        # never silently adjudicate different series.
+        selected_run_id, series, series_counts = _select_series(run_root, run_id=run_id)
         if not series:
             defects.append(
                 "no train_step telemetry series under this run root to bind the receipt against"
                 + (f" (run_ids seen: {sorted(series_counts)})" if len(series_counts) > 1 else "")
                 + " -- an E4 receipt must describe the same series E1 adjudicates"
             )
-        elif type(steps) is int:
-            series_steps = len(series)
-            if not (0 <= series_steps - steps <= 1):
+        else:
+            # The receipt must NAME the series it describes (rev-1494 round-2
+            # item 1, same class as the E6 decoy cure): step-count agreement
+            # alone would let a receipt describing a different run mint MET.
+            receipt_run_id = receipt.get("run_id")
+            if not isinstance(receipt_run_id, str) or not receipt_run_id:
                 defects.append(
-                    f"steps={steps} disagrees with the deduped train_step series ({series_steps} steps, run_id {selected_run_id}) -- "
-                    "the receipt must describe the series E1 counts (telemetry may lead by at most 1: emit-before-accumulate)"
+                    f"run_id: missing or not a non-empty string ({receipt_run_id!r}) -- the receipt "
+                    "must name the run it describes (the producer writes telemetry's run_id)"
                 )
+            elif receipt_run_id != selected_run_id:
+                defects.append(
+                    f"run_id {receipt_run_id!r} does not match the adjudicated series run_id "
+                    f"{selected_run_id!r} -- one run's receipt must not credit another's series"
+                )
+            if type(steps) is int:
+                series_steps = len(series)
+                if not (0 <= series_steps - steps <= 1):
+                    defects.append(
+                        f"steps={steps} disagrees with the deduped train_step series ({series_steps} steps, run_id {selected_run_id}) -- "
+                        "the receipt must describe the series E1 counts (telemetry may lead by at most 1: emit-before-accumulate)"
+                    )
         tokens_total, wall_seconds, tps = receipt.get("tokens_total"), receipt.get("wall_seconds"), receipt.get("tokens_per_second")
         for name, value in (("tokens_total", tokens_total), ("wall_seconds", wall_seconds), ("tokens_per_second", tps)):
             if not _finite_pos(value):
@@ -1548,7 +1574,7 @@ def _run_one_exit(
     elif exit_id == "e3":
         result = check_r1_e3(run_root, sibling_roots=sibling_roots, explicit_manifest=explicit_manifest)
     elif exit_id == "e4":
-        result = check_r1_e4(run_root, thresholds)
+        result = check_r1_e4(run_root, thresholds, run_id=run_id)
     elif exit_id == "e5":
         result = check_r1_e5(run_root, thresholds)
     elif exit_id == "e6":
@@ -1939,6 +1965,53 @@ def run_selftest() -> None:
         # telemetry one step AHEAD (emit-before-accumulate crash window) stays MET
         e4_ahead = _e4_case("e4_ahead_run", _e4_receipt(), telemetry_steps=101)
         assert e4_ahead["status"] == "MET", e4_ahead
+
+        # --- E4 (rev-1494 round-2 item 1): the receipt must NAME the adjudicated
+        # --- series -- foreign, null, and absent run_id all refuse ---
+        e4_foreign = _e4_receipt()
+        e4_foreign["run_id"] = "SOME-OTHER-RUN"
+        e4_foreign_res = _e4_case("e4_foreign_run", e4_foreign, telemetry_steps=100)
+        assert e4_foreign_res["status"] == "NOT_MET", e4_foreign_res
+        assert any("must not credit another's series" in d for d in e4_foreign_res["components"]["defects"]), e4_foreign_res
+        e4_nullid = _e4_receipt()
+        e4_nullid["run_id"] = None
+        e4_nullid_res = _e4_case("e4_nullid_run", e4_nullid, telemetry_steps=100)
+        assert e4_nullid_res["status"] == "NOT_MET", e4_nullid_res
+        e4_noid = _e4_receipt()
+        del e4_noid["run_id"]
+        e4_noid_res = _e4_case("e4_noid_run", e4_noid, telemetry_steps=100)
+        assert e4_noid_res["status"] == "NOT_MET", e4_noid_res
+        assert any("must name the run it describes" in d for d in e4_noid_res["components"]["defects"]), e4_noid_res
+
+        # --- E4 (rev-1494 round-2 item 2): on a multi-run_id root the operator's
+        # --- run_id selects the SAME series for E4 that E1 adjudicates ---
+        e4_multi_root = tmp_path / "e4_multi_run"
+        e4_multi_root.mkdir()
+        _e4_telemetry(e4_multi_root, 100)
+        (e4_multi_root / "telemetry" / "other.jsonl").write_text(
+            "\n".join(json.dumps({"source": "ember-restart-3b", "kind": "train_step",
+                                  "ts": f"2026-08-06T01:00:{i:02d}Z",
+                                  "payload": {"run_id": "an-unrelated-attempt", "step": i, "loss": 9.9}})
+                      for i in range(1, 41)) + "\n", encoding="utf-8")
+        (e4_multi_root / "e4-measurement-receipt.json").write_text(json.dumps(_e4_receipt()), encoding="utf-8")
+        e4_multi = check_r1_e4(e4_multi_root, thresholds, run_id="SELFTEST_FIXTURE_run")
+        assert e4_multi["status"] == "MET", e4_multi
+
+        # --- E4 (rev-1494 round-2 item 3): quarantined telemetry is not evidence
+        # --- and cannot poison series selection ---
+        e4_quar_root = tmp_path / "e4_quar_run"
+        e4_quar_root.mkdir()
+        _e4_telemetry(e4_quar_root, 100)
+        quar_dir = e4_quar_root / ".checkpoint-quarantine" / "telemetry"
+        quar_dir.mkdir(parents=True)
+        (quar_dir / "poison.jsonl").write_text(
+            json.dumps({"source": "ember-restart-3b", "kind": "train_step",
+                        "ts": "2026-08-06T02:00:00Z",
+                        "payload": {"run_id": "quarantined-run", "step": 1, "loss": 0.0}}) + "\n",
+            encoding="utf-8")
+        (e4_quar_root / "e4-measurement-receipt.json").write_text(json.dumps(_e4_receipt()), encoding="utf-8")
+        e4_quar = check_r1_e4(e4_quar_root, thresholds)
+        assert e4_quar["status"] == "MET", e4_quar
 
         # --- E4 (rev-1494 f2): declared cpu_fraction inconsistent with its own inputs -> NOT_MET ---
         e4_cpu = _e4_receipt()
