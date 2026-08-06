@@ -13,7 +13,9 @@
     "pull_request": 1511,
     "url": "https://github.com/wordingone/ember/pull/1511",
     "branch": "feat/ember-legacy-77-factor1-764",
-    "head_sha256": "07e2e43e44fbdefd1d19e10a56429b2f597559bf",
+    "source_producer_commit_sha256": "07e2e43e44fbdefd1d19e10a56429b2f597559bf",
+    "publication_head_bound_externally": true,
+    "publication_head_binding": "The final PR head is bound by the public PR metadata/body; this receipt intentionally does not self-reference its containing commit.",
     "parent_sha256": "e7c0abc6768f8a4e4afc61cc8612e108b2ea84d3",
     "state": "OPEN_DRAFT",
     "base": "master"
