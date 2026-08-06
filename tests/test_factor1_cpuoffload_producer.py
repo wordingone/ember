@@ -4,6 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import tempfile
 import unittest
@@ -91,3 +92,14 @@ class MicrobenchBindingTests(unittest.TestCase):
         self.assertTrue(status["available"])
         self.assertEqual(status["status"], "CURRENT_NATIVE_PRODUCER_AVAILABLE")
         self.assertEqual(status["producer_basename"], "factor1_cpuoffload_producer.py")
+
+    def test_fixture_receipt_binds_current_bytes_and_supersedes_stale_identity(self):
+        current_path = ROOT / "receipts" / "factor1-lever-microbench-20260806T205607Z.json"
+        stale_path = ROOT / "receipts" / "factor1-lever-microbench-20260806T175504Z.json"
+        current = __import__("json").loads(current_path.read_text(encoding="utf-8"))
+        stale = __import__("json").loads(stale_path.read_text(encoding="utf-8"))
+        implementation = ROOT / "scripts" / "factor1_lever_microbench.py"
+        expected = hashlib.sha256(implementation.read_bytes()).hexdigest()
+        self.assertEqual(current["implementation_sha256"], expected)
+        self.assertEqual(stale["disposition"], "SUPERSEDED_STALE_SOURCE_IDENTITY")
+        self.assertEqual(stale["superseded_by"], "receipts/factor1-lever-microbench-20260806T205607Z.json")
