@@ -61,7 +61,7 @@ def verify(census_path: Path, dag_path: Path, ledger_path: Path, expected_master
                     reject(True, errors, not clause.get("text"), f"row {row.get('issue_number')} clause text missing")
         if row.get("issue_number") == 764:
             prs = row.get("matching_pr_set") or []
-            reject(True, errors, not any(x.get("pr_number") == 1511 and x.get("head") == "075f40a7d19fd681ec932860fb568e3e31f316a8" for x in prs if isinstance(x, dict)), "#764 is not bound to the current-native producer PR")
+            reject(True, errors, not any(x.get("pr_number") == 1511 and x.get("head") == "bc0b0921b3e1d97eedd8c15fefa5838c2bd0ccc0" for x in prs if isinstance(x, dict)), "#764 is not bound to the current-native producer PR")
     expected_dag = {"schema_version","repository","goal_id","workstream_id","public_master_sha","deletion_authority","nodes","edges","topological_order"}
     reject(True, errors, set(dag) != expected_dag, "DAG schema is not closed")
     reject(True, errors, dag.get("deletion_authority") != "NOT_GRANTED", "DAG grants deletion authority")
