@@ -144,6 +144,27 @@ check still covers these files in full.
   as a pinned frozen-rows artifact; C2 hardening mandates byte-exact match.
   Contains: absolute project-drive paths (dataset/benchmark receipt references).
 
+## Hash-pinned frozen artifacts, class 3 (issue #1401, 2026-08-04)
+
+The EMBER-02 launch-authority declaration triple. `certificate.json`'s sha256 is its
+identity — cited by `declaration-ledger.jsonl` and by `run-spec.json`'s
+`certificate_sha256` field — so redacting its embedded path strings would produce a
+document that is not the certificate that was declared. `run-spec.json`'s
+`requested_scope` is compared literally against the certificate's `execution_scope`;
+redacting one and not the other would make a byte-consistent pair read as a mismatch.
+Excluded from the paths check by the same enumeration mechanism as class 2.
+
+- `receipts/ember-02-launch-authority/certificate.json`
+  (sha256: `10696f763a682e47e243d3b72cf6e85e24b128faeda43b69ee494e7438fcd8a0`)
+  — EMBER-02 launch-authority certificate. Contains: `completion_receipt_path`, an
+  operator-machine cockpit-state path (drive letter, `Users`, account segment).
+
+- `receipts/ember-02-launch-authority/run-spec.json`
+  (sha256: `02ef9f24cbc5b5bcd7d1412e8b3d86897b5854c87d8c278acec2ab1d54ed88c8`)
+  — EMBER-02 launch-authority run spec. Contains: `artifact_root`/`custody_root`
+  project-drive paths (drive letter, then an `M` segment) matching the guard's
+  `M`-segment arm.
+
 ## History note
 
 Git history retains the pre-redaction blobs (the redacted commits are new commits, not
