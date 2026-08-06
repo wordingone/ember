@@ -863,13 +863,22 @@ RECALIBRATION_SCHEMA = "ember02-forecast-recalibration/v1"
 E6_SCALAR_QUANTITIES = ("step_time_ms", "tokens_per_second", "proxy_joules_per_token", "peak_vram_gib")
 
 
-def _validate_recalibration_content(path: Path, *, repo_root: Path) -> list[str]:
+def _validate_recalibration_content(path: Path, *, repo_root: Path, run_root: Path, t01: int) -> list[str]:
     """Return the list of content defects (empty = valid) for one candidate
     recalibration receipt, per §3's closing-receipts clause. Fail-closed: every
-    check that cannot be performed is itself a defect, and abs/rel errors are
-    arithmetic-checked against the receipt's own predicted/measured values so a
-    hand-assembled receipt cannot smuggle inconsistent numbers past the name
-    match (same posture as E7's pooled-sigma arithmetic check)."""
+    check that cannot be performed is itself a defect. Three bindings must all
+    hold or the receipt is decorative (rev-1490 findings 1-3):
+      * document binding -- forecast_path must resolve INSIDE repo_root (no
+        absolute paths, no traversal) and its bytes must hash to forecast_sha256;
+      * value binding -- every predicted value in the receipt must EQUAL the
+        bound forecast's predicted value (sha alone proves the document is
+        unchanged, not that the receipt used its numbers);
+      * run binding -- the receipt's run_root must resolve to the adjudicated
+        run root, and steps_measured must reach T-01 (a 3-step recalibration
+        of someone else's run must not credit this root's exit).
+    abs/rel errors are arithmetic-checked against the receipt's own
+    predicted/measured values (scalars AND loss anchors) so a hand-assembled
+    receipt cannot smuggle inconsistent numbers past the name match."""
     defects: list[str] = []
     try:
         receipt = json.loads(path.read_text(encoding="utf-8"))
@@ -879,51 +888,96 @@ def _validate_recalibration_content(path: Path, *, repo_root: Path) -> list[str]
         return ["top level is not a JSON object"]
     if receipt.get("schema_version") != RECALIBRATION_SCHEMA:
         defects.append(f"schema_version is {receipt.get('schema_version')!r}, need {RECALIBRATION_SCHEMA!r}")
+
+    receipt_run_root = receipt.get("run_root")
+    if not isinstance(receipt_run_root, str) or not receipt_run_root:
+        defects.append("run_root binding field missing")
+    else:
+        try:
+            if Path(receipt_run_root).resolve() != run_root.resolve():
+                defects.append(f"run_root mismatch: receipt was generated for {receipt_run_root!r}, adjudicating {str(run_root)!r} -- one run's recalibration must not credit another's exit")
+        except OSError as error:
+            defects.append(f"run_root unresolvable: {error}")
+    steps_measured = receipt.get("steps_measured")
+    if not isinstance(steps_measured, int) or isinstance(steps_measured, bool) or steps_measured < t01:
+        defects.append(f"steps_measured={steps_measured!r} below T-01={t01} -- recalibration requires the measured baseline the prereg names")
+
+    forecast_predicted: dict[str, Any] = {}
     forecast_rel = receipt.get("forecast_path")
     forecast_sha = receipt.get("forecast_sha256")
     if not isinstance(forecast_rel, str) or not isinstance(forecast_sha, str):
         defects.append("forecast_path/forecast_sha256 binding fields missing")
     else:
-        forecast_abs = (repo_root / forecast_rel) if not Path(forecast_rel).is_absolute() else Path(forecast_rel)
-        if not forecast_abs.is_file():
-            defects.append(f"bound forecast document does not exist: {forecast_rel}")
-        elif hashlib.sha256(forecast_abs.read_bytes()).hexdigest() != forecast_sha:
-            defects.append(f"forecast_sha256 does not match the bytes of {forecast_rel} -- the receipt binds a different forecast than the one on disk")
+        repo_resolved = repo_root.resolve()
+        if Path(forecast_rel).is_absolute():
+            defects.append(f"forecast_path is absolute ({forecast_rel!r}) -- the binding must be repo-relative so it names the preregistered document, not an arbitrary file")
+        else:
+            forecast_abs = (repo_root / forecast_rel).resolve()
+            if repo_resolved not in forecast_abs.parents and forecast_abs != repo_resolved:
+                defects.append(f"forecast_path escapes the repository ({forecast_rel!r})")
+            elif not forecast_abs.is_file():
+                defects.append(f"bound forecast document does not exist: {forecast_rel}")
+            elif hashlib.sha256(forecast_abs.read_bytes()).hexdigest() != forecast_sha:
+                defects.append(f"forecast_sha256 does not match the bytes of {forecast_rel} -- the receipt binds a different forecast than the one on disk")
+            else:
+                try:
+                    forecast_doc = json.loads(forecast_abs.read_text(encoding="utf-8"))
+                    forecast_predicted = forecast_doc.get("quantities", {}) if isinstance(forecast_doc, dict) else {}
+                except ValueError as error:
+                    defects.append(f"bound forecast document is not valid JSON: {error}")
+
     quantities = receipt.get("quantities")
     if not isinstance(quantities, dict):
         defects.append("quantities mapping missing")
         return defects
+
+    def _num(value: Any) -> bool:
+        return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+    def _check_pair(label: str, entry: Mapping[str, Any], forecast_value: Any) -> None:
+        predicted, measured = entry.get("predicted"), entry.get("measured")
+        for field_name, value in (("predicted", predicted), ("measured", measured)):
+            if not _num(value):
+                defects.append(f"{label}.{field_name}: not a finite number ({value!r})")
+        if _num(predicted) and forecast_value is not None:
+            if not _num(forecast_value):
+                defects.append(f"{label}: bound forecast carries no finite predicted value to compare against")
+            elif abs(predicted - forecast_value) > 1e-9 * max(1.0, abs(forecast_value)):
+                defects.append(f"{label}.predicted={predicted!r} differs from the bound forecast's {forecast_value!r} -- the receipt did not use the preregistered prediction")
+        if _num(predicted) and _num(measured):
+            abs_error = entry.get("abs_error")
+            if not _num(abs_error) or abs(abs_error - abs(measured - predicted)) > 1e-9 * max(1.0, abs(measured), abs(predicted)):
+                defects.append(f"{label}.abs_error: absent or inconsistent with |measured - predicted|")
+
     for name in E6_SCALAR_QUANTITIES:
         entry = quantities.get(name)
         if not isinstance(entry, dict):
             defects.append(f"{name}: entry missing")
             continue
-        predicted, measured = entry.get("predicted"), entry.get("measured")
-        for label, value in (("predicted", predicted), ("measured", measured)):
-            if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
-                defects.append(f"{name}.{label}: not a finite number ({value!r})")
-        if all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) for v in (predicted, measured)):
-            abs_error = entry.get("abs_error")
-            if not isinstance(abs_error, (int, float)) or isinstance(abs_error, bool) or abs(abs_error - abs(measured - predicted)) > 1e-9 * max(1.0, abs(measured), abs(predicted)):
-                defects.append(f"{name}.abs_error: absent or inconsistent with |measured - predicted|")
+        forecast_entry = forecast_predicted.get(name) if isinstance(forecast_predicted.get(name), dict) else {}
+        _check_pair(name, entry, forecast_entry.get("predicted") if forecast_predicted else None)
+
     trajectory = quantities.get("loss_trajectory")
     anchors = trajectory.get("anchors") if isinstance(trajectory, dict) else None
+    forecast_lt = forecast_predicted.get("loss_trajectory") if isinstance(forecast_predicted.get("loss_trajectory"), dict) else {}
+    forecast_anchors = forecast_lt.get("predicted_anchors") if isinstance(forecast_lt.get("predicted_anchors"), dict) else {}
     if not isinstance(anchors, dict) or not anchors:
         defects.append("loss_trajectory.anchors: missing or empty")
     else:
+        if forecast_predicted and forecast_anchors and set(anchors) != set(forecast_anchors):
+            defects.append(f"loss_trajectory anchor set {sorted(anchors)} differs from the bound forecast's {sorted(forecast_anchors)}")
         for key, anchor in sorted(anchors.items()):
-            if not isinstance(anchor, dict) or not all(
-                isinstance(anchor.get(f), (int, float)) and not isinstance(anchor.get(f), bool) and math.isfinite(anchor.get(f))
-                for f in ("predicted", "measured")
-            ):
-                defects.append(f"loss_trajectory.anchors[{key}]: predicted/measured not finite numbers")
+            if not isinstance(anchor, dict):
+                defects.append(f"loss_trajectory.anchors[{key}]: not an object")
+                continue
+            _check_pair(f"loss_trajectory.anchors[{key}]", anchor, forecast_anchors.get(key) if forecast_predicted else None)
     return defects
 
 
 def check_r1_e6(run_root: Path, thresholds: dict[str, Any], *, repo_root: Path = REPO_ROOT) -> dict[str, Any]:
     t01 = int(thresholds["T-01"])
-    forecast_matches = set(run_root.rglob("*forecast*.json")) if run_root.is_dir() else set()
-    recalibration_matches = set(run_root.rglob("*recalibrat*.json")) if run_root.is_dir() else set()
+    forecast_matches = set(p for p in run_root.rglob("*forecast*.json") if ".checkpoint-quarantine" not in p.parts) if run_root.is_dir() else set()
+    recalibration_matches = set(p for p in run_root.rglob("*recalibrat*.json") if ".checkpoint-quarantine" not in p.parts) if run_root.is_dir() else set()
     # Deduped union: one file named e.g. forecast-recalibration.json matches
     # BOTH name patterns -- it is one candidate document, not two satisfied
     # requirements. Name matches are candidate pointers only; §3's closing-
@@ -960,31 +1014,41 @@ def check_r1_e6(run_root: Path, thresholds: dict[str, Any], *, repo_root: Path =
             ),
         }
     validations = [
-        {**doc, "defects": _validate_recalibration_content(Path(doc["path"]), repo_root=repo_root)}
+        {**doc, "defects": _validate_recalibration_content(Path(doc["path"]), repo_root=repo_root, run_root=run_root, t01=t01)}
         for doc in candidate_documents
     ]
-    valid = [v for v in validations if not v["defects"]]
-    if len(valid) == 1 and len(validations) <= 2:
-        # One valid receipt, at most one companion candidate (the copied-in
-        # forecast doc itself also name-matches *forecast*; it is not required
-        # to validate as a recalibration receipt).
-        companions_ok = all(v is valid[0] or "recalibration" not in v["name_matches"] for v in validations)
-        if companions_ok:
-            return {
-                "status": "MET",
-                "forecast_recalibration_validation": "IMPLEMENTED",
-                "detail": f"validated forecast-recalibration receipt: {valid[0]['path']}",
-                "components": {"candidate_validation": validations, "required_predicted_vs_measured": required},
-            }
-    status = "NOT_MET" if any("recalibration" in v["name_matches"] for v in validations) else "EVIDENCE_MISSING"
+    # The dispositive population is the candidates that CLAIM to be the
+    # recalibration receipt (name-match "recalibration"); *forecast*-named
+    # companions -- a copied-in forecast doc, a disk-forecast.json -- are
+    # recorded but never counted toward ambiguity (rev-1490 finding 6: gating
+    # on total candidate count produced a false NOT_MET with a false reason).
+    claimants = [v for v in validations if "recalibration" in v["name_matches"]]
+    valid_claimants = [v for v in claimants if not v["defects"]]
+    if len(claimants) == 1 and len(valid_claimants) == 1:
+        return {
+            "status": "MET",
+            "forecast_recalibration_validation": "IMPLEMENTED",
+            "detail": f"validated forecast-recalibration receipt: {valid_claimants[0]['path']}",
+            "components": {"candidate_validation": validations, "required_predicted_vs_measured": required},
+        }
+    if not claimants:
+        return {
+            "status": "EVIDENCE_MISSING",
+            "forecast_recalibration_validation": "IMPLEMENTED",
+            "detail": (
+                f"{len(validations)} name-matched candidate(s) but none claims to be a recalibration "
+                "receipt; generate one with scripts/forecast_recalibration.py"
+            ),
+            "components": {"candidate_validation": validations, "required_predicted_vs_measured": required},
+            "needs": "a content-valid recalibration receipt under the run root",
+        }
     return {
-        "status": status,
+        "status": "NOT_MET",
         "forecast_recalibration_validation": "IMPLEMENTED",
         "detail": (
-            f"{len(validations)} name-matched candidate(s), {len(valid)} content-valid: "
-            + ("ambiguous -- more than one candidate claims to be the recalibration receipt" if len(valid) > 1 or len(validations) > 2 else
-               "; ".join(f"{v['path']}: {'; '.join(v['defects'])}" for v in validations if v["defects"]) or
-               "no candidate names itself a recalibration receipt")
+            f"{len(claimants)} recalibration claimant(s), {len(valid_claimants)} content-valid: "
+            + ("ambiguous -- more than one candidate claims to be the recalibration receipt" if len(claimants) > 1 else
+               "; ".join(f"{v['path']}: {'; '.join(v['defects'])}" for v in claimants if v["defects"]))
         ),
         "components": {"candidate_validation": validations, "required_predicted_vs_measured": required},
         "needs": "exactly one content-valid recalibration receipt (plus optionally the bound forecast document) under the run root",
@@ -1703,10 +1767,20 @@ def run_selftest() -> None:
         assert len(dual_rows) == 1 and sorted(dual_rows[0]["name_matches"]) == ["forecast", "recalibration"], e6_dual
         assert dual_rows[0]["defects"], e6_dual
 
-        # --- E6: a content-valid receipt, sha-bound to a forecast doc on disk -> MET ---
+        # --- E6: a content-valid receipt -- sha-bound, value-bound, run-bound -> MET ---
         e6_repo = tmp_path / "e6_repo"
         (e6_repo / "docs" / "spec").mkdir(parents=True)
-        e6_forecast_bytes = json.dumps({"schema_version": "ember02-r1-forecast/v1", "SELFTEST_FIXTURE": True}).encode("utf-8")
+        e6_forecast_bytes = json.dumps({
+            "schema_version": "ember02-r1-forecast/v1",
+            "SELFTEST_FIXTURE": True,
+            "quantities": {
+                "step_time_ms": {"predicted": 174.0},
+                "tokens_per_second": {"predicted": 44.4},
+                "proxy_joules_per_token": {"predicted": 10.1},
+                "peak_vram_gib": {"predicted": 20.2},
+                "loss_trajectory": {"predicted_anchors": {"step_100": 0.39}},
+            },
+        }).encode("utf-8")
         (e6_repo / "docs" / "spec" / "ember02-r1-forecast-v1.json").write_bytes(e6_forecast_bytes)
         e6_met_root = tmp_path / "e6_met_run"
         e6_met_root.mkdir()
@@ -1717,6 +1791,8 @@ def run_selftest() -> None:
             "generator": "scripts/forecast_recalibration.py",
             "forecast_path": "docs/spec/ember02-r1-forecast-v1.json",
             "forecast_sha256": hashlib.sha256(e6_forecast_bytes).hexdigest(),
+            "run_root": str(e6_met_root),
+            "steps_measured": 100,
             "quantities": {
                 "step_time_ms": _e6_scalar(174.0, 181.5),
                 "tokens_per_second": _e6_scalar(44.4, 42.6),
@@ -1729,11 +1805,78 @@ def run_selftest() -> None:
         e6_met = check_r1_e6(e6_met_root, thresholds, repo_root=e6_repo)
         assert e6_met["status"] == "MET", e6_met
 
-        # --- E6: tampered abs_error (inconsistent with its own predicted/measured) -> NOT_MET ---
+        # --- E6 (rev-1490 f6): the valid receipt plus TWO forecast-named companions stays MET ---
+        (e6_met_root / "disk-forecast.json").write_text(json.dumps({"noise": 1}), encoding="utf-8")
+        (e6_met_root / "old-forecast.json").write_text(json.dumps({"noise": 2}), encoding="utf-8")
+        e6_companions = check_r1_e6(e6_met_root, thresholds, repo_root=e6_repo)
+        assert e6_companions["status"] == "MET", e6_companions
+
+        # --- E6 (rev-1490 f1): predicted values differing from the bound forecast -> NOT_MET ---
+        e6_invent = json.loads(json.dumps(e6_receipt))
+        e6_invent["quantities"]["step_time_ms"] = _e6_scalar(999.0, 999.0)
+        e6_invent_root = tmp_path / "e6_invent_run"
+        e6_invent_root.mkdir()
+        e6_invent["run_root"] = str(e6_invent_root)
+        (e6_invent_root / "forecast-recalibration.json").write_text(json.dumps(e6_invent), encoding="utf-8")
+        e6_invent_res = check_r1_e6(e6_invent_root, thresholds, repo_root=e6_repo)
+        assert e6_invent_res["status"] == "NOT_MET", e6_invent_res
+        assert any("did not use the preregistered prediction" in d for row in e6_invent_res["components"]["candidate_validation"] for d in row["defects"]), e6_invent_res
+
+        # --- E6 (rev-1490 f2): absolute forecast_path -> NOT_MET; traversal -> NOT_MET ---
+        for bad_path in (str((e6_repo / "docs" / "spec" / "ember02-r1-forecast-v1.json").resolve()), "../outside-forecast.json"):
+            e6_abs = json.loads(json.dumps(e6_receipt))
+            e6_abs["forecast_path"] = bad_path
+            e6_abs_root = tmp_path / ("e6_path_run_" + hashlib.sha256(bad_path.encode()).hexdigest()[:8])
+            e6_abs_root.mkdir()
+            e6_abs["run_root"] = str(e6_abs_root)
+            (e6_abs_root / "forecast-recalibration.json").write_text(json.dumps(e6_abs), encoding="utf-8")
+            e6_abs_res = check_r1_e6(e6_abs_root, thresholds, repo_root=e6_repo)
+            assert e6_abs_res["status"] == "NOT_MET", (bad_path, e6_abs_res)
+
+        # --- E6 (rev-1490 f3): run_root naming a different run -> NOT_MET; steps below T-01 -> NOT_MET ---
+        e6_foreign = json.loads(json.dumps(e6_receipt))
+        e6_foreign_root = tmp_path / "e6_foreign_run"
+        e6_foreign_root.mkdir()
+        (e6_foreign_root / "forecast-recalibration.json").write_text(json.dumps(e6_foreign), encoding="utf-8")  # run_root still points at e6_met_root
+        e6_foreign_res = check_r1_e6(e6_foreign_root, thresholds, repo_root=e6_repo)
+        assert e6_foreign_res["status"] == "NOT_MET", e6_foreign_res
+        assert any("run_root mismatch" in d for row in e6_foreign_res["components"]["candidate_validation"] for d in row["defects"]), e6_foreign_res
+        e6_short = json.loads(json.dumps(e6_receipt))
+        e6_short["steps_measured"] = 3
+        e6_short_root = tmp_path / "e6_short_run"
+        e6_short_root.mkdir()
+        e6_short["run_root"] = str(e6_short_root)
+        (e6_short_root / "forecast-recalibration.json").write_text(json.dumps(e6_short), encoding="utf-8")
+        e6_short_res = check_r1_e6(e6_short_root, thresholds, repo_root=e6_repo)
+        assert e6_short_res["status"] == "NOT_MET", e6_short_res
+        assert any("T-01" in d for row in e6_short_res["components"]["candidate_validation"] for d in row["defects"]), e6_short_res
+
+        # --- E6 (rev-1490 f4): quarantined receipts are invisible, both directions ---
+        e6_quar_root = tmp_path / "e6_quar_run"
+        (e6_quar_root / ".checkpoint-quarantine").mkdir(parents=True)
+        e6_quar = json.loads(json.dumps(e6_receipt))
+        e6_quar["run_root"] = str(e6_quar_root)
+        (e6_quar_root / ".checkpoint-quarantine" / "forecast-recalibration.json").write_text(json.dumps(e6_quar), encoding="utf-8")
+        e6_quar_res = check_r1_e6(e6_quar_root, thresholds, repo_root=e6_repo)
+        assert e6_quar_res["status"] == "EVIDENCE_MISSING", e6_quar_res  # a valid receipt ONLY in quarantine never mints MET
+
+        # --- E6 (rev-1490 informational): anchor abs_error tamper -> NOT_MET, same check as scalars ---
+        e6_anchor = json.loads(json.dumps(e6_receipt))
+        e6_anchor["quantities"]["loss_trajectory"]["anchors"]["step_100"]["abs_error"] = 123.0
+        e6_anchor_root = tmp_path / "e6_anchor_run"
+        e6_anchor_root.mkdir()
+        e6_anchor["run_root"] = str(e6_anchor_root)
+        (e6_anchor_root / "forecast-recalibration.json").write_text(json.dumps(e6_anchor), encoding="utf-8")
+        e6_anchor_res = check_r1_e6(e6_anchor_root, thresholds, repo_root=e6_repo)
+        assert e6_anchor_res["status"] == "NOT_MET", e6_anchor_res
+        assert any("abs_error" in d for row in e6_anchor_res["components"]["candidate_validation"] for d in row["defects"]), e6_anchor_res
+
+        # --- E6: tampered scalar abs_error -> NOT_MET ---
         e6_tamper = json.loads(json.dumps(e6_receipt))
         e6_tamper["quantities"]["step_time_ms"]["abs_error"] = 0.0
         e6_tamper_root = tmp_path / "e6_tamper_run"
         e6_tamper_root.mkdir()
+        e6_tamper["run_root"] = str(e6_tamper_root)
         (e6_tamper_root / "forecast-recalibration.json").write_text(json.dumps(e6_tamper), encoding="utf-8")
         e6_bad = check_r1_e6(e6_tamper_root, thresholds, repo_root=e6_repo)
         assert e6_bad["status"] == "NOT_MET", e6_bad

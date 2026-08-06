@@ -49,6 +49,7 @@ SCHEMA_VERSION = "ember02-forecast-recalibration/v1"
 FORECAST_SCHEMA = "ember02-r1-forecast/v1"
 GENERATOR = "scripts/forecast_recalibration.py"
 SCALAR_QUANTITIES = ("step_time_ms", "tokens_per_second", "proxy_joules_per_token", "peak_vram_gib")
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class RecalibrationRefusal(RuntimeError):
@@ -93,7 +94,7 @@ def load_forecast(path: Path) -> dict[str, Any]:
 def load_train_series(run_root: Path) -> list[dict[str, Any]]:
     """Deduped train_step payload rows, last occurrence per step, ascending step."""
     best: dict[int, dict[str, Any]] = {}
-    for telemetry_path in sorted(run_root.rglob("*.jsonl")):
+    for telemetry_path in sorted(p for p in run_root.rglob("*.jsonl") if ".checkpoint-quarantine" not in p.parts):
         try:
             lines = telemetry_path.read_text(encoding="utf-8", errors="replace").splitlines()
         except OSError:
@@ -160,10 +161,12 @@ def measure_tokens_per_second(series: list[dict[str, Any]], run_root: Path, step
                 "UNMEASURABLE tokens_per_second: data_cursor lacks finite tokens_seen/global_step "
                 f"(tokens_seen={tokens_seen!r}, global_step={global_step!r})"
             )
-        # run_vertical_slice.py writes data_cursor["resume_authority"] ONLY when the
-        # run resumed a checkpoint (line ~2819) -- its presence is the authoritative
-        # resume marker. A resumed run's global_step is lineage-cumulative while
-        # tokens_seen is not guaranteed to be, so the division is invalid there.
+        # tools/ember-restart-3b/run_vertical_slice.py writes
+        # data_cursor["resume_authority"] ONLY when the run resumed a checkpoint
+        # (both write-sites: specialist ~2828-2829 and semantic ~3279-3280) --
+        # its presence is the authoritative resume marker. A resumed run's
+        # global_step is lineage-cumulative while tokens_seen is not guaranteed
+        # to be, so the division is invalid there.
         if cursor.get("resume_authority") is not None:
             raise RecalibrationRefusal(
                 "UNMEASURABLE tokens_per_second: data_cursor carries resume_authority (this run resumed "
@@ -263,12 +266,47 @@ def measure_loss_anchors(series: list[dict[str, Any]], predicted_anchors: dict[s
     return {"anchors": anchors, "source": "telemetry train_step loss at each forecast anchor step"}
 
 
+def load_t01() -> int:
+    """T-01 via the battery's own frozen-thresholds loader (schema, pin, and
+    entry parsing live there) -- bound at runtime, never copied: the number's
+    authority is that loader plus the frozen file, not this script."""
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from r1_exit_battery import load_thresholds
+        thresholds, _ = load_thresholds()
+        return int(thresholds["T-01"])
+    except Exception as error:
+        raise RecalibrationRefusal(f"THRESHOLDS_UNREADABLE: via r1_exit_battery.load_thresholds: {error}") from error
+
+
+def repo_relative_forecast_path(forecast_path: Path) -> str:
+    """The receipt binds the PREREGISTERED document, so the path it records must
+    be repo-relative and inside the repo -- an absolute or escaping path would
+    let a receipt bind an arbitrary file (rev-1490 finding 2). Refuses rather
+    than silently rewriting."""
+    resolved = forecast_path.resolve()
+    try:
+        return resolved.relative_to(REPO_ROOT.resolve()).as_posix()
+    except ValueError:
+        raise RecalibrationRefusal(
+            f"FORECAST_OUTSIDE_REPO: {forecast_path} does not live inside {REPO_ROOT}; the receipt "
+            "must bind the committed preregistered document, not an arbitrary file"
+        ) from None
+
+
 def build_receipt(forecast_path: Path, run_root: Path) -> dict[str, Any]:
     forecast = load_forecast(forecast_path)
+    forecast_rel = repo_relative_forecast_path(forecast_path)
+    t01 = load_t01()
     quantities = forecast["quantities"]
     series = load_train_series(run_root)
     if not series:
         raise RecalibrationRefusal(f"UNMEASURABLE: no train_step telemetry under {run_root}")
+    if len(series) < t01:
+        raise RecalibrationRefusal(
+            f"UNMEASURABLE: series has {len(series)} deduped steps, below the T-01={t01} measured "
+            "baseline the prereg requires for recalibration"
+        )
 
     step_time = measure_step_time_ms(series)
     tokens = measure_tokens_per_second(series, run_root, step_time["value"])
@@ -295,7 +333,7 @@ def build_receipt(forecast_path: Path, run_root: Path) -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "generated_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "generator": GENERATOR,
-        "forecast_path": str(forecast_path.as_posix()),
+        "forecast_path": forecast_rel,
         "forecast_sha256": sha256_file(forecast_path),
         "run_root": str(run_root),
         "steps_measured": len(series),
