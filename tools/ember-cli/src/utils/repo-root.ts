@@ -202,6 +202,19 @@ export function resolveEmberRepoRoot(options: ResolveEmberRepoRootOptions = {}):
       "Set EMBER_REPO_ROOT to the repo path.",
   );
 }
+/** Issue #1486: the typed refusal the source-root resolver throws instead of guessing.
+ *  Thrown when EMBER_SOURCE_ROOT is set to a directory without the repo markers, or when
+ *  no marker directory exists at or above the walk starts. The field failure this kills:
+ *  a cockpit launched via `wt.exe -w new` inherited %USERPROFILE% as cwd, the walk found
+ *  nothing, the old bare-cwd fallback handed that profile cwd downstream, and the state-root
+ *  guard crashed the boot with an unrelated-looking EmberStateRootError. */
+export class SourceRootError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SourceRootError";
+  }
+}
+
 /**
  * Resolves the exact selected Ember checkout that owns executable/source bytes.
  *
@@ -212,6 +225,11 @@ export function resolveEmberRepoRoot(options: ResolveEmberRepoRootOptions = {}):
  * EMBER_SOURCE_ROOT is this resolver's only environment override.
  * EMBER_REPO_ROOT belongs exclusively to the canonical mutable-state resolver
  * and is deliberately ignored here.
+ *
+ * Refusal contract (#1486): a set-but-invalid EMBER_SOURCE_ROOT throws — falling through
+ * to discovery would silently substitute a different checkout for the one the launcher
+ * named. A failed walk throws "no ember source root at or above <cwd>" — this resolver
+ * never returns an unvalidated directory.
  */
 export function resolveEmberSourceRoot(
   options: ResolveEmberRepoRootOptions = {},
@@ -220,23 +238,34 @@ export function resolveEmberSourceRoot(
   if (envValue) {
     const resolvedEnv = path.resolve(envValue);
     if (isRepoRoot(resolvedEnv)) return resolvedEnv;
+    throw new SourceRootError(
+      `EMBER_SOURCE_ROOT is set to ${resolvedEnv}, but that directory does not contain ` +
+        "the ember source markers (GOAL.md + tools/ember-cli). Unset it or point it at " +
+        "the selected checkout.",
+    );
   }
 
-  const fromCwd = walkUpForMarker(options.startDir ?? process.cwd());
+  const startDir = path.resolve(options.startDir ?? process.cwd());
+  const fromCwd = walkUpForMarker(startDir);
   if (fromCwd) return fromCwd;
 
-  const fromExe = walkUpForMarker(path.dirname(options.execPath ?? process.execPath));
+  const execDir = path.dirname(options.execPath ?? process.execPath);
+  const fromExe = walkUpForMarker(execDir);
   if (fromExe) return fromExe;
 
-  throw new Error(
-    "Could not resolve the selected Ember source root (no directory containing GOAL.md + " +
-      "tools/ember-cli found via cwd or the running binary's location). " +
-      "Set EMBER_SOURCE_ROOT to the selected checkout path.",
+  throw new SourceRootError(
+    `no ember source root at or above ${startDir} (no directory containing GOAL.md + ` +
+      `tools/ember-cli via the cwd walk or the running binary's location ${execDir}). ` +
+      "Set EMBER_SOURCE_ROOT to the selected checkout path, or launch from inside the " +
+      "selected checkout.",
   );
 }
 
-/** Fail-open wrapper for interactive source consumers. The fallback remains the
- * selected cwd; it never canonicalizes through a worktree pointer. */
+/** HISTORICAL NAME — the bare-cwd fallback is GONE (#1486). Every firing of the old
+ *  fallback meant "no markers at or above cwd", so the returned root was wrong 100% of
+ *  the time and resurfaced downstream as a confusing crash (EmberStateRootError against
+ *  the launch cwd) or, worse, silent operation against a non-checkout. This wrapper now
+ *  logs the refusal under the consumer's prefix and rethrows the typed SourceRootError. */
 export function resolveEmberSourceRootOrCwd(
   options: ResolveEmberRepoRootOptions = {},
   warnPrefix = "[source-root]",
@@ -244,10 +273,10 @@ export function resolveEmberSourceRootOrCwd(
   try {
     return resolveEmberSourceRoot(options);
   } catch (err) {
-    console.warn(
-      `${warnPrefix} source root resolution failed, falling back to cwd: ${err instanceof Error ? err.message : String(err)}`,
+    console.error(
+      `${warnPrefix} refusing to run without a validated ember source root: ${err instanceof Error ? err.message : String(err)}`,
     );
-    return options.startDir ?? process.cwd();
+    throw err;
   }
 }
 

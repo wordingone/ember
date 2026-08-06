@@ -555,6 +555,13 @@ try {
     Set-EmberWindowToLeftWorkArea $windowHandle | Out-Null
 
     # Invoke in this shell: no second terminal or dead launcher window may remain underneath.
+    # #1486: the child resolves its source root by walking up from CWD, and Ember.exe is
+    # staged under the state root, so an inherited launch cwd (wt.exe -w new hands the
+    # wrapper %USERPROFILE%) left the walk nothing to find. Hand the child the root this
+    # launcher already resolved and validated: cwd for the walk, EMBER_SOURCE_ROOT as the
+    # explicit override the resolver prefers.
+    Set-Location -LiteralPath $repositoryRoot
+    $env:EMBER_SOURCE_ROOT = $repositoryRoot
     & $application
     $applicationExit = $LASTEXITCODE
     if ($applicationExit -ne 0) {
