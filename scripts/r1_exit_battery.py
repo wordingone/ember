@@ -308,22 +308,45 @@ def find_telemetry_files(run_root: Path) -> list[Path]:
 
 def find_quarantined_telemetry_files(run_root: Path) -> list[Path]:
     """Every *.jsonl under a .checkpoint-quarantine dir that carries real
-    ember-restart-3b train_step rows. Nothing on the certified path writes
-    telemetry there (see the placement invariant in find_telemetry_files),
-    so a non-empty result means copied-in archive material or a new
-    producer bug -- surfaced in check components, never silently hidden
-    (rev-1490 round-3 suggestion)."""
+    ember-restart-3b train_step rows -- OR that cannot be read at all.
+    Nothing on the certified path writes telemetry there (see the placement
+    invariant in find_telemetry_files), so a non-empty result means
+    copied-in archive material or a new producer bug -- surfaced in check
+    components, never silently hidden (rev-1490 round-3 suggestion).
+    Detection is a raw marker scan, not a JSON parse: a quarantined file is
+    already a violation candidate, and an UNREADABLE one is the case where
+    something is actively wrong -- a read error counts it and surfaces it
+    rather than reporting the quarantine clean (rev-1490 non-blocking 3)."""
     if not run_root.is_dir():
         return []
     found = []
     for candidate in sorted(run_root.rglob("*.jsonl")):
         if ".checkpoint-quarantine" not in candidate.parts:
             continue
-        for event in _iter_jsonl_events(candidate):
-            if event.get("source") == "ember-restart-3b" and event.get("kind") == "train_step":
-                found.append(candidate)
-                break
+        try:
+            raw = candidate.read_bytes()
+        except OSError:
+            found.append(candidate)
+            continue
+        if b'"ember-restart-3b"' in raw and b'"train_step"' in raw:
+            found.append(candidate)
     return found
+
+
+def _evidence_excluded(path: Path) -> bool:
+    """True when a path may not serve as E5 EVIDENCE: anything under
+    .checkpoint-quarantine (copied-in archive material must not vouch for a
+    run) or under a preserved failed-attempt dir (attempt-*/ -- the
+    launcher retains failed attempts as visible siblings; their receipts
+    are history, and the run's authoritative evidence lives outside them).
+    Telemetry loading deliberately does NOT use this: a failed attempt's
+    train_step rows belong to the same run_id and are still counted
+    (rev-1490 item 6: both modules must agree, and exclusion mirrors how
+    the quarantine dir is already handled)."""
+    return any(
+        part == ".checkpoint-quarantine" or part.startswith("attempt-")
+        for part in path.parts
+    )
 
 
 def load_train_step_series(run_root: Path, *, run_id: str | None = None) -> dict[str, list[dict[str, Any]]]:
@@ -986,6 +1009,13 @@ E5_ADMISSION_CONFIG_PATH = "configs/ember-restart-3b.json"
 E5_INVARIANT_PATH = "INVARIANT.md"
 E5_TOKENIZER_RECEIPT_PATH = "receipts/ember-restart-3b/tokenizer-reconstruction-issue534-v1.json"
 E5_RUN_ATTEMPTS_REGISTRY = "receipts/run-attempts.jsonl"
+# Prereg line 27 t0: R1's predecessor is exactly the candidate's genesis
+# receipt (the seed83 cost-calibration certificate -- it records the run that
+# created the candidate and charges the already-seen 2,048 tokens). This
+# battery only ever adjudicates R1, so the pin is closed: an unpinned
+# predecessor admits any repo JSON file as the lineage anchor (rev-1490
+# item 3 -- the E6 decoy lesson with a different field name).
+E5_GENESIS_RECEIPT_PATH = "receipts/ember-restart-3b/native-cost-calibration-seed83-certificate.json"
 # §5.1 class 1: each category must attest False -- a True value is a stopped
 # program, not a receipt field ("fail-closed on unknown provenance").
 E5_ATTESTATION_CATEGORIES = (
@@ -1015,7 +1045,7 @@ E5_CHECKPOINT_HASH_KEYS = (
 
 def _validate_frontier_content(
     path: Path, *, repo_root: Path, run_root: Path, thresholds: dict[str, Any],
-    fixed_prior_manifest_path: Path | None,
+    fixed_prior_manifest_path: Path | None, run_id: str | None = None,
 ) -> list[str]:
     """Return the list of content defects (empty = valid) for one candidate
     frontier receipt. Fail-closed: every check that cannot be performed is
@@ -1031,10 +1061,13 @@ def _validate_frontier_content(
         field-for-field, and arithmetic (energy totals, wall clock) must
         recompute from the receipt's own numbers;
       * run binding -- the receipt's run_root must resolve to the
-        adjudicated root, and every evidence sha must match the file found
-        under THAT root (one run's receipt must not credit another's exit).
-    Telemetry series length is E1's leg on the same root; here only the
-    receipt's steps_measured is checked against T-01."""
+        adjudicated root, every evidence sha must match the file found
+        under THAT root, and steps_measured must EQUAL the deduped
+        train_step series of the receipt's own run_id, re-selected here
+        with the same _select_series the other exits adjudicate through
+        (one run's receipt must not credit another's exit, and the
+        headline step count is never accepted on the receipt's word --
+        rev-1490 items 1+2)."""
     t01 = int(thresholds["T-01"])
     t06 = float(thresholds["T-06"])
     defects: list[str] = []
@@ -1077,6 +1110,40 @@ def _validate_frontier_content(
     if not isinstance(steps_measured, int) or isinstance(steps_measured, bool) or steps_measured < t01:
         defects.append(f"steps_measured={steps_measured!r} below T-01={t01} -- a frontier point needs the measured baseline the prereg names")
 
+    # Re-derive the headline step count from the root's own telemetry with
+    # the SAME per-run selection E1/E2/E4 adjudicate through. The receipt's
+    # run_id must name the selected run and steps_measured must equal the
+    # deduped series length -- a claimed count with no series behind it, or
+    # a count pooled across run_ids on a resumed root, never validates
+    # (rev-1490 items 1+2: the one asserted-not-re-derived quantity).
+    selected_run_id, series, series_counts = _select_series(run_root, run_id=run_id)
+    receipt_run_id = receipt.get("run_id")
+    if not _nonempty_str(receipt_run_id):
+        defects.append("run_id binding field missing -- the receipt must name the telemetry run it describes")
+    if not series:
+        if selected_run_id is None and len(series_counts) > 1:
+            defects.append(
+                f"steps_measured cannot be re-derived: multiple telemetry run_ids under the run root "
+                f"({series_counts!r}) and no --run-id selects one -- ambiguous adjudication is refused"
+            )
+        else:
+            defects.append(
+                f"steps_measured cannot be re-derived: no train_step telemetry for "
+                f"run_id={run_id!r} under the run root (run_ids_seen={series_counts!r}) -- "
+                "the headline quantity of a frontier point is never accepted on the receipt's own word"
+            )
+    else:
+        if _nonempty_str(receipt_run_id) and receipt_run_id != selected_run_id:
+            defects.append(
+                f"run_id mismatch: receipt names {receipt_run_id!r}, the adjudicated series is "
+                f"{selected_run_id!r} -- one run's frontier receipt must not credit another's telemetry"
+            )
+        if isinstance(steps_measured, int) and not isinstance(steps_measured, bool) and steps_measured != len(series):
+            defects.append(
+                f"steps_measured={steps_measured!r} does not equal the re-derived deduped series "
+                f"length {len(series)} for run_id={selected_run_id!r}"
+            )
+
     repo_resolved = repo_root.resolve()
 
     def _bind_repo_doc(label: str, entry: Any, expected_rel: str | None) -> Path | None:
@@ -1108,7 +1175,10 @@ def _validate_frontier_content(
 
     _bind_repo_doc("prereg", receipt.get("prereg"), E5_PREREG_PATH)
     _bind_repo_doc("admission_config", receipt.get("admission_config"), E5_ADMISSION_CONFIG_PATH)
-    predecessor_path = _bind_repo_doc("predecessor_receipt", receipt.get("predecessor_receipt"), None)
+    # Pinned to THE R1 predecessor (this battery only adjudicates R1): an
+    # unpinned predecessor accepted any repo JSON -- the admission config
+    # doubling as its own lineage anchor validated (rev-1490 item 3).
+    predecessor_path = _bind_repo_doc("predecessor_receipt", receipt.get("predecessor_receipt"), E5_GENESIS_RECEIPT_PATH)
     if predecessor_path is not None:
         try:
             json.loads(predecessor_path.read_text(encoding="utf-8"))
@@ -1227,10 +1297,12 @@ def _validate_frontier_content(
                     defects.append(f"identity_spine.checkpoint_file_sha256s[{key!r}] does not equal the checkpoint manifest's value")
 
     def _bind_run_file(label: str, rel_name: str, expected_sha: Any) -> tuple[Path, Any] | None:
-        """Discover exactly one rel_name under the run root (quarantine
-        excluded), require the receipt's sha to match its bytes, and return
+        """Discover exactly one rel_name under the run root (quarantine and
+        preserved attempt-*/ dirs excluded -- a retained failed attempt's
+        receipts are history, not this run's evidence; rev-1490 item 6),
+        require the receipt's sha to match its bytes, and return
         (path, parsed JSON). None (with defects appended) otherwise."""
-        candidates = sorted(p for p in run_root.rglob(rel_name) if ".checkpoint-quarantine" not in p.parts) if run_root.is_dir() else []
+        candidates = sorted(p for p in run_root.rglob(rel_name) if not _evidence_excluded(p)) if run_root.is_dir() else []
         if not candidates:
             defects.append(f"{label}: no {rel_name} under the run root")
             return None
@@ -1258,6 +1330,15 @@ def _validate_frontier_content(
         bound = _bind_run_file("capability", "frozen-eval-results.json", capability.get("results_receipt_sha256"))
         if bound is not None:
             _eval_path, eval_doc = bound
+            # The named path must BE the discovered file, not merely share
+            # its sha -- an unbound path field is decorative (rev-1490 nb-4).
+            named_eval = capability.get("results_receipt_path")
+            try:
+                named_eval_ok = _nonempty_str(named_eval) and Path(named_eval).resolve() == _eval_path.resolve()
+            except OSError:
+                named_eval_ok = False
+            if not named_eval_ok:
+                defects.append(f"capability.results_receipt_path {named_eval!r} does not name the discovered frozen-eval receipt {_eval_path}")
             if not isinstance(eval_doc, dict):
                 defects.append("capability: frozen-eval-results.json top level is not a JSON object")
             else:
@@ -1294,26 +1375,30 @@ def _validate_frontier_content(
         bound = _bind_run_file("time", "disk-budget-runner-receipt.json", time_leg.get("runner_receipt_sha256"))
         if bound is not None:
             _runner_path, runner_doc = bound
-            started = runner_doc.get("started_at_ms") if isinstance(runner_doc, dict) else None
-            finished = runner_doc.get("finished_at_ms") if isinstance(runner_doc, dict) else None
-            duration = runner_doc.get("duration_ms") if isinstance(runner_doc, dict) else None
-            if not (_num(started) and _num(finished) and _num(duration)):
-                defects.append("time: runner receipt lacks finite started_at_ms/finished_at_ms/duration_ms")
+            source = time_leg.get("source")
+            if not _nonempty_str(source) or _runner_path.name not in source:
+                defects.append(f"time.source {source!r} does not name the discovered runner receipt ({_runner_path.name}) -- an unbound provenance field is decorative")
+            # The REAL producer contract: float unix SECONDS in
+            # started_at_unix/finished_at_unix (schema_version-7 disk-budget
+            # runner receipt, read from the canary root 2026-08-06). The
+            # first transcription checked *_ms fields no producer writes.
+            started = runner_doc.get("started_at_unix") if isinstance(runner_doc, dict) else None
+            finished = runner_doc.get("finished_at_unix") if isinstance(runner_doc, dict) else None
+            if not (_num(started) and _num(finished)):
+                defects.append("time: runner receipt lacks finite started_at_unix/finished_at_unix")
             elif finished < started:
-                defects.append("time: runner receipt finished_at_ms precedes started_at_ms")
-            elif abs((finished - started) - duration) > 1000:
-                defects.append(f"time: runner receipt duration_ms {duration} disagrees with finished-started {finished - started} beyond 1s")
+                defects.append("time: runner receipt finished_at_unix precedes started_at_unix")
             else:
                 wall = time_leg.get("wall_clock_seconds")
-                expected_wall = (finished - started) / 1000.0
-                if not _num(wall) or abs(wall - expected_wall) > 1e-3:
+                expected_wall = finished - started
+                if not _num(wall) or abs(wall - expected_wall) > 1e-6:
                     defects.append(f"time.wall_clock_seconds {wall!r} does not equal the runner receipt's span {expected_wall}")
 
-                def _iso(ms: float) -> str:
-                    return datetime.fromtimestamp(ms / 1000.0, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+                def _iso(unix_s: float) -> str:
+                    return datetime.fromtimestamp(unix_s, tz=timezone.utc).isoformat().replace("+00:00", "Z")
 
                 if time_leg.get("run_start_utc") != _iso(started) or time_leg.get("run_end_utc") != _iso(finished):
-                    defects.append("time.run_start_utc/run_end_utc do not re-derive from the runner receipt's ms fields")
+                    defects.append("time.run_start_utc/run_end_utc do not re-derive from the runner receipt's unix-seconds fields")
         if time_leg.get("coverage") != "process_birth_to_exit":
             defects.append(f"time.coverage is {time_leg.get('coverage')!r}, need 'process_birth_to_exit'")
 
@@ -1336,37 +1421,37 @@ def _validate_frontier_content(
         if not _num(gpu_j) or not _num(total_j):
             defects.append("energy.gpu_joules/total_proxy_joules not finite")
         else:
+            if gpu_j < 0 or total_j < 0:
+                defects.append(f"energy joules negative (gpu={gpu_j!r}, total={total_j!r}) -- integrated energy cannot be below zero")
             expected_total = gpu_j + (cpu_j if _num(cpu_j) else 0.0)
             if abs(total_j - expected_total) > 1e-9 * max(1.0, abs(expected_total)):
                 defects.append(f"energy.total_proxy_joules {total_j} does not equal gpu + cpu legs {expected_total}")
-        if cpu_j is None:
+        if _num(cpu_j) and cpu_j < 0:
+            defects.append(f"energy.cpu_pkg_joules negative ({cpu_j!r})")
+        if not _num(cpu_j):
+            # `is None` alone let a STRING-typed cpu leg drop from the total
+            # silently with no disclosure (rev-1490 non-blocking 2): any
+            # non-numeric cpu leg must be disclosed as excluded.
             excluded = energy_block.get("excluded_components")
             if not isinstance(excluded, list) or not any(isinstance(e, str) and e.lower().startswith("cpu package") for e in excluded):
-                defects.append("energy.cpu_pkg_joules is null but 'CPU package' is not disclosed in excluded_components")
-        energy_receipt_path = receipt.get("energy_receipt_path")
-        energy_receipt_sha = receipt.get("energy_receipt_sha256")
-        if not _nonempty_str(energy_receipt_path) or not _nonempty_str(energy_receipt_sha):
-            defects.append("energy_receipt_path/energy_receipt_sha256 binding fields missing")
-        else:
-            producer_path = Path(energy_receipt_path)
+                defects.append(f"energy.cpu_pkg_joules is not a finite number ({cpu_j!r}) but 'CPU package' is not disclosed in excluded_components")
+        # The producer receipt gets the same discovery discipline as every
+        # other evidence file: exactly one under the root, quarantine and
+        # attempt-*/ excluded, sha-bound -- a receipt naming a second or
+        # quarantined producer while a contradicting one sits on disk never
+        # validates (rev-1490 item 5).
+        bound = _bind_run_file("energy", "*energy-proxy*.json", receipt.get("energy_receipt_sha256"))
+        if bound is not None:
+            producer_path, producer_doc = bound
+            named_energy = receipt.get("energy_receipt_path")
             try:
-                inside = run_root.resolve() in producer_path.resolve().parents
+                named_energy_ok = _nonempty_str(named_energy) and Path(named_energy).resolve() == producer_path.resolve()
             except OSError:
-                inside = False
-            if not inside:
-                defects.append(f"energy_receipt_path {energy_receipt_path!r} is not under the adjudicated run root")
-            elif not producer_path.is_file():
-                defects.append(f"energy producer receipt does not exist: {energy_receipt_path}")
-            elif _sha256_file(producer_path) != energy_receipt_sha:
-                defects.append("energy_receipt_sha256 does not match the producer receipt bytes on disk")
-            else:
-                try:
-                    producer_doc = json.loads(producer_path.read_text(encoding="utf-8"))
-                except (OSError, ValueError) as error:
-                    producer_doc = None
-                    defects.append(f"energy producer receipt unreadable: {error}")
-                if isinstance(producer_doc, dict) and producer_doc.get("energy") != energy_block:
-                    defects.append("energy block does not equal the producer receipt's nested energy block verbatim -- the §5.3 embed contract")
+                named_energy_ok = False
+            if not named_energy_ok:
+                defects.append(f"energy_receipt_path {named_energy!r} does not name the discovered producer receipt {producer_path}")
+            if isinstance(producer_doc, dict) and producer_doc.get("energy") != energy_block:
+                defects.append("energy block does not equal the producer receipt's nested energy block verbatim -- the §5.3 embed contract")
 
     # --- leg 6: reproducibility (value-bound to the checkpoint manifest) ------
     repro = receipt.get("reproducibility")
@@ -1507,17 +1592,57 @@ def _validate_frontier_content(
             else:
                 lines = [ln for ln in registry_disk.read_text(encoding="utf-8").splitlines() if ln.strip()]
                 parse_failures = []
+                non_object_rows = []
+                rows = []
                 for i, line in enumerate(lines):
                     try:
-                        json.loads(line)
+                        row = json.loads(line)
                     except ValueError:
                         parse_failures.append(i + 1)
+                        continue
+                    if not isinstance(row, dict):
+                        non_object_rows.append(i + 1)
+                        continue
+                    rows.append(row)
                 if parse_failures:
                     defects.append(f"ledger.all_compute_coverage: registry lines unparseable: {parse_failures}")
+                if non_object_rows:
+                    defects.append(
+                        f"ledger.all_compute_coverage: registry lines are not JSON objects: {non_object_rows} "
+                        "-- a scalar line is not an attempt record (rev-1490 item 4)"
+                    )
                 if not lines:
                     defects.append("ledger.all_compute_coverage: run-attempt registry is empty")
                 if coverage_block.get("registry_rows") != len(lines):
                     defects.append(f"ledger.all_compute_coverage.registry_rows {coverage_block.get('registry_rows')!r} does not equal the registry's {len(lines)} rows")
+                # The adjudicated run must APPEAR in the registry: a
+                # non-empty file that never mentions this run attests
+                # nothing about its failed work (rev-1490 item 4). The
+                # match is field-name-agnostic (issue #1497's schema is
+                # not invented here): any string value in an object row
+                # equal to the run's telemetry run_id, the run-root
+                # directory name, or the checkpoint-manifest sha names it.
+                run_tokens = {t for t in (selected_run_id, run_root.name, disk_manifest_sha) if _nonempty_str(t)}
+
+                def _row_strings(value: Any):
+                    if isinstance(value, str):
+                        yield value
+                    elif isinstance(value, dict):
+                        for v in value.values():
+                            yield from _row_strings(v)
+                    elif isinstance(value, list):
+                        for v in value:
+                            yield from _row_strings(v)
+
+                if rows and run_tokens and not any(
+                    any(s in run_tokens for s in _row_strings(row)) for row in rows
+                ):
+                    defects.append(
+                        "ledger.all_compute_coverage: no registry row names the adjudicated run "
+                        f"(looked for run_id {selected_run_id!r}, run-root name {run_root.name!r}, "
+                        "or the checkpoint-manifest sha among row string values) -- 'failed work "
+                        "included' is unattestable from rows that never mention this run"
+                    )
             if coverage_block.get("failed_work_included") is not True:
                 defects.append("ledger.all_compute_coverage.failed_work_included must be true")
             components_map = coverage_block.get("components")
@@ -1585,14 +1710,14 @@ def _validate_frontier_content(
     return defects
 
 
-def check_r1_e5(run_root: Path, thresholds: dict[str, Any], *, repo_root: Path = REPO_ROOT, fixed_prior_manifest_path: Path | None = None) -> dict[str, Any]:
+def check_r1_e5(run_root: Path, thresholds: dict[str, Any], *, repo_root: Path = REPO_ROOT, fixed_prior_manifest_path: Path | None = None, run_id: str | None = None) -> dict[str, Any]:
     t01 = int(thresholds["T-01"])
     t06 = float(thresholds["T-06"])
     manifest_cfg = fixed_prior_manifest_path or (repo_root / FIXED_PRIOR_MANIFEST_REL)
     fixed_prior_present = manifest_cfg.is_file()
     frontier_receipt_candidates = sorted(
         p for p in (run_root.rglob("*frontier*receipt*.json") if run_root.is_dir() else [])
-        if ".checkpoint-quarantine" not in p.parts
+        if not _evidence_excluded(p)
     )
     # Placement-invariant disclosure (rev-1490 round-3): quarantined .jsonl
     # holding real train_step rows never blocks E5, but it is surfaced --
@@ -1626,7 +1751,7 @@ def check_r1_e5(run_root: Path, thresholds: dict[str, Any], *, repo_root: Path =
             "path": str(p),
             "defects": _validate_frontier_content(
                 p, repo_root=repo_root, run_root=run_root, thresholds=thresholds,
-                fixed_prior_manifest_path=fixed_prior_manifest_path,
+                fixed_prior_manifest_path=fixed_prior_manifest_path, run_id=run_id,
             ),
         }
         for p in frontier_receipt_candidates
@@ -1642,6 +1767,7 @@ def check_r1_e5(run_root: Path, thresholds: dict[str, Any], *, repo_root: Path =
         components.update({
             "receipt_path": str(receipt_path),
             "receipt_sha256": _sha256_file(receipt_path),
+            "run_id": receipt.get("run_id"),
             "steps_measured": receipt.get("steps_measured"),
             "wall_clock_seconds": _json_safe_number(receipt.get("time", {}).get("wall_clock_seconds")),
             "energy_boundary": receipt.get("energy", {}).get("energy_boundary"),
@@ -2235,7 +2361,7 @@ def _run_one_exit(
     elif exit_id == "e4":
         result = check_r1_e4(run_root, thresholds, run_id=run_id)
     elif exit_id == "e5":
-        result = check_r1_e5(run_root, thresholds)
+        result = check_r1_e5(run_root, thresholds, run_id=run_id)
     elif exit_id == "e6":
         result = check_r1_e6(run_root, thresholds)
     elif exit_id == "e7":
@@ -2270,7 +2396,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--sibling-root", type=Path, action="append", default=[], help="another run directory to search for resume/A1 evidence (repeatable)")
     ap.add_argument("--seed-root", type=Path, action="append", default=[], help="a run directory representing one seed replica, for R1-E7 (repeatable; defaults to --run-root alone)")
     ap.add_argument("--checkpoint-manifest", type=Path, default=None, help="explicit checkpoint-manifest.json path for R1-E3 (default: auto-glob under --run-root)")
-    ap.add_argument("--run-id", type=str, default=None, help="explicit telemetry run_id to adjudicate for R1-E1/E2 (default: the single run_id present under --run-root; multiple run_ids without this flag refuse)")
+    ap.add_argument("--run-id", type=str, default=None, help="explicit telemetry run_id to adjudicate for R1-E1/E2/E4/E5 (default: the single run_id present under --run-root; multiple run_ids without this flag refuse)")
     ap.add_argument("--thresholds", type=Path, default=None, help="override thresholds JSON path")
     ap.add_argument("--exit", dest="exit_id", choices=(*EXIT_IDS, "all"), default="all")
     ap.add_argument("--out-dir", type=Path, default=Path("receipts") / "ember-02-r1-exits")
@@ -2764,7 +2890,7 @@ def run_selftest() -> None:
             (repo / "receipts" / "ember-restart-3b" / "native-cost-calibration-seed83-certificate.json").write_bytes(
                 json.dumps({"SELFTEST_FIXTURE": "genesis", "adjudication": "PASS"}).encode("utf-8"))
             (repo / "receipts" / "run-attempts.jsonl").write_bytes(
-                json.dumps({"run_id": "SELFTEST_FIXTURE", "outcome": "completed"}).encode("utf-8") + b"\n")
+                json.dumps({"run_id": "SELFTEST_E5_run", "outcome": "completed"}).encode("utf-8") + b"\n")
             return repo
 
         def _e5_run(name: str) -> tuple[Path, dict[str, Any]]:
@@ -2772,6 +2898,10 @@ def run_selftest() -> None:
             run = tmp_path / name
             ckpt = run / "artifacts" / "checkpoints" / "checkpoint-selftest"
             ckpt.mkdir(parents=True)
+            # A real 204-step telemetry series: steps_measured is re-derived
+            # from this, never accepted on the receipt's word (rev-1490 item 1).
+            _write_jsonl(run / "telemetry" / "train.jsonl",
+                         _synthetic_train_step_events(run_id="SELFTEST_E5_run", n_steps=204))
             manifest = {
                 "model_config_sha256": "c" * 64,
                 # Per-shard MAPPING, the real v5 shape (cross-check finding:
@@ -2791,8 +2921,9 @@ def run_selftest() -> None:
                 "results": {"loss_probe": {"value": 0.29}},
                 "tool_access": "none",
             }).encode("utf-8"))
+            # The real schema_version-7 runner-receipt shape: unix SECONDS.
             (run / "disk-budget-runner-receipt.json").write_bytes(json.dumps({
-                "started_at_ms": 1786200000000, "finished_at_ms": 1786200742000, "duration_ms": 742000,
+                "schema_version": 7, "started_at_unix": 1786200000.0, "finished_at_unix": 1786200742.0,
             }).encode("utf-8"))
             (run / "energy-proxy-receipt.json").write_bytes(json.dumps({
                 "schema_version": "ember-energy-proxy-run-v1",
@@ -2826,7 +2957,9 @@ def run_selftest() -> None:
                 "generator": "scripts/frontier_receipt.py",
                 "rung": "R1",
                 "run_root": str(run),
-                "steps_measured": max(int(thresholds["T-01"]), 204),
+                "run_id": "SELFTEST_E5_run",
+                # Equals the fixture telemetry series length (re-derived).
+                "steps_measured": 204,
                 "prereg": {"path": E5_PREREG_PATH, "sha256": sha_of(repo / E5_PREREG_PATH)},
                 "admission_config": {"path": E5_ADMISSION_CONFIG_PATH, "sha256": sha_of(repo / E5_ADMISSION_CONFIG_PATH)},
                 "identity_spine": {
@@ -2900,10 +3033,10 @@ def run_selftest() -> None:
                     "model_only_ablation": None,
                 },
                 "time": {
-                    "run_start_utc": datetime.fromtimestamp(1786200000000 / 1000.0, tz=timezone.utc).isoformat().replace("+00:00", "Z"),
-                    "run_end_utc": datetime.fromtimestamp(1786200742000 / 1000.0, tz=timezone.utc).isoformat().replace("+00:00", "Z"),
+                    "run_start_utc": datetime.fromtimestamp(1786200000.0, tz=timezone.utc).isoformat().replace("+00:00", "Z"),
+                    "run_end_utc": datetime.fromtimestamp(1786200742.0, tz=timezone.utc).isoformat().replace("+00:00", "Z"),
                     "wall_clock_seconds": 742.0, "coverage": "process_birth_to_exit",
-                    "source": "SELFTEST_FIXTURE runner receipt",
+                    "source": "disk-budget-runner-receipt.json started_at_ms/finished_at_ms (SELFTEST_FIXTURE)",
                     "runner_receipt_sha256": sha_of(run / "disk-budget-runner-receipt.json"),
                 },
                 "energy": energy_block,
@@ -2943,12 +3076,12 @@ def run_selftest() -> None:
         e5_run, e5_manifest = _e5_run("e5_full_run")
         e5_pristine = _e5_receipt(e5_repo, e5_run, e5_manifest)
 
-        def _e5_case(mutate=None) -> dict[str, Any]:
+        def _e5_case(mutate=None, run_id=None) -> dict[str, Any]:
             receipt = json.loads(json.dumps(e5_pristine))
             if mutate is not None:
                 mutate(receipt)
             (e5_run / "frontier-receipt.json").write_bytes(json.dumps(receipt).encode("utf-8"))
-            return check_r1_e5(e5_run, thresholds, repo_root=e5_repo)
+            return check_r1_e5(e5_run, thresholds, repo_root=e5_repo, run_id=run_id)
 
         def _e5_defect(result: dict[str, Any], fragment: str) -> None:
             assert result["status"] == "NOT_MET", (fragment, result)
@@ -3031,6 +3164,102 @@ def run_selftest() -> None:
         e5_quarantine = _e5_case()
         assert e5_quarantine["status"] == "MET", e5_quarantine
         assert len(e5_quarantine["components"]["quarantined_telemetry_files"]) == 1, e5_quarantine
+
+        # An UNREADABLE quarantined .jsonl (a directory wearing the name) is
+        # surfaced too -- a read error is the case where something is
+        # actively wrong, never reported clean (rev-1490 non-blocking 3).
+        (quarantine_dir / "locked.jsonl").mkdir()
+        e5_unreadable = _e5_case()
+        assert e5_unreadable["status"] == "MET", e5_unreadable
+        assert len(e5_unreadable["components"]["quarantined_telemetry_files"]) == 2, e5_unreadable
+        (quarantine_dir / "locked.jsonl").rmdir()
+
+        # --- rev-1490 REWORK items 1-6, each cure proven at the bytes ---
+        # Item 1: an inflated headline count no series reached never validates.
+        _e5_defect(_e5_case(_set(["steps_measured"], 100000)), "does not equal the re-derived")
+        # Item 1: a receipt naming a foreign run's telemetry never validates.
+        _e5_defect(_e5_case(_set(["run_id"], "SELFTEST_E5_other")), "run_id mismatch")
+
+        # Item 2: a resumed root (second run_id) is ambiguous without --run-id,
+        # and adjudicable per-run with it -- steps re-derive from the SELECTED
+        # series, never the pool.
+        _write_jsonl(e5_run / "telemetry" / "resume.jsonl",
+                     _synthetic_train_step_events(run_id="SELFTEST_E5_resume", n_steps=60))
+        _e5_defect(_e5_case(), "multiple telemetry run_ids")
+        e5_selected = _e5_case(run_id="SELFTEST_E5_run")
+        assert e5_selected["status"] == "MET", e5_selected
+        (e5_run / "telemetry" / "resume.jsonl").unlink()
+
+        # Item 3: the admission config doubling as its own predecessor (valid
+        # sha, wrong document) never validates -- the pin is the genesis receipt.
+        def _predecessor_decoy(receipt):
+            decoy = e5_repo / "configs" / "ember-restart-3b.json"
+            receipt["predecessor_receipt"] = {
+                "path": "configs/ember-restart-3b.json",
+                "sha256": hashlib.sha256(decoy.read_bytes()).hexdigest(),
+            }
+        _e5_defect(_e5_case(_predecessor_decoy), "predecessor_receipt")
+
+        # Item 4: a registry whose single line is the scalar `0` attests nothing.
+        registry_file = e5_repo / "receipts" / "run-attempts.jsonl"
+        original_registry = registry_file.read_bytes()
+        registry_file.write_bytes(b"0\n")
+        _e5_defect(_e5_case(_set(["ledger", "all_compute_coverage", "registry_sha256"],
+                                 hashlib.sha256(b"0\n").hexdigest())), "not JSON objects")
+        # Item 4: object rows that never mention the adjudicated run attest nothing.
+        foreign_row = json.dumps({"run_id": "SOMEONE_ELSE", "outcome": "completed"}).encode("utf-8") + b"\n"
+        registry_file.write_bytes(foreign_row)
+        _e5_defect(_e5_case(_set(["ledger", "all_compute_coverage", "registry_sha256"],
+                                 hashlib.sha256(foreign_row).hexdigest())), "no registry row names the adjudicated run")
+        registry_file.write_bytes(original_registry)
+
+        # Item 5: a second energy producer receipt on disk is ambiguous evidence,
+        # even when the receipt names the "good" one.
+        (e5_run / "old-energy-proxy.json").write_bytes((e5_run / "energy-proxy-receipt.json").read_bytes())
+        _e5_defect(_e5_case(), "ambiguous evidence")
+        (e5_run / "old-energy-proxy.json").unlink()
+
+        # Item 5: a quarantined producer receipt named explicitly (correct sha)
+        # never validates -- quarantine is excluded from evidence discovery.
+        energy_bytes = (e5_run / "energy-proxy-receipt.json").read_bytes()
+        quarantined_energy = e5_run / "artifacts" / "checkpoints" / ".checkpoint-quarantine" / "energy-proxy-receipt.json"
+        quarantined_energy.write_bytes(energy_bytes)
+        (e5_run / "energy-proxy-receipt.json").unlink()
+        _e5_defect(_e5_case(_set(["energy_receipt_path"], str(quarantined_energy))), "no *energy-proxy*.json")
+        quarantined_energy.unlink()
+        (e5_run / "energy-proxy-receipt.json").write_bytes(energy_bytes)
+
+        # Item 6: a retained failed attempt (attempt-*/ copies of runner +
+        # energy receipts) neither blocks nor substitutes -- the root-level
+        # evidence stays uniquely discoverable and the receipt stays MET.
+        attempt_dir = e5_run / "attempt-1-CHILD_FAILED-0000Z"
+        attempt_dir.mkdir()
+        (attempt_dir / "disk-budget-runner-receipt.json").write_bytes(json.dumps({
+            "schema_version": 7, "started_at_unix": 1786100000.0, "finished_at_unix": 1786100001.0,
+        }).encode("utf-8"))
+        (attempt_dir / "energy-proxy-receipt.json").write_bytes(energy_bytes)
+        e5_attempt = _e5_case()
+        assert e5_attempt["status"] == "MET", e5_attempt
+        (attempt_dir / "disk-budget-runner-receipt.json").unlink()
+        (attempt_dir / "energy-proxy-receipt.json").unlink()
+        attempt_dir.rmdir()
+
+        # Non-blocking 1: negative joules never validate (arithmetic-consistent).
+        def _negative_joules(receipt):
+            receipt["energy"]["gpu_joules"] = -118.0
+            receipt["energy"]["total_proxy_joules"] = -118.0 + receipt["energy"]["cpu_pkg_joules"]
+        _e5_defect(_e5_case(_negative_joules), "negative")
+
+        # Non-blocking 2: a STRING cpu leg cannot silently drop from the total
+        # without an excluded_components disclosure.
+        def _string_cpu(receipt):
+            receipt["energy"]["cpu_pkg_joules"] = "464.5"
+            receipt["energy"]["total_proxy_joules"] = 118.0
+        _e5_defect(_e5_case(_string_cpu), "excluded_components")
+
+        # Non-blocking 4: the two formerly-decorative fields are bound.
+        _e5_defect(_e5_case(_set(["capability", "results_receipt_path"], str(e5_run / "elsewhere.json"))), "results_receipt_path")
+        _e5_defect(_e5_case(_set(["time", "source"], "telemetry ts-span")), "time.source")
 
         e6 = check_r1_e6(empty_root, thresholds)
         assert e6["status"] == "EVIDENCE_MISSING", e6

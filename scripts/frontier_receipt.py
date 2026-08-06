@@ -36,7 +36,10 @@ Evidence inputs (all under the adjudicated run root unless noted):
     checkpoint-manifest.json       checkpoint byte hashes, data_cursor, launch_seed,
                                    model_config_sha256, optimizer pins, rng state.
     e4-measurement-receipt.json    optional host-accounting evidence (R1-E4 wiring).
-    telemetry *.jsonl              deduped train_step series -> steps_measured.
+    telemetry *.jsonl              per-run deduped train_step series -> steps_measured,
+                                   selected with the battery's own _select_series
+                                   (never pooled across run_ids; --run-id names the
+                                   run on resumed roots, ambiguity refuses).
 
   adjudicated inputs this generator DEFINES the consumer contract for
   (their producers are issue-tracked; absence is a named refusal, never a skip):
@@ -55,7 +58,10 @@ Evidence inputs (all under the adjudicated run root unless noted):
                                    receipt plus the resume-run comparison (run C).
     receipts/run-attempts.jsonl    repo-level append-only launch-attempt registry
                                    (issue #1497) -- "failed work included" is
-                                   unattestable from a single run root without it.
+                                   unattestable from a single run root without it;
+                                   rows must be JSON objects and at least one row
+                                   must NAME this run (by run_id, run-root name,
+                                   or checkpoint-manifest sha in any string value).
 """
 from __future__ import annotations
 
@@ -154,9 +160,21 @@ def _battery():
     return r1_exit_battery
 
 
+def _excluded_from_evidence(path: Path) -> bool:
+    """Twin of r1_exit_battery._evidence_excluded, kept in agreement (rev-1490
+    E5 item 6: both modules must resolve the retained-failed-attempt shape the
+    same way): nothing under .checkpoint-quarantine or a preserved attempt-*/
+    dir serves as evidence -- a failed attempt's receipts are history, and a
+    run that retained one must stay mintable from its root-level evidence."""
+    return any(
+        part == ".checkpoint-quarantine" or part.startswith("attempt-")
+        for part in path.parts
+    )
+
+
 def _find_one(run_root: Path, pattern: str, what: str, needs: str) -> Path:
     candidates = sorted(
-        p for p in run_root.rglob(pattern) if ".checkpoint-quarantine" not in p.parts
+        p for p in run_root.rglob(pattern) if not _excluded_from_evidence(p)
     )
     if not candidates:
         raise FrontierRefusal(f"{what}: no {pattern} under {run_root} ({needs})")
@@ -175,16 +193,29 @@ def bind_document(rel: str, what: str) -> dict[str, str]:
     return {"path": rel, "sha256": _sha256(path)}
 
 
-def measured_series(run_root: Path, t01: int) -> int:
-    from forecast_recalibration import load_train_series  # same-directory sibling
-    series = load_train_series(run_root)
+def measured_series(battery, run_root: Path, t01: int, run_id: str | None) -> tuple[str, int]:
+    """Steps are counted with the battery's own per-run selection
+    (_select_series), never pooled across run_ids: on a resumed root a
+    pooled count is a step count no single run reached, and the validator
+    re-derives against the SELECTED series (rev-1490 items 1+2). Returns
+    (selected run_id, deduped series length)."""
+    selected_run_id, series, counts = battery._select_series(run_root, run_id=run_id)
     if not series:
-        raise FrontierRefusal(f"UNMEASURABLE_STEPS: no train_step telemetry under {run_root}")
+        if selected_run_id is None and len(counts) > 1:
+            raise FrontierRefusal(
+                f"AMBIGUOUS_RUN_ID: multiple telemetry run_ids under {run_root} "
+                f"({counts!r}); pass --run-id to name the adjudicated run"
+            )
+        raise FrontierRefusal(
+            f"UNMEASURABLE_STEPS: no train_step telemetry for run_id={run_id!r} "
+            f"under {run_root} (run_ids_seen={counts!r})"
+        )
     if len(series) < t01:
         raise FrontierRefusal(
-            f"STEPS_BELOW_T01: series has {len(series)} deduped steps, below T-01={t01}"
+            f"STEPS_BELOW_T01: run {selected_run_id!r} series has {len(series)} "
+            f"deduped steps, below T-01={t01}"
         )
-    return len(series)
+    return selected_run_id, len(series)
 
 
 # --- leg 2: fixed prior + learned-import attestation --------------------------
@@ -298,31 +329,31 @@ def leg_capability(run_root: Path, manifest_path: Path, manifest: dict[str, Any]
 def leg_time(run_root: Path) -> dict[str, Any]:
     path = _find_one(
         run_root, "disk-budget-runner-receipt.json", "UNMEASURABLE_WALL_CLOCK",
-        "the certified launch chain writes started_at_ms/finished_at_ms; a run "
+        "the certified launch chain writes started_at_unix/finished_at_unix; a run "
         "without its runner receipt has no process-level wall clock",
     )
     doc = _read_json(path, "UNMEASURABLE_WALL_CLOCK")
-    started, finished = doc.get("started_at_ms"), doc.get("finished_at_ms")
-    duration = doc.get("duration_ms")
-    if not (_finite(started) and _finite(finished) and _finite(duration)):
+    # The REAL producer contract (read from the canary root's schema_version-7
+    # receipt, 2026-08-06): float unix SECONDS in started_at_unix /
+    # finished_at_unix. The first transcription invented started_at_ms /
+    # finished_at_ms / duration_ms fields no producer writes -- every real
+    # root refused (the rev-1490 item-6 unmintability class, caught by
+    # probing the canary root after the attempt-dir cure).
+    started, finished = doc.get("started_at_unix"), doc.get("finished_at_unix")
+    if not (_finite(started) and _finite(finished)):
         raise FrontierRefusal(
-            f"UNMEASURABLE_WALL_CLOCK: {path} lacks finite started_at_ms/finished_at_ms/duration_ms"
+            f"UNMEASURABLE_WALL_CLOCK: {path} lacks finite started_at_unix/finished_at_unix"
         )
     if finished < started:
-        raise FrontierRefusal(f"UNMEASURABLE_WALL_CLOCK: finished_at_ms precedes started_at_ms in {path}")
-    if abs((finished - started) - duration) > 1000:
-        raise FrontierRefusal(
-            f"UNMEASURABLE_WALL_CLOCK: duration_ms {duration} disagrees with "
-            f"finished-started {finished - started} beyond 1s in {path}"
-        )
-    def iso(ms: float) -> str:
-        return datetime.fromtimestamp(ms / 1000.0, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+        raise FrontierRefusal(f"UNMEASURABLE_WALL_CLOCK: finished_at_unix precedes started_at_unix in {path}")
+    def iso(unix_s: float) -> str:
+        return datetime.fromtimestamp(unix_s, tz=timezone.utc).isoformat().replace("+00:00", "Z")
     return {
         "run_start_utc": iso(started),
         "run_end_utc": iso(finished),
-        "wall_clock_seconds": (finished - started) / 1000.0,
+        "wall_clock_seconds": finished - started,
         "coverage": "process_birth_to_exit",
-        "source": f"{path.name} started_at_ms/finished_at_ms (certified launch chain runner receipt)",
+        "source": f"{path.name} started_at_unix/finished_at_unix (certified launch chain runner receipt)",
         "runner_receipt_sha256": _sha256(path),
     }
 
@@ -354,19 +385,27 @@ def leg_energy(run_root: Path, t06: float) -> dict[str, Any]:
     gpu_j, cpu_j, total_j = block.get("gpu_joules"), block.get("cpu_pkg_joules"), block.get("total_proxy_joules")
     if not _finite(gpu_j) or not _finite(total_j):
         raise FrontierRefusal("UNMEASURABLE_ENERGY: gpu_joules/total_proxy_joules not finite")
+    if gpu_j < 0 or total_j < 0 or (_finite(cpu_j) and cpu_j < 0):
+        raise FrontierRefusal(
+            f"ENERGY_ARITHMETIC_INCONSISTENT: negative joules (gpu={gpu_j!r}, cpu={cpu_j!r}, "
+            f"total={total_j!r}) -- integrated energy cannot be below zero"
+        )
     expected_total = gpu_j + (cpu_j if _finite(cpu_j) else 0.0)
     if abs(total_j - expected_total) > 1e-9 * max(1.0, abs(expected_total)):
         raise FrontierRefusal(
             f"ENERGY_ARITHMETIC_INCONSISTENT: total_proxy_joules {total_j} != gpu + cpu legs {expected_total}"
         )
-    if cpu_j is None:
+    if not _finite(cpu_j):
+        # `is None` alone let a STRING-typed cpu leg drop from the total with
+        # no disclosure (rev-1490 non-blocking 2): any non-numeric cpu leg
+        # must be disclosed as excluded.
         excluded = block.get("excluded_components")
         if not isinstance(excluded, list) or not any(
             isinstance(e, str) and e.lower().startswith("cpu package") for e in excluded
         ):
             raise FrontierRefusal(
-                "ENERGY_ARITHMETIC_INCONSISTENT: cpu_pkg_joules is null but 'CPU package' is not "
-                "disclosed in excluded_components (energy_proxy_logger contract)"
+                f"ENERGY_ARITHMETIC_INCONSISTENT: cpu_pkg_joules is not a finite number ({cpu_j!r}) "
+                "but 'CPU package' is not disclosed in excluded_components (energy_proxy_logger contract)"
             )
     return {
         "energy": block,  # the producer's section-5.3 block, embedded verbatim
@@ -487,7 +526,7 @@ def ledger_host_accounting(run_root: Path) -> dict[str, Any]:
         "not_measured": {},
     }
     e4_candidates = sorted(
-        p for p in run_root.rglob("e4-measurement-receipt.json") if ".checkpoint-quarantine" not in p.parts
+        p for p in run_root.rglob("e4-measurement-receipt.json") if not _excluded_from_evidence(p)
     )
     if len(e4_candidates) == 1:
         e4 = _read_json(e4_candidates[0], "LEDGER_INCOMPLETE:host_accounting")
@@ -512,7 +551,7 @@ def ledger_host_accounting(run_root: Path) -> dict[str, Any]:
     return entry
 
 
-def ledger_all_compute_coverage(run_root: Path) -> dict[str, Any]:
+def ledger_all_compute_coverage(run_root: Path, run_id: str, manifest_sha: str) -> dict[str, Any]:
     registry_path = REPO_ROOT / RUN_ATTEMPTS_REGISTRY
     if not registry_path.is_file():
         raise FrontierRefusal(
@@ -526,13 +565,44 @@ def ledger_all_compute_coverage(run_root: Path) -> dict[str, Any]:
         if not line:
             continue
         try:
-            rows.append(json.loads(line))
+            row = json.loads(line)
         except ValueError as error:
             raise FrontierRefusal(
                 f"LEDGER_INCOMPLETE:all_compute_coverage: registry line {i + 1} unparseable: {error}"
             ) from error
+        if not isinstance(row, dict):
+            raise FrontierRefusal(
+                f"LEDGER_INCOMPLETE:all_compute_coverage: registry line {i + 1} is not a JSON "
+                "object -- a scalar line is not an attempt record (rev-1490 item 4)"
+            )
+        rows.append(row)
     if not rows:
         raise FrontierRefusal("LEDGER_INCOMPLETE:all_compute_coverage: run-attempt registry is empty")
+
+    # The adjudicated run must APPEAR in the registry: a non-empty file that
+    # never mentions this run attests nothing about its failed work (rev-1490
+    # item 4). Field-name-agnostic (issue #1497's schema is not invented
+    # here): any string value in a row equal to the telemetry run_id, the
+    # run-root directory name, or the checkpoint-manifest sha names the run.
+    run_tokens = {t for t in (run_id, run_root.name, manifest_sha) if isinstance(t, str) and t}
+
+    def _row_strings(value: Any):
+        if isinstance(value, str):
+            yield value
+        elif isinstance(value, dict):
+            for v in value.values():
+                yield from _row_strings(v)
+        elif isinstance(value, list):
+            for v in value:
+                yield from _row_strings(v)
+
+    if not any(any(s in run_tokens for s in _row_strings(row)) for row in rows):
+        raise FrontierRefusal(
+            "LEDGER_INCOMPLETE:all_compute_coverage: no registry row names this run "
+            f"(looked for run_id {run_id!r}, run-root name {run_root.name!r}, or the "
+            "checkpoint-manifest sha among row string values) -- 'failed work included' "
+            "cannot be asserted from rows that never mention the run"
+        )
     components = {}
     for component in COMPUTE_COMPONENTS:
         included = component in ("training", "validation", "final_evaluation")
@@ -591,18 +661,25 @@ def leg_invariant(predecessor_rel: str) -> tuple[dict[str, str], dict[str, str]]
 
 # --- assembly -----------------------------------------------------------------
 
-def build_receipt(run_root: Path, predecessor_rel: str) -> dict[str, Any]:
+def build_receipt(run_root: Path, predecessor_rel: str, run_id: str | None = None) -> dict[str, Any]:
     battery = _battery()
     thresholds, _ = battery.load_thresholds()
     t01, t06 = int(thresholds["T-01"]), float(thresholds["T-06"])
 
-    from forecast_recalibration import find_checkpoint_manifest
+    # The battery's own finder (artifacts/checkpoints/*/): generator and
+    # validator now discover the manifest the same way, so a root where they
+    # would disagree cannot exist (rev-1490 item 6's agreement requirement --
+    # previously the generator rglob'd via forecast_recalibration and the two
+    # modules resolved multi-manifest roots in opposite directions).
     try:
-        manifest_path, manifest = find_checkpoint_manifest(run_root)
-    except Exception as error:  # its refusal type is not ours; re-raise named
+        manifest_path = battery.find_checkpoint_manifest(run_root)
+    except battery.R1ExitBatteryRefusal as error:
         raise FrontierRefusal(str(error)) from error
+    manifest = _read_json(manifest_path, "CHECKPOINT_MANIFEST")
+    if not isinstance(manifest, dict):
+        raise FrontierRefusal(f"CHECKPOINT_MANIFEST: {manifest_path} top level is not a JSON object")
 
-    steps = measured_series(run_root, t01)
+    selected_run_id, steps = measured_series(battery, run_root, t01, run_id)
     fixed_prior, attestation = leg_fixed_prior(battery)
     capability = leg_capability(run_root, manifest_path, manifest)
     time_leg = leg_time(run_root)
@@ -617,7 +694,8 @@ def build_receipt(run_root: Path, predecessor_rel: str) -> dict[str, Any]:
         "data_accounting": ledger_data_accounting(manifest, fixed_prior),
         "host_accounting": ledger_host_accounting(run_root),
         "energy_ref": "see energy (leg 5), embedded verbatim from the producer receipt",
-        "all_compute_coverage": ledger_all_compute_coverage(run_root),
+        "all_compute_coverage": ledger_all_compute_coverage(
+            run_root, selected_run_id, capability["checkpoint_manifest_sha256"]),
         "walls_checklist": ledger_walls_checklist(run_root),
         "identity_spine_ref": "see identity_spine (envelope)",
     }
@@ -628,6 +706,7 @@ def build_receipt(run_root: Path, predecessor_rel: str) -> dict[str, Any]:
         "generator": GENERATOR,
         "rung": RUNG,
         "run_root": str(run_root),
+        "run_id": selected_run_id,
         "steps_measured": steps,
         "prereg": bind_document(PREREG_PATH, "PREREG"),
         "admission_config": bind_document(ADMISSION_CONFIG_PATH, "ADMISSION_CONFIG"),
@@ -660,12 +739,16 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=None,
                         help="receipt path (default: <run-root>/frontier-receipt.json)")
     parser.add_argument("--predecessor", type=str, default=GENESIS_RECEIPT_PATH,
-                        help="repo-relative predecessor receipt (default: the candidate's genesis receipt)")
+                        help="repo-relative predecessor receipt (default: the candidate's genesis receipt; "
+                             "the R1 battery validator pins exactly the default -- an override refuses at adjudication)")
+    parser.add_argument("--run-id", type=str, default=None,
+                        help="explicit telemetry run_id to describe (default: the single run_id present; "
+                             "multiple run_ids without this flag refuse -- a pooled step count is minted by no run)")
     args = parser.parse_args()
 
     out_path = args.out or (args.run_root / "frontier-receipt.json")
     try:
-        receipt = build_receipt(args.run_root, args.predecessor)
+        receipt = build_receipt(args.run_root, args.predecessor, args.run_id)
     except FrontierRefusal as refusal:
         print(f"frontier_receipt: REFUSED: {refusal}", file=sys.stderr)
         print("no receipt written -- a partial frontier point must never mint one", file=sys.stderr)
@@ -673,7 +756,7 @@ def main() -> int:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"frontier receipt written: {out_path}")
-    print(f"  rung {receipt['rung']}, steps_measured {receipt['steps_measured']}, "
+    print(f"  rung {receipt['rung']}, run_id {receipt['run_id']}, steps_measured {receipt['steps_measured']}, "
           f"energy_boundary {receipt['energy']['energy_boundary']}, "
           f"wall_clock_s {receipt['time']['wall_clock_seconds']:.1f}")
     return 0
