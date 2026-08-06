@@ -150,7 +150,8 @@ def run_pretraining_segment(
         grad_norm_tensor = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
         losses.append(float(loss.detach().cpu()))
-        tokens_seen += int(batch["input_ids"].numel())
+        step_tokens = int(batch["input_ids"].numel())
+        tokens_seen += step_tokens
         data_cursor += 1
         if active_expert in EXPERT_NAMES:
             expert_examples[active_expert] += 1
@@ -181,6 +182,7 @@ def run_pretraining_segment(
                 "total_steps": final_global_step,
                 "loss": losses[-1],
                 "step_ms": float((time.perf_counter() - step_started) * 1000.0),
+                "tokens_consumed": step_tokens,
                 "grad_norm": float(grad_norm_tensor),
                 "router_entropy_nats": expert_entropy,
                 "expert_utilization": expert_utilization,
@@ -263,7 +265,8 @@ def run_selection_pretraining_segment(
         grad_norm_tensor = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
         completed += 1
-        tokens_seen += int(batch["input_ids"].numel())
+        step_tokens = int(batch["input_ids"].numel())
+        tokens_seen += step_tokens
         losses.append(float(loss.detach().cpu()))
         if active_expert in EXPERT_NAMES:
             expert_examples[active_expert] += 1
@@ -292,6 +295,7 @@ def run_selection_pretraining_segment(
             progress_callback({
                 "step": global_step, "total_steps": None, "loss": losses[-1],
                 "step_ms": float((time.perf_counter() - step_started) * 1000.0),
+                "tokens_consumed": step_tokens,
                 "grad_norm": float(grad_norm_tensor),
                 "router_entropy_nats": expert_entropy,
                 "expert_utilization": expert_utilization,
