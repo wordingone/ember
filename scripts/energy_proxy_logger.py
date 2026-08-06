@@ -554,6 +554,188 @@ def run_smoke(duration_s: float, receipt_path: str | None,
 
 
 # ---------------------------------------------------------------------------
+# Watch mode -- integrate over a certified child's lifetime (R1-E5 wiring)
+# ---------------------------------------------------------------------------
+
+WATCH_PIDFILE_WAIT_S = 180.0
+
+
+def _pid_alive(pid: int) -> bool:
+    """Query-only liveness. On Windows, os.kill() is NEVER used: any signal
+    other than the two CTRL events TERMINATES the target there, and the CTRL
+    events broadcast to the console group (the receipted session-kill class).
+    OpenProcess with PROCESS_QUERY_LIMITED_INFORMATION reads state and can
+    touch nothing."""
+    if sys.platform == "win32":
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        STILL_ACTIVE = 259
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
+        if not handle:
+            return False
+        try:
+            code = ctypes.c_ulong(0)
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                return False
+            return code.value == STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
+def sample_while_pidfile(reader: str, pidfile: Path,
+                         sample_hz: float = SAMPLE_HZ) -> tuple[list, int, float, str]:
+    """Sample the GPU leg on the pinned cadence while the pidfile exists AND
+    the pid it names is alive. Returns (samples, intended, wall_s, stop_reason).
+
+    The pidfile's lifetime IS the measured window: the launcher creates it just
+    before spawning the certified child and deletes it after the child exits
+    (a file operation, never a signal). Pid liveness is the crash backstop --
+    a launcher that dies without cleaning up must not leave this loop sampling
+    forever. intended is computed from the pinned cadence and the wall the
+    window actually spanned, so coverage is measured against the contract.
+    """
+    interval = 1.0 / sample_hz
+    samples: list[tuple[float, float]] = []
+    start = time.time()
+    stop_reason = None
+    tick = 0
+    while True:
+        if not pidfile.exists():
+            stop_reason = "pidfile removed (launcher closed the measured window)"
+            break
+        try:
+            pid = int(pidfile.read_text(encoding="utf-8").strip())
+        except (OSError, ValueError):
+            pid = None
+        if pid is not None and not _pid_alive(pid):
+            stop_reason = f"watched pid {pid} exited (crash backstop)"
+            break
+        target = start + tick * interval
+        now = time.time()
+        if target > now:
+            time.sleep(min(target - now, interval))
+        w = _read_gpu_watts(reader) if reader else None
+        if w is not None:
+            samples.append((time.time(), w))
+        tick += 1
+    wall = time.time() - start
+    # One read fires at t=0 and one per interval after it, so the contract
+    # count over the window is floor(wall*hz)+1 -- never fewer than the loop
+    # could have captured, keeping coverage <= 1.0 (the generator and battery
+    # both hold sample_coverage_fraction to [0,1]).
+    intended = max(1, int(wall * sample_hz) + 1)
+    return samples, intended, wall, stop_reason
+
+
+def run_watch(pidfile_path: str, receipt_path: str, ticket: str) -> int:
+    """Sidecar entry: idle baseline BEFORE the child exists, then integrate
+    over the pidfile window, then write the receipt. Exit codes: 0 measured
+    with coverage >= T-06; 1 measured but below the floor (receipt still
+    written -- the battery, not this logger, is the adjudicator); 3 the
+    measured window never opened (no receipt: an unopened window has no run
+    to attest)."""
+    pidfile = Path(pidfile_path)
+    cpu_resolved = resolve_cpu_counter()
+    gpu_resolved = resolve_gpu_reader()
+    gpu_reader = gpu_resolved["selected_counter"]
+
+    # Idle baseline: the launcher spawns this sidecar BEFORE the training
+    # child, and holds the child until the marker below appears, so nothing
+    # Ember is resident during this interval.
+    idle_cpu_before = read_cpu_package_joules(cpu_resolved)
+    idle_t0 = time.time()
+    idle_samples, _ = sample_interval(gpu_reader, IDLE_BASELINE_S)
+    idle_wall = time.time() - idle_t0
+    idle_cpu_after = read_cpu_package_joules(cpu_resolved)
+    idle_gpu_w = (sum(w for _, w in idle_samples) / len(idle_samples)
+                  if idle_samples else 0.0)
+    idle_cpu_pkg_w = (
+        None if idle_cpu_before is None or idle_cpu_after is None or idle_wall <= 0
+        else (idle_cpu_after - idle_cpu_before) / idle_wall)
+
+    marker = Path(receipt_path + ".baseline-done")
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text(_utc_stamp(), encoding="utf-8")
+
+    waited = 0.0
+    while not pidfile.exists():
+        if waited >= WATCH_PIDFILE_WAIT_S:
+            print(f"energy_proxy_logger: watch window never opened: {pidfile} "
+                  f"did not appear within {WATCH_PIDFILE_WAIT_S:.0f}s", file=sys.stderr)
+            return 3
+        time.sleep(0.5)
+        waited += 0.5
+
+    watched_pid = None
+    try:
+        watched_pid = int(pidfile.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        pass
+
+    cpu_before = read_cpu_package_joules(cpu_resolved)
+    gpu_samples, intended, wall, stop_reason = sample_while_pidfile(gpu_reader, pidfile)
+    cpu_after = read_cpu_package_joules(cpu_resolved)
+    cpu_joules = (None if cpu_before is None or cpu_after is None
+                  else cpu_after - cpu_before)
+
+    energy = build_energy_block(gpu_samples, intended, idle_gpu_w,
+                                IDLE_BASELINE_S, gpu_reader, cpu_resolved,
+                                cpu_joules, idle_cpu_pkg_w)
+    coverage_ok = energy["sample_coverage_fraction"] >= 0.95
+    receipt = {
+        "ticket": ticket,
+        "ts": _utc_stamp(),
+        "invariant_sha256": invariant_sha256(),
+        "sha_convention": SHA_CONVENTION,
+        "schema_version": "ember-energy-proxy-run-v1",
+        "goal_id": "EMBER-02",
+        "workstream_id": RECEIPT_WORKSTREAM_ID,
+        "next_executed_outcome": ("EMBER-02 first sufficiently pretrained "
+                                  "clean-genesis 3B Ember"),
+        "prereg_section": "docs/spec/ember02-preregistration-v1.md sec5.3",
+        "purpose": ("R1 credited-run energy proxy: integrated over the "
+                    "certified child's lifetime (sec5.4 leg 5)"),
+        "result": "MEASURED",
+        "executed": True,
+        "gpu_reader_chain": gpu_resolved["chain_probed"],
+        "measured_interval_s": wall,
+        "cpu_counter_interval_s": wall,
+        "intended_samples": intended,
+        "captured_samples": len(gpu_samples),
+        "t06_coverage_floor": 0.95,
+        "coverage_meets_t06": coverage_ok,
+        "coverage_scope": ("sample_coverage_fraction describes the sampled GPU "
+                           "leg; the CPU leg is a cumulative-counter endpoint "
+                           "difference and cannot lose samples"),
+        "energy": energy,
+        "watch": {
+            "pidfile": str(pidfile),
+            "watched_pid": watched_pid,
+            "stop_reason": stop_reason,
+        },
+        "host": {
+            "platform": sys.platform,
+            "python_version": sys.version.split()[0],
+        },
+        "gpu_allocated": True,
+        "training_launched": True,
+    }
+    receipt_write.checked_write(receipt_path, receipt)
+    if not coverage_ok:
+        print(f"COVERAGE BELOW T-06 FLOOR: "
+              f"{energy['sample_coverage_fraction']:.4f} < 0.95", file=sys.stderr)
+    return 0 if coverage_ok else 1
+
+
+# ---------------------------------------------------------------------------
 # Selftest -- pure functions only; no counter is required to be present
 # ---------------------------------------------------------------------------
 
@@ -645,6 +827,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--smoke", type=float, metavar="SECONDS",
                     help="run a measured smoke interval of this many seconds")
+    ap.add_argument("--watch-pidfile", metavar="PATH",
+                    help="sidecar mode: idle baseline, then integrate while "
+                         "PATH exists and its pid lives; requires --receipt")
     ap.add_argument("--receipt", help="path to write the smoke receipt")
     ap.add_argument("--ticket", default="R1-ENTRY-ENERGY-SMOKE")
     ap.add_argument("--probe-counters", action="store_true",
@@ -659,6 +844,14 @@ def main() -> int:
         print(json.dumps({"cpu": resolve_cpu_counter(),
                           "gpu": resolve_gpu_reader()}, indent=2))
         return 0
+
+    if args.watch_pidfile is not None:
+        if not args.receipt:
+            print("--watch-pidfile requires --receipt", file=sys.stderr)
+            return 2
+        ticket = ("R1-RUN-ENERGY-PROXY" if args.ticket == "R1-ENTRY-ENERGY-SMOKE"
+                  else args.ticket)
+        return run_watch(args.watch_pidfile, args.receipt, ticket)
 
     if args.smoke is not None:
         ok, receipt = run_smoke(args.smoke, args.receipt, args.ticket)
