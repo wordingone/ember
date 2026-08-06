@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime
 import hashlib
 import importlib.util
 import json
@@ -1894,6 +1895,77 @@ def _finish_energy_sidecar(
     disclosure["receipt_written"] = receipt.is_file()
 
 
+def _registry_utc_now() -> str:
+    return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _append_run_attempt_row(
+    repo_root: pathlib.Path,
+    launch: ValidatedLaunch,
+    child_env: dict[str, str],
+    *,
+    outcome: str,
+    attempt_id: str,
+    start_utc: str,
+    end_utc: str | None,
+    outcome_basis: str,
+) -> None:
+    """Fail-safe run-attempt registry leg (issue #1497, prereg 5.1 class 7:
+    all compute charged, failed work included). The caller gates both legs
+    on run_process is subprocess.run, like the sidecar: only REAL launches
+    write the real registry. Mirrors the sidecar's stdout discipline -- the
+    producer's output goes to a custody log, never this process's stdout
+    (issue #1408: the final stdout line is the cockpit handshake). NEVER
+    raises: a registry write failure must never kill the run (#1489). The
+    registry file plus run-attempt-registry.log under custody_root are the
+    receipts."""
+    log_path = launch.custody_root / "run-attempt-registry.log"
+    producer = repo_root / "scripts" / "run_attempt_registry.py"
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_path, "ab") as log_handle:
+            stamp = f"[{_registry_utc_now()}] {outcome} attempt_id={attempt_id}"
+            if not producer.is_file():
+                log_handle.write(
+                    f"{stamp} SKIPPED: producer missing at {producer}\n".encode("utf-8")
+                )
+                return
+            registry_argv = [
+                sys.executable,
+                str(producer),
+                "append",
+                "--run-root", str(launch.artifact_root),
+                "--outcome", outcome,
+                "--attempt-id", attempt_id,
+                "--start-utc", start_utc,
+                "--source-receipt", "tools/ember-restart-3b/certified_train_launch.py",
+                "--outcome-basis", outcome_basis,
+            ]
+            if end_utc is not None:
+                registry_argv.extend(["--end-utc", end_utc])
+            completed = subprocess.run(
+                registry_argv,
+                shell=False,
+                check=False,
+                cwd=repo_root,
+                env=child_env,
+                stdout=log_handle,
+                stderr=subprocess.STDOUT,
+                timeout=60,
+            )
+            log_handle.write(
+                f"{stamp} exit_code={completed.returncode}\n".encode("utf-8")
+            )
+    except Exception as error:  # noqa: BLE001 -- never kill the run (#1489)
+        try:
+            with open(log_path, "ab") as log_handle:
+                log_handle.write(
+                    f"registry leg failed (suppressed): {error!r}\n".encode("utf-8")
+                )
+        except OSError:
+            pass
+
+
 def execute_validated_launch(
     repo_root: pathlib.Path,
     launch: ValidatedLaunch,
@@ -1923,6 +1995,24 @@ def execute_validated_launch(
             "spawned": False,
             "note": "sidecar skipped: injected run_process (test double)",
         }
+    # Run-attempt registry legs (issue #1497) ride the same real-launch
+    # gate: one row at spawn (outcome=running, end_utc null), one at exit.
+    registry_attempt_id = None
+    registry_start_utc = None
+    if run_process is subprocess.run:
+        registry_start_utc = _registry_utc_now()
+        registry_attempt_id = (
+            f"launch-{registry_start_utc.replace('-', '').replace(':', '')}"
+            f"-pid{os.getpid()}"
+        )
+        _append_run_attempt_row(
+            repo_root, launch, child_env,
+            outcome="running",
+            attempt_id=registry_attempt_id,
+            start_utc=registry_start_utc,
+            end_utc=None,
+            outcome_basis="certified-launch spawn leg; child not yet exited",
+        )
     # The child (disk_budget_runner -> run_vertical_slice) must NEVER inherit
     # this consumer's stdout: this process's own final line is the cockpit's
     # machine-readable handshake (main()'s json.dumps), and any training-log
@@ -1955,6 +2045,15 @@ def execute_validated_launch(
     finally:
         if sidecar_pidfile is not None:
             _finish_energy_sidecar(sidecar_process, sidecar_pidfile, sidecar_disclosure)
+    if registry_attempt_id is not None and registry_start_utc is not None:
+        _append_run_attempt_row(
+            repo_root, launch, child_env,
+            outcome="completed" if exit_code == 0 else "failed",
+            attempt_id=registry_attempt_id,
+            start_utc=registry_start_utc,
+            end_utc=_registry_utc_now(),
+            outcome_basis=f"certified-launch exit leg; child exit_code={exit_code}",
+        )
     _write_execution_receipt(
         launch, argv, exit_code, child_log_path=child_log_path,
         energy_sidecar=sidecar_disclosure,
