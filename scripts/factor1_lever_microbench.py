@@ -320,7 +320,12 @@ def _receipt(results: dict) -> dict:
     source = production_path_status()
     return {
         "schema": "ember-factor1-lever-microbench-v1",
+        "ticket": "EMBER-764-FACTOR1-LEVER-MICROBENCH",
+        "ts": time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()),
         "issue": "wordingone/ember#764",
+        "goal_id": "EMBER-02",
+        "workstream_id": "EMBER-02A",
+        "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
         "implementation_basename": Path(__file__).name,
         "implementation_sha256": _sha256(Path(__file__)),
         "source": source,
@@ -332,6 +337,7 @@ def _receipt(results: dict) -> dict:
         "fixture": results,
         "api_spend_usd": 0,
         "capability_claim": "NONE",
+        "sha_convention": "implementation_sha256 and source_sha256 are lowercase SHA-256 of exact bytes; path-free basenames only",
         "receipt_boundary": "fixture measurements are not exact-scale evidence; no training/checkpoint claim",
     }
 

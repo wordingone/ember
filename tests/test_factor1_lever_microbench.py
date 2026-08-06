@@ -1,4 +1,7 @@
 """Bounded CPU-only tests for issue #764's fail-closed harness."""
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 from __future__ import annotations
 
 import json
