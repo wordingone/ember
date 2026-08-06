@@ -1,0 +1,63 @@
+{
+  "schema_version": "ember02-r1-forecast/v1",
+  "authored_utc": "2026-08-06T05:25:00Z",
+  "prereg": {
+    "doc": "docs/spec/ember02-preregistration-v1.md",
+    "pin": "3d48d387",
+    "clause": "section 3 common structure, closing receipts: forecast-recalibration receipt carries predicted vs measured step time, tokens/s, proxy-joules/token, peak VRAM, loss trajectory"
+  },
+  "applies_to": {
+    "description": "the next certified from-step-1 specialist run (R1 credited evidence root), image capability, ember-sparse-3b-v2, single RTX 4090 at vram_fraction 0.85, >= 100 contiguous steps",
+    "mode": "specialist",
+    "capability": "image",
+    "architecture_revision": "ember-sparse-3b-v2",
+    "min_steps": 100
+  },
+  "basis": {
+    "run_id": "specialist-canary-20260805",
+    "run_root_note": "the live-receipts custody root for that run_id; identified content-wise by the telemetry sha below, not by any host path",
+    "telemetry_file": "telemetry/specialist-canary.jsonl",
+    "telemetry_sha256": "91df7b60b7ba571822090e472b128601bfc230a0e47f6275b70160e6c7b2803e",
+    "series": "200 deduped train_step rows (steps 5..204, last occurrence per step) out of 1400 telemetry rows from 7 launch attempts",
+    "statistic_population": "every quantity below is computed on the DEDUPED last-occurrence-per-step series -- the exact statistic scripts/forecast_recalibration.py measures -- never on the raw 1400-row population (rev-1490 finding 5: mixing the two bases made the basis run miss its own band). Where the raw population informs a band edge, that is stated explicitly.",
+    "checkpoint_manifest_sha256": "fefd8d44b840bbbd4879a53a05f7e58a41a50e547a00dcc07ac31058d3cbf3f1",
+    "adjudication_note": "this continuation series was ruled non-credited for R1-E1/E2 (contiguous_from_step_1 false; issue #1464 adjudication 2026-08-06). It is used here solely as the measured basis for prediction, which is exactly what a prior run is for."
+  },
+  "quantities": {
+    "step_time_ms": {
+      "predicted": 160.2,
+      "ci_low": 152.0,
+      "ci_high": 210.0,
+      "unit": "milliseconds per optimizer step, median of the deduped series",
+      "method": "deduped-series median 160.163 (n=200, deduped p10 158.3 / p90 163.55). Band widened asymmetrically outward: the raw 7-attempt population's p90 was 206.1 ms (cold attempts run slow, and a from-1 run starts cold), and a 5 percent fast tail is allowed below."
+    },
+    "tokens_per_second": {
+      "predicted": 47.3,
+      "ci_low": 36.0,
+      "ci_high": 53.0,
+      "unit": "consumed training tokens per wall-second",
+      "method": "reproduces the generator's own fallback arithmetic on the basis run: tokens_seen 1546 / global_step 204 = 7.578 tokens/step, divided by the deduped median step time 0.160163 s = 47.32. For the from-1 run the generator divides by its own step count, and the record mix drawn from the same selection may shift tokens/step; the band covers the step-time band plus that mix variation. NOT comparable to 2048-token semantic-path benchmarks (656 and 1976 tok/s) - different path, different record shape."
+    },
+    "proxy_joules_per_token": {
+      "predicted": 9.5,
+      "ci_low": 3.3,
+      "ci_high": 11.0,
+      "unit": "joules per consumed token, DEGRADED_PROXY boundary",
+      "method": "no measured sample exists anywhere yet (energy_proxy_logger.py never invoked - battery E5 receipt 2026-08-05). Upper region: 450 W board TDP x 0.160163 s / 7.578 tokens = 9.51. Lower band edge: 35 percent mean-draw assumption at short-step utilization. First measured sample recalibrates this; the wide CI is the honest statement of ignorance."
+    },
+    "peak_vram_gib": {
+      "predicted": 20.2,
+      "ci_low": 19.5,
+      "ci_high": 21.5,
+      "unit": "GiB, peak used = total_gib minus minimum free_gib over the deduped series",
+      "method": "deduped-series statistic the generator computes: total_gib 23.988 minus deduped min free_gib 3.835 = 20.152 GiB used at vram_fraction 0.85; from-1 run shares shape, optimizer coverage, and batch construction. (The raw population's min free_gib is 3.553 -> 20.435 GiB; the band's upper half covers it.)"
+    },
+    "loss_trajectory": {
+      "predicted_anchors": {"step_5": 6.93, "step_10": 4.34, "step_20": 1.18, "step_50": 0.82, "step_100": 0.39},
+      "ci_abs": 0.5,
+      "unit": "training loss at step anchors",
+      "method": "the deduped series' measured losses at the same absolute steps (its steps 5..204 sit on the same lineage schedule the from-1 run replays: the parent covered 1..4 and the canary's step-5 loss 6.93 equals ln-vocab random-init level, so the descent shape is expected to reproduce from step 1). CI widened to 0.5 because the from-1 run re-runs steps 1..4 under its own seed draw."
+    }
+  },
+  "falsifiability_note": "each quantity risks a wrong prediction: a from-1 run whose step time, throughput, VRAM, or loss anchors land outside these bands is a FORECAST-MISS to be recalibrated with receipts, never silently absorbed (prereg E-A / F-02 posture). Sanity check executed at authoring time: the basis run itself, re-measured by scripts/forecast_recalibration.py's own statistics, lands inside every band above (step_time 160.163, tokens/s 47.32, peak VRAM 20.152)."
+}
