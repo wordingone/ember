@@ -2921,6 +2921,7 @@ def run(
     e4_accumulator: dict[str, object] = {
         "wall_t0": time.perf_counter(), "cpu_t0": os.times(),
         "steps": 0, "tokens_total": 0, "step_ms_sum": 0.0, "tokens_missing": 0,
+        "write_failures": 0,
     }
 
     def _write_e4_measurement_receipt() -> None:
@@ -2936,13 +2937,22 @@ def run(
         tokens_total, steps = int(e4_accumulator["tokens_total"]), int(e4_accumulator["steps"])
         tokens_known = int(e4_accumulator["tokens_missing"]) == 0 and tokens_total > 0
         step_ms_sum = float(e4_accumulator["step_ms_sum"])
-        _atomic_json(telemetry_path.parent.parent / "e4-measurement-receipt.json", {
+        # Run-root derivation by MARKER, not blind depth (rev-1495 finding 2):
+        # the credited layout is <run_root>/telemetry/<file>.jsonl, so parent
+        # .parent is right exactly when the parent directory is named
+        # "telemetry"; any other launcher-supplied shape writes BESIDE the
+        # telemetry file instead -- always inside the run root, so the
+        # battery's rglob finds it either way, and a shallow path can no
+        # longer place the receipt outside the scanned tree.
+        receipt_dir = telemetry_path.parent.parent if telemetry_path.parent.name == "telemetry" else telemetry_path.parent
+        _atomic_json(receipt_dir / "e4-measurement-receipt.json", {
             "schema_version": "ember02-r1-e4-measurement/v1",
             "run_id": telemetry_run_id,
             "updated_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "steps": steps,
             "tokens_total": tokens_total if tokens_known else None,
             "tokens_missing_steps": int(e4_accumulator["tokens_missing"]),
+            "write_failures": int(e4_accumulator["write_failures"]),
             "wall_seconds": wall_seconds,
             "step_ms_sum": step_ms_sum,
             "tokens_per_second": (tokens_total / wall_seconds) if tokens_known else None,
@@ -2990,7 +3000,18 @@ def run(
         step_ms = progress.get("step_ms")
         if isinstance(step_ms, (int, float)) and not isinstance(step_ms, bool):
             e4_accumulator["step_ms_sum"] = float(e4_accumulator["step_ms_sum"]) + float(step_ms)
-        _write_e4_measurement_receipt()
+        try:
+            _write_e4_measurement_receipt()
+        except Exception:
+            # rev-1495 finding 1: the evidence writer must never kill the
+            # certified run it documents (that would invert the #1489 lesson --
+            # the receipt exists BECAUSE crashes destroy evidence). A full
+            # volume, a transient sharing violation on os.replace while the
+            # cockpit reads the file, or a CUDA query error costs one write,
+            # counted here and disclosed in the next successful receipt; the
+            # accumulator itself lost nothing. KeyboardInterrupt/SystemExit
+            # still propagate (BaseException, not Exception).
+            e4_accumulator["write_failures"] = int(e4_accumulator["write_failures"]) + 1
 
     segment = run_pretraining_segment(
         model=model, optimizer=optimizer, records=records, config=config, device=torch.device("cuda"),
