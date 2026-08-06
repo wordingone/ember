@@ -5,6 +5,7 @@
   "sha_convention": "bytes on disk as-is; tree digest is sorted relative path|byte length|per-file SHA-256 UTF-8 manifest",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "issues": ["wordingone/ember#702", "wordingone/ember#764"],
   "source_private_receipt_sha256": "371fa36af40d2026ee555608229188669c184e653606f9ae93f3f7d3ab57aa17",
   "public_binding": {
