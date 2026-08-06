@@ -1,0 +1,14 @@
+{
+  "benchmark_registry_sha256": "<TEMP_WORKSPACE>/ember/manifests/ember-01-custody/benchmark-registry.json",
+  "board_receipt_sha256": "<TEMP_WORKSPACE>/ember/scripts/ember_totality/receipts-totality/ember-totality-20260802T160105Z.json",
+  "checkout_sha256": "<TEMP_WORKSPACE>/ember/.git/worktrees/ember01-verify/HEAD",
+  "cli_binary_sha256": "<TEMP_WORKSPACE>/ember/Ember.cmd",
+  "config_sha256": "<TEMP_WORKSPACE>/ember/configs/ember-restart-3b.json",
+  "failure_class_ledger_sha256": "<TEMP_WORKSPACE>/ember/docs/ember-debt-ledger.md",
+  "input_authority_sha256": "<TEMP_WORKSPACE> (private operator workspace; path elided, sha256 is the binding)",
+  "launch_packet_sha256": "<TEMP_WORKSPACE>/ember/tools/ember-restart-3b/launch_packet.py",
+  "root_summary_sha256": "<TEMP_WORKSPACE>/ember/manifests/ember-01-custody/root-spec.json",
+  "seat_sha256": "<TEMP_WORKSPACE> (private operator workspace; path elided, sha256 is the binding)",
+  "subject_manifest_sha256": "<TEMP_WORKSPACE> (private operator workspace; path elided, sha256 is the binding)",
+  "tokenizer_sha256": "<TEMP_WORKSPACE> (private operator workspace; path elided, sha256 is the binding)"
+}
