@@ -10,7 +10,9 @@ import path from "node:path";
 import {
   resolveEmberRepoRoot,
   resolveEmberSourceRoot,
+  resolveEmberSourceRootOrCwd,
   CanonicalRootError,
+  SourceRootError,
 } from "./repo-root.ts";
 
 let scratchDir: string;
@@ -485,5 +487,87 @@ describe("PR954 round 3 — dangling worktree gitdir target", () => {
         execPath: path.join(scratchDir, "nowhere", "bin.exe"),
       }),
     ).toThrow(CanonicalRootError);
+  });
+});
+
+// ---------------------------------------------------------------------------------------
+// Issue #1486 — launcher cwd inheritance: a cockpit launched via `wt.exe -w new` inherited
+// %USERPROFILE% as cwd; the source-root walk found nothing and the old bare-cwd fallback
+// handed that bare profile cwd downstream, crashing boot with EmberStateRootError. The cure has
+// two closed shapes, pinned here: (a) EMBER_SOURCE_ROOT is preferred AND validated — set-
+// but-invalid REFUSES, never falls through to discovery; (b) a failed walk REFUSES with a
+// named error instead of returning the launch cwd.
+// ---------------------------------------------------------------------------------------
+
+describe("issue #1486 — source-root refusal (no bare-cwd guessing)", () => {
+  test("valid EMBER_SOURCE_ROOT is preferred over a cwd that would also resolve", () => {
+    const envRoot = path.join(scratchDir, "env-selected");
+    fs.mkdirSync(envRoot, { recursive: true });
+    makeRepoMarker(envRoot);
+    const decoyRoot = path.join(scratchDir, "cwd-decoy");
+    const decoyNested = path.join(decoyRoot, "nested");
+    fs.mkdirSync(decoyNested, { recursive: true });
+    makeRepoMarker(decoyRoot);
+
+    const resolved = resolveEmberSourceRoot({
+      envSourceRoot: envRoot,
+      startDir: decoyNested,
+      execPath: path.join(scratchDir, "nowhere", "bin.exe"),
+    });
+    expect(resolved).toBe(path.resolve(envRoot));
+  });
+
+  test("EMBER_SOURCE_ROOT set but invalid REFUSES (SourceRootError naming the var) even when cwd discovery would succeed", () => {
+    // The decoy cwd WOULD resolve, so a throw proves the env path refused rather than
+    // fell through — the old behavior silently substituted the discovered checkout.
+    const decoyRoot = path.join(scratchDir, "decoy-1486");
+    fs.mkdirSync(decoyRoot, { recursive: true });
+    makeRepoMarker(decoyRoot);
+    const bogus = path.join(scratchDir, "not-a-checkout");
+    fs.mkdirSync(bogus, { recursive: true });
+
+    const attempt = () =>
+      resolveEmberSourceRoot({
+        envSourceRoot: bogus,
+        startDir: decoyRoot,
+        execPath: path.join(scratchDir, "nowhere", "bin.exe"),
+      });
+    expect(attempt).toThrow(SourceRootError);
+    expect(attempt).toThrow(/EMBER_SOURCE_ROOT/);
+  });
+
+  test("failed walk REFUSES with the named error carrying the start cwd — no bare-cwd fallback", () => {
+    const bareCwd = path.join(scratchDir, "userprofile-like");
+    fs.mkdirSync(bareCwd, { recursive: true });
+
+    let thrown: unknown;
+    try {
+      resolveEmberSourceRoot({
+        envSourceRoot: "",
+        startDir: bareCwd,
+        execPath: path.join(scratchDir, "also-nowhere", "bin.exe"),
+      });
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(SourceRootError);
+    expect((thrown as Error).message).toContain("no ember source root at or above");
+    expect((thrown as Error).message).toContain(path.resolve(bareCwd));
+  });
+
+  test("resolveEmberSourceRootOrCwd no longer returns the launch cwd on failure — it rethrows the typed refusal (the field defect)", () => {
+    const bareCwd = path.join(scratchDir, "wt-inherited-cwd");
+    fs.mkdirSync(bareCwd, { recursive: true });
+
+    expect(() =>
+      resolveEmberSourceRootOrCwd(
+        {
+          envSourceRoot: "",
+          startDir: bareCwd,
+          execPath: path.join(scratchDir, "also-nowhere", "bin.exe"),
+        },
+        "[test-1486]",
+      ),
+    ).toThrow(SourceRootError);
   });
 });
