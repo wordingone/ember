@@ -1,0 +1,73 @@
+{
+  "schema": "ember-702-764-governed-exact-scale-cpu-v1",
+  "ticket": "EMBER-702-764-EXACT-SCALE-CPU-STEP1",
+  "ts": "20260806T200013Z",
+  "sha_convention": "bytes on disk as-is; tree digest is sorted relative path|byte length|per-file SHA-256 UTF-8 manifest",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "issues": ["wordingone/ember#702", "wordingone/ember#764"],
+  "source_private_receipt_sha256": "371fa36af40d2026ee555608229188669c184e653606f9ae93f3f7d3ab57aa17",
+  "public_binding": {
+    "repository": "wordingone/ember",
+    "pull_request": 1511,
+    "url": "https://github.com/wordingone/ember/pull/1511",
+    "branch": "feat/ember-legacy-77-factor1-764",
+    "head_sha256": "07e2e43e44fbdefd1d19e10a56429b2f597559bf",
+    "parent_sha256": "e7c0abc6768f8a4e4afc61cc8612e108b2ea84d3",
+    "state": "OPEN_DRAFT",
+    "base": "master"
+  },
+  "implementation_basename": "scripts/factor1_cpuoffload_producer.py",
+  "implementation_sha256": "c2d44db0c22729ff071700cd261f823ba23c6e8626413855d5a729ad06e2d114",
+  "producer_identity": {
+    "optimizer_basename": "scripts/cpu_offload_adamw.py",
+    "optimizer_sha256": "aba53b54e30a2da075fced76c11625221af5b0c0dac90ffdc137974dc19784f6",
+    "shape_manifest_sha256": "5edf85d24b8e2a4e1b5b8ec7067095bf7f0656b6e5bfd662639d9efe99f9d28a",
+    "source_hashes_are_computed_from_bytes": true
+  },
+  "command": {
+    "argv": "python -B -c import sys,json; from pathlib import Path; sys.path.insert(0,'scripts'); import factor1_cpuoffload_producer as p; s=p._resource_snapshot(); r=p.run_exact_scale_cpu(Path('B:/tmp/ember-factor1-764/exact-scale-optstate-20260806'), s, steps=1, execute=True); print(json.dumps({'status':r['status'],'scale':r['scale'],'steps':r['steps'],'preflight':r['preflight'],'identity':r['identity']}, sort_keys=True))",
+    "steps": 1,
+    "explicit_execute": true,
+    "working_set_path_role": "exact-scale-optstate-20260806"
+  },
+  "preflight": {
+    "scale": "2.2B",
+    "sufficient": true,
+    "observed_available_commit_gib": 58.88467788696289,
+    "observed_available_physical_gib": 45.33184051513672,
+    "observed_disk_free_gib": 265.80157470703125,
+    "required_working_set_gib": 24.9029695,
+    "required_commit_and_physical_gib": 30.9029695,
+    "required_disk_gib": 28.9029695,
+    "refusal_reasons": []
+  },
+  "result": {
+    "status": "EXECUTED",
+    "scale": "2.2B",
+    "steps": 1,
+    "synthetic_parameter_optimizer_step": true,
+    "forward_or_backward_training": false,
+    "checkpoint_written": false
+  },
+  "output_tree": {
+    "file_count": 596,
+    "total_bytes": 26739359744,
+    "adamw_bytes": 1573535744,
+    "muon_bytes": 25165824000,
+    "tree_sha256": "28f55d61e296435348f5eda5fe3497d0431971034d970a6c3568d39c5cf455d7"
+  },
+  "disk_observation": {
+    "volume": "B",
+    "free_gib_before": 265.801575,
+    "free_gib_after": 240.897987,
+    "reserve_breach": false
+  },
+  "issue_disposition": {
+    "764": "EXECUTE_EVIDENCE_STEP1_BOUND; full L0-L2 lever receipt and independent review remain required",
+    "702": "EXECUTE_DEPENDENCY_REMAINS; no profiler or GPU evidence was run by this CPU producer step"
+  },
+  "receipt_boundary": "One real current-native CPUOffloadOptimizer step at the exact 2.2B state-shape contract, with source identity, preflight, and output custody. This is not the #702 profiler experiment, full #764 L0-L2 timed lever acceptance, GPU L3, training, checkpoint creation, sufficient pretraining, capability, speedup, or model admission.",
+  "capability_claim": "NONE",
+  "disposition": "EXECUTED_EVIDENCE_STEP1_NONTERMINAL"
+}
