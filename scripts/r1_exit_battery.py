@@ -55,12 +55,13 @@ are pure EVIDENCE-MISSING against every run this repo has ever produced --
 this script proves that with receipts rather than asserting it in prose.
 The zero-further-code-changes claim is scoped to E1/E2/E3/E7: the day their
 evidence exists (telemetry files, second seed, resume run) they adjudicate
-in one command. E4/E5/E6/E8 instead refuse-until-validatable: their MET is
-deliberately unreachable until the named validators/computations exist
-(tokens-per-s + MFU + host-utilization computation; a section-5.4
-frontier-receipt validator; a forecast-recalibration content validator;
-the A1 liveness/parity leg computations) -- a filename or marker-word
-match never mints MET. Only E3 yields a real, scoped,
+in one command. E4, E5, and E6 carry implemented content validators
+(receipt-vs-inputs consistency for the E4 measurement receipt; the
+section-5.4 eight-leg frontier-receipt validation for E5; forecast value
+binding for E6) -- each still refuses until its run root carries real
+evidence, and a filename or marker-word match never mints MET. E8 remains
+refuse-until-validatable (the A1 liveness/parity leg computations do not
+exist). Only E3 yields a real, scoped,
 DERIVABLE-NOW sub-receipt today (checkpoint write-side hash integrity) --
 it stays NOT-MET overall because the restore leg has never been exercised
 (the one attempt crashed on a bookkeeping guard before reaching restore
@@ -85,13 +86,23 @@ SCOPE BOUNDARIES (disclosed, not silent gaps):
     variances, sigma = sqrt(pooled variance). A different superseding
     method is a receipt-schema change, not a code rewrite (see
     `pooled_sigma_seed`).
-  * check_r1_e5 confirms the §5.2 fixed-prior manifest exists and is
-    hash-checkable (one of §5.4's 8 ledger field classes) but does not
-    attempt to assemble a full closed-boundary frontier receipt -- no
-    frontier-receipt generator exists anywhere in this repo (verified by
-    repo-wide grep 2026-08-05), and inventing one is out of this script's
-    scope (a frontier receipt needs a real >=100-step run's energy/time
-    legs to exist first; see the inventory doc's needs-execution plan).
+  * check_r1_e5 validates a section-5.4 frontier receipt (schema
+    ember02-frontier-receipt/v1, produced by scripts/frontier_receipt.py)
+    by independently re-verifying its bindings against the bytes on disk:
+    repo-document pins (prereg, admission config, INVARIANT.md, fixed-prior
+    manifest, tokenizer receipt, predecessor receipt, run-attempts
+    registry), run-root evidence files by sha256 (frozen evals, runner
+    receipt, energy producer receipt, reproduction adjudication,
+    interventions, walls checklist), the section-5.3 energy block
+    re-checked arithmetically AND compared field-for-field with the
+    producer's disk copy, and reproducibility pins compared value-for-value
+    with the checkpoint manifest. It re-states the spec constants rather
+    than importing the generator: validator and generator are deliberately
+    two independent transcriptions of the same frozen spec, so a
+    transcription error in either surfaces as a refusal at first contact
+    instead of validating itself. Telemetry series length is E1's leg (the
+    battery composes all exits on one root); E5 checks the receipt's
+    steps_measured against T-01 only.
   * check_r1_e8 looks for ANY A1-labeled run evidence (dense mechanism,
     tier1/tier2 markers) under the given search roots. It does not invent
     an A1 checkpoint schema (none exists anywhere in this repo as of
@@ -138,7 +149,8 @@ SHA_CONVENTION = (
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_THRESHOLDS_PATH = REPO_ROOT / "docs" / "spec" / "ember02-preregistration-thresholds-v1.json"
-DEFAULT_FIXED_PRIOR_MANIFEST = REPO_ROOT / "manifests" / "ember-restart-3b" / "fixed-prior-manifest-v1.json"
+FIXED_PRIOR_MANIFEST_REL = "manifests/ember-restart-3b/fixed-prior-manifest-v1.json"
+DEFAULT_FIXED_PRIOR_MANIFEST = REPO_ROOT / FIXED_PRIOR_MANIFEST_REL
 
 # F-11 is required alongside T-01..T-09: R1-E8's parity leg quotes its frozen
 # band formula from the thresholds document, never from a transcription here.
@@ -271,15 +283,44 @@ def find_telemetry_files(run_root: Path) -> list[Path]:
         return []
     found = []
     for candidate in sorted(run_root.rglob("*.jsonl")):
-        # Quarantined material is not evidence for ANY check that reads this
-        # loader (E1/E2/E4 alike): a .jsonl inside .checkpoint-quarantine must
-        # not poison series selection or vouch for a run (rev-1494 round-2
-        # item 3 -- the receipt globs already excluded quarantine, the
-        # telemetry loader did not).
+        # This skip is defense-in-depth against copied-in archive material
+        # vouching for a run (rev-1494 round-2 item 3), and it is fail-OPEN
+        # for content predicates: dedup keeps the latest-by-ts row per
+        # (run_id, step), so hiding a quarantined file can PROMOTE an older
+        # visible row -- exclusion must never be the mechanism a
+        # correctness claim rests on. The load-bearing invariant is
+        # upstream (rev-1490 round-3): the trainer never writes telemetry
+        # under .checkpoint-quarantine -- only failed checkpoint-WRITE
+        # artifacts live there (checkpoint-write-failed-*.json, staged
+        # candidate-* dirs); a failed attempt's telemetry lands as a
+        # visible sibling (attempt-*/telemetry/) under the same run_id and
+        # is still loaded. Any skipped .jsonl that DOES hold real
+        # train_step rows is a placement-invariant violation, surfaced by
+        # find_quarantined_telemetry_files below.
         if ".checkpoint-quarantine" in candidate.parts:
             continue
         for event in _iter_jsonl_events(candidate):
             if event.get("source") == "ember-restart-3b":
+                found.append(candidate)
+                break
+    return found
+
+
+def find_quarantined_telemetry_files(run_root: Path) -> list[Path]:
+    """Every *.jsonl under a .checkpoint-quarantine dir that carries real
+    ember-restart-3b train_step rows. Nothing on the certified path writes
+    telemetry there (see the placement invariant in find_telemetry_files),
+    so a non-empty result means copied-in archive material or a new
+    producer bug -- surfaced in check components, never silently hidden
+    (rev-1490 round-3 suggestion)."""
+    if not run_root.is_dir():
+        return []
+    found = []
+    for candidate in sorted(run_root.rglob("*.jsonl")):
+        if ".checkpoint-quarantine" not in candidate.parts:
+            continue
+        for event in _iter_jsonl_events(candidate):
+            if event.get("source") == "ember-restart-3b" and event.get("kind") == "train_step":
                 found.append(candidate)
                 break
     return found
@@ -930,84 +971,702 @@ def check_r1_e4(run_root: Path, thresholds: dict[str, Any], *, run_id: str | Non
 
 # ---------------------------------------------------------------------------
 # R1-E5 -- first closed-boundary frontier receipt, §5.4, energy_boundary
-# DEGRADED_PROXY.
+# DEGRADED_PROXY. Validates receipts produced by scripts/frontier_receipt.py.
+# The constants below are INDEPENDENT transcriptions of the frozen spec
+# sources (§5.1/§5.4, the physiology-addendum twelve-wall table) -- NOT
+# imports from the generator, so a transcription error in either module
+# surfaces as a refusal at first contact instead of validating itself.
 # ---------------------------------------------------------------------------
+
+FRONTIER_SCHEMA = "ember02-frontier-receipt/v1"
+E5_GOAL_ID = "EMBER-02"
+E5_WORKSTREAM_ID = "EMBER-02A"
+E5_PREREG_PATH = "docs/spec/ember02-preregistration-v1.md"
+E5_ADMISSION_CONFIG_PATH = "configs/ember-restart-3b.json"
+E5_INVARIANT_PATH = "INVARIANT.md"
+E5_TOKENIZER_RECEIPT_PATH = "receipts/ember-restart-3b/tokenizer-reconstruction-issue534-v1.json"
+E5_RUN_ATTEMPTS_REGISTRY = "receipts/run-attempts.jsonl"
+# §5.1 class 1: each category must attest False -- a True value is a stopped
+# program, not a receipt field ("fail-closed on unknown provenance").
+E5_ATTESTATION_CATEGORIES = (
+    "imported_learned_weights", "imported_embeddings", "learned_parameter_tokenizers",
+    "teacher_outputs", "learned_filters_judges", "hidden_accelerator_services",
+)
+# §5.1 class 7, the ten quoted compute components.
+E5_COMPUTE_COMPONENTS = (
+    "training", "validation", "tools", "environments", "judging",
+    "search", "retrieval", "rollouts", "test_time_reasoning", "final_evaluation",
+)
+# The twelve-bottleneck protocol table (physiology closed-boundary addendum),
+# NOT the five-row B1-B5 bottleneck ledger -- different namespace.
+E5_WALL_IDS = (
+    "1-metric", "2-accounting", "3-theory-disclosure", "4-data",
+    "5-objective-verifier", "6-transfer-persistence", "7-optimization",
+    "8-architecture-capacity", "9-composition", "10-residency",
+    "11-roofline-numerics", "12-seriality-iteration",
+)
+E5_WALL_VERDICTS = ("green", "red", "not_probed")
+# The manifest keys identity_spine.checkpoint_file_sha256s may mirror.
+E5_CHECKPOINT_HASH_KEYS = (
+    "shared_model_shard_sha256", "expert_checkpoint_sha256",
+    "optimizer_state_shard_sha256", "rng_state_sha256",
+)
+
+
+def _validate_frontier_content(
+    path: Path, *, repo_root: Path, run_root: Path, thresholds: dict[str, Any],
+    fixed_prior_manifest_path: Path | None,
+) -> list[str]:
+    """Return the list of content defects (empty = valid) for one candidate
+    frontier receipt. Fail-closed: every check that cannot be performed is
+    itself a defect. The three binding families the E6 reviews proved
+    load-bearing all apply here:
+      * document binding -- every repo-document pin (prereg, admission
+        config, fixed-prior manifest, tokenizer receipt, predecessor,
+        registry, INVARIANT.md) must name THE pinned path, resolve inside
+        repo_root, and hash to the receipt's sha256;
+      * value binding -- reproducibility pins must EQUAL the checkpoint
+        manifest's values, embedded evidence (energy block, eval results,
+        interventions, walls rows) must EQUAL the producer files on disk
+        field-for-field, and arithmetic (energy totals, wall clock) must
+        recompute from the receipt's own numbers;
+      * run binding -- the receipt's run_root must resolve to the
+        adjudicated root, and every evidence sha must match the file found
+        under THAT root (one run's receipt must not credit another's exit).
+    Telemetry series length is E1's leg on the same root; here only the
+    receipt's steps_measured is checked against T-01."""
+    t01 = int(thresholds["T-01"])
+    t06 = float(thresholds["T-06"])
+    defects: list[str] = []
+    try:
+        receipt = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        return [f"unreadable or non-JSON: {error}"]
+    if not isinstance(receipt, dict):
+        return ["top level is not a JSON object"]
+
+    def _num(value: Any) -> bool:
+        return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+    def _nonempty_str(value: Any) -> bool:
+        return isinstance(value, str) and bool(value.strip())
+
+    if receipt.get("schema_version") != FRONTIER_SCHEMA:
+        defects.append(f"schema_version is {receipt.get('schema_version')!r}, need {FRONTIER_SCHEMA!r}")
+    if receipt.get("rung") != "R1":
+        defects.append(f"rung is {receipt.get('rung')!r}, need 'R1' (this battery adjudicates R1 exits)")
+    if not _nonempty_str(receipt.get("generator")):
+        defects.append("generator provenance field missing")
+    if not _nonempty_str(receipt.get("generated_utc")):
+        defects.append("generated_utc missing")
+
+    receipt_run_root = receipt.get("run_root")
+    if not _nonempty_str(receipt_run_root):
+        defects.append("run_root binding field missing")
+    else:
+        try:
+            if Path(receipt_run_root).resolve() != run_root.resolve():
+                defects.append(
+                    f"run_root mismatch: receipt was generated for {receipt_run_root!r}, adjudicating "
+                    f"{str(run_root)!r} -- one run's frontier receipt must not credit another's exit"
+                )
+        except OSError as error:
+            defects.append(f"run_root unresolvable: {error}")
+
+    steps_measured = receipt.get("steps_measured")
+    if not isinstance(steps_measured, int) or isinstance(steps_measured, bool) or steps_measured < t01:
+        defects.append(f"steps_measured={steps_measured!r} below T-01={t01} -- a frontier point needs the measured baseline the prereg names")
+
+    repo_resolved = repo_root.resolve()
+
+    def _bind_repo_doc(label: str, entry: Any, expected_rel: str | None) -> Path | None:
+        """Verify a {path, sha256} repo-document pin; return the resolved
+        path on success, None (with defects appended) otherwise. When
+        expected_rel is given the pin must name exactly that document --
+        binding any other repo file is refused (the E6 decoy lesson)."""
+        if not isinstance(entry, dict) or not _nonempty_str(entry.get("path")) or not _nonempty_str(entry.get("sha256")):
+            defects.append(f"{label}: path/sha256 binding fields missing")
+            return None
+        rel = entry["path"]
+        if Path(rel).is_absolute():
+            defects.append(f"{label}: path is absolute ({rel!r}) -- the binding must be repo-relative")
+            return None
+        if expected_rel is not None and PurePath(rel).as_posix() != expected_rel:
+            defects.append(f"{label}: path {rel!r} does not name the pinned document ({expected_rel})")
+            return None
+        abs_path = (repo_root / rel).resolve()
+        if repo_resolved not in abs_path.parents and abs_path != repo_resolved:
+            defects.append(f"{label}: path escapes the repository ({rel!r})")
+            return None
+        if not abs_path.is_file():
+            defects.append(f"{label}: bound document does not exist on disk: {rel}")
+            return None
+        if _sha256_file(abs_path) != entry["sha256"]:
+            defects.append(f"{label}: sha256 does not match the bytes of {rel} -- the receipt binds a different document than the one on disk")
+            return None
+        return abs_path
+
+    _bind_repo_doc("prereg", receipt.get("prereg"), E5_PREREG_PATH)
+    _bind_repo_doc("admission_config", receipt.get("admission_config"), E5_ADMISSION_CONFIG_PATH)
+    predecessor_path = _bind_repo_doc("predecessor_receipt", receipt.get("predecessor_receipt"), None)
+    if predecessor_path is not None:
+        try:
+            json.loads(predecessor_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as error:
+            defects.append(f"predecessor_receipt: bound document is not valid JSON: {error}")
+
+    # --- leg 2: fixed prior + learned-import attestation ----------------------
+    expected_manifest = (fixed_prior_manifest_path or (repo_root / FIXED_PRIOR_MANIFEST_REL)).resolve()
+    try:
+        expected_manifest_rel = expected_manifest.relative_to(repo_resolved).as_posix()
+    except ValueError:
+        expected_manifest_rel = str(expected_manifest)
+    fixed_prior = receipt.get("fixed_prior")
+    fixed_prior_sha: str | None = None
+    if not isinstance(fixed_prior, dict) or not _nonempty_str(fixed_prior.get("manifest_path")) or not _nonempty_str(fixed_prior.get("manifest_sha256")):
+        defects.append("fixed_prior: manifest_path/manifest_sha256 binding fields missing")
+        fixed_prior = {}
+    elif PurePath(fixed_prior["manifest_path"]).as_posix() != expected_manifest_rel:
+        defects.append(
+            f"fixed_prior.manifest_path {fixed_prior['manifest_path']!r} does not name the pinned "
+            f"§5.2 manifest ({expected_manifest_rel})"
+        )
+    elif not expected_manifest.is_file():
+        defects.append(f"fixed_prior: pinned manifest does not exist on disk: {expected_manifest}")
+    elif _sha256_file(expected_manifest) != fixed_prior["manifest_sha256"]:
+        defects.append("fixed_prior.manifest_sha256 does not match the manifest bytes on disk")
+    else:
+        fixed_prior_sha = fixed_prior["manifest_sha256"]
+        # Independent re-validation of the manifest CONTENT the attestation
+        # rests on (§5.1 class 1 is fail-closed on unknown provenance).
+        try:
+            manifest_doc = json.loads(expected_manifest.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as error:
+            defects.append(f"fixed_prior: manifest unreadable: {error}")
+            manifest_doc = None
+        if isinstance(manifest_doc, dict):
+            if not _nonempty_str(manifest_doc.get("learned_import_attestation")):
+                defects.append("fixed_prior: manifest carries no learned_import_attestation statement")
+            items = manifest_doc.get("items")
+            if not isinstance(items, list) or not items:
+                defects.append("fixed_prior: manifest has no items")
+            else:
+                for i, item in enumerate(items):
+                    if not isinstance(item, dict) or not item.get("provenance"):
+                        defects.append(f"fixed_prior: manifest item {i} lacks a provenance line")
+                        continue
+                    kind = item.get("kind")
+                    probe = item.get("probe") if isinstance(item.get("probe"), dict) else {}
+                    pinned = (
+                        (kind == "file" and bool(item.get("sha256")))
+                        or (kind == "version" and probe.get("ok") is True and bool(probe.get("output")))
+                        or (kind == "tree" and bool(item.get("combined_sha256")))
+                        or (kind == "external")
+                    )
+                    if not pinned:
+                        defects.append(f"fixed_prior: manifest item {i} (kind={kind!r}) carries no pin for its kind")
+        elif manifest_doc is not None:
+            defects.append("fixed_prior: manifest top level is not a JSON object")
+
+    attestation = receipt.get("learned_import_attestation")
+    if not isinstance(attestation, dict):
+        defects.append("learned_import_attestation block missing")
+    else:
+        for category in E5_ATTESTATION_CATEGORIES:
+            if attestation.get(category) is not False:
+                defects.append(
+                    f"learned_import_attestation.{category} is {attestation.get(category)!r}, need "
+                    "False -- a true or absent value is a stopped program, not a receipt field"
+                )
+        if not _nonempty_str(attestation.get("basis")):
+            defects.append("learned_import_attestation.basis missing")
+
+    # --- run-root evidence: checkpoint manifest (identity spine) --------------
+    disk_manifest: dict[str, Any] | None = None
+    disk_manifest_sha: str | None = None
+    try:
+        manifest_path = find_checkpoint_manifest(run_root)
+        disk_manifest_sha = _sha256_file(manifest_path)
+        loaded = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if isinstance(loaded, dict):
+            disk_manifest = loaded
+        else:
+            defects.append(f"checkpoint manifest top level is not a JSON object: {manifest_path}")
+    except R1ExitBatteryRefusal as refusal:
+        defects.append(f"checkpoint manifest: {refusal}")
+    except (OSError, ValueError) as error:
+        defects.append(f"checkpoint manifest unreadable: {error}")
+
+    spine = receipt.get("identity_spine")
+    if not isinstance(spine, dict):
+        defects.append("identity_spine block missing")
+        spine = {}
+    else:
+        if spine.get("goal_id") != E5_GOAL_ID:
+            defects.append(f"identity_spine.goal_id is {spine.get('goal_id')!r}, need {E5_GOAL_ID!r}")
+        if spine.get("workstream_id") != E5_WORKSTREAM_ID:
+            defects.append(f"identity_spine.workstream_id is {spine.get('workstream_id')!r}, need {E5_WORKSTREAM_ID!r}")
+        if not _nonempty_str(spine.get("next_executed_outcome")):
+            defects.append("identity_spine.next_executed_outcome missing")
+        spine_manifest_sha = spine.get("checkpoint_manifest_sha256")
+        if not _nonempty_str(spine_manifest_sha):
+            defects.append("identity_spine.checkpoint_manifest_sha256 missing")
+        elif disk_manifest_sha is not None and spine_manifest_sha != disk_manifest_sha:
+            defects.append(
+                "identity_spine.checkpoint_manifest_sha256 does not match this run root's checkpoint "
+                "manifest bytes -- the receipt describes a different checkpoint"
+            )
+        file_shas = spine.get("checkpoint_file_sha256s")
+        if not isinstance(file_shas, dict) or not file_shas:
+            defects.append("identity_spine.checkpoint_file_sha256s missing or empty")
+        elif disk_manifest is not None:
+            for key, value in file_shas.items():
+                if key not in E5_CHECKPOINT_HASH_KEYS:
+                    defects.append(f"identity_spine.checkpoint_file_sha256s carries unknown key {key!r}")
+                elif disk_manifest.get(key) != value:
+                    defects.append(f"identity_spine.checkpoint_file_sha256s[{key!r}] does not equal the checkpoint manifest's value")
+
+    def _bind_run_file(label: str, rel_name: str, expected_sha: Any) -> tuple[Path, Any] | None:
+        """Discover exactly one rel_name under the run root (quarantine
+        excluded), require the receipt's sha to match its bytes, and return
+        (path, parsed JSON). None (with defects appended) otherwise."""
+        candidates = sorted(p for p in run_root.rglob(rel_name) if ".checkpoint-quarantine" not in p.parts) if run_root.is_dir() else []
+        if not candidates:
+            defects.append(f"{label}: no {rel_name} under the run root")
+            return None
+        if len(candidates) > 1:
+            defects.append(f"{label}: {len(candidates)} {rel_name} files under the run root -- ambiguous evidence")
+            return None
+        disk_path = candidates[0]
+        if not _nonempty_str(expected_sha):
+            defects.append(f"{label}: receipt carries no sha256 for {rel_name}")
+            return None
+        if _sha256_file(disk_path) != expected_sha:
+            defects.append(f"{label}: receipt sha256 does not match the bytes of {disk_path} -- the receipt binds different evidence than this run root holds")
+            return None
+        try:
+            return disk_path, json.loads(disk_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as error:
+            defects.append(f"{label}: {disk_path} unreadable: {error}")
+            return None
+
+    # --- leg 3: capability ----------------------------------------------------
+    capability = receipt.get("capability")
+    if not isinstance(capability, dict):
+        defects.append("capability leg missing")
+    else:
+        bound = _bind_run_file("capability", "frozen-eval-results.json", capability.get("results_receipt_sha256"))
+        if bound is not None:
+            _eval_path, eval_doc = bound
+            if not isinstance(eval_doc, dict):
+                defects.append("capability: frozen-eval-results.json top level is not a JSON object")
+            else:
+                for field_name in ("eval_suite_id", "eval_suite_sha256"):
+                    if eval_doc.get(field_name) != capability.get(field_name) or not _nonempty_str(capability.get(field_name)):
+                        defects.append(f"capability.{field_name} does not equal the frozen-eval receipt's value")
+                if eval_doc.get("tool_access") != "none" or capability.get("tool_access") != "none":
+                    defects.append(
+                        f"capability.tool_access is {capability.get('tool_access')!r} (producer: "
+                        f"{eval_doc.get('tool_access')!r}), need 'none' at R1 -- no harness/tool substitution"
+                    )
+                results = capability.get("results")
+                if not isinstance(results, dict) or not results:
+                    defects.append("capability.results is not a non-empty mapping")
+                else:
+                    if results != eval_doc.get("results"):
+                        defects.append("capability.results does not equal the frozen-eval receipt's results verbatim")
+                    for metric, entry in results.items():
+                        if not isinstance(entry, dict) or not _num(entry.get("value")):
+                            defects.append(f"capability.results[{metric!r}] lacks a finite value -- no missing result is converted into completion")
+                eval_manifest_sha = eval_doc.get("checkpoint_manifest_sha256")
+                if disk_manifest_sha is not None and eval_manifest_sha != disk_manifest_sha:
+                    defects.append("capability: frozen-eval receipt binds a different checkpoint manifest than this run root's -- one run's eval must not credit another's checkpoint")
+        if disk_manifest_sha is not None and capability.get("checkpoint_manifest_sha256") != disk_manifest_sha:
+            defects.append("capability.checkpoint_manifest_sha256 does not match this run root's checkpoint manifest bytes")
+        if capability.get("model_only_ablation") is not None:
+            defects.append("capability.model_only_ablation must be null at R1 (no claim exists for the ablation to probe)")
+
+    # --- leg 4: time ----------------------------------------------------------
+    time_leg = receipt.get("time")
+    if not isinstance(time_leg, dict):
+        defects.append("time leg missing")
+    else:
+        bound = _bind_run_file("time", "disk-budget-runner-receipt.json", time_leg.get("runner_receipt_sha256"))
+        if bound is not None:
+            _runner_path, runner_doc = bound
+            started = runner_doc.get("started_at_ms") if isinstance(runner_doc, dict) else None
+            finished = runner_doc.get("finished_at_ms") if isinstance(runner_doc, dict) else None
+            duration = runner_doc.get("duration_ms") if isinstance(runner_doc, dict) else None
+            if not (_num(started) and _num(finished) and _num(duration)):
+                defects.append("time: runner receipt lacks finite started_at_ms/finished_at_ms/duration_ms")
+            elif finished < started:
+                defects.append("time: runner receipt finished_at_ms precedes started_at_ms")
+            elif abs((finished - started) - duration) > 1000:
+                defects.append(f"time: runner receipt duration_ms {duration} disagrees with finished-started {finished - started} beyond 1s")
+            else:
+                wall = time_leg.get("wall_clock_seconds")
+                expected_wall = (finished - started) / 1000.0
+                if not _num(wall) or abs(wall - expected_wall) > 1e-3:
+                    defects.append(f"time.wall_clock_seconds {wall!r} does not equal the runner receipt's span {expected_wall}")
+
+                def _iso(ms: float) -> str:
+                    return datetime.fromtimestamp(ms / 1000.0, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+
+                if time_leg.get("run_start_utc") != _iso(started) or time_leg.get("run_end_utc") != _iso(finished):
+                    defects.append("time.run_start_utc/run_end_utc do not re-derive from the runner receipt's ms fields")
+        if time_leg.get("coverage") != "process_birth_to_exit":
+            defects.append(f"time.coverage is {time_leg.get('coverage')!r}, need 'process_birth_to_exit'")
+
+    # --- leg 5: energy (§5.3 block re-checked AND compared with producer) -----
+    energy_block = receipt.get("energy")
+    if not isinstance(energy_block, dict):
+        defects.append("energy leg missing (§5.3 block)")
+    else:
+        boundary = energy_block.get("energy_boundary")
+        if boundary != "DEGRADED_PROXY":
+            defects.append(f"energy.energy_boundary is {boundary!r}, need 'DEGRADED_PROXY' (prereg: the boundary is permanent)")
+        coverage = energy_block.get("sample_coverage_fraction")
+        if not _num(coverage) or not (0.0 <= coverage <= 1.0):
+            defects.append(f"energy.sample_coverage_fraction {coverage!r} is not in [0,1]")
+        elif coverage < t06:
+            defects.append(f"energy.sample_coverage_fraction {coverage} below T-06={t06} -- an unmetered run is not a frontier point")
+        gpu_j = energy_block.get("gpu_joules")
+        cpu_j = energy_block.get("cpu_pkg_joules")
+        total_j = energy_block.get("total_proxy_joules")
+        if not _num(gpu_j) or not _num(total_j):
+            defects.append("energy.gpu_joules/total_proxy_joules not finite")
+        else:
+            expected_total = gpu_j + (cpu_j if _num(cpu_j) else 0.0)
+            if abs(total_j - expected_total) > 1e-9 * max(1.0, abs(expected_total)):
+                defects.append(f"energy.total_proxy_joules {total_j} does not equal gpu + cpu legs {expected_total}")
+        if cpu_j is None:
+            excluded = energy_block.get("excluded_components")
+            if not isinstance(excluded, list) or not any(isinstance(e, str) and e.lower().startswith("cpu package") for e in excluded):
+                defects.append("energy.cpu_pkg_joules is null but 'CPU package' is not disclosed in excluded_components")
+        energy_receipt_path = receipt.get("energy_receipt_path")
+        energy_receipt_sha = receipt.get("energy_receipt_sha256")
+        if not _nonempty_str(energy_receipt_path) or not _nonempty_str(energy_receipt_sha):
+            defects.append("energy_receipt_path/energy_receipt_sha256 binding fields missing")
+        else:
+            producer_path = Path(energy_receipt_path)
+            try:
+                inside = run_root.resolve() in producer_path.resolve().parents
+            except OSError:
+                inside = False
+            if not inside:
+                defects.append(f"energy_receipt_path {energy_receipt_path!r} is not under the adjudicated run root")
+            elif not producer_path.is_file():
+                defects.append(f"energy producer receipt does not exist: {energy_receipt_path}")
+            elif _sha256_file(producer_path) != energy_receipt_sha:
+                defects.append("energy_receipt_sha256 does not match the producer receipt bytes on disk")
+            else:
+                try:
+                    producer_doc = json.loads(producer_path.read_text(encoding="utf-8"))
+                except (OSError, ValueError) as error:
+                    producer_doc = None
+                    defects.append(f"energy producer receipt unreadable: {error}")
+                if isinstance(producer_doc, dict) and producer_doc.get("energy") != energy_block:
+                    defects.append("energy block does not equal the producer receipt's nested energy block verbatim -- the §5.3 embed contract")
+
+    # --- leg 6: reproducibility (value-bound to the checkpoint manifest) ------
+    repro = receipt.get("reproducibility")
+    if not isinstance(repro, dict):
+        defects.append("reproducibility leg missing")
+    else:
+        if disk_manifest is not None:
+            for field_name, manifest_key in (
+                ("config_sha256", "model_config_sha256"),
+                ("optimizer_state_sha256", "optimizer_state_shard_sha256"),
+                ("rng_state_sha256", "rng_state_sha256"),
+            ):
+                # Present-and-EQUAL, deliberately type-agnostic: v5 manifests
+                # pin optimizer/shared/expert shards as per-shard MAPPINGS,
+                # not single hex strings (cross-check finding: a string-typed
+                # requirement here refused every real generator receipt).
+                if not repro.get(field_name) or repro.get(field_name) != disk_manifest.get(manifest_key):
+                    defects.append(f"reproducibility.{field_name} does not equal the checkpoint manifest's {manifest_key}")
+            if not repro.get("optimizer_contract") or repro.get("optimizer_contract") != disk_manifest.get("optimizer_contract"):
+                defects.append("reproducibility.optimizer_contract does not equal the checkpoint manifest's optimizer_contract")
+            manifest_seed = disk_manifest.get("launch_seed")
+            seeds = repro.get("seeds")
+            if not isinstance(seeds, list) or not seeds or not all(isinstance(s, int) and not isinstance(s, bool) for s in seeds):
+                defects.append("reproducibility.seeds is not a non-empty list of integers")
+            elif seeds != [manifest_seed]:
+                defects.append(f"reproducibility.seeds {seeds!r} does not equal the checkpoint manifest's launch_seed [{manifest_seed!r}]")
+            cursor = repro.get("data_cursor")
+            manifest_cursor = disk_manifest.get("data_cursor") if isinstance(disk_manifest.get("data_cursor"), dict) else {}
+            if not isinstance(cursor, dict) or not _num(cursor.get("tokens_seen")) or not _num(cursor.get("global_step")):
+                defects.append("reproducibility.data_cursor incomplete (finite tokens_seen/global_step required)")
+            elif (cursor.get("tokens_seen") != manifest_cursor.get("tokens_seen")
+                  or cursor.get("global_step") != manifest_cursor.get("global_step")):
+                defects.append("reproducibility.data_cursor does not equal the checkpoint manifest's data_cursor")
+        _bind_repo_doc("reproducibility.tokenizer_reconstruction_receipt", repro.get("tokenizer_reconstruction_receipt"), E5_TOKENIZER_RECEIPT_PATH)
+        if fixed_prior_sha is not None and repro.get("recipe_ref") != fixed_prior_sha:
+            defects.append("reproducibility.recipe_ref does not equal the fixed-prior manifest sha256 -- the recipe binding is the §5.2 manifest")
+        reproduction = repro.get("reproduction")
+        if not isinstance(reproduction, dict):
+            defects.append("reproducibility.reproduction adjudication block missing")
+        else:
+            adjudication_disk = run_root / "reproduction-adjudication.json"
+            status = reproduction.get("status")
+            if status not in ("REPRODUCED", "MISMATCH"):
+                defects.append(f"reproduction.status {status!r} is neither REPRODUCED nor MISMATCH -- '(reproduces or names its mismatch)' admits nothing else")
+            if status == "MISMATCH" and not reproduction.get("mismatch"):
+                defects.append("reproduction: MISMATCH status without a named mismatch")
+            if not _nonempty_str(reproduction.get("evidence_ref")):
+                defects.append("reproduction.evidence_ref missing")
+            if not adjudication_disk.is_file():
+                defects.append("reproduction: no reproduction-adjudication.json under the run root")
+            elif not _nonempty_str(reproduction.get("adjudication_sha256")) or _sha256_file(adjudication_disk) != reproduction.get("adjudication_sha256"):
+                defects.append("reproduction.adjudication_sha256 does not match reproduction-adjudication.json bytes")
+            else:
+                try:
+                    adjudication_doc = json.loads(adjudication_disk.read_text(encoding="utf-8"))
+                except (OSError, ValueError) as error:
+                    adjudication_doc = None
+                    defects.append(f"reproduction adjudication unreadable: {error}")
+                if isinstance(adjudication_doc, dict) and adjudication_doc.get("status") != status:
+                    defects.append("reproduction.status does not equal the adjudication file's status")
+
+    # --- leg 1: the nine-class ledger -----------------------------------------
+    ledger = receipt.get("ledger")
+    if not isinstance(ledger, dict):
+        defects.append("ledger block missing (§5.1)")
+    else:
+        for ref_field in ("learned_import_attestation_ref", "energy_ref", "identity_spine_ref"):
+            if not _nonempty_str(ledger.get(ref_field)):
+                defects.append(f"ledger.{ref_field} missing")
+        if isinstance(fixed_prior, dict) and fixed_prior.get("manifest_path") and ledger.get("fixed_prior_manifest_ref") != fixed_prior.get("manifest_path"):
+            defects.append("ledger.fixed_prior_manifest_ref does not name the bound fixed-prior manifest")
+
+        interventions = ledger.get("human_interventions")
+        if not isinstance(interventions, dict):
+            defects.append("ledger.human_interventions missing")
+        else:
+            interventions_disk = run_root / "human-interventions.json"
+            if not interventions_disk.is_file():
+                defects.append("ledger.human_interventions: no human-interventions.json under the run root -- an explicit empty list is evidence, an absent file is not a zero")
+            elif not _nonempty_str(interventions.get("source_sha256")) or _sha256_file(interventions_disk) != interventions.get("source_sha256"):
+                defects.append("ledger.human_interventions.source_sha256 does not match human-interventions.json bytes")
+            else:
+                try:
+                    disk_rows = json.loads(interventions_disk.read_text(encoding="utf-8"))
+                except (OSError, ValueError) as error:
+                    disk_rows = None
+                    defects.append(f"ledger.human_interventions: source file unreadable: {error}")
+                rows = interventions.get("interventions")
+                if disk_rows is not None and rows != disk_rows:
+                    defects.append("ledger.human_interventions.interventions does not equal the source file's rows verbatim")
+                if isinstance(rows, list):
+                    for i, row in enumerate(rows):
+                        if not isinstance(row, dict) or not all(row.get(k) for k in ("action_class", "actor_role", "ts_utc", "description")):
+                            defects.append(f"ledger.human_interventions row {i} lacks action_class/actor_role/ts_utc/description")
+                else:
+                    defects.append("ledger.human_interventions.interventions is not a list")
+
+        data_accounting = ledger.get("data_accounting")
+        if not isinstance(data_accounting, dict):
+            defects.append("ledger.data_accounting missing")
+        else:
+            if disk_manifest is not None:
+                manifest_cursor = disk_manifest.get("data_cursor") if isinstance(disk_manifest.get("data_cursor"), dict) else {}
+                if not _num(data_accounting.get("tokens_seen")) or data_accounting.get("tokens_seen") != manifest_cursor.get("tokens_seen"):
+                    defects.append("ledger.data_accounting.tokens_seen does not equal the checkpoint manifest's data_cursor.tokens_seen")
+            if not _nonempty_str(data_accounting.get("attestation")):
+                defects.append("ledger.data_accounting.attestation missing")
+            if data_accounting.get("retained_originals") is not True:
+                defects.append("ledger.data_accounting.retained_originals must be true")
+            if isinstance(fixed_prior, dict) and fixed_prior.get("manifest_path") and data_accounting.get("corpora_evidence_ref") != fixed_prior.get("manifest_path"):
+                defects.append("ledger.data_accounting.corpora_evidence_ref does not name the fixed-prior manifest")
+
+        host = ledger.get("host_accounting")
+        if not isinstance(host, dict):
+            defects.append("ledger.host_accounting missing")
+        else:
+            not_measured = host.get("not_measured")
+            if not isinstance(not_measured, dict) or not all(_nonempty_str(v) for v in not_measured.values()):
+                defects.append("ledger.host_accounting.not_measured must map each unmeasured field to a named reason (§5.1 class 4: an absent measurement without a reason is a hole, not a disclosure)")
+            evidence_ref = host.get("evidence_ref")
+            if _nonempty_str(evidence_ref):
+                if not Path(evidence_ref).is_file():
+                    defects.append(f"ledger.host_accounting.evidence_ref does not exist: {evidence_ref}")
+            elif isinstance(not_measured, dict) and "cpu_gpu_utilization" not in not_measured:
+                defects.append("ledger.host_accounting carries neither an evidence_ref (R1-E4 receipt) nor a not_measured reason for cpu_gpu_utilization")
+
+        coverage_block = ledger.get("all_compute_coverage")
+        if not isinstance(coverage_block, dict):
+            defects.append("ledger.all_compute_coverage missing")
+        else:
+            registry_disk = repo_root / E5_RUN_ATTEMPTS_REGISTRY
+            if coverage_block.get("registry_path") != E5_RUN_ATTEMPTS_REGISTRY:
+                defects.append(f"ledger.all_compute_coverage.registry_path does not name {E5_RUN_ATTEMPTS_REGISTRY}")
+            if not registry_disk.is_file():
+                defects.append(f"ledger.all_compute_coverage: no run-attempt registry at {E5_RUN_ATTEMPTS_REGISTRY} -- 'failed work included' is unattestable without it (issue #1497)")
+            elif not _nonempty_str(coverage_block.get("registry_sha256")) or _sha256_file(registry_disk) != coverage_block.get("registry_sha256"):
+                defects.append("ledger.all_compute_coverage.registry_sha256 does not match the registry bytes on disk")
+            else:
+                lines = [ln for ln in registry_disk.read_text(encoding="utf-8").splitlines() if ln.strip()]
+                parse_failures = []
+                for i, line in enumerate(lines):
+                    try:
+                        json.loads(line)
+                    except ValueError:
+                        parse_failures.append(i + 1)
+                if parse_failures:
+                    defects.append(f"ledger.all_compute_coverage: registry lines unparseable: {parse_failures}")
+                if not lines:
+                    defects.append("ledger.all_compute_coverage: run-attempt registry is empty")
+                if coverage_block.get("registry_rows") != len(lines):
+                    defects.append(f"ledger.all_compute_coverage.registry_rows {coverage_block.get('registry_rows')!r} does not equal the registry's {len(lines)} rows")
+            if coverage_block.get("failed_work_included") is not True:
+                defects.append("ledger.all_compute_coverage.failed_work_included must be true")
+            components_map = coverage_block.get("components")
+            if not isinstance(components_map, dict):
+                defects.append("ledger.all_compute_coverage.components missing")
+            else:
+                for component in E5_COMPUTE_COMPONENTS:
+                    entry = components_map.get(component)
+                    if not isinstance(entry, dict) or not isinstance(entry.get("included"), bool):
+                        defects.append(f"ledger.all_compute_coverage.components[{component!r}] missing or lacks an included bool")
+                    elif entry["included"] and not _nonempty_str(entry.get("evidence_ref")):
+                        defects.append(f"ledger.all_compute_coverage.components[{component!r}] included without an evidence_ref")
+                    elif not entry["included"] and not _nonempty_str(entry.get("note")):
+                        defects.append(f"ledger.all_compute_coverage.components[{component!r}] excluded without a note naming why")
+
+        walls = ledger.get("walls_checklist")
+        if not isinstance(walls, dict):
+            defects.append("ledger.walls_checklist missing")
+        else:
+            walls_disk = run_root / "walls-checklist.json"
+            rows = walls.get("rows")
+            if not walls_disk.is_file():
+                defects.append("ledger.walls_checklist: no walls-checklist.json under the run root")
+            elif not _nonempty_str(walls.get("source_sha256")) or _sha256_file(walls_disk) != walls.get("source_sha256"):
+                defects.append("ledger.walls_checklist.source_sha256 does not match walls-checklist.json bytes")
+            else:
+                try:
+                    disk_rows = json.loads(walls_disk.read_text(encoding="utf-8"))
+                except (OSError, ValueError) as error:
+                    disk_rows = None
+                    defects.append(f"ledger.walls_checklist: source file unreadable: {error}")
+                if disk_rows is not None and rows != disk_rows:
+                    defects.append("ledger.walls_checklist.rows does not equal walls-checklist.json verbatim")
+            if not isinstance(rows, list) or len(rows) != 12:
+                defects.append(f"ledger.walls_checklist.rows must be exactly the twelve protocol rows, found {len(rows) if isinstance(rows, list) else type(rows).__name__}")
+            else:
+                seen_ids = []
+                for row in rows:
+                    wall_id, verdict = (row.get("wall_id"), row.get("verdict")) if isinstance(row, dict) else (None, None)
+                    if wall_id not in E5_WALL_IDS:
+                        defects.append(f"ledger.walls_checklist: unknown wall_id {wall_id!r}")
+                    if verdict not in E5_WALL_VERDICTS:
+                        defects.append(f"ledger.walls_checklist: wall {wall_id!r} verdict {verdict!r} not in {E5_WALL_VERDICTS}")
+                    seen_ids.append(wall_id)
+                if sorted(str(s) for s in seen_ids) != sorted(E5_WALL_IDS):
+                    defects.append("ledger.walls_checklist: rows do not cover the twelve wall ids exactly once")
+
+    # --- advantage + invariant stamps -----------------------------------------
+    if receipt.get("advantage_claims") != []:
+        defects.append(
+            f"advantage_claims is {receipt.get('advantage_claims')!r}, need [] -- §4.4 freezes R1's "
+            "receipted comparison at 'None (canary + measurement baselines)'"
+        )
+    stamp = receipt.get("invariant_stamp")
+    invariant_disk = repo_root / E5_INVARIANT_PATH
+    if not isinstance(stamp, dict) or not _nonempty_str(stamp.get("invariant_md_sha256")):
+        defects.append("invariant_stamp.invariant_md_sha256 missing")
+    elif not invariant_disk.is_file():
+        defects.append(f"invariant stamp: no {E5_INVARIANT_PATH} at the repository root")
+    elif _sha256_file(invariant_disk) != stamp.get("invariant_md_sha256"):
+        defects.append(
+            "invariant_stamp.invariant_md_sha256 does not match the INVARIANT.md in force -- a "
+            "receipt stamped under a different invariant is not this rung's receipt"
+        )
+    return defects
+
 
 def check_r1_e5(run_root: Path, thresholds: dict[str, Any], *, repo_root: Path = REPO_ROOT, fixed_prior_manifest_path: Path | None = None) -> dict[str, Any]:
     t01 = int(thresholds["T-01"])
     t06 = float(thresholds["T-06"])
-    fixed_prior_manifest_path = fixed_prior_manifest_path or DEFAULT_FIXED_PRIOR_MANIFEST
-    fixed_prior_present = fixed_prior_manifest_path.is_file()
-    fixed_prior_sha256 = _sha256_file(fixed_prior_manifest_path) if fixed_prior_present else None
-
-    frontier_receipt_candidates = sorted(run_root.rglob("*frontier*receipt*.json")) if run_root.is_dir() else []
-    energy_receipt_candidates = [
-        p for p in (run_root.rglob("*.json") if run_root.is_dir() else [])
-        if "energy" in p.name.lower()
+    manifest_cfg = fixed_prior_manifest_path or (repo_root / FIXED_PRIOR_MANIFEST_REL)
+    fixed_prior_present = manifest_cfg.is_file()
+    frontier_receipt_candidates = sorted(
+        p for p in (run_root.rglob("*frontier*receipt*.json") if run_root.is_dir() else [])
+        if ".checkpoint-quarantine" not in p.parts
+    )
+    # Placement-invariant disclosure (rev-1490 round-3): quarantined .jsonl
+    # holding real train_step rows never blocks E5, but it is surfaced --
+    # nothing legitimate writes telemetry there.
+    quarantined_telemetry = [str(p) for p in find_quarantined_telemetry_files(run_root)]
+    needs = (
+        f"a §5.4-validated closed-boundary frontier receipt (all 8 legs; energy_boundary "
+        f"'DEGRADED_PROXY'; sample_coverage_fraction >= T-06={t06}) from a real >= T-01={t01}-step "
+        "canary with energy-proxy sampling; generate it with scripts/frontier_receipt.py "
+        "--run-root <this root> (it refuses, with the leg named, until every leg's evidence exists)"
+    )
+    if not frontier_receipt_candidates:
+        return {
+            "status": "EVIDENCE_MISSING",
+            "frontier_receipt_validation": "IMPLEMENTED",
+            "detail": (
+                "no frontier-receipt-shaped file under this run root; generate one with "
+                "scripts/frontier_receipt.py --run-root <this root>"
+            ),
+            "components": {
+                "fixed_prior_manifest_present": fixed_prior_present,
+                "fixed_prior_manifest_path": str(manifest_cfg),
+                "fixed_prior_manifest_sha256": _sha256_file(manifest_cfg) if fixed_prior_present else None,
+                "candidate_validation": [],
+                "quarantined_telemetry_files": quarantined_telemetry,
+            },
+            "needs": needs,
+        }
+    validations = [
+        {
+            "path": str(p),
+            "defects": _validate_frontier_content(
+                p, repo_root=repo_root, run_root=run_root, thresholds=thresholds,
+                fixed_prior_manifest_path=fixed_prior_manifest_path,
+            ),
+        }
+        for p in frontier_receipt_candidates
     ]
-
-    # A filename match is a CANDIDATE pointer, never §5.4 evidence. The only
-    # spec-frozen, checkable-today content is the energy block (§5.3's shape:
-    # energy.energy_boundary, energy.sample_coverage_fraction vs T-06) -- run
-    # those checks per candidate and record them, but MET stays unreachable
-    # until a full §5.4 validator exists (legs: ledger completeness,
-    # fixed-prior + learned-import attestation, capability, time,
-    # reproducibility, advantage-if-claimed, INVARIANT stamps -- their
-    # receipt schema is defined nowhere yet; inventing one here is exactly
-    # the invention this battery prohibits).
-    candidate_validation: list[dict[str, Any]] = []
-    for candidate_path in frontier_receipt_candidates:
-        row: dict[str, Any] = {"path": str(candidate_path), "parse_ok": False}
-        try:
-            doc = json.loads(candidate_path.read_bytes())
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-            doc = None
-        if isinstance(doc, dict):
-            row["parse_ok"] = True
-            energy = doc.get("energy") if isinstance(doc.get("energy"), dict) else {}
-            boundary = energy.get("energy_boundary", doc.get("energy_boundary"))
-            coverage = energy.get("sample_coverage_fraction", doc.get("sample_coverage_fraction"))
-            row["energy_boundary"] = boundary
-            row["energy_boundary_ok"] = boundary == "DEGRADED_PROXY"
-            row["sample_coverage_fraction"] = _json_safe_number(coverage)
-            row["sample_coverage_ok"] = (
-                isinstance(coverage, (int, float)) and not isinstance(coverage, bool)
-                and math.isfinite(coverage) and coverage >= t06
-            )
-        candidate_validation.append(row)
-
-    return {
-        "status": "EVIDENCE_MISSING",
-        "frontier_receipt_validation": "PARTIAL_UNIMPLEMENTED",
-        "detail": (
-            (
-                f"{len(frontier_receipt_candidates)} frontier-receipt-shaped candidate file(s) found, "
-                "recorded with the spec-frozen energy-block checks only (energy_boundary == "
-                f"'DEGRADED_PROXY', sample_coverage_fraction >= T-06={t06}) -- a validated §5.4 "
-                "frontier receipt is still missing because no validator exists for the remaining "
-                "§5.4 legs (ledger, fixed-prior + learned-import attestation, capability, time, "
-                "reproducibility, advantage, INVARIANT stamps); a filename match must never mint MET"
-            ) if frontier_receipt_candidates else
-            "no frontier-receipt-shaped file under this run root, and no frontier-receipt generator "
-            "exists anywhere in scripts/ (repo-wide grep, zero hits, 2026-08-05); no energy-proxy "
-            "sampling occurred for this run (scripts/energy_proxy_logger.py exists but was not invoked)"
-        ),
-        "components": {
-            "fixed_prior_manifest_present": fixed_prior_present,
-            "fixed_prior_manifest_path": str(fixed_prior_manifest_path),
-            "fixed_prior_manifest_sha256": fixed_prior_sha256,
-            "frontier_receipt_candidates": [str(p) for p in frontier_receipt_candidates],
-            "candidate_validation": candidate_validation,
-            "energy_receipt_candidates": [str(p) for p in energy_receipt_candidates],
-        },
-        "needs": (
-            f"a §5.4-validated closed-boundary frontier receipt (all 8 legs; energy_boundary "
-            f"'DEGRADED_PROXY'; sample_coverage_fraction >= T-06={t06}) from a real >= T-01={t01}-step "
-            "canary with energy-proxy sampling -- which first needs BOTH a frontier-receipt assembly "
-            "script and a §5.4 validator (neither exists yet): an engineering task, not just an "
-            "execution one"
-        ),
+    valid = [v for v in validations if not v["defects"]]
+    components: dict[str, Any] = {
+        "candidate_validation": validations,
+        "quarantined_telemetry_files": quarantined_telemetry,
     }
+    if len(validations) == 1 and len(valid) == 1:
+        receipt_path = Path(valid[0]["path"])
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        components.update({
+            "receipt_path": str(receipt_path),
+            "receipt_sha256": _sha256_file(receipt_path),
+            "steps_measured": receipt.get("steps_measured"),
+            "wall_clock_seconds": _json_safe_number(receipt.get("time", {}).get("wall_clock_seconds")),
+            "energy_boundary": receipt.get("energy", {}).get("energy_boundary"),
+            "sample_coverage_fraction": _json_safe_number(receipt.get("energy", {}).get("sample_coverage_fraction")),
+            "total_proxy_joules": _json_safe_number(receipt.get("energy", {}).get("total_proxy_joules")),
+        })
+        return {
+            "status": "MET",
+            "frontier_receipt_validation": "IMPLEMENTED",
+            "detail": f"validated §5.4 frontier receipt (all legs re-verified against disk): {receipt_path}",
+            "components": components,
+        }
+    return {
+        "status": "NOT_MET",
+        "frontier_receipt_validation": "IMPLEMENTED",
+        "detail": (
+            f"{len(validations)} frontier-receipt candidate(s), {len(valid)} content-valid: "
+            + ("ambiguous -- more than one file claims to be the frontier receipt" if len(validations) > 1 else
+               "; ".join(f"{v['path']}: {'; '.join(v['defects'][:8])}" for v in validations if v["defects"]))
+        ),
+        "components": components,
+        "needs": needs,
+    }
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -2062,31 +2721,316 @@ def run_selftest() -> None:
         assert e4_null_result["status"] == "NOT_MET", e4_null_result
         assert any("tokens_missing_steps" in d for d in e4_null_result["components"]["defects"]), e4_null_result
 
-        # --- E5/E6: EVIDENCE_MISSING against an empty root; fixed-prior manifest presence is reported ---
+        # --- E5: EVIDENCE_MISSING against an empty root; fixed-prior manifest presence is reported ---
         e5 = check_r1_e5(empty_root, thresholds)
         assert e5["status"] == "EVIDENCE_MISSING", e5
+        assert e5["frontier_receipt_validation"] == "IMPLEMENTED", e5
         assert e5["components"]["fixed_prior_manifest_present"] is True, e5  # real repo file, checked via REPO_ROOT default
+        assert e5["components"]["quarantined_telemetry_files"] == [], e5
 
-        # --- E5 (R-2): a name-matched JUNK file must NOT mint MET; partial validation is recorded ---
+        # --- E5: a name-matched JUNK file is a defective CLAIMANT (NOT_MET), never EVIDENCE_MISSING, never MET ---
         e5_junk_root = tmp_path / "e5_junk_run"
         e5_junk_root.mkdir()
         (e5_junk_root / "SELFTEST_FIXTURE-frontier-receipt.json").write_bytes(json.dumps({"note": "SELFTEST_FIXTURE junk"}).encode("utf-8"))
         e5_junk = check_r1_e5(e5_junk_root, thresholds)
-        assert e5_junk["status"] == "EVIDENCE_MISSING", e5_junk
-        assert e5_junk["frontier_receipt_validation"] == "PARTIAL_UNIMPLEMENTED", e5_junk
-        junk_row = e5_junk["components"]["candidate_validation"][0]
-        assert junk_row["parse_ok"] is True and junk_row["energy_boundary_ok"] is False and junk_row["sample_coverage_ok"] is False, e5_junk
+        assert e5_junk["status"] == "NOT_MET", e5_junk
+        assert e5_junk["frontier_receipt_validation"] == "IMPLEMENTED", e5_junk
+        assert e5_junk["components"]["candidate_validation"][0]["defects"], e5_junk
 
-        # --- E5 (R-2): even a candidate passing every IMPLEMENTED energy check refuses MET (no full §5.4 validator) ---
-        e5_energy_root = tmp_path / "e5_energy_run"
-        e5_energy_root.mkdir()
-        (e5_energy_root / "SELFTEST_FIXTURE-frontier-receipt.json").write_bytes(json.dumps({
-            "energy": {"energy_boundary": "DEGRADED_PROXY", "sample_coverage_fraction": float(thresholds["T-06"])},
-        }).encode("utf-8"))
-        e5_energy = check_r1_e5(e5_energy_root, thresholds)
-        assert e5_energy["status"] == "EVIDENCE_MISSING", e5_energy
-        energy_row = e5_energy["components"]["candidate_validation"][0]
-        assert energy_row["energy_boundary_ok"] is True and energy_row["sample_coverage_ok"] is True, e5_energy
+        # --- E5: full-fixture MET path + per-leg poison cases against the eight-leg validator ---
+        def _e5_repo(name: str) -> Path:
+            """A fake repo root carrying every pinned document the validator
+            binds, so the MET path is provable hermetically (the real repo
+            lacks receipts/run-attempts.jsonl until issue #1497 lands)."""
+            repo = tmp_path / name
+            (repo / "docs" / "spec").mkdir(parents=True)
+            (repo / "configs").mkdir()
+            (repo / "manifests" / "ember-restart-3b").mkdir(parents=True)
+            (repo / "receipts" / "ember-restart-3b").mkdir(parents=True)
+            (repo / "docs" / "spec" / "ember02-preregistration-v1.md").write_bytes(b"SELFTEST_FIXTURE prereg\n")
+            (repo / "configs" / "ember-restart-3b.json").write_bytes(json.dumps({"SELFTEST_FIXTURE": True}).encode("utf-8"))
+            (repo / "INVARIANT.md").write_bytes(b"SELFTEST_FIXTURE invariant\n")
+            (repo / "manifests" / "ember-restart-3b" / "fixed-prior-manifest-v1.json").write_bytes(json.dumps({
+                "learned_import_attestation": "SELFTEST_FIXTURE: no learned imports of any category",
+                "items": [
+                    {"kind": "file", "provenance": "SELFTEST_FIXTURE file", "sha256": "a" * 64},
+                    {"kind": "version", "provenance": "SELFTEST_FIXTURE version", "probe": {"ok": True, "output": "1.0"}},
+                    {"kind": "tree", "provenance": "SELFTEST_FIXTURE tree", "combined_sha256": "b" * 64},
+                    {"kind": "external", "provenance": "SELFTEST_FIXTURE external bytes, sha None by design", "sha256": None},
+                ],
+            }).encode("utf-8"))
+            (repo / "receipts" / "ember-restart-3b" / "tokenizer-reconstruction-issue534-v1.json").write_bytes(
+                json.dumps({"SELFTEST_FIXTURE": "tokenizer"}).encode("utf-8"))
+            (repo / "receipts" / "ember-restart-3b" / "native-cost-calibration-seed83-certificate.json").write_bytes(
+                json.dumps({"SELFTEST_FIXTURE": "genesis", "adjudication": "PASS"}).encode("utf-8"))
+            (repo / "receipts" / "run-attempts.jsonl").write_bytes(
+                json.dumps({"run_id": "SELFTEST_FIXTURE", "outcome": "completed"}).encode("utf-8") + b"\n")
+            return repo
+
+        def _e5_run(name: str) -> tuple[Path, dict[str, Any]]:
+            """A run root with every evidence file; returns (root, checkpoint manifest)."""
+            run = tmp_path / name
+            ckpt = run / "artifacts" / "checkpoints" / "checkpoint-selftest"
+            ckpt.mkdir(parents=True)
+            manifest = {
+                "model_config_sha256": "c" * 64,
+                # Per-shard MAPPING, the real v5 shape (cross-check finding:
+                # these pins are not single hex strings).
+                "optimizer_state_shard_sha256": {"shard0": "d" * 64, "shard1": "d" * 63 + "e"},
+                "rng_state_sha256": "e" * 64,
+                "optimizer_contract": "SELFTEST_FIXTURE-adamw-v1",
+                "launch_seed": 830001,
+                "data_cursor": {"tokens_seen": 417792, "global_step": 204, "resume_authority": "SELFTEST_FIXTURE"},
+            }
+            (ckpt / "checkpoint-manifest.json").write_bytes(json.dumps(manifest).encode("utf-8"))
+            manifest_sha = hashlib.sha256((ckpt / "checkpoint-manifest.json").read_bytes()).hexdigest()
+            (run / "frozen-eval-results.json").write_bytes(json.dumps({
+                "eval_suite_id": "SELFTEST_FIXTURE-cheap-probe-v1",
+                "eval_suite_sha256": "f" * 64,
+                "checkpoint_manifest_sha256": manifest_sha,
+                "results": {"loss_probe": {"value": 0.29}},
+                "tool_access": "none",
+            }).encode("utf-8"))
+            (run / "disk-budget-runner-receipt.json").write_bytes(json.dumps({
+                "started_at_ms": 1786200000000, "finished_at_ms": 1786200742000, "duration_ms": 742000,
+            }).encode("utf-8"))
+            (run / "energy-proxy-receipt.json").write_bytes(json.dumps({
+                "schema_version": "ember-energy-proxy-run-v1",
+                "energy": {
+                    "energy_boundary": "DEGRADED_PROXY", "sample_coverage_fraction": 1.0,
+                    "gpu_joules": 118.0, "cpu_pkg_joules": 464.5, "total_proxy_joules": 582.5,
+                },
+            }).encode("utf-8"))
+            (run / "reproduction-adjudication.json").write_bytes(json.dumps({
+                "status": "REPRODUCED", "mismatch": None, "evidence_ref": "SELFTEST_FIXTURE r1-e3 round trip",
+            }).encode("utf-8"))
+            (run / "human-interventions.json").write_bytes(b"[]")
+            (run / "walls-checklist.json").write_bytes(json.dumps(
+                [{"wall_id": wall_id, "verdict": "not_probed"} for wall_id in E5_WALL_IDS]
+            ).encode("utf-8"))
+            return run, manifest
+
+        def _e5_receipt(repo: Path, run: Path, manifest: dict[str, Any]) -> dict[str, Any]:
+            """Assemble a receipt whose every binding matches the fixture bytes
+            -- an independent transcription of the generator's shape."""
+            def sha_of(p: Path) -> str:
+                return hashlib.sha256(p.read_bytes()).hexdigest()
+            manifest_sha = sha_of(run / "artifacts" / "checkpoints" / "checkpoint-selftest" / "checkpoint-manifest.json")
+            fixed_prior_rel = "manifests/ember-restart-3b/fixed-prior-manifest-v1.json"
+            fixed_prior_sha = sha_of(repo / fixed_prior_rel)
+            energy_block = json.loads((run / "energy-proxy-receipt.json").read_text(encoding="utf-8"))["energy"]
+            eval_doc = json.loads((run / "frozen-eval-results.json").read_text(encoding="utf-8"))
+            return {
+                "schema_version": FRONTIER_SCHEMA,
+                "generated_utc": "2026-08-06T12:00:00Z",
+                "generator": "scripts/frontier_receipt.py",
+                "rung": "R1",
+                "run_root": str(run),
+                "steps_measured": max(int(thresholds["T-01"]), 204),
+                "prereg": {"path": E5_PREREG_PATH, "sha256": sha_of(repo / E5_PREREG_PATH)},
+                "admission_config": {"path": E5_ADMISSION_CONFIG_PATH, "sha256": sha_of(repo / E5_ADMISSION_CONFIG_PATH)},
+                "identity_spine": {
+                    "goal_id": "EMBER-02", "workstream_id": "EMBER-02A",
+                    "next_executed_outcome": "SELFTEST_FIXTURE outcome",
+                    "checkpoint_manifest_sha256": manifest_sha,
+                    "checkpoint_file_sha256s": {
+                        "optimizer_state_shard_sha256": manifest["optimizer_state_shard_sha256"],
+                        "rng_state_sha256": manifest["rng_state_sha256"],
+                    },
+                },
+                "ledger": {
+                    "learned_import_attestation_ref": "see learned_import_attestation (leg 2)",
+                    "fixed_prior_manifest_ref": fixed_prior_rel,
+                    "human_interventions": {
+                        "interventions": [], "attestation": "SELFTEST_FIXTURE: zero interventions",
+                        "source_sha256": sha_of(run / "human-interventions.json"),
+                    },
+                    "data_accounting": {
+                        "tokens_seen": manifest["data_cursor"]["tokens_seen"],
+                        "acquisition_this_rung": "none",
+                        "attestation": "SELFTEST_FIXTURE: frozen preregistered stream only",
+                        "corpora_evidence_ref": fixed_prior_rel,
+                        "synthetic_ancestry_graph_ref": None,
+                        "retained_originals": True,
+                    },
+                    "host_accounting": {
+                        "offload_bytes": None,
+                        "not_measured": {
+                            "cpu_gpu_utilization": "SELFTEST_FIXTURE: no e4 receipt in this fixture",
+                            "ram_peak": "SELFTEST_FIXTURE reason", "storage_io": "SELFTEST_FIXTURE reason",
+                            "network_io": "SELFTEST_FIXTURE reason", "checkpoint_overhead_s": "SELFTEST_FIXTURE reason",
+                            "failure_overhead_s": "SELFTEST_FIXTURE reason",
+                        },
+                    },
+                    "energy_ref": "see energy (leg 5)",
+                    "all_compute_coverage": {
+                        "components": {
+                            component: {
+                                "included": component in ("training", "validation", "final_evaluation"),
+                                "evidence_ref": E5_RUN_ATTEMPTS_REGISTRY if component in ("training", "validation", "final_evaluation") else None,
+                                "note": None if component in ("training", "validation", "final_evaluation") else "SELFTEST_FIXTURE: not exercised at R1",
+                            }
+                            for component in E5_COMPUTE_COMPONENTS
+                        },
+                        "failed_work_included": True,
+                        "registry_path": E5_RUN_ATTEMPTS_REGISTRY,
+                        "registry_sha256": sha_of(repo / E5_RUN_ATTEMPTS_REGISTRY),
+                        "registry_rows": 1,
+                    },
+                    "walls_checklist": {
+                        "rows": json.loads((run / "walls-checklist.json").read_text(encoding="utf-8")),
+                        "source_sha256": sha_of(run / "walls-checklist.json"),
+                    },
+                    "identity_spine_ref": "see identity_spine (envelope)",
+                },
+                "fixed_prior": {"manifest_path": fixed_prior_rel, "manifest_sha256": fixed_prior_sha},
+                "learned_import_attestation": {
+                    **{category: False for category in E5_ATTESTATION_CATEGORIES},
+                    "basis": "SELFTEST_FIXTURE basis",
+                },
+                "capability": {
+                    "eval_suite_id": eval_doc["eval_suite_id"],
+                    "eval_suite_sha256": eval_doc["eval_suite_sha256"],
+                    "results_receipt_path": str(run / "frozen-eval-results.json"),
+                    "results_receipt_sha256": sha_of(run / "frozen-eval-results.json"),
+                    "checkpoint_manifest_sha256": manifest_sha,
+                    "checkpoint_file_sha256s": {"rng_state_sha256": manifest["rng_state_sha256"]},
+                    "results": eval_doc["results"],
+                    "tool_access": "none",
+                    "model_only_ablation": None,
+                },
+                "time": {
+                    "run_start_utc": datetime.fromtimestamp(1786200000000 / 1000.0, tz=timezone.utc).isoformat().replace("+00:00", "Z"),
+                    "run_end_utc": datetime.fromtimestamp(1786200742000 / 1000.0, tz=timezone.utc).isoformat().replace("+00:00", "Z"),
+                    "wall_clock_seconds": 742.0, "coverage": "process_birth_to_exit",
+                    "source": "SELFTEST_FIXTURE runner receipt",
+                    "runner_receipt_sha256": sha_of(run / "disk-budget-runner-receipt.json"),
+                },
+                "energy": energy_block,
+                "energy_receipt_path": str(run / "energy-proxy-receipt.json"),
+                "energy_receipt_sha256": sha_of(run / "energy-proxy-receipt.json"),
+                "reproducibility": {
+                    "config_sha256": manifest["model_config_sha256"],
+                    "optimizer_state_sha256": manifest["optimizer_state_shard_sha256"],
+                    "rng_state_sha256": manifest["rng_state_sha256"],
+                    "optimizer_contract": manifest["optimizer_contract"],
+                    "tokenizer_reconstruction_receipt": {
+                        "path": E5_TOKENIZER_RECEIPT_PATH,
+                        "sha256": sha_of(repo / E5_TOKENIZER_RECEIPT_PATH),
+                    },
+                    "seeds": [manifest["launch_seed"]],
+                    "data_cursor": {
+                        "tokens_seen": manifest["data_cursor"]["tokens_seen"],
+                        "global_step": manifest["data_cursor"]["global_step"],
+                        "resume_authority": "SELFTEST_FIXTURE",
+                    },
+                    "recipe_ref": fixed_prior_sha,
+                    "reproduction": {
+                        "status": "REPRODUCED", "mismatch": None,
+                        "evidence_ref": "SELFTEST_FIXTURE r1-e3 round trip",
+                        "adjudication_sha256": sha_of(run / "reproduction-adjudication.json"),
+                    },
+                },
+                "advantage_claims": [],
+                "invariant_stamp": {"invariant_md_sha256": sha_of(repo / "INVARIANT.md")},
+                "predecessor_receipt": {
+                    "path": "receipts/ember-restart-3b/native-cost-calibration-seed83-certificate.json",
+                    "sha256": sha_of(repo / "receipts" / "ember-restart-3b" / "native-cost-calibration-seed83-certificate.json"),
+                },
+            }
+
+        e5_repo = _e5_repo("e5_repo")
+        e5_run, e5_manifest = _e5_run("e5_full_run")
+        e5_pristine = _e5_receipt(e5_repo, e5_run, e5_manifest)
+
+        def _e5_case(mutate=None) -> dict[str, Any]:
+            receipt = json.loads(json.dumps(e5_pristine))
+            if mutate is not None:
+                mutate(receipt)
+            (e5_run / "frontier-receipt.json").write_bytes(json.dumps(receipt).encode("utf-8"))
+            return check_r1_e5(e5_run, thresholds, repo_root=e5_repo)
+
+        def _e5_defect(result: dict[str, Any], fragment: str) -> None:
+            assert result["status"] == "NOT_MET", (fragment, result)
+            defects = result["components"]["candidate_validation"][0]["defects"]
+            assert any(fragment in d for d in defects), (fragment, defects)
+
+        # MET: every leg re-verified against the fixture bytes.
+        e5_met = _e5_case()
+        assert e5_met["status"] == "MET", e5_met
+        assert e5_met["frontier_receipt_validation"] == "IMPLEMENTED", e5_met
+        assert e5_met["components"]["steps_measured"] == e5_pristine["steps_measured"], e5_met
+        assert e5_met["components"]["energy_boundary"] == "DEGRADED_PROXY", e5_met
+
+        # Envelope poisons.
+        def _set(path_keys, value):
+            def mutate(receipt):
+                target = receipt
+                for key in path_keys[:-1]:
+                    target = target[key]
+                target[path_keys[-1]] = value
+            return mutate
+        _e5_defect(_e5_case(_set(["schema_version"], "ember02-frontier-receipt/v0")), "schema_version")
+        _e5_defect(_e5_case(_set(["run_root"], str(tmp_path / "some_other_run"))), "run_root mismatch")
+        _e5_defect(_e5_case(_set(["steps_measured"], int(thresholds["T-01"]) - 1)), "steps_measured")
+        _e5_defect(_e5_case(_set(["prereg", "sha256"], "0" * 64)), "prereg")
+        _e5_defect(_e5_case(_set(["advantage_claims"], [{"claim": "SELFTEST_FIXTURE"}])), "advantage_claims")
+        _e5_defect(_e5_case(_set(["invariant_stamp", "invariant_md_sha256"], "0" * 64)), "invariant_stamp")
+
+        # Energy poisons: boundary, coverage, arithmetic, and the verbatim-embed contract.
+        _e5_defect(_e5_case(_set(["energy", "energy_boundary"], "MEASURED")), "energy_boundary")
+        _e5_defect(_e5_case(_set(["energy", "sample_coverage_fraction"], float(thresholds["T-06"]) - 0.01)), "T-06")
+        _e5_defect(_e5_case(_set(["energy", "total_proxy_joules"], 9999.0)), "total_proxy_joules")
+
+        def _energy_consistent_but_foreign(receipt):
+            receipt["energy"]["gpu_joules"] = 200.0
+            receipt["energy"]["total_proxy_joules"] = 200.0 + receipt["energy"]["cpu_pkg_joules"]
+        _e5_defect(_e5_case(_energy_consistent_but_foreign), "verbatim")
+
+        # Identity/capability/reproducibility value-binding poisons.
+        def _wrong_manifest_sha(receipt):
+            receipt["identity_spine"]["checkpoint_manifest_sha256"] = "1" * 64
+            receipt["capability"]["checkpoint_manifest_sha256"] = "1" * 64
+        _e5_defect(_e5_case(_wrong_manifest_sha), "checkpoint manifest")
+        _e5_defect(_e5_case(_set(["reproducibility", "config_sha256"], "2" * 64)), "config_sha256")
+        _e5_defect(_e5_case(_set(["reproducibility", "seeds"], [999999])), "seeds")
+        _e5_defect(_e5_case(_set(["capability", "tool_access"], "browser")), "tool_access")
+
+        # Ledger poisons: walls row count and interventions verbatim-equality.
+        def _drop_wall(receipt):
+            receipt["ledger"]["walls_checklist"]["rows"] = receipt["ledger"]["walls_checklist"]["rows"][:11]
+        _e5_defect(_e5_case(_drop_wall), "walls_checklist")
+        _e5_defect(_e5_case(_set(["ledger", "human_interventions", "interventions"],
+                                 [{"note": "SELFTEST_FIXTURE ghost row"}])), "human_interventions")
+
+        # Registry deleted from the fake repo after receipt assembly -> §5.1 class 7 unattestable.
+        registry_bytes = (e5_repo / "receipts" / "run-attempts.jsonl").read_bytes()
+        (e5_repo / "receipts" / "run-attempts.jsonl").unlink()
+        _e5_defect(_e5_case(), "run-attempt registry")
+        (e5_repo / "receipts" / "run-attempts.jsonl").write_bytes(registry_bytes)
+
+        # INVARIANT.md drift after receipt assembly -> the stamp no longer names the invariant in force.
+        invariant_bytes = (e5_repo / "INVARIANT.md").read_bytes()
+        (e5_repo / "INVARIANT.md").write_bytes(b"SELFTEST_FIXTURE invariant CHANGED\n")
+        _e5_defect(_e5_case(), "INVARIANT.md in force")
+        (e5_repo / "INVARIANT.md").write_bytes(invariant_bytes)
+
+        # Ambiguity: a second frontier-named file -> NOT_MET, never a pick-one.
+        (e5_run / "SELFTEST_FIXTURE-copy-frontier-receipt.json").write_bytes(json.dumps(e5_pristine).encode("utf-8"))
+        e5_ambiguous = _e5_case()
+        assert e5_ambiguous["status"] == "NOT_MET" and "ambiguous" in e5_ambiguous["detail"], e5_ambiguous
+        (e5_run / "SELFTEST_FIXTURE-copy-frontier-receipt.json").unlink()
+
+        # Quarantined telemetry with real train_step rows: surfaced, never blocking (rev-1490 round-3).
+        quarantine_dir = e5_run / "artifacts" / "checkpoints" / ".checkpoint-quarantine" / "candidate-x" / "telemetry"
+        quarantine_dir.mkdir(parents=True)
+        (quarantine_dir / "poison.jsonl").write_bytes(json.dumps({
+            "source": "ember-restart-3b", "kind": "train_step", "ts": "2026-08-06T00:00:00Z",
+            "payload": {"run_id": "SELFTEST_FIXTURE_run", "step": 1},
+        }).encode("utf-8") + b"\n")
+        e5_quarantine = _e5_case()
+        assert e5_quarantine["status"] == "MET", e5_quarantine
+        assert len(e5_quarantine["components"]["quarantined_telemetry_files"]) == 1, e5_quarantine
 
         e6 = check_r1_e6(empty_root, thresholds)
         assert e6["status"] == "EVIDENCE_MISSING", e6
