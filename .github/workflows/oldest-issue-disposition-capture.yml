@@ -131,7 +131,7 @@ jobs:
 
       - name: Upload immutable raw capture
         if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: oldest-issue-raw-${{ github.run_id }}-${{ github.sha }}
           path: ${{ runner.temp }}/oldest-issue-disposition-raw-artifact
@@ -168,7 +168,7 @@ jobs:
           )
 
       - name: Upload verified non-authorizing packet
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: oldest-issue-disposition-${{ github.run_id }}-${{ github.sha }}
           path: ${{ runner.temp }}/oldest-issue-disposition-verified-artifact
