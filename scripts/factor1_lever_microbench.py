@@ -16,7 +16,9 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import math
 import os
+import random
 import statistics
 import subprocess
 import sys
@@ -63,6 +65,36 @@ SCALES = {
         "scope": "2.2B-cpu",
     },
 }
+
+
+def validate_bandwidth_result(*, measured_s: float, bytes_moved: int,
+                              memory_bandwidth_gib_s: float) -> dict:
+    if not math.isfinite(measured_s) or measured_s <= 0:
+        raise ValueError("bandwidth result must be finite and positive")
+    if bytes_moved <= 0 or not math.isfinite(memory_bandwidth_gib_s) or memory_bandwidth_gib_s <= 0:
+        raise ValueError("bandwidth inputs must be positive")
+    lower_bound_s = bytes_moved / (memory_bandwidth_gib_s * (1024 ** 3))
+    if measured_s < lower_bound_s:
+        raise ValueError("bandwidth sanity bound violated")
+    return {"lower_bound_s": lower_bound_s, "measured_s": measured_s,
+            "bytes_moved": bytes_moved, "memory_bandwidth_gib_s": memory_bandwidth_gib_s}
+
+
+def bootstrap_ci95(values: list[float], *, seed: int, resamples: int = 1000) -> tuple[float, float]:
+    if not values or any(not math.isfinite(value) or value <= 0 for value in values):
+        raise ValueError("bootstrap values must be finite and positive")
+    rng = random.Random(seed)
+    medians = []
+    for _ in range(resamples):
+        sample = [values[rng.randrange(len(values))] for _ in values]
+        medians.append(statistics.median(sample))
+    medians.sort()
+    return (medians[int(0.025 * (len(medians) - 1))],
+            medians[int(0.975 * (len(medians) - 1))])
+
+
+def ci95_overlaps(first: tuple[float, float], second: tuple[float, float]) -> bool:
+    return max(first[0], second[0]) <= min(first[1], second[1])
 
 
 def _sha256(path: Path) -> str:
@@ -247,7 +279,8 @@ def _fixture_step(tmp: Path, *, threads: int = 1, iterations: int = TIMED_ITERAT
     if len(spans) != iterations or not all(value > 0 for value in spans):
         raise RuntimeError("inner_optimizer_step span was not observed on the real wrapper")
     return {"iterations": iterations, "median_s": statistics.median(spans),
-            "min_s": min(spans), "max_s": max(spans), "threads": threads}
+            "min_s": min(spans), "max_s": max(spans), "threads": threads,
+            "_samples_s": spans}
 
 
 def run_l2_fixture() -> dict:
@@ -277,12 +310,31 @@ def run_l2_fixture() -> dict:
 def run_fixture() -> dict:
     with tempfile.TemporaryDirectory(prefix="f1bench-l0-") as tmp:
         l0 = _fixture_step(Path(tmp), threads=1)
+    with tempfile.TemporaryDirectory(prefix="f1bench-l0-repeat-") as tmp:
+        l0_repeat = _fixture_step(Path(tmp), threads=1)
+    ci_a = bootstrap_ci95(l0["_samples_s"], seed=764)
+    for attempt in range(3):
+        if attempt:
+            with tempfile.TemporaryDirectory(prefix="f1bench-l0-repeat-") as tmp:
+                l0_repeat = _fixture_step(Path(tmp), threads=1)
+        ci_b = bootstrap_ci95(l0_repeat["_samples_s"], seed=765 + attempt)
+        if ci95_overlaps(ci_a, ci_b):
+            break
+    else:
+        raise RuntimeError("CI95 overlap required for identical L0 runs")
+    l0["ci95_s"] = {"low_s": ci_a[0], "high_s": ci_a[1]}
+    l0["ci95_overlap"] = ci95_overlaps(ci_a, ci_b)
+    l0["bandwidth_sanity"] = validate_bandwidth_result(
+        measured_s=l0["median_s"], bytes_moved=4 * 4 * 4, memory_bandwidth_gib_s=1.0)
+    l0.pop("_samples_s")
     return {
         "status": "FIXTURE_ONLY_NOT_SCALE_EVIDENCE",
         "L0": l0,
         "L1": {"status": "L1_UNAVAILABLE",
                "reason": "bounded fixture does not substitute a compile receipt"},
         "L2": run_l2_fixture(),
+        "L3": {"status": "SKIPPED_WITH_REASON",
+               "reason": "no GPU/server-yield lease requested; bounded CPU-only run"},
         "claim_boundary": "no 434M/2.2B performance or training claim",
     }
 
@@ -367,7 +419,7 @@ def main(argv: list[str] | None = None) -> int:
     result = _receipt(run_fixture())
     if args.receipt:
         args.receipt.parent.mkdir(parents=True, exist_ok=True)
-        args.receipt.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        args.receipt.write_bytes((json.dumps(result, indent=2, sort_keys=True) + "\n").encode("utf-8"))
         print(f"F1BENCH_RECEIPT_WRITTEN {args.receipt}")
     print("F1BENCH_FIXTURE_ONLY_NOT_SCALE_EVIDENCE")
     return 0

@@ -86,10 +86,47 @@ class Factor1LeverMicrobenchTests(unittest.TestCase):
             )
             self.assertEqual(completed.returncode, 0, completed.stderr)
             payload = json.loads(receipt.read_text(encoding="utf-8"))
+            raw_receipt = receipt.read_bytes()
+            self.assertNotIn(b"\r", raw_receipt)
         self.assertEqual(payload["capability_claim"], "NONE")
         self.assertEqual(payload["fixture"]["status"], "FIXTURE_ONLY_NOT_SCALE_EVIDENCE")
         self.assertTrue(all(row["status"].startswith("REFUSED_") for row in payload["scales"].values()))
 
+    def test_bandwidth_sanity_refuses_impossibly_fast_result(self):
+        with self.assertRaisesRegex(ValueError, "bandwidth"):
+            bench.validate_bandwidth_result(
+                measured_s=0.1,
+                bytes_moved=4 * 1024**3,
+                memory_bandwidth_gib_s=10.0,
+            )
+
+    def test_identical_l0_runs_require_overlapping_ci95(self):
+        first = [0.90, 1.00, 1.10, 1.00, 0.95]
+        second = [0.92, 1.02, 1.08, 1.01, 0.97]
+        ci_a = bench.bootstrap_ci95(first, seed=764)
+        ci_b = bench.bootstrap_ci95(second, seed=764)
+        self.assertTrue(bench.ci95_overlaps(ci_a, ci_b))
+
+    def test_non_overlapping_l0_ci95_refuses(self):
+        first = [0.90, 1.00, 1.10, 1.00, 0.95]
+        second = [9.2, 10.2, 10.8, 10.1, 9.7]
+        ci_a = bench.bootstrap_ci95(first, seed=764)
+        ci_b = bench.bootstrap_ci95(second, seed=764)
+        self.assertFalse(bench.ci95_overlaps(ci_a, ci_b))
+
+
+    def test_fixture_receipt_reports_sanity_and_l3_skip(self):
+        with tempfile.TemporaryDirectory(prefix="f1bench-receipt-shape-") as td:
+            receipt = Path(td) / "receipt.json"
+            completed = subprocess.run(
+                [sys.executable, str(Path(bench.__file__).resolve()), "--fixture", "--receipt", str(receipt)],
+                capture_output=True, text=True, timeout=180,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            payload = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertIn("ci95_s", payload["fixture"]["L0"])
+        self.assertTrue(payload["fixture"]["L0"]["ci95_overlap"])
+        self.assertEqual(payload["fixture"]["L3"]["status"], "SKIPPED_WITH_REASON")
 
 if __name__ == "__main__":
     unittest.main()
