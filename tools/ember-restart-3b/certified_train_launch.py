@@ -1743,6 +1743,7 @@ def _write_execution_receipt(
     argv: list[str],
     exit_code: int,
     child_log_path: pathlib.Path | None = None,
+    energy_sidecar: dict[str, Any] | None = None,
 ) -> pathlib.Path:
     receipt_path = _execution_receipt_path(launch)
     receipt = {
@@ -1756,6 +1757,7 @@ def _write_execution_receipt(
         "artifact_root": str(launch.artifact_root),
         "runner_receipt": str(launch.runner_receipt),
         "child_log": str(child_log_path) if child_log_path is not None else None,
+        "energy_sidecar": energy_sidecar,
         "claim_scope": {
             "capability_claimed": False,
             "admission_claimed": False,
@@ -1786,6 +1788,112 @@ def _execution_receipt_path(launch: ValidatedLaunch) -> pathlib.Path:
     )
 
 
+ENERGY_SIDECAR_BASELINE_WAIT_S = 120.0
+ENERGY_SIDECAR_FINALIZE_WAIT_S = 60.0
+
+
+def _start_energy_sidecar(
+    repo_root: pathlib.Path, launch: ValidatedLaunch, child_env: dict[str, str]
+) -> tuple[Any, pathlib.Path, dict[str, Any]]:
+    """Spawn the R1-E5 energy sidecar (scripts/energy_proxy_logger.py
+    --watch-pidfile) and hold until its idle baseline completes, so the
+    baseline is measured with no Ember job resident. Every failure here is
+    DISCLOSED and none is fatal: the sidecar exists to produce evidence, and
+    an evidence producer must never be able to kill the certified run (the
+    #1489 lesson, applied at spawn instead of at write). A run that ends up
+    without an energy receipt fails R1-E5 at the battery -- fail-closed
+    downstream, never fail-fatal here.
+
+    Returns (process_or_None, pidfile_path, disclosure_dict).
+    """
+    receipt_path = launch.artifact_root / "energy-proxy-receipt.json"
+    pidfile = launch.custody_root / "energy-sidecar.pid"
+    sidecar_log = launch.custody_root / "energy-sidecar.log"
+    marker = pathlib.Path(str(receipt_path) + ".baseline-done")
+    disclosure: dict[str, Any] = {
+        "spawned": False,
+        "receipt_path": str(receipt_path),
+        "pidfile": str(pidfile),
+        "log": str(sidecar_log),
+        "note": None,
+    }
+    logger_path = repo_root / "scripts" / "energy_proxy_logger.py"
+    if not logger_path.is_file():
+        disclosure["note"] = f"sidecar not spawned: {logger_path} missing"
+        return None, pidfile, disclosure
+    try:
+        for stale in (pidfile, marker):
+            if stale.exists():
+                stale.unlink()
+        launch.artifact_root.mkdir(parents=True, exist_ok=True)
+        launch.custody_root.mkdir(parents=True, exist_ok=True)
+        sidecar_log_handle = open(sidecar_log, "wb")
+        process = subprocess.Popen(
+            [sys.executable, "-B", str(logger_path),
+             "--watch-pidfile", str(pidfile), "--receipt", str(receipt_path)],
+            shell=False,
+            cwd=repo_root,
+            env=child_env,
+            stdout=sidecar_log_handle,
+            stderr=subprocess.STDOUT,
+        )
+    except Exception as error:
+        disclosure["note"] = f"sidecar spawn failed: {error!r}"
+        return None, pidfile, disclosure
+    disclosure["spawned"] = True
+    import time as _time
+    waited = 0.0
+    while not marker.exists():
+        if process.poll() is not None:
+            disclosure["note"] = (
+                f"sidecar exited (code {process.returncode}) before its idle "
+                "baseline completed; proceeding without energy capture"
+            )
+            return None, pidfile, disclosure
+        if waited >= ENERGY_SIDECAR_BASELINE_WAIT_S:
+            disclosure["note"] = (
+                f"idle-baseline marker not seen within {ENERGY_SIDECAR_BASELINE_WAIT_S:.0f}s; "
+                "child launched anyway -- the sidecar may still capture a late window"
+            )
+            return process, pidfile, disclosure
+        _time.sleep(0.5)
+        waited += 0.5
+    disclosure["note"] = f"idle baseline completed in {waited:.1f}s"
+    return process, pidfile, disclosure
+
+
+def _finish_energy_sidecar(
+    process: Any, pidfile: pathlib.Path, disclosure: dict[str, Any]
+) -> None:
+    """Close the measured window (delete the pidfile -- a file operation,
+    never a signal) and give the sidecar a bounded interval to finalize its
+    receipt. A sidecar that overruns is LEFT RUNNING and disclosed: its
+    sampling loop has already ended with the window, its own exit is bounded
+    by one counter read, and this launcher kills nothing it can avoid
+    killing."""
+    import time as _time
+    try:
+        if pidfile.exists():
+            pidfile.unlink()
+    except OSError as error:
+        disclosure["note"] = (disclosure.get("note") or "") + f"; pidfile unlink failed: {error!r}"
+    if process is None:
+        return
+    deadline = _time.monotonic() + ENERGY_SIDECAR_FINALIZE_WAIT_S
+    while process.poll() is None and _time.monotonic() < deadline:
+        _time.sleep(0.5)
+    if process.poll() is None:
+        disclosure["exit_code"] = None
+        disclosure["note"] = (disclosure.get("note") or "") + (
+            f"; sidecar still finalizing after {ENERGY_SIDECAR_FINALIZE_WAIT_S:.0f}s -- left "
+            "running (its window is closed; it exits after one counter read)"
+        )
+    else:
+        disclosure["exit_code"] = int(process.returncode)
+    receipt = pathlib.Path(disclosure["receipt_path"])
+    disclosure["receipt_written"] = receipt.is_file()
+
+
 def execute_validated_launch(
     repo_root: pathlib.Path,
     launch: ValidatedLaunch,
@@ -1798,6 +1906,23 @@ def execute_validated_launch(
     # of an -B argv insertion, which would shift that pinned position.
     child_env = os.environ.copy()
     child_env["PYTHONDONTWRITEBYTECODE"] = "1"
+    # R1-E5 energy sidecar rides only REAL launches: an injected run_process
+    # is a test double with no child process to meter, and metering a fake
+    # would slow every launcher test by the idle-baseline interval. The
+    # execution receipt discloses the skip either way, and the battery's E5
+    # check refuses a run root with no energy receipt -- a stripped sidecar
+    # cannot fake a frontier point, it can only fail one honestly later.
+    sidecar_process = None
+    sidecar_pidfile = None
+    if run_process is subprocess.run:
+        sidecar_process, sidecar_pidfile, sidecar_disclosure = _start_energy_sidecar(
+            repo_root, launch, child_env
+        )
+    else:
+        sidecar_disclosure = {
+            "spawned": False,
+            "note": "sidecar skipped: injected run_process (test double)",
+        }
     # The child (disk_budget_runner -> run_vertical_slice) must NEVER inherit
     # this consumer's stdout: this process's own final line is the cockpit's
     # machine-readable handshake (main()'s json.dumps), and any training-log
@@ -1806,18 +1931,34 @@ def execute_validated_launch(
     # custody_root instead -- preserved for debugging, never devnulled.
     child_log_path = _child_log_path(launch)
     child_log_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(child_log_path, "wb") as child_log:
-        result = run_process(
-            argv,
-            shell=False,
-            check=False,
-            cwd=repo_root,
-            env=child_env,
-            stdout=child_log,
-            stderr=subprocess.STDOUT,
-        )
-    exit_code = int(result.returncode)
-    _write_execution_receipt(launch, argv, exit_code, child_log_path=child_log_path)
+    try:
+        if sidecar_pidfile is not None and sidecar_process is not None:
+            try:
+                # The pidfile's lifetime IS the sidecar's measured window; its
+                # content (this launcher's pid) is only the crash backstop.
+                sidecar_pidfile.write_text(str(os.getpid()), encoding="utf-8")
+            except OSError as error:
+                sidecar_disclosure["note"] = (sidecar_disclosure.get("note") or "") + (
+                    f"; pidfile write failed: {error!r} -- window never opened"
+                )
+        with open(child_log_path, "wb") as child_log:
+            result = run_process(
+                argv,
+                shell=False,
+                check=False,
+                cwd=repo_root,
+                env=child_env,
+                stdout=child_log,
+                stderr=subprocess.STDOUT,
+            )
+        exit_code = int(result.returncode)
+    finally:
+        if sidecar_pidfile is not None:
+            _finish_energy_sidecar(sidecar_process, sidecar_pidfile, sidecar_disclosure)
+    _write_execution_receipt(
+        launch, argv, exit_code, child_log_path=child_log_path,
+        energy_sidecar=sidecar_disclosure,
+    )
     return exit_code
 
 
