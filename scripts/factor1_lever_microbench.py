@@ -4,11 +4,12 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Bounded factor-1 lever evidence for Ember issue #764.
 
-The exact 434M/2.2B benchmark is deliberately fail-closed when the current
-public production consumer is unavailable or host floors are not met.  The
-``--fixture`` path is CPU-only and exercises the real
-``CPUOffloadOptimizer`` with ``torch.optim.AdamW``; it is explicitly marked
-fixture evidence and never substitutes for a scale receipt.
+The current-native exact-scale producer is explicit and fail-closed: it
+rebuilds the frozen shape identity, rechecks local resource floors, and only
+constructs the exact tensors when the caller opts into its execution API. The
+``--fixture`` path is CPU-only and exercises the real ``CPUOffloadOptimizer``
+with real AdamW and Muon classes; it is explicitly marked fixture evidence
+and never substitutes for a scale receipt.
 """
 from __future__ import annotations
 
@@ -27,7 +28,8 @@ import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-PRODUCTION_SOURCE = Path(__file__).resolve().parent / "timeshare_pretrain.py"
+PRODUCTION_SOURCE = Path(__file__).resolve().parent / "factor1_cpuoffload_producer.py"
+HISTORICAL_SOURCE = Path(__file__).resolve().parent / "timeshare_pretrain.py"
 PHYSICAL_MARGIN_FLOOR_GIB = 6.0
 COMMIT_MARGIN_FLOOR_GIB = 6.0
 DISK_MARGIN_FLOOR_GIB = 4.0
@@ -179,22 +181,22 @@ def exact_scale_working_set_gib(scale: str) -> float:
 
 
 def production_path_status() -> dict:
-    """Return source identity and the current consumer's fail-closed state."""
+    """Return the content identity of the current-native producer."""
     if not PRODUCTION_SOURCE.is_file():
         return {"available": False, "status": "MISSING_PRODUCTION_SOURCE", "source_sha256": None}
     source_bytes = PRODUCTION_SOURCE.read_bytes()
     source_sha = hashlib.sha256(source_bytes).hexdigest()
-    first = source_bytes[:8192]
-    if b"historical_only" in first and b"raise SystemExit" in first:
-        return {
-            "available": False,
-            "status": "PRODUCTION_PATH_UNAVAILABLE_HISTORICAL_ONLY",
-            "source_basename": PRODUCTION_SOURCE.name,
-            "source_sha256": source_sha,
-            "reason": "current public consumer explicitly denies sub-3B execution",
-        }
-    return {"available": True, "status": "PRODUCTION_SOURCE_PRESENT",
-            "source_basename": PRODUCTION_SOURCE.name, "source_sha256": source_sha}
+    optimizer_bytes = (PRODUCTION_SOURCE.parent / "cpu_offload_adamw.py").read_bytes()
+    return {
+        "available": True,
+        "status": "CURRENT_NATIVE_PRODUCER_AVAILABLE",
+        "producer_basename": PRODUCTION_SOURCE.name,
+        "producer_sha256": source_sha,
+        "optimizer_basename": "cpu_offload_adamw.py",
+        "optimizer_sha256": hashlib.sha256(optimizer_bytes).hexdigest(),
+        "historical_source_basename": HISTORICAL_SOURCE.name,
+        "historical_source_not_used": True,
+    }
 
 
 def _memory_status() -> dict | None:
@@ -360,8 +362,15 @@ def _selftest() -> int:
     fixture = run_fixture()
     if fixture["L0"]["iterations"] != TIMED_ITERATIONS:
         raise AssertionError("L0 timed sample floor missing")
+    sys.path.insert(0, str(PRODUCTION_SOURCE.parent))
+    import factor1_cpuoffload_producer as native
+    with tempfile.TemporaryDirectory(prefix="f1bench-native-smoke-") as tmp:
+        native_result = native.run_production_smoke(Path(tmp), steps=2)
+    if native_result["status"] != "PRODUCTION_SMOKE_PASS":
+        raise AssertionError("current-native producer smoke did not execute")
     print("F1BENCH_SHAPES_BOUND_PASS")
     print("F1BENCH_L0_PRODUCTION_PATH_PASS")
+    print("F1BENCH_CURRENT_NATIVE_PRODUCER_SMOKE_PASS")
     print("F1BENCH_NEGATIVE_FIXTURES_PASS")
     print("F1BENCH_EXACT_SCALE_STATUS " + production_path_status()["status"])
     print("F1BENCH_SELFTEST_ALL_PASS")
@@ -384,7 +393,9 @@ def _receipt(results: dict) -> dict:
         "scales": {scale: {"shape": assert_shape_contract(scale)["totals"],
                            "working_set_gib": exact_scale_working_set_gib(scale),
                            "preflight": preflight_scale(scale),
-                           "status": "REFUSED_PRODUCTION_PATH_OR_PREFLIGHT"}
+                           "status": ("READY_EXACT_SCALE_AWAITING_EXPLICIT_EXECUTION"
+                                      if preflight_scale(scale)["sufficient"]
+                                      else "REFUSED_PRODUCTION_PREFLIGHT")}
                    for scale in SCALES},
         "fixture": results,
         "api_spend_usd": 0,

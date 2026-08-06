@@ -38,11 +38,14 @@ class Factor1LeverMicrobenchTests(unittest.TestCase):
         self.assertFalse(result["sufficient"])
         self.assertGreaterEqual(len(result["refusal_reasons"]), 3)
 
-    def test_current_historical_only_consumer_is_not_bypassed(self):
+    def test_current_native_producer_is_used_and_history_is_not_bypassed(self):
         status = bench.production_path_status()
-        self.assertFalse(status["available"])
-        self.assertEqual(status["status"], "PRODUCTION_PATH_UNAVAILABLE_HISTORICAL_ONLY")
-        self.assertRegex(status["source_sha256"], r"^[0-9a-f]{64}$")
+        self.assertTrue(status["available"])
+        self.assertEqual(status["status"], "CURRENT_NATIVE_PRODUCER_AVAILABLE")
+        self.assertEqual(status["producer_basename"], "factor1_cpuoffload_producer.py")
+        self.assertTrue(status["historical_source_not_used"])
+        self.assertRegex(status["producer_sha256"], r"^[0-9a-f]{64}$")
+        self.assertRegex(status["optimizer_sha256"], r"^[0-9a-f]{64}$")
 
     def test_real_cpu_offload_wrapper_records_inner_step(self):
         with tempfile.TemporaryDirectory(prefix="f1bench-test-") as td:
@@ -71,7 +74,8 @@ class Factor1LeverMicrobenchTests(unittest.TestCase):
             "F1BENCH_SHAPES_BOUND_PASS",
             "F1BENCH_L0_PRODUCTION_PATH_PASS",
             "F1BENCH_NEGATIVE_FIXTURES_PASS",
-            "F1BENCH_EXACT_SCALE_STATUS PRODUCTION_PATH_UNAVAILABLE_HISTORICAL_ONLY",
+            "F1BENCH_CURRENT_NATIVE_PRODUCER_SMOKE_PASS",
+            "F1BENCH_EXACT_SCALE_STATUS CURRENT_NATIVE_PRODUCER_AVAILABLE",
             "F1BENCH_SELFTEST_ALL_PASS",
         ):
             self.assertIn(marker, completed.stdout)
@@ -90,7 +94,8 @@ class Factor1LeverMicrobenchTests(unittest.TestCase):
             self.assertNotIn(b"\r", raw_receipt)
         self.assertEqual(payload["capability_claim"], "NONE")
         self.assertEqual(payload["fixture"]["status"], "FIXTURE_ONLY_NOT_SCALE_EVIDENCE")
-        self.assertTrue(all(row["status"].startswith("REFUSED_") for row in payload["scales"].values()))
+        self.assertTrue(all(row["status"] in {"READY_EXACT_SCALE_AWAITING_EXPLICIT_EXECUTION", "REFUSED_PRODUCTION_PREFLIGHT"}
+                            for row in payload["scales"].values()))
 
     def test_bandwidth_sanity_refuses_impossibly_fast_result(self):
         with self.assertRaisesRegex(ValueError, "bandwidth"):
