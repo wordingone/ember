@@ -71,6 +71,14 @@ class CurrentNativeProducerTests(unittest.TestCase):
         self.assertRegex(identity["optimizer_sha256"], r"^[0-9a-f]{64}$")
         self.assertNotIn("path", identity)
 
+    def test_published_receipt_binds_live_shape_and_external_source_commit(self):
+        receipt = __import__("json").loads(
+            (ROOT / "receipts" / "factor1-exact-scale-cpu-step1-20260806.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(receipt["producer_identity"]["shape_manifest_sha256"], producer.exact_shape_manifest()["shape_sha256"])
+        self.assertRegex(receipt["public_binding"]["source_producer_commit_sha256"], r"^[0-9a-f]{40}$")
+        self.assertTrue(receipt["public_binding"]["publication_head_bound_externally"])
+
 
 if __name__ == "__main__":
     unittest.main()
