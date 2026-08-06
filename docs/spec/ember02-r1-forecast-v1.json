@@ -1,0 +1,62 @@
+{
+  "schema_version": "ember02-r1-forecast/v1",
+  "authored_utc": "2026-08-06T03:58:00Z",
+  "prereg": {
+    "doc": "docs/spec/ember02-preregistration-v1.md",
+    "pin": "3d48d387",
+    "clause": "section 3 common structure, closing receipts: forecast-recalibration receipt carries predicted vs measured step time, tokens/s, proxy-joules/token, peak VRAM, loss trajectory"
+  },
+  "applies_to": {
+    "description": "the next certified from-step-1 specialist run (R1 credited evidence root), image capability, ember-sparse-3b-v2, single RTX 4090 at vram_fraction 0.85, >= 100 contiguous steps",
+    "mode": "specialist",
+    "capability": "image",
+    "architecture_revision": "ember-sparse-3b-v2",
+    "min_steps": 100
+  },
+  "basis": {
+    "run_id": "specialist-canary-20260805",
+    "run_root_note": "the live-receipts custody root for that run_id; identified content-wise by the telemetry sha below, not by any host path",
+    "telemetry_file": "telemetry/specialist-canary.jsonl",
+    "telemetry_sha256": "91df7b60b7ba571822090e472b128601bfc230a0e47f6275b70160e6c7b2803e",
+    "series": "200 deduped train_step rows (steps 5..204) across 1400 telemetry rows from 7 launch attempts",
+    "checkpoint_manifest_sha256": "fefd8d44b840bbbd4879a53a05f7e58a41a50e547a00dcc07ac31058d3cbf3f1",
+    "adjudication_note": "this continuation series was ruled non-credited for R1-E1/E2 (contiguous_from_step_1 false; issue #1464 adjudication 2026-08-06). It is used here solely as the measured basis for prediction, which is exactly what a prior run is for."
+  },
+  "quantities": {
+    "step_time_ms": {
+      "predicted": 174.0,
+      "ci_low": 160.5,
+      "ci_high": 206.1,
+      "unit": "milliseconds per optimizer step",
+      "method": "median of 1400 receipted step_ms rows; CI = p10..p90 of the same distribution"
+    },
+    "tokens_per_second": {
+      "predicted": 44.4,
+      "ci_low": 37.5,
+      "ci_high": 48.2,
+      "unit": "consumed training tokens per wall-second",
+      "method": "checkpoint data_cursor tokens_seen 1546 over record_index 200 gives 7.73 tokens/step (image specialist records are short); divided by the step_time band. NOT comparable to 2048-token semantic-path benchmarks (656 and 1976 tok/s) - different path, different record shape."
+    },
+    "proxy_joules_per_token": {
+      "predicted": 10.1,
+      "ci_low": 3.5,
+      "ci_high": 11.6,
+      "unit": "joules per consumed token, DEGRADED_PROXY boundary",
+      "method": "no measured sample exists anywhere yet (energy_proxy_logger.py never invoked - battery E5 receipt 2026-08-05). Upper band: 450 W board TDP x 0.174 s / 7.73 tokens. Lower band: 35 percent mean-draw assumption at short-step utilization. First measured sample recalibrates this; the wide CI is the honest statement of ignorance."
+    },
+    "peak_vram_gib": {
+      "predicted": 20.2,
+      "ci_low": 19.5,
+      "ci_high": 21.5,
+      "unit": "GiB, peak used = total_gib minus minimum free_gib",
+      "method": "canary telemetry total_gib 23.99 minus observed min free_gib 3.84 = 20.15 GiB used at vram_fraction 0.85; from-1 run shares shape, optimizer coverage, and batch construction"
+    },
+    "loss_trajectory": {
+      "predicted_anchors": {"step_5": 6.93, "step_10": 4.34, "step_20": 1.18, "step_50": 0.82, "step_100": 0.39},
+      "ci_abs": 0.5,
+      "unit": "training loss at step anchors",
+      "method": "canary measured losses at the same absolute steps (its steps 5..204 sit on the same lineage schedule the from-1 run replays: the parent covered 1..4 and the canary's step-5 loss 6.93 equals ln-vocab random-init level, so the descent shape is expected to reproduce from step 1). CI widened to 0.5 because the from-1 run re-runs steps 1..4 under its own seed draw."
+    }
+  },
+  "falsifiability_note": "each quantity risks a wrong prediction: a from-1 run whose step time, throughput, VRAM, or loss anchors land outside these bands is a FORECAST-MISS to be recalibrated with receipts, never silently absorbed (prereg E-A / F-02 posture)."
+}
