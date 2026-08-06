@@ -38,6 +38,15 @@ from optimizer_transition import validate_optimizer_transition_registry
 from step2_realization_registry import validate_step2_realization_registry_bundle
 from train import run_launch, run_text_lab_preflight
 
+# R1-E4 measurement receipt (issue #1464): the two constants the MFU arithmetic
+# depends on, stated here so the receipt can carry them verbatim. Active count
+# matches the post-training assertion below (measure_parameter_counts); the
+# assumed peak is RTX 4090 BF16 dense without structured sparsity -- with FP32
+# accumulate the achievable peak is ~82.6e12, which would double the reported
+# utilization, so the receipt names both.
+_E4_ACTIVE_PARAMETERS = 1_725_232_640
+_E4_ASSUMED_PEAK_FLOPS = 165.2e12
+
 
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
@@ -2909,6 +2918,54 @@ def run(
                 "checkpoint_manifest_sha256": _sha256(checkpoint_target / "checkpoint-manifest.json"),
             })
 
+    e4_accumulator: dict[str, object] = {
+        "wall_t0": time.perf_counter(), "cpu_t0": os.times(),
+        "steps": 0, "tokens_total": 0, "step_ms_sum": 0.0, "tokens_missing": 0,
+    }
+
+    def _write_e4_measurement_receipt() -> None:
+        # Running upsert, rewritten after EVERY step (R1-E4, issue #1464). The
+        # #1489 incident proved post-publication housekeeping can raise INSIDE
+        # the training segment -- after the final checkpoint published -- which
+        # destroyed the child's final stdout JSON and with it the only peak-VRAM
+        # capture of the run. A receipt that exists from step 1 and is complete
+        # as of the last finished step cannot be destroyed by any later failure.
+        wall_seconds = max(time.perf_counter() - float(e4_accumulator["wall_t0"]), 1e-9)
+        cpu_t0, cpu_now = e4_accumulator["cpu_t0"], os.times()
+        process_cpu_seconds = max((cpu_now.user - cpu_t0.user) + (cpu_now.system - cpu_t0.system), 0.0)
+        tokens_total, steps = int(e4_accumulator["tokens_total"]), int(e4_accumulator["steps"])
+        tokens_known = int(e4_accumulator["tokens_missing"]) == 0 and tokens_total > 0
+        step_ms_sum = float(e4_accumulator["step_ms_sum"])
+        _atomic_json(telemetry_path.parent.parent / "e4-measurement-receipt.json", {
+            "schema_version": "ember02-r1-e4-measurement/v1",
+            "run_id": telemetry_run_id,
+            "updated_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "steps": steps,
+            "tokens_total": tokens_total if tokens_known else None,
+            "tokens_missing_steps": int(e4_accumulator["tokens_missing"]),
+            "wall_seconds": wall_seconds,
+            "step_ms_sum": step_ms_sum,
+            "tokens_per_second": (tokens_total / wall_seconds) if tokens_known else None,
+            "tokens_per_second_step_basis": (tokens_total / (step_ms_sum / 1000.0)) if tokens_known and step_ms_sum > 0 else None,
+            "mfu": {
+                "value": ((6.0 * _E4_ACTIVE_PARAMETERS * tokens_total / wall_seconds) / _E4_ASSUMED_PEAK_FLOPS) if tokens_known else None,
+                "flops_model": "6 * active_parameters * tokens_total / wall_seconds",
+                "active_parameters": _E4_ACTIVE_PARAMETERS,
+                "assumed_peak_flops": _E4_ASSUMED_PEAK_FLOPS,
+                "assumed_peak_note": "RTX 4090 BF16 dense peak without structured sparsity; with FP32 accumulate the peak is ~82.6e12, doubling the reported utilization",
+            },
+            "peak_vram": {
+                "allocated_bytes": int(torch.cuda.max_memory_allocated()),
+                "reserved_bytes": int(torch.cuda.max_memory_reserved()),
+            },
+            "host_utilization": {
+                "process_cpu_seconds": process_cpu_seconds,
+                "wall_seconds": wall_seconds,
+                "process_cpu_fraction": process_cpu_seconds / wall_seconds,
+                "method": "os.times() user+system delta over the segment wall clock (this process only)",
+            },
+        })
+
     def progress_callback(progress: dict[str, object]) -> None:
         if telemetry_path is None or telemetry_run_id is None:
             return
@@ -2920,6 +2977,20 @@ def run(
             "total_gib": float(total_bytes / 1024**3),
             "vram_fraction_applied": float(torch.cuda.get_per_process_memory_fraction()),
         })
+        e4_accumulator["steps"] = int(e4_accumulator["steps"]) + 1
+        step_tokens = progress.get("tokens_consumed")
+        if isinstance(step_tokens, int) and not isinstance(step_tokens, bool) and step_tokens > 0:
+            e4_accumulator["tokens_total"] = int(e4_accumulator["tokens_total"]) + step_tokens
+        else:
+            # A payload without per-step tokens (an unpatched segment producer)
+            # poisons the throughput denominator honestly: the receipt keeps
+            # counting steps but reports tokens/s and MFU as null rather than
+            # extrapolating -- fail-closed, the battery refuses nulls.
+            e4_accumulator["tokens_missing"] = int(e4_accumulator["tokens_missing"]) + 1
+        step_ms = progress.get("step_ms")
+        if isinstance(step_ms, (int, float)) and not isinstance(step_ms, bool):
+            e4_accumulator["step_ms_sum"] = float(e4_accumulator["step_ms_sum"]) + float(step_ms)
+        _write_e4_measurement_receipt()
 
     segment = run_pretraining_segment(
         model=model, optimizer=optimizer, records=records, config=config, device=torch.device("cuda"),
