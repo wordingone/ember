@@ -63,6 +63,16 @@ blocked operations remain denied regardless of goal state. The next executable
 command becomes runnable only when its prerequisite receipts exist; running it
 earlier must fail closed.
 
+EMBER-01 is COMPLETE. Its nine certificate legs stood resolved-true in one run
+on 2026-08-02 and again at the current tip on 2026-08-04, and SPINE_CERTIFIED
+was declared on that basis. The evidence is committed under
+`receipts/ember-01-completion/evidence-pack-v1/` (start at `INDEX.json`) with the
+declaration under `receipts/ember-02-launch-authority/`. Completion is scoped:
+the custody, seat, and identity legs are operator-machine-bound and report
+UNRESOLVED on a bare clone, which the pack labels rather than hides. EMBER-01
+completion is a spine claim only and asserts no model, training, benchmark, or
+runtime completion.
+
 ### Superseded 2026-07-22: authority-only reconciliation phase
 
 The prior boundary read: "The current public tree is in an authority-only

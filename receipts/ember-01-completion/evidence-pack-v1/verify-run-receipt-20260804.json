@@ -1,0 +1,28 @@
+{
+  "schema": "ember-cli/verify-run-receipt@1",
+  "job_id": "verify-msevylf8fjeaii",
+  "ok": true,
+  "status": "done",
+  "failure_kind": null,
+  "phase": "done",
+  "pinned_commit": "363177c981fb7543dabb77d890c1652aa455dc51",
+  "worktree_path": "<USER_HOME>\\ember-verify-worktrees\\verify-msevylf8fjeaii",
+  "worktree_detached": true,
+  "worktree_forcibly_retired": false,
+  "started_at": "2026-08-04T16:42:04.148Z",
+  "finished_at": "2026-08-04T17:19:54.162Z",
+  "duration_ms": 2270014,
+  "leg_timings_ms": {
+    "rev-parse": 359,
+    "worktree-create": 3756,
+    "gh-issue-list": 6808,
+    "issue-census": 3264,
+    "verifier": 2254226
+  },
+  "reaped_pids": [],
+  "timeout_ms": 10800000,
+  "verifier_receipt_path": null,
+  "legs": null,
+  "error": null,
+  "worktree_retire_error": null
+}

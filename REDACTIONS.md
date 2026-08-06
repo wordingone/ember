@@ -144,26 +144,55 @@ check still covers these files in full.
   as a pinned frozen-rows artifact; C2 hardening mandates byte-exact match.
   Contains: absolute project-drive paths (dataset/benchmark receipt references).
 
-## Hash-pinned frozen artifacts, class 3 (issue #1401, 2026-08-04)
+## EMBER-01 completion evidence pack (2026-08-04, issue #1401)
 
-The EMBER-02 launch-authority declaration triple. `certificate.json`'s sha256 is its
-identity — cited by `declaration-ledger.jsonl` and by `run-spec.json`'s
-`certificate_sha256` field — so redacting its embedded path strings would produce a
-document that is not the certificate that was declared. `run-spec.json`'s
-`requested_scope` is compared literally against the certificate's `execution_scope`;
-redacting one and not the other would make a byte-consistent pair read as a mismatch.
-Excluded from the paths check by the same enumeration mechanism as class 2.
+The completion evidence pack under `receipts/ember-01-completion/evidence-pack-v1/`
+and the launch-authority artifacts under `receipts/ember-02-launch-authority/` are
+machine-emitted receipts copied into the repository verbatim, so the same path-leak
+class applies to them. Two were redacted; two are hash-pinned and were excluded
+instead. Both dispositions are recorded here.
+
+**Redacted (token substitution, no other byte changed):**
+
+- `receipts/ember-01-completion/evidence-pack-v1/verify-run-receipt-20260804.json`
+  — one `worktree_path` value carrying the operator's home directory (drive letter,
+  a `Users` segment, the account name) replaced with `<USER_HOME>`; the
+  repo-irrelevant remainder is kept, matching the two `<USER_HOME>` files above.
+- `receipts/ember-02-launch-authority/sha-binding-map.json` — project-drive paths
+  (drive letter, an `M` segment, the repo name) replaced with `<TEMP_WORKSPACE>`,
+  keeping the repo-relative remainder. Four entries (`input_authority_sha256`,
+  `seat_sha256`, `subject_manifest_sha256`, `tokenizer_sha256`) point into a private
+  operator workspace outside this repository, whose directory name is itself
+  developer-local context; those paths are elided entirely rather than tokenized with
+  their tail. The sha256 each entry annotates is unchanged and remains the binding.
+
+**Hash-pinned frozen artifacts (paths-check exclusions, not redacted):**
+
+Same ruling class as the 2026-07-09 C2 restore above — byte-exact sha256 is
+load-bearing, redaction breaks the pin, and re-pinning breaks the frozen-before law.
+Enumerated individually in `PATHPAT_FIXTURE_EXCLUDE_ARGS` in `tools/repo-guard.sh`. The
+operator-name checks still cover both files in full.
 
 - `receipts/ember-02-launch-authority/certificate.json`
   (sha256: `10696f763a682e47e243d3b72cf6e85e24b128faeda43b69ee494e7438fcd8a0`)
-  — EMBER-02 launch-authority certificate. Contains: `completion_receipt_path`, an
-  operator-machine cockpit-state path (drive letter, `Users`, account segment).
+  — the SPINE_CERTIFIED declaration. This digest is its identity: it is cited by
+  `declaration-ledger.jsonl` and by `run-spec.json`, and issue #1401 acceptance
+  clause 4 requires a stranger to reproduce it from the committed bytes. Contains:
+  one `completion_receipt_path` carrying the operator home directory, and
+  `execution_scope` custody/artifact roots carrying the project drive.
 
 - `receipts/ember-02-launch-authority/run-spec.json`
   (sha256: `02ef9f24cbc5b5bcd7d1412e8b3d86897b5854c87d8c278acec2ab1d54ed88c8`)
-  — EMBER-02 launch-authority run spec. Contains: `artifact_root`/`custody_root`
-  project-drive paths (drive letter, then an `M` segment) matching the guard's
-  `M`-segment arm.
+  — the certified run-spec bound to that certificate. Its `requested_scope` roots are
+  compared literally against the certificate's `execution_scope`; redacting one side
+  of that comparison and not the other would make a consistent pair read as a
+  mismatch. Contains: project-drive custody root, artifact root, and runner-receipt
+  path.
+
+The two nine-leg completion receipts in the pack needed no disposition here — they
+carry no absolute paths at all. They are, however, enumerated in
+`tools/frozen-receipt-exceptions.json` for a different gate (the receipt schema
+floor), for the same underlying reason: their sha256 values are cited elsewhere.
 
 ## History note
 
