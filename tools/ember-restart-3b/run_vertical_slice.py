@@ -26,7 +26,7 @@ from typing import Any, Callable, Iterable, Mapping
 import tokenizers
 import torch
 
-from checkpoint_artifacts import CheckpointDeferredLowCommit, _atomic_publish_no_replace, load_checkpoint_artifacts, load_checkpoint_model_only_transition, preflight_specialist_lineage_sources, published_checkpoint_receipt, write_checkpoint_artifacts
+from checkpoint_artifacts import CheckpointDeferredLowCommit, _atomic_publish_no_replace, load_checkpoint_artifacts, load_checkpoint_model_only_transition, optimizer_covers_every_expert_route, preflight_specialist_lineage_sources, published_checkpoint_receipt, write_checkpoint_artifacts
 from parameter_counter import validate_realization_receipt
 from model import RestartDecoderConfig, UnifiedDecoder
 from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
@@ -527,6 +527,33 @@ def checkpoint_serialization_byte_bound(config_path: Path, *, active_parameters:
         + selected_active_parameters * serialization["optimizer_state_bytes_per_active_parameter"]
         + serialization["format_overhead_bytes"]
     )
+
+
+def specialist_checkpoint_bound_active_parameters(
+    *,
+    specialist_lineage: dict | None,
+    optimizer_full_route_coverage: bool,
+    active_parameters: int,
+    total_parameters: int,
+) -> int:
+    """Select the optimizer coverage the checkpoint byte bound must budget.
+
+    Two closed optimizer coverages are admissible for a specialist episode,
+    mirroring the storage projection's admission shapes (#1473): a true
+    single-route episode holds moments for shared plus exactly one expert,
+    while a lineage episode that exact-resumed a full-coverage parent restores
+    every route's moments verbatim and serializes full-coverage state at
+    projection factor 1. The coverage decision is derived from the SAME live
+    optimizer the projection later measures, so the bound and the projection
+    cannot budget different worlds (#1483: budgeting shared-plus-one-expert
+    under-declared the inherited full set and refused the by-design
+    publication). The governed-vertical shard realizes every expert, so its
+    bound always admits full coverage (#1320).
+    """
+
+    if specialist_lineage is not None and not optimizer_full_route_coverage:
+        return active_parameters
+    return total_parameters
 
 
 def checkpoint_host_commit_reserve_bytes(config_path: Path) -> int:
@@ -2747,13 +2774,18 @@ def run(
             f"checkpoint-continue-seed-{seed}-from-step-"
             f"{int(resume_cursor['global_step']) + bounded_records}"
         )
-    # Specialist lineage episodes hold optimizer state for shared plus exactly
-    # one expert; the governed-vertical shard realizes every expert, so its
-    # checkpoint bound must admit full-coverage optimizer state (#1320).
+    # The optimizer restored at resume decides the coverage this episode's
+    # checkpoint bound must budget -- see specialist_checkpoint_bound_active_parameters
+    # for the two closed admissible shapes (#1473, #1483, #1320).
     checkpoint_byte_bound = checkpoint_serialization_byte_bound(
         config_path,
-        active_parameters=(
-            active_parameters if specialist_lineage is not None else total_parameters
+        active_parameters=specialist_checkpoint_bound_active_parameters(
+            specialist_lineage=specialist_lineage,
+            optimizer_full_route_coverage=optimizer_covers_every_expert_route(
+                model, optimizer
+            ),
+            active_parameters=active_parameters,
+            total_parameters=total_parameters,
         ),
     )
     specialist_plan: dict[str, int] | None = None
