@@ -24,6 +24,9 @@ function receipt() {
   ];
   return {
     schema_version: "ember-fireball-installed-capture-receipt-v1",
+    ticket: "EMBER-CLI-ISSUE-54-FIREBALL-CAPTURE",
+    ts: "2026-08-07T15:00:00.000Z",
+    sha_convention: "sha256 over exact on-disk file bytes, no normalization",
     goal_id: "EMBER-02",
     workstream_id: "EMBER-02A",
     next_executed_outcome: "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",

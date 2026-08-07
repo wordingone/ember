@@ -130,11 +130,16 @@ function boundsFor(occupancy: JsonObject[]) {
 export function validateInstalledCaptureReceipt(value: unknown): void {
   const receipt = object(value, "receipt");
   exactKeys(receipt, [
-    "schema_version", "goal_id", "workstream_id", "next_executed_outcome", "issue_id",
+    "schema_version", "ticket", "ts", "sha_convention", "goal_id", "workstream_id", "next_executed_outcome", "issue_id",
     "result", "source_commit", "binary_sha256", "capture_tool_sha256", "viewport",
     "captures", "geometry", "art_quality_obligation", "claim_boundary",
   ], "receipt");
   if (receipt.schema_version !== "ember-fireball-installed-capture-receipt-v1") throw new Error("wrong receipt schema");
+  if (receipt.ticket !== "EMBER-CLI-ISSUE-54-FIREBALL-CAPTURE") throw new Error("wrong receipt ticket");
+  if (Number.isNaN(Date.parse(string(receipt.ts, "ts")))) throw new Error("ts must be ISO time");
+  if (receipt.sha_convention !== "sha256 over exact on-disk file bytes, no normalization") {
+    throw new Error("wrong sha convention");
+  }
   if (receipt.goal_id !== "EMBER-02" || receipt.workstream_id !== "EMBER-02A") throw new Error("wrong goal binding");
   if (receipt.next_executed_outcome !== NEXT_OUTCOME) throw new Error("wrong next outcome");
   if (receipt.issue_id !== 54 || receipt.result !== "MEASURED") throw new Error("wrong issue/result");
@@ -367,6 +372,9 @@ async function main(): Promise<void> {
     const styleFrames = new Set(captures.map((capture) => canonical(capture.cells)));
     const receipt = {
       schema_version: "ember-fireball-installed-capture-receipt-v1",
+      ticket: "EMBER-CLI-ISSUE-54-FIREBALL-CAPTURE",
+      ts: captures[0]!.captured_at,
+      sha_convention: "sha256 over exact on-disk file bytes, no normalization",
       goal_id: "EMBER-02",
       workstream_id: "EMBER-02A",
       next_executed_outcome: NEXT_OUTCOME,
