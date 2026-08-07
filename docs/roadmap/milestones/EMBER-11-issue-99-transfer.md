@@ -6,7 +6,7 @@ This is a canonical EMBER-11 evidence annex, not a new authority. Issue #99's or
 
 ## Lossless transfer to EMBER-11/#1125
 
-- **Staging and identity:** stage the exact terminal and W1-control checkpoint subjects with config/tokenizer references, honest model cards, and public-receipt cross-links; bind every artifact to the final identity spine (`EMBER-11.WORK.013`, `.016`, `.CERT.007`, `.010`).
+- **Staging and identity:** stage the first admissible current owned checkpoint(s) with exact config/tokenizer/source-lineage identity, honest model cards, and public-receipt links; bind every artifact to the final identity spine (`EMBER-11.WORK.013`, `.016`, `.CERT.007`, `.010`).
 - **Scope and name safety:** run the #91 re-scoped name sweep before staging; weights, manifests, and README cards only; never stage corpus shards, hydrated corpus bytes, or third-party benchmark data (`EMBER-11.WORK.012`, `.013`).
 - **Operator-held publication:** the upload command prints its staging diff and fails closed without explicit operator authentication; no credential is accepted from chat, logs, source, or receipts (`EMBER-11.PROHIBIT.001`, `.002`, `.003`).
 - **Receipt and reproduction:** record per-file SHA-256 values plus the remote revision, independently verify the hub object, and preserve a clean-host reconstruction path (`EMBER-11.WORK.016`, `.017`, `.018`, `EMBER-11.CERT.007`, `.008`).
