@@ -3424,8 +3424,13 @@ impl Daemon {
                 let mut stmt = conn.prepare(
                     "SELECT payload_json FROM events WHERE job_id=?1 AND kind=?2 ORDER BY seq",
                 )?;
-                stmt.query_map(params![job_id, kind], |row| row.get::<_, String>(0))?
-                    .collect::<std::result::Result<_, _>>()?
+                let mut payloads = Vec::new();
+                for payload in stmt.query_map(params![job_id, kind], |row| {
+                    row.get::<_, String>(0)
+                })? {
+                    payloads.push(payload?);
+                }
+                payloads
             };
             let mut found = None;
             for payload in payloads {
