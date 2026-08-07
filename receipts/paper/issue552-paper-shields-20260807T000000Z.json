@@ -1,0 +1,196 @@
+{
+  "ticket": "EMBER-552-PAPER-SHIELDS",
+  "ts": "20260807T124533Z",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "issue": 552,
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "scope": "CPU-only model-free paper-shields Components A-C",
+  "claim_boundary": "No model, training, benchmark, capability, or frozen-corpus claim",
+  "inputs": {
+    "eval_manifest": {
+      "basename": "tmp-issue552-10-item-eval.json",
+      "sha256": "772cbdc1c683de1bb198c96fba75ca170f04cffaf972bc9079f6c4bbcbf72c5a"
+    },
+    "shards": [
+      {
+        "basename": "train.jsonl",
+        "sha256": "3267ee4176a0acfc63690e16442728d1cb61564743b62a3440a3f8ea9b6eb9f2"
+      },
+      {
+        "basename": "heldout.jsonl",
+        "sha256": "22f650f9a9ee94f82304be25a9ece404335bcfb535a1660052d3b9dac536cce3"
+      }
+    ],
+    "configs": [
+      {
+        "basename": "v1-pretrain-config.json",
+        "sha256": "5f79dc3899593caed883218e34f5c2acc9e91aa728bb425096f74369a2536269"
+      }
+    ],
+    "receipts": [
+      {
+        "basename": "cbase-grow-rung2-event-580rerun-20260710-b1.json",
+        "sha256": "29bf13bde5101afe833653d5ad3e96d82e19f8b519df8abd4f4bc9981afb0c4b"
+      }
+    ]
+  },
+  "component_a_contamination": {
+    "per_item": [
+      {
+        "item_id": "toy-1",
+        "max_13gram_collision": 0,
+        "max_minhash_jaccard": 0.0,
+        "worst_shard": null
+      },
+      {
+        "item_id": "toy-2",
+        "max_13gram_collision": 0,
+        "max_minhash_jaccard": 0.0,
+        "worst_shard": null
+      },
+      {
+        "item_id": "toy-3",
+        "max_13gram_collision": 0,
+        "max_minhash_jaccard": 0.0,
+        "worst_shard": null
+      },
+      {
+        "item_id": "toy-4",
+        "max_13gram_collision": 0,
+        "max_minhash_jaccard": 0.0,
+        "worst_shard": null
+      },
+      {
+        "item_id": "toy-5",
+        "max_13gram_collision": 0,
+        "max_minhash_jaccard": 0.0,
+        "worst_shard": null
+      },
+      {
+        "item_id": "toy-6",
+        "max_13gram_collision": 0,
+        "max_minhash_jaccard": 0.0,
+        "worst_shard": null
+      },
+      {
+        "item_id": "toy-7",
+        "max_13gram_collision": 0,
+        "max_minhash_jaccard": 0.0,
+        "worst_shard": null
+      },
+      {
+        "item_id": "toy-8",
+        "max_13gram_collision": 0,
+        "max_minhash_jaccard": 0.0,
+        "worst_shard": null
+      },
+      {
+        "item_id": "toy-9",
+        "max_13gram_collision": 0,
+        "max_minhash_jaccard": 0.0,
+        "worst_shard": null
+      },
+      {
+        "item_id": "toy-10",
+        "max_13gram_collision": 0,
+        "max_minhash_jaccard": 0.0,
+        "worst_shard": null
+      }
+    ],
+    "suite_summary": {
+      "n_items": 10,
+      "n_contaminated": 0,
+      "contamination_rate": 0.0
+    },
+    "thresholds": {
+      "collision_window_len": 3,
+      "gram_size": 13,
+      "minhash_perms": 128,
+      "minhash_shingle": 13,
+      "collision_threshold": 0,
+      "jaccard_threshold": 0.5
+    },
+    "contaminated_items": []
+  },
+  "component_b_provenance": {
+    "manifest": [
+      {
+        "shard_path": "code_github_clean-manifest-20260611T051128Z.json",
+        "sha256": "UNREADABLE",
+        "source": "UNKNOWN",
+        "fetch_date": "UNKNOWN",
+        "transform_chain": [],
+        "transform_status": "UNKNOWN",
+        "model_in_loop": false,
+        "note": "config-referenced provenance input"
+      },
+      {
+        "shard_path": "wikipedia_en-manifest-20260611T045542Z.json",
+        "sha256": "UNREADABLE",
+        "source": "UNKNOWN",
+        "fetch_date": "UNKNOWN",
+        "transform_chain": [],
+        "transform_status": "UNKNOWN",
+        "model_in_loop": false,
+        "note": "config-referenced provenance input"
+      },
+      {
+        "shard_path": "gutenberg_en-manifest-20260611T050315Z.json",
+        "sha256": "UNREADABLE",
+        "source": "UNKNOWN",
+        "fetch_date": "UNKNOWN",
+        "transform_chain": [],
+        "transform_status": "UNKNOWN",
+        "model_in_loop": false,
+        "note": "config-referenced provenance input"
+      },
+      {
+        "shard_path": "ledger_mit-manifest-20260611T044523Z.json",
+        "sha256": "UNREADABLE",
+        "source": "UNKNOWN",
+        "fetch_date": "UNKNOWN",
+        "transform_chain": [],
+        "transform_status": "UNKNOWN",
+        "model_in_loop": false,
+        "note": "config-referenced provenance input"
+      }
+    ],
+    "summary": {
+      "n_shards": 4,
+      "verified": 0,
+      "unverifiable": 0,
+      "unknown": 4
+    }
+  },
+  "component_c_compute_ledger": [
+    {
+      "receipt_path": "cbase-grow-rung2-event-580rerun-20260710-b1.json",
+      "status": "BACKFILLED",
+      "compute_ledger": {
+        "tokens_seen": "UNKNOWN",
+        "optimizer_steps": "UNKNOWN",
+        "wall_seconds": "UNKNOWN",
+        "sec_per_step_mean": "UNKNOWN",
+        "tflops_est": "UNKNOWN",
+        "tflops_formula": "TFLOPS = (tokens_seen * model_params * flops_per_token_forward) / (wall_seconds * 1e12)",
+        "peak_vram_gib": "UNKNOWN",
+        "watts_series_ref": null
+      }
+    }
+  ],
+  "component_d_status": "COORDINATOR_GATED_NOT_IMPLEMENTED",
+  "component_d_transfer": {
+    "carrier_issue": 123,
+    "carrier_url": "https://github.com/wordingone/ember/issues/123",
+    "status": "PENDING_BENCHMARK_MANDATE",
+    "clauses": [
+      "coordinator freeze declaration binds commit_hash suite_manifest_sha256 ts",
+      "pre-freeze numbers are labeled development appendix",
+      "one held-out eval selected by a published rule seeded by freeze commit",
+      "no human selection and no capability claim before freeze"
+    ]
+  }
+}
