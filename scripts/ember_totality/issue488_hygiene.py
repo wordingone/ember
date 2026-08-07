@@ -22,6 +22,9 @@ from scripts.ember_totality.ember_totality_spec import compute_working_set
 
 MANIFEST_SCHEMA = "ember-issue-488-reference-manifest-v1"
 CLEANUP_SCHEMA = "ember-issue-488-cleanup-receipt-v1"
+GOAL_ID = "EMBER-02"
+WORKSTREAM_ID = "EMBER-02A"
+NEXT_EXECUTED_OUTCOME = "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
 _HEX64 = set("0123456789abcdef")
 
 
@@ -269,6 +272,10 @@ def apply_safe_cleanup(
         working_set_after = compute_working_set(str(root))
         receipt = {
             "schema_version": CLEANUP_SCHEMA,
+            "goal_id": GOAL_ID,
+            "workstream_id": WORKSTREAM_ID,
+            "next_executed_outcome": NEXT_EXECUTED_OUTCOME,
+            "artifact_class": "hygiene_evidence",
             "manifest_sha256": manifest.get("manifest_sha256"),
             "before": before,
             "after": after,
