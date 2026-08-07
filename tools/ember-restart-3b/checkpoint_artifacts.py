@@ -478,6 +478,86 @@ def _canonical_sha256(value: Mapping[str, Any]) -> str:
     return hashlib.sha256(json.dumps(dict(value), sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
+_OWNED_SELECTION_SCHEMA_VERSION = "ember-owned-corpus-selection-receipt-v1"
+_OWNED_SELECTION_RECEIPT_FIELDS = {
+    "schema_version",
+    "manifest_sha256",
+    "split",
+    "root_sha256",
+    "selected_record_count",
+    "tokenizer_sha256",
+    "selection_rule_id",
+}
+_OWNED_SELECTION_RULE = "owned_corpus_text_tokenize_v1"
+
+
+def _canonical_owned_selection_receipt_sha256(receipt: Mapping[str, Any]) -> str:
+    payload = json.dumps(dict(receipt), sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _validate_owned_selection_receipt_binding(
+    data_cursor: Mapping[str, Any],
+    selection_receipt: object,
+) -> dict[str, Any] | None:
+    p2b = isinstance(data_cursor, Mapping) and (
+        "selection_cursor" in data_cursor
+        or data_cursor.get("schema_version") == TRAINING_CURSOR_SCHEMA_VERSION
+    )
+    if not p2b:
+        if selection_receipt is not None:
+            raise ValueError("legacy checkpoint cannot carry a P2B selection receipt")
+        return None
+    if selection_receipt is None:
+        raise ValueError("P2B checkpoint requires the exact owned selection receipt")
+    if not isinstance(selection_receipt, Mapping) or set(selection_receipt) != _OWNED_SELECTION_RECEIPT_FIELDS:
+        raise ValueError("owned selection receipt schema is not closed")
+    normalized = dict(selection_receipt)
+    if normalized.get("schema_version") != _OWNED_SELECTION_SCHEMA_VERSION:
+        raise ValueError("owned selection receipt schema is invalid")
+    if normalized.get("split") not in ("train", "heldout"):
+        raise ValueError("owned selection receipt split is invalid")
+    for field in ("manifest_sha256", "root_sha256", "tokenizer_sha256"):
+        value = normalized.get(field)
+        if not isinstance(value, str) or len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
+            raise ValueError("owned selection receipt digest is invalid")
+    if type(normalized.get("selected_record_count")) is not int or normalized["selected_record_count"] <= 0:
+        raise ValueError("owned selection receipt record count is invalid")
+    if normalized.get("selection_rule_id") != _OWNED_SELECTION_RULE:
+        raise ValueError("owned selection receipt selection rule is invalid")
+    selection_cursor = data_cursor.get("selection_cursor")
+    selection_fields = {
+        "schema_version",
+        "selection_receipt_sha256",
+        "selection_rule_id",
+        "selected_ordinal",
+        "next_source_index",
+    }
+    if (
+        not isinstance(data_cursor, Mapping)
+        or set(data_cursor) != {"schema_version", "selection_cursor", "global_step", "tokens_seen"}
+        or data_cursor.get("schema_version") != TRAINING_CURSOR_SCHEMA_VERSION
+        or not isinstance(selection_cursor, Mapping)
+        or set(selection_cursor) != selection_fields
+        or selection_cursor.get("schema_version") != SELECTION_CURSOR_SCHEMA_VERSION
+    ):
+        raise ValueError("P2B checkpoint selection cursor is invalid")
+    if selection_cursor.get("selection_rule_id") != normalized["selection_rule_id"]:
+        raise ValueError("P2B checkpoint selection rule does not match its receipt")
+    for field in ("selected_ordinal", "next_source_index", "global_step", "tokens_seen"):
+        value = selection_cursor.get(field) if field in selection_cursor else data_cursor.get(field)
+        if type(value) is not int or value < 0:
+            raise ValueError("P2B checkpoint cursor counters are invalid")
+    if selection_cursor["selected_ordinal"] > normalized["selected_record_count"]:
+        raise ValueError("P2B checkpoint selection cursor exceeds receipt record count")
+    expected_sha256 = selection_cursor.get("selection_receipt_sha256")
+    if not isinstance(expected_sha256, str) or len(expected_sha256) != 64 or any(character not in "0123456789abcdef" for character in expected_sha256):
+        raise ValueError("P2B checkpoint selection receipt hash is invalid")
+    if _canonical_owned_selection_receipt_sha256(normalized) != expected_sha256:
+        raise ValueError("P2B checkpoint selection receipt bytes do not match its cursor hash")
+    return normalized
+
+
 def _optimizer_tensor_storage_by_route(
     model: UnifiedDecoder,
     optimizer: torch.optim.Optimizer,
@@ -1634,6 +1714,7 @@ def _write_checkpoint_artifacts_impl(
     launch_seed: int,
     rng_state: Mapping[str, torch.Tensor],
     data_cursor: Mapping[str, Any],
+    selection_receipt: Mapping[str, Any] | None,
     model_config_sha256: str,
     contract_sha256: str,
     expert_genesis_sha256: Mapping[str, str],
@@ -1663,6 +1744,7 @@ def _write_checkpoint_artifacts_impl(
         contract_sha256=contract_sha256,
         expert_genesis_sha256=expert_genesis_sha256,
     )
+    selection_receipt_binding = _validate_owned_selection_receipt_binding(data_cursor, selection_receipt)
     optimizer_contract = _validate_optimizer_contract(optimizer_contract or _default_optimizer_contract(optimizer))
     optimizer_realization = _optimizer_realization(optimizer, optimizer_contract)
     expert_parameter_sha256 = model.expert_bank_genesis_hashes()
@@ -1845,6 +1927,8 @@ def _write_checkpoint_artifacts_impl(
         }
         if storage_projection is not None:
             manifest["storage_projection"] = storage_projection
+        if selection_receipt_binding is not None:
+            manifest["selection_receipt"] = selection_receipt_binding
         if lineage is not None:
             manifest["lineage"] = lineage
         if host_commit_plan is not None:
@@ -1921,6 +2005,7 @@ def write_checkpoint_artifacts(
     model_config_sha256: str,
     contract_sha256: str,
     expert_genesis_sha256: Mapping[str, str],
+    selection_receipt: Mapping[str, Any] | None = None,
     optimizer_contract: Mapping[str, Any] | None = None,
     specialist_lineage: Mapping[str, Any] | None = None,
     max_serialized_bytes: int | None = None,
@@ -1935,6 +2020,7 @@ def write_checkpoint_artifacts(
         launch_seed=launch_seed,
         rng_state=rng_state,
         data_cursor=data_cursor,
+        selection_receipt=selection_receipt,
         model_config_sha256=model_config_sha256,
         contract_sha256=contract_sha256,
         expert_genesis_sha256=expert_genesis_sha256,
@@ -2059,6 +2145,7 @@ def load_checkpoint_artifacts(
         raise ValueError("checkpoint receipt lacks the four expert genesis hashes")
     if not isinstance(active, list) or len(active) != 1 or active[0] not in {*EXPERT_NAMES, "shared"}:
         raise ValueError("checkpoint receipt lacks exactly one declared active expert")
+    _validate_owned_selection_receipt_binding(receipt.get("data_cursor"), receipt.get("selection_receipt"))
     records = _validated_records(root, receipt)
     if schema_version == "ember-sparse-checkpoint-v5":
         if (
