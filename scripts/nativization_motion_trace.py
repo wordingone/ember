@@ -108,7 +108,7 @@ LAYER_SEMANTICS = {
         "imports": ("torch.optim",),
         "symbols": ("step", "Adam", "Muon"),
     },
-    "Training loop (fwd ? loss ? backward ? step)": {
+    "Training loop (fwd " + chr(0x2192) + " loss " + chr(0x2192) + " backward " + chr(0x2192) + " step)": {
         "imports": (),
         "symbols": ("forward", "loss", "backward", "step"),
     },
