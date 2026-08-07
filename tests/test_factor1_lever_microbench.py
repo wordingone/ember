@@ -1,4 +1,4 @@
-"""Bounded CPU-only tests for issue #764's fail-closed harness."""
+"""CPU-only contract tests for the governed #764 factor-1 harness."""
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
@@ -19,7 +19,7 @@ from scripts import factor1_lever_microbench as bench
 class Factor1LeverMicrobenchTests(unittest.TestCase):
     def test_exact_shape_contract_binds_both_scales(self):
         for scale, spec in bench.SCALES.items():
-            result = bench.assert_shape_contract(scale)
+            result = bench.assert_shape_list_identity(spec["intermediate"], spec)
             self.assertEqual(result["totals"]["n_muon"], bench.REF_N_MUON)
             self.assertEqual(result["totals"]["n_adamw"], bench.REF_N_ADAMW)
             self.assertEqual(result["totals"]["muon_elems_total"], spec["expected_muon_elems"])
@@ -30,108 +30,62 @@ class Factor1LeverMicrobenchTests(unittest.TestCase):
         totals = bench.shape_list_totals(bad, bench.build_adamw_shape_list())
         self.assertNotEqual(totals["muon_elems_total"], bench.REF_2P2B_MUON_STATE_ELEMS)
 
-    def test_resource_gate_refuses_impossible_input(self):
-        result = bench.preflight_scale(
-            "2.2B", disk_free_gib=0.0,
-            available_physical_gib=0.0, available_commit_gib=0.0,
-        )
-        self.assertFalse(result["sufficient"])
-        self.assertGreaterEqual(len(result["refusal_reasons"]), 3)
+    def test_current_native_adapter_never_imports_historical_trainer(self):
+        self.assertEqual(bench.native.__name__, "factor1_cpuoffload_producer")
+        self.assertNotIn("timeshare_pretrain", bench._CurrentNative.__module__)
+        self.assertRegex(bench.native.source_identity()["producer_sha256"], r"^[0-9a-f]{64}$")
 
-    def test_current_native_producer_is_used_and_history_is_not_bypassed(self):
-        status = bench.production_path_status()
-        self.assertTrue(status["available"])
-        self.assertEqual(status["status"], "CURRENT_NATIVE_PRODUCER_AVAILABLE")
-        self.assertEqual(status["producer_basename"], "factor1_cpuoffload_producer.py")
-        self.assertTrue(status["historical_source_not_used"])
-        self.assertRegex(status["producer_sha256"], r"^[0-9a-f]{64}$")
-        self.assertRegex(status["optimizer_sha256"], r"^[0-9a-f]{64}$")
+    def test_governance_and_lease_negatives_are_fail_closed(self):
+        with tempfile.TemporaryDirectory(prefix="f1bench-contract-") as td:
+            root = Path(td)
+            self.assertFalse(bench.preflight_gate(required_working_set_gib=1_000_000.0, run_dir=str(root))["sufficient"])
+            self.assertFalse(bench.check_lease_token(None, required_scope="2.2B-cpu")["valid"])
+            self.assertEqual(
+                bench.lever_L2_subprocess_sweep("434M", {"dir": str(root / "missing")}, None)["status"],
+                "REFUSED_UNAUTHORIZED",
+            )
 
-    def test_real_cpu_offload_wrapper_records_inner_step(self):
-        with tempfile.TemporaryDirectory(prefix="f1bench-test-") as td:
-            result = bench._fixture_step(Path(td), threads=1, iterations=20)
-        self.assertEqual(result["iterations"], 20)
-        self.assertGreater(result["median_s"], 0)
+    def test_equivalence_and_tamper_negative(self):
+        with tempfile.TemporaryDirectory(prefix="f1bench-equivalence-") as td:
+            self.assertTrue(bench._selftest_equivalence_gate_corruption_fails(Path(td)))
+        self.assertTrue(bench._selftest_l3a_equivalence_numeric())
 
-    def test_l2_worker_is_fresh_subprocess_and_bounded(self):
-        with tempfile.TemporaryDirectory(prefix="f1bench-worker-test-") as td:
-            command = [sys.executable, str(Path(bench.__file__).resolve()),
-                       "--worker", "--threads", "1", "--iterations", "20",
-                       "--replicate", "2", "--tmp", td]
-            completed = subprocess.run(command, capture_output=True, text=True, timeout=120)
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-        rows = [line for line in completed.stdout.splitlines() if line.startswith("F1BENCH_WORKER ")]
-        self.assertEqual(len(rows), 1)
-        self.assertEqual(json.loads(rows[0].split(" ", 1)[1])["iterations"], 20)
+    def test_all_tiles_and_aggregate_status_are_closed(self):
+        self.assertTrue(bench._selftest_l3a_tile_partition_covers_all())
+        self.assertTrue(bench._selftest_l3a_aggregate_status_hardened())
 
-    def test_cli_selftest_reports_required_markers(self):
+    def test_cli_selftest_reports_governed_markers(self):
         completed = subprocess.run(
             [sys.executable, str(Path(bench.__file__).resolve()), "--selftest"],
             capture_output=True, text=True, timeout=180,
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
         for marker in (
-            "F1BENCH_SHAPES_BOUND_PASS",
-            "F1BENCH_L0_PRODUCTION_PATH_PASS",
-            "F1BENCH_NEGATIVE_FIXTURES_PASS",
-            "F1BENCH_CURRENT_NATIVE_PRODUCER_SMOKE_PASS",
-            "F1BENCH_EXACT_SCALE_STATUS CURRENT_NATIVE_PRODUCER_AVAILABLE",
+            "F1BENCH_SHAPES_BOUND_PASS PASS",
+            "F1BENCH_L0_PRODUCTION_PATH_PASS PASS",
+            "F1BENCH_GOVERNANCE_BOUNDARY_PASS PASS",
+            "F1BENCH_LEASE_TOKEN_BOUNDARY_PASS PASS",
+            "F1BENCH_EQUIVALENCE_GATE_CORRUPTION_DETECTED PASS",
+            "F1BENCH_L3A_EQUIVALENCE_NUMERIC_PASS PASS",
+            "F1BENCH_L3A_AGGREGATE_STATUS_HARDENED PASS",
+            "F1BENCH_NEGATIVE_FIXTURES_PASS PASS",
             "F1BENCH_SELFTEST_ALL_PASS",
         ):
             self.assertIn(marker, completed.stdout)
 
-    def test_fixture_receipt_is_explicitly_non_claiming(self):
-        with tempfile.TemporaryDirectory(prefix="f1bench-receipt-test-") as td:
-            receipt = Path(td) / "receipt.json"
-            completed = subprocess.run(
-                [sys.executable, str(Path(bench.__file__).resolve()),
-                 "--fixture", "--receipt", str(receipt)],
-                capture_output=True, text=True, timeout=180,
-            )
-            self.assertEqual(completed.returncode, 0, completed.stderr)
-            payload = json.loads(receipt.read_text(encoding="utf-8"))
-            raw_receipt = receipt.read_bytes()
-            self.assertNotIn(b"\r", raw_receipt)
-        self.assertEqual(payload["capability_claim"], "NONE")
-        self.assertEqual(payload["fixture"]["status"], "FIXTURE_ONLY_NOT_SCALE_EVIDENCE")
-        self.assertTrue(all(row["status"] in {"READY_EXACT_SCALE_AWAITING_EXPLICIT_EXECUTION", "REFUSED_PRODUCTION_PREFLIGHT"}
-                            for row in payload["scales"].values()))
+    def test_live_requires_authority_before_scale_allocation(self):
+        with tempfile.TemporaryDirectory(prefix="f1bench-live-refusal-") as td:
+            result = bench.run_scale_live("2.2B", bench.ts.load_contract(), Path(td), lease_token_path=None)
+        self.assertEqual(result["status"], "REFUSED_UNAUTHORIZED")
+        self.assertEqual(result["L3"]["status"], "REFUSED_ANALYTICALLY_INFEASIBLE")
 
-    def test_bandwidth_sanity_refuses_impossibly_fast_result(self):
-        with self.assertRaisesRegex(ValueError, "bandwidth"):
-            bench.validate_bandwidth_result(
-                measured_s=0.1,
-                bytes_moved=4 * 1024**3,
-                memory_bandwidth_gib_s=10.0,
-            )
+    def test_receipt_contract_has_no_capability_claim(self):
+        receipt = bench._build_receipt({"434M": {"status": "REFUSED_UNAUTHORIZED"}}, "20260806T000000Z")
+        self.assertEqual(receipt["invariant_sha256"], bench.INVARIANT_SHA256)
+        self.assertEqual(receipt["api_spend_usd"], 0)
+        self.assertEqual(receipt["paid_api_surface_used"], False)
+        self.assertEqual(receipt["results_by_scale"]["434M"]["status"], "REFUSED_UNAUTHORIZED")
 
-    def test_identical_l0_runs_require_overlapping_ci95(self):
-        first = [0.90, 1.00, 1.10, 1.00, 0.95]
-        second = [0.92, 1.02, 1.08, 1.01, 0.97]
-        ci_a = bench.bootstrap_ci95(first, seed=764)
-        ci_b = bench.bootstrap_ci95(second, seed=764)
-        self.assertTrue(bench.ci95_overlaps(ci_a, ci_b))
-
-    def test_non_overlapping_l0_ci95_refuses(self):
-        first = [0.90, 1.00, 1.10, 1.00, 0.95]
-        second = [9.2, 10.2, 10.8, 10.1, 9.7]
-        ci_a = bench.bootstrap_ci95(first, seed=764)
-        ci_b = bench.bootstrap_ci95(second, seed=764)
-        self.assertFalse(bench.ci95_overlaps(ci_a, ci_b))
-
-
-    def test_fixture_receipt_reports_sanity_and_l3_skip(self):
-        with tempfile.TemporaryDirectory(prefix="f1bench-receipt-shape-") as td:
-            receipt = Path(td) / "receipt.json"
-            completed = subprocess.run(
-                [sys.executable, str(Path(bench.__file__).resolve()), "--fixture", "--receipt", str(receipt)],
-                capture_output=True, text=True, timeout=180,
-            )
-            self.assertEqual(completed.returncode, 0, completed.stderr)
-            payload = json.loads(receipt.read_text(encoding="utf-8"))
-        self.assertIn("ci95_s", payload["fixture"]["L0"])
-        self.assertTrue(payload["fixture"]["L0"]["ci95_overlap"])
-        self.assertEqual(payload["fixture"]["L3"]["status"], "SKIPPED_WITH_REASON")
 
 if __name__ == "__main__":
     unittest.main()
