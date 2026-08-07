@@ -42,26 +42,38 @@ async function flushRepl(times: number = 5): Promise<void> {
   }
 }
 
-function renderedLines(raw: string, columns: number, rows: number): string[] {
+function renderedFrame(raw: string, columns: number, rows: number) {
   const frame = buildFrame(columns, rows);
-  parseRenderedIntoFrame(raw, frame, new StylePool());
-  return frame.cells.map((line) => line.map((cell) => cell?.char ?? " ").join(""));
+  const pool = new StylePool();
+  parseRenderedIntoFrame(raw, frame, pool);
+  return { frame, pool };
 }
 
 function stripAnsi(text: string): string {
   return text.replace(/\x1b\[[0-9;]*m/g, "");
 }
 
-const idleRasters = [0, 1, 2].map((tick) =>
-  renderFireballLines("panel", "idle", tick, { ascii: false, color: true }).map(stripAnsi)
-);
+const idleRaster = renderFireballLines(
+  "panel",
+  "idle",
+  0,
+  { ascii: false, color: true },
+).map(stripAnsi);
 
-function detectedIdleRaster(lines: string[]): number | undefined {
-  for (let tick = 0; tick < idleRasters.length; tick++) {
-    const raster = idleRasters[tick]!;
-    for (let row = 0; row <= lines.length - raster.length; row++) {
-      if (raster.every((rasterLine, offset) => lines[row + offset]!.includes(rasterLine))) {
-        return tick;
+function detectedIdleStyleSignature(raw: string, columns: number, rows: number): string | undefined {
+  const { frame, pool } = renderedFrame(raw, columns, rows);
+  const lines = frame.cells.map((line) => line.map((cell) => cell?.char ?? " ").join(""));
+  for (let row = 0; row <= lines.length - idleRaster.length; row++) {
+    for (let col = 0; col <= columns - 9; col++) {
+      if (idleRaster.every((rasterLine, offset) =>
+        lines[row + offset]!.slice(col, col + rasterLine.length) === rasterLine
+      )) {
+        return JSON.stringify(frame.cells.slice(row, row + idleRaster.length).map((line) =>
+          line.slice(col, col + 9).map((cell) => ({
+            char: cell?.char ?? " ",
+            style: pool.lookup(cell?.styleRef ?? 0),
+          }))
+        ));
       }
     }
   }
@@ -96,11 +108,11 @@ describe("issue #46 production homescreen fireball binding", () => {
     // change across the bounded samples below.
     await Bun.sleep(700);
     await flushRepl();
-    const observed = new Set<number>();
+    const observed = new Set<string>();
     for (let sample = 0; sample < 4; sample++) {
-      const raster = detectedIdleRaster(renderedLines(raw, columns, rows));
-      expect(raster).toBeDefined();
-      observed.add(raster!);
+      const signature = detectedIdleStyleSignature(raw, columns, rows);
+      expect(signature).toBeDefined();
+      observed.add(signature!);
       await Bun.sleep(150);
       await flushRepl();
     }
@@ -139,11 +151,11 @@ describe("issue #46 production homescreen fireball binding", () => {
     await Bun.sleep(500);
     await flushRepl();
 
-    const observed = new Set<number>();
+    const observed = new Set<string>();
     for (let sample = 0; sample < 4; sample++) {
-      const raster = detectedIdleRaster(renderedLines(raw, columns, rows));
-      expect(raster).toBeDefined();
-      observed.add(raster!);
+      const signature = detectedIdleStyleSignature(raw, columns, rows);
+      expect(signature).toBeDefined();
+      observed.add(signature!);
       await Bun.sleep(150);
       await flushRepl();
     }
