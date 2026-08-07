@@ -186,6 +186,55 @@ One frozen multi-cycle campaign must prove:
 <!-- clause-id: EMBER-05.REOPEN.001 -->
 Negative evidence narrows the tested initialization, routing, domain, ordering, consolidation, precision, or scale regime. It does not delete expert growth, dense controls, or the broader goal. If later scaling shows the apparent advantage shrinking, losing deletion attribution, or regressing a modality, EMBER-05 reopens and later rung claims stop.
 
+## Historical issue #585 transfer: C8 cheap-rung variance vehicle
+
+<!-- clause-id: EMBER-05.TRANSFER.585.001 -->
+Issue #585's historical C8 cheap-rung/sub-3B seed-variance runner and its
+cheap-rung execution subject are retired. This section is the canonical,
+append-only transfer of every surviving scientific and prelaunch obligation;
+it makes no GPU, training, capability, sufficient-pretraining, or C8 result
+claim. The public transfer is accepted by the current open owner in
+[#1119/TRANSFER.585](https://github.com/wordingone/ember/issues/1119#issuecomment-5221634800).
+
+<!-- clause-id: EMBER-05.TRANSFER.585.002 -->
+**Current owner and authority.** The current Ember Lab/governed-runner
+identity, the frozen evaluation/data-order/config custody, and the existing
+EMBER-05 receipt spine are the sole authorities. The historical #585 runner,
+cheap-rung/sub-3B vehicle, seed ledger, and any raw-only MDE receipt are not
+current producers and must not be revived or copied as a parallel authority.
+
+<!-- clause-id: EMBER-05.TRANSFER.585.003 -->
+**Binding acceptance before any C8 launch.** The first admissible current owned
+3B design must run five fresh post-freeze seeds through the same governed
+training entry and the exact registered comparison class. Seed selection is
+frozen before launch; no seed shopping or replacement is allowed without an
+append-only amendment. Each seed receipt must bind paired control and
+treatment losses, recomputable per-seed deltas with the registered sign
+convention, the exact comparison class, frozen data-order pin, config hash,
+generator/source hash, and frozen evaluation-suite hash.
+
+<!-- clause-id: EMBER-05.TRANSFER.585.004 -->
+At least two independently usable variance receipts are required before
+power/MDE is usable. Raw-only, unpaired, mismatched, stale, synthetic,
+borrowed, or path-unbound receipts are rejected, not silently upgraded. The
+MDE consumer must use the exact noncentral-t power calculation, or an already
+registered conservative equivalent accompanied by its proof, and must fail
+closed on missing or drifting freeze, data-order, config, generator, pairing,
+receipt, or evaluator authority.
+
+<!-- clause-id: EMBER-05.TRANSFER.585.005 -->
+The prelaunch path must bind the governed GPU/resource envelope and preserve
+negative/refusal evidence, interruption and rollback evidence, and exact
+receipt custody. A closure or launch decision cannot be based on a synthetic
+fixture, an unbound variance file, or an externally learned filter.
+
+<!-- clause-id: EMBER-05.TRANSFER.585.006 -->
+**Closure falsifier and boundary.** A current owned 3B, checkpoint-bound,
+independently replayable package satisfying every transferred clause is
+required before a C8 conclusion. Retiring #585 removes only the obsolete
+cheap-rung/C8/sub-3B execution subject; it does not waive the transferred
+contract or create result credit. `NO_NEW_PARALLEL_AUTHORITY`.
+
 ## Public execution note
 
 <!-- clause-id: EMBER-05.EXECUTION.001 -->
