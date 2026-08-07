@@ -3405,7 +3405,6 @@ impl Daemon {
             .log_dir
             .join("rehearsal")
             .join(hash_bytes(job_id.as_bytes()));
-        let conn = self.conn()?;
         let mut consumed = Vec::with_capacity(6);
         for phase in [
             Phase::DataVerify,
@@ -3416,12 +3415,20 @@ impl Daemon {
             Phase::Restore,
         ] {
             let kind = format!("ember_lab_phase_{}", phase.as_str());
-            let mut stmt = conn.prepare(
-                "SELECT payload_json FROM events WHERE job_id=?1 AND kind=?2 ORDER BY seq",
-            )?;
+            // Materialize the event payloads before asking phase_event_authorized
+            // to open its own connection. Holding the query cursor across that
+            // call can make SQLite's Windows WAL busy timeout fire once per
+            // phase, turning a six-phase consume into an apparent hang.
+            let payloads: Vec<String> = {
+                let conn = self.conn()?;
+                let mut stmt = conn.prepare(
+                    "SELECT payload_json FROM events WHERE job_id=?1 AND kind=?2 ORDER BY seq",
+                )?;
+                stmt.query_map(params![job_id, kind], |row| row.get::<_, String>(0))?
+                    .collect::<std::result::Result<_, _>>()?
+            };
             let mut found = None;
-            for payload in stmt.query_map(params![job_id, kind], |row| row.get::<_, String>(0))? {
-                let payload = payload?;
+            for payload in payloads {
                 let value: Value = match serde_json::from_str(&payload) {
                     Ok(value) => value,
                     Err(_) => continue,
