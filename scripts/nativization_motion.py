@@ -58,6 +58,7 @@ class LayerMeasurement:
 
 @dataclass
 class NativizationMotionReceipt:
+    schema_version: str
     ts: str
     ticket: str
     goal_id: str
@@ -699,6 +700,7 @@ def run_nativization_motion(
 
     # Build receipt
     receipt = NativizationMotionReceipt(
+        schema_version="ember-nativization-motion-receipt-v2",
         ts=ts,
         ticket=TICKET,
         goal_id=GOAL_ID,

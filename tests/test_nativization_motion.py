@@ -838,6 +838,7 @@ import numpy
             "duplicate": lambda value: {**value, "layers": [value["layers"][0]] * len(value["layers"])},
             "missing": lambda value: {**value, "layers": value["layers"][:-1]},
             "stale": lambda value: {**value, "source_commit": "0" * 40},
+            "stale-timestamp": lambda value: {**value, "ts": "2000-01-01T00:00:00Z"},
             "wrong-diagnostic": lambda value: {**value, "map_source_sha": "sha256:" + "0" * 64},
             "missing-field": lambda value: {key: item for key, item in value.items() if key != "source_commit"},
             "extra-field": lambda value: {**value, "unexpected": True},

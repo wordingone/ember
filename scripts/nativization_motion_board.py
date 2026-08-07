@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,7 @@ from nativization_motion import load_run_import_manifest, _require_hex, sha256_f
 
 
 RECEIPT_FIELDS = {
+    "schema_version",
     "ts",
     "ticket",
     "goal_id",
@@ -73,6 +75,8 @@ def consume_motion_receipt(
         raise ValueError("motion receipt must be an object")
     if set(document) != RECEIPT_FIELDS:
         raise ValueError("motion receipt fields are not closed")
+    if document["schema_version"] != "ember-nativization-motion-receipt-v2":
+        raise ValueError("motion receipt schema version is not governed")
     manifest, manifest_sha = load_run_import_manifest(
         root, manifest_path, expected_manifest_sha256, None
     )
@@ -97,6 +101,19 @@ def consume_motion_receipt(
     source = _require_hex(document["source_commit"], length=40, label="source_commit")
     if source != manifest["source_commit"] or not _source_commit_is_usable(root, source):
         raise ValueError("motion receipt source commit binding mismatch")
+    try:
+        commit_result = subprocess.run(
+            ["git", "show", "-s", "--format=%cI", source],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        commit_timestamp = datetime.fromisoformat(commit_result.stdout.strip().replace("Z", "+00:00"))
+    except (OSError, subprocess.CalledProcessError, ValueError) as exc:
+        raise ValueError("motion receipt source commit timestamp is unavailable") from exc
+    if timestamp < commit_timestamp:
+        raise ValueError("motion receipt timestamp is stale for its source commit")
     invariant = document["invariant_sha256"]
     if invariant != "sha256:unknown":
         _require_hex(invariant, length=64, label="invariant_sha256")
