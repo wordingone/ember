@@ -792,7 +792,7 @@ import numpy
     def test_trace_intersects_reachable_graph_with_each_layer_predicate(self, tmp_path):
         layers = [
             "CUDA kernels (cuBLAS matmul, elementwise)",
-            "Autograd (grad_fn graph, backward())",
+            "Autograd (`grad_fn` graph, `backward()`)",
         ]
         manifest_path, _ = _write_run_import_manifest(tmp_path, layers)
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
