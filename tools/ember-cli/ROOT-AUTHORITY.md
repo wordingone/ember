@@ -22,7 +22,7 @@ mutable singleton state converges there (issue #666).
 | `entrypoints/process-entry.ts` REPL cwd | exact checkout | Commands launched by the REPL must resolve selected source bytes. |
 | `hardening/hardening-receipts.ts` | canonical root | Append-only shared test state must not fork per worktree. |
 | `services/activity-feed.ts` | canonical root | Watches the shared receipt, outage, and watchdog state surfaces. |
-| `services/brain-server-supervisor.ts` | canonical root | Owns singleton serving registry/outage/event state; callers that execute source must pass an explicit selected source path. |
+| `entrypoints/owned-server-supervisor.ts` + `runtime/ember-lab/src/server_supervisor.rs` | exact checkout + canonical runtime | Current owned-server calls are lazy and route all identity, lease, outage, health, restore, and event state through Ember Lab; the retired 2.2B brain supervisor is not an authority. |
 | `services/github-receipts.ts` | canonical root | Append-only outward-action receipts are shared state. |
 | `services/goal-persistence.ts` | canonical root | Session goal state must survive worktree rotation and converge. |
 | `services/goal-receipts.ts` | canonical root | Append-only goal transition receipts are shared state. |

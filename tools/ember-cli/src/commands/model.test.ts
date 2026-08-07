@@ -464,7 +464,7 @@ describe("model command", () => {
   // alone. Binds the REAL consumer (createModelCommand's status handler) and
   // the REAL verifier (owned-seat-loader.ts, only its fetch stubbed) --
   // mirrors the proven-negative shape at
-  // services/brain-server-supervisor.test.ts:448-456 (pid-reuse reclaim).
+  // Ember Lab daemon-owned process identity covers PID-reuse reclamation.
   // =========================================================================
   describe("cond3 procreg: /model status re-verifies owned endpoint identity", () => {
     const verifiedIdentity = {
@@ -510,7 +510,7 @@ describe("model command", () => {
         // Simulates a pid-reused ambient process (e.g. notepad.exe) now
         // holding the port: it answers HTTP, but not with our identity
         // contract -- the REAL verifier rejects this (mirrors the proven
-        // negative at brain-server-supervisor.test.ts:448-456).
+        // negative at the Ember Lab daemon boundary).
         verifyOwnedEndpointIdentity: (identity) =>
           realVerifyOwnedEndpointIdentity(identity, async () => Response.json({ notARealField: true })),
       });

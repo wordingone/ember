@@ -1203,7 +1203,7 @@ describe("process-entry — main() end-to-end: EMBER_GPU_FREE precedence over pe
 // unconditionally, even while a training leg holds a live GPU lease (the
 // 2026-07-07 incident: cockpit boot at 10:13:46Z OOM'd a W1 training attempt
 // at 10:39Z). Fix: an effective planned-outage.json marker (the SAME marker
-// services/brain-server-supervisor.ts's device policy already reads) is
+// Ember Lab's daemon-owned device policy already reads) is
 // folded into gpuFreeRequested BEFORE the seat is constructed, so the boot
 // takes the identical GPU-free code path -- no spawn, OFFLINE seat, and a
 // distinct "[ember] GPU leased to training: ..." disclosure line naming the
@@ -1344,7 +1344,7 @@ describe("process-entry — main() end-to-end: GPU-lease awareness (issue #344)"
 });
 
 describe("process-entry — defaultCheckGpuLease", () => {
-  it("returns null when planned-outage.json is absent (fail-open, matches brain-server-supervisor.ts's resolveDeviceForSpawn)", async () => {
+  it("returns null when planned-outage.json is absent (fail-open, matches Ember Lab's owned-server policy)", async () => {
     const marker = await defaultCheckGpuLease();
     // In this test environment there is no live tools/ember-cli/state/planned-outage.json,
     // so this must resolve null, never throw -- the same fail-open contract
@@ -2125,7 +2125,7 @@ describe("process-entry — dispatchFastPath('--watch') execution binding", () =
       const panelStarts = (stdout.match(/╭/g) ?? []).length;
       expect(panelStarts).toBeGreaterThan(1);
       // Clean SIGINT exit: no leftover process. Exit CODE is platform-dependent here --
-      // services/brain-server-supervisor.test.ts documents the same fact this codebase already
+      // Ember Lab's owned-server tests document the same fact this codebase already
       // knows: "on Windows this is an unconditional terminate" (Node's child.kill(signal) has no
       // real POSIX signal to deliver on Windows, so the OS force-terminates rather than letting
       // the child's own `process.on("SIGINT", ...)` handler run process.exit(0) -- the graceful

@@ -495,7 +495,7 @@ export async function spawnLlamaServer(opts: ServerSpawnOptions): Promise<Server
 // (W1 attempt-3 OOM'd 10:39Z after the cockpit's 10:13:46Z boot spawned
 // llama-server) is exactly that collision. This reuses the SAME
 // planned-outage.json marker + parse/effective-check pair
-// services/brain-server-supervisor.ts's resolveDeviceForSpawn already reads
+// Ember Lab's daemon-owned device policy already reads
 // for its own cuda/cpu device policy (issue #588/#602/#614 lineage) --
 // no new lease mechanism, no new marker format, same fail-open contract
 // (absent/unreadable/malformed marker = no lease, never a false refusal).
@@ -503,7 +503,7 @@ export async function spawnLlamaServer(opts: ServerSpawnOptions): Promise<Server
 
 /** Reads tools/ember-cli/state/planned-outage.json relative to the resolved ember
  *  source root and returns the effective marker, or null if none is live.
- *  Fail-open on any read/parse error, matching brain-server-supervisor.ts's
+ *  Fail-open on any read/parse error, matching the current Ember Lab policy's
  *  resolveDeviceForSpawn (an outage system that fails CLOSED on marker read errors
  *  would itself become an availability hazard). */
 export async function defaultCheckGpuLease(): Promise<OutageMarker | null> {
@@ -923,7 +923,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   // while the code below still tries to spawn a server). An explicit EMBER_MODEL_URL still
   // wins over a lease (checked via envModelUrlBeforeConfigApply, identical precedence to
   // the existing GPU-free flag). Reuses the SAME planned-outage.json marker
-  // services/brain-server-supervisor.ts's resolveDeviceForSpawn already reads for its own
+  // Ember Lab's owned-server supervisor already reads this for its own
   // cuda/cpu device policy -- no new lease mechanism.
   const gpuLeaseMarker = envModelUrlBeforeConfigApply === undefined
     ? await (opts.checkGpuLease ?? defaultCheckGpuLease)()
