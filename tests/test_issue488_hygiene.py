@@ -147,6 +147,10 @@ class Issue488HygieneTests(unittest.TestCase):
         self.assertIn("rollback", result)
         encoded = receipt.read_text(encoding="utf-8")
         self.assertNotRegex(encoded, r"[A-Za-z]:[\\/]")
+        target.write_bytes(b"duplicate")
+        with self.assertRaises(ValueError):
+            mod.apply_safe_cleanup(root, manifest, [row["path"]], receipt)
+        self.assertTrue(target.exists())
 
 
 if __name__ == "__main__":

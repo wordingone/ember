@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import subprocess
+import argparse
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -221,6 +222,10 @@ def apply_safe_cleanup(
     if len(paths) != len(set(paths)):
         raise ValueError("duplicate cleanup path")
     root = Path(repo_root).resolve()
+    destination = Path(receipt_path)
+    if destination.exists():
+        raise ValueError("refusing to overwrite cleanup receipt")
+    destination.parent.mkdir(parents=True, exist_ok=True)
     # A reviewed cleanup may only begin from the exact clean tree that was
     # scanned.  Tiny unit fixtures without their own .git directory are
     # intentionally treated as isolated non-repository custody roots.
@@ -251,24 +256,71 @@ def apply_safe_cleanup(
             raise ValueError("candidate bytes changed")
         selected.append((relative, row, path))
 
+    backups = [(path, path.read_bytes()) for _relative, _row, path in selected]
     before = _snapshot(root)
+    working_set_before = manifest.get("working_set")
     deleted = []
-    for relative, row, path in selected:
-        path.unlink()
-        deleted.append({"path": relative, "bytes": row["bytes"], "sha256": row["sha256"]})
-    after = _snapshot(root)
-    receipt = {
-        "schema_version": CLEANUP_SCHEMA,
-        "manifest_sha256": manifest.get("manifest_sha256"),
-        "before": before,
-        "after": after,
-        "deleted": deleted,
-        "rollback": {"files": deleted, "action": "restore exact bytes from the recorded hashes"},
-        "non_regression": {"git_metadata_mutated": False, "private_or_untracked_bytes_deleted": False},
-    }
-    destination = Path(receipt_path)
-    if destination.exists():
-        raise ValueError("refusing to overwrite cleanup receipt")
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_bytes(_canonical(receipt) + b"\n")
-    return receipt
+    temporary_receipt = destination.with_name(destination.name + ".tmp")
+    try:
+        for relative, row, path in selected:
+            path.unlink()
+            deleted.append({"path": relative, "bytes": row["bytes"], "sha256": row["sha256"]})
+        after = _snapshot(root)
+        working_set_after = compute_working_set(str(root))
+        receipt = {
+            "schema_version": CLEANUP_SCHEMA,
+            "manifest_sha256": manifest.get("manifest_sha256"),
+            "before": before,
+            "after": after,
+            "working_set_before": working_set_before,
+            "working_set_after_cleanup": working_set_after,
+            "deleted": deleted,
+            "rollback": {"files": deleted, "action": "restore exact bytes from the recorded hashes"},
+            "non_regression": {"git_metadata_mutated": False, "private_or_untracked_bytes_deleted": False},
+        }
+        temporary_receipt.write_bytes(_canonical(receipt) + b"\n")
+        os.replace(temporary_receipt, destination)
+        return receipt
+    except Exception:
+        for path, content in backups:
+            path.write_bytes(content)
+        if temporary_receipt.exists():
+            temporary_receipt.unlink()
+        raise
+
+
+def write_manifest(repo_root: str | os.PathLike[str], destination: str | os.PathLike[str]) -> dict[str, Any]:
+    """Write one canonical manifest without overwriting an existing artifact."""
+    path = Path(destination)
+    if path.exists():
+        raise ValueError("refusing to overwrite reference manifest")
+    manifest = build_reference_manifest(repo_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(_canonical(manifest) + b"\n")
+    return manifest
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Issue #488 closed hygiene inventory")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    scan = subparsers.add_parser("scan")
+    scan.add_argument("repo_root", type=Path)
+    scan.add_argument("manifest", type=Path)
+    apply = subparsers.add_parser("apply")
+    apply.add_argument("repo_root", type=Path)
+    apply.add_argument("manifest", type=Path)
+    apply.add_argument("receipt", type=Path)
+    apply.add_argument("paths", nargs="+")
+    args = parser.parse_args(argv)
+    if args.command == "scan":
+        if args.manifest.exists():
+            raise SystemExit("refusing to overwrite reference manifest")
+        write_manifest(args.repo_root, args.manifest)
+    else:
+        payload = json.loads(args.manifest.read_text(encoding="utf-8"))
+        apply_safe_cleanup(args.repo_root, payload, args.paths, args.receipt)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
