@@ -1,5 +1,5 @@
 {
-  "ts": "2026-08-07T02:35:46Z",
+  "ts": "2026-08-07T03:03:29Z",
   "ticket": "S5-NATIVIZATION-MOTION",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
@@ -7,9 +7,9 @@
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "map_source_sha": "sha256:df870f83e3ac7e3b423c2422dea3e75099bf2b2a0d1a48cc4674048e13da92ca",
-  "run_import_manifest_sha256": "09ac115cf6962732dd25f0e969a919135deaeec3458fa764578be219304497a4",
-  "run_import_trace_sha256": "a54b28dc3ecb2fcb833362cf3bfc8c083e3c99f9fab5bdbc41e652bed6555a13",
-  "run_import_trace_producer_sha256": "0ad73d8ee6588e85a4506af052618d32cead49a9a4ea6e7c9416100b3b82ff86",
+  "run_import_manifest_sha256": "d069177d62f65419c8d098e375c80609ac0849cfa923a592a6f89b5801838edb",
+  "run_import_trace_sha256": "d6d07cddc6a5335f5c1b0780f20bb29501b4837f77b28ef6b3225fe77023cca1",
+  "run_import_trace_producer_sha256": "9655e5c8ba7a0b64ce8919c729b9cc30d78d91b197193d4c57519984365e173b",
   "layers": [
     {
       "name": "CUDA kernels (cuBLAS matmul, elementwise)",
@@ -89,7 +89,7 @@
       "critical_path_share": {
         "creation": true,
         "current_rung_training": true,
-        "evidence": "governed-run-import-trace-v1:a54b28dc3ecb2fcb833362cf3bfc8c083e3c99f9fab5bdbc41e652bed6555a13",
+        "evidence": "rooted-import-graph-v2:c163d133b0b108a1c267d7b7faf26f44240994ee1e00d17dfaa7e35af01586c0",
         "growth_run": true
       }
     },
@@ -106,7 +106,7 @@
       "critical_path_share": {
         "creation": true,
         "current_rung_training": true,
-        "evidence": "governed-run-import-trace-v1:a54b28dc3ecb2fcb833362cf3bfc8c083e3c99f9fab5bdbc41e652bed6555a13",
+        "evidence": "rooted-import-graph-v2:c163d133b0b108a1c267d7b7faf26f44240994ee1e00d17dfaa7e35af01586c0",
         "growth_run": true
       }
     },
@@ -576,7 +576,7 @@
         "zstandard"
       ],
       "borrowed_deps_count": 461,
-      "borrowed_loc": 12392,
+      "borrowed_loc": 12393,
       "owned_loc": 0,
       "borrowed_binaries": [
         "bun",
@@ -587,7 +587,7 @@
       "critical_path_share": {
         "creation": true,
         "current_rung_training": true,
-        "evidence": "governed-run-import-trace-v1:a54b28dc3ecb2fcb833362cf3bfc8c083e3c99f9fab5bdbc41e652bed6555a13",
+        "evidence": "rooted-import-graph-v2:c163d133b0b108a1c267d7b7faf26f44240994ee1e00d17dfaa7e35af01586c0",
         "growth_run": true
       }
     },
@@ -616,7 +616,7 @@
       "critical_path_share": {
         "creation": true,
         "current_rung_training": true,
-        "evidence": "governed-run-import-trace-v1:a54b28dc3ecb2fcb833362cf3bfc8c083e3c99f9fab5bdbc41e652bed6555a13",
+        "evidence": "rooted-import-graph-v2:c163d133b0b108a1c267d7b7faf26f44240994ee1e00d17dfaa7e35af01586c0",
         "growth_run": true
       }
     },
@@ -677,7 +677,7 @@
       "critical_path_share": {
         "creation": true,
         "current_rung_training": true,
-        "evidence": "governed-run-import-trace-v1:a54b28dc3ecb2fcb833362cf3bfc8c083e3c99f9fab5bdbc41e652bed6555a13",
+        "evidence": "rooted-import-graph-v2:c163d133b0b108a1c267d7b7faf26f44240994ee1e00d17dfaa7e35af01586c0",
         "growth_run": true
       }
     }
@@ -705,11 +705,11 @@
     }
   },
   "next_home_candidate": "Autograd (`grad_fn` graph, `backward()`)",
-  "method": "static-import-census-v1",
+  "method": "phase-rooted-import-graph-v1",
   "limits": [
     "dynamic imports not detected",
     "vendored code treated as external",
     "binary dependencies of dependencies not scanned",
-    "relative imports only partially resolved"
+    "relative imports are resolved only within the governed repository root"
   ]
 }

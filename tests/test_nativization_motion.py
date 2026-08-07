@@ -35,12 +35,26 @@ from nativization_motion import (
 import nativization_motion
 
 
+def _prepare_fixture_repo(repo_root: Path) -> None:
+    phase_root = repo_root / "tools" / "ember-restart-3b"
+    phase_root.mkdir(parents=True, exist_ok=True)
+    (phase_root / "model.py").write_text("MODEL = 'creation'\n", encoding="utf-8")
+    (phase_root / "pretrain.py").write_text("TRAIN = True\n", encoding="utf-8")
+    (phase_root / "run_vertical_slice.py").write_text("GROWTH = True\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=repo_root, check=True)
+    subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=repo_root, check=True)
+    subprocess.run(["git", "config", "user.name", "fixture"], cwd=repo_root, check=True)
+    subprocess.run(["git", "add", "."], cwd=repo_root, check=True)
+    subprocess.run(["git", "commit", "-qm", "fixture"], cwd=repo_root, check=True)
+
+
 def _write_run_import_manifest(
     repo_root: Path,
     layer_names: list[str],
     *,
     producer_sha256: str | None = None,
 ) -> tuple[Path, str]:
+    _prepare_fixture_repo(repo_root)
     return build_run_import_manifest(
         repo_root, layer_names, producer_sha256=producer_sha256
     )
@@ -381,6 +395,29 @@ class TestIdentifyNextHomeCandidate:
 class TestEndToEnd:
     """End-to-end integration tests."""
 
+    def test_run_import_manifest_requires_git_source_authority(self, tmp_path):
+        source = tmp_path / "tools" / "cuda.py"
+        source.parent.mkdir(parents=True)
+        source.write_text("import torch\\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="Git|git|source authority"):
+            build_run_import_manifest(
+                tmp_path,
+                ["CUDA kernels (cuBLAS matmul, elementwise)"],
+            )
+
+    def test_run_import_trace_ignores_unrelated_lexicographic_matches(self, tmp_path):
+        source = tmp_path / "tools" / "cuda.py"
+        source.parent.mkdir(parents=True)
+        source.write_text("import torch\\n", encoding="utf-8")
+        unrelated = tmp_path / "tools" / "aaa_first.py"
+        unrelated.write_text("unrelated = True\\n", encoding="utf-8")
+        manifest_path, _ = _write_run_import_manifest(
+            tmp_path,
+            ["CUDA kernels (cuBLAS matmul, elementwise)"],
+        )
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        assert all(event["entrypoint"] != "tools/aaa_first.py" for event in manifest["trace"]["events"])
+
     def test_run_nativization_motion_fixture(self, tmp_path):
         """Test full runner with fixture mini-tree."""
         # Create fixture structure
@@ -459,7 +496,7 @@ import torch
         )
         assert len(receipt["invariant_sha256"]) == 64
         assert all(c in "0123456789abcdef" for c in receipt["invariant_sha256"])
-        assert receipt["method"] == "static-import-census-v1"
+        assert receipt["method"] == "phase-rooted-import-graph-v1"
         assert len(receipt["layers"]) == 2
         assert receipt["run_import_manifest_sha256"] == manifest_sha
         for layer in receipt["layers"]:

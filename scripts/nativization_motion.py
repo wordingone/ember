@@ -25,9 +25,10 @@ from nativization_motion_trace import (
     TRACE_PHASES,
     TRACE_RUN_ID,
     TRACE_SCHEMA_VERSION,
+    PHASE_ENTRYPOINTS,
+    _reachable_projection,
     build_trace,
     canonical_json_bytes,
-    choose_trace_source,
     sha256_bytes,
     source_commit,
 )
@@ -398,12 +399,15 @@ def _require_hex(value: Any, *, length: int, label: str) -> str:
 
 
 def _source_commit_is_usable(repo_root: Path, value: str) -> bool:
-    if value == "0" * 40:
+    if not (repo_root / ".git").exists() or value == "0" * 40:
         return False
-    git_dir = repo_root / ".git"
-    if not git_dir.exists():
-        return True
     try:
+        subprocess.run(
+            ["git", "rev-parse", "--verify", f"{value}^{{commit}}"],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+        )
         subprocess.run(
             ["git", "merge-base", "--is-ancestor", value, "HEAD"],
             cwd=repo_root,
@@ -421,7 +425,7 @@ def _trace_layer_rows(
     trace: dict[str, Any],
     trace_sha256: str,
 ) -> list[dict[str, Any]]:
-    events_by_layer: dict[str, list[dict[str, str]]] = {name: [] for name in layer_names}
+    events_by_layer: dict[str, list[dict[str, Any]]] = {name: [] for name in layer_names}
     for event in trace["events"]:
         if event["layer"] in events_by_layer:
             events_by_layer[event["layer"]].append(event)
@@ -429,16 +433,17 @@ def _trace_layer_rows(
     for name in layer_names:
         events = events_by_layer[name]
         if len(events) != len(TRACE_PHASES):
-            raise ValueError("run import trace must contain one event per phase and layer")
-        phases = {event["phase"] for event in events}
-        if phases != set(TRACE_PHASES):
+            raise ValueError("run import trace must contain one rooted event per phase and layer")
+        if {event["phase"] for event in events} != set(TRACE_PHASES):
             raise ValueError("run import trace phases are incomplete")
+        phase_reachability = {event["phase"]: event["reachability_sha256"] for event in events}
         share = {
-            "creation": True,
-            "current_rung_training": True,
-            "growth_run": True,
-            "evidence": f"governed-run-import-trace-v1:{trace_sha256}",
+            phase: bool(next(event for event in events if event["phase"] == phase)["reachable"])
+            for phase in TRACE_PHASES
         }
+        share["evidence"] = (
+            f"rooted-import-graph-v2:{sha256_bytes(canonical_json_bytes(phase_reachability))}"
+        )
         rows.append({"name": name, "trace_events": events, "critical_path_share": share})
     return rows
 
@@ -452,6 +457,7 @@ def build_run_import_manifest(
 ) -> tuple[Path, str]:
     """Derive a closed manifest from hashed production source trace events."""
     root = repo_root.resolve()
+    bound_source_commit = source_commit(root)
     patterns = {name: get_layer_file_globs(name) for name in layer_names}
     trace = build_trace(root, layer_names, patterns)
     trace_sha = sha256_bytes(canonical_json_bytes(trace))
@@ -459,7 +465,7 @@ def build_run_import_manifest(
     manifest = {
         "schema_version": "ember-run-import-manifest-v1",
         "run_id": TRACE_RUN_ID,
-        "source_commit": source_commit(root),
+        "source_commit": bound_source_commit,
         "producer_sha256": producer_sha256 or trace_producer,
         "trace_sha256": trace_sha,
         "trace": trace,
@@ -507,7 +513,7 @@ def load_run_import_manifest(
         raise ValueError("run import manifest schema or run id mismatch")
     source = _require_hex(document["source_commit"], length=40, label="source_commit")
     if not _source_commit_is_usable(root, source):
-        raise ValueError("run import manifest source commit is not an ancestor of the governed run")
+        raise ValueError("run import manifest source commit is not an exact governed Git ancestor")
     producer_sha = _require_hex(document["producer_sha256"], length=64, label="producer_sha256")
     current_producer_sha = hashlib.sha256(Path(__file__).with_name("nativization_motion_trace.py").read_bytes()).hexdigest()
     if producer_sha != current_producer_sha:
@@ -528,20 +534,44 @@ def load_run_import_manifest(
         raise ValueError("run import manifest layers mismatch")
     expected_names = set(layer_names) if layer_names is not None else None
     seen: set[str] = set()
-    events_by_layer: dict[str, list[dict[str, str]]] = {}
+    events_by_layer: dict[str, list[dict[str, Any]]] = {}
     for event in events:
-        if not isinstance(event, dict) or set(event) != {"layer", "phase", "path", "sha256"}:
+        required_event = {"layer", "phase", "entrypoint", "entrypoint_sha256", "reachable", "reachability_sha256"}
+        if not isinstance(event, dict) or set(event) != required_event:
             raise ValueError("run import trace event fields are not closed")
         if not isinstance(event["layer"], str) or event["phase"] not in TRACE_PHASES:
             raise ValueError("run import trace event identity is invalid")
-        _require_hex(event["sha256"], length=64, label="trace source hash")
-        event_path = (root / event["path"]).resolve()
+        phase = event["phase"]
+        if event["entrypoint"] != PHASE_ENTRYPOINTS[phase]:
+            raise ValueError("run import trace entrypoint is not a governed phase root")
+        entrypoint = (root / event["entrypoint"]).resolve()
         try:
-            event_path.relative_to(root)
+            entrypoint.relative_to(root)
         except ValueError as exc:
-            raise ValueError("run import trace source escapes repo root") from exc
-        if not event_path.is_file() or hashlib.sha256(event_path.read_bytes()).hexdigest() != event["sha256"]:
-            raise ValueError("run import trace source bytes drifted")
+            raise ValueError("run import trace entrypoint escapes repo root") from exc
+        _require_hex(event["entrypoint_sha256"], length=64, label="entrypoint hash")
+        if not entrypoint.is_file() or hashlib.sha256(entrypoint.read_bytes()).hexdigest() != event["entrypoint_sha256"]:
+            raise ValueError("run import trace entrypoint bytes drifted")
+        reachable = event["reachable"]
+        if not isinstance(reachable, list) or not reachable:
+            raise ValueError("run import trace reachability is required")
+        for item in reachable:
+            if not isinstance(item, dict) or set(item) != {"path", "sha256"}:
+                raise ValueError("run import trace reachable entry fields are not closed")
+            _require_hex(item["sha256"], length=64, label="reachable source hash")
+            item_path = (root / item["path"]).resolve()
+            try:
+                item_path.relative_to(root)
+            except ValueError as exc:
+                raise ValueError("run import trace reachable source escapes repo root") from exc
+            if not item_path.is_file() or hashlib.sha256(item_path.read_bytes()).hexdigest() != item["sha256"]:
+                raise ValueError("run import trace reachable source bytes drifted")
+        expected_reachable = _reachable_projection(root, event["entrypoint"])
+        if reachable != expected_reachable:
+            raise ValueError("run import trace reachability is not rooted in the governed entrypoint")
+        _require_hex(event["reachability_sha256"], length=64, label="reachability hash")
+        if event["reachability_sha256"] != sha256_bytes(canonical_json_bytes(reachable)):
+            raise ValueError("run import trace reachability hash mismatch")
         events_by_layer.setdefault(event["layer"], []).append(event)
     for row in rows:
         if not isinstance(row, dict) or set(row) != {"name", "trace_events", "critical_path_share"}:
@@ -555,19 +585,16 @@ def load_run_import_manifest(
             raise ValueError("run import manifest layer trace does not match governed events")
         if len(row_events) != len(TRACE_PHASES) or {event["phase"] for event in row_events} != set(TRACE_PHASES):
             raise ValueError("run import manifest layer trace phases are incomplete")
-        share = row["critical_path_share"]
+        phase_reachability = {event["phase"]: event["reachability_sha256"] for event in row_events}
         expected_share = {
-            "creation": True,
-            "current_rung_training": True,
-            "growth_run": True,
-            "evidence": f"governed-run-import-trace-v1:{trace_sha}",
+            phase: bool(next(event for event in row_events if event["phase"] == phase)["reachable"])
+            for phase in TRACE_PHASES
         }
-        if share != expected_share:
-            raise ValueError("run import manifest critical path share is not trace-derived")
-        expected_source = choose_trace_source(root, get_layer_file_globs(name)).resolve().relative_to(root).as_posix()
-        for event in row_events:
-            if event["path"] != expected_source:
-                raise ValueError("run import trace source path is not the governed layer source")
+        expected_share["evidence"] = (
+            f"rooted-import-graph-v2:{sha256_bytes(canonical_json_bytes(phase_reachability))}"
+        )
+        if row["critical_path_share"] != expected_share:
+            raise ValueError("run import manifest critical path share is not rooted trace-derived")
     if expected_names is not None and seen != expected_names:
         raise ValueError("run import manifest layer names mismatch")
     return document, actual
@@ -641,12 +668,12 @@ def run_nativization_motion(
         layers=[asdict(layer) for layer in layers],
         deltas=deltas,
         next_home_candidate=next_home,
-        method="static-import-census-v1",
+        method="phase-rooted-import-graph-v1",
         limits=[
             "dynamic imports not detected",
             "vendored code treated as external",
             "binary dependencies of dependencies not scanned",
-            "relative imports only partially resolved",
+            "relative imports are resolved only within the governed repository root",
         ],
     )
 
