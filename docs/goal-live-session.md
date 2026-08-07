@@ -18,6 +18,11 @@ The command emits one path-free JSON object with schema
 `ember-goal-live-session-receipt-v1`. The checked-in deterministic fixture is
 `tools/ember-cli/src/fixtures/goal-live-session-receipt-v1.json`.
 
+The receipt also contains three hash-bound frame captures from the compiled
+session: queued-input preemption, autonomous continuations, and completion.
+Their event indices prove preemption occurred before the main goal was created
+and their source binding identifies the goal-live producer.
+
 Acceptance evidence is bounded to: at least three autonomous continuation
 events after boot with zero user input, refusal of premature `Complete` at
 both tool and store boundaries, an evidence-bearing `Complete` transition,

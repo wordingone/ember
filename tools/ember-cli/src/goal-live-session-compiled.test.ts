@@ -52,9 +52,27 @@ describe("compiled goal-session live path", () => {
         start_turn_calls: 0,
         receipt_event: "continuation_skipped",
       });
+      expect(receipt.frame_captures).toHaveLength(3);
+      expect(receipt.frame_captures.map((frame: any) => frame.phase)).toEqual([
+        "preemption",
+        "continuations",
+        "completion",
+      ]);
+      for (const frame of receipt.frame_captures) {
+        expect(frame.frame_sha256).toMatch(/^[0-9a-f]{64}$/);
+        expect(frame.source_binding).toEqual({
+          id: "ember-goal-live-session-source-v1",
+          sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+        });
+        expect(frame.event_count).toBeGreaterThan(0);
+      }
       expect(receipt.events.filter((event: any) => event.event === "continuation_fired").length)
         .toBeGreaterThanOrEqual(3);
       expect(receipt.events.some((event: any) => event.event === "continuation_skipped")).toBe(true);
+      expect(receipt.events[0]).toMatchObject({ goalId: "goal-live-preemption-v1", event: "created" });
+      expect(receipt.events[1]).toMatchObject({ goalId: "goal-live-preemption-v1", event: "continuation_skipped" });
+      expect(receipt.events.findIndex((event: any) => event.event === "status_changed"))
+        .toBeGreaterThan(1);
 
       const serialized = JSON.stringify(receipt);
       expect(serialized).not.toContain(SRC_DIR);

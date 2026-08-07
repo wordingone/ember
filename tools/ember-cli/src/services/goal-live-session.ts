@@ -21,6 +21,7 @@ import {
   type GoalReceiptEvent,
   type GoalReceiptWriter,
 } from "./goal-receipts.ts";
+import { captureGoalLiveFrames, type GoalLiveFrameCapture } from "./goal-live-session-frames.ts";
 import { UpdateGoalTool } from "../tools/goal-tools.ts";
 
 export const GOAL_LIVE_RECEIPT_SCHEMA = "ember-goal-live-session-receipt-v1" as const;
@@ -29,12 +30,12 @@ interface CapturedEvent {
   event: GoalReceiptEvent;
   goalId?: string;
   detail?: Record<string, unknown>;
-  goal_id: "EMBER-02";
-  workstream_id: "EMBER-02A";
-  next_executed_outcome: "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember";
 }
 
 export interface GoalLiveSessionReceipt {
+  goal_id: "EMBER-02";
+  workstream_id: "EMBER-02A";
+  next_executed_outcome: "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember";
   schema_version: typeof GOAL_LIVE_RECEIPT_SCHEMA;
   result: "MEASURED";
   model: "deterministic-local-stub-v1";
@@ -55,6 +56,7 @@ export interface GoalLiveSessionReceipt {
     start_turn_calls: number;
     receipt_event: "continuation_skipped";
   };
+  frame_captures: GoalLiveFrameCapture[];
   events: CapturedEvent[];
 }
 
@@ -100,6 +102,41 @@ function statusFromGoal(value: unknown): GoalStatus | null {
 }
 
 /** Runs the real production continuation engine against a deterministic local stub. */
+interface PreemptionEvidence {
+  events: CapturedEvent[];
+  startTurnCalls: number;
+  reason: string;
+}
+
+async function runQueuedInputPreemption(): Promise<PreemptionEvidence> {
+  const preemptionEvents: CapturedEvent[] = [];
+  const preemptionWriter = memoryWriter(preemptionEvents);
+  const preemptionStore = createGoalStore({
+    persistence: createInMemoryGoalPersistence(),
+    now: () => new Date(FIXED_NOW),
+    generateId: () => FIXED_PREEMPT_GOAL_ID,
+    onTransition: (event) => receiptGoalTransition(preemptionWriter, event),
+  });
+  const preemptionGoal = preemptionStore.createGoal("queued input wins", { tokenBudget: 10 });
+  if (!preemptionGoal.ok) throw new Error(preemptionGoal.message);
+  let startTurnCalls = 0;
+  const outcome = await createGoalContinuationEngine().maybeContinueIfIdle({
+    store: preemptionStore,
+    getEligibilitySignals: () => ({
+      featureEnabled: true,
+      planMode: false,
+      turnActive: false,
+      queuedUserInput: true,
+    }),
+    startTurn: async () => { startTurnCalls += 1; },
+  });
+  if (outcome.fired) throw new Error("queued user input did not preempt continuation");
+  preemptionWriter.append("continuation_skipped", FIXED_PREEMPT_GOAL_ID, {
+    reason: outcome.reason,
+  });
+  return { events: preemptionEvents, startTurnCalls, reason: outcome.reason };
+}
+
 export async function runGoalLiveSession(): Promise<GoalLiveSessionReceipt> {
   const events: CapturedEvent[] = [];
   const writer = memoryWriter(events);
@@ -109,6 +146,9 @@ export async function runGoalLiveSession(): Promise<GoalLiveSessionReceipt> {
     generateId: () => FIXED_GOAL_ID,
     onTransition: (event) => receiptGoalTransition(writer, event),
   });
+  const preemption = await runQueuedInputPreemption();
+  const preemptionEvents = preemption.events;
+  const preemptionStartCalls = preemption.startTurnCalls;
   const created = store.createGoal("prove the compiled goal organ is live", { tokenBudget: 100 });
   let queuedUserInput = false;
   if (!created.ok) throw new Error(created.message);
@@ -120,7 +160,7 @@ export async function runGoalLiveSession(): Promise<GoalLiveSessionReceipt> {
   const audit: CompletionAudit = {
     requirements: [
       { id: "continuations", evidence: "three autonomous continuation events observed" },
-      { id: "preemption", evidence: "queued user input suppressed continuation" },
+      { id: "preemption", evidence: `queued user input suppressed continuation (reason: ${preemption.reason})` },
     ],
   };
 
@@ -162,40 +202,12 @@ export async function runGoalLiveSession(): Promise<GoalLiveSessionReceipt> {
   poke();
   await waitFor(() => turns === 3 && statusFromGoal(store.getGoal()) === "Complete");
 
-  const preemptionEvents: CapturedEvent[] = [];
-  const preemptionWriter = memoryWriter(preemptionEvents);
-  const preemptionStore = createGoalStore({
-    persistence: createInMemoryGoalPersistence(),
-    now: () => new Date(FIXED_NOW),
-    generateId: () => FIXED_PREEMPT_GOAL_ID,
-    onTransition: (event) => receiptGoalTransition(preemptionWriter, event),
-  });
-  const preemptionGoal = preemptionStore.createGoal("queued input wins", { tokenBudget: 10 });
-  if (!preemptionGoal.ok) throw new Error(preemptionGoal.message);
-  let preemptionStartCalls = 0;
-  const preemptionEngine = createGoalContinuationEngine();
-  const preemptionOutcome = await preemptionEngine.maybeContinueIfIdle({
-    store: preemptionStore,
-    getEligibilitySignals: () => ({
-      featureEnabled: true,
-      planMode: false,
-      turnActive: false,
-      queuedUserInput: true,
-    }),
-    startTurn: async () => { preemptionStartCalls += 1; },
-  });
-  if (preemptionOutcome.fired) {
-    throw new Error("queued user input did not preempt continuation");
-  }
-  preemptionWriter.append("continuation_skipped", FIXED_PREEMPT_GOAL_ID, {
-    reason: preemptionOutcome.reason,
-  });
 
   const complete = store.getGoal();
   if (!complete || complete.status !== "Complete" || !complete.completionAudit) {
     throw new Error("Complete transition did not retain its audit evidence");
   }
-  const combinedEvents = [...events, ...preemptionEvents];
+  const combinedEvents = [...preemptionEvents, ...events];
   const continuationEvents = combinedEvents.filter((event) => event.event === "continuation_fired");
   const preemptionEvent = preemptionEvents.find((event) => event.event === "continuation_skipped");
   if (continuationEvents.length < 3 || !preemptionEvent) {
@@ -205,6 +217,7 @@ export async function runGoalLiveSession(): Promise<GoalLiveSessionReceipt> {
     throw new Error("premature Complete transition was not refused at both boundaries");
   }
 
+  const frameCaptures = captureGoalLiveFrames(combinedEvents, FIXED_PREEMPT_GOAL_ID);
   return {
     schema_version: GOAL_LIVE_RECEIPT_SCHEMA,
     goal_id: "EMBER-02",
@@ -229,6 +242,7 @@ export async function runGoalLiveSession(): Promise<GoalLiveSessionReceipt> {
       start_turn_calls: preemptionStartCalls,
       receipt_event: "continuation_skipped",
     },
+    frame_captures: frameCaptures,
     events: combinedEvents,
   };
 }

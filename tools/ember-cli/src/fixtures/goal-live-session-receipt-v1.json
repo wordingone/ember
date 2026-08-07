@@ -22,17 +22,55 @@
     "start_turn_calls": 0,
     "receipt_event": "continuation_skipped"
   },
+  "frame_captures": [
+    {
+      "frame_id": "preemption",
+      "phase": "preemption",
+      "event_indices": [0, 1],
+      "event_count": 2,
+      "event_types": ["created", "continuation_skipped"],
+      "frame_sha256": "03469af60f13a9695923ebc73d293e08491b4e55a52da89146054f20b9eb9094",
+      "source_binding": {
+        "id": "ember-goal-live-session-source-v1",
+        "sha256": "35d652465ba870cc9b6d1287d99f8920b92a58e603b4fdbd73c7e371639f456e"
+      }
+    },
+    {
+      "frame_id": "continuations",
+      "phase": "continuations",
+      "event_indices": [4, 6, 9],
+      "event_count": 3,
+      "event_types": ["continuation_fired", "continuation_fired", "continuation_fired"],
+      "frame_sha256": "4556ce8b5ac4e3207c7b12f1f2449337d44cc7a15e477dfb0a71da45f55f73db",
+      "source_binding": {
+        "id": "ember-goal-live-session-source-v1",
+        "sha256": "35d652465ba870cc9b6d1287d99f8920b92a58e603b4fdbd73c7e371639f456e"
+      }
+    },
+    {
+      "frame_id": "completion",
+      "phase": "completion",
+      "event_indices": [8],
+      "event_count": 1,
+      "event_types": ["status_changed"],
+      "frame_sha256": "4b77873e8198559363df1041c2b759b7fdc09b59b9e1d6089baefa7b66d5e316",
+      "source_binding": {
+        "id": "ember-goal-live-session-source-v1",
+        "sha256": "35d652465ba870cc9b6d1287d99f8920b92a58e603b4fdbd73c7e371639f456e"
+      }
+    }
+  ],
   "events": [
+    {"event": "created", "goalId": "goal-live-preemption-v1", "detail": {"objective": "queued input wins", "tokenBudget": 10}},
+    {"event": "continuation_skipped", "goalId": "goal-live-preemption-v1", "detail": {"reason": "queued_user_input"}},
     {"event": "created", "goalId": "goal-live-session-v1", "detail": {"objective": "prove the compiled goal organ is live", "tokenBudget": 100}},
     {"event": "usage_recorded", "goalId": "goal-live-session-v1", "detail": {"usage": {"tokensUsed": 1, "elapsedMs": 1}}},
     {"event": "continuation_fired", "goalId": "goal-live-session-v1", "detail": {"kind": "continue"}},
     {"event": "usage_recorded", "goalId": "goal-live-session-v1", "detail": {"usage": {"tokensUsed": 2, "elapsedMs": 2}}},
     {"event": "continuation_fired", "goalId": "goal-live-session-v1", "detail": {"kind": "continue"}},
     {"event": "usage_recorded", "goalId": "goal-live-session-v1", "detail": {"usage": {"tokensUsed": 3, "elapsedMs": 3}}},
-    {"event": "status_changed", "goalId": "goal-live-session-v1", "detail": {"from": "Active", "to": "Complete", "completionAudit": {"requirements": [{"id": "continuations", "evidence": "three autonomous continuation events observed"}, {"id": "preemption", "evidence": "queued user input suppressed continuation"}]} }},
+    {"event": "status_changed", "goalId": "goal-live-session-v1", "detail": {"from": "Active", "to": "Complete", "completionAudit": {"requirements": [{"id": "continuations", "evidence": "three autonomous continuation events observed"}, {"id": "preemption", "evidence": "queued user input suppressed continuation (reason: queued_user_input)"}]} }},
     {"event": "continuation_fired", "goalId": "goal-live-session-v1", "detail": {"kind": "continue"}},
-    {"event": "continuation_skipped", "goalId": "goal-live-session-v1", "detail": {"reason": "goal_not_active"}},
-    {"event": "created", "goalId": "goal-live-preemption-v1", "detail": {"objective": "queued input wins", "tokenBudget": 10}},
-    {"event": "continuation_skipped", "goalId": "goal-live-preemption-v1", "detail": {"reason": "queued_user_input"}}
+    {"event": "continuation_skipped", "goalId": "goal-live-session-v1", "detail": {"reason": "goal_not_active"}}
   ]
 }
