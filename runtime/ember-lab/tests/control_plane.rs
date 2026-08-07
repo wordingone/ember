@@ -2,8 +2,11 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-use ember_lab::{Daemon, EmberLabError, JobSpec, JobState, RestartPolicy, SchedulePrediction};
-use serde_json::Value;
+use ember_lab::{
+    rehearsal::produce_minimal_slice, Daemon, EmberLabError, JobSpec, JobState, RestartPolicy,
+    SchedulePrediction,
+};
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs;
@@ -32,6 +35,14 @@ fn sandbox(name: &str) -> PathBuf {
 fn sha256(path: &Path) -> String {
     let bytes = fs::read(path).unwrap();
     format!("{:x}", Sha256::digest(bytes))
+}
+
+fn readiness_deadline_after_ms(delta_ms: u64) -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64
+        + delta_ms as i64
 }
 
 fn write_identity(root: &Path) -> (PathBuf, String) {
@@ -110,10 +121,73 @@ fn write_restore_manifest(root: &Path, job_id: &str) -> PathBuf {
     manifest
 }
 
+fn start_phase_fixture(root: &Path, job_id: &str, producer: bool) -> (Daemon, PathBuf) {
+    start_phase_fixture_with_delay(root, job_id, producer, 0)
+}
+
+fn start_phase_fixture_with_delay(
+    root: &Path,
+    job_id: &str,
+    producer: bool,
+    delay_ms: u64,
+) -> (Daemon, PathBuf) {
+    let db = root.join(format!("{job_id}.sqlite3"));
+    let (identity, identity_hash) = write_identity(root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity(job_id, &identity, &identity_hash)
+        .unwrap();
+    daemon.acquire_lease("cpu-fixture", job_id).unwrap();
+    let mut spec = JobSpec::new(
+        job_id,
+        std::env::current_exe().unwrap().to_string_lossy(),
+        ["--exact", "fixture_child_process", "--nocapture"],
+        "cpu-fixture",
+    )
+    .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+    .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000");
+    if producer {
+        spec = spec
+            .with_env("EMBER_LAB_MINIMAL_SLICE", "1")
+            .with_env("EMBER_LAB_MINIMAL_SLICE_JOB_ID", job_id);
+        if delay_ms > 0 {
+            spec = spec.with_env("EMBER_LAB_MINIMAL_SLICE_DELAY_MS", delay_ms.to_string());
+        }
+    }
+    daemon.start_job(spec).unwrap();
+    let phase_root = root
+        .join(format!("{job_id}.sqlite3.logs"))
+        .join("rehearsal")
+        .join(ember_lab::hash_bytes(job_id.as_bytes()));
+    (daemon, phase_root)
+}
+
+fn wait_for_host_peak(path: &Path) -> u64 {
+    for _ in 0..150 {
+        if path.exists() {
+            let bytes = fs::read(path).unwrap();
+            let value: Value = serde_json::from_slice(&bytes).unwrap();
+            if let Some(peak) = value.get("whole_run_peak_bytes").and_then(Value::as_u64) {
+                return peak;
+            }
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    panic!(
+        "minimal-slice producer did not emit host peak: {}",
+        path.display()
+    );
+}
+
 #[test]
 fn fixture_child_process() {
     if std::env::var("EMBER_LAB_FIXTURE_CHILD").as_deref() != Ok("1") {
         return;
+    }
+    if std::env::var("EMBER_LAB_MINIMAL_SLICE").as_deref() == Ok("1") {
+        let root = PathBuf::from(std::env::var_os("EMBER_LAB_PHASE_OUTPUT_ROOT").unwrap());
+        let job_id = std::env::var("EMBER_LAB_MINIMAL_SLICE_JOB_ID").unwrap();
+        produce_minimal_slice(&root, &job_id).unwrap();
     }
     if std::env::var("EMBER_LAB_FIXTURE_SPAWN_CHILD").as_deref() == Ok("1") {
         let child = Command::new(std::env::current_exe().unwrap())
@@ -1506,10 +1580,23 @@ fn dead_persisted_running_job_is_exited_unknown_and_releases_its_lease() {
         .export_content_addressed_receipt("short-job", &root.join("receipts"))
         .unwrap();
     assert_eq!(first, second);
-    let payload: Value = serde_json::from_slice(&fs::read(first.path).unwrap()).unwrap();
+    let payload: Value = serde_json::from_slice(&fs::read(&first.path).unwrap()).unwrap();
     assert_eq!(payload["state"], "exited");
     assert_eq!(payload["logs"]["stdout"]["sealed"], false);
     assert!(payload["logs"]["stdout"]["sha256"].is_null());
+    let enriched = reopened
+        .export_content_addressed_receipt_with_observation(
+            "short-job",
+            &root.join("receipts"),
+            &json!({"phase":"test"}),
+        )
+        .unwrap();
+    assert_eq!(enriched.sha256, sha256(&enriched.path));
+    let enriched_payload: Value =
+        serde_json::from_slice(&fs::read(&enriched.path).unwrap()).unwrap();
+    assert_eq!(enriched_payload["rehearsal"]["phase"], "test");
+    let original_payload: Value = serde_json::from_slice(&fs::read(&first.path).unwrap()).unwrap();
+    assert!(original_payload.get("rehearsal").is_none());
 }
 
 #[cfg(windows)]
@@ -1671,6 +1758,370 @@ fn receipt_publication_never_replaces_an_existing_file() {
     ));
     assert_eq!(fs::read(&receipt).unwrap(), b"pre-existing receipt bytes");
 }
+
+#[test]
+fn phase_events_are_daemon_bound_and_foreign_bytes_do_not_authorize() {
+    let root = sandbox("phase-event-authority");
+    let db = root.join("ember-lab.sqlite3");
+    let foreign = root.join("foreign-train.json");
+    fs::write(
+        &foreign,
+        br#"{"schema":"ember-lab-phase-evidence-v1","producer":"ember-lab-daemon","result":"COMPLETED","job_id":"phase-job","phase":"train"}"#,
+    )
+    .unwrap();
+    let foreign_sha256 = sha256(&foreign);
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("phase-job", &identity, &identity_hash)
+        .unwrap();
+    daemon.acquire_lease("cpu-fixture", "phase-job").unwrap();
+    daemon
+        .start_job(
+            JobSpec::new(
+                "phase-job",
+                std::env::current_exe().unwrap().to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "cpu-fixture",
+            )
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_MINIMAL_SLICE", "1")
+            .with_env("EMBER_LAB_MINIMAL_SLICE_JOB_ID", "phase-job")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000"),
+        )
+        .unwrap();
+    let forged_dir = root
+        .join("ember-lab.sqlite3.logs")
+        .join("rehearsal")
+        .join(ember_lab::hash_bytes(b"phase-job"));
+    fs::create_dir_all(&forged_dir).unwrap();
+    let forged_path = forged_dir.join("forged-train.json");
+    fs::write(
+        &forged_path,
+        br#"{"schema":"ember-lab-phase-evidence-v1","producer":"ember-lab-daemon","result":"COMPLETED","job_id":"phase-job","phase":"train","operation_sha256":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","operation":"ember-lab-daemon-phase-owner:train","operation_evidence":{"kind":"running_job_observed","pid":1,"lease_epoch":1},"observed_at_ms":1,"lease_epoch":1,"pid":1,"identity_verified":true,"job_started_event":true}"#,
+    )
+    .unwrap();
+    let (forged_pid, forged_lease_epoch): (u32, i64) = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT pid,lease_epoch FROM jobs WHERE job_id='phase-job'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,?4)",
+            rusqlite::params![
+                "phase-job",
+                1_i64,
+                "ember_lab_phase_train",
+                serde_json::json!({
+                    "producer":"ember-lab-daemon",
+                    "job_id":"phase-job",
+                    "phase":"train",
+                    "evidence_file_name":"forged-train.json",
+                    "evidence_sha256": sha256(&forged_path),
+                    "operation_sha256":"f".repeat(64),
+                    "lease_epoch":forged_lease_epoch,
+                    "pid":forged_pid,
+                    "event_authority_sha256":"0".repeat(64),
+                })
+                .to_string(),
+            ],
+        )
+        .unwrap();
+    assert!(!daemon
+        .phase_event_authorized("phase-job", "train", &foreign_sha256)
+        .unwrap());
+    assert!(!daemon
+        .phase_event_authorized("phase-job", "train", &sha256(&forged_path))
+        .unwrap());
+    assert!(daemon.load_authorized_phase_evidence("phase-job").is_err());
+    let phase_root = root
+        .join("ember-lab.sqlite3.logs")
+        .join("rehearsal")
+        .join(ember_lab::hash_bytes(b"phase-job"));
+    let host_peak_path = phase_root.join("host_peak.json");
+    for _ in 0..100 {
+        if host_peak_path.exists() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    let host_peak: Value = serde_json::from_slice(&fs::read(host_peak_path).unwrap()).unwrap();
+    let produced = daemon
+        .execute_minimal_episode(
+            "phase-job",
+            host_peak["whole_run_peak_bytes"].as_u64().unwrap(),
+            readiness_deadline_after_ms(5_000),
+        )
+        .unwrap();
+    let consumed = daemon.load_authorized_phase_evidence("phase-job").unwrap();
+    assert_eq!(consumed.len(), 6);
+    let evidence = produced
+        .iter()
+        .find(|evidence| evidence.phase == ember_lab::rehearsal::Phase::Train)
+        .unwrap();
+    assert!(daemon
+        .phase_event_authorized("phase-job", "train", &evidence.sha256)
+        .unwrap());
+    assert_eq!(produced.len(), 6);
+    assert!(produced.iter().all(|evidence| evidence
+        .path
+        .starts_with(root.join("ember-lab.sqlite3.logs").join("rehearsal"))));
+    fs::write(&evidence.path, br#"{"producer":"foreign"}"#).unwrap();
+    assert!(!daemon
+        .phase_event_authorized("phase-job", "train", &evidence.sha256)
+        .unwrap());
+    daemon.stop_job("phase-job").unwrap();
+    assert!(daemon
+        .execute_minimal_episode("phase-job", 1, readiness_deadline_after_ms(5_000))
+        .is_err());
+}
+
+#[test]
+fn phase_owner_refuses_before_dispatch_and_emits_no_later_phase_events() {
+    let root = sandbox("phase-event-no-dispatch");
+    let db = root.join("ember-lab.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("phase-not-started", &identity, &identity_hash)
+        .unwrap();
+    daemon
+        .acquire_lease("cpu-fixture", "phase-not-started")
+        .unwrap();
+
+    assert!(daemon
+        .execute_minimal_episode("phase-not-started", 1, readiness_deadline_after_ms(5_000))
+        .is_err());
+    assert!(!daemon
+        .job_event_kinds("phase-not-started")
+        .unwrap()
+        .iter()
+        .any(|kind| kind.starts_with("ember_lab_phase_")));
+}
+
+#[test]
+fn minimal_slice_noop_child_cannot_authorize_any_phase() {
+    let root = sandbox("phase-noop-child");
+    let (daemon, _phase_root) = start_phase_fixture(&root, "phase-noop", false);
+    assert!(daemon
+        .execute_minimal_episode("phase-noop", 1, readiness_deadline_after_ms(5_000))
+        .is_err());
+    daemon.stop_job("phase-noop").unwrap();
+}
+
+#[test]
+fn delayed_minimal_slice_waits_for_terminal_completion() {
+    let root = sandbox("phase-delayed-completion");
+    // This deliberately exceeds the old 750ms polling cap.  A valid producer
+    // must remain admissible until the dispatch-bound deadline, not be rejected
+    // merely because readiness took longer than a fixed convenience timeout.
+    let (daemon, _phase_root) = start_phase_fixture_with_delay(&root, "phase-delayed", true, 1_000);
+    let produced = daemon
+        .execute_minimal_episode("phase-delayed", 1, readiness_deadline_after_ms(5_000))
+        .unwrap();
+    assert_eq!(produced.len(), 6);
+    daemon.stop_job("phase-delayed").unwrap();
+}
+
+#[test]
+fn readiness_deadline_expiry_refuses_without_stopping_valid_producer() {
+    let root = sandbox("phase-readiness-deadline");
+    let (daemon, _phase_root) =
+        start_phase_fixture_with_delay(&root, "phase-readiness-deadline", true, 1_000);
+    assert!(daemon
+        .execute_minimal_episode(
+            "phase-readiness-deadline",
+            1,
+            readiness_deadline_after_ms(250),
+        )
+        .is_err());
+    assert!(!daemon
+        .job_event_kinds("phase-readiness-deadline")
+        .unwrap()
+        .iter()
+        .any(|kind| kind == "job_stopped"));
+    daemon.stop_job("phase-readiness-deadline").unwrap();
+}
+
+#[test]
+fn missing_completion_marker_refuses_even_when_phase_files_are_complete() {
+    let root = sandbox("phase-missing-completion");
+    let (daemon, phase_root) = start_phase_fixture(&root, "phase-missing-completion", true);
+    let _ = wait_for_host_peak(&phase_root.join("host_peak.json"));
+    for _ in 0..100 {
+        if phase_root.join("completion.json").exists() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    fs::remove_file(phase_root.join("completion.json")).unwrap();
+    assert!(daemon
+        .execute_minimal_episode(
+            "phase-missing-completion",
+            1,
+            readiness_deadline_after_ms(5_000),
+        )
+        .is_err());
+    daemon.stop_job("phase-missing-completion").unwrap();
+}
+
+#[test]
+fn foreign_completion_marker_cannot_authorize_consumption() {
+    let root = sandbox("phase-foreign-completion");
+    let (daemon, phase_root) = start_phase_fixture(&root, "phase-foreign", true);
+    for _ in 0..100 {
+        if phase_root.join("completion.json").exists() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    let mut completion: Value =
+        serde_json::from_slice(&fs::read(phase_root.join("completion.json")).unwrap()).unwrap();
+    completion["job_id"] = json!("foreign-job");
+    fs::write(
+        phase_root.join("completion.json"),
+        serde_json::to_vec(&completion).unwrap(),
+    )
+    .unwrap();
+    assert!(daemon
+        .execute_minimal_episode("phase-foreign", 1, readiness_deadline_after_ms(5_000))
+        .is_err());
+    daemon.stop_job("phase-foreign").unwrap();
+}
+
+#[test]
+fn stale_completion_marker_cannot_authorize_consumption() {
+    let root = sandbox("phase-stale-completion");
+    let (daemon, phase_root) = start_phase_fixture(&root, "phase-stale", true);
+    for _ in 0..100 {
+        if phase_root.join("completion.json").exists() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    let mut completion: Value =
+        serde_json::from_slice(&fs::read(phase_root.join("completion.json")).unwrap()).unwrap();
+    completion["completed_at_ms"] = json!(0);
+    fs::write(
+        phase_root.join("completion.json"),
+        serde_json::to_vec(&completion).unwrap(),
+    )
+    .unwrap();
+    assert!(daemon
+        .execute_minimal_episode("phase-stale", 1, readiness_deadline_after_ms(5_000))
+        .is_err());
+    daemon.stop_job("phase-stale").unwrap();
+}
+
+#[test]
+fn forged_host_probe_peak_is_not_authoritative() {
+    let root = sandbox("phase-forged-host-peak");
+    let (daemon, phase_root) = start_phase_fixture(&root, "phase-forged-peak", true);
+    for _ in 0..100 {
+        if phase_root.join("completion.json").exists() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    let mut peak: Value =
+        serde_json::from_slice(&fs::read(phase_root.join("host_peak.json")).unwrap()).unwrap();
+    peak["whole_run_peak_bytes"] = json!(1);
+    fs::write(
+        phase_root.join("host_peak.json"),
+        serde_json::to_vec(&peak).unwrap(),
+    )
+    .unwrap();
+    assert!(daemon
+        .execute_minimal_episode("phase-forged-peak", 1, readiness_deadline_after_ms(5_000))
+        .is_err());
+    daemon.stop_job("phase-forged-peak").unwrap();
+}
+
+#[test]
+fn daemon_peak_receipt_rejects_post_write_peak_tamper() {
+    let root = sandbox("phase-daemon-peak-tamper");
+    let (daemon, phase_root) = start_phase_fixture(&root, "phase-daemon-peak-tamper", true);
+    let producer_peak = wait_for_host_peak(&phase_root.join("host_peak.json"));
+    daemon
+        .execute_minimal_episode(
+            "phase-daemon-peak-tamper",
+            producer_peak,
+            readiness_deadline_after_ms(5_000),
+        )
+        .unwrap();
+    let (_, original_sha256, original_peak) = daemon
+        .authoritative_whole_run_peak("phase-daemon-peak-tamper")
+        .unwrap();
+    assert!(!original_sha256.is_empty());
+    assert!(original_peak > 0);
+    let observed_path = phase_root.join("host_peak.observed.json");
+    let mut observed: Value = serde_json::from_slice(&fs::read(&observed_path).unwrap()).unwrap();
+    observed["whole_run_peak_bytes"] = json!(1);
+    fs::write(&observed_path, serde_json::to_vec(&observed).unwrap()).unwrap();
+    assert!(daemon
+        .authoritative_whole_run_peak("phase-daemon-peak-tamper")
+        .is_err());
+    daemon.stop_job("phase-daemon-peak-tamper").unwrap();
+}
+
+#[test]
+fn marker_only_phase_json_is_rejected_after_real_child_start() {
+    let root = sandbox("phase-marker-only");
+    let (daemon, phase_root) = start_phase_fixture(&root, "phase-marker", true);
+    let peak = wait_for_host_peak(&phase_root.join("host_peak.json"));
+    fs::write(
+        phase_root.join("train.json"),
+        br#"{"schema":"ember-lab-phase-producer-v1","producer":"ember-lab-minimal-slice-producer","result":"COMPLETED","job_id":"phase-marker","phase":"train","producer_pid":1,"sequence":2,"operation":{"kind":"running_job_observed"},"operation_sha256":"0000000000000000000000000000000000000000000000000000000000000000"}"#,
+    )
+    .unwrap();
+    assert!(daemon
+        .execute_minimal_episode("phase-marker", peak, readiness_deadline_after_ms(5_000))
+        .is_err());
+    daemon.stop_job("phase-marker").unwrap();
+}
+
+#[test]
+fn zero_train_steps_refuse_before_checkpoint_consumption() {
+    let root = sandbox("phase-zero-steps");
+    let (daemon, phase_root) = start_phase_fixture(&root, "phase-zero", true);
+    let peak = wait_for_host_peak(&phase_root.join("host_peak.json"));
+    let train_path = phase_root.join("train.json");
+    let mut train: Value = serde_json::from_slice(&fs::read(&train_path).unwrap()).unwrap();
+    train["operation"]["train_steps"] = json!(0);
+    train["operation"]["update_count"] = json!(0);
+    let operation_bytes = serde_json::to_vec(&train["operation"]).unwrap();
+    train["operation_sha256"] = json!(format!("{:x}", Sha256::digest(operation_bytes)));
+    fs::write(&train_path, serde_json::to_vec(&train).unwrap()).unwrap();
+    assert!(daemon
+        .execute_minimal_episode("phase-zero", peak, readiness_deadline_after_ms(5_000))
+        .is_err());
+    daemon.stop_job("phase-zero").unwrap();
+}
+
+#[test]
+fn missing_checkpoint_publish_selectable_or_restore_artifact_refuses() {
+    for phase in ["checkpoint", "publish", "selectable_checkpoint", "restore"] {
+        let root = sandbox(&format!("phase-missing-{phase}"));
+        let (daemon, phase_root) =
+            start_phase_fixture(&root, &format!("phase-missing-{phase}"), true);
+        let peak = wait_for_host_peak(&phase_root.join("host_peak.json"));
+        fs::remove_file(phase_root.join(format!("{phase}.json"))).unwrap();
+        assert!(daemon
+            .execute_minimal_episode(
+                &format!("phase-missing-{phase}"),
+                peak,
+                readiness_deadline_after_ms(5_000),
+            )
+            .is_err());
+        daemon.stop_job(&format!("phase-missing-{phase}")).unwrap();
+    }
+}
+
 #[cfg(windows)]
 fn force_terminate_process(pid: u32) {
     use windows_sys::Win32::Foundation::CloseHandle;
