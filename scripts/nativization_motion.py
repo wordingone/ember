@@ -629,7 +629,7 @@ def load_run_import_manifest(
             raise ValueError("run import manifest layer trace does not match governed events")
         if len(row_events) != len(TRACE_PHASES) or {event["phase"] for event in row_events} != set(TRACE_PHASES):
             raise ValueError("run import manifest layer trace phases are incomplete")
-        phase_reachability = {event["phase"]: event["reachability_sha256"] for event in row_events}
+        phase_reachability = {event["phase"]: event["layer_reachability_sha256"] for event in row_events}
         expected_share = {
             phase: bool(next(event for event in row_events if event["phase"] == phase)["layer_reachable"])
             for phase in TRACE_PHASES
