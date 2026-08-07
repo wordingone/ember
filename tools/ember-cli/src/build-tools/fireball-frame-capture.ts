@@ -130,7 +130,7 @@ function boundsFor(occupancy: JsonObject[]) {
 export function validateInstalledCaptureReceipt(value: unknown): void {
   const receipt = object(value, "receipt");
   exactKeys(receipt, [
-    "schema_version", "ticket", "ts", "sha_convention", "goal_id", "workstream_id", "next_executed_outcome", "issue_id",
+    "schema_version", "ticket", "ts", "sha_convention", "invariant_sha256", "goal_id", "workstream_id", "next_executed_outcome", "issue_id",
     "result", "source_commit", "binary_sha256", "capture_tool_sha256", "viewport",
     "captures", "geometry", "art_quality_obligation", "claim_boundary",
   ], "receipt");
@@ -140,6 +140,7 @@ export function validateInstalledCaptureReceipt(value: unknown): void {
   if (receipt.sha_convention !== "sha256 over exact on-disk file bytes, no normalization") {
     throw new Error("wrong sha convention");
   }
+  sha(receipt.invariant_sha256, "invariant_sha256");
   if (receipt.goal_id !== "EMBER-02" || receipt.workstream_id !== "EMBER-02A") throw new Error("wrong goal binding");
   if (receipt.next_executed_outcome !== NEXT_OUTCOME) throw new Error("wrong next outcome");
   if (receipt.issue_id !== 54 || receipt.result !== "MEASURED") throw new Error("wrong issue/result");
@@ -375,6 +376,7 @@ async function main(): Promise<void> {
       ticket: "EMBER-CLI-ISSUE-54-FIREBALL-CAPTURE",
       ts: captures[0]!.captured_at,
       sha_convention: "sha256 over exact on-disk file bytes, no normalization",
+      invariant_sha256: sha256File(join(repoRoot, "INVARIANT.md")),
       goal_id: "EMBER-02",
       workstream_id: "EMBER-02A",
       next_executed_outcome: NEXT_OUTCOME,

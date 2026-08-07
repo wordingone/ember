@@ -27,6 +27,7 @@ function receipt() {
     ticket: "EMBER-CLI-ISSUE-54-FIREBALL-CAPTURE",
     ts: "2026-08-07T15:00:00.000Z",
     sha_convention: "sha256 over exact on-disk file bytes, no normalization",
+    invariant_sha256: "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
     goal_id: "EMBER-02",
     workstream_id: "EMBER-02A",
     next_executed_outcome: "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
