@@ -109,10 +109,12 @@ export function redactHostPaths(
   return { publicBytes, redactions };
 }
 
-function frameLines(terminal: Terminal): string[] {
+export function visibleFrameLines(terminal: Terminal): string[] {
   const start = terminal.buffer.active.viewportY;
   return Array.from({ length: terminal.rows }, (_, row) =>
-    terminal.buffer.active.getLine(start + row)?.translateToString(false) ?? "",
+    (terminal.buffer.active.getLine(start + row)?.translateToString(false, 0, terminal.cols) ?? "")
+      .padEnd(terminal.cols)
+      .slice(0, terminal.cols),
   );
 }
 
@@ -371,7 +373,7 @@ async function waitForRegion(
   while (Date.now() < deadline) {
     if (rawChunks.length > 0) {
       await flushWrites();
-      const current = frameLines(terminal);
+      const current = visibleFrameLines(terminal);
       try {
         return { lines: current, region: findClosedPromptRegion(current, terminal.cols) };
       } catch (error) {
