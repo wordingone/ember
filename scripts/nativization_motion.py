@@ -152,7 +152,7 @@ def get_layer_file_globs(layer_name: str) -> list[str]:
             "tools/**/*tensor*.py",
             "scripts/**/*tensor*.py",
         ],
-        "Autograd (grad_fn graph, backward())": [
+        "Autograd (`grad_fn` graph, `backward()`)": [
             "tools/**/*autograd*.py",
             "scripts/**/*autograd*.py",
             "tools/**/*grad*.py",
