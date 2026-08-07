@@ -456,6 +456,7 @@ class TestEndToEnd:
 import torch
 import sys
 import subprocess
+RESULT = torch.cuda.is_available()
 subprocess.run("llama-server")
 """,
             encoding="utf-8",
@@ -465,13 +466,18 @@ subprocess.run("llama-server")
             """\
 import numpy
 import torch
+RESULT = torch.tensor(1)
 """,
             encoding="utf-8",
         )
 
-        # Run the runner
-        manifest_path, manifest_sha = _write_run_import_manifest(
-            tmp_path, parse_diagnostic_map(diagnostic_file)
+        _prepare_fixture_repo(tmp_path)
+        phase_root = tmp_path / "tools" / "ember-restart-3b"
+        (phase_root / "model.py").write_text("import cuda\nimport tensor\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-qm", "governed source set"], cwd=tmp_path, check=True)
+        manifest_path, manifest_sha = build_run_import_manifest(
+            tmp_path, parse_diagnostic_map(diagnostic_file), output_path=tmp_path / "manifests" / "run-import-manifest-v1.json"
         )
         receipt_path = run_nativization_motion(
             tmp_path,
@@ -557,9 +563,13 @@ import torch
             """\
 import torch
 import numpy
+RESULT = torch.cuda.is_available()
 """,
             encoding="utf-8",
         )
+        _prepare_fixture_repo(tmp_path)
+        phase_root = tmp_path / "tools" / "ember-restart-3b"
+        (phase_root / "model.py").write_text("import cuda\n", encoding="utf-8")
 
         # Create prior receipt
         receipts_dir = tmp_path / "receipts" / "nativization-motion"
@@ -575,9 +585,11 @@ import numpy
             ],
         }
 
-        # Build the governed manifest before introducing the untracked predecessor fixture.
-        manifest_path, manifest_sha = _write_run_import_manifest(
-            tmp_path, parse_diagnostic_map(diagnostic_file)
+        # Build the governed manifest after committing the phase-rooted source.
+        subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-qm", "governed source set"], cwd=tmp_path, check=True)
+        manifest_path, manifest_sha = build_run_import_manifest(
+            tmp_path, parse_diagnostic_map(diagnostic_file), output_path=tmp_path / "manifests" / "run-import-manifest-v1.json"
         )
         prior_path = receipts_dir / "nm-20260701T000000Z.json"
         prior_receipt["source_commit"] = subprocess.run(
@@ -810,7 +822,7 @@ import numpy
         manifest_path, _ = build_run_import_manifest(tmp_path, layers)
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         shares = {row["name"]: row["critical_path_share"] for row in manifest["layers"]}
-        assert shares[layers[0]]["creation"] is True
+        assert shares[layers[0]]["creation"] is False
         assert shares[layers[1]]["creation"] is False
 
     def test_trace_rejects_unknown_layer_predicate(self, tmp_path):

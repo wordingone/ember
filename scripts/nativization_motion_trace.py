@@ -117,7 +117,8 @@ def _relative(root: Path, path: Path) -> str:
 LAYER_SEMANTICS = {
     "CUDA kernels (cuBLAS matmul, elementwise)": {
         "imports": ("torch",),
-        "symbols": ("cuda", "matmul"),
+        "symbols": ("cuda",),
+        "require_all_symbols": True,
     },
     "Tensor abstraction (storage/strides/dtype)": {
         "imports": ("torch",),
@@ -147,26 +148,33 @@ def _source_bytes(root: Path, commit: str | None, relative_path: str) -> bytes:
 def _resolve_local_import(root: Path, importer: Path, module: str, commit: str | None = None) -> Path | None:
     if not module:
         return None
+    module_path = module.replace(".", "/")
+    suffixes = (module_path + ".py", module_path + "/__init__.py")
+    if commit is not None:
+        tree = _git_tree_bytes(root, commit)
+        candidates = sorted(
+            path for path in tree
+            if path.startswith(("tools/", "scripts/", "baseline/"))
+            and "/tests/" not in path
+            and not path.startswith("tests/")
+            and any(path == suffix or path.endswith("/" + suffix) for suffix in suffixes)
+        )
+        if candidates:
+            return (root / candidates[0]).resolve()
+        return None
     candidates = [
         importer.parent / f"{module.split('.')[-1]}.py",
-        root / (module.replace(".", "/") + ".py"),
-        root / "tools" / "ember-restart-3b" / f"{module.split('.')[-1]}.py",
+        root / (module_path + ".py"),
+        root / (module_path + "/__init__.py"),
     ]
     for candidate in candidates:
         try:
             candidate.resolve().relative_to(root.resolve())
         except ValueError:
             continue
-        if commit is not None:
-            try:
-                git_blob_bytes(root, commit, _relative(root, candidate))
-                return candidate.resolve()
-            except ValueError:
-                continue
         if candidate.is_file():
             return candidate.resolve()
     return None
-
 
 def _reachable_source_paths(root: Path, entrypoint: str, commit: str | None = None) -> list[Path]:
     first = (root / entrypoint).resolve()
@@ -226,13 +234,14 @@ def _semantic_layer_reachable(
     matched: list[dict[str, str]] = []
     required_imports = tuple(predicate["imports"])
     required_symbols = set(predicate["symbols"])
+    require_all_symbols = bool(predicate.get("require_all_symbols"))
     for item in reachable:
         try:
             tree = ast.parse(git_blob_bytes(root, commit, item["path"]).decode("utf-8-sig"), filename=item["path"])
         except (OSError, SyntaxError, UnicodeError, ValueError) as exc:
             raise ValueError("reachable source is not parseable") from exc
-        imported = set()
-        names = set()
+        imported: set[str] = set()
+        names: set[str] = set()
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 imported.update(alias.name for alias in node.names)
@@ -247,8 +256,9 @@ def _semantic_layer_reachable(
             for value in imported
             for module in required_imports
         )
-        symbol_hit = bool(required_symbols.intersection(names))
-        if import_hit or symbol_hit:
+        symbol_hit = required_symbols.issubset(names) if require_all_symbols else bool(required_symbols.intersection(names))
+        matches = import_hit and symbol_hit if require_all_symbols else (import_hit or symbol_hit)
+        if matches:
             matched.append(item)
     return matched
 

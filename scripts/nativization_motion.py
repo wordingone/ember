@@ -81,6 +81,8 @@ class NativizationMotionReceipt:
     predecessor_receipt_path: str | None
     predecessor_receipt_sha256: str | None
     predecessor_source_commit: str | None
+    predecessor_trace_producer_sha256: str | None
+    predecessor_method: str | None
 
 
 def sha256_file(path: Path) -> str:
@@ -259,23 +261,20 @@ def _stdlib_modules() -> set[str]:
 
 
 def _owned_import_path(repo_root: Path, file_path: Path, module: str, commit: str) -> str | None:
-    candidates = [
-        file_path.parent / f"{module.split('.')[-1]}.py",
-        repo_root / (module.replace(".", "/") + ".py"),
-        repo_root / "tools" / "ember-restart-3b" / f"{module.split('.')[-1]}.py",
-    ]
-    for candidate in candidates:
-        try:
-            relative = candidate.resolve().relative_to(repo_root.resolve()).as_posix()
-        except ValueError:
-            continue
-        try:
-            git_blob_bytes(repo_root, commit, relative)
-        except ValueError:
-            continue
-        return relative
-    return None
-
+    module_path = module.replace(".", "/")
+    suffixes = (module_path + ".py", module_path + "/__init__.py")
+    try:
+        tree = __import__("nativization_motion_trace")._git_tree_bytes(repo_root, commit)
+    except Exception as exc:
+        raise ValueError("Git source tree is unavailable") from exc
+    candidates = sorted(
+        path for path in tree
+        if path.startswith(("tools/", "scripts/", "baseline/"))
+        and "/tests/" not in path
+        and not path.startswith("tests/")
+        and any(path == suffix or path.endswith("/" + suffix) for suffix in suffixes)
+    )
+    return candidates[0] if candidates else None
 
 def collect_import_metrics(
     file_path: Path,
@@ -355,6 +354,7 @@ def measure_layer(
     critical_path_share: dict[str, Any] | None = None,
     *,
     source_commit: str | None = None,
+    source_paths: list[str] | None = None,
 ) -> LayerMeasurement:
     """Measure borrowed/owned imports from exact Git-bound source bytes."""
     all_imports: set[str] = set()
@@ -362,10 +362,27 @@ def measure_layer(
     total_owned_loc = 0
     all_binaries: set[str] = set()
     files_to_scan: set[Path] = set()
-    for glob_pattern in file_globs:
-        for file_path in root.glob(glob_pattern):
-            if file_path.is_file() and file_path.suffix == ".py":
-                files_to_scan.add(file_path)
+    if source_commit is not None and source_paths is None:
+        from nativization_motion_trace import PHASE_ENTRYPOINTS, _reachable_projection, _semantic_layer_reachable
+        selected: set[str] = set()
+        for entrypoint in PHASE_ENTRYPOINTS.values():
+            reachable = _reachable_projection(root, entrypoint, source_commit)
+            selected.update(item["path"] for item in _semantic_layer_reachable(root, source_commit, layer_name, reachable))
+        source_paths = sorted(selected)
+    if source_paths is not None:
+        for relative in source_paths:
+            path = (root / relative).resolve()
+            try:
+                path.relative_to(root.resolve())
+            except ValueError as exc:
+                raise ValueError("governed source path escapes repository") from exc
+            if path.suffix == ".py" and path.is_file():
+                files_to_scan.add(path)
+    else:
+        for glob_pattern in file_globs:
+            for file_path in root.glob(glob_pattern):
+                if file_path.is_file() and file_path.suffix == ".py":
+                    files_to_scan.add(file_path)
     commit = source_commit
     if commit is None and (root / ".git").exists():
         try:
@@ -780,7 +797,16 @@ def run_nativization_motion(
     layers: list[LayerMeasurement] = []
     for layer_name in layer_names:
         file_globs = get_layer_file_globs(layer_name)
-        measurement = measure_layer(repo_root, layer_name, file_globs, run_layers[layer_name])
+        source_paths = sorted({
+            item["path"]
+            for event in run_manifest["trace"]["events"]
+            if event["layer"] == layer_name
+            for item in event["layer_reachable"]
+        })
+        measurement = measure_layer(
+            repo_root, layer_name, file_globs, run_layers[layer_name],
+            source_commit=run_manifest["source_commit"], source_paths=source_paths,
+        )
         layers.append(measurement)
 
     # Load only the caller-declared predecessor; never select a mutable latest file.
@@ -831,6 +857,8 @@ def run_nativization_motion(
         predecessor_receipt_path=prior_relative,
         predecessor_receipt_sha256=prior_sha,
         predecessor_source_commit=prior_receipt.get("source_commit") if prior_receipt else None,
+        predecessor_trace_producer_sha256=prior_receipt.get("run_import_trace_producer_sha256") if prior_receipt else None,
+        predecessor_method=prior_receipt.get("method") if prior_receipt else None,
     )
 
     # Write receipt
@@ -848,18 +876,21 @@ def run_nativization_motion(
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4:
-        print("Usage: nativization_motion.py <repo-root> <run-import-manifest> <manifest-sha256>", file=sys.stderr)
-        sys.exit(2)
-    repo_root = Path(sys.argv[1])
-    manifest_path = Path(sys.argv[2])
-    manifest_sha = sys.argv[3]
-
+    import argparse
+    parser = argparse.ArgumentParser(description="Run governed nativization motion measurement")
+    parser.add_argument("repo_root")
+    parser.add_argument("run_import_manifest")
+    parser.add_argument("manifest_sha256")
+    parser.add_argument("--prior-receipt-path", type=Path)
+    parser.add_argument("--expected-prior-receipt-sha256")
+    args = parser.parse_args()
     try:
         receipt_path = run_nativization_motion(
-            repo_root,
-            run_import_manifest_path=manifest_path,
-            expected_run_import_manifest_sha256=manifest_sha,
+            Path(args.repo_root),
+            run_import_manifest_path=Path(args.run_import_manifest),
+            expected_run_import_manifest_sha256=args.manifest_sha256,
+            prior_receipt_path=args.prior_receipt_path,
+            expected_prior_receipt_sha256=args.expected_prior_receipt_sha256,
         )
         print(f"Success: {receipt_path}")
         sys.exit(0)

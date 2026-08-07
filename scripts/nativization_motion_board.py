@@ -38,6 +38,8 @@ RECEIPT_FIELDS = {
     "predecessor_receipt_path",
     "predecessor_receipt_sha256",
     "predecessor_source_commit",
+    "predecessor_trace_producer_sha256",
+    "predecessor_method",
 }
 LAYER_FIELDS = {
     "name",
@@ -162,6 +164,15 @@ def consume_motion_receipt(
             raise ValueError("motion receipt predecessor source mismatch")
         if predecessor_source != document["source_commit"] and not _source_commit_is_usable(root, predecessor_source):
             raise ValueError("motion receipt predecessor source is not governed")
+        predecessor_producer = _require_hex(document["predecessor_trace_producer_sha256"], length=64, label="predecessor trace producer hash")
+        if predecessor_producer != predecessor.get("run_import_trace_producer_sha256"):
+            raise ValueError("motion receipt predecessor producer binding mismatch")
+        if predecessor_producer != document["run_import_trace_producer_sha256"]:
+            raise ValueError("motion receipt predecessor producer differs from current producer")
+        if document["predecessor_method"] != predecessor.get("method"):
+            raise ValueError("motion receipt predecessor method binding mismatch")
+        if document["predecessor_method"] != document["method"]:
+            raise ValueError("motion receipt predecessor method differs from current method")
     if not isinstance(document["sha_convention"], str) or not document["sha_convention"]:
         raise ValueError("motion receipt SHA convention is invalid")
     if not isinstance(document["next_executed_outcome"], str) or not document["next_executed_outcome"]:
@@ -180,9 +191,15 @@ def consume_motion_receipt(
         if not isinstance(name, str) or name in seen or name not in expected_layers:
             raise ValueError("motion receipt layer identity mismatch")
         seen.add(name)
+        source_paths = sorted({
+            item["path"]
+            for event in manifest["trace"]["events"]
+            if event["layer"] == name
+            for item in event["layer_reachable"]
+        })
         recomputed = measure_layer(
             root, name, get_layer_file_globs(name), expected_layers[name],
-            source_commit=manifest["source_commit"],
+            source_commit=manifest["source_commit"], source_paths=source_paths,
         )
         deps = row["borrowed_deps"]
         if not isinstance(deps, list) or deps != sorted(set(deps)) or not all(isinstance(item, str) for item in deps):
