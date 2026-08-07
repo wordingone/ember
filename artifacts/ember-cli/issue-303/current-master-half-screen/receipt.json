@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-fireball-installed-capture-receipt-v1",
   "ticket": "EMBER-CLI-ISSUE-54-FIREBALL-CAPTURE",
-  "ts": "2026-08-07T16:49:44.602Z",
+  "ts": "2026-08-07T16:57:11.827Z",
   "sha_convention": "sha256 over exact on-disk file bytes, no normalization",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "goal_id": "EMBER-02",
@@ -9,8 +9,8 @@
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "issue_id": 54,
   "result": "MEASURED",
-  "source_commit": "4800237bf01d12f5d5ba3653560f745af2c8538c",
-  "binary_sha256": "a0ad54b2810d3c016ae84cac28cf80fd597ade486fd45671ba4ad4ef657e245e",
+  "source_commit": "cc5cd173f0849302a780bb8884290ecc2a194001",
+  "binary_sha256": "976f28d2228133b064746b3782f81760e454c1853d7d211a1e16ac8c4f57bbc7",
   "capture_tool_sha256": "57400c5dc94dad80fe1d59ab4e75d4ba253da3a978990c136b822a80dde3eeec",
   "viewport": {
     "desktop_width_px": 1720,
@@ -22,10 +22,10 @@
   "captures": [
     {
       "capture_id": "frame-1",
-      "captured_at": "2026-08-07T16:49:44.602Z",
+      "captured_at": "2026-08-07T16:57:11.827Z",
       "elapsed_ms_from_previous": null,
       "frame_file": "frame-1.txt",
-      "frame_sha256": "3dae4d5f12e6f035e11f7b564c46bd5aa394d576cbb34793615e61a80456d3b6",
+      "frame_sha256": "f5d159d29b113b14968be7a298ed956a7329c12162b132c18f6030f4577cf033",
       "cells_file": "frame-1.cells.json",
       "cells_sha256": "1e7e5d58685445ab7505c5212ad94cf764bc31b0677afbc8cf417e49dbcffc18",
       "bounds": {
@@ -199,10 +199,10 @@
     },
     {
       "capture_id": "frame-2",
-      "captured_at": "2026-08-07T16:49:46.817Z",
-      "elapsed_ms_from_previous": 2215,
+      "captured_at": "2026-08-07T16:57:14.037Z",
+      "elapsed_ms_from_previous": 2210,
       "frame_file": "frame-2.txt",
-      "frame_sha256": "b6e4fee16394c639ac364f8af9c569f07c1c7baaaa7344f166240d57667776af",
+      "frame_sha256": "bbf963c7b86365fbb6af9b0910878ae173d438da11398bb183025b9364c2710d",
       "cells_file": "frame-2.cells.json",
       "cells_sha256": "07a8f6e92908c71db012500f145d524eac4b784427225acc22e4daeb623d35ed",
       "bounds": {
@@ -376,10 +376,10 @@
     },
     {
       "capture_id": "frame-3",
-      "captured_at": "2026-08-07T16:49:49.075Z",
-      "elapsed_ms_from_previous": 2258,
+      "captured_at": "2026-08-07T16:57:16.366Z",
+      "elapsed_ms_from_previous": 2329,
       "frame_file": "frame-3.txt",
-      "frame_sha256": "6dd5bcab475f2f1150b3669fc174e654a91db7a765a383382acdac6e0d7ccdda",
+      "frame_sha256": "88023c1e76e50c607e09e93d76c0b60e897ea61c68ff2ff6b18784107485052e",
       "cells_file": "frame-3.cells.json",
       "cells_sha256": "50a74520f9255ef7b84575a70061d5c6ad03fb16fb26cccf74d9cc6ea790b24f",
       "bounds": {

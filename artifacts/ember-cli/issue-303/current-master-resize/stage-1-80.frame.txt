@@ -1,24 +1,24 @@
 ╭─ ember ─────────────────────────────────────╮┌─LIVE RUN / ACTIVITY/EVENT FEED┐
 │    ▀       ember  v0.0.0                    ││ IDLE                          │
-│   ▀▀▀      inference + training, on this    ││ [SELECT PROCESS ▾]            │
-│            machine                          ││   [START]   [PAUSE]           │
-│  ▀▀▀▀▀     OFFLINE - no model · Local       ││   [RESUME]   [RESTART]        │
-│   ▀▀▀      <p>~~~~~~~~~~~~~                 ││ inspect [observatory]         │
-│    ▀       Data: <p>~~~~~~~~~~~~~           ││ [watch] [model] [cockpit]     │
-│Spine — what Ember can be driven to do       ││ [custody] [spine]             │
-│──────────────────────────────────────       ││ govern [admit] +2 more        │
-╰─────────────────────────────────────────────╯│ SOURCE UNVERIFIED/UNBOUND     │
-                                               │ ┌─ HOST MEMORY GIB ─────────┐ │
-                                               │ │ 0.20 GiB | min 0.20 max 0~│ │
-                                               │ └───────────────────────────┘ │
-                                               │ ┌─ HOST RAM GIB ────────────┐ │
-                                               │ │ 25.62 GiB | min 25.62 max~│ │
+│   ▀▀▀      inference + training, on this    ││   [START]   [PAUSE]           │
+│            machine                          ││   [RESUME]   [RESTART]        │
+│  ▀▀▀▀▀     OFFLINE - no model · Local       ││ SOURCE UNVERIFIED/UNBOUND     │
+│   ▀▀▀      <p>~~~~~~~~~~~~~                 ││ ┌─ HOST MEMORY GIB ─────────┐ │
+│    ▀                                        ││ │ AWAITING FIRST SAMPLE     │ │
+│Spine — what Ember can be driven to do       ││ └───────────────────────────┘ │
+╰─────────────────────────────────────────────╯│ ┌─ HOST RAM GIB ────────────┐ │
+                                               │ │ AWAITING FIRST SAMPLE     │ │
                                                │ └───────────────────────────┘ │
                                                │ ┌─ HOST VRAM GIB ───────────┐ │
-                                               │ │ nvidia-smi unavailable    │ │
+                                               │ │ AWAITING FIRST SAMPLE     │ │
                                                │ └───────────────────────────┘ │
-                                               │ … 7 more charts               │
-╭─────────────────────────────────────────────╮│ ACTIVITY/EVENT FEED           │
-│ ❯                                           ││ activity: none observed yet   │
-│ ○ observe · ○ sandbox · no roundtrip yet    ││                               │
+                                               │ ┌─ HOST CPU % ──────────────┐ │
+                                               │ │ AWAITING FIRST SAMPLE     │ │
+                                               │ └───────────────────────────┘ │
+                                               │ ┌─ HOST GPU % ──────────────┐ │
+                                               │ │ AWAITING FIRST SAMPLE     │ │
+                                               │ └───────────────────────────┘ │
+╭─────────────────────────────────────────────╮│ … 5 more charts               │
+│ ❯                                           ││ ACTIVITY/EVENT FEED           │
+│ ○ observe · ○ sandbox · no roundtrip yet    ││ activity: none observed yet   │
 ╰─────────────────────────────────────────────╯└───────────────────────────────┘

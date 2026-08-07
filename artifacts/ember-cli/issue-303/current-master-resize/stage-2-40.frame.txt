@@ -14,7 +14,7 @@
                     │ │ 0.20 GiB | m~│ │
                     │ └──────────────┘ │
                     │ ┌─ HOST RAM GIB  │
-                    │ │ 25.62 GiB | ~│ │
+                    │ │ 24.53 GiB | ~│ │
                     │ └──────────────┘ │
                     │ … 8 more charts  │
                     │ ACTIVITY/EVENT … │

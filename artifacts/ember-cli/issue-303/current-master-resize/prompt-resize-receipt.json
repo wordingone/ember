@@ -5,13 +5,13 @@
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "issue": 243,
   "evidence_class": "LIVE_COMPILED_BINARY_CONPTY",
-  "source_commit": "4800237bf01d12f5d5ba3653560f745af2c8538c",
+  "source_commit": "cc5cd173f0849302a780bb8884290ecc2a194001",
   "binary": {
     "artifact": "tools/ember-cli/src/ember.exe",
-    "sha256": "a0ad54b2810d3c016ae84cac28cf80fd597ade486fd45671ba4ad4ef657e245e",
+    "sha256": "976f28d2228133b064746b3782f81760e454c1853d7d211a1e16ac8c4f57bbc7",
     "reproducible_rebuild": {
-      "source_commit": "4800237bf01d12f5d5ba3653560f745af2c8538c",
-      "sha256": "a0ad54b2810d3c016ae84cac28cf80fd597ade486fd45671ba4ad4ef657e245e",
+      "source_commit": "cc5cd173f0849302a780bb8884290ecc2a194001",
+      "sha256": "976f28d2228133b064746b3782f81760e454c1853d7d211a1e16ac8c4f57bbc7",
       "equals_captured_binary": true
     }
   },
@@ -62,14 +62,14 @@
       "columns": 80,
       "rows": 24,
       "raw_public_redacted": {
-        "path": "artifacts/ember-cli/issue-303/current-master-resize/stage-1-80.raw",
+        "path": "artifacts/ember-cli/issue-303/current-master-resize/stage-1-80.raw.bin",
         "bytes": 6533,
-        "sha256": "0fa71d52620ebd32f7a5d72f5a6df433d79f8eb15cf72910048e5a2c7efe9c1d"
+        "sha256": "18cedb63d4f57cca99956534bf6e4598a3b75c317f801e96f36626df6f35640e"
       },
       "raw_private_exact": {
-        "logical_locator": "EMBER_PRIVATE_EVIDENCE:ember-cli/issue-243/live-resize-v1/4800237bf01d12f5d5ba3653560f745af2c8538c/stage-1-80.raw",
+        "logical_locator": "EMBER_PRIVATE_EVIDENCE:ember-cli/issue-243/live-resize-v1/cc5cd173f0849302a780bb8884290ecc2a194001/stage-1-80.raw",
         "bytes": 6533,
-        "sha256": "eba3a13d1347606713d451e3428af018e4f3c02c70c7f773fe21c10bbd8d0350"
+        "sha256": "37ee7d73a8bad78943784231bb667c8a137f521eb46837be0ec7022c2ec22a54"
       },
       "path_redaction": {
         "byte_length_preserved": true,
@@ -88,8 +88,8 @@
       },
       "frame": {
         "path": "artifacts/ember-cli/issue-303/current-master-resize/stage-1-80.frame.txt",
-        "bytes": 2891,
-        "sha256": "0764c0d6868a9461ef0073a291beb84b8f97b706b4eef0c932fb00f9595f6ff7"
+        "bytes": 3001,
+        "sha256": "b057c409c7bdf3458f5b74908e783d806013ada28ff27b410a481b699f7c57f5"
       },
       "closed_prompt_region": {
         "top": 20,
@@ -102,14 +102,14 @@
       "columns": 40,
       "rows": 24,
       "raw_public_redacted": {
-        "path": "artifacts/ember-cli/issue-303/current-master-resize/stage-2-40.raw",
+        "path": "artifacts/ember-cli/issue-303/current-master-resize/stage-2-40.raw.bin",
         "bytes": 5402,
-        "sha256": "e197dd3c190b49ebab31a8e9a5aa14cae7d2da37f9f17e6ded9e0a04cd5ce67c"
+        "sha256": "08eaf387e4a9f602fa4464a4f98cec0d9a8faf9a1423741b30ac5027fac2f782"
       },
       "raw_private_exact": {
-        "logical_locator": "EMBER_PRIVATE_EVIDENCE:ember-cli/issue-243/live-resize-v1/4800237bf01d12f5d5ba3653560f745af2c8538c/stage-2-40.raw",
+        "logical_locator": "EMBER_PRIVATE_EVIDENCE:ember-cli/issue-243/live-resize-v1/cc5cd173f0849302a780bb8884290ecc2a194001/stage-2-40.raw",
         "bytes": 5402,
-        "sha256": "b63d05fae3941fb04ea81ae7607c33e01557b0470d3f4af2a136856cb553d8ef"
+        "sha256": "9521e800a9897fbdd591bb94a204fa70bd73a3653a0fbf8372768477fa2bcd6b"
       },
       "path_redaction": {
         "byte_length_preserved": true,
@@ -129,7 +129,7 @@
       "frame": {
         "path": "artifacts/ember-cli/issue-303/current-master-resize/stage-2-40.frame.txt",
         "bytes": 1441,
-        "sha256": "ca46486004370faf17a4afb530f5e73605bcdc8d3e8b990ccccbd4a4f4aacb81"
+        "sha256": "2982c7d435b4e5a476aab038ebf36a6106b58c8e9da7ed2dc393d32c69f2dad8"
       },
       "closed_prompt_region": {
         "top": 20,
@@ -142,14 +142,14 @@
       "columns": 80,
       "rows": 24,
       "raw_public_redacted": {
-        "path": "artifacts/ember-cli/issue-303/current-master-resize/stage-3-80.raw",
+        "path": "artifacts/ember-cli/issue-303/current-master-resize/stage-3-80.raw.bin",
         "bytes": 8012,
-        "sha256": "dce60e0357e5ec30f61efcaeb0deaa219dd71ac3dd9d04bf58d00385a455066c"
+        "sha256": "1976a53c5b77b9c151a602dac5d64b503131ae802daa21a425d5fd3c622d69df"
       },
       "raw_private_exact": {
-        "logical_locator": "EMBER_PRIVATE_EVIDENCE:ember-cli/issue-243/live-resize-v1/4800237bf01d12f5d5ba3653560f745af2c8538c/stage-3-80.raw",
+        "logical_locator": "EMBER_PRIVATE_EVIDENCE:ember-cli/issue-243/live-resize-v1/cc5cd173f0849302a780bb8884290ecc2a194001/stage-3-80.raw",
         "bytes": 8012,
-        "sha256": "7d014dd91b22589e9f764072e93365b029ed9873eaa334651aa7bb13ce996a2f"
+        "sha256": "c94d5d01f1d16bf1d4d5e4702d1fbbba577436a59dc927bc85756b716458b3f4"
       },
       "path_redaction": {
         "byte_length_preserved": true,
@@ -169,7 +169,7 @@
       "frame": {
         "path": "artifacts/ember-cli/issue-303/current-master-resize/stage-3-80.frame.txt",
         "bytes": 2891,
-        "sha256": "ee4e68ebdb2350a3348d3ef75ca7e68a5ae078935f3669ce0a8ae8408c46f136"
+        "sha256": "24f4b6efdfe4eea8b8ac1cf4a2b3d9ad4b69d1067760812a4206592d1c712801"
       },
       "closed_prompt_region": {
         "top": 20,

@@ -1,2 +1,3 @@
 {"ts":"2026-08-07T16:46:46.432Z","pids":[26744],"match_rule":"exact PID returned by this capture process's node-pty spawn","survivors_expected":"none"}
 {"ts":"2026-08-07T16:49:49.169Z","pids":[122328],"match_rule":"exact PID returned by this capture process's node-pty spawn","survivors_expected":"none"}
+{"ts":"2026-08-07T16:57:16.457Z","pids":[94620],"match_rule":"exact PID returned by this capture process's node-pty spawn","survivors_expected":"none"}
