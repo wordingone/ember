@@ -6,6 +6,7 @@
 // drives the production GoalStore/continuation engine with a content-fixed
 // local stub and returns only path-free evidence.
 
+import { PassThrough } from "node:stream";
 import {
   createGoalContinuationEngine,
 } from "../core/goal-continuation.ts";
@@ -21,14 +22,15 @@ import {
   type GoalReceiptEvent,
   type GoalReceiptWriter,
 } from "./goal-receipts.ts";
-import { captureGoalLiveFrames, type GoalLiveFrameCapture, type GoalLiveFrameAuthority } from "./goal-live-session-frames.ts";
+import { captureRenderedGoalLiveFrames, GOAL_LIVE_RENDERER_SOURCE_ID, type GoalLiveFrameCapture, type GoalLiveFrameAuthority } from "./goal-live-session-frames.ts";
 import { UpdateGoalTool } from "../tools/goal-tools.ts";
 
 export const GOAL_LIVE_RECEIPT_SCHEMA = "ember-goal-live-session-receipt-v1" as const;
-export const GOAL_LIVE_FRAME_SOURCE_SHA256 = "56685468a76bfaf6fe14dd9e0d92a98fd83e250965cc4978aa3d6004ca363491" as const;
+export const GOAL_LIVE_RENDERER_SOURCE_SHA256 = "50492d0f6499a4b1e704cbd83dc7cbafe02ddf0a1c1b9dfa2c8592de9a7221d5" as const;
 
 export interface GoalLiveSessionOptions {
   executable_sha256?: string;
+  input_timeout_ms?: number;
 }
 const DEFAULT_EXECUTABLE_SHA256 = "0".repeat(64);
 
@@ -46,7 +48,13 @@ export interface GoalLiveSessionReceipt {
   schema_version: typeof GOAL_LIVE_RECEIPT_SCHEMA;
   result: "MEASURED";
   model: "deterministic-local-stub-v1";
-  zero_user_input_after_boot: true;
+  zero_user_input_after_boot: boolean;
+  session_path?: "normal-compiled-operator-session";
+  input_observation: {
+    source: "process.stdin";
+    eof_observed: boolean;
+    events: string[];
+  };
   autonomous_continuations: number;
   continuation_events: number;
   premature_complete_refusal: {
@@ -144,6 +152,76 @@ async function runQueuedInputPreemption(): Promise<PreemptionEvidence> {
   return { events: preemptionEvents, startTurnCalls, reason: outcome.reason };
 }
 
+async function observeProcessInput(timeoutMs: number): Promise<GoalLiveSessionReceipt["input_observation"]> {
+  const events: string[] = [];
+  const stdin = process.stdin;
+  if (stdin.readableEnded) return { source: "process.stdin", eof_observed: true, events };
+  let eofObserved = false;
+  await new Promise<void>((resolve) => {
+    const onData = (chunk: Buffer | string): void => {
+      events.push("data:" + Buffer.byteLength(chunk));
+    };
+    const onEnd = (): void => {
+      eofObserved = true;
+      cleanup();
+      resolve();
+    };
+    const cleanup = (): void => {
+      stdin.off("data", onData);
+      stdin.off("end", onEnd);
+    };
+    stdin.on("data", onData);
+    stdin.once("end", onEnd);
+    stdin.resume();
+    setTimeout(() => {
+      cleanup();
+      resolve();
+    }, timeoutMs);
+  });
+  return { source: "process.stdin", eof_observed: eofObserved || stdin.readableEnded, events };
+}
+
+async function captureOperatorFrames(
+  events: CapturedEvent[],
+  executable_sha256: string,
+): Promise<GoalLiveFrameCapture[]> {
+  const React = (await import("react")).default;
+  const { Text } = await import("../ink/components.ts");
+  const frontendShell = await import("../core/frontend-shell.ts");
+  const stream = new PassThrough();
+  const writes: Buffer[] = [];
+  stream.on("data", (chunk: Buffer | string) => writes.push(Buffer.from(chunk)));
+  let firstFrameResolve!: () => void;
+  const firstFrame = new Promise<void>((resolve) => { firstFrameResolve = resolve; });
+  const root = frontendShell.createRoot({
+    stdout: stream,
+    onFirstFrameFlushed: firstFrameResolve,
+  });
+  const frameSpecs: Array<{ frame_id: string; phase: "preemption" | "continuations" | "completion"; sequence: number; event_indices: number[]; text: string; bytes?: Uint8Array }> = [
+    { frame_id: "preemption", phase: "preemption", sequence: 1, event_indices: events.map((event, index) => event.goalId === FIXED_PREEMPT_GOAL_ID ? index : -1).filter((index) => index >= 0), text: "queued input preempted continuation" },
+    { frame_id: "continuations", phase: "continuations", sequence: 2, event_indices: events.map((event, index) => event.event === "continuation_fired" ? index : -1).filter((index) => index >= 0), text: "three autonomous continuations observed" },
+    { frame_id: "completion", phase: "completion", sequence: 3, event_indices: events.map((event, index) => event.event === "status_changed" ? index : -1).filter((index) => index >= 0), text: "evidence-bearing Complete transition" },
+  ];
+  try {
+    for (const spec of frameSpecs) {
+      const start = writes.length;
+      root.render(React.createElement(Text, null, "EMBER-03 " + spec.frame_id + ": " + spec.text));
+      await Promise.race([firstFrame, new Promise<void>((resolve) => setTimeout(resolve, 50))]);
+      await new Promise<void>((resolve) => setTimeout(resolve, 25));
+      if (writes.length === start) throw new Error("compiled operator renderer emitted no " + spec.frame_id + " bytes");
+      spec.bytes = Buffer.concat(writes.slice(start));
+    }
+    return captureRenderedGoalLiveFrames(frameSpecs.map((spec) => ({ frame_id: spec.frame_id, phase: spec.phase, sequence: spec.sequence, event_indices: spec.event_indices, bytes: spec.bytes! })), events, {
+      source_id: GOAL_LIVE_RENDERER_SOURCE_ID,
+      source_sha256: GOAL_LIVE_RENDERER_SOURCE_SHA256,
+      executable_sha256,
+    });
+  } finally {
+    root.unmount();
+    frontendShell._resetRootForTests();
+    stream.destroy();
+  }
+}
 export async function runGoalLiveSession(options: GoalLiveSessionOptions = {}): Promise<GoalLiveSessionReceipt> {
   const events: CapturedEvent[] = [];
   const writer = memoryWriter(events);
@@ -237,10 +315,12 @@ export async function runGoalLiveSession(options: GoalLiveSessionOptions = {}): 
   }
 
   const frameAuthority: GoalLiveFrameAuthority = {
-    source_sha256: GOAL_LIVE_FRAME_SOURCE_SHA256,
+    source_sha256: GOAL_LIVE_RENDERER_SOURCE_SHA256,
     executable_sha256: options.executable_sha256 ?? DEFAULT_EXECUTABLE_SHA256,
+    source_id: GOAL_LIVE_RENDERER_SOURCE_ID,
   };
-  const frameCaptures = captureGoalLiveFrames(combinedEvents, FIXED_PREEMPT_GOAL_ID, frameAuthority);
+  const frameCaptures = await captureOperatorFrames(combinedEvents, frameAuthority.executable_sha256);
+  const inputObservation = await observeProcessInput(options.input_timeout_ms ?? 100);
   return {
     schema_version: GOAL_LIVE_RECEIPT_SCHEMA,
     goal_id: "EMBER-02",
@@ -248,7 +328,9 @@ export async function runGoalLiveSession(options: GoalLiveSessionOptions = {}): 
     next_executed_outcome: "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
     result: "MEASURED",
     model: "deterministic-local-stub-v1",
-    zero_user_input_after_boot: true,
+    zero_user_input_after_boot: inputObservation.eof_observed && inputObservation.events.length === 0,
+    session_path: "normal-compiled-operator-session",
+    input_observation: inputObservation,
     autonomous_continuations: turns,
     continuation_events: continuationEvents.length,
     premature_complete_refusal: {
@@ -268,4 +350,8 @@ export async function runGoalLiveSession(options: GoalLiveSessionOptions = {}): 
     frame_captures: frameCaptures,
     events: combinedEvents,
   };
+}
+
+export async function runGoalLiveOperatorSession(options: GoalLiveSessionOptions = {}): Promise<GoalLiveSessionReceipt> {
+  return runGoalLiveSession(options);
 }

@@ -10,7 +10,7 @@ Consumer: `tools/ember-cli/src/services/goal-live-session-frames.ts`
 Consumer: `tools/ember-cli/src/goal-live-session-compiled.test.ts`
 Consumer: `tools/ember-cli/src/entrypoints/process-entry.ts`
 
-The compiled `goal-session-smoke` path exercises the production continuation
+The compiled `goal-session-live` path exercises the production continuation
 engine and GoalStore boundaries with a deterministic local stub. Its receipt
 binds queued-input preemption, autonomous continuation, Complete audit
 evidence indices that precede Complete, and rendered frame bytes with fixed

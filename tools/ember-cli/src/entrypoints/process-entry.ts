@@ -151,6 +151,7 @@ const FAST_PATH_SUBCMDS = new Set<string>([
   "environment-runner",
   "self-hosted-runner",
   "goal-session-smoke",
+  "goal-session-live",
   "gh",
   "liveness",
 ]);
@@ -611,7 +612,7 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
       `\n` +
       `Subcommands:\n` +
       `  remote-control (rc), sync, bridge, daemon, ps, logs, attach, kill,\n` +
-      `  new, list, reply, environment-runner, self-hosted-runner, goal-session-smoke, gh doctor,\n` +
+      `  new, list, reply, environment-runner, self-hosted-runner, goal-session-smoke, goal-session-live, gh doctor,\n` +
       `  liveness install [--executable C:\\path\\to\\ember.exe]\n` +
       `\n` +
       `Environment:\n` +
@@ -724,16 +725,16 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
     return true;
   }
 
-  if (first === "goal-session-smoke") {
-    const { runGoalLiveSession } = await import("../services/goal-live-session.ts");
+  if (first === "goal-session-smoke" || first === "goal-session-live") {
+    const { runGoalLiveOperatorSession } = await import("../services/goal-live-session.ts");
     try {
       const executable_sha256 = createHash("sha256").update(await readFile(process.execPath)).digest("hex");
-      const receipt = await runGoalLiveSession({ executable_sha256 });
+      const receipt = await runGoalLiveOperatorSession({ executable_sha256 });
       process.stdout.write(JSON.stringify(receipt) + "\n");
       process.exit(0);
     } catch (error) {
       process.stderr.write(
-        "goal-session-smoke failed: " +
+        (first + " failed: ") +
           (error instanceof Error ? error.message : String(error)) +
           "\n",
       );

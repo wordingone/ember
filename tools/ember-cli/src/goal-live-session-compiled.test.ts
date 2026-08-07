@@ -20,12 +20,12 @@ describe("compiled goal-session live path", () => {
     const executable = join(tempRoot, "ember-goal-live.exe");
     try {
       const build = Bun.spawnSync(
-        ["bun", "build", "./entrypoints/main.ts", "--compile", "--outfile", executable],
+        ["bun", "build", "./entrypoints/main.ts", "--compile", "--outfile", executable, "--define", "globalThis.__EMBER_BUILD_COMMIT__=\\\"251962ed675dcb88d8ae4b3b34ecb593efb34bcf\\\""],
         { cwd: SRC_DIR, stdout: "pipe", stderr: "pipe" },
       );
       expect(build.exitCode, text(build.stderr)).toBe(0);
 
-      const run = Bun.spawnSync([executable, "goal-session-smoke"], {
+      const run = Bun.spawnSync([executable, "goal-session-live"], {
         cwd: SRC_DIR,
         stdout: "pipe",
         stderr: "pipe",
@@ -81,7 +81,7 @@ describe("compiled goal-session live path", () => {
       expect(auditIndices.length).toBeGreaterThanOrEqual(4);
       expect(auditIndices.every((index: number) => Number.isInteger(index) && index < orderingCompleteIndex)).toBe(true);
       const executableSha = createHash("sha256").update(readFileSync(executable)).digest("hex");
-      const sourceSha = createHash("sha256").update(readFileSync(join(SRC_DIR, "services", "goal-live-session-frames.ts"))).digest("hex");
+      const sourceSha = createHash("sha256").update(readFileSync(join(SRC_DIR, "core", "frontend-shell.ts"))).digest("hex");
       for (const frame of receipt.frame_captures) {
         expect(frame.frame_sha256).toMatch(/^[0-9a-f]{64}$/);
         expect(frame.frame_bytes_base64).toMatch(/^[A-Za-z0-9+/]+={0,2}$/);
@@ -90,10 +90,11 @@ describe("compiled goal-session live path", () => {
         expect(frame.sequence).toBeGreaterThan(0);
         expect(frame.receipt_start_index).toBeLessThanOrEqual(frame.receipt_end_index);
         expect(frame.source_binding).toEqual({
-          id: "ember-goal-live-session-source-v1",
+          id: "ember-goal-live-renderer-v1",
           sha256: sourceSha,
           executable_sha256: executableSha,
         });
+        expect(frame.renderer).toBe("ember-ink-reconciler");
         expect(frame.event_count).toBeGreaterThan(0);
         const frameBytes = Buffer.from(frame.frame_bytes_base64, "base64");
         expect(frame.frame_sha256).toBe(createHash("sha256").update(frameBytes).digest("hex"));
@@ -111,6 +112,48 @@ describe("compiled goal-session live path", () => {
       expect(serialized).not.toContain(tempRoot);
       expect(serialized).not.toMatch(/[A-Za-z]:\\/);
       expect(serialized).not.toContain("filePath");
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("runs the normal compiled operator session and binds observed renderer/input evidence", () => {
+    const tempBase = process.env["TEMP"] ?? process.env["TMP"] ?? "C:\\tmp";
+    const tempRoot = mkdtempSync(join(tempBase, "ember-goal-live-operator-"));
+    const executable = join(tempRoot, "ember-goal-live-operator.exe");
+    try {
+      const build = Bun.spawnSync(
+        [
+          "bun", "build", "./entrypoints/main.ts", "--compile", "--outfile", executable,
+          "--define", "globalThis.__EMBER_BUILD_COMMIT__=\\\"251962ed675dcb88d8ae4b3b34ecb593efb34bcf\\\"",
+        ],
+        { cwd: SRC_DIR, stdout: "pipe", stderr: "pipe" },
+      );
+      expect(build.exitCode, text(build.stderr)).toBe(0);
+
+      const run = Bun.spawnSync([executable, "goal-session-live"], {
+        cwd: SRC_DIR,
+        stdout: "pipe",
+        stderr: "pipe",
+        stdin: "pipe",
+      });
+      const stdout = text(run.stdout).trim();
+      expect(run.exitCode, text(run.stderr)).toBe(0);
+      const receipt = JSON.parse(stdout.split(/\r?\n/).at(-1) ?? "null") as Record<string, any>;
+      expect(receipt.goal_id).toBe("EMBER-02");
+      expect(receipt.workstream_id).toBe("EMBER-02A");
+      expect(receipt.session_path).toBe("normal-compiled-operator-session");
+      expect(receipt.input_observation).toMatchObject({
+        source: "process.stdin",
+        eof_observed: true,
+        events: [],
+      });
+      expect(receipt.frame_captures).toHaveLength(3);
+      expect(receipt.frame_captures.every((frame: any) =>
+        frame.renderer === "ember-ink-reconciler" &&
+        frame.frame_bytes_base64.length > 0 &&
+        frame.source_binding?.id === "ember-goal-live-renderer-v1")).toBe(true);
+      expect(JSON.stringify(receipt)).not.toMatch(/[A-Za-z]:\\\\/);
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }

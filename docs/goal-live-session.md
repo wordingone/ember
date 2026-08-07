@@ -9,8 +9,10 @@ From `tools/ember-cli/src`, build and run the exact command:
 
 ```powershell
 $exe = Join-Path $env:TEMP "ember-goal-live.exe"
-bun build .\entrypoints\main.ts --compile --outfile $exe
-& $exe goal-session-smoke
+$commit = (git rev-parse HEAD).Trim()
+$define = 'globalThis.__EMBER_BUILD_COMMIT__=\"' + $commit + '\"'
+bun build .\entrypoints\main.ts --compile --outfile $exe --define $define
+& $exe goal-session-live
 Remove-Item -LiteralPath $exe -Force
 ```
 
@@ -18,9 +20,7 @@ The command emits one path-free JSON object with schema
 `ember-goal-live-session-receipt-v1`. The checked-in deterministic fixture is
 `tools/ember-cli/src/fixtures/goal-live-session-receipt-v1.json`.
 
-The receipt also contains three hash-bound frame captures from the compiled
-The receipt also contains three rendered, fixed-dimension frame captures from
-the compiled session. Each frame binds UTF-8 bytes, width/height, sequence,
+The receipt contains three rendered, fixed-dimension frame captures from the compiled session. Each frame binds UTF-8 bytes, width/height, sequence,
 receipt range, the exact frame-source SHA, and the compiled executable SHA;
 the checked-in test recomputes each hash and rejects a one-byte tamper.
 
