@@ -2,6 +2,7 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
+use ember_lab::rehearsal::{self, Phase, PhaseOutcome, RehearsalManifest, RehearsalRunner};
 use ember_lab::{
     ember_lab_source_hash, hash_file, rpc::serve_named_pipe, training_verify, Daemon,
     MAX_DISPATCH_MANIFEST_BYTES,
@@ -15,7 +16,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 fn usage() -> &'static str {
-    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]"
+    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
 }
 
 enum Command {
@@ -32,6 +33,26 @@ enum Command {
         receipt: PathBuf,
         certificate: Option<PathBuf>,
     },
+    Rehearse {
+        capability: String,
+        manifest: PathBuf,
+        receipt: PathBuf,
+    },
+    Runbook {
+        output: PathBuf,
+    },
+}
+
+struct CliRunner;
+
+impl RehearsalRunner for CliRunner {
+    fn run(&self, _phase: Phase) -> PhaseOutcome {
+        // The CLI path is a deterministic rehearsal seam.  It proves the
+        // ordered authority/receipt contract without claiming a real training
+        // or capability result; a governed production runner supplies the
+        // concrete phase observations separately.
+        PhaseOutcome::Completed
+    }
 }
 
 fn parse_args() -> Result<Command, String> {
@@ -57,6 +78,43 @@ fn parse_args() -> Result<Command, String> {
             root: root.ok_or_else(|| format!("missing --root\n{}", usage()))?,
             receipt: receipt.ok_or_else(|| format!("missing --receipt\n{}", usage()))?,
             certificate,
+        });
+    }
+
+    if command == "runbook" {
+        let flag = args
+            .next()
+            .ok_or_else(|| format!("missing --output\n{}", usage()))?;
+        let output = args
+            .next()
+            .ok_or_else(|| format!("missing value for {flag}\n{}", usage()))?;
+        if flag != "--output" || args.next().is_some() {
+            return Err(format!("arguments do not match runbook\n{}", usage()));
+        }
+        return Ok(Command::Runbook {
+            output: PathBuf::from(output),
+        });
+    }
+
+    if command == "rehearse" || command == "episode" {
+        let mut capability = "rehearsal".to_string();
+        let mut manifest = None;
+        let mut receipt = None;
+        while let Some(flag) = args.next() {
+            let value = args
+                .next()
+                .ok_or_else(|| format!("missing value for {flag}\n{}", usage()))?;
+            match flag.as_str() {
+                "--capability" => capability = value,
+                "--manifest" => manifest = Some(PathBuf::from(value)),
+                "--receipt" => receipt = Some(PathBuf::from(value)),
+                _ => return Err(format!("unknown argument {flag}\n{}", usage())),
+            }
+        }
+        return Ok(Command::Rehearse {
+            capability,
+            manifest: manifest.ok_or_else(|| format!("missing --manifest\n{}", usage()))?,
+            receipt: receipt.ok_or_else(|| format!("missing --receipt\n{}", usage()))?,
         });
     }
 
@@ -107,6 +165,25 @@ fn run_verify_training(
     )?;
     training_verify::write_receipt(receipt_path, &outcome.receipt)?;
     Ok(outcome.ok)
+}
+
+fn run_rehearsal(
+    capability: &str,
+    manifest_path: &Path,
+    receipt_path: &Path,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let manifest_bytes = std::fs::read(manifest_path)?;
+    let manifest_sha256 = format!("{:x}", Sha256::digest(&manifest_bytes));
+    let manifest: RehearsalManifest = serde_json::from_slice(&manifest_bytes)?;
+    let result = rehearsal::episode(capability, &manifest, &CliRunner);
+    let receipt = result.receipt.with_manifest_sha256(manifest_sha256);
+    rehearsal::write_receipt(receipt_path, &receipt).map_err(std::io::Error::other)?;
+    println!(
+        "rehearse: {:?} -- receipt written to {}",
+        result.status,
+        receipt_path.display()
+    );
+    Ok(result.status == rehearsal::RehearsalStatus::Completed)
 }
 
 fn dispatch(pipe: &str, manifest: &Path) -> Result<Value, Box<dyn std::error::Error>> {
@@ -182,6 +259,19 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 // field, not the exit code alone.
                 std::process::exit(1);
             }
+        }
+        Command::Rehearse {
+            capability,
+            manifest,
+            receipt,
+        } => {
+            if !run_rehearsal(&capability, &manifest, &receipt)? {
+                std::process::exit(1);
+            }
+        }
+        Command::Runbook { output } => {
+            std::fs::write(&output, rehearsal::generate_runbook())?;
+            println!("runbook written to {}", output.display());
         }
     }
     Ok(())

@@ -18,6 +18,7 @@ use std::sync::{Arc, Mutex};
 use std::sync::{RwLock, Weak};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+pub mod rehearsal;
 pub mod rpc;
 pub mod scratch;
 pub mod server_supervisor;
