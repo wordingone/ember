@@ -728,7 +728,11 @@ pub fn serve_named_pipe(daemon: Arc<Daemon>, pipe_name: &str) -> io::Result<()> 
                 .duration_since(UNIX_EPOCH)
                 .map(|duration| duration.as_millis() as i64)
                 .unwrap_or(0);
-            let _ = worker_daemon.supervise_registered_server_once(now_ms);
+            if let Err(error) = worker_daemon.supervise_registered_server_once(now_ms) {
+                if let Err(record_error) = worker_daemon.record_supervision_error(now_ms, &error) {
+                    eprintln!("ember-lab supervision failure was not receipted: {record_error}");
+                }
+            }
             thread::sleep(Duration::from_secs(1));
         }
     });

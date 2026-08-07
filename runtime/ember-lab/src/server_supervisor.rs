@@ -10,7 +10,9 @@
 //! truth.  This module only adds the server leg to that authority; it does not
 //! create a second launcher, registry, ledger, or receipt family.
 
-use crate::{atomic_create, hash_bytes, Daemon, EmberLabError, Result};
+use crate::{
+    atomic_create, hash_bytes, Daemon, DispatchManifest, DispatchOutcome, EmberLabError, Result,
+};
 use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -348,6 +350,94 @@ impl Daemon {
         Ok(())
     }
 
+    fn rebind_server_supervision(
+        &self,
+        previous: &ServerAuthority,
+        request: &ServerLiveCycleRequest,
+        outcome: &DispatchOutcome,
+    ) -> Result<ServerAuthority> {
+        let manifest_bytes = fs::read(&request.restore_manifest_path)?;
+        let manifest: DispatchManifest = serde_json::from_slice(&manifest_bytes)
+            .map_err(|error| invalid(format!("restore manifest is not closed JSON: {error}")))?;
+        if manifest.job_id == previous.job_id {
+            return Err(invalid(
+                "restore manifest must dispatch a fresh job authority",
+            ));
+        }
+        if manifest.resource_lease != previous.resource_lease {
+            return Err(invalid(
+                "restore manifest changed the supervised resource lease",
+            ));
+        }
+        if self.job_pid(&manifest.job_id)? != Some(outcome.handle.pid) {
+            return Err(EmberLabError::ProcessIdentityMismatch {
+                job_id: manifest.job_id,
+                pid: outcome.handle.pid,
+            });
+        }
+        if self.lease_owner(&previous.resource_lease)?.as_deref() != Some(manifest.job_id.as_str())
+        {
+            return Err(EmberLabError::LeaseNotOwned {
+                resource: previous.resource_lease.clone(),
+                job_id: manifest.job_id,
+            });
+        }
+        let identity_sha256 = self
+            .identity_hash(&manifest.job_id)?
+            .ok_or_else(|| invalid("restored job has no bound identity"))?;
+        let rebound = ServerAuthority {
+            schema_version: SERVER_AUTHORITY_SCHEMA.into(),
+            job_id: manifest.job_id,
+            resource_lease: previous.resource_lease.clone(),
+            target: previous.target.clone(),
+            host: previous.host.clone(),
+            port: previous.port,
+            pid: outcome.handle.pid,
+            identity_sha256,
+        };
+        let authority_root = request
+            .authority_path
+            .parent()
+            .ok_or_else(|| invalid("server authority has no custody root"))?;
+        let authority_stem = request
+            .authority_path
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .ok_or_else(|| invalid("server authority name is invalid"))?;
+        let rebound_path = authority_root.join(format!(
+            "{authority_stem}-rebound-{}.json",
+            &hash_bytes(rebound.job_id.as_bytes())[..16]
+        ));
+        let rebound_bytes = serde_json::to_vec(&rebound)?;
+        atomic_create(&rebound_path, &rebound_bytes)?;
+        validate_receipt_destination(&rebound_path, &request.receipt_path)?;
+        let rebound_sha256 = hash_bytes(&rebound_bytes);
+        self.ensure_server_supervisions_table()?;
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        tx.execute(
+            "DELETE FROM server_supervisions WHERE job_id=?1",
+            [&previous.job_id],
+        )?;
+        tx.execute(
+            "INSERT INTO server_supervisions(
+               job_id,authority_path,authority_sha256,receipt_path,
+               restore_manifest_path,required_headroom_bytes,updated_at_ms
+             ) VALUES(?1,?2,?3,?4,?5,?6,?7)",
+            rusqlite::params![
+                &rebound.job_id,
+                rebound_path.to_string_lossy(),
+                rebound_sha256,
+                request.receipt_path.to_string_lossy(),
+                request.restore_manifest_path.to_string_lossy(),
+                request.required_headroom_bytes,
+                request.now_ms,
+            ],
+        )?;
+        tx.commit()?;
+        Ok(rebound)
+    }
+
     fn fence_server_for_recovery(
         &self,
         authority: &ServerAuthority,
@@ -416,6 +506,34 @@ impl Daemon {
             .collect()
     }
 
+    pub fn record_supervision_error(&self, now_ms: i64, error: &EmberLabError) -> Result<()> {
+        if now_ms < 0 {
+            return Err(invalid("server supervision clock is invalid"));
+        }
+        let directory = self.log_dir.join("server-supervision-errors");
+        fs::create_dir_all(&directory)?;
+        let path = directory.join(format!("{now_ms}.json"));
+        let bytes = serde_json::to_vec_pretty(&serde_json::json!({
+            "schema": "ember-lab-supervision-error-v1",
+            "observed_at_ms": now_ms,
+            "error": error.to_string(),
+            "scientific_capability_evidence": false,
+        }))?;
+        atomic_create(&path, &bytes)?;
+        self.conn()?.execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'server_supervision_error',?3)",
+            rusqlite::params![
+                "ember-lab-supervisor",
+                now_ms,
+                serde_json::to_string(&serde_json::json!({
+                    "receipt_sha256": hash_bytes(&bytes),
+                    "error": error.to_string(),
+                }))?,
+            ],
+        )?;
+        Ok(())
+    }
+
     /// Run one receipt-bound server supervision cycle through Ember Lab's
     /// identity/lease/activity/atomic-receipt authority.  `restore` is the
     /// current owned-server restore seam; production callers connect it to the
@@ -455,7 +573,15 @@ impl Daemon {
                 actual: authority.identity_sha256.clone(),
             });
         }
+        if request.now_ms < 0 {
+            return Err(invalid("server cycle clock is invalid"));
+        }
+        let outage = planned_outage_state(self, &authority.resource_lease, request.now_ms)?;
+        if outage == PlannedOutageState::Expired {
+            sweep_expired_outage(self, &authority.resource_lease, request.now_ms)?;
+        }
         if !allow_released_lease
+            && outage != PlannedOutageState::Open
             && self.lease_owner(&authority.resource_lease)?.as_deref() != Some(&authority.job_id)
         {
             return Err(EmberLabError::LeaseNotOwned {
@@ -463,14 +589,7 @@ impl Daemon {
                 job_id: authority.job_id.clone(),
             });
         }
-        if request.now_ms < 0 {
-            return Err(invalid("server cycle clock is invalid"));
-        }
         let restarts_last_hour = self.restart_count_last_hour(&authority.job_id, request.now_ms)?;
-        let outage = planned_outage_state(self, &authority.resource_lease, request.now_ms)?;
-        if outage == PlannedOutageState::Expired {
-            sweep_expired_outage(self, &authority.resource_lease, request.now_ms)?;
-        }
         let endpoint = format!("{}:{}", authority.host, authority.port);
         let failure = if request.observation.process_alive {
             match request.observation.endpoint {
@@ -520,7 +639,7 @@ impl Daemon {
                     Some(evidence.restore_cost_s),
                     Some(evidence.health_status),
                 ),
-                Err(_) => (
+                Err(_error) => (
                     "RESTORE_FAILED".to_string(),
                     Some(cause.to_string()),
                     None,
@@ -590,6 +709,19 @@ impl Daemon {
         &self,
         request: ServerLiveCycleRequest,
     ) -> Result<ServerCycleReceipt> {
+        self.supervise_server_live_cycle_with_dispatch(request, |daemon, path| {
+            daemon.dispatch_manifest(path)
+        })
+    }
+
+    fn supervise_server_live_cycle_with_dispatch<F>(
+        &self,
+        request: ServerLiveCycleRequest,
+        dispatch: F,
+    ) -> Result<ServerCycleReceipt>
+    where
+        F: FnOnce(&Daemon, &std::path::Path) -> Result<DispatchOutcome>,
+    {
         self.register_server_supervision(&request)?;
         let authority = load_authority(&request.authority_path, &request.authority_sha256)?;
         if let Some(pid) = self.job_pid(&authority.job_id)? {
@@ -608,22 +740,29 @@ impl Daemon {
             process_alive,
             endpoint: probe_endpoint(&authority),
         };
-        if process_alive
-            && matches!(
-                observation.endpoint,
-                EndpointHealth::Dead | EndpointHealth::Hung
-            )
-        {
-            self.fence_server_for_recovery(&authority, true)?;
-        } else if !process_alive {
-            self.fence_server_for_recovery(&authority, false)?;
-        }
         let available_headroom_bytes = self
             .resource_guard_status()?
             .get("observation")
             .and_then(|observation| observation.get("physical_available_bytes"))
             .and_then(serde_json::Value::as_u64)
             .unwrap_or(0);
+        let outage = planned_outage_state(self, &authority.resource_lease, request.now_ms)?;
+        if outage == PlannedOutageState::Expired {
+            sweep_expired_outage(self, &authority.resource_lease, request.now_ms)?;
+        }
+        let restarts_last_hour = self.restart_count_last_hour(&authority.job_id, request.now_ms)?;
+        let restore_authorized = outage != PlannedOutageState::Open
+            && restarts_last_hour < 3
+            && available_headroom_bytes >= request.required_headroom_bytes
+            && (!process_alive
+                || matches!(
+                    observation.endpoint,
+                    EndpointHealth::Dead | EndpointHealth::Hung
+                ));
+        if restore_authorized {
+            self.fence_server_for_recovery(&authority, process_alive)?;
+        }
+        let registration = request.clone();
         let cycle = ServerCycleRequest {
             authority_path: request.authority_path,
             authority_sha256: request.authority_sha256,
@@ -638,8 +777,9 @@ impl Daemon {
             cycle,
             |authority| {
                 let started = Instant::now();
-                let _outcome = self.dispatch_manifest(&manifest_path)?;
-                let health = probe_endpoint(authority);
+                let outcome = dispatch(self, &manifest_path)?;
+                let rebound = self.rebind_server_supervision(authority, &registration, &outcome)?;
+                let health = probe_endpoint(&rebound);
                 Ok(RestoreEvidence {
                     restore_cost_s: started.elapsed().as_secs_f64(),
                     health_status: if health == EndpointHealth::Healthy {
@@ -651,5 +791,144 @@ impl Daemon {
             },
             true,
         )
+    }
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+    use crate::{Daemon, JobSpec, ReceiptArtifact};
+    use serde_json::json;
+    use sha2::{Digest, Sha256};
+    use std::fs;
+    use std::net::TcpListener;
+    use std::path::{Path, PathBuf};
+    use std::thread;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn sandbox(name: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "ember-lab-supervisor-{name}-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&path).unwrap();
+        path
+    }
+
+    fn sha256(path: &Path) -> String {
+        format!("{:x}", Sha256::digest(fs::read(path).unwrap()))
+    }
+
+    #[test]
+    fn successful_dispatch_rebinds_authority_before_next_tick() {
+        let root = sandbox("rebind");
+        let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
+        let old_identity = root.join("old-identity.json");
+        fs::write(&old_identity, br#"{"schema":"old"}"#).unwrap();
+        let old_identity_sha = sha256(&old_identity);
+        daemon
+            .bind_identity("old-server-job", &old_identity, &old_identity_sha)
+            .unwrap();
+        let manifest_path = root.join("restore-manifest.json");
+        let manifest = json!({
+            "schema_version": "ember-lab-dispatch-manifest-v3",
+            "job_id": "restored-server-job",
+            "source_commit": "5326043c344227c1b145a4ddbb3519cfa62d4943",
+            "not_before_ms": 0,
+            "expires_at_ms": 60_000,
+            "resource_lease": "server:8082",
+            "program": {"path": "C:\\Windows\\System32\\cmd.exe", "sha256": "a".repeat(64)},
+            "args": ["/C", "ping", "127.0.0.1", "-n", "30"],
+            "workload_profile": {
+                "profile_id": "evidence_verifier",
+                "pinned_host_producers": [{"kind": "receipt_verifier", "maximum_bytes": 1}],
+                "requires_ui_responsiveness": false
+            },
+            "env": {},
+            "bindings": [],
+            "custody_root": root,
+            "storage_reserves": [],
+            "minimum_free_vram_bytes": 1,
+            "required_available_maximum_commit_bytes": 1,
+            "maximum_job_memory_bytes": 1,
+            "simulated_peak_commit_bytes": 1,
+            "preflight_receipt": root.join("preflight.json")
+        });
+        let manifest_bytes = serde_json::to_vec(&manifest).unwrap();
+        fs::write(&manifest_path, &manifest_bytes).unwrap();
+        let manifest_sha = sha256(&manifest_path);
+        daemon
+            .bind_identity("restored-server-job", &manifest_path, &manifest_sha)
+            .unwrap();
+        daemon
+            .acquire_lease("server:8082", "restored-server-job")
+            .unwrap();
+        let started = daemon
+            .start_job(JobSpec::new(
+                "restored-server-job",
+                std::env::var("COMSPEC").unwrap(),
+                ["/C", "ping", "127.0.0.1", "-n", "30"],
+                "server:8082",
+            ))
+            .unwrap();
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let _ = std::io::Write::write_all(
+                    &mut stream,
+                    b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n",
+                );
+            }
+        });
+        let old_authority = ServerAuthority {
+            schema_version: SERVER_AUTHORITY_SCHEMA.into(),
+            job_id: "old-server-job".into(),
+            resource_lease: "server:8082".into(),
+            target: "llama-server".into(),
+            host: "127.0.0.1".into(),
+            port,
+            pid: 1,
+            identity_sha256: old_identity_sha,
+        };
+        let old_authority_path = root.join("server-authority.json");
+        let old_authority_bytes = serde_json::to_vec(&old_authority).unwrap();
+        fs::write(&old_authority_path, &old_authority_bytes).unwrap();
+        let request = ServerLiveCycleRequest {
+            authority_path: old_authority_path,
+            authority_sha256: hash_bytes(&old_authority_bytes),
+            receipt_path: root.join("supervision-receipt.json"),
+            restore_manifest_path: manifest_path,
+            required_headroom_bytes: 1,
+            now_ms: 1_000,
+        };
+        daemon.register_server_supervision(&request).unwrap();
+        let rebound = daemon
+            .rebind_server_supervision(
+                &old_authority,
+                &request,
+                &DispatchOutcome {
+                    handle: crate::JobHandle { pid: started.pid },
+                    receipt: ReceiptArtifact {
+                        path: root.join("dispatch-receipt.json"),
+                        sha256: "a".repeat(64),
+                    },
+                },
+            )
+            .unwrap();
+        assert_eq!(rebound.job_id, "restored-server-job");
+        let receipt = daemon
+            .supervise_registered_server_once(2_000)
+            .unwrap()
+            .pop()
+            .unwrap();
+        assert_eq!(receipt.decision, "HEALTHY");
+        assert_eq!(receipt.job_id, "restored-server-job");
+        daemon.stop_job("restored-server-job").unwrap();
+        server.join().unwrap();
     }
 }
