@@ -24,7 +24,6 @@ import {
 import {
   StatusLine,
   type PermissionModeState,
-  type InterruptHandler,
   type TaskPanelState,
   type Task,
   type EffortCalloutState,
@@ -34,6 +33,7 @@ import {
   usePromptInput,
   parseInputMode,
   type PromptInputState,
+  type PermissionMode as PromptPermissionMode,
 } from "../components/prompt-input.ts";
 import { IdleReturnDialog, CostDialog } from "../components/dialogs.ts";
 import { Homescreen, type BoardSummary, type HomescreenProps } from "../components/logo-homescreen.ts";
@@ -154,14 +154,14 @@ import { verifySourceBinding } from "../entrypoints/source-binding-verifier.ts";
 // Constants (spec — preserve exactly)
 // ---------------------------------------------------------------------------
 
-export type ReplPermissionMode = "bypass" | "interactive" | "swarm-worker";
+export type ReplPermissionMode = PromptPermissionMode;
 
-export const DEFAULT_REPL_PERMISSION_MODE: ReplPermissionMode = "interactive";
+export const DEFAULT_REPL_PERMISSION_MODE: ReplPermissionMode = "regular";
 
 export const REPL_PERMISSION_CYCLE: ReplPermissionMode[] = [
-  "interactive",
+  "regular",
   "bypass",
-  "swarm-worker",
+  "plan",
 ];
 
 export const COMPACTION_TOKEN_THRESHOLD = 180_000;
@@ -1127,21 +1127,13 @@ export function ReplScreen({
     () => setPermMode((m) => cycleReplPermissionMode(m)),
     [],
   );
-  const handleInterrupt        = useCallback(() => {}, []);
   const handleTaskPanelToggle = useCallback(
     () => setTaskPanelVisible((v) => toggleTaskPanel(v)),
     [],
   );
-
-  // Editor open shortcut (wired to future /edit handler)
-  useInput((_input, key) => {
-    if (key.ctrl && _input === "e") { /* editor open: handled by main */ }
-  });
-
   // Status-bar prop shapes
   const sbMode: "bypass" | "regular"   = permMode === "bypass" ? "bypass" : "regular";
   const permModeState: PermissionModeState = { mode: sbMode, cycle: handlePermCycle };
-  const interruptHandler: InterruptHandler = { interrupt: handleInterrupt };
   const taskPanelState: TaskPanelState     = {
     visible: taskPanelVisible,
     toggle:  handleTaskPanelToggle,
@@ -1215,7 +1207,7 @@ export function ReplScreen({
   // the pane holds focus this hook must be switched OFF rather than merely out-competed.
   const [inputState, inputActions] = usePromptInput({
     keyboardActive: !paneFocused,
-    permissionMode: sbMode,
+    permissionMode: permMode,
     onPermissionModeCycle: handlePermCycle,
   });
 
@@ -2014,7 +2006,6 @@ export function ReplScreen({
         width:          mainColumnWidth,
         statusLine: React.createElement(StatusLine, {
           permissionMode: permModeState,
-          interrupt:      interruptHandler,
           taskPanel:      taskPanelState,
           telemetry,
           modelMetrics:   modelMetrics ?? undefined,

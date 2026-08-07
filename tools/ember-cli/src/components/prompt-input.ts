@@ -272,9 +272,6 @@ export function handlePromptInputKey(
   isStashed: boolean,
 ): boolean {
   if (key.ctrl  && input === "s") { actions.stash();              return true; }
-  if (key.alt   && input === "p") { actions.openModelPicker();    return true; }
-  if (key.alt   && input === "o") { actions.toggleFastMode();     return true; }
-  if (key.ctrl  && input === "g") { actions.openEditor();         return true; }
   if (key.shift && key.tab)                           { actions.cyclePermissionMode();    return true; }
   if (!key.shift && key.tab && actions.acceptSuggestion) { actions.acceptSuggestion();       return true; }
   if (key.escape && isStashed)                        { actions.restoreStash();           return true; }

@@ -8,7 +8,7 @@ describe("#1215 process-entry sandbox default", () => {
   test("the production interactive REPL is constructed in sandbox mode", () => {
     expect(freshInteractiveReplConfig("ember")).toEqual({
       model: "ember",
-      permissionMode: "interactive",
+      permissionMode: "regular",
       baseSystemPrompt: "",
     });
   });

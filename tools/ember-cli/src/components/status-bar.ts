@@ -461,7 +461,8 @@ export function fitStatusBarLine(
 
 export interface StatusLineProps {
   permissionMode: PermissionModeState;
-  interrupt: InterruptHandler;
+  /** No interrupt accelerator is advertised until a real cancellation path exists. */
+  interrupt?: InterruptHandler;
   taskPanel: TaskPanelState;
   /** Live owned-training state. Required so the Repl cannot silently detach the render seam. */
   telemetry: TelemetryState;
@@ -491,7 +492,6 @@ export interface StatusLineProps {
 
 export function StatusLine({
   permissionMode,
-  interrupt,
   taskPanel,
   telemetry,
   coordinator,
@@ -505,7 +505,6 @@ export function StatusLine({
   width,
 }: StatusLineProps): React.ReactElement {
   useInput((_input, key) => {
-    if (key.escape)              { interrupt.interrupt(); return; }
     if (key.ctrl && _input === "t") { taskPanel.toggle(); return; }
   });
 

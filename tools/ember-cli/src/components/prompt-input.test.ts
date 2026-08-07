@@ -8,6 +8,7 @@
 
 import { describe, it, expect } from "bun:test";
 import React from "react";
+import type { KeyboardKey } from "../ink/hooks.ts";
 import {
   PromptInput,
   type PromptInputState,
@@ -17,6 +18,7 @@ import {
   moveCursorBy,
   computeInputViewport,
   promptInputViewportWidth,
+  handlePromptInputKey,
 } from "./prompt-input.ts";
 
 function children(el: any): any[] {
@@ -56,6 +58,24 @@ function baseState(overrides: Partial<PromptInputState> = {}): PromptInputState 
   };
 }
 
+describe("issue #252 dead prompt accelerators", () => {
+  it("does not consume or dispatch Alt+P, Alt+O, or Ctrl+G", () => {
+    const calls: string[] = [];
+    const actions = {
+      stash: () => calls.push("stash"),
+      openModelPicker: () => calls.push("model"),
+      toggleFastMode: () => calls.push("fast"),
+      openEditor: () => calls.push("editor"),
+      cyclePermissionMode: () => calls.push("permission"),
+      restoreStash: () => calls.push("restore"),
+    };
+
+    expect(handlePromptInputKey("p", { alt: true } as KeyboardKey, actions, false)).toBe(false);
+    expect(handlePromptInputKey("o", { alt: true } as KeyboardKey, actions, false)).toBe(false);
+    expect(handlePromptInputKey("g", { ctrl: true } as KeyboardKey, actions, false)).toBe(false);
+    expect(calls).toEqual([]);
+  });
+});
 describe("PromptInput — closed rounded input region (issue #243)", () => {
   it("renders one rounded full-width box instead of rule rows", () => {
     const el = PromptInput({ state: baseState(), width: 40 });

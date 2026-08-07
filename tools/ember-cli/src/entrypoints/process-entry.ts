@@ -870,12 +870,12 @@ export interface MainOptions {
 
 export function freshInteractiveReplConfig(model: string): {
   model: string;
-  permissionMode: "interactive";
+  permissionMode: "regular";
   baseSystemPrompt: string;
 } {
   return {
     model,
-    permissionMode: "interactive",
+    permissionMode: "regular",
     baseSystemPrompt: "",
   };
 }
