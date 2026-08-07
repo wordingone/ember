@@ -1,5 +1,5 @@
 {
-  "ts": "2026-08-07T02:25:33Z",
+  "ts": "2026-08-07T02:35:46Z",
   "ticket": "S5-NATIVIZATION-MOTION",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
@@ -7,9 +7,9 @@
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "map_source_sha": "sha256:df870f83e3ac7e3b423c2422dea3e75099bf2b2a0d1a48cc4674048e13da92ca",
-  "run_import_manifest_sha256": "b23a2857b031bb52324e4d6e3e05e4c9b20269e365788e2629cca6e0efdb1756",
+  "run_import_manifest_sha256": "09ac115cf6962732dd25f0e969a919135deaeec3458fa764578be219304497a4",
   "run_import_trace_sha256": "a54b28dc3ecb2fcb833362cf3bfc8c083e3c99f9fab5bdbc41e652bed6555a13",
-  "run_import_trace_producer_sha256": "c9c2704945bb939d4afb85fe32232c23bc08167109c9df09cf4020d5d115e393",
+  "run_import_trace_producer_sha256": "0ad73d8ee6588e85a4506af052618d32cead49a9a4ea6e7c9416100b3b82ff86",
   "layers": [
     {
       "name": "CUDA kernels (cuBLAS matmul, elementwise)",
@@ -692,8 +692,8 @@
       "borrowed_loc_delta": 0
     },
     "Autograd (`grad_fn` graph, `backward()`)": {
-      "borrowed_deps_delta": 1,
-      "borrowed_loc_delta": 16
+      "borrowed_deps_delta": 0,
+      "borrowed_loc_delta": 0
     },
     "Optimizer (Adam/Muon: separable state + update)": {
       "borrowed_deps_delta": 0,
