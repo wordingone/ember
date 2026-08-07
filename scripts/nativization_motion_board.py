@@ -8,10 +8,43 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from nativization_motion import load_run_import_manifest, _require_hex
+from nativization_motion import load_run_import_manifest, _require_hex, sha256_file, _source_commit_is_usable
+
+
+RECEIPT_FIELDS = {
+    "ts",
+    "ticket",
+    "goal_id",
+    "workstream_id",
+    "next_executed_outcome",
+    "sha_convention",
+    "invariant_sha256",
+    "map_source_sha",
+    "source_commit",
+    "run_import_manifest_sha256",
+    "run_import_trace_sha256",
+    "run_import_trace_producer_sha256",
+    "layers",
+    "deltas",
+    "next_home_candidate",
+    "method",
+    "limits",
+}
+LAYER_FIELDS = {
+    "name",
+    "borrowed_deps",
+    "borrowed_deps_count",
+    "borrowed_loc",
+    "owned_loc",
+    "borrowed_binaries",
+    "critical_path_share",
+}
+CRITICAL_SHARE_FIELDS = {"creation", "current_rung_training", "growth_run", "evidence"}
+DELTA_FIELDS = {"borrowed_deps_delta", "borrowed_loc_delta"}
 
 
 def consume_motion_receipt(
@@ -38,23 +71,92 @@ def consume_motion_receipt(
         raise ValueError("motion receipt is malformed") from exc
     if not isinstance(document, dict):
         raise ValueError("motion receipt must be an object")
+    if set(document) != RECEIPT_FIELDS:
+        raise ValueError("motion receipt fields are not closed")
     manifest, manifest_sha = load_run_import_manifest(
         root, manifest_path, expected_manifest_sha256, None
     )
-    if document.get("run_import_manifest_sha256") != manifest_sha:
+    if not isinstance(document["ts"], str):
+        raise ValueError("motion receipt timestamp is invalid")
+    try:
+        timestamp = datetime.fromisoformat(document["ts"].replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("motion receipt timestamp is invalid") from exc
+    if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+        raise ValueError("motion receipt timestamp must be UTC")
+    if document["ticket"] != "S5-NATIVIZATION-MOTION" or document["goal_id"] != "EMBER-02" or document["workstream_id"] != "EMBER-02A":
+        raise ValueError("motion receipt diagnostic identity mismatch")
+    for field in ("run_import_manifest_sha256", "run_import_trace_sha256", "run_import_trace_producer_sha256"):
+        _require_hex(document[field], length=64, label=field)
+    if document["run_import_manifest_sha256"] != manifest_sha:
         raise ValueError("motion receipt manifest binding mismatch")
-    if document.get("run_import_trace_sha256") != manifest["trace_sha256"]:
+    if document["run_import_trace_sha256"] != manifest["trace_sha256"]:
         raise ValueError("motion receipt trace binding mismatch")
-    if document.get("run_import_trace_producer_sha256") != manifest["producer_sha256"]:
+    if document["run_import_trace_producer_sha256"] != manifest["producer_sha256"]:
         raise ValueError("motion receipt trace producer binding mismatch")
-    if not isinstance(document.get("layers"), list) or len(document["layers"]) != len(manifest["layers"]):
-        raise ValueError("motion receipt layer coverage mismatch")
+    source = _require_hex(document["source_commit"], length=40, label="source_commit")
+    if source != manifest["source_commit"] or not _source_commit_is_usable(root, source):
+        raise ValueError("motion receipt source commit binding mismatch")
+    invariant = document["invariant_sha256"]
+    if invariant != "sha256:unknown":
+        _require_hex(invariant, length=64, label="invariant_sha256")
+    map_source_sha = document["map_source_sha"]
+    if not isinstance(map_source_sha, str) or not map_source_sha.startswith("sha256:"):
+        raise ValueError("motion receipt diagnostic hash is invalid")
+    _require_hex(map_source_sha[7:], length=64, label="diagnostic hash")
+    diagnostic_path = root / "docs" / "design" / "ember-owned-substrate-diagnostic.md"
+    if not diagnostic_path.is_file() or map_source_sha != sha256_file(diagnostic_path):
+        raise ValueError("motion receipt diagnostic bytes are stale")
+    if document["method"] != "phase-rooted-import-graph-v1":
+        raise ValueError("motion receipt method is not governed")
+    if not isinstance(document["sha_convention"], str) or not document["sha_convention"]:
+        raise ValueError("motion receipt SHA convention is invalid")
+    if not isinstance(document["next_executed_outcome"], str) or not document["next_executed_outcome"]:
+        raise ValueError("motion receipt outcome identity is invalid")
+    if not isinstance(document["limits"], list) or not all(isinstance(item, str) for item in document["limits"]):
+        raise ValueError("motion receipt limits are invalid")
     expected_layers = {row["name"]: row["critical_path_share"] for row in manifest["layers"]}
-    for row in document["layers"]:
-        if not isinstance(row, dict) or row.get("name") not in expected_layers:
+    rows = document["layers"]
+    if not isinstance(rows, list) or len(rows) != len(expected_layers):
+        raise ValueError("motion receipt layer coverage mismatch")
+    seen: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict) or set(row) != LAYER_FIELDS:
+            raise ValueError("motion receipt layer fields are not closed")
+        name = row["name"]
+        if not isinstance(name, str) or name in seen or name not in expected_layers:
             raise ValueError("motion receipt layer identity mismatch")
-        if row.get("critical_path_share") != expected_layers[row["name"]]:
+        seen.add(name)
+        deps = row["borrowed_deps"]
+        if not isinstance(deps, list) or deps != sorted(set(deps)) or not all(isinstance(item, str) for item in deps):
+            raise ValueError("motion receipt borrowed dependency evidence is invalid")
+        if type(row["borrowed_deps_count"]) is not int or row["borrowed_deps_count"] != len(deps):
+            raise ValueError("motion receipt borrowed dependency count mismatch")
+        for field in ("borrowed_loc", "owned_loc"):
+            if type(row[field]) is not int or row[field] < 0:
+                raise ValueError("motion receipt borrowed-weight evidence is invalid")
+        binaries = row["borrowed_binaries"]
+        if not isinstance(binaries, list) or binaries != sorted(set(binaries)) or not all(isinstance(item, str) for item in binaries):
+            raise ValueError("motion receipt borrowed binary evidence is invalid")
+        share = row["critical_path_share"]
+        if not isinstance(share, dict) or set(share) != CRITICAL_SHARE_FIELDS:
+            raise ValueError("motion receipt critical-path evidence is not closed")
+        if not all(type(share[field]) is bool for field in ("creation", "current_rung_training", "growth_run")) or not isinstance(share["evidence"], str):
+            raise ValueError("motion receipt critical-path evidence is invalid")
+        if share != expected_layers[name]:
             raise ValueError("motion receipt critical-path evidence mismatch")
+    if seen != set(expected_layers):
+        raise ValueError("motion receipt layer coverage mismatch")
+    deltas = document["deltas"]
+    if deltas is not None:
+        if not isinstance(deltas, dict) or set(deltas) != seen:
+            raise ValueError("motion receipt predecessor deltas are not closed")
+        for value in deltas.values():
+            if not isinstance(value, dict) or set(value) != DELTA_FIELDS or not all(type(value[field]) is int for field in DELTA_FIELDS):
+                raise ValueError("motion receipt predecessor delta is invalid")
+    candidate = document["next_home_candidate"]
+    if candidate is not None and (not isinstance(candidate, str) or candidate not in seen):
+        raise ValueError("motion receipt next-home candidate is invalid")
     return {
         "schema_version": "ember-nativization-motion-board-v1",
         "decision": "MEASURED_STATIC_MOTION",

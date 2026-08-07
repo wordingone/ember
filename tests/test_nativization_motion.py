@@ -33,6 +33,7 @@ from nativization_motion import (
     sha256_file,
 )
 import nativization_motion
+from nativization_motion_board import consume_motion_receipt
 
 
 def _prepare_fixture_repo(repo_root: Path) -> None:
@@ -787,6 +788,85 @@ import numpy
         board_receipt = json.loads(result.stdout)
         assert board_receipt["decision"] == "MEASURED_STATIC_MOTION"
         assert board_receipt["run_import_manifest_sha256"] == manifest_sha
+
+    def test_trace_intersects_reachable_graph_with_each_layer_predicate(self, tmp_path):
+        layers = [
+            "CUDA kernels (cuBLAS matmul, elementwise)",
+            "Autograd (grad_fn graph, backward())",
+        ]
+        manifest_path, _ = _write_run_import_manifest(tmp_path, layers)
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        shares = {row["name"]: row["critical_path_share"] for row in manifest["layers"]}
+        assert shares[layers[0]]["creation"] is True
+        assert shares[layers[1]]["creation"] is False
+
+    def test_trace_rejects_dirty_reachable_source_bytes(self, tmp_path):
+        _prepare_fixture_repo(tmp_path)
+        source = tmp_path / "tools" / "ember-restart-3b" / "model.py"
+        source.write_text("MODEL = 'dirty'\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="clean|Git|source"):
+            build_run_import_manifest(
+                tmp_path,
+                ["CUDA kernels (cuBLAS matmul, elementwise)"],
+            )
+
+    def test_trace_rejects_untracked_reachable_dependency(self, tmp_path):
+        _prepare_fixture_repo(tmp_path)
+        phase_root = tmp_path / "tools" / "ember-restart-3b"
+        (phase_root / "pretrain.py").write_text(
+            "import untracked_dependency\nTRAIN = True\n", encoding="utf-8"
+        )
+        (phase_root / "untracked_dependency.py").write_text("VALUE = 1\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="clean|Git|source|tracked"):
+            build_run_import_manifest(
+                tmp_path,
+                ["Training loop (fwd ? loss ? backward() ? step)"],
+            )
+
+    def test_board_cli_rejects_duplicate_missing_stale_and_open_receipt_shapes(self):
+        root = Path(__file__).resolve().parent.parent
+        manifest_path = root / "manifests" / "run-import-manifest-v1.json"
+        receipt_path = root / "receipts" / "nativization-motion" / "nm-20260807T014339Z.json"
+        manifest_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+        original = json.loads(receipt_path.read_text(encoding="utf-8"))
+        mutations = {
+            "duplicate": lambda value: {**value, "layers": [value["layers"][0]] * len(value["layers"])},
+            "missing": lambda value: {**value, "layers": value["layers"][:-1]},
+            "stale": lambda value: {**value, "source_commit": "0" * 40},
+            "wrong-diagnostic": lambda value: {**value, "map_source_sha": "sha256:" + "0" * 64},
+            "missing-field": lambda value: {key: item for key, item in value.items() if key != "source_commit"},
+            "extra-field": lambda value: {**value, "unexpected": True},
+            "omitted-delta": lambda value: {key: item for key, item in value.items() if key != "deltas"},
+            "borrowed-weight": lambda value: {
+                **value,
+                "layers": [
+                    {**value["layers"][0], "borrowed_deps_count": value["layers"][0]["borrowed_deps_count"] + 1},
+                    *value["layers"][1:],
+                ],
+            },
+        }
+        scratch = root / "receipts" / "nativization-motion" / ".p1513-board-negative.json"
+        try:
+            for name, mutate in mutations.items():
+                payload = json.dumps(mutate(original), sort_keys=True, separators=(",", ":")).encode()
+                scratch.write_bytes(payload)
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(root / "scripts" / "nativization_motion_board.py"),
+                        str(root),
+                        str(scratch),
+                        hashlib.sha256(payload).hexdigest(),
+                        str(manifest_path),
+                        manifest_sha,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                assert result.returncode != 0, name
+        finally:
+            scratch.unlink(missing_ok=True)
 
 def pytest_generate_tests(metafunc):
     """Pytest hook for fixture parameterization."""

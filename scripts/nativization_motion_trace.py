@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import ast
+import fnmatch
 import json
 import subprocess
 from pathlib import Path
@@ -28,6 +29,40 @@ def canonical_json_bytes(value: Any) -> bytes:
 
 def sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
+
+
+def git_blob_bytes(repo_root: Path, commit: str, relative_path: str) -> bytes:
+    try:
+        result = subprocess.run(
+            ["git", "show", f"{commit}:{relative_path}"],
+            cwd=repo_root,
+            capture_output=True,
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise ValueError(f"Git blob is unavailable for {relative_path}") from exc
+    return result.stdout
+
+
+def git_blob_sha256(repo_root: Path, commit: str, relative_path: str) -> str:
+    return sha256_bytes(git_blob_bytes(repo_root, commit, relative_path))
+
+
+def ensure_source_tree_clean(repo_root: Path) -> None:
+    if not (repo_root / ".git").exists():
+        raise ValueError("exact Git source authority is required")
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=all"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise ValueError("exact Git source authority is required") from exc
+    if result.stdout.strip():
+        raise ValueError("exact Git source tree must be clean before trace construction")
 
 
 def source_commit(repo_root: Path) -> str:
@@ -116,21 +151,30 @@ def _reachable_projection(root: Path, entrypoint: str) -> list[dict[str, str]]:
 
 
 def build_trace(repo_root: Path, layer_names: list[str], layer_patterns: dict[str, list[str]]) -> dict[str, Any]:
-    del layer_patterns
     events: list[dict[str, Any]] = []
     for name in layer_names:
+        patterns = layer_patterns.get(name)
+        if not isinstance(patterns, list) or not patterns or not all(isinstance(item, str) for item in patterns):
+            raise ValueError(f"closed layer predicate is required for {name}")
         for phase in TRACE_PHASES:
             entrypoint = PHASE_ENTRYPOINTS[phase]
             reachable = _reachable_projection(repo_root, entrypoint)
             entrypoint_digest = next(item["sha256"] for item in reachable if item["path"] == entrypoint)
+            layer_reachable = [
+                item for item in reachable
+                if any(fnmatch.fnmatchcase(item["path"], pattern) for pattern in patterns)
+            ]
             events.append(
                 {
                     "layer": name,
                     "phase": phase,
                     "entrypoint": entrypoint,
                     "entrypoint_sha256": entrypoint_digest,
+                    "layer_patterns": list(patterns),
                     "reachable": reachable,
                     "reachability_sha256": sha256_bytes(canonical_json_bytes(reachable)),
+                    "layer_reachable": layer_reachable,
+                    "layer_reachability_sha256": sha256_bytes(canonical_json_bytes(layer_reachable)),
                 }
             )
     return {
