@@ -1,0 +1,53 @@
+{
+  "layers": [
+    {
+      "critical_path_share": {
+        "creation": true,
+        "current_rung_training": true,
+        "evidence": "run-import-manifest-v1:owned-run-path",
+        "growth_run": true
+      },
+      "name": "CUDA kernels (cuBLAS matmul, elementwise)"
+    },
+    {
+      "critical_path_share": {
+        "creation": true,
+        "current_rung_training": true,
+        "evidence": "run-import-manifest-v1:owned-run-path",
+        "growth_run": true
+      },
+      "name": "Tensor abstraction (storage/strides/dtype)"
+    },
+    {
+      "critical_path_share": {
+        "creation": true,
+        "current_rung_training": true,
+        "evidence": "run-import-manifest-v1:owned-run-path",
+        "growth_run": true
+      },
+      "name": "Autograd (`grad_fn` graph, `backward()`)"
+    },
+    {
+      "critical_path_share": {
+        "creation": true,
+        "current_rung_training": true,
+        "evidence": "run-import-manifest-v1:owned-run-path",
+        "growth_run": true
+      },
+      "name": "Optimizer (Adam/Muon: separable state + update)"
+    },
+    {
+      "critical_path_share": {
+        "creation": true,
+        "current_rung_training": true,
+        "evidence": "run-import-manifest-v1:owned-run-path",
+        "growth_run": true
+      },
+      "name": "Training loop (fwd → loss → backward → step)"
+    }
+  ],
+  "producer_sha256": "7f1a8e26ae57aafa47fcac6c9cb6e5d6a1e011941d3980189eda75b6ff202714",
+  "run_id": "ember-02-static-nativization-v1",
+  "schema_version": "ember-run-import-manifest-v1",
+  "source_commit": "d648d7f9f692134bf51478d3303267666b04e342"
+}

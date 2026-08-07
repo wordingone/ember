@@ -36,6 +36,7 @@ class LayerMeasurement:
     borrowed_loc: int
     owned_loc: int
     borrowed_binaries: list[str]
+    critical_path_share: dict[str, Any] | None = None
 
 
 @dataclass
@@ -48,6 +49,7 @@ class NativizationMotionReceipt:
     sha_convention: str
     invariant_sha256: str
     map_source_sha: str
+    run_import_manifest_sha256: str
     layers: list[dict[str, Any]]
     deltas: dict[str, Any] | None
     next_home_candidate: str | None
@@ -249,6 +251,7 @@ def measure_layer(
     root: Path,
     layer_name: str,
     file_globs: list[str],
+    critical_path_share: dict[str, Any] | None = None,
 ) -> LayerMeasurement:
     """Measure borrowed dependencies for a single layer.
 
@@ -284,6 +287,7 @@ def measure_layer(
         borrowed_loc=total_lines_with_imports,
         owned_loc=0,  # v1: placeholder; v2 will compute actual owned lines
         borrowed_binaries=sorted(all_binaries),
+        critical_path_share=critical_path_share,
     )
 
 
@@ -372,11 +376,94 @@ def get_invariant_sha(root: Path) -> str:
     return hashlib.sha256(invariant_path.read_bytes()).hexdigest()
 
 
-def run_nativization_motion(repo_root: Path) -> str:
+def _require_hex(value: Any, *, length: int, label: str) -> str:
+    if not isinstance(value, str) or not re.fullmatch(rf"[0-9a-f]{{{length}}}", value):
+        raise ValueError(f"run import manifest {label} must be lowercase {length}-hex")
+    return value
+
+
+def load_run_import_manifest(
+    repo_root: Path,
+    manifest_path: Path | None,
+    expected_sha256: str | None,
+    layer_names: list[str] | None,
+) -> tuple[dict[str, Any], str]:
+    if manifest_path is None or expected_sha256 is None:
+        raise ValueError("run import manifest path and expected hash are required")
+    expected = _require_hex(expected_sha256, length=64, label="expected hash")
+    root = repo_root.resolve()
+    path = Path(manifest_path).resolve()
+    try:
+        path.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("run import manifest must be under repo root") from exc
+    try:
+        payload = path.read_bytes()
+    except OSError as exc:
+        raise ValueError("run import manifest cannot be read") from exc
+    actual = hashlib.sha256(payload).hexdigest()
+    if actual != expected:
+        raise ValueError("run import manifest hash mismatch")
+    try:
+        document = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("run import manifest is malformed") from exc
+    if not isinstance(document, dict):
+        raise ValueError("run import manifest must be an object")
+    if set(document) != {"schema_version", "run_id", "source_commit", "producer_sha256", "layers"}:
+        raise ValueError("run import manifest fields are not closed")
+    if document["schema_version"] != "ember-run-import-manifest-v1":
+        raise ValueError("run import manifest schema mismatch")
+    if document["run_id"] != "ember-02-static-nativization-v1":
+        raise ValueError("run import manifest run_id mismatch")
+    _require_hex(document["source_commit"], length=40, label="source_commit")
+    producer_sha = _require_hex(document["producer_sha256"], length=64, label="producer_sha256")
+    current_producer_sha = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    if producer_sha != current_producer_sha:
+        raise ValueError("run import manifest producer hash is stale")
+    rows = document["layers"]
+    if not isinstance(rows, list) or not rows:
+        raise ValueError("run import manifest layers mismatch")
+    expected_names = set(layer_names) if layer_names is not None else None
+    seen: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict) or set(row) != {"name", "critical_path_share"}:
+            raise ValueError("run import manifest layer fields are not closed")
+        name = row["name"]
+        if not isinstance(name, str) or (expected_names is not None and name not in expected_names) or name in seen:
+            raise ValueError("run import manifest layer names mismatch")
+        seen.add(name)
+        share = row["critical_path_share"]
+        if not isinstance(share, dict) or set(share) != {"creation", "current_rung_training", "growth_run", "evidence"}:
+            raise ValueError("run import manifest critical path fields are not closed")
+        for key in ("creation", "current_rung_training", "growth_run"):
+            if type(share[key]) is not bool:
+                raise ValueError("run import manifest critical path flags must be bool")
+        if not isinstance(share["evidence"], str) or not share["evidence"].strip():
+            raise ValueError("run import manifest critical path evidence is required")
+    if expected_names is not None and seen != expected_names:
+        raise ValueError("run import manifest layer names mismatch")
+    return document, actual
+
+
+def run_nativization_motion(
+    repo_root: Path,
+    *,
+    run_import_manifest_path: Path | None = None,
+    expected_run_import_manifest_sha256: str | None = None,
+) -> str:
     """Main runner: measure nativization status and write receipt.
 
     Returns path to the written receipt.
     """
+    if run_import_manifest_path is None or expected_run_import_manifest_sha256 is None:
+        raise ValueError("run import manifest path and expected hash are required")
+
+    # Bind the exact production run manifest before parsing any mutable diagnostic text.
+    run_manifest, run_manifest_sha = load_run_import_manifest(
+        repo_root, run_import_manifest_path, expected_run_import_manifest_sha256, None
+    )
+
     # Find diagnostic and receipts paths
     diagnostic_path = repo_root / "docs" / "design" / "ember-owned-substrate-diagnostic.md"
     receipts_dir = repo_root / "receipts" / "nativization-motion"
@@ -384,14 +471,17 @@ def run_nativization_motion(repo_root: Path) -> str:
     if not diagnostic_path.exists():
         raise FileNotFoundError(f"Diagnostic map not found: {diagnostic_path}")
 
-    # Parse layers from diagnostic
+    # Parse layers from diagnostic and require exact manifest coverage.
     layer_names = parse_diagnostic_map(diagnostic_path)
+    run_layers = {row["name"]: row["critical_path_share"] for row in run_manifest["layers"]}
+    if set(run_layers) != set(layer_names):
+        raise ValueError("run import manifest layer names mismatch")
 
     # Measure each layer
     layers: list[LayerMeasurement] = []
     for layer_name in layer_names:
         file_globs = get_layer_file_globs(layer_name)
-        measurement = measure_layer(repo_root, layer_name, file_globs)
+        measurement = measure_layer(repo_root, layer_name, file_globs, run_layers[layer_name])
         layers.append(measurement)
 
     # Load prior receipt for delta computation
@@ -419,6 +509,7 @@ def run_nativization_motion(repo_root: Path) -> str:
         sha_convention=SHA_CONVENTION,
         invariant_sha256=invariant_sha,
         map_source_sha=map_source_sha,
+        run_import_manifest_sha256=run_manifest_sha,
         layers=[asdict(layer) for layer in layers],
         deltas=deltas,
         next_home_candidate=next_home,
@@ -446,13 +537,19 @@ def run_nativization_motion(repo_root: Path) -> str:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        repo_root = Path(sys.argv[1])
-    else:
-        repo_root = Path.cwd()
+    if len(sys.argv) != 4:
+        print("Usage: nativization_motion.py <repo-root> <run-import-manifest> <manifest-sha256>", file=sys.stderr)
+        sys.exit(2)
+    repo_root = Path(sys.argv[1])
+    manifest_path = Path(sys.argv[2])
+    manifest_sha = sys.argv[3]
 
     try:
-        receipt_path = run_nativization_motion(repo_root)
+        receipt_path = run_nativization_motion(
+            repo_root,
+            run_import_manifest_path=manifest_path,
+            expected_run_import_manifest_sha256=manifest_sha,
+        )
         print(f"Success: {receipt_path}")
         sys.exit(0)
     except Exception as e:

@@ -9,6 +9,9 @@ Fixture-driven, zero network, CI-unconditional.
 """
 
 import json
+import hashlib
+import pytest
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -28,6 +31,39 @@ from nativization_motion import (
     scan_binaries,
     sha256_file,
 )
+import nativization_motion
+
+
+def _write_run_import_manifest(
+    repo_root: Path,
+    layer_names: list[str],
+    *,
+    producer_sha256: str | None = None,
+) -> tuple[Path, str]:
+    manifest_path = repo_root / "manifests" / "run-import-manifest-v1.json"
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "schema_version": "ember-run-import-manifest-v1",
+        "run_id": "ember-02-static-nativization-v1",
+        "source_commit": "d648d7f9f692134bf51478d3303267666b04e342",
+        "producer_sha256": producer_sha256
+        or hashlib.sha256(Path(nativization_motion.__file__).read_bytes()).hexdigest(),
+        "layers": [
+            {
+                "name": name,
+                "critical_path_share": {
+                    "creation": True,
+                    "current_rung_training": True,
+                    "growth_run": True,
+                    "evidence": f"checked-in-run-import-manifest-v1:{name}",
+                },
+            }
+            for name in layer_names
+        ],
+    }
+    payload = json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()
+    manifest_path.write_bytes(payload)
+    return manifest_path, hashlib.sha256(payload).hexdigest()
 
 
 class TestImportCollection:
@@ -416,7 +452,14 @@ import torch
         )
 
         # Run the runner
-        receipt_path = run_nativization_motion(tmp_path)
+        manifest_path, manifest_sha = _write_run_import_manifest(
+            tmp_path, parse_diagnostic_map(diagnostic_file)
+        )
+        receipt_path = run_nativization_motion(
+            tmp_path,
+            run_import_manifest_path=manifest_path,
+            expected_run_import_manifest_sha256=manifest_sha,
+        )
 
         # Verify receipt was created
         assert Path(receipt_path).exists()
@@ -438,6 +481,12 @@ import torch
         assert all(c in "0123456789abcdef" for c in receipt["invariant_sha256"])
         assert receipt["method"] == "static-import-census-v1"
         assert len(receipt["layers"]) == 2
+        assert receipt["run_import_manifest_sha256"] == manifest_sha
+        for layer in receipt["layers"]:
+            share = layer["critical_path_share"]
+            assert set(share) == {"creation", "current_rung_training", "growth_run", "evidence"}
+            assert all(isinstance(share[key], bool) for key in ("creation", "current_rung_training", "growth_run"))
+            assert share["evidence"]
         assert receipt["deltas"] is None  # First receipt
         assert receipt["next_home_candidate"] is not None
         assert len(receipt["limits"]) > 0
@@ -512,7 +561,14 @@ import numpy
             json.dump(prior_receipt, f)
 
         # Run the runner
-        receipt_path = run_nativization_motion(tmp_path)
+        manifest_path, manifest_sha = _write_run_import_manifest(
+            tmp_path, parse_diagnostic_map(diagnostic_file)
+        )
+        receipt_path = run_nativization_motion(
+            tmp_path,
+            run_import_manifest_path=manifest_path,
+            expected_run_import_manifest_sha256=manifest_sha,
+        )
 
         # Load receipt
         with open(receipt_path) as f:
@@ -523,6 +579,78 @@ import numpy
         cuda_deltas = receipt["deltas"]["CUDA kernels (cuBLAS matmul, elementwise)"]
         assert cuda_deltas["borrowed_deps_delta"] == 1  # 2 - 1
         assert cuda_deltas["borrowed_loc_delta"] == 1  # 2 - 1
+
+    def test_run_nativization_motion_cli_consumes_bound_manifest(self, tmp_path):
+        docs_dir = tmp_path / "docs" / "design"
+        docs_dir.mkdir(parents=True)
+        (docs_dir / "ember-owned-substrate-diagnostic.md").write_text(
+            "## The inherited stack, bottom \u2192 top, with the blocking line\n\n| layer | what | rel |\n|---|---|---|\n| CUDA kernels (cuBLAS matmul, elementwise) | x | component |\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "INVARIANT.md").write_text("owned", encoding="utf-8")
+        tools_dir = tmp_path / "tools"
+        tools_dir.mkdir()
+        (tools_dir / "cuda.py").write_text("import torch\n", encoding="utf-8")
+        manifest_path, manifest_sha = _write_run_import_manifest(
+            tmp_path, ["CUDA kernels (cuBLAS matmul, elementwise)"]
+        )
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(Path(nativization_motion.__file__)),
+                str(tmp_path),
+                str(manifest_path),
+                manifest_sha,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        receipts = sorted((tmp_path / "receipts" / "nativization-motion").glob("nm-*.json"))
+        assert receipts
+        receipt = json.loads(receipts[-1].read_text(encoding="utf-8"))
+        assert receipt["run_import_manifest_sha256"] == manifest_sha
+
+    def test_run_nativization_motion_requires_run_import_manifest(self, tmp_path):
+        with pytest.raises(ValueError, match="run import manifest"):
+            run_nativization_motion(tmp_path)
+
+    def test_run_nativization_motion_rejects_malformed_run_import_manifest(self, tmp_path):
+        docs_dir = tmp_path / "docs" / "design"
+        docs_dir.mkdir(parents=True)
+        (docs_dir / "ember-owned-substrate-diagnostic.md").write_text(
+            "## The inherited stack, bottom ??? top, with the blocking line\n\n| layer | what | rel |\n|---|---|---|\n| CUDA kernels (cuBLAS matmul, elementwise) | x | component |\n",
+            encoding="utf-8",
+        )
+        manifest_path = tmp_path / "run-import-manifest.json"
+        manifest_path.write_text("{}", encoding="utf-8")
+        expected_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+        with pytest.raises(ValueError, match="run import manifest"):
+            run_nativization_motion(
+                tmp_path,
+                run_import_manifest_path=manifest_path,
+                expected_run_import_manifest_sha256=expected_sha,
+            )
+
+    def test_run_nativization_motion_rejects_stale_run_import_manifest(self, tmp_path):
+        docs_dir = tmp_path / "docs" / "design"
+        docs_dir.mkdir(parents=True)
+        (docs_dir / "ember-owned-substrate-diagnostic.md").write_text(
+            "## The inherited stack, bottom ??? top, with the blocking line\n\n| layer | what | rel |\n|---|---|---|\n| CUDA kernels (cuBLAS matmul, elementwise) | x | component |\n",
+            encoding="utf-8",
+        )
+        manifest_path, manifest_sha = _write_run_import_manifest(
+            tmp_path,
+            ["CUDA kernels (cuBLAS matmul, elementwise)"],
+            producer_sha256="0" * 64,
+        )
+        with pytest.raises(ValueError, match="producer"):
+            run_nativization_motion(
+                tmp_path,
+                run_import_manifest_path=manifest_path,
+                expected_run_import_manifest_sha256=manifest_sha,
+            )
 
 
 def pytest_generate_tests(metafunc):
