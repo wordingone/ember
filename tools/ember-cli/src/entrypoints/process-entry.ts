@@ -1133,6 +1133,19 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     serverUrl    = externalUrl;
     detectedNCtx = await detectNCtx(serverUrl).catch(() => modelsCfg?.nCtx ?? 4096);
   } else {
+    // No direct launcher path may become an accidental third authority.  The
+    // only seat permitted to use this local-spawn compatibility branch is an
+    // explicitly requested REFERENCE_ONLY seat; owned seats already passed
+    // through Ember Lab's ensureOwnedServer above, and an ordinary unbound
+    // boot is refused by resolveModelSeat before reaching here.
+    if (seatDecision.seat !== "REFERENCE_ONLY") {
+      process.env["EMBER_MODEL_NAME"] = "OFFLINE - no model";
+      process.stderr.write(
+        "[ember] ERROR: direct model spawn requires a bound Ember Lab identity or explicit reference seat\n",
+      );
+      doExitMain(1);
+      return;
+    }
     const exeDir    = resolve(dirname(process.execPath ?? process.argv[0] ?? process.cwd()));
     const port      = await resolveServerPort(exeDir);
     const binPath   = resolve(exeDir, modelsCfg?.binary ?? "llama-server.exe");

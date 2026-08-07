@@ -929,6 +929,55 @@ describe("process-entry — G3: main() with -p routes to headlessRunner before l
   });
 });
 
+describe("process-entry — ordinary boot is fail-closed without an Ember Lab identity", () => {
+  it("never invokes the direct spawn hook and refuses the unbound seat", async () => {
+    const saved = saveEnv([
+      "EMBER_HOME",
+      "EMBER_MODEL_URL",
+      "EMBER_MODEL_NAME",
+      "EMBER_MODEL_SEAT",
+      "EMBER_REFERENCE_SEAT",
+      "EMBER_GPU_FREE",
+    ]);
+    delete process.env["EMBER_MODEL_URL"];
+    delete process.env["EMBER_MODEL_NAME"];
+    delete process.env["EMBER_MODEL_SEAT"];
+    delete process.env["EMBER_REFERENCE_SEAT"];
+    delete process.env["EMBER_GPU_FREE"];
+
+    let spawnCalls = 0;
+    let exitCode: number | null = null;
+    let initCalls = 0;
+    const stderrOrig = process.stderr.write.bind(process.stderr);
+    let stderr = "";
+    process.stderr.write = ((chunk: string) => {
+      stderr += chunk;
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      await main({
+        argv: ["node", "ember", "-p", "unbound"],
+        loadOwnedIdentityFn: () => undefined,
+        loadOwnedDevelopmentIdentityFn: () => undefined,
+        spawnServer: async () => {
+          spawnCalls += 1;
+          return makeFakeHandle(29998);
+        },
+        initFn: async () => { initCalls += 1; },
+        exitFn: (code) => { exitCode = code; },
+      });
+    } finally {
+      process.stderr.write = stderrOrig;
+      restoreEnv(saved);
+    }
+
+    expect(spawnCalls).toBe(0);
+    expect(initCalls).toBe(0);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("no admitted owned Ember identity");
+  });
+});
+
 // ---------------------------------------------------------------------------
 // G1 — production deps are threaded into the headless path (not undefined)
 // ---------------------------------------------------------------------------
