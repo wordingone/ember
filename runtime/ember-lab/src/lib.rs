@@ -3080,6 +3080,15 @@ impl Daemon {
             "observed_at_ms": now_ms(),
         }))?;
         atomic_create(&observed_path, &observed_receipt)?;
+        self.record_daemon_peak_event(
+            job_id,
+            &row,
+            &hash_bytes(&observed_receipt),
+            observed_peak_bytes,
+            &hash_bytes(&completion_bytes),
+            &hash_bytes(&host_peak_bytes),
+            &executable_sha256,
+        )?;
         let mut operations = std::collections::BTreeMap::<Phase, Value>::new();
         let mut produced = Vec::with_capacity(phases.len());
         for phase in phases {
@@ -3405,6 +3414,47 @@ impl Daemon {
     /// artifact for the terminal rehearsal receipt; the producer's raw
     /// `host_peak.json` is only supporting evidence.
     pub fn authoritative_whole_run_peak(&self, job_id: &str) -> Result<(PathBuf, String, u64)> {
+        let row = self.job_process_row(job_id)?;
+        if row.state != JobState::Running || !self.lease_matches_process_row(job_id, &row)? {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "daemon-owned whole-run peak job row is no longer running under its lease"
+                    .into(),
+            });
+        }
+        #[cfg(windows)]
+        match open_live_status(&row) {
+            LiveStatus::Verified(_) => {}
+            LiveStatus::Dead => {
+                return Err(EmberLabError::ProcessUnavailable {
+                    job_id: job_id.into(),
+                    pid: row.pid,
+                })
+            }
+            LiveStatus::Orphaned(detail) | LiveStatus::IdentityConflict(detail) => {
+                return Err(EmberLabError::ProcessControlUncertain {
+                    job_id: job_id.into(),
+                    pid: row.pid,
+                    detail,
+                })
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            let identity =
+                inspect_process(row.pid).map_err(|_| EmberLabError::ProcessUnavailable {
+                    job_id: job_id.into(),
+                    pid: row.pid,
+                })?;
+            if identity.start_token != row.start_token
+                || !same_executable(&identity.executable, &row.executable)
+            {
+                return Err(EmberLabError::ProcessIdentityMismatch {
+                    job_id: job_id.into(),
+                    pid: row.pid,
+                });
+            }
+        }
         let path = self
             .log_dir
             .join("rehearsal")
@@ -3419,19 +3469,165 @@ impl Daemon {
                 job_id: job_id.into(),
                 detail: "daemon-owned whole-run peak receipt is malformed".into(),
             })?;
-        if value.get("schema") != Some(&Value::String("ember-lab-daemon-host-peak-v1".into()))
-            || value.get("producer") != Some(&Value::String("ember-lab-daemon".into()))
-            || value.get("result") != Some(&Value::String("MEASURED".into()))
-            || value.get("job_id") != Some(&Value::String(job_id.into()))
-            || value
+        let phase_dir = path
+            .parent()
+            .ok_or_else(|| EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "daemon-owned whole-run peak receipt has no phase directory".into(),
+            })?;
+        let completion_path = phase_dir.join("completion.json");
+        let child_peak_path = phase_dir.join("host_peak.json");
+        let completion_bytes =
+            fs::read(&completion_path).map_err(|_| EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "minimal-slice completion marker is absent while reopening peak".into(),
+            })?;
+        let child_peak_bytes =
+            fs::read(&child_peak_path).map_err(|_| EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "minimal-slice child peak is absent while reopening peak".into(),
+            })?;
+        let completion: Value = serde_json::from_slice(&completion_bytes).map_err(|_| {
+            EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "minimal-slice completion marker is malformed while reopening peak".into(),
+            }
+        })?;
+        let child_peak: Value = serde_json::from_slice(&child_peak_bytes).map_err(|_| {
+            EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "minimal-slice child peak is malformed while reopening peak".into(),
+            }
+        })?;
+        let binary_sha256 = hash_file(Path::new(&row.executable))?;
+        let completion_sha256 = hash_bytes(&completion_bytes);
+        let child_peak_sha256 = hash_bytes(&child_peak_bytes);
+        let phase_artifact_sha256 =
+            crate::rehearsal::phase_artifact_digest(phase_dir).map_err(EmberLabError::Io)?;
+        let child_peak_valid = child_peak.get("schema")
+            == Some(&Value::String("ember-lab-host-peak-v1".into()))
+            && child_peak.get("producer")
+                == Some(&Value::String("ember-lab-minimal-slice-producer".into()))
+            && child_peak.get("result") == Some(&Value::String("MEASURED".into()))
+            && child_peak.get("job_id") == Some(&Value::String(job_id.into()))
+            && child_peak.get("producer_pid").and_then(Value::as_u64) == Some(row.pid as u64)
+            && child_peak
+                .get("sample_count")
+                .and_then(Value::as_u64)
+                .unwrap_or(0)
+                >= 2
+            && child_peak
                 .get("whole_run_peak_bytes")
                 .and_then(Value::as_u64)
                 .unwrap_or(0)
-                == 0
-        {
+                > 0;
+        let completion_valid = completion.get("schema")
+            == Some(&Value::String(
+                "ember-lab-minimal-slice-completion-v1".into(),
+            ))
+            && completion.get("producer")
+                == Some(&Value::String("ember-lab-minimal-slice-producer".into()))
+            && completion.get("result") == Some(&Value::String("COMPLETED".into()))
+            && completion.get("job_id") == Some(&Value::String(job_id.into()))
+            && completion.get("producer_pid").and_then(Value::as_u64) == Some(row.pid as u64)
+            && completion.get("phase_count").and_then(Value::as_u64) == Some(6)
+            && completion.get("host_peak_sha256").and_then(Value::as_str)
+                == Some(child_peak_sha256.as_str())
+            && completion
+                .get("phase_artifact_sha256")
+                .and_then(Value::as_str)
+                == Some(phase_artifact_sha256.as_str())
+            && completion
+                .get("producer_binary_sha256")
+                .and_then(Value::as_str)
+                == Some(binary_sha256.as_str())
+            && completion
+                .get("producer_source_sha256")
+                .and_then(Value::as_str)
+                == Some(self.ember_lab_source_sha256.as_str());
+        if !child_peak_valid || !completion_valid {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "daemon-owned whole-run peak child evidence is not bound to the current process/source/binary".into(),
+            });
+        }
+        let observed_valid = value.get("schema")
+            == Some(&Value::String("ember-lab-daemon-host-peak-v1".into()))
+            && value.get("producer") == Some(&Value::String("ember-lab-daemon".into()))
+            && value.get("result") == Some(&Value::String("MEASURED".into()))
+            && value.get("job_id") == Some(&Value::String(job_id.into()))
+            && value.get("pid").and_then(Value::as_u64) == Some(row.pid as u64)
+            && value.get("process_start_token").and_then(Value::as_str)
+                == Some(row.start_token.as_str())
+            && value.get("executable_identity").and_then(Value::as_str)
+                == Some(row.executable.as_str())
+            && value.get("job_object_name").and_then(Value::as_str)
+                == Some(row.job_object_name.as_str())
+            && value.get("lease_epoch").and_then(Value::as_i64) == Some(row.lease_epoch)
+            && value.get("producer_schema").and_then(Value::as_str)
+                == Some("ember-lab-host-peak-v1")
+            && value.get("producer_binary_sha256").and_then(Value::as_str)
+                == Some(binary_sha256.as_str())
+            && value.get("producer_source_sha256").and_then(Value::as_str)
+                == Some(self.ember_lab_source_sha256.as_str())
+            && value.get("completion_sha256").and_then(Value::as_str)
+                == Some(completion_sha256.as_str())
+            && value.get("child_host_peak_sha256").and_then(Value::as_str)
+                == Some(child_peak_sha256.as_str())
+            && value
+                .get("whole_run_peak_bytes")
+                .and_then(Value::as_u64)
+                .unwrap_or(0)
+                > 0;
+        if !observed_valid {
             return Err(EmberLabError::InvalidTransition {
                 job_id: job_id.into(),
                 detail: "daemon-owned whole-run peak receipt is not valid".into(),
+            });
+        }
+        let observed_sha256 = hash_bytes(&bytes);
+        let event_payload: Option<String> = self
+            .conn()?
+            .query_row(
+                "SELECT payload_json FROM events WHERE job_id=?1 AND kind='ember_lab_daemon_host_peak' ORDER BY seq DESC LIMIT 1",
+                [job_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        let Some(event_payload) = event_payload else {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "daemon-owned whole-run peak has no persisted authority event".into(),
+            });
+        };
+        let event: Value = serde_json::from_str(&event_payload)?;
+        let event_matches = event.get("producer")
+            == Some(&Value::String("ember-lab-daemon".into()))
+            && event.get("job_id") == Some(&Value::String(job_id.into()))
+            && event.get("observed_sha256").and_then(Value::as_str)
+                == Some(observed_sha256.as_str())
+            && event.get("whole_run_peak_bytes").and_then(Value::as_u64)
+                == value.get("whole_run_peak_bytes").and_then(Value::as_u64)
+            && event.get("completion_sha256").and_then(Value::as_str)
+                == Some(completion_sha256.as_str())
+            && event.get("child_host_peak_sha256").and_then(Value::as_str)
+                == Some(child_peak_sha256.as_str())
+            && event.get("pid").and_then(Value::as_u64) == Some(row.pid as u64)
+            && event.get("process_start_token").and_then(Value::as_str)
+                == Some(row.start_token.as_str())
+            && event.get("executable_identity").and_then(Value::as_str)
+                == Some(row.executable.as_str())
+            && event.get("job_object_name").and_then(Value::as_str)
+                == Some(row.job_object_name.as_str())
+            && event.get("lease_epoch").and_then(Value::as_i64) == Some(row.lease_epoch)
+            && event.get("producer_binary_sha256").and_then(Value::as_str)
+                == Some(binary_sha256.as_str())
+            && event.get("producer_source_sha256").and_then(Value::as_str)
+                == Some(self.ember_lab_source_sha256.as_str());
+        if !event_matches {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "daemon-owned whole-run peak receipt changed after authority event".into(),
             });
         }
         let sha256 = hash_bytes(&bytes);
@@ -3492,6 +3688,52 @@ impl Daemon {
             return Err(EmberLabError::InvalidTransition {
                 job_id: job_id.into(),
                 detail: "current Ember Lab phase operation was not persisted".into(),
+            });
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn record_daemon_peak_event(
+        &self,
+        job_id: &str,
+        row: &JobProcessRow,
+        observed_sha256: &str,
+        whole_run_peak_bytes: u64,
+        completion_sha256: &str,
+        child_host_peak_sha256: &str,
+        producer_binary_sha256: &str,
+    ) -> Result<()> {
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let inserted = tx.execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'ember_lab_daemon_host_peak',?3)",
+            params![
+                job_id,
+                now_ms(),
+                json!({
+                    "producer": "ember-lab-daemon",
+                    "job_id": job_id,
+                    "observed_sha256": observed_sha256,
+                    "whole_run_peak_bytes": whole_run_peak_bytes,
+                    "completion_sha256": completion_sha256,
+                    "child_host_peak_sha256": child_host_peak_sha256,
+                    "pid": row.pid,
+                    "process_start_token": row.start_token,
+                    "executable_identity": row.executable,
+                    "job_object_name": row.job_object_name,
+                    "lease_epoch": row.lease_epoch,
+                    "producer_binary_sha256": producer_binary_sha256,
+                    "producer_source_sha256": self.ember_lab_source_sha256,
+                })
+                .to_string(),
+            ],
+        )?;
+        if inserted != 1 {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "daemon-owned whole-run peak authority event was not persisted".into(),
             });
         }
         tx.commit()?;

@@ -2043,6 +2043,33 @@ fn forged_host_probe_peak_is_not_authoritative() {
 }
 
 #[test]
+fn daemon_peak_receipt_rejects_post_write_peak_tamper() {
+    let root = sandbox("phase-daemon-peak-tamper");
+    let (daemon, phase_root) = start_phase_fixture(&root, "phase-daemon-peak-tamper", true);
+    let producer_peak = wait_for_host_peak(&phase_root.join("host_peak.json"));
+    daemon
+        .execute_minimal_episode(
+            "phase-daemon-peak-tamper",
+            producer_peak,
+            readiness_deadline_after_ms(5_000),
+        )
+        .unwrap();
+    let (_, original_sha256, original_peak) = daemon
+        .authoritative_whole_run_peak("phase-daemon-peak-tamper")
+        .unwrap();
+    assert!(!original_sha256.is_empty());
+    assert!(original_peak > 0);
+    let observed_path = phase_root.join("host_peak.observed.json");
+    let mut observed: Value = serde_json::from_slice(&fs::read(&observed_path).unwrap()).unwrap();
+    observed["whole_run_peak_bytes"] = json!(1);
+    fs::write(&observed_path, serde_json::to_vec(&observed).unwrap()).unwrap();
+    assert!(daemon
+        .authoritative_whole_run_peak("phase-daemon-peak-tamper")
+        .is_err());
+    daemon.stop_job("phase-daemon-peak-tamper").unwrap();
+}
+
+#[test]
 fn marker_only_phase_json_is_rejected_after_real_child_start() {
     let root = sandbox("phase-marker-only");
     let (daemon, phase_root) = start_phase_fixture(&root, "phase-marker", true);

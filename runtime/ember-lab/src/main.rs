@@ -320,52 +320,101 @@ fn run_rehearsal(
     }
     let daemon = Daemon::open(db_path)?;
     let dispatch_outcome = daemon.dispatch_manifest(dispatch_manifest_path)?;
-    // The dispatched child emits the current minimal-slice operation outputs.
-    // Ember Lab only reopens, validates, hashes, and fences those bytes below;
-    // the rehearsal adapter never creates phase evidence.
-    daemon.execute_minimal_episode(
-        &manifest.dispatch_id,
-        manifest.measurements.whole_run_peak_bytes,
-        dispatch.expires_at_ms,
+    let dispatch_id = manifest.dispatch_id.clone();
+    let execution_manifest = manifest.clone();
+    let completed = finalize_after_dispatch(
+        daemon,
+        dispatch_outcome,
+        &dispatch_id,
+        &manifest_sha256,
+        receipt_path,
+        |runner| {
+            // The dispatched child emits the current minimal-slice operation outputs.
+            // Ember Lab only reopens, validates, hashes, and fences those bytes below;
+            // the rehearsal adapter never creates phase evidence.
+            runner.daemon.execute_minimal_episode(
+                &dispatch_id,
+                execution_manifest.measurements.whole_run_peak_bytes,
+                dispatch.expires_at_ms,
+            )?;
+            let (authoritative_peak_path, authoritative_peak_sha256, authoritative_peak_bytes) =
+                runner.daemon.authoritative_whole_run_peak(&dispatch_id)?;
+            let phase_evidence = runner.daemon.load_authorized_phase_evidence(&dispatch_id)?;
+            let mut execution_manifest = execution_manifest.clone();
+            execution_manifest.phase_evidence = phase_evidence.clone();
+            execution_manifest.measurements.evidence_path = authoritative_peak_path;
+            execution_manifest.measurements.evidence_sha256 = authoritative_peak_sha256;
+            execution_manifest.measurements.whole_run_peak_bytes = authoritative_peak_bytes;
+            runner.phase_evidence = phase_evidence;
+            Ok(rehearsal::episode(capability, &execution_manifest, runner))
+        },
     )?;
-    let (authoritative_peak_path, authoritative_peak_sha256, authoritative_peak_bytes) =
-        daemon.authoritative_whole_run_peak(&manifest.dispatch_id)?;
-    let phase_evidence = match daemon.load_authorized_phase_evidence(&manifest.dispatch_id) {
-        Ok(evidence) => evidence,
-        Err(error) => {
-            let _ = daemon.stop_job(&manifest.dispatch_id);
-            return Err(error.into());
-        }
-    };
-    let mut execution_manifest = manifest.clone();
-    execution_manifest.phase_evidence = phase_evidence.clone();
-    execution_manifest.measurements.evidence_path = authoritative_peak_path;
-    execution_manifest.measurements.evidence_sha256 = authoritative_peak_sha256;
-    execution_manifest.measurements.whole_run_peak_bytes = authoritative_peak_bytes;
+    println!(
+        "rehearse: {} -- receipt written to {}",
+        if completed { "completed" } else { "refused" },
+        receipt_path.display()
+    );
+    Ok(completed)
+}
+
+fn finalize_after_dispatch<F>(
+    daemon: Daemon,
+    dispatch: DispatchOutcome,
+    job_id: &str,
+    manifest_sha256: &str,
+    receipt_path: &Path,
+    operation: F,
+) -> Result<bool, Box<dyn std::error::Error>>
+where
+    F: FnOnce(
+        &mut CurrentAuthorityRunner,
+    ) -> Result<rehearsal::RehearsalResult, Box<dyn std::error::Error>>,
+{
     let mut runner = CurrentAuthorityRunner {
         daemon,
-        job_id: manifest.dispatch_id.clone(),
-        dispatch: Some(dispatch_outcome),
-        phase_evidence,
+        job_id: job_id.into(),
+        dispatch: Some(dispatch),
+        phase_evidence: Vec::new(),
     };
-    let result = rehearsal::episode(capability, &execution_manifest, &mut runner);
-    let _dispatch_outcome = runner.dispatch.take().ok_or_else(|| {
-        std::io::Error::other(
-            "current Ember Lab dispatch authority refused before producing an operational receipt",
-        )
-    })?;
-    runner.daemon.stop_job(&manifest.dispatch_id)?;
-    let observation = json!({
-        "manifest_sha256": manifest_sha256,
-        "result": result.receipt,
-    });
+    let attempt = operation(&mut runner);
+    let (completed, observation) = match attempt {
+        Ok(result) => (
+            result.status == rehearsal::RehearsalStatus::Completed,
+            json!({
+                "manifest_sha256": manifest_sha256,
+                "result": result.receipt,
+            }),
+        ),
+        Err(error) => (
+            false,
+            json!({
+                "manifest_sha256": manifest_sha256,
+                "status": "REFUSED",
+                "result": "REFUSED",
+                "next_action": "Inspect the operational receipt failure and fix the named readiness or evidence gate before retrying.",
+                "failure": {
+                    "stage": "post_dispatch",
+                    "code": "POST_DISPATCH_REFUSED",
+                    "detail": error.to_string(),
+                },
+            }),
+        ),
+    };
+    let stop_error = runner.daemon.stop_job(job_id).err();
     let operational = runner
         .daemon
         .export_content_addressed_receipt_with_observation(
-            &manifest.dispatch_id,
+            job_id,
             receipt_path.parent().unwrap_or_else(|| Path::new(".")),
             &observation,
-        )?;
+        );
+    if let Some(error) = stop_error {
+        return Err(std::io::Error::other(format!(
+            "post-dispatch cleanup failed after one owned stop attempt: {error:?}"
+        ))
+        .into());
+    }
+    let operational = operational?;
     if receipt_path != operational.path {
         if receipt_path.exists() {
             return Err(std::io::Error::new(
@@ -376,13 +425,7 @@ fn run_rehearsal(
         }
         std::fs::copy(&operational.path, receipt_path)?;
     }
-    println!(
-        "rehearse: {:?} -- receipt {} written to {}",
-        result.status,
-        operational.sha256,
-        receipt_path.display()
-    );
-    Ok(result.status == rehearsal::RehearsalStatus::Completed)
+    Ok(completed)
 }
 
 fn phase_evidence_shape_authorized(bytes: &[u8], job_id: &str, phase: Phase) -> bool {
@@ -512,6 +555,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ember_lab::{JobSpec, ReceiptArtifact};
 
     #[test]
     fn arbitrary_phase_bytes_without_current_producer_refuse() {
@@ -553,5 +597,93 @@ mod tests {
             "dispatch-1",
             Phase::Train
         ));
+    }
+
+    #[test]
+    fn rehearsal_orchestration_fixture_child() {
+        if std::env::var("EMBER_LAB_ORCHESTRATION_FIXTURE").as_deref() != Ok("1") {
+            return;
+        }
+        std::thread::sleep(Duration::from_secs(30));
+    }
+
+    #[test]
+    fn post_dispatch_failure_stops_owned_job_once_and_exports_refusal() {
+        let root = std::env::temp_dir().join(format!(
+            "ember-lab-orchestration-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let db = root.join("ember-lab.sqlite3");
+        let identity = std::env::current_exe().unwrap();
+        let identity_sha256 = hash_file(&identity).unwrap();
+        let daemon = Daemon::open(&db).unwrap();
+        daemon
+            .bind_identity("orchestration-failure", &identity, &identity_sha256)
+            .unwrap();
+        daemon
+            .acquire_lease("cpu-fixture", "orchestration-failure")
+            .unwrap();
+        let spec = JobSpec::new(
+            "orchestration-failure",
+            identity.to_string_lossy(),
+            [
+                "--exact",
+                "tests::tests::rehearsal_orchestration_fixture_child",
+                "--nocapture",
+            ],
+            "cpu-fixture",
+        )
+        .with_env("EMBER_LAB_ORCHESTRATION_FIXTURE", "1");
+        let handle = daemon.start_job(spec).unwrap();
+        let dispatch = DispatchOutcome {
+            handle,
+            receipt: ReceiptArtifact {
+                path: root.join("dispatch.json"),
+                sha256: "0".repeat(64),
+            },
+        };
+        let receipt_path = root.join("rehearsal-receipt.json");
+        let completed = finalize_after_dispatch(
+            daemon,
+            dispatch,
+            "orchestration-failure",
+            "m".repeat(64).as_str(),
+            &receipt_path,
+            |_runner| Err(std::io::Error::other("completion marker expired").into()),
+        )
+        .unwrap();
+        assert!(!completed);
+        let reopened = Daemon::open(&db).unwrap();
+        assert_eq!(
+            reopened.job_state("orchestration-failure").unwrap(),
+            Some(ember_lab::JobState::Stopped)
+        );
+        let events = reopened.job_event_kinds("orchestration-failure").unwrap();
+        assert_eq!(
+            events
+                .iter()
+                .filter(|kind| kind.as_str() == "job_stop_requested")
+                .count(),
+            1
+        );
+        assert_eq!(
+            events
+                .iter()
+                .filter(|kind| kind.as_str() == "job_stopped")
+                .count(),
+            1
+        );
+        let receipt: Value = serde_json::from_slice(&std::fs::read(receipt_path).unwrap()).unwrap();
+        assert_eq!(receipt["rehearsal"]["status"], "REFUSED");
+        assert_eq!(
+            receipt["rehearsal"]["next_action"],
+            "Inspect the operational receipt failure and fix the named readiness or evidence gate before retrying."
+        );
+        assert_eq!(receipt["rehearsal"]["failure"]["stage"], "post_dispatch");
     }
 }
