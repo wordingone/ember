@@ -190,12 +190,8 @@ def _build_opts(backbone, head, mtp_heads, arm: str):
 def _bind_live_parameter_evidence(backbone, head, mtp_heads, opts, run_id: str, update_count: int, execution_boundary) -> dict:
     """Persist content-addressed evidence from the objects used by this run."""
     from mtp_parameter_manifest import (
-        validate_pricing_receipt,
-        build_executed_run_receipt,
-        build_governed_execution_receipt,
-        begin_governed_execution,
+        build_execution_candidate,
         write_parameter_manifest_from_parts,
-        write_pricing_receipt,
     )
 
     with open(os.path.join(NC, "configs", "v0-pretrain-config.json"), encoding="utf-8") as handle:
@@ -203,22 +199,18 @@ def _bind_live_parameter_evidence(backbone, head, mtp_heads, opts, run_id: str, 
     evidence_dir = Path(RECEIPTS) / "issue688-mtp-live"
     evidence_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = evidence_dir / f"{run_id}-parameter-manifest.json"
-    pricing_path = evidence_dir / f"{run_id}-pricing-receipt.json"
     manifest = write_parameter_manifest_from_parts(
         manifest_path, backbone, head, mtp_heads, opts, config
     )
     source_path = Path(__file__)
     config_path = Path(NC) / "configs" / "v0-pretrain-config.json"
-    governed_parent = build_governed_execution_receipt(
+    candidate = build_execution_candidate(
         manifest, run_id, source_path, config_path, execution_boundary,
         (backbone, head, mtp_heads), opts, update_count=update_count,
     )
-    executed_run = build_executed_run_receipt(manifest, governed_parent)
-    pricing = write_pricing_receipt(pricing_path, manifest, executed_run)
-    validate_pricing_receipt(pricing, manifest)
     return {
         "parameter_manifest": manifest,
-        "parameter_pricing_receipt": pricing,
+        "parameter_execution_candidate": candidate,
         "parameter_accounting": dict(manifest["parameter_accounting"]),
     }
 
@@ -450,7 +442,7 @@ def _noise_floor_run() -> dict:
         "derived_threshold":  derived_threshold,
         "threshold_floor":    NOISE_FLOOR_THRESHOLD_FLOOR,
         "parameter_manifest": live_evidence["parameter_manifest"],
-        "parameter_pricing_receipt": live_evidence["parameter_pricing_receipt"],
+        "parameter_execution_candidate": live_evidence["parameter_execution_candidate"],
     }
 
 

@@ -25,12 +25,17 @@ from mtp_parameter_manifest import (  # noqa: E402
     attach_parameter_manifest,
     build_parameter_manifest,
     build_parameter_manifest_from_parts,
+    build_execution_candidate,
     build_executed_run_receipt,
     build_governed_execution_receipt,
+    finalize_governed_execution_receipt,
     executed_run_receipt_sha256,
+    execution_candidate_sha256,
     build_pricing_receipt,
+    governed_execution_receipt_sha256,
     manifest_sha256,
     validate_parameter_manifest,
+    validate_governed_execution_receipt,
     validate_pricing_receipt,
     pricing_receipt_sha256,
     write_parameter_manifest,
@@ -64,13 +69,10 @@ def _config(base=4, aux=8, realized=12):
     }
 
 def _executed(manifest, run_id="issue688-test-run", update_count=1):
-    parent = {
-        "schema": "ember-mtp-governed-execution-receipt-v1",
-        "authority": "certified-governed-execution",
-        "status": "COMPLETED",
+    candidate = {
+        "schema": "ember-mtp-execution-candidate-v1",
         "run_id": run_id,
         "update_count": update_count,
-        "child_exit_code": 0,
         "source_sha256": "1" * 64,
         "config_sha256": "2" * 64,
         "manifest_sha256": manifest["manifest_sha256"],
@@ -79,8 +81,15 @@ def _executed(manifest, run_id="issue688-test-run", update_count=1):
         "before_optimizer_state_sha256": "5" * 64,
         "optimizer_state_sha256": "6" * 64,
     }
-    from mtp_parameter_manifest import governed_execution_receipt_sha256
-    parent["receipt_sha256"] = governed_execution_receipt_sha256(parent)
+    candidate["receipt_sha256"] = execution_candidate_sha256(candidate)
+    parent = finalize_governed_execution_receipt(
+        manifest, candidate,
+        command=[sys.executable, "-B", "child.py", run_id],
+        process_identity={"pid": 1, "start_time_ns": 1, "executable_sha256": "7" * 64},
+        child_exit_code=0,
+        verifier_id="test-external-runner-v1",
+        verifier_sha256="8" * 64,
+    )
     return build_executed_run_receipt(manifest, parent)
 
 
@@ -288,21 +297,14 @@ class Issue688LiveManifestTests(unittest.TestCase):
         with self.assertRaisesRegex(MtpParameterManifestError, "authorized"):
             build_pricing_receipt(manifest, forged)
     def test_governed_parent_rejects_no_step_and_self_attested_update(self):
-        from mtp_parameter_manifest import begin_governed_execution
-
         model = TinyMtp()
         optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
         manifest = build_parameter_manifest(model, optimizer, _config())
-        boundary = begin_governed_execution(model, optimizer)
-        with tempfile.TemporaryDirectory() as td:
-            source = Path(td) / "source.py"
-            config = Path(td) / "config.json"
-            source.write_bytes(b"source")
-            config.write_bytes(b"config")
-            with self.assertRaisesRegex(MtpParameterManifestError, "update evidence"):
-                build_governed_execution_receipt(
-                    manifest, "no-step", source, config, boundary, model, optimizer, update_count=1
-                )
+        with self.assertRaisesRegex(MtpParameterManifestError, "external launcher"):
+            build_governed_execution_receipt(
+                manifest, "no-step", Path("source.py"), Path("config.json"),
+                None, model, optimizer, update_count=1
+            )
 
     def test_governed_parent_live_update_produces_bound_pricing_receipt(self):
         from mtp_parameter_manifest import begin_governed_execution
@@ -319,13 +321,105 @@ class Issue688LiveManifestTests(unittest.TestCase):
             config = Path(td) / "config.json"
             source.write_bytes(b"source")
             config.write_bytes(b"config")
-            parent = build_governed_execution_receipt(
+            candidate = build_execution_candidate(
                 manifest, "live-run", source, config, boundary, model, optimizer, update_count=1
+            )
+            parent = finalize_governed_execution_receipt(
+                manifest, candidate,
+                command=[sys.executable, "-B", "child.py"],
+                process_identity={"pid": 1, "start_time_ns": 1, "executable_sha256": "7" * 64},
+                child_exit_code=0,
+                verifier_id="test-external-runner-v1",
+                verifier_sha256="8" * 64,
             )
             pricing = build_pricing_receipt(manifest, build_executed_run_receipt(manifest, parent))
             validate_pricing_receipt(pricing, manifest)
             self.assertEqual(pricing["evidence"], "authorized-executed-run")
 
+    def test_external_runner_end_to_end_binds_observed_exit_and_candidate(self):
+        from mtp_external_runner import run_external_candidate
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            manifest_path = root / "manifest.json"
+            candidate_path = root / "candidate.json"
+            receipt_path = root / "governed-receipt.json"
+            source_path = root / "source.py"
+            config_path = root / "config.json"
+            source_path.write_bytes(b"external-source")
+            config_path.write_bytes(json.dumps(_config()).encode("utf-8"))
+            child_path = root / "child.py"
+            child_path.write_text(
+                """
+import json
+import sys
+sys.path.insert(0, {scripts!r})
+from pathlib import Path
+import torch
+from mtp_parameter_manifest import build_parameter_manifest, begin_governed_execution, build_execution_candidate, write_parameter_manifest
+class M(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.base = torch.nn.Linear(2, 2, bias=False)
+        self.mtp_heads = torch.nn.ModuleList([torch.nn.Linear(2, 2, bias=False) for _ in range(2)])
+model = M()
+optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+cfg = {{"model": {{"parameter_accounting": {{"base_excluding_mtp": 4, "mtp_aux": 8, "realized": 12}}}}}}
+manifest = write_parameter_manifest(Path({manifest!r}), model, optimizer, cfg)
+boundary = begin_governed_execution(model, optimizer)
+loss = sum(parameter.square().sum() for parameter in model.parameters())
+loss.backward()
+optimizer.step()
+candidate = build_execution_candidate(manifest, "external-e2e", Path({source!r}), Path({config!r}), boundary, model, optimizer, update_count=1)
+Path({candidate_path!r}).write_text(json.dumps(candidate, sort_keys=True), encoding="utf-8")
+""".format(
+                    manifest=str(manifest_path),
+                    source=str(source_path),
+                    config=str(config_path),
+                    candidate_path=str(candidate_path),
+                    scripts=str(SCRIPTS),
+                ),
+                encoding="utf-8",
+            )
+            parent = run_external_candidate(
+                manifest_path=manifest_path,
+                candidate_path=candidate_path,
+                receipt_path=receipt_path,
+                command=[sys.executable, "-B", str(child_path)],
+                source_path=source_path,
+                config_path=config_path,
+                cwd=SCRIPTS,
+            )
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            validate_governed_execution_receipt(parent, manifest)
+            self.assertEqual(parent["authority"], "external-disk-budget-runner")
+            self.assertEqual(parent["child_exit_code"], 0)
+            self.assertEqual(parent["command"], [sys.executable, "-B", str(child_path)])
+            pricing = build_pricing_receipt(manifest, build_executed_run_receipt(manifest, parent))
+            validate_pricing_receipt(pricing, manifest)
+            self.assertTrue(receipt_path.exists())
+            wrong_source = root / "wrong-source.py"
+            wrong_source.write_bytes(b"different-source")
+            with self.assertRaisesRegex(ValueError, "source_sha256"):
+                run_external_candidate(
+                    manifest_path=manifest_path,
+                    candidate_path=candidate_path,
+                    receipt_path=root / "wrong-receipt.json",
+                    command=[sys.executable, "-B", str(child_path)],
+                    source_path=wrong_source,
+                    config_path=config_path,
+                    cwd=SCRIPTS,
+                )
+
+    def test_external_parent_rejects_child_forged_authority(self):
+        model = TinyMtp()
+        manifest = build_parameter_manifest(model, torch.optim.SGD(model.parameters(), lr=0.1), _config())
+        parent = _executed(manifest, "forged-authority")["governed_execution_receipt"]
+        forged = copy.deepcopy(parent)
+        forged["authority"] = "certified-governed-execution"
+        forged["receipt_sha256"] = governed_execution_receipt_sha256(forged)
+        with self.assertRaisesRegex(MtpParameterManifestError, "externally verified"):
+            validate_governed_execution_receipt(forged, manifest)
     def test_two_arm_projection_rejects_accounting_mismatch(self):
         import fp44_horizon_equiv_gate
 
@@ -378,11 +472,13 @@ class Issue688LiveManifestTests(unittest.TestCase):
     def test_optimizer_boundary_source_binds_actual_manifest_and_pricing(self):
         source = (ROOT / "scripts" / "fp44_horizon_optimizer_equiv.py").read_text(encoding="utf-8")
         self.assertIn("write_parameter_manifest_from_parts", source)
-        self.assertIn("write_pricing_receipt", source)
+        self.assertIn("parameter_execution_candidate", source)
+        self.assertNotIn("write_pricing_receipt", source)
         self.assertIn("_bind_live_parameter_evidence", source)
         timeshare_source = (ROOT / "scripts" / "timeshare_pretrain.py").read_text(encoding="utf-8")
         self.assertIn("write_parameter_manifest", timeshare_source)
-        self.assertIn("write_pricing_receipt", timeshare_source)
+        self.assertIn("parameter_execution_candidate", timeshare_source)
+        self.assertNotIn("write_pricing_receipt", timeshare_source)
 
     def test_launch_receipt_requires_manifest(self):
         import v0_pretrain_launch_gate

@@ -440,12 +440,16 @@ def bind_manifest_evidence(receipt: Mapping[str, Any], manifest: Mapping[str, An
     return bound
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_EXECUTION_CANDIDATE_KEYS = {
+    "schema", "run_id", "update_count", "source_sha256", "config_sha256",
+    "manifest_sha256", "before_state_sha256", "after_state_sha256",
+    "before_optimizer_state_sha256", "optimizer_state_sha256", "receipt_sha256",
+}
 _GOVERNED_EXECUTION_KEYS = {
     "schema", "authority", "status", "run_id", "update_count", "child_exit_code",
-    "source_sha256", "config_sha256", "manifest_sha256",
-    "before_state_sha256", "after_state_sha256",
-    "before_optimizer_state_sha256", "optimizer_state_sha256",
-    "receipt_sha256",
+    "manifest_sha256", "execution_candidate", "execution_candidate_sha256",
+    "command", "command_sha256", "process_identity", "verifier_id",
+    "verifier_sha256", "receipt_sha256",
 }
 _EXECUTED_RUN_KEYS = {
     "schema", "evidence", "run_id", "update_count", "source_sha256", "config_sha256",
@@ -459,6 +463,16 @@ def _require_sha256(value: Any, label: str) -> None:
         raise MtpParameterManifestError(f"{label} must be a lowercase SHA-256")
 
 
+def _execution_candidate_bytes(receipt: Mapping[str, Any]) -> bytes:
+    payload = copy.deepcopy(dict(receipt))
+    payload.pop("receipt_sha256", None)
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+
+def execution_candidate_sha256(receipt: Mapping[str, Any]) -> str:
+    return hashlib.sha256(_execution_candidate_bytes(receipt)).hexdigest()
+
+
 def _governed_execution_receipt_bytes(receipt: Mapping[str, Any]) -> bytes:
     payload = copy.deepcopy(dict(receipt))
     payload.pop("receipt_sha256", None)
@@ -469,30 +483,74 @@ def governed_execution_receipt_sha256(receipt: Mapping[str, Any]) -> str:
     return hashlib.sha256(_governed_execution_receipt_bytes(receipt)).hexdigest()
 
 
+def validate_execution_candidate(
+    receipt: Mapping[str, Any], manifest: Mapping[str, Any] | None = None
+) -> None:
+    if not isinstance(receipt, Mapping) or set(receipt) != _EXECUTION_CANDIDATE_KEYS:
+        raise MtpParameterManifestError("execution candidate schema is not closed")
+    if receipt["schema"] != "ember-mtp-execution-candidate-v1":
+        raise MtpParameterManifestError("execution candidate schema is invalid")
+    if not isinstance(receipt["run_id"], str) or not receipt["run_id"].strip():
+        raise MtpParameterManifestError("execution candidate run_id is invalid")
+    if type(receipt["update_count"]) is not int or receipt["update_count"] < 1:
+        raise MtpParameterManifestError("execution candidate update_count must be positive")
+    for key in (
+        "source_sha256", "config_sha256", "manifest_sha256",
+        "before_state_sha256", "after_state_sha256",
+        "before_optimizer_state_sha256", "optimizer_state_sha256", "receipt_sha256",
+    ):
+        _require_sha256(receipt[key], f"execution candidate {key}")
+    if receipt["before_state_sha256"] == receipt["after_state_sha256"]:
+        raise MtpParameterManifestError("execution candidate update evidence is unchanged")
+    if receipt["receipt_sha256"] != execution_candidate_sha256(receipt):
+        raise MtpParameterManifestError("execution candidate receipt hash mismatch")
+    if manifest is not None:
+        validate_parameter_manifest(manifest)
+        if receipt["manifest_sha256"] != manifest["manifest_sha256"]:
+            raise MtpParameterManifestError("execution candidate manifest hash mismatch")
+
+
 def validate_governed_execution_receipt(
     receipt: Mapping[str, Any], manifest: Mapping[str, Any] | None = None
 ) -> None:
     if not isinstance(receipt, Mapping) or set(receipt) != _GOVERNED_EXECUTION_KEYS:
         raise MtpParameterManifestError("governed execution receipt schema is not closed")
-    if receipt["schema"] != "ember-mtp-governed-execution-receipt-v1":
+    if receipt["schema"] != "ember-mtp-governed-execution-receipt-v2":
         raise MtpParameterManifestError("governed execution receipt schema is invalid")
-    if receipt["authority"] != "certified-governed-execution" or receipt["status"] != "COMPLETED":
-        raise MtpParameterManifestError("governed execution authority is not certified")
+    if receipt["authority"] != "external-disk-budget-runner" or receipt["status"] != "VERIFIED_COMPLETED":
+        raise MtpParameterManifestError("governed execution authority is not externally verified")
     if not isinstance(receipt["run_id"], str) or not receipt["run_id"].strip():
         raise MtpParameterManifestError("governed execution run_id is invalid")
     if type(receipt["update_count"]) is not int or receipt["update_count"] < 1:
         raise MtpParameterManifestError("governed execution update_count must be positive")
     if type(receipt["child_exit_code"]) is not int or receipt["child_exit_code"] != 0:
-        raise MtpParameterManifestError("governed execution child exit must be zero")
-    for key in (
-        "source_sha256", "config_sha256", "manifest_sha256",
-        "before_state_sha256", "after_state_sha256",
-        "before_optimizer_state_sha256", "optimizer_state_sha256",
-        "receipt_sha256",
+        raise MtpParameterManifestError("governed execution observed child exit must be zero")
+    if not isinstance(receipt["command"], list) or not receipt["command"] or not all(
+        isinstance(item, str) and item and "\x00" not in item for item in receipt["command"]
     ):
-        _require_sha256(receipt[key], f"governed execution {key}")
-    if receipt["before_state_sha256"] == receipt["after_state_sha256"]:
-        raise MtpParameterManifestError("governed execution update evidence is unchanged")
+        raise MtpParameterManifestError("governed execution command is invalid")
+    command_bytes = json.dumps(receipt["command"], separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    if receipt["command_sha256"] != hashlib.sha256(command_bytes).hexdigest():
+        raise MtpParameterManifestError("governed execution command hash mismatch")
+    identity = receipt["process_identity"]
+    if not isinstance(identity, Mapping) or set(identity) != {"pid", "start_time_ns", "executable_sha256"}:
+        raise MtpParameterManifestError("governed execution process identity is not closed")
+    if type(identity["pid"]) is not int or identity["pid"] <= 0:
+        raise MtpParameterManifestError("governed execution process identity pid is invalid")
+    if type(identity["start_time_ns"]) is not int or identity["start_time_ns"] <= 0:
+        raise MtpParameterManifestError("governed execution process identity start time is invalid")
+    _require_sha256(identity["executable_sha256"], "governed execution executable_sha256")
+    if not isinstance(receipt["verifier_id"], str) or not receipt["verifier_id"].strip():
+        raise MtpParameterManifestError("governed execution verifier_id is invalid")
+    _require_sha256(receipt["verifier_sha256"], "governed execution verifier_sha256")
+    validate_execution_candidate(receipt["execution_candidate"], manifest)
+    candidate = receipt["execution_candidate"]
+    if receipt["execution_candidate_sha256"] != candidate["receipt_sha256"]:
+        raise MtpParameterManifestError("governed execution candidate hash mismatch")
+    if receipt["run_id"] != candidate["run_id"] or receipt["update_count"] != candidate["update_count"]:
+        raise MtpParameterManifestError("governed execution candidate identity mismatch")
+    if manifest is not None and receipt["manifest_sha256"] != manifest["manifest_sha256"]:
+        raise MtpParameterManifestError("governed execution manifest hash mismatch")
     if receipt["receipt_sha256"] != governed_execution_receipt_sha256(receipt):
         raise MtpParameterManifestError("governed execution receipt hash mismatch")
     if manifest is not None:
@@ -509,7 +567,7 @@ class GovernedExecutionBoundary:
     before_optimizer_state_sha256: str
 
 
-def build_governed_execution_receipt(
+def build_execution_candidate(
     manifest: Mapping[str, Any],
     run_id: str,
     source_path: str | Path,
@@ -520,7 +578,7 @@ def build_governed_execution_receipt(
     *,
     update_count: int,
 ) -> dict[str, Any]:
-    """Finalize parent evidence from one live model/optimizer boundary."""
+    """Emit child-side candidate evidence; never certify process completion."""
     validate_parameter_manifest(manifest)
     if type(update_count) is not int or update_count < 1:
         raise MtpParameterManifestError("governed execution update_count must be positive")
@@ -536,12 +594,9 @@ def build_governed_execution_receipt(
     if after_state_sha256 == boundary.before_state_sha256:
         raise MtpParameterManifestError("governed execution update evidence is unchanged")
     receipt: dict[str, Any] = {
-        "schema": "ember-mtp-governed-execution-receipt-v1",
-        "authority": "certified-governed-execution",
-        "status": "COMPLETED",
+        "schema": "ember-mtp-execution-candidate-v1",
         "run_id": run_id,
         "update_count": update_count,
-        "child_exit_code": 0,
         "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
         "config_sha256": hashlib.sha256(config_bytes).hexdigest(),
         "manifest_sha256": manifest["manifest_sha256"],
@@ -550,11 +605,63 @@ def build_governed_execution_receipt(
         "before_optimizer_state_sha256": boundary.before_optimizer_state_sha256,
         "optimizer_state_sha256": optimizer_state_sha256,
     }
-    receipt["receipt_sha256"] = governed_execution_receipt_sha256(receipt)
-    validate_governed_execution_receipt(receipt, manifest)
+    receipt["receipt_sha256"] = execution_candidate_sha256(receipt)
+    validate_execution_candidate(receipt, manifest)
     return receipt
 
 
+def build_governed_execution_receipt(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Refuse the legacy child-minted completion API."""
+    raise MtpParameterManifestError(
+        "child cannot mint governed completion; external launcher verification is required"
+    )
+
+
+def finalize_governed_execution_receipt(
+    manifest: Mapping[str, Any],
+    candidate: Mapping[str, Any],
+    *,
+    command: Sequence[str],
+    process_identity: Mapping[str, Any],
+    child_exit_code: int,
+    verifier_id: str,
+    verifier_sha256: str,
+) -> dict[str, Any]:
+    """Mint completion authority from observations made after child exit."""
+    validate_parameter_manifest(manifest)
+    validate_execution_candidate(candidate, manifest)
+    if type(child_exit_code) is not int:
+        raise MtpParameterManifestError("external child exit code must be an integer")
+    if not isinstance(command, Sequence) or isinstance(command, (str, bytes)):
+        raise MtpParameterManifestError("external command must be a sequence")
+    identity = dict(process_identity)
+    if set(identity) != {"pid", "start_time_ns", "executable_sha256"}:
+        raise MtpParameterManifestError("external process identity is not closed")
+    command_list = [str(item) for item in command]
+    command_sha256 = hashlib.sha256(
+        json.dumps(command_list, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+    receipt: dict[str, Any] = {
+        "schema": "ember-mtp-governed-execution-receipt-v2",
+        "authority": "external-disk-budget-runner",
+        "status": "VERIFIED_COMPLETED" if child_exit_code == 0 else "VERIFIED_FAILED",
+        "run_id": candidate["run_id"],
+        "update_count": candidate["update_count"],
+        "child_exit_code": child_exit_code,
+        "manifest_sha256": manifest["manifest_sha256"],
+        "execution_candidate": copy.deepcopy(dict(candidate)),
+        "execution_candidate_sha256": candidate["receipt_sha256"],
+        "command": command_list,
+        "command_sha256": command_sha256,
+        "process_identity": identity,
+        "verifier_id": verifier_id,
+        "verifier_sha256": verifier_sha256,
+    }
+    receipt["receipt_sha256"] = governed_execution_receipt_sha256(receipt)
+    if child_exit_code != 0:
+        raise MtpParameterManifestError("external child did not complete successfully")
+    validate_governed_execution_receipt(receipt, manifest)
+    return receipt
 def execution_probe_sha256(model: Any, optimizers: Any) -> str:
     """Hash bounded live model/optimizer state probes at an execution boundary."""
     h = hashlib.sha256()
@@ -623,8 +730,8 @@ def build_executed_run_receipt(
         "evidence": "authorized-executed-run",
         "run_id": governed_execution_receipt["run_id"],
         "update_count": governed_execution_receipt["update_count"],
-        "source_sha256": governed_execution_receipt["source_sha256"],
-        "config_sha256": governed_execution_receipt["config_sha256"],
+        "source_sha256": governed_execution_receipt["execution_candidate"]["source_sha256"],
+        "config_sha256": governed_execution_receipt["execution_candidate"]["config_sha256"],
         "manifest_sha256": manifest["manifest_sha256"],
         "governed_execution_receipt": copy.deepcopy(dict(governed_execution_receipt)),
         "governed_execution_receipt_sha256": governed_execution_receipt["receipt_sha256"],
@@ -646,7 +753,8 @@ def validate_executed_run_receipt(
     if receipt["governed_execution_receipt_sha256"] != parent["receipt_sha256"]:
         raise MtpParameterManifestError("executed-run governed parent hash mismatch")
     for key in ("run_id", "update_count", "source_sha256", "config_sha256", "manifest_sha256"):
-        expected = manifest["manifest_sha256"] if key == "manifest_sha256" and manifest is not None else parent.get(key)
+        candidate = parent["execution_candidate"]
+        expected = manifest["manifest_sha256"] if key == "manifest_sha256" and manifest is not None else candidate.get(key)
         if receipt[key] != expected:
             raise MtpParameterManifestError(f"executed-run evidence {key} mismatch")
     _require_sha256(receipt["receipt_sha256"], "executed-run evidence receipt_sha256")

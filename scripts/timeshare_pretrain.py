@@ -1067,27 +1067,19 @@ def _write_live_parameter_evidence(
 ) -> dict[str, Any]:
     """Bind accounting to the model/optimizers that just executed a live run."""
     from mtp_parameter_manifest import (
-        validate_pricing_receipt,
-        build_executed_run_receipt,
-        build_governed_execution_receipt,
-        begin_governed_execution,
-        write_pricing_receipt,
+        build_execution_candidate,
     )
 
     manifest, manifest_path = _write_live_parameter_manifest(
         run_dir, model, optimizers, cfg, run_id
     )
-    pricing_path = manifest_path.with_name(f"{run_id}-pricing-receipt.json")
-    governed_parent = build_governed_execution_receipt(
+    candidate = build_execution_candidate(
         manifest, run_id, Path(__file__), Path(CONTRACT_PATH), execution_boundary,
         model, optimizers, update_count=update_count,
     )
-    executed_run = build_executed_run_receipt(manifest, governed_parent)
-    pricing = write_pricing_receipt(pricing_path, manifest, executed_run)
-    validate_pricing_receipt(pricing, manifest)
     return {
         "parameter_manifest": manifest,
-        "parameter_pricing_receipt": pricing,
+        "parameter_execution_candidate": candidate,
         "parameter_accounting": dict(manifest["parameter_accounting"]),
     }
 
