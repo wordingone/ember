@@ -17,6 +17,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
 import re
 from dataclasses import dataclass
 from collections import defaultdict
@@ -443,7 +444,8 @@ _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _EXECUTION_CANDIDATE_KEYS = {
     "schema", "run_id", "update_count", "source_sha256", "config_sha256",
     "manifest_sha256", "before_state_sha256", "after_state_sha256",
-    "before_optimizer_state_sha256", "optimizer_state_sha256", "receipt_sha256",
+    "before_optimizer_state_sha256", "optimizer_state_sha256", "producer_pid",
+    "receipt_sha256",
 }
 _GOVERNED_RUNNER_CAPABILITY = object()
 _GOVERNED_EXECUTION_KEYS = {
@@ -451,7 +453,7 @@ _GOVERNED_EXECUTION_KEYS = {
     "manifest_sha256", "execution_candidate", "execution_candidate_sha256",
     "command", "command_sha256", "process_identity", "verifier_id",
     "verifier_sha256", "disk_budget_receipt", "disk_budget_receipt_sha256",
-    "runner_module_sha256", "receipt_sha256",
+    "runner_module_sha256", "candidate_file_identity", "receipt_sha256",
 }
 _EXECUTED_RUN_KEYS = {
     "schema", "evidence", "run_id", "update_count", "source_sha256", "config_sha256",
@@ -500,6 +502,8 @@ def validate_execution_candidate(
         raise MtpParameterManifestError("execution candidate run_id is invalid")
     if type(receipt["update_count"]) is not int or receipt["update_count"] < 1:
         raise MtpParameterManifestError("execution candidate update_count must be positive")
+    if type(receipt["producer_pid"]) is not int or receipt["producer_pid"] <= 0:
+        raise MtpParameterManifestError("execution candidate producer pid is invalid")
     for key in (
         "source_sha256", "config_sha256", "manifest_sha256",
         "before_state_sha256", "after_state_sha256",
@@ -578,6 +582,14 @@ def validate_governed_execution_receipt(
     if receipt["process_identity"]["executable_sha256"] != disk_receipt["child_executable_sha256"]:
         raise MtpParameterManifestError("governed execution executable identity mismatch")
     _require_sha256(receipt["runner_module_sha256"], "governed runner module_sha256")
+    candidate_identity = receipt["candidate_file_identity"]
+    if not isinstance(candidate_identity, Mapping) or set(candidate_identity) != {
+        "device", "inode", "size", "mtime_ns", "ctime_ns"
+    }:
+        raise MtpParameterManifestError("governed candidate file identity is not closed")
+    for key in ("device", "inode", "size", "mtime_ns", "ctime_ns"):
+        if type(candidate_identity[key]) is not int or candidate_identity[key] < 0:
+            raise MtpParameterManifestError("governed candidate file identity is invalid")
     validate_execution_candidate(receipt["execution_candidate"], manifest)
     candidate = receipt["execution_candidate"]
     if receipt["execution_candidate_sha256"] != candidate["receipt_sha256"]:
@@ -635,6 +647,7 @@ def build_execution_candidate(
         "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
         "config_sha256": hashlib.sha256(config_bytes).hexdigest(),
         "manifest_sha256": manifest["manifest_sha256"],
+        "producer_pid": os.getpid(),
         "before_state_sha256": boundary.before_state_sha256,
         "after_state_sha256": after_state_sha256,
         "before_optimizer_state_sha256": boundary.before_optimizer_state_sha256,
@@ -665,6 +678,7 @@ def _finalize_governed_execution_receipt(
     *,
     command: Sequence[str],
     process_identity: Mapping[str, Any],
+    candidate_file_identity: Mapping[str, Any],
     child_exit_code: int,
     verifier_id: str,
     verifier_sha256: str,
@@ -702,6 +716,7 @@ def _finalize_governed_execution_receipt(
         "command": command_list,
         "command_sha256": command_sha256,
         "process_identity": identity,
+        "candidate_file_identity": copy.deepcopy(dict(candidate_file_identity)),
         "verifier_id": verifier_id,
         "verifier_sha256": verifier_sha256,
         "disk_budget_receipt": copy.deepcopy(dict(disk_budget_receipt)),

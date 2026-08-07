@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 from mtp_parameter_manifest import _GOVERNED_RUNNER_CAPABILITY, _finalize_governed_execution_receipt, validate_parameter_manifest
 Runner = Callable[..., int]
+_TEST_RUNNER_CAPABILITY = object()
 
 def _sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -61,9 +62,11 @@ def _write_json_atomic(path: Path, value: Mapping[str, Any]) -> None:
     temporary.write_text(json.dumps(value, sort_keys=True, indent=2) + "\n", encoding="utf-8")
     os.replace(temporary, path)
 
-def run_external_candidate(*, manifest_path: Path | str, candidate_path: Path | str, receipt_path: Path | str, source_path: Path | str, config_path: Path | str, command: Sequence[str], cwd: Path | str | None = None, write_roots: Mapping[str, Path | str] | None = None, max_write_gib: Mapping[str, float] | None = None, runner_receipt_path: Path | str | None = None, runner: Runner | None = None) -> dict[str, Any]:
+def _run_external_candidate_impl(*, manifest_path: Path | str, candidate_path: Path | str, receipt_path: Path | str, source_path: Path | str, config_path: Path | str, command: Sequence[str], cwd: Path | str | None = None, write_roots: Mapping[str, Path | str] | None = None, max_write_gib: Mapping[str, float] | None = None, runner_receipt_path: Path | str | None = None, runner: Runner | None = None, _test_capability: object | None = None) -> dict[str, Any]:
     """Run one child through the governed runner and persist parent authority."""
     del cwd
+    if runner is not None and _test_capability is not _TEST_RUNNER_CAPABILITY:
+        raise ValueError("injected governed runner is test-only")
     manifest_file = Path(manifest_path).resolve(strict=True)
     candidate_file = Path(candidate_path).resolve()
     receipt_file = Path(receipt_path).resolve()
@@ -146,9 +149,12 @@ def run_external_candidate(*, manifest_path: Path | str, candidate_path: Path | 
         raise ValueError("governed disk-budget command mismatch")
     if not candidate_file.is_file():
         raise ValueError("execution candidate was not created by the child")
-    if candidate_file.stat().st_mtime_ns < invocation_started_ns - 1_000_000_000:
+    candidate_stat = candidate_file.stat()
+    if candidate_stat.st_mtime_ns < invocation_started_ns or candidate_stat.st_ctime_ns < invocation_started_ns:
         raise ValueError("execution candidate was not created during this run")
     candidate = json.loads(candidate_file.read_text(encoding="utf-8"))
+    if candidate.get("producer_pid") != projection["child_pid"]:
+        raise ValueError("execution candidate producer is not the observed child")
     source_sha_after = _sha256_file(source_file)
     config_sha_after = _sha256_file(config_file)
     if source_sha_before != source_sha_after:
@@ -159,6 +165,26 @@ def run_external_candidate(*, manifest_path: Path | str, candidate_path: Path | 
         raise ValueError("external source_sha256 mismatch")
     if candidate.get("config_sha256") != config_sha_before:
         raise ValueError("external config_sha256 mismatch")
-    parent = _finalize_governed_execution_receipt(manifest, candidate, command=command_list, process_identity={"pid": projection["child_pid"], "start_time_ns": projection["child_start_time_ns"], "executable_sha256": projection["child_executable_sha256"]}, child_exit_code=int(projection["child_exit_code"]), verifier_id="ember-mtp-external-runner-v1", verifier_sha256=_sha256_file(Path(__file__).resolve()), disk_budget_receipt=projection, disk_budget_receipt_sha256=projection["receipt_sha256"], runner_module_sha256=_sha256_file(runner_module_path), capability=_GOVERNED_RUNNER_CAPABILITY)
+    candidate_identity = {
+        "device": int(candidate_stat.st_dev),
+        "inode": int(candidate_stat.st_ino),
+        "size": int(candidate_stat.st_size),
+        "mtime_ns": int(candidate_stat.st_mtime_ns),
+        "ctime_ns": int(candidate_stat.st_ctime_ns),
+    }
+    parent = _finalize_governed_execution_receipt(manifest, candidate, command=command_list, process_identity={"pid": projection["child_pid"], "start_time_ns": projection["child_start_time_ns"], "executable_sha256": projection["child_executable_sha256"]}, candidate_file_identity=candidate_identity, child_exit_code=int(projection["child_exit_code"]), verifier_id="ember-mtp-external-runner-v1", verifier_sha256=_sha256_file(Path(__file__).resolve()), disk_budget_receipt=projection, disk_budget_receipt_sha256=projection["receipt_sha256"], runner_module_sha256=_sha256_file(runner_module_path), capability=_GOVERNED_RUNNER_CAPABILITY)
     _write_json_atomic(receipt_file, parent)
     return parent
+
+def run_external_candidate(**kwargs: Any) -> dict[str, Any]:
+    """Run through the owned disk-budget launcher; injected launchers are not public."""
+    if "runner" in kwargs or "_test_capability" in kwargs:
+        raise TypeError("run_external_candidate does not accept an injected runner")
+    return _run_external_candidate_impl(**kwargs, runner=None, _test_capability=None)
+
+
+def _run_external_candidate_for_test(*, runner: Runner, _test_capability: object, **kwargs: Any) -> dict[str, Any]:
+    """Test-only seam for exercising parent validation without a consuming run."""
+    if _test_capability is not _TEST_RUNNER_CAPABILITY:
+        raise ValueError("injected governed runner is test-only")
+    return _run_external_candidate_impl(**kwargs, runner=runner, _test_capability=_test_capability)

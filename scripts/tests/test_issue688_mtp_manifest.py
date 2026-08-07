@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
+from mtp_external_runner import _TEST_RUNNER_CAPABILITY, _run_external_candidate_for_test
 
 from mtp_parameter_manifest import (  # noqa: E402
     MtpParameterManifestError,
@@ -98,7 +99,7 @@ def _test_runner(command, max_write_gib, receipt_path, *, write_roots):
 
 
 def _executed(manifest, run_id="issue688-test-run", update_count=1):
-    from mtp_external_runner import run_external_candidate
+    from mtp_external_runner import _run_external_candidate_for_test
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         manifest_path = root / "manifest.json"
@@ -117,6 +118,7 @@ def _executed(manifest, run_id="issue688-test-run", update_count=1):
             "source_sha256": hashlib.sha256(source_path.read_bytes()).hexdigest(),
             "config_sha256": hashlib.sha256(config_path.read_bytes()).hexdigest(),
             "manifest_sha256": manifest["manifest_sha256"],
+            "producer_pid": 1,
             "before_state_sha256": "3" * 64,
             "after_state_sha256": "4" * 64,
             "before_optimizer_state_sha256": "5" * 64,
@@ -125,11 +127,11 @@ def _executed(manifest, run_id="issue688-test-run", update_count=1):
         candidate["receipt_sha256"] = execution_candidate_sha256(candidate)
         child_path = root / "child.py"
         child_path.write_text(
-            "import json; from pathlib import Path; Path(" + repr(str(candidate_path)) + ").write_text(" +
-            repr(json.dumps(candidate, sort_keys=True)) + ", encoding='utf-8')",
+            "import json, os, sys; sys.path.insert(0, " + repr(str(SCRIPTS)) + "); from pathlib import Path; from mtp_parameter_manifest import execution_candidate_sha256; candidate = json.loads(" +
+            repr(json.dumps(candidate, sort_keys=True)) + "); candidate['producer_pid'] = os.getpid(); candidate['receipt_sha256'] = execution_candidate_sha256(candidate); Path(" + repr(str(candidate_path)) + ").write_text(json.dumps(candidate, sort_keys=True), encoding='utf-8')",
             encoding="utf-8",
         )
-        parent = run_external_candidate(
+        parent = _run_external_candidate_for_test(
             manifest_path=manifest_path,
             candidate_path=candidate_path,
             receipt_path=parent_path,
@@ -137,7 +139,7 @@ def _executed(manifest, run_id="issue688-test-run", update_count=1):
             source_path=source_path,
             config_path=config_path,
             command=[sys.executable, "-B", str(child_path)],
-            runner=_test_runner,
+            runner=_test_runner, _test_capability=_TEST_RUNNER_CAPABILITY,
         )
         return build_executed_run_receipt(manifest, parent)
 
@@ -364,7 +366,7 @@ class Issue688LiveManifestTests(unittest.TestCase):
         self.assertEqual(pricing["evidence"], "authorized-executed-run")
 
     def test_external_runner_end_to_end_binds_observed_exit_and_candidate(self):
-        from mtp_external_runner import run_external_candidate
+        from mtp_external_runner import _run_external_candidate_for_test
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -412,7 +414,7 @@ Path({candidate_path!r}).write_text(json.dumps(candidate, sort_keys=True), encod
                 ),
                 encoding="utf-8",
             )
-            parent = run_external_candidate(
+            parent = _run_external_candidate_for_test(
                 manifest_path=manifest_path,
                 candidate_path=candidate_path,
                 receipt_path=receipt_path,
@@ -420,7 +422,7 @@ Path({candidate_path!r}).write_text(json.dumps(candidate, sort_keys=True), encod
                 source_path=source_path,
                 config_path=config_path,
                 cwd=SCRIPTS,
-                runner=_test_runner,
+                runner=_test_runner, _test_capability=_TEST_RUNNER_CAPABILITY,
                 runner_receipt_path=root / 'disk-budget.json',
                 write_roots={},
                 max_write_gib={},
@@ -436,7 +438,7 @@ Path({candidate_path!r}).write_text(json.dumps(candidate, sort_keys=True), encod
             wrong_source = root / "wrong-source.py"
             wrong_source.write_bytes(b"different-source")
             with self.assertRaisesRegex(ValueError, "candidate.*before spawn"):
-                run_external_candidate(
+                _run_external_candidate_for_test(
                     manifest_path=manifest_path,
                     candidate_path=candidate_path,
                     receipt_path=root / "wrong-receipt.json",
@@ -444,7 +446,7 @@ Path({candidate_path!r}).write_text(json.dumps(candidate, sort_keys=True), encod
                     source_path=wrong_source,
                     config_path=config_path,
                     cwd=SCRIPTS,
-                    runner=_test_runner,
+                    runner=_test_runner, _test_capability=_TEST_RUNNER_CAPABILITY,
                     runner_receipt_path=root / 'wrong-disk-budget.json',
                     write_roots={},
                     max_write_gib={},
@@ -470,6 +472,7 @@ Path({candidate_path!r}).write_text(json.dumps(candidate, sort_keys=True), encod
             "source_sha256": "1" * 64,
             "config_sha256": "2" * 64,
             "manifest_sha256": manifest["manifest_sha256"],
+            "producer_pid": 1,
             "before_state_sha256": "3" * 64,
             "after_state_sha256": "4" * 64,
             "before_optimizer_state_sha256": "5" * 64,
@@ -486,8 +489,21 @@ Path({candidate_path!r}).write_text(json.dumps(candidate, sort_keys=True), encod
                 verifier_id="test-external-runner-v1",
                 verifier_sha256="8" * 64,
             )
-    def test_external_runner_rejects_preexisting_candidate_before_spawn(self):
+    def test_public_runner_rejects_injected_launcher(self):
         from mtp_external_runner import run_external_candidate
+
+        with self.assertRaisesRegex(TypeError, "does not accept"):
+            run_external_candidate(
+                manifest_path=Path(__file__),
+                candidate_path=Path(__file__).with_name("candidate.json"),
+                receipt_path=Path(__file__).with_name("parent.json"),
+                source_path=Path(__file__),
+                config_path=Path(__file__),
+                command=[sys.executable, "-c", "pass"],
+                runner=lambda *args, **kwargs: 0,
+            )
+    def test_external_runner_rejects_preexisting_candidate_before_spawn(self):
+        from mtp_external_runner import _run_external_candidate_for_test
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -503,6 +519,7 @@ Path({candidate_path!r}).write_text(json.dumps(candidate, sort_keys=True), encod
             candidate = {
                 "schema": "ember-mtp-execution-candidate-v1",
                 "run_id": "stale-preexisting",
+                "producer_pid": 1,
                 "update_count": 1,
                 "source_sha256": hashlib.sha256(b"source").hexdigest(),
                 "config_sha256": hashlib.sha256(json.dumps(_config()).encode("utf-8")).hexdigest(),
@@ -515,7 +532,7 @@ Path({candidate_path!r}).write_text(json.dumps(candidate, sort_keys=True), encod
             candidate["receipt_sha256"] = execution_candidate_sha256(candidate)
             candidate_path.write_text(json.dumps(candidate, sort_keys=True), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "candidate.*before spawn"):
-                run_external_candidate(
+                _run_external_candidate_for_test(
                     manifest_path=manifest_path,
                     candidate_path=candidate_path,
                     receipt_path=root / "governed-receipt.json",
@@ -523,8 +540,56 @@ Path({candidate_path!r}).write_text(json.dumps(candidate, sort_keys=True), encod
                     config_path=config_path,
                     command=[sys.executable, "-c", "pass"],
                     cwd=SCRIPTS,
-                    runner=_test_runner,
+                    runner=_test_runner, _test_capability=_TEST_RUNNER_CAPABILITY,
                     runner_receipt_path=root / 'wrong-disk-budget.json',
+                    write_roots={},
+                    max_write_gib={},
+                )
+    def test_external_runner_rejects_candidate_copied_after_spawn(self):
+        from mtp_external_runner import _run_external_candidate_for_test
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            source_path = root / "source.py"
+            config_path = root / "config.json"
+            manifest_path = root / "manifest.json"
+            candidate_path = root / "candidate.json"
+            source_path.write_bytes(b"source")
+            config_path.write_bytes(json.dumps(_config()).encode("utf-8"))
+            model = TinyMtp()
+            manifest = write_parameter_manifest(
+                manifest_path, model, torch.optim.SGD(model.parameters(), lr=0.1), _config()
+            )
+            candidate = {
+                "schema": "ember-mtp-execution-candidate-v1",
+                "run_id": "stale-copied-after-spawn",
+                "update_count": 1,
+                "producer_pid": 1,
+                "source_sha256": hashlib.sha256(b"source").hexdigest(),
+                "config_sha256": hashlib.sha256(json.dumps(_config()).encode("utf-8")).hexdigest(),
+                "manifest_sha256": manifest["manifest_sha256"],
+                "before_state_sha256": "3" * 64,
+                "after_state_sha256": "4" * 64,
+                "before_optimizer_state_sha256": "5" * 64,
+                "optimizer_state_sha256": "6" * 64,
+            }
+            candidate["receipt_sha256"] = execution_candidate_sha256(candidate)
+            child = root / "child.py"
+            child.write_text(
+                "from pathlib import Path; Path(" + repr(str(candidate_path)) + ").write_text(" +
+                repr(json.dumps(candidate, sort_keys=True)) + ", encoding='utf-8')",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "producer is not the observed child"):
+                _run_external_candidate_for_test(
+                    manifest_path=manifest_path,
+                    candidate_path=candidate_path,
+                    receipt_path=root / "parent.json",
+                    source_path=source_path,
+                    config_path=config_path,
+                    command=[sys.executable, "-B", str(child)],
+                    runner=_test_runner, _test_capability=_TEST_RUNNER_CAPABILITY,
+                    runner_receipt_path=root / "disk.json",
                     write_roots={},
                     max_write_gib={},
                 )
