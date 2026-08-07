@@ -30,6 +30,17 @@ const liveStdoutSize = {
   get rows():    number { return process.stdout.rows    ?? 24; },
 };
 
+function resolveStdoutSize(stream?: NodeJS.WritableStream): { columns: number; rows: number } {
+  const candidate = stream as ({ columns?: unknown; rows?: unknown } | undefined);
+  const columns = candidate?.columns;
+  const rows = candidate?.rows;
+  if (typeof columns === "number" && Number.isInteger(columns) && columns > 0
+    && typeof rows === "number" && Number.isInteger(rows) && rows > 0) {
+    return { columns, rows };
+  }
+  return liveStdoutSize;
+}
+
 // ---------------------------------------------------------------------------
 // Design system re-exports (AC10)
 // ---------------------------------------------------------------------------
@@ -275,7 +286,7 @@ export function createRoot(options?: RenderOptions): FrontendRoot {
   const stream = (options?.stdout as { write?: (s: string) => void } | undefined)?.write
     ? options!.stdout as { write(s: string): void }
     : process.stdout as { write(s: string): void };
-  const stdout = liveStdoutSize;
+  const stdout = resolveStdoutSize(options?.stdout);
   _rootTerminalSession = createTerminalSessionController(stream);
   _rootExitListener = (): void => {
     try { _rootTerminalSession?.exit(); } catch { /* process teardown is best-effort */ }

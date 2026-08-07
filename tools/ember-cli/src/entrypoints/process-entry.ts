@@ -7,6 +7,7 @@
 // Bundle: entrypoints/process-entry.ts (lines 323033–323519)
 
 import { readFile, writeFile, stat, mkdir } from "fs/promises";
+import { createHash } from "node:crypto";
 import { openSync, closeSync } from "fs";
 import { join, dirname, resolve } from "path";
 import { spawn } from "child_process";
@@ -149,6 +150,8 @@ const FAST_PATH_SUBCMDS = new Set<string>([
   "reply",
   "environment-runner",
   "self-hosted-runner",
+  "goal-session-smoke",
+  "goal-session-live",
   "gh",
   "liveness",
 ]);
@@ -609,7 +612,7 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
       `\n` +
       `Subcommands:\n` +
       `  remote-control (rc), sync, bridge, daemon, ps, logs, attach, kill,\n` +
-      `  new, list, reply, environment-runner, self-hosted-runner, gh doctor,\n` +
+      `  new, list, reply, environment-runner, self-hosted-runner, goal-session-smoke, goal-session-live, gh doctor,\n` +
       `  liveness install [--executable C:\\path\\to\\ember.exe]\n` +
       `\n` +
       `Environment:\n` +
@@ -719,6 +722,24 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
     }
     process.stderr.write(`gh: unknown subcommand "${sub ?? ""}" (supported: doctor)\n`);
     process.exit(1);
+    return true;
+  }
+
+  if (first === "goal-session-smoke" || first === "goal-session-live") {
+    const { runGoalLiveOperatorSession } = await import("../services/goal-live-session.ts");
+    try {
+      const executable_sha256 = createHash("sha256").update(await readFile(process.execPath)).digest("hex");
+      const receipt = await runGoalLiveOperatorSession({ executable_sha256 });
+      process.stdout.write(JSON.stringify(receipt) + "\n");
+      process.exit(0);
+    } catch (error) {
+      process.stderr.write(
+        (first + " failed: ") +
+          (error instanceof Error ? error.message : String(error)) +
+          "\n",
+      );
+      process.exit(1);
+    }
     return true;
   }
 
