@@ -11,7 +11,7 @@ import {
   verifyIssue303Evidence,
 } from "./verify-issue-303-layout.ts";
 
-const evidenceRoot = resolve(import.meta.dir, "../../../../receipts/ember-cli/issue-303");
+const evidenceRoot = resolve(import.meta.dir, "../../../../artifacts/ember-cli/issue-303");
 
 describe("issue #303 terminal layout evidence", () => {
   test("reopens current-master resize and half-screen captures", () => {
