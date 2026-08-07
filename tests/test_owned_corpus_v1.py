@@ -103,6 +103,50 @@ def test_resume_from_completed_shard_matches_uninterrupted_build(tmp_path: Path)
     assert (partial / "manifest.json").read_bytes() == (tmp_path / "clean" / "manifest.json").read_bytes()
 
 
+
+def test_resume_rejects_heldout_modulus_drift(tmp_path: Path):
+    from scripts.corpus.owned_v1 import build_owned_corpus
+
+    raw = _fixture(tmp_path)
+    partial = tmp_path / "partial"
+    build_owned_corpus(
+        raw_root=raw,
+        output_root=partial,
+        source_names=("alpha", "beta"),
+        shard_records=2,
+        heldout_modulus=2,
+        max_records=2,
+    )
+    with pytest.raises(ValueError, match="resume authority|transform"):
+        build_owned_corpus(
+            raw_root=raw,
+            output_root=partial,
+            source_names=("alpha", "beta"),
+            shard_records=2,
+            heldout_modulus=3,
+            resume=True,
+        )
+
+
+def test_validate_manifest_recomputes_deterministic_split_rule(tmp_path: Path):
+    from scripts.corpus.owned_v1 import build_owned_corpus, validate_manifest
+
+    raw = _fixture(tmp_path)
+    out = tmp_path / "out"
+    build_owned_corpus(
+        raw_root=raw,
+        output_root=out,
+        source_names=("alpha", "beta"),
+        shard_records=2,
+        heldout_modulus=2,
+    )
+    path = out / "manifest.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest["heldout_modulus"] = 3
+    path.write_text(json.dumps(manifest, sort_keys=True) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="split|transform"):
+        validate_manifest(path, output_root=out)
+
 def test_malformed_record_and_path_escape_fail_closed(tmp_path: Path):
     from scripts.corpus.owned_v1 import build_owned_corpus
 
@@ -311,8 +355,20 @@ def test_owned_corpus_selection_feeds_real_pretrain_consumer_and_advances_cursor
         max_records=2,
     )
     assert selection.receipt["selected_record_count"] == 2
+    assert selection.receipt["schema_version"] == "ember-owned-specialist-stream-selection-receipt-v1"
+    assert set(selection.receipt) == {
+        "schema_version",
+        "manifest_sha256",
+        "split",
+        "root_sha256",
+        "selected_record_count",
+        "tokenizer_sha256",
+        "selection_rule_id",
+    }
 
     tools_root = ROOT / "tools" / "ember-restart-3b"
+    tests_root = ROOT / "tests"
+    sys.path.insert(0, str(tests_root))
     sys.path.insert(0, str(tools_root))
     try:
         import torch
@@ -351,13 +407,136 @@ def test_owned_corpus_selection_feeds_real_pretrain_consumer_and_advances_cursor
         )
     finally:
         sys.path.remove(str(tools_root))
+        sys.path.remove(str(tests_root))
 
     assert result["steps"] == 1
-    assert [state["data_cursor"]["selection_cursor"]["record_index"] for state in checkpoints] == [1]
+    assert [state["data_cursor"]["selection_cursor"]["selected_ordinal"] for state in checkpoints] == [1]
     assert resumed["steps"] == 1
-    assert [state["data_cursor"]["selection_cursor"]["record_index"] for state in resumed_checkpoints] == [2]
-    assert resumed["data_cursor"]["selection_cursor"]["record_index"] == 2
+    assert [state["data_cursor"]["selection_cursor"]["selected_ordinal"] for state in resumed_checkpoints] == [2]
+    assert resumed["data_cursor"]["selection_cursor"]["selected_ordinal"] == 2
     assert resumed["data_cursor"]["global_step"] == 2
+
+
+
+def test_owned_corpus_selection_rejects_legacy_cursor_schema(tmp_path: Path):
+    from tokenizers import Tokenizer
+    from tokenizers.models import WordLevel
+
+    from scripts.corpus.owned_v1 import OwnedCorpusSelection, build_owned_corpus
+
+    raw = tmp_path / "raw"
+    _write_source(raw, "alpha", [{"id": "a0", "text": "record"}])
+    out = tmp_path / "owned"
+    manifest = build_owned_corpus(raw_root=raw, output_root=out, source_names=("alpha",), shard_records=1)
+    tokenizer_path = tmp_path / "tokenizer.json"
+    Tokenizer(WordLevel(vocab={"[UNK]": 0, "record": 1}, unk_token="[UNK]")).save(str(tokenizer_path))
+    selection = OwnedCorpusSelection(out / "manifest.json", output_root=out, tokenizer_path=tokenizer_path, split="heldout", max_records=1)
+    legacy_cursor = {
+        "schema_version": "ember-owned-corpus-cursor-v1",
+        "manifest_sha256": _sha((out / "manifest.json").read_bytes()),
+        "split": "heldout",
+        "root_sha256": manifest["heldout_root_sha256"],
+        "record_index": 0,
+    }
+    with pytest.raises(ValueError, match="schema|cursor"):
+        list(selection.iter_from(legacy_cursor))
+
+def test_owned_corpus_selection_round_trips_real_p2b_checkpoint_and_resume(tmp_path: Path):
+    from tokenizers import Tokenizer
+    from tokenizers.models import WordLevel
+
+    from scripts.corpus.owned_v1 import OwnedCorpusSelection, build_owned_corpus
+
+    raw = tmp_path / "raw"
+    _write_source(raw, "alpha", [{"id": f"a{index}", "text": f"record {index}"} for index in range(6)])
+    out = tmp_path / "owned"
+    build_owned_corpus(raw_root=raw, output_root=out, source_names=("alpha",), shard_records=2)
+    tokenizer_path = tmp_path / "tokenizer.json"
+    Tokenizer(WordLevel(vocab={"[UNK]": 0, "record": 1}, unk_token="[UNK]")).save(str(tokenizer_path))
+    selection = OwnedCorpusSelection(out / "manifest.json", output_root=out, tokenizer_path=tokenizer_path, split="train", max_records=2)
+
+    tools_root = ROOT / "tools" / "ember-restart-3b"
+    tests_root = ROOT / "tests"
+    sys.path.insert(0, str(tests_root))
+    sys.path.insert(0, str(tools_root))
+    try:
+        import torch
+        import checkpoint_artifacts
+        import pretrain
+        from ember_restart_model.checkpoint_fixture import write_checkpoint_artifacts
+        from model import RestartDecoderConfig, UnifiedDecoder
+        from specialist_stream import SELECTION_CURSOR_SCHEMA_VERSION, SELECTION_RECEIPT_SCHEMA_VERSION, TRAINING_CURSOR_SCHEMA_VERSION
+
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=101)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        result = pretrain.run_selection_pretraining_segment(
+            model=model,
+            optimizer=optimizer,
+            selection=selection,
+            config=config,
+            device=torch.device("cpu"),
+            checkpoint_every=1,
+            checkpoint_callback=lambda _step, _state: None,
+            max_records=1,
+            require_complete_coverage=False,
+        )
+        training_cursor = result["data_cursor"]
+        assert training_cursor["schema_version"] == TRAINING_CURSOR_SCHEMA_VERSION
+        selection_cursor = training_cursor["selection_cursor"]
+        assert selection_cursor["schema_version"] == SELECTION_CURSOR_SCHEMA_VERSION
+        assert set(selection_cursor) == {
+            "schema_version",
+            "selection_receipt_sha256",
+            "selection_rule_id",
+            "selected_ordinal",
+            "next_source_index",
+        }
+        assert selection_cursor["selection_receipt_sha256"] == _sha(
+            json.dumps(selection.receipt, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+        )
+        assert selection.receipt["schema_version"] == SELECTION_RECEIPT_SCHEMA_VERSION
+        checkpoint_root = tmp_path / "checkpoint"
+        receipt = write_checkpoint_artifacts(
+            model=model,
+            optimizer=optimizer,
+            root=checkpoint_root,
+            launch_seed=101,
+            rng_state={"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
+            data_cursor=training_cursor,
+            model_config_sha256="a" * 64,
+            contract_sha256="b" * 64,
+            expert_genesis_sha256={name: "c" * 64 for name in ("vision", "audio", "reasoning", "tool")},
+            test_only_allow_unverified=True,
+        )
+        restored_model = UnifiedDecoder(config, genesis_seed=101)
+        restored_optimizer = torch.optim.AdamW(restored_model.parameters(), lr=1e-3)
+        restored = checkpoint_artifacts.load_checkpoint_artifacts(
+            restored_model,
+            restored_optimizer,
+            checkpoint_root,
+            receipt,
+        )
+        assert restored["data_cursor"] == training_cursor
+        resumed = pretrain.run_selection_pretraining_segment(
+            model=restored_model,
+            optimizer=restored_optimizer,
+            selection=selection,
+            config=config,
+            device=torch.device("cpu"),
+            checkpoint_every=1,
+            checkpoint_callback=lambda _step, _state: None,
+            initial_selection_cursor=selection_cursor,
+            initial_global_step=training_cursor["global_step"],
+            initial_tokens_seen=training_cursor["tokens_seen"],
+            require_complete_coverage=False,
+        )
+    finally:
+        sys.path.remove(str(tools_root))
+        sys.path.remove(str(tests_root))
+
+    assert resumed["steps"] == 1
+    assert resumed["data_cursor"]["selection_cursor"]["selected_ordinal"] == 2
 
 def test_owned_corpus_selection_rejects_tokenizer_drift(tmp_path: Path):
     from tokenizers import Tokenizer

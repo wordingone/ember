@@ -56,6 +56,17 @@ _SOURCE_BINDING_FIELDS = {
     "manifest_sha256",
 }
 
+_STATE_FIELDS = {
+    "schema_version",
+    "source_manifest_sha256",
+    "shard_records",
+    "split_seed",
+    "heldout_modulus",
+    "processed_input_records",
+    "shards",
+    "pending",
+}
+
 
 class CorpusBuildError(ValueError):
     """A fail-closed source or deterministic-build violation."""
@@ -283,7 +294,11 @@ def _load_state(output_root: Path) -> dict[str, Any] | None:
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise CorpusBuildError("build state is unreadable") from error
-    if not isinstance(value, dict) or value.get("schema_version") != STATE_SCHEMA_VERSION:
+    if (
+        not isinstance(value, dict)
+        or set(value) != _STATE_FIELDS
+        or value.get("schema_version") != STATE_SCHEMA_VERSION
+    ):
         raise CorpusBuildError("build state schema is invalid")
     return value
 
@@ -307,7 +322,12 @@ def build_owned_corpus(*, raw_root: Path, output_root: Path, source_names: Seque
     ]
     source_manifest_sha256 = _sha_bytes(_json_bytes(source_binding))
     state = _load_state(output_root) if resume else None
-    if state is not None and (state.get("source_manifest_sha256") != source_manifest_sha256 or state.get("shard_records") != shard_records or state.get("split_seed") != split_seed):
+    if state is not None and (
+        state.get("source_manifest_sha256") != source_manifest_sha256
+        or state.get("shard_records") != shard_records
+        or state.get("split_seed") != split_seed
+        or state.get("heldout_modulus") != heldout_modulus
+    ):
         raise CorpusBuildError("resume authority does not match source bytes or transform")
     processed_input = int(state.get("processed_input_records", 0)) if state else 0
     shard_info = {"train": list(state.get("shards", {}).get("train", [])) if state else [], "heldout": list(state.get("shards", {}).get("heldout", [])) if state else []}
@@ -352,7 +372,16 @@ def build_owned_corpus(*, raw_root: Path, output_root: Path, source_names: Seque
                 shard_info[split].append(_write_shard(output_root, split, len(shard_info[split]), buffers[split], max_temp_bytes))
                 buffers[split] = []
             if max_records is not None and input_seen >= processed_input + max_records:
-                state_value = {"schema_version": STATE_SCHEMA_VERSION, "source_manifest_sha256": source_manifest_sha256, "shard_records": shard_records, "split_seed": split_seed, "processed_input_records": input_seen, "shards": shard_info, "pending": buffers}
+                state_value = {
+                    "schema_version": STATE_SCHEMA_VERSION,
+                    "source_manifest_sha256": source_manifest_sha256,
+                    "shard_records": shard_records,
+                    "split_seed": split_seed,
+                    "heldout_modulus": heldout_modulus,
+                    "processed_input_records": input_seen,
+                    "shards": shard_info,
+                    "pending": buffers,
+                }
                 _write_json(output_root / ".build-state.json", state_value)
                 return {"schema_version": SCHEMA_VERSION, "result": "INTERRUPTED", "processed_input_records": input_seen, "shard_count": sum(len(values) for values in shard_info.values())}
     for split in ("train", "heldout"):
@@ -450,6 +479,8 @@ def validate_manifest(manifest_path: Path, *, output_root: Path) -> dict[str, An
                     raise CorpusBuildError("manifest record source binding is unresolved")
                 if not isinstance(row["record_id"], str) or not row["record_id"] or not isinstance(row["text"], str) or not isinstance(row["content_sha256"], str) or _LOWER_HEX.fullmatch(row["content_sha256"]) is None or row["content_sha256"] != _sha_bytes(row["text"].encode("utf-8")):
                     raise CorpusBuildError("manifest record content hash is invalid")
+                if _split_for(row["content_sha256"], manifest["split_seed"], manifest["heldout_modulus"]) != split:
+                    raise CorpusBuildError("manifest row split does not match deterministic transform")
                 rows.append(row)
             if descriptor["records"] != len(rows):
                 raise CorpusBuildError("manifest shard record count does not match")
@@ -529,7 +560,15 @@ def iter_owned_records(manifest_path: Path, *, output_root: Path, cursor: dict[s
 
 
 
-OWNED_SELECTION_SCHEMA_VERSION = "ember-owned-corpus-selection-receipt-v1"
+OWNED_SELECTION_SCHEMA_VERSION = "ember-owned-specialist-stream-selection-receipt-v1"
+SELECTION_CURSOR_SCHEMA_VERSION = "ember-owned-specialist-stream-selection-cursor-v1"
+SELECTION_CURSOR_FIELDS = {
+    "schema_version",
+    "selection_receipt_sha256",
+    "selection_rule_id",
+    "selected_ordinal",
+    "next_source_index",
+}
 OWNED_SELECTION_RULE = "owned_corpus_text_tokenize_v1"
 
 
@@ -578,25 +617,33 @@ class OwnedCorpusSelection:
             "root_sha256": self._root_sha256,
             "selected_record_count": self._selected_record_count,
             "tokenizer_sha256": self._tokenizer_sha256,
-            "selection_rule": OWNED_SELECTION_RULE,
+            "selection_rule_id": OWNED_SELECTION_RULE,
         }
+        self._selection_receipt_sha256 = _sha_bytes(json.dumps(self.receipt, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8"))
 
     def _validate_cursor(self, cursor: object) -> dict[str, Any]:
         if cursor is None:
             cursor = {
-                "schema_version": _CURSOR_SCHEMA_VERSION,
-                "manifest_sha256": self._manifest_sha256,
-                "split": self.split,
-                "root_sha256": self._root_sha256,
-                "record_index": 0,
+                "schema_version": SELECTION_CURSOR_SCHEMA_VERSION,
+                "selection_receipt_sha256": self._selection_receipt_sha256,
+                "selection_rule_id": OWNED_SELECTION_RULE,
+                "selected_ordinal": 0,
+                "next_source_index": 0,
             }
-        if not isinstance(cursor, dict) or set(cursor) != _CURSOR_FIELDS:
+        if not isinstance(cursor, dict) or set(cursor) != SELECTION_CURSOR_FIELDS:
             raise CorpusBuildError("selection cursor schema is not closed")
-        if cursor.get("schema_version") != _CURSOR_SCHEMA_VERSION:
+        if cursor.get("schema_version") != SELECTION_CURSOR_SCHEMA_VERSION:
             raise CorpusBuildError("selection cursor schema is invalid")
-        if cursor.get("manifest_sha256") != self._manifest_sha256 or cursor.get("split") != self.split or cursor.get("root_sha256") != self._root_sha256:
-            raise CorpusBuildError("selection cursor authority does not match receipt")
-        if type(cursor.get("record_index")) is not int or not 0 <= cursor["record_index"] <= self._selected_record_count:
+        if cursor.get("selection_receipt_sha256") != self._selection_receipt_sha256:
+            raise CorpusBuildError("selection cursor receipt authority does not match receipt")
+        if cursor.get("selection_rule_id") != OWNED_SELECTION_RULE:
+            raise CorpusBuildError("selection cursor selection rule is invalid")
+        for field in ("selected_ordinal", "next_source_index"):
+            if type(cursor.get(field)) is not int or cursor[field] < 0:
+                raise CorpusBuildError("selection cursor progress is invalid")
+        if cursor["selected_ordinal"] != cursor["next_source_index"]:
+            raise CorpusBuildError("selection cursor progress is incoherent")
+        if cursor["selected_ordinal"] > self._selected_record_count:
             raise CorpusBuildError("selection cursor is out of range")
         return dict(cursor)
 
@@ -625,15 +672,30 @@ class OwnedCorpusSelection:
         current = self._validate_cursor(cursor)
         if _sha_file(self.tokenizer_path) != self._tokenizer_sha256:
             raise CorpusBuildError("selection tokenizer authority changed")
-        if current["record_index"] >= self._selected_record_count:
+        if current["selected_ordinal"] >= self._selected_record_count:
             return
-        remaining = self._selected_record_count - current["record_index"]
-        for row, next_cursor in iter_owned_records(
+        remaining = self._selected_record_count - current["selected_ordinal"]
+        source_cursor = {
+            "schema_version": _CURSOR_SCHEMA_VERSION,
+            "manifest_sha256": self._manifest_sha256,
+            "split": self.split,
+            "root_sha256": self._root_sha256,
+            "record_index": current["next_source_index"],
+        }
+        for row, next_source_cursor in iter_owned_records(
             self.manifest_path,
             output_root=self.output_root,
-            cursor=current,
+            cursor=source_cursor,
             max_records=remaining,
         ):
+            next_index = next_source_cursor["record_index"]
+            next_cursor = {
+                "schema_version": SELECTION_CURSOR_SCHEMA_VERSION,
+                "selection_receipt_sha256": self._selection_receipt_sha256,
+                "selection_rule_id": OWNED_SELECTION_RULE,
+                "selected_ordinal": next_index,
+                "next_source_index": next_index,
+            }
             yield self._semantic_record(row), next_cursor
 
 
