@@ -130,12 +130,28 @@ def _run_external_candidate_impl(*, manifest_path: Path | str, candidate_path: P
     disk_receipt = json.loads(runner_receipt_file.read_text(encoding="utf-8"))
     if runner_module is not None:
         if len(observed_process) != 1:
-            raise ValueError("governed runner must create exactly one observed child")
-        observed = observed_process[0]
+            raise ValueError("governed runner must create exactly one wrapper child")
+        wrapper = observed_process[0]
+        child_identity = disk_receipt.get("child_process_identity")
+        if not isinstance(child_identity, Mapping) or set(child_identity) != {
+            "pid", "start_time_ns", "executable_sha256"
+        }:
+            raise ValueError("governed runner did not record the nested command identity")
+        if type(child_identity["pid"]) is not int or child_identity["pid"] <= 0:
+            raise ValueError("governed nested child pid is invalid")
+        if type(child_identity["start_time_ns"]) is not int or child_identity["start_time_ns"] <= 0:
+            raise ValueError("governed nested child start time is invalid")
+        executable_sha256 = child_identity["executable_sha256"]
+        if not isinstance(executable_sha256, str) or len(executable_sha256) != 64 or any(
+            character not in "0123456789abcdef" for character in executable_sha256
+        ):
+            raise ValueError("governed nested child executable identity is invalid")
+        if child_identity["pid"] == wrapper["pid"]:
+            raise ValueError("governed runner recorded its wrapper, not the nested command")
         for field, value in (
-            ("child_pid", observed["pid"]),
-            ("child_start_time_ns", observed["start_time_ns"]),
-            ("child_executable_sha256", observed["executable_sha256"]),
+            ("child_pid", child_identity["pid"]),
+            ("child_start_time_ns", child_identity["start_time_ns"]),
+            ("child_executable_sha256", child_identity["executable_sha256"]),
         ):
             if field in disk_receipt and disk_receipt[field] != value:
                 raise ValueError(f"governed runner {field} mismatch")

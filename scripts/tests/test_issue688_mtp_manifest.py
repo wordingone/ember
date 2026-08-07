@@ -462,6 +462,177 @@ Path({candidate_path!r}).write_text(json.dumps(candidate, sort_keys=True), encod
         with self.assertRaisesRegex(MtpParameterManifestError, "externally verified"):
             validate_governed_execution_receipt(forged, manifest)
 
+    def test_owned_disk_runner_bootstrap_records_inner_child_identity(self):
+        """The governed runner must bind the command child, not its cache wrapper."""
+        import importlib.util
+
+        runner_path = ROOT / "tools" / "ember-restart-3b" / "disk_budget_runner.py"
+        spec = importlib.util.spec_from_file_location("issue688_disk_runner", runner_path)
+        assert spec is not None and spec.loader is not None
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            assertion_path = root / "assertion.json"
+            child_pid_path = root / "child.pid"
+            temp_root = root / "tmp"
+            temp_root.mkdir()
+            bindings = {"TEMP": str(temp_root)}
+            child = root / "child.py"
+            child.write_text(
+                "import os; from pathlib import Path; Path(" + repr(str(child_pid_path)) + ").write_text(str(os.getpid()), encoding='utf-8')",
+                encoding="utf-8",
+            )
+            env = dict(os.environ)
+            env["TEMP"] = str(temp_root)
+            env["TMP"] = str(temp_root)
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    runner._CHILD_ENV_BOOTSTRAP,
+                    json.dumps(bindings, sort_keys=True),
+                    str(assertion_path),
+                    "a" * 32,
+                    sys.executable,
+                    str(child),
+                ],
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            payload = json.loads(assertion_path.read_text(encoding="utf-8"))
+            identity = payload["process_identity"]
+            self.assertEqual(identity["pid"], int(child_pid_path.read_text(encoding="utf-8")))
+            self.assertGreater(identity["start_time_ns"], 0)
+            self.assertEqual(
+                identity["executable_sha256"],
+                hashlib.sha256(Path(sys.executable).resolve(strict=True).read_bytes()).hexdigest(),
+            )
+
+    def test_public_runner_binds_nested_child_and_rejects_foreign_pid(self):
+        """The public runner must bind the command child behind its cache wrapper."""
+        import importlib.util
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        import mtp_external_runner
+
+        disk_path = ROOT / "tools" / "ember-restart-3b" / "disk_budget_runner.py"
+        disk_spec = importlib.util.spec_from_file_location("issue688_disk_runner_public", disk_path)
+        assert disk_spec is not None and disk_spec.loader is not None
+        disk_runner = importlib.util.module_from_spec(disk_spec)
+        disk_spec.loader.exec_module(disk_runner)
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+
+            def run_case(label: str, producer_expression: str) -> dict[str, object]:
+                case = root / label
+                case.mkdir()
+                tmp_root = case / "tmp"
+                tmp_root.mkdir()
+                custody = case / "custody"
+                custody.mkdir()
+                manifest_path = case / "manifest.json"
+                candidate_path = case / "candidate.json"
+                parent_path = case / "parent.json"
+                disk_receipt_path = case / "disk.json"
+                source_path = case / "source.py"
+                config_path = case / "config.json"
+                source_path.write_bytes(b"nested-source")
+                config_path.write_bytes(b"nested-config")
+                model = TinyMtp()
+                manifest = write_parameter_manifest(
+                    manifest_path,
+                    model,
+                    torch.optim.SGD(model.parameters(), lr=0.1),
+                    _config(),
+                )
+                candidate = {
+                    "schema": "ember-mtp-execution-candidate-v1",
+                    "run_id": label,
+                    "update_count": 1,
+                    "source_sha256": hashlib.sha256(source_path.read_bytes()).hexdigest(),
+                    "config_sha256": hashlib.sha256(config_path.read_bytes()).hexdigest(),
+                    "manifest_sha256": manifest["manifest_sha256"],
+                    "before_state_sha256": "3" * 64,
+                    "after_state_sha256": "4" * 64,
+                    "before_optimizer_state_sha256": "5" * 64,
+                    "optimizer_state_sha256": "6" * 64,
+                }
+                child_path = case / "child.py"
+                child_path.write_text(
+                    "import json, os, sys; sys.path.insert(0, " + repr(str(SCRIPTS)) + "); from pathlib import Path; "
+                    "from mtp_parameter_manifest import execution_candidate_sha256; "
+                    "candidate = json.loads(" + repr(json.dumps(candidate, sort_keys=True)) + "); "
+                    "candidate['producer_pid'] = " + producer_expression + "; "
+                    "candidate['receipt_sha256'] = execution_candidate_sha256(candidate); "
+                    "Path(" + repr(str(candidate_path)) + ").write_text(json.dumps(candidate, sort_keys=True), encoding='utf-8')",
+                    encoding="utf-8",
+                )
+                fake_module = SimpleNamespace()
+                fake_module.subprocess = subprocess
+                fake_module.DEVNULL = subprocess.DEVNULL
+                fake_module.TimeoutExpired = subprocess.TimeoutExpired
+                fake_module.run = subprocess.run
+
+                def owned_run(command, budgets, receipt_path, *, write_roots):
+                    del budgets, write_roots
+                    assertion_path = case / "assertion.json"
+                    env = dict(os.environ)
+                    env["TEMP"] = str(tmp_root)
+                    env["TMP"] = str(tmp_root)
+                    wrapper = fake_module.subprocess.Popen(
+                        [
+                            sys.executable,
+                            "-c",
+                            disk_runner._CHILD_ENV_BOOTSTRAP,
+                            json.dumps({"TEMP": str(tmp_root)}, sort_keys=True),
+                            str(assertion_path),
+                            "b" * 32,
+                            *command,
+                        ],
+                        env=env,
+                    )
+                    wrapper_rc = wrapper.wait()
+                    payload = json.loads(assertion_path.read_text(encoding="utf-8"))
+                    raw = {
+                        "schema_version": 7,
+                        "receipt_sha256": "",
+                        "outcome": "COMPLETED",
+                        "child_exit_code": int(wrapper_rc),
+                        "runner_exit_code": int(wrapper_rc),
+                        "command": list(command),
+                        "child_process_identity": payload["process_identity"],
+                    }
+                    raw["receipt_sha256"] = mtp_external_runner._canonical_sha256(raw, omit="receipt_sha256")
+                    Path(receipt_path).write_text(json.dumps(raw, sort_keys=True), encoding="utf-8")
+                    return int(wrapper_rc)
+
+                with patch.object(
+                    mtp_external_runner,
+                    "_load_disk_budget_runner",
+                    return_value=(owned_run, Path(mtp_external_runner.__file__).resolve(), fake_module),
+                ):
+                    return mtp_external_runner.run_external_candidate(
+                        manifest_path=manifest_path,
+                        candidate_path=candidate_path,
+                        receipt_path=parent_path,
+                        source_path=source_path,
+                        config_path=config_path,
+                        command=[sys.executable, "-B", str(child_path)],
+                        write_roots={"custody": custody},
+                        max_write_gib={"C": 0.0, "B": 0.01},
+                        runner_receipt_path=disk_receipt_path,
+                    )
+
+            parent = run_case("nested-positive", "os.getpid()")
+            self.assertEqual(parent["process_identity"]["pid"], parent["execution_candidate"]["producer_pid"])
+            with self.assertRaisesRegex(ValueError, "producer is not the observed child"):
+                run_case("nested-foreign", "1")
     def test_direct_finalizer_cannot_mint_governed_parent(self):
         model = TinyMtp()
         manifest = build_parameter_manifest(model, torch.optim.SGD(model.parameters(), lr=0.1), _config())
