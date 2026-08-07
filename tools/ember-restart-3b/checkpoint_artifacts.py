@@ -489,6 +489,26 @@ _OWNED_SELECTION_RECEIPT_FIELDS = {
     "selection_rule_id",
 }
 _OWNED_SELECTION_RULE = "owned_corpus_text_tokenize_v1"
+_SPECIALIST_SELECTION_SCHEMA_VERSION = "ember-owned-specialist-stream-selection-receipt-v1"
+_SPECIALIST_SELECTION_RECEIPT_FIELDS = {
+    "schema_version",
+    "stream_manifest_sha256",
+    "stream_build_receipt_sha256",
+    "corpus_root_sha256",
+    "family_root_sha256",
+    "capability",
+    "selection_rule_id",
+    "selected_record_count",
+    "selected_token_count",
+    "selected_records_sha256",
+    "selection_commitment_sha256",
+}
+_SPECIALIST_SELECTION_RULES = {
+    "image": "image_scene_split_train_v1",
+    "audio": "all_records_semantic_pretraining_v1",
+    "reasoning": "all_records_semantic_pretraining_v1",
+    "tool": "all_records_semantic_pretraining_v1",
+}
 
 
 def _canonical_owned_selection_receipt_sha256(receipt: Mapping[str, Any]) -> str:
@@ -510,21 +530,35 @@ def _validate_owned_selection_receipt_binding(
         return None
     if selection_receipt is None:
         raise ValueError("P2B checkpoint requires the exact owned selection receipt")
-    if not isinstance(selection_receipt, Mapping) or set(selection_receipt) != _OWNED_SELECTION_RECEIPT_FIELDS:
-        raise ValueError("owned selection receipt schema is not closed")
+    if not isinstance(selection_receipt, Mapping):
+        raise ValueError("selection receipt schema is not closed")
     normalized = dict(selection_receipt)
-    if normalized.get("schema_version") != _OWNED_SELECTION_SCHEMA_VERSION:
-        raise ValueError("owned selection receipt schema is invalid")
-    if normalized.get("split") not in ("train", "heldout"):
-        raise ValueError("owned selection receipt split is invalid")
-    for field in ("manifest_sha256", "root_sha256", "tokenizer_sha256"):
-        value = normalized.get(field)
-        if not isinstance(value, str) or len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
-            raise ValueError("owned selection receipt digest is invalid")
-    if type(normalized.get("selected_record_count")) is not int or normalized["selected_record_count"] <= 0:
-        raise ValueError("owned selection receipt record count is invalid")
-    if normalized.get("selection_rule_id") != _OWNED_SELECTION_RULE:
-        raise ValueError("owned selection receipt selection rule is invalid")
+    schema_version = normalized.get("schema_version")
+    if schema_version == _SPECIALIST_SELECTION_SCHEMA_VERSION:
+        if set(normalized) != _SPECIALIST_SELECTION_RECEIPT_FIELDS:
+            raise ValueError("specialist selection receipt schema is not closed")
+        capability = normalized.get("capability")
+        if capability not in _SPECIALIST_SELECTION_RULES:
+            raise ValueError("specialist selection receipt capability is invalid")
+        if normalized.get("selection_rule_id") != _SPECIALIST_SELECTION_RULES[capability]:
+            raise ValueError("specialist selection receipt selection rule is invalid")
+        for field in ("stream_manifest_sha256", "stream_build_receipt_sha256", "corpus_root_sha256", "family_root_sha256", "selected_records_sha256", "selection_commitment_sha256"):
+            _sha256_value(normalized.get(field), name=f"specialist selection receipt {field}")
+        if any(type(normalized.get(field)) is not int or normalized[field] <= 0 for field in ("selected_record_count", "selected_token_count")):
+            raise ValueError("specialist selection receipt count is invalid")
+    elif schema_version == _OWNED_SELECTION_SCHEMA_VERSION:
+        if set(normalized) != _OWNED_SELECTION_RECEIPT_FIELDS:
+            raise ValueError("owned selection receipt schema is not closed")
+        if normalized.get("split") not in ("train", "heldout"):
+            raise ValueError("owned selection receipt split is invalid")
+        for field in ("manifest_sha256", "root_sha256", "tokenizer_sha256"):
+            _sha256_value(normalized.get(field), name=f"owned selection receipt {field}")
+        if type(normalized.get("selected_record_count")) is not int or normalized["selected_record_count"] <= 0:
+            raise ValueError("owned selection receipt record count is invalid")
+        if normalized.get("selection_rule_id") != _OWNED_SELECTION_RULE:
+            raise ValueError("owned selection receipt selection rule is invalid")
+    else:
+        raise ValueError("selection receipt schema is invalid")
     selection_cursor = data_cursor.get("selection_cursor")
     selection_fields = {
         "schema_version",

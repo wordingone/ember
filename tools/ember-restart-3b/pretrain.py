@@ -290,6 +290,7 @@ def run_selection_pretraining_segment(
             "step": global_step, "global_step": global_step, "losses": list(losses), "tokens_seen": tokens_seen,
             "data_cursor": training_cursor, "modality_examples": dict(modality_examples),
             "expert_examples": dict(expert_examples), "active_expert": active_expert,
+            "selection_receipt": dict(selection.receipt),
         }
         if progress_callback is not None:
             # See run_pretraining_segment: piggybacks on the loss sync above, and

@@ -410,6 +410,7 @@ def test_owned_corpus_selection_feeds_real_pretrain_consumer_and_advances_cursor
         sys.path.remove(str(tests_root))
 
     assert result["steps"] == 1
+    assert checkpoints[0]["selection_receipt"] == selection.receipt
     assert [state["data_cursor"]["selection_cursor"]["selected_ordinal"] for state in checkpoints] == [1]
     assert resumed["steps"] == 1
     assert [state["data_cursor"]["selection_cursor"]["selected_ordinal"] for state in resumed_checkpoints] == [2]
@@ -649,3 +650,92 @@ def test_owned_corpus_selection_rejects_tokenizer_drift(tmp_path: Path):
     tokenizer_path.write_bytes(tokenizer_path.read_bytes() + b"\n")
     with pytest.raises(ValueError, match="tokenizer authority"):
         list(selection.iter_from())
+
+
+def test_specialist_selection_receipt_family_round_trips_checkpoint_and_rejects_cross_family(tmp_path: Path):
+    tools_root = ROOT / "tools" / "ember-restart-3b"
+    tests_root = ROOT / "tests"
+    sys.path.insert(0, str(tests_root))
+    sys.path.insert(0, str(tools_root))
+    try:
+        import torch
+        import checkpoint_artifacts
+        from ember_restart_model.checkpoint_fixture import write_checkpoint_artifacts
+        from model import RestartDecoderConfig, UnifiedDecoder
+        from specialist_stream import (
+            SELECTION_CURSOR_SCHEMA_VERSION,
+            SELECTION_RECEIPT_SCHEMA_VERSION,
+            TRAINING_CURSOR_SCHEMA_VERSION,
+            canonical_record_bytes,
+        )
+        from scripts.corpus.owned_v1 import OWNED_SELECTION_SCHEMA_VERSION
+
+        config = RestartDecoderConfig.small_for_tests(hidden_size=16, layers=1, attention_heads=2, vocab_size=32)
+        model = UnifiedDecoder(config, genesis_seed=303)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        specialist_receipt = {
+            "schema_version": SELECTION_RECEIPT_SCHEMA_VERSION,
+            "stream_manifest_sha256": "1" * 64,
+            "stream_build_receipt_sha256": "2" * 64,
+            "corpus_root_sha256": "3" * 64,
+            "family_root_sha256": "4" * 64,
+            "capability": "image",
+            "selection_rule_id": "image_scene_split_train_v1",
+            "selected_record_count": 1,
+            "selected_token_count": 2,
+            "selected_records_sha256": "5" * 64,
+            "selection_commitment_sha256": "6" * 64,
+        }
+        receipt_sha256 = _sha(canonical_record_bytes(specialist_receipt))
+        data_cursor = {
+            "schema_version": TRAINING_CURSOR_SCHEMA_VERSION,
+            "selection_cursor": {
+                "schema_version": SELECTION_CURSOR_SCHEMA_VERSION,
+                "selection_receipt_sha256": receipt_sha256,
+                "selection_rule_id": specialist_receipt["selection_rule_id"],
+                "selected_ordinal": 1,
+                "next_source_index": 1,
+            },
+            "global_step": 1,
+            "tokens_seen": 2,
+        }
+        common = {
+            "model": model,
+            "optimizer": optimizer,
+            "launch_seed": 303,
+            "rng_state": {"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
+            "data_cursor": data_cursor,
+            "model_config_sha256": "a" * 64,
+            "contract_sha256": "b" * 64,
+            "expert_genesis_sha256": {name: "c" * 64 for name in ("vision", "audio", "reasoning", "tool")},
+            "test_only_allow_unverified": True,
+        }
+        checkpoint = write_checkpoint_artifacts(root=tmp_path / "specialist", selection_receipt=specialist_receipt, **common)
+        restored_model = UnifiedDecoder(config, genesis_seed=303)
+        restored_optimizer = torch.optim.AdamW(restored_model.parameters(), lr=1e-3)
+        restored = checkpoint_artifacts.load_checkpoint_artifacts(restored_model, restored_optimizer, tmp_path / "specialist", checkpoint)
+        assert restored["data_cursor"] == data_cursor
+        assert checkpoint["selection_receipt"] == specialist_receipt
+
+        owned_receipt = {
+            "schema_version": OWNED_SELECTION_SCHEMA_VERSION,
+            "manifest_sha256": "1" * 64,
+            "split": "train",
+            "root_sha256": "2" * 64,
+            "selected_record_count": 1,
+            "tokenizer_sha256": "3" * 64,
+            "selection_rule_id": "owned_corpus_text_tokenize_v1",
+        }
+        owned_cursor = {**data_cursor, "selection_cursor": {**data_cursor["selection_cursor"], "selection_receipt_sha256": _sha(canonical_record_bytes(owned_receipt)), "selection_rule_id": owned_receipt["selection_rule_id"]}}
+        with pytest.raises(ValueError, match="selection receipt|schema|rule"):
+            write_checkpoint_artifacts(root=tmp_path / "cross-specialist-owned", data_cursor=data_cursor, selection_receipt=owned_receipt, **{key: value for key, value in common.items() if key != "data_cursor"})
+        with pytest.raises(ValueError, match="selection receipt|schema|rule"):
+            write_checkpoint_artifacts(root=tmp_path / "cross-owned-specialist", data_cursor=owned_cursor, selection_receipt=specialist_receipt, **{key: value for key, value in common.items() if key != "data_cursor"})
+        wrong_schema = {**specialist_receipt, "schema_version": "ember-specialist-stream-selection-receipt-v0"}
+        with pytest.raises(ValueError, match="selection receipt|schema"):
+            write_checkpoint_artifacts(root=tmp_path / "wrong-schema", selection_receipt=wrong_schema, **common)
+        with pytest.raises(ValueError, match="selection receipt"):
+            write_checkpoint_artifacts(root=tmp_path / "missing-receipt", selection_receipt=None, **common)
+    finally:
+        sys.path.remove(str(tools_root))
+        sys.path.remove(str(tests_root))
