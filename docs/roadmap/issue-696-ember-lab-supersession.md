@@ -6,7 +6,8 @@ Source issue: #696 (`ember-cli: wire brain-server supervisor into a real consume
 Current source master: `63f33108b41441d4bd7ef93662d2cc29d51d0ecd`.
 Canonical current carrier: merged #802 / Ember Lab `00eec85d2bd3073b137b51f2d89b78d905b46076`,
 with the continuing current-architecture owner `runtime/ember-lab` and the open
-`EMBER-03` roadmap parent (#1117).
+`EMBER-03` roadmap parent (#1117), which accepted this transfer append-only at
+https://github.com/wordingone/ember/issues/1117#issuecomment-5221421459.
 
 ## Historical-to-current crosswalk
 
@@ -30,6 +31,12 @@ The #802 closure evidence explicitly covers the current owned-server health loop
 planned-outage ordering, stable rebound identity, no-foreign-process fencing,
 receipt custody, activity events, and restart backoff. It grants no model,
 capability, training, GPU, or historical 2.2B credit to #696.
+
+The canonical owner acceptance is the append-only #1117 comment
+https://github.com/wordingone/ember/issues/1117#issuecomment-5221421459. It
+explicitly preserves lazy real-consumer start, planned-outage ordering,
+own-process-only PID/lease fencing, no idle borrowed tenant, live-fire/receipt
+evidence, and sole Ember Lab authority without model or result credit.
 
 ## Conflict scan and authority verdict
 

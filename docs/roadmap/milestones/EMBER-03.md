@@ -203,3 +203,5 @@ restart backoff. The historical borrowed 2.2B `:8083` vehicle is retired; no
 second launcher, lease, registry, or receipt authority is created. #696's
 surviving obligations remain governed by `runtime/ember-lab/src/server_supervisor.rs`
 and the `tools/ember-cli/src/entrypoints/owned-server-supervisor.ts` consumer.
+The canonical open owner accepted this transfer append-only at
+https://github.com/wordingone/ember/issues/1117#issuecomment-5221421459.
