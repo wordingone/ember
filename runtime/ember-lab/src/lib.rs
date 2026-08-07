@@ -2877,6 +2877,106 @@ impl Daemon {
         Ok(rows)
     }
 
+    /// Append one phase result through the daemon's fenced job/event authority.
+    /// Callers provide only an evidence path and expected digest; the daemon
+    /// rehashes the bytes and binds the event to the live job lease/state.
+    pub fn append_phase_event(
+        &self,
+        job_id: &str,
+        phase: &str,
+        evidence_path: &Path,
+        evidence_sha256: &str,
+    ) -> Result<()> {
+        const PHASES: &[&str] = &[
+            "data_verify",
+            "train",
+            "checkpoint",
+            "publish",
+            "selectable_checkpoint",
+            "restore",
+        ];
+        if !PHASES.contains(&phase) || validate_hash(evidence_sha256).is_err() {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: format!("invalid Ember Lab phase binding for {phase}"),
+            });
+        }
+        let canonical = fs::canonicalize(evidence_path)?;
+        let actual_sha256 = hash_file(&canonical)?;
+        if actual_sha256 != evidence_sha256 {
+            return Err(EmberLabError::DispatchBindingMismatch {
+                path: canonical,
+                expected: evidence_sha256.into(),
+                actual: actual_sha256,
+            });
+        }
+        let row = self.job_process_row(job_id)?;
+        if row.state != JobState::Running {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "phase evidence requires a running Ember Lab job".into(),
+            });
+        }
+        let evidence_file_name = canonical
+            .file_name()
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                detail: "phase evidence path has no file name".into(),
+            })?
+            .to_string_lossy()
+            .into_owned();
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let fenced = tx.execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,?4)",
+            params![
+                job_id,
+                now_ms(),
+                format!("ember_lab_phase_{phase}"),
+                json!({
+                    "producer": "ember-lab-daemon",
+                    "job_id": job_id,
+                    "phase": phase,
+                    "evidence_file_name": evidence_file_name,
+                    "evidence_sha256": evidence_sha256,
+                    "lease_epoch": row.lease_epoch,
+                    "pid": row.pid,
+                })
+                .to_string(),
+            ],
+        )?;
+        if fenced != 1 {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "phase event was not persisted".into(),
+            });
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn phase_event_authorized(
+        &self,
+        job_id: &str,
+        phase: &str,
+        evidence_sha256: &str,
+    ) -> Result<bool> {
+        let kind = format!("ember_lab_phase_{phase}");
+        let conn = self.conn()?;
+        let mut stmt = conn
+            .prepare("SELECT payload_json FROM events WHERE job_id=?1 AND kind=?2 ORDER BY seq")?;
+        for payload in stmt.query_map(params![job_id, kind], |row| row.get::<_, String>(0))? {
+            let payload = payload?;
+            let value: Value = serde_json::from_str(&payload)?;
+            if value.get("producer") == Some(&Value::String("ember-lab-daemon".into()))
+                && value.get("job_id") == Some(&Value::String(job_id.into()))
+                && value.get("phase") == Some(&Value::String(phase.into()))
+                && value.get("evidence_sha256") == Some(&Value::String(evidence_sha256.into()))
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     pub fn reconcile(&self) -> Result<()> {
         let jobs: Vec<String> = {
             let conn = self.conn()?;

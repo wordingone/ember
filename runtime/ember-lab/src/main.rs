@@ -47,6 +47,7 @@ enum Command {
 
 struct CurrentAuthorityRunner {
     daemon: Daemon,
+    job_id: String,
     dispatch_manifest: PathBuf,
     dispatch: Option<DispatchOutcome>,
     phase_evidence: Vec<rehearsal::PhaseEvidence>,
@@ -86,6 +87,12 @@ impl RehearsalRunner for CurrentAuthorityRunner {
                 phase.as_str()
             ));
         }
+        if !phase_evidence_shape_authorized(&bytes, &self.job_id, phase) {
+            return PhaseOutcome::Failed(format!(
+                "current Ember Lab phase evidence producer is not authorized for {}",
+                phase.as_str()
+            ));
+        }
         let Ok(dispatch_receipt) = std::fs::read(&dispatch.receipt.path) else {
             return PhaseOutcome::Failed("current Ember Lab dispatch receipt is unreadable".into());
         };
@@ -103,7 +110,26 @@ impl RehearsalRunner for CurrentAuthorityRunner {
         {
             return PhaseOutcome::Failed("current Ember Lab dispatch receipt is not green".into());
         }
-        if !phase_event_authorized(&value, phase, &evidence.sha256) {
+        if self
+            .daemon
+            .append_phase_event(
+                &self.job_id,
+                phase.as_str(),
+                &evidence.path,
+                &evidence.sha256,
+            )
+            .is_err()
+        {
+            return PhaseOutcome::Failed(format!(
+                "current Ember Lab phase event producer refused {}",
+                phase.as_str()
+            ));
+        }
+        if !self
+            .daemon
+            .phase_event_authorized(&self.job_id, phase.as_str(), &evidence.sha256)
+            .unwrap_or(false)
+        {
             return PhaseOutcome::Failed(format!(
                 "current Ember Lab phase authority event is absent for {}",
                 phase.as_str()
@@ -271,6 +297,7 @@ fn run_rehearsal(
     }
     let mut runner = CurrentAuthorityRunner {
         daemon: Daemon::open(db_path)?,
+        job_id: manifest.dispatch_id.clone(),
         dispatch_manifest: dispatch_manifest_path.to_path_buf(),
         dispatch: None,
         phase_evidence: manifest.phase_evidence.clone(),
@@ -312,26 +339,15 @@ fn run_rehearsal(
     Ok(result.status == rehearsal::RehearsalStatus::Completed)
 }
 
-fn phase_event_authorized(value: &Value, phase: Phase, evidence_sha256: &str) -> bool {
-    let expected_kind = format!("ember_lab_phase_{}", phase.as_str());
-    value
-        .get("events")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .any(|event| {
-            event.get("kind").and_then(Value::as_str) == Some(expected_kind.as_str())
-                && event
-                    .get("payload")
-                    .and_then(|payload| payload.get("job_id"))
-                    .and_then(Value::as_str)
-                    == value.get("job_id").and_then(Value::as_str)
-                && event
-                    .get("payload")
-                    .and_then(|payload| payload.get("evidence_sha256"))
-                    .and_then(Value::as_str)
-                    == Some(evidence_sha256)
-        })
+fn phase_evidence_shape_authorized(bytes: &[u8], job_id: &str, phase: Phase) -> bool {
+    let Ok(value) = serde_json::from_slice::<Value>(bytes) else {
+        return false;
+    };
+    value.get("schema") == Some(&Value::String("ember-lab-phase-evidence-v1".into()))
+        && value.get("producer") == Some(&Value::String("ember-lab-current-dispatch".into()))
+        && value.get("result") == Some(&Value::String("COMPLETED".into()))
+        && value.get("job_id") == Some(&Value::String(job_id.into()))
+        && value.get("phase") == Some(&Value::String(phase.as_str().into()))
 }
 
 fn dispatch(pipe: &str, manifest: &Path) -> Result<Value, Box<dyn std::error::Error>> {
@@ -439,35 +455,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn arbitrary_phase_bytes_without_current_authority_event_refuse() {
-        let receipt = json!({
-            "job_id": "dispatch-1",
-            "schema_version": "ember-lab-dispatch-preflight-v1",
-            "result": "PREFLIGHT_PASSED",
-            "events": []
-        });
-        assert!(!phase_event_authorized(
-            &receipt,
-            Phase::Train,
-            &"a".repeat(64)
+    fn arbitrary_phase_bytes_without_current_producer_refuse() {
+        assert!(!phase_evidence_shape_authorized(
+            br#"{"phase":"train"}"#,
+            "dispatch-1",
+            Phase::Train
         ));
-        let wrong_job = json!({
-            "job_id": "dispatch-1",
-            "events": [{"kind":"ember_lab_phase_train","payload":{"job_id":"foreign","evidence_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}]
-        });
-        assert!(!phase_event_authorized(
-            &wrong_job,
-            Phase::Train,
-            &"a".repeat(64)
+        assert!(!phase_evidence_shape_authorized(
+            br#"{"schema":"ember-lab-phase-evidence-v1","producer":"foreign","result":"COMPLETED","job_id":"dispatch-1","phase":"train"}"#,
+            "dispatch-1",
+            Phase::Train
         ));
-        let valid = json!({
-            "job_id": "dispatch-1",
-            "events": [{"kind":"ember_lab_phase_train","payload":{"job_id":"dispatch-1","evidence_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}]
-        });
-        assert!(phase_event_authorized(
-            &valid,
-            Phase::Train,
-            &"a".repeat(64)
+        assert!(phase_evidence_shape_authorized(
+            br#"{"schema":"ember-lab-phase-evidence-v1","producer":"ember-lab-current-dispatch","result":"COMPLETED","job_id":"dispatch-1","phase":"train"}"#,
+            "dispatch-1",
+            Phase::Train
         ));
     }
 }

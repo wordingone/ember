@@ -1684,6 +1684,49 @@ fn receipt_publication_never_replaces_an_existing_file() {
     ));
     assert_eq!(fs::read(&receipt).unwrap(), b"pre-existing receipt bytes");
 }
+
+#[test]
+fn phase_events_are_daemon_bound_and_foreign_bytes_do_not_authorize() {
+    let root = sandbox("phase-event-authority");
+    let db = root.join("ember-lab.sqlite3");
+    let evidence = root.join("train.json");
+    let evidence_bytes = br#"{"schema":"ember-lab-phase-evidence-v1","producer":"ember-lab-current-dispatch","result":"COMPLETED","job_id":"phase-job","phase":"train"}"#;
+    fs::write(&evidence, evidence_bytes).unwrap();
+    let evidence_sha256 = sha256(&evidence);
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("phase-job", &identity, &identity_hash)
+        .unwrap();
+    daemon.acquire_lease("cpu-fixture", "phase-job").unwrap();
+    daemon
+        .start_job(
+            JobSpec::new(
+                "phase-job",
+                std::env::current_exe().unwrap().to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "cpu-fixture",
+            )
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "5000"),
+        )
+        .unwrap();
+    assert!(!daemon
+        .phase_event_authorized("phase-job", "train", &evidence_sha256)
+        .unwrap());
+    daemon
+        .append_phase_event("phase-job", "train", &evidence, &evidence_sha256)
+        .unwrap();
+    assert!(daemon
+        .phase_event_authorized("phase-job", "train", &evidence_sha256)
+        .unwrap());
+    fs::write(&evidence, br#"{"producer":"foreign"}"#).unwrap();
+    assert!(daemon
+        .append_phase_event("phase-job", "train", &evidence, &evidence_sha256)
+        .is_err());
+    daemon.stop_job("phase-job").unwrap();
+}
+
 #[cfg(windows)]
 fn force_terminate_process(pid: u32) {
     use windows_sys::Win32::Foundation::CloseHandle;
