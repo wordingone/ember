@@ -1,5 +1,5 @@
 {
-  "ts": "2026-08-07T03:03:29Z",
+  "ts": "2026-08-07T01:43:39Z",
   "ticket": "S5-NATIVIZATION-MOTION",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
@@ -7,7 +7,7 @@
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "map_source_sha": "sha256:df870f83e3ac7e3b423c2422dea3e75099bf2b2a0d1a48cc4674048e13da92ca",
-  "run_import_manifest_sha256": "d069177d62f65419c8d098e375c80609ac0849cfa923a592a6f89b5801838edb",
+  "run_import_manifest_sha256": "e510f0c12ae86c2d13dc15893ec1c3171c1025908235101badfd11b4951a443b",
   "run_import_trace_sha256": "d6d07cddc6a5335f5c1b0780f20bb29501b4837f77b28ef6b3225fe77023cca1",
   "run_import_trace_producer_sha256": "9655e5c8ba7a0b64ce8919c729b9cc30d78d91b197193d4c57519984365e173b",
   "layers": [
