@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 use ember_lab::rehearsal::{
     episode, generate_runbook, production_strict_gate_census, validate_strict_gate_census,
     AdmissionBounds, DeathClass, GateBinding, Measurement, MeasurementSource, Phase, PhaseOutcome,

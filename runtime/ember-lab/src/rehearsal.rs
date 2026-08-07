@@ -1,6 +1,10 @@
 //! Ember Lab's rehearsal-first dispatch contract.
 //!
-//! This is the current implementation of the historical `emberd rehearse`
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
+//! This is the current implementation of the historical daemon's `rehearse`
 //! wording.  It deliberately reuses the Ember Lab dispatch authority instead
 //! of creating another launcher, lease, or receipt authority.  The runner
 //! trait is only a deterministic CPU/fake-runner seam for tests and dry-run

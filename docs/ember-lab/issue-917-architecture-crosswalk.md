@@ -1,12 +1,12 @@
 # Issue #917 architecture crosswalk
 
 This document is the lossless current-architecture mapping for the historical
-issue wording. `emberd` is historical provenance only; the sole current
+daemon wording. That name is historical provenance only; the sole current
 authority is the repo-owned Ember Lab crate at `runtime/ember-lab`.
 
 | Historical obligation | Current Ember Lab owner | Classification | Preserved obligation |
 | --- | --- | --- | --- |
-| `emberd rehearse <manifest>` | `runtime/ember-lab/src/main.rs` `episode`/`rehearse` commands and `rehearsal::episode` | RENAMED | ordered admission, data verification, train, checkpoint, publish, selectable checkpoint, restore phases |
+| historical `rehearse <manifest>` | `runtime/ember-lab/src/main.rs` `episode`/`rehearse` commands and `rehearsal::episode` | RENAMED | ordered admission, data verification, train, checkpoint, publish, selectable checkpoint, restore phases |
 | strict-gate census | `runtime/ember-lab/src/rehearsal.rs` `production_strict_gate_census` plus producer/consumer tests | REORGANIZED | every listed strict comparison has an explicit producer, consumer, and binding kind |
 | measured-number admission | `rehearsal::Measurement`, `AdmissionBounds`, and `episode` | REORGANIZED | missing/unobserved evidence, memory, storage, and duration violations refuse before the runner |
 | self-diagnosing refusal receipt | `rehearsal::RehearsalReceipt` and `write_receipt` | RENAMED | closed refusal code, phase, gate, offending value/bound, and one `next_action` |
