@@ -1,0 +1,45 @@
+{
+  "schema_version": "ember-cli-issue-303-terminal-layout-v1",
+  "ticket": "EMBER-CLI-ISSUE-303-TERMINAL-LAYOUT",
+  "ts": "2026-08-07T00:00:00.000Z",
+  "sha_convention": "sha256 over exact on-disk file bytes, no normalization",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "issue_id": 303,
+  "result": "PASS",
+  "source_commit": "cc5cd173f0849302a780bb8884290ecc2a194001",
+  "binary_sha256": "976f28d2228133b064746b3782f81760e454c1853d7d211a1e16ac8c4f57bbc7",
+  "evidence": {
+    "resize_receipt": "current-master-resize/prompt-resize-receipt.json",
+    "resize_receipt_sha256": "d221fb7c85c06a385193eea9f92f9a9efd616efcc66bb1d212f680bc3ef13171",
+    "half_screen_receipt": "current-master-half-screen/receipt.json",
+    "half_screen_receipt_sha256": "f221ffc0239c4847864fbc2d1b3eb5da84ee4016be7cc164210eb94194354697",
+    "resize_dimensions": [
+      "80x24",
+      "40x24",
+      "80x24"
+    ],
+    "restored_prompt_geometry": true,
+    "half_screen_dimensions": "190x85",
+    "left_panel_right_column": 110,
+    "prompt_right_column": 110
+  },
+  "bottom_layout_obligation": {
+    "disposition": "COMPLETED",
+    "evidence": "compiled current-source binary at 80x24, 40x24, 80x24 and operator 190x85"
+  },
+  "zero_activity_obligation": {
+    "disposition": "TRANSFERRED",
+    "canonical_issue": 485
+  },
+  "architecture": {
+    "current_surface": "Ember CLI fixed viewport and independently scrollable regions",
+    "no_new_parallel_authority": true
+  },
+  "claim_boundary": [
+    "terminal geometry and resize behavior only",
+    "no model, training, benchmark, or capability claim"
+  ]
+}
