@@ -13,7 +13,7 @@ or grant model, training, benchmark, or capability credit.
 ## Bound public evidence
 
 The crosswalk is bound to public master
-`7af65b0a4b98fd3bd34196bc86e6509e393acb6f`.
+`06accab43eb955a301a35492052ca2ea531e04cf`.
 
 The historical shard receipt is
 `receipts/token-shards-v0-20260611T170047Z.json`. Its current Git blob is the
@@ -56,7 +56,7 @@ silently dropped:
 
 | Historical #203 mechanism | Current status | Current owner and binding |
 | --- | --- | --- |
-| v0 token-shard admission and `shards-v0` files | `REMOVED` from current Ember Lab admission | Current custody spine: EMBER-01 / issue #1115, `docs/custody/ember-01-custody-README.md` |
+| v0 token-shard admission and `shards-v0` files | `REMOVED` from current Ember Lab admission | Current custody spine: completed roadmap issue #1115 plus `docs/custody/ember-01-custody-README.md` and `docs/roadmap/certificates/EMBER-01.md` |
 | v0-00025 recurrence characterization | `SUPERSEDED` as an executable path; obligation retained | EMBER-01 reopening rule `EMBER-01.REOPEN.001`; exact bytes must be restored before recomputation |
 | 26-shard self-duplication quantification | `SUPERSEDED` as an executable path; obligation retained | EMBER-01 receipt/root census and future exact-byte re-verification |
 | rebuild/drop/accept-with-disclosure decision | `DEPRECATED_ABSORBED` | This disclosure plus EMBER-01.REOPEN.001; no current admission decision is inferred |
@@ -70,14 +70,15 @@ does not create a second corpus, shard, receipt, benchmark, or launcher owner.
 
 ## Lossless transfer and reopening
 
-The surviving owner is issue #1115 (EMBER-01 custody/identity spine), whose
-public certificate is `docs/roadmap/certificates/EMBER-01.md`. The transfer is
-append-only and lossless: #203's byte identity, 26-shard scope, recurrence
-question, cure choice, disclosure boundary, and W1 comparability obligation
-remain named above. If exact v0 bytes or a consumer that bypasses the current
-identity manifest is later found, `EMBER-01.REOPEN.001` is the required route;
-the owner must reopen and re-verify rather than silently edit this historical
-finding.
+The durable owner is the completed EMBER-01 custody/identity contract formerly
+tracked by issue #1115 and now carried by
+`docs/roadmap/certificates/EMBER-01.md`. No new permanent tracker is created.
+The transfer is append-only and lossless: #203's byte identity, 26-shard scope,
+recurrence question, cure choice, disclosure boundary, and W1 comparability
+obligation remain named above. If exact v0 bytes or a consumer that bypasses
+the current identity manifest is later found, `EMBER-01.REOPEN.001` requires
+the EMBER-01 custody contract to be reopened and re-verified rather than
+silently editing this historical finding.
 
 This crosswalk therefore supports a closure proposal for #203 as
 `SUPERSEDED / DEPRECATED_ABSORBED` with zero scope loss. It does not close the
