@@ -629,6 +629,32 @@ import numpy
         receipt = json.loads(receipts[-1].read_text(encoding="utf-8"))
         assert receipt["run_import_manifest_sha256"] == manifest_sha
 
+    def test_checked_in_manifest_and_receipt_reach_board_consumer(self):
+        root = Path(__file__).resolve().parent.parent
+        manifest_path = root / "manifests" / "run-import-manifest-v1.json"
+        receipt_path = root / "receipts" / "nativization-motion" / "nm-20260807T014339Z.json"
+        manifest_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+        receipt_sha = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(root / "scripts" / "nativization_motion_board.py"),
+                str(root),
+                str(receipt_path),
+                receipt_sha,
+                str(manifest_path),
+                manifest_sha,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        board = json.loads(result.stdout)
+        assert board["decision"] == "MEASURED_STATIC_MOTION"
+        assert board["run_import_manifest_sha256"] == manifest_sha
+        assert board["receipt_sha256"] == receipt_sha
+
     def test_run_nativization_motion_requires_run_import_manifest(self, tmp_path):
         with pytest.raises(ValueError, match="run import manifest"):
             run_nativization_motion(tmp_path)
