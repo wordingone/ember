@@ -462,48 +462,35 @@ Path({candidate_path!r}).write_text(json.dumps(candidate, sort_keys=True), encod
         with self.assertRaisesRegex(MtpParameterManifestError, "externally verified"):
             validate_governed_execution_receipt(forged, manifest)
 
-    def test_owned_disk_runner_bootstrap_records_inner_child_identity(self):
-        """The governed runner must bind the command child, not its cache wrapper."""
-        import importlib.util
+    def test_nested_child_bootstrap_records_actual_child_identity(self):
+        """The A-owned bootstrap must bind the command child, not its wrapper."""
+        import mtp_external_runner
 
-        runner_path = ROOT / "tools" / "ember-restart-3b" / "disk_budget_runner.py"
-        spec = importlib.util.spec_from_file_location("issue688_disk_runner", runner_path)
-        assert spec is not None and spec.loader is not None
-        runner = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(runner)
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            assertion_path = root / "assertion.json"
+            identity_path = root / "identity.json"
             child_pid_path = root / "child.pid"
-            temp_root = root / "tmp"
-            temp_root.mkdir()
-            bindings = {"TEMP": str(temp_root)}
             child = root / "child.py"
             child.write_text(
                 "import os; from pathlib import Path; Path(" + repr(str(child_pid_path)) + ").write_text(str(os.getpid()), encoding='utf-8')",
                 encoding="utf-8",
             )
-            env = dict(os.environ)
-            env["TEMP"] = str(temp_root)
-            env["TMP"] = str(temp_root)
             completed = subprocess.run(
                 [
                     sys.executable,
                     "-c",
-                    runner._CHILD_ENV_BOOTSTRAP,
-                    json.dumps(bindings, sort_keys=True),
-                    str(assertion_path),
-                    "a" * 32,
+                    mtp_external_runner._NESTED_CHILD_BOOTSTRAP,
+                    str(identity_path),
+                    "nonce",
                     sys.executable,
                     str(child),
                 ],
-                env=env,
                 text=True,
                 capture_output=True,
                 check=False,
             )
             self.assertEqual(completed.returncode, 0, completed.stderr)
-            payload = json.loads(assertion_path.read_text(encoding="utf-8"))
+            payload = json.loads(identity_path.read_text(encoding="utf-8"))
             identity = payload["process_identity"]
             self.assertEqual(identity["pid"], int(child_pid_path.read_text(encoding="utf-8")))
             self.assertGreater(identity["start_time_ns"], 0)
@@ -511,7 +498,6 @@ Path({candidate_path!r}).write_text(json.dumps(candidate, sort_keys=True), encod
                 identity["executable_sha256"],
                 hashlib.sha256(Path(sys.executable).resolve(strict=True).read_bytes()).hexdigest(),
             )
-
     def test_public_runner_binds_nested_child_and_rejects_foreign_pid(self):
         """The public runner must bind the command child behind its cache wrapper."""
         import importlib.util
@@ -606,7 +592,11 @@ Path({candidate_path!r}).write_text(json.dumps(candidate, sort_keys=True), encod
                         "child_exit_code": int(wrapper_rc),
                         "runner_exit_code": int(wrapper_rc),
                         "command": list(command),
-                        "child_process_identity": payload["process_identity"],
+                        "child_pid": int(wrapper.pid),
+                        "child_start_time_ns": int(time.time_ns()),
+                        "child_executable_sha256": hashlib.sha256(
+                            Path(sys.executable).resolve(strict=True).read_bytes()
+                        ).hexdigest(),
                     }
                     raw["receipt_sha256"] = mtp_external_runner._canonical_sha256(raw, omit="receipt_sha256")
                     Path(receipt_path).write_text(json.dumps(raw, sort_keys=True), encoding="utf-8")

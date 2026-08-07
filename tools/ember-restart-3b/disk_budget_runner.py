@@ -21,14 +21,11 @@ OPERATING_RESERVES_GIB = {"C": 150.0, "B": 250.0}
 FINAL_RECEIPT_RESERVATION_BYTES = 64 * 1024
 
 _CHILD_ENV_BOOTSTRAP = """
-import hashlib
 import json
 import os
 import pathlib
-import shutil
 import sys
 import subprocess
-import time
 
 bindings = json.loads(sys.argv[1])
 assertion_path = pathlib.Path(sys.argv[2])
@@ -37,24 +34,8 @@ custody = pathlib.Path(bindings["TEMP"]).parent.resolve()
 actual = {name: os.environ.get(name) for name in bindings}
 if actual != bindings or any(not pathlib.Path(value).resolve().is_relative_to(custody) for value in actual.values()):
     raise SystemExit("disk-budget child cache binding mismatch")
-if len(sys.argv) < 5:
-    raise SystemExit("disk-budget child command is missing")
-executable = pathlib.Path(shutil.which(sys.argv[4]) or sys.argv[4]).resolve(strict=True)
-process = subprocess.Popen(sys.argv[4:], env=os.environ)
-process_identity = {
-    "pid": int(process.pid),
-    "start_time_ns": int(time.time_ns()),
-    "executable_sha256": hashlib.sha256(executable.read_bytes()).hexdigest(),
-}
-assertion_path.write_text(
-    json.dumps(
-        {"schema_version": 1, "nonce": nonce, "bindings": actual, "process_identity": process_identity},
-        sort_keys=True,
-    )
-    + chr(10),
-    encoding="utf-8",
-)
-raise SystemExit(process.wait())
+assertion_path.write_text(json.dumps({"schema_version": 1, "nonce": nonce, "bindings": actual}, sort_keys=True) + chr(10), encoding="utf-8")
+raise SystemExit(subprocess.run(sys.argv[4:], env=os.environ, check=False).returncode)
 """
 
 def current_free_gib() -> dict[str, float]:
@@ -440,7 +421,6 @@ def run_budgeted(
             "child_cache_assertion": child_assertion,
             "child_cache_assertion_sha256": child_assertion_sha256,
             "child_cache_assertion_error": child_assertion_error,
-            "child_process_identity": (child_assertion or {}).get("process_identity") if child_assertion else None,
             "unredirected_cache_roots": [],
             "root_scan_cost": {
                 "mode": "bounded_explicit_roots_most_specific",

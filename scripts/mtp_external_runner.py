@@ -8,6 +8,8 @@ import hashlib
 import importlib.util
 import json
 import os
+import secrets
+import sys
 import time
 from types import SimpleNamespace
 from pathlib import Path
@@ -15,6 +17,35 @@ from typing import Any, Callable, Mapping, Sequence
 from mtp_parameter_manifest import _GOVERNED_RUNNER_CAPABILITY, _finalize_governed_execution_receipt, validate_parameter_manifest
 Runner = Callable[..., int]
 _TEST_RUNNER_CAPABILITY = object()
+_NESTED_CHILD_BOOTSTRAP = r'''
+import hashlib
+import json
+import os
+import pathlib
+import shutil
+import subprocess
+import sys
+import time
+
+identity_path = pathlib.Path(sys.argv[1])
+nonce = sys.argv[2]
+command = sys.argv[3:]
+if not command:
+    raise SystemExit("nested child command is missing")
+executable = pathlib.Path(shutil.which(command[0]) or command[0]).resolve(strict=True)
+child = subprocess.Popen(command, env=os.environ)
+identity = {
+    "pid": int(child.pid),
+    "start_time_ns": int(time.time_ns()),
+    "executable_sha256": hashlib.sha256(executable.read_bytes()).hexdigest(),
+}
+identity_path.write_text(
+    json.dumps({"schema": "ember-mtp-nested-child-identity-v1", "nonce": nonce, "process_identity": identity}, sort_keys=True)
+    + "\n",
+    encoding="utf-8",
+)
+raise SystemExit(child.wait())
+'''
 
 def _sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -93,12 +124,28 @@ def _run_external_candidate_impl(*, manifest_path: Path | str, candidate_path: P
     else:
         runner_module_path = Path(__file__).resolve()
     invocation_started_ns = time.time_ns()
+    child_identity_path = runner_receipt_file.with_name(
+        f".{runner_receipt_file.stem}.nested-child.{os.getpid()}.json"
+    )
+    if child_identity_path.exists():
+        raise ValueError("nested child identity must be absent before spawn")
+    identity_nonce = secrets.token_hex(16)
+    launch_command = command_list
+    if runner_module is not None:
+        launch_command = [
+            sys.executable,
+            "-c",
+            _NESTED_CHILD_BOOTSTRAP,
+            str(child_identity_path),
+            identity_nonce,
+            *command_list,
+        ]
     if runner_module is None:
-        runner(command_list, run_budgets, runner_receipt_file, write_roots=run_roots)
+        runner(launch_command, run_budgets, runner_receipt_file, write_roots=run_roots)
     else:
         # Keep process observation at the external launcher boundary. The
-        # owned disk runner remains the only production child launcher, while
-        # this isolated proxy records the exact Popen identity it created.
+        # owned disk runner remains the only production child launcher; the
+        # A-owned nested bootstrap records the actual command identity.
         original_subprocess = runner_module.subprocess
         original_popen = original_subprocess.Popen
 
@@ -122,7 +169,7 @@ def _run_external_candidate_impl(*, manifest_path: Path | str, candidate_path: P
             TimeoutExpired=original_subprocess.TimeoutExpired,
         )
         try:
-            runner(command_list, run_budgets, runner_receipt_file, write_roots=run_roots)
+            runner(launch_command, run_budgets, runner_receipt_file, write_roots=run_roots)
         finally:
             runner_module.subprocess = original_subprocess
     if not runner_receipt_file.is_file():
@@ -132,11 +179,19 @@ def _run_external_candidate_impl(*, manifest_path: Path | str, candidate_path: P
         if len(observed_process) != 1:
             raise ValueError("governed runner must create exactly one wrapper child")
         wrapper = observed_process[0]
-        child_identity = disk_receipt.get("child_process_identity")
-        if not isinstance(child_identity, Mapping) or set(child_identity) != {
-            "pid", "start_time_ns", "executable_sha256"
-        }:
-            raise ValueError("governed runner did not record the nested command identity")
+        if not child_identity_path.is_file():
+            raise ValueError("governed nested child identity was not produced")
+        identity_stat = child_identity_path.stat()
+        if identity_stat.st_mtime_ns < invocation_started_ns or identity_stat.st_ctime_ns < invocation_started_ns:
+            raise ValueError("governed nested child identity was not created during this run")
+        identity_payload = json.loads(child_identity_path.read_text(encoding="utf-8"))
+        if not isinstance(identity_payload, Mapping) or set(identity_payload) != {"schema", "nonce", "process_identity"}:
+            raise ValueError("governed nested child identity schema is invalid")
+        if identity_payload["schema"] != "ember-mtp-nested-child-identity-v1" or identity_payload["nonce"] != identity_nonce:
+            raise ValueError("governed nested child identity nonce mismatch")
+        child_identity = identity_payload["process_identity"]
+        if not isinstance(child_identity, Mapping) or set(child_identity) != {"pid", "start_time_ns", "executable_sha256"}:
+            raise ValueError("governed nested child identity is not closed")
         if type(child_identity["pid"]) is not int or child_identity["pid"] <= 0:
             raise ValueError("governed nested child pid is invalid")
         if type(child_identity["start_time_ns"]) is not int or child_identity["start_time_ns"] <= 0:
@@ -153,15 +208,14 @@ def _run_external_candidate_impl(*, manifest_path: Path | str, candidate_path: P
             ("child_start_time_ns", child_identity["start_time_ns"]),
             ("child_executable_sha256", child_identity["executable_sha256"]),
         ):
-            if field in disk_receipt and disk_receipt[field] != value:
-                raise ValueError(f"governed runner {field} mismatch")
             disk_receipt[field] = value
         disk_receipt["receipt_sha256"] = _canonical_sha256(
             disk_receipt, omit="receipt_sha256"
         )
         _write_json_atomic(runner_receipt_file, disk_receipt)
+        child_identity_path.unlink(missing_ok=True)
     projection = _disk_projection(disk_receipt)
-    if projection["command"] != command_list:
+    if projection["command"] != launch_command:
         raise ValueError("governed disk-budget command mismatch")
     if not candidate_file.is_file():
         raise ValueError("execution candidate was not created by the child")
@@ -188,7 +242,7 @@ def _run_external_candidate_impl(*, manifest_path: Path | str, candidate_path: P
         "mtime_ns": int(candidate_stat.st_mtime_ns),
         "ctime_ns": int(candidate_stat.st_ctime_ns),
     }
-    parent = _finalize_governed_execution_receipt(manifest, candidate, command=command_list, process_identity={"pid": projection["child_pid"], "start_time_ns": projection["child_start_time_ns"], "executable_sha256": projection["child_executable_sha256"]}, candidate_file_identity=candidate_identity, child_exit_code=int(projection["child_exit_code"]), verifier_id="ember-mtp-external-runner-v1", verifier_sha256=_sha256_file(Path(__file__).resolve()), disk_budget_receipt=projection, disk_budget_receipt_sha256=projection["receipt_sha256"], runner_module_sha256=_sha256_file(runner_module_path), capability=_GOVERNED_RUNNER_CAPABILITY)
+    parent = _finalize_governed_execution_receipt(manifest, candidate, command=launch_command, process_identity={"pid": projection["child_pid"], "start_time_ns": projection["child_start_time_ns"], "executable_sha256": projection["child_executable_sha256"]}, candidate_file_identity=candidate_identity, child_exit_code=int(projection["child_exit_code"]), verifier_id="ember-mtp-external-runner-v1", verifier_sha256=_sha256_file(Path(__file__).resolve()), disk_budget_receipt=projection, disk_budget_receipt_sha256=projection["receipt_sha256"], runner_module_sha256=_sha256_file(runner_module_path), capability=_GOVERNED_RUNNER_CAPABILITY)
     _write_json_atomic(receipt_file, parent)
     return parent
 
