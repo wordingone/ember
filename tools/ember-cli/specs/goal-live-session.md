@@ -3,7 +3,7 @@
 <!-- next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember -->
 # Compiled goal-session live acceptance
 
-Status: DRAFT
+Status: CURRENT
 
 Consumer: `tools/ember-cli/src/services/goal-live-session.ts`
 Consumer: `tools/ember-cli/src/services/goal-live-session-frames.ts`
