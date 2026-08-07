@@ -1,0 +1,158 @@
+{
+  "schema_version": "ember-nativization-motion-receipt-v2",
+  "ts": "2026-08-07T05:16:59Z",
+  "ticket": "S5-NATIVIZATION-MOTION",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "map_source_sha": "sha256:df870f83e3ac7e3b423c2422dea3e75099bf2b2a0d1a48cc4674048e13da92ca",
+  "source_commit": "7e2e72fa44a5b501a2fde5e9555d7bf420b284d4",
+  "run_import_manifest_sha256": "c45aad9d29efe1ee8635c838afc4d0f9e26659568d172890088639b79e44859f",
+  "run_import_trace_sha256": "fce02ae488fb4f6530781d780687b5b7f2c69215230f67f93d16e94544ca8b69",
+  "run_import_trace_producer_sha256": "7b76287dd28d5e07e928ef439f1e37fe78cc58d0b5bda225c26e9314c1edcb4a",
+  "layers": [
+    {
+      "name": "CUDA kernels (cuBLAS matmul, elementwise)",
+      "borrowed_deps": [
+        "arxiv_fetch",
+        "bitsandbytes",
+        "bulk_fetch",
+        "chunked_download",
+        "ember_restart",
+        "ember_restart_eval_raw_forward",
+        "hf_fetch",
+        "http_fetch",
+        "huggingface_hub",
+        "jsonschema",
+        "kaggle_fetch",
+        "numpy",
+        "openreview_fetch",
+        "receipt",
+        "tokenizer",
+        "tokenizers",
+        "torch",
+        "transformers",
+        "validate_identity",
+        "wave_manifest"
+      ],
+      "borrowed_deps_count": 20,
+      "borrowed_loc": 64,
+      "owned_loc": 106,
+      "borrowed_binaries": [],
+      "critical_path_share": {
+        "creation": true,
+        "current_rung_training": true,
+        "evidence": "rooted-import-graph-v3:a9f3753b9e8767b09060be9b20f75a686d99b5ed8c9009e457d3c9ce11a7f745",
+        "growth_run": true
+      }
+    },
+    {
+      "name": "Tensor abstraction (storage/strides/dtype)",
+      "borrowed_deps": [],
+      "borrowed_deps_count": 0,
+      "borrowed_loc": 0,
+      "owned_loc": 1,
+      "borrowed_binaries": [],
+      "critical_path_share": {
+        "creation": true,
+        "current_rung_training": true,
+        "evidence": "rooted-import-graph-v3:305f4c502beac392f87fd5eabb93ffadf57b236b6f3271921120d3560a62d5b8",
+        "growth_run": true
+      }
+    },
+    {
+      "name": "Autograd (`grad_fn` graph, `backward()`)",
+      "borrowed_deps": [],
+      "borrowed_deps_count": 0,
+      "borrowed_loc": 0,
+      "owned_loc": 0,
+      "borrowed_binaries": [],
+      "critical_path_share": {
+        "creation": false,
+        "current_rung_training": true,
+        "evidence": "rooted-import-graph-v3:3a514527348916e212de3ac368bfc2a6ec350aa32323ac3b037bf51d866d0d44",
+        "growth_run": true
+      }
+    },
+    {
+      "name": "Optimizer (Adam/Muon: separable state + update)",
+      "borrowed_deps": [
+        "numpy",
+        "p5_ratio_audit",
+        "torch",
+        "transformers"
+      ],
+      "borrowed_deps_count": 4,
+      "borrowed_loc": 26,
+      "owned_loc": 11,
+      "borrowed_binaries": [],
+      "critical_path_share": {
+        "creation": false,
+        "current_rung_training": true,
+        "evidence": "rooted-import-graph-v3:5669f513933a94b24e2eb42fb254241497e3a77159ebac6012e2bd01adf589e1",
+        "growth_run": true
+      }
+    },
+    {
+      "name": "Training loop (fwd \u2192 loss \u2192 backward \u2192 step)",
+      "borrowed_deps": [
+        "compute_ledger",
+        "ember_resident_igrpo",
+        "liger_kernel",
+        "muon",
+        "numpy",
+        "requests",
+        "scipy",
+        "sentencepiece",
+        "tokenizers",
+        "torch",
+        "transformers"
+      ],
+      "borrowed_deps_count": 11,
+      "borrowed_loc": 132,
+      "owned_loc": 93,
+      "borrowed_binaries": [],
+      "critical_path_share": {
+        "creation": false,
+        "current_rung_training": true,
+        "evidence": "rooted-import-graph-v3:5669f513933a94b24e2eb42fb254241497e3a77159ebac6012e2bd01adf589e1",
+        "growth_run": true
+      }
+    }
+  ],
+  "deltas": {
+    "CUDA kernels (cuBLAS matmul, elementwise)": {
+      "borrowed_deps_delta": -47,
+      "borrowed_loc_delta": -674
+    },
+    "Tensor abstraction (storage/strides/dtype)": {
+      "borrowed_deps_delta": -2,
+      "borrowed_loc_delta": -19
+    },
+    "Autograd (`grad_fn` graph, `backward()`)": {
+      "borrowed_deps_delta": 0,
+      "borrowed_loc_delta": 0
+    },
+    "Optimizer (Adam/Muon: separable state + update)": {
+      "borrowed_deps_delta": -10,
+      "borrowed_loc_delta": -67
+    },
+    "Training loop (fwd \u2192 loss \u2192 backward \u2192 step)": {
+      "borrowed_deps_delta": -35,
+      "borrowed_loc_delta": -321
+    }
+  },
+  "next_home_candidate": "CUDA kernels (cuBLAS matmul, elementwise)",
+  "method": "phase-rooted-import-graph-v1",
+  "limits": [
+    "dynamic imports not detected",
+    "vendored code treated as external",
+    "binary dependencies of dependencies not scanned",
+    "relative imports are resolved only within the governed repository root"
+  ],
+  "predecessor_receipt_path": "receipts/nativization-motion/nm-20260807T014339Z.json",
+  "predecessor_receipt_sha256": "2bd410fb9e177e0f8f69a826282535fc0b9b1f0fc7f5ab7493230c9654d93ea5",
+  "predecessor_source_commit": "fb412cad8ff55d655933fd8d54801116a277b0ec"
+}

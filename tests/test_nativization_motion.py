@@ -9,6 +9,9 @@ Fixture-driven, zero network, CI-unconditional.
 """
 
 import json
+import hashlib
+import pytest
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -17,6 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from nativization_motion import (
+    build_run_import_manifest,
     collect_imports,
     compute_deltas,
     get_invariant_sha,
@@ -28,6 +32,33 @@ from nativization_motion import (
     scan_binaries,
     sha256_file,
 )
+import nativization_motion
+from nativization_motion_board import consume_motion_receipt
+
+
+def _prepare_fixture_repo(repo_root: Path) -> None:
+    phase_root = repo_root / "tools" / "ember-restart-3b"
+    phase_root.mkdir(parents=True, exist_ok=True)
+    (phase_root / "model.py").write_text("MODEL = 'creation'\n", encoding="utf-8")
+    (phase_root / "pretrain.py").write_text("TRAIN = True\n", encoding="utf-8")
+    (phase_root / "run_vertical_slice.py").write_text("GROWTH = True\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=repo_root, check=True)
+    subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=repo_root, check=True)
+    subprocess.run(["git", "config", "user.name", "fixture"], cwd=repo_root, check=True)
+    subprocess.run(["git", "add", "."], cwd=repo_root, check=True)
+    subprocess.run(["git", "commit", "-qm", "fixture"], cwd=repo_root, check=True)
+
+
+def _write_run_import_manifest(
+    repo_root: Path,
+    layer_names: list[str],
+    *,
+    producer_sha256: str | None = None,
+) -> tuple[Path, str]:
+    _prepare_fixture_repo(repo_root)
+    return build_run_import_manifest(
+        repo_root, layer_names, producer_sha256=producer_sha256
+    )
 
 
 class TestImportCollection:
@@ -365,6 +396,29 @@ class TestIdentifyNextHomeCandidate:
 class TestEndToEnd:
     """End-to-end integration tests."""
 
+    def test_run_import_manifest_requires_git_source_authority(self, tmp_path):
+        source = tmp_path / "tools" / "cuda.py"
+        source.parent.mkdir(parents=True)
+        source.write_text("import torch\\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="Git|git|source authority"):
+            build_run_import_manifest(
+                tmp_path,
+                ["CUDA kernels (cuBLAS matmul, elementwise)"],
+            )
+
+    def test_run_import_trace_ignores_unrelated_lexicographic_matches(self, tmp_path):
+        source = tmp_path / "tools" / "cuda.py"
+        source.parent.mkdir(parents=True)
+        source.write_text("import torch\\n", encoding="utf-8")
+        unrelated = tmp_path / "tools" / "aaa_first.py"
+        unrelated.write_text("unrelated = True\\n", encoding="utf-8")
+        manifest_path, _ = _write_run_import_manifest(
+            tmp_path,
+            ["CUDA kernels (cuBLAS matmul, elementwise)"],
+        )
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        assert all(event["entrypoint"] != "tools/aaa_first.py" for event in manifest["trace"]["events"])
+
     def test_run_nativization_motion_fixture(self, tmp_path):
         """Test full runner with fixture mini-tree."""
         # Create fixture structure
@@ -402,6 +456,7 @@ class TestEndToEnd:
 import torch
 import sys
 import subprocess
+RESULT = torch.cuda.is_available()
 subprocess.run("llama-server")
 """,
             encoding="utf-8",
@@ -411,12 +466,24 @@ subprocess.run("llama-server")
             """\
 import numpy
 import torch
+RESULT = torch.tensor(1)
 """,
             encoding="utf-8",
         )
 
-        # Run the runner
-        receipt_path = run_nativization_motion(tmp_path)
+        _prepare_fixture_repo(tmp_path)
+        phase_root = tmp_path / "tools" / "ember-restart-3b"
+        (phase_root / "model.py").write_text("import cuda\nimport tensor\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-qm", "governed source set"], cwd=tmp_path, check=True)
+        manifest_path, manifest_sha = build_run_import_manifest(
+            tmp_path, parse_diagnostic_map(diagnostic_file), output_path=tmp_path / "manifests" / "run-import-manifest-v1.json"
+        )
+        receipt_path = run_nativization_motion(
+            tmp_path,
+            run_import_manifest_path=manifest_path,
+            expected_run_import_manifest_sha256=manifest_sha,
+        )
 
         # Verify receipt was created
         assert Path(receipt_path).exists()
@@ -425,8 +492,25 @@ import torch
         with open(receipt_path) as f:
             receipt = json.load(f)
 
-        assert receipt["method"] == "static-import-census-v1"
+        assert receipt["ticket"] == "S5-NATIVIZATION-MOTION"
+        assert receipt["goal_id"] == "EMBER-02"
+        assert receipt["workstream_id"] == "EMBER-02A"
+        assert receipt["next_executed_outcome"] == (
+            "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+        )
+        assert receipt["sha_convention"] == (
+            "bytes on disk as-is (binary read, no line-ending normalization)"
+        )
+        assert len(receipt["invariant_sha256"]) == 64
+        assert all(c in "0123456789abcdef" for c in receipt["invariant_sha256"])
+        assert receipt["method"] == "phase-rooted-import-graph-v1"
         assert len(receipt["layers"]) == 2
+        assert receipt["run_import_manifest_sha256"] == manifest_sha
+        for layer in receipt["layers"]:
+            share = layer["critical_path_share"]
+            assert set(share) == {"creation", "current_rung_training", "growth_run", "evidence"}
+            assert all(isinstance(share[key], bool) for key in ("creation", "current_rung_training", "growth_run"))
+            assert share["evidence"]
         assert receipt["deltas"] is None  # First receipt
         assert receipt["next_home_candidate"] is not None
         assert len(receipt["limits"]) > 0
@@ -479,9 +563,13 @@ import torch
             """\
 import torch
 import numpy
+RESULT = torch.cuda.is_available()
 """,
             encoding="utf-8",
         )
+        _prepare_fixture_repo(tmp_path)
+        phase_root = tmp_path / "tools" / "ember-restart-3b"
+        (phase_root / "model.py").write_text("import cuda\n", encoding="utf-8")
 
         # Create prior receipt
         receipts_dir = tmp_path / "receipts" / "nativization-motion"
@@ -497,11 +585,28 @@ import numpy
             ],
         }
 
-        with open(receipts_dir / "nm-20260701T000000Z.json", "w") as f:
+        # Build the governed manifest after committing the phase-rooted source.
+        subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-qm", "governed source set"], cwd=tmp_path, check=True)
+        manifest_path, manifest_sha = build_run_import_manifest(
+            tmp_path, parse_diagnostic_map(diagnostic_file), output_path=tmp_path / "manifests" / "run-import-manifest-v1.json"
+        )
+        prior_path = receipts_dir / "nm-20260701T000000Z.json"
+        prior_receipt["source_commit"] = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout.strip()
+        with open(prior_path, "w") as f:
             json.dump(prior_receipt, f)
+        prior_sha = hashlib.sha256(prior_path.read_bytes()).hexdigest()
 
-        # Run the runner
-        receipt_path = run_nativization_motion(tmp_path)
+        # Run the runner with an explicit predecessor binding.
+        receipt_path = run_nativization_motion(
+            tmp_path,
+            run_import_manifest_path=manifest_path,
+            expected_run_import_manifest_sha256=manifest_sha,
+            prior_receipt_path=prior_path,
+            expected_prior_receipt_sha256=prior_sha,
+        )
 
         # Load receipt
         with open(receipt_path) as f:
@@ -513,6 +618,284 @@ import numpy
         assert cuda_deltas["borrowed_deps_delta"] == 1  # 2 - 1
         assert cuda_deltas["borrowed_loc_delta"] == 1  # 2 - 1
 
+    def test_run_nativization_motion_cli_consumes_bound_manifest(self, tmp_path):
+        docs_dir = tmp_path / "docs" / "design"
+        docs_dir.mkdir(parents=True)
+        (docs_dir / "ember-owned-substrate-diagnostic.md").write_text(
+            "## The inherited stack, bottom \u2192 top, with the blocking line\n\n| layer | what | rel |\n|---|---|---|\n| CUDA kernels (cuBLAS matmul, elementwise) | x | component |\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "INVARIANT.md").write_text("owned", encoding="utf-8")
+        tools_dir = tmp_path / "tools"
+        tools_dir.mkdir()
+        (tools_dir / "cuda.py").write_text("import torch\n", encoding="utf-8")
+        manifest_path, manifest_sha = _write_run_import_manifest(
+            tmp_path, ["CUDA kernels (cuBLAS matmul, elementwise)"]
+        )
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(Path(nativization_motion.__file__)),
+                str(tmp_path),
+                str(manifest_path),
+                manifest_sha,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        receipts = sorted((tmp_path / "receipts" / "nativization-motion").glob("nm-*.json"))
+        assert receipts
+        receipt = json.loads(receipts[-1].read_text(encoding="utf-8"))
+        assert receipt["run_import_manifest_sha256"] == manifest_sha
+
+    def test_checked_in_manifest_and_receipt_reach_board_consumer(self):
+        root = Path(__file__).resolve().parent.parent
+        manifest_path = root / "manifests" / "run-import-manifest-v1.json"
+        receipt_path = root / "receipts" / "nativization-motion" / "nm-20260807T060100Z.json"
+        manifest_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+        receipt_sha = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(root / "scripts" / "nativization_motion_board.py"),
+                str(root),
+                str(receipt_path),
+                receipt_sha,
+                str(manifest_path),
+                manifest_sha,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        board = json.loads(result.stdout)
+        assert board["decision"] == "MEASURED_STATIC_MOTION"
+        assert board["run_import_manifest_sha256"] == manifest_sha
+        assert board["receipt_sha256"] == receipt_sha
+
+    def test_run_nativization_motion_requires_run_import_manifest(self, tmp_path):
+        with pytest.raises(ValueError, match="run import manifest"):
+            run_nativization_motion(tmp_path)
+
+    def test_run_nativization_motion_rejects_malformed_run_import_manifest(self, tmp_path):
+        docs_dir = tmp_path / "docs" / "design"
+        docs_dir.mkdir(parents=True)
+        (docs_dir / "ember-owned-substrate-diagnostic.md").write_text(
+            "## The inherited stack, bottom ??? top, with the blocking line\n\n| layer | what | rel |\n|---|---|---|\n| CUDA kernels (cuBLAS matmul, elementwise) | x | component |\n",
+            encoding="utf-8",
+        )
+        manifest_path = tmp_path / "run-import-manifest.json"
+        manifest_path.write_text("{}", encoding="utf-8")
+        expected_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+        with pytest.raises(ValueError, match="run import manifest"):
+            run_nativization_motion(
+                tmp_path,
+                run_import_manifest_path=manifest_path,
+                expected_run_import_manifest_sha256=expected_sha,
+            )
+
+    def test_run_nativization_motion_rejects_stale_run_import_manifest(self, tmp_path):
+        docs_dir = tmp_path / "docs" / "design"
+        docs_dir.mkdir(parents=True)
+        tools_dir = tmp_path / "tools"
+        tools_dir.mkdir()
+        (tools_dir / "cuda.py").write_text("import torch\n", encoding="utf-8")
+        (docs_dir / "ember-owned-substrate-diagnostic.md").write_text(
+            "## The inherited stack, bottom ??? top, with the blocking line\n\n| layer | what | rel |\n|---|---|---|\n| CUDA kernels (cuBLAS matmul, elementwise) | x | component |\n",
+            encoding="utf-8",
+        )
+        manifest_path, manifest_sha = _write_run_import_manifest(
+            tmp_path,
+            ["CUDA kernels (cuBLAS matmul, elementwise)"],
+            producer_sha256="0" * 64,
+        )
+        with pytest.raises(ValueError, match="producer"):
+            run_nativization_motion(
+                tmp_path,
+                run_import_manifest_path=manifest_path,
+                expected_run_import_manifest_sha256=manifest_sha,
+            )
+
+
+
+    def test_run_nativization_motion_rejects_fabricated_false_trace_claims(self, tmp_path):
+        """Caller-authored false flags must not become measured authority."""
+        docs_dir = tmp_path / "docs" / "design"
+        docs_dir.mkdir(parents=True)
+        (docs_dir / "ember-owned-substrate-diagnostic.md").write_text(
+            "## The inherited stack, bottom \u2192 top, with the blocking line\n\n"
+            "| layer | what | rel |\n|---|---|---|\n"
+            "| CUDA kernels (cuBLAS matmul, elementwise) | x | component |\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "INVARIANT.md").write_text("owned", encoding="utf-8")
+        tools_dir = tmp_path / "tools"
+        tools_dir.mkdir()
+        (tools_dir / "cuda.py").write_text("import torch\n", encoding="utf-8")
+        manifest_path, _ = _write_run_import_manifest(
+            tmp_path, ["CUDA kernels (cuBLAS matmul, elementwise)"]
+        )
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["source_commit"] = "0" * 40
+        for row in manifest["layers"]:
+            row["critical_path_share"] = {
+                "creation": False,
+                "current_rung_training": False,
+                "growth_run": False,
+                "evidence": "fabricated-review-claim",
+            }
+        payload = json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()
+        manifest_path.write_bytes(payload)
+        manifest_sha = hashlib.sha256(payload).hexdigest()
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(Path(nativization_motion.__file__)),
+                str(tmp_path),
+                str(manifest_path),
+                manifest_sha,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode != 0
+        assert "run import" in result.stderr.lower() or "source" in result.stderr.lower()
+
+    def test_public_board_consumer_accepts_real_motion_receipt(self, tmp_path):
+        """The board-facing consumer must consume the real CLI receipt."""
+        docs_dir = tmp_path / "docs" / "design"
+        docs_dir.mkdir(parents=True)
+        (docs_dir / "ember-owned-substrate-diagnostic.md").write_text(
+            "## The inherited stack, bottom \u2192 top, with the blocking line\n\n"
+            "| layer | what | rel |\n|---|---|---|\n"
+            "| CUDA kernels (cuBLAS matmul, elementwise) | x | component |\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "INVARIANT.md").write_text("owned", encoding="utf-8")
+        tools_dir = tmp_path / "tools"
+        tools_dir.mkdir()
+        (tools_dir / "cuda.py").write_text("import torch\n", encoding="utf-8")
+        manifest_path, manifest_sha = _write_run_import_manifest(
+            tmp_path, ["CUDA kernels (cuBLAS matmul, elementwise)"]
+        )
+        receipt_path = Path(
+            run_nativization_motion(
+                tmp_path,
+                run_import_manifest_path=manifest_path,
+                expected_run_import_manifest_sha256=manifest_sha,
+            )
+        )
+        receipt_sha = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(Path(__file__).parent.parent / "scripts" / "nativization_motion_board.py"),
+                str(tmp_path),
+                str(receipt_path),
+                receipt_sha,
+                str(manifest_path),
+                manifest_sha,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        board_receipt = json.loads(result.stdout)
+        assert board_receipt["decision"] == "MEASURED_STATIC_MOTION"
+        assert board_receipt["run_import_manifest_sha256"] == manifest_sha
+
+    def test_trace_intersects_reachable_graph_with_each_layer_predicate(self, tmp_path):
+        layers = [
+            "CUDA kernels (cuBLAS matmul, elementwise)",
+            "Autograd (`grad_fn` graph, `backward()`)",
+        ]
+        _prepare_fixture_repo(tmp_path)
+        phase_root = tmp_path / "tools" / "ember-restart-3b"
+        (phase_root / "model.py").write_text("import torch\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-qm", "semantic predicate"], cwd=tmp_path, check=True)
+        manifest_path, _ = build_run_import_manifest(tmp_path, layers)
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        shares = {row["name"]: row["critical_path_share"] for row in manifest["layers"]}
+        assert shares[layers[0]]["creation"] is False
+        assert shares[layers[1]]["creation"] is False
+
+    def test_trace_rejects_unknown_layer_predicate(self, tmp_path):
+        _prepare_fixture_repo(tmp_path)
+        with pytest.raises(ValueError, match="closed layer predicate"):
+            build_run_import_manifest(tmp_path, ["unregistered layer"])
+
+    def test_trace_rejects_dirty_reachable_source_bytes(self, tmp_path):
+        _prepare_fixture_repo(tmp_path)
+        source = tmp_path / "tools" / "ember-restart-3b" / "model.py"
+        source.write_text("MODEL = 'dirty'\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="clean|Git|source"):
+            build_run_import_manifest(
+                tmp_path,
+                ["CUDA kernels (cuBLAS matmul, elementwise)"],
+            )
+
+    def test_trace_rejects_untracked_reachable_dependency(self, tmp_path):
+        _prepare_fixture_repo(tmp_path)
+        phase_root = tmp_path / "tools" / "ember-restart-3b"
+        (phase_root / "pretrain.py").write_text(
+            "import untracked_dependency\nTRAIN = True\n", encoding="utf-8"
+        )
+        (phase_root / "untracked_dependency.py").write_text("VALUE = 1\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="clean|Git|source|tracked"):
+            build_run_import_manifest(
+                tmp_path,
+                ["Training loop (fwd ? loss ? backward() ? step)"],
+            )
+
+    def test_board_cli_rejects_duplicate_missing_stale_and_open_receipt_shapes(self):
+        root = Path(__file__).resolve().parent.parent
+        manifest_path = root / "manifests" / "run-import-manifest-v1.json"
+        receipt_path = root / "receipts" / "nativization-motion" / "nm-20260807T051659Z.json"
+        manifest_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+        original = json.loads(receipt_path.read_text(encoding="utf-8"))
+        mutations = {
+            "duplicate": lambda value: {**value, "layers": [value["layers"][0]] * len(value["layers"])},
+            "missing": lambda value: {**value, "layers": value["layers"][:-1]},
+            "stale": lambda value: {**value, "source_commit": "0" * 40},
+            "stale-timestamp": lambda value: {**value, "ts": "2000-01-01T00:00:00Z"},
+            "wrong-diagnostic": lambda value: {**value, "map_source_sha": "sha256:" + "0" * 64},
+            "missing-field": lambda value: {key: item for key, item in value.items() if key != "source_commit"},
+            "extra-field": lambda value: {**value, "unexpected": True},
+            "omitted-delta": lambda value: {key: item for key, item in value.items() if key != "deltas"},
+            "borrowed-weight": lambda value: {
+                **value,
+                "layers": [
+                    {**value["layers"][0], "borrowed_deps_count": value["layers"][0]["borrowed_deps_count"] + 1},
+                    *value["layers"][1:],
+                ],
+            },
+        }
+        with tempfile.TemporaryDirectory(prefix="p1513-board-negative-") as temp_dir:
+            scratch = Path(temp_dir) / "mutated-receipt.json"
+            for name, mutate in mutations.items():
+                payload = json.dumps(mutate(original), sort_keys=True, separators=(",", ":")).encode()
+                scratch.write_bytes(payload)
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(root / "scripts" / "nativization_motion_board.py"),
+                        str(root),
+                        str(scratch),
+                        hashlib.sha256(payload).hexdigest(),
+                        str(manifest_path),
+                        manifest_sha,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                assert result.returncode != 0, name
 
 def pytest_generate_tests(metafunc):
     """Pytest hook for fixture parameterization."""
