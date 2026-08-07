@@ -278,3 +278,100 @@ def test_owned_corpus_cursor_rejects_wrong_split_root_and_range(tmp_path: Path):
     for cursor, message in (({**base, "split": "heldout", "root_sha256": base["root_sha256"]}, "root"), ({**base, "root_sha256": "0" * 64}, "root"), ({**base, "record_index": 10_000}, "cursor")):
         with pytest.raises(ValueError, match=message):
             list(iter_owned_records(out / "manifest.json", output_root=out, cursor=cursor, max_records=1))
+
+
+def test_owned_corpus_selection_feeds_real_pretrain_consumer_and_advances_cursor(tmp_path: Path):
+    """The governed selection consumer must consume owned-v1 rows without list slicing."""
+    from tokenizers import Tokenizer
+    from tokenizers.models import WordLevel
+
+    from scripts.corpus.owned_v1 import OwnedCorpusSelection, build_owned_corpus
+
+    raw = tmp_path / "raw"
+    _write_source(
+        raw,
+        "alpha",
+        [{"id": f"a{index}", "text": f"owned selection record {index}"} for index in range(12)],
+    )
+    out = tmp_path / "owned"
+    manifest = build_owned_corpus(raw_root=raw, output_root=out, source_names=("alpha",), shard_records=2)
+    tokenizer = Tokenizer(
+        WordLevel(
+            vocab={"[UNK]": 0, "owned": 1, "selection": 2, "record": 3},
+            unk_token="[UNK]",
+        )
+    )
+    tokenizer_path = tmp_path / "tokenizer.json"
+    tokenizer.save(str(tokenizer_path))
+    selection = OwnedCorpusSelection(
+        out / "manifest.json",
+        output_root=out,
+        tokenizer_path=tokenizer_path,
+        split="train",
+        max_records=2,
+    )
+    assert selection.receipt["selected_record_count"] == 2
+
+    tools_root = ROOT / "tools" / "ember-restart-3b"
+    sys.path.insert(0, str(tools_root))
+    try:
+        import torch
+        import pretrain
+        from model import RestartDecoderConfig, UnifiedDecoder
+
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=101)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        checkpoints: list[dict[str, object]] = []
+        result = pretrain.run_selection_pretraining_segment(
+            model=model,
+            optimizer=optimizer,
+            selection=selection,
+            config=config,
+            device=torch.device("cpu"),
+            checkpoint_every=1,
+            checkpoint_callback=lambda _step, state: checkpoints.append(state),
+            max_records=1,
+            require_complete_coverage=False,
+        )
+        first_cursor = dict(result["data_cursor"]["selection_cursor"])
+        resumed_checkpoints: list[dict[str, object]] = []
+        resumed = pretrain.run_selection_pretraining_segment(
+            model=model,
+            optimizer=optimizer,
+            selection=selection,
+            config=config,
+            device=torch.device("cpu"),
+            checkpoint_every=1,
+            checkpoint_callback=lambda _step, state: resumed_checkpoints.append(state),
+            initial_selection_cursor=first_cursor,
+            initial_global_step=result["global_step"],
+            initial_tokens_seen=result["tokens_seen"],
+            require_complete_coverage=False,
+        )
+    finally:
+        sys.path.remove(str(tools_root))
+
+    assert result["steps"] == 1
+    assert [state["data_cursor"]["selection_cursor"]["record_index"] for state in checkpoints] == [1]
+    assert resumed["steps"] == 1
+    assert [state["data_cursor"]["selection_cursor"]["record_index"] for state in resumed_checkpoints] == [2]
+    assert resumed["data_cursor"]["selection_cursor"]["record_index"] == 2
+    assert resumed["data_cursor"]["global_step"] == 2
+
+def test_owned_corpus_selection_rejects_tokenizer_drift(tmp_path: Path):
+    from tokenizers import Tokenizer
+    from tokenizers.models import WordLevel
+
+    from scripts.corpus.owned_v1 import OwnedCorpusSelection, build_owned_corpus
+
+    raw = tmp_path / "raw"
+    _write_source(raw, "alpha", [{"id": f"a{index}", "text": f"record {index}"} for index in range(6)])
+    out = tmp_path / "owned"
+    build_owned_corpus(raw_root=raw, output_root=out, source_names=("alpha",), shard_records=2)
+    tokenizer_path = tmp_path / "tokenizer.json"
+    Tokenizer(WordLevel(vocab={"[UNK]": 0}, unk_token="[UNK]")).save(str(tokenizer_path))
+    selection = OwnedCorpusSelection(out / "manifest.json", output_root=out, tokenizer_path=tokenizer_path, split="train", max_records=1)
+    tokenizer_path.write_bytes(tokenizer_path.read_bytes() + b"\n")
+    with pytest.raises(ValueError, match="tokenizer authority"):
+        list(selection.iter_from())

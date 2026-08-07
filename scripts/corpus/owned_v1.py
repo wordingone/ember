@@ -529,6 +529,114 @@ def iter_owned_records(manifest_path: Path, *, output_root: Path, cursor: dict[s
 
 
 
+OWNED_SELECTION_SCHEMA_VERSION = "ember-owned-corpus-selection-receipt-v1"
+OWNED_SELECTION_RULE = "owned_corpus_text_tokenize_v1"
+
+
+class OwnedCorpusSelection:
+    """Lazy owned-v1 selection adapter for the merged P2B pretrain consumer."""
+
+    def __init__(
+        self,
+        manifest_path: Path,
+        *,
+        output_root: Path,
+        tokenizer_path: Path,
+        split: str,
+        max_records: int,
+    ) -> None:
+        self.manifest_path = Path(manifest_path).resolve()
+        self.output_root = Path(output_root).resolve()
+        if self.manifest_path.parent != self.output_root:
+            raise CorpusBuildError("selection manifest path is not the declared output root")
+        manifest = validate_manifest(self.manifest_path, output_root=self.output_root)
+        if split not in ("train", "heldout"):
+            raise CorpusBuildError("selection split is invalid")
+        if type(max_records) is not int or max_records <= 0:
+            raise CorpusBuildError("selection max_records is invalid")
+        self.split = split
+        self._manifest_bytes = self.manifest_path.read_bytes()
+        self._manifest_sha256 = _sha_bytes(self._manifest_bytes)
+        self._root_sha256 = manifest[f"{split}_root_sha256"]
+        total = manifest[f"{split}_record_count"]
+        self._selected_record_count = min(max_records, total)
+        if self._selected_record_count <= 0:
+            raise CorpusBuildError("selection has no records")
+        self.tokenizer_path = Path(tokenizer_path).resolve()
+        if not self.tokenizer_path.is_file():
+            raise CorpusBuildError("selection tokenizer is missing")
+        self._tokenizer_sha256 = _sha_file(self.tokenizer_path)
+        try:
+            from tokenizers import Tokenizer
+            self._tokenizer = Tokenizer.from_file(str(self.tokenizer_path))
+        except Exception as error:
+            raise CorpusBuildError("selection tokenizer is unreadable") from error
+        self.receipt = {
+            "schema_version": OWNED_SELECTION_SCHEMA_VERSION,
+            "manifest_sha256": self._manifest_sha256,
+            "split": self.split,
+            "root_sha256": self._root_sha256,
+            "selected_record_count": self._selected_record_count,
+            "tokenizer_sha256": self._tokenizer_sha256,
+            "selection_rule": OWNED_SELECTION_RULE,
+        }
+
+    def _validate_cursor(self, cursor: object) -> dict[str, Any]:
+        if cursor is None:
+            cursor = {
+                "schema_version": _CURSOR_SCHEMA_VERSION,
+                "manifest_sha256": self._manifest_sha256,
+                "split": self.split,
+                "root_sha256": self._root_sha256,
+                "record_index": 0,
+            }
+        if not isinstance(cursor, dict) or set(cursor) != _CURSOR_FIELDS:
+            raise CorpusBuildError("selection cursor schema is not closed")
+        if cursor.get("schema_version") != _CURSOR_SCHEMA_VERSION:
+            raise CorpusBuildError("selection cursor schema is invalid")
+        if cursor.get("manifest_sha256") != self._manifest_sha256 or cursor.get("split") != self.split or cursor.get("root_sha256") != self._root_sha256:
+            raise CorpusBuildError("selection cursor authority does not match receipt")
+        if type(cursor.get("record_index")) is not int or not 0 <= cursor["record_index"] <= self._selected_record_count:
+            raise CorpusBuildError("selection cursor is out of range")
+        return dict(cursor)
+
+    def _semantic_record(self, row: dict[str, Any]) -> dict[str, Any]:
+        try:
+            token_ids = [int(value) for value in self._tokenizer.encode(row["text"]).ids]
+        except Exception as error:
+            raise CorpusBuildError("selection text tokenization failed") from error
+        token_ids = token_ids[:128]
+        if len(token_ids) < 2:
+            token_ids = (token_ids + [0, 0])[:2]
+        return {
+            "schema_version": "ember-owned-semantic-text-v1",
+            "active_expert": "shared",
+            "token_ids": token_ids,
+            "target_ids": token_ids[1:] + token_ids[:1],
+            "image_coordinates": [],
+            "multimodal_spans": [],
+            "source_name": row["source_name"],
+            "source_sha256": row["source_sha256"],
+            "record_id": row["record_id"],
+            "content_sha256": row["content_sha256"],
+        }
+
+    def iter_from(self, cursor: object = None) -> Iterator[tuple[dict[str, Any], dict[str, Any]]]:
+        current = self._validate_cursor(cursor)
+        if _sha_file(self.tokenizer_path) != self._tokenizer_sha256:
+            raise CorpusBuildError("selection tokenizer authority changed")
+        if current["record_index"] >= self._selected_record_count:
+            return
+        remaining = self._selected_record_count - current["record_index"]
+        for row, next_cursor in iter_owned_records(
+            self.manifest_path,
+            output_root=self.output_root,
+            cursor=current,
+            max_records=remaining,
+        ):
+            yield self._semantic_record(row), next_cursor
+
+
 if __name__ == "__main__":
     import argparse
 
