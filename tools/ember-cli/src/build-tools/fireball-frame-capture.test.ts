@@ -8,6 +8,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  redactInstalledFrame,
   validateInstalledCaptureReceipt,
   verifyInstalledCaptureDirectory,
   waitForDistinctCells,
@@ -69,6 +70,13 @@ function receipt() {
 }
 
 describe("issue #54 installed fireball capture receipt", () => {
+  test("redacts absolute host paths from committed installed frames without changing bytes", () => {
+    const privateFrame = "root B:\\tmp\\ember-303 data B:\\tmp\\ember-303\\data\n";
+    const publicFrame = redactInstalledFrame(privateFrame, "B:\\tmp\\ember-303");
+    expect(publicFrame).not.toContain("B:\\");
+    expect(Buffer.byteLength(publicFrame)).toBe(Buffer.byteLength(privateFrame));
+  });
+
   test("waits past a cadence alias until the real terminal style changes", async () => {
     const frames = [
       [{ row: 2, col: 4, char: "▀", fg: 1, bg: -1 }],

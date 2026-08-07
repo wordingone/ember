@@ -3,13 +3,17 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 import { describe, expect, test } from "bun:test";
+import xtermHeadless from "@xterm/headless";
 import {
   buildCaptureReceipt,
   findClosedPromptRegion,
   redactHostPaths,
+  visibleFrameLines,
   type CaptureReceiptInput,
   type CaptureStageInput,
 } from "./capture-prompt-input-243.ts";
+
+const { Terminal } = xtermHeadless;
 
 function frame(width: number, status = "STATUS"): string {
   const content = width - 2;
@@ -38,6 +42,16 @@ function stage(columns: number, index: number): CaptureStageInput {
     region: findClosedPromptRegion(frameText.replace(/\n$/, "").split("\n"), columns),
   };
 }
+
+test("visibleFrameLines clips stale xterm backing rows after a shrink", async () => {
+  const terminal = new Terminal({ cols: 80, rows: 24, allowProposedApi: true });
+  await new Promise<void>((done) => terminal.write("\u001b[?1049h" + "x".repeat(80), done));
+  terminal.resize(40, 24);
+  const lines = visibleFrameLines(terminal);
+  expect(lines).toHaveLength(24);
+  expect(lines.every((line) => line.length === 40)).toBe(true);
+  terminal.dispose();
+});
 
 function valid(): CaptureReceiptInput {
   return {
