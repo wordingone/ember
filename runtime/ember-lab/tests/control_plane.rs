@@ -2,7 +2,10 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-use ember_lab::{Daemon, EmberLabError, JobSpec, JobState, RestartPolicy, SchedulePrediction};
+use ember_lab::{
+    rehearsal::produce_minimal_slice, Daemon, EmberLabError, JobSpec, JobState, RestartPolicy,
+    SchedulePrediction,
+};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -110,10 +113,61 @@ fn write_restore_manifest(root: &Path, job_id: &str) -> PathBuf {
     manifest
 }
 
+fn start_phase_fixture(root: &Path, job_id: &str, producer: bool) -> (Daemon, PathBuf) {
+    let db = root.join(format!("{job_id}.sqlite3"));
+    let (identity, identity_hash) = write_identity(root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity(job_id, &identity, &identity_hash)
+        .unwrap();
+    daemon.acquire_lease("cpu-fixture", job_id).unwrap();
+    let mut spec = JobSpec::new(
+        job_id,
+        std::env::current_exe().unwrap().to_string_lossy(),
+        ["--exact", "fixture_child_process", "--nocapture"],
+        "cpu-fixture",
+    )
+    .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+    .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000");
+    if producer {
+        spec = spec
+            .with_env("EMBER_LAB_MINIMAL_SLICE", "1")
+            .with_env("EMBER_LAB_MINIMAL_SLICE_JOB_ID", job_id);
+    }
+    daemon.start_job(spec).unwrap();
+    let phase_root = root
+        .join(format!("{job_id}.sqlite3.logs"))
+        .join("rehearsal")
+        .join(ember_lab::hash_bytes(job_id.as_bytes()));
+    (daemon, phase_root)
+}
+
+fn wait_for_host_peak(path: &Path) -> u64 {
+    for _ in 0..150 {
+        if path.exists() {
+            let bytes = fs::read(path).unwrap();
+            let value: Value = serde_json::from_slice(&bytes).unwrap();
+            if let Some(peak) = value.get("whole_run_peak_bytes").and_then(Value::as_u64) {
+                return peak;
+            }
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    panic!(
+        "minimal-slice producer did not emit host peak: {}",
+        path.display()
+    );
+}
+
 #[test]
 fn fixture_child_process() {
     if std::env::var("EMBER_LAB_FIXTURE_CHILD").as_deref() != Ok("1") {
         return;
+    }
+    if std::env::var("EMBER_LAB_MINIMAL_SLICE").as_deref() == Ok("1") {
+        let root = PathBuf::from(std::env::var_os("EMBER_LAB_PHASE_OUTPUT_ROOT").unwrap());
+        let job_id = std::env::var("EMBER_LAB_MINIMAL_SLICE_JOB_ID").unwrap();
+        produce_minimal_slice(&root, &job_id).unwrap();
     }
     if std::env::var("EMBER_LAB_FIXTURE_SPAWN_CHILD").as_deref() == Ok("1") {
         let child = Command::new(std::env::current_exe().unwrap())
@@ -1711,6 +1765,8 @@ fn phase_events_are_daemon_bound_and_foreign_bytes_do_not_authorize() {
                 "cpu-fixture",
             )
             .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_MINIMAL_SLICE", "1")
+            .with_env("EMBER_LAB_MINIMAL_SLICE_JOB_ID", "phase-job")
             .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000"),
         )
         .unwrap();
@@ -1763,7 +1819,24 @@ fn phase_events_are_daemon_bound_and_foreign_bytes_do_not_authorize() {
         .phase_event_authorized("phase-job", "train", &sha256(&forged_path))
         .unwrap());
     assert!(daemon.load_authorized_phase_evidence("phase-job").is_err());
-    let produced = daemon.execute_minimal_episode("phase-job").unwrap();
+    let phase_root = root
+        .join("ember-lab.sqlite3.logs")
+        .join("rehearsal")
+        .join(ember_lab::hash_bytes(b"phase-job"));
+    let host_peak_path = phase_root.join("host_peak.json");
+    for _ in 0..100 {
+        if host_peak_path.exists() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    let host_peak: Value = serde_json::from_slice(&fs::read(host_peak_path).unwrap()).unwrap();
+    let produced = daemon
+        .execute_minimal_episode(
+            "phase-job",
+            host_peak["whole_run_peak_bytes"].as_u64().unwrap(),
+        )
+        .unwrap();
     let consumed = daemon.load_authorized_phase_evidence("phase-job").unwrap();
     assert_eq!(consumed.len(), 6);
     let evidence = produced
@@ -1782,7 +1855,7 @@ fn phase_events_are_daemon_bound_and_foreign_bytes_do_not_authorize() {
         .phase_event_authorized("phase-job", "train", &evidence.sha256)
         .unwrap());
     daemon.stop_job("phase-job").unwrap();
-    assert!(daemon.execute_minimal_episode("phase-job").is_err());
+    assert!(daemon.execute_minimal_episode("phase-job", 1).is_err());
 }
 
 #[test]
@@ -1798,12 +1871,69 @@ fn phase_owner_refuses_before_dispatch_and_emits_no_later_phase_events() {
         .acquire_lease("cpu-fixture", "phase-not-started")
         .unwrap();
 
-    assert!(daemon.execute_minimal_episode("phase-not-started").is_err());
+    assert!(daemon
+        .execute_minimal_episode("phase-not-started", 1)
+        .is_err());
     assert!(!daemon
         .job_event_kinds("phase-not-started")
         .unwrap()
         .iter()
         .any(|kind| kind.starts_with("ember_lab_phase_")));
+}
+
+#[test]
+fn minimal_slice_noop_child_cannot_authorize_any_phase() {
+    let root = sandbox("phase-noop-child");
+    let (daemon, _phase_root) = start_phase_fixture(&root, "phase-noop", false);
+    assert!(daemon.execute_minimal_episode("phase-noop", 1).is_err());
+    daemon.stop_job("phase-noop").unwrap();
+}
+
+#[test]
+fn marker_only_phase_json_is_rejected_after_real_child_start() {
+    let root = sandbox("phase-marker-only");
+    let (daemon, phase_root) = start_phase_fixture(&root, "phase-marker", true);
+    let peak = wait_for_host_peak(&phase_root.join("host_peak.json"));
+    fs::write(
+        phase_root.join("train.json"),
+        br#"{"schema":"ember-lab-phase-producer-v1","producer":"ember-lab-minimal-slice-producer","result":"COMPLETED","job_id":"phase-marker","phase":"train","producer_pid":1,"sequence":2,"operation":{"kind":"running_job_observed"},"operation_sha256":"0000000000000000000000000000000000000000000000000000000000000000"}"#,
+    )
+    .unwrap();
+    assert!(daemon
+        .execute_minimal_episode("phase-marker", peak)
+        .is_err());
+    daemon.stop_job("phase-marker").unwrap();
+}
+
+#[test]
+fn zero_train_steps_refuse_before_checkpoint_consumption() {
+    let root = sandbox("phase-zero-steps");
+    let (daemon, phase_root) = start_phase_fixture(&root, "phase-zero", true);
+    let peak = wait_for_host_peak(&phase_root.join("host_peak.json"));
+    let train_path = phase_root.join("train.json");
+    let mut train: Value = serde_json::from_slice(&fs::read(&train_path).unwrap()).unwrap();
+    train["operation"]["train_steps"] = json!(0);
+    train["operation"]["update_count"] = json!(0);
+    let operation_bytes = serde_json::to_vec(&train["operation"]).unwrap();
+    train["operation_sha256"] = json!(format!("{:x}", Sha256::digest(operation_bytes)));
+    fs::write(&train_path, serde_json::to_vec(&train).unwrap()).unwrap();
+    assert!(daemon.execute_minimal_episode("phase-zero", peak).is_err());
+    daemon.stop_job("phase-zero").unwrap();
+}
+
+#[test]
+fn missing_checkpoint_publish_selectable_or_restore_artifact_refuses() {
+    for phase in ["checkpoint", "publish", "selectable_checkpoint", "restore"] {
+        let root = sandbox(&format!("phase-missing-{phase}"));
+        let (daemon, phase_root) =
+            start_phase_fixture(&root, &format!("phase-missing-{phase}"), true);
+        let peak = wait_for_host_peak(&phase_root.join("host_peak.json"));
+        fs::remove_file(phase_root.join(format!("{phase}.json"))).unwrap();
+        assert!(daemon
+            .execute_minimal_episode(&format!("phase-missing-{phase}"), peak)
+            .is_err());
+        daemon.stop_job(&format!("phase-missing-{phase}")).unwrap();
+    }
 }
 
 #[cfg(windows)]

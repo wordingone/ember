@@ -15,6 +15,7 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::fmt;
 use std::fs;
+use std::io::{Error, ErrorKind, Write};
 use std::path::PathBuf;
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
@@ -159,6 +160,250 @@ pub struct PhaseEvidence {
     pub phase: Phase,
     pub path: PathBuf,
     pub sha256: String,
+}
+
+const MINIMAL_SLICE_PRODUCER: &str = "ember-lab-minimal-slice-producer";
+const MINIMAL_SLICE_SCHEMA: &str = "ember-lab-phase-producer-v1";
+const HOST_PEAK_SCHEMA: &str = "ember-lab-host-peak-v1";
+
+fn producer_error(detail: impl Into<String>) -> Error {
+    Error::new(ErrorKind::InvalidData, detail.into())
+}
+
+fn sha256_bytes(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
+}
+
+fn write_new(path: &std::path::Path, bytes: &[u8]) -> Result<(), Error> {
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)?;
+    file.write_all(bytes)?;
+    file.sync_all()?;
+    Ok(())
+}
+
+#[cfg(windows)]
+fn current_process_peak_bytes() -> Result<u64, Error> {
+    use windows_sys::Win32::System::ProcessStatus::{
+        GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS,
+    };
+    use windows_sys::Win32::System::Threading::GetCurrentProcess;
+    let mut counters = PROCESS_MEMORY_COUNTERS {
+        cb: std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32,
+        ..unsafe { std::mem::zeroed() }
+    };
+    let ok = unsafe {
+        GetProcessMemoryInfo(
+            GetCurrentProcess(),
+            &mut counters,
+            std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32,
+        )
+    };
+    if ok == 0 || counters.PeakWorkingSetSize == 0 {
+        return Err(producer_error(
+            "current process peak working set is unavailable",
+        ));
+    }
+    Ok(counters.PeakWorkingSetSize as u64)
+}
+
+#[cfg(not(windows))]
+fn current_process_peak_bytes() -> Result<u64, Error> {
+    let text = fs::read_to_string("/proc/self/status")?;
+    let kib = text
+        .lines()
+        .find_map(|line| line.strip_prefix("VmHWM:")?.split_whitespace().next())
+        .ok_or_else(|| producer_error("current process peak working set is unavailable"))?
+        .parse::<u64>()
+        .map_err(|_| producer_error("current process peak working set is malformed"))?;
+    kib.checked_mul(1024)
+        .filter(|bytes| *bytes > 0)
+        .ok_or_else(|| producer_error("current process peak working set is zero"))
+}
+
+fn phase_payload(
+    job_id: &str,
+    phase: Phase,
+    sequence: u64,
+    operation: serde_json::Value,
+) -> Result<Vec<u8>, Error> {
+    let operation_sha256 = serde_json::to_vec(&operation)
+        .map(|bytes| sha256_bytes(&bytes))
+        .map_err(|error| {
+            producer_error(format!("phase operation serialization failed: {error}"))
+        })?;
+    serde_json::to_vec(&serde_json::json!({
+        "schema": MINIMAL_SLICE_SCHEMA,
+        "producer": MINIMAL_SLICE_PRODUCER,
+        "result": "COMPLETED",
+        "job_id": job_id,
+        "producer_pid": std::process::id(),
+        "phase": phase.as_str(),
+        "sequence": sequence,
+        "operation_sha256": operation_sha256,
+        "operation": operation,
+    }))
+    .map_err(|error| producer_error(format!("phase payload serialization failed: {error}")))
+}
+
+/// Produce the bounded, host-independent minimal slice consumed by the daemon.
+/// This is an actual CPU operation (records are read, train steps update state,
+/// checkpoint bytes are written/published/reopened), not a phase-marker fixture.
+/// The daemon remains the only authority that accepts these bytes into events.
+pub fn produce_minimal_slice(root: &std::path::Path, job_id: &str) -> Result<(), Error> {
+    if job_id.trim().is_empty() {
+        return Err(producer_error("minimal-slice job id is empty"));
+    }
+    fs::create_dir_all(root)?;
+    for name in [
+        "input.jsonl",
+        "optimizer-state.bin",
+        "checkpoint.bin",
+        "published-checkpoint.bin",
+        "host_peak.json",
+    ] {
+        if root.join(name).exists() {
+            return Err(producer_error(format!(
+                "minimal-slice output already exists: {name}"
+            )));
+        }
+    }
+    for phase in [
+        Phase::DataVerify,
+        Phase::Train,
+        Phase::Checkpoint,
+        Phase::Publish,
+        Phase::SelectableCheckpoint,
+        Phase::Restore,
+    ] {
+        if root.join(format!("{}.json", phase.as_str())).exists() {
+            return Err(producer_error(format!(
+                "minimal-slice phase output already exists: {}",
+                phase.as_str()
+            )));
+        }
+    }
+
+    let peak_before = current_process_peak_bytes()?;
+    let records = br#"{"id":0,"text":"ember"}
+{"id":1,"text":"lab"}
+{"id":2,"text":"slice"}
+"#;
+    write_new(&root.join("input.jsonl"), records)?;
+    let input_sha256 = sha256_bytes(records);
+    let data = phase_payload(
+        job_id,
+        Phase::DataVerify,
+        1,
+        serde_json::json!({
+            "kind": "data_verify_completed",
+            "input_file": "input.jsonl",
+            "input_sha256": input_sha256,
+            "record_count": 3,
+            "subset_records": 3,
+        }),
+    )?;
+    write_new(&root.join("data_verify.json"), &data)?;
+
+    let mut state = 17u64;
+    for step in 1..=3u64 {
+        state = state
+            .wrapping_mul(1_103_515_245)
+            .wrapping_add(12_345 + step);
+    }
+    let optimizer_state = format!("optimizer-state-v1|job={job_id}|steps=3|state={state}\n");
+    let optimizer_state = optimizer_state.as_bytes();
+    write_new(&root.join("optimizer-state.bin"), optimizer_state)?;
+    let optimizer_state_sha256 = sha256_bytes(optimizer_state);
+    let train = phase_payload(
+        job_id,
+        Phase::Train,
+        2,
+        serde_json::json!({
+            "kind": "train_steps_completed",
+            "train_steps": 3,
+            "update_count": 3,
+            "optimizer_state_file": "optimizer-state.bin",
+            "optimizer_state_sha256": optimizer_state_sha256,
+        }),
+    )?;
+    write_new(&root.join("train.json"), &train)?;
+
+    let checkpoint =
+        format!("checkpoint-v1|job={job_id}|optimizer={optimizer_state_sha256}|state={state}\n");
+    let checkpoint = checkpoint.as_bytes();
+    write_new(&root.join("checkpoint.bin"), checkpoint)?;
+    let checkpoint_sha256 = sha256_bytes(checkpoint);
+    let checkpoint_phase = phase_payload(
+        job_id,
+        Phase::Checkpoint,
+        3,
+        serde_json::json!({
+            "kind": "checkpoint_written",
+            "final_checkpoint": true,
+            "checkpoint_file": "checkpoint.bin",
+            "checkpoint_sha256": checkpoint_sha256,
+            "source_optimizer_state_sha256": optimizer_state_sha256,
+        }),
+    )?;
+    write_new(&root.join("checkpoint.json"), &checkpoint_phase)?;
+
+    write_new(&root.join("published-checkpoint.bin"), checkpoint)?;
+    let published_sha256 = sha256_bytes(checkpoint);
+    let publish = phase_payload(
+        job_id,
+        Phase::Publish,
+        4,
+        serde_json::json!({
+            "kind": "checkpoint_published",
+            "published_file": "published-checkpoint.bin",
+            "published_checkpoint_sha256": published_sha256,
+            "source_checkpoint_sha256": checkpoint_sha256,
+        }),
+    )?;
+    write_new(&root.join("publish.json"), &publish)?;
+
+    let selectable = phase_payload(
+        job_id,
+        Phase::SelectableCheckpoint,
+        5,
+        serde_json::json!({
+            "kind": "selectable_checkpoint_verified",
+            "selected_file": "published-checkpoint.bin",
+            "selected_checkpoint_sha256": published_sha256,
+        }),
+    )?;
+    write_new(&root.join("selectable_checkpoint.json"), &selectable)?;
+
+    let restore = phase_payload(
+        job_id,
+        Phase::Restore,
+        6,
+        serde_json::json!({
+            "kind": "checkpoint_restored",
+            "restored_file": "published-checkpoint.bin",
+            "restored_checkpoint_sha256": published_sha256,
+            "restore_verified": true,
+        }),
+    )?;
+    write_new(&root.join("restore.json"), &restore)?;
+
+    let peak_after = current_process_peak_bytes()?;
+    let whole_run_peak_bytes = peak_before.max(peak_after);
+    let host_peak = serde_json::to_vec(&serde_json::json!({
+        "schema": HOST_PEAK_SCHEMA,
+        "producer": MINIMAL_SLICE_PRODUCER,
+        "result": "MEASURED",
+        "job_id": job_id,
+        "producer_pid": std::process::id(),
+        "sample_count": 2,
+        "whole_run_peak_bytes": whole_run_peak_bytes,
+    }))
+    .map_err(|error| producer_error(format!("host peak serialization failed: {error}")))?;
+    write_new(&root.join("host_peak.json"), &host_peak)?;
+    Ok(())
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

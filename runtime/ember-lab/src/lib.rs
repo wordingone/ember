@@ -2185,6 +2185,16 @@ impl Daemon {
             PROTECTIVE_CHECKPOINT_RESPONSE_ENV.into(),
             checkpoint_response_path.to_string_lossy().into_owned(),
         );
+        if spec.env.get("EMBER_LAB_MINIMAL_SLICE").map(String::as_str) == Some("1") {
+            let output_root = self
+                .log_dir
+                .join("rehearsal")
+                .join(hash_bytes(spec.job_id.as_bytes()));
+            spec.env.insert(
+                "EMBER_LAB_PHASE_OUTPUT_ROOT".into(),
+                output_root.to_string_lossy().into_owned(),
+            );
+        }
         let argv_json = serde_json::to_string(&spec.args)?;
         let env_json = serde_json::to_string(&spec.env)?;
         let argv_sha = hash_bytes(argv_json.as_bytes());
@@ -2877,16 +2887,12 @@ impl Daemon {
         Ok(rows)
     }
 
-    /// Execute the six current Ember Lab phase owners for a live dispatched job.
-    /// Each owner performs its operation first, then records a daemon-fenced
-    /// evidence artifact/event.  Rehearsal is a consumer of these records, never
-    /// their producer.
-    pub fn execute_minimal_episode(
+    fn consume_minimal_slice(
         &self,
         job_id: &str,
+        expected_whole_run_peak_bytes: u64,
     ) -> Result<Vec<crate::rehearsal::PhaseEvidence>> {
         use crate::rehearsal::{Phase, PhaseEvidence};
-
         let phases = [
             Phase::DataVerify,
             Phase::Train,
@@ -2895,108 +2901,327 @@ impl Daemon {
             Phase::SelectableCheckpoint,
             Phase::Restore,
         ];
+        if expected_whole_run_peak_bytes == 0 {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "minimal-slice whole-run host peak must be measured".into(),
+            });
+        }
+        self.identity_hash(job_id)?
+            .ok_or_else(|| EmberLabError::IdentityNotFound {
+                job_id: job_id.into(),
+            })?;
         let phase_dir = self
             .log_dir
             .join("rehearsal")
             .join(hash_bytes(job_id.as_bytes()));
-        fs::create_dir_all(&phase_dir)?;
-        let mut produced = Vec::with_capacity(phases.len());
-        let identity_sha256 =
-            self.identity_hash(job_id)?
-                .ok_or_else(|| EmberLabError::IdentityNotFound {
+        let host_peak: Value =
+            serde_json::from_slice(&fs::read(phase_dir.join("host_peak.json")).map_err(|_| {
+                EmberLabError::InvalidTransition {
                     job_id: job_id.into(),
-                })?;
-        let mut prior_artifact: Option<(PathBuf, String)> = None;
+                    detail: "minimal-slice measured host peak artifact is absent".into(),
+                }
+            })?)
+            .map_err(|_| EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "minimal-slice measured host peak artifact is malformed".into(),
+            })?;
+        let row = self.job_process_row(job_id)?;
+        if host_peak.get("schema") != Some(&Value::String("ember-lab-host-peak-v1".into()))
+            || host_peak.get("producer")
+                != Some(&Value::String("ember-lab-minimal-slice-producer".into()))
+            || host_peak.get("result") != Some(&Value::String("MEASURED".into()))
+            || host_peak.get("job_id") != Some(&Value::String(job_id.into()))
+            || host_peak.get("producer_pid").and_then(Value::as_u64) != Some(row.pid as u64)
+            || host_peak
+                .get("sample_count")
+                .and_then(Value::as_u64)
+                .unwrap_or(0)
+                < 2
+            || host_peak
+                .get("whole_run_peak_bytes")
+                .and_then(Value::as_u64)
+                != Some(expected_whole_run_peak_bytes)
+        {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "minimal-slice measured host peak is not bound to this child/run".into(),
+            });
+        }
+        let mut operations = std::collections::BTreeMap::<Phase, Value>::new();
+        let mut produced = Vec::with_capacity(phases.len());
         for phase in phases {
             let row = self.job_process_row(job_id)?;
             if row.state != JobState::Running {
                 return Err(EmberLabError::InvalidTransition {
                     job_id: job_id.into(),
+                    detail: format!("minimal-slice phase {} is not running", phase.as_str()),
+                });
+            }
+            let path = phase_dir.join(format!("{}.json", phase.as_str()));
+            let bytes = fs::read(&path).map_err(|_| EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: format!(
+                    "minimal-slice producer output is absent for {}",
+                    phase.as_str()
+                ),
+            })?;
+            let value: Value =
+                serde_json::from_slice(&bytes).map_err(|_| EmberLabError::InvalidTransition {
+                    job_id: job_id.into(),
                     detail: format!(
-                        "current Ember Lab phase owner cannot complete {} outside a running job",
+                        "minimal-slice producer output is malformed for {}",
+                        phase.as_str()
+                    ),
+                })?;
+            if value.get("schema") != Some(&Value::String("ember-lab-phase-producer-v1".into()))
+                || value.get("producer")
+                    != Some(&Value::String("ember-lab-minimal-slice-producer".into()))
+                || value.get("result") != Some(&Value::String("COMPLETED".into()))
+                || value.get("job_id") != Some(&Value::String(job_id.into()))
+                || value.get("phase") != Some(&Value::String(phase.as_str().into()))
+                || value.get("producer_pid").and_then(Value::as_u64) != Some(row.pid as u64)
+                || value.get("sequence").and_then(Value::as_u64)
+                    != Some((produced.len() + 1) as u64)
+            {
+                return Err(EmberLabError::InvalidTransition {
+                    job_id: job_id.into(),
+                    detail: format!(
+                        "minimal-slice producer identity/sequence mismatch for {}",
                         phase.as_str()
                     ),
                 });
             }
-            let operation = match phase {
-                Phase::DataVerify => json!({
-                    "kind": "identity_bytes_verified",
-                    "identity_sha256": identity_sha256.clone(),
-                }),
-                Phase::Train => json!({
-                    "kind": "running_job_observed",
-                    "pid": row.pid,
-                    "lease_epoch": row.lease_epoch,
-                }),
-                Phase::Checkpoint => {
-                    let (_, prior_sha256) = prior_artifact.as_ref().ok_or_else(|| {
-                        EmberLabError::InvalidTransition {
+            let operation = value.get("operation").cloned().ok_or_else(|| {
+                EmberLabError::InvalidTransition {
+                    job_id: job_id.into(),
+                    detail: format!("minimal-slice operation is absent for {}", phase.as_str()),
+                }
+            })?;
+            let operation_sha256 = hash_bytes(&serde_json::to_vec(&operation)?);
+            if value.get("operation_sha256") != Some(&Value::String(operation_sha256.clone())) {
+                return Err(EmberLabError::InvalidTransition {
+                    job_id: job_id.into(),
+                    detail: format!(
+                        "minimal-slice operation hash is not bound for {}",
+                        phase.as_str()
+                    ),
+                });
+            }
+            let object = operation
+                .as_object()
+                .ok_or_else(|| EmberLabError::InvalidTransition {
+                    job_id: job_id.into(),
+                    detail: format!(
+                        "minimal-slice operation is not an object for {}",
+                        phase.as_str()
+                    ),
+                })?;
+            let kind = object.get("kind").and_then(Value::as_str).unwrap_or("");
+            let child_file = |name: &str| -> Result<PathBuf> {
+                let candidate = Path::new(name);
+                if name.trim().is_empty()
+                    || candidate.file_name().and_then(|v| v.to_str()) != Some(name)
+                {
+                    return Err(EmberLabError::InvalidTransition {
+                        job_id: job_id.into(),
+                        detail: "minimal-slice producer path is not a basename".into(),
+                    });
+                }
+                Ok(phase_dir.join(name))
+            };
+            let hash_named = |name: &str| -> Result<String> { hash_file(&child_file(name)?) };
+            match phase {
+                Phase::DataVerify => {
+                    if kind != "data_verify_completed"
+                        || object.get("record_count").and_then(Value::as_u64) != Some(3)
+                        || object.get("subset_records").and_then(Value::as_u64) != Some(3)
+                    {
+                        return Err(EmberLabError::InvalidTransition {
                             job_id: job_id.into(),
-                            detail: "checkpoint phase has no completed train operation".into(),
-                        }
-                    })?;
-                    json!({
-                        "kind": "daemon_checkpoint_marker_created",
-                        "prior_phase_sha256": prior_sha256,
-                    })
+                            detail: "data verify did not prove three subset records".into(),
+                        });
+                    }
+                    let name = object
+                        .get("input_file")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "data verify input file is absent".into(),
+                        })?;
+                    let actual = hash_named(name)?;
+                    if object.get("input_sha256").and_then(Value::as_str) != Some(actual.as_str())
+                        || fs::read(child_file(name)?)?
+                            .split(|byte| *byte == b'\n')
+                            .filter(|line| !line.is_empty())
+                            .count()
+                            != 3
+                    {
+                        return Err(EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "data verify input bytes are not bound".into(),
+                        });
+                    }
+                }
+                Phase::Train => {
+                    if kind != "train_steps_completed"
+                        || object
+                            .get("train_steps")
+                            .and_then(Value::as_u64)
+                            .unwrap_or(0)
+                            < 3
+                        || object
+                            .get("update_count")
+                            .and_then(Value::as_u64)
+                            .unwrap_or(0)
+                            < 3
+                    {
+                        return Err(EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "train did not prove nonzero update steps".into(),
+                        });
+                    }
+                    let name = object
+                        .get("optimizer_state_file")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "optimizer state is absent".into(),
+                        })?;
+                    let actual = hash_named(name)?;
+                    if object.get("optimizer_state_sha256").and_then(Value::as_str)
+                        != Some(actual.as_str())
+                    {
+                        return Err(EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "optimizer state bytes are not bound".into(),
+                        });
+                    }
+                }
+                Phase::Checkpoint => {
+                    if kind != "checkpoint_written"
+                        || object.get("final_checkpoint") != Some(&Value::Bool(true))
+                    {
+                        return Err(EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "final checkpoint evidence is absent".into(),
+                        });
+                    }
+                    let name = object
+                        .get("checkpoint_file")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "checkpoint bytes are absent".into(),
+                        })?;
+                    let actual = hash_named(name)?;
+                    if object.get("checkpoint_sha256").and_then(Value::as_str)
+                        != Some(actual.as_str())
+                        || object.get("source_optimizer_state_sha256")
+                            != operations
+                                .get(&Phase::Train)
+                                .and_then(|value| value.get("optimizer_state_sha256"))
+                    {
+                        return Err(EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "checkpoint is not bound to train state".into(),
+                        });
+                    }
                 }
                 Phase::Publish => {
-                    let (_, prior_sha256) = prior_artifact.as_ref().ok_or_else(|| {
-                        EmberLabError::InvalidTransition {
+                    if kind != "checkpoint_published" {
+                        return Err(EmberLabError::InvalidTransition {
                             job_id: job_id.into(),
-                            detail: "publish phase has no completed checkpoint operation".into(),
-                        }
-                    })?;
-                    json!({
-                        "kind": "daemon_artifact_published",
-                        "source_checkpoint_sha256": prior_sha256,
-                    })
+                            detail: "checkpoint publish evidence is absent".into(),
+                        });
+                    }
+                    let name = object
+                        .get("published_file")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "published checkpoint is absent".into(),
+                        })?;
+                    let actual = hash_named(name)?;
+                    if object
+                        .get("published_checkpoint_sha256")
+                        .and_then(Value::as_str)
+                        != Some(actual.as_str())
+                        || object.get("source_checkpoint_sha256")
+                            != operations
+                                .get(&Phase::Checkpoint)
+                                .and_then(|value| value.get("checkpoint_sha256"))
+                    {
+                        return Err(EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "published checkpoint is not bound".into(),
+                        });
+                    }
                 }
                 Phase::SelectableCheckpoint => {
-                    let (prior_path, prior_sha256) = prior_artifact.as_ref().ok_or_else(|| {
-                        EmberLabError::InvalidTransition {
+                    if kind != "selectable_checkpoint_verified" {
+                        return Err(EmberLabError::InvalidTransition {
                             job_id: job_id.into(),
-                            detail: "selectable checkpoint has no published artifact".into(),
-                        }
-                    })?;
-                    let actual = hash_file(prior_path)?;
-                    if actual != *prior_sha256 {
-                        return Err(EmberLabError::DispatchBindingMismatch {
-                            path: prior_path.clone(),
-                            expected: prior_sha256.clone(),
-                            actual,
+                            detail: "selectable checkpoint evidence is absent".into(),
                         });
                     }
-                    json!({
-                        "kind": "selectable_checkpoint_verified",
-                        "published_artifact_sha256": prior_sha256,
-                    })
+                    let name = object
+                        .get("selected_file")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "selected checkpoint is absent".into(),
+                        })?;
+                    let actual = hash_named(name)?;
+                    if object
+                        .get("selected_checkpoint_sha256")
+                        .and_then(Value::as_str)
+                        != Some(actual.as_str())
+                        || object.get("selected_checkpoint_sha256")
+                            != operations
+                                .get(&Phase::Publish)
+                                .and_then(|value| value.get("published_checkpoint_sha256"))
+                    {
+                        return Err(EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "selected checkpoint is not bound".into(),
+                        });
+                    }
                 }
                 Phase::Restore => {
-                    let (prior_path, prior_sha256) = prior_artifact.as_ref().ok_or_else(|| {
-                        EmberLabError::InvalidTransition {
+                    if kind != "checkpoint_restored"
+                        || object.get("restore_verified") != Some(&Value::Bool(true))
+                    {
+                        return Err(EmberLabError::InvalidTransition {
                             job_id: job_id.into(),
-                            detail: "restore phase has no selectable checkpoint".into(),
-                        }
-                    })?;
-                    let actual = hash_file(prior_path)?;
-                    if actual != *prior_sha256 {
-                        return Err(EmberLabError::DispatchBindingMismatch {
-                            path: prior_path.clone(),
-                            expected: prior_sha256.clone(),
-                            actual,
+                            detail: "checkpoint restore evidence is absent".into(),
                         });
                     }
-                    json!({
-                        "kind": "checkpoint_restored_and_reverified",
-                        "selectable_checkpoint_sha256": prior_sha256,
-                    })
+                    let name = object
+                        .get("restored_file")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "restored checkpoint is absent".into(),
+                        })?;
+                    let actual = hash_named(name)?;
+                    if object
+                        .get("restored_checkpoint_sha256")
+                        .and_then(Value::as_str)
+                        != Some(actual.as_str())
+                        || object.get("restored_checkpoint_sha256")
+                            != operations
+                                .get(&Phase::SelectableCheckpoint)
+                                .and_then(|value| value.get("selected_checkpoint_sha256"))
+                    {
+                        return Err(EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "restored checkpoint is not bound".into(),
+                        });
+                    }
                 }
                 Phase::Admission => unreachable!("admission is owned by dispatch_manifest"),
-            };
-            // The identity and the daemon's durable job-start event are the
-            // production operation fence. A caller-authored JSON file cannot
-            // satisfy either check.
+            }
             self.verify_identity(job_id)?;
             if !self
                 .job_event_kinds(job_id)?
@@ -3010,28 +3235,7 @@ impl Daemon {
                 });
             }
             let observed_at_ms = now_ms();
-            let operation_sha256 = hash_bytes(&serde_json::to_vec(&operation)?);
             self.record_phase_operation(job_id, phase, &operation_sha256, observed_at_ms, &row)?;
-            let bytes = serde_json::to_vec(&json!({
-                "schema": "ember-lab-phase-evidence-v1",
-                "producer": "ember-lab-daemon",
-                "result": "COMPLETED",
-                "job_id": job_id,
-                "phase": phase.as_str(),
-                "operation_sha256": operation_sha256,
-                "operation": format!("ember-lab-daemon-phase-owner:{}", phase.as_str()),
-                "operation_evidence": operation,
-                "observed_at_ms": observed_at_ms,
-                "lease_epoch": row.lease_epoch,
-                "pid": row.pid,
-                "identity_verified": true,
-                "job_started_event": true,
-            }))?;
-            let path = phase_dir.join(format!("{}.json", phase.as_str()));
-            let artifact = write_content_addressed_receipt(&phase_dir, &bytes)?;
-            if path != artifact.path {
-                atomic_create(&path, &bytes)?;
-            }
             let evidence_sha256 = hash_bytes(&bytes);
             self.record_phase_event(
                 job_id,
@@ -3042,16 +3246,25 @@ impl Daemon {
                 observed_at_ms,
                 &row,
             )?;
+            operations.insert(phase, operation);
             produced.push(PhaseEvidence {
                 phase,
                 path,
                 sha256: evidence_sha256,
             });
-            prior_artifact = produced
-                .last()
-                .map(|evidence| (evidence.path.clone(), evidence.sha256.clone()));
         }
         Ok(produced)
+    }
+
+    /// Consume the six current Ember Lab phase outputs for a live dispatched job.
+    /// The child producer performs each operation; this method only records the
+    /// existing bytes through the daemon's fenced event authority.
+    pub fn execute_minimal_episode(
+        &self,
+        job_id: &str,
+        expected_whole_run_peak_bytes: u64,
+    ) -> Result<Vec<crate::rehearsal::PhaseEvidence>> {
+        return self.consume_minimal_slice(job_id, expected_whole_run_peak_bytes);
     }
 
     /// Persist one phase event through the daemon's existing job/lease
@@ -3241,8 +3454,9 @@ impl Daemon {
                     Err(_) => continue,
                 };
                 if evidence.get("schema")
-                    != Some(&Value::String("ember-lab-phase-evidence-v1".into()))
-                    || evidence.get("producer") != Some(&Value::String("ember-lab-daemon".into()))
+                    != Some(&Value::String("ember-lab-phase-producer-v1".into()))
+                    || evidence.get("producer")
+                        != Some(&Value::String("ember-lab-minimal-slice-producer".into()))
                     || evidence.get("result") != Some(&Value::String("COMPLETED".into()))
                     || evidence.get("job_id") != Some(&Value::String(job_id.into()))
                     || evidence.get("phase") != Some(&Value::String(phase.as_str().into()))

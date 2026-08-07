@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 fn usage() -> &'static str {
-    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
+    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
 }
 
 enum Command {
@@ -27,6 +27,10 @@ enum Command {
     Dispatch {
         pipe: String,
         manifest: PathBuf,
+    },
+    ProduceMinimalSlice {
+        root: PathBuf,
+        job_id: String,
     },
     VerifyTraining {
         root: PathBuf,
@@ -148,6 +152,29 @@ fn parse_args() -> Result<Command, String> {
         });
     }
 
+    if command == "produce-minimal-slice" {
+        let mut root = None;
+        let mut job_id = None;
+        while let Some(flag) = args.next() {
+            let value = args
+                .next()
+                .ok_or_else(|| format!("missing value for {flag}\n{}", usage()))?;
+            match flag.as_str() {
+                "--root" => root = Some(PathBuf::from(value)),
+                "--job-id" => job_id = Some(value),
+                _ => return Err(format!("unknown argument {flag}\n{}", usage())),
+            }
+        }
+        return Ok(Command::ProduceMinimalSlice {
+            root: root
+                .or_else(|| std::env::var_os("EMBER_LAB_PHASE_OUTPUT_ROOT").map(PathBuf::from))
+                .ok_or_else(|| {
+                    format!("missing --root or producer output environment\n{}", usage())
+                })?,
+            job_id: job_id.ok_or_else(|| format!("missing --job-id\n{}", usage()))?,
+        });
+    }
+
     if command == "runbook" {
         let flag = args
             .next()
@@ -264,6 +291,19 @@ fn run_rehearsal(
         )
         .into());
     }
+    if dispatch
+        .env
+        .get("EMBER_LAB_MINIMAL_SLICE")
+        .map(String::as_str)
+        != Some("1")
+        || dispatch.env.get("EMBER_LAB_MINIMAL_SLICE_JOB_ID") != Some(&manifest.dispatch_id)
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "dispatch authority does not bind the current minimal-slice producer/job",
+        )
+        .into());
+    }
     if manifest.contract_sha256 != rehearsal::current_contract_sha256() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
@@ -280,10 +320,13 @@ fn run_rehearsal(
     }
     let daemon = Daemon::open(db_path)?;
     let dispatch_outcome = daemon.dispatch_manifest(dispatch_manifest_path)?;
-    // The daemon executes the current production phase owners and persists
-    // their fenced evidence.  The rehearsal adapter only consumes the
-    // resulting records below; it never creates phase evidence itself.
-    daemon.execute_minimal_episode(&manifest.dispatch_id)?;
+    // The dispatched child emits the current minimal-slice operation outputs.
+    // Ember Lab only reopens, validates, hashes, and fences those bytes below;
+    // the rehearsal adapter never creates phase evidence.
+    daemon.execute_minimal_episode(
+        &manifest.dispatch_id,
+        manifest.measurements.whole_run_peak_bytes,
+    )?;
     let phase_evidence = match daemon.load_authorized_phase_evidence(&manifest.dispatch_id) {
         Ok(evidence) => evidence,
         Err(error) => {
@@ -340,8 +383,18 @@ fn phase_evidence_shape_authorized(bytes: &[u8], job_id: &str, phase: Phase) -> 
     let Ok(value) = serde_json::from_slice::<Value>(bytes) else {
         return false;
     };
-    value.get("schema") == Some(&Value::String("ember-lab-phase-evidence-v1".into()))
-        && value.get("producer") == Some(&Value::String("ember-lab-daemon".into()))
+    let Some(operation) = value.get("operation") else {
+        return false;
+    };
+    let Some(operation_sha256) = value.get("operation_sha256").and_then(Value::as_str) else {
+        return false;
+    };
+    let Ok(operation_bytes) = serde_json::to_vec(operation) else {
+        return false;
+    };
+    format!("{:x}", Sha256::digest(operation_bytes)) == operation_sha256
+        && value.get("schema") == Some(&Value::String("ember-lab-phase-producer-v1".into()))
+        && value.get("producer") == Some(&Value::String("ember-lab-minimal-slice-producer".into()))
         && value.get("result") == Some(&Value::String("COMPLETED".into()))
         && value.get("job_id") == Some(&Value::String(job_id.into()))
         && value.get("phase") == Some(&Value::String(phase.as_str().into()))
@@ -399,6 +452,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         Command::Dispatch { pipe, manifest } => {
             println!("{}", serde_json::to_string(&dispatch(&pipe, &manifest)?)?);
+        }
+        Command::ProduceMinimalSlice { root, job_id } => {
+            rehearsal::produce_minimal_slice(&root, &job_id)?;
         }
         Command::VerifyTraining {
             root,
@@ -468,8 +524,26 @@ mod tests {
             "dispatch-1",
             Phase::Train
         ));
+        let operation = json!({
+            "kind": "train_steps_completed",
+            "train_steps": 3,
+            "update_count": 3,
+        });
+        let operation_sha256 = format!(
+            "{:x}",
+            Sha256::digest(serde_json::to_vec(&operation).unwrap())
+        );
+        let current = json!({
+            "schema": "ember-lab-phase-producer-v1",
+            "producer": "ember-lab-minimal-slice-producer",
+            "result": "COMPLETED",
+            "job_id": "dispatch-1",
+            "phase": "train",
+            "operation_sha256": operation_sha256,
+            "operation": operation,
+        });
         assert!(phase_evidence_shape_authorized(
-            br#"{"schema":"ember-lab-phase-evidence-v1","producer":"ember-lab-daemon","result":"COMPLETED","job_id":"dispatch-1","phase":"train"}"#,
+            &serde_json::to_vec(&current).unwrap(),
             "dispatch-1",
             Phase::Train
         ));
