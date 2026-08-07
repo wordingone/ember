@@ -1,5 +1,7 @@
 <!-- goal_id: EMBER-02 -->
 <!-- workstream_id: EMBER-02A -->
+<!-- issue_id: 211 -->
+<!-- milestone: EMBER-03 -->
 <!-- next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember -->
 # Compiled goal-session live acceptance
 

@@ -5,9 +5,14 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createHash } from "node:crypto";
-import { validateGoalLiveFrameCapture } from "./services/goal-live-session-frames.ts";
+import {
+  GOAL_LIVE_FRAME_ENCODING,
+  validateGoalLiveFrameCapture,
+  validateGoalLiveFrameCaptures,
+} from "./services/goal-live-session-frames.ts";
 
 const SRC_DIR = resolve(import.meta.dir);
+const REVIEWED_SOURCE_COMMIT = "c636fe87b3828cf21a2759abc99b597fe6480220";
 
 function text(value: Uint8Array | undefined): string {
   return new TextDecoder().decode(value ?? new Uint8Array());
@@ -20,7 +25,7 @@ describe("compiled goal-session live path", () => {
     const executable = join(tempRoot, "ember-goal-live.exe");
     try {
       const build = Bun.spawnSync(
-        ["bun", "build", "./entrypoints/main.ts", "--compile", "--outfile", executable, "--define", "globalThis.__EMBER_BUILD_COMMIT__=\\\"251962ed675dcb88d8ae4b3b34ecb593efb34bcf\\\""],
+        ["bun", "build", "./entrypoints/main.ts", "--compile", "--outfile", executable, "--define", `globalThis.__EMBER_BUILD_COMMIT__="${REVIEWED_SOURCE_COMMIT}"`],
         { cwd: SRC_DIR, stdout: "pipe", stderr: "pipe" },
       );
       expect(build.exitCode, text(build.stderr)).toBe(0);
@@ -34,12 +39,13 @@ describe("compiled goal-session live path", () => {
       expect(run.exitCode, text(run.stderr)).toBe(0);
       const receipt = JSON.parse(stdout.split(/\r?\n/).at(-1) ?? "null") as Record<string, any>;
       const expectedReceipt = JSON.parse(readFileSync(join(SRC_DIR, "fixtures", "goal-live-session-receipt-v1.json"), "utf8"));
-      for (const [index, frame] of expectedReceipt.frame_captures.entries()) {
-        frame.source_binding.executable_sha256 = receipt.frame_captures[index].source_binding.executable_sha256;
-      }
       expect(receipt).toEqual(expectedReceipt);
       expect(receipt.schema_version).toBe("ember-goal-live-session-receipt-v1");
       expect(receipt.result).toBe("MEASURED");
+      expect(receipt.source_commit).toBe(REVIEWED_SOURCE_COMMIT);
+      expect(receipt.build_commit).toBe(REVIEWED_SOURCE_COMMIT);
+      expect(receipt.issue_id).toBe("211");
+      expect(receipt.milestone).toBe("EMBER-03");
       expect(receipt.model).toBe("deterministic-local-stub-v1");
       expect(receipt.zero_user_input_after_boot).toBe(true);
       expect(receipt.autonomous_continuations).toBeGreaterThanOrEqual(3);
@@ -59,6 +65,7 @@ describe("compiled goal-session live path", () => {
         receipt_event: "continuation_skipped",
       });
       expect(receipt.frame_captures).toHaveLength(3);
+      expect(receipt.frame_captures.every((frame: any) => frame.frame_encoding === GOAL_LIVE_FRAME_ENCODING)).toBe(true);
       expect(receipt.frame_captures.map((frame: any) => frame.phase)).toEqual([
         "preemption",
         "continuations",
@@ -125,7 +132,7 @@ describe("compiled goal-session live path", () => {
       const build = Bun.spawnSync(
         [
           "bun", "build", "./entrypoints/main.ts", "--compile", "--outfile", executable,
-          "--define", "globalThis.__EMBER_BUILD_COMMIT__=\\\"251962ed675dcb88d8ae4b3b34ecb593efb34bcf\\\"",
+          "--define", `globalThis.__EMBER_BUILD_COMMIT__="${REVIEWED_SOURCE_COMMIT}"`,
         ],
         { cwd: SRC_DIR, stdout: "pipe", stderr: "pipe" },
       );
@@ -141,6 +148,10 @@ describe("compiled goal-session live path", () => {
       expect(run.exitCode, text(run.stderr)).toBe(0);
       const receipt = JSON.parse(stdout.split(/\r?\n/).at(-1) ?? "null") as Record<string, any>;
       expect(receipt.goal_id).toBe("EMBER-02");
+      expect(receipt.source_commit).toBe(REVIEWED_SOURCE_COMMIT);
+      expect(receipt.build_commit).toBe(REVIEWED_SOURCE_COMMIT);
+      expect(receipt.issue_id).toBe("211");
+      expect(receipt.milestone).toBe("EMBER-03");
       expect(receipt.workstream_id).toBe("EMBER-02A");
       expect(receipt.session_path).toBe("normal-compiled-operator-session");
       expect(receipt.input_observation).toMatchObject({
@@ -149,6 +160,7 @@ describe("compiled goal-session live path", () => {
         events: [],
       });
       expect(receipt.frame_captures).toHaveLength(3);
+      expect(receipt.frame_captures.every((frame: any) => frame.frame_encoding === GOAL_LIVE_FRAME_ENCODING)).toBe(true);
       expect(receipt.frame_captures.every((frame: any) =>
         frame.renderer === "ember-ink-reconciler" &&
         frame.frame_bytes_base64.length > 0 &&
