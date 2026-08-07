@@ -149,6 +149,7 @@ const FAST_PATH_SUBCMDS = new Set<string>([
   "reply",
   "environment-runner",
   "self-hosted-runner",
+  "goal-session-smoke",
   "gh",
   "liveness",
 ]);
@@ -609,7 +610,7 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
       `\n` +
       `Subcommands:\n` +
       `  remote-control (rc), sync, bridge, daemon, ps, logs, attach, kill,\n` +
-      `  new, list, reply, environment-runner, self-hosted-runner, gh doctor,\n` +
+      `  new, list, reply, environment-runner, self-hosted-runner, goal-session-smoke, gh doctor,\n` +
       `  liveness install [--executable C:\\path\\to\\ember.exe]\n` +
       `\n` +
       `Environment:\n` +
@@ -719,6 +720,23 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
     }
     process.stderr.write(`gh: unknown subcommand "${sub ?? ""}" (supported: doctor)\n`);
     process.exit(1);
+    return true;
+  }
+
+  if (first === "goal-session-smoke") {
+    const { runGoalLiveSession } = await import("../services/goal-live-session.ts");
+    try {
+      const receipt = await runGoalLiveSession();
+      process.stdout.write(JSON.stringify(receipt) + "\n");
+      process.exit(0);
+    } catch (error) {
+      process.stderr.write(
+        "goal-session-smoke failed: " +
+          (error instanceof Error ? error.message : String(error)) +
+          "\n",
+      );
+      process.exit(1);
+    }
     return true;
   }
 

@@ -1,0 +1,38 @@
+{
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "schema_version": "ember-goal-live-session-receipt-v1",
+  "result": "MEASURED",
+  "model": "deterministic-local-stub-v1",
+  "zero_user_input_after_boot": true,
+  "autonomous_continuations": 3,
+  "continuation_events": 3,
+  "premature_complete_refusal": {
+    "tool_validation": true,
+    "store_boundary": true
+  },
+  "complete_transition": {
+    "status": "Complete",
+    "audit_bound": true,
+    "requirement_ids": ["continuations", "preemption"]
+  },
+  "user_preemption": {
+    "outcome": "queued_user_input",
+    "start_turn_calls": 0,
+    "receipt_event": "continuation_skipped"
+  },
+  "events": [
+    {"event": "created", "goalId": "goal-live-session-v1", "detail": {"objective": "prove the compiled goal organ is live", "tokenBudget": 100}},
+    {"event": "usage_recorded", "goalId": "goal-live-session-v1", "detail": {"usage": {"tokensUsed": 1, "elapsedMs": 1}}},
+    {"event": "continuation_fired", "goalId": "goal-live-session-v1", "detail": {"kind": "continue"}},
+    {"event": "usage_recorded", "goalId": "goal-live-session-v1", "detail": {"usage": {"tokensUsed": 2, "elapsedMs": 2}}},
+    {"event": "continuation_fired", "goalId": "goal-live-session-v1", "detail": {"kind": "continue"}},
+    {"event": "usage_recorded", "goalId": "goal-live-session-v1", "detail": {"usage": {"tokensUsed": 3, "elapsedMs": 3}}},
+    {"event": "status_changed", "goalId": "goal-live-session-v1", "detail": {"from": "Active", "to": "Complete", "completionAudit": {"requirements": [{"id": "continuations", "evidence": "three autonomous continuation events observed"}, {"id": "preemption", "evidence": "queued user input suppressed continuation"}]} }},
+    {"event": "continuation_fired", "goalId": "goal-live-session-v1", "detail": {"kind": "continue"}},
+    {"event": "continuation_skipped", "goalId": "goal-live-session-v1", "detail": {"reason": "goal_not_active"}},
+    {"event": "created", "goalId": "goal-live-preemption-v1", "detail": {"objective": "queued input wins", "tokenBudget": 10}},
+    {"event": "continuation_skipped", "goalId": "goal-live-preemption-v1", "detail": {"reason": "queued_user_input"}}
+  ]
+}
