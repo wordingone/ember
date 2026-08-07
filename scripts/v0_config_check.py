@@ -91,12 +91,32 @@ def _parameter_accounting_violations(cfg):
     return v
 
 
-def parameter_accounting(cfg):
-    """Return the validated (base, MTP auxiliary, realized) parameter split."""
+def parameter_accounting(cfg, live_manifest=None):
+    """Return the split, optionally bound to a validated live manifest."""
     violations = _parameter_accounting_violations(cfg)
     if violations:
         raise ValueError("; ".join(violations))
     accounting = cfg["model"]["parameter_accounting"]
+    if live_manifest is not None:
+        try:
+            from mtp_parameter_manifest import validate_parameter_manifest
+            validate_parameter_manifest(live_manifest, cfg)
+        except Exception as exc:  # noqa: BLE001
+            raise ValueError(f"live parameter manifest invalid: {exc}") from exc
+        live = live_manifest["parameter_accounting"]
+        declared = (
+            accounting["base_excluding_mtp"],
+            accounting["mtp_aux"],
+            accounting["realized"],
+        )
+        observed = (
+            live["base_excluding_mtp"], live["mtp_aux"], live["realized"]
+        )
+        if observed != declared:
+            raise ValueError(
+                "live parameter manifest accounting mismatch: "
+                f"observed={observed} declared={declared}"
+            )
     return (
         accounting["base_excluding_mtp"],
         accounting["mtp_aux"],

@@ -384,12 +384,36 @@ def g_shards_mm(
                      f"tokenizer vocab={tok_vocab}=={EXPECTED_VOCAB}")
 
 
-def g_config():
+def _load_parameter_manifest(path):
+    """Load and validate a live MTP manifest before any launch gate decision."""
+    if not path:
+        return None, None
+    try:
+        with open(path, encoding="utf-8") as f:
+            manifest = json.load(f)
+        from mtp_parameter_manifest import validate_parameter_manifest
+        validate_parameter_manifest(manifest)
+        return manifest, None
+    except Exception as exc:  # noqa: BLE001
+        return None, f"parameter manifest unreadable or invalid: {exc}"
+
+
+def g_config(parameter_manifest=None, parameter_manifest_error=None):
     cfg = json.load(open(CONFIG, encoding="utf-8"))
+    if parameter_manifest_error:
+        return "BLOCKED", parameter_manifest_error
+    if parameter_manifest is not None:
+        try:
+            v0_config_check.parameter_accounting(cfg, live_manifest=parameter_manifest)
+        except ValueError as exc:
+            return "BLOCKED", f"live parameter manifest binding: {exc}"
     v = v0_config_check.check(cfg, launch=True)
     if v:
         return "BLOCKED", f"v0_config_check launch violations: {v}"
-    return "GREEN", "V0_CONFIG_GREEN (launch mode)"
+    detail = "V0_CONFIG_GREEN (launch mode)"
+    if parameter_manifest is not None:
+        detail += f"; parameter_manifest_sha256={parameter_manifest['manifest_sha256']}"
+    return "GREEN", detail
 
 
 def g_governor():
@@ -704,7 +728,8 @@ def gate(launch_date, multimodal_config_path=None,
          mm_manifest_path=None, mm_tokenizer_path=None,
          mm_holdout_size=None, mm_holdout_manifest_path=None,
          efficiency_receipt_path=None, requested_run=None,
-         shard_dir_override=None):
+         shard_dir_override=None, parameter_manifest_path=None,
+         parameter_manifest=None, parameter_manifest_error=None):
     """Returns [(row, status, detail), ...] in table order.
 
     multimodal_config_path: if provided, G-efficiency binds against this config's SHA
@@ -724,6 +749,10 @@ def gate(launch_date, multimodal_config_path=None,
     (default, every existing caller) preserves today's byte-identical resolution.
     Ignored on the G-shards-mm path (mm manifests carry their own paths already).
     """
+    if parameter_manifest is None and parameter_manifest_path:
+        parameter_manifest, parameter_manifest_error = _load_parameter_manifest(
+            parameter_manifest_path
+        )
     out = []
     for name in ROWS:
         if name == "G-corpus":
@@ -741,7 +770,10 @@ def gate(launch_date, multimodal_config_path=None,
             else:
                 st, dt = g_shards(shard_dir_override=shard_dir_override)
         elif name == "G-config":
-            st, dt = g_config()
+            st, dt = g_config(
+                parameter_manifest=parameter_manifest,
+                parameter_manifest_error=parameter_manifest_error,
+            )
         elif name == "G-governor":
             st, dt = g_governor()
         elif name == "G-world":
@@ -764,7 +796,8 @@ def _utc_ts():
         "%Y%m%dT%H%M%SZ")
 
 
-def emit(launch_date, rows, output_dir=None, provenance=None):
+def emit(launch_date, rows, output_dir=None, provenance=None,
+         parameter_manifest=None):
     ts = _utc_ts()
     blocked = [r[0] for r in rows if r[1] != "GREEN"]
     receipt = {
@@ -788,6 +821,15 @@ def emit(launch_date, rows, output_dir=None, provenance=None):
         "sha_convention": SHA_CONVENTION,
         "no_gpu": True,
     }
+    if parameter_manifest is not None:
+        receipt["parameter_manifest"] = {
+            "schema": parameter_manifest["schema"],
+            "sha256": parameter_manifest["manifest_sha256"],
+            "path": None,
+        }
+        receipt["parameter_accounting"] = dict(
+            parameter_manifest["parameter_accounting"]
+        )
     # optional dated provenance section (#230-class events: a re-freeze that
     # re-anchors pins to a NEW baseline rather than reconstructing a prior
     # one). Additive-only; absent for every ordinary emission.
@@ -1064,6 +1106,8 @@ def main():
                     help="explicit frozen holdout manifest path")
     ap.add_argument("--efficiency-receipt", default=None,
                     help="explicit launch-efficiency receipt path")
+    ap.add_argument("--parameter-manifest", default=None,
+                    help="live MTP unique-Parameter manifest; required to bind #688")
     ap.add_argument("--shard-dir", default=None,
                     help="real packed uint16 shard dir (#682) — authoritative base "
                          "path for G-shards' declared shard files, taking precedence "
@@ -1079,6 +1123,9 @@ def main():
     else:
         ld = datetime.date.today()
     shard_dir_override = a.shard_dir or os.environ.get("EMBER_SHARD_DIR_OVERRIDE")
+    parameter_manifest, parameter_manifest_error = _load_parameter_manifest(
+        a.parameter_manifest
+    )
     rows = gate(
         ld,
         multimodal_config_path=a.multimodal_config,
@@ -1088,11 +1135,15 @@ def main():
         mm_holdout_manifest_path=a.mm_holdout_manifest,
         efficiency_receipt_path=a.efficiency_receipt,
         shard_dir_override=shard_dir_override,
+        parameter_manifest=parameter_manifest,
+        parameter_manifest_error=parameter_manifest_error,
     )
     _print(rows)
     blocked = [r[0] for r in rows if r[1] != "GREEN"]
     if a.emit:
-        path = emit(ld, rows, output_dir=a.emit_dir)
+        path = emit(
+            ld, rows, output_dir=a.emit_dir, parameter_manifest=parameter_manifest
+        )
         try:
             rel = os.path.relpath(path, NC)
         except ValueError:

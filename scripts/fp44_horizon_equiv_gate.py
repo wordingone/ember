@@ -50,6 +50,11 @@ loader is tolerant and falls back across key spellings):
 
 Emits a verdict receipt; selftest validates the decision logic on synthetic cases.
 """
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
+import argparse
 import glob
 import json
 import os
@@ -173,7 +178,7 @@ def _load_receipt():
     return chosen
 
 
-def score_receipt(r):
+def score_receipt(r, parameter_manifest=None):
     """Full receipt → verdict pipeline (loader + arm-pick + noise-floor + decide).
     Returns a dict with status SCORED / SCHEMA_MISMATCH. Pure (no I/O) so the
     selftest can exercise the whole path on synthetic receipts."""
@@ -216,18 +221,38 @@ def score_receipt(r):
     # Phase-1 noise floor was expected, that signals a schema/key mismatch.
     noise_floor_source = max(floor_candidates, key=floor_candidates.get)
     verdict, detail = decide(mt, at, noise_floor)
-    return {"status": "SCORED", "verdict": verdict, "detail": detail,
-            "noise_floor": noise_floor, "noise_floor_source": noise_floor_source,
-            "muon_traj": mt, "adamw_traj": at}
+    result = {"status": "SCORED", "verdict": verdict, "detail": detail,
+              "noise_floor": noise_floor, "noise_floor_source": noise_floor_source,
+              "muon_traj": mt, "adamw_traj": at}
+    if parameter_manifest is not None:
+        from mtp_parameter_manifest import bind_manifest_evidence
+        result = bind_manifest_evidence(result, parameter_manifest)
+    return result
 
 
-def analyze():
+def _load_parameter_manifest(path):
+    if not path:
+        return None
+    with open(path, encoding="utf-8") as f:
+        manifest = json.load(f)
+    from mtp_parameter_manifest import validate_parameter_manifest
+    validate_parameter_manifest(manifest)
+    return manifest
+
+
+def analyze(parameter_manifest_path=None):
     r = _load_receipt()
     if r is None:
         print(json.dumps({"verdict": "NO_RECEIPT_YET",
                           "note": "fp-44 horizon-equiv receipt not on disk; gate frozen + selftested"}))
         sys.exit(2)
-    s = score_receipt(r)
+    try:
+        parameter_manifest = _load_parameter_manifest(parameter_manifest_path)
+    except Exception as exc:  # noqa: BLE001
+        print(json.dumps({"status": "SCHEMA_MISMATCH",
+                          "parameter_manifest_error": str(exc)}))
+        sys.exit(2)
+    s = score_receipt(r, parameter_manifest=parameter_manifest)
     if s["status"] != "SCORED":
         print(json.dumps(s))
         sys.exit(2)
@@ -248,6 +273,9 @@ def analyze():
             "HOLD_INCONCLUSIVE": "longer horizon / re-seed before any commit",
         }[verdict],
     }
+    if "parameter_manifest" in s:
+        receipt["parameter_manifest"] = s["parameter_manifest"]
+        receipt["parameter_accounting"] = s["parameter_accounting"]
     out = f"{RECEIPTS}/fp44-horizon-equiv-gate-{ts}.json"
     checked_write(out, receipt)
     print(json.dumps({"verdict": verdict, "detail": detail, "noise_floor": noise_floor}, indent=2))
@@ -386,4 +414,8 @@ def selftest():
 if __name__ == "__main__":
     if "--selftest" in sys.argv:
         sys.exit(0 if selftest() else 1)
-    analyze()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--parameter-manifest", default=None,
+                    help="validated live MTP unique-Parameter manifest (#688)")
+    args = ap.parse_args()
+    analyze(args.parameter_manifest)
