@@ -4,16 +4,20 @@
 
 use ember_lab::rehearsal::{
     episode, generate_runbook, production_strict_gate_census, validate_strict_gate_census,
-    AdmissionBounds, DeathClass, GateBinding, Measurement, MeasurementSource, Phase, PhaseOutcome,
-    RefusalCode, RehearsalManifest, RehearsalRunner, RehearsalStatus, StrictGate, StrictGateCensus,
+    AdmissionBounds, DeathClass, GateBinding, Measurement, MeasurementSource, Phase, PhaseEvidence,
+    PhaseOutcome, RefusalCode, RehearsalManifest, RehearsalRunner, RehearsalStatus, StrictGate,
+    StrictGateCensus,
 };
+use sha2::{Digest, Sha256};
+use std::fs;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 struct Runner {
     fail: Option<Phase>,
 }
 
 impl RehearsalRunner for Runner {
-    fn run(&self, phase: Phase) -> PhaseOutcome {
+    fn run(&mut self, phase: Phase) -> PhaseOutcome {
         if self.fail == Some(phase) {
             PhaseOutcome::Failed("fixture refusal".into())
         } else {
@@ -23,9 +27,35 @@ impl RehearsalRunner for Runner {
 }
 
 fn manifest() -> RehearsalManifest {
+    let root = std::env::temp_dir().join(format!(
+        "ember-lab-rehearsal-evidence-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::create_dir_all(&root).unwrap();
+    let measurement_path = root.join("measurement.json");
+    let measurement_bytes = br#"{"whole_run_peak_bytes":512}"#;
+    fs::write(&measurement_path, measurement_bytes).unwrap();
+    let phase_evidence = Phase::ordered()
+        .iter()
+        .map(|phase| {
+            let path = root.join(format!("{}.json", phase.as_str()));
+            let bytes = format!("{{\"phase\":\"{}\"}}", phase.as_str()).into_bytes();
+            fs::write(&path, &bytes).unwrap();
+            PhaseEvidence {
+                phase: *phase,
+                path,
+                sha256: format!("{:x}", Sha256::digest(bytes)),
+            }
+        })
+        .collect::<Vec<_>>();
     RehearsalManifest {
         schema_version: "ember-lab-rehearsal-v1".into(),
         dispatch_id: "fixture-dispatch".into(),
+        source_commit: "a".repeat(40),
+        contract_sha256: ember_lab::rehearsal::current_contract_sha256(),
         bounds: AdmissionBounds {
             minimum_memory_bytes: 100,
             minimum_storage_free_bytes: 200,
@@ -37,14 +67,21 @@ fn manifest() -> RehearsalManifest {
             available_memory_bytes: 1_000,
             storage_free_bytes: 2_000,
             measured_duration_ms: 50,
-            evidence_sha256: "a".repeat(64),
+            whole_run_peak_bytes: 512,
+            evidence_path: measurement_path,
+            evidence_sha256: format!("{:x}", Sha256::digest(measurement_bytes)),
         },
+        phase_evidence,
     }
 }
 
 #[test]
 fn measured_values_admit_and_rehearse_every_minimal_slice_phase() {
-    let result = episode("fixture-capability", &manifest(), &Runner { fail: None });
+    let result = episode(
+        "fixture-capability",
+        &manifest(),
+        &mut Runner { fail: None },
+    );
     assert_eq!(result.status, RehearsalStatus::Completed);
     assert_eq!(result.receipt.phases, Phase::ordered());
     assert!(result.receipt.next_action.is_none());
@@ -55,7 +92,7 @@ fn phase_refusal_is_self_diagnosing_and_stops_before_later_phases() {
     let result = episode(
         "fixture-capability",
         &manifest(),
-        &Runner {
+        &mut Runner {
             fail: Some(Phase::Checkpoint),
         },
     );
@@ -64,7 +101,7 @@ fn phase_refusal_is_self_diagnosing_and_stops_before_later_phases() {
     assert_eq!(result.receipt.phase, Some(Phase::Checkpoint));
     assert_eq!(
         result.receipt.next_action.as_deref(),
-        Some("repair_or_rehearse")
+        Some(RefusalCode::PhaseFailed.next_action())
     );
     assert_eq!(result.receipt.phases, Phase::ordered()[..4].to_vec());
 }
@@ -73,13 +110,33 @@ fn phase_refusal_is_self_diagnosing_and_stops_before_later_phases() {
 fn missing_or_estimated_measurement_refuses_before_runner() {
     let mut invalid = manifest();
     invalid.measurements.evidence_sha256.clear();
-    let result = episode("fixture-capability", &invalid, &Runner { fail: None });
+    let result = episode("fixture-capability", &invalid, &mut Runner { fail: None });
     assert_eq!(result.status, RehearsalStatus::Refused);
     assert_eq!(result.receipt.code, Some(RefusalCode::MissingMeasurement));
     assert_eq!(
         result.receipt.next_action.as_deref(),
-        Some("measure_then_retry")
+        Some(RefusalCode::MissingMeasurement.next_action())
     );
+    assert!(result.receipt.phases.is_empty());
+}
+
+#[test]
+fn phase_evidence_mutation_refuses_before_any_phase() {
+    let mut invalid = manifest();
+    fs::write(&invalid.phase_evidence[0].path, b"mutated").unwrap();
+    let result = episode("fixture-capability", &invalid, &mut Runner { fail: None });
+    assert_eq!(result.status, RehearsalStatus::Refused);
+    assert_eq!(result.receipt.code, Some(RefusalCode::MissingMeasurement));
+    assert!(result.receipt.phases.is_empty());
+}
+
+#[test]
+fn stale_contract_binding_refuses_before_any_phase() {
+    let mut invalid = manifest();
+    invalid.contract_sha256 = "c".repeat(64);
+    let result = episode("fixture-capability", &invalid, &mut Runner { fail: None });
+    assert_eq!(result.status, RehearsalStatus::Refused);
+    assert_eq!(result.receipt.code, Some(RefusalCode::StrictGateUnbound));
     assert!(result.receipt.phases.is_empty());
 }
 
@@ -98,7 +155,7 @@ fn every_measured_admission_bound_refuses_before_any_phase() {
             "duration" => invalid.measurements.measured_duration_ms = 301,
             _ => unreachable!(),
         }
-        let result = episode("fixture-capability", &invalid, &Runner { fail: None });
+        let result = episode("fixture-capability", &invalid, &mut Runner { fail: None });
         assert_eq!(result.receipt.code, Some(expected));
         assert!(result.receipt.phases.is_empty());
         assert!(result.receipt.next_action.is_some());

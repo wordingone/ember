@@ -5,7 +5,7 @@
 use ember_lab::rehearsal::{self, Phase, PhaseOutcome, RehearsalManifest, RehearsalRunner};
 use ember_lab::{
     ember_lab_source_hash, hash_file, rpc::serve_named_pipe, training_verify, Daemon,
-    MAX_DISPATCH_MANIFEST_BYTES,
+    DispatchManifest, DispatchOutcome, MAX_DISPATCH_MANIFEST_BYTES,
 };
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 fn usage() -> &'static str {
-    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
+    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
 }
 
 enum Command {
@@ -35,6 +35,8 @@ enum Command {
     },
     Rehearse {
         capability: String,
+        db: PathBuf,
+        dispatch_manifest: PathBuf,
         manifest: PathBuf,
         receipt: PathBuf,
     },
@@ -43,14 +45,59 @@ enum Command {
     },
 }
 
-struct CliRunner;
+struct CurrentAuthorityRunner {
+    daemon: Daemon,
+    dispatch_manifest: PathBuf,
+    dispatch: Option<DispatchOutcome>,
+    phase_evidence: Vec<rehearsal::PhaseEvidence>,
+}
 
-impl RehearsalRunner for CliRunner {
-    fn run(&self, _phase: Phase) -> PhaseOutcome {
-        // The CLI path is a deterministic rehearsal seam.  It proves the
-        // ordered authority/receipt contract without claiming a real training
-        // or capability result; a governed production runner supplies the
-        // concrete phase observations separately.
+impl RehearsalRunner for CurrentAuthorityRunner {
+    fn run(&mut self, phase: Phase) -> PhaseOutcome {
+        if phase == Phase::Admission {
+            return match self.daemon.dispatch_manifest(&self.dispatch_manifest) {
+                Ok(outcome) => {
+                    self.dispatch = Some(outcome);
+                    PhaseOutcome::Completed
+                }
+                Err(error) => PhaseOutcome::Failed(format!(
+                    "current Ember Lab dispatch admission refused: {error}"
+                )),
+            };
+        }
+        let Some(dispatch) = self.dispatch.as_ref() else {
+            return PhaseOutcome::Failed("current Ember Lab dispatch receipt is absent".into());
+        };
+        let Some(evidence) = self.phase_evidence.iter().find(|e| e.phase == phase) else {
+            return PhaseOutcome::Failed(format!(
+                "current Ember Lab phase evidence is absent for {}",
+                phase.as_str()
+            ));
+        };
+        let Ok(bytes) = std::fs::read(&evidence.path) else {
+            return PhaseOutcome::Failed(format!(
+                "current Ember Lab phase evidence is unreadable for {}",
+                phase.as_str()
+            ));
+        };
+        if format!("{:x}", Sha256::digest(&bytes)) != evidence.sha256 {
+            return PhaseOutcome::Failed(format!(
+                "current Ember Lab phase evidence changed for {}",
+                phase.as_str()
+            ));
+        }
+        let Ok(dispatch_receipt) = std::fs::read(&dispatch.receipt.path) else {
+            return PhaseOutcome::Failed("current Ember Lab dispatch receipt is unreadable".into());
+        };
+        let Ok(value) = serde_json::from_slice::<Value>(&dispatch_receipt) else {
+            return PhaseOutcome::Failed("current Ember Lab dispatch receipt is malformed".into());
+        };
+        if value.get("schema_version")
+            != Some(&Value::String("ember-lab-dispatch-preflight-v1".into()))
+            || value.get("result") != Some(&Value::String("PREFLIGHT_PASSED".into()))
+        {
+            return PhaseOutcome::Failed("current Ember Lab dispatch receipt is not green".into());
+        }
         PhaseOutcome::Completed
     }
 }
@@ -98,6 +145,8 @@ fn parse_args() -> Result<Command, String> {
 
     if command == "rehearse" || command == "episode" {
         let mut capability = "rehearsal".to_string();
+        let mut db = None;
+        let mut dispatch_manifest = None;
         let mut manifest = None;
         let mut receipt = None;
         while let Some(flag) = args.next() {
@@ -106,6 +155,8 @@ fn parse_args() -> Result<Command, String> {
                 .ok_or_else(|| format!("missing value for {flag}\n{}", usage()))?;
             match flag.as_str() {
                 "--capability" => capability = value,
+                "--db" => db = Some(PathBuf::from(value)),
+                "--dispatch-manifest" => dispatch_manifest = Some(PathBuf::from(value)),
                 "--manifest" => manifest = Some(PathBuf::from(value)),
                 "--receipt" => receipt = Some(PathBuf::from(value)),
                 _ => return Err(format!("unknown argument {flag}\n{}", usage())),
@@ -113,6 +164,13 @@ fn parse_args() -> Result<Command, String> {
         }
         return Ok(Command::Rehearse {
             capability,
+            db: db.ok_or_else(|| format!("missing --db dispatch authority\n{}", usage()))?,
+            dispatch_manifest: dispatch_manifest.ok_or_else(|| {
+                format!(
+                    "missing --dispatch-manifest dispatch authority\n{}",
+                    usage()
+                )
+            })?,
             manifest: manifest.ok_or_else(|| format!("missing --manifest\n{}", usage()))?,
             receipt: receipt.ok_or_else(|| format!("missing --receipt\n{}", usage()))?,
         });
@@ -169,15 +227,55 @@ fn run_verify_training(
 
 fn run_rehearsal(
     capability: &str,
+    db_path: &Path,
+    dispatch_manifest_path: &Path,
     manifest_path: &Path,
     receipt_path: &Path,
 ) -> Result<bool, Box<dyn std::error::Error>> {
     let manifest_bytes = std::fs::read(manifest_path)?;
     let manifest_sha256 = format!("{:x}", Sha256::digest(&manifest_bytes));
     let manifest: RehearsalManifest = serde_json::from_slice(&manifest_bytes)?;
-    let result = rehearsal::episode(capability, &manifest, &CliRunner);
-    let receipt = result.receipt.with_manifest_sha256(manifest_sha256);
-    rehearsal::write_receipt(receipt_path, &receipt).map_err(std::io::Error::other)?;
+    let dispatch_bytes = std::fs::read(dispatch_manifest_path)?;
+    let dispatch: DispatchManifest = serde_json::from_slice(&dispatch_bytes)?;
+    if dispatch.source_commit != manifest.source_commit || dispatch.job_id != manifest.dispatch_id {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "dispatch authority source commit does not match rehearsal manifest",
+        )
+        .into());
+    }
+    if manifest.contract_sha256 != rehearsal::current_contract_sha256() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "rehearsal manifest contract is not the current Ember Lab contract",
+        )
+        .into());
+    }
+    let mut runner = CurrentAuthorityRunner {
+        daemon: Daemon::open(db_path)?,
+        dispatch_manifest: dispatch_manifest_path.to_path_buf(),
+        dispatch: None,
+        phase_evidence: manifest.phase_evidence.clone(),
+    };
+    let result = rehearsal::episode(capability, &manifest, &mut runner);
+    let dispatch_outcome = runner.dispatch.take().ok_or_else(|| {
+        std::io::Error::other(
+            "current Ember Lab dispatch authority refused before producing an operational receipt",
+        )
+    })?;
+    let mut operational: Value =
+        serde_json::from_slice(&std::fs::read(&dispatch_outcome.receipt.path)?)?;
+    operational["rehearsal"] = serde_json::to_value(&result.receipt)?;
+    operational["rehearsal_manifest_sha256"] = Value::String(manifest_sha256);
+    let bytes = serde_json::to_vec_pretty(&operational)?;
+    let temp = dispatch_outcome
+        .receipt
+        .path
+        .with_extension("rehearsal.tmp");
+    std::fs::write(&temp, &bytes)?;
+    std::fs::rename(&temp, &dispatch_outcome.receipt.path)?;
+    runner.daemon.stop_job(&manifest.dispatch_id)?;
+    std::fs::write(receipt_path, &bytes)?;
     println!(
         "rehearse: {:?} -- receipt written to {}",
         result.status,
@@ -262,10 +360,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         Command::Rehearse {
             capability,
+            db,
+            dispatch_manifest,
             manifest,
             receipt,
         } => {
-            if !run_rehearsal(&capability, &manifest, &receipt)? {
+            if !run_rehearsal(&capability, &db, &dispatch_manifest, &manifest, &receipt)? {
                 std::process::exit(1);
             }
         }

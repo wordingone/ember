@@ -11,10 +11,11 @@
 //! admission; a capability claim is never made by this module.
 
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::fmt;
 use std::fs;
-use std::path::Path;
+use std::path::PathBuf;
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -97,12 +98,22 @@ impl RefusalCode {
 
     pub const fn next_action(self) -> &'static str {
         match self {
-            Self::MissingMeasurement => "measure_then_retry",
-            Self::MemoryFloor => "increase_memory_headroom_or_reduce_scope",
-            Self::StorageFloor => "free_storage_or_reduce_scope",
-            Self::DurationBound => "measure_duration_then_reduce_scope",
-            Self::PhaseFailed => "repair_or_rehearse",
-            Self::StrictGateUnbound => "bind_gate_producer_and_consumer",
+            Self::MissingMeasurement => {
+                "Collect a current measured evidence file and retry the bounded rehearsal."
+            }
+            Self::MemoryFloor => {
+                "Increase measured memory headroom or reduce the bounded scope, then retry."
+            }
+            Self::StorageFloor => "Free measured storage or reduce the bounded scope, then retry.",
+            Self::DurationBound => {
+                "Measure the whole-run duration and reduce the bounded scope before retrying."
+            }
+            Self::PhaseFailed => {
+                "Repair the failed current-authority phase and rerun the bounded rehearsal."
+            }
+            Self::StrictGateUnbound => {
+                "Bind the missing current-authority producer and consumer before retrying."
+            }
         }
     }
 }
@@ -137,7 +148,17 @@ pub struct Measurement {
     pub available_memory_bytes: u64,
     pub storage_free_bytes: u64,
     pub measured_duration_ms: u64,
+    pub whole_run_peak_bytes: u64,
+    pub evidence_path: PathBuf,
     pub evidence_sha256: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PhaseEvidence {
+    pub phase: Phase,
+    pub path: PathBuf,
+    pub sha256: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -145,8 +166,11 @@ pub struct Measurement {
 pub struct RehearsalManifest {
     pub schema_version: String,
     pub dispatch_id: String,
+    pub source_commit: String,
+    pub contract_sha256: String,
     pub bounds: AdmissionBounds,
     pub measurements: Measurement,
+    pub phase_evidence: Vec<PhaseEvidence>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -156,7 +180,7 @@ pub enum PhaseOutcome {
 }
 
 pub trait RehearsalRunner {
-    fn run(&self, phase: Phase) -> PhaseOutcome;
+    fn run(&mut self, phase: Phase) -> PhaseOutcome;
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -173,6 +197,10 @@ pub struct RehearsalReceipt {
     pub bound: Option<u64>,
     pub next_action: Option<String>,
     pub phases: Vec<Phase>,
+    pub source_commit: String,
+    pub contract_sha256: String,
+    pub whole_run_peak_bytes: u64,
+    pub capability_chain: Vec<String>,
     #[serde(default)]
     pub manifest_sha256: Option<String>,
 }
@@ -202,7 +230,7 @@ fn refused(
     RehearsalResult {
         status: RehearsalStatus::Refused,
         receipt: RehearsalReceipt {
-            schema_version: "ember-lab-rehearsal-receipt-v1".into(),
+            schema_version: "ember-lab-dispatch-preflight-v1".into(),
             dispatch_id: manifest.dispatch_id.clone(),
             capability_claim: "NO_CAPABILITY_CLAIM".into(),
             status: RehearsalStatus::Refused,
@@ -213,6 +241,10 @@ fn refused(
             bound,
             next_action: Some(code.next_action().into()),
             phases,
+            source_commit: manifest.source_commit.clone(),
+            contract_sha256: manifest.contract_sha256.clone(),
+            whole_run_peak_bytes: manifest.measurements.whole_run_peak_bytes,
+            capability_chain: vec!["NO_CAPABILITY_CLAIM".into()],
             manifest_sha256: None,
         },
     }
@@ -225,10 +257,69 @@ fn valid_hash(value: &str) -> bool {
 fn admission(manifest: &RehearsalManifest) -> Result<(), (RefusalCode, Option<u64>, Option<u64>)> {
     if manifest.schema_version != "ember-lab-rehearsal-v1"
         || manifest.dispatch_id.trim().is_empty()
+        || manifest.source_commit.len() != 40
+        || !manifest
+            .source_commit
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit())
         || manifest.measurements.observed_at_ms == 0
+        || manifest.measurements.whole_run_peak_bytes == 0
         || !valid_hash(&manifest.measurements.evidence_sha256)
     {
         return Err((RefusalCode::MissingMeasurement, None, None));
+    }
+    if manifest.contract_sha256 != current_contract_sha256() {
+        return Err((RefusalCode::StrictGateUnbound, None, None));
+    }
+    let measurement_bytes = fs::read(&manifest.measurements.evidence_path).map_err(|_| {
+        (
+            RefusalCode::MissingMeasurement,
+            None,
+            Some(manifest.measurements.whole_run_peak_bytes),
+        )
+    })?;
+    if format!("{:x}", Sha256::digest(&measurement_bytes)) != manifest.measurements.evidence_sha256
+    {
+        return Err((RefusalCode::MissingMeasurement, None, None));
+    }
+    let measurement: serde_json::Value =
+        serde_json::from_slice(&measurement_bytes).map_err(|_| {
+            (
+                RefusalCode::MissingMeasurement,
+                None,
+                Some(manifest.measurements.whole_run_peak_bytes),
+            )
+        })?;
+    if measurement
+        .get("whole_run_peak_bytes")
+        .and_then(serde_json::Value::as_u64)
+        != Some(manifest.measurements.whole_run_peak_bytes)
+    {
+        return Err((RefusalCode::MissingMeasurement, None, None));
+    }
+    let mut phases = BTreeSet::new();
+    if manifest.phase_evidence.len() != Phase::ordered().len()
+        || manifest
+            .phase_evidence
+            .iter()
+            .any(|evidence| !phases.insert(evidence.phase) || !valid_hash(&evidence.sha256))
+        || phases.iter().copied().collect::<Vec<_>>()
+            != Phase::ordered().into_iter().collect::<Vec<_>>()
+    {
+        return Err((RefusalCode::StrictGateUnbound, None, None));
+    }
+    for evidence in &manifest.phase_evidence {
+        let bytes = fs::read(&evidence.path).map_err(|_| {
+            (
+                RefusalCode::MissingMeasurement,
+                None,
+                Some(manifest.measurements.whole_run_peak_bytes),
+            )
+        })?;
+        let observed = format!("{:x}", Sha256::digest(&bytes));
+        if observed != evidence.sha256 {
+            return Err((RefusalCode::MissingMeasurement, None, None));
+        }
     }
     if manifest.measurements.available_memory_bytes < manifest.bounds.minimum_memory_bytes {
         return Err((
@@ -259,7 +350,7 @@ fn admission(manifest: &RehearsalManifest) -> Result<(), (RefusalCode, Option<u6
 pub fn episode<R: RehearsalRunner>(
     capability: &str,
     manifest: &RehearsalManifest,
-    runner: &R,
+    runner: &mut R,
 ) -> RehearsalResult {
     if capability.trim().is_empty() {
         return refused(
@@ -302,7 +393,7 @@ pub fn episode<R: RehearsalRunner>(
     RehearsalResult {
         status: RehearsalStatus::Completed,
         receipt: RehearsalReceipt {
-            schema_version: "ember-lab-rehearsal-receipt-v1".into(),
+            schema_version: "ember-lab-dispatch-preflight-v1".into(),
             dispatch_id: manifest.dispatch_id.clone(),
             capability_claim: "NO_CAPABILITY_CLAIM".into(),
             status: RehearsalStatus::Completed,
@@ -313,20 +404,13 @@ pub fn episode<R: RehearsalRunner>(
             bound: None,
             next_action: None,
             phases,
+            source_commit: manifest.source_commit.clone(),
+            contract_sha256: manifest.contract_sha256.clone(),
+            whole_run_peak_bytes: manifest.measurements.whole_run_peak_bytes,
+            capability_chain: vec!["NO_CAPABILITY_CLAIM".into()],
             manifest_sha256: None,
         },
     }
-}
-
-/// Persist a receipt only after the full result has been assembled.  The
-/// caller owns the path under the declared custody root; no capability claim
-/// is inferred from writing this file.
-pub fn write_receipt(path: &Path, receipt: &RehearsalReceipt) -> Result<(), String> {
-    let bytes = serde_json::to_vec_pretty(receipt).map_err(|error| error.to_string())?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    fs::write(path, bytes).map_err(|error| error.to_string())
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -378,6 +462,12 @@ pub fn validate_strict_gate_census(census: &StrictGateCensus) -> Result<(), Stri
         return Err("strict-gate census is incomplete".into());
     }
     Ok(())
+}
+
+pub fn current_contract_sha256() -> String {
+    let bytes = serde_json::to_vec(&production_strict_gate_census())
+        .expect("strict-gate census is serializable");
+    format!("{:x}", Sha256::digest(bytes))
 }
 
 /// Closed build-time inventory for the current Ember Lab dispatch boundary.

@@ -2,7 +2,7 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-use serde_json::{json, Value};
+use serde_json::json;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -44,7 +44,7 @@ fn manifest(path: &std::path::Path) {
 }
 
 #[test]
-fn operator_alone_episode_entrypoint_writes_a_bound_refusal_or_success_receipt() {
+fn operator_alone_episode_entrypoint_refuses_without_current_dispatch_authority() {
     let root = sandbox();
     let manifest_path = root.join("manifest.json");
     let receipt_path = root.join("receipt.json");
@@ -62,14 +62,7 @@ fn operator_alone_episode_entrypoint_writes_a_bound_refusal_or_success_receipt()
         ])
         .output()
         .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let receipt: Value = serde_json::from_slice(&fs::read(receipt_path).unwrap()).unwrap();
-    assert_eq!(receipt["schema_version"], "ember-lab-rehearsal-receipt-v1");
-    assert_eq!(receipt["status"], "completed");
-    assert_eq!(receipt["capability_claim"], "NO_CAPABILITY_CLAIM");
-    assert_eq!(receipt["manifest_sha256"].as_str().unwrap().len(), 64);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("dispatch authority"));
+    assert!(!receipt_path.exists());
 }
