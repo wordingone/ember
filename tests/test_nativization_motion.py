@@ -641,7 +641,7 @@ import numpy
     def test_checked_in_manifest_and_receipt_reach_board_consumer(self):
         root = Path(__file__).resolve().parent.parent
         manifest_path = root / "manifests" / "run-import-manifest-v1.json"
-        receipt_path = root / "receipts" / "nativization-motion" / "nm-20260807T014339Z.json"
+        receipt_path = root / "receipts" / "nativization-motion" / "nm-20260807T051659Z.json"
         manifest_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
         receipt_sha = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
         result = subprocess.run(
@@ -844,7 +844,7 @@ import numpy
     def test_board_cli_rejects_duplicate_missing_stale_and_open_receipt_shapes(self):
         root = Path(__file__).resolve().parent.parent
         manifest_path = root / "manifests" / "run-import-manifest-v1.json"
-        receipt_path = root / "receipts" / "nativization-motion" / "nm-20260807T014339Z.json"
+        receipt_path = root / "receipts" / "nativization-motion" / "nm-20260807T051659Z.json"
         manifest_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
         original = json.loads(receipt_path.read_text(encoding="utf-8"))
         mutations = {
