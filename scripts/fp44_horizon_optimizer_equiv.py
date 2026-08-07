@@ -187,11 +187,13 @@ def _build_opts(backbone, head, mtp_heads, arm: str):
     return opts
 
 
-def _bind_live_parameter_evidence(backbone, head, mtp_heads, opts, run_id: str, update_count: int) -> dict:
+def _bind_live_parameter_evidence(backbone, head, mtp_heads, opts, run_id: str, update_count: int, execution_boundary) -> dict:
     """Persist content-addressed evidence from the objects used by this run."""
     from mtp_parameter_manifest import (
         validate_pricing_receipt,
         build_executed_run_receipt,
+        build_governed_execution_receipt,
+        begin_governed_execution,
         write_parameter_manifest_from_parts,
         write_pricing_receipt,
     )
@@ -205,21 +207,17 @@ def _bind_live_parameter_evidence(backbone, head, mtp_heads, opts, run_id: str, 
     manifest = write_parameter_manifest_from_parts(
         manifest_path, backbone, head, mtp_heads, opts, config
     )
-    executed_run = build_executed_run_receipt(
-        manifest,
-        run_id,
-        update_count,
-        Path(__file__).read_bytes(),
-        (Path(NC) / "configs" / "v0-pretrain-config.json").read_bytes(),
+    source_path = Path(__file__)
+    config_path = Path(NC) / "configs" / "v0-pretrain-config.json"
+    governed_parent = build_governed_execution_receipt(
+        manifest, run_id, source_path, config_path, execution_boundary,
+        (backbone, head, mtp_heads), opts, update_count=update_count,
     )
+    executed_run = build_executed_run_receipt(manifest, governed_parent)
     pricing = write_pricing_receipt(pricing_path, manifest, executed_run)
     validate_pricing_receipt(pricing, manifest)
     return {
-        "parameter_manifest": {
-            "schema": manifest["schema"],
-            "sha256": manifest["manifest_sha256"],
-            "path": manifest_path.name,
-        },
+        "parameter_manifest": manifest,
         "parameter_pricing_receipt": pricing,
         "parameter_accounting": dict(manifest["parameter_accounting"]),
     }
@@ -286,6 +284,7 @@ def _run_arm(arm: str, seed: int, train_ds: "ShardTokens", val_ds: "ShardTokens"
     """
     import torch
     import copy
+    from mtp_parameter_manifest import begin_governed_execution
 
     tag = label or f"{arm}-seed{seed}"
     out: dict = {"arm": arm, "seed": seed, "train_steps": TRAIN_STEPS,
@@ -297,6 +296,7 @@ def _run_arm(arm: str, seed: int, train_ds: "ShardTokens", val_ds: "ShardTokens"
         opts = _build_opts(backbone, head, mtp_heads, arm)
         backbone.train(); head.train(); mtp_heads.train()
         train_ds.reset()
+        execution_boundary = begin_governed_execution((backbone, head, mtp_heads), opts)
 
         # Warmup (symmetric across arms)
         print(f"[fp44] {tag}: warmup {WARMUP_STEPS} steps ...", flush=True)
@@ -309,7 +309,7 @@ def _run_arm(arm: str, seed: int, train_ds: "ShardTokens", val_ds: "ShardTokens"
             print(f"[fp44]   warmup {i+1}/{WARMUP_STEPS}", flush=True)
 
         live_evidence = _bind_live_parameter_evidence(
-            backbone, head, mtp_heads, opts, f"{tag}-warmup", WARMUP_STEPS)
+            backbone, head, mtp_heads, opts, f"{tag}-warmup", WARMUP_STEPS, execution_boundary)
         out.update(live_evidence)
         torch.cuda.synchronize()
         free_b, _ = torch.cuda.mem_get_info()
@@ -373,6 +373,7 @@ def _noise_floor_run() -> dict:
     """
     import torch
     import copy
+    from mtp_parameter_manifest import begin_governed_execution
 
     train_ds = ShardTokens(os.path.join(SHARD_DIR, TRAIN_SHARD), SEQ)
     val_ds   = ShardTokens(os.path.join(SHARD_DIR, VAL_SHARD),   SEQ)
@@ -383,6 +384,7 @@ def _noise_floor_run() -> dict:
     opts = _build_opts(backbone, head, mtp_heads, "muon_split_baseline")
     backbone.train(); head.train(); mtp_heads.train()
     train_ds.reset()
+    execution_boundary = begin_governed_execution((backbone, head, mtp_heads), opts)
 
     print(f"[fp44] noise-floor: warmup {WARMUP_STEPS} steps ...", flush=True)
     for i in range(WARMUP_STEPS):
@@ -393,7 +395,7 @@ def _noise_floor_run() -> dict:
         time.sleep(PACE_S)
 
     live_evidence = _bind_live_parameter_evidence(
-        backbone, head, mtp_heads, opts, "noise-floor-warmup", WARMUP_STEPS)
+        backbone, head, mtp_heads, opts, "noise-floor-warmup", WARMUP_STEPS, execution_boundary)
     # Snapshot post-warmup state
     model_snap = {k: v.detach().clone() for k, v in backbone.state_dict().items()}
     head_snap  = {k: v.detach().clone() for k, v in head.state_dict().items()}

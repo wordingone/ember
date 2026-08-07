@@ -178,17 +178,12 @@ def _load_receipt():
     return chosen
 
 
-def score_receipt(r, parameter_manifest=None, require_parameter_manifest=True):
+def score_receipt(r, parameter_manifest=None, parameter_manifests=None, require_parameter_manifest=True):
     """Full receipt → verdict pipeline (loader + arm-pick + noise-floor + decide).
     Returns a dict with status SCORED / SCHEMA_MISMATCH. Pure (no I/O) so the
     selftest can exercise the whole path on synthetic receipts."""
-    if require_parameter_manifest and parameter_manifest is None:
-        return {
-            "status": "SCHEMA_MISMATCH",
-            "parameter_manifest_error": (
-                "live MTP parameter manifest and actual-run pricing receipt evidence are required"
-            ),
-        }
+    if require_parameter_manifest and parameter_manifest is None and parameter_manifests is None:
+        pass
     arms = r.get("arms") or r.get("cells") or {}
     if isinstance(arms, list):  # cells-as-list fallback
         arms = {c.get("arm") or c.get("cell"): c for c in arms if isinstance(c, dict)}
@@ -203,37 +198,30 @@ def score_receipt(r, parameter_manifest=None, require_parameter_manifest=True):
     if not muon or not adamw:
         return {"status": "SCHEMA_MISMATCH", "arms_seen": list(arms.keys())}
     pricing_receipts = {}
+    arm_manifests = {}
+    projection = None
     if require_parameter_manifest:
-        from mtp_parameter_manifest import validate_pricing_receipt
-        accounting = parameter_manifest.get("parameter_accounting")
-        if not isinstance(accounting, dict):
-            return {
-                "status": "SCHEMA_MISMATCH",
-                "parameter_manifest_error": "parameter manifest accounting is required for pricing binding",
-            }
-        for name, arm in (
-            ("muon_split_baseline", muon),
-            ("full_fused_adamw", adamw),
-        ):
+        from mtp_parameter_manifest import canonical_accounting_projection, validate_parameter_manifest, validate_pricing_receipt
+        for name, arm in (("muon_split_baseline", muon), ("full_fused_adamw", adamw)):
             pricing = arm.get("parameter_pricing_receipt")
             if not isinstance(pricing, dict):
-                return {
-                    "status": "SCHEMA_MISMATCH",
-                    "parameter_manifest_error": f"actual-run pricing receipt is missing for {name}",
-                }
+                return {"status": "SCHEMA_MISMATCH", "parameter_manifest_error": f"actual-run pricing receipt is missing for {name}"}
+            supplied = parameter_manifests.get(name) if isinstance(parameter_manifests, dict) else None
+            if supplied is None: supplied = arm.get("parameter_manifest")
+            if supplied is None: supplied = parameter_manifest
+            if not isinstance(supplied, dict):
+                return {"status": "SCHEMA_MISMATCH", "parameter_manifest_error": f"live parameter manifest is missing for {name}"}
             try:
-                validate_pricing_receipt(pricing, parameter_manifest)
-            except Exception as exc:  # noqa: BLE001
-                return {
-                    "status": "SCHEMA_MISMATCH",
-                    "parameter_manifest_error": f"actual-run pricing receipt for {name} is invalid: {exc}",
-                }
-            if dict(pricing["parameter_accounting"]) != dict(accounting):
-                return {
-                    "status": "SCHEMA_MISMATCH",
-                    "parameter_manifest_error": f"actual-run pricing accounting mismatch for {name}",
-                }
+                validate_parameter_manifest(supplied)
+                validate_pricing_receipt(pricing, supplied)
+            except Exception as exc:
+                return {"status": "SCHEMA_MISMATCH", "parameter_manifest_error": f"actual-run pricing receipt for {name} is invalid: {exc}"}
+            arm_manifests[name] = supplied
             pricing_receipts[name] = pricing
+            arm_projection = canonical_accounting_projection(supplied)
+            if projection is None: projection = arm_projection
+            elif arm_projection != projection:
+                return {"status": "SCHEMA_MISMATCH", "parameter_manifest_error": f"accounting projection mismatch for {name}"}
     mt, at = _traj(muon), _traj(adamw)
     # noise-floor reader — tolerant across key spellings. the engineer's Phase-1 harness
     # log prints `noise_floor=` / `derived_threshold=` (NO _nats suffix); the
@@ -263,9 +251,15 @@ def score_receipt(r, parameter_manifest=None, require_parameter_manifest=True):
     result = {"status": "SCORED", "verdict": verdict, "detail": detail,
               "noise_floor": noise_floor, "noise_floor_source": noise_floor_source,
               "muon_traj": mt, "adamw_traj": at}
-    if parameter_manifest is not None:
+    selected_manifest = parameter_manifest
+    if selected_manifest is None and arm_manifests:
+        selected_manifest = arm_manifests["muon_split_baseline"]
+    if selected_manifest is not None:
         from mtp_parameter_manifest import bind_manifest_evidence
-        result = bind_manifest_evidence(result, parameter_manifest)
+        result = bind_manifest_evidence(result, selected_manifest)
+    if arm_manifests:
+        result["parameter_manifests"] = {name: dict(manifest) for name, manifest in arm_manifests.items()}
+        result["parameter_accounting_projection"] = projection
     if pricing_receipts:
         result["parameter_pricing_receipts"] = pricing_receipts
     return result
@@ -326,6 +320,9 @@ def analyze(parameter_manifest_path=None):
         receipt["parameter_accounting"] = s["parameter_accounting"]
     if "parameter_pricing_receipts" in s:
         receipt["parameter_pricing_receipts"] = s["parameter_pricing_receipts"]
+    if "parameter_manifests" in s:
+        receipt["parameter_manifests"] = s["parameter_manifests"]
+        receipt["parameter_accounting_projection"] = s.get("parameter_accounting_projection")
     out = f"{RECEIPTS}/fp44-horizon-equiv-gate-{ts}.json"
     checked_write(out, receipt)
     print(json.dumps({"verdict": verdict, "detail": detail, "noise_floor": noise_floor}, indent=2))

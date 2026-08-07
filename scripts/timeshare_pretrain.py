@@ -1063,11 +1063,14 @@ def _write_live_parameter_evidence(
     cfg: dict,
     run_id: str,
     update_count: int,
+    execution_boundary,
 ) -> dict[str, Any]:
     """Bind accounting to the model/optimizers that just executed a live run."""
     from mtp_parameter_manifest import (
         validate_pricing_receipt,
         build_executed_run_receipt,
+        build_governed_execution_receipt,
+        begin_governed_execution,
         write_pricing_receipt,
     )
 
@@ -1075,21 +1078,15 @@ def _write_live_parameter_evidence(
         run_dir, model, optimizers, cfg, run_id
     )
     pricing_path = manifest_path.with_name(f"{run_id}-pricing-receipt.json")
-    executed_run = build_executed_run_receipt(
-        manifest,
-        run_id,
-        update_count,
-        Path(__file__).read_bytes(),
-        Path(CONTRACT_PATH).read_bytes(),
+    governed_parent = build_governed_execution_receipt(
+        manifest, run_id, Path(__file__), Path(CONTRACT_PATH), execution_boundary,
+        model, optimizers, update_count=update_count,
     )
+    executed_run = build_executed_run_receipt(manifest, governed_parent)
     pricing = write_pricing_receipt(pricing_path, manifest, executed_run)
     validate_pricing_receipt(pricing, manifest)
     return {
-        "parameter_manifest": {
-            "schema": manifest["schema"],
-            "sha256": manifest["manifest_sha256"],
-            "path": manifest_path.name,
-        },
+        "parameter_manifest": manifest,
         "parameter_pricing_receipt": pricing,
         "parameter_accounting": dict(manifest["parameter_accounting"]),
     }
@@ -2067,6 +2064,9 @@ def run_v0_segment(
             "optimizer_state_reset": reset_optimizer_on_resume,
         }
 
+    from mtp_parameter_manifest import begin_governed_execution
+    execution_boundary = begin_governed_execution(model, optimizers)
+
     # --- QAT gate (cfg["precision"]["qat"]["enabled"]) ---
     # When True: apply int8-grid fake-quant to all Linear weights pre-forward,
     # restore AFTER backward so gradients flow to full-precision weights (STE).
@@ -2140,7 +2140,7 @@ def run_v0_segment(
         if not losses:
             raise RuntimeError("live split run produced no optimizer update for pricing evidence")
         live_parameter_evidence = _write_live_parameter_evidence(
-            run_dir, model, optimizers, cfg, f"{segment_id}-step-{resume_step + len(losses)}", len(losses))
+            run_dir, model, optimizers, cfg, f"{segment_id}-step-{resume_step + len(losses)}", len(losses), execution_boundary)
     wall_s = time.perf_counter() - t_start
     tokens_this_seg = n_steps * batch_size * grad_accum_steps * seq
 

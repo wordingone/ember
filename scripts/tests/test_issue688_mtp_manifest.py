@@ -26,6 +26,7 @@ from mtp_parameter_manifest import (  # noqa: E402
     build_parameter_manifest,
     build_parameter_manifest_from_parts,
     build_executed_run_receipt,
+    build_governed_execution_receipt,
     executed_run_receipt_sha256,
     build_pricing_receipt,
     manifest_sha256,
@@ -63,13 +64,24 @@ def _config(base=4, aux=8, realized=12):
     }
 
 def _executed(manifest, run_id="issue688-test-run", update_count=1):
-    return build_executed_run_receipt(
-        manifest,
-        run_id,
-        update_count,
-        b"immutable-source-bytes",
-        b"immutable-config-bytes",
-    )
+    parent = {
+        "schema": "ember-mtp-governed-execution-receipt-v1",
+        "authority": "certified-governed-execution",
+        "status": "COMPLETED",
+        "run_id": run_id,
+        "update_count": update_count,
+        "child_exit_code": 0,
+        "source_sha256": "1" * 64,
+        "config_sha256": "2" * 64,
+        "manifest_sha256": manifest["manifest_sha256"],
+        "before_state_sha256": "3" * 64,
+        "after_state_sha256": "4" * 64,
+        "before_optimizer_state_sha256": "5" * 64,
+        "optimizer_state_sha256": "6" * 64,
+    }
+    from mtp_parameter_manifest import governed_execution_receipt_sha256
+    parent["receipt_sha256"] = governed_execution_receipt_sha256(parent)
+    return build_executed_run_receipt(manifest, parent)
 
 
 class Issue688LiveManifestTests(unittest.TestCase):
@@ -204,23 +216,29 @@ class Issue688LiveManifestTests(unittest.TestCase):
     def test_horizon_scoring_accepts_two_actual_pricing_receipts(self):
         import fp44_horizon_equiv_gate
 
-        model = TinyMtp()
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
-        manifest = build_parameter_manifest(model, optimizer, _config())
+        muon_model = TinyMtp()
+        muon_optimizer = torch.optim.SGD(muon_model.parameters(), lr=0.1)
+        muon_manifest = build_parameter_manifest(muon_model, muon_optimizer, _config())
+        adamw_model = TinyMtp()
+        adamw_optimizer = torch.optim.SGD(adamw_model.parameters(), lr=0.1)
+        adamw_manifest = build_parameter_manifest(adamw_model, adamw_optimizer, _config())
+        self.assertNotEqual(muon_manifest["manifest_sha256"], adamw_manifest["manifest_sha256"])
         receipt = {
             "arms": {
                 "muon_split_baseline": {
                     "val_losses": {"250": 1.0, "1000": 1.0, "2000": 1.0},
-                    "parameter_pricing_receipt": build_pricing_receipt(manifest, _executed(manifest, "muon-run")),
+                    "parameter_manifest": muon_manifest,
+                    "parameter_pricing_receipt": build_pricing_receipt(muon_manifest, _executed(muon_manifest, "muon-run")),
                 },
                 "full_fused_adamw": {
                     "val_losses": {"250": 1.0, "1000": 1.0, "2000": 1.0},
-                    "parameter_pricing_receipt": build_pricing_receipt(manifest, _executed(manifest, "adamw-run")),
+                    "parameter_manifest": adamw_manifest,
+                    "parameter_pricing_receipt": build_pricing_receipt(adamw_manifest, _executed(adamw_manifest, "adamw-run")),
                 },
             }
         }
         scored = fp44_horizon_equiv_gate.score_receipt(
-            receipt, parameter_manifest=manifest, require_parameter_manifest=True
+            receipt, require_parameter_manifest=True
         )
         self.assertEqual(scored["status"], "SCORED")
         self.assertEqual(
@@ -259,14 +277,8 @@ class Issue688LiveManifestTests(unittest.TestCase):
         model = TinyMtp()
         optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
         manifest = build_parameter_manifest(model, optimizer, _config())
-        with self.assertRaisesRegex(MtpParameterManifestError, "update_count"):
-            build_executed_run_receipt(
-                manifest,
-                "no-step-run",
-                0,
-                b"immutable-source-bytes",
-                b"immutable-config-bytes",
-            )
+        with self.assertRaisesRegex(MtpParameterManifestError, "governed execution"):
+            build_executed_run_receipt(manifest, {"schema": "not-a-governed-parent"})
         with self.assertRaisesRegex(MtpParameterManifestError, "executed-run evidence"):
             build_pricing_receipt(manifest, "no-step-run")
 
@@ -275,6 +287,70 @@ class Issue688LiveManifestTests(unittest.TestCase):
         forged["receipt_sha256"] = executed_run_receipt_sha256(forged)
         with self.assertRaisesRegex(MtpParameterManifestError, "authorized"):
             build_pricing_receipt(manifest, forged)
+    def test_governed_parent_rejects_no_step_and_self_attested_update(self):
+        from mtp_parameter_manifest import begin_governed_execution
+
+        model = TinyMtp()
+        optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+        manifest = build_parameter_manifest(model, optimizer, _config())
+        boundary = begin_governed_execution(model, optimizer)
+        with tempfile.TemporaryDirectory() as td:
+            source = Path(td) / "source.py"
+            config = Path(td) / "config.json"
+            source.write_bytes(b"source")
+            config.write_bytes(b"config")
+            with self.assertRaisesRegex(MtpParameterManifestError, "update evidence"):
+                build_governed_execution_receipt(
+                    manifest, "no-step", source, config, boundary, model, optimizer, update_count=1
+                )
+
+    def test_governed_parent_live_update_produces_bound_pricing_receipt(self):
+        from mtp_parameter_manifest import begin_governed_execution
+
+        model = TinyMtp()
+        optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+        manifest = build_parameter_manifest(model, optimizer, _config())
+        boundary = begin_governed_execution(model, optimizer)
+        loss = sum(parameter.square().sum() for parameter in model.parameters())
+        loss.backward()
+        optimizer.step()
+        with tempfile.TemporaryDirectory() as td:
+            source = Path(td) / "source.py"
+            config = Path(td) / "config.json"
+            source.write_bytes(b"source")
+            config.write_bytes(b"config")
+            parent = build_governed_execution_receipt(
+                manifest, "live-run", source, config, boundary, model, optimizer, update_count=1
+            )
+            pricing = build_pricing_receipt(manifest, build_executed_run_receipt(manifest, parent))
+            validate_pricing_receipt(pricing, manifest)
+            self.assertEqual(pricing["evidence"], "authorized-executed-run")
+
+    def test_two_arm_projection_rejects_accounting_mismatch(self):
+        import fp44_horizon_equiv_gate
+
+        first = TinyMtp()
+        first_manifest = build_parameter_manifest(first, torch.optim.SGD(first.parameters(), lr=0.1), _config())
+        second = TinyMtp(extra_base=True)
+        second_manifest = build_parameter_manifest(second, torch.optim.SGD(second.parameters(), lr=0.1), _config(base=5, aux=8, realized=13))
+        receipt = {
+            "arms": {
+                "muon_split_baseline": {
+                    "val_losses": {"250": 1.0, "1000": 1.0, "2000": 1.0},
+                    "parameter_manifest": first_manifest,
+                    "parameter_pricing_receipt": build_pricing_receipt(first_manifest, _executed(first_manifest, "m1")),
+                },
+                "full_fused_adamw": {
+                    "val_losses": {"250": 1.0, "1000": 1.0, "2000": 1.0},
+                    "parameter_manifest": second_manifest,
+                    "parameter_pricing_receipt": build_pricing_receipt(second_manifest, _executed(second_manifest, "m2")),
+                },
+            }
+        }
+        scored = fp44_horizon_equiv_gate.score_receipt(receipt, require_parameter_manifest=True)
+        self.assertEqual(scored["status"], "SCHEMA_MISMATCH")
+        self.assertIn("accounting projection", scored["parameter_manifest_error"])
+
     def test_actual_run_pricing_receipt_binds_post_update_live_parts(self):
 
         model = TinyMtp()

@@ -18,6 +18,7 @@ import copy
 import hashlib
 import json
 import re
+from dataclasses import dataclass
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -414,6 +415,18 @@ def attach_parameter_manifest(
     return bound
 
 
+def canonical_accounting_projection(manifest: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the identity-free projection shared by independently built arms."""
+    validate_parameter_manifest(manifest)
+    return {
+        "parameter_accounting": dict(manifest["parameter_accounting"]),
+        "optimizer": {
+            "group_count": manifest["optimizer"]["group_count"],
+            "parameter_count": manifest["optimizer"]["parameter_count"],
+        },
+    }
+
+
 def bind_manifest_evidence(receipt: Mapping[str, Any], manifest: Mapping[str, Any]) -> dict[str, Any]:
     """Bind an already validated manifest to a downstream H-Q receipt."""
     validate_parameter_manifest(manifest)
@@ -427,16 +440,166 @@ def bind_manifest_evidence(receipt: Mapping[str, Any], manifest: Mapping[str, An
     return bound
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
-_EXECUTED_RUN_KEYS = {
-    "schema",
-    "evidence",
-    "run_id",
-    "update_count",
-    "source_sha256",
-    "config_sha256",
-    "manifest_sha256",
+_GOVERNED_EXECUTION_KEYS = {
+    "schema", "authority", "status", "run_id", "update_count", "child_exit_code",
+    "source_sha256", "config_sha256", "manifest_sha256",
+    "before_state_sha256", "after_state_sha256",
+    "before_optimizer_state_sha256", "optimizer_state_sha256",
     "receipt_sha256",
 }
+_EXECUTED_RUN_KEYS = {
+    "schema", "evidence", "run_id", "update_count", "source_sha256", "config_sha256",
+    "manifest_sha256", "governed_execution_receipt", "governed_execution_receipt_sha256",
+    "receipt_sha256",
+}
+
+
+def _require_sha256(value: Any, label: str) -> None:
+    if not isinstance(value, str) or _SHA256_RE.fullmatch(value) is None:
+        raise MtpParameterManifestError(f"{label} must be a lowercase SHA-256")
+
+
+def _governed_execution_receipt_bytes(receipt: Mapping[str, Any]) -> bytes:
+    payload = copy.deepcopy(dict(receipt))
+    payload.pop("receipt_sha256", None)
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+
+def governed_execution_receipt_sha256(receipt: Mapping[str, Any]) -> str:
+    return hashlib.sha256(_governed_execution_receipt_bytes(receipt)).hexdigest()
+
+
+def validate_governed_execution_receipt(
+    receipt: Mapping[str, Any], manifest: Mapping[str, Any] | None = None
+) -> None:
+    if not isinstance(receipt, Mapping) or set(receipt) != _GOVERNED_EXECUTION_KEYS:
+        raise MtpParameterManifestError("governed execution receipt schema is not closed")
+    if receipt["schema"] != "ember-mtp-governed-execution-receipt-v1":
+        raise MtpParameterManifestError("governed execution receipt schema is invalid")
+    if receipt["authority"] != "certified-governed-execution" or receipt["status"] != "COMPLETED":
+        raise MtpParameterManifestError("governed execution authority is not certified")
+    if not isinstance(receipt["run_id"], str) or not receipt["run_id"].strip():
+        raise MtpParameterManifestError("governed execution run_id is invalid")
+    if type(receipt["update_count"]) is not int or receipt["update_count"] < 1:
+        raise MtpParameterManifestError("governed execution update_count must be positive")
+    if type(receipt["child_exit_code"]) is not int or receipt["child_exit_code"] != 0:
+        raise MtpParameterManifestError("governed execution child exit must be zero")
+    for key in (
+        "source_sha256", "config_sha256", "manifest_sha256",
+        "before_state_sha256", "after_state_sha256",
+        "before_optimizer_state_sha256", "optimizer_state_sha256",
+        "receipt_sha256",
+    ):
+        _require_sha256(receipt[key], f"governed execution {key}")
+    if receipt["before_state_sha256"] == receipt["after_state_sha256"]:
+        raise MtpParameterManifestError("governed execution update evidence is unchanged")
+    if receipt["receipt_sha256"] != governed_execution_receipt_sha256(receipt):
+        raise MtpParameterManifestError("governed execution receipt hash mismatch")
+    if manifest is not None:
+        validate_parameter_manifest(manifest)
+        if receipt["manifest_sha256"] != manifest["manifest_sha256"]:
+            raise MtpParameterManifestError("governed execution manifest hash mismatch")
+
+
+@dataclass(frozen=True)
+class GovernedExecutionBoundary:
+    model_ids: tuple[int, ...]
+    optimizer_ids: tuple[int, ...]
+    before_state_sha256: str
+    before_optimizer_state_sha256: str
+
+
+def build_governed_execution_receipt(
+    manifest: Mapping[str, Any],
+    run_id: str,
+    source_path: str | Path,
+    config_path: str | Path,
+    boundary: GovernedExecutionBoundary,
+    model: Any,
+    optimizers: Any,
+    *,
+    update_count: int,
+) -> dict[str, Any]:
+    """Finalize parent evidence from one live model/optimizer boundary."""
+    validate_parameter_manifest(manifest)
+    if type(update_count) is not int or update_count < 1:
+        raise MtpParameterManifestError("governed execution update_count must be positive")
+    modules = model if isinstance(model, (list, tuple)) else [model]
+    model_ids = tuple(id(module) for module in modules)
+    optimizer_ids = tuple(id(item) for _, item in _optimizer_items(optimizers))
+    if model_ids != boundary.model_ids or optimizer_ids != boundary.optimizer_ids:
+        raise MtpParameterManifestError("governed execution boundary object identity changed")
+    source_bytes = Path(source_path).read_bytes()
+    config_bytes = Path(config_path).read_bytes()
+    after_state_sha256 = execution_probe_sha256(model, optimizers)
+    optimizer_state_sha256 = execution_probe_sha256([], optimizers)
+    if after_state_sha256 == boundary.before_state_sha256:
+        raise MtpParameterManifestError("governed execution update evidence is unchanged")
+    receipt: dict[str, Any] = {
+        "schema": "ember-mtp-governed-execution-receipt-v1",
+        "authority": "certified-governed-execution",
+        "status": "COMPLETED",
+        "run_id": run_id,
+        "update_count": update_count,
+        "child_exit_code": 0,
+        "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
+        "config_sha256": hashlib.sha256(config_bytes).hexdigest(),
+        "manifest_sha256": manifest["manifest_sha256"],
+        "before_state_sha256": boundary.before_state_sha256,
+        "after_state_sha256": after_state_sha256,
+        "before_optimizer_state_sha256": boundary.before_optimizer_state_sha256,
+        "optimizer_state_sha256": optimizer_state_sha256,
+    }
+    receipt["receipt_sha256"] = governed_execution_receipt_sha256(receipt)
+    validate_governed_execution_receipt(receipt, manifest)
+    return receipt
+
+
+def execution_probe_sha256(model: Any, optimizers: Any) -> str:
+    """Hash bounded live model/optimizer state probes at an execution boundary."""
+    h = hashlib.sha256()
+    modules = model if isinstance(model, (list, tuple)) else [model]
+    for module_index, module in enumerate(modules):
+        iterator = module.named_parameters(remove_duplicate=False)
+        for name, parameter in iterator:
+            tensor = parameter.detach()
+            flat = tensor.reshape(-1)
+            first = float(flat[0].item()) if flat.numel() else 0.0
+            last = float(flat[-1].item()) if flat.numel() else 0.0
+            total = float(tensor.sum().item())
+            abs_total = float(tensor.abs().sum().item())
+            h.update(json.dumps({
+                "module": module_index, "name": str(name), "shape": list(tensor.shape),
+                "dtype": str(tensor.dtype), "first": first, "last": last,
+                "sum": total, "abs_sum": abs_total,
+            }, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+    for optimizer_name, optimizer in _optimizer_items(optimizers):
+        state = getattr(optimizer, "state", {})
+        for parameter_id, values in sorted(state.items(), key=lambda item: str(item[0])):
+            h.update(str(optimizer_name).encode("utf-8"))
+            h.update(str(parameter_id).encode("utf-8"))
+            for key, value in sorted(values.items(), key=lambda item: str(item[0])):
+                if hasattr(value, "detach"):
+                    tensor = value.detach()
+                    flat = tensor.reshape(-1)
+                    summary = (str(key), str(tensor.dtype), list(tensor.shape),
+                               float(flat[0].item()) if flat.numel() else 0.0,
+                               float(flat[-1].item()) if flat.numel() else 0.0,
+                               float(tensor.sum().item()))
+                else:
+                    summary = (str(key), repr(value))
+                h.update(repr(summary).encode("utf-8"))
+    return h.hexdigest()
+
+
+def begin_governed_execution(model: Any, optimizers: Any) -> GovernedExecutionBoundary:
+    modules = model if isinstance(model, (list, tuple)) else [model]
+    return GovernedExecutionBoundary(
+        model_ids=tuple(id(module) for module in modules),
+        optimizer_ids=tuple(id(item) for _, item in _optimizer_items(optimizers)),
+        before_state_sha256=execution_probe_sha256(model, optimizers),
+        before_optimizer_state_sha256=execution_probe_sha256([], optimizers),
+    )
 
 
 def _executed_run_receipt_bytes(receipt: Mapping[str, Any]) -> bytes:
@@ -446,42 +609,25 @@ def _executed_run_receipt_bytes(receipt: Mapping[str, Any]) -> bytes:
 
 
 def executed_run_receipt_sha256(receipt: Mapping[str, Any]) -> str:
-    """Hash the canonical immutable executed-run evidence, excluding self-hash."""
     return hashlib.sha256(_executed_run_receipt_bytes(receipt)).hexdigest()
 
 
-def _require_sha256(value: Any, label: str) -> None:
-    if not isinstance(value, str) or _SHA256_RE.fullmatch(value) is None:
-        raise MtpParameterManifestError(f"{label} must be a lowercase SHA-256")
-
-
 def build_executed_run_receipt(
-    manifest: Mapping[str, Any],
-    run_id: str,
-    update_count: int,
-    source_bytes: bytes,
-    config_bytes: bytes,
+    manifest: Mapping[str, Any], governed_execution_receipt: Mapping[str, Any]
 ) -> dict[str, Any]:
-    """Create executed-run evidence from one completed update boundary.
-
-    This helper hashes the exact source/config byte buffers supplied by the
-    caller; it never accepts caller-provided identity strings.
-    """
+    """Derive pricing input only from a validated governed parent receipt."""
     validate_parameter_manifest(manifest)
-    if not isinstance(run_id, str) or not run_id.strip():
-        raise MtpParameterManifestError("executed-run evidence run_id must be non-empty")
-    if type(update_count) is not int or update_count < 1:
-        raise MtpParameterManifestError("executed-run evidence update_count must be positive")
-    if type(source_bytes) is not bytes or type(config_bytes) is not bytes or not source_bytes or not config_bytes:
-        raise MtpParameterManifestError("executed-run evidence requires immutable source/config bytes")
+    validate_governed_execution_receipt(governed_execution_receipt, manifest)
     receipt: dict[str, Any] = {
         "schema": "ember-mtp-executed-run-receipt-v1",
         "evidence": "authorized-executed-run",
-        "run_id": run_id,
-        "update_count": update_count,
-        "source_sha256": hashlib.sha256(bytes(source_bytes)).hexdigest(),
-        "config_sha256": hashlib.sha256(bytes(config_bytes)).hexdigest(),
+        "run_id": governed_execution_receipt["run_id"],
+        "update_count": governed_execution_receipt["update_count"],
+        "source_sha256": governed_execution_receipt["source_sha256"],
+        "config_sha256": governed_execution_receipt["config_sha256"],
         "manifest_sha256": manifest["manifest_sha256"],
+        "governed_execution_receipt": copy.deepcopy(dict(governed_execution_receipt)),
+        "governed_execution_receipt_sha256": governed_execution_receipt["receipt_sha256"],
     }
     receipt["receipt_sha256"] = executed_run_receipt_sha256(receipt)
     validate_executed_run_receipt(receipt, manifest)
@@ -495,18 +641,22 @@ def validate_executed_run_receipt(
         raise MtpParameterManifestError("executed-run evidence schema is not closed")
     if receipt["schema"] != "ember-mtp-executed-run-receipt-v1" or receipt["evidence"] != "authorized-executed-run":
         raise MtpParameterManifestError("executed-run evidence is not authorized")
-    if not isinstance(receipt["run_id"], str) or not receipt["run_id"].strip():
-        raise MtpParameterManifestError("executed-run evidence run_id is invalid")
-    if type(receipt["update_count"]) is not int or receipt["update_count"] < 1:
-        raise MtpParameterManifestError("executed-run evidence update_count must be positive")
-    for key in ("source_sha256", "config_sha256", "manifest_sha256", "receipt_sha256"):
-        _require_sha256(receipt[key], f"executed-run evidence {key}")
+    validate_governed_execution_receipt(receipt["governed_execution_receipt"], manifest)
+    parent = receipt["governed_execution_receipt"]
+    if receipt["governed_execution_receipt_sha256"] != parent["receipt_sha256"]:
+        raise MtpParameterManifestError("executed-run governed parent hash mismatch")
+    for key in ("run_id", "update_count", "source_sha256", "config_sha256", "manifest_sha256"):
+        expected = manifest["manifest_sha256"] if key == "manifest_sha256" and manifest is not None else parent.get(key)
+        if receipt[key] != expected:
+            raise MtpParameterManifestError(f"executed-run evidence {key} mismatch")
+    _require_sha256(receipt["receipt_sha256"], "executed-run evidence receipt_sha256")
     if receipt["receipt_sha256"] != executed_run_receipt_sha256(receipt):
         raise MtpParameterManifestError("executed-run evidence receipt hash mismatch")
     if manifest is not None:
         validate_parameter_manifest(manifest)
         if receipt["manifest_sha256"] != manifest["manifest_sha256"]:
             raise MtpParameterManifestError("executed-run evidence manifest hash mismatch")
+
 def _pricing_receipt_bytes(receipt: Mapping[str, Any]) -> bytes:
     payload = copy.deepcopy(dict(receipt))
     payload.pop("receipt_sha256", None)
