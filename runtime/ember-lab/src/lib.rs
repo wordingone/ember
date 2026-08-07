@@ -2891,6 +2891,7 @@ impl Daemon {
         &self,
         job_id: &str,
         expected_whole_run_peak_bytes: u64,
+        readiness_deadline_ms: i64,
     ) -> Result<Vec<crate::rehearsal::PhaseEvidence>> {
         use crate::rehearsal::{Phase, PhaseEvidence};
         let _caller_supplied_peak = expected_whole_run_peak_bytes;
@@ -2916,17 +2917,38 @@ impl Daemon {
             .log_dir
             .join("rehearsal")
             .join(hash_bytes(job_id.as_bytes()));
-        let row = self.job_process_row(job_id)?;
+        let initial_row = self.job_process_row(job_id)?;
+        if initial_row.state != JobState::Running
+            || !self.lease_matches_process_row(job_id, &initial_row)?
+        {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "minimal-slice producer is not running under its fenced lease".into(),
+            });
+        }
         let completion_path = phase_dir.join("completion.json");
         let completion_bytes = {
-            let deadline = Instant::now() + Duration::from_millis(750);
             loop {
+                let current_row = self.job_process_row(job_id)?;
+                if current_row.state != JobState::Running
+                    || !same_job_process_fence(&initial_row, &current_row)
+                    || !self.lease_matches_process_row(job_id, &current_row)?
+                {
+                    return Err(EmberLabError::InvalidTransition {
+                        job_id: job_id.into(),
+                        detail: "minimal-slice producer identity or lease changed before readiness"
+                            .into(),
+                    });
+                }
+                if now_ms() >= readiness_deadline_ms {
+                    return Err(EmberLabError::InvalidTransition {
+                        job_id: job_id.into(),
+                        detail: "minimal-slice readiness deadline expired before completion".into(),
+                    });
+                }
                 match fs::read(&completion_path) {
                     Ok(bytes) => break bytes,
-                    Err(error)
-                        if error.kind() == std::io::ErrorKind::NotFound
-                            && Instant::now() < deadline =>
-                    {
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                         std::thread::sleep(Duration::from_millis(10));
                     }
                     Err(error) => {
@@ -2940,6 +2962,16 @@ impl Daemon {
                 }
             }
         };
+        let row = self.job_process_row(job_id)?;
+        if row.state != JobState::Running
+            || !same_job_process_fence(&initial_row, &row)
+            || !self.lease_matches_process_row(job_id, &row)?
+        {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "minimal-slice producer identity or lease changed at readiness".into(),
+            });
+        }
         let completion: Value = serde_json::from_slice(&completion_bytes).map_err(|_| {
             EmberLabError::InvalidTransition {
                 job_id: job_id.into(),
@@ -2973,8 +3005,9 @@ impl Daemon {
             && completion
                 .get("completed_at_ms")
                 .and_then(Value::as_i64)
-                .unwrap_or_default()
-                >= row.started_at_ms
+                .is_some_and(|completed_at_ms| {
+                    completed_at_ms >= row.started_at_ms && completed_at_ms <= readiness_deadline_ms
+                })
             && completion.get("phase_count").and_then(Value::as_u64) == Some(6)
             && completion.get("host_peak_sha256").and_then(Value::as_str)
                 == Some(hash_bytes(&host_peak_bytes).as_str())
@@ -3362,8 +3395,9 @@ impl Daemon {
         &self,
         job_id: &str,
         expected_whole_run_peak_bytes: u64,
+        readiness_deadline_ms: i64,
     ) -> Result<Vec<crate::rehearsal::PhaseEvidence>> {
-        self.consume_minimal_slice(job_id, expected_whole_run_peak_bytes)
+        self.consume_minimal_slice(job_id, expected_whole_run_peak_bytes, readiness_deadline_ms)
     }
 
     /// Return the immutable daemon-owned whole-process-tree observation that
@@ -4104,6 +4138,18 @@ impl Daemon {
         let conn = self.conn()?;
         job_process_row_from_connection(&conn, job_id)
     }
+
+    fn lease_matches_process_row(&self, job_id: &str, row: &JobProcessRow) -> Result<bool> {
+        let conn = self.conn()?;
+        Ok(conn
+            .query_row(
+                "SELECT 1 FROM leases WHERE resource=?1 AND owner_job_id=?2 AND lease_epoch=?3",
+                params![row.resource, job_id, row.lease_epoch],
+                |_| Ok(()),
+            )
+            .optional()?
+            .is_some())
+    }
 }
 
 fn finalize_stopped_in_connection(
@@ -4272,6 +4318,16 @@ struct JobProcessRow {
     stdout_child_handle: i64,
     stderr_child_handle: i64,
     started_at_ms: i64,
+}
+
+fn same_job_process_fence(expected: &JobProcessRow, observed: &JobProcessRow) -> bool {
+    expected.pid == observed.pid
+        && expected.start_token == observed.start_token
+        && expected.executable == observed.executable
+        && expected.resource == observed.resource
+        && expected.job_object_name == observed.job_object_name
+        && expected.main_thread_id == observed.main_thread_id
+        && expected.lease_epoch == observed.lease_epoch
 }
 
 #[cfg(windows)]

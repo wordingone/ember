@@ -326,6 +326,7 @@ fn run_rehearsal(
     daemon.execute_minimal_episode(
         &manifest.dispatch_id,
         manifest.measurements.whole_run_peak_bytes,
+        dispatch.expires_at_ms,
     )?;
     let (authoritative_peak_path, authoritative_peak_sha256, authoritative_peak_bytes) =
         daemon.authoritative_whole_run_peak(&manifest.dispatch_id)?;

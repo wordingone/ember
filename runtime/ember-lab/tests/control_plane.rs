@@ -37,6 +37,14 @@ fn sha256(path: &Path) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
+fn readiness_deadline_after_ms(delta_ms: u64) -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64
+        + delta_ms as i64
+}
+
 fn write_identity(root: &Path) -> (PathBuf, String) {
     let path = root.join("identity.json");
     fs::write(
@@ -1847,6 +1855,7 @@ fn phase_events_are_daemon_bound_and_foreign_bytes_do_not_authorize() {
         .execute_minimal_episode(
             "phase-job",
             host_peak["whole_run_peak_bytes"].as_u64().unwrap(),
+            readiness_deadline_after_ms(5_000),
         )
         .unwrap();
     let consumed = daemon.load_authorized_phase_evidence("phase-job").unwrap();
@@ -1867,7 +1876,9 @@ fn phase_events_are_daemon_bound_and_foreign_bytes_do_not_authorize() {
         .phase_event_authorized("phase-job", "train", &evidence.sha256)
         .unwrap());
     daemon.stop_job("phase-job").unwrap();
-    assert!(daemon.execute_minimal_episode("phase-job", 1).is_err());
+    assert!(daemon
+        .execute_minimal_episode("phase-job", 1, readiness_deadline_after_ms(5_000))
+        .is_err());
 }
 
 #[test]
@@ -1884,7 +1895,7 @@ fn phase_owner_refuses_before_dispatch_and_emits_no_later_phase_events() {
         .unwrap();
 
     assert!(daemon
-        .execute_minimal_episode("phase-not-started", 1)
+        .execute_minimal_episode("phase-not-started", 1, readiness_deadline_after_ms(5_000))
         .is_err());
     assert!(!daemon
         .job_event_kinds("phase-not-started")
@@ -1897,17 +1908,44 @@ fn phase_owner_refuses_before_dispatch_and_emits_no_later_phase_events() {
 fn minimal_slice_noop_child_cannot_authorize_any_phase() {
     let root = sandbox("phase-noop-child");
     let (daemon, _phase_root) = start_phase_fixture(&root, "phase-noop", false);
-    assert!(daemon.execute_minimal_episode("phase-noop", 1).is_err());
+    assert!(daemon
+        .execute_minimal_episode("phase-noop", 1, readiness_deadline_after_ms(5_000))
+        .is_err());
     daemon.stop_job("phase-noop").unwrap();
 }
 
 #[test]
 fn delayed_minimal_slice_waits_for_terminal_completion() {
     let root = sandbox("phase-delayed-completion");
-    let (daemon, _phase_root) = start_phase_fixture_with_delay(&root, "phase-delayed", true, 250);
-    let produced = daemon.execute_minimal_episode("phase-delayed", 1).unwrap();
+    // This deliberately exceeds the old 750ms polling cap.  A valid producer
+    // must remain admissible until the dispatch-bound deadline, not be rejected
+    // merely because readiness took longer than a fixed convenience timeout.
+    let (daemon, _phase_root) = start_phase_fixture_with_delay(&root, "phase-delayed", true, 1_000);
+    let produced = daemon
+        .execute_minimal_episode("phase-delayed", 1, readiness_deadline_after_ms(5_000))
+        .unwrap();
     assert_eq!(produced.len(), 6);
     daemon.stop_job("phase-delayed").unwrap();
+}
+
+#[test]
+fn readiness_deadline_expiry_refuses_without_stopping_valid_producer() {
+    let root = sandbox("phase-readiness-deadline");
+    let (daemon, _phase_root) =
+        start_phase_fixture_with_delay(&root, "phase-readiness-deadline", true, 1_000);
+    assert!(daemon
+        .execute_minimal_episode(
+            "phase-readiness-deadline",
+            1,
+            readiness_deadline_after_ms(250),
+        )
+        .is_err());
+    assert!(!daemon
+        .job_event_kinds("phase-readiness-deadline")
+        .unwrap()
+        .iter()
+        .any(|kind| kind == "job_stopped"));
+    daemon.stop_job("phase-readiness-deadline").unwrap();
 }
 
 #[test]
@@ -1923,7 +1961,11 @@ fn missing_completion_marker_refuses_even_when_phase_files_are_complete() {
     }
     fs::remove_file(phase_root.join("completion.json")).unwrap();
     assert!(daemon
-        .execute_minimal_episode("phase-missing-completion", 1)
+        .execute_minimal_episode(
+            "phase-missing-completion",
+            1,
+            readiness_deadline_after_ms(5_000),
+        )
         .is_err());
     daemon.stop_job("phase-missing-completion").unwrap();
 }
@@ -1946,7 +1988,9 @@ fn foreign_completion_marker_cannot_authorize_consumption() {
         serde_json::to_vec(&completion).unwrap(),
     )
     .unwrap();
-    assert!(daemon.execute_minimal_episode("phase-foreign", 1).is_err());
+    assert!(daemon
+        .execute_minimal_episode("phase-foreign", 1, readiness_deadline_after_ms(5_000))
+        .is_err());
     daemon.stop_job("phase-foreign").unwrap();
 }
 
@@ -1968,7 +2012,9 @@ fn stale_completion_marker_cannot_authorize_consumption() {
         serde_json::to_vec(&completion).unwrap(),
     )
     .unwrap();
-    assert!(daemon.execute_minimal_episode("phase-stale", 1).is_err());
+    assert!(daemon
+        .execute_minimal_episode("phase-stale", 1, readiness_deadline_after_ms(5_000))
+        .is_err());
     daemon.stop_job("phase-stale").unwrap();
 }
 
@@ -1991,7 +2037,7 @@ fn forged_host_probe_peak_is_not_authoritative() {
     )
     .unwrap();
     assert!(daemon
-        .execute_minimal_episode("phase-forged-peak", 1)
+        .execute_minimal_episode("phase-forged-peak", 1, readiness_deadline_after_ms(5_000))
         .is_err());
     daemon.stop_job("phase-forged-peak").unwrap();
 }
@@ -2007,7 +2053,7 @@ fn marker_only_phase_json_is_rejected_after_real_child_start() {
     )
     .unwrap();
     assert!(daemon
-        .execute_minimal_episode("phase-marker", peak)
+        .execute_minimal_episode("phase-marker", peak, readiness_deadline_after_ms(5_000))
         .is_err());
     daemon.stop_job("phase-marker").unwrap();
 }
@@ -2024,7 +2070,9 @@ fn zero_train_steps_refuse_before_checkpoint_consumption() {
     let operation_bytes = serde_json::to_vec(&train["operation"]).unwrap();
     train["operation_sha256"] = json!(format!("{:x}", Sha256::digest(operation_bytes)));
     fs::write(&train_path, serde_json::to_vec(&train).unwrap()).unwrap();
-    assert!(daemon.execute_minimal_episode("phase-zero", peak).is_err());
+    assert!(daemon
+        .execute_minimal_episode("phase-zero", peak, readiness_deadline_after_ms(5_000))
+        .is_err());
     daemon.stop_job("phase-zero").unwrap();
 }
 
@@ -2037,7 +2085,11 @@ fn missing_checkpoint_publish_selectable_or_restore_artifact_refuses() {
         let peak = wait_for_host_peak(&phase_root.join("host_peak.json"));
         fs::remove_file(phase_root.join(format!("{phase}.json"))).unwrap();
         assert!(daemon
-            .execute_minimal_episode(&format!("phase-missing-{phase}"), peak)
+            .execute_minimal_episode(
+                &format!("phase-missing-{phase}"),
+                peak,
+                readiness_deadline_after_ms(5_000),
+            )
             .is_err());
         daemon.stop_job(&format!("phase-missing-{phase}")).unwrap();
     }
