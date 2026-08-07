@@ -36,23 +36,23 @@ const writeTool = buildTool({
 });
 
 describe("#1215 sandbox-default authority display and enforcement", () => {
-  test("a fresh production session defaults to the interactive sandbox posture", () => {
-    expect(DEFAULT_REPL_PERMISSION_MODE).toBe("interactive");
-    expect(REPL_PERMISSION_CYCLE[0]).toBe("interactive");
+  test("a fresh production session uses the prompt's canonical sandbox mode", () => {
+    expect(DEFAULT_REPL_PERMISSION_MODE).toBe("regular");
+    expect(REPL_PERMISSION_CYCLE[0]).toBe("regular");
     expect(statusBarText("regular", false)).toContain("sandbox");
     expect(statusBarText("regular", false)).not.toContain("regular mode");
   });
 
   test("bypass remains explicit and cycling an unknown state fails closed to sandbox", () => {
     expect(REPL_PERMISSION_CYCLE).toContain("bypass");
-    expect(cycleReplPermissionMode("swarm-worker")).toBe("interactive");
+    expect(cycleReplPermissionMode("swarm-worker" as never)).toBe("regular");
     expect(statusBarText("bypass", false)).toContain("bypass permissions on");
   });
 
   test("sandbox permits only permission-allowed read-only tools", () => {
-    expect(authorizeReplTool("interactive", readTool, {}, "allow")).toBe(true);
-    expect(authorizeReplTool("interactive", writeTool, {}, "allow")).toBe(false);
-    expect(authorizeReplTool("interactive", readTool, {}, "ask")).toBe(false);
+    expect(authorizeReplTool("regular", readTool, {}, "allow")).toBe(true);
+    expect(authorizeReplTool("regular", writeTool, {}, "allow")).toBe(false);
+    expect(authorizeReplTool("regular", readTool, {}, "ask")).toBe(false);
   });
 
   test("explicit bypass permits ask and mutation but never overrides hard deny", () => {
@@ -61,8 +61,8 @@ describe("#1215 sandbox-default authority display and enforcement", () => {
     expect(authorizeReplTool("bypass", readTool, {}, "deny")).toBe(false);
   });
 
-  test("worker posture is fail-closed like the interactive sandbox", () => {
-    expect(authorizeReplTool("swarm-worker", readTool, {}, "allow")).toBe(true);
-    expect(authorizeReplTool("swarm-worker", writeTool, {}, "allow")).toBe(false);
+  test("plan posture is fail-closed like the regular sandbox", () => {
+    expect(authorizeReplTool("plan", readTool, {}, "allow")).toBe(true);
+    expect(authorizeReplTool("plan", writeTool, {}, "allow")).toBe(false);
   });
 });

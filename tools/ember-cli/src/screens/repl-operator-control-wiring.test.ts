@@ -97,7 +97,7 @@ describe("operator-surface pane control click drives a real effect on the run", 
       TerminalSizeContext.Provider,
       { value: { columns, rows } },
       React.createElement(ReplScreen, {
-        config: { model: "ember", permissionMode: "interactive" as const, baseSystemPrompt: "" },
+        config: { model: "ember", permissionMode: "regular" as const, baseSystemPrompt: "" },
         cwd: process.cwd(),
         env: {
           EMBER_DISABLE_TERMINAL_TITLE: "1",
