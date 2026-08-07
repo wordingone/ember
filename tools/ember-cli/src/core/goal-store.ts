@@ -294,6 +294,9 @@ export function createGoalStore(deps: GoalStoreDeps = {}): GoalStore {
         message: `illegal transition ${existing.status} -> ${status}`,
       };
     }
+    if (opts.completionAudit !== undefined && status !== "Complete") {
+      return { ok: false, message: "completionAudit is valid only for Complete transitions" };
+    }
     if (status === "Complete") {
       const completionAudit = validateCompletionAudit(opts.completionAudit);
       if (!completionAudit.ok) return completionAudit;
@@ -305,7 +308,9 @@ export function createGoalStore(deps: GoalStoreDeps = {}): GoalStore {
       updatedAt: now().toISOString(),
       consecutiveBlockedTurns: resetsAudit ? 0 : existing.consecutiveBlockedTurns,
       ...(resetsAudit ? { lastBlockReason: undefined } : {}),
-      ...(opts.completionAudit !== undefined ? { completionAudit: opts.completionAudit } : {}),
+      ...(status === "Complete" && opts.completionAudit !== undefined
+        ? { completionAudit: opts.completionAudit }
+        : {}),
     };
     persistence.write(updated);
     emit({
@@ -314,7 +319,9 @@ export function createGoalStore(deps: GoalStoreDeps = {}): GoalStore {
       from: existing.status,
       to: status,
       ...(opts.reason !== undefined ? { reason: opts.reason } : {}),
-      ...(opts.completionAudit !== undefined ? { completionAudit: opts.completionAudit } : {}),
+      ...(status === "Complete" && opts.completionAudit !== undefined
+        ? { completionAudit: opts.completionAudit }
+        : {}),
     });
     return { ok: true, goal: updated };
   }

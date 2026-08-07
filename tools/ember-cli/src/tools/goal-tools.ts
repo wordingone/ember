@@ -187,6 +187,13 @@ export const UpdateGoalTool = buildTool<UpdateGoalInput, unknown>({
       // "objective" alongside status -- with exactly this error path.
       return { result: false as const, message: parsed.error.message, errorCode: "INVALID_INPUT" };
     }
+    if (parsed.data.completionAudit !== undefined && parsed.data.status !== "Complete") {
+      return {
+        result: false as const,
+        message: "completionAudit is valid only for update_goal(status: 'Complete')",
+        errorCode: "INVALID_INPUT",
+      };
+    }
     if (parsed.data.status === "Complete" && parsed.data.completionAudit === undefined) {
       return {
         result: false as const,
@@ -206,6 +213,14 @@ export const UpdateGoalTool = buildTool<UpdateGoalInput, unknown>({
     const store = getGoalStore();
     const status: GoalStatus = args.status as ModelSettableStatus;
 
+    if (args.completionAudit !== undefined && status !== "Complete") {
+      return {
+        data: {
+          ok: false,
+          message: "completionAudit is valid only for update_goal(status: 'Complete')",
+        },
+      };
+    }
     if (status === "Complete" && args.completionAudit === undefined) {
       return {
         data: {

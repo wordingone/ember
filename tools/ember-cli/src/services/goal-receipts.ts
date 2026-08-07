@@ -113,8 +113,10 @@ export function receiptGoalTransition(writer: GoalReceiptWriter, event: GoalTran
       writer.append("status_changed", event.goal.goalId, {
         from: event.from,
         to: event.to,
-        reason: event.reason,
-        completionAudit: event.goal.completionAudit,
+        ...(event.reason !== undefined ? { reason: event.reason } : {}),
+        ...(event.to === "Complete" && event.completionAudit !== undefined
+          ? { completionAudit: event.completionAudit }
+          : {}),
       });
       return;
     case "objective_edited":

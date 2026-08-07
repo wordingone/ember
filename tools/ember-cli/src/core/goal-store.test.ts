@@ -117,6 +117,19 @@ describe("createGoalStore — createGoal", () => {
     expect(store.getGoal()?.completionAudit).toEqual(audit);
   });
 
+  it("rejects completion-audit evidence on non-Complete transitions", () => {
+    const audit = { requirements: [{ id: "objective", evidence: "receipt:objective-proven" }] };
+    for (const [start, status] of [["Active", "Paused"], ["Active", "Blocked"], ["Paused", "Active"]] as const) {
+      const store = createGoalStore();
+      store.createGoal("prove the objective");
+      if (start === "Paused") store.updateStatus("Paused");
+      const result = store.updateStatus(status, { completionAudit: audit });
+      expect(result.ok).toBe(false);
+      expect(store.getGoal()?.status).toBe(start);
+      expect(store.getGoal()?.completionAudit).toBeUndefined();
+    }
+  });
+
   it("creates a new goal with status Active and zeroed usage", () => {
     const store = createGoalStore();
     const result = store.createGoal("reach the summit");

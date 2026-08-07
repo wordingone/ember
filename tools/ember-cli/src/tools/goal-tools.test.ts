@@ -157,6 +157,12 @@ describe("update_goal — status-only, objective immutable", () => {
       status: "Complete",
       completionAudit: { requirements: [{ id: "objective", evidence: "ok" }] },
     })?.result).toBe(true);
+    for (const status of ["Active", "Paused", "Blocked"] as const) {
+      expect(UpdateGoalTool.validateInput?.({
+        status,
+        completionAudit: { requirements: [{ id: "objective", evidence: "ok" }] },
+      })?.result).toBe(false);
+    }
   });
 
   it("validateInput REJECTS a payload carrying an 'objective' field — the schema has no such field", () => {

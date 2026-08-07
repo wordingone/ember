@@ -144,6 +144,25 @@ describe("receiptGoalTransition — maps every GoalTransitionEvent kind to a rec
     expect(row.detail.completionAudit).toEqual(audit);
   });
 
+  test("status_changed omits completion-audit evidence for non-Complete transitions", () => {
+    const audit = { requirements: [{ id: "objective", evidence: "receipt:objective-proven" }] };
+    for (const status of ["Active", "Paused", "Blocked"] as const) {
+      const writer = createGoalReceiptWriter({ repoRoot: path.join(scratchDir, status) });
+      const from = status === "Active" ? "Paused" : "Active";
+      const event: GoalTransitionEvent = {
+        kind: "status_changed",
+        goal: fakeGoal({ status, completionAudit: audit }),
+        from,
+        to: status,
+        completionAudit: audit,
+      };
+      receiptGoalTransition(writer, event);
+      const row = JSON.parse(fs.readFileSync(writer.filePath, "utf8").trim());
+      expect(row.detail).toEqual({ from, to: status });
+      expect(Object.prototype.hasOwnProperty.call(row.detail, "completionAudit")).toBe(false);
+    }
+  });
+
   test("objective_edited carries previousObjective + new objective", () => {
     const writer = createGoalReceiptWriter({ repoRoot: scratchDir });
     const event: GoalTransitionEvent = {
