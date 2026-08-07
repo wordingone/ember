@@ -13,7 +13,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, Iterable
 
-TRACE_SCHEMA_VERSION = "ember-run-import-trace-v2"
+TRACE_SCHEMA_VERSION = "ember-run-import-trace-v3"
 TRACE_RUN_ID = "ember-02-governed-run-import-v2"
 TRACE_PHASES = ("creation", "current_rung_training", "growth_run")
 PHASE_ENTRYPOINTS = {

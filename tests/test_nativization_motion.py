@@ -800,6 +800,11 @@ import numpy
         assert shares[layers[0]]["creation"] is True
         assert shares[layers[1]]["creation"] is False
 
+    def test_trace_rejects_unknown_layer_predicate(self, tmp_path):
+        _prepare_fixture_repo(tmp_path)
+        with pytest.raises(ValueError, match="closed layer predicate"):
+            build_run_import_manifest(tmp_path, ["unregistered layer"])
+
     def test_trace_rejects_dirty_reachable_source_bytes(self, tmp_path):
         _prepare_fixture_repo(tmp_path)
         source = tmp_path / "tools" / "ember-restart-3b" / "model.py"

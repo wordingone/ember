@@ -170,8 +170,9 @@ def get_layer_file_globs(layer_name: str) -> list[str]:
         ],
     }
 
-    # Fallback: scan all Python files if no specific mapping
-    return mapping.get(layer_name, ["**/*.py"])
+    if layer_name not in mapping:
+        raise ValueError(f"closed layer predicate is not defined for {layer_name}")
+    return list(mapping[layer_name])
 
 
 def collect_imports(file_path: Path) -> tuple[set[str], int]:
