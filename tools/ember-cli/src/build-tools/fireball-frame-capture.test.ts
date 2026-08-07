@@ -11,7 +11,7 @@ const COMMIT = "b".repeat(40);
 function receipt() {
   const cells = [
     { row: 2, col: 4, char: "▀", fg: 0xff7d1a, bg: 0x7a1f0a },
-    { row: 3, col: 3, char: "▀", fg: 0xd4541c, bg: 0xc43410 },
+    { row: 3, col: 3, char: "▀", fg: 0xd4541c, bg: -1 },
   ];
   return {
     schema_version: "ember-fireball-installed-capture-receipt-v1",
@@ -86,6 +86,10 @@ describe("issue #54 installed fireball capture receipt", () => {
 
     const extra = { ...receipt(), surprise: true };
     cases.push(extra);
+
+    const invalidDefaultColor = receipt();
+    invalidDefaultColor.captures[0]!.cells[0]!.bg = -2;
+    cases.push(invalidDefaultColor);
 
     for (const candidate of cases) {
       expect(() => validateInstalledCaptureReceipt(candidate)).toThrow();

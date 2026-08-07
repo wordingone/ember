@@ -83,7 +83,11 @@ function validateCell(value: unknown, label: string, includeStyle: boolean): Jso
   if (includeStyle) {
     for (const key of ["fg", "bg"] as const) {
       const color = integer(cell[key], `${label}.${key}`);
-      if (color < 0 || color > 0xffffff) throw new Error(`${label}.${key} must be a 24-bit color`);
+      // xterm represents the terminal's default foreground/background with -1.
+      // Preserve that sentinel in evidence rather than inventing an RGB value.
+      if (color < -1 || color > 0xffffff) {
+        throw new Error(`${label}.${key} must be an xterm color or default-color sentinel`);
+      }
     }
   }
   return cell;
