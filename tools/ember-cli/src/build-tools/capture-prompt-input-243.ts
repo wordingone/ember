@@ -477,7 +477,10 @@ export async function capturePromptInput243(argv: string[]): Promise<void> {
       const privateRawBytes = Buffer.from(rawChunks.join(""), "utf8");
       const privateFrameText = `${observed.lines.join("\n")}\n`;
       const stem = `stage-${index + 1}-${columns}`;
-      const rawPath = join(outDir, `${stem}.raw`);
+      // ConPTY output is an opaque byte stream and legitimately contains CRLF.
+      // Publish it as binary evidence so Git never normalizes bytes after the
+      // receipt has committed their exact hash.
+      const rawPath = join(outDir, `${stem}.raw.bin`);
       const privateRawPath = join(privateOutDir, `${stem}.raw`);
       const framePath = join(outDir, `${stem}.frame.txt`);
       const rawRedaction = redactHostPaths(privateRawBytes, [binary, repoRoot, resolvedEmberRoot]);
@@ -498,7 +501,7 @@ export async function capturePromptInput243(argv: string[]): Promise<void> {
       stages.push({
         columns,
         rows: ROWS,
-        rawPath: `${outArtifact}/${stem}.raw`,
+        rawPath: `${outArtifact}/${stem}.raw.bin`,
         privateRawLocator: `EMBER_PRIVATE_EVIDENCE:ember-cli/issue-243/live-resize-v1/${sourceCommit}/${stem}.raw`,
         privateRawBytes,
         redactions: rawRedaction.redactions,
