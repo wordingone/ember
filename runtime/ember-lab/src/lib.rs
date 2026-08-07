@@ -2893,6 +2893,7 @@ impl Daemon {
         expected_whole_run_peak_bytes: u64,
     ) -> Result<Vec<crate::rehearsal::PhaseEvidence>> {
         use crate::rehearsal::{Phase, PhaseEvidence};
+        let _caller_supplied_peak = expected_whole_run_peak_bytes;
         let phases = [
             Phase::DataVerify,
             Phase::Train,
@@ -2915,18 +2916,88 @@ impl Daemon {
             .log_dir
             .join("rehearsal")
             .join(hash_bytes(job_id.as_bytes()));
-        let host_peak: Value =
-            serde_json::from_slice(&fs::read(phase_dir.join("host_peak.json")).map_err(|_| {
-                EmberLabError::InvalidTransition {
-                    job_id: job_id.into(),
-                    detail: "minimal-slice measured host peak artifact is absent".into(),
+        let row = self.job_process_row(job_id)?;
+        let completion_path = phase_dir.join("completion.json");
+        let completion_bytes = {
+            let deadline = Instant::now() + Duration::from_millis(750);
+            loop {
+                match fs::read(&completion_path) {
+                    Ok(bytes) => break bytes,
+                    Err(error)
+                        if error.kind() == std::io::ErrorKind::NotFound
+                            && Instant::now() < deadline =>
+                    {
+                        std::thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(error) => {
+                        return Err(EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: format!(
+                                "minimal-slice durable completion marker is unavailable: {error}"
+                            ),
+                        });
+                    }
                 }
-            })?)
-            .map_err(|_| EmberLabError::InvalidTransition {
+            }
+        };
+        let completion: Value = serde_json::from_slice(&completion_bytes).map_err(|_| {
+            EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "minimal-slice durable completion marker is malformed".into(),
+            }
+        })?;
+        let host_peak_path = phase_dir.join("host_peak.json");
+        let host_peak_bytes =
+            fs::read(&host_peak_path).map_err(|_| EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "minimal-slice measured host peak artifact is absent".into(),
+            })?;
+        let host_peak: Value = serde_json::from_slice(&host_peak_bytes).map_err(|_| {
+            EmberLabError::InvalidTransition {
                 job_id: job_id.into(),
                 detail: "minimal-slice measured host peak artifact is malformed".into(),
-            })?;
-        let row = self.job_process_row(job_id)?;
+            }
+        })?;
+        let executable_sha256 = hash_file(Path::new(&row.executable))?;
+        let phase_artifact_sha256 =
+            crate::rehearsal::phase_artifact_digest(&phase_dir).map_err(EmberLabError::Io)?;
+        let completion_valid = completion.get("schema")
+            == Some(&Value::String(
+                "ember-lab-minimal-slice-completion-v1".into(),
+            ))
+            && completion.get("producer")
+                == Some(&Value::String("ember-lab-minimal-slice-producer".into()))
+            && completion.get("result") == Some(&Value::String("COMPLETED".into()))
+            && completion.get("job_id") == Some(&Value::String(job_id.into()))
+            && completion.get("producer_pid").and_then(Value::as_u64) == Some(row.pid as u64)
+            && completion
+                .get("completed_at_ms")
+                .and_then(Value::as_i64)
+                .unwrap_or_default()
+                >= row.started_at_ms
+            && completion.get("phase_count").and_then(Value::as_u64) == Some(6)
+            && completion.get("host_peak_sha256").and_then(Value::as_str)
+                == Some(hash_bytes(&host_peak_bytes).as_str())
+            && completion
+                .get("phase_artifact_sha256")
+                .and_then(Value::as_str)
+                == Some(phase_artifact_sha256.as_str())
+            && completion
+                .get("producer_binary_sha256")
+                .and_then(Value::as_str)
+                == Some(executable_sha256.as_str())
+            && completion
+                .get("producer_source_sha256")
+                .and_then(Value::as_str)
+                == Some(self.ember_lab_source_sha256.as_str());
+        if !completion_valid {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail:
+                    "minimal-slice completion marker is not bound to this daemon job/source/binary"
+                        .into(),
+            });
+        }
         if host_peak.get("schema") != Some(&Value::String("ember-lab-host-peak-v1".into()))
             || host_peak.get("producer")
                 != Some(&Value::String("ember-lab-minimal-slice-producer".into()))
@@ -2941,13 +3012,41 @@ impl Daemon {
             || host_peak
                 .get("whole_run_peak_bytes")
                 .and_then(Value::as_u64)
-                != Some(expected_whole_run_peak_bytes)
+                .unwrap_or(0)
+                == 0
         {
             return Err(EmberLabError::InvalidTransition {
                 job_id: job_id.into(),
                 detail: "minimal-slice measured host peak is not bound to this child/run".into(),
             });
         }
+        let observed_peak_bytes = observe_owned_process_tree_peak_bytes(&row)?;
+        let observed_path = phase_dir.join("host_peak.observed.json");
+        if observed_path.exists() {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "daemon-owned whole-run peak receipt already exists".into(),
+            });
+        }
+        let observed_receipt = serde_json::to_vec(&json!({
+            "schema": "ember-lab-daemon-host-peak-v1",
+            "producer": "ember-lab-daemon",
+            "result": "MEASURED",
+            "job_id": job_id,
+            "pid": row.pid,
+            "process_start_token": row.start_token,
+            "executable_identity": row.executable,
+            "job_object_name": row.job_object_name,
+            "lease_epoch": row.lease_epoch,
+            "producer_schema": "ember-lab-host-peak-v1",
+            "producer_binary_sha256": executable_sha256,
+            "producer_source_sha256": self.ember_lab_source_sha256,
+            "completion_sha256": hash_bytes(&completion_bytes),
+            "child_host_peak_sha256": hash_bytes(&host_peak_bytes),
+            "whole_run_peak_bytes": observed_peak_bytes,
+            "observed_at_ms": now_ms(),
+        }))?;
+        atomic_create(&observed_path, &observed_receipt)?;
         let mut operations = std::collections::BTreeMap::<Phase, Value>::new();
         let mut produced = Vec::with_capacity(phases.len());
         for phase in phases {
@@ -3265,6 +3364,51 @@ impl Daemon {
         expected_whole_run_peak_bytes: u64,
     ) -> Result<Vec<crate::rehearsal::PhaseEvidence>> {
         self.consume_minimal_slice(job_id, expected_whole_run_peak_bytes)
+    }
+
+    /// Return the immutable daemon-owned whole-process-tree observation that
+    /// was created during minimal-slice consumption.  Callers must use this
+    /// artifact for the terminal rehearsal receipt; the producer's raw
+    /// `host_peak.json` is only supporting evidence.
+    pub fn authoritative_whole_run_peak(&self, job_id: &str) -> Result<(PathBuf, String, u64)> {
+        let path = self
+            .log_dir
+            .join("rehearsal")
+            .join(hash_bytes(job_id.as_bytes()))
+            .join("host_peak.observed.json");
+        let bytes = fs::read(&path).map_err(|_| EmberLabError::InvalidTransition {
+            job_id: job_id.into(),
+            detail: "daemon-owned whole-run peak receipt is absent".into(),
+        })?;
+        let value: Value =
+            serde_json::from_slice(&bytes).map_err(|_| EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "daemon-owned whole-run peak receipt is malformed".into(),
+            })?;
+        if value.get("schema") != Some(&Value::String("ember-lab-daemon-host-peak-v1".into()))
+            || value.get("producer") != Some(&Value::String("ember-lab-daemon".into()))
+            || value.get("result") != Some(&Value::String("MEASURED".into()))
+            || value.get("job_id") != Some(&Value::String(job_id.into()))
+            || value
+                .get("whole_run_peak_bytes")
+                .and_then(Value::as_u64)
+                .unwrap_or(0)
+                == 0
+        {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "daemon-owned whole-run peak receipt is not valid".into(),
+            });
+        }
+        let sha256 = hash_bytes(&bytes);
+        let peak = value
+            .get("whole_run_peak_bytes")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "daemon-owned whole-run peak is missing".into(),
+            })?;
+        Ok((path, sha256, peak))
     }
 
     /// Persist one phase event through the daemon's existing job/lease
@@ -4009,7 +4153,7 @@ fn finalize_stopped_in_connection(
 
 fn job_process_row_from_connection(conn: &Connection, job_id: &str) -> Result<JobProcessRow> {
     conn.query_row(
-        "SELECT pid,process_start_token,executable_identity,resource,state,job_object_name,main_thread_id,lease_epoch,stdout_log_path,stderr_log_path,stdout_child_handle,stderr_child_handle FROM jobs WHERE job_id=?1",
+        "SELECT pid,process_start_token,executable_identity,resource,state,job_object_name,main_thread_id,lease_epoch,stdout_log_path,stderr_log_path,stdout_child_handle,stderr_child_handle,started_at_ms FROM jobs WHERE job_id=?1",
         [job_id],
         |row| {
             let state: String = row.get(4)?;
@@ -4026,6 +4170,7 @@ fn job_process_row_from_connection(conn: &Connection, job_id: &str) -> Result<Jo
                 row.get::<_, String>(9)?,
                 row.get::<_, i64>(10)?,
                 row.get::<_, i64>(11)?,
+                row.get::<_, i64>(12)?,
             ))
         },
     )
@@ -4047,9 +4192,72 @@ fn job_process_row_from_connection(conn: &Connection, job_id: &str) -> Result<Jo
             stderr_log_path: PathBuf::from(row.9),
             stdout_child_handle: row.10,
             stderr_child_handle: row.11,
+            started_at_ms: row.12,
         })
     })
 }
+
+fn observe_owned_process_tree_peak_bytes(row: &JobProcessRow) -> Result<u64> {
+    #[cfg(windows)]
+    {
+        use std::mem::zeroed;
+        use windows_sys::Win32::Foundation::CloseHandle;
+        use windows_sys::Win32::System::JobObjects::{
+            JobObjectExtendedLimitInformation, OpenJobObjectW, QueryInformationJobObject,
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        };
+        const JOB_OBJECT_QUERY_RIGHT: u32 = 0x0004;
+        let name = wide(&row.job_object_name);
+        let job = unsafe { OpenJobObjectW(JOB_OBJECT_QUERY_RIGHT, 0, name.as_ptr()) };
+        if job.is_null() {
+            return Err(EmberLabError::ProcessUnavailable {
+                job_id: String::new(),
+                pid: row.pid,
+            });
+        }
+        let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { zeroed() };
+        let ok = unsafe {
+            QueryInformationJobObject(
+                job,
+                JobObjectExtendedLimitInformation,
+                (&mut info as *mut JOBOBJECT_EXTENDED_LIMIT_INFORMATION).cast(),
+                std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+                std::ptr::null_mut(),
+            )
+        };
+        unsafe { CloseHandle(job) };
+        if ok == 0 || info.PeakJobMemoryUsed == 0 {
+            return Err(EmberLabError::ProcessUnavailable {
+                job_id: String::new(),
+                pid: row.pid,
+            });
+        }
+        Ok(info.PeakJobMemoryUsed as u64)
+    }
+    #[cfg(not(windows))]
+    {
+        let status = fs::read_to_string(format!("/proc/{}/status", row.pid))?;
+        let kib = status
+            .lines()
+            .find_map(|line| line.strip_prefix("VmHWM:")?.split_whitespace().next())
+            .ok_or_else(|| EmberLabError::ProcessUnavailable {
+                job_id: String::new(),
+                pid: row.pid,
+            })?
+            .parse::<u64>()
+            .map_err(|_| EmberLabError::ProcessUnavailable {
+                job_id: String::new(),
+                pid: row.pid,
+            })?;
+        kib.checked_mul(1024)
+            .filter(|bytes| *bytes > 0)
+            .ok_or_else(|| EmberLabError::ProcessUnavailable {
+                job_id: String::new(),
+                pid: row.pid,
+            })
+    }
+}
+
 struct JobProcessRow {
     pid: u32,
     start_token: String,
@@ -4063,6 +4271,7 @@ struct JobProcessRow {
     stderr_log_path: PathBuf,
     stdout_child_handle: i64,
     stderr_child_handle: i64,
+    started_at_ms: i64,
 }
 
 #[cfg(windows)]

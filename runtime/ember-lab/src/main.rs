@@ -327,6 +327,8 @@ fn run_rehearsal(
         &manifest.dispatch_id,
         manifest.measurements.whole_run_peak_bytes,
     )?;
+    let (authoritative_peak_path, authoritative_peak_sha256, authoritative_peak_bytes) =
+        daemon.authoritative_whole_run_peak(&manifest.dispatch_id)?;
     let phase_evidence = match daemon.load_authorized_phase_evidence(&manifest.dispatch_id) {
         Ok(evidence) => evidence,
         Err(error) => {
@@ -336,6 +338,9 @@ fn run_rehearsal(
     };
     let mut execution_manifest = manifest.clone();
     execution_manifest.phase_evidence = phase_evidence.clone();
+    execution_manifest.measurements.evidence_path = authoritative_peak_path;
+    execution_manifest.measurements.evidence_sha256 = authoritative_peak_sha256;
+    execution_manifest.measurements.whole_run_peak_bytes = authoritative_peak_bytes;
     let mut runner = CurrentAuthorityRunner {
         daemon,
         job_id: manifest.dispatch_id.clone(),

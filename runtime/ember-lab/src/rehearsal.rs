@@ -16,7 +16,8 @@ use std::collections::BTreeSet;
 use std::fmt;
 use std::fs;
 use std::io::{Error, ErrorKind, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -165,6 +166,7 @@ pub struct PhaseEvidence {
 const MINIMAL_SLICE_PRODUCER: &str = "ember-lab-minimal-slice-producer";
 const MINIMAL_SLICE_SCHEMA: &str = "ember-lab-phase-producer-v1";
 const HOST_PEAK_SCHEMA: &str = "ember-lab-host-peak-v1";
+const COMPLETION_SCHEMA: &str = "ember-lab-minimal-slice-completion-v1";
 
 fn producer_error(detail: impl Into<String>) -> Error {
     Error::new(ErrorKind::InvalidData, detail.into())
@@ -182,6 +184,29 @@ fn write_new(path: &std::path::Path, bytes: &[u8]) -> Result<(), Error> {
     file.write_all(bytes)?;
     file.sync_all()?;
     Ok(())
+}
+
+/// Digest the exact phase output bytes in their canonical sequence.  The
+/// producer commits this digest only after all six phase files and its raw
+/// host observation have been durably written; the daemon recomputes it before
+/// admitting any phase.
+pub fn phase_artifact_digest(root: &Path) -> Result<String, Error> {
+    let mut material = Vec::new();
+    for name in [
+        "data_verify.json",
+        "train.json",
+        "checkpoint.json",
+        "publish.json",
+        "selectable_checkpoint.json",
+        "restore.json",
+    ] {
+        let bytes = fs::read(root.join(name))?;
+        material.extend_from_slice(name.as_bytes());
+        material.push(0);
+        material.extend_from_slice(sha256_bytes(&bytes).as_bytes());
+        material.push(b'\n');
+    }
+    Ok(sha256_bytes(&material))
 }
 
 #[cfg(windows)]
@@ -263,6 +288,7 @@ pub fn produce_minimal_slice(root: &std::path::Path, job_id: &str) -> Result<(),
         "checkpoint.bin",
         "published-checkpoint.bin",
         "host_peak.json",
+        "completion.json",
     ] {
         if root.join(name).exists() {
             return Err(producer_error(format!(
@@ -286,6 +312,12 @@ pub fn produce_minimal_slice(root: &std::path::Path, job_id: &str) -> Result<(),
         }
     }
 
+    if let Ok(delay_ms) = std::env::var("EMBER_LAB_MINIMAL_SLICE_DELAY_MS") {
+        let delay_ms = delay_ms
+            .parse::<u64>()
+            .map_err(|_| producer_error("minimal-slice delay is malformed"))?;
+        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+    }
     let peak_before = current_process_peak_bytes()?;
     let records = br#"{"id":0,"text":"ember"}
 {"id":1,"text":"lab"}
@@ -403,6 +435,27 @@ pub fn produce_minimal_slice(root: &std::path::Path, job_id: &str) -> Result<(),
     }))
     .map_err(|error| producer_error(format!("host peak serialization failed: {error}")))?;
     write_new(&root.join("host_peak.json"), &host_peak)?;
+    let phase_artifact_sha256 = phase_artifact_digest(root)?;
+    let producer_binary_sha256 = sha256_bytes(&fs::read(std::env::current_exe()?)?);
+    let producer_source_sha256 = crate::ember_lab_source_hash();
+    let completion = serde_json::to_vec(&serde_json::json!({
+        "schema": COMPLETION_SCHEMA,
+        "producer": MINIMAL_SLICE_PRODUCER,
+        "result": "COMPLETED",
+        "job_id": job_id,
+        "producer_pid": std::process::id(),
+        "completed_at_ms": SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64,
+        "phase_count": 6,
+        "phase_artifact_sha256": phase_artifact_sha256,
+        "host_peak_sha256": sha256_bytes(&host_peak),
+        "producer_binary_sha256": producer_binary_sha256,
+        "producer_source_sha256": producer_source_sha256,
+    }))
+    .map_err(|error| producer_error(format!("completion serialization failed: {error}")))?;
+    write_new(&root.join("completion.json"), &completion)?;
     Ok(())
 }
 

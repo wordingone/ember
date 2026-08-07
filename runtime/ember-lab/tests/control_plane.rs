@@ -114,6 +114,15 @@ fn write_restore_manifest(root: &Path, job_id: &str) -> PathBuf {
 }
 
 fn start_phase_fixture(root: &Path, job_id: &str, producer: bool) -> (Daemon, PathBuf) {
+    start_phase_fixture_with_delay(root, job_id, producer, 0)
+}
+
+fn start_phase_fixture_with_delay(
+    root: &Path,
+    job_id: &str,
+    producer: bool,
+    delay_ms: u64,
+) -> (Daemon, PathBuf) {
     let db = root.join(format!("{job_id}.sqlite3"));
     let (identity, identity_hash) = write_identity(root);
     let daemon = Daemon::open(&db).unwrap();
@@ -133,6 +142,9 @@ fn start_phase_fixture(root: &Path, job_id: &str, producer: bool) -> (Daemon, Pa
         spec = spec
             .with_env("EMBER_LAB_MINIMAL_SLICE", "1")
             .with_env("EMBER_LAB_MINIMAL_SLICE_JOB_ID", job_id);
+        if delay_ms > 0 {
+            spec = spec.with_env("EMBER_LAB_MINIMAL_SLICE_DELAY_MS", delay_ms.to_string());
+        }
     }
     daemon.start_job(spec).unwrap();
     let phase_root = root
@@ -1887,6 +1899,101 @@ fn minimal_slice_noop_child_cannot_authorize_any_phase() {
     let (daemon, _phase_root) = start_phase_fixture(&root, "phase-noop", false);
     assert!(daemon.execute_minimal_episode("phase-noop", 1).is_err());
     daemon.stop_job("phase-noop").unwrap();
+}
+
+#[test]
+fn delayed_minimal_slice_waits_for_terminal_completion() {
+    let root = sandbox("phase-delayed-completion");
+    let (daemon, _phase_root) = start_phase_fixture_with_delay(&root, "phase-delayed", true, 250);
+    let produced = daemon.execute_minimal_episode("phase-delayed", 1).unwrap();
+    assert_eq!(produced.len(), 6);
+    daemon.stop_job("phase-delayed").unwrap();
+}
+
+#[test]
+fn missing_completion_marker_refuses_even_when_phase_files_are_complete() {
+    let root = sandbox("phase-missing-completion");
+    let (daemon, phase_root) = start_phase_fixture(&root, "phase-missing-completion", true);
+    let _ = wait_for_host_peak(&phase_root.join("host_peak.json"));
+    for _ in 0..100 {
+        if phase_root.join("completion.json").exists() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    fs::remove_file(phase_root.join("completion.json")).unwrap();
+    assert!(daemon
+        .execute_minimal_episode("phase-missing-completion", 1)
+        .is_err());
+    daemon.stop_job("phase-missing-completion").unwrap();
+}
+
+#[test]
+fn foreign_completion_marker_cannot_authorize_consumption() {
+    let root = sandbox("phase-foreign-completion");
+    let (daemon, phase_root) = start_phase_fixture(&root, "phase-foreign", true);
+    for _ in 0..100 {
+        if phase_root.join("completion.json").exists() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    let mut completion: Value =
+        serde_json::from_slice(&fs::read(phase_root.join("completion.json")).unwrap()).unwrap();
+    completion["job_id"] = json!("foreign-job");
+    fs::write(
+        phase_root.join("completion.json"),
+        serde_json::to_vec(&completion).unwrap(),
+    )
+    .unwrap();
+    assert!(daemon.execute_minimal_episode("phase-foreign", 1).is_err());
+    daemon.stop_job("phase-foreign").unwrap();
+}
+
+#[test]
+fn stale_completion_marker_cannot_authorize_consumption() {
+    let root = sandbox("phase-stale-completion");
+    let (daemon, phase_root) = start_phase_fixture(&root, "phase-stale", true);
+    for _ in 0..100 {
+        if phase_root.join("completion.json").exists() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    let mut completion: Value =
+        serde_json::from_slice(&fs::read(phase_root.join("completion.json")).unwrap()).unwrap();
+    completion["completed_at_ms"] = json!(0);
+    fs::write(
+        phase_root.join("completion.json"),
+        serde_json::to_vec(&completion).unwrap(),
+    )
+    .unwrap();
+    assert!(daemon.execute_minimal_episode("phase-stale", 1).is_err());
+    daemon.stop_job("phase-stale").unwrap();
+}
+
+#[test]
+fn forged_host_probe_peak_is_not_authoritative() {
+    let root = sandbox("phase-forged-host-peak");
+    let (daemon, phase_root) = start_phase_fixture(&root, "phase-forged-peak", true);
+    for _ in 0..100 {
+        if phase_root.join("completion.json").exists() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    let mut peak: Value =
+        serde_json::from_slice(&fs::read(phase_root.join("host_peak.json")).unwrap()).unwrap();
+    peak["whole_run_peak_bytes"] = json!(1);
+    fs::write(
+        phase_root.join("host_peak.json"),
+        serde_json::to_vec(&peak).unwrap(),
+    )
+    .unwrap();
+    assert!(daemon
+        .execute_minimal_episode("phase-forged-peak", 1)
+        .is_err());
+    daemon.stop_job("phase-forged-peak").unwrap();
 }
 
 #[test]
