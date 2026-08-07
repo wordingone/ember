@@ -100,6 +100,15 @@ claim grammar. EMBER-02 owns the admissible 3B birth and full-shape cost-model
 measurement. #702 owned only the retired scale-specific attribution vehicle; no
 unique obligation remains after this transfer.
 
+The transfer is not merely asserted by this document. The exact residual
+clauses above were posted append-only to canonical #707 and accepted on its
+live public thread before #702 closure:
+<https://github.com/wordingone/ember/issues/707#issuecomment-5220742929>.
+That comment binds this PR head, preserves the no-result boundary, and names
+#707 plus EMBER-02 as the current owners. The prior #702
+`KEEP_OPEN_EVIDENCE_REQUIRED` comments remain truthful for the retired 2.2B
+vehicle; this ruling does not reinterpret them as completed evidence.
+
 ## Closure effect
 
 Close #702 as not planned/superseded after this ruling is on public master and
