@@ -89,6 +89,11 @@ impl RehearsalRunner for CurrentAuthorityRunner {
         let Ok(dispatch_receipt) = std::fs::read(&dispatch.receipt.path) else {
             return PhaseOutcome::Failed("current Ember Lab dispatch receipt is unreadable".into());
         };
+        if format!("{:x}", Sha256::digest(&dispatch_receipt)) != dispatch.receipt.sha256 {
+            return PhaseOutcome::Failed(
+                "current Ember Lab dispatch receipt hash changed after admission".into(),
+            );
+        }
         let Ok(value) = serde_json::from_slice::<Value>(&dispatch_receipt) else {
             return PhaseOutcome::Failed("current Ember Lab dispatch receipt is malformed".into());
         };
@@ -97,6 +102,12 @@ impl RehearsalRunner for CurrentAuthorityRunner {
             || value.get("result") != Some(&Value::String("PREFLIGHT_PASSED".into()))
         {
             return PhaseOutcome::Failed("current Ember Lab dispatch receipt is not green".into());
+        }
+        if !phase_event_authorized(&value, phase, &evidence.sha256) {
+            return PhaseOutcome::Failed(format!(
+                "current Ember Lab phase authority event is absent for {}",
+                phase.as_str()
+            ));
         }
         PhaseOutcome::Completed
     }
@@ -265,30 +276,62 @@ fn run_rehearsal(
         phase_evidence: manifest.phase_evidence.clone(),
     };
     let result = rehearsal::episode(capability, &manifest, &mut runner);
-    let dispatch_outcome = runner.dispatch.take().ok_or_else(|| {
+    let _dispatch_outcome = runner.dispatch.take().ok_or_else(|| {
         std::io::Error::other(
             "current Ember Lab dispatch authority refused before producing an operational receipt",
         )
     })?;
-    let mut operational: Value =
-        serde_json::from_slice(&std::fs::read(&dispatch_outcome.receipt.path)?)?;
-    operational["rehearsal"] = serde_json::to_value(&result.receipt)?;
-    operational["rehearsal_manifest_sha256"] = Value::String(manifest_sha256);
-    let bytes = serde_json::to_vec_pretty(&operational)?;
-    let temp = dispatch_outcome
-        .receipt
-        .path
-        .with_extension("rehearsal.tmp");
-    std::fs::write(&temp, &bytes)?;
-    std::fs::rename(&temp, &dispatch_outcome.receipt.path)?;
     runner.daemon.stop_job(&manifest.dispatch_id)?;
-    std::fs::write(receipt_path, &bytes)?;
+    let observation = json!({
+        "manifest_sha256": manifest_sha256,
+        "result": result.receipt,
+    });
+    let operational = runner
+        .daemon
+        .export_content_addressed_receipt_with_observation(
+            &manifest.dispatch_id,
+            receipt_path.parent().unwrap_or_else(|| Path::new(".")),
+            &observation,
+        )?;
+    if receipt_path != operational.path {
+        if receipt_path.exists() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                "requested rehearsal receipt path already exists",
+            )
+            .into());
+        }
+        std::fs::copy(&operational.path, receipt_path)?;
+    }
     println!(
-        "rehearse: {:?} -- receipt written to {}",
+        "rehearse: {:?} -- receipt {} written to {}",
         result.status,
+        operational.sha256,
         receipt_path.display()
     );
     Ok(result.status == rehearsal::RehearsalStatus::Completed)
+}
+
+fn phase_event_authorized(value: &Value, phase: Phase, evidence_sha256: &str) -> bool {
+    let expected_kind = format!("ember_lab_phase_{}", phase.as_str());
+    value
+        .get("events")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .any(|event| {
+            event.get("kind").and_then(Value::as_str) == Some(expected_kind.as_str())
+                && event
+                    .get("payload")
+                    .and_then(|payload| payload.get("job_id"))
+                    .and_then(Value::as_str)
+                    == value.get("job_id").and_then(Value::as_str)
+                && event
+                    .get("payload")
+                    .and_then(|payload| payload.get("evidence_sha256"))
+                    .and_then(Value::as_str)
+                    == Some(evidence_sha256)
+        })
 }
 
 fn dispatch(pipe: &str, manifest: &Path) -> Result<Value, Box<dyn std::error::Error>> {
@@ -388,5 +431,43 @@ fn main() {
     if let Err(error) = run() {
         eprintln!("ember-lab: {error}");
         std::process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn arbitrary_phase_bytes_without_current_authority_event_refuse() {
+        let receipt = json!({
+            "job_id": "dispatch-1",
+            "schema_version": "ember-lab-dispatch-preflight-v1",
+            "result": "PREFLIGHT_PASSED",
+            "events": []
+        });
+        assert!(!phase_event_authorized(
+            &receipt,
+            Phase::Train,
+            &"a".repeat(64)
+        ));
+        let wrong_job = json!({
+            "job_id": "dispatch-1",
+            "events": [{"kind":"ember_lab_phase_train","payload":{"job_id":"foreign","evidence_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}]
+        });
+        assert!(!phase_event_authorized(
+            &wrong_job,
+            Phase::Train,
+            &"a".repeat(64)
+        ));
+        let valid = json!({
+            "job_id": "dispatch-1",
+            "events": [{"kind":"ember_lab_phase_train","payload":{"job_id":"dispatch-1","evidence_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}]
+        });
+        assert!(phase_event_authorized(
+            &valid,
+            Phase::Train,
+            &"a".repeat(64)
+        ));
     }
 }

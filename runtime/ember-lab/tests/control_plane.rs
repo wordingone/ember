@@ -3,7 +3,7 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 use ember_lab::{Daemon, EmberLabError, JobSpec, JobState, RestartPolicy, SchedulePrediction};
-use serde_json::Value;
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs;
@@ -1510,6 +1510,19 @@ fn dead_persisted_running_job_is_exited_unknown_and_releases_its_lease() {
     assert_eq!(payload["state"], "exited");
     assert_eq!(payload["logs"]["stdout"]["sealed"], false);
     assert!(payload["logs"]["stdout"]["sha256"].is_null());
+    let enriched = reopened
+        .export_content_addressed_receipt_with_observation(
+            "short-job",
+            &root.join("receipts"),
+            &json!({"phase":"test"}),
+        )
+        .unwrap();
+    assert_eq!(enriched.sha256, sha256(&enriched.path));
+    let enriched_payload: Value =
+        serde_json::from_slice(&fs::read(&enriched.path).unwrap()).unwrap();
+    assert_eq!(enriched_payload["rehearsal"]["phase"], "test");
+    let original_payload: Value = serde_json::from_slice(&fs::read(first.path).unwrap()).unwrap();
+    assert!(original_payload.get("rehearsal").is_none());
 }
 
 #[cfg(windows)]

@@ -2750,26 +2750,41 @@ impl Daemon {
                 state: state.as_str().into(),
             });
         }
-        let bytes = self.receipt_bytes(job_id)?;
-        let sha256 = hash_bytes(&bytes);
-        fs::create_dir_all(directory)?;
-        let path = directory.join(format!("{sha256}.json"));
-        if path.exists() {
-            if fs::read(&path)? == bytes {
-                return Ok(ReceiptArtifact { path, sha256 });
-            }
-            return Err(EmberLabError::ReceiptHashCollision { path });
+        write_content_addressed_receipt(directory, &self.receipt_bytes(job_id)?)
+    }
+
+    /// Export the daemon-owned terminal receipt with one observation nested in
+    /// the same operational receipt family. The base receipt is rebuilt from
+    /// the verified job/identity/event database; callers cannot replace it in
+    /// place or self-author a new authority family.
+    pub fn export_content_addressed_receipt_with_observation(
+        &self,
+        job_id: &str,
+        directory: &Path,
+        observation: &Value,
+    ) -> Result<ReceiptArtifact> {
+        let state = self
+            .job_state(job_id)?
+            .ok_or_else(|| EmberLabError::JobNotFound {
+                job_id: job_id.into(),
+            })?;
+        if !matches!(
+            state,
+            JobState::Stopped | JobState::Exited | JobState::Failed
+        ) {
+            return Err(EmberLabError::NonTerminalReceipt {
+                job_id: job_id.into(),
+                state: state.as_str().into(),
+            });
         }
-        match atomic_create(&path, &bytes) {
-            Ok(()) => Ok(ReceiptArtifact { path, sha256 }),
-            Err(EmberLabError::ReceiptAlreadyExists { .. }) if fs::read(&path)? == bytes => {
-                Ok(ReceiptArtifact { path, sha256 })
-            }
-            Err(EmberLabError::ReceiptAlreadyExists { .. }) => {
-                Err(EmberLabError::ReceiptHashCollision { path })
-            }
-            Err(error) => Err(error),
-        }
+        let mut receipt: Value = serde_json::from_slice(&self.receipt_bytes(job_id)?)?;
+        receipt
+            .as_object_mut()
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                detail: "daemon operational receipt is not a JSON object".into(),
+            })?
+            .insert("rehearsal".into(), observation.clone());
+        write_content_addressed_receipt(directory, &serde_json::to_vec_pretty(&receipt)?)
     }
     #[cfg(windows)]
     fn retain_and_monitor(&self, job_id: &str, live: LiveProcess) -> Result<()> {
@@ -4450,6 +4465,28 @@ fn atomic_replace(path: &Path, bytes: &[u8]) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn write_content_addressed_receipt(directory: &Path, bytes: &[u8]) -> Result<ReceiptArtifact> {
+    let sha256 = hash_bytes(bytes);
+    fs::create_dir_all(directory)?;
+    let path = directory.join(format!("{sha256}.json"));
+    if path.exists() {
+        if fs::read(&path)? == bytes {
+            return Ok(ReceiptArtifact { path, sha256 });
+        }
+        return Err(EmberLabError::ReceiptHashCollision { path });
+    }
+    match atomic_create(&path, bytes) {
+        Ok(()) => Ok(ReceiptArtifact { path, sha256 }),
+        Err(EmberLabError::ReceiptAlreadyExists { .. }) if fs::read(&path)? == bytes => {
+            Ok(ReceiptArtifact { path, sha256 })
+        }
+        Err(EmberLabError::ReceiptAlreadyExists { .. }) => {
+            Err(EmberLabError::ReceiptHashCollision { path })
+        }
+        Err(error) => Err(error),
+    }
 }
 
 fn atomic_create(path: &Path, bytes: &[u8]) -> Result<()> {
