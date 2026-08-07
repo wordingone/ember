@@ -66,8 +66,9 @@ function requireHash(value: unknown, label: string): string {
 function requireArtifact(repoRoot: string, evidenceRoot: string, descriptor: unknown, label: string): void {
   const artifact = object(descriptor, label);
   let path = resolveRepoFile(repoRoot, artifact.path, `${label}.path`);
-  const prefix = "receipts/ember-cli/issue-303/";
-  if (!existsSync(path) && typeof artifact.path === "string" && artifact.path.startsWith(prefix)) {
+  const prefixes = ["artifacts/ember-cli/issue-303/", "receipts/ember-cli/issue-303/"];
+  const prefix = typeof artifact.path === "string" ? prefixes.find((candidate) => artifact.path.startsWith(candidate)) : undefined;
+  if (!existsSync(path) && prefix) {
     path = resolve(evidenceRoot, artifact.path.slice(prefix.length));
     const rel = relative(evidenceRoot, path);
     if (rel.startsWith("..") || isAbsolute(rel)) throw new Error(`${label}.path escapes evidence root`);
