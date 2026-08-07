@@ -16,18 +16,61 @@ The public #321 record contains obtainability, font, and scan-custody probes, no
 
 ## Lossless current-owner crosswalk
 
-| Historical obligation | Current EMBER-02 contract preserved by the accepted transfer |
-| --- | --- |
-| M0 edition integrity | At least three exact edition-pinned dual-observation books; title-page pixels, item metadata, PD eligibility, hashes, scan-vs-scan diff, era strata, single-printing semantics, and fail-closed obtainability |
-| M1 calibration | Frozen nine-stratum sample/RNG; explicit human-transcription or ratified measurement-only authority; segmentation exclusions; raw and normalized CER; bootstrap floor and frozen decision bands |
-| M2 seed comparison | Modern-only versus period-face font arms differing only in inventory; frozen renderer/degradation/data/training identity; per-book CER and preregistered proceed/flag/kill bands |
-| M2.5 confidence falsifier | Confidence-versus-correctness AUC and precision-at-threshold; no self-training when ranking is not above registered chance |
-| M3 self-training | Exactly one registered round, three pseudo-label subsamples, spread/inconclusive rule, seed-regime bands, per-book reporting, kill rules, and promotion only to a larger pilot |
-| Corpus/toolchain authority | Deterministic non-learned segmentation/render/degradation; no bundled OCR or external learned selection signal; exact font/license/glyph/source/pixel custody |
-| July amendments | DP-credit-first default; metadata/pixel evidence distinction; different-copy diff rule; source/access/era/drop rules; Junicode/EB Garamond qualification; IM Fell negative; Berkeley long-s and first-leaf scan custody preserved as inputs only |
-| Resource and claims | Bounded preregistered resource envelope; current Ember Lab/governed execution/corpus custody; selected-versus-rejected bias audit; honest confidence/CER token labels; refusal, interruption, deletion, and rollback evidence |
+### M0 edition integrity and obtainability
 
-The accepted transfer copies the complete clause text and retains the original issue/comments as provenance. It does not infer the unresolved transcription-governance decision, loosen any kill rule, or substitute the banked obtainability probes for the M0→M3 experiment.
+- Bind at least three edition-pinned dual-observation books with exact scan/text identity, title-page pixel evidence, publisher/place/year, item-level archive metadata, public-domain eligibility, content hashes, and the scan-vs-scan printing-difference rule.
+- Use DP-credit-first search by default. Define metadata-tier versus pixel-tier evidence, single-extant-printing semantics, accepted era strata, and every exclusion before intake.
+- HathiTrust is unavailable unless a receipted access method exists. A different repository or printing is not silently substituted.
+- Inter-edition disagreement at or above the registered M3 effect drops the book. Fewer than three qualifying books is a terminal refusal, not permission to shrink the pilot.
+
+### M1 frozen calibration floor
+
+- Freeze the nine strata as `book × page-third` and the RNG seed before inspecting scans. The target is approximately 100 hand-transcribed lines.
+- Choose one explicit authority: operator transcription, or a ratified rule that measurement-only calibration is outside the token-selection boundary. The crosswalk does not choose between them.
+- Only logged segmentation failures may be excluded; more than 10% blocks the pilot.
+- Measure raw and preregistered-normalized CER (long-s, ligatures, and u/v), bootstrap its confidence interval, and call downstream deltas inside that interval `INCONCLUSIVE`.
+- Preserve the `<=0.5%`, `0.5–2%`, and `>=2%` bands. The middle band expands to 300 lines and switches the fallback ground truth to the hand-corrected subset.
+
+### M2 synthetic-seed comparison
+
+- Compare modern-only and period-face font inventories while holding renderer, degradation, data, training, initialization, and evaluation identity fixed.
+- Report per-book and aggregate CER. The AT-ST anchor is from a different regime and remains a disclosed decision anchor, not a truth claim.
+- Preserve the `<=3%` proceed, `3–20%` flagged, and `>=20%` kill rules. Seed CER above 15% makes M3 void.
+
+### M2.5 confidence falsifier
+
+- Measure per-line confidence versus correctness, ranking AUC, and precision-at-threshold on the calibration set.
+- If AUC is not above `0.5 + registered epsilon`, confidence does not rank correctness and M3 remains unrun.
+
+### M3 one-round self-training
+
+- Run exactly one registered self-training round using transcription-posterior ranking and masking augmentation, repeated three times with different pseudo-label subsamples.
+- Spread at or above the registered delta is `INCONCLUSIVE`. Preserve the seed-CER regime bands, report every book separately, and prohibit pooling.
+- Kill when CER worsens in a majority of repeats or top-confidence-decile CER is not below overall seed CER.
+- Three books can promote only to a larger 10–20-book pilot, never to a corpus or capability claim.
+
+### Corpus and toolchain authority
+
+- Use deterministic projection-profile, Otsu, and connected-components segmentation. A real-scan probe must show less than 10% line failure on the registered crops.
+- Ban bundled IA/LoC OCR text, confidence, and boxes from selection, cropping, edition matching, and verification.
+- Bind font-file bytes, OFL/license, cmap/GSUB coverage (long-s, ct/st ligatures, and old-style numerals where claimed), source lineage, and the explicit human/non-generative creation-era ruling.
+- Bind deterministic renderer inputs and pixel hashes. Enumerate only mirrored-page bleed-through, morphological spread/erosion, threshold jitter, geometric warp, blur, and JP2 recompression. No learned/GAN degrader or external learned signal is admissible.
+
+### July amendments and banked inputs
+
+- Preserve DP-credit-first as the winning search direction; year match alone is not edition evidence; a different repository copy triggers the printing-difference rule.
+- The Berkeley 1725 long-s was observed in pixels. Five candidate scans banked 50/50 unconditional first-leaf JPEGs with hashes; these prove custody/obtainability, not title-page matches or OCR quality.
+- Junicode and EB Garamond clear the receipted glyph bar. IM Fell lacks old-style numerals and requires per-book disclosure.
+- Preserve the named drops: the audiobook release is the wrong artifact class; the Canadian/US edition mismatch is not interchangeable; the undated reprint remains unpinnable until dated. Source/access/jurisdiction/era facts remain preregistration inputs only.
+
+### Resource, selection-bias, and claim law
+
+- Freeze the bounded resource envelope before execution and use only current Ember Lab, governed execution, and corpus custody. Receipt every refusal, interruption, deletion, and rollback.
+- Later admitted tokens must carry the exact form `ember-ocr-confidence>=tau, calibration-CER=X at tau`, never `verified`.
+- Report selected-versus-rejected typography density and page-position composition so confidence selection cannot silently bias the realized corpus toward easy lines.
+- No OCR, corpus, training, checkpoint, capability, sufficient-pretraining, or milestone credit exists until the complete current-authority M0→M3 chain passes.
+
+The accepted transfer and this crosswalk retain every clause while the original issue/comments remain provenance. They do not infer the unresolved transcription-governance decision, loosen a kill rule, or substitute the banked probes for the M0→M3 experiment.
 
 ## Current architecture and claim boundary
 
