@@ -1,4 +1,5 @@
 {
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "schema": "ember-702-764-governed-exact-scale-cpu-v1",
   "ticket": "EMBER-702-764-EXACT-SCALE-CPU-STEP1",
   "ts": "20260806T200013Z",
