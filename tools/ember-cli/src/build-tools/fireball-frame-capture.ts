@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 import xtermHeadless from "@xterm/headless";
 import { spawn as spawnPty, type IPty } from "node-pty";
 import { READY_OSC } from "../cli/ready-sentinel.ts";
+import { redactHostPaths } from "./capture-prompt-input-243.ts";
 
 const { Terminal } = xtermHeadless;
 const COLS = 190;
@@ -265,6 +266,10 @@ function frameText(terminal: InstanceType<typeof Terminal>): string {
   return lines.join("\n") + "\n";
 }
 
+export function redactInstalledFrame(frame: string, repoRoot: string): string {
+  return Buffer.from(redactHostPaths(Buffer.from(frame, "utf8"), [repoRoot]).publicBytes).toString("utf8");
+}
+
 function fireballCells(terminal: InstanceType<typeof Terminal>) {
   const buffer = terminal.buffer.active;
   const cells: Array<{ row: number; col: number; char: string; fg: number; bg: number }> = [];
@@ -349,7 +354,7 @@ async function main(): Promise<void> {
         );
       }
       const capturedAt = Date.now();
-      const text = frameText(terminal);
+      const text = redactInstalledFrame(frameText(terminal), repoRoot);
       const occupancy = cells.map(({ row, col, char }) => ({ row, col, char }));
       const frameFile = `frame-${index + 1}.txt`;
       const cellsFile = `frame-${index + 1}.cells.json`;
