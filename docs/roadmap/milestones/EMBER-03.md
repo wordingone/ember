@@ -190,3 +190,16 @@ change without changing this contract.
 <!-- clause-id: EMBER-03.EXECUTION.002 -->
 Dependencies and scheduling are represented by the public roadmap index and
 execution graph. They cannot waive this milestone's completion certificate.
+
+## Accepted historical transfer: #696
+
+<!-- transfer-id: EMBER-03.TRANSFER.696.20260807 -->
+The historical #696 brain-server-supervisor obligation is accepted here as a
+lossless transfer to the current Ember Lab owner. The merged #802 behavioral
+carrier (`00eec85d2bd3073b137b51f2d89b78d905b46076`) proves the current owner for
+lazy owned-server consumption, daemon-owned health/process fencing, planned
+outage ordering and expiry, governed restore, activity/receipt evidence, and
+restart backoff. The historical borrowed 2.2B `:8083` vehicle is retired; no
+second launcher, lease, registry, or receipt authority is created. #696's
+surviving obligations remain governed by `runtime/ember-lab/src/server_supervisor.rs`
+and the `tools/ember-cli/src/entrypoints/owned-server-supervisor.ts` consumer.
