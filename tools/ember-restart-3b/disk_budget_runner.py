@@ -20,11 +20,6 @@ GIB = 1024 ** 3
 OPERATING_RESERVES_GIB = {"C": 150.0, "B": 250.0}
 FINAL_RECEIPT_RESERVATION_BYTES = 64 * 1024
 
-def _receipt_sha256(receipt: Mapping[str, object]) -> str:
-    payload = dict(receipt)
-    payload.pop("receipt_sha256", None)
-    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
-
 _CHILD_ENV_BOOTSTRAP = """
 import json
 import os
@@ -334,9 +329,6 @@ def run_budgeted(
     ]
     root_binding_error: str | None = None
     child_started = False
-    child_pid: int | None = None
-    child_start_time_ns: int | None = None
-    child_executable_sha256: str | None = None
     start_free = current_free_gib()
     start_backing = _backing_indicators()
     errors = assess_capacity(start_free, OPERATING_RESERVES_GIB, budgets)
@@ -450,9 +442,6 @@ def run_budgeted(
             "end_free_gib": end_free,
             "stop_reason": stop_reason,
             "child_exit_code": child_exit_code,
-            "child_pid": child_pid,
-            "child_start_time_ns": child_start_time_ns,
-            "child_executable_sha256": child_executable_sha256,
             "termination_wait_timed_out": termination_wait_timed_out,
             "runner_exit_code": 125 if outcome in {"STOPPED_BY_BUDGET", "CHILD_TERMINATION_TIMEOUT", "PRELAUNCH_REJECTED"} else child_exit_code or 0,
             "outcome": outcome,
@@ -461,7 +450,6 @@ def run_budgeted(
             receipt["outcome"] = "CHILD_ENV_ASSERTION_FAILED"
             receipt["stop_reason"] = child_assertion_error
             receipt["runner_exit_code"] = 125
-        receipt["receipt_sha256"] = _receipt_sha256(receipt)
         receipt_path.parent.mkdir(parents=True, exist_ok=True)
         receipt_path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
         return int(receipt["runner_exit_code"])
@@ -474,9 +462,6 @@ def run_budgeted(
         env=child_environment,
     )
     child_started = True
-    child_pid = int(process.pid)
-    child_start_time_ns = time.time_ns()
-    child_executable_sha256 = hashlib.sha256(pathlib.Path(sys.executable).resolve(strict=True).read_bytes()).hexdigest()
     stop_reason = None
     child_exit_code: int | None = None
     termination_wait_timed_out = False
