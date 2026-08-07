@@ -11,6 +11,7 @@ Pure-local, no GPU, no network.
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import fnmatch
@@ -35,6 +36,7 @@ from nativization_motion_trace import (
     git_blob_sha256,
     sha256_bytes,
     source_commit,
+    _semantic_layer_reachable,
 )
 
 
@@ -76,6 +78,9 @@ class NativizationMotionReceipt:
     next_home_candidate: str | None
     method: str
     limits: list[str]
+    predecessor_receipt_path: str | None
+    predecessor_receipt_sha256: str | None
+    predecessor_source_commit: str | None
 
 
 def sha256_file(path: Path) -> str:
@@ -236,6 +241,80 @@ def collect_imports(file_path: Path) -> tuple[set[str], int]:
     return imported_packages, lines_with_imports
 
 
+def _stdlib_modules() -> set[str]:
+    names = getattr(sys, "stdlib_module_names", None)
+    if names:
+        return set(names)
+    return {
+        "sys", "os", "re", "json", "pathlib", "typing", "dataclasses",
+        "hashlib", "subprocess", "argparse", "tempfile", "shutil", "copy",
+        "itertools", "functools", "collections", "abc", "enum", "datetime",
+        "time", "random", "math", "statistics", "decimal", "fractions",
+        "contextlib", "inspect", "warnings", "io", "codecs", "locale",
+        "gettext", "struct", "pickle", "copyreg", "types", "pydoc", "ast",
+        "html", "urllib", "csv", "sqlite3", "unittest", "logging", "traceback",
+        "platform", "queue", "signal", "threading", "multiprocessing", "gc",
+        "runpy", "glob", "fnmatch", "textwrap",
+    }
+
+
+def _owned_import_path(repo_root: Path, file_path: Path, module: str, commit: str) -> str | None:
+    candidates = [
+        file_path.parent / f"{module.split('.')[-1]}.py",
+        repo_root / (module.replace(".", "/") + ".py"),
+        repo_root / "tools" / "ember-restart-3b" / f"{module.split('.')[-1]}.py",
+    ]
+    for candidate in candidates:
+        try:
+            relative = candidate.resolve().relative_to(repo_root.resolve()).as_posix()
+        except ValueError:
+            continue
+        try:
+            git_blob_bytes(repo_root, commit, relative)
+        except ValueError:
+            continue
+        return relative
+    return None
+
+
+def collect_import_metrics(
+    file_path: Path,
+    repo_root: Path,
+    commit: str,
+) -> tuple[set[str], set[str], int, int]:
+    try:
+        payload = git_blob_bytes(repo_root, commit, file_path.resolve().relative_to(repo_root.resolve()).as_posix())
+        if file_path.read_bytes() != payload:
+            raise ValueError("measured source bytes drifted from exact Git authority")
+        tree = ast.parse(payload.decode("utf-8"), filename=str(file_path))
+    except (OSError, SyntaxError, UnicodeError, ValueError) as exc:
+        raise ValueError("measured source bytes are not exact Git authority") from exc
+    external: set[str] = set()
+    owned: set[str] = set()
+    borrowed_loc = 0
+    owned_loc = 0
+    stdlib = _stdlib_modules()
+    for node in ast.walk(tree):
+        module = None
+        if isinstance(node, ast.Import):
+            module = node.names[0].name
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            module = node.module
+        if not module:
+            continue
+        top = module.split(".")[0]
+        span = (getattr(node, "end_lineno", node.lineno) - node.lineno) + 1
+        if top in stdlib:
+            continue
+        if _owned_import_path(repo_root, file_path, module, commit) is not None:
+            owned.add(top)
+            owned_loc += span
+        else:
+            external.add(top)
+            borrowed_loc += span
+    return external, owned, borrowed_loc, owned_loc
+
+
 def scan_binaries(file_path: Path) -> set[str]:
     """Extract external binary names from subprocess/exec calls.
 
@@ -274,44 +353,49 @@ def measure_layer(
     layer_name: str,
     file_globs: list[str],
     critical_path_share: dict[str, Any] | None = None,
+    *,
+    source_commit: str | None = None,
 ) -> LayerMeasurement:
-    """Measure borrowed dependencies for a single layer.
-
-    Scans all matching files and counts:
-    - distinct external packages
-    - lines with external imports
-    - external binaries
-    """
+    """Measure borrowed/owned imports from exact Git-bound source bytes."""
     all_imports: set[str] = set()
-    total_lines_with_imports = 0
+    total_borrowed_loc = 0
+    total_owned_loc = 0
     all_binaries: set[str] = set()
-
-    # Find all matching files
-    files_to_scan = set()
+    files_to_scan: set[Path] = set()
     for glob_pattern in file_globs:
         for file_path in root.glob(glob_pattern):
             if file_path.is_file() and file_path.suffix == ".py":
                 files_to_scan.add(file_path)
-
-    # Scan each file
+    commit = source_commit
+    if commit is None and (root / ".git").exists():
+        try:
+            commit = subprocess.run(
+                ["git", "rev-parse", "--verify", "HEAD^{commit}"],
+                cwd=root, capture_output=True, text=True, check=True,
+            ).stdout.strip()
+        except (OSError, subprocess.CalledProcessError):
+            commit = None
     for file_path in sorted(files_to_scan):
-        imports, lines_count = collect_imports(file_path)
+        if commit:
+            imports, _owned, borrowed_loc, owned_loc = collect_import_metrics(
+                file_path, root, commit
+            )
+        else:
+            imports, borrowed_loc = collect_imports(file_path)
+            owned_loc = 0
         all_imports.update(imports)
-        total_lines_with_imports += lines_count
-
-        binaries = scan_binaries(file_path)
-        all_binaries.update(binaries)
-
+        total_borrowed_loc += borrowed_loc
+        total_owned_loc += owned_loc
+        all_binaries.update(scan_binaries(file_path))
     return LayerMeasurement(
         name=layer_name,
         borrowed_deps=sorted(all_imports),
         borrowed_deps_count=len(all_imports),
-        borrowed_loc=total_lines_with_imports,
-        owned_loc=0,  # v1: placeholder; v2 will compute actual owned lines
+        borrowed_loc=total_borrowed_loc,
+        owned_loc=total_owned_loc,
         borrowed_binaries=sorted(all_binaries),
         critical_path_share=critical_path_share,
     )
-
 
 def compute_deltas(
     current_layers: list[LayerMeasurement],
@@ -366,25 +450,40 @@ def identify_next_home_candidate(
     return None
 
 
-def load_prior_receipt(receipts_dir: Path) -> dict[str, Any] | None:
-    """Load the most recent prior receipt if it exists.
-
-    Receipts are named nm-<UTCts>.json and sorted by timestamp.
-    """
-    if not receipts_dir.exists():
-        return None
-
-    receipts = sorted(receipts_dir.glob("nm-*.json"))
-    if not receipts:
-        return None
-
-    # Load the most recent receipt
+def load_prior_receipt(
+    repo_root: Path,
+    receipt_path: Path | None,
+    expected_sha256: str | None,
+) -> tuple[dict[str, Any] | None, str | None, str | None]:
+    if receipt_path is None and expected_sha256 is None:
+        return None, None, None
+    if receipt_path is None or expected_sha256 is None:
+        raise ValueError("predecessor receipt path and hash are both required")
+    expected = _require_hex(expected_sha256, length=64, label="predecessor receipt hash")
+    path = Path(receipt_path).resolve()
     try:
-        with open(receipts[-1]) as f:
-            return json.load(f)
-    except (json.JSONDecodeError, OSError):
-        return None
-
+        relative = path.relative_to(repo_root.resolve()).as_posix()
+    except ValueError as exc:
+        raise ValueError("predecessor receipt must be under repo root") from exc
+    if not relative.startswith("receipts/nativization-motion/"):
+        raise ValueError("predecessor receipt path is outside governed receipt root")
+    try:
+        payload = path.read_bytes()
+    except OSError as exc:
+        raise ValueError("predecessor receipt cannot be read") from exc
+    actual = hashlib.sha256(payload).hexdigest()
+    if actual != expected:
+        raise ValueError("predecessor receipt hash mismatch")
+    try:
+        document = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("predecessor receipt is malformed") from exc
+    if not isinstance(document, dict) or not isinstance(document.get("layers"), list):
+        raise ValueError("predecessor receipt is not a motion receipt")
+    prior_source = document.get("source_commit")
+    if not isinstance(prior_source, str) or not _source_commit_is_usable(repo_root, prior_source):
+        raise ValueError("predecessor receipt source commit is not governed")
+    return document, actual, relative
 
 def get_invariant_sha(root: Path) -> str:
     """Get the invariant_sha256 from INVARIANT.md.
@@ -468,7 +567,7 @@ def build_run_import_manifest(
     ensure_source_tree_clean(root)
     bound_source_commit = source_commit(root)
     patterns = {name: get_layer_file_globs(name) for name in layer_names}
-    trace = build_trace(root, layer_names, patterns)
+    trace = build_trace(root, layer_names, patterns, bound_source_commit)
     trace_sha = sha256_bytes(canonical_json_bytes(trace))
     trace_producer = hashlib.sha256(Path(__file__).with_name("nativization_motion_trace.py").read_bytes()).hexdigest()
     manifest = {
@@ -600,7 +699,7 @@ def load_run_import_manifest(
                 raise ValueError("run import trace reachable source bytes drifted from Git source authority")
             if hashlib.sha256(blob).hexdigest() != item["sha256"]:
                 raise ValueError("run import trace reachable source hash is not Git-bound")
-        expected_reachable = _reachable_projection(root, event["entrypoint"])
+        expected_reachable = _reachable_projection(root, event["entrypoint"], source)
         if reachable != expected_reachable:
             raise ValueError("run import trace reachability is not rooted in the governed entrypoint")
         _require_hex(event["reachability_sha256"], length=64, label="reachability hash")
@@ -609,10 +708,9 @@ def load_run_import_manifest(
         layer_reachable = event["layer_reachable"]
         if not isinstance(layer_reachable, list):
             raise ValueError("run import trace layer reachability is invalid")
-        expected_layer_reachable = [
-            item for item in reachable
-            if any(fnmatch.fnmatchcase(item["path"], pattern) for pattern in patterns)
-        ]
+        expected_layer_reachable = _semantic_layer_reachable(
+            root, source, event["layer"], reachable
+        )
         if layer_reachable != expected_layer_reachable:
             raise ValueError("run import trace layer reachability is not predicate-derived")
         _require_hex(event["layer_reachability_sha256"], length=64, label="layer reachability hash")
@@ -650,6 +748,8 @@ def run_nativization_motion(
     *,
     run_import_manifest_path: Path | None = None,
     expected_run_import_manifest_sha256: str | None = None,
+    prior_receipt_path: Path | None = None,
+    expected_prior_receipt_sha256: str | None = None,
 ) -> str:
     """Main runner: measure nativization status and write receipt.
 
@@ -683,8 +783,13 @@ def run_nativization_motion(
         measurement = measure_layer(repo_root, layer_name, file_globs, run_layers[layer_name])
         layers.append(measurement)
 
-    # Load prior receipt for delta computation
-    prior_receipt = load_prior_receipt(receipts_dir)
+    # Load only the caller-declared predecessor; never select a mutable latest file.
+    if prior_receipt_path is None and expected_prior_receipt_sha256 is None:
+        if list(receipts_dir.glob("nm-*.json")):
+            raise ValueError("explicit predecessor receipt path and hash are required")
+    prior_receipt, prior_sha, prior_relative = load_prior_receipt(
+        repo_root, prior_receipt_path, expected_prior_receipt_sha256
+    )
     deltas = compute_deltas(layers, prior_receipt)
 
     # Identify next home candidate
@@ -723,6 +828,9 @@ def run_nativization_motion(
             "binary dependencies of dependencies not scanned",
             "relative imports are resolved only within the governed repository root",
         ],
+        predecessor_receipt_path=prior_relative,
+        predecessor_receipt_sha256=prior_sha,
+        predecessor_source_commit=prior_receipt.get("source_commit") if prior_receipt else None,
     )
 
     # Write receipt

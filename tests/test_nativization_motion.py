@@ -575,17 +575,25 @@ import numpy
             ],
         }
 
-        with open(receipts_dir / "nm-20260701T000000Z.json", "w") as f:
-            json.dump(prior_receipt, f)
-
-        # Run the runner
+        # Build the governed manifest before introducing the untracked predecessor fixture.
         manifest_path, manifest_sha = _write_run_import_manifest(
             tmp_path, parse_diagnostic_map(diagnostic_file)
         )
+        prior_path = receipts_dir / "nm-20260701T000000Z.json"
+        prior_receipt["source_commit"] = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout.strip()
+        with open(prior_path, "w") as f:
+            json.dump(prior_receipt, f)
+        prior_sha = hashlib.sha256(prior_path.read_bytes()).hexdigest()
+
+        # Run the runner with an explicit predecessor binding.
         receipt_path = run_nativization_motion(
             tmp_path,
             run_import_manifest_path=manifest_path,
             expected_run_import_manifest_sha256=manifest_sha,
+            prior_receipt_path=prior_path,
+            expected_prior_receipt_sha256=prior_sha,
         )
 
         # Load receipt
@@ -794,7 +802,12 @@ import numpy
             "CUDA kernels (cuBLAS matmul, elementwise)",
             "Autograd (`grad_fn` graph, `backward()`)",
         ]
-        manifest_path, _ = _write_run_import_manifest(tmp_path, layers)
+        _prepare_fixture_repo(tmp_path)
+        phase_root = tmp_path / "tools" / "ember-restart-3b"
+        (phase_root / "model.py").write_text("import torch\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-qm", "semantic predicate"], cwd=tmp_path, check=True)
+        manifest_path, _ = build_run_import_manifest(tmp_path, layers)
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         shares = {row["name"]: row["critical_path_share"] for row in manifest["layers"]}
         assert shares[layers[0]]["creation"] is True

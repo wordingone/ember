@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import hashlib
 import ast
-import fnmatch
 import json
 import subprocess
 from pathlib import Path
@@ -92,32 +91,72 @@ def _relative(root: Path, path: Path) -> str:
     return path.resolve().relative_to(root.resolve()).as_posix()
 
 
-def _resolve_local_import(root: Path, importer: Path, module: str) -> Path | None:
+LAYER_SEMANTICS = {
+    "CUDA kernels (cuBLAS matmul, elementwise)": {
+        "imports": ("torch",),
+        "symbols": ("cuda", "matmul"),
+    },
+    "Tensor abstraction (storage/strides/dtype)": {
+        "imports": ("torch",),
+        "symbols": ("Tensor", "tensor", "dtype", "stride"),
+    },
+    "Autograd (" + chr(96) + "grad_fn" + chr(96) + " graph, " + chr(96) + "backward()" + chr(96) + ")": {
+        "imports": ("torch.autograd",),
+        "symbols": ("backward", "grad_fn"),
+    },
+    "Optimizer (Adam/Muon: separable state + update)": {
+        "imports": ("torch.optim",),
+        "symbols": ("step", "Adam", "Muon"),
+    },
+    "Training loop (fwd ? loss ? backward ? step)": {
+        "imports": (),
+        "symbols": ("forward", "loss", "backward", "step"),
+    },
+}
+
+
+def _source_bytes(root: Path, commit: str | None, relative_path: str) -> bytes:
+    if commit is not None:
+        return git_blob_bytes(root, commit, relative_path)
+    return (root / relative_path).read_bytes()
+
+
+def _resolve_local_import(root: Path, importer: Path, module: str, commit: str | None = None) -> Path | None:
     if not module:
         return None
-    leaf = module.split(".")[-1]
     candidates = [
-        importer.parent / f"{leaf}.py",
+        importer.parent / f"{module.split('.')[-1]}.py",
         root / (module.replace(".", "/") + ".py"),
-        root / "tools" / "ember-restart-3b" / f"{leaf}.py",
+        root / "tools" / "ember-restart-3b" / f"{module.split('.')[-1]}.py",
     ]
     for candidate in candidates:
         try:
             candidate.resolve().relative_to(root.resolve())
         except ValueError:
             continue
+        if commit is not None:
+            try:
+                git_blob_bytes(root, commit, _relative(root, candidate))
+                return candidate.resolve()
+            except ValueError:
+                continue
         if candidate.is_file():
             return candidate.resolve()
     return None
 
 
-def _reachable_source_paths(root: Path, entrypoint: str) -> list[Path]:
+def _reachable_source_paths(root: Path, entrypoint: str, commit: str | None = None) -> list[Path]:
     first = (root / entrypoint).resolve()
     try:
         first.relative_to(root.resolve())
     except ValueError as exc:
         raise ValueError("governed phase entrypoint escapes repo root") from exc
-    if not first.is_file():
+    if commit is not None:
+        try:
+            git_blob_bytes(root, commit, entrypoint)
+        except ValueError as exc:
+            raise ValueError(f"governed phase entrypoint missing: {entrypoint}") from exc
+    elif not first.is_file():
         raise ValueError(f"governed phase entrypoint missing: {entrypoint}")
     queue = [first]
     seen: set[Path] = set()
@@ -126,9 +165,11 @@ def _reachable_source_paths(root: Path, entrypoint: str) -> list[Path]:
         if current in seen:
             continue
         seen.add(current)
+        relative = _relative(root, current)
         try:
-            tree = ast.parse(current.read_text(encoding="utf-8"), filename=str(current))
-        except (OSError, SyntaxError, UnicodeError) as exc:
+            payload = _source_bytes(root, commit, relative)
+            tree = ast.parse(payload.decode("utf-8"), filename=relative)
+        except (OSError, SyntaxError, UnicodeError, ValueError) as exc:
             raise ValueError("governed phase entrypoint is not parseable") from exc
         imported: list[str] = []
         for node in ast.walk(tree):
@@ -137,20 +178,58 @@ def _reachable_source_paths(root: Path, entrypoint: str) -> list[Path]:
             elif isinstance(node, ast.ImportFrom) and node.module:
                 imported.append(node.module)
         for module in sorted(set(imported)):
-            dependency = _resolve_local_import(root, current, module)
+            dependency = _resolve_local_import(root, current, module, commit)
             if dependency is not None and dependency not in seen:
                 queue.append(dependency)
     return sorted(seen, key=lambda path: _relative(root, path))
 
 
-def _reachable_projection(root: Path, entrypoint: str) -> list[dict[str, str]]:
+def _reachable_projection(root: Path, entrypoint: str, commit: str | None = None) -> list[dict[str, str]]:
     return [
-        {"path": _relative(root, path), "sha256": sha256_bytes(path.read_bytes())}
-        for path in _reachable_source_paths(root, entrypoint)
+        {"path": _relative(root, path), "sha256": sha256_bytes(_source_bytes(root, commit, _relative(root, path)))}
+        for path in _reachable_source_paths(root, entrypoint, commit)
     ]
 
 
-def build_trace(repo_root: Path, layer_names: list[str], layer_patterns: dict[str, list[str]]) -> dict[str, Any]:
+def _semantic_layer_reachable(
+    root: Path,
+    commit: str,
+    layer_name: str,
+    reachable: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    predicate = LAYER_SEMANTICS.get(layer_name)
+    if predicate is None:
+        raise ValueError(f"closed layer predicate is not defined for {layer_name}")
+    matched: list[dict[str, str]] = []
+    required_imports = tuple(predicate["imports"])
+    required_symbols = set(predicate["symbols"])
+    for item in reachable:
+        try:
+            tree = ast.parse(git_blob_bytes(root, commit, item["path"]).decode("utf-8"), filename=item["path"])
+        except (OSError, SyntaxError, UnicodeError, ValueError) as exc:
+            raise ValueError("reachable source is not parseable") from exc
+        imported = set()
+        names = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported.update(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported.add(node.module)
+            elif isinstance(node, ast.Name):
+                names.add(node.id)
+            elif isinstance(node, ast.Attribute):
+                names.add(node.attr)
+        import_hit = any(
+            value == module or value.startswith(module + ".")
+            for value in imported
+            for module in required_imports
+        )
+        symbol_hit = bool(required_symbols.intersection(names))
+        if import_hit or symbol_hit:
+            matched.append(item)
+    return matched
+
+def build_trace(repo_root: Path, layer_names: list[str], layer_patterns: dict[str, list[str]], source_commit: str | None = None) -> dict[str, Any]:
     events: list[dict[str, Any]] = []
     for name in layer_names:
         patterns = layer_patterns.get(name)
@@ -158,12 +237,13 @@ def build_trace(repo_root: Path, layer_names: list[str], layer_patterns: dict[st
             raise ValueError(f"closed layer predicate is required for {name}")
         for phase in TRACE_PHASES:
             entrypoint = PHASE_ENTRYPOINTS[phase]
-            reachable = _reachable_projection(repo_root, entrypoint)
+            reachable = _reachable_projection(repo_root, entrypoint, source_commit)
             entrypoint_digest = next(item["sha256"] for item in reachable if item["path"] == entrypoint)
-            layer_reachable = [
-                item for item in reachable
-                if any(fnmatch.fnmatchcase(item["path"], pattern) for pattern in patterns)
-            ]
+            if source_commit is None:
+                raise ValueError("exact Git source commit is required for trace construction")
+            layer_reachable = _semantic_layer_reachable(
+                repo_root, source_commit, name, reachable
+            )
             events.append(
                 {
                     "layer": name,
