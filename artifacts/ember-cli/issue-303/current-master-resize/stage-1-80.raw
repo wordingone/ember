@@ -1,0 +1,28 @@
+[?9001h[?1004h[?25l[2J[m[H[ember] model seat: OFFLINE (GPU-free observation; no model identity)
+]0;{local-05dbff4323a6}~~~~~~~~~~~~~~~~~~~~~~~~~~[?25h[ember] model endpoint: GPU-free mode (EMBER_GPU_FREE=1, model unavailable)
+[?1049h[?1003h[?1006h[?25l[H[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K[80C[3;1H[liveness-heartbeat] EMBER_CLI_HEADLESS_CAPTURE=1 -- this process is a capture harness, not the cockpit; heartbeat writer is INERT (no file will ever be created or written).[2J[38;2;255;122;61m[H╭─ ember ─────────────────────────────────────╮[36m┌─LIVE RUN / ACTIVITY/EVENT FEED┐[38;2;255;122;61m│    [38;2;239;125;26m[48;2;239;125;26m▀[m       [38;2;255;122;61m[1member[m[2m  v0.0.0[22m                    [20X[38;2;255;122;61m│[36m│ [33m[1mIDLE[m                          [K[36m│[38;2;255;122;61m│[m[2m   [38;2;212;84;28m[48;2;239;125;26m▀[38;2;239;125;26m[48;2;212;84;28m[22m▀[38;2;212;84;28m[48;2;239;125;26m▀[m      [2minference + training, on this[22m    [38;2;255;122;61m│[36m│   [90m[START]   [PAUSE]           [K[36m│[38;2;255;122;61m│            [12X[m[2mmachine[22m                          [26X[38;2;255;122;61m│[36m│   [90m[RESUME]   [RESTART]        [36m│[38;2;255;122;61m│[m[2m  [38;2;239;125;26m[48;2;196;52;16m▀[48;2;239;125;26m[22m▀[38;2;212;84;28m[48;2;212;84;28m▀[38;2;239;125;26m[48;2;239;125;26m▀[48;2;196;52;16m▀[m     OFFLINE - no model [38;2;78;201;163m· Local       [38;2;255;122;61m│[36m│ [m[2mSOURCE UNVERIFIED/UNBOUND[22m     [36m│[38;2;255;122;61m│   [38;2;122;31;10m[48;2;122;31;10m▀[38;2;196;52;16m[48;2;196;52;16m▀[38;2;122;31;10m[48;2;122;31;10m▀[m      [2m<p>~~~~~~~~~~~~~[22m                 [17X[38;2;255;122;61m│[36m│ ┌─ HOST MEMORY GIB ─────────┐ │[38;2;255;122;61m│[m[2m    [38;2;122;31;10m▀[m                                        [K[38;2;255;122;61m│[36m│ │ AWAITING FIRST SAMPLE     │ │[38;2;255;122;61m│[m[1mSpine — what Ember can be driven to do[22m       [38;2;255;122;61m│[36m│ └───────────────────────────┘ │[38;2;255;122;61m╰─────────────────────────────────────────────╯[36m│ [34m┌─ HOST RAM GIB ────────────┐ [36m│[m                                               [K[36m│ [34m│ AWAITING FIRST SAMPLE     │ [36m│[m                                               [K[36m│ [34m└───────────────────────────┘ [36m│[m                                               [K[36m│ [35m┌─ HOST VRAM GIB ───────────┐ [36m│[m                                               [K[36m│ [35m│ AWAITING FIRST SAMPLE     │ [36m│[m                                               [K[36m│ [35m└───────────────────────────┘ [36m│[m                                               [K[36m│ [32m┌─ HOST CPU % ──────────────┐ [36m│[m                                               [K[36m│ [32m│ AWAITING FIRST SAMPLE     │ [36m│[m                                               [K[36m│ [32m└───────────────────────────┘ [36m│[m                                               [K[36m│ [31m┌─ HOST GPU % ──────────────┐ [36m│[m                                               [K[36m│ [31m│ AWAITING FIRST SAMPLE     │ [36m│[m                                               [K[36m│ [31m└───────────────────────────┘ [36m│╭─────────────────────────────────────────────╮│ [33m… 5 more charts               [K[36m││ [1m❯[m                                           [K[36m││ [35m[1mACTIVITY/EVENT FEED[m           [K[36m││ [m[2m○ observe · [22m○ sandbox[2m ·[22m [2mno roundtrip yet[22m    [36m││ [m[2mactivity: none observed yet[22m   [36m│╰─────────────────────────────────────────────╯└───────────────────────────────┘]7770;EMBER_READY;v1[m[2m[7;14HData: <p>~~~~~~~~~~~~~[36m[22m[16C0.20 GiB[1C| min[1C0.20 max[1C0~[34m[10;52H25.62 GiB | min 25.62[1Cmax~[35m[13;52Hnvidia-smi unavailable[32m[16;52Hno reading    [1C      [31m[19;52Hnvidia-smi unavailable[m[36m[1m[3;50H[SELECT PROCESS ▾][m [90m[4;53HSTART]  [1C[PAU[1CE]   [5;50H  [RESUME]   [RESTART]   [m[1m[2m[6;50Hinspect[22m [32m[observatory]        [7;50H[watch] [model] [cockpit]    [8;50H[custody] [spine][12X[38;2;255;122;61m
+│[m[2m──────────────────────────────────────[22m       [38;2;255;122;61m│[m[1m[2m[2Cgovern[22m [32m[admit] +2 more       [38;2;255;122;61m
+╰─────────────────────────────────────────────╯[m[2m[2CSOURCE UNVERIFIED/UNBOUND[22m    [36m[11;50H┌─ HOST MEMORY GIB ─────────┐[12;50H│ 0.20 GiB | min 0.20 max 0~│[13;50H└───────────────────────────┘[34m[14;50H┌─ HOST RAM GIB ────────────┐[15;50H│ 25.62 GiB | min 25.62 max~│[16;50H└───────────────────────────┘[35m[17;50H┌─ HOST VRAM GIB ───────────┐[18;50H│ nvidia-smi unavailable    │[19;50H└───────────────────────────┘[33m[20;50H… 7 more charts[14X[35m[1m[21;50HACTIVITY/EVENT FEED[m[2m[22;50Hactivity: none observed yet[22m[23;50H[27X[27C
