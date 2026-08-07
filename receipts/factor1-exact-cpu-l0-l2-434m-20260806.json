@@ -1,0 +1,109 @@
+{
+  "ticket": "EMBER-764-EXACT-CPU-L0-L2",
+  "ts": "2026-08-07T02:06:35.034981Z",
+  "sha_convention": "sha256 over on-disk raw bytes, binary read, no line-ending normalization",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "schema": "ember-764-exact-cpu-l0-l2-evidence-v1",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "issues": ["#702", "#707", "#764"],
+  "public_binding": {
+    "repository": "wordingone/ember",
+    "pr_number": 1511,
+    "base_commit": "d648d7f9f692134bf51478d3303267666b04e342",
+    "branch": "feat/ember-legacy-77-factor1-764",
+    "self_reference": "UNBOUND_UNTIL_COMMIT"
+  },
+  "execution": {
+    "scale": "434M",
+    "execute": true,
+    "warmup_steps": 3,
+    "active_steps": 20,
+    "l2_threads": [1, 8, 16, 24, 32],
+    "l2_replicates": 1,
+    "tenancy": "CPU_ONLY_GPU_NOT_COLLECTED"
+  },
+  "source_identity": {
+    "runner_basename": "factor1_exact_cpu_l0_l2.py",
+    "runner_sha256": "eaaaf444603a5c46b7f58c28f788bfc5624375c7d065552cbc85ad03b46a6153",
+    "producer_sha256": "c2d44db0c22729ff071700cd261f823ba23c6e8626413855d5a729ad06e2d114",
+    "optimizer_sha256": "aba53b54e30a2da075fced76c11625221af5b0c0dac90ffdc137974dc19784f6"
+  },
+  "raw_result": {
+    "schema": "ember-764-exact-cpu-l0-l2-v1",
+    "bytes": 118732,
+    "sha256": "2dfcd74b655aa3b16aa33c05868b957dfbcd65a5618978ca55b4568740bc0624"
+  },
+  "windows": {
+    "l0_control_unprofiled_wall_seconds": {
+      "n": 20,
+      "median": 65.08030195,
+      "ci95": [64.7153509, 65.28971325],
+      "min": 64.2919769,
+      "max": 69.9461638
+    },
+    "l0_profiled_wall_seconds": {
+      "n": 20,
+      "median": 66.32370155,
+      "ci95": [66.08943905, 66.59608395],
+      "min": 65.6716884,
+      "max": 68.6261033
+    },
+    "l2_wall_seconds": {
+      "1": {"n": 20, "median": 64.6553862, "ci95": [64.2540896, 65.5186994], "min": 63.5939483, "max": 73.5981492},
+      "8": {"n": 20, "median": 10.64882445, "ci95": [10.48430345, 11.438787], "min": 10.2335716, "max": 12.7982225},
+      "16": {"n": 20, "median": 9.7634771, "ci95": [9.6610501, 9.8341847], "min": 9.3722624, "max": 11.0262112},
+      "24": {"n": 20, "median": 8.08299865, "ci95": [8.035844, 8.80918425], "min": 7.9533366, "max": 12.5282745},
+      "32": {"n": 20, "median": 7.85893535, "ci95": [7.5228829, 8.01826455], "min": 7.0266998, "max": 11.8698841}
+    }
+  },
+  "controls": {
+    "matched_unprofiled_control": true,
+    "warmup_active_windows": true,
+    "host_wall_and_process_counters": true,
+    "transfer_bytes_from_production_hooks": true,
+    "cpu_only_no_gpu_claim": true
+  },
+  "governed_disk": {
+    "schema_version": 7,
+    "outcome": "COMPLETED",
+    "child_exit_code": 0,
+    "runner_exit_code": 0,
+    "termination_wait_timed_out": false,
+    "operating_reserve_breaches": 0,
+    "max_write_gib": {"B": 8.0, "C": 0.0},
+    "runtime_stop_floors_gib": {"B": 250.0, "C": 150.0},
+    "file_delta_bytes_by_drive": {"B": 118797, "C": 0},
+    "file_max_concurrent_growth_bytes_by_drive": {"B": 5600067584, "C": 0},
+    "start_free_gib": {"B": 265.7985610961914, "C": 153.91960906982422},
+    "end_free_gib": {"B": 265.56066131591797, "C": 152.42839813232422},
+    "root_scan_uncertainty": {
+      "count": 4,
+      "classification": "EPHEMERAL_TEMP_CLEANUP",
+      "disclosure": "Temporary optimizer files were removed before bounded root-scan observation; no reserve breach or exit failure was observed."
+    },
+    "receipt_bytes": 5781226,
+    "receipt_sha256": "fb498ea8ea67a9ff147258870ebf7405a1b4ea74797fb90c05d0806701edb202"
+  },
+  "clause_results": {
+    "#764_cpu_l0_l2_434m": "EXECUTED_NONTERMINAL",
+    "#702_attribution": "PARTIAL_NONTERMINAL",
+    "#707_gpu_l3": "NOT_RUN"
+  },
+  "verdict": "CPU_L0_L2_EXECUTED_NONTERMINAL_PENDING_GPU_L3_AND_CURE_A_B",
+  "unmet_criteria": [
+    "exact 2.2B current-native producer gate and CPU L0-L2",
+    "governed single-tenant GPU L3",
+    "precision/factorization/equivalence evidence",
+    "cure-A and cure-B evidence",
+    "closure-ready public receipts for #702/#707/#764"
+  ],
+  "claim_boundary": {
+    "gpu": false,
+    "training": false,
+    "capability": false,
+    "issue_702_completion": false,
+    "issue_764_completion": false
+  }
+}
