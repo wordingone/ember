@@ -11,6 +11,7 @@ use sha2::{Digest, Sha256};
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 fn usage() -> &'static str {
@@ -154,9 +155,9 @@ fn dispatch(pipe: &str, manifest: &Path) -> Result<Value, Box<dyn std::error::Er
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     match parse_args().map_err(std::io::Error::other)? {
         Command::Serve { db, pipe } => {
-            let daemon = Daemon::open(&db)?;
+            let daemon = Arc::new(Daemon::open(&db)?);
             daemon.reconcile()?;
-            serve_named_pipe(&daemon, &pipe)?;
+            serve_named_pipe(daemon, &pipe)?;
         }
         Command::Dispatch { pipe, manifest } => {
             println!("{}", serde_json::to_string(&dispatch(&pipe, &manifest)?)?);

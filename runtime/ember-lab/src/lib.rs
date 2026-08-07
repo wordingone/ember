@@ -20,6 +20,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub mod rpc;
 pub mod scratch;
+pub mod server_supervisor;
 pub mod training_verify;
 
 pub type Result<T> = std::result::Result<T, EmberLabError>;
@@ -2352,6 +2353,16 @@ impl Daemon {
             })
             .optional()?;
         value.map(|v| JobState::parse(&v)).transpose()
+    }
+
+    pub fn job_pid(&self, job_id: &str) -> Result<Option<u32>> {
+        Ok(self
+            .conn()?
+            .query_row("SELECT pid FROM jobs WHERE job_id=?1", [job_id], |row| {
+                row.get::<_, i64>(0)
+            })
+            .optional()?
+            .and_then(|pid| u32::try_from(pid).ok()))
     }
 
     pub fn job_exit_code(&self, job_id: &str) -> Result<Option<i64>> {
