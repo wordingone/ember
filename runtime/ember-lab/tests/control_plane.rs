@@ -1722,7 +1722,7 @@ fn phase_events_are_daemon_bound_and_foreign_bytes_do_not_authorize() {
     let forged_path = forged_dir.join("forged-train.json");
     fs::write(
         &forged_path,
-        br#"{"schema":"ember-lab-phase-evidence-v1","producer":"ember-lab-daemon","result":"COMPLETED","job_id":"phase-job","phase":"train"}"#,
+        br#"{"schema":"ember-lab-phase-evidence-v1","producer":"ember-lab-daemon","result":"COMPLETED","job_id":"phase-job","phase":"train","operation_sha256":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","operation":"ember-lab-daemon-phase-owner:train","operation_evidence":{"kind":"running_job_observed","pid":1,"lease_epoch":1},"observed_at_ms":1,"lease_epoch":1,"pid":1,"identity_verified":true,"job_started_event":true}"#,
     )
     .unwrap();
     let (forged_pid, forged_lease_epoch): (u32, i64) = rusqlite::Connection::open(&db)
@@ -1747,6 +1747,7 @@ fn phase_events_are_daemon_bound_and_foreign_bytes_do_not_authorize() {
                     "phase":"train",
                     "evidence_file_name":"forged-train.json",
                     "evidence_sha256": sha256(&forged_path),
+                    "operation_sha256":"f".repeat(64),
                     "lease_epoch":forged_lease_epoch,
                     "pid":forged_pid,
                     "event_authority_sha256":"0".repeat(64),
@@ -1761,7 +1762,10 @@ fn phase_events_are_daemon_bound_and_foreign_bytes_do_not_authorize() {
     assert!(!daemon
         .phase_event_authorized("phase-job", "train", &sha256(&forged_path))
         .unwrap());
-    let produced = daemon.produce_rehearsal_phase_events("phase-job").unwrap();
+    assert!(daemon.load_authorized_phase_evidence("phase-job").is_err());
+    let produced = daemon.execute_minimal_episode("phase-job").unwrap();
+    let consumed = daemon.load_authorized_phase_evidence("phase-job").unwrap();
+    assert_eq!(consumed.len(), 6);
     let evidence = produced
         .iter()
         .find(|evidence| evidence.phase == ember_lab::rehearsal::Phase::Train)
@@ -1778,7 +1782,7 @@ fn phase_events_are_daemon_bound_and_foreign_bytes_do_not_authorize() {
         .phase_event_authorized("phase-job", "train", &evidence.sha256)
         .unwrap());
     daemon.stop_job("phase-job").unwrap();
-    assert!(daemon.produce_rehearsal_phase_events("phase-job").is_err());
+    assert!(daemon.execute_minimal_episode("phase-job").is_err());
 }
 
 #[test]
@@ -1794,9 +1798,7 @@ fn phase_owner_refuses_before_dispatch_and_emits_no_later_phase_events() {
         .acquire_lease("cpu-fixture", "phase-not-started")
         .unwrap();
 
-    assert!(daemon
-        .produce_rehearsal_phase_events("phase-not-started")
-        .is_err());
+    assert!(daemon.execute_minimal_episode("phase-not-started").is_err());
     assert!(!daemon
         .job_event_kinds("phase-not-started")
         .unwrap()

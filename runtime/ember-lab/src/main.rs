@@ -280,7 +280,11 @@ fn run_rehearsal(
     }
     let daemon = Daemon::open(db_path)?;
     let dispatch_outcome = daemon.dispatch_manifest(dispatch_manifest_path)?;
-    let phase_evidence = match daemon.produce_rehearsal_phase_events(&manifest.dispatch_id) {
+    // The daemon executes the current production phase owners and persists
+    // their fenced evidence.  The rehearsal adapter only consumes the
+    // resulting records below; it never creates phase evidence itself.
+    daemon.execute_minimal_episode(&manifest.dispatch_id)?;
+    let phase_evidence = match daemon.load_authorized_phase_evidence(&manifest.dispatch_id) {
         Ok(evidence) => evidence,
         Err(error) => {
             let _ = daemon.stop_job(&manifest.dispatch_id);

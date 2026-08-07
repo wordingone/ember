@@ -122,7 +122,7 @@ fn missing_or_estimated_measurement_refuses_before_runner() {
 
 #[test]
 fn phase_evidence_mutation_refuses_before_any_phase() {
-    let mut invalid = manifest();
+    let invalid = manifest();
     fs::write(&invalid.phase_evidence[0].path, b"mutated").unwrap();
     let result = episode("fixture-capability", &invalid, &mut Runner { fail: None });
     assert_eq!(result.status, RehearsalStatus::Refused);

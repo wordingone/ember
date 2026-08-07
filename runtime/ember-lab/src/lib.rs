@@ -2877,12 +2877,11 @@ impl Daemon {
         Ok(rows)
     }
 
-    /// Produce the six non-admission phase artifacts from the current Ember Lab
-    /// daemon's live job boundary.  The rehearsal adapter cannot supply paths,
-    /// bytes, producer names, or event payloads: every artifact is created under
-    /// the daemon log root and every event is fenced to the running job identity
-    /// and lease epoch here.
-    pub fn produce_rehearsal_phase_events(
+    /// Execute the six current Ember Lab phase owners for a live dispatched job.
+    /// Each owner performs its operation first, then records a daemon-fenced
+    /// evidence artifact/event.  Rehearsal is a consumer of these records, never
+    /// their producer.
+    pub fn execute_minimal_episode(
         &self,
         job_id: &str,
     ) -> Result<Vec<crate::rehearsal::PhaseEvidence>> {
@@ -3011,12 +3010,15 @@ impl Daemon {
                 });
             }
             let observed_at_ms = now_ms();
+            let operation_sha256 = hash_bytes(&serde_json::to_vec(&operation)?);
+            self.record_phase_operation(job_id, phase, &operation_sha256, observed_at_ms, &row)?;
             let bytes = serde_json::to_vec(&json!({
                 "schema": "ember-lab-phase-evidence-v1",
                 "producer": "ember-lab-daemon",
                 "result": "COMPLETED",
                 "job_id": job_id,
                 "phase": phase.as_str(),
+                "operation_sha256": operation_sha256,
                 "operation": format!("ember-lab-daemon-phase-owner:{}", phase.as_str()),
                 "operation_evidence": operation,
                 "observed_at_ms": observed_at_ms,
@@ -3031,47 +3033,15 @@ impl Daemon {
                 atomic_create(&path, &bytes)?;
             }
             let evidence_sha256 = hash_bytes(&bytes);
-            let event_authority_sha256 = hash_bytes(
-                format!(
-                    "ember-lab-phase-authority-v1|{}|{}|{}|{}|{}|{}",
-                    job_id,
-                    phase.as_str(),
-                    evidence_sha256,
-                    row.lease_epoch,
-                    row.pid,
-                    self.ember_lab_binary_sha256,
-                    self.ember_lab_source_sha256,
-                )
-                .as_bytes(),
-            );
-            let mut conn = self.conn()?;
-            let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-            let fenced = tx.execute(
-                "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,?4)",
-                params![
-                    job_id,
-                    observed_at_ms,
-                    format!("ember_lab_phase_{}", phase.as_str()),
-                    json!({
-                        "producer": "ember-lab-daemon",
-                        "job_id": job_id,
-                        "phase": phase.as_str(),
-                        "evidence_file_name": path.file_name().unwrap().to_string_lossy(),
-                        "evidence_sha256": evidence_sha256,
-                        "event_authority_sha256": event_authority_sha256,
-                        "lease_epoch": row.lease_epoch,
-                        "pid": row.pid,
-                    })
-                    .to_string(),
-                ],
+            self.record_phase_event(
+                job_id,
+                phase,
+                &path,
+                &evidence_sha256,
+                &operation_sha256,
+                observed_at_ms,
+                &row,
             )?;
-            if fenced != 1 {
-                return Err(EmberLabError::InvalidTransition {
-                    job_id: job_id.into(),
-                    detail: "current Ember Lab phase event was not persisted".into(),
-                });
-            }
-            tx.commit()?;
             produced.push(PhaseEvidence {
                 phase,
                 path,
@@ -3082,6 +3052,223 @@ impl Daemon {
                 .map(|evidence| (evidence.path.clone(), evidence.sha256.clone()));
         }
         Ok(produced)
+    }
+
+    /// Persist one phase event through the daemon's existing job/lease
+    /// authority.  This private helper is reachable only from production phase
+    /// owners; callers can never supply a producer/authority string to it.
+    fn record_phase_operation(
+        &self,
+        job_id: &str,
+        phase: crate::rehearsal::Phase,
+        operation_sha256: &str,
+        observed_at_ms: i64,
+        row: &JobProcessRow,
+    ) -> Result<()> {
+        let operation_authority_sha256 = hash_bytes(
+            format!(
+                "ember-lab-phase-operation-v1|{}|{}|{}|{}|{}|{}",
+                job_id,
+                phase.as_str(),
+                operation_sha256,
+                row.lease_epoch,
+                row.pid,
+                self.ember_lab_source_sha256,
+            )
+            .as_bytes(),
+        );
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let inserted = tx.execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,?4)",
+            params![
+                job_id,
+                observed_at_ms,
+                format!("ember_lab_phase_operation_{}", phase.as_str()),
+                json!({
+                    "producer": "ember-lab-daemon",
+                    "job_id": job_id,
+                    "phase": phase.as_str(),
+                    "operation_sha256": operation_sha256,
+                    "operation_authority_sha256": operation_authority_sha256,
+                    "lease_epoch": row.lease_epoch,
+                    "pid": row.pid,
+                })
+                .to_string(),
+            ],
+        )?;
+        if inserted != 1 {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "current Ember Lab phase operation was not persisted".into(),
+            });
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn record_phase_event(
+        &self,
+        job_id: &str,
+        phase: crate::rehearsal::Phase,
+        evidence_path: &Path,
+        evidence_sha256: &str,
+        operation_sha256: &str,
+        observed_at_ms: i64,
+        row: &JobProcessRow,
+    ) -> Result<()> {
+        let canonical = fs::canonicalize(evidence_path)?;
+        if hash_file(&canonical)? != evidence_sha256 {
+            return Err(EmberLabError::DispatchBindingMismatch {
+                path: canonical,
+                expected: evidence_sha256.into(),
+                actual: hash_file(evidence_path)?,
+            });
+        }
+        let evidence_file_name = canonical
+            .file_name()
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                detail: "phase evidence path has no file name".into(),
+            })?
+            .to_string_lossy()
+            .into_owned();
+        let event_authority_sha256 = hash_bytes(
+            format!(
+                "ember-lab-phase-authority-v2|{}|{}|{}|{}|{}|{}|{}|{}",
+                job_id,
+                phase.as_str(),
+                evidence_sha256,
+                operation_sha256,
+                row.lease_epoch,
+                row.pid,
+                self.ember_lab_binary_sha256,
+                self.ember_lab_source_sha256,
+            )
+            .as_bytes(),
+        );
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let fenced = tx.execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,?4)",
+            params![
+                job_id,
+                observed_at_ms,
+                format!("ember_lab_phase_{}", phase.as_str()),
+                json!({
+                    "producer": "ember-lab-daemon",
+                    "job_id": job_id,
+                    "phase": phase.as_str(),
+                    "evidence_file_name": evidence_file_name,
+                    "evidence_sha256": evidence_sha256,
+                    "operation_sha256": operation_sha256,
+                    "event_authority_sha256": event_authority_sha256,
+                    "lease_epoch": row.lease_epoch,
+                    "pid": row.pid,
+                })
+                .to_string(),
+            ],
+        )?;
+        if fenced != 1 {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "current Ember Lab phase event was not persisted".into(),
+            });
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Consume only phase evidence already emitted by the current daemon
+    /// owners.  No file or event is created here; missing, forged, malformed,
+    /// or unbound evidence fails the episode before a later phase can run.
+    pub fn load_authorized_phase_evidence(
+        &self,
+        job_id: &str,
+    ) -> Result<Vec<crate::rehearsal::PhaseEvidence>> {
+        use crate::rehearsal::{Phase, PhaseEvidence};
+
+        let expected_root = self
+            .log_dir
+            .join("rehearsal")
+            .join(hash_bytes(job_id.as_bytes()));
+        let conn = self.conn()?;
+        let mut consumed = Vec::with_capacity(6);
+        for phase in [
+            Phase::DataVerify,
+            Phase::Train,
+            Phase::Checkpoint,
+            Phase::Publish,
+            Phase::SelectableCheckpoint,
+            Phase::Restore,
+        ] {
+            let kind = format!("ember_lab_phase_{}", phase.as_str());
+            let mut stmt = conn.prepare(
+                "SELECT payload_json FROM events WHERE job_id=?1 AND kind=?2 ORDER BY seq",
+            )?;
+            let mut found = None;
+            for payload in stmt.query_map(params![job_id, kind], |row| row.get::<_, String>(0))? {
+                let payload = payload?;
+                let value: Value = match serde_json::from_str(&payload) {
+                    Ok(value) => value,
+                    Err(_) => continue,
+                };
+                let Some(file_name) = value.get("evidence_file_name").and_then(Value::as_str)
+                else {
+                    continue;
+                };
+                let Some(evidence_sha256) = value.get("evidence_sha256").and_then(Value::as_str)
+                else {
+                    continue;
+                };
+                let Some(operation_sha256) = value.get("operation_sha256").and_then(Value::as_str)
+                else {
+                    continue;
+                };
+                let path = expected_root.join(file_name);
+                if path.parent() != Some(expected_root.as_path())
+                    || value.get("producer") != Some(&Value::String("ember-lab-daemon".into()))
+                    || value.get("job_id") != Some(&Value::String(job_id.into()))
+                    || value.get("phase") != Some(&Value::String(phase.as_str().into()))
+                    || !path.is_file()
+                    || !self.phase_event_authorized(job_id, phase.as_str(), evidence_sha256)?
+                {
+                    continue;
+                }
+                let bytes = fs::read(&path)?;
+                let evidence: Value = match serde_json::from_slice(&bytes) {
+                    Ok(value) => value,
+                    Err(_) => continue,
+                };
+                if evidence.get("schema")
+                    != Some(&Value::String("ember-lab-phase-evidence-v1".into()))
+                    || evidence.get("producer") != Some(&Value::String("ember-lab-daemon".into()))
+                    || evidence.get("result") != Some(&Value::String("COMPLETED".into()))
+                    || evidence.get("job_id") != Some(&Value::String(job_id.into()))
+                    || evidence.get("phase") != Some(&Value::String(phase.as_str().into()))
+                    || evidence.get("operation_sha256")
+                        != Some(&Value::String(operation_sha256.into()))
+                    || hash_bytes(&bytes) != evidence_sha256
+                {
+                    continue;
+                }
+                found = Some(PhaseEvidence {
+                    phase,
+                    path,
+                    sha256: evidence_sha256.into(),
+                });
+                break;
+            }
+            let evidence = found.ok_or_else(|| EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: format!(
+                    "current Ember Lab production phase evidence is absent or unbound for {}",
+                    phase.as_str()
+                ),
+            })?;
+            consumed.push(evidence);
+        }
+        Ok(consumed)
     }
 
     pub fn phase_event_authorized(
@@ -3110,6 +3297,10 @@ impl Daemon {
             let Some(pid) = value.get("pid").and_then(Value::as_u64) else {
                 continue;
             };
+            let Some(operation_sha256) = value.get("operation_sha256").and_then(Value::as_str)
+            else {
+                continue;
+            };
             let expected_path = expected_root.join(file_name);
             if expected_path.parent() != Some(expected_root.as_path())
                 || !expected_path.is_file()
@@ -3119,10 +3310,11 @@ impl Daemon {
             }
             let authority = hash_bytes(
                 format!(
-                    "ember-lab-phase-authority-v1|{}|{}|{}|{}|{}|{}",
+                    "ember-lab-phase-authority-v2|{}|{}|{}|{}|{}|{}|{}|{}",
                     job_id,
                     phase,
                     evidence_sha256,
+                    operation_sha256,
                     lease_epoch,
                     pid,
                     self.ember_lab_binary_sha256,
@@ -3130,7 +3322,47 @@ impl Daemon {
                 )
                 .as_bytes(),
             );
-            if value.get("producer") == Some(&Value::String("ember-lab-daemon".into()))
+            let operation_kind = format!("ember_lab_phase_operation_{phase}");
+            let mut operation_stmt =
+                conn.prepare("SELECT payload_json FROM events WHERE job_id=?1 AND kind=?2")?;
+            let operation_bound = operation_stmt
+                .query_map(params![job_id, operation_kind], |row| {
+                    row.get::<_, String>(0)
+                })?
+                .filter_map(|payload| payload.ok())
+                .any(|payload| {
+                    let Ok(operation) = serde_json::from_str::<Value>(&payload) else {
+                        return false;
+                    };
+                    let Some(operation_authority) = operation
+                        .get("operation_authority_sha256")
+                        .and_then(Value::as_str)
+                    else {
+                        return false;
+                    };
+                    let expected_operation_authority = hash_bytes(
+                        format!(
+                            "ember-lab-phase-operation-v1|{}|{}|{}|{}|{}|{}",
+                            job_id,
+                            phase,
+                            operation_sha256,
+                            lease_epoch,
+                            pid,
+                            self.ember_lab_source_sha256,
+                        )
+                        .as_bytes(),
+                    );
+                    operation.get("producer") == Some(&Value::String("ember-lab-daemon".into()))
+                        && operation.get("job_id") == Some(&Value::String(job_id.into()))
+                        && operation.get("phase") == Some(&Value::String(phase.into()))
+                        && operation.get("operation_sha256")
+                            == Some(&Value::String(operation_sha256.into()))
+                        && operation.get("lease_epoch") == Some(&Value::from(lease_epoch))
+                        && operation.get("pid") == Some(&Value::from(pid))
+                        && operation_authority == expected_operation_authority
+                });
+            if operation_bound
+                && value.get("producer") == Some(&Value::String("ember-lab-daemon".into()))
                 && value.get("job_id") == Some(&Value::String(job_id.into()))
                 && value.get("phase") == Some(&Value::String(phase.into()))
                 && value.get("evidence_sha256") == Some(&Value::String(evidence_sha256.into()))
