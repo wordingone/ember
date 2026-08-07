@@ -107,4 +107,3 @@ path, its 26 shard rows, the v0-00025 SHA/token count, and the absence of the
 packed shard paths. A reviewer cannot reproduce the historical recurrence
 measurement without the missing exact shard bytes; that limitation is an
 explicit result, not an unresolved claim hidden by this document.
-
