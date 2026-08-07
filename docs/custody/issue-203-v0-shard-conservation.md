@@ -31,6 +31,28 @@ Consequently the receipt hashes preserve identity claims only; they cannot
 reconstruct or re-quantify the missing bytes. No current public tree entry is
 `v0-00025.bin` or any of the 26 packed v0 shard files.
 
+## Preserved 2026-08-04 audit-derived disposition
+
+The latest public provenance audit comment is retained as decision evidence,
+not misrepresented as a fresh reopening of the unavailable shard bytes. Using
+deterministic writer order and verified boundary arithmetic, that audit reports
+that shard 25 is **99.91% `gutenberg_en` plus 100% of `ledger_mit`**, with an
+approximately **117x recurrence**. It reports these quantified alternatives:
+
+- dropping shard 25 loses roughly 267 million admissible tokens, including all
+  `ledger_mit`, and yields an L3-clean total of `5,039,812,933`;
+- rule-based exact-hash document deduplication and rebuild preserves those
+  tokens and yields an L3-clean total of `5,306,794,511`;
+- retaining the shard preserves the reported recurrence in the only fully
+  owned source.
+
+The audit therefore recommends **exact-hash deduplication and rebuild**, with a
+new shard SHA-256 bound to a v1 writer receipt and the deduplication rule stated
+inline. This recommendation is conserved for any authorized reopening. The
+percentages, recurrence factor, and totals above are audit-derived public facts;
+this PR does not independently revalidate them from the absent exact shard
+bytes and does not mint a replacement shard or receipt.
+
 ## Complete #203 obligation map
 
 The original issue has four obligations. Each is retained here rather than
@@ -46,8 +68,10 @@ silently dropped:
 3. Select rebuild, drop, or accept-with-disclosure. The current disposition is
    `DEPRECATED_ABSORBED`: the removed v0 admission path is not a current
    executable route; the historical loss and non-recoverability are disclosed
-   here. Any future cure decision must use newly acquired, independently
-   hashed bytes and must not relabel the old receipt.
+   here. The preserved audit-derived recommendation is rule-based exact-hash
+   deduplication and rebuild, because dropping loses all `ledger_mit`; execution
+   of that recommendation still requires newly acquired, independently hashed
+   bytes and must not relabel the old receipt.
 4. Preserve W1/cross-rung comparability. The obligation survives as a custody
    reopening condition owned by EMBER-01. It is not asserted satisfied by the
    receipt alone, and no historical v0 result is promoted to a current rung.
@@ -59,7 +83,7 @@ silently dropped:
 | v0 token-shard admission and `shards-v0` files | `REMOVED` from current Ember Lab admission | Current custody spine: completed roadmap issue #1115 plus `docs/custody/ember-01-custody-README.md` and `docs/roadmap/certificates/EMBER-01.md` |
 | v0-00025 recurrence characterization | `SUPERSEDED` as an executable path; obligation retained | EMBER-01 reopening rule `EMBER-01.REOPEN.001`; exact bytes must be restored before recomputation |
 | 26-shard self-duplication quantification | `SUPERSEDED` as an executable path; obligation retained | EMBER-01 receipt/root census and future exact-byte re-verification |
-| rebuild/drop/accept-with-disclosure decision | `DEPRECATED_ABSORBED` | This disclosure plus EMBER-01.REOPEN.001; no current admission decision is inferred |
+| rebuild/drop/accept-with-disclosure decision | `DEPRECATED_ABSORBED`; audit recommendation preserved | Exact-hash dedup/rebuild under EMBER-01.REOPEN.001 after byte custody is restored; no current rebuilt shard is inferred |
 | W1/cross-rung comparability | `CURRENT` as a preserved obligation, not a completed result | EMBER-01 current custody/benchmark spine; any unique uncustodied artifact reopens EMBER-01 |
 
 The current Ember Lab primitives reused by this transfer are the exact-byte
