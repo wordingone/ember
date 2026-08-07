@@ -2,7 +2,7 @@
 
 <!-- transfer-id: EMBER-11.REOPEN.099 -->
 
-This is a canonical EMBER-11 evidence annex, not a new authority. Issue #99's original rung-1 terminal and W1-control checkpoint-publication subjects are unavailable historical vehicles. This annex retires only those obsolete subjects; it does not retire the underlying obligations and makes no checkpoint, release, capability, training, or milestone claim.
+This is a canonical EMBER-11 evidence annex, not a new authority. Issue #99's original rung-1 terminal and W1-control checkpoint-publication subjects are unavailable historical vehicles. This annex retires only those obsolete subjects; their hashes and names remain historical provenance/non-availability evidence, not future upload requirements. The surviving obligation is publication of the first admissible current owned checkpoint(s), selected by current Ember Lab authority, with no checkpoint, release, capability, training, or milestone claim until independent verification.
 
 ## Lossless transfer to EMBER-11/#1125
 
@@ -14,4 +14,4 @@ This is a canonical EMBER-11 evidence annex, not a new authority. Issue #99's or
 
 ## Current evidence and disposition
 
-At public master `63f33108b41441d4bd7ef93662d2cc29d51d0ecd`, historical implementation commit `42e15a7` is unreachable and the checkpoint-specific staging/upload path is absent. The merged #1308/#1311 HF custody substrate is an off-box mirror/release seat only, not a checkpoint publication receipt. Historical #99 correction https://github.com/wordingone/ember/issues/99#issuecomment-5015595316 and canonical transfer https://github.com/wordingone/ember/issues/1125#issuecomment-5221000188 are orientation/obligation evidence, not landing evidence. No parallel corpus, checkpoint, upload, or receipt authority is introduced.
+At public master `63f33108b41441d4bd7ef93662d2cc29d51d0ecd`, historical implementation commit `42e15a7` is unreachable and the checkpoint-specific staging/upload path is absent. The merged #1308/#1311 HF custody substrate is an off-box mirror/release seat only, not a checkpoint publication receipt. Historical #99 correction https://github.com/wordingone/ember/issues/99#issuecomment-5015595316, canonical transfer https://github.com/wordingone/ember/issues/1125#issuecomment-5221000188, and its correction https://github.com/wordingone/ember/issues/1125#issuecomment-5221069854 are orientation/obligation evidence, not landing evidence. No parallel corpus, checkpoint, upload, or receipt authority is introduced.
