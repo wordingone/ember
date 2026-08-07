@@ -251,6 +251,13 @@ fn run_rehearsal(
         )
         .into());
     }
+    if manifest.measurements.source != rehearsal::MeasurementSource::HostProbe {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "operator rehearsal requires a current HostProbe measurement",
+        )
+        .into());
+    }
     let mut runner = CurrentAuthorityRunner {
         daemon: Daemon::open(db_path)?,
         dispatch_manifest: dispatch_manifest_path.to_path_buf(),
