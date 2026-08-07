@@ -3,7 +3,7 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 import { describe, expect, test } from "bun:test";
-import { validateInstalledCaptureReceipt } from "./fireball-frame-capture.ts";
+import { validateInstalledCaptureReceipt, waitForDistinctCells } from "./fireball-frame-capture.ts";
 
 const SHA = "a".repeat(64);
 const COMMIT = "b".repeat(40);
@@ -56,6 +56,22 @@ function receipt() {
 }
 
 describe("issue #54 installed fireball capture receipt", () => {
+  test("waits past a cadence alias until the real terminal style changes", async () => {
+    const frames = [
+      [{ row: 2, col: 4, char: "▀", fg: 1, bg: -1 }],
+      [{ row: 2, col: 4, char: "▀", fg: 1, bg: -1 }],
+      [{ row: 2, col: 4, char: "▀", fg: 2, bg: -1 }],
+    ];
+    let index = 0;
+    const observed = await waitForDistinctCells(
+      frames[0]!,
+      () => frames[Math.min(++index, frames.length - 1)]!,
+      async () => undefined,
+      3,
+    );
+    expect(observed).toEqual(frames[2]!);
+  });
+
   test("accepts exactly three source-bound captures at least two seconds apart", () => {
     expect(validateInstalledCaptureReceipt(receipt())).toBeUndefined();
   });

@@ -24,6 +24,8 @@ const COLS = 190;
 const ROWS = 85;
 const MIN_CAPTURE_GAP_MS = 2_000;
 const CAPTURE_GAP_MS = 2_200;
+const STYLE_POLL_MS = 50;
+const STYLE_POLL_ATTEMPTS = 40;
 const TIMEOUT_MS = 20_000;
 const SHA_RE = /^[0-9a-f]{64}$/;
 const COMMIT_RE = /^[0-9a-f]{40}$/;
@@ -70,6 +72,21 @@ function canonical(value: unknown): string {
     ).join(",")}}`;
   }
   return JSON.stringify(value);
+}
+
+export async function waitForDistinctCells(
+  previous: JsonObject[],
+  readCells: () => JsonObject[] | Promise<JsonObject[]>,
+  sleepFn: (milliseconds: number) => Promise<void>,
+  maxAttempts = STYLE_POLL_ATTEMPTS,
+): Promise<JsonObject[]> {
+  const prior = canonical(previous);
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const cells = await readCells();
+    if (canonical(cells) !== prior) return cells;
+    await sleepFn(STYLE_POLL_MS);
+  }
+  throw new Error("installed fireball style did not change within the bounded observation window");
 }
 
 function validateCell(value: unknown, label: string, includeStyle: boolean): JsonObject {
@@ -277,9 +294,20 @@ async function main(): Promise<void> {
     for (let index = 0; index < 3; index++) {
       if (index > 0) await sleep(CAPTURE_GAP_MS);
       await writes;
+      let cells = fireballCells(terminal);
+      if (index > 0) {
+        const previousCells = captures[index - 1]!.cells as JsonObject[];
+        cells = await waitForDistinctCells(
+          previousCells,
+          async () => {
+            await writes;
+            return fireballCells(terminal);
+          },
+          sleep,
+        );
+      }
       const capturedAt = Date.now();
       const text = frameText(terminal);
-      const cells = fireballCells(terminal);
       const occupancy = cells.map(({ row, col, char }) => ({ row, col, char }));
       const frameFile = `frame-${index + 1}.txt`;
       const cellsFile = `frame-${index + 1}.cells.json`;
