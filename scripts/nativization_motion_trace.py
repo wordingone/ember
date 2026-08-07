@@ -191,7 +191,7 @@ def _reachable_source_paths(root: Path, entrypoint: str, commit: str | None = No
         relative = _relative(root, current)
         try:
             payload = _source_bytes(root, commit, relative)
-            tree = ast.parse(payload.decode("utf-8"), filename=relative)
+            tree = ast.parse(payload.decode("utf-8-sig"), filename=relative)
         except (OSError, SyntaxError, UnicodeError, ValueError) as exc:
             raise ValueError("governed phase entrypoint is not parseable") from exc
         imported: list[str] = []
@@ -228,7 +228,7 @@ def _semantic_layer_reachable(
     required_symbols = set(predicate["symbols"])
     for item in reachable:
         try:
-            tree = ast.parse(git_blob_bytes(root, commit, item["path"]).decode("utf-8"), filename=item["path"])
+            tree = ast.parse(git_blob_bytes(root, commit, item["path"]).decode("utf-8-sig"), filename=item["path"])
         except (OSError, SyntaxError, UnicodeError, ValueError) as exc:
             raise ValueError("reachable source is not parseable") from exc
         imported = set()

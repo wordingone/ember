@@ -286,7 +286,7 @@ def collect_import_metrics(
         payload = git_blob_bytes(repo_root, commit, file_path.resolve().relative_to(repo_root.resolve()).as_posix())
         if file_path.read_bytes() != payload:
             raise ValueError("measured source bytes drifted from exact Git authority")
-        tree = ast.parse(payload.decode("utf-8"), filename=str(file_path))
+        tree = ast.parse(payload.decode("utf-8-sig"), filename=str(file_path))
     except (OSError, SyntaxError, UnicodeError, ValueError) as exc:
         raise ValueError("measured source bytes are not exact Git authority") from exc
     external: set[str] = set()
