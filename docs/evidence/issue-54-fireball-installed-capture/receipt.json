@@ -1,0 +1,569 @@
+{
+  "schema_version": "ember-fireball-installed-capture-receipt-v1",
+  "ticket": "EMBER-CLI-ISSUE-54-FIREBALL-CAPTURE",
+  "ts": "2026-08-07T15:27:46.771Z",
+  "sha_convention": "sha256 over exact on-disk file bytes, no normalization",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "issue_id": 54,
+  "result": "MEASURED",
+  "source_commit": "5782062d60602d040efe18edce07ffeadc726eb7",
+  "binary_sha256": "5d353c5679ac9fb1f8102dd0d81d9ba3d30d75af5c37190eeef2383ee165410c",
+  "capture_tool_sha256": "a65e3f56ad3a09ce3a8b2d80f4da872dfe28324c5883de4f3f05962ad94081ee",
+  "viewport": {
+    "desktop_width_px": 1720,
+    "desktop_height_px": 1440,
+    "snapped_side": "left",
+    "terminal_columns": 190,
+    "terminal_rows": 85
+  },
+  "captures": [
+    {
+      "capture_id": "frame-1",
+      "captured_at": "2026-08-07T15:27:46.771Z",
+      "elapsed_ms_from_previous": null,
+      "frame_file": "frame-1.txt",
+      "frame_sha256": "4444f1ab3ea4bd00b8b753acbab00afc0042d023fe33c46934634d671a3036c5",
+      "cells_file": "frame-1.cells.json",
+      "cells_sha256": "07a8f6e92908c71db012500f145d524eac4b784427225acc22e4daeb623d35ed",
+      "bounds": {
+        "min_row": 1,
+        "max_row": 5,
+        "min_col": 3,
+        "max_col": 7,
+        "width": 5,
+        "height": 5
+      },
+      "occupancy": [
+        {
+          "row": 1,
+          "col": 5,
+          "char": "▀"
+        },
+        {
+          "row": 2,
+          "col": 4,
+          "char": "▀"
+        },
+        {
+          "row": 2,
+          "col": 5,
+          "char": "▀"
+        },
+        {
+          "row": 2,
+          "col": 6,
+          "char": "▀"
+        },
+        {
+          "row": 3,
+          "col": 3,
+          "char": "▀"
+        },
+        {
+          "row": 3,
+          "col": 4,
+          "char": "▀"
+        },
+        {
+          "row": 3,
+          "col": 5,
+          "char": "▀"
+        },
+        {
+          "row": 3,
+          "col": 6,
+          "char": "▀"
+        },
+        {
+          "row": 3,
+          "col": 7,
+          "char": "▀"
+        },
+        {
+          "row": 4,
+          "col": 4,
+          "char": "▀"
+        },
+        {
+          "row": 4,
+          "col": 5,
+          "char": "▀"
+        },
+        {
+          "row": 4,
+          "col": 6,
+          "char": "▀"
+        },
+        {
+          "row": 5,
+          "col": 5,
+          "char": "▀"
+        }
+      ],
+      "cells": [
+        {
+          "row": 1,
+          "col": 5,
+          "char": "▀",
+          "fg": 15695130,
+          "bg": 13915164
+        },
+        {
+          "row": 2,
+          "col": 4,
+          "char": "▀",
+          "fg": 15695130,
+          "bg": 13915164
+        },
+        {
+          "row": 2,
+          "col": 5,
+          "char": "▀",
+          "fg": 13915164,
+          "bg": 15695130
+        },
+        {
+          "row": 2,
+          "col": 6,
+          "char": "▀",
+          "fg": 15695130,
+          "bg": 13915164
+        },
+        {
+          "row": 3,
+          "col": 3,
+          "char": "▀",
+          "fg": 13915164,
+          "bg": 13915164
+        },
+        {
+          "row": 3,
+          "col": 4,
+          "char": "▀",
+          "fg": 15695130,
+          "bg": 13915164
+        },
+        {
+          "row": 3,
+          "col": 5,
+          "char": "▀",
+          "fg": 13915164,
+          "bg": 15695130
+        },
+        {
+          "row": 3,
+          "col": 6,
+          "char": "▀",
+          "fg": 15695130,
+          "bg": 13915164
+        },
+        {
+          "row": 3,
+          "col": 7,
+          "char": "▀",
+          "fg": 13915164,
+          "bg": 13915164
+        },
+        {
+          "row": 4,
+          "col": 4,
+          "char": "▀",
+          "fg": 13915164,
+          "bg": 8003338
+        },
+        {
+          "row": 4,
+          "col": 5,
+          "char": "▀",
+          "fg": 15695130,
+          "bg": 12858384
+        },
+        {
+          "row": 4,
+          "col": 6,
+          "char": "▀",
+          "fg": 13915164,
+          "bg": 8003338
+        },
+        {
+          "row": 5,
+          "col": 5,
+          "char": "▀",
+          "fg": 8003338,
+          "bg": -1
+        }
+      ]
+    },
+    {
+      "capture_id": "frame-2",
+      "captured_at": "2026-08-07T15:27:49.112Z",
+      "elapsed_ms_from_previous": 2341,
+      "frame_file": "frame-2.txt",
+      "frame_sha256": "edd1ebae6f4f8a73401829d697e516abb68556d17a4ed188d2d62849ffc34c8d",
+      "cells_file": "frame-2.cells.json",
+      "cells_sha256": "50a74520f9255ef7b84575a70061d5c6ad03fb16fb26cccf74d9cc6ea790b24f",
+      "bounds": {
+        "min_row": 1,
+        "max_row": 5,
+        "min_col": 3,
+        "max_col": 7,
+        "width": 5,
+        "height": 5
+      },
+      "occupancy": [
+        {
+          "row": 1,
+          "col": 5,
+          "char": "▀"
+        },
+        {
+          "row": 2,
+          "col": 4,
+          "char": "▀"
+        },
+        {
+          "row": 2,
+          "col": 5,
+          "char": "▀"
+        },
+        {
+          "row": 2,
+          "col": 6,
+          "char": "▀"
+        },
+        {
+          "row": 3,
+          "col": 3,
+          "char": "▀"
+        },
+        {
+          "row": 3,
+          "col": 4,
+          "char": "▀"
+        },
+        {
+          "row": 3,
+          "col": 5,
+          "char": "▀"
+        },
+        {
+          "row": 3,
+          "col": 6,
+          "char": "▀"
+        },
+        {
+          "row": 3,
+          "col": 7,
+          "char": "▀"
+        },
+        {
+          "row": 4,
+          "col": 4,
+          "char": "▀"
+        },
+        {
+          "row": 4,
+          "col": 5,
+          "char": "▀"
+        },
+        {
+          "row": 4,
+          "col": 6,
+          "char": "▀"
+        },
+        {
+          "row": 5,
+          "col": 5,
+          "char": "▀"
+        }
+      ],
+      "cells": [
+        {
+          "row": 1,
+          "col": 5,
+          "char": "▀",
+          "fg": 15695130,
+          "bg": 13915164
+        },
+        {
+          "row": 2,
+          "col": 4,
+          "char": "▀",
+          "fg": 13915164,
+          "bg": 15695130
+        },
+        {
+          "row": 2,
+          "col": 5,
+          "char": "▀",
+          "fg": 15695130,
+          "bg": 13915164
+        },
+        {
+          "row": 2,
+          "col": 6,
+          "char": "▀",
+          "fg": 13915164,
+          "bg": 15695130
+        },
+        {
+          "row": 3,
+          "col": 3,
+          "char": "▀",
+          "fg": 13915164,
+          "bg": 12858384
+        },
+        {
+          "row": 3,
+          "col": 4,
+          "char": "▀",
+          "fg": 13915164,
+          "bg": 13915164
+        },
+        {
+          "row": 3,
+          "col": 5,
+          "char": "▀",
+          "fg": 15695130,
+          "bg": 15695130
+        },
+        {
+          "row": 3,
+          "col": 6,
+          "char": "▀",
+          "fg": 13915164,
+          "bg": 13915164
+        },
+        {
+          "row": 3,
+          "col": 7,
+          "char": "▀",
+          "fg": 13915164,
+          "bg": 12858384
+        },
+        {
+          "row": 4,
+          "col": 4,
+          "char": "▀",
+          "fg": 8003338,
+          "bg": 8003338
+        },
+        {
+          "row": 4,
+          "col": 5,
+          "char": "▀",
+          "fg": 12858384,
+          "bg": 12858384
+        },
+        {
+          "row": 4,
+          "col": 6,
+          "char": "▀",
+          "fg": 8003338,
+          "bg": 8003338
+        },
+        {
+          "row": 5,
+          "col": 5,
+          "char": "▀",
+          "fg": 8003338,
+          "bg": -1
+        }
+      ]
+    },
+    {
+      "capture_id": "frame-3",
+      "captured_at": "2026-08-07T15:27:51.335Z",
+      "elapsed_ms_from_previous": 2223,
+      "frame_file": "frame-3.txt",
+      "frame_sha256": "3d6359a36d3029aaa23a291ff0274823315640310c91a474f5d1cb6bcf207af9",
+      "cells_file": "frame-3.cells.json",
+      "cells_sha256": "1e7e5d58685445ab7505c5212ad94cf764bc31b0677afbc8cf417e49dbcffc18",
+      "bounds": {
+        "min_row": 1,
+        "max_row": 5,
+        "min_col": 3,
+        "max_col": 7,
+        "width": 5,
+        "height": 5
+      },
+      "occupancy": [
+        {
+          "row": 1,
+          "col": 5,
+          "char": "▀"
+        },
+        {
+          "row": 2,
+          "col": 4,
+          "char": "▀"
+        },
+        {
+          "row": 2,
+          "col": 5,
+          "char": "▀"
+        },
+        {
+          "row": 2,
+          "col": 6,
+          "char": "▀"
+        },
+        {
+          "row": 3,
+          "col": 3,
+          "char": "▀"
+        },
+        {
+          "row": 3,
+          "col": 4,
+          "char": "▀"
+        },
+        {
+          "row": 3,
+          "col": 5,
+          "char": "▀"
+        },
+        {
+          "row": 3,
+          "col": 6,
+          "char": "▀"
+        },
+        {
+          "row": 3,
+          "col": 7,
+          "char": "▀"
+        },
+        {
+          "row": 4,
+          "col": 4,
+          "char": "▀"
+        },
+        {
+          "row": 4,
+          "col": 5,
+          "char": "▀"
+        },
+        {
+          "row": 4,
+          "col": 6,
+          "char": "▀"
+        },
+        {
+          "row": 5,
+          "col": 5,
+          "char": "▀"
+        }
+      ],
+      "cells": [
+        {
+          "row": 1,
+          "col": 5,
+          "char": "▀",
+          "fg": 15695130,
+          "bg": 15695130
+        },
+        {
+          "row": 2,
+          "col": 4,
+          "char": "▀",
+          "fg": 13915164,
+          "bg": 15695130
+        },
+        {
+          "row": 2,
+          "col": 5,
+          "char": "▀",
+          "fg": 15695130,
+          "bg": 13915164
+        },
+        {
+          "row": 2,
+          "col": 6,
+          "char": "▀",
+          "fg": 13915164,
+          "bg": 15695130
+        },
+        {
+          "row": 3,
+          "col": 3,
+          "char": "▀",
+          "fg": 15695130,
+          "bg": 12858384
+        },
+        {
+          "row": 3,
+          "col": 4,
+          "char": "▀",
+          "fg": 15695130,
+          "bg": 15695130
+        },
+        {
+          "row": 3,
+          "col": 5,
+          "char": "▀",
+          "fg": 13915164,
+          "bg": 13915164
+        },
+        {
+          "row": 3,
+          "col": 6,
+          "char": "▀",
+          "fg": 15695130,
+          "bg": 15695130
+        },
+        {
+          "row": 3,
+          "col": 7,
+          "char": "▀",
+          "fg": 15695130,
+          "bg": 12858384
+        },
+        {
+          "row": 4,
+          "col": 4,
+          "char": "▀",
+          "fg": 8003338,
+          "bg": 8003338
+        },
+        {
+          "row": 4,
+          "col": 5,
+          "char": "▀",
+          "fg": 12858384,
+          "bg": 12858384
+        },
+        {
+          "row": 4,
+          "col": 6,
+          "char": "▀",
+          "fg": 8003338,
+          "bg": 8003338
+        },
+        {
+          "row": 5,
+          "col": 5,
+          "char": "▀",
+          "fg": 8003338,
+          "bg": -1
+        }
+      ]
+    }
+  ],
+  "geometry": {
+    "identical_bounds": true,
+    "identical_occupancy": true,
+    "distinct_style_frames": 3
+  },
+  "art_quality_obligation": {
+    "disposition": "TRANSFER_TO_CURRENT_PARENT",
+    "successor_issue": 1117
+  },
+  "claim_boundary": [
+    "installed Ember UI geometry and color-pulse evidence only",
+    "no model, training, benchmark, or capability claim",
+    "art-quality redesign remains owned by current EMBER-03 parent issue #1117"
+  ]
+}
