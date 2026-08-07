@@ -84,7 +84,15 @@ FP19_SEQ           = 1024   # c03 seq
 # Launch interlock (default-closed)
 # ---------------------------------------------------------------------------
 
-def _check_launch_interlock(*, live: bool, requested_run: dict | None = None, shard_dir: str | None = None) -> None:
+def _check_launch_interlock(
+    *,
+    live: bool,
+    requested_run: dict | None = None,
+    shard_dir: str | None = None,
+    parameter_manifest: dict | None = None,
+    parameter_manifest_path: str | None = None,
+    require_parameter_manifest: bool = False,
+) -> None:
     """Refuse GPU/real-pretrain launch unless both guards are satisfied.
 
     Guards:
@@ -126,7 +134,14 @@ def _check_launch_interlock(*, live: bool, requested_run: dict | None = None, sh
     # module top CPU-safe and avoids any cycle — the gate never imports this.)
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import v0_pretrain_launch_gate as _lg
-    rows = _lg.gate(datetime.now(timezone.utc).date(), requested_run=requested_run, shard_dir_override=shard_dir)
+    rows = _lg.gate(
+        datetime.now(timezone.utc).date(),
+        requested_run=requested_run,
+        shard_dir_override=shard_dir,
+        parameter_manifest=parameter_manifest,
+        parameter_manifest_path=parameter_manifest_path,
+        require_parameter_manifest=require_parameter_manifest,
+    )
     blocked = [r for r in rows if r[1] != "GREEN"]
     if blocked:
         detail = "; ".join(f"{r[0]}={r[2]}" for r in blocked)
@@ -1024,6 +1039,52 @@ def build_split_optimizer(model, cfg, *, force_fallback: bool = False,
     return opts, base_lrs, routing
 
 
+def _write_live_parameter_manifest(
+    run_dir: str,
+    model: Any,
+    optimizers: dict,
+    cfg: dict,
+    run_id: str,
+) -> tuple[dict[str, Any], Path]:
+    """Persist a manifest directly from the model/optimizers before updates."""
+    from mtp_parameter_manifest import write_parameter_manifest
+
+    evidence_dir = Path(run_dir) / "parameter-evidence"
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = evidence_dir / f"{run_id}-parameter-manifest.json"
+    manifest = write_parameter_manifest(manifest_path, model, optimizers, cfg)
+    return manifest, manifest_path
+
+
+def _write_live_parameter_evidence(
+    run_dir: str,
+    model: Any,
+    optimizers: dict,
+    cfg: dict,
+    run_id: str,
+) -> dict[str, Any]:
+    """Bind accounting to the model/optimizers that just executed a live run."""
+    from mtp_parameter_manifest import (
+        validate_pricing_receipt,
+        write_pricing_receipt,
+    )
+
+    manifest, manifest_path = _write_live_parameter_manifest(
+        run_dir, model, optimizers, cfg, run_id
+    )
+    pricing_path = manifest_path.with_name(f"{run_id}-pricing-receipt.json")
+    pricing = write_pricing_receipt(pricing_path, manifest, run_id)
+    validate_pricing_receipt(pricing, manifest)
+    return {
+        "parameter_manifest": {
+            "schema": manifest["schema"],
+            "sha256": manifest["manifest_sha256"],
+            "path": manifest_path.name,
+        },
+        "parameter_pricing_receipt": pricing,
+        "parameter_accounting": dict(manifest["parameter_accounting"]),
+    }
+
 def save_optimizers_state(optimizers: dict) -> dict:
     """Bundle every optimizer's state_dict for checkpointing. The bundle is
     an opaque dict to the eng-33 save_checkpoint (it just torch.saves it)."""
@@ -1883,7 +1944,12 @@ def run_v0_segment(
     use_device = device or ("cuda" if live else "cpu")
 
     if live:
-        _check_launch_interlock(live=live, requested_run=requested_run, shard_dir=shard_dir)
+        _check_launch_interlock(
+            live=live,
+            requested_run=requested_run,
+            shard_dir=shard_dir,
+            require_parameter_manifest=False,
+        )
         gov_receipt = _apply_governor()
         if shard_dir is None:
             raise SystemExit(
@@ -1936,6 +2002,28 @@ def run_v0_segment(
         model, cfg, force_fallback=opt_force_fallback,
         deviation_dir=deviation_dir,
         offload_optimizer_state=offload_optimizer_state)
+
+    if live:
+        # The first gate above checks only static launch/corpus/resource
+        # prerequisites. After model+optimizer construction, bind the exact
+        # live parameter/storage/optimizer membership and reopen those bytes
+        # through the strict gate before any optimizer update.
+        _prelaunch_manifest, _prelaunch_manifest_path = (
+            _write_live_parameter_manifest(
+                run_dir,
+                model,
+                optimizers,
+                cfg,
+                f"{segment_id}-prelaunch",
+            )
+        )
+        _check_launch_interlock(
+            live=True,
+            requested_run=requested_run,
+            shard_dir=shard_dir,
+            parameter_manifest_path=str(_prelaunch_manifest_path),
+            require_parameter_manifest=True,
+        )
 
     assert grad_accum_steps >= 1, "grad_accum_steps must be >= 1"
 
@@ -2038,6 +2126,12 @@ def run_v0_segment(
                        "mtp_enabled": bool(mtp_enabled),
                        "total_steps": total_steps})
 
+    live_parameter_evidence = None
+    if live:
+        if not losses:
+            raise RuntimeError("live split run produced no optimizer update for pricing evidence")
+        live_parameter_evidence = _write_live_parameter_evidence(
+            run_dir, model, optimizers, cfg, f"{segment_id}-step-{resume_step + len(losses)}")
     wall_s = time.perf_counter() - t_start
     tokens_this_seg = n_steps * batch_size * grad_accum_steps * seq
 
@@ -2111,6 +2205,8 @@ def run_v0_segment(
         "pass": True,
         "verdict": "V0_SEGMENT_COMPLETE",
     }
+    if live_parameter_evidence is not None:
+        receipt.update(live_parameter_evidence)
     # Component C: Add compute_ledger block (#552)
     receipt = add_compute_ledger_to_receipt(receipt)
     return receipt

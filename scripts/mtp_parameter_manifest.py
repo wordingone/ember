@@ -53,12 +53,16 @@ _MTP_NAME = re.compile(r"(?:^|\.)mtp_heads\.(\d+)(?:\.|$)")
 _BASE_ROOTS = {
     "base",
     "backbone",
+    "backbone_model",
+    "blocks",
     "embed_tokens",
+    "embed",
     "extra",
     "head",
     "layers",
     "lm_head",
     "model",
+    "norm",
     "tok_embeddings",
     "transformer",
 }
@@ -344,6 +348,30 @@ def validate_parameter_manifest(manifest: Mapping[str, Any], config: Mapping[str
         raise MtpParameterManifestError("optimizer parameter_count does not equal manifest rows")
 
 
+def build_parameter_manifest_from_parts(
+    backbone: Any,
+    head: Any,
+    mtp_heads: Any,
+    optimizers: Any,
+    config: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Measure the exact model parts and optimizers constructed for a live run.
+
+    The production optimizer-equivalence bench constructs these parts separately;
+    this adapter gives the manifest builder one canonical module tree without
+    accepting caller-declared counts or identities.
+    """
+    import torch
+
+    class _LiveMtpParts(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.backbone = backbone
+            self.head = head
+            self.mtp_heads = mtp_heads
+
+    return build_parameter_manifest(_LiveMtpParts(), optimizers, config)
+
 def write_parameter_manifest(path: str | Path, model: Any, optimizers: Any, config: Mapping[str, Any]) -> dict[str, Any]:
     manifest = build_parameter_manifest(model, optimizers, config)
     target = Path(path)
@@ -351,6 +379,22 @@ def write_parameter_manifest(path: str | Path, model: Any, optimizers: Any, conf
     target.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return manifest
 
+
+def write_parameter_manifest_from_parts(
+    path: str | Path,
+    backbone: Any,
+    head: Any,
+    mtp_heads: Any,
+    optimizers: Any,
+    config: Mapping[str, Any],
+) -> dict[str, Any]:
+    manifest = build_parameter_manifest_from_parts(
+        backbone, head, mtp_heads, optimizers, config
+    )
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return manifest
 
 def attach_parameter_manifest(
     receipt: Mapping[str, Any],
@@ -381,3 +425,71 @@ def bind_manifest_evidence(receipt: Mapping[str, Any], manifest: Mapping[str, An
     }
     bound["parameter_accounting"] = dict(manifest["parameter_accounting"])
     return bound
+
+def _pricing_receipt_bytes(receipt: Mapping[str, Any]) -> bytes:
+    payload = copy.deepcopy(dict(receipt))
+    payload.pop("receipt_sha256", None)
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+
+def pricing_receipt_sha256(receipt: Mapping[str, Any]) -> str:
+    """Hash canonical path-free pricing evidence, excluding its self-hash."""
+    return hashlib.sha256(_pricing_receipt_bytes(receipt)).hexdigest()
+
+
+def build_pricing_receipt(manifest: Mapping[str, Any], run_id: str) -> dict[str, Any]:
+    """Create path-free pricing evidence from a realized model/optimizer run."""
+    validate_parameter_manifest(manifest)
+    if not isinstance(run_id, str) or not run_id.strip():
+        raise MtpParameterManifestError("pricing receipt run_id must be non-empty")
+    accounting = dict(manifest["parameter_accounting"])
+    receipt: dict[str, Any] = {
+        "schema": "ember-mtp-parameter-pricing-receipt-v1",
+        "evidence": "actual-run",
+        "run_id": run_id,
+        "manifest_sha256": manifest["manifest_sha256"],
+        "parameter_accounting": accounting,
+        "realized_parameter_count": accounting["realized"],
+        "optimizer_parameter_count": manifest["optimizer"]["parameter_count"],
+    }
+    receipt["receipt_sha256"] = pricing_receipt_sha256(receipt)
+    return receipt
+
+
+def write_pricing_receipt(path: str | Path, manifest: Mapping[str, Any], run_id: str) -> dict[str, Any]:
+    receipt = build_pricing_receipt(manifest, run_id)
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return receipt
+
+
+def validate_pricing_receipt(receipt: Mapping[str, Any], manifest: Mapping[str, Any] | None = None) -> None:
+    if not isinstance(receipt, Mapping):
+        raise MtpParameterManifestError("pricing receipt must be an object")
+    expected_keys = {
+        "schema", "evidence", "run_id", "manifest_sha256",
+        "parameter_accounting", "realized_parameter_count",
+        "optimizer_parameter_count", "receipt_sha256",
+    }
+    if set(receipt) != expected_keys:
+        raise MtpParameterManifestError("pricing receipt schema is not closed")
+    if receipt["schema"] != "ember-mtp-parameter-pricing-receipt-v1" or receipt["evidence"] != "actual-run":
+        raise MtpParameterManifestError("pricing receipt evidence/schema is invalid")
+    if not isinstance(receipt["run_id"], str) or not receipt["run_id"].strip():
+        raise MtpParameterManifestError("pricing receipt run_id is invalid")
+    if receipt["receipt_sha256"] != pricing_receipt_sha256(receipt):
+        raise MtpParameterManifestError("pricing receipt hash mismatch")
+    if manifest is not None:
+        validate_parameter_manifest(manifest)
+        if receipt["manifest_sha256"] != manifest["manifest_sha256"]:
+            raise MtpParameterManifestError("pricing receipt manifest hash mismatch")
+        if dict(receipt["parameter_accounting"]) != dict(manifest["parameter_accounting"]):
+            raise MtpParameterManifestError("pricing receipt accounting mismatch")
+        if receipt["optimizer_parameter_count"] != manifest["optimizer"]["parameter_count"]:
+            raise MtpParameterManifestError("pricing receipt optimizer count mismatch")
+    accounting = receipt["parameter_accounting"]
+    if not isinstance(accounting, Mapping) or set(accounting) != _ACCOUNTING_KEYS:
+        raise MtpParameterManifestError("pricing receipt accounting schema is invalid")
+    if receipt["realized_parameter_count"] != accounting["realized"]:
+        raise MtpParameterManifestError("pricing receipt realized count mismatch")

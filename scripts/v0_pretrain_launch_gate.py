@@ -398,13 +398,16 @@ def _load_parameter_manifest(path):
         return None, f"parameter manifest unreadable or invalid: {exc}"
 
 
-def g_config(parameter_manifest=None, parameter_manifest_error=None):
+def g_config(parameter_manifest=None, parameter_manifest_error=None, require_parameter_manifest=True):
     cfg = json.load(open(CONFIG, encoding="utf-8"))
     if parameter_manifest_error:
         return "BLOCKED", parameter_manifest_error
+    if require_parameter_manifest and parameter_manifest is None:
+        return "BLOCKED", "live MTP parameter manifest is required for split-consuming launch"
+    live_accounting = None
     if parameter_manifest is not None:
         try:
-            v0_config_check.parameter_accounting(cfg, live_manifest=parameter_manifest)
+            live_accounting = v0_config_check.parameter_accounting(cfg, live_manifest=parameter_manifest)
         except ValueError as exc:
             return "BLOCKED", f"live parameter manifest binding: {exc}"
     v = v0_config_check.check(cfg, launch=True)
@@ -413,6 +416,7 @@ def g_config(parameter_manifest=None, parameter_manifest_error=None):
     detail = "V0_CONFIG_GREEN (launch mode)"
     if parameter_manifest is not None:
         detail += f"; parameter_manifest_sha256={parameter_manifest['manifest_sha256']}"
+        detail += f"; live_parameter_accounting={dict(zip(('base_excluding_mtp', 'mtp_aux', 'realized'), live_accounting))}"
     return "GREEN", detail
 
 
@@ -729,7 +733,7 @@ def gate(launch_date, multimodal_config_path=None,
          mm_holdout_size=None, mm_holdout_manifest_path=None,
          efficiency_receipt_path=None, requested_run=None,
          shard_dir_override=None, parameter_manifest_path=None,
-         parameter_manifest=None, parameter_manifest_error=None):
+         parameter_manifest=None, parameter_manifest_error=None, require_parameter_manifest=True):
     """Returns [(row, status, detail), ...] in table order.
 
     multimodal_config_path: if provided, G-efficiency binds against this config's SHA
@@ -772,6 +776,7 @@ def gate(launch_date, multimodal_config_path=None,
         elif name == "G-config":
             st, dt = g_config(
                 parameter_manifest=parameter_manifest,
+                require_parameter_manifest=require_parameter_manifest,
                 parameter_manifest_error=parameter_manifest_error,
             )
         elif name == "G-governor":
@@ -795,9 +800,10 @@ def _utc_ts():
     return datetime.datetime.now(datetime.timezone.utc).strftime(
         "%Y%m%dT%H%M%SZ")
 
-
 def emit(launch_date, rows, output_dir=None, provenance=None,
          parameter_manifest=None):
+    if parameter_manifest is None:
+        raise ValueError("parameter manifest is required for launch receipt emission")
     ts = _utc_ts()
     blocked = [r[0] for r in rows if r[1] != "GREEN"]
     receipt = {
@@ -861,7 +867,7 @@ def _selftest():
     # contract drifted and the selftest SHOULD fail)
     assert g_corpus()[0] == "GREEN", g_corpus()
     assert g_tokenizer()[0] == "GREEN", g_tokenizer()
-    assert g_config()[0] == "GREEN", g_config()
+    assert g_config(require_parameter_manifest=False)[0] == "GREEN", g_config(require_parameter_manifest=False)
     assert g_governor()[0] == "GREEN", g_governor()
     assert g_world()[0] == "GREEN", g_world()
     # shards: time-robust — BLOCKED iff no token-shards-v0 receipt is on disk
@@ -963,7 +969,7 @@ def _selftest():
                                 requested_run="not-a-dict")
     assert st_bad2 == "BLOCKED" and "malformed" in dt_bad2, (st_bad2, dt_bad2)
     # gate() threads requested_run through to G-budget only; other rows unaffected.
-    _rows_rr = gate(date(2999, 1, 1), requested_run=_micro_rr)
+    _rows_rr = gate(date(2999, 1, 1), requested_run=_micro_rr, require_parameter_manifest=False)
     assert [r[0] for r in _rows_rr] == ROWS
     _budget_row = next(r for r in _rows_rr if r[0] == "G-budget")
     assert _budget_row[1] == "GREEN" and "FIT" in _budget_row[2], _budget_row
@@ -1106,7 +1112,7 @@ def main():
                     help="explicit frozen holdout manifest path")
     ap.add_argument("--efficiency-receipt", default=None,
                     help="explicit launch-efficiency receipt path")
-    ap.add_argument("--parameter-manifest", default=None,
+    ap.add_argument("--parameter-manifest", default=argparse.SUPPRESS,
                     help="live MTP unique-Parameter manifest; required to bind #688")
     ap.add_argument("--shard-dir", default=None,
                     help="real packed uint16 shard dir (#682) — authoritative base "
@@ -1122,6 +1128,9 @@ def main():
         ld = datetime.date.fromisoformat(a.launch_date)
     else:
         ld = datetime.date.today()
+    if not hasattr(a, "parameter_manifest"):
+        print("LAUNCH REFUSED: --parameter-manifest is required for split-consuming v0 launch")
+        raise SystemExit(2)
     shard_dir_override = a.shard_dir or os.environ.get("EMBER_SHARD_DIR_OVERRIDE")
     parameter_manifest, parameter_manifest_error = _load_parameter_manifest(
         a.parameter_manifest

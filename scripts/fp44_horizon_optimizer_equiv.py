@@ -33,6 +33,9 @@ Governor rails (HOLD — never loosened):
 Via train MCP (WSL2/CUDA). Selftest: python fp44_horizon_optimizer_equiv.py --selftest
 Marker: FP44_HORIZON_OPTIMIZER_EQUIV_DONE
 """
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 from __future__ import annotations
 
 import argparse
@@ -184,6 +187,35 @@ def _build_opts(backbone, head, mtp_heads, arm: str):
     return opts
 
 
+def _bind_live_parameter_evidence(backbone, head, mtp_heads, opts, run_id: str) -> dict:
+    """Persist content-addressed evidence from the objects used by this run."""
+    from mtp_parameter_manifest import (
+        validate_pricing_receipt,
+        write_parameter_manifest_from_parts,
+        write_pricing_receipt,
+    )
+
+    with open(os.path.join(NC, "configs", "v0-pretrain-config.json"), encoding="utf-8") as handle:
+        config = json.load(handle)
+    evidence_dir = Path(RECEIPTS) / "issue688-mtp-live"
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = evidence_dir / f"{run_id}-parameter-manifest.json"
+    pricing_path = evidence_dir / f"{run_id}-pricing-receipt.json"
+    manifest = write_parameter_manifest_from_parts(
+        manifest_path, backbone, head, mtp_heads, opts, config
+    )
+    pricing = write_pricing_receipt(pricing_path, manifest, run_id)
+    validate_pricing_receipt(pricing, manifest)
+    return {
+        "parameter_manifest": {
+            "schema": manifest["schema"],
+            "sha256": manifest["manifest_sha256"],
+            "path": manifest_path.name,
+        },
+        "parameter_pricing_receipt": pricing,
+        "parameter_accounting": dict(manifest["parameter_accounting"]),
+    }
+
 # ---------------------------------------------------------------------------
 # Step and val-loss functions
 # ---------------------------------------------------------------------------
@@ -268,6 +300,9 @@ def _run_arm(arm: str, seed: int, train_ds: "ShardTokens", val_ds: "ShardTokens"
             time.sleep(PACE_S)
             print(f"[fp44]   warmup {i+1}/{WARMUP_STEPS}", flush=True)
 
+        live_evidence = _bind_live_parameter_evidence(
+            backbone, head, mtp_heads, opts, f"{tag}-warmup")
+        out.update(live_evidence)
         torch.cuda.synchronize()
         free_b, _ = torch.cuda.mem_get_info()
         free_gib = free_b / (1 << 30)
@@ -349,6 +384,8 @@ def _noise_floor_run() -> dict:
         _step(backbone, head, mtp_heads, opts, ids, tgts_primary, tgts_mtp_list)
         time.sleep(PACE_S)
 
+    live_evidence = _bind_live_parameter_evidence(
+        backbone, head, mtp_heads, opts, "noise-floor-warmup")
     # Snapshot post-warmup state
     model_snap = {k: v.detach().clone() for k, v in backbone.state_dict().items()}
     head_snap  = {k: v.detach().clone() for k, v in head.state_dict().items()}
@@ -402,6 +439,8 @@ def _noise_floor_run() -> dict:
         "noise_floor":        noise_floor,
         "derived_threshold":  derived_threshold,
         "threshold_floor":    NOISE_FLOOR_THRESHOLD_FLOOR,
+        "parameter_manifest": live_evidence["parameter_manifest"],
+        "parameter_pricing_receipt": live_evidence["parameter_pricing_receipt"],
     }
 
 

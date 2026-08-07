@@ -225,6 +225,7 @@ def _check_launch_interlock(
         mm_holdout_size=mm_holdout_size,
         mm_holdout_manifest_path=mm_holdout_manifest_path,
         efficiency_receipt_path=efficiency_receipt_path,
+        require_parameter_manifest=False,
     )
     blocked = [r[0] for r in rows if r[1] != "GREEN"]
     if blocked:

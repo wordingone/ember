@@ -24,9 +24,14 @@ from mtp_parameter_manifest import (  # noqa: E402
     MtpParameterManifestError,
     attach_parameter_manifest,
     build_parameter_manifest,
+    build_parameter_manifest_from_parts,
+    build_pricing_receipt,
     manifest_sha256,
     validate_parameter_manifest,
+    validate_pricing_receipt,
+    pricing_receipt_sha256,
     write_parameter_manifest,
+    write_pricing_receipt,
 )
 
 
@@ -171,6 +176,85 @@ class Issue688LiveManifestTests(unittest.TestCase):
             scored["parameter_manifest"]["sha256"], manifest["manifest_sha256"]
         )
 
+    def test_horizon_scoring_requires_live_manifest_and_pricing_evidence(self):
+        import fp44_horizon_equiv_gate
+
+        receipt = {
+            "arms": {
+                "muon_split_baseline": {"val_losses": {"250": 1.0, "1000": 1.0, "2000": 1.0}},
+                "full_fused_adamw": {"val_losses": {"250": 1.0, "1000": 1.0, "2000": 1.0}},
+            }
+        }
+        missing = fp44_horizon_equiv_gate.score_receipt(
+            receipt, require_parameter_manifest=True
+        )
+        self.assertEqual(missing["status"], "SCHEMA_MISMATCH")
+        self.assertIn("pricing", missing["parameter_manifest_error"])
+
+    def test_horizon_scoring_accepts_two_actual_pricing_receipts(self):
+        import fp44_horizon_equiv_gate
+
+        model = TinyMtp()
+        optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+        manifest = build_parameter_manifest(model, optimizer, _config())
+        receipt = {
+            "arms": {
+                "muon_split_baseline": {
+                    "val_losses": {"250": 1.0, "1000": 1.0, "2000": 1.0},
+                    "parameter_pricing_receipt": build_pricing_receipt(manifest, "muon-run"),
+                },
+                "full_fused_adamw": {
+                    "val_losses": {"250": 1.0, "1000": 1.0, "2000": 1.0},
+                    "parameter_pricing_receipt": build_pricing_receipt(manifest, "adamw-run"),
+                },
+            }
+        }
+        scored = fp44_horizon_equiv_gate.score_receipt(
+            receipt, parameter_manifest=manifest, require_parameter_manifest=True
+        )
+        self.assertEqual(scored["status"], "SCORED")
+        self.assertEqual(
+            set(scored["parameter_pricing_receipts"]),
+            {"muon_split_baseline", "full_fused_adamw"},
+        )
+    def test_actual_run_pricing_receipt_binds_post_update_live_parts(self):
+        model = TinyMtp()
+        optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+        loss = sum(parameter.square().sum() for parameter in model.parameters())
+        loss.backward()
+        optimizer.step()
+        manifest = build_parameter_manifest_from_parts(
+            model.base, model.base, model.mtp_heads, {"sgd": optimizer}, _config()
+        )
+        receipt = build_pricing_receipt(manifest, "issue688-test-run")
+        validate_pricing_receipt(receipt, manifest)
+        self.assertEqual(receipt["evidence"], "actual-run")
+        self.assertEqual(receipt["realized_parameter_count"], 12)
+        self.assertEqual(receipt["receipt_sha256"], pricing_receipt_sha256(receipt))
+        tampered = copy.deepcopy(receipt)
+        tampered["realized_parameter_count"] += 1
+        tampered["receipt_sha256"] = pricing_receipt_sha256(tampered)
+        with self.assertRaisesRegex(MtpParameterManifestError, "realized count"):
+            validate_pricing_receipt(tampered, manifest)
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "pricing-receipt.json"
+            self.assertEqual(write_pricing_receipt(path, manifest, "issue688-test-run"), receipt)
+
+    def test_optimizer_boundary_source_binds_actual_manifest_and_pricing(self):
+        source = (ROOT / "scripts" / "fp44_horizon_optimizer_equiv.py").read_text(encoding="utf-8")
+        self.assertIn("write_parameter_manifest_from_parts", source)
+        self.assertIn("write_pricing_receipt", source)
+        self.assertIn("_bind_live_parameter_evidence", source)
+        timeshare_source = (ROOT / "scripts" / "timeshare_pretrain.py").read_text(encoding="utf-8")
+        self.assertIn("write_parameter_manifest", timeshare_source)
+        self.assertIn("write_pricing_receipt", timeshare_source)
+
+    def test_launch_receipt_requires_manifest(self):
+        import v0_pretrain_launch_gate
+
+        rows = [(name, "GREEN", "ok") for name in v0_pretrain_launch_gate.ROWS]
+        with self.assertRaisesRegex(ValueError, "parameter manifest"):
+            v0_pretrain_launch_gate.emit(datetime.date(2026, 1, 1), rows)
     def test_launch_gate_rejects_bad_manifest_and_binds_receipt(self):
         import v0_pretrain_launch_gate
 
@@ -204,5 +288,32 @@ class Issue688LiveManifestTests(unittest.TestCase):
             )
             self.assertEqual(status, "BLOCKED")
             self.assertIn("parameter manifest", detail)
+    def test_live_boundary_binds_manifest_before_first_optimizer_update(self):
+        source = (ROOT / "scripts" / "timeshare_pretrain.py").read_text(encoding="utf-8")
+        prelaunch = source.index("_write_live_parameter_manifest(")
+        optimizer_boundary = source.index("optimizers, base_lrs, routing = build_split_optimizer(")
+        prelaunch_call = source.index('f"{segment_id}-prelaunch"')
+        strict_gate = source.index("require_parameter_manifest=True", prelaunch)
+        first_update = source.index("_run_production_step(", strict_gate)
+        self.assertLess(optimizer_boundary, prelaunch_call)
+        self.assertLess(prelaunch_call, strict_gate)
+        self.assertLess(prelaunch, strict_gate)
+        self.assertLess(strict_gate, first_update)
+        self.assertIn("parameter_manifest_path=str(_prelaunch_manifest_path)", source)
+        self.assertIn("require_parameter_manifest=False", source)
+
+        import v0_pretrain_launch_gate
+
+        rows = v0_pretrain_launch_gate.gate(
+            datetime.date(2026, 1, 1),
+            require_parameter_manifest=True,
+        )
+        status, detail = next(
+            (status, detail)
+            for name, status, detail in rows
+            if name == "G-config"
+        )
+        self.assertEqual(status, "BLOCKED")
+        self.assertIn("parameter manifest", detail)
 if __name__ == "__main__":
     unittest.main()
