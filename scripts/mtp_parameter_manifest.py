@@ -445,11 +445,13 @@ _EXECUTION_CANDIDATE_KEYS = {
     "manifest_sha256", "before_state_sha256", "after_state_sha256",
     "before_optimizer_state_sha256", "optimizer_state_sha256", "receipt_sha256",
 }
+_GOVERNED_RUNNER_CAPABILITY = object()
 _GOVERNED_EXECUTION_KEYS = {
     "schema", "authority", "status", "run_id", "update_count", "child_exit_code",
     "manifest_sha256", "execution_candidate", "execution_candidate_sha256",
     "command", "command_sha256", "process_identity", "verifier_id",
-    "verifier_sha256", "receipt_sha256",
+    "verifier_sha256", "disk_budget_receipt", "disk_budget_receipt_sha256",
+    "runner_module_sha256", "receipt_sha256",
 }
 _EXECUTED_RUN_KEYS = {
     "schema", "evidence", "run_id", "update_count", "source_sha256", "config_sha256",
@@ -481,6 +483,10 @@ def _governed_execution_receipt_bytes(receipt: Mapping[str, Any]) -> bytes:
 
 def governed_execution_receipt_sha256(receipt: Mapping[str, Any]) -> str:
     return hashlib.sha256(_governed_execution_receipt_bytes(receipt)).hexdigest()
+
+
+def _canonical_mapping_sha256(value: Mapping[str, Any]) -> str:
+    return hashlib.sha256(json.dumps(dict(value), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
 
 
 def validate_execution_candidate(
@@ -543,6 +549,35 @@ def validate_governed_execution_receipt(
     if not isinstance(receipt["verifier_id"], str) or not receipt["verifier_id"].strip():
         raise MtpParameterManifestError("governed execution verifier_id is invalid")
     _require_sha256(receipt["verifier_sha256"], "governed execution verifier_sha256")
+    disk_receipt = receipt["disk_budget_receipt"]
+    disk_keys = {
+        "schema_version", "receipt_sha256", "outcome", "child_exit_code",
+        "runner_exit_code", "command", "child_pid", "child_start_time_ns",
+        "child_executable_sha256",
+    }
+    if not isinstance(disk_receipt, Mapping) or set(disk_receipt) != disk_keys:
+        raise MtpParameterManifestError("governed disk-budget receipt projection is not closed")
+    if disk_receipt["schema_version"] != 7 or disk_receipt["outcome"] != "COMPLETED":
+        raise MtpParameterManifestError("governed disk-budget runner did not complete")
+    if type(disk_receipt["child_exit_code"]) is not int or disk_receipt["child_exit_code"] != 0:
+        raise MtpParameterManifestError("governed disk-budget child exit is not zero")
+    if type(disk_receipt["runner_exit_code"]) is not int or disk_receipt["runner_exit_code"] != 0:
+        raise MtpParameterManifestError("governed disk-budget runner exit is not zero")
+    if disk_receipt["command"] != receipt["command"]:
+        raise MtpParameterManifestError("governed disk-budget command binding mismatch")
+    if type(disk_receipt["child_pid"]) is not int or disk_receipt["child_pid"] <= 0:
+        raise MtpParameterManifestError("governed disk-budget child pid is invalid")
+    if type(disk_receipt["child_start_time_ns"]) is not int or disk_receipt["child_start_time_ns"] <= 0:
+        raise MtpParameterManifestError("governed disk-budget child start time is invalid")
+    _require_sha256(disk_receipt["child_executable_sha256"], "governed disk-budget executable_sha256")
+    _require_sha256(receipt["disk_budget_receipt_sha256"], "governed disk-budget receipt_sha256")
+    if disk_receipt["receipt_sha256"] != receipt["disk_budget_receipt_sha256"]:
+        raise MtpParameterManifestError("governed disk-budget receipt identity mismatch")
+    if receipt["process_identity"]["pid"] != disk_receipt["child_pid"] or receipt["process_identity"]["start_time_ns"] != disk_receipt["child_start_time_ns"]:
+        raise MtpParameterManifestError("governed execution process identity mismatch")
+    if receipt["process_identity"]["executable_sha256"] != disk_receipt["child_executable_sha256"]:
+        raise MtpParameterManifestError("governed execution executable identity mismatch")
+    _require_sha256(receipt["runner_module_sha256"], "governed runner module_sha256")
     validate_execution_candidate(receipt["execution_candidate"], manifest)
     candidate = receipt["execution_candidate"]
     if receipt["execution_candidate_sha256"] != candidate["receipt_sha256"]:
@@ -617,7 +652,14 @@ def build_governed_execution_receipt(*args: Any, **kwargs: Any) -> dict[str, Any
     )
 
 
-def finalize_governed_execution_receipt(
+def finalize_governed_execution_receipt(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Refuse direct caller-authored governed parent creation."""
+    raise MtpParameterManifestError(
+        "only the external runner may mint governed execution receipts"
+    )
+
+
+def _finalize_governed_execution_receipt(
     manifest: Mapping[str, Any],
     candidate: Mapping[str, Any],
     *,
@@ -626,8 +668,14 @@ def finalize_governed_execution_receipt(
     child_exit_code: int,
     verifier_id: str,
     verifier_sha256: str,
+    disk_budget_receipt: Mapping[str, Any],
+    disk_budget_receipt_sha256: str,
+    runner_module_sha256: str,
+    capability: object,
 ) -> dict[str, Any]:
     """Mint completion authority from observations made after child exit."""
+    if capability is not _GOVERNED_RUNNER_CAPABILITY:
+        raise MtpParameterManifestError("governed receipt minting requires the external runner capability")
     validate_parameter_manifest(manifest)
     validate_execution_candidate(candidate, manifest)
     if type(child_exit_code) is not int:
@@ -656,6 +704,9 @@ def finalize_governed_execution_receipt(
         "process_identity": identity,
         "verifier_id": verifier_id,
         "verifier_sha256": verifier_sha256,
+        "disk_budget_receipt": copy.deepcopy(dict(disk_budget_receipt)),
+        "disk_budget_receipt_sha256": disk_budget_receipt_sha256,
+        "runner_module_sha256": runner_module_sha256,
     }
     receipt["receipt_sha256"] = governed_execution_receipt_sha256(receipt)
     if child_exit_code != 0:

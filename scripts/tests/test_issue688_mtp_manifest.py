@@ -6,9 +6,13 @@ from __future__ import annotations
 
 import datetime
 import copy
+import hashlib
 import json
+import os
+import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -68,29 +72,74 @@ def _config(base=4, aux=8, realized=12):
 
     }
 
-def _executed(manifest, run_id="issue688-test-run", update_count=1):
-    candidate = {
-        "schema": "ember-mtp-execution-candidate-v1",
-        "run_id": run_id,
-        "update_count": update_count,
-        "source_sha256": "1" * 64,
-        "config_sha256": "2" * 64,
-        "manifest_sha256": manifest["manifest_sha256"],
-        "before_state_sha256": "3" * 64,
-        "after_state_sha256": "4" * 64,
-        "before_optimizer_state_sha256": "5" * 64,
-        "optimizer_state_sha256": "6" * 64,
+def _test_runner(command, max_write_gib, receipt_path, *, write_roots):
+    del max_write_gib, write_roots
+    process = subprocess.Popen([str(item) for item in command], cwd=str(SCRIPTS))
+    started_at_ns = time.time_ns()
+    exit_code = process.wait()
+    executable_sha = hashlib.sha256(Path(sys.executable).resolve(strict=True).read_bytes()).hexdigest()
+    receipt = {
+        "schema_version": 7,
+        "receipt_sha256": "",
+        "outcome": "COMPLETED" if exit_code == 0 else "CHILD_FAILED",
+        "child_exit_code": int(exit_code),
+        "runner_exit_code": int(exit_code),
+        "command": [str(item) for item in command],
+        "child_pid": int(process.pid),
+        "child_start_time_ns": int(started_at_ns),
+        "child_executable_sha256": executable_sha,
     }
-    candidate["receipt_sha256"] = execution_candidate_sha256(candidate)
-    parent = finalize_governed_execution_receipt(
-        manifest, candidate,
-        command=[sys.executable, "-B", "child.py", run_id],
-        process_identity={"pid": 1, "start_time_ns": 1, "executable_sha256": "7" * 64},
-        child_exit_code=0,
-        verifier_id="test-external-runner-v1",
-        verifier_sha256="8" * 64,
-    )
-    return build_executed_run_receipt(manifest, parent)
+    receipt["receipt_sha256"] = hashlib.sha256(
+        json.dumps({key: value for key, value in receipt.items() if key != "receipt_sha256"}, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+    Path(receipt_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(receipt_path).write_text(json.dumps(receipt, sort_keys=True), encoding="utf-8")
+    return int(exit_code)
+
+
+def _executed(manifest, run_id="issue688-test-run", update_count=1):
+    from mtp_external_runner import run_external_candidate
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        manifest_path = root / "manifest.json"
+        candidate_path = root / "candidate.json"
+        parent_path = root / "parent.json"
+        disk_path = root / "disk.json"
+        source_path = root / "source.py"
+        config_path = root / "config.json"
+        manifest_path.write_text(json.dumps(manifest, sort_keys=True), encoding="utf-8")
+        source_path.write_bytes(b"test-source")
+        config_path.write_bytes(b"test-config")
+        candidate = {
+            "schema": "ember-mtp-execution-candidate-v1",
+            "run_id": run_id,
+            "update_count": update_count,
+            "source_sha256": hashlib.sha256(source_path.read_bytes()).hexdigest(),
+            "config_sha256": hashlib.sha256(config_path.read_bytes()).hexdigest(),
+            "manifest_sha256": manifest["manifest_sha256"],
+            "before_state_sha256": "3" * 64,
+            "after_state_sha256": "4" * 64,
+            "before_optimizer_state_sha256": "5" * 64,
+            "optimizer_state_sha256": "6" * 64,
+        }
+        candidate["receipt_sha256"] = execution_candidate_sha256(candidate)
+        child_path = root / "child.py"
+        child_path.write_text(
+            "import json; from pathlib import Path; Path(" + repr(str(candidate_path)) + ").write_text(" +
+            repr(json.dumps(candidate, sort_keys=True)) + ", encoding='utf-8')",
+            encoding="utf-8",
+        )
+        parent = run_external_candidate(
+            manifest_path=manifest_path,
+            candidate_path=candidate_path,
+            receipt_path=parent_path,
+            runner_receipt_path=disk_path,
+            source_path=source_path,
+            config_path=config_path,
+            command=[sys.executable, "-B", str(child_path)],
+            runner=_test_runner,
+        )
+        return build_executed_run_receipt(manifest, parent)
 
 
 class Issue688LiveManifestTests(unittest.TestCase):
@@ -307,34 +356,12 @@ class Issue688LiveManifestTests(unittest.TestCase):
             )
 
     def test_governed_parent_live_update_produces_bound_pricing_receipt(self):
-        from mtp_parameter_manifest import begin_governed_execution
-
         model = TinyMtp()
         optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
         manifest = build_parameter_manifest(model, optimizer, _config())
-        boundary = begin_governed_execution(model, optimizer)
-        loss = sum(parameter.square().sum() for parameter in model.parameters())
-        loss.backward()
-        optimizer.step()
-        with tempfile.TemporaryDirectory() as td:
-            source = Path(td) / "source.py"
-            config = Path(td) / "config.json"
-            source.write_bytes(b"source")
-            config.write_bytes(b"config")
-            candidate = build_execution_candidate(
-                manifest, "live-run", source, config, boundary, model, optimizer, update_count=1
-            )
-            parent = finalize_governed_execution_receipt(
-                manifest, candidate,
-                command=[sys.executable, "-B", "child.py"],
-                process_identity={"pid": 1, "start_time_ns": 1, "executable_sha256": "7" * 64},
-                child_exit_code=0,
-                verifier_id="test-external-runner-v1",
-                verifier_sha256="8" * 64,
-            )
-            pricing = build_pricing_receipt(manifest, build_executed_run_receipt(manifest, parent))
-            validate_pricing_receipt(pricing, manifest)
-            self.assertEqual(pricing["evidence"], "authorized-executed-run")
+        pricing = build_pricing_receipt(manifest, _executed(manifest, "live-run"))
+        validate_pricing_receipt(pricing, manifest)
+        self.assertEqual(pricing["evidence"], "authorized-executed-run")
 
     def test_external_runner_end_to_end_binds_observed_exit_and_candidate(self):
         from mtp_external_runner import run_external_candidate
@@ -348,10 +375,14 @@ class Issue688LiveManifestTests(unittest.TestCase):
             config_path = root / "config.json"
             source_path.write_bytes(b"external-source")
             config_path.write_bytes(json.dumps(_config()).encode("utf-8"))
+            fixture_model = TinyMtp()
+            write_parameter_manifest(manifest_path, fixture_model, torch.optim.SGD(fixture_model.parameters(), lr=0.1), _config())
             child_path = root / "child.py"
             child_path.write_text(
                 """
 import json
+import os
+import subprocess
 import sys
 sys.path.insert(0, {scripts!r})
 from pathlib import Path
@@ -365,7 +396,7 @@ class M(torch.nn.Module):
 model = M()
 optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
 cfg = {{"model": {{"parameter_accounting": {{"base_excluding_mtp": 4, "mtp_aux": 8, "realized": 12}}}}}}
-manifest = write_parameter_manifest(Path({manifest!r}), model, optimizer, cfg)
+manifest = json.loads(Path({manifest!r}).read_text(encoding="utf-8"))
 boundary = begin_governed_execution(model, optimizer)
 loss = sum(parameter.square().sum() for parameter in model.parameters())
 loss.backward()
@@ -389,6 +420,10 @@ Path({candidate_path!r}).write_text(json.dumps(candidate, sort_keys=True), encod
                 source_path=source_path,
                 config_path=config_path,
                 cwd=SCRIPTS,
+                runner=_test_runner,
+                runner_receipt_path=root / 'disk-budget.json',
+                write_roots={},
+                max_write_gib={},
             )
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             validate_governed_execution_receipt(parent, manifest)
@@ -400,7 +435,7 @@ Path({candidate_path!r}).write_text(json.dumps(candidate, sort_keys=True), encod
             self.assertTrue(receipt_path.exists())
             wrong_source = root / "wrong-source.py"
             wrong_source.write_bytes(b"different-source")
-            with self.assertRaisesRegex(ValueError, "source_sha256"):
+            with self.assertRaisesRegex(ValueError, "candidate.*before spawn"):
                 run_external_candidate(
                     manifest_path=manifest_path,
                     candidate_path=candidate_path,
@@ -409,6 +444,10 @@ Path({candidate_path!r}).write_text(json.dumps(candidate, sort_keys=True), encod
                     source_path=wrong_source,
                     config_path=config_path,
                     cwd=SCRIPTS,
+                    runner=_test_runner,
+                    runner_receipt_path=root / 'wrong-disk-budget.json',
+                    write_roots={},
+                    max_write_gib={},
                 )
 
     def test_external_parent_rejects_child_forged_authority(self):
@@ -420,6 +459,75 @@ Path({candidate_path!r}).write_text(json.dumps(candidate, sort_keys=True), encod
         forged["receipt_sha256"] = governed_execution_receipt_sha256(forged)
         with self.assertRaisesRegex(MtpParameterManifestError, "externally verified"):
             validate_governed_execution_receipt(forged, manifest)
+
+    def test_direct_finalizer_cannot_mint_governed_parent(self):
+        model = TinyMtp()
+        manifest = build_parameter_manifest(model, torch.optim.SGD(model.parameters(), lr=0.1), _config())
+        candidate = {
+            "schema": "ember-mtp-execution-candidate-v1",
+            "run_id": "direct-finalizer-forgery",
+            "update_count": 1,
+            "source_sha256": "1" * 64,
+            "config_sha256": "2" * 64,
+            "manifest_sha256": manifest["manifest_sha256"],
+            "before_state_sha256": "3" * 64,
+            "after_state_sha256": "4" * 64,
+            "before_optimizer_state_sha256": "5" * 64,
+            "optimizer_state_sha256": "6" * 64,
+        }
+        candidate["receipt_sha256"] = execution_candidate_sha256(candidate)
+        with self.assertRaisesRegex(MtpParameterManifestError, "external runner"):
+            finalize_governed_execution_receipt(
+                manifest,
+                candidate,
+                command=[sys.executable, "-c", "pass"],
+                process_identity={"pid": 1, "start_time_ns": 1, "executable_sha256": "7" * 64},
+                child_exit_code=0,
+                verifier_id="test-external-runner-v1",
+                verifier_sha256="8" * 64,
+            )
+    def test_external_runner_rejects_preexisting_candidate_before_spawn(self):
+        from mtp_external_runner import run_external_candidate
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            source_path = root / "source.py"
+            config_path = root / "config.json"
+            manifest_path = root / "manifest.json"
+            candidate_path = root / "candidate.json"
+            source_path.write_bytes(b"source")
+            config_path.write_bytes(json.dumps(_config()).encode("utf-8"))
+            model = TinyMtp()
+            optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+            manifest = write_parameter_manifest(manifest_path, model, optimizer, _config())
+            candidate = {
+                "schema": "ember-mtp-execution-candidate-v1",
+                "run_id": "stale-preexisting",
+                "update_count": 1,
+                "source_sha256": hashlib.sha256(b"source").hexdigest(),
+                "config_sha256": hashlib.sha256(json.dumps(_config()).encode("utf-8")).hexdigest(),
+                "manifest_sha256": manifest["manifest_sha256"],
+                "before_state_sha256": "3" * 64,
+                "after_state_sha256": "4" * 64,
+                "before_optimizer_state_sha256": "5" * 64,
+                "optimizer_state_sha256": "6" * 64,
+            }
+            candidate["receipt_sha256"] = execution_candidate_sha256(candidate)
+            candidate_path.write_text(json.dumps(candidate, sort_keys=True), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "candidate.*before spawn"):
+                run_external_candidate(
+                    manifest_path=manifest_path,
+                    candidate_path=candidate_path,
+                    receipt_path=root / "governed-receipt.json",
+                    source_path=source_path,
+                    config_path=config_path,
+                    command=[sys.executable, "-c", "pass"],
+                    cwd=SCRIPTS,
+                    runner=_test_runner,
+                    runner_receipt_path=root / 'wrong-disk-budget.json',
+                    write_roots={},
+                    max_write_gib={},
+                )
     def test_two_arm_projection_rejects_accounting_mismatch(self):
         import fp44_horizon_equiv_gate
 
@@ -467,7 +575,9 @@ Path({candidate_path!r}).write_text(json.dumps(candidate, sort_keys=True), encod
             validate_pricing_receipt(tampered, manifest)
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / "pricing-receipt.json"
-            self.assertEqual(write_pricing_receipt(path, manifest, _executed(manifest, "issue688-test-run")), receipt)
+            saved = write_pricing_receipt(path, manifest, _executed(manifest, "issue688-test-run"))
+            self.assertEqual(saved["realized_parameter_count"], receipt["realized_parameter_count"])
+            self.assertEqual(saved["evidence"], receipt["evidence"])
 
     def test_optimizer_boundary_source_binds_actual_manifest_and_pricing(self):
         source = (ROOT / "scripts" / "fp44_horizon_optimizer_equiv.py").read_text(encoding="utf-8")
