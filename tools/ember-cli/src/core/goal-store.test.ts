@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // core/goal-store.test.ts — state-machine unit tests for the persisted goal organ
 // (ember issue #211). Covers: every legal/illegal status transition, objective
 // immutability (updateStatus can never carry an objective, editObjective is the
@@ -99,6 +103,33 @@ describe("validateObjective", () => {
 // ---------------------------------------------------------------------------
 
 describe("createGoalStore — createGoal", () => {
+  it("requires completion-audit evidence at the store boundary", () => {
+    const store = createGoalStore();
+    store.createGoal("prove the objective");
+
+    const missing = store.updateStatus("Complete");
+    expect(missing.ok).toBe(false);
+    expect(store.getGoal()?.status).toBe("Active");
+
+    const audit = { requirements: [{ id: "objective", evidence: "receipt:objective-proven" }] };
+    const accepted = store.updateStatus("Complete", { completionAudit: audit });
+    expect(accepted.ok).toBe(true);
+    expect(store.getGoal()?.completionAudit).toEqual(audit);
+  });
+
+  it("rejects completion-audit evidence on non-Complete transitions", () => {
+    const audit = { requirements: [{ id: "objective", evidence: "receipt:objective-proven" }] };
+    for (const [start, status] of [["Active", "Paused"], ["Active", "Blocked"], ["Paused", "Active"]] as const) {
+      const store = createGoalStore();
+      store.createGoal("prove the objective");
+      if (start === "Paused") store.updateStatus("Paused");
+      const result = store.updateStatus(status, { completionAudit: audit });
+      expect(result.ok).toBe(false);
+      expect(store.getGoal()?.status).toBe(start);
+      expect(store.getGoal()?.completionAudit).toBeUndefined();
+    }
+  });
+
   it("creates a new goal with status Active and zeroed usage", () => {
     const store = createGoalStore();
     const result = store.createGoal("reach the summit");

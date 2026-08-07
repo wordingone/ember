@@ -157,7 +157,9 @@ describe("goal-continuation bounded re-arm (issue #279)", () => {
       getEligibilitySignals: () => eligible({ turnActive }),
       startTurn: async () => {
         fired += 1;
-        store.updateStatus("Complete");
+        store.updateStatus("Complete", {
+          completionAudit: { requirements: [{ id: "rearm", evidence: "test-receipt" }] },
+        });
       },
     });
 
