@@ -234,7 +234,13 @@ def run_selection_pretraining_segment(
     iter_from = getattr(selection, "iter_from", None)
     if not callable(iter_from):
         raise ValueError("selection consumer requires sequential iter_from")
+    validate_selection_receipt = getattr(selection, "validate_receipt", None)
 
+    def _validate_selection_authority() -> None:
+        if callable(validate_selection_receipt):
+            validate_selection_receipt()
+
+    _validate_selection_authority()
     model.train()
     losses: list[float] = []
     modality_examples = {"text": 0, "image": 0, "audio": 0, "reasoning": 0, "tool": 0}
@@ -301,6 +307,7 @@ def run_selection_pretraining_segment(
                 "expert_utilization": expert_utilization,
             })
         if global_step % checkpoint_every == 0:
+            _validate_selection_authority()
             checkpoint_callback(global_step, last_result)
             last_checkpoint_step = global_step
         if max_records is not None and completed >= max_records:
@@ -308,6 +315,7 @@ def run_selection_pretraining_segment(
     if last_result is None or last_cursor is None:
         raise ValueError("selection consumer requires at least one selected record")
     if last_checkpoint_step != last_result["global_step"]:
+        _validate_selection_authority()
         checkpoint_callback(int(last_result["global_step"]), last_result)
     if require_complete_coverage:
         missing_capabilities = [name for name, value in modality_examples.items() if value <= 0]

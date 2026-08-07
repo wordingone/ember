@@ -14,6 +14,7 @@ import json
 import os
 import re
 import shutil
+from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Iterator, Sequence
 
@@ -560,7 +561,16 @@ def iter_owned_records(manifest_path: Path, *, output_root: Path, cursor: dict[s
 
 
 
-OWNED_SELECTION_SCHEMA_VERSION = "ember-owned-specialist-stream-selection-receipt-v1"
+OWNED_SELECTION_SCHEMA_VERSION = "ember-owned-corpus-selection-receipt-v1"
+OWNED_SELECTION_RECEIPT_FIELDS = {
+    "schema_version",
+    "manifest_sha256",
+    "split",
+    "root_sha256",
+    "selected_record_count",
+    "tokenizer_sha256",
+    "selection_rule_id",
+}
 SELECTION_CURSOR_SCHEMA_VERSION = "ember-owned-specialist-stream-selection-cursor-v1"
 SELECTION_CURSOR_FIELDS = {
     "schema_version",
@@ -570,6 +580,36 @@ SELECTION_CURSOR_FIELDS = {
     "next_source_index",
 }
 OWNED_SELECTION_RULE = "owned_corpus_text_tokenize_v1"
+
+
+def _canonical_owned_selection_receipt_bytes(receipt: Mapping[str, Any]) -> bytes:
+    return json.dumps(dict(receipt), sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+
+
+def validate_owned_selection_receipt(
+    receipt: object,
+    *,
+    expected_sha256: str | None = None,
+) -> dict[str, Any]:
+    if not isinstance(receipt, Mapping) or set(receipt) != OWNED_SELECTION_RECEIPT_FIELDS:
+        raise CorpusBuildError("owned selection receipt schema is not closed")
+    normalized = dict(receipt)
+    if normalized.get("schema_version") != OWNED_SELECTION_SCHEMA_VERSION:
+        raise CorpusBuildError("owned selection receipt schema is invalid")
+    if normalized.get("split") not in ("train", "heldout"):
+        raise CorpusBuildError("owned selection receipt split is invalid")
+    for field in ("manifest_sha256", "root_sha256", "tokenizer_sha256"):
+        value = normalized.get(field)
+        if not isinstance(value, str) or _LOWER_HEX.fullmatch(value) is None:
+            raise CorpusBuildError("owned selection receipt digest is invalid")
+    if type(normalized.get("selected_record_count")) is not int or normalized["selected_record_count"] <= 0:
+        raise CorpusBuildError("owned selection receipt record count is invalid")
+    if normalized.get("selection_rule_id") != OWNED_SELECTION_RULE:
+        raise CorpusBuildError("owned selection receipt selection rule is invalid")
+    receipt_sha256 = _sha_bytes(_canonical_owned_selection_receipt_bytes(normalized))
+    if expected_sha256 is not None and receipt_sha256 != expected_sha256:
+        raise CorpusBuildError("owned selection receipt bytes do not match its authority hash")
+    return normalized
 
 
 class OwnedCorpusSelection:
@@ -619,9 +659,14 @@ class OwnedCorpusSelection:
             "tokenizer_sha256": self._tokenizer_sha256,
             "selection_rule_id": OWNED_SELECTION_RULE,
         }
-        self._selection_receipt_sha256 = _sha_bytes(json.dumps(self.receipt, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8"))
+        validate_owned_selection_receipt(self.receipt)
+        self._selection_receipt_sha256 = _sha_bytes(_canonical_owned_selection_receipt_bytes(self.receipt))
+
+    def validate_receipt(self) -> dict[str, Any]:
+        return validate_owned_selection_receipt(self.receipt, expected_sha256=self._selection_receipt_sha256)
 
     def _validate_cursor(self, cursor: object) -> dict[str, Any]:
+        self.validate_receipt()
         if cursor is None:
             cursor = {
                 "schema_version": SELECTION_CURSOR_SCHEMA_VERSION,

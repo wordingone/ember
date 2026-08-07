@@ -355,7 +355,7 @@ def test_owned_corpus_selection_feeds_real_pretrain_consumer_and_advances_cursor
         max_records=2,
     )
     assert selection.receipt["selected_record_count"] == 2
-    assert selection.receipt["schema_version"] == "ember-owned-specialist-stream-selection-receipt-v1"
+    assert selection.receipt["schema_version"] == "ember-owned-corpus-selection-receipt-v1"
     assert set(selection.receipt) == {
         "schema_version",
         "manifest_sha256",
@@ -465,7 +465,8 @@ def test_owned_corpus_selection_round_trips_real_p2b_checkpoint_and_resume(tmp_p
         import pretrain
         from ember_restart_model.checkpoint_fixture import write_checkpoint_artifacts
         from model import RestartDecoderConfig, UnifiedDecoder
-        from specialist_stream import SELECTION_CURSOR_SCHEMA_VERSION, SELECTION_RECEIPT_SCHEMA_VERSION, TRAINING_CURSOR_SCHEMA_VERSION
+        from specialist_stream import SELECTION_CURSOR_SCHEMA_VERSION, TRAINING_CURSOR_SCHEMA_VERSION
+        from scripts.corpus.owned_v1 import OWNED_SELECTION_SCHEMA_VERSION
 
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=101)
@@ -495,7 +496,7 @@ def test_owned_corpus_selection_round_trips_real_p2b_checkpoint_and_resume(tmp_p
         assert selection_cursor["selection_receipt_sha256"] == _sha(
             json.dumps(selection.receipt, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
         )
-        assert selection.receipt["schema_version"] == SELECTION_RECEIPT_SCHEMA_VERSION
+        assert selection.receipt["schema_version"] == OWNED_SELECTION_SCHEMA_VERSION
         checkpoint_root = tmp_path / "checkpoint"
         receipt = write_checkpoint_artifacts(
             model=model,
@@ -537,6 +538,26 @@ def test_owned_corpus_selection_round_trips_real_p2b_checkpoint_and_resume(tmp_p
 
     assert resumed["steps"] == 1
     assert resumed["data_cursor"]["selection_cursor"]["selected_ordinal"] == 2
+
+
+def test_owned_selection_receipt_tamper_is_rejected_on_resume(tmp_path: Path):
+    from tokenizers import Tokenizer
+    from tokenizers.models import WordLevel
+
+    from scripts.corpus.owned_v1 import OwnedCorpusSelection, build_owned_corpus
+
+    raw = tmp_path / "raw"
+    _write_source(raw, "alpha", [{"id": f"a{index}", "text": f"record {index}"} for index in range(4)])
+    out = tmp_path / "owned"
+    build_owned_corpus(raw_root=raw, output_root=out, source_names=("alpha",), shard_records=2)
+    tokenizer_path = tmp_path / "tokenizer.json"
+    Tokenizer(WordLevel(vocab={"[UNK]": 0, "record": 1}, unk_token="[UNK]")).save(str(tokenizer_path))
+    selection = OwnedCorpusSelection(
+        out / "manifest.json", output_root=out, tokenizer_path=tokenizer_path, split="train", max_records=1
+    )
+    selection.receipt["manifest_sha256"] = "0" * 64
+    with pytest.raises(ValueError, match="receipt|selection"):
+        list(selection.iter_from())
 
 def test_owned_corpus_selection_rejects_tokenizer_drift(tmp_path: Path):
     from tokenizers import Tokenizer
