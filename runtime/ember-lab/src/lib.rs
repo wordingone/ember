@@ -3264,7 +3264,7 @@ impl Daemon {
         job_id: &str,
         expected_whole_run_peak_bytes: u64,
     ) -> Result<Vec<crate::rehearsal::PhaseEvidence>> {
-        return self.consume_minimal_slice(job_id, expected_whole_run_peak_bytes);
+        self.consume_minimal_slice(job_id, expected_whole_run_peak_bytes)
     }
 
     /// Persist one phase event through the daemon's existing job/lease
