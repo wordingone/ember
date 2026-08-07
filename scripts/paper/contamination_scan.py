@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """#552 Component A: eval-contamination scan (Q6b, feeds A1).
 
 Model-free contamination detection via n-gram exact collisions + MinHash-Jaccard.
@@ -62,21 +65,21 @@ def _count_ngram_collisions(eval_text: str, shard_text: str, gram_size: int = 13
     if not eval_grams or not shard_grams:
         return 0
 
-    shard_set = set(shard_grams)
-
-    # Find consecutive matches
-    max_window = 0
-    current_window = 0
-
-    for gram in eval_grams:
-        if gram in shard_set:
-            current_window += 1
-            max_window = max(max_window, current_window)
-        else:
-            current_window = 0
-
-    # Return 1 if we found >= window_len consecutive matches, else 0
-    return 1 if max_window >= window_len else 0
+    # A collision window must be contiguous and ordered in BOTH streams.  A
+    # membership set alone falsely joins grams that occur far apart or in a
+    # different order in the shard.
+    positions: dict[str, list[int]] = {}
+    for index, gram in enumerate(shard_grams):
+        positions.setdefault(gram, []).append(index)
+    for start in range(len(eval_grams) - window_len + 1):
+        first = positions.get(eval_grams[start], [])
+        for shard_start in first:
+            if all(
+                shard_start + offset in positions.get(eval_grams[start + offset], [])
+                for offset in range(window_len)
+            ):
+                return 1
+    return 0
 
 
 def _minhash_jaccard(text1: str, text2: str, shingle_size: int = 13,

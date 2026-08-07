@@ -14,6 +14,7 @@ import argparse
 import glob
 import hashlib
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -47,11 +48,60 @@ def _basename(value: object) -> str:
     return Path(str(value)).name if value is not None else "UNKNOWN"
 
 
+D_CLAUSES = (
+    "coordinator freeze declaration binds commit_hash suite_manifest_sha256 ts",
+    "pre-freeze numbers are labeled development appendix",
+    "one held-out eval selected by a published rule seeded by freeze commit",
+    "no human selection and no capability claim before freeze",
+)
+
+
+def _build_component_d_transfer(comment_url: str | None, body_sha256: str | None) -> dict:
+    if not isinstance(comment_url, str) or not comment_url.startswith("https://github.com/wordingone/ember/issues/123#issuecomment-"):
+        raise ValueError("component D requires the canonical append-only #123 comment URL")
+    if not isinstance(body_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", body_sha256):
+        raise ValueError("component D requires a lowercase SHA-256 of the public carrier comment")
+    clauses_sha = hashlib.sha256(json.dumps(list(D_CLAUSES), separators=(",", ":")).encode("utf-8")).hexdigest()
+    return {
+        "carrier_issue": 123,
+        "carrier_url": "https://github.com/wordingone/ember/issues/123",
+        "carrier_comment_url": comment_url,
+        "carrier_comment_body_sha256": body_sha256,
+        "status": "TRANSFERRED_TO_CANONICAL_CARRIER",
+        "accepted_clauses": list(D_CLAUSES),
+        "accepted_clauses_sha256": clauses_sha,
+        "append_only": True,
+    }
+
+
+def _sanitize_provenance_row(row: dict) -> dict:
+    clean = dict(row)
+    for key in ("shard_path", "source_manifest"):
+        if key in clean:
+            clean[key] = _basename(clean[key])
+    links = []
+    for link in clean.get("transform_links", []):
+        if not isinstance(link, dict):
+            links.append({"path": "UNKNOWN", "sha256": "UNKNOWN", "status": "UNKNOWN"})
+            continue
+        item = dict(link)
+        item["path"] = _basename(item.get("path"))
+        links.append(item)
+    clean["transform_links"] = links
+    return clean
+
+
 def _load_eval(path: Path) -> list[dict]:
     raw = path.read_bytes()
-    data = json.loads(raw.decode("utf-8"))
+    text = raw.decode("utf-8")
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        data = [json.loads(line) for line in text.splitlines() if line.strip()]
+    if isinstance(data, dict) and isinstance(data.get("items"), list):
+        data = data["items"]
     if not isinstance(data, list) or not all(isinstance(row, dict) for row in data):
-        raise ValueError("eval manifest must be a JSON list of objects")
+        raise ValueError("eval manifest must be a JSON list, bound items object, or JSONL objects")
     return data
 
 
@@ -82,7 +132,10 @@ def _config_manifest_refs(configs: list[str]) -> list[str]:
 
 
 def run_shields(eval_manifest: str, shards: list[str], configs: list[str],
-                receipts: list[str], out_path: str, timestamp: str | None = None) -> dict:
+                receipts: list[str], out_path: str, timestamp: str | None = None,
+                authority_roots: list[str] | None = None,
+                component_d_comment_url: str | None = None,
+                component_d_comment_body_sha256: str | None = None) -> dict:
     """Run A/B/C on explicit bytes and atomically publish one path-free receipt."""
     eval_path = Path(eval_manifest)
     if not eval_path.is_file():
@@ -91,6 +144,8 @@ def run_shields(eval_manifest: str, shards: list[str], configs: list[str],
         raise ValueError("at least one training config is required")
     if not receipts:
         raise ValueError("at least one existing claim-bearing receipt is required")
+    if component_d_comment_url is None or component_d_comment_body_sha256 is None:
+        raise ValueError("component D requires a public append-only carrier comment")
     eval_data = _load_eval(eval_path)
     shard_values = _expand_shards(shards)
     # A is intentionally executed even when a shard is unreadable; B preserves
@@ -100,17 +155,10 @@ def run_shields(eval_manifest: str, shards: list[str], configs: list[str],
         for row in contamination.get(key, []):
             if row.get("worst_shard") is not None:
                 row["worst_shard"] = _basename(row["worst_shard"])
-    provenance = provenance_manifest.build_manifest(configs)
+    roots = authority_roots or [str(Path(config).resolve().parent.parent) for config in configs]
+    provenance = provenance_manifest.build_manifest(configs, authority_roots=roots)
     ledger = compute_ledger.backfill_compute_ledger(receipts)
-    covered = {str(row.get("shard_path")) for row in provenance["manifest"]}
-    for ref in _config_manifest_refs(configs):
-        if ref not in covered:
-            provenance["manifest"].append({"shard_path": ref, "sha256": _sha256(Path(ref)),
-                "source": "UNKNOWN", "fetch_date": "UNKNOWN", "transform_chain": [],
-                "transform_status": "UNKNOWN", "model_in_loop": False,
-                "note": "config-referenced provenance input"})
-            provenance["summary"]["n_shards"] += 1
-            provenance["summary"]["unknown"] += 1
+    production_hook = compute_ledger.verify_production_hook(HERE.parents[1] / "timeshare_pretrain.py")
     ts = timestamp or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     receipt = {
         "ticket": "EMBER-552-PAPER-SHIELDS",
@@ -134,26 +182,16 @@ def run_shields(eval_manifest: str, shards: list[str], configs: list[str],
         },
         "component_a_contamination": contamination,
         "component_b_provenance": {
-            "manifest": [{**row, "shard_path": _basename(row.get("shard_path"))}
-                         for row in provenance["manifest"]],
+            "manifest": [_sanitize_provenance_row(row) for row in provenance["manifest"]],
             "summary": provenance["summary"],
         },
         "component_c_compute_ledger": [
             {**row, "receipt_path": _basename(row.get("receipt_path"))}
             for row in ledger
         ],
-        "component_d_status": "COORDINATOR_GATED_NOT_IMPLEMENTED",
-        "component_d_transfer": {
-            "carrier_issue": 123,
-            "carrier_url": "https://github.com/wordingone/ember/issues/123",
-            "status": "PENDING_BENCHMARK_MANDATE",
-            "clauses": [
-                "coordinator freeze declaration binds commit_hash suite_manifest_sha256 ts",
-                "pre-freeze numbers are labeled development appendix",
-                "one held-out eval selected by a published rule seeded by freeze commit",
-                "no human selection and no capability claim before freeze",
-            ],
-        },
+        "component_c_production_hook": production_hook,
+        "component_d_status": "TRANSFERRED_TO_CANONICAL_CARRIER",
+        "component_d_transfer": _build_component_d_transfer(component_d_comment_url, component_d_comment_body_sha256),
     }
     checked_write(out_path, receipt)
     return receipt
@@ -174,7 +212,9 @@ def _selftest() -> None:
         run.write_text(json.dumps({"ticket": "RUN", "ts": "20260601T000000Z", "steps": 2,
                                   "tokens_this_segment": 8, "wall_s": 4}), encoding="utf-8")
         result = run_shields(str(eval_path), [str(shard)], [str(config)], [str(run)], str(out),
-                             timestamp="20260807T000000Z")
+                             timestamp="20260807T000000Z",
+                             component_d_comment_url="https://github.com/wordingone/ember/issues/123#issuecomment-selftest",
+                             component_d_comment_body_sha256="a" * 64)
         assert result["component_a_contamination"]["suite_summary"]["n_items"] == 1
         assert result["component_b_provenance"]["summary"]["unknown"] >= 1
         assert result["component_c_compute_ledger"][0]["status"] == "BACKFILLED"
@@ -189,6 +229,9 @@ def main() -> int:
     parser.add_argument("--shard", action="append", default=[])
     parser.add_argument("--config", action="append", default=[])
     parser.add_argument("--receipt", action="append", default=[])
+    parser.add_argument("--authority-root", action="append", default=[])
+    parser.add_argument("--component-d-comment-url")
+    parser.add_argument("--component-d-comment-body-sha256")
     parser.add_argument("--out")
     args = parser.parse_args()
     if args.selftest:
@@ -196,7 +239,10 @@ def main() -> int:
     for name in ("eval_manifest", "out"):
         if not getattr(args, name):
             parser.error(f"--{name.replace('_', '-') } is required")
-    run_shields(args.eval_manifest, args.shard, args.config, args.receipt, args.out)
+    run_shields(args.eval_manifest, args.shard, args.config, args.receipt, args.out,
+                authority_roots=args.authority_root,
+                component_d_comment_url=args.component_d_comment_url,
+                component_d_comment_body_sha256=args.component_d_comment_body_sha256)
     return 0
 
 

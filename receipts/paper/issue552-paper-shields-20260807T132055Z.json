@@ -1,0 +1,415 @@
+{
+  "ticket": "EMBER-552-PAPER-SHIELDS",
+  "ts": "20260807T132751Z",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "issue": 552,
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "scope": "CPU-only model-free paper-shields Components A-C",
+  "claim_boundary": "No model, training, benchmark, capability, or frozen-corpus claim",
+  "inputs": {
+    "eval_manifest": {
+      "basename": "issue552-eval.json",
+      "sha256": "a0e4c41e8be8dea1280748523e1201fbd69862d9d6c8fa96385c3fffc35ce01b"
+    },
+    "shards": [
+      {
+        "basename": "issue552-contamination-shard.json",
+        "sha256": "add910d03bafde0155bbe68b57d5c6eb904d806f84914f0c6243530b9791e092"
+      }
+    ],
+    "configs": [
+      {
+        "basename": "v1-pretrain-config.json",
+        "sha256": "5f79dc3899593caed883218e34f5c2acc9e91aa728bb425096f74369a2536269"
+      }
+    ],
+    "receipts": [
+      {
+        "basename": "cbase-grow-live-live-20260703T053225Z.json",
+        "sha256": "43217cc5f31cce0320bf0627a603b11a7e4782ed1e03c48510c55346ac27c2d5"
+      }
+    ]
+  },
+  "component_a_contamination": {
+    "per_item": [
+      {
+        "item_id": "pos-1",
+        "max_13gram_collision": 1,
+        "max_minhash_jaccard": 0.2891,
+        "worst_shard": "issue552-contamination-shard.json"
+      },
+      {
+        "item_id": "pos-2",
+        "max_13gram_collision": 0,
+        "max_minhash_jaccard": 0.0,
+        "worst_shard": null
+      },
+      {
+        "item_id": "neg-1",
+        "max_13gram_collision": 0,
+        "max_minhash_jaccard": 0.0,
+        "worst_shard": null
+      },
+      {
+        "item_id": "neg-2",
+        "max_13gram_collision": 0,
+        "max_minhash_jaccard": 0.0,
+        "worst_shard": null
+      },
+      {
+        "item_id": "neg-3",
+        "max_13gram_collision": 0,
+        "max_minhash_jaccard": 0.0,
+        "worst_shard": null
+      }
+    ],
+    "suite_summary": {
+      "n_items": 5,
+      "n_contaminated": 1,
+      "contamination_rate": 0.2
+    },
+    "thresholds": {
+      "collision_window_len": 3,
+      "gram_size": 13,
+      "minhash_perms": 128,
+      "minhash_shingle": 13,
+      "collision_threshold": 0,
+      "jaccard_threshold": 0.5
+    },
+    "contaminated_items": [
+      {
+        "item_id": "pos-1",
+        "max_13gram_collision": 1,
+        "max_minhash_jaccard": 0.2891,
+        "worst_shard": "issue552-contamination-shard.json"
+      }
+    ]
+  },
+  "component_b_provenance": {
+    "manifest": [
+      {
+        "shard_path": "code_github_clean-00000.jsonl.zst",
+        "sha256": "UNREADABLE",
+        "declared_sha256": "71ec4259d4c2b4656a9b84b228ff0ebdc36e84112e5ac7c21742a04e96fe58ae",
+        "bytes_on_disk": "UNKNOWN",
+        "declared_bytes_on_disk": 181427530,
+        "source_manifest": "code_github_clean-manifest-20260611T051128Z.json",
+        "status": "UNKNOWN",
+        "transform_links": [],
+        "source": "UNKNOWN",
+        "fetch_date": "UNKNOWN",
+        "model_in_loop": false
+      },
+      {
+        "shard_path": "code_github_clean-00001.jsonl.zst",
+        "sha256": "UNREADABLE",
+        "declared_sha256": "2ec600d549daf268d3cdd7af3a380282775ac488cda31c060c4ba66861ca834a",
+        "bytes_on_disk": "UNKNOWN",
+        "declared_bytes_on_disk": 180957650,
+        "source_manifest": "code_github_clean-manifest-20260611T051128Z.json",
+        "status": "UNKNOWN",
+        "transform_links": [],
+        "source": "UNKNOWN",
+        "fetch_date": "UNKNOWN",
+        "model_in_loop": false
+      },
+      {
+        "shard_path": "code_github_clean-00002.jsonl.zst",
+        "sha256": "UNREADABLE",
+        "declared_sha256": "1b85dd5a33b1f43a4432f72773b471edb3841433e6bf06eded427794f2a33cb8",
+        "bytes_on_disk": "UNKNOWN",
+        "declared_bytes_on_disk": 181261303,
+        "source_manifest": "code_github_clean-manifest-20260611T051128Z.json",
+        "status": "UNKNOWN",
+        "transform_links": [],
+        "source": "UNKNOWN",
+        "fetch_date": "UNKNOWN",
+        "model_in_loop": false
+      },
+      {
+        "shard_path": "code_github_clean-00003.jsonl.zst",
+        "sha256": "UNREADABLE",
+        "declared_sha256": "c30e5c7b3588f3fa34ae20a6f8eb2e17a94c83d4d3feb705a336d5d74227979b",
+        "bytes_on_disk": "UNKNOWN",
+        "declared_bytes_on_disk": 181236988,
+        "source_manifest": "code_github_clean-manifest-20260611T051128Z.json",
+        "status": "UNKNOWN",
+        "transform_links": [],
+        "source": "UNKNOWN",
+        "fetch_date": "UNKNOWN",
+        "model_in_loop": false
+      },
+      {
+        "shard_path": "code_github_clean-00004.jsonl.zst",
+        "sha256": "UNREADABLE",
+        "declared_sha256": "08f15b2a10c5cab461367b0ae2a5f4c02d219f57db53e370bcbd04129dd49dca",
+        "bytes_on_disk": "UNKNOWN",
+        "declared_bytes_on_disk": 179634362,
+        "source_manifest": "code_github_clean-manifest-20260611T051128Z.json",
+        "status": "UNKNOWN",
+        "transform_links": [],
+        "source": "UNKNOWN",
+        "fetch_date": "UNKNOWN",
+        "model_in_loop": false
+      },
+      {
+        "shard_path": "code_github_clean-00005.jsonl.zst",
+        "sha256": "UNREADABLE",
+        "declared_sha256": "5c6284ac01f945cea11f4b7bd56be01352dc9908eb3f43df260e813c8004a1d5",
+        "bytes_on_disk": "UNKNOWN",
+        "declared_bytes_on_disk": 181059662,
+        "source_manifest": "code_github_clean-manifest-20260611T051128Z.json",
+        "status": "UNKNOWN",
+        "transform_links": [],
+        "source": "UNKNOWN",
+        "fetch_date": "UNKNOWN",
+        "model_in_loop": false
+      },
+      {
+        "shard_path": "code_github_clean-00006.jsonl.zst",
+        "sha256": "UNREADABLE",
+        "declared_sha256": "eee8e7f356b487ba6e50962bd1e5a7881f52bc373c4dc39ec1739643171e4c62",
+        "bytes_on_disk": "UNKNOWN",
+        "declared_bytes_on_disk": 182349674,
+        "source_manifest": "code_github_clean-manifest-20260611T051128Z.json",
+        "status": "UNKNOWN",
+        "transform_links": [],
+        "source": "UNKNOWN",
+        "fetch_date": "UNKNOWN",
+        "model_in_loop": false
+      },
+      {
+        "shard_path": "code_github_clean-00007.jsonl.zst",
+        "sha256": "UNREADABLE",
+        "declared_sha256": "b85283eae15ac30389f44313f304aacc5939ed23176acdc51856bbca16274e31",
+        "bytes_on_disk": "UNKNOWN",
+        "declared_bytes_on_disk": 181893321,
+        "source_manifest": "code_github_clean-manifest-20260611T051128Z.json",
+        "status": "UNKNOWN",
+        "transform_links": [],
+        "source": "UNKNOWN",
+        "fetch_date": "UNKNOWN",
+        "model_in_loop": false
+      },
+      {
+        "shard_path": "code_github_clean-00008.jsonl.zst",
+        "sha256": "UNREADABLE",
+        "declared_sha256": "b0807146f817cfa28d6cb2d6ee8b13994c6dc5a8544dc6f849970865dc82bd64",
+        "bytes_on_disk": "UNKNOWN",
+        "declared_bytes_on_disk": 181179231,
+        "source_manifest": "code_github_clean-manifest-20260611T051128Z.json",
+        "status": "UNKNOWN",
+        "transform_links": [],
+        "source": "UNKNOWN",
+        "fetch_date": "UNKNOWN",
+        "model_in_loop": false
+      },
+      {
+        "shard_path": "code_github_clean-00009.jsonl.zst",
+        "sha256": "UNREADABLE",
+        "declared_sha256": "3e1e26d6c6f6773f0f5f0f029d8315967b90585cc6d64d5c8df18ce9a1a0661f",
+        "bytes_on_disk": "UNKNOWN",
+        "declared_bytes_on_disk": 180075662,
+        "source_manifest": "code_github_clean-manifest-20260611T051128Z.json",
+        "status": "UNKNOWN",
+        "transform_links": [],
+        "source": "UNKNOWN",
+        "fetch_date": "UNKNOWN",
+        "model_in_loop": false
+      },
+      {
+        "shard_path": "code_github_clean-00010.jsonl.zst",
+        "sha256": "UNREADABLE",
+        "declared_sha256": "366b94f87762c7f4ca1e5c0d026db7d4c9b4b95a5c3fbc6c8f987d646291df2a",
+        "bytes_on_disk": "UNKNOWN",
+        "declared_bytes_on_disk": 179899827,
+        "source_manifest": "code_github_clean-manifest-20260611T051128Z.json",
+        "status": "UNKNOWN",
+        "transform_links": [],
+        "source": "UNKNOWN",
+        "fetch_date": "UNKNOWN",
+        "model_in_loop": false
+      },
+      {
+        "shard_path": "code_github_clean-00011.jsonl.zst",
+        "sha256": "UNREADABLE",
+        "declared_sha256": "881e94d1851f0d3f18ba8bca2e9bbed4a382975bb1c170c350b53d122272c6dd",
+        "bytes_on_disk": "UNKNOWN",
+        "declared_bytes_on_disk": 180429669,
+        "source_manifest": "code_github_clean-manifest-20260611T051128Z.json",
+        "status": "UNKNOWN",
+        "transform_links": [],
+        "source": "UNKNOWN",
+        "fetch_date": "UNKNOWN",
+        "model_in_loop": false
+      },
+      {
+        "shard_path": "code_github_clean-00012.jsonl.zst",
+        "sha256": "UNREADABLE",
+        "declared_sha256": "64b47db885e6fd44bc81137e59a4b0190f082a05dd5e97c8d292ced6b89ac93a",
+        "bytes_on_disk": "UNKNOWN",
+        "declared_bytes_on_disk": 182563572,
+        "source_manifest": "code_github_clean-manifest-20260611T051128Z.json",
+        "status": "UNKNOWN",
+        "transform_links": [],
+        "source": "UNKNOWN",
+        "fetch_date": "UNKNOWN",
+        "model_in_loop": false
+      },
+      {
+        "shard_path": "code_github_clean-00013.jsonl.zst",
+        "sha256": "UNREADABLE",
+        "declared_sha256": "35c3b6ea92d67dbccd37107d917293d97b0a310806f6f7a72f693a131c6c7f63",
+        "bytes_on_disk": "UNKNOWN",
+        "declared_bytes_on_disk": 133309452,
+        "source_manifest": "code_github_clean-manifest-20260611T051128Z.json",
+        "status": "UNKNOWN",
+        "transform_links": [],
+        "source": "UNKNOWN",
+        "fetch_date": "UNKNOWN",
+        "model_in_loop": false
+      },
+      {
+        "shard_path": "wikipedia_en-00000.jsonl.zst",
+        "sha256": "UNREADABLE",
+        "declared_sha256": "4977be5873d7997930a66e6aec268415c764cf172ae9ac2f1009c1bca55a94fd",
+        "bytes_on_disk": "UNKNOWN",
+        "declared_bytes_on_disk": 332710435,
+        "source_manifest": "wikipedia_en-manifest-20260611T045542Z.json",
+        "status": "UNKNOWN",
+        "transform_links": [],
+        "source": "UNKNOWN",
+        "fetch_date": "UNKNOWN",
+        "model_in_loop": false
+      },
+      {
+        "shard_path": "wikipedia_en-00001.jsonl.zst",
+        "sha256": "UNREADABLE",
+        "declared_sha256": "400a3588a135bd95dd9c0694d4c537790b9d0995aaf241b2c020777bc022c68f",
+        "bytes_on_disk": "UNKNOWN",
+        "declared_bytes_on_disk": 330336717,
+        "source_manifest": "wikipedia_en-manifest-20260611T045542Z.json",
+        "status": "UNKNOWN",
+        "transform_links": [],
+        "source": "UNKNOWN",
+        "fetch_date": "UNKNOWN",
+        "model_in_loop": false
+      },
+      {
+        "shard_path": "wikipedia_en-00002.jsonl.zst",
+        "sha256": "UNREADABLE",
+        "declared_sha256": "126facf950b1f895f16c9f9853b5f3fedf62631614e582b92c2677a453b1a0f9",
+        "bytes_on_disk": "UNKNOWN",
+        "declared_bytes_on_disk": 327543615,
+        "source_manifest": "wikipedia_en-manifest-20260611T045542Z.json",
+        "status": "UNKNOWN",
+        "transform_links": [],
+        "source": "UNKNOWN",
+        "fetch_date": "UNKNOWN",
+        "model_in_loop": false
+      },
+      {
+        "shard_path": "wikipedia_en-00003.jsonl.zst",
+        "sha256": "UNREADABLE",
+        "declared_sha256": "e1ac0739add3e1b7d28376f3bd801c33ab57c4fe91ba75910cf8d68c2fbb3e0f",
+        "bytes_on_disk": "UNKNOWN",
+        "declared_bytes_on_disk": 16472552,
+        "source_manifest": "wikipedia_en-manifest-20260611T045542Z.json",
+        "status": "UNKNOWN",
+        "transform_links": [],
+        "source": "UNKNOWN",
+        "fetch_date": "UNKNOWN",
+        "model_in_loop": false
+      },
+      {
+        "shard_path": "gutenberg_en-00000.jsonl.zst",
+        "sha256": "UNREADABLE",
+        "declared_sha256": "03175aae4ede85a49314dbdf4aab0dfbb740b03fd2b9f8aee4fa168fb18b06d8",
+        "bytes_on_disk": "UNKNOWN",
+        "declared_bytes_on_disk": 324030247,
+        "source_manifest": "gutenberg_en-manifest-20260611T050315Z.json",
+        "status": "UNKNOWN",
+        "transform_links": [],
+        "source": "UNKNOWN",
+        "fetch_date": "UNKNOWN",
+        "model_in_loop": false
+      },
+      {
+        "shard_path": "gutenberg_en-00001.jsonl.zst",
+        "sha256": "UNREADABLE",
+        "declared_sha256": "d29f927892d271a7f70497fc65b291a4979ba5026a67787bdb478cd75878d142",
+        "bytes_on_disk": "UNKNOWN",
+        "declared_bytes_on_disk": 305035652,
+        "source_manifest": "gutenberg_en-manifest-20260611T050315Z.json",
+        "status": "UNKNOWN",
+        "transform_links": [],
+        "source": "UNKNOWN",
+        "fetch_date": "UNKNOWN",
+        "model_in_loop": false
+      },
+      {
+        "shard_path": "ledger_mit-00000.jsonl.zst",
+        "sha256": "UNREADABLE",
+        "declared_sha256": "b6c23875148e0bb60fa0dcac2f50c2db7d2b7a9609d987718df03e470eada43b",
+        "bytes_on_disk": "UNKNOWN",
+        "declared_bytes_on_disk": 80038,
+        "source_manifest": "ledger_mit-manifest-20260611T044523Z.json",
+        "status": "UNKNOWN",
+        "transform_links": [],
+        "source": "UNKNOWN",
+        "fetch_date": "UNKNOWN",
+        "model_in_loop": false
+      }
+    ],
+    "summary": {
+      "n_shards": 21,
+      "verified": 0,
+      "unverifiable": 0,
+      "unknown": 21,
+      "n_manifests": 4,
+      "unreadable_manifests": 0,
+      "transform_verified": 0,
+      "transform_unverifiable": 0
+    }
+  },
+  "component_c_compute_ledger": [
+    {
+      "receipt_path": "cbase-grow-live-live-20260703T053225Z.json",
+      "status": "BACKFILLED",
+      "compute_ledger": {
+        "tokens_seen": "UNKNOWN",
+        "optimizer_steps": 60,
+        "wall_seconds": 88.095,
+        "sec_per_step_mean": 1.4683,
+        "tflops_est": "UNKNOWN",
+        "tflops_formula": "TFLOPS = (tokens_seen * model_params * flops_per_token_forward) / (wall_seconds * 1e12)",
+        "peak_vram_gib": "UNKNOWN",
+        "watts_series_ref": null
+      }
+    }
+  ],
+  "component_c_production_hook": {
+    "status": "VERIFIED",
+    "source_basename": "timeshare_pretrain.py",
+    "source_sha256": "4278ee7bfd12f6e2f41af6b5a0b5835e6b92a27ba021499a6e051d4b5e121a7f"
+  },
+  "component_d_status": "TRANSFERRED_TO_CANONICAL_CARRIER",
+  "component_d_transfer": {
+    "carrier_issue": 123,
+    "carrier_url": "https://github.com/wordingone/ember/issues/123",
+    "carrier_comment_url": "https://github.com/wordingone/ember/issues/123#issuecomment-5217502317",
+    "carrier_comment_body_sha256": "3bc1e3b9a9caecaa2f121b33cefac07ad6f18e54d6e68b50f2dcc12d8371cbf7",
+    "status": "TRANSFERRED_TO_CANONICAL_CARRIER",
+    "accepted_clauses": [
+      "coordinator freeze declaration binds commit_hash suite_manifest_sha256 ts",
+      "pre-freeze numbers are labeled development appendix",
+      "one held-out eval selected by a published rule seeded by freeze commit",
+      "no human selection and no capability claim before freeze"
+    ],
+    "accepted_clauses_sha256": "fd6ed67390ebcdc79584bf098096316ffb8aba1b3d63d5b10814bf90ae1ff805",
+    "append_only": true
+  }
+}

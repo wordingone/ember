@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """#552 Component C: compute ledger receipt block (Q7).
 
 Per-run compute metrics emission + backfill utility for existing receipts.
@@ -25,55 +28,49 @@ from typing import Any
 
 
 def compute_ledger_from_receipt(receipt: dict) -> dict:
-    """Extract compute_ledger block from a training receipt.
-
-    Derives metrics from receipt fields where available.
-    Non-derivable fields are marked UNKNOWN.
-    """
-
+    """Extract measured compute fields, preferring the latest measured segment."""
+    segment = {}
+    for key in ("post_grow_segment", "pre_grow_segment"):
+        candidate = receipt.get(key)
+        if isinstance(candidate, dict) and candidate:
+            segment = candidate
+            break
     tokens_seen = receipt.get("tokens_this_segment")
+    if not isinstance(tokens_seen, (int, float)) or tokens_seen <= 0:
+        tokens_seen = segment.get("tokens_this_segment", segment.get("tokens_seen"))
     steps = receipt.get("steps")
+    if not isinstance(steps, (int, float)) or steps <= 0:
+        steps = segment.get("steps")
     wall_s = receipt.get("wall_s")
+    if not isinstance(wall_s, (int, float)) or wall_s <= 0:
+        wall_s = segment.get("wall_s", segment.get("wall_seconds"))
 
-    # Compute derived fields
     sec_per_step_mean = None
-    if steps and steps > 0 and wall_s and wall_s > 0:
+    if isinstance(steps, (int, float)) and steps > 0 and isinstance(wall_s, (int, float)) and wall_s > 0:
         sec_per_step_mean = round(wall_s / steps, 4)
 
-    # TFLOPS estimate
-    # Formula: TFLOPS = (tokens * param_count * flops_per_token) / (wall_s * 1e12)
-    # For now, stub as UNKNOWN (requires model config which isn't always in receipt)
-    tflops_est = None
     tflops_formula = (
         "TFLOPS = (tokens_seen * model_params * flops_per_token_forward) / "
         "(wall_seconds * 1e12)"
     )
-
-    # Peak VRAM — check governor or components for vram usage
-    peak_vram_gib = None
-    gov = receipt.get("governor") or {}
-    if "peak_vram_used_gib" in gov:
-        peak_vram_gib = gov["peak_vram_used_gib"]
-    elif "vram_usage_peak_gib" in gov:
-        peak_vram_gib = gov["vram_usage_peak_gib"]
-
-    # Watts series reference — check if #118 instrumentation is present
+    gov = receipt.get("governor") or segment.get("governor") or {}
+    peak_vram_gib = gov.get("peak_vram_used_gib")
+    if peak_vram_gib is None:
+        peak_vram_gib = gov.get("vram_usage_peak_gib")
     watts_series_ref = None
     if "power_instrumentation" in receipt or "watts_series" in receipt:
         watts_series_ref = receipt.get("watts_series", "power_instrumentation_present")
 
-    ledger = {
-        "tokens_seen": tokens_seen if tokens_seen else "UNKNOWN",
-        "optimizer_steps": steps if steps else "UNKNOWN",
-        "wall_seconds": wall_s if wall_s else "UNKNOWN",
-        "sec_per_step_mean": sec_per_step_mean if sec_per_step_mean else "UNKNOWN",
-        "tflops_est": tflops_est or "UNKNOWN",
+    return {
+        "tokens_seen": tokens_seen if isinstance(tokens_seen, (int, float)) and tokens_seen > 0 else "UNKNOWN",
+        "optimizer_steps": steps if isinstance(steps, (int, float)) and steps > 0 else "UNKNOWN",
+        "wall_seconds": wall_s if isinstance(wall_s, (int, float)) and wall_s > 0 else "UNKNOWN",
+        "sec_per_step_mean": sec_per_step_mean if sec_per_step_mean is not None else "UNKNOWN",
+        "tflops_est": "UNKNOWN",
         "tflops_formula": tflops_formula,
-        "peak_vram_gib": peak_vram_gib or "UNKNOWN",
+        "peak_vram_gib": peak_vram_gib if isinstance(peak_vram_gib, (int, float)) and peak_vram_gib >= 0 else "UNKNOWN",
         "watts_series_ref": watts_series_ref,
     }
-
-    return ledger
 
 
 def backfill_compute_ledger(receipt_paths: list[str]) -> list[dict]:
@@ -126,6 +123,20 @@ def add_compute_ledger_to_receipt(receipt: dict) -> dict:
     """
     receipt["compute_ledger"] = compute_ledger_from_receipt(receipt)
     return receipt
+
+
+def verify_production_hook(source_path: str | Path) -> dict:
+    """Verify the production runner adds the ledger before returning its receipt."""
+    path = Path(source_path)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ValueError(f"runner source unreadable: {path.name}") from exc
+    call = text.find("receipt = add_compute_ledger_to_receipt(receipt)")
+    returned = text.find("return receipt", call + 1) if call >= 0 else -1
+    if call < 0 or returned < 0 or "checked_write" not in text:
+        raise ValueError("production runner lacks ordered compute-ledger hook")
+    return {"status": "VERIFIED", "source_basename": path.name, "source_sha256": __import__("hashlib").sha256(path.read_bytes()).hexdigest()}
 
 
 def _selftest() -> None:

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """#552 Component B: corpus provenance manifest emitter (Q6a).
 
 Per-shard provenance documentation with machine-checkable transform chains.
@@ -46,45 +49,77 @@ def _load_config(config_path: str) -> dict:
 
 
 def _extract_shard_refs(config: dict) -> list[str]:
-    """Extract shard references from config (common patterns)."""
-    shards = []
-
-    # Common config locations
-    for key in ['shards', 'shard_paths', 'corpus_path', 'data_path', 'dataset_path']:
-        val = config.get(key)
-        if val:
-            if isinstance(val, str):
-                shards.append(val)
-            elif isinstance(val, list):
-                shards.extend(val)
-
-    # Nested paths
-    for section in config.values():
-        if isinstance(section, dict):
-            for key in ['shards', 'shard_paths', 'corpus_path', 'data_path']:
-                val = section.get(key)
-                if val:
-                    if isinstance(val, str):
-                        shards.append(val)
-                    elif isinstance(val, list):
-                        shards.extend(val)
-
-    return list(set(shards))  # deduplicate
+    """Extract direct shard references from a training config."""
+    shards: list[str] = []
+    def visit(value: object) -> None:
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if key in {"shards", "shard_paths", "corpus_path", "data_path", "dataset_path"}:
+                    if isinstance(item, str): shards.append(item)
+                    elif isinstance(item, list): shards.extend(x for x in item if isinstance(x, str))
+                visit(item)
+        elif isinstance(value, list):
+            for item in value: visit(item)
+    visit(config)
+    return list(dict.fromkeys(shards))
 
 
-def _find_shard_files(shard_ref: str) -> list[Path]:
-    """Resolve a shard reference (path, glob) to actual files."""
-    shard_path = Path(shard_ref)
+def _extract_manifest_refs(config: dict) -> list[str]:
+    refs: list[str] = []
+    def visit(value: object) -> None:
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if key in {"manifest_path", "corpus_manifest", "manifest"} and isinstance(item, str): refs.append(item)
+                visit(item)
+        elif isinstance(value, list):
+            for item in value: visit(item)
+    visit(config)
+    return list(dict.fromkeys(refs))
 
-    if shard_path.is_file():
-        return [shard_path]
 
-    if '*' in shard_ref:
-        # Glob pattern
-        return list(Path(shard_path.parent).glob(shard_path.name))
+def _resolve_candidates(ref: str, base: Path, roots: list[Path]) -> list[Path]:
+    value = Path(ref)
+    if value.is_absolute(): return [value]
+    candidates = [base / value] + [root / value for root in roots]
+    unique: list[Path] = []
+    for candidate in candidates:
+        if candidate not in unique: unique.append(candidate)
+    return unique
 
-    # Path that doesn't exist yet — return as-is for unknown provenance
-    return []
+
+def _resolve_one(ref: str, base: Path, roots: list[Path]) -> Path | None:
+    for candidate in _resolve_candidates(ref, base, roots):
+        if candidate.is_file(): return candidate
+    return None
+
+
+def _transform_links(row: dict, manifest_path: Path, roots: list[Path]) -> list[dict]:
+    links = row.get("transform_links", row.get("transform_chain", []))
+    if not isinstance(links, list): return []
+    result: list[dict] = []
+    for link in links:
+        if not isinstance(link, dict):
+            result.append({"path": "UNKNOWN", "sha256": "UNKNOWN", "status": "UNKNOWN"})
+            continue
+        ref = link.get("path") or link.get("output_path") or link.get("file")
+        expected = link.get("sha256") or link.get("output_sha256")
+        resolved = _resolve_one(str(ref), manifest_path.parent, roots) if isinstance(ref, str) else None
+        actual = _sha256_file(resolved) if resolved else "UNREADABLE"
+        status = "VERIFIED" if resolved and isinstance(expected, str) and actual == expected else "UNVERIFIABLE"
+        result.append({"path": Path(ref).name if isinstance(ref, str) else "UNKNOWN", "sha256": actual, "declared_sha256": expected or "UNKNOWN", "status": status})
+    return result
+
+
+def _find_shard_files(shard_ref: str, base: Path | None = None, roots: list[Path] | None = None) -> list[Path]:
+    roots = roots or []
+    base = base or Path.cwd()
+    result: list[Path] = []
+    for candidate in _resolve_candidates(shard_ref, base, roots):
+        if any(c in str(candidate) for c in "*?["):
+            result.extend(sorted(candidate.parent.glob(candidate.name)))
+        elif candidate.is_file():
+            result.append(candidate)
+    return list(dict.fromkeys(result))
 
 
 def _build_transform_chain(shard_path: Path) -> dict:
@@ -104,84 +139,67 @@ def _build_transform_chain(shard_path: Path) -> dict:
     }
 
 
-def build_manifest(config_paths: list[str], metadata_manifest_path: str | None = None) -> dict:
-    """Build corpus provenance manifest."""
-
-    all_shards_set = set()
-
-    # Extract shards from configs
-    for config_path in config_paths:
-        cfg = _load_config(config_path)
-        refs = _extract_shard_refs(cfg)
-        all_shards_set.update(refs)
-
-    # Load optional metadata manifest (pre-filled provenance info)
-    metadata = {}
+def build_manifest(config_paths: list[str], metadata_manifest_path: str | None = None, authority_roots: list[str | Path] | None = None) -> dict:
+    """Open each config-referenced manifest, enumerate shards, and verify bytes/links."""
+    roots = [Path(root) for root in (authority_roots or [])]
+    roots.extend(Path(path).resolve().parent for path in config_paths)
+    roots = list(dict.fromkeys(roots))
+    metadata: dict = {}
     if metadata_manifest_path:
-        try:
-            with open(metadata_manifest_path, 'r') as f:
-                metadata = json.load(f)
-        except Exception:
-            pass
-
-    manifest_entries = []
+        try: metadata = json.loads(Path(metadata_manifest_path).read_text(encoding="utf-8"))
+        except (OSError, ValueError): metadata = {}
+    entries: list[dict] = []
     counts = {"verified": 0, "unverifiable": 0, "unknown": 0}
-
-    for shard_ref in sorted(all_shards_set):
-        shard_files = _find_shard_files(shard_ref)
-
-        if shard_files:
-            # Shard exists on disk
-            for shard_path in shard_files:
-                sha = _sha256_file(shard_path)
-                meta = metadata.get(str(shard_path), {})
-
-                transform_data = _build_transform_chain(shard_path)
-                transform_status = transform_data.get("status", "UNKNOWN")
-
-                entry = {
-                    "shard_path": str(shard_path),
-                    "sha256": sha,
-                    "source": meta.get("source", "UNKNOWN"),
-                    "fetch_date": meta.get("fetch_date", "UNKNOWN"),
-                    "transform_chain": transform_data.get("chain", []),
-                    "transform_status": transform_status,
-                    "model_in_loop": False,
-                }
-                manifest_entries.append(entry)
-
-                if transform_status == "VERIFIED":
-                    counts["verified"] += 1
-                elif transform_status == "UNVERIFIABLE":
-                    counts["unverifiable"] += 1
-                else:
-                    counts["unknown"] += 1
-        else:
-            # Shard path not found on disk — explicit UNKNOWN entry
-            meta = metadata.get(shard_ref, {})
-            entry = {
-                "shard_path": shard_ref,
-                "sha256": "UNREADABLE",
-                "source": meta.get("source", "UNKNOWN"),
-                "fetch_date": meta.get("fetch_date", "UNKNOWN"),
-                "transform_chain": [],
-                "transform_status": "UNKNOWN",
-                "model_in_loop": False,
-                "note": "shard not found on disk",
-            }
-            manifest_entries.append(entry)
-            counts["unknown"] += 1
-
-    return {
-        "manifest": manifest_entries,
-        "summary": {
-            "n_shards": len(manifest_entries),
-            "verified": counts["verified"],
-            "unverifiable": counts["unverifiable"],
-            "unknown": counts["unknown"],
-        },
-        "timestamp": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
-    }
+    manifest_count = unreadable_manifests = transform_verified = transform_unverifiable = 0
+    def add_entry(entry: dict) -> None:
+        entries.append(entry)
+        status = entry.get("status", "UNKNOWN")
+        counts["verified" if status == "VERIFIED" else "unverifiable" if status == "UNVERIFIABLE" else "unknown"] += 1
+    for config_path in config_paths:
+        config_file = Path(config_path)
+        config = _load_config(config_path)
+        base = config_file.resolve().parent
+        for manifest_ref in _extract_manifest_refs(config):
+            manifest_path = _resolve_one(manifest_ref, base, roots)
+            manifest_count += 1
+            if manifest_path is None:
+                unreadable_manifests += 1
+                add_entry({"shard_path": Path(manifest_ref).name, "sha256": "UNREADABLE", "source_manifest": Path(manifest_ref).name, "status": "UNKNOWN", "transform_links": [], "model_in_loop": False, "note": "config-referenced manifest unreadable"})
+                continue
+            try: manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                unreadable_manifests += 1
+                add_entry({"shard_path": manifest_path.name, "sha256": "UNREADABLE", "source_manifest": manifest_path.name, "status": "UNKNOWN", "transform_links": [], "model_in_loop": False, "note": "config-referenced manifest invalid"})
+                continue
+            rows = manifest.get("shards") if isinstance(manifest, dict) else None
+            if not isinstance(rows, list):
+                unreadable_manifests += 1
+                add_entry({"shard_path": manifest_path.name, "sha256": "UNREADABLE", "source_manifest": manifest_path.name, "status": "UNKNOWN", "transform_links": [], "model_in_loop": False, "note": "manifest shards list missing"})
+                continue
+            for row in rows:
+                if not isinstance(row, dict) or not isinstance(row.get("file"), str):
+                    add_entry({"shard_path": "UNKNOWN", "sha256": "UNREADABLE", "source_manifest": manifest_path.name, "status": "UNKNOWN", "transform_links": [], "model_in_loop": False, "note": "manifest shard row malformed"})
+                    continue
+                ref = row["file"]
+                shard_path = _resolve_one(ref, manifest_path.parent, roots)
+                links = _transform_links(row, manifest_path, roots)
+                transform_verified += sum(link["status"] == "VERIFIED" for link in links)
+                transform_unverifiable += sum(link["status"] != "VERIFIED" for link in links)
+                actual = _sha256_file(shard_path) if shard_path else "UNREADABLE"
+                expected = row.get("sha256")
+                bytes_expected = row.get("bytes_on_disk")
+                bytes_actual = shard_path.stat().st_size if shard_path else None
+                valid = shard_path is not None and isinstance(expected, str) and actual == expected and (bytes_expected is None or bytes_actual == bytes_expected) and all(link["status"] == "VERIFIED" for link in links)
+                add_entry({"shard_path": ref, "sha256": actual, "declared_sha256": expected or "UNKNOWN", "bytes_on_disk": bytes_actual if bytes_actual is not None else "UNKNOWN", "declared_bytes_on_disk": bytes_expected if bytes_expected is not None else "UNKNOWN", "source_manifest": manifest_path.name, "status": "VERIFIED" if valid else "UNVERIFIABLE" if shard_path else "UNKNOWN", "transform_links": links, "source": "UNKNOWN", "fetch_date": "UNKNOWN", "model_in_loop": False})
+        for shard_ref in _extract_shard_refs(config):
+            files = _find_shard_files(shard_ref, base, roots)
+            if files:
+                for shard_path in files:
+                    meta = metadata.get(str(shard_path), metadata.get(shard_ref, {}))
+                    add_entry({"shard_path": str(shard_path), "sha256": _sha256_file(shard_path), "declared_sha256": "UNKNOWN", "bytes_on_disk": shard_path.stat().st_size, "declared_bytes_on_disk": "UNKNOWN", "source_manifest": "UNKNOWN", "status": "UNKNOWN", "transform_links": [], "source": meta.get("source", "UNKNOWN") if isinstance(meta, dict) else "UNKNOWN", "fetch_date": meta.get("fetch_date", "UNKNOWN") if isinstance(meta, dict) else "UNKNOWN", "model_in_loop": False})
+            else:
+                add_entry({"shard_path": shard_ref, "sha256": "UNREADABLE", "declared_sha256": "UNKNOWN", "bytes_on_disk": "UNKNOWN", "declared_bytes_on_disk": "UNKNOWN", "source_manifest": "UNKNOWN", "status": "UNKNOWN", "transform_links": [], "source": "UNKNOWN", "fetch_date": "UNKNOWN", "model_in_loop": False, "note": "shard not found on disk"})
+    return {"manifest": entries, "summary": {"n_shards": len(entries), "verified": counts["verified"], "unverifiable": counts["unverifiable"], "unknown": counts["unknown"], "n_manifests": manifest_count, "unreadable_manifests": unreadable_manifests, "transform_verified": transform_verified, "transform_unverifiable": transform_unverifiable}, "timestamp": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")}
 
 
 def _selftest() -> None:

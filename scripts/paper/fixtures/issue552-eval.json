@@ -1,0 +1,12 @@
+{
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "items": [
+    {"item_id": "pos-1", "text": "the quick brown fox jumps over the lazy dog and then runs quickly across the field today"},
+    {"item_id": "pos-2", "text": "contiguous ordered shard gram fixture for contamination controls"},
+    {"item_id": "neg-1", "text": "unrelated clean control about orbital mechanics and weather"},
+    {"item_id": "neg-2", "text": "another clean control about public domain literature"},
+    {"item_id": "neg-3", "text": "deterministic negative fixture with no corpus overlap"}
+  ]
+}
