@@ -1259,7 +1259,7 @@ fn server_live_cycle_restarts_across_rebound_authorities_then_backs_off() {
             match listener.accept() {
                 Ok((mut stream, _)) => {
                     let index = response_counter.fetch_add(1, Ordering::SeqCst);
-                    let response = if index % 2 == 0 {
+                    let response = if index.is_multiple_of(2) {
                         b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\n\r\n".to_vec()
                     } else {
                         b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".to_vec()
