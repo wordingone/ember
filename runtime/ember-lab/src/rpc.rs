@@ -2,7 +2,10 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-use crate::{Daemon, JobSpec, RestartPolicy, SchedulePrediction, MAX_DISPATCH_MANIFEST_BYTES};
+use crate::{
+    server_supervisor::ServerLiveCycleRequest, Daemon, JobSpec, RestartPolicy, SchedulePrediction,
+    MAX_DISPATCH_MANIFEST_BYTES,
+};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -100,6 +103,18 @@ struct PlanOutageParams {
 #[derive(Debug, Deserialize)]
 struct ResourceParams {
     resource: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ServerCycleParams {
+    authority_path: PathBuf,
+    authority_sha256: String,
+    receipt_path: PathBuf,
+    restore_manifest_path: PathBuf,
+    restarts_last_hour: u32,
+    required_headroom_bytes: u64,
+    now_ms: i64,
 }
 
 fn invalid_request(id: Value, message: impl Into<String>) -> Value {
@@ -257,6 +272,28 @@ fn dispatch(daemon: &Daemon, request: WireRequest) -> (Value, bool) {
                     ),
                     false,
                 ),
+                Err(error) => (operation_error(id, error), false),
+            }
+        }
+        "supervise_server_cycle" => {
+            let params: ServerCycleParams = match decode(&id, request.params) {
+                Ok(value) => value,
+                Err(response) => return (response, false),
+            };
+            let request = ServerLiveCycleRequest {
+                authority_path: params.authority_path,
+                authority_sha256: params.authority_sha256,
+                receipt_path: params.receipt_path,
+                restore_manifest_path: params.restore_manifest_path,
+                restarts_last_hour: params.restarts_last_hour,
+                required_headroom_bytes: params.required_headroom_bytes,
+                now_ms: params.now_ms,
+            };
+            match daemon.supervise_server_live_cycle(request) {
+                Ok(receipt) => match serde_json::to_value(receipt) {
+                    Ok(value) => (success(id, value), false),
+                    Err(error) => (operation_error(id, error), false),
+                },
                 Err(error) => (operation_error(id, error), false),
             }
         }

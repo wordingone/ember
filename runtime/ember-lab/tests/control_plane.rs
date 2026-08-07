@@ -6,6 +6,7 @@ use ember_lab::{Daemon, EmberLabError, JobSpec, JobState, RestartPolicy, Schedul
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::fs;
+use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, Barrier};
@@ -314,6 +315,360 @@ fn unbound_owner_cannot_acquire_a_durable_lease() {
         daemon.acquire_lease("heavy-workload", "missing-identity"),
         Err(EmberLabError::IdentityNotFound { .. })
     ));
+}
+
+#[test]
+fn ember_lab_server_cycle_uses_bound_authority_and_governed_restore() {
+    use ember_lab::server_supervisor::{EndpointHealth, RestoreEvidence, ServerCycleRequest};
+
+    let root = sandbox("server-cycle-red");
+    let db = root.join("ember-lab.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("server-job", &identity, &identity_hash)
+        .unwrap();
+    daemon.acquire_lease("server:8082", "server-job").unwrap();
+
+    let authority_path = root.join("server-authority.json");
+    let authority = serde_json::json!({
+        "schema_version": "ember-lab-server-authority-v1",
+        "job_id": "server-job",
+        "resource_lease": "server:8082",
+        "target": "llama-server",
+        "host": "127.0.0.1",
+        "port": 8082,
+        "pid": 4321,
+        "identity_sha256": identity_hash,
+    });
+    let authority_bytes = serde_json::to_vec(&authority).unwrap();
+    fs::write(&authority_path, &authority_bytes).unwrap();
+    let authority_sha256 = format!("{:x}", Sha256::digest(&authority_bytes));
+
+    let request = ServerCycleRequest {
+        authority_path,
+        authority_sha256,
+        receipt_path: root.join("server-cycle-receipt.json"),
+        observation: ember_lab::server_supervisor::ServerObservation {
+            process_alive: true,
+            endpoint: EndpointHealth::Dead,
+        },
+        restarts_last_hour: 0,
+        available_headroom_bytes: 2,
+        required_headroom_bytes: 1,
+        now_ms: 1_000,
+    };
+    let mut restored = false;
+    let receipt = daemon
+        .supervise_server_cycle(request, |_authority| {
+            restored = true;
+            Ok(RestoreEvidence {
+                restore_cost_s: 1.25,
+                health_status: 200,
+            })
+        })
+        .unwrap();
+    assert_eq!(receipt.decision, "RESTORED");
+    assert_eq!(receipt.death_cause.as_deref(), Some("endpoint_dead"));
+    assert_eq!(receipt.restore_cost_s, Some(1.25));
+    assert!(restored);
+    assert_eq!(
+        daemon.job_event_kinds("server-job").unwrap(),
+        vec!["server_restored"]
+    );
+    let persisted: Value =
+        serde_json::from_slice(&fs::read(root.join("server-cycle-receipt.json")).unwrap()).unwrap();
+    assert_eq!(persisted["schema"], "ember-lab-operational-receipt-v1");
+    assert_eq!(persisted["events"][0]["kind"], "server_restored");
+    assert_eq!(persisted["events"][0]["payload"]["restore_cost_s"], 1.25);
+    assert_eq!(
+        persisted["events"][0]["payload"]["death_cause"],
+        "endpoint_dead"
+    );
+    assert!(persisted.to_string().contains("server_restored"));
+    assert!(!persisted.to_string().contains("authority_path"));
+}
+
+#[test]
+fn ember_lab_server_cycle_covers_health_outage_hung_headroom_and_alarm_law() {
+    use ember_lab::server_supervisor::{EndpointHealth, ServerCycleRequest};
+
+    let root = sandbox("server-cycle-matrix");
+    let db = root.join("ember-lab.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("server-job", &identity, &identity_hash)
+        .unwrap();
+    daemon.acquire_lease("server:8082", "server-job").unwrap();
+    let authority_path = root.join("server-authority.json");
+    let authority = serde_json::json!({
+        "schema_version": "ember-lab-server-authority-v1",
+        "job_id": "server-job",
+        "resource_lease": "server:8082",
+        "target": "llama-server",
+        "host": "127.0.0.1",
+        "port": 8082,
+        "pid": 4321,
+        "identity_sha256": identity_hash,
+    });
+    let authority_bytes = serde_json::to_vec(&authority).unwrap();
+    fs::write(&authority_path, &authority_bytes).unwrap();
+    let authority_sha256 = format!("{:x}", Sha256::digest(&authority_bytes));
+    let mut sequence = 0u32;
+    let mut request = |endpoint: EndpointHealth, now_ms: i64, headroom: u64, restarts: u32| {
+        sequence += 1;
+        ServerCycleRequest {
+            authority_path: authority_path.clone(),
+            authority_sha256: authority_sha256.clone(),
+            receipt_path: root.join(format!("cycle-{sequence}.json")),
+            observation: ember_lab::server_supervisor::ServerObservation {
+                process_alive: true,
+                endpoint,
+            },
+            restarts_last_hour: restarts,
+            available_headroom_bytes: headroom,
+            required_headroom_bytes: 10,
+            now_ms,
+        }
+    };
+
+    daemon
+        .plan_outage("server:8082", 0, 2_000, "planned maintenance")
+        .unwrap();
+    let mut restore_calls = 0;
+    let waited = daemon
+        .supervise_server_cycle(request(EndpointHealth::Dead, 1_000, 20, 0), |_authority| {
+            restore_calls += 1;
+            Ok(ember_lab::server_supervisor::RestoreEvidence {
+                restore_cost_s: 1.0,
+                health_status: 200,
+            })
+        })
+        .unwrap();
+    assert_eq!(waited.decision, "WAIT_PLANNED_OUTAGE");
+    assert_eq!(restore_calls, 0);
+
+    let expired = daemon
+        .supervise_server_cycle(request(EndpointHealth::Dead, 3_000, 20, 0), |_authority| {
+            restore_calls += 1;
+            Ok(ember_lab::server_supervisor::RestoreEvidence {
+                restore_cost_s: 1.0,
+                health_status: 200,
+            })
+        })
+        .unwrap();
+    assert_eq!(expired.outage_state, "expired");
+    assert_eq!(expired.decision, "RESTORED");
+
+    daemon
+        .plan_outage("server:8082", 0, 10_000, "closed maintenance")
+        .unwrap();
+    assert_eq!(daemon.cancel_outages("server:8082").unwrap(), 1);
+    let closed = daemon
+        .supervise_server_cycle(request(EndpointHealth::Dead, 4_000, 20, 0), |_authority| {
+            restore_calls += 1;
+            Ok(ember_lab::server_supervisor::RestoreEvidence {
+                restore_cost_s: 1.0,
+                health_status: 200,
+            })
+        })
+        .unwrap();
+    assert_eq!(closed.outage_state, "closed");
+    assert_eq!(closed.decision, "RESTORED");
+
+    let hung = daemon
+        .supervise_server_cycle(request(EndpointHealth::Hung, 5_000, 20, 0), |_authority| {
+            restore_calls += 1;
+            Ok(ember_lab::server_supervisor::RestoreEvidence {
+                restore_cost_s: 2.0,
+                health_status: 503,
+            })
+        })
+        .unwrap();
+    assert_eq!(hung.death_cause.as_deref(), Some("endpoint_hung"));
+    assert_eq!(hung.decision, "RESTORE_FAILED");
+
+    let headroom = daemon
+        .supervise_server_cycle(request(EndpointHealth::Dead, 6_000, 9, 0), |_authority| {
+            restore_calls += 1;
+            Ok(ember_lab::server_supervisor::RestoreEvidence {
+                restore_cost_s: 1.0,
+                health_status: 200,
+            })
+        })
+        .unwrap();
+    assert_eq!(headroom.decision, "RESTORE_REFUSED_HEADROOM");
+
+    let alarm = daemon
+        .supervise_server_cycle(request(EndpointHealth::Dead, 7_000, 20, 3), |_authority| {
+            restore_calls += 1;
+            Ok(ember_lab::server_supervisor::RestoreEvidence {
+                restore_cost_s: 1.0,
+                health_status: 200,
+            })
+        })
+        .unwrap();
+    assert_eq!(alarm.decision, "ALARM_BACKOFF");
+
+    let healthy = daemon
+        .supervise_server_cycle(
+            request(EndpointHealth::Healthy, 8_000, 20, 0),
+            |_authority| {
+                restore_calls += 1;
+                Ok(ember_lab::server_supervisor::RestoreEvidence {
+                    restore_cost_s: 1.0,
+                    health_status: 200,
+                })
+            },
+        )
+        .unwrap();
+    assert_eq!(healthy.decision, "HEALTHY");
+    assert_eq!(restore_calls, 3);
+    assert!(daemon.job_event_kinds("server-job").unwrap().len() >= 7);
+}
+
+#[test]
+fn ember_lab_server_cycle_rejects_unbound_or_overwritten_authority() {
+    use ember_lab::server_supervisor::{EndpointHealth, ServerCycleRequest};
+
+    let root = sandbox("server-cycle-authority-negative");
+    let db = root.join("ember-lab.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("server-job", &identity, &identity_hash)
+        .unwrap();
+    daemon.acquire_lease("server:8082", "server-job").unwrap();
+    let authority_path = root.join("server-authority.json");
+    let authority = serde_json::json!({
+        "schema_version": "ember-lab-server-authority-v1",
+        "job_id": "server-job",
+        "resource_lease": "server:8082",
+        "target": "llama-server",
+        "host": "127.0.0.1",
+        "port": 8082,
+        "pid": 4321,
+        "identity_sha256": identity_hash,
+    });
+    let bytes = serde_json::to_vec(&authority).unwrap();
+    fs::write(&authority_path, &bytes).unwrap();
+    let sha256 = format!("{:x}", Sha256::digest(&bytes));
+    let request = || ServerCycleRequest {
+        authority_path: authority_path.clone(),
+        authority_sha256: sha256.clone(),
+        receipt_path: root.join("cycle.json"),
+        observation: ember_lab::server_supervisor::ServerObservation {
+            process_alive: true,
+            endpoint: EndpointHealth::Dead,
+        },
+        restarts_last_hour: 0,
+        available_headroom_bytes: 20,
+        required_headroom_bytes: 10,
+        now_ms: 1_000,
+    };
+    fs::write(&authority_path, b"tampered").unwrap();
+    assert!(daemon
+        .supervise_server_cycle(request(), |_authority| {
+            Err(EmberLabError::InvalidTransition {
+                job_id: "server-job".into(),
+                detail: "restore must not run".into(),
+            })
+        })
+        .is_err());
+    fs::write(&authority_path, bytes).unwrap();
+    assert!(daemon
+        .supervise_server_cycle(request(), |_authority| {
+            Ok(ember_lab::server_supervisor::RestoreEvidence {
+                restore_cost_s: 1.0,
+                health_status: 200,
+            })
+        })
+        .is_ok());
+    assert!(
+        daemon
+            .supervise_server_cycle(request(), |_authority| {
+                Err(EmberLabError::InvalidTransition {
+                    job_id: "server-job".into(),
+                    detail: "receipt must not overwrite".into(),
+                })
+            })
+            .is_err(),
+        "receipt output is atomic and must not be overwritten"
+    );
+}
+
+#[test]
+fn ember_lab_live_server_cycle_uses_real_endpoint_and_existing_dispatch_authority() {
+    use ember_lab::server_supervisor::ServerLiveCycleRequest;
+
+    let root = sandbox("server-cycle-live");
+    let db = root.join("ember-lab.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("live-server-job", &identity, &identity_hash)
+        .unwrap();
+    daemon
+        .acquire_lease("server:8082", "live-server-job")
+        .unwrap();
+
+    let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut request = [0u8; 128];
+        let _ = std::io::Read::read(&mut stream, &mut request);
+        std::io::Write::write_all(
+            &mut stream,
+            b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok",
+        )
+        .unwrap();
+    });
+
+    let fixture = std::env::current_exe().unwrap();
+    let started = daemon
+        .start_job(
+            JobSpec::new(
+                "live-server-job",
+                fixture.to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "server:8082",
+            )
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000"),
+        )
+        .unwrap();
+    let authority_path = root.join("server-authority.json");
+    let authority = serde_json::json!({
+        "schema_version": "ember-lab-server-authority-v1",
+        "job_id": "live-server-job",
+        "resource_lease": "server:8082",
+        "target": "llama-server",
+        "host": "127.0.0.1",
+        "port": port,
+        "pid": started.pid,
+        "identity_sha256": identity_hash,
+    });
+    let authority_bytes = serde_json::to_vec(&authority).unwrap();
+    fs::write(&authority_path, &authority_bytes).unwrap();
+    let authority_sha256 = format!("{:x}", Sha256::digest(&authority_bytes));
+    let receipt = daemon
+        .supervise_server_live_cycle(ServerLiveCycleRequest {
+            authority_path,
+            authority_sha256,
+            receipt_path: root.join("live-cycle.json"),
+            restore_manifest_path: root.join("unused-restore-manifest.json"),
+            restarts_last_hour: 0,
+            required_headroom_bytes: 1,
+            now_ms: 1_000,
+        })
+        .unwrap();
+    daemon.stop_job("live-server-job").unwrap();
+    server.join().unwrap();
+    assert_eq!(receipt.decision, "HEALTHY");
+    assert_eq!(receipt.endpoint_health, "healthy");
+    assert!(fs::metadata(root.join("live-cycle.json")).is_ok());
 }
 
 #[test]

@@ -74,6 +74,50 @@ export type EnsureOwnedServerResult =
   | { outcome: "spawned"; port: number; handle: OwnedServerHandle }
   | { outcome: "dispatched"; port: number; pid: number };
 
+export interface SuperviseOwnedServerCycleOptions {
+  pipeName: string;
+  authorityPath: string;
+  authoritySha256: string;
+  receiptPath: string;
+  restoreManifestPath: string;
+  restartsLastHour: number;
+  requiredHeadroomBytes: number;
+  nowMs?: number;
+}
+
+/**
+ * Ask the resident Ember Lab authority to run one receipt-bound server cycle.
+ * This is the current owned-server/operator surface for the historical :8082
+ * supervisor obligation; it deliberately does not create a second launcher,
+ * registry, ledger, or receipt family in the CLI.
+ */
+export async function superviseOwnedServerCycle(
+  options: SuperviseOwnedServerCycleOptions,
+): Promise<Record<string, unknown>> {
+  if (!Number.isInteger(options.restartsLastHour) || options.restartsLastHour < 0) {
+    throw new Error("server cycle restart count must be a nonnegative integer");
+  }
+  if (!Number.isInteger(options.requiredHeadroomBytes) || options.requiredHeadroomBytes <= 0) {
+    throw new Error("server cycle required headroom must be a positive integer");
+  }
+  if (!/^[0-9a-f]{64}$/.test(options.authoritySha256)) {
+    throw new Error("server cycle authority hash must be lowercase sha256");
+  }
+  return callEmberLab({
+    pipeName: options.pipeName,
+    method: "supervise_server_cycle",
+    params: {
+      authority_path: options.authorityPath,
+      authority_sha256: options.authoritySha256,
+      receipt_path: options.receiptPath,
+      restore_manifest_path: options.restoreManifestPath,
+      restarts_last_hour: options.restartsLastHour,
+      required_headroom_bytes: options.requiredHeadroomBytes,
+      now_ms: options.nowMs ?? Date.now(),
+    },
+  });
+}
+
 type VerifyEndpoint = (identity: OwnedModelIdentity) => Promise<void>;
 
 export interface EnsureOwnedServerDeps {
