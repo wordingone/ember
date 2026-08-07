@@ -80,7 +80,6 @@ export interface SuperviseOwnedServerCycleOptions {
   authoritySha256: string;
   receiptPath: string;
   restoreManifestPath: string;
-  restartsLastHour: number;
   requiredHeadroomBytes: number;
   nowMs?: number;
 }
@@ -94,9 +93,6 @@ export interface SuperviseOwnedServerCycleOptions {
 export async function superviseOwnedServerCycle(
   options: SuperviseOwnedServerCycleOptions,
 ): Promise<Record<string, unknown>> {
-  if (!Number.isInteger(options.restartsLastHour) || options.restartsLastHour < 0) {
-    throw new Error("server cycle restart count must be a nonnegative integer");
-  }
   if (!Number.isInteger(options.requiredHeadroomBytes) || options.requiredHeadroomBytes <= 0) {
     throw new Error("server cycle required headroom must be a positive integer");
   }
@@ -111,7 +107,6 @@ export async function superviseOwnedServerCycle(
       authority_sha256: options.authoritySha256,
       receipt_path: options.receiptPath,
       restore_manifest_path: options.restoreManifestPath,
-      restarts_last_hour: options.restartsLastHour,
       required_headroom_bytes: options.requiredHeadroomBytes,
       now_ms: options.nowMs ?? Date.now(),
     },

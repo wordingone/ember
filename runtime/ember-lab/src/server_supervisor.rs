@@ -88,7 +88,6 @@ pub struct ServerCycleRequest {
     pub authority_sha256: String,
     pub receipt_path: PathBuf,
     pub observation: ServerObservation,
-    pub restarts_last_hour: u32,
     pub available_headroom_bytes: u64,
     pub required_headroom_bytes: u64,
     pub now_ms: i64,
@@ -100,7 +99,6 @@ pub struct ServerLiveCycleRequest {
     pub authority_sha256: String,
     pub receipt_path: PathBuf,
     pub restore_manifest_path: PathBuf,
-    pub restarts_last_hour: u32,
     pub required_headroom_bytes: u64,
     pub now_ms: i64,
 }
@@ -163,6 +161,24 @@ fn load_authority(path: &std::path::Path, expected_sha256: &str) -> Result<Serve
         return Err(invalid("server authority fields are invalid"));
     }
     Ok(authority)
+}
+
+fn validate_receipt_destination(
+    authority_path: &std::path::Path,
+    receipt_path: &std::path::Path,
+) -> Result<()> {
+    let authority_root = authority_path
+        .parent()
+        .ok_or_else(|| invalid("server authority has no custody root"))?
+        .canonicalize()?;
+    let receipt_parent = receipt_path
+        .parent()
+        .ok_or_else(|| invalid("server receipt has no custody root"))?
+        .canonicalize()?;
+    if !receipt_parent.starts_with(&authority_root) {
+        return Err(invalid("server receipt is outside authority custody"));
+    }
+    Ok(())
 }
 
 pub fn probe_endpoint(authority: &ServerAuthority) -> EndpointHealth {
@@ -241,6 +257,165 @@ fn sweep_expired_outage(daemon: &Daemon, resource: &str, now_ms: i64) -> Result<
 }
 
 impl Daemon {
+    fn ensure_server_supervisions_table(&self) -> Result<()> {
+        self.conn()?.execute_batch(
+            "CREATE TABLE IF NOT EXISTS server_supervisions(
+               job_id TEXT PRIMARY KEY,
+               authority_path TEXT NOT NULL,
+               authority_sha256 TEXT NOT NULL,
+               receipt_path TEXT NOT NULL,
+               restore_manifest_path TEXT NOT NULL,
+               required_headroom_bytes INTEGER NOT NULL,
+               updated_at_ms INTEGER NOT NULL
+             );",
+        )?;
+        Ok(())
+    }
+
+    pub fn register_server_supervision(&self, request: &ServerLiveCycleRequest) -> Result<()> {
+        validate_receipt_destination(&request.authority_path, &request.receipt_path)?;
+        let authority = load_authority(&request.authority_path, &request.authority_sha256)?;
+        self.ensure_server_supervisions_table()?;
+        self.conn()?.execute(
+            "INSERT INTO server_supervisions(
+               job_id,authority_path,authority_sha256,receipt_path,
+               restore_manifest_path,required_headroom_bytes,updated_at_ms
+             ) VALUES(?1,?2,?3,?4,?5,?6,?7)
+             ON CONFLICT(job_id) DO UPDATE SET
+               authority_path=excluded.authority_path,
+               authority_sha256=excluded.authority_sha256,
+               receipt_path=excluded.receipt_path,
+               restore_manifest_path=excluded.restore_manifest_path,
+               required_headroom_bytes=excluded.required_headroom_bytes,
+               updated_at_ms=excluded.updated_at_ms",
+            rusqlite::params![
+                authority.job_id,
+                request.authority_path.to_string_lossy(),
+                request.authority_sha256,
+                request.receipt_path.to_string_lossy(),
+                request.restore_manifest_path.to_string_lossy(),
+                request.required_headroom_bytes,
+                request.now_ms,
+            ],
+        )?;
+        Ok(())
+    }
+
+    fn restart_count_last_hour(&self, job_id: &str, now_ms: i64) -> Result<u32> {
+        let count: i64 = self.conn()?.query_row(
+            "SELECT COUNT(*) FROM events
+             WHERE job_id=?1 AND ts_ms>?2 AND ts_ms<=?3
+               AND kind IN ('server_restored','server_restore_failed')",
+            rusqlite::params![job_id, now_ms.saturating_sub(3_600_000), now_ms],
+            |row| row.get(0),
+        )?;
+        u32::try_from(count).map_err(|_| invalid("server restart event count overflowed"))
+    }
+
+    fn release_exited_server_lease(&self, authority: &ServerAuthority) -> Result<()> {
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let row: (String, i64, u32, String) = tx.query_row(
+            "SELECT state,lease_epoch,pid,resource FROM jobs WHERE job_id=?1",
+            [&authority.job_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )?;
+        if row.2 != authority.pid {
+            return Err(EmberLabError::ProcessIdentityMismatch {
+                job_id: authority.job_id.clone(),
+                pid: authority.pid,
+            });
+        }
+        if matches!(
+            row.0.as_str(),
+            "starting" | "prepared" | "running" | "stopping"
+        ) {
+            return Err(invalid(
+                "active server requires a verified stop before handoff",
+            ));
+        }
+        let changed = tx.execute(
+            "DELETE FROM leases WHERE resource=?1 AND owner_job_id=?2 AND lease_epoch=?3",
+            rusqlite::params![row.3, authority.job_id, row.1],
+        )?;
+        if changed == 1 {
+            tx.execute(
+                "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'server_handoff_lease_released','{}')",
+                rusqlite::params![authority.job_id, crate::now_ms()],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn fence_server_for_recovery(
+        &self,
+        authority: &ServerAuthority,
+        process_alive: bool,
+    ) -> Result<()> {
+        if self.job_pid(&authority.job_id)? != Some(authority.pid) {
+            return Err(EmberLabError::ProcessIdentityMismatch {
+                job_id: authority.job_id.clone(),
+                pid: authority.pid,
+            });
+        }
+        if process_alive {
+            if self.lease_owner(&authority.resource_lease)?.as_deref() != Some(&authority.job_id) {
+                return Err(EmberLabError::LeaseNotOwned {
+                    resource: authority.resource_lease.clone(),
+                    job_id: authority.job_id.clone(),
+                });
+            }
+            self.stop_job(&authority.job_id)
+        } else {
+            self.release_exited_server_lease(authority)
+        }
+    }
+
+    pub fn supervise_registered_server_once(&self, now_ms: i64) -> Result<Vec<ServerCycleReceipt>> {
+        if now_ms < 0 {
+            return Err(invalid("server supervision clock is invalid"));
+        }
+        self.ensure_server_supervisions_table()?;
+        let registrations: Vec<ServerLiveCycleRequest> = {
+            let conn = self.conn()?;
+            let mut statement = conn.prepare(
+                "SELECT authority_path,authority_sha256,receipt_path,
+                        restore_manifest_path,required_headroom_bytes
+                 FROM server_supervisions ORDER BY job_id",
+            )?;
+            let rows = statement
+                .query_map([], |row| {
+                    Ok(ServerLiveCycleRequest {
+                        authority_path: PathBuf::from(row.get::<_, String>(0)?),
+                        authority_sha256: row.get(1)?,
+                        receipt_path: PathBuf::from(row.get::<_, String>(2)?),
+                        restore_manifest_path: PathBuf::from(row.get::<_, String>(3)?),
+                        required_headroom_bytes: row.get(4)?,
+                        now_ms,
+                    })
+                })?
+                .collect::<std::result::Result<_, _>>()?;
+            rows
+        };
+        registrations
+            .into_iter()
+            .map(|mut request| {
+                let parent = request
+                    .receipt_path
+                    .parent()
+                    .ok_or_else(|| invalid("server receipt has no custody root"))?;
+                let stem = request
+                    .receipt_path
+                    .file_stem()
+                    .and_then(|value| value.to_str())
+                    .ok_or_else(|| invalid("server receipt name is invalid"))?;
+                request.receipt_path = parent.join(format!("{stem}-{now_ms}.json"));
+                self.supervise_server_live_cycle(request)
+            })
+            .collect()
+    }
+
     /// Run one receipt-bound server supervision cycle through Ember Lab's
     /// identity/lease/activity/atomic-receipt authority.  `restore` is the
     /// current owned-server restore seam; production callers connect it to the
@@ -250,6 +425,18 @@ impl Daemon {
         &self,
         request: ServerCycleRequest,
         restore: F,
+    ) -> Result<ServerCycleReceipt>
+    where
+        F: FnOnce(&ServerAuthority) -> Result<RestoreEvidence>,
+    {
+        self.supervise_server_cycle_inner(request, restore, false)
+    }
+
+    fn supervise_server_cycle_inner<F>(
+        &self,
+        request: ServerCycleRequest,
+        restore: F,
+        allow_released_lease: bool,
     ) -> Result<ServerCycleReceipt>
     where
         F: FnOnce(&ServerAuthority) -> Result<RestoreEvidence>,
@@ -268,15 +455,18 @@ impl Daemon {
                 actual: authority.identity_sha256.clone(),
             });
         }
-        if self.lease_owner(&authority.resource_lease)?.as_deref() != Some(&authority.job_id) {
+        if !allow_released_lease
+            && self.lease_owner(&authority.resource_lease)?.as_deref() != Some(&authority.job_id)
+        {
             return Err(EmberLabError::LeaseNotOwned {
                 resource: authority.resource_lease.clone(),
                 job_id: authority.job_id.clone(),
             });
         }
-        if request.now_ms < 0 || request.restarts_last_hour > 10_000 {
-            return Err(invalid("server cycle clock/restart count is invalid"));
+        if request.now_ms < 0 {
+            return Err(invalid("server cycle clock is invalid"));
         }
+        let restarts_last_hour = self.restart_count_last_hour(&authority.job_id, request.now_ms)?;
         let outage = planned_outage_state(self, &authority.resource_lease, request.now_ms)?;
         if outage == PlannedOutageState::Expired {
             sweep_expired_outage(self, &authority.resource_lease, request.now_ms)?;
@@ -299,7 +489,7 @@ impl Daemon {
                 None,
                 None,
             ),
-            Some(cause) if request.restarts_last_hour >= 3 => (
+            Some(cause) if restarts_last_hour >= 3 => (
                 "ALARM_BACKOFF".to_string(),
                 Some(cause.to_string()),
                 None,
@@ -359,7 +549,7 @@ impl Daemon {
             death_cause,
             restore_cost_s,
             health_status,
-            restarts_last_hour: request.restarts_last_hour,
+            restarts_last_hour,
             activity_event: activity_event.into(),
         };
         let receipt_bytes = serde_json::to_vec_pretty(&serde_json::json!({
@@ -379,6 +569,7 @@ impl Daemon {
             "outage_events": [],
             "scientific_capability_evidence": false,
         }))?;
+        validate_receipt_destination(&request.authority_path, &request.receipt_path)?;
         atomic_create(&request.receipt_path, &receipt_bytes)?;
         self.conn()?.execute(
             "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,?4)",
@@ -399,6 +590,7 @@ impl Daemon {
         &self,
         request: ServerLiveCycleRequest,
     ) -> Result<ServerCycleReceipt> {
+        self.register_server_supervision(&request)?;
         let authority = load_authority(&request.authority_path, &request.authority_sha256)?;
         if let Some(pid) = self.job_pid(&authority.job_id)? {
             if pid != authority.pid {
@@ -416,6 +608,16 @@ impl Daemon {
             process_alive,
             endpoint: probe_endpoint(&authority),
         };
+        if process_alive
+            && matches!(
+                observation.endpoint,
+                EndpointHealth::Dead | EndpointHealth::Hung
+            )
+        {
+            self.fence_server_for_recovery(&authority, true)?;
+        } else if !process_alive {
+            self.fence_server_for_recovery(&authority, false)?;
+        }
         let available_headroom_bytes = self
             .resource_guard_status()?
             .get("observation")
@@ -427,24 +629,27 @@ impl Daemon {
             authority_sha256: request.authority_sha256,
             receipt_path: request.receipt_path,
             observation,
-            restarts_last_hour: request.restarts_last_hour,
             available_headroom_bytes,
             required_headroom_bytes: request.required_headroom_bytes,
             now_ms: request.now_ms,
         };
         let manifest_path = request.restore_manifest_path;
-        self.supervise_server_cycle(cycle, |authority| {
-            let started = Instant::now();
-            let _outcome = self.dispatch_manifest(&manifest_path)?;
-            let health = probe_endpoint(authority);
-            Ok(RestoreEvidence {
-                restore_cost_s: started.elapsed().as_secs_f64(),
-                health_status: if health == EndpointHealth::Healthy {
-                    200
-                } else {
-                    503
-                },
-            })
-        })
+        self.supervise_server_cycle_inner(
+            cycle,
+            |authority| {
+                let started = Instant::now();
+                let _outcome = self.dispatch_manifest(&manifest_path)?;
+                let health = probe_endpoint(authority);
+                Ok(RestoreEvidence {
+                    restore_cost_s: started.elapsed().as_secs_f64(),
+                    health_status: if health == EndpointHealth::Healthy {
+                        200
+                    } else {
+                        503
+                    },
+                })
+            },
+            true,
+        )
     }
 }

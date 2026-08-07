@@ -11,6 +11,12 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::io;
 use std::path::PathBuf;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+use std::thread;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Deserialize)]
 struct WireRequest {
@@ -112,7 +118,6 @@ struct ServerCycleParams {
     authority_sha256: String,
     receipt_path: PathBuf,
     restore_manifest_path: PathBuf,
-    restarts_last_hour: u32,
     required_headroom_bytes: u64,
     now_ms: i64,
 }
@@ -285,7 +290,6 @@ fn dispatch(daemon: &Daemon, request: WireRequest) -> (Value, bool) {
                 authority_sha256: params.authority_sha256,
                 receipt_path: params.receipt_path,
                 restore_manifest_path: params.restore_manifest_path,
-                restarts_last_hour: params.restarts_last_hour,
                 required_headroom_bytes: params.required_headroom_bytes,
                 now_ms: params.now_ms,
             };
@@ -694,7 +698,7 @@ fn handle_connection(
 }
 
 #[cfg(windows)]
-pub fn serve_named_pipe(daemon: &Daemon, pipe_name: &str) -> io::Result<()> {
+pub fn serve_named_pipe(daemon: Arc<Daemon>, pipe_name: &str) -> io::Result<()> {
     use std::fs::File;
     use std::os::windows::io::{FromRawHandle, RawHandle};
     use windows_sys::Win32::Foundation::{
@@ -715,7 +719,20 @@ pub fn serve_named_pipe(daemon: &Daemon, pipe_name: &str) -> io::Result<()> {
         lpSecurityDescriptor: security_descriptor.0,
         bInheritHandle: 0,
     };
-    loop {
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let worker_shutdown = Arc::clone(&shutdown);
+    let worker_daemon = Arc::clone(&daemon);
+    let worker = thread::spawn(move || {
+        while !worker_shutdown.load(Ordering::Acquire) {
+            let now_ms = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|duration| duration.as_millis() as i64)
+                .unwrap_or(0);
+            let _ = worker_daemon.supervise_registered_server_once(now_ms);
+            thread::sleep(Duration::from_secs(1));
+        }
+    });
+    let result = (|| loop {
         let handle = unsafe {
             CreateNamedPipeW(
                 wide.as_ptr(),
@@ -738,16 +755,38 @@ pub fn serve_named_pipe(daemon: &Daemon, pipe_name: &str) -> io::Result<()> {
         }
 
         let stream = unsafe { File::from_raw_handle(handle as RawHandle) };
-        if handle_connection(daemon, stream, handle).unwrap_or(false) {
-            return Ok(());
+        if handle_connection(&daemon, stream, handle).unwrap_or(false) {
+            break Ok(());
         }
-    }
+    })();
+    shutdown.store(true, Ordering::Release);
+    let _ = worker.join();
+    result
 }
 
 #[cfg(not(windows))]
-pub fn serve_named_pipe(_daemon: &Daemon, _pipe_name: &str) -> io::Result<()> {
+pub fn serve_named_pipe(_daemon: Arc<Daemon>, _pipe_name: &str) -> io::Result<()> {
     Err(io::Error::new(
         io::ErrorKind::Unsupported,
         "named-pipe transport is only available on Windows",
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ServerCycleParams;
+
+    #[test]
+    fn server_cycle_params_reject_caller_restart_count() {
+        let value = serde_json::json!({
+            "authority_path": "authority.json",
+            "authority_sha256": "a".repeat(64),
+            "receipt_path": "receipt.json",
+            "restore_manifest_path": "restore.json",
+            "required_headroom_bytes": 1,
+            "now_ms": 1,
+            "restarts_last_hour": 3,
+        });
+        assert!(serde_json::from_value::<ServerCycleParams>(value).is_err());
+    }
 }

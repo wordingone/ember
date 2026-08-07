@@ -24,23 +24,21 @@ import {
 const CHECKPOINT = "d".repeat(64);
 
 describe("Ember Lab server-cycle operator surface", () => {
-  it("rejects fabricated restart/headroom inputs before contacting Ember Lab", async () => {
+  it("rejects malformed authority and headroom inputs before contacting Ember Lab", async () => {
     await expect(superviseOwnedServerCycle({
       pipeName: "\\\\.\\pipe\\ember-lab-test",
       authorityPath: "C:\\owned\\server-authority.json",
       authoritySha256: "g".repeat(64),
       receiptPath: "C:\\owned\\cycle.json",
       restoreManifestPath: "C:\\owned\\restore.json",
-      restartsLastHour: -1,
       requiredHeadroomBytes: 1,
-    })).rejects.toThrow("restart count");
+    })).rejects.toThrow("authority hash");
     await expect(superviseOwnedServerCycle({
       pipeName: "\\\\.\\pipe\\ember-lab-test",
       authorityPath: "C:\\owned\\server-authority.json",
       authoritySha256: "a".repeat(64),
       receiptPath: "C:\\owned\\cycle.json",
       restoreManifestPath: "C:\\owned\\restore.json",
-      restartsLastHour: 0,
       requiredHeadroomBytes: 0,
     })).rejects.toThrow("required headroom");
   });
