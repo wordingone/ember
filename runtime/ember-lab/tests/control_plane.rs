@@ -1506,7 +1506,7 @@ fn dead_persisted_running_job_is_exited_unknown_and_releases_its_lease() {
         .export_content_addressed_receipt("short-job", &root.join("receipts"))
         .unwrap();
     assert_eq!(first, second);
-    let payload: Value = serde_json::from_slice(&fs::read(first.path).unwrap()).unwrap();
+    let payload: Value = serde_json::from_slice(&fs::read(&first.path).unwrap()).unwrap();
     assert_eq!(payload["state"], "exited");
     assert_eq!(payload["logs"]["stdout"]["sealed"], false);
     assert!(payload["logs"]["stdout"]["sha256"].is_null());
@@ -1521,7 +1521,7 @@ fn dead_persisted_running_job_is_exited_unknown_and_releases_its_lease() {
     let enriched_payload: Value =
         serde_json::from_slice(&fs::read(&enriched.path).unwrap()).unwrap();
     assert_eq!(enriched_payload["rehearsal"]["phase"], "test");
-    let original_payload: Value = serde_json::from_slice(&fs::read(first.path).unwrap()).unwrap();
+    let original_payload: Value = serde_json::from_slice(&fs::read(&first.path).unwrap()).unwrap();
     assert!(original_payload.get("rehearsal").is_none());
 }
 
