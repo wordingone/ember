@@ -425,6 +425,17 @@ import torch
         with open(receipt_path) as f:
             receipt = json.load(f)
 
+        assert receipt["ticket"] == "S5-NATIVIZATION-MOTION"
+        assert receipt["goal_id"] == "EMBER-02"
+        assert receipt["workstream_id"] == "EMBER-02A"
+        assert receipt["next_executed_outcome"] == (
+            "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+        )
+        assert receipt["sha_convention"] == (
+            "bytes on disk as-is (binary read, no line-ending normalization)"
+        )
+        assert len(receipt["invariant_sha256"]) == 64
+        assert all(c in "0123456789abcdef" for c in receipt["invariant_sha256"])
         assert receipt["method"] == "static-import-census-v1"
         assert len(receipt["layers"]) == 2
         assert receipt["deltas"] is None  # First receipt

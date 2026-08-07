@@ -21,6 +21,13 @@ from pathlib import Path
 from typing import Any
 
 
+TICKET = "S5-NATIVIZATION-MOTION"
+GOAL_ID = "EMBER-02"
+WORKSTREAM_ID = "EMBER-02A"
+NEXT_EXECUTED_OUTCOME = "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
+
+
 @dataclass
 class LayerMeasurement:
     name: str
@@ -34,6 +41,11 @@ class LayerMeasurement:
 @dataclass
 class NativizationMotionReceipt:
     ts: str
+    ticket: str
+    goal_id: str
+    workstream_id: str
+    next_executed_outcome: str
+    sha_convention: str
     invariant_sha256: str
     map_source_sha: str
     layers: list[dict[str, Any]]
@@ -357,12 +369,7 @@ def get_invariant_sha(root: Path) -> str:
     if not invariant_path.exists():
         return "sha256:unknown"
 
-    content = invariant_path.read_text(encoding="utf-8")
-    match = re.search(r"invariant_sha256:\s*([a-f0-9]+)", content)
-    if match:
-        return "sha256:" + match.group(1)
-
-    return "sha256:unknown"
+    return hashlib.sha256(invariant_path.read_bytes()).hexdigest()
 
 
 def run_nativization_motion(repo_root: Path) -> str:
@@ -405,6 +412,11 @@ def run_nativization_motion(repo_root: Path) -> str:
     # Build receipt
     receipt = NativizationMotionReceipt(
         ts=ts,
+        ticket=TICKET,
+        goal_id=GOAL_ID,
+        workstream_id=WORKSTREAM_ID,
+        next_executed_outcome=NEXT_EXECUTED_OUTCOME,
+        sha_convention=SHA_CONVENTION,
         invariant_sha256=invariant_sha,
         map_source_sha=map_source_sha,
         layers=[asdict(layer) for layer in layers],
