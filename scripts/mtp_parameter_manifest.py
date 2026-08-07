@@ -426,6 +426,87 @@ def bind_manifest_evidence(receipt: Mapping[str, Any], manifest: Mapping[str, An
     bound["parameter_accounting"] = dict(manifest["parameter_accounting"])
     return bound
 
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_EXECUTED_RUN_KEYS = {
+    "schema",
+    "evidence",
+    "run_id",
+    "update_count",
+    "source_sha256",
+    "config_sha256",
+    "manifest_sha256",
+    "receipt_sha256",
+}
+
+
+def _executed_run_receipt_bytes(receipt: Mapping[str, Any]) -> bytes:
+    payload = copy.deepcopy(dict(receipt))
+    payload.pop("receipt_sha256", None)
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+
+def executed_run_receipt_sha256(receipt: Mapping[str, Any]) -> str:
+    """Hash the canonical immutable executed-run evidence, excluding self-hash."""
+    return hashlib.sha256(_executed_run_receipt_bytes(receipt)).hexdigest()
+
+
+def _require_sha256(value: Any, label: str) -> None:
+    if not isinstance(value, str) or _SHA256_RE.fullmatch(value) is None:
+        raise MtpParameterManifestError(f"{label} must be a lowercase SHA-256")
+
+
+def build_executed_run_receipt(
+    manifest: Mapping[str, Any],
+    run_id: str,
+    update_count: int,
+    source_bytes: bytes,
+    config_bytes: bytes,
+) -> dict[str, Any]:
+    """Create executed-run evidence from one completed update boundary.
+
+    This helper hashes the exact source/config byte buffers supplied by the
+    caller; it never accepts caller-provided identity strings.
+    """
+    validate_parameter_manifest(manifest)
+    if not isinstance(run_id, str) or not run_id.strip():
+        raise MtpParameterManifestError("executed-run evidence run_id must be non-empty")
+    if type(update_count) is not int or update_count < 1:
+        raise MtpParameterManifestError("executed-run evidence update_count must be positive")
+    if type(source_bytes) is not bytes or type(config_bytes) is not bytes or not source_bytes or not config_bytes:
+        raise MtpParameterManifestError("executed-run evidence requires immutable source/config bytes")
+    receipt: dict[str, Any] = {
+        "schema": "ember-mtp-executed-run-receipt-v1",
+        "evidence": "authorized-executed-run",
+        "run_id": run_id,
+        "update_count": update_count,
+        "source_sha256": hashlib.sha256(bytes(source_bytes)).hexdigest(),
+        "config_sha256": hashlib.sha256(bytes(config_bytes)).hexdigest(),
+        "manifest_sha256": manifest["manifest_sha256"],
+    }
+    receipt["receipt_sha256"] = executed_run_receipt_sha256(receipt)
+    validate_executed_run_receipt(receipt, manifest)
+    return receipt
+
+
+def validate_executed_run_receipt(
+    receipt: Mapping[str, Any], manifest: Mapping[str, Any] | None = None
+) -> None:
+    if not isinstance(receipt, Mapping) or set(receipt) != _EXECUTED_RUN_KEYS:
+        raise MtpParameterManifestError("executed-run evidence schema is not closed")
+    if receipt["schema"] != "ember-mtp-executed-run-receipt-v1" or receipt["evidence"] != "authorized-executed-run":
+        raise MtpParameterManifestError("executed-run evidence is not authorized")
+    if not isinstance(receipt["run_id"], str) or not receipt["run_id"].strip():
+        raise MtpParameterManifestError("executed-run evidence run_id is invalid")
+    if type(receipt["update_count"]) is not int or receipt["update_count"] < 1:
+        raise MtpParameterManifestError("executed-run evidence update_count must be positive")
+    for key in ("source_sha256", "config_sha256", "manifest_sha256", "receipt_sha256"):
+        _require_sha256(receipt[key], f"executed-run evidence {key}")
+    if receipt["receipt_sha256"] != executed_run_receipt_sha256(receipt):
+        raise MtpParameterManifestError("executed-run evidence receipt hash mismatch")
+    if manifest is not None:
+        validate_parameter_manifest(manifest)
+        if receipt["manifest_sha256"] != manifest["manifest_sha256"]:
+            raise MtpParameterManifestError("executed-run evidence manifest hash mismatch")
 def _pricing_receipt_bytes(receipt: Mapping[str, Any]) -> bytes:
     payload = copy.deepcopy(dict(receipt))
     payload.pop("receipt_sha256", None)
@@ -437,27 +518,35 @@ def pricing_receipt_sha256(receipt: Mapping[str, Any]) -> str:
     return hashlib.sha256(_pricing_receipt_bytes(receipt)).hexdigest()
 
 
-def build_pricing_receipt(manifest: Mapping[str, Any], run_id: str) -> dict[str, Any]:
-    """Create path-free pricing evidence from a realized model/optimizer run."""
+def build_pricing_receipt(
+    manifest: Mapping[str, Any], executed_run_receipt: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Create pricing evidence bound to immutable completed-run evidence."""
     validate_parameter_manifest(manifest)
-    if not isinstance(run_id, str) or not run_id.strip():
-        raise MtpParameterManifestError("pricing receipt run_id must be non-empty")
+    if not isinstance(executed_run_receipt, Mapping):
+        raise MtpParameterManifestError("executed-run evidence is required")
+    validate_executed_run_receipt(executed_run_receipt, manifest)
     accounting = dict(manifest["parameter_accounting"])
     receipt: dict[str, Any] = {
         "schema": "ember-mtp-parameter-pricing-receipt-v1",
-        "evidence": "actual-run",
-        "run_id": run_id,
+        "evidence": "authorized-executed-run",
+        "run_id": executed_run_receipt["run_id"],
+        "update_count": executed_run_receipt["update_count"],
+        "source_sha256": executed_run_receipt["source_sha256"],
+        "config_sha256": executed_run_receipt["config_sha256"],
         "manifest_sha256": manifest["manifest_sha256"],
+        "executed_run_receipt": copy.deepcopy(dict(executed_run_receipt)),
+        "executed_run_receipt_sha256": executed_run_receipt["receipt_sha256"],
         "parameter_accounting": accounting,
         "realized_parameter_count": accounting["realized"],
         "optimizer_parameter_count": manifest["optimizer"]["parameter_count"],
     }
     receipt["receipt_sha256"] = pricing_receipt_sha256(receipt)
+
     return receipt
 
-
-def write_pricing_receipt(path: str | Path, manifest: Mapping[str, Any], run_id: str) -> dict[str, Any]:
-    receipt = build_pricing_receipt(manifest, run_id)
+def write_pricing_receipt(path: str | Path, manifest: Mapping[str, Any], executed_run_receipt: Mapping[str, Any]) -> dict[str, Any]:
+    receipt = build_pricing_receipt(manifest, executed_run_receipt)
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -468,16 +557,26 @@ def validate_pricing_receipt(receipt: Mapping[str, Any], manifest: Mapping[str, 
     if not isinstance(receipt, Mapping):
         raise MtpParameterManifestError("pricing receipt must be an object")
     expected_keys = {
-        "schema", "evidence", "run_id", "manifest_sha256",
-        "parameter_accounting", "realized_parameter_count",
-        "optimizer_parameter_count", "receipt_sha256",
+        "schema", "evidence", "run_id", "update_count", "source_sha256",
+        "config_sha256", "manifest_sha256", "executed_run_receipt",
+        "executed_run_receipt_sha256", "parameter_accounting",
+        "realized_parameter_count", "optimizer_parameter_count", "receipt_sha256",
     }
     if set(receipt) != expected_keys:
         raise MtpParameterManifestError("pricing receipt schema is not closed")
-    if receipt["schema"] != "ember-mtp-parameter-pricing-receipt-v1" or receipt["evidence"] != "actual-run":
+    if receipt["schema"] != "ember-mtp-parameter-pricing-receipt-v1" or receipt["evidence"] != "authorized-executed-run":
         raise MtpParameterManifestError("pricing receipt evidence/schema is invalid")
     if not isinstance(receipt["run_id"], str) or not receipt["run_id"].strip():
         raise MtpParameterManifestError("pricing receipt run_id is invalid")
+    for key in ("source_sha256", "config_sha256", "manifest_sha256", "executed_run_receipt_sha256", "receipt_sha256"):
+        _require_sha256(receipt[key], f"pricing receipt {key}")
+    validate_executed_run_receipt(receipt["executed_run_receipt"], manifest)
+    executed = receipt["executed_run_receipt"]
+    if receipt["executed_run_receipt_sha256"] != executed["receipt_sha256"]:
+        raise MtpParameterManifestError("pricing receipt executed-run hash mismatch")
+    for key in ("run_id", "update_count", "source_sha256", "config_sha256", "manifest_sha256"):
+        if receipt[key] != executed[key]:
+            raise MtpParameterManifestError(f"pricing receipt {key} mismatch")
     if receipt["receipt_sha256"] != pricing_receipt_sha256(receipt):
         raise MtpParameterManifestError("pricing receipt hash mismatch")
     if manifest is not None:

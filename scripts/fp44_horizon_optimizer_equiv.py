@@ -187,10 +187,11 @@ def _build_opts(backbone, head, mtp_heads, arm: str):
     return opts
 
 
-def _bind_live_parameter_evidence(backbone, head, mtp_heads, opts, run_id: str) -> dict:
+def _bind_live_parameter_evidence(backbone, head, mtp_heads, opts, run_id: str, update_count: int) -> dict:
     """Persist content-addressed evidence from the objects used by this run."""
     from mtp_parameter_manifest import (
         validate_pricing_receipt,
+        build_executed_run_receipt,
         write_parameter_manifest_from_parts,
         write_pricing_receipt,
     )
@@ -204,7 +205,14 @@ def _bind_live_parameter_evidence(backbone, head, mtp_heads, opts, run_id: str) 
     manifest = write_parameter_manifest_from_parts(
         manifest_path, backbone, head, mtp_heads, opts, config
     )
-    pricing = write_pricing_receipt(pricing_path, manifest, run_id)
+    executed_run = build_executed_run_receipt(
+        manifest,
+        run_id,
+        update_count,
+        Path(__file__).read_bytes(),
+        (Path(NC) / "configs" / "v0-pretrain-config.json").read_bytes(),
+    )
+    pricing = write_pricing_receipt(pricing_path, manifest, executed_run)
     validate_pricing_receipt(pricing, manifest)
     return {
         "parameter_manifest": {
@@ -301,7 +309,7 @@ def _run_arm(arm: str, seed: int, train_ds: "ShardTokens", val_ds: "ShardTokens"
             print(f"[fp44]   warmup {i+1}/{WARMUP_STEPS}", flush=True)
 
         live_evidence = _bind_live_parameter_evidence(
-            backbone, head, mtp_heads, opts, f"{tag}-warmup")
+            backbone, head, mtp_heads, opts, f"{tag}-warmup", WARMUP_STEPS)
         out.update(live_evidence)
         torch.cuda.synchronize()
         free_b, _ = torch.cuda.mem_get_info()
@@ -385,7 +393,7 @@ def _noise_floor_run() -> dict:
         time.sleep(PACE_S)
 
     live_evidence = _bind_live_parameter_evidence(
-        backbone, head, mtp_heads, opts, "noise-floor-warmup")
+        backbone, head, mtp_heads, opts, "noise-floor-warmup", WARMUP_STEPS)
     # Snapshot post-warmup state
     model_snap = {k: v.detach().clone() for k, v in backbone.state_dict().items()}
     head_snap  = {k: v.detach().clone() for k, v in head.state_dict().items()}

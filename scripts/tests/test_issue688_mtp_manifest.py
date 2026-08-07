@@ -25,6 +25,8 @@ from mtp_parameter_manifest import (  # noqa: E402
     attach_parameter_manifest,
     build_parameter_manifest,
     build_parameter_manifest_from_parts,
+    build_executed_run_receipt,
+    executed_run_receipt_sha256,
     build_pricing_receipt,
     manifest_sha256,
     validate_parameter_manifest,
@@ -57,7 +59,17 @@ def _config(base=4, aux=8, realized=12):
                 "realized": realized,
             }
         }
+
     }
+
+def _executed(manifest, run_id="issue688-test-run", update_count=1):
+    return build_executed_run_receipt(
+        manifest,
+        run_id,
+        update_count,
+        b"immutable-source-bytes",
+        b"immutable-config-bytes",
+    )
 
 
 class Issue688LiveManifestTests(unittest.TestCase):
@@ -170,7 +182,7 @@ class Issue688LiveManifestTests(unittest.TestCase):
             }
         }
         scored = fp44_horizon_equiv_gate.score_receipt(
-            receipt, parameter_manifest=manifest
+            receipt, parameter_manifest=manifest, require_parameter_manifest=False
         )
         self.assertEqual(
             scored["parameter_manifest"]["sha256"], manifest["manifest_sha256"]
@@ -185,9 +197,7 @@ class Issue688LiveManifestTests(unittest.TestCase):
                 "full_fused_adamw": {"val_losses": {"250": 1.0, "1000": 1.0, "2000": 1.0}},
             }
         }
-        missing = fp44_horizon_equiv_gate.score_receipt(
-            receipt, require_parameter_manifest=True
-        )
+        missing = fp44_horizon_equiv_gate.score_receipt(receipt)
         self.assertEqual(missing["status"], "SCHEMA_MISMATCH")
         self.assertIn("pricing", missing["parameter_manifest_error"])
 
@@ -201,11 +211,11 @@ class Issue688LiveManifestTests(unittest.TestCase):
             "arms": {
                 "muon_split_baseline": {
                     "val_losses": {"250": 1.0, "1000": 1.0, "2000": 1.0},
-                    "parameter_pricing_receipt": build_pricing_receipt(manifest, "muon-run"),
+                    "parameter_pricing_receipt": build_pricing_receipt(manifest, _executed(manifest, "muon-run")),
                 },
                 "full_fused_adamw": {
                     "val_losses": {"250": 1.0, "1000": 1.0, "2000": 1.0},
-                    "parameter_pricing_receipt": build_pricing_receipt(manifest, "adamw-run"),
+                    "parameter_pricing_receipt": build_pricing_receipt(manifest, _executed(manifest, "adamw-run")),
                 },
             }
         }
@@ -217,7 +227,56 @@ class Issue688LiveManifestTests(unittest.TestCase):
             set(scored["parameter_pricing_receipts"]),
             {"muon_split_baseline", "full_fused_adamw"},
         )
+
+    def test_horizon_scoring_rejects_foreign_manifest_hash(self):
+        import fp44_horizon_equiv_gate
+
+        model = TinyMtp()
+        optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+        manifest = build_parameter_manifest(model, optimizer, _config())
+        foreign = build_pricing_receipt(manifest, _executed(manifest, "foreign-run"))
+        foreign["manifest_sha256"] = "f" * 64
+        foreign["receipt_sha256"] = pricing_receipt_sha256(foreign)
+        receipt = {
+            "arms": {
+                "muon_split_baseline": {
+                    "val_losses": {"250": 1.0, "1000": 1.0, "2000": 1.0},
+                    "parameter_pricing_receipt": foreign,
+                },
+                "full_fused_adamw": {
+                    "val_losses": {"250": 1.0, "1000": 1.0, "2000": 1.0},
+                    "parameter_pricing_receipt": foreign,
+                },
+            }
+        }
+        scored = fp44_horizon_equiv_gate.score_receipt(
+            receipt, parameter_manifest=manifest, require_parameter_manifest=True
+        )
+        self.assertEqual(scored["status"], "SCHEMA_MISMATCH")
+        self.assertIn("manifest_sha256 mismatch", scored["parameter_manifest_error"])
+
+    def test_pricing_receipt_rejects_self_attested_no_step_evidence(self):
+        model = TinyMtp()
+        optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+        manifest = build_parameter_manifest(model, optimizer, _config())
+        with self.assertRaisesRegex(MtpParameterManifestError, "update_count"):
+            build_executed_run_receipt(
+                manifest,
+                "no-step-run",
+                0,
+                b"immutable-source-bytes",
+                b"immutable-config-bytes",
+            )
+        with self.assertRaisesRegex(MtpParameterManifestError, "executed-run evidence"):
+            build_pricing_receipt(manifest, "no-step-run")
+
+        forged = _executed(manifest, "forged-run")
+        forged["evidence"] = "actual-run"
+        forged["receipt_sha256"] = executed_run_receipt_sha256(forged)
+        with self.assertRaisesRegex(MtpParameterManifestError, "authorized"):
+            build_pricing_receipt(manifest, forged)
     def test_actual_run_pricing_receipt_binds_post_update_live_parts(self):
+
         model = TinyMtp()
         optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
         loss = sum(parameter.square().sum() for parameter in model.parameters())
@@ -226,9 +285,9 @@ class Issue688LiveManifestTests(unittest.TestCase):
         manifest = build_parameter_manifest_from_parts(
             model.base, model.base, model.mtp_heads, {"sgd": optimizer}, _config()
         )
-        receipt = build_pricing_receipt(manifest, "issue688-test-run")
+        receipt = build_pricing_receipt(manifest, _executed(manifest, "issue688-test-run"))
         validate_pricing_receipt(receipt, manifest)
-        self.assertEqual(receipt["evidence"], "actual-run")
+        self.assertEqual(receipt["evidence"], "authorized-executed-run")
         self.assertEqual(receipt["realized_parameter_count"], 12)
         self.assertEqual(receipt["receipt_sha256"], pricing_receipt_sha256(receipt))
         tampered = copy.deepcopy(receipt)
@@ -238,7 +297,7 @@ class Issue688LiveManifestTests(unittest.TestCase):
             validate_pricing_receipt(tampered, manifest)
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / "pricing-receipt.json"
-            self.assertEqual(write_pricing_receipt(path, manifest, "issue688-test-run"), receipt)
+            self.assertEqual(write_pricing_receipt(path, manifest, _executed(manifest, "issue688-test-run")), receipt)
 
     def test_optimizer_boundary_source_binds_actual_manifest_and_pricing(self):
         source = (ROOT / "scripts" / "fp44_horizon_optimizer_equiv.py").read_text(encoding="utf-8")

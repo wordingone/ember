@@ -1062,10 +1062,12 @@ def _write_live_parameter_evidence(
     optimizers: dict,
     cfg: dict,
     run_id: str,
+    update_count: int,
 ) -> dict[str, Any]:
     """Bind accounting to the model/optimizers that just executed a live run."""
     from mtp_parameter_manifest import (
         validate_pricing_receipt,
+        build_executed_run_receipt,
         write_pricing_receipt,
     )
 
@@ -1073,7 +1075,14 @@ def _write_live_parameter_evidence(
         run_dir, model, optimizers, cfg, run_id
     )
     pricing_path = manifest_path.with_name(f"{run_id}-pricing-receipt.json")
-    pricing = write_pricing_receipt(pricing_path, manifest, run_id)
+    executed_run = build_executed_run_receipt(
+        manifest,
+        run_id,
+        update_count,
+        Path(__file__).read_bytes(),
+        Path(CONTRACT_PATH).read_bytes(),
+    )
+    pricing = write_pricing_receipt(pricing_path, manifest, executed_run)
     validate_pricing_receipt(pricing, manifest)
     return {
         "parameter_manifest": {
@@ -2131,7 +2140,7 @@ def run_v0_segment(
         if not losses:
             raise RuntimeError("live split run produced no optimizer update for pricing evidence")
         live_parameter_evidence = _write_live_parameter_evidence(
-            run_dir, model, optimizers, cfg, f"{segment_id}-step-{resume_step + len(losses)}")
+            run_dir, model, optimizers, cfg, f"{segment_id}-step-{resume_step + len(losses)}", len(losses))
     wall_s = time.perf_counter() - t_start
     tokens_this_seg = n_steps * batch_size * grad_accum_steps * seq
 

@@ -178,7 +178,7 @@ def _load_receipt():
     return chosen
 
 
-def score_receipt(r, parameter_manifest=None, require_parameter_manifest=False):
+def score_receipt(r, parameter_manifest=None, require_parameter_manifest=True):
     """Full receipt → verdict pipeline (loader + arm-pick + noise-floor + decide).
     Returns a dict with status SCORED / SCHEMA_MISMATCH. Pure (no I/O) so the
     selftest can exercise the whole path on synthetic receipts."""
@@ -222,7 +222,7 @@ def score_receipt(r, parameter_manifest=None, require_parameter_manifest=False):
                     "parameter_manifest_error": f"actual-run pricing receipt is missing for {name}",
                 }
             try:
-                validate_pricing_receipt(pricing)
+                validate_pricing_receipt(pricing, parameter_manifest)
             except Exception as exc:  # noqa: BLE001
                 return {
                     "status": "SCHEMA_MISMATCH",
@@ -385,7 +385,7 @@ def selftest():
         (_rcpt(1.15, 1.00, adamw_seeds=[1.0, 1.3]), "COMMIT_ADAMW", 0.21, "receipt seed-std floor -> AdamW"),
     ]
     for r, exp_v, exp_nf, lbl in pipe:
-        s = score_receipt(r)
+        s = score_receipt(r, require_parameter_manifest=False)
         match = s.get("status") == "SCORED" and s.get("verdict") == exp_v
         if exp_nf is not None:
             match = match and abs(s.get("noise_floor", 0) - exp_nf) < 0.02
@@ -400,7 +400,7 @@ def selftest():
     r_nf = {"ticket": "FP44-HORIZON-OPTIMIZER-EQUIV", "noise_floor": 0.605,
             "arms": {"muon_split_baseline": {"val_loss": {"250": 2.2, "1000": 1.4, "2000": 1.0}},
                      "full_fused_adamw":   {"val_loss": {"250": 2.2, "1000": 1.5, "2000": 1.3}}}}
-    s_nf = score_receipt(r_nf)
+    s_nf = score_receipt(r_nf, require_parameter_manifest=False)
     c_nf = (s_nf.get("verdict") == "COMMIT_ADAMW"
             and abs(s_nf.get("noise_floor", 0) - 0.605) < 1e-9
             and s_nf.get("noise_floor_source") == "derived")
@@ -410,7 +410,7 @@ def selftest():
     # default-fallback flag: no derived floor + no seed spread -> source 'default'
     s_def = score_receipt({"ticket": "x-horizon-equiv",
                            "arms": {"muon": {"val_loss": {"2000": 1.0}},
-                                    "adamw": {"val_loss": {"2000": 1.0}}}})
+                                    "adamw": {"val_loss": {"2000": 1.0}}}}, require_parameter_manifest=False)
     c_def = s_def.get("noise_floor_source") == "default" and s_def.get("noise_floor") == DEFAULT_NOISE_FLOOR
     print(f"  [{'PASS' if c_def else 'FAIL'}] no derived floor -> source 'default' (red flag) "
           f"src={s_def.get('noise_floor_source')}")
@@ -428,7 +428,7 @@ def selftest():
              "adamw_result": {"arm": "full_fused_adamw",
                               "val_losses": {"250": 9.39, "500": 8.98, "1000": 7.32,
                                              "1500": 7.39, "2000": 6.9766}}}
-    s_eng = score_receipt(r_eng)
+    s_eng = score_receipt(r_eng, require_parameter_manifest=False)
     c_eng = (s_eng.get("status") == "SCORED"
              and s_eng.get("verdict") == "ESCALATE_USER_TRADEOFF"
              and s_eng.get("noise_floor_source") == "derived"
@@ -438,7 +438,7 @@ def selftest():
     ok = ok and c_eng
 
     # schema-mismatch path
-    sm = score_receipt({"arms": {"sgd": {"val_loss": {"2000": 1.0}}}})
+    sm = score_receipt({"arms": {"sgd": {"val_loss": {"2000": 1.0}}}}, require_parameter_manifest=False)
     c_sm = sm.get("status") == "SCHEMA_MISMATCH"
     print(f"  [{'PASS' if c_sm else 'FAIL'}] unknown arms -> SCHEMA_MISMATCH")
     ok = ok and c_sm
