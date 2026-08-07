@@ -14,6 +14,7 @@ import json
 import os
 import subprocess
 import argparse
+import datetime as _dt
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -271,6 +272,9 @@ def apply_safe_cleanup(
         after = _snapshot(root)
         working_set_after = compute_working_set(str(root))
         receipt = {
+            "ticket": "EMBER-488-HYGIENE",
+            "ts": _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
+            "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
             "schema_version": CLEANUP_SCHEMA,
             "goal_id": GOAL_ID,
             "workstream_id": WORKSTREAM_ID,
