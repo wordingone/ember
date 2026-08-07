@@ -929,6 +929,55 @@ describe("process-entry — G3: main() with -p routes to headlessRunner before l
   });
 });
 
+describe("process-entry — ordinary boot is fail-closed without an Ember Lab identity", () => {
+  it("never invokes the direct spawn hook and refuses the unbound seat", async () => {
+    const saved = saveEnv([
+      "EMBER_HOME",
+      "EMBER_MODEL_URL",
+      "EMBER_MODEL_NAME",
+      "EMBER_MODEL_SEAT",
+      "EMBER_REFERENCE_SEAT",
+      "EMBER_GPU_FREE",
+    ]);
+    delete process.env["EMBER_MODEL_URL"];
+    delete process.env["EMBER_MODEL_NAME"];
+    delete process.env["EMBER_MODEL_SEAT"];
+    delete process.env["EMBER_REFERENCE_SEAT"];
+    delete process.env["EMBER_GPU_FREE"];
+
+    let spawnCalls = 0;
+    let exitCode: number | null = null;
+    let initCalls = 0;
+    const stderrOrig = process.stderr.write.bind(process.stderr);
+    let stderr = "";
+    process.stderr.write = ((chunk: string) => {
+      stderr += chunk;
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      await main({
+        argv: ["node", "ember", "-p", "unbound"],
+        loadOwnedIdentityFn: () => undefined,
+        loadOwnedDevelopmentIdentityFn: () => undefined,
+        spawnServer: async () => {
+          spawnCalls += 1;
+          return makeFakeHandle(29998);
+        },
+        initFn: async () => { initCalls += 1; },
+        exitFn: (code) => { exitCode = code; },
+      });
+    } finally {
+      process.stderr.write = stderrOrig;
+      restoreEnv(saved);
+    }
+
+    expect(spawnCalls).toBe(0);
+    expect(initCalls).toBe(0);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("no admitted owned Ember identity");
+  });
+});
+
 // ---------------------------------------------------------------------------
 // G1 — production deps are threaded into the headless path (not undefined)
 // ---------------------------------------------------------------------------
@@ -1203,7 +1252,7 @@ describe("process-entry — main() end-to-end: EMBER_GPU_FREE precedence over pe
 // unconditionally, even while a training leg holds a live GPU lease (the
 // 2026-07-07 incident: cockpit boot at 10:13:46Z OOM'd a W1 training attempt
 // at 10:39Z). Fix: an effective planned-outage.json marker (the SAME marker
-// services/brain-server-supervisor.ts's device policy already reads) is
+// Ember Lab's daemon-owned device policy already reads) is
 // folded into gpuFreeRequested BEFORE the seat is constructed, so the boot
 // takes the identical GPU-free code path -- no spawn, OFFLINE seat, and a
 // distinct "[ember] GPU leased to training: ..." disclosure line naming the
@@ -1344,7 +1393,7 @@ describe("process-entry — main() end-to-end: GPU-lease awareness (issue #344)"
 });
 
 describe("process-entry — defaultCheckGpuLease", () => {
-  it("returns null when planned-outage.json is absent (fail-open, matches brain-server-supervisor.ts's resolveDeviceForSpawn)", async () => {
+  it("returns null when planned-outage.json is absent (fail-open, matches Ember Lab's owned-server policy)", async () => {
     const marker = await defaultCheckGpuLease();
     // In this test environment there is no live tools/ember-cli/state/planned-outage.json,
     // so this must resolve null, never throw -- the same fail-open contract
@@ -2125,7 +2174,7 @@ describe("process-entry — dispatchFastPath('--watch') execution binding", () =
       const panelStarts = (stdout.match(/╭/g) ?? []).length;
       expect(panelStarts).toBeGreaterThan(1);
       // Clean SIGINT exit: no leftover process. Exit CODE is platform-dependent here --
-      // services/brain-server-supervisor.test.ts documents the same fact this codebase already
+      // Ember Lab's owned-server tests document the same fact this codebase already
       // knows: "on Windows this is an unconditional terminate" (Node's child.kill(signal) has no
       // real POSIX signal to deliver on Windows, so the OS force-terminates rather than letting
       // the child's own `process.on("SIGINT", ...)` handler run process.exit(0) -- the graceful

@@ -18,7 +18,7 @@ This document is the contract between the two sides.
 ```
 
 - `<python>` — `EMBER_PYTHON_BIN` env override, default `python` (matches the convention in
-  `services/brain-server-supervisor.ts` / `entrypoints/owned-seat-loader.ts`).
+  `entrypoints/owned-server-supervisor.ts` / `entrypoints/owned-seat-loader.ts`).
 - `<manifestPath>` — the active checkpoint's identity manifest. Resolution order:
   `deps.manifestPath` (test injection) -> `EMBER_MODEL_IDENTITY_MANIFEST` env ->
   `<cwd>/.ember/model-identity.json`.
