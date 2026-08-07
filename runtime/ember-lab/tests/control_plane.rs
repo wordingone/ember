@@ -1711,7 +1711,7 @@ fn phase_events_are_daemon_bound_and_foreign_bytes_do_not_authorize() {
                 "cpu-fixture",
             )
             .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
-            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "5000"),
+        .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000"),
         )
         .unwrap();
     let forged_dir = root
