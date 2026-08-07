@@ -7,6 +7,7 @@
 // Bundle: entrypoints/process-entry.ts (lines 323033–323519)
 
 import { readFile, writeFile, stat, mkdir } from "fs/promises";
+import { createHash } from "node:crypto";
 import { openSync, closeSync } from "fs";
 import { join, dirname, resolve } from "path";
 import { spawn } from "child_process";
@@ -726,7 +727,8 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
   if (first === "goal-session-smoke") {
     const { runGoalLiveSession } = await import("../services/goal-live-session.ts");
     try {
-      const receipt = await runGoalLiveSession();
+      const executable_sha256 = createHash("sha256").update(await readFile(process.execPath)).digest("hex");
+      const receipt = await runGoalLiveSession({ executable_sha256 });
       process.stdout.write(JSON.stringify(receipt) + "\n");
       process.exit(0);
     } catch (error) {

@@ -19,9 +19,10 @@ The command emits one path-free JSON object with schema
 `tools/ember-cli/src/fixtures/goal-live-session-receipt-v1.json`.
 
 The receipt also contains three hash-bound frame captures from the compiled
-session: queued-input preemption, autonomous continuations, and completion.
-Their event indices prove preemption occurred before the main goal was created
-and their source binding identifies the goal-live producer.
+The receipt also contains three rendered, fixed-dimension frame captures from
+the compiled session. Each frame binds UTF-8 bytes, width/height, sequence,
+receipt range, the exact frame-source SHA, and the compiled executable SHA;
+the checked-in test recomputes each hash and rejects a one-byte tamper.
 
 Acceptance evidence is bounded to: at least three autonomous continuation
 events after boot with zero user input, refusal of premature `Complete` at
