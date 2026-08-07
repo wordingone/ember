@@ -15,6 +15,7 @@ use crate::{
 };
 use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
@@ -22,6 +23,11 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 pub const SERVER_AUTHORITY_SCHEMA: &str = "ember-lab-server-authority-v1";
+pub const SERVER_SUPERVISION_ID_SCHEMA: &str = "ember-lab-server-supervision-v1";
+
+fn supervision_identity(resource_lease: &str) -> String {
+    format!("{SERVER_SUPERVISION_ID_SCHEMA}:{resource_lease}")
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -109,6 +115,7 @@ pub struct ServerLiveCycleRequest {
 #[serde(deny_unknown_fields)]
 pub struct ServerCycleReceipt {
     pub authority_sha256: String,
+    pub supervision_id: String,
     pub job_id: String,
     pub target: String,
     pub endpoint: String,
@@ -303,15 +310,40 @@ impl Daemon {
         Ok(())
     }
 
-    fn restart_count_last_hour(&self, job_id: &str, now_ms: i64) -> Result<u32> {
-        let count: i64 = self.conn()?.query_row(
-            "SELECT COUNT(*) FROM events
-             WHERE job_id=?1 AND ts_ms>?2 AND ts_ms<=?3
+    fn restart_count_last_hour(&self, supervision_id: &str, now_ms: i64) -> Result<u32> {
+        if supervision_id.trim().is_empty() {
+            return Err(invalid("server supervision identity is missing"));
+        }
+        let conn = self.conn()?;
+        let mut statement = conn.prepare(
+            "SELECT payload_json FROM events
+             WHERE ts_ms>?1 AND ts_ms<=?2
                AND kind IN ('server_restored','server_restore_failed')",
-            rusqlite::params![job_id, now_ms.saturating_sub(3_600_000), now_ms],
-            |row| row.get(0),
         )?;
-        u32::try_from(count).map_err(|_| invalid("server restart event count overflowed"))
+        let rows = statement.query_map(
+            rusqlite::params![now_ms.saturating_sub(3_600_000), now_ms],
+            |row| row.get::<_, String>(0),
+        )?;
+        let mut count = 0_u32;
+        for row in rows {
+            let payload = row?;
+            let payload: Value = serde_json::from_str(&payload).map_err(|error| {
+                invalid(format!("server restart event is not valid JSON: {error}"))
+            })?;
+            let recorded = payload
+                .get("supervision_id")
+                .and_then(Value::as_str)
+                .ok_or_else(|| invalid("server restart event lacks stable supervision identity"))?;
+            if recorded != supervision_id {
+                return Err(invalid(
+                    "server restart event has a foreign supervision identity",
+                ));
+            }
+            count = count
+                .checked_add(1)
+                .ok_or_else(|| invalid("server restart event count overflowed"))?;
+        }
+        Ok(count)
     }
 
     fn release_exited_server_lease(&self, authority: &ServerAuthority) -> Result<()> {
@@ -589,7 +621,8 @@ impl Daemon {
                 job_id: authority.job_id.clone(),
             });
         }
-        let restarts_last_hour = self.restart_count_last_hour(&authority.job_id, request.now_ms)?;
+        let supervision_id = supervision_identity(&authority.resource_lease);
+        let restarts_last_hour = self.restart_count_last_hour(&supervision_id, request.now_ms)?;
         let endpoint = format!("{}:{}", authority.host, authority.port);
         let failure = if request.observation.process_alive {
             match request.observation.endpoint {
@@ -657,6 +690,7 @@ impl Daemon {
         };
         let receipt = ServerCycleReceipt {
             authority_sha256: request.authority_sha256,
+            supervision_id: supervision_id.clone(),
             job_id: authority.job_id.clone(),
             target: authority.target.clone(),
             endpoint,
@@ -678,6 +712,7 @@ impl Daemon {
                 "source_sha256": &self.ember_lab_source_sha256,
             },
             "job_id": &authority.job_id,
+            "supervision_id": &supervision_id,
             "identity_sha256": &authority.identity_sha256,
             "resource_lease": &authority.resource_lease,
             "state": "running",
@@ -750,7 +785,8 @@ impl Daemon {
         if outage == PlannedOutageState::Expired {
             sweep_expired_outage(self, &authority.resource_lease, request.now_ms)?;
         }
-        let restarts_last_hour = self.restart_count_last_hour(&authority.job_id, request.now_ms)?;
+        let supervision_id = supervision_identity(&authority.resource_lease);
+        let restarts_last_hour = self.restart_count_last_hour(&supervision_id, request.now_ms)?;
         let restore_authorized = outage != PlannedOutageState::Open
             && restarts_last_hour < 3
             && available_headroom_bytes >= request.required_headroom_bytes

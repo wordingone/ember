@@ -51,7 +51,7 @@ fn write_restore_manifest(root: &Path, job_id: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_millis() as i64;
-    let custody = root.join("restore-custody");
+    let custody = root.join(format!("restore-custody-{job_id}"));
     fs::create_dir_all(&custody).unwrap();
     let mut env = BTreeMap::new();
     for key in [
@@ -74,7 +74,7 @@ fn write_restore_manifest(root: &Path, job_id: &str) -> PathBuf {
     fs::write(&config, b"{\"config\":\"restore\"}").unwrap();
     fs::write(&data_manifest, b"{\"records\":1}").unwrap();
     let program = std::env::current_exe().unwrap();
-    let manifest = root.join("restore-manifest.json");
+    let manifest = root.join(format!("restore-manifest-{job_id}.json"));
     fs::write(
         &manifest,
         serde_json::to_vec(&serde_json::json!({
@@ -758,8 +758,16 @@ fn server_cycle_derives_restart_count_from_authoritative_activity_events() {
     ] {
         connection
             .execute(
-                "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,'{}')",
-                rusqlite::params!["server-job", timestamp, kind],
+                "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,?4)",
+                rusqlite::params![
+                    "server-job",
+                    timestamp,
+                    kind,
+                    serde_json::json!({
+                        "supervision_id": "ember-lab-server-supervision-v1:server:8082"
+                    })
+                    .to_string()
+                ],
             )
             .unwrap();
     }
@@ -804,6 +812,84 @@ fn server_cycle_derives_restart_count_from_authoritative_activity_events() {
         .unwrap();
     assert_eq!(receipt.restarts_last_hour, 3);
     assert_eq!(receipt.decision, "ALARM_BACKOFF");
+}
+
+#[test]
+fn server_cycle_backoff_spans_rebound_job_ids_and_rejects_restore() {
+    use ember_lab::server_supervisor::{EndpointHealth, RestoreEvidence, ServerCycleRequest};
+
+    let root = sandbox("server-cycle-stable-supervision-id");
+    let db = root.join("ember-lab.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("current-job", &identity, &identity_hash)
+        .unwrap();
+    daemon.acquire_lease("server:8082", "current-job").unwrap();
+
+    let supervision_id = "ember-lab-server-supervision-v1:server:8082";
+    let connection = rusqlite::Connection::open(&db).unwrap();
+    for (timestamp, job_id) in [
+        (400_i64, "old-job"),
+        (500_i64, "rebound-1"),
+        (600_i64, "rebound-2"),
+    ] {
+        connection
+            .execute(
+                "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'server_restored',?3)",
+                rusqlite::params![
+                    job_id,
+                    timestamp,
+                    serde_json::json!({"supervision_id": supervision_id}).to_string()
+                ],
+            )
+            .unwrap();
+    }
+    drop(connection);
+
+    let authority_path = root.join("server-authority.json");
+    let authority = serde_json::json!({
+        "schema_version": "ember-lab-server-authority-v1",
+        "job_id": "current-job",
+        "resource_lease": "server:8082",
+        "target": "llama-server",
+        "host": "127.0.0.1",
+        "port": 8082,
+        "pid": 4321,
+        "identity_sha256": identity_hash,
+    });
+    let authority_bytes = serde_json::to_vec(&authority).unwrap();
+    fs::write(&authority_path, &authority_bytes).unwrap();
+    let authority_sha256 = format!("{:x}", Sha256::digest(&authority_bytes));
+    let restore_calls = Arc::new(AtomicUsize::new(0));
+    let restore_calls_for_callback = Arc::clone(&restore_calls);
+    let receipt = daemon
+        .supervise_server_cycle(
+            ServerCycleRequest {
+                authority_path,
+                authority_sha256,
+                receipt_path: root.join("server-cycle-stable-receipt.json"),
+                observation: ember_lab::server_supervisor::ServerObservation {
+                    process_alive: true,
+                    endpoint: EndpointHealth::Dead,
+                },
+                available_headroom_bytes: 2,
+                required_headroom_bytes: 1,
+                now_ms: 1_000,
+            },
+            |_authority| {
+                restore_calls_for_callback.fetch_add(1, Ordering::SeqCst);
+                Ok(RestoreEvidence {
+                    restore_cost_s: 1.0,
+                    health_status: 200,
+                })
+            },
+        )
+        .unwrap();
+    assert_eq!(receipt.decision, "ALARM_BACKOFF");
+    assert_eq!(restore_calls.load(Ordering::SeqCst), 0);
+    let receipt_json = serde_json::to_value(&receipt).unwrap();
+    assert_eq!(receipt_json["supervision_id"], supervision_id);
 }
 
 #[test]
@@ -1135,6 +1221,129 @@ fn server_live_cycle_rebinds_successful_restore_for_subsequent_ticks() {
     daemon.stop_job("restored-server-job").unwrap();
     server.join().unwrap();
     assert_eq!(responses.load(Ordering::SeqCst), 4);
+}
+
+#[test]
+fn server_live_cycle_restarts_across_rebound_authorities_then_backs_off() {
+    use ember_lab::server_supervisor::ServerLiveCycleRequest;
+
+    let root = sandbox("server-supervision-stable-backoff");
+    let db = root.join("ember-lab.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("old-server-job", &identity, &identity_hash)
+        .unwrap();
+    daemon
+        .acquire_lease("server:8082", "old-server-job")
+        .unwrap();
+    let started = daemon
+        .start_job(
+            JobSpec::new(
+                "old-server-job",
+                std::env::current_exe().unwrap().to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "server:8082",
+            )
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000"),
+        )
+        .unwrap();
+    let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let port = listener.local_addr().unwrap().port();
+    listener.set_nonblocking(true).unwrap();
+    let responses = Arc::new(AtomicUsize::new(0));
+    let response_counter = Arc::clone(&responses);
+    let server = thread::spawn(move || {
+        for _ in 0..400 {
+            match listener.accept() {
+                Ok((mut stream, _)) => {
+                    let index = response_counter.fetch_add(1, Ordering::SeqCst);
+                    let response = if index % 2 == 0 {
+                        b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\n\r\n".to_vec()
+                    } else {
+                        b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".to_vec()
+                    };
+                    let _ = std::io::Write::write_all(&mut stream, &response);
+                    if index >= 6 {
+                        break;
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(_) => break,
+            }
+        }
+    });
+    let mut authority_path = root.join("server-authority.json");
+    let authority = serde_json::json!({
+        "schema_version": "ember-lab-server-authority-v1",
+        "job_id": "old-server-job",
+        "resource_lease": "server:8082",
+        "target": "llama-server",
+        "host": "127.0.0.1",
+        "port": port,
+        "pid": started.pid,
+        "identity_sha256": identity_hash,
+    });
+    let authority_bytes = serde_json::to_vec(&authority).unwrap();
+    fs::write(&authority_path, &authority_bytes).unwrap();
+    let mut job_id = "old-server-job".to_string();
+
+    for iteration in 1..=3 {
+        if iteration > 1 {
+            daemon.stop_job(&job_id).unwrap();
+        }
+        let next_job_id = format!("rebound-server-job-{iteration}");
+        let manifest_path = write_restore_manifest(&root, &next_job_id);
+        let authority_bytes = fs::read(&authority_path).unwrap();
+        let receipt = daemon
+            .supervise_server_live_cycle(ServerLiveCycleRequest {
+                authority_path: authority_path.clone(),
+                authority_sha256: format!("{:x}", Sha256::digest(&authority_bytes)),
+                receipt_path: root.join(format!("stable-backoff-{iteration}.json")),
+                restore_manifest_path: manifest_path,
+                required_headroom_bytes: 1,
+                now_ms: iteration * 1_000,
+            })
+            .unwrap();
+        assert_eq!(receipt.decision, "RESTORED");
+        assert_eq!(
+            receipt.supervision_id,
+            "ember-lab-server-supervision-v1:server:8082"
+        );
+        assert_eq!(
+            daemon.job_state(&next_job_id).unwrap(),
+            Some(JobState::Running)
+        );
+        let stem = authority_path.file_stem().unwrap().to_string_lossy();
+        let rebound_name = format!(
+            "{stem}-rebound-{}.json",
+            &format!("{:x}", Sha256::digest(next_job_id.as_bytes()))[..16]
+        );
+        authority_path = root.join(rebound_name);
+        job_id = next_job_id;
+    }
+
+    daemon.stop_job(&job_id).unwrap();
+    let authority_bytes = fs::read(&authority_path).unwrap();
+    let fourth = daemon
+        .supervise_server_live_cycle(ServerLiveCycleRequest {
+            authority_path,
+            authority_sha256: format!("{:x}", Sha256::digest(&authority_bytes)),
+            receipt_path: root.join("stable-backoff-fourth.json"),
+            restore_manifest_path: root.join("must-not-dispatch-fourth.json"),
+            required_headroom_bytes: 1,
+            now_ms: 4_000,
+        })
+        .unwrap();
+    assert_eq!(fourth.decision, "ALARM_BACKOFF");
+    assert_eq!(fourth.restarts_last_hour, 3);
+    assert_eq!(daemon.job_state("rebound-server-job-4").unwrap(), None);
+    assert_eq!(daemon.lease_owner("server:8082").unwrap(), None);
+    assert_eq!(responses.load(Ordering::SeqCst), 7);
+    server.join().unwrap();
 }
 
 #[test]
