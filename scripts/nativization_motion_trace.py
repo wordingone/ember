@@ -7,8 +7,10 @@ from __future__ import annotations
 
 import hashlib
 import ast
+import io
 import json
 import subprocess
+import tarfile
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -30,17 +32,38 @@ def sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
-def git_blob_bytes(repo_root: Path, commit: str, relative_path: str) -> bytes:
+_GIT_TREE_CACHE: dict[tuple[str, str], dict[str, bytes]] = {}
+
+
+def _git_tree_bytes(repo_root: Path, commit: str) -> dict[str, bytes]:
+    key = (str(repo_root.resolve()), commit)
+    cached = _GIT_TREE_CACHE.get(key)
+    if cached is not None:
+        return cached
     try:
         result = subprocess.run(
-            ["git", "show", f"{commit}:{relative_path}"],
+            ["git", "archive", "--format=tar", commit],
             cwd=repo_root,
             capture_output=True,
             check=True,
         )
-    except (OSError, subprocess.CalledProcessError) as exc:
+        archive = tarfile.open(fileobj=io.BytesIO(result.stdout), mode="r:")
+        files = {
+            member.name: archive.extractfile(member).read()
+            for member in archive.getmembers()
+            if member.isfile()
+        }
+    except (OSError, subprocess.CalledProcessError, tarfile.TarError) as exc:
+        raise ValueError("Git source tree is unavailable") from exc
+    _GIT_TREE_CACHE[key] = files
+    return files
+
+
+def git_blob_bytes(repo_root: Path, commit: str, relative_path: str) -> bytes:
+    try:
+        return _git_tree_bytes(repo_root, commit)[relative_path]
+    except (KeyError, ValueError) as exc:
         raise ValueError(f"Git blob is unavailable for {relative_path}") from exc
-    return result.stdout
 
 
 def git_blob_sha256(repo_root: Path, commit: str, relative_path: str) -> str:
