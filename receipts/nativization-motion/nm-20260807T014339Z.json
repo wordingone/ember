@@ -1,5 +1,5 @@
 {
-  "ts": "2026-08-07T02:03:41Z",
+  "ts": "2026-08-07T02:25:33Z",
   "ticket": "S5-NATIVIZATION-MOTION",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
@@ -7,7 +7,9 @@
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "map_source_sha": "sha256:df870f83e3ac7e3b423c2422dea3e75099bf2b2a0d1a48cc4674048e13da92ca",
-  "run_import_manifest_sha256": "2b7f91be7191c470942853850e87a654a2795e607365e277abafdb99daae03cd",
+  "run_import_manifest_sha256": "b23a2857b031bb52324e4d6e3e05e4c9b20269e365788e2629cca6e0efdb1756",
+  "run_import_trace_sha256": "a54b28dc3ecb2fcb833362cf3bfc8c083e3c99f9fab5bdbc41e652bed6555a13",
+  "run_import_trace_producer_sha256": "c9c2704945bb939d4afb85fe32232c23bc08167109c9df09cf4020d5d115e393",
   "layers": [
     {
       "name": "CUDA kernels (cuBLAS matmul, elementwise)",
@@ -87,7 +89,7 @@
       "critical_path_share": {
         "creation": true,
         "current_rung_training": true,
-        "evidence": "run-import-manifest-v1:owned-run-path",
+        "evidence": "governed-run-import-trace-v1:a54b28dc3ecb2fcb833362cf3bfc8c083e3c99f9fab5bdbc41e652bed6555a13",
         "growth_run": true
       }
     },
@@ -104,7 +106,7 @@
       "critical_path_share": {
         "creation": true,
         "current_rung_training": true,
-        "evidence": "run-import-manifest-v1:owned-run-path",
+        "evidence": "governed-run-import-trace-v1:a54b28dc3ecb2fcb833362cf3bfc8c083e3c99f9fab5bdbc41e652bed6555a13",
         "growth_run": true
       }
     },
@@ -400,6 +402,7 @@
         "native_compute_screen",
         "native_crash_guard",
         "nativization_motion",
+        "nativization_motion_trace",
         "nck",
         "ntpath",
         "numpy",
@@ -572,8 +575,8 @@
         "zlib",
         "zstandard"
       ],
-      "borrowed_deps_count": 460,
-      "borrowed_loc": 12376,
+      "borrowed_deps_count": 461,
+      "borrowed_loc": 12392,
       "owned_loc": 0,
       "borrowed_binaries": [
         "bun",
@@ -584,7 +587,7 @@
       "critical_path_share": {
         "creation": true,
         "current_rung_training": true,
-        "evidence": "run-import-manifest-v1:owned-run-path",
+        "evidence": "governed-run-import-trace-v1:a54b28dc3ecb2fcb833362cf3bfc8c083e3c99f9fab5bdbc41e652bed6555a13",
         "growth_run": true
       }
     },
@@ -613,7 +616,7 @@
       "critical_path_share": {
         "creation": true,
         "current_rung_training": true,
-        "evidence": "run-import-manifest-v1:owned-run-path",
+        "evidence": "governed-run-import-trace-v1:a54b28dc3ecb2fcb833362cf3bfc8c083e3c99f9fab5bdbc41e652bed6555a13",
         "growth_run": true
       }
     },
@@ -674,7 +677,7 @@
       "critical_path_share": {
         "creation": true,
         "current_rung_training": true,
-        "evidence": "run-import-manifest-v1:owned-run-path",
+        "evidence": "governed-run-import-trace-v1:a54b28dc3ecb2fcb833362cf3bfc8c083e3c99f9fab5bdbc41e652bed6555a13",
         "growth_run": true
       }
     }
@@ -689,8 +692,8 @@
       "borrowed_loc_delta": 0
     },
     "Autograd (`grad_fn` graph, `backward()`)": {
-      "borrowed_deps_delta": 0,
-      "borrowed_loc_delta": 3
+      "borrowed_deps_delta": 1,
+      "borrowed_loc_delta": 16
     },
     "Optimizer (Adam/Muon: separable state + update)": {
       "borrowed_deps_delta": 0,

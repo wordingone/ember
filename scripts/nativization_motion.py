@@ -14,11 +14,23 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import subprocess
 import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from nativization_motion_trace import (
+    TRACE_PHASES,
+    TRACE_RUN_ID,
+    TRACE_SCHEMA_VERSION,
+    build_trace,
+    canonical_json_bytes,
+    choose_trace_source,
+    sha256_bytes,
+    source_commit,
+)
 
 
 TICKET = "S5-NATIVIZATION-MOTION"
@@ -50,6 +62,8 @@ class NativizationMotionReceipt:
     invariant_sha256: str
     map_source_sha: str
     run_import_manifest_sha256: str
+    run_import_trace_sha256: str
+    run_import_trace_producer_sha256: str
     layers: list[dict[str, Any]]
     deltas: dict[str, Any] | None
     next_home_candidate: str | None
@@ -382,6 +396,82 @@ def _require_hex(value: Any, *, length: int, label: str) -> str:
     return value
 
 
+
+def _source_commit_is_usable(repo_root: Path, value: str) -> bool:
+    if value == "0" * 40:
+        return False
+    git_dir = repo_root / ".git"
+    if not git_dir.exists():
+        return True
+    try:
+        subprocess.run(
+            ["git", "merge-base", "--is-ancestor", value, "HEAD"],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return False
+    return True
+
+
+def _trace_layer_rows(
+    repo_root: Path,
+    layer_names: list[str],
+    trace: dict[str, Any],
+    trace_sha256: str,
+) -> list[dict[str, Any]]:
+    events_by_layer: dict[str, list[dict[str, str]]] = {name: [] for name in layer_names}
+    for event in trace["events"]:
+        if event["layer"] in events_by_layer:
+            events_by_layer[event["layer"]].append(event)
+    rows: list[dict[str, Any]] = []
+    for name in layer_names:
+        events = events_by_layer[name]
+        if len(events) != len(TRACE_PHASES):
+            raise ValueError("run import trace must contain one event per phase and layer")
+        phases = {event["phase"] for event in events}
+        if phases != set(TRACE_PHASES):
+            raise ValueError("run import trace phases are incomplete")
+        share = {
+            "creation": True,
+            "current_rung_training": True,
+            "growth_run": True,
+            "evidence": f"governed-run-import-trace-v1:{trace_sha256}",
+        }
+        rows.append({"name": name, "trace_events": events, "critical_path_share": share})
+    return rows
+
+
+def build_run_import_manifest(
+    repo_root: Path,
+    layer_names: list[str],
+    *,
+    output_path: Path | None = None,
+    producer_sha256: str | None = None,
+) -> tuple[Path, str]:
+    """Derive a closed manifest from hashed production source trace events."""
+    root = repo_root.resolve()
+    patterns = {name: get_layer_file_globs(name) for name in layer_names}
+    trace = build_trace(root, layer_names, patterns)
+    trace_sha = sha256_bytes(canonical_json_bytes(trace))
+    trace_producer = hashlib.sha256(Path(__file__).with_name("nativization_motion_trace.py").read_bytes()).hexdigest()
+    manifest = {
+        "schema_version": "ember-run-import-manifest-v1",
+        "run_id": TRACE_RUN_ID,
+        "source_commit": source_commit(root),
+        "producer_sha256": producer_sha256 or trace_producer,
+        "trace_sha256": trace_sha,
+        "trace": trace,
+        "layers": _trace_layer_rows(root, layer_names, trace, trace_sha),
+    }
+    path = output_path or root / "manifests" / "run-import-manifest-v1.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = canonical_json_bytes(manifest)
+    path.write_bytes(payload)
+    return path, hashlib.sha256(payload).hexdigest()
+
+
 def load_run_import_manifest(
     repo_root: Path,
     manifest_path: Path | None,
@@ -410,41 +500,77 @@ def load_run_import_manifest(
         raise ValueError("run import manifest is malformed") from exc
     if not isinstance(document, dict):
         raise ValueError("run import manifest must be an object")
-    if set(document) != {"schema_version", "run_id", "source_commit", "producer_sha256", "layers"}:
+    required = {"schema_version", "run_id", "source_commit", "producer_sha256", "trace_sha256", "trace", "layers"}
+    if set(document) != required:
         raise ValueError("run import manifest fields are not closed")
-    if document["schema_version"] != "ember-run-import-manifest-v1":
-        raise ValueError("run import manifest schema mismatch")
-    if document["run_id"] != "ember-02-static-nativization-v1":
-        raise ValueError("run import manifest run_id mismatch")
-    _require_hex(document["source_commit"], length=40, label="source_commit")
+    if document["schema_version"] != "ember-run-import-manifest-v1" or document["run_id"] != TRACE_RUN_ID:
+        raise ValueError("run import manifest schema or run id mismatch")
+    source = _require_hex(document["source_commit"], length=40, label="source_commit")
+    if not _source_commit_is_usable(root, source):
+        raise ValueError("run import manifest source commit is not an ancestor of the governed run")
     producer_sha = _require_hex(document["producer_sha256"], length=64, label="producer_sha256")
-    current_producer_sha = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    current_producer_sha = hashlib.sha256(Path(__file__).with_name("nativization_motion_trace.py").read_bytes()).hexdigest()
     if producer_sha != current_producer_sha:
-        raise ValueError("run import manifest producer hash is stale")
+        raise ValueError("run import manifest trace producer hash is stale")
+    trace = document["trace"]
+    if not isinstance(trace, dict) or set(trace) != {"schema_version", "run_id", "events"}:
+        raise ValueError("run import trace fields are not closed")
+    if trace["schema_version"] != TRACE_SCHEMA_VERSION or trace["run_id"] != TRACE_RUN_ID:
+        raise ValueError("run import trace schema mismatch")
+    trace_sha = _require_hex(document["trace_sha256"], length=64, label="trace_sha256")
+    if trace_sha != sha256_bytes(canonical_json_bytes(trace)):
+        raise ValueError("run import trace hash mismatch")
+    events = trace["events"]
+    if not isinstance(events, list) or not events:
+        raise ValueError("run import trace events are required")
     rows = document["layers"]
     if not isinstance(rows, list) or not rows:
         raise ValueError("run import manifest layers mismatch")
     expected_names = set(layer_names) if layer_names is not None else None
     seen: set[str] = set()
+    events_by_layer: dict[str, list[dict[str, str]]] = {}
+    for event in events:
+        if not isinstance(event, dict) or set(event) != {"layer", "phase", "path", "sha256"}:
+            raise ValueError("run import trace event fields are not closed")
+        if not isinstance(event["layer"], str) or event["phase"] not in TRACE_PHASES:
+            raise ValueError("run import trace event identity is invalid")
+        _require_hex(event["sha256"], length=64, label="trace source hash")
+        event_path = (root / event["path"]).resolve()
+        try:
+            event_path.relative_to(root)
+        except ValueError as exc:
+            raise ValueError("run import trace source escapes repo root") from exc
+        if not event_path.is_file() or hashlib.sha256(event_path.read_bytes()).hexdigest() != event["sha256"]:
+            raise ValueError("run import trace source bytes drifted")
+        events_by_layer.setdefault(event["layer"], []).append(event)
     for row in rows:
-        if not isinstance(row, dict) or set(row) != {"name", "critical_path_share"}:
+        if not isinstance(row, dict) or set(row) != {"name", "trace_events", "critical_path_share"}:
             raise ValueError("run import manifest layer fields are not closed")
         name = row["name"]
         if not isinstance(name, str) or (expected_names is not None and name not in expected_names) or name in seen:
             raise ValueError("run import manifest layer names mismatch")
         seen.add(name)
+        row_events = row["trace_events"]
+        if not isinstance(row_events, list) or row_events != events_by_layer.get(name):
+            raise ValueError("run import manifest layer trace does not match governed events")
+        if len(row_events) != len(TRACE_PHASES) or {event["phase"] for event in row_events} != set(TRACE_PHASES):
+            raise ValueError("run import manifest layer trace phases are incomplete")
         share = row["critical_path_share"]
-        if not isinstance(share, dict) or set(share) != {"creation", "current_rung_training", "growth_run", "evidence"}:
-            raise ValueError("run import manifest critical path fields are not closed")
-        for key in ("creation", "current_rung_training", "growth_run"):
-            if type(share[key]) is not bool:
-                raise ValueError("run import manifest critical path flags must be bool")
-        if not isinstance(share["evidence"], str) or not share["evidence"].strip():
-            raise ValueError("run import manifest critical path evidence is required")
+        expected_share = {
+            "creation": True,
+            "current_rung_training": True,
+            "growth_run": True,
+            "evidence": f"governed-run-import-trace-v1:{trace_sha}",
+        }
+        if share != expected_share:
+            raise ValueError("run import manifest critical path share is not trace-derived")
+        expected_source = choose_trace_source(root, get_layer_file_globs(name)).resolve().relative_to(root).as_posix()
+        for event in row_events:
+            if event["path"] != expected_source:
+                raise ValueError("run import trace source path is not the governed layer source")
     if expected_names is not None and seen != expected_names:
         raise ValueError("run import manifest layer names mismatch")
     return document, actual
-
 
 def run_nativization_motion(
     repo_root: Path,
@@ -510,6 +636,8 @@ def run_nativization_motion(
         invariant_sha256=invariant_sha,
         map_source_sha=map_source_sha,
         run_import_manifest_sha256=run_manifest_sha,
+        run_import_trace_sha256=run_manifest["trace_sha256"],
+        run_import_trace_producer_sha256=run_manifest["producer_sha256"],
         layers=[asdict(layer) for layer in layers],
         deltas=deltas,
         next_home_candidate=next_home,

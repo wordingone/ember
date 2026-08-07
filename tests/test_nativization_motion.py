@@ -20,6 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from nativization_motion import (
+    build_run_import_manifest,
     collect_imports,
     compute_deltas,
     get_invariant_sha,
@@ -40,30 +41,9 @@ def _write_run_import_manifest(
     *,
     producer_sha256: str | None = None,
 ) -> tuple[Path, str]:
-    manifest_path = repo_root / "manifests" / "run-import-manifest-v1.json"
-    manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    manifest = {
-        "schema_version": "ember-run-import-manifest-v1",
-        "run_id": "ember-02-static-nativization-v1",
-        "source_commit": "d648d7f9f692134bf51478d3303267666b04e342",
-        "producer_sha256": producer_sha256
-        or hashlib.sha256(Path(nativization_motion.__file__).read_bytes()).hexdigest(),
-        "layers": [
-            {
-                "name": name,
-                "critical_path_share": {
-                    "creation": True,
-                    "current_rung_training": True,
-                    "growth_run": True,
-                    "evidence": f"checked-in-run-import-manifest-v1:{name}",
-                },
-            }
-            for name in layer_names
-        ],
-    }
-    payload = json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()
-    manifest_path.write_bytes(payload)
-    return manifest_path, hashlib.sha256(payload).hexdigest()
+    return build_run_import_manifest(
+        repo_root, layer_names, producer_sha256=producer_sha256
+    )
 
 
 class TestImportCollection:
@@ -636,6 +616,9 @@ import numpy
     def test_run_nativization_motion_rejects_stale_run_import_manifest(self, tmp_path):
         docs_dir = tmp_path / "docs" / "design"
         docs_dir.mkdir(parents=True)
+        tools_dir = tmp_path / "tools"
+        tools_dir.mkdir()
+        (tools_dir / "cuda.py").write_text("import torch\n", encoding="utf-8")
         (docs_dir / "ember-owned-substrate-diagnostic.md").write_text(
             "## The inherited stack, bottom ??? top, with the blocking line\n\n| layer | what | rel |\n|---|---|---|\n| CUDA kernels (cuBLAS matmul, elementwise) | x | component |\n",
             encoding="utf-8",
@@ -652,6 +635,95 @@ import numpy
                 expected_run_import_manifest_sha256=manifest_sha,
             )
 
+
+
+    def test_run_nativization_motion_rejects_fabricated_false_trace_claims(self, tmp_path):
+        """Caller-authored false flags must not become measured authority."""
+        docs_dir = tmp_path / "docs" / "design"
+        docs_dir.mkdir(parents=True)
+        (docs_dir / "ember-owned-substrate-diagnostic.md").write_text(
+            "## The inherited stack, bottom \u2192 top, with the blocking line\n\n"
+            "| layer | what | rel |\n|---|---|---|\n"
+            "| CUDA kernels (cuBLAS matmul, elementwise) | x | component |\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "INVARIANT.md").write_text("owned", encoding="utf-8")
+        tools_dir = tmp_path / "tools"
+        tools_dir.mkdir()
+        (tools_dir / "cuda.py").write_text("import torch\n", encoding="utf-8")
+        manifest_path, _ = _write_run_import_manifest(
+            tmp_path, ["CUDA kernels (cuBLAS matmul, elementwise)"]
+        )
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["source_commit"] = "0" * 40
+        for row in manifest["layers"]:
+            row["critical_path_share"] = {
+                "creation": False,
+                "current_rung_training": False,
+                "growth_run": False,
+                "evidence": "fabricated-review-claim",
+            }
+        payload = json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()
+        manifest_path.write_bytes(payload)
+        manifest_sha = hashlib.sha256(payload).hexdigest()
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(Path(nativization_motion.__file__)),
+                str(tmp_path),
+                str(manifest_path),
+                manifest_sha,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode != 0
+        assert "run import" in result.stderr.lower() or "source" in result.stderr.lower()
+
+    def test_public_board_consumer_accepts_real_motion_receipt(self, tmp_path):
+        """The board-facing consumer must consume the real CLI receipt."""
+        docs_dir = tmp_path / "docs" / "design"
+        docs_dir.mkdir(parents=True)
+        (docs_dir / "ember-owned-substrate-diagnostic.md").write_text(
+            "## The inherited stack, bottom \u2192 top, with the blocking line\n\n"
+            "| layer | what | rel |\n|---|---|---|\n"
+            "| CUDA kernels (cuBLAS matmul, elementwise) | x | component |\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "INVARIANT.md").write_text("owned", encoding="utf-8")
+        tools_dir = tmp_path / "tools"
+        tools_dir.mkdir()
+        (tools_dir / "cuda.py").write_text("import torch\n", encoding="utf-8")
+        manifest_path, manifest_sha = _write_run_import_manifest(
+            tmp_path, ["CUDA kernels (cuBLAS matmul, elementwise)"]
+        )
+        receipt_path = Path(
+            run_nativization_motion(
+                tmp_path,
+                run_import_manifest_path=manifest_path,
+                expected_run_import_manifest_sha256=manifest_sha,
+            )
+        )
+        receipt_sha = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(Path(__file__).parent.parent / "scripts" / "nativization_motion_board.py"),
+                str(tmp_path),
+                str(receipt_path),
+                receipt_sha,
+                str(manifest_path),
+                manifest_sha,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        board_receipt = json.loads(result.stdout)
+        assert board_receipt["decision"] == "MEASURED_STATIC_MOTION"
+        assert board_receipt["run_import_manifest_sha256"] == manifest_sha
 
 def pytest_generate_tests(metafunc):
     """Pytest hook for fixture parameterization."""
