@@ -3,10 +3,19 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 import { describe, expect, test } from "bun:test";
-import { validateInstalledCaptureReceipt, waitForDistinctCells } from "./fireball-frame-capture.ts";
+import { createHash } from "node:crypto";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  validateInstalledCaptureReceipt,
+  verifyInstalledCaptureDirectory,
+  waitForDistinctCells,
+} from "./fireball-frame-capture.ts";
 
 const SHA = "a".repeat(64);
 const COMMIT = "b".repeat(40);
+const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 
 function receipt() {
   const cells = [
@@ -74,6 +83,27 @@ describe("issue #54 installed fireball capture receipt", () => {
 
   test("accepts exactly three source-bound captures at least two seconds apart", () => {
     expect(validateInstalledCaptureReceipt(receipt())).toBeUndefined();
+  });
+
+  test("reopens and hashes every referenced frame artifact", () => {
+    const directory = mkdtempSync(join(tmpdir(), "ember-fireball-receipt-"));
+    try {
+      const candidate = receipt();
+      for (const capture of candidate.captures) {
+        const frame = `${capture.capture_id}\n`;
+        const cells = JSON.stringify(capture.cells) + "\n";
+        writeFileSync(join(directory, capture.frame_file), frame, "utf8");
+        writeFileSync(join(directory, capture.cells_file), cells, "utf8");
+        capture.frame_sha256 = digest(frame);
+        capture.cells_sha256 = digest(cells);
+      }
+      writeFileSync(join(directory, "receipt.json"), JSON.stringify(candidate), "utf8");
+      expect(verifyInstalledCaptureDirectory(directory)).toBeUndefined();
+      writeFileSync(join(directory, candidate.captures[1]!.frame_file), "tampered\n", "utf8");
+      expect(() => verifyInstalledCaptureDirectory(directory)).toThrow("frame-2 frame sha256 mismatch");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   test("rejects timing, occupancy, style, hash, viewport, and unknown-field drift", () => {

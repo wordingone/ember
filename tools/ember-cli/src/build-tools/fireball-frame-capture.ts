@@ -210,6 +210,42 @@ function sha256File(path: string): string {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
 
+export function verifyInstalledCaptureDirectory(directory: string): void {
+  const root = resolve(directory);
+  let receipt: JsonObject;
+  try {
+    const bytes = readFileSync(join(root, "receipt.json"));
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    receipt = object(JSON.parse(text), "receipt");
+  } catch (error) {
+    throw new Error(`cannot read strict capture receipt: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  validateInstalledCaptureReceipt(receipt);
+  for (const rawCapture of receipt.captures as JsonObject[]) {
+    const capture = object(rawCapture, "capture");
+    const captureId = string(capture.capture_id, "capture_id");
+    const frameFile = string(capture.frame_file, "frame_file");
+    const cellsFile = string(capture.cells_file, "cells_file");
+    if (sha256File(join(root, frameFile)) !== capture.frame_sha256) {
+      throw new Error(`${captureId} frame sha256 mismatch`);
+    }
+    const cellsPath = join(root, cellsFile);
+    if (sha256File(cellsPath) !== capture.cells_sha256) {
+      throw new Error(`${captureId} cells sha256 mismatch`);
+    }
+    let cells: unknown;
+    try {
+      const text = new TextDecoder("utf-8", { fatal: true }).decode(readFileSync(cellsPath));
+      cells = JSON.parse(text);
+    } catch (error) {
+      throw new Error(`${captureId} cells are not strict UTF-8 JSON: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    if (canonical(cells) !== canonical(capture.cells)) {
+      throw new Error(`${captureId} cells artifact does not match receipt cells`);
+    }
+  }
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
