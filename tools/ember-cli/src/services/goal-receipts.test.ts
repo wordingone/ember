@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // goal-receipts.test.ts — JSONL receipt writer tests for the goal organ
 // (ember issue #211). Mirrors operator-receipts.test.ts's conventions.
 
@@ -123,6 +127,21 @@ describe("receiptGoalTransition — maps every GoalTransitionEvent kind to a rec
     receiptGoalTransition(writer, event);
     const row = JSON.parse(fs.readFileSync(writer.filePath, "utf8").trim());
     expect(row.detail).toEqual({ from: "Active", to: "Blocked", reason: "same blocker x3" });
+  });
+
+  test("status_changed carries completion-audit evidence for Complete", () => {
+    const writer = createGoalReceiptWriter({ repoRoot: scratchDir });
+    const audit = { requirements: [{ id: "objective", evidence: "receipt:objective-proven" }] };
+    const event: GoalTransitionEvent = {
+      kind: "status_changed",
+      goal: fakeGoal({ status: "Complete", completionAudit: audit }),
+      from: "Active",
+      to: "Complete",
+      completionAudit: audit,
+    };
+    receiptGoalTransition(writer, event);
+    const row = JSON.parse(fs.readFileSync(writer.filePath, "utf8").trim());
+    expect(row.detail.completionAudit).toEqual(audit);
   });
 
   test("objective_edited carries previousObjective + new objective", () => {

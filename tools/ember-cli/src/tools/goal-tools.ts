@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // tools/goal-tools.ts — model-side goal tools (ember issue #211, spec §2):
 // get_goal (read), create_goal (fails if one exists), update_goal (STATUS
 // ONLY). Objective immutability is enforced in TWO independent layers so a
@@ -20,7 +24,7 @@ import { z } from "zod";
 import { buildTool } from "../core/tool-interface.ts";
 import type { ToolUseContext } from "../core/tool-interface.ts";
 import { getGoalStore, isCurrentSessionEphemeral } from "../core/goal-runtime.ts";
-import type { GoalStatus } from "../core/goal-store.ts";
+import type { GoalStatus, CompletionAudit } from "../core/goal-store.ts";
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -57,6 +61,7 @@ export const GetGoalTool = buildTool<GetGoalInput, unknown>({
         tokenBudget: goal.tokenBudget,
         usage: goal.usage,
         consecutiveBlockedTurns: goal.consecutiveBlockedTurns,
+        completionAudit: goal.completionAudit,
       },
     };
   },
@@ -134,10 +139,37 @@ export const CreateGoalTool = buildTool<CreateGoalInput, unknown>({
 const MODEL_SETTABLE_STATUSES = ["Active", "Paused", "Blocked", "Complete"] as const;
 type ModelSettableStatus = (typeof MODEL_SETTABLE_STATUSES)[number];
 
+const CompletionAuditItemSchema = z
+  .object({
+    id: z.string().trim().min(1),
+    evidence: z.string().trim().min(1),
+  })
+  .strict();
+
+const CompletionAuditSchema = z
+  .object({
+    requirements: z.array(CompletionAuditItemSchema).min(1),
+  })
+  .strict()
+  .superRefine((audit, ctx) => {
+    const ids = new Set<string>();
+    for (const [index, item] of audit.requirements.entries()) {
+      if (ids.has(item.id.trim())) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["requirements", index, "id"],
+          message: `duplicate requirement id: ${item.id.trim()}`,
+        });
+      }
+      ids.add(item.id.trim());
+    }
+  });
+
 const UpdateGoalInputSchema = z
   .object({
     status: z.enum(MODEL_SETTABLE_STATUSES),
     reason: z.string().optional(),
+    completionAudit: CompletionAuditSchema.optional(),
   })
   .strict();
 export type UpdateGoalInput = z.infer<typeof UpdateGoalInputSchema>;
@@ -155,13 +187,33 @@ export const UpdateGoalTool = buildTool<UpdateGoalInput, unknown>({
       // "objective" alongside status -- with exactly this error path.
       return { result: false as const, message: parsed.error.message, errorCode: "INVALID_INPUT" };
     }
+    if (parsed.data.status === "Complete" && parsed.data.completionAudit === undefined) {
+      return {
+        result: false as const,
+        message: "update_goal(status: 'Complete') requires requirement-by-requirement completionAudit evidence",
+        errorCode: "INVALID_INPUT",
+      };
+    }
     return { result: true as const };
   },
 
   call: async (rawArgs: unknown, _context: ToolUseContext) => {
-    const args = rawArgs as UpdateGoalInput;
+    const parsed = UpdateGoalInputSchema.safeParse(rawArgs);
+    if (!parsed.success) {
+      return { data: { ok: false, message: parsed.error.message } };
+    }
+    const args = parsed.data;
     const store = getGoalStore();
     const status: GoalStatus = args.status as ModelSettableStatus;
+
+    if (status === "Complete" && args.completionAudit === undefined) {
+      return {
+        data: {
+          ok: false,
+          message: "update_goal(status: 'Complete') requires requirement-by-requirement completionAudit evidence",
+        },
+      };
+    }
 
     // BLOCKED AUDIT (spec §4): "never blocked merely because the work is hard,
     // slow, uncertain, incomplete" -- this is the one completion-adjacent gate
@@ -192,7 +244,12 @@ export const UpdateGoalTool = buildTool<UpdateGoalInput, unknown>({
       }
     }
 
-    const result = store.updateStatus(status, args.reason !== undefined ? { reason: args.reason } : {});
+    const result = store.updateStatus(status, {
+      ...(args.reason !== undefined ? { reason: args.reason } : {}),
+      ...(args.completionAudit !== undefined
+        ? { completionAudit: args.completionAudit as CompletionAudit }
+        : {}),
+    });
     if (!result.ok) {
       return { data: { ok: false, message: result.message } };
     }
@@ -202,8 +259,8 @@ export const UpdateGoalTool = buildTool<UpdateGoalInput, unknown>({
   description: () =>
     "Updates the CURRENT goal's status only (active/paused/blocked/complete). The objective " +
     "itself can never be changed through this tool -- only the operator's /goal command can " +
-    "edit it. Only mark 'Complete' after a requirement-by-requirement completion audit proves " +
-    "it; only mark 'Blocked' after the same blocker has repeated on 3+ consecutive goal turns.",
+    "edit it. Only mark 'Complete' with requirement-by-requirement completionAudit evidence " +
+    "that the store records; only mark 'Blocked' after the same blocker has repeated on 3+ consecutive goal turns.",
 
   mapToolResultToToolResultBlockParam: (content, toolUseId) => {
     const data = content as { ok: boolean; message?: string };

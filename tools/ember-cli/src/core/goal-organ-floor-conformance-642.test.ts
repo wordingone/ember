@@ -403,8 +403,8 @@ describe("CLAUSE 3b — idle pokes continuation without any external caller poll
 // reproduce.
 // ===========================================================================
 
-describe("CLAUSE 4 — GAP: update_goal(Complete) has zero code-level completion-proof requirement", () => {
-  it.skip("[GAP #663 - tracked, see docs/archive/goal/goal-organ-floor-conformance-20260710.md row 4] update_goal(status:'Complete') should be REJECTED absent any recorded completion-audit evidence", async () => {
+describe("CLAUSE 4 - Complete requires code-level completion-audit evidence", () => {
+  it("#663: update_goal(status:'Complete') rejects absent completion-audit evidence", async () => {
     const store = createGoalStore({ persistence: createInMemoryGoalPersistence() });
     store.createGoal("ship a feature that provably does not exist yet");
     setGoalStoreForTests(store);

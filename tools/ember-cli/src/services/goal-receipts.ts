@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // services/goal-receipts.ts — JSONL receipt writer for the goal organ (ember
 // issue #211, spec §6/§7.1: "every transition and continuation fire ALSO
 // appends to the receipt store -- the organ itself obeys receipts-only law").
@@ -110,6 +114,7 @@ export function receiptGoalTransition(writer: GoalReceiptWriter, event: GoalTran
         from: event.from,
         to: event.to,
         reason: event.reason,
+        completionAudit: event.goal.completionAudit,
       });
       return;
     case "objective_edited":
