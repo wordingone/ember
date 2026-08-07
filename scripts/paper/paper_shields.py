@@ -159,6 +159,12 @@ def run_shields(eval_manifest: str, shards: list[str], configs: list[str],
     provenance = provenance_manifest.build_manifest(configs, authority_roots=roots)
     ledger = compute_ledger.backfill_compute_ledger(receipts)
     production_hook = compute_ledger.verify_production_hook(HERE.parents[1] / "timeshare_pretrain.py")
+    if production_hook["status"] != "VERIFIED":
+        ledger = [
+            {**row, "status": "HISTORICAL_BACKFILL_ONLY", "execution_authority": "DENIED",
+             "closure_ready": False}
+            for row in ledger
+        ]
     ts = timestamp or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     receipt = {
         "ticket": "EMBER-552-PAPER-SHIELDS",
@@ -185,6 +191,7 @@ def run_shields(eval_manifest: str, shards: list[str], configs: list[str],
             "manifest": [_sanitize_provenance_row(row) for row in provenance["manifest"]],
             "summary": provenance["summary"],
         },
+        "component_c_status": "VERIFIED" if production_hook["status"] == "VERIFIED" else "EXECUTION_DENIED_UNFULFILLED",
         "component_c_compute_ledger": [
             {**row, "receipt_path": _basename(row.get("receipt_path"))}
             for row in ledger
@@ -217,7 +224,8 @@ def _selftest() -> None:
                              component_d_comment_body_sha256="a" * 64)
         assert result["component_a_contamination"]["suite_summary"]["n_items"] == 1
         assert result["component_b_provenance"]["summary"]["unknown"] >= 1
-        assert result["component_c_compute_ledger"][0]["status"] == "BACKFILLED"
+        assert result["component_c_compute_ledger"][0]["status"] == "HISTORICAL_BACKFILL_ONLY"
+        assert result["component_c_status"] == "EXECUTION_DENIED_UNFULFILLED"
         assert "\\" not in out.read_text(encoding="utf-8")
         print("ISSUE552_PAPER_SHIELDS_SELFTEST_PASS")
 

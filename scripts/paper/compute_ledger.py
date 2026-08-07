@@ -126,17 +126,28 @@ def add_compute_ledger_to_receipt(receipt: dict) -> dict:
 
 
 def verify_production_hook(source_path: str | Path) -> dict:
-    """Verify the production runner adds the ledger before returning its receipt."""
+    """Verify a reachable producer, never a text-only execution-denied script."""
     path = Path(source_path)
     try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as exc:
+        raw = path.read_bytes()
+        text = raw.decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
         raise ValueError(f"runner source unreadable: {path.name}") from exc
+    source_sha256 = __import__("hashlib").sha256(raw).hexdigest()
     call = text.find("receipt = add_compute_ledger_to_receipt(receipt)")
     returned = text.find("return receipt", call + 1) if call >= 0 else -1
+    denial_marker = text.find("# EMBER_ARTIFACT_CLASS=historical_only")
+    denial_exit = text.find("raise SystemExit", denial_marker + 1) if denial_marker >= 0 else -1
+    if denial_marker >= 0 and (denial_exit < 0 or denial_exit < call or call < 0):
+        return {
+            "status": "EXECUTION_DENIED",
+            "source_basename": path.name,
+            "source_sha256": source_sha256,
+            "reason": "historical_only producer exits before imports/receipt writing",
+        }
     if call < 0 or returned < 0 or "checked_write" not in text:
         raise ValueError("production runner lacks ordered compute-ledger hook")
-    return {"status": "VERIFIED", "source_basename": path.name, "source_sha256": __import__("hashlib").sha256(path.read_bytes()).hexdigest()}
+    return {"status": "VERIFIED", "source_basename": path.name, "source_sha256": source_sha256}
 
 
 def _selftest() -> None:

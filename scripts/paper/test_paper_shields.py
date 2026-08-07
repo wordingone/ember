@@ -33,9 +33,10 @@ def test_components_a_b_c_bind_explicit_inputs_and_hide_paths(tmp_path):
                          component_d_comment_body_sha256="a" * 64)
     assert result["component_a_contamination"]["suite_summary"]["n_contaminated"] >= 1
     assert result["component_b_provenance"]["summary"]["n_shards"] >= 2
-    assert result["component_c_compute_ledger"][0]["status"] == "BACKFILLED"
+    assert result["component_c_compute_ledger"][0]["status"] == "HISTORICAL_BACKFILL_ONLY"
+    assert result["component_c_status"] == "EXECUTION_DENIED_UNFULFILLED"
     assert result["component_d_status"] == "TRANSFERRED_TO_CANONICAL_CARRIER"
-    assert result["component_c_production_hook"]["status"] == "VERIFIED"
+    assert result["component_c_production_hook"]["status"] == "EXECUTION_DENIED"
     text = out.read_text(encoding="utf-8")
     assert str(tmp_path) not in text and "\\" not in text
 
@@ -136,7 +137,7 @@ def test_compute_ledger_binds_nested_measured_segment_and_runner_hook(tmp_path):
     assert ledger["sec_per_step_mean"] == 1.0739
     assert ledger["peak_vram_gib"] == 12.5
     runner = Path(__file__).resolve().parents[1] / "timeshare_pretrain.py"
-    assert compute_ledger.verify_production_hook(runner)["status"] == "VERIFIED"
+    assert compute_ledger.verify_production_hook(runner)["status"] == "EXECUTION_DENIED"
     bad = tmp_path / "runner.py"
     bad.write_text("def run():\n    return {}\n", encoding="utf-8")
     try:
@@ -145,3 +146,10 @@ def test_compute_ledger_binds_nested_measured_segment_and_runner_hook(tmp_path):
         pass
     else:
         raise AssertionError("missing ledger hook must fail closed")
+
+
+def test_execution_denied_producer_cannot_report_verified(tmp_path):
+    denied = tmp_path / "denied.py"
+    denied.write_text("# EMBER_ARTIFACT_CLASS=historical_only\nraise SystemExit('historical_only')\nreceipt = add_compute_ledger_to_receipt(receipt)\nreturn receipt\n", encoding="utf-8")
+    result = compute_ledger.verify_production_hook(denied)
+    assert result["status"] == "EXECUTION_DENIED"

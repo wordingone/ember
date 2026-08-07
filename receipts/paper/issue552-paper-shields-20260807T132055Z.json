@@ -1,6 +1,6 @@
 {
   "ticket": "EMBER-552-PAPER-SHIELDS",
-  "ts": "20260807T132751Z",
+  "ts": "20260807T133808Z",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "issue": 552,
@@ -375,10 +375,11 @@
       "transform_unverifiable": 0
     }
   },
+  "component_c_status": "EXECUTION_DENIED_UNFULFILLED",
   "component_c_compute_ledger": [
     {
       "receipt_path": "cbase-grow-live-live-20260703T053225Z.json",
-      "status": "BACKFILLED",
+      "status": "HISTORICAL_BACKFILL_ONLY",
       "compute_ledger": {
         "tokens_seen": "UNKNOWN",
         "optimizer_steps": 60,
@@ -388,13 +389,16 @@
         "tflops_formula": "TFLOPS = (tokens_seen * model_params * flops_per_token_forward) / (wall_seconds * 1e12)",
         "peak_vram_gib": "UNKNOWN",
         "watts_series_ref": null
-      }
+      },
+      "execution_authority": "DENIED",
+      "closure_ready": false
     }
   ],
   "component_c_production_hook": {
-    "status": "VERIFIED",
+    "status": "EXECUTION_DENIED",
     "source_basename": "timeshare_pretrain.py",
-    "source_sha256": "4278ee7bfd12f6e2f41af6b5a0b5835e6b92a27ba021499a6e051d4b5e121a7f"
+    "source_sha256": "4278ee7bfd12f6e2f41af6b5a0b5835e6b92a27ba021499a6e051d4b5e121a7f",
+    "reason": "historical_only producer exits before imports/receipt writing"
   },
   "component_d_status": "TRANSFERRED_TO_CANONICAL_CARRIER",
   "component_d_transfer": {
