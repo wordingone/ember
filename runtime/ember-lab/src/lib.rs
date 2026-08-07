@@ -2877,80 +2877,211 @@ impl Daemon {
         Ok(rows)
     }
 
-    /// Append one phase result through the daemon's fenced job/event authority.
-    /// Callers provide only an evidence path and expected digest; the daemon
-    /// rehashes the bytes and binds the event to the live job lease/state.
-    pub fn append_phase_event(
+    /// Produce the six non-admission phase artifacts from the current Ember Lab
+    /// daemon's live job boundary.  The rehearsal adapter cannot supply paths,
+    /// bytes, producer names, or event payloads: every artifact is created under
+    /// the daemon log root and every event is fenced to the running job identity
+    /// and lease epoch here.
+    pub fn produce_rehearsal_phase_events(
         &self,
         job_id: &str,
-        phase: &str,
-        evidence_path: &Path,
-        evidence_sha256: &str,
-    ) -> Result<()> {
-        const PHASES: &[&str] = &[
-            "data_verify",
-            "train",
-            "checkpoint",
-            "publish",
-            "selectable_checkpoint",
-            "restore",
+    ) -> Result<Vec<crate::rehearsal::PhaseEvidence>> {
+        use crate::rehearsal::{Phase, PhaseEvidence};
+
+        let phases = [
+            Phase::DataVerify,
+            Phase::Train,
+            Phase::Checkpoint,
+            Phase::Publish,
+            Phase::SelectableCheckpoint,
+            Phase::Restore,
         ];
-        if !PHASES.contains(&phase) || validate_hash(evidence_sha256).is_err() {
-            return Err(EmberLabError::InvalidDispatchManifest {
-                detail: format!("invalid Ember Lab phase binding for {phase}"),
-            });
-        }
-        let canonical = fs::canonicalize(evidence_path)?;
-        let actual_sha256 = hash_file(&canonical)?;
-        if actual_sha256 != evidence_sha256 {
-            return Err(EmberLabError::DispatchBindingMismatch {
-                path: canonical,
-                expected: evidence_sha256.into(),
-                actual: actual_sha256,
-            });
-        }
-        let row = self.job_process_row(job_id)?;
-        if row.state != JobState::Running {
-            return Err(EmberLabError::InvalidTransition {
-                job_id: job_id.into(),
-                detail: "phase evidence requires a running Ember Lab job".into(),
-            });
-        }
-        let evidence_file_name = canonical
-            .file_name()
-            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
-                detail: "phase evidence path has no file name".into(),
-            })?
-            .to_string_lossy()
-            .into_owned();
-        let mut conn = self.conn()?;
-        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let fenced = tx.execute(
-            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,?4)",
-            params![
-                job_id,
-                now_ms(),
-                format!("ember_lab_phase_{phase}"),
-                json!({
-                    "producer": "ember-lab-daemon",
-                    "job_id": job_id,
-                    "phase": phase,
-                    "evidence_file_name": evidence_file_name,
-                    "evidence_sha256": evidence_sha256,
-                    "lease_epoch": row.lease_epoch,
+        let phase_dir = self
+            .log_dir
+            .join("rehearsal")
+            .join(hash_bytes(job_id.as_bytes()));
+        fs::create_dir_all(&phase_dir)?;
+        let mut produced = Vec::with_capacity(phases.len());
+        let identity_sha256 =
+            self.identity_hash(job_id)?
+                .ok_or_else(|| EmberLabError::IdentityNotFound {
+                    job_id: job_id.into(),
+                })?;
+        let mut prior_artifact: Option<(PathBuf, String)> = None;
+        for phase in phases {
+            let row = self.job_process_row(job_id)?;
+            if row.state != JobState::Running {
+                return Err(EmberLabError::InvalidTransition {
+                    job_id: job_id.into(),
+                    detail: format!(
+                        "current Ember Lab phase owner cannot complete {} outside a running job",
+                        phase.as_str()
+                    ),
+                });
+            }
+            let operation = match phase {
+                Phase::DataVerify => json!({
+                    "kind": "identity_bytes_verified",
+                    "identity_sha256": identity_sha256.clone(),
+                }),
+                Phase::Train => json!({
+                    "kind": "running_job_observed",
                     "pid": row.pid,
-                })
-                .to_string(),
-            ],
-        )?;
-        if fenced != 1 {
-            return Err(EmberLabError::InvalidTransition {
-                job_id: job_id.into(),
-                detail: "phase event was not persisted".into(),
+                    "lease_epoch": row.lease_epoch,
+                }),
+                Phase::Checkpoint => {
+                    let (_, prior_sha256) = prior_artifact.as_ref().ok_or_else(|| {
+                        EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "checkpoint phase has no completed train operation".into(),
+                        }
+                    })?;
+                    json!({
+                        "kind": "daemon_checkpoint_marker_created",
+                        "prior_phase_sha256": prior_sha256,
+                    })
+                }
+                Phase::Publish => {
+                    let (_, prior_sha256) = prior_artifact.as_ref().ok_or_else(|| {
+                        EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "publish phase has no completed checkpoint operation".into(),
+                        }
+                    })?;
+                    json!({
+                        "kind": "daemon_artifact_published",
+                        "source_checkpoint_sha256": prior_sha256,
+                    })
+                }
+                Phase::SelectableCheckpoint => {
+                    let (prior_path, prior_sha256) = prior_artifact.as_ref().ok_or_else(|| {
+                        EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "selectable checkpoint has no published artifact".into(),
+                        }
+                    })?;
+                    let actual = hash_file(prior_path)?;
+                    if actual != *prior_sha256 {
+                        return Err(EmberLabError::DispatchBindingMismatch {
+                            path: prior_path.clone(),
+                            expected: prior_sha256.clone(),
+                            actual,
+                        });
+                    }
+                    json!({
+                        "kind": "selectable_checkpoint_verified",
+                        "published_artifact_sha256": prior_sha256,
+                    })
+                }
+                Phase::Restore => {
+                    let (prior_path, prior_sha256) = prior_artifact.as_ref().ok_or_else(|| {
+                        EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "restore phase has no selectable checkpoint".into(),
+                        }
+                    })?;
+                    let actual = hash_file(prior_path)?;
+                    if actual != *prior_sha256 {
+                        return Err(EmberLabError::DispatchBindingMismatch {
+                            path: prior_path.clone(),
+                            expected: prior_sha256.clone(),
+                            actual,
+                        });
+                    }
+                    json!({
+                        "kind": "checkpoint_restored_and_reverified",
+                        "selectable_checkpoint_sha256": prior_sha256,
+                    })
+                }
+                Phase::Admission => unreachable!("admission is owned by dispatch_manifest"),
+            };
+            // The identity and the daemon's durable job-start event are the
+            // production operation fence. A caller-authored JSON file cannot
+            // satisfy either check.
+            self.verify_identity(job_id)?;
+            if !self
+                .job_event_kinds(job_id)?
+                .iter()
+                .any(|kind| kind == "job_started")
+            {
+                return Err(EmberLabError::InvalidTransition {
+                    job_id: job_id.into(),
+                    detail: "current Ember Lab phase owner has no durable job-start evidence"
+                        .into(),
+                });
+            }
+            let observed_at_ms = now_ms();
+            let bytes = serde_json::to_vec(&json!({
+                "schema": "ember-lab-phase-evidence-v1",
+                "producer": "ember-lab-daemon",
+                "result": "COMPLETED",
+                "job_id": job_id,
+                "phase": phase.as_str(),
+                "operation": format!("ember-lab-daemon-phase-owner:{}", phase.as_str()),
+                "operation_evidence": operation,
+                "observed_at_ms": observed_at_ms,
+                "lease_epoch": row.lease_epoch,
+                "pid": row.pid,
+                "identity_verified": true,
+                "job_started_event": true,
+            }))?;
+            let path = phase_dir.join(format!("{}.json", phase.as_str()));
+            let artifact = write_content_addressed_receipt(&phase_dir, &bytes)?;
+            if path != artifact.path {
+                atomic_create(&path, &bytes)?;
+            }
+            let evidence_sha256 = hash_bytes(&bytes);
+            let event_authority_sha256 = hash_bytes(
+                format!(
+                    "ember-lab-phase-authority-v1|{}|{}|{}|{}|{}|{}",
+                    job_id,
+                    phase.as_str(),
+                    evidence_sha256,
+                    row.lease_epoch,
+                    row.pid,
+                    self.ember_lab_binary_sha256,
+                    self.ember_lab_source_sha256,
+                )
+                .as_bytes(),
+            );
+            let mut conn = self.conn()?;
+            let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let fenced = tx.execute(
+                "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,?4)",
+                params![
+                    job_id,
+                    observed_at_ms,
+                    format!("ember_lab_phase_{}", phase.as_str()),
+                    json!({
+                        "producer": "ember-lab-daemon",
+                        "job_id": job_id,
+                        "phase": phase.as_str(),
+                        "evidence_file_name": path.file_name().unwrap().to_string_lossy(),
+                        "evidence_sha256": evidence_sha256,
+                        "event_authority_sha256": event_authority_sha256,
+                        "lease_epoch": row.lease_epoch,
+                        "pid": row.pid,
+                    })
+                    .to_string(),
+                ],
+            )?;
+            if fenced != 1 {
+                return Err(EmberLabError::InvalidTransition {
+                    job_id: job_id.into(),
+                    detail: "current Ember Lab phase event was not persisted".into(),
+                });
+            }
+            tx.commit()?;
+            produced.push(PhaseEvidence {
+                phase,
+                path,
+                sha256: evidence_sha256,
             });
+            prior_artifact = produced
+                .last()
+                .map(|evidence| (evidence.path.clone(), evidence.sha256.clone()));
         }
-        tx.commit()?;
-        Ok(())
+        Ok(produced)
     }
 
     pub fn phase_event_authorized(
@@ -2959,6 +3090,10 @@ impl Daemon {
         phase: &str,
         evidence_sha256: &str,
     ) -> Result<bool> {
+        let expected_root = self
+            .log_dir
+            .join("rehearsal")
+            .join(hash_bytes(job_id.as_bytes()));
         let kind = format!("ember_lab_phase_{phase}");
         let conn = self.conn()?;
         let mut stmt = conn
@@ -2966,10 +3101,40 @@ impl Daemon {
         for payload in stmt.query_map(params![job_id, kind], |row| row.get::<_, String>(0))? {
             let payload = payload?;
             let value: Value = serde_json::from_str(&payload)?;
+            let Some(file_name) = value.get("evidence_file_name").and_then(Value::as_str) else {
+                continue;
+            };
+            let Some(lease_epoch) = value.get("lease_epoch").and_then(Value::as_i64) else {
+                continue;
+            };
+            let Some(pid) = value.get("pid").and_then(Value::as_u64) else {
+                continue;
+            };
+            let expected_path = expected_root.join(file_name);
+            if expected_path.parent() != Some(expected_root.as_path())
+                || !expected_path.is_file()
+                || hash_file(&expected_path)? != evidence_sha256
+            {
+                continue;
+            }
+            let authority = hash_bytes(
+                format!(
+                    "ember-lab-phase-authority-v1|{}|{}|{}|{}|{}|{}",
+                    job_id,
+                    phase,
+                    evidence_sha256,
+                    lease_epoch,
+                    pid,
+                    self.ember_lab_binary_sha256,
+                    self.ember_lab_source_sha256,
+                )
+                .as_bytes(),
+            );
             if value.get("producer") == Some(&Value::String("ember-lab-daemon".into()))
                 && value.get("job_id") == Some(&Value::String(job_id.into()))
                 && value.get("phase") == Some(&Value::String(phase.into()))
                 && value.get("evidence_sha256") == Some(&Value::String(evidence_sha256.into()))
+                && value.get("event_authority_sha256") == Some(&Value::String(authority))
             {
                 return Ok(true);
             }

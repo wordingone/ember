@@ -1689,10 +1689,13 @@ fn receipt_publication_never_replaces_an_existing_file() {
 fn phase_events_are_daemon_bound_and_foreign_bytes_do_not_authorize() {
     let root = sandbox("phase-event-authority");
     let db = root.join("ember-lab.sqlite3");
-    let evidence = root.join("train.json");
-    let evidence_bytes = br#"{"schema":"ember-lab-phase-evidence-v1","producer":"ember-lab-current-dispatch","result":"COMPLETED","job_id":"phase-job","phase":"train"}"#;
-    fs::write(&evidence, evidence_bytes).unwrap();
-    let evidence_sha256 = sha256(&evidence);
+    let foreign = root.join("foreign-train.json");
+    fs::write(
+        &foreign,
+        br#"{"schema":"ember-lab-phase-evidence-v1","producer":"ember-lab-daemon","result":"COMPLETED","job_id":"phase-job","phase":"train"}"#,
+    )
+    .unwrap();
+    let foreign_sha256 = sha256(&foreign);
     let (identity, identity_hash) = write_identity(&root);
     let daemon = Daemon::open(&db).unwrap();
     daemon
@@ -1711,20 +1714,94 @@ fn phase_events_are_daemon_bound_and_foreign_bytes_do_not_authorize() {
             .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "5000"),
         )
         .unwrap();
+    let forged_dir = root
+        .join("ember-lab.sqlite3.logs")
+        .join("rehearsal")
+        .join(ember_lab::hash_bytes(b"phase-job"));
+    fs::create_dir_all(&forged_dir).unwrap();
+    let forged_path = forged_dir.join("forged-train.json");
+    fs::write(
+        &forged_path,
+        br#"{"schema":"ember-lab-phase-evidence-v1","producer":"ember-lab-daemon","result":"COMPLETED","job_id":"phase-job","phase":"train"}"#,
+    )
+    .unwrap();
+    let (forged_pid, forged_lease_epoch): (u32, i64) = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT pid,lease_epoch FROM jobs WHERE job_id='phase-job'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,?4)",
+            rusqlite::params![
+                "phase-job",
+                1_i64,
+                "ember_lab_phase_train",
+                serde_json::json!({
+                    "producer":"ember-lab-daemon",
+                    "job_id":"phase-job",
+                    "phase":"train",
+                    "evidence_file_name":"forged-train.json",
+                    "evidence_sha256": sha256(&forged_path),
+                    "lease_epoch":forged_lease_epoch,
+                    "pid":forged_pid,
+                    "event_authority_sha256":"0".repeat(64),
+                })
+                .to_string(),
+            ],
+        )
+        .unwrap();
     assert!(!daemon
-        .phase_event_authorized("phase-job", "train", &evidence_sha256)
+        .phase_event_authorized("phase-job", "train", &foreign_sha256)
         .unwrap());
-    daemon
-        .append_phase_event("phase-job", "train", &evidence, &evidence_sha256)
+    assert!(!daemon
+        .phase_event_authorized("phase-job", "train", &sha256(&forged_path))
+        .unwrap());
+    let produced = daemon.produce_rehearsal_phase_events("phase-job").unwrap();
+    let evidence = produced
+        .iter()
+        .find(|evidence| evidence.phase == ember_lab::rehearsal::Phase::Train)
         .unwrap();
     assert!(daemon
-        .phase_event_authorized("phase-job", "train", &evidence_sha256)
+        .phase_event_authorized("phase-job", "train", &evidence.sha256)
         .unwrap());
-    fs::write(&evidence, br#"{"producer":"foreign"}"#).unwrap();
-    assert!(daemon
-        .append_phase_event("phase-job", "train", &evidence, &evidence_sha256)
-        .is_err());
+    assert_eq!(produced.len(), 6);
+    assert!(produced.iter().all(|evidence| evidence
+        .path
+        .starts_with(root.join("ember-lab.sqlite3.logs").join("rehearsal"))));
+    fs::write(&evidence.path, br#"{"producer":"foreign"}"#).unwrap();
+    assert!(!daemon
+        .phase_event_authorized("phase-job", "train", &evidence.sha256)
+        .unwrap());
     daemon.stop_job("phase-job").unwrap();
+    assert!(daemon.produce_rehearsal_phase_events("phase-job").is_err());
+}
+
+#[test]
+fn phase_owner_refuses_before_dispatch_and_emits_no_later_phase_events() {
+    let root = sandbox("phase-event-no-dispatch");
+    let db = root.join("ember-lab.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("phase-not-started", &identity, &identity_hash)
+        .unwrap();
+    daemon
+        .acquire_lease("cpu-fixture", "phase-not-started")
+        .unwrap();
+
+    assert!(daemon
+        .produce_rehearsal_phase_events("phase-not-started")
+        .is_err());
+    assert!(!daemon
+        .job_event_kinds("phase-not-started")
+        .unwrap()
+        .iter()
+        .any(|kind| kind.starts_with("ember_lab_phase_")));
 }
 
 #[cfg(windows)]

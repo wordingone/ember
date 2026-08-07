@@ -10,7 +10,7 @@ authority is the repo-owned Ember Lab crate at `runtime/ember-lab`.
 | strict-gate census | `runtime/ember-lab/src/rehearsal.rs` `production_strict_gate_census` plus producer/consumer tests | REORGANIZED | every listed strict comparison has an explicit producer, consumer, and binding kind |
 | measured-number admission | `rehearsal::Measurement`, `AdmissionBounds`, and `episode` | REORGANIZED | missing/unobserved evidence, memory, storage, and duration violations refuse before the runner |
 | self-diagnosing refusal receipt | daemon-owned `ember-lab-operational-receipt-v1` exported after terminal stop, with the rehearsal observation nested and content-addressed | RENAMED | closed refusal code, phase, gate, offending value/bound, and one plain-language `next_action`; the immutable preflight receipt is never rewritten |
-| operator-alone capability entrypoint | Ember Lab `episode --capability` CLI | RENAMED | one entrypoint chains admission and all rehearsal phases; each non-admission phase requires a daemon-persisted, job-bound phase event with matching evidence digest; it emits `NO_CAPABILITY_CLAIM` |
+| operator-alone capability entrypoint | Ember Lab `episode --capability` CLI | RENAMED | one entrypoint chains admission and all rehearsal phases; after dispatch, the current daemon's production phase owner emits each job/identity-fenced event and the rehearsal adapter only consumes/verifies its immutable evidence digest; it emits `NO_CAPABILITY_CLAIM` |
 | generated operator runbook | `rehearsal::generate_runbook` and its exhaustive test | REORGANIZED | runbook vocabulary is generated from the closed receipt-code enum |
 | six historical death classes | `DeathClass::all` and the prevention-layer test | REORGANIZED | each class is mapped to layer 1/2/3 and its dynamic reason is retained |
 
@@ -19,11 +19,12 @@ corpus/model authority, or policy gate is introduced. Existing Ember Lab
 dispatch/lease/identity/receipt primitives remain the production authority;
 the rehearsal module's fake-runner is an in-memory seam for tests only. The
 operator CLI requires a current dispatch manifest and daemon database,
-rehashes structured phase evidence, and appends each phase result through the
-daemon's fenced job/event authority. It never accepts fabricated external
-event JSON and never rewrites the dispatch preflight receipt; after terminal
-stop it exports the same operational receipt family with the rehearsal
-observation. It makes no GPU, training, checkpoint, or capability claim.
+rehashes structured phase evidence produced under the daemon log root, and
+only consumes daemon-persisted phase events; it never accepts fabricated
+external event JSON or creates phase events from the rehearsal adapter and
+never rewrites the dispatch preflight receipt. After terminal stop it exports
+the same operational receipt family with the rehearsal observation. It makes
+no GPU, training, checkpoint, or capability claim.
 
 The rehearsal manifest binds the current source commit, the SHA-256 of the
 closed strict-gate census contract, a structured measured whole-run peak file,

@@ -48,7 +48,6 @@ enum Command {
 struct CurrentAuthorityRunner {
     daemon: Daemon,
     job_id: String,
-    dispatch_manifest: PathBuf,
     dispatch: Option<DispatchOutcome>,
     phase_evidence: Vec<rehearsal::PhaseEvidence>,
 }
@@ -56,14 +55,13 @@ struct CurrentAuthorityRunner {
 impl RehearsalRunner for CurrentAuthorityRunner {
     fn run(&mut self, phase: Phase) -> PhaseOutcome {
         if phase == Phase::Admission {
-            return match self.daemon.dispatch_manifest(&self.dispatch_manifest) {
-                Ok(outcome) => {
-                    self.dispatch = Some(outcome);
-                    PhaseOutcome::Completed
-                }
-                Err(error) => PhaseOutcome::Failed(format!(
-                    "current Ember Lab dispatch admission refused: {error}"
-                )),
+            return if self.dispatch.is_some() {
+                PhaseOutcome::Completed
+            } else {
+                PhaseOutcome::Failed(
+                    "current Ember Lab dispatch authority was not established before rehearsal"
+                        .into(),
+                )
             };
         }
         let Some(dispatch) = self.dispatch.as_ref() else {
@@ -109,21 +107,6 @@ impl RehearsalRunner for CurrentAuthorityRunner {
             || value.get("result") != Some(&Value::String("PREFLIGHT_PASSED".into()))
         {
             return PhaseOutcome::Failed("current Ember Lab dispatch receipt is not green".into());
-        }
-        if self
-            .daemon
-            .append_phase_event(
-                &self.job_id,
-                phase.as_str(),
-                &evidence.path,
-                &evidence.sha256,
-            )
-            .is_err()
-        {
-            return PhaseOutcome::Failed(format!(
-                "current Ember Lab phase event producer refused {}",
-                phase.as_str()
-            ));
         }
         if !self
             .daemon
@@ -295,14 +278,24 @@ fn run_rehearsal(
         )
         .into());
     }
-    let mut runner = CurrentAuthorityRunner {
-        daemon: Daemon::open(db_path)?,
-        job_id: manifest.dispatch_id.clone(),
-        dispatch_manifest: dispatch_manifest_path.to_path_buf(),
-        dispatch: None,
-        phase_evidence: manifest.phase_evidence.clone(),
+    let daemon = Daemon::open(db_path)?;
+    let dispatch_outcome = daemon.dispatch_manifest(dispatch_manifest_path)?;
+    let phase_evidence = match daemon.produce_rehearsal_phase_events(&manifest.dispatch_id) {
+        Ok(evidence) => evidence,
+        Err(error) => {
+            let _ = daemon.stop_job(&manifest.dispatch_id);
+            return Err(error.into());
+        }
     };
-    let result = rehearsal::episode(capability, &manifest, &mut runner);
+    let mut execution_manifest = manifest.clone();
+    execution_manifest.phase_evidence = phase_evidence.clone();
+    let mut runner = CurrentAuthorityRunner {
+        daemon,
+        job_id: manifest.dispatch_id.clone(),
+        dispatch: Some(dispatch_outcome),
+        phase_evidence,
+    };
+    let result = rehearsal::episode(capability, &execution_manifest, &mut runner);
     let _dispatch_outcome = runner.dispatch.take().ok_or_else(|| {
         std::io::Error::other(
             "current Ember Lab dispatch authority refused before producing an operational receipt",
@@ -344,7 +337,7 @@ fn phase_evidence_shape_authorized(bytes: &[u8], job_id: &str, phase: Phase) -> 
         return false;
     };
     value.get("schema") == Some(&Value::String("ember-lab-phase-evidence-v1".into()))
-        && value.get("producer") == Some(&Value::String("ember-lab-current-dispatch".into()))
+        && value.get("producer") == Some(&Value::String("ember-lab-daemon".into()))
         && value.get("result") == Some(&Value::String("COMPLETED".into()))
         && value.get("job_id") == Some(&Value::String(job_id.into()))
         && value.get("phase") == Some(&Value::String(phase.as_str().into()))
@@ -466,8 +459,13 @@ mod tests {
             "dispatch-1",
             Phase::Train
         ));
-        assert!(phase_evidence_shape_authorized(
+        assert!(!phase_evidence_shape_authorized(
             br#"{"schema":"ember-lab-phase-evidence-v1","producer":"ember-lab-current-dispatch","result":"COMPLETED","job_id":"dispatch-1","phase":"train"}"#,
+            "dispatch-1",
+            Phase::Train
+        ));
+        assert!(phase_evidence_shape_authorized(
+            br#"{"schema":"ember-lab-phase-evidence-v1","producer":"ember-lab-daemon","result":"COMPLETED","job_id":"dispatch-1","phase":"train"}"#,
             "dispatch-1",
             Phase::Train
         ));
