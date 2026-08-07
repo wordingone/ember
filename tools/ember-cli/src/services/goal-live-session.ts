@@ -22,17 +22,31 @@ import {
   type GoalReceiptEvent,
   type GoalReceiptWriter,
 } from "./goal-receipts.ts";
-import { captureRenderedGoalLiveFrames, GOAL_LIVE_RENDERER_SOURCE_ID, type GoalLiveFrameCapture, type GoalLiveFrameAuthority } from "./goal-live-session-frames.ts";
+import { captureRenderedGoalLiveFrames, GOAL_LIVE_FRAME_HEIGHT, GOAL_LIVE_FRAME_WIDTH, GOAL_LIVE_RENDERER_SOURCE_ID, type GoalLiveFrameCapture, type GoalLiveFrameAuthority } from "./goal-live-session-frames.ts";
 import { UpdateGoalTool } from "../tools/goal-tools.ts";
 
 export const GOAL_LIVE_RECEIPT_SCHEMA = "ember-goal-live-session-receipt-v1" as const;
-export const GOAL_LIVE_RENDERER_SOURCE_SHA256 = "50492d0f6499a4b1e704cbd83dc7cbafe02ddf0a1c1b9dfa2c8592de9a7221d5" as const;
+export const GOAL_LIVE_RENDERER_SOURCE_SHA256 = "33f4b8154a3ed97c00928b123f40e1f13f0eee3c8cc1f2edaed2dbb774efbc0a" as const;
 
 export interface GoalLiveSessionOptions {
   executable_sha256?: string;
   input_timeout_ms?: number;
 }
-const DEFAULT_EXECUTABLE_SHA256 = "0".repeat(64);
+
+function embeddedBuildCommit(): string {
+  const value = (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__;
+  if (typeof value !== "string" || !/^[0-9a-f]{40}$/.test(value)) {
+    throw new Error("goal live-session embedded source commit is invalid");
+  }
+  return value;
+}
+
+function requireExecutableSha(value: unknown): string {
+  if (typeof value !== "string" || !/^[0-9a-f]{64}$/.test(value) || /^0+$/.test(value)) {
+    throw new Error("goal live-session executable binding is invalid");
+  }
+  return value;
+}
 
 
 interface CapturedEvent {
@@ -44,6 +58,11 @@ interface CapturedEvent {
 export interface GoalLiveSessionReceipt {
   goal_id: "EMBER-02";
   workstream_id: "EMBER-02A";
+  issue_id: "211";
+  milestone: "EMBER-03";
+  source_commit: string;
+  build_commit: string;
+  executable_sha256: string;
   next_executed_outcome: "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember";
   schema_version: typeof GOAL_LIVE_RECEIPT_SCHEMA;
   result: "MEASURED";
@@ -188,7 +207,9 @@ async function captureOperatorFrames(
   const React = (await import("react")).default;
   const { Text } = await import("../ink/components.ts");
   const frontendShell = await import("../core/frontend-shell.ts");
-  const stream = new PassThrough();
+  const stream = new PassThrough() as PassThrough & { columns: number; rows: number };
+  stream.columns = GOAL_LIVE_FRAME_WIDTH;
+  stream.rows = GOAL_LIVE_FRAME_HEIGHT;
   const writes: Buffer[] = [];
   stream.on("data", (chunk: Buffer | string) => writes.push(Buffer.from(chunk)));
   let firstFrameResolve!: () => void;
@@ -223,6 +244,8 @@ async function captureOperatorFrames(
   }
 }
 export async function runGoalLiveSession(options: GoalLiveSessionOptions = {}): Promise<GoalLiveSessionReceipt> {
+  const sourceCommit = embeddedBuildCommit();
+  const executableSha = requireExecutableSha(options.executable_sha256);
   const events: CapturedEvent[] = [];
   const writer = memoryWriter(events);
   const store = createGoalStore({
@@ -316,7 +339,7 @@ export async function runGoalLiveSession(options: GoalLiveSessionOptions = {}): 
 
   const frameAuthority: GoalLiveFrameAuthority = {
     source_sha256: GOAL_LIVE_RENDERER_SOURCE_SHA256,
-    executable_sha256: options.executable_sha256 ?? DEFAULT_EXECUTABLE_SHA256,
+    executable_sha256: executableSha,
     source_id: GOAL_LIVE_RENDERER_SOURCE_ID,
   };
   const frameCaptures = await captureOperatorFrames(combinedEvents, frameAuthority.executable_sha256);
@@ -325,6 +348,11 @@ export async function runGoalLiveSession(options: GoalLiveSessionOptions = {}): 
     schema_version: GOAL_LIVE_RECEIPT_SCHEMA,
     goal_id: "EMBER-02",
     workstream_id: "EMBER-02A",
+    issue_id: "211",
+    milestone: "EMBER-03",
+    source_commit: sourceCommit,
+    build_commit: sourceCommit,
+    executable_sha256: executableSha,
     next_executed_outcome: "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
     result: "MEASURED",
     model: "deterministic-local-stub-v1",
