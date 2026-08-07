@@ -1,5 +1,6 @@
 {
-  "ts": "2026-08-07T03:55:32Z",
+  "schema_version": "ember-nativization-motion-receipt-v2",
+  "ts": "2026-08-07T04:11:25Z",
   "ticket": "S5-NATIVIZATION-MOTION",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
@@ -7,8 +8,8 @@
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "map_source_sha": "sha256:df870f83e3ac7e3b423c2422dea3e75099bf2b2a0d1a48cc4674048e13da92ca",
-  "source_commit": "f9a63c1be317631bf8fddafcc77c86dc83103edf",
-  "run_import_manifest_sha256": "f24f34bec95f0175060154ef47489365d63e5e664bdba72721c930a026c6af71",
+  "source_commit": "fb412cad8ff55d655933fd8d54801116a277b0ec",
+  "run_import_manifest_sha256": "1eba2fc431d23aa541273a9b8bc3ee2f387d73d956a7f23abee8c200c06d953b",
   "run_import_trace_sha256": "ebf48af07824cba15c251f55c07a53d7abe0f488d32ad4339edec0f9ec39a971",
   "run_import_trace_producer_sha256": "84193f145abfd573790fbb59462ce35276305232f8994fd383160bda504d5cfc",
   "layers": [
@@ -226,8 +227,8 @@
       "borrowed_loc_delta": 0
     },
     "Autograd (`grad_fn` graph, `backward()`)": {
-      "borrowed_deps_delta": -461,
-      "borrowed_loc_delta": -12393
+      "borrowed_deps_delta": 0,
+      "borrowed_loc_delta": 0
     },
     "Optimizer (Adam/Muon: separable state + update)": {
       "borrowed_deps_delta": 0,
