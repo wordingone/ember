@@ -60,3 +60,25 @@ handled by the release process without weakening repository privacy.
 
 Borrowed models are frozen references only. External learned or evaluative
 signals never enter an owned lineage.
+
+## Repository hygiene (#488)
+
+The totality board's working-set metric is the authoritative trend surface for
+public repository hygiene. A reviewable, content-addressed reference scan is
+required before any cleanup and must classify each path as retained evidence,
+annex candidate, or deletion candidate.
+
+- **HYGIENE_REFERENCE_SCAN**: scan tracked docs, scripts, receipts, on-disk
+  untracked receipts, and Git pack bytes; record exact relative paths, sizes,
+  hashes, and tracked references.
+- **HYGIENE_PROTECTED_EVIDENCE**: preserve authority, claims, provenance,
+  preregistrations, live consumers, and anything referenced by a tracked file.
+- **HYGIENE_NO_PRIVATE_DELETE**: never delete private/user untracked bytes or
+  mutate `.git` automatically.
+- **HYGIENE_EXPLICIT_APPLY**: cleanup is an explicit reviewed manifest action;
+  changed bytes, unlisted paths, and protected paths fail closed.
+- **HYGIENE_MANIFEST_LAST**: publish before/after evidence only after the
+  selected operation completes, with exact rollback bytes and no overwrite.
+- **HYGIENE_PATH_FREE_RECEIPT**: public receipts contain repository-relative
+  paths only and bind the source commit, manifest, working-set counts, and
+  non-regression result.
