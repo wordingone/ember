@@ -876,8 +876,8 @@ RESULT = torch.cuda.is_available()
                 ],
             },
         }
-        scratch = root / "receipts" / "nativization-motion" / ".p1513-board-negative.json"
-        try:
+        with tempfile.TemporaryDirectory(prefix="p1513-board-negative-") as temp_dir:
+            scratch = Path(temp_dir) / "mutated-receipt.json"
             for name, mutate in mutations.items():
                 payload = json.dumps(mutate(original), sort_keys=True, separators=(",", ":")).encode()
                 scratch.write_bytes(payload)
@@ -896,8 +896,6 @@ RESULT = torch.cuda.is_available()
                     check=False,
                 )
                 assert result.returncode != 0, name
-        finally:
-            scratch.unlink(missing_ok=True)
 
 def pytest_generate_tests(metafunc):
     """Pytest hook for fixture parameterization."""

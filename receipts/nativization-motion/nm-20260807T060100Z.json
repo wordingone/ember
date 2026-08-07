@@ -84,7 +84,7 @@
       }
     },
     {
-      "name": "Training loop (fwd \u2192 loss \u2192 backward \u2192 step)",
+      "name": "Training loop (fwd → loss → backward → step)",
       "borrowed_deps": [
         "bitsandbytes",
         "tokenizers",
@@ -119,7 +119,7 @@
       "borrowed_deps_delta": 0,
       "borrowed_loc_delta": 0
     },
-    "Training loop (fwd \u2192 loss \u2192 backward \u2192 step)": {
+    "Training loop (fwd → loss → backward → step)": {
       "borrowed_deps_delta": 0,
       "borrowed_loc_delta": 0
     }
@@ -133,7 +133,7 @@
     "relative imports are resolved only within the governed repository root"
   ],
   "predecessor_receipt_path": "receipts/nativization-motion/nm-20260807T060000Z.json",
-  "predecessor_receipt_sha256": "cd5138b3f878900158140c4eed2c69c900cbf18ed7dd2b10bbbfbf6e3557f5ee",
+  "predecessor_receipt_sha256": "ef72064353288d7f64ae11c1f51df456dc13aa5a2e908535fb8dc6545a90f2b3",
   "predecessor_source_commit": "71641690b477a901f061bedd7592bb7e8ee8bb75",
   "predecessor_trace_producer_sha256": "478be400244249979b1fee3044e3b81c0f7f813f0432305bb63a052f3e556454",
   "predecessor_method": "phase-rooted-import-graph-v1"
