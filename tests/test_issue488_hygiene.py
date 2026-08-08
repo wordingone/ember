@@ -203,7 +203,14 @@ class Issue488HygieneTests(unittest.TestCase):
             "schema_version": "ember-issue-488-reference-manifest-v1",
             "source_commit": "0" * 40,
             "source_clean": True,
-            "working_set": {},
+            "working_set": {
+                "tracked_files": 0,
+                "docs_files": 0,
+                "scripts_files": 0,
+                "tracked_receipts": 0,
+                "untracked_receipts_on_disk": 0,
+                "open_issues_count": 0,
+            },
             "inventory": _empty_inventory(mod),
             "candidates": [row],
             "selected_cleanup": [],
@@ -624,6 +631,57 @@ class Issue488HygieneTests(unittest.TestCase):
         self.assertEqual(receipt["working_set_before"]["open_issues_count"], 3)
         self.assertEqual(receipt["working_set_after_cleanup"]["open_issues_count"], 3)
 
+    def test_write_manifest_then_apply_accepts_canonical_live_working_set(self):
+        """The real writer and applier share stable fields plus live issue provenance."""
+        mod = _module()
+        spec = importlib.import_module("scripts.ember_totality.ember_totality_spec")
+        root = self._fixture()
+        tracked = [
+            "docs/readme.md",
+            "scripts/run.py",
+            "receipts/canonical.json",
+            "receipts/duplicate.json",
+        ]
+
+        def fixture_git(_root, *args):
+            if args == ("rev-parse", "--show-toplevel"):
+                return str(root)
+            if args == ("rev-parse", "HEAD"):
+                return "0" * 40
+            if args == ("status", "--porcelain"):
+                return ""
+            if args == ("ls-files", "-z"):
+                return "\x00".join(tracked)
+            raise OSError("isolated fixture has no other Git authority")
+
+        real_run = spec.subprocess.run
+
+        def canonical_open_issue_probe(args, **kwargs):
+            if args[:2] == ["gh", "issue"]:
+                return subprocess.CompletedProcess(
+                    args=args,
+                    returncode=0,
+                    stdout='[{"number": 101}, {"number": 102}, {"number": 103}]',
+                    stderr="",
+                )
+            return real_run(args, **kwargs)
+
+        with patch.object(mod, "_tracked_paths", return_value=tracked), patch.object(
+            mod, "_git", side_effect=fixture_git
+        ), patch.object(spec.subprocess, "run", side_effect=canonical_open_issue_probe):
+            manifest = mod.write_manifest(root, root / "manifest.json")
+            candidate = next(row for row in manifest["candidates"] if row["action"] == "DELETE_CANDIDATE")
+            receipt = mod.apply_safe_cleanup(
+                root,
+                manifest,
+                [candidate["path"]],
+                root / "cleanup-receipt.json",
+            )
+
+        self.assertEqual(manifest["working_set"]["open_issues_count"], 3)
+        self.assertEqual(receipt["working_set_before"]["open_issues_count"], 3)
+        self.assertEqual(receipt["working_set_after_cleanup"]["open_issues_count"], 3)
+
     def _checked_post_cleanup_inputs(self, mod):
         manifest = json.loads(
             (REPO_ROOT / "docs/hygiene/issue-488-reference-manifest-v1.json").read_text(encoding="utf-8")
@@ -646,11 +704,29 @@ class Issue488HygieneTests(unittest.TestCase):
                 text=True,
             ).stdout.splitlines()
             tracked_set = set(tracked)
-            observed_open_issues = mod.compute_working_set(
-                REPO_ROOT,
-                tracked_override=tracked,
-                include_open_issues=True,
-            )["open_issues_count"]
+            # Historical replay must use the same canonical totality-board
+            # acquisition seam as production, but tests cannot depend on a
+            # live ``gh`` session.  Keep the live integer contract intact and
+            # make the observed population deterministic at this boundary.
+            spec = importlib.import_module("scripts.ember_totality.ember_totality_spec")
+            real_run = spec.subprocess.run
+
+            def canonical_open_issue_probe(args, **kwargs):
+                if args[:2] == ["gh", "issue"]:
+                    return subprocess.CompletedProcess(
+                        args=args,
+                        returncode=0,
+                        stdout='[{"number": 101}, {"number": 102}, {"number": 103}]',
+                        stderr="",
+                    )
+                return real_run(args, **kwargs)
+
+            with patch.object(spec.subprocess, "run", side_effect=canonical_open_issue_probe):
+                observed_open_issues = mod.compute_working_set(
+                    REPO_ROOT,
+                    tracked_override=tracked,
+                    include_open_issues=True,
+                )["open_issues_count"]
             self.assertIsInstance(observed_open_issues, int)
             def working_set(tracked_view):
                 untracked = sum(

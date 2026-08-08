@@ -344,6 +344,9 @@ def _validate_manifest(
         raise ValueError("manifest hash mismatch")
     if not isinstance(manifest["working_set"], dict) or not isinstance(manifest["inventory"], dict):
         raise ValueError("manifest working-set or inventory malformed")
+    observed_open_issues = manifest["working_set"].get("open_issues_count")
+    if type(observed_open_issues) is not int or observed_open_issues < 0:
+        raise ValueError("manifest working-set live issue observation malformed")
     inventory = manifest["inventory"]
     if set(inventory) != {"docs", "scripts", "tracked_receipts", "untracked_receipts", "git_packs"}:
         raise ValueError("manifest inventory fields malformed")
@@ -432,7 +435,7 @@ def _validate_manifest(
             include_open_issues=False,
         )
         for field in ("working_set", "inventory", "candidates"):
-            if field == "working_set" and historical:
+            if field == "working_set":
                 stable_keys = {
                     "tracked_files",
                     "docs_files",
@@ -445,6 +448,10 @@ def _validate_manifest(
                     for key in stable_keys
                 ):
                     raise ValueError(f"manifest {field} projection drift")
+                # ``open_issues_count`` is a live totality-board observation,
+                # not a Git/tree authority.  Its closed nonnegative integer
+                # shape is checked above, while stable fields are replayed
+                # identically in live and historical modes.
                 continue
             if manifest[field] != expected[field]:
                 raise ValueError(f"manifest {field} projection drift")
