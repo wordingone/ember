@@ -15,6 +15,8 @@ import json
 import sys
 import tempfile
 import unittest
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -61,6 +63,8 @@ class ReceiptAndChunkManifestTests(BulkFetchServerTestCase):
             self.assertEqual(data["files"][0]["sha256"], hashlib.sha256(payload).hexdigest())
             self.assertIn("chunk_manifest=", data["notes"])
             self.assertIn("resumed=no", data["notes"])
+            self.assertEqual(data["retry_attempts"], 0)
+            self.assertEqual(data["retry_events"], [])
 
             dest_filename = Path(data["files"][0]["path"]).name
             self.assertEqual((dest / dest_filename).read_bytes(), payload)
@@ -73,12 +77,46 @@ class ReceiptAndChunkManifestTests(BulkFetchServerTestCase):
             self.assertEqual(chunk_data["total_bytes"], len(payload))
             self.assertEqual(len(chunk_data["chunks"]), -(-len(payload) // 128))
             self.assertEqual(chunk_data["sha256"], hashlib.sha256(payload).hexdigest())
+            self.assertEqual(chunk_data["retry_attempts"], 0)
+            self.assertEqual(chunk_data["retry_events"], [])
 
             # manifest.jsonl compatibility row was appended too
             manifest_jsonl = (dest / "manifest.jsonl").read_text(encoding="utf-8").splitlines()
             self.assertEqual(len(manifest_jsonl), 1)
             row = json.loads(manifest_jsonl[0])
             self.assertEqual(row["license"], "CC-BY-SA-4.0")
+
+    def test_transient_retry_fields_are_written_to_receipt(self):
+        payload = _payload(100)
+        url, _ = self._serve(payload)
+        calls = {"n": 0}
+
+        def opener(request, timeout=60):
+            if calls["n"] == 0:
+                calls["n"] += 1
+                raise urllib.error.HTTPError(
+                    request.full_url, 503, "temporary", {}, None
+                )
+            return urllib.request.urlopen(request, timeout=timeout)
+
+        with tempfile.TemporaryDirectory() as td:
+            dest = Path(td) / "bulkdata"
+            args = bulk_fetch.build_parser().parse_args(
+                [
+                    url,
+                    "--budget-bytes", "10000",
+                    "--chunk-size-bytes", "128",
+                    "--max-retries", "1",
+                    "--retry-backoff-seconds", "0",
+                    "--allow-unverified-license",
+                    "--dest", str(dest),
+                ]
+            )
+            receipt_path = bulk_fetch.fetch(args, opener=opener)
+            data = json.loads(receipt_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(data["retry_attempts"], 1)
+        self.assertEqual(data["retry_events"], [{"attempt": 1, "chunk_index": 0, "status": "http_503"}])
 
     def test_fetch_without_license_is_unverified_and_blocked_by_default(self):
         payload = _payload(200)

@@ -56,6 +56,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--chunk-size-bytes", type=int, default=bulk.DEFAULT_CHUNK_SIZE, metavar="N")
     p.add_argument("--disk-margin-bytes", type=int, default=bulk.DEFAULT_DISK_MARGIN_BYTES, metavar="N")
+    p.add_argument("--max-retries", type=int, default=bulk.DEFAULT_MAX_RETRIES, metavar="N")
+    p.add_argument(
+        "--retry-backoff-seconds",
+        type=float,
+        default=bulk.DEFAULT_RETRY_BACKOFF_SECONDS,
+        metavar="N",
+    )
     p.add_argument("--sha256", dest="expected_sha256", default=None, metavar="EXPECTED")
     p.add_argument("--license", dest="license_str", default=None, metavar="STR")
     p.add_argument("--license-evidence", dest="license_evidence", default=None, metavar="STR")
@@ -123,6 +130,10 @@ def fetch(args: argparse.Namespace, opener=None, disk_usage_fn=None) -> Path:
         timeout=args.timeout,
         opener=opener,
         disk_usage_fn=disk_usage_fn,
+        max_retries=getattr(args, "max_retries", bulk.DEFAULT_MAX_RETRIES),
+        backoff_base_seconds=getattr(
+            args, "retry_backoff_seconds", bulk.DEFAULT_RETRY_BACKOFF_SECONDS
+        ),
     )
 
     downloaded_paths = [dest_file]
@@ -159,9 +170,12 @@ def fetch(args: argparse.Namespace, opener=None, disk_usage_fn=None) -> Path:
             f"resumable chunked-bulk transfer; {len(result.chunks)} chunks of "
             f"{result.chunk_size} bytes; budget_bytes={args.budget_bytes}; "
             f"resumed={'yes' if result.resumed else 'no'}; "
+            f"retry_attempts={result.retry_attempts}; "
             f"chunk_manifest={chunk_manifest_path.relative_to(dest_root).as_posix()}; "
             f"sha256_verified={'yes' if args.expected_sha256 else 'no'}"
         ),
+        retry_attempts=result.retry_attempts,
+        retry_events=result.retry_events,
     )
     # commit_receipt's own fail-closed cleanup covers both dest_file and the chunk
     # manifest (both are in downloaded_paths) if the receipt write itself fails.
