@@ -6,6 +6,16 @@ import { spawnSync } from "child_process";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
+const cockpitIconPath = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "..",
+  "..",
+  "assets",
+  "ember.ico",
+);
+
 export function requireBuildCommit(value: string): string {
   const commit = value.trim();
   if (!/^[0-9a-f]{40}$/.test(commit)) {
@@ -28,6 +38,8 @@ export function cockpitWindowsMetadataArgs(): string[] {
     "0.1.0.0",
     "--windows-description",
     "Ember local AI laboratory",
+    "--windows-icon",
+    cockpitIconPath,
   ];
 }
 
