@@ -1606,6 +1606,10 @@ def _validate_owner_sharded_optimizer_payloads(
     receipt: Mapping[str, Any],
     records: Mapping[str, Mapping[str, Any]],
 ) -> None:
+    optimizer_contract = _validate_optimizer_contract(receipt.get("optimizer_contract", {}))
+    optimizer_realization = _validate_optimizer_realization(
+        optimizer_contract, receipt.get("optimizer_realization")
+    )
     owner_ids = receipt.get("optimizer_state_owner_ids")
     owner_by_parameter = receipt.get("optimizer_state_owner_by_parameter")
     if not isinstance(owner_ids, list) or not isinstance(owner_by_parameter, Mapping):
@@ -1620,6 +1624,8 @@ def _validate_owner_sharded_optimizer_payloads(
             or set(payload) != {"schema_version", "owner", "state", "param_groups", "optimizer_contract", "optimizer_realization"}
             or payload.get("schema_version") != "ember-optimizer-owner-shard-v1"
             or payload.get("owner") != owner
+            or payload.get("optimizer_contract") != optimizer_contract
+            or payload.get("optimizer_realization") != optimizer_realization
             or not isinstance(payload.get("state"), Mapping)
             or not payload["state"]
             or not isinstance(payload.get("param_groups"), list)
@@ -1648,6 +1654,13 @@ def _checkpoint_candidate_receipt(candidate: Path) -> dict[str, Any]:
     manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
     receipt = {**manifest, "checkpoint_manifest_sha256": manifest_sha256}
     records = _validated_records(candidate, receipt)
+    if receipt.get("optimizer_state_layout") == _OWNER_SHARDED_OPTIMIZER_STATE_LAYOUT:
+        try:
+            _validate_owner_sharded_optimizer_payloads(candidate, receipt, records)
+        except ValueError:
+            raise
+        except Exception as error:
+            raise ValueError("checkpoint optimizer owner payload cannot be read") from error
     projection = receipt.get("storage_projection")
     if projection is not None:
         validated_projection = _validate_checkpoint_storage_projection(
@@ -1684,7 +1697,6 @@ def _checkpoint_candidate_receipt(candidate: Path) -> dict[str, Any]:
             )
         try:
             if validated_projection.get("optimizer_state_layout") == _OWNER_SHARDED_OPTIMIZER_STATE_LAYOUT:
-                _validate_owner_sharded_optimizer_payloads(candidate, receipt, records)
                 optimizer_payload = None
             else:
                 optimizer_payload = torch.load(
@@ -2435,6 +2447,18 @@ def load_checkpoint_artifacts(
     ):
         raise ValueError("legacy checkpoint does not bind its shared optimizer shard")
 
+    owner_sharded = (
+        schema_version == "ember-sparse-checkpoint-v5"
+        and receipt.get("optimizer_state_layout") == _OWNER_SHARDED_OPTIMIZER_STATE_LAYOUT
+    )
+    if owner_sharded:
+        try:
+            _validate_owner_sharded_optimizer_payloads(root, receipt, records)
+        except ValueError:
+            raise
+        except Exception as error:
+            raise ValueError("checkpoint optimizer owner payload cannot be read") from error
+
     identity = receipt.get("checkpoint")
     if not isinstance(identity, dict) or not isinstance(identity.get("byte_sha256"), str):
         raise CheckpointIdentityMismatch(
@@ -2461,10 +2485,6 @@ def load_checkpoint_artifacts(
     for name, state in replay_payload["rng_state"].items():
         if not isinstance(state, torch.Tensor) or state.dtype != torch.uint8 or state.ndim != 1:
             raise ValueError(f"checkpoint replay RNG state is invalid: {name}")
-    owner_sharded = (
-        schema_version == "ember-sparse-checkpoint-v5"
-        and receipt.get("optimizer_state_layout") == _OWNER_SHARDED_OPTIMIZER_STATE_LAYOUT
-    )
     if owner_sharded:
         shared_payload = payloads["shared-model.pt"]
         optimizer_payload = None

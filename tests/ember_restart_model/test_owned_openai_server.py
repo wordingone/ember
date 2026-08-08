@@ -764,6 +764,71 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         self.assertNotIn("replay-state.pt", str(load.call_args))
         self.assertNotIn("expert-", str(load.call_args))
 
+    def test_development_loader_reads_owner_sharded_v5_shared_model_only(self) -> None:
+        import model as model_module
+        from model import RestartDecoderConfig, UnifiedDecoder
+
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=1, attention_heads=4, vocab_size=64
+        )
+        model = UnifiedDecoder(config, device="cpu")
+        payload = {
+            "model": {
+                key: value.detach().clone()
+                for key, value in model.state_dict().items()
+                if ".experts." not in key
+            }
+        }
+        owner_ids = ["shared", "vision"]
+        records = [
+            {"path": "shared-model.pt", "sha256": "b" * 64},
+            *[
+                {"path": f"optimizer-state-{owner}.pt", "sha256": chr(99 + index) * 64}
+                for index, owner in enumerate(owner_ids)
+            ],
+            {"path": "replay-state.pt", "sha256": "e" * 64},
+            *[
+                {"path": f"expert-{name}.pt", "sha256": "f" * 64}
+                for name in model_module.EXPERT_NAMES
+            ],
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path = root / "config.json"
+            config_path.write_text("{}", encoding="utf-8")
+            with (
+                patch(
+                    "serve_owned_openai.RestartDecoderConfig.from_contract",
+                    return_value=config,
+                ),
+                patch(
+                    "serve_owned_openai.construct_runtime_model", return_value=model
+                ),
+                patch(
+                    "serve_owned_openai.tied_embeddings_from_contract",
+                    return_value=True,
+                ),
+                patch(
+                    "serve_owned_openai.hash_and_load_torch", return_value=payload
+                ) as load,
+            ):
+                loaded = load_development_shared_runtime(
+                    checkpoint=root,
+                    config_path=config_path,
+                    checkpoint_manifest={
+                        "schema_version": "ember-sparse-checkpoint-v5",
+                        "optimizer_state_layout": "owner-sharded-v1",
+                        "optimizer_state_owner_ids": owner_ids,
+                        "shards": records,
+                    },
+                    device="cpu",
+                )
+        self.assertIs(loaded, model)
+        load.assert_called_once_with(
+            torch, root / "shared-model.pt", "b" * 64, device="cpu"
+        )
+        self.assertEqual(load.call_args.args[1].name, "shared-model.pt")
+
     def test_development_resolver_requires_exact_non_admissible_seat(self) -> None:
         payload = {"valid": True, "seat": "OWNED_DEVELOPMENT", "claim_status": "NON_ADMISSIBLE"}
         calls: list[list[str]] = []
