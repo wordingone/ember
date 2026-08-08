@@ -903,10 +903,10 @@ fn validate_edge(value: &Value) -> Result<()> {
     validate_identity(string_value(row, "from_id", "edge")?, "edge from_id")?;
     validate_identity(string_value(row, "to_id", "edge")?, "edge to_id")?;
     nonnegative_integer(row, "ordinal", "edge")?;
-    object(
+    validate_edge_payload(
+        kind,
         row.get("payload")
             .ok_or_else(|| invalid_error("edge payload is missing"))?,
-        "edge payload",
     )?;
     let expected = match kind {
         "source_object" => ("source", "immutable_object"),
@@ -967,6 +967,7 @@ fn validate_edge_endpoints(records: &[Value], edges: &[Value]) -> Result<()> {
 }
 
 fn validate_required_relations(records: &[Value], edges: &[Value]) -> Result<()> {
+    validate_receipt_supersession(records, edges)?;
     let mut admitted_training_objects = BTreeSet::new();
     let mut protected_evaluation_objects = BTreeSet::new();
     for record in records {
@@ -1144,6 +1145,74 @@ fn validate_required_relations(records: &[Value], edges: &[Value]) -> Result<()>
         return invalid(format!(
             "admitted training membership overlaps protected evaluation object {overlap}"
         ));
+    }
+    Ok(())
+}
+
+fn validate_edge_payload(kind: &str, value: &Value) -> Result<()> {
+    let payload = object(value, &format!("{kind} edge payload"))?;
+    // Relation semantics are carried by the closed edge columns and endpoint
+    // record schemas. Every current relation deliberately has an empty
+    // payload, so unknown or future fields must refuse rather than persist
+    // an unvalidated authority extension.
+    let expected: &[&str] = match kind {
+        "source_object"
+        | "object_receipt"
+        | "dataset_parent"
+        | "transform_parent"
+        | "transform_input"
+        | "transform_output"
+        | "transform_receipt"
+        | "dataset_transform"
+        | "version_membership"
+        | "membership_object"
+        | "evaluation_object"
+        | "evaluation_receipt"
+        | "consumer_dataset"
+        | "consumer_evaluation"
+        | "consumer_receipt"
+        | "experience_consumer"
+        | "experience_receipt"
+        | "receipt_supersession" => &[],
+        _ => unreachable!("edge kind is validated before its payload"),
+    };
+    exact_keys(payload, expected, &format!("{kind} edge payload"))
+}
+
+fn validate_receipt_supersession(records: &[Value], edges: &[Value]) -> Result<()> {
+    let receipt_states: BTreeMap<String, String> = records
+        .iter()
+        .filter(|record| record.get("kind").and_then(Value::as_str) == Some("receipt"))
+        .map(|record| {
+            let row = object(record, "receipt record")?;
+            Ok((
+                string_value(row, "id", "receipt record")?.to_string(),
+                string_value(row, "state", "receipt record")?.to_string(),
+            ))
+        })
+        .collect::<Result<_>>()?;
+
+    for edge in edges {
+        let row = object(edge, "edge")?;
+        if string_value(row, "kind", "edge")? != "receipt_supersession" {
+            continue;
+        }
+        let from_id = string_value(row, "from_id", "edge")?;
+        let to_id = string_value(row, "to_id", "edge")?;
+        let from_state = receipt_states
+            .get(from_id)
+            .ok_or_else(|| invalid_error("receipt supersession source is foreign"))?;
+        let to_state = receipt_states
+            .get(to_id)
+            .ok_or_else(|| invalid_error("receipt supersession target is foreign"))?;
+        if from_id == to_id
+            || !matches!(from_state.as_str(), "accepted" | "refused")
+            || to_state != "superseded"
+        {
+            return invalid(format!(
+                "receipt supersession must point from a non-stale receipt to a distinct superseded receipt: {from_id} ({from_state}) -> {to_id} ({to_state})"
+            ));
+        }
     }
     Ok(())
 }

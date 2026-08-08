@@ -519,6 +519,128 @@ fn missing_required_graph_relation_refuses_without_partial_catalog_state() {
 }
 
 #[test]
+fn unknown_edge_payload_fields_refuse_without_partial_catalog_state() {
+    let root = temp_root("catalog-edge-payload-schema");
+    let db = root.join("ember-lab.sqlite3");
+    let mut manifest: serde_json::Value =
+        serde_json::from_slice(&complete_manifest_bytes()).unwrap();
+    manifest["edges"][0]["payload"]["foreign_field"] = json!("must-refuse");
+
+    let daemon = Daemon::open(&db).unwrap();
+    let error = daemon
+        .import_data_catalog_manifest(&serde_json::to_vec(&manifest).unwrap())
+        .unwrap_err();
+    assert!(matches!(error, EmberLabError::InvalidDataCatalog { .. }));
+    assert_eq!(
+        daemon.export_data_catalog_manifest().unwrap(),
+        serde_json::to_vec(&json!({
+            "schema_version": "ember-data-catalog-manifest-v1",
+            "records": [],
+            "edges": []
+        }))
+        .unwrap()
+    );
+
+    drop(daemon);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn receipt_supersession_requires_non_stale_to_superseded_direction() {
+    for case in [
+        "accepted_to_accepted",
+        "superseded_to_superseded",
+        "self_cycle",
+        "foreign_target",
+    ] {
+        let root = temp_root(&format!("catalog-supersession-{case}"));
+        let db = root.join("ember-lab.sqlite3");
+        let mut manifest: serde_json::Value =
+            serde_json::from_slice(&complete_manifest_bytes()).unwrap();
+        let supersession = manifest["edges"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|edge| edge["kind"] == "receipt_supersession")
+            .unwrap();
+        let source_id = supersession["from_id"].as_str().unwrap().to_string();
+        let target_id = supersession["to_id"].as_str().unwrap().to_string();
+
+        match case {
+            "accepted_to_accepted" => {
+                let target = manifest["records"]
+                    .as_array_mut()
+                    .unwrap()
+                    .iter_mut()
+                    .find(|record| record["id"] == target_id)
+                    .unwrap();
+                target["state"] = json!("accepted");
+            }
+            "superseded_to_superseded" => {
+                let source = manifest["records"]
+                    .as_array_mut()
+                    .unwrap()
+                    .iter_mut()
+                    .find(|record| record["id"] == source_id)
+                    .unwrap();
+                source["state"] = json!("superseded");
+                let mut reverse = manifest["edges"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|edge| edge["kind"] == "receipt_supersession")
+                    .unwrap()
+                    .clone();
+                reverse["from_id"] = json!(target_id);
+                reverse["to_id"] = json!(source_id);
+                manifest["edges"].as_array_mut().unwrap().push(reverse);
+            }
+            "self_cycle" => {
+                let edge = manifest["edges"]
+                    .as_array_mut()
+                    .unwrap()
+                    .iter_mut()
+                    .find(|edge| edge["kind"] == "receipt_supersession")
+                    .unwrap();
+                edge["from_id"] = json!(target_id);
+            }
+            "foreign_target" => {
+                let edge = manifest["edges"]
+                    .as_array_mut()
+                    .unwrap()
+                    .iter_mut()
+                    .find(|edge| edge["kind"] == "receipt_supersession")
+                    .unwrap();
+                edge["to_id"] = json!(format!("sha256:{}", "9".repeat(64)));
+            }
+            _ => unreachable!(),
+        }
+
+        let daemon = Daemon::open(&db).unwrap();
+        let error = daemon
+            .import_data_catalog_manifest(&serde_json::to_vec(&manifest).unwrap())
+            .unwrap_err();
+        assert!(
+            matches!(error, EmberLabError::InvalidDataCatalog { .. }),
+            "malformed supersession case {case} was admitted: {error:?}"
+        );
+        assert_eq!(
+            daemon.export_data_catalog_manifest().unwrap(),
+            serde_json::to_vec(&json!({
+                "schema_version": "ember-data-catalog-manifest-v1",
+                "records": [],
+                "edges": []
+            }))
+            .unwrap(),
+            "malformed supersession case {case} committed partial catalog state"
+        );
+
+        drop(daemon);
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[test]
 fn object_hash_bindings_and_train_eval_isolation_refuse_drift() {
     for case in [
         "membership_hash_mismatch",
