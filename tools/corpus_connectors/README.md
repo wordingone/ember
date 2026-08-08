@@ -333,6 +333,8 @@ verifies the download and deletes the partial file on mismatch.
 ```
 python wave_manifest.py [--domain LETTER] [--include-bulk]
                         [--bulk-budget-bytes N] [--execute]
+                        [--bulk-resolution-file JSON]
+                        [--bulk-license-evidence-file JSON]
 ```
 
 Encodes the per-charter-domain source table from
@@ -345,12 +347,20 @@ instead of being re-derived by hand at fetch time. Performs no network I/O
 of its own: default mode prints each routed command; `--execute` shells out
 to the already-tested connector CLIs (inheriting their own license/receipt/
 fail-closed behavior unchanged). `--domain` filters to one charter letter;
-`--include-bulk` also lists the bulk veins (each needs `--bulk-budget-bytes`
-to actually dispatch under `--execute`, per the charter's per-wave disk cap
--- there is no baked-in default budget). `domains_covered()` is the
+`--include-bulk` also lists the bulk veins. `--execute` additionally requires
+positive `--bulk-budget-bytes`, a closed resolution JSON object mapping every
+selected vein to `{urls, resolution_receipt_sha256}` (with concrete URLs and a
+lowercase 64-hex resolution receipt hash for each entry page), and a closed
+license-evidence JSON object mapping every selected vein to an external
+source-read license page/file. Missing or self-referential evidence, unresolved
+entry pages, unknown keys, duplicate URLs, bad receipt hashes, and malformed
+URLs refuse before any connector subprocess is started; the direct Wikipedia
+artifact does not require replacement resolution but still requires external
+evidence. `domains_covered()` is the
 machine-checkable form of the sizing doc's claim that every charter domain
 A-K plus the Wikipedia baseline has at least one routed source; a test
-asserts it holds.
+asserts it holds, and `validate_domain_diversity()` requires two independent
+registers per lettered domain (H includes Python and Rust reference docs).
 
 ## Tests
 

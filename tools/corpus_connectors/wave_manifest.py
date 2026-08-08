@@ -22,7 +22,9 @@ This module does not perform any network I/O itself. It only:
   3. `iter_sources(domain=None)` filters `WAVE2_SOURCES` by charter domain
      letter;
   4. a CLI (`--domain LETTER`, `--dry-run` default, `--execute` to actually
-     shell out) prints or runs the routed commands.
+     shell out) prints or runs the routed commands. Bulk execution is refused
+     unless a closed resolution JSON map and an external license-evidence JSON
+     map are supplied; entry-page URLs are never handed to `bulk_fetch.py`.
 
 `--dry-run` is the default specifically because this module's job in this PR
 is the routing table and its tests, not a live multi-source pull (fetch
@@ -35,11 +37,13 @@ unchanged -- this module adds no separate execution path of its own.
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
+from urllib.parse import urlparse
 
 HERE = Path(__file__).resolve().parent
 
@@ -253,6 +257,34 @@ WAVE2_SOURCES: List[WaveSource] = [
         est_tokens_low_b=0.1,
         est_tokens_high_b=0.3,
     ),
+    WaveSource(
+        name="python-language-docs",
+        domains=("H",),
+        license_basis="Python Software Foundation License (Python documentation)",
+        connector="http_fetch",
+        argv=(
+            "https://docs.python.org/3/",
+            "--license", "Python-2.0",
+            "--license-evidence", "Python documentation license page and PSF LICENSE",
+        ),
+        est_tokens_low_b=0.1,
+        est_tokens_high_b=0.4,
+        notes="independent API/reference register for H-domain diversity",
+    ),
+    WaveSource(
+        name="rust-reference-docs",
+        domains=("H",),
+        license_basis="MIT/Apache-2.0 (Rust project documentation)",
+        connector="http_fetch",
+        argv=(
+            "https://doc.rust-lang.org/reference/",
+            "--license", "MIT-OR-Apache-2.0",
+            "--license-evidence", "Rust repository LICENSE-APACHE and LICENSE-MIT",
+        ),
+        est_tokens_low_b=0.1,
+        est_tokens_high_b=0.4,
+        notes="independent language-reference register for H-domain diversity",
+    ),
 ]
 
 
@@ -272,6 +304,7 @@ class BulkVein:
     url: str
     est_tokens_low_b: float
     est_tokens_high_b: float
+    requires_resolution: bool = False
 
     def __post_init__(self) -> None:
         for d in self.domains:
@@ -280,14 +313,30 @@ class BulkVein:
         if not self.url:
             raise ValueError(f"{self.name}: url must not be empty")
 
-    def build_argv(self, budget_bytes: int) -> tuple:
-        if budget_bytes <= 0:
+    def build_argv(
+        self,
+        budget_bytes: int,
+        *,
+        license_evidence: str,
+        resolved_url: Optional[str] = None,
+    ) -> tuple:
+        if type(budget_bytes) is not int or budget_bytes <= 0:
             raise ValueError(f"{self.name}: budget_bytes must be positive")
+        if not isinstance(license_evidence, str) or not license_evidence.strip():
+            raise ValueError(f"{self.name}: external license evidence is required")
+        if "wave_manifest.py" in license_evidence.casefold():
+            raise ValueError(f"{self.name}: license evidence must not self-cite wave_manifest.py")
+        if self.requires_resolution and not resolved_url:
+            raise ValueError(f"{self.name}: concrete artifact URL resolution is required")
+        target_url = resolved_url or self.url
+        parsed = urlparse(target_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc or not parsed.path:
+            raise ValueError(f"{self.name}: resolved artifact URL is invalid")
         return (
-            self.url,
+            target_url,
             "--budget-bytes", str(budget_bytes),
             "--license", self.license_basis,
-            "--license-evidence", f"{self.name} named-source license determination (wave_manifest.py)",
+            "--license-evidence", license_evidence.strip(),
         )
 
 
@@ -299,6 +348,7 @@ WAVE2_BULK_VEINS: List[BulkVein] = [
         url="https://arxiv.org/help/bulk_data",
         est_tokens_low_b=18.0,
         est_tokens_high_b=25.0,
+        requires_resolution=True,
     ),
     BulkVein(
         name="pmc-oa-comm-use",
@@ -307,6 +357,7 @@ WAVE2_BULK_VEINS: List[BulkVein] = [
         url="https://ftp.ncbi.nlm.nih.gov/pub/pmc/oa_bulk/",
         est_tokens_low_b=8.0,
         est_tokens_high_b=15.0,
+        requires_resolution=True,
     ),
     BulkVein(
         name="stackexchange-charter-sites",
@@ -315,6 +366,7 @@ WAVE2_BULK_VEINS: List[BulkVein] = [
         url="https://archive.org/download/stackexchange",
         est_tokens_low_b=10.0,
         est_tokens_high_b=18.0,
+        requires_resolution=True,
     ),
     BulkVein(
         name="us-federal-technical-pd",
@@ -323,6 +375,7 @@ WAVE2_BULK_VEINS: List[BulkVein] = [
         url="https://ntrs.nasa.gov/api/citations/search",
         est_tokens_low_b=4.0,
         est_tokens_high_b=8.0,
+        requires_resolution=True,
     ),
     BulkVein(
         name="open-textbooks-reference",
@@ -331,6 +384,7 @@ WAVE2_BULK_VEINS: List[BulkVein] = [
         url="https://openstax.org/api/v2/pages/",
         est_tokens_low_b=3.0,
         est_tokens_high_b=6.0,
+        requires_resolution=True,
     ),
     BulkVein(
         name="wikipedia-en-baseline",
@@ -373,6 +427,71 @@ def domains_covered() -> set:
     return covered
 
 
+def validate_domain_diversity() -> dict[str, list[str]]:
+    """Return lettered charter domains lacking two independent registers."""
+    deficits: dict[str, list[str]] = {}
+    for domain in CHARTER_DOMAINS:
+        if domain == "baseline":
+            continue
+        names = [s.name for s in WAVE2_SOURCES if domain in s.domains]
+        names.extend(v.name for v in WAVE2_BULK_VEINS if domain in v.domains)
+        if len(names) < 2:
+            deficits[domain] = names
+    return deficits
+
+
+def _load_bulk_mapping(path: str, selected: list[BulkVein], label: str) -> dict[str, object]:
+    try:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"{label} file is unreadable or malformed") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} file must be a JSON object")
+    expected = {v.name for v in selected}
+    if set(payload) != expected:
+        raise ValueError(f"{label} file must contain exactly the selected bulk veins")
+    return payload
+
+
+def _bulk_dispatch_plan(
+    selected: list[BulkVein],
+    resolution_file: str,
+    evidence_file: str,
+) -> list[tuple[BulkVein, str, str]]:
+    resolutions = _load_bulk_mapping(resolution_file, selected, "bulk resolution")
+    evidence = _load_bulk_mapping(evidence_file, selected, "bulk license evidence")
+    plan: list[tuple[BulkVein, str, str]] = []
+    for vein in selected:
+        resolution = resolutions[vein.name]
+        if not isinstance(resolution, dict) or set(resolution) != {"urls", "resolution_receipt_sha256"}:
+            raise ValueError(f"bulk vein {vein.name} resolution receipt has an invalid closed schema")
+        receipt_sha256 = resolution["resolution_receipt_sha256"]
+        if (
+            not isinstance(receipt_sha256, str)
+            or len(receipt_sha256) != 64
+            or any(char not in "0123456789abcdef" for char in receipt_sha256)
+        ):
+            raise ValueError(f"bulk vein {vein.name} resolution receipt hash is invalid")
+        urls = resolution["urls"]
+        if vein.requires_resolution:
+            if not isinstance(urls, list) or not urls or not all(isinstance(url, str) for url in urls):
+                raise ValueError(f"bulk vein {vein.name} has no concrete resolved artifact URLs")
+            if len(set(urls)) != len(urls):
+                raise ValueError(f"bulk vein {vein.name} resolution receipt has duplicate URLs")
+        elif urls not in (None, [], [vein.url]):
+            raise ValueError(f"bulk vein {vein.name} must not replace its direct artifact URL")
+        target_urls = [vein.url] if not vein.requires_resolution else urls
+        text = evidence[vein.name]
+        if not isinstance(text, str) or not text.strip() or "wave_manifest.py" in text.casefold():
+            raise ValueError(f"bulk vein {vein.name} has invalid external license evidence")
+        for target_url in target_urls:
+            if vein.requires_resolution and urlparse(target_url).path.endswith("/"):
+                raise ValueError(f"bulk vein {vein.name} resolution points to an entry page")
+            vein.build_argv(1, license_evidence=text, resolved_url=target_url)
+            plan.append((vein, target_url, text))
+    return plan
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="Route wave-2 charter-domain sources to their connector CLI invocations (issue #1439)."
@@ -380,6 +499,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--domain", default=None, choices=sorted(CHARTER_DOMAINS), help="filter to one charter domain letter")
     p.add_argument("--include-bulk", action="store_true", help="also list the six bulk veins (no budget dispatched by default)")
     p.add_argument("--bulk-budget-bytes", type=int, default=None, help="required with --include-bulk --execute")
+    p.add_argument("--bulk-resolution-file", default=None, help="closed JSON map of selected entry pages to concrete artifact URLs")
+    p.add_argument("--bulk-license-evidence-file", default=None, help="closed JSON map of selected veins to external license evidence")
     p.add_argument("--execute", action="store_true", help="actually run each routed connector (default: print only)")
     return p
 
@@ -387,6 +508,24 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     sources = iter_sources(args.domain)
+    bulk_plan: list[tuple[BulkVein, str, str]] = []
+    selected_bulk = iter_bulk_veins(args.domain) if args.include_bulk else []
+    if args.include_bulk and args.execute:
+        if type(args.bulk_budget_bytes) is not int or args.bulk_budget_bytes <= 0:
+            print("BLOCKED: --bulk-budget-bytes required to --execute bulk veins", file=sys.stderr)
+            return 1
+        if not args.bulk_resolution_file or not args.bulk_license_evidence_file:
+            print("BLOCKED: --bulk-resolution-file and --bulk-license-evidence-file are required before bulk dispatch", file=sys.stderr)
+            return 1
+        try:
+            bulk_plan = _bulk_dispatch_plan(
+                selected_bulk,
+                args.bulk_resolution_file,
+                args.bulk_license_evidence_file,
+            )
+        except ValueError as exc:
+            print(f"BLOCKED: {exc}", file=sys.stderr)
+            return 1
     for s in sources:
         cmd = [sys.executable, *build_argv(s)]
         print(f"# {s.name} ({','.join(s.domains)}) [{s.license_basis}]")
@@ -394,17 +533,23 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.execute:
             subprocess.run(cmd, check=True)
     if args.include_bulk:
-        for v in iter_bulk_veins(args.domain):
-            if args.execute:
-                if not args.bulk_budget_bytes:
-                    print(f"BLOCKED: --bulk-budget-bytes required to --execute bulk vein {v.name}", file=sys.stderr)
-                    return 1
-                cmd = [sys.executable, str(CONNECTOR_SCRIPTS["bulk_fetch"]), *v.build_argv(args.bulk_budget_bytes)]
+        if args.execute:
+            for v, target_url, evidence in bulk_plan:
+                cmd = [
+                    sys.executable,
+                    str(CONNECTOR_SCRIPTS["bulk_fetch"]),
+                    *v.build_argv(
+                        args.bulk_budget_bytes,
+                        license_evidence=evidence,
+                        resolved_url=target_url,
+                    ),
+                ]
                 print(f"# {v.name} ({','.join(v.domains)}) [{v.license_basis}]")
                 print(" ".join(cmd))
                 subprocess.run(cmd, check=True)
-            else:
-                print(f"# {v.name} ({','.join(v.domains)}) [{v.license_basis}] -- bulk vein, needs --bulk-budget-bytes to dispatch")
+        for v in selected_bulk:
+            if not args.execute:
+                print(f"# {v.name} ({','.join(v.domains)}) [{v.license_basis}] -- bulk vein, needs explicit resolution/evidence before dispatch")
     return 0
 
 
