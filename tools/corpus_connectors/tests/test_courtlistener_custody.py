@@ -83,6 +83,28 @@ def test_courtlistener_annotation_round_trips_and_rejects_l4_or_file_drift(tmp_p
         validate_content_annotation(annotation_path, manifest, root)
 
 
+def test_courtlistener_same_length_out_of_sample_source_mutation_refuses_without_sidecar(tmp_path: Path) -> None:
+    root = tmp_path / "courtlistener"
+    root.mkdir()
+    source = root / "opinion-clusters.csv"
+    original = (
+        b"id,date_created,case_name,syllabus,headnotes,summary,disposition\n"
+        b"1,2026-01-01,Example,,,,\n"
+        b"2,2026-01-02,Example,,,,\n"
+    )
+    source.write_bytes(original)
+    manifest = root / "manifest.jsonl"
+    manifest.write_text(json.dumps(_manifest_row(source.name, original)) + "\n", encoding="utf-8")
+
+    # sample_rows=1 reads only the first data row; the second row is the
+    # deterministic out-of-sample mutation and remains exactly the same size.
+    source.write_bytes(original.replace(b"2,2026-01-02,Example", b"2,2026-01-02,Xxample"))
+    output = root / "content-annotation-v1.json"
+    with pytest.raises(ValueError, match="source hash mismatch"):
+        write_content_annotation(manifest, root, output, sample_rows=1)
+    assert not output.exists()
+
+
 def test_courtlistener_annotation_rejects_manifest_row_with_unknown_or_missing_fields(tmp_path: Path) -> None:
     root, manifest = _write_fixture(tmp_path)
     rows = [json.loads(manifest.read_text(encoding="utf-8"))]

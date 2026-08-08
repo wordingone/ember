@@ -85,6 +85,14 @@ def _sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _canonical_without_annotation_hash(annotation: dict) -> bytes:
     payload = {key: value for key, value in annotation.items() if key != "annotation_sha256"}
     return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
@@ -191,6 +199,9 @@ def build_content_annotation(manifest_path: Path, data_root: Path, *, sample_row
             raise ValueError(f"source byte count mismatch for {name}")
         if not isinstance(row["sha256"], str) or len(row["sha256"]) != 64 or row["sha256"] != row["sha256"].lower():
             raise ValueError(f"source hash is invalid for {name}")
+        actual_sha256 = _sha256_file(path)
+        if actual_sha256 != row["sha256"]:
+            raise ValueError(f"source hash mismatch for {name}")
         header, sampled, nonempty = _sample_schema(path, sample_rows)
         if nonempty:
             content_class = "TEXT_BEARING_REVIEW_REQUIRED"
