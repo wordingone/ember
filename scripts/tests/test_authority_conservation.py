@@ -13,6 +13,7 @@ import re
 import shutil
 import subprocess
 import sys
+from types import SimpleNamespace
 from pathlib import Path
 import pytest
 
@@ -644,6 +645,34 @@ def test_lower_precedence_document_cannot_authorize_completion(tmp_path: Path) -
     assert "authority.lower_precedence_claim" in {
         item["code"] for item in payload["errors"]
     }
+
+
+def test_untracked_authority_shaped_scratch_is_not_part_of_git_guard(tmp_path: Path, monkeypatch) -> None:
+    """Only untracked scratch products are outside the commit-level scan."""
+    (tmp_path / ".git").write_text("gitdir: fixture\n", encoding="utf-8")
+    tracked = "docs/tracked.md"
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    import verify_authority_conservation as verifier
+
+    monkeypatch.setattr(
+        verifier,
+        "subprocess",
+        SimpleNamespace(
+            run=lambda *args, **kwargs: subprocess.CompletedProcess(
+                args, 0, stdout=(tracked + "\0").encode(), stderr=b""
+            )
+        ),
+    )
+    rogue = tmp_path / "scratch" / "historical-authority.md"
+    rogue.parent.mkdir(parents=True, exist_ok=True)
+    rogue.write_text(
+        "# Active Ember goal\n\n"
+        "This document is a binding completion law and authorizes a completed Ember model.\n",
+        encoding="utf-8",
+    )
+    errors: list[dict] = []
+    verifier.check_lower_precedence_authority(tmp_path, errors)
+    assert errors == []
 
 
 def test_explicitly_historical_document_has_no_live_authority(tmp_path: Path) -> None:
