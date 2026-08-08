@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Clean-room process supervision gate for Ember's the predecessor CLI parity harness.
 
 This gate proves a resident-owned process supervisor can spawn, track, timeout,
@@ -20,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from receipt_write import checked_write
+from owned_process import OwnedProcessRunner
 
 TICKET = "EMBER-GATE-PROCESS-SUPERVISION"
 SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
@@ -46,20 +50,14 @@ class ResidentProcessSupervisor:
     def run_with_timeout(self, command: list[str], timeout_s: float) -> ProcessRecord:
         if not self.enabled:
             raise RuntimeError("process_supervision_deleted")
-        proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        record = ProcessRecord(pid=proc.pid, command=command, started_at=time.time(), timeout_s=timeout_s, status="running")
+        started_at = time.time()
+        result = OwnedProcessRunner().run(command, timeout_s=timeout_s)
+        record = ProcessRecord(pid=result.pid, command=command, started_at=started_at, timeout_s=timeout_s, status="running")
         self.records.append(record)
-        try:
-            proc.communicate(timeout=timeout_s)
-            record.returncode = proc.returncode
-            record.status = "completed"
-        except subprocess.TimeoutExpired:
-            record.status = "timeout"
-            proc.kill()
-            proc.communicate(timeout=5)
-            record.returncode = proc.returncode
+        record.returncode = result.returncode
+        record.status = result.status
+        if result.status == "terminated":
             record.killed_at = time.time()
-            record.status = "terminated"
         return record
 
     def is_alive(self, pid: int) -> bool:

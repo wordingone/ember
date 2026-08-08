@@ -27,6 +27,10 @@
 | `tools` | Standalone tools, CLI utilities, and build/analysis helpers | tool |
 | `TEMP` | Junk artifact directory (private-use-codepoint name; contains a nested `claude/<session-id>/...` scratch tree) left behind by a mangled temp-path write that landed inside the repo root instead of the OS temp dir; not a real working directory — flagged here for coordinator cleanup (rename/remove) | junk |
 
+## Owned local processes
+
+Automated commands that may create descendants (including Bun/Node tests, watchers, development servers, builds, Cargo tests, and Python harnesses) must run through `python -B scripts/owned_process.py --timeout-seconds <finite-seconds> -- <command...>`. Raw unbounded `bun test`, watch mode, or background process launch is forbidden for agent work. The owned runner must fail closed when containment cannot be established, and task completion requires that its process tree has been cleaned up. Windows uses a kill-on-close Job Object; callers must remain backend-neutral so Linux/macOS process-group containment can evolve without a second launcher authority.
+
 ## Worktree lifecycle
 
 All Ember worktree creation and retirement must use `python scripts/worktree_lifecycle.py create` and `python scripts/worktree_lifecycle.py retire`. Raw `git worktree add` and recursive worktree deletion are forbidden. Each managed worktree requires an owner, purpose, and expiry; dirty worktrees are never retired automatically, detached heads are archived first, and the repository-local worktree ceiling may only ratchet downward toward 12.
