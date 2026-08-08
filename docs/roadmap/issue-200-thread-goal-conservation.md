@@ -55,7 +55,9 @@ The accepted transfer preserves:
    for id, name, versioned in-repository prompt protocol, RFC5545 recurrence,
    dated Active/Paused state, model/effort, and working directory;
 9. append-only run memory recording checks, exact receipts, verdict, and notify
-   or dedup rationale, with the same session/terminal evidence as manual turns;
+   or dedup rationale; every automation run must end in a machine-minted
+   terminal-result event using the same session evidence as a manual turn, and
+   a wedged automation is a bug whose journal must record its terminal state;
 10. the completed-manual-seat gate and terminal acceptance of three consecutive
     board-freshness runs with current source/executable identity, receipts,
     journal rows, and no new suite regression;
