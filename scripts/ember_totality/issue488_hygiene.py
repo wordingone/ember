@@ -409,7 +409,9 @@ def _validate_manifest(
             tracked_override=tracked,
             source_commit_override=manifest["source_commit"] if historical else None,
             source_clean_override=True if historical else None,
-            include_open_issues=not historical,
+            # Open-issue count is time-varying and deliberately excluded from
+            # the authoritative Git/tree projection in both modes.
+            include_open_issues=False,
         )
         for field in ("working_set", "inventory", "candidates"):
             if manifest[field] != expected[field]:
