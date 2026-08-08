@@ -58,9 +58,12 @@ from __future__ import annotations
 
 import http.client
 import json
+import math
 import os
 import re
 import shutil
+import socket
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -74,6 +77,8 @@ SCHEMA_CHUNK_MANIFEST = "corpus-bulk-chunk-manifest-v1"
 
 DEFAULT_CHUNK_SIZE = 64 * 1024 * 1024  # 64 MiB
 DEFAULT_DISK_MARGIN_BYTES = 1 * 1024 * 1024 * 1024  # 1 GiB
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_RETRY_BACKOFF_SECONDS = 1.0
 
 _CONTENT_RANGE_RE = re.compile(r"^bytes (\d+)-(\d+)/(\d+|\*)$")
 
@@ -92,6 +97,10 @@ class RangeNotSupportedError(rcpt.BlockedError):
 class ChunkFetchError(rcpt.BlockedError):
     """A ranged chunk request got an HTTP status that is neither 206 nor the
     "ignoring Range" 200 case (e.g. 404, 416, 500)."""
+
+    def __init__(self, message: str, *, status_code: Optional[int] = None):
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class BudgetExceededError(rcpt.BlockedError):
@@ -171,6 +180,8 @@ class BulkFetchResult:
     chunk_size: int
     chunks: List[ChunkRecord]
     resumed: bool
+    retry_attempts: int = 0
+    retry_events: Optional[List[dict]] = None
 
     def chunk_manifest_dict(self, url: str, budget_bytes: int) -> dict:
         return {
@@ -183,6 +194,8 @@ class BulkFetchResult:
             "sha256": self.sha256,
             "chunk_count": len(self.chunks),
             "resumed": self.resumed,
+            "retry_attempts": self.retry_attempts,
+            "retry_events": list(self.retry_events or []),
             "chunks": [c.to_dict() for c in self.chunks],
         }
 
@@ -302,7 +315,8 @@ def _fetch_one_chunk(
         # never an error status -- so RangeNotSupportedError's "200 instead of
         # 206" case is unaffected and still handled by the branch below.)
         raise ChunkFetchError(
-            f"unexpected HTTP status {exc.code} for Range bytes={start}-{end}"
+            f"unexpected HTTP status {exc.code} for Range bytes={start}-{end}",
+            status_code=exc.code,
         ) from exc
     with response_cm as resp:
         status = getattr(resp, "status", None)
@@ -315,7 +329,10 @@ def _fetch_one_chunk(
                 f"refusing rather than risk silently re-reading from byte 0"
             )
         if status != 206:
-            raise ChunkFetchError(f"unexpected HTTP status {status} for Range bytes={start}-{end}")
+            raise ChunkFetchError(
+                f"unexpected HTTP status {status} for Range bytes={start}-{end}",
+                status_code=status,
+            )
 
         get_header = resp.headers.get if hasattr(resp, "headers") else (lambda *_a, **_kw: None)
         resp_start, resp_end, resp_total = _parse_content_range(get_header("Content-Range"))
@@ -381,6 +398,9 @@ def fetch_chunked(
     headers: Optional[dict] = None,
     opener: Optional[Callable] = None,
     disk_usage_fn: Optional[Callable[[str], object]] = None,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    backoff_base_seconds: float = DEFAULT_RETRY_BACKOFF_SECONDS,
+    sleep_fn: Callable[[float], None] = time.sleep,
 ) -> BulkFetchResult:
     """Fetch `url` to `dest_file` via resumable HTTP Range chunks, never
     exceeding `budget_bytes`. Raises a BlockedError subclass (see above) on
@@ -390,6 +410,15 @@ def fetch_chunked(
         raise rcpt.BlockedError("budget_bytes must be positive")
     if chunk_size <= 0:
         raise rcpt.BlockedError("chunk_size must be positive")
+    if not isinstance(max_retries, int) or isinstance(max_retries, bool) or max_retries < 0:
+        raise rcpt.BlockedError("max_retries must be a non-negative integer")
+    if (
+        not isinstance(backoff_base_seconds, (int, float))
+        or isinstance(backoff_base_seconds, bool)
+        or not math.isfinite(float(backoff_base_seconds))
+        or backoff_base_seconds < 0
+    ):
+        raise rcpt.BlockedError("backoff_base_seconds must be a non-negative number")
 
     rcpt.check_no_collision(dest_file)
     dest_file.parent.mkdir(parents=True, exist_ok=True)
@@ -403,6 +432,8 @@ def fetch_chunked(
     etag: Optional[str] = None
     last_modified: Optional[str] = None
     resumed = False
+    retry_attempts = 0
+    retry_events: List[dict] = []
     session_created_at = rcpt.utc_now_iso()
 
     existing_state = _load_state(state_path)
@@ -480,9 +511,49 @@ def fetch_chunked(
 
         while total_bytes is None or start < total_bytes:
             end = start + chunk_size - 1  # request ceiling; server clamps to its own total
-            data, resp_end, resp_total, resp_etag, resp_last_modified = _fetch_one_chunk(
-                url, start, end, timeout, headers, opener
-            )
+            chunk_retry_attempts = 0
+            while True:
+                try:
+                    data, resp_end, resp_total, resp_etag, resp_last_modified = _fetch_one_chunk(
+                        url, start, end, timeout, headers, opener
+                    )
+                    break
+                except Exception as exc:
+                    if isinstance(exc, ChunkFetchError):
+                        status_code = exc.status_code
+                        if status_code is not None and 500 <= status_code <= 599:
+                            retry_status = f"http_{status_code}"
+                        else:
+                            retry_status = None
+                    elif isinstance(exc, (ConnectionResetError, ConnectionAbortedError, BrokenPipeError)):
+                        retry_status = "connection_reset"
+                    elif isinstance(exc, (TimeoutError, socket.timeout)):
+                        retry_status = "timeout"
+                    elif isinstance(exc, urllib.error.URLError) and isinstance(
+                        exc.reason,
+                        (ConnectionResetError, ConnectionAbortedError, BrokenPipeError, TimeoutError, socket.timeout),
+                    ):
+                        retry_status = (
+                            "timeout"
+                            if isinstance(exc.reason, (TimeoutError, socket.timeout))
+                            else "connection_reset"
+                        )
+                    else:
+                        retry_status = None
+
+                    if retry_status is None or chunk_retry_attempts >= max_retries:
+                        raise
+
+                    chunk_retry_attempts += 1
+                    retry_attempts += 1
+                    retry_events.append(
+                        {
+                            "chunk_index": next_index,
+                            "attempt": chunk_retry_attempts,
+                            "status": retry_status,
+                        }
+                    )
+                    sleep_fn(float(backoff_base_seconds) * (2 ** (chunk_retry_attempts - 1)))
 
             if total_bytes is None:
                 total_bytes = resp_total
@@ -592,4 +663,6 @@ def fetch_chunked(
         chunk_size=chunk_size,
         chunks=chunks,
         resumed=resumed,
+        retry_attempts=retry_attempts,
+        retry_events=retry_events,
     )

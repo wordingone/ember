@@ -128,6 +128,8 @@ class Receipt:
     notes: str = ""
     schema: str = SCHEMA_NAME
     l3_statement: str = L3_STATEMENT
+    retry_attempts: Optional[int] = None
+    retry_events: Optional[List[dict]] = None
 
     @property
     def total_bytes(self) -> int:
@@ -138,7 +140,7 @@ class Receipt:
         return sha256_of_manifest([f.sha256 for f in self.files])
 
     def to_dict(self) -> dict:
-        return {
+        data = {
             "schema": self.schema,
             "source": self.source,
             "source_id": self.source_id,
@@ -155,6 +157,11 @@ class Receipt:
             "dest_root": self.dest_root,
             "notes": self.notes,
         }
+        if self.retry_attempts is not None:
+            data["retry_attempts"] = self.retry_attempts
+        if self.retry_events is not None:
+            data["retry_events"] = list(self.retry_events)
+        return data
 
 
 # ---------------------------------------------------------------------------
