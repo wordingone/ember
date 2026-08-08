@@ -126,6 +126,8 @@ jobs:
           python-version: "3.12"
       - name: Verify text-lab input-identity code_files pins match live bytes
         run: python -B tools/ember-restart-3b/remint_text_lab_input_identity.py --check
+      - name: Replay text-lab identity freshness regressions
+        run: python -B -m unittest discover -s tests/ember_restart_model -p "test_remint_text_lab_input_identity.py" -v
   cli:
     runs-on: windows-latest
     timeout-minutes: 25

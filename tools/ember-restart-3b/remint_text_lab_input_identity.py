@@ -41,6 +41,11 @@ EXPECTED_CODE = {
     "text_lab_corpus": "tools/ember-restart-3b/text_lab_corpus.py",
     "train": "tools/ember-restart-3b/train.py",
 }
+EXPECTED_IDENTITY_KEYS = {"schema_version", "corpus_sha256", "code_files", "source_base_commit"}
+EXPECTED_CODE_KEYS = set(EXPECTED_CODE)
+EXPECTED_INDEX_KEYS = {"boundary", "corpus", "input_identity", "receipt_bundle", "registry", "result", "schema_version"}
+EXPECTED_INDEX_INPUT_KEYS = {"path", "schema", "sha256"}
+EXPECTED_SCHEMA_KEYS = {"path", "sha256"}
 
 
 def _sha_bytes(data: bytes) -> str:
@@ -57,6 +62,46 @@ def live_code_hashes() -> dict[str, str]:
     return {name: _sha_bytes((ROOT / relative).read_bytes()) for name, relative in EXPECTED_CODE.items()}
 
 
+def _validate_identity(identity: object) -> dict[str, object]:
+    if not isinstance(identity, dict) or set(identity) != EXPECTED_IDENTITY_KEYS:
+        raise ValueError("identity authority has a closed schema violation")
+    code_files = identity.get("code_files")
+    if not isinstance(code_files, dict) or set(code_files) != EXPECTED_CODE_KEYS:
+        raise ValueError("identity code_files has a closed schema violation")
+    for name, value in code_files.items():
+        if not isinstance(value, str) or len(value) != 64 or any(c not in "0123456789abcdef" for c in value):
+            raise ValueError(f"identity code_files.{name} is not a lowercase SHA-256")
+    for name in ("corpus_sha256", "source_base_commit", "schema_version"):
+        if not isinstance(identity[name], str) or not identity[name]:
+            raise ValueError(f"identity {name} is invalid")
+    if identity["schema_version"] != "ember-text-lab-input-identity-v2":
+        raise ValueError("identity schema_version is invalid")
+    return identity
+
+
+def _validate_index(index: object) -> dict[str, object]:
+    if not isinstance(index, dict) or set(index) != EXPECTED_INDEX_KEYS:
+        raise ValueError("authority index has a closed schema violation")
+    if index.get("schema_version") != "ember-text-lab-authority-index-v1":
+        raise ValueError("authority index schema_version is invalid")
+    input_identity = index.get("input_identity")
+    if not isinstance(input_identity, dict) or set(input_identity) != EXPECTED_INDEX_INPUT_KEYS:
+        raise ValueError("authority index input_identity has a closed schema violation")
+    if input_identity["path"] != "data/ember-restart-3b/owned-text-lab-input-identity-v2.json":
+        raise ValueError("authority index input_identity.path is invalid")
+    schema = input_identity["schema"]
+    if not isinstance(schema, dict) or set(schema) != EXPECTED_SCHEMA_KEYS:
+        raise ValueError("authority index input_identity.schema has a closed schema violation")
+    if schema["path"] != "data/ember-restart-3b/text-lab-identity-v2.schema.json":
+        raise ValueError("authority index input_identity.schema.path is invalid")
+    if schema["sha256"] != "69c32fb8a854c4743a33af2e905d908cfd1a5728d0650fdfe58dc329f5fda06d":
+        raise ValueError("authority index input_identity.schema.sha256 is invalid")
+    digest = input_identity["sha256"]
+    if not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+        raise ValueError("authority index input_identity.sha256 is not a lowercase SHA-256")
+    return index
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group(required=True)
@@ -64,12 +109,21 @@ def main() -> int:
     group.add_argument("--write", action="store_true", help="regenerate pins from live bytes")
     args = parser.parse_args()
 
-    identity = json.loads(IDENTITY_PATH.read_bytes())
+    try:
+        identity = _validate_identity(json.loads(IDENTITY_PATH.read_bytes()))
+        index = _validate_index(json.loads(INDEX_PATH.read_bytes()))
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        print(f"INVALID AUTHORITY INPUT: {exc}")
+        return 2
     live = live_code_hashes()
     pinned = identity.get("code_files", {})
     stale = {name: (pinned.get(name), live[name]) for name in EXPECTED_CODE if pinned.get(name) != live[name]}
 
     if args.check:
+        identity_sha = _sha_bytes(IDENTITY_PATH.read_bytes())
+        if index["input_identity"]["sha256"] != identity_sha:
+            print("STALE PIN: text-lab-authority-index-v1.json input_identity.sha256 does not match identity bytes")
+            return 1
         if not stale:
             print("text-lab input identity: all code_files pins match live bytes")
             return 0
@@ -87,7 +141,6 @@ def main() -> int:
     IDENTITY_PATH.write_bytes(_dump(identity))
     new_identity_sha = _sha_bytes(IDENTITY_PATH.read_bytes())
 
-    index = json.loads(INDEX_PATH.read_bytes())
     index["input_identity"]["sha256"] = new_identity_sha
     INDEX_PATH.write_bytes(_dump(index))
 

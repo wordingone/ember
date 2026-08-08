@@ -42,18 +42,52 @@ class RemintTextLabInputIdentityTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("all code_files pins match live bytes", result.stdout)
 
-    def test_check_fails_after_a_pinned_module_is_edited_reproducing_1461(self):
+    def test_check_fails_for_each_pinned_module_when_edited(self):
+        pinned = {
+            "run_vertical_slice": "run_vertical_slice.py",
+            "text_lab_corpus": "text_lab_corpus.py",
+            "train": "train.py",
+        }
+        for name, filename in pinned.items():
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as tmp:
+                root = self._sandbox(Path(tmp))
+                module = root / "tools/ember-restart-3b" / filename
+                module.write_bytes(module.read_bytes() + b"\n# drift injected by test\n")
+                check = subprocess.run(
+                    [sys.executable, "-B", str(root / "tools/ember-restart-3b/remint_text_lab_input_identity.py"), "--check"],
+                    cwd=root, capture_output=True, text=True,
+                )
+                self.assertEqual(check.returncode, 1)
+                self.assertIn("STALE PIN", check.stdout)
+                self.assertIn(name, check.stdout)
+
+    def test_check_rejects_unknown_or_missing_code_file_keys(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = self._sandbox(Path(tmp))
-            module = root / "tools/ember-restart-3b/run_vertical_slice.py"
-            module.write_bytes(module.read_bytes() + b"\n# drift injected by test\n")
+            identity_path = root / IDENTITY_REL
+            identity = json.loads(identity_path.read_bytes())
+            identity["code_files"]["unexpected"] = "0" * 64
+            identity_path.write_bytes(json.dumps(identity).encode("utf-8"))
+            check = subprocess.run(
+                [sys.executable, "-B", str(root / "tools/ember-restart-3b/remint_text_lab_input_identity.py"), "--check"],
+                cwd=root, capture_output=True, text=True,
+            )
+            self.assertEqual(check.returncode, 2)
+            self.assertIn("closed schema", check.stdout)
+
+    def test_check_rejects_a_stale_downstream_index_pin(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._sandbox(Path(tmp))
+            index_path = root / INDEX_REL
+            index = json.loads(index_path.read_bytes())
+            index["input_identity"]["sha256"] = "0" * 64
+            index_path.write_bytes(json.dumps(index).encode("utf-8"))
             check = subprocess.run(
                 [sys.executable, "-B", str(root / "tools/ember-restart-3b/remint_text_lab_input_identity.py"), "--check"],
                 cwd=root, capture_output=True, text=True,
             )
             self.assertEqual(check.returncode, 1)
-            self.assertIn("STALE PIN", check.stdout)
-            self.assertIn("run_vertical_slice", check.stdout)
+            self.assertIn("authority-index-v1", check.stdout)
 
     def test_write_cures_the_drift_and_check_then_passes(self):
         with tempfile.TemporaryDirectory() as tmp:
