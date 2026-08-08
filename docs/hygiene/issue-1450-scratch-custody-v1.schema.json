@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ember-scratch-custody-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "label", "target", "source_commit", "source_status_sha256", "policy", "entries", "top_level", "summary", "manifest_sha256"],
+  "properties": {
+    "schema_version": {"const": "ember-scratch-custody-v1"},
+    "label": {"type": "string", "minLength": 1},
+    "target": {"const": "scratch"},
+    "source_commit": {"type": "string", "minLength": 1},
+    "source_status_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_bytes", "max_files", "read_only", "reparse_refused"],
+      "properties": {
+        "max_bytes": {"type": "integer", "minimum": 0},
+        "max_files": {"type": "integer", "minimum": 1},
+        "read_only": {"const": true},
+        "reparse_refused": {"const": true}
+      }
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "kind", "bytes", "sha256", "tracked"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "kind": {"const": "file"},
+          "bytes": {"type": "integer", "minimum": 0},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "tracked": {"type": "boolean"}
+        }
+      }
+    },
+    "top_level": {"type": "array"},
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["files", "bytes"],
+      "properties": {
+        "files": {"type": "integer", "minimum": 0},
+        "bytes": {"type": "integer", "minimum": 0}
+      }
+    },
+    "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}
