@@ -1124,23 +1124,14 @@ def _derive_checkpoint_storage_projection(
         raise ValueError(
             "checkpoint storage projection requires one post-update optimizer state"
         )
-    # Admission cannot recover the runtime parameter-to-route identity from a
-    # generic optimizer state_dict without trusting candidate-authored labels.
-    # Use the closed worst-case bound when route ownership cannot be reopened:
-    # every initialized byte may belong to the one active specialist and
-    # therefore exist once per specialist at full four-expert realization.
-    # Only name-addressed owner shards can independently prove that shared-only
-    # or full-route state is already the complete realization floor.
-    projection_has_independent_route_authority = (
-        optimizer_state_layout == _OWNER_SHARDED_OPTIMIZER_STATE_LAYOUT
-        and (
-            model.active_expert == "shared"
-            or specialist_routes == list(EXPERT_NAMES)
-        )
-    )
+    # The writer owns the live parameter objects and derives route identity
+    # directly from model/optimizer state. Shared-only and closed full-route
+    # states are therefore already their complete realization floor; a
+    # single-specialist state retains the conservative four-route projection.
     projected_optimizer = optimizer_actual * (
         1
-        if projection_has_independent_route_authority
+        if model.active_expert == "shared"
+        or specialist_routes == list(EXPERT_NAMES)
         else len(EXPERT_NAMES)
     )
     actual_checkpoint_floor = sum(shard_storage_lower_bounds.values())
@@ -1357,16 +1348,10 @@ def _validate_checkpoint_storage_projection(
     optimizer_actual = materialized[
         "optimizer_state_tensor_storage_lower_bound_bytes"
     ]
-    projection_has_independent_route_authority = (
-        optimizer_state_layout == _OWNER_SHARDED_OPTIMIZER_STATE_LAYOUT
-        and (
-            active_expert == "shared"
-            or specialist_routes == list(EXPERT_NAMES)
-        )
-    )
     expected_projected_optimizer = optimizer_actual * (
         1
-        if projection_has_independent_route_authority
+        if active_expert == "shared"
+        or specialist_routes == list(EXPERT_NAMES)
         else len(EXPERT_NAMES)
     )
     optimizer_shard_total = sum(
@@ -1444,17 +1429,11 @@ def _measure_candidate_storage_projection(
     )
     if optimizer_state_layout == "legacy-v1":
         optimizer_actual = measured["optimizer-state.pt"]
-    projection_has_independent_route_authority = (
-        optimizer_state_layout == _OWNER_SHARDED_OPTIMIZER_STATE_LAYOUT
-        and (
-            projection["active_expert"] == "shared"
-            or projection["optimizer_state_active_expert_ids"]
-            == list(EXPERT_NAMES)
-        )
-    )
     projected_optimizer = optimizer_actual * (
         1
-        if projection_has_independent_route_authority
+        if projection["active_expert"] == "shared"
+        or projection["optimizer_state_active_expert_ids"]
+        == list(EXPERT_NAMES)
         else len(EXPERT_NAMES)
     )
     projected_checkpoint = (
@@ -1745,28 +1724,43 @@ def preflight_specialist_lineage_sources(*, parent_manifest: Path, root_manifest
         "parent_history": list(history),
     }
 
-def _attested_parent_optimizer_expert_routes(parent: Mapping[str, Any]) -> tuple[str, ...]:
-    """Expert routes a lineage parent's digest-bound storage projection attests.
+def _attested_parent_optimizer_expert_routes(
+    parent: Mapping[str, Any], *, parent_root: Path | None = None,
+    parent_manifest_sha256: str | None = None,
+) -> tuple[str, ...]:
+    """Reopen an external parent's owner shards before granting route inheritance.
 
-    Fail-soft to the empty tuple: a parent without an internally valid,
-    digest-verified projection attests no optimizer-state inheritance, which
-    holds the successor's route admission at its strictest single-route shape
-    (#1473). Reuses the stored-projection revalidator so a re-signed or
-    widened id list is refused by the same closed authority everywhere.
+    Legacy aggregate optimizer payloads cannot independently recover
+    parameter-to-route ownership and therefore attest no inherited specialist
+    routes. Owner-sharded parents must rederive every route byte from immutable
+    payloads and match the stored projection exactly; a forged parent refuses
+    instead of degrading into candidate-authored route authority.
     """
 
     projection = parent.get("storage_projection")
     if not isinstance(projection, Mapping):
         return ()
-    try:
-        validated = _validate_checkpoint_storage_projection(projection)
-    except (ValueError, TypeError):
+    if (
+        parent_root is None
+        or parent_manifest_sha256 is None
+        or parent.get("optimizer_state_layout")
+        != _OWNER_SHARDED_OPTIMIZER_STATE_LAYOUT
+    ):
         return ()
-    return tuple(
-        name
-        for name in validated["optimizer_state_active_expert_ids"]
-        if name in EXPERT_NAMES
+    parent_receipt = {
+        **parent,
+        "checkpoint_manifest_sha256": parent_manifest_sha256,
+    }
+    records = _validated_records(parent_root, parent_receipt)
+    owner_authority = _validate_owner_sharded_optimizer_payloads(
+        parent_root,
+        parent_receipt,
+        records,
+        expected_optimizer_contract=parent_receipt.get("optimizer_contract"),
+        expected_optimizer_realization=parent_receipt.get("optimizer_realization"),
     )
+    _validate_owner_storage_projection_authority(parent_receipt, owner_authority)
+    return tuple(owner_authority["specialist_owner_ids"])
 
 
 def _specialist_lineage(
@@ -1799,7 +1793,11 @@ def _specialist_lineage(
     root, root_sha256 = _external_checkpoint_manifest(root_path, label="root genesis")
     # Bound to the same one-byte manifest snapshot the lineage hashes: a second
     # read here could attest routes from different bytes than parent_sha256.
-    parent_optimizer_routes = _attested_parent_optimizer_expert_routes(parent)
+    parent_optimizer_routes = _attested_parent_optimizer_expert_routes(
+        parent,
+        parent_root=parent_path.parent,
+        parent_manifest_sha256=parent_sha256,
+    )
     parent_lineage = parent.get("lineage")
     if not isinstance(parent_lineage, Mapping):
         if parent_sha256 != root_sha256:
