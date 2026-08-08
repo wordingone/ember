@@ -2539,6 +2539,7 @@ def load_checkpoint_artifacts(
                 records,
                 expected_optimizer_contract=optimizer_contract,
                 expected_optimizer_realization=optimizer_realization,
+                expected_parameter_names=set(dict(model.named_parameters())),
             )
         except ValueError:
             raise
