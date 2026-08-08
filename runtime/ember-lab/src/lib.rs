@@ -2,7 +2,7 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
+use rusqlite::{params, Connection, OpenFlags, OptionalExtension, TransactionBehavior};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -18,6 +18,7 @@ use std::sync::{Arc, Mutex};
 use std::sync::{RwLock, Weak};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+pub mod data_catalog;
 pub mod rehearsal;
 pub mod rpc;
 pub mod scratch;
@@ -28,6 +29,67 @@ pub type Result<T> = std::result::Result<T, EmberLabError>;
 
 /// Largest UTF-8 dispatch-manifest payload that fits the 64 KiB JSON-RPC line envelope even when JSON string escaping doubles every source byte.
 pub const MAX_DISPATCH_MANIFEST_BYTES: usize = 30_000;
+const CURRENT_DATABASE_SCHEMA_VERSION: u32 = 5;
+
+pub fn read_data_catalog_status(path: &Path) -> Result<Value> {
+    let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    conn.busy_timeout(Duration::from_secs(10))?;
+    conn.execute_batch("PRAGMA foreign_keys=ON;")?;
+    let schema_version: String = conn.query_row(
+        "SELECT value FROM metadata WHERE key='schema_version'",
+        [],
+        |row| row.get(0),
+    )?;
+    if schema_version != CURRENT_DATABASE_SCHEMA_VERSION.to_string() {
+        return Err(EmberLabError::InvalidDataCatalog {
+            detail: format!(
+                "read-only data catalog status requires database schema version {CURRENT_DATABASE_SCHEMA_VERSION}, found {schema_version}"
+            ),
+        });
+    }
+    data_catalog::status(&conn)
+}
+
+pub fn rollback_empty_data_catalog_migration(path: &Path) -> Result<()> {
+    let _state_writer_lock = acquire_state_writer_lock(path)?;
+    let mut conn = Connection::open(path)?;
+    conn.busy_timeout(Duration::from_secs(10))?;
+    conn.execute_batch("PRAGMA foreign_keys=ON;")?;
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let schema_version: String = tx.query_row(
+        "SELECT value FROM metadata WHERE key='schema_version'",
+        [],
+        |row| row.get(0),
+    )?;
+    if schema_version != CURRENT_DATABASE_SCHEMA_VERSION.to_string() {
+        return Err(EmberLabError::InvalidDataCatalog {
+            detail: format!(
+                "data catalog rollback requires database schema version {CURRENT_DATABASE_SCHEMA_VERSION}, found {schema_version}"
+            ),
+        });
+    }
+    let catalog_rows: i64 = tx.query_row(
+        "SELECT
+             (SELECT COUNT(*) FROM data_catalog_records)
+           + (SELECT COUNT(*) FROM data_catalog_edges)
+           + (SELECT COUNT(*) FROM data_catalog_imports)",
+        [],
+        |row| row.get(0),
+    )?;
+    if catalog_rows != 0 {
+        return Err(EmberLabError::InvalidDataCatalog {
+            detail: "data catalog rollback refuses after immutable catalog data exists".into(),
+        });
+    }
+    tx.execute_batch(
+        "DROP TABLE data_catalog_edges;
+         DROP TABLE data_catalog_imports;
+         DROP TABLE data_catalog_records;
+         UPDATE metadata SET value='4' WHERE key='schema_version';",
+    )?;
+    tx.commit()?;
+    Ok(())
+}
 
 #[derive(Debug)]
 pub enum EmberLabError {
@@ -166,6 +228,9 @@ pub enum EmberLabError {
     ResourceAdmissionFrozen {
         reason: String,
         receipt_path: PathBuf,
+    },
+    InvalidDataCatalog {
+        detail: String,
     },
     Poisoned,
 }
@@ -884,7 +949,7 @@ impl Daemon {
         fs::create_dir_all(&log_dir)?;
         #[cfg(windows)]
         let monitor_shutdown = create_monitor_shutdown()?;
-        let conn = Connection::open(path)?;
+        let mut conn = Connection::open(path)?;
         let ember_lab_binary_sha256 = hash_file(&std::env::current_exe()?)?;
         let ember_lab_source_sha256 = ember_lab_source_hash();
         conn.busy_timeout(Duration::from_secs(10))?;
@@ -903,7 +968,7 @@ impl Daemon {
             CREATE TABLE IF NOT EXISTS resource_guard_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), admission_state TEXT NOT NULL CHECK(admission_state IN ('open','frozen')), reason TEXT, observed_at_ms INTEGER NOT NULL, oracle_evidence_required INTEGER NOT NULL CHECK(oracle_evidence_required IN (0,1)), observation_json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS resource_guard_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL);
             INSERT OR IGNORE INTO resource_guard_state(singleton,admission_state,reason,observed_at_ms,oracle_evidence_required,observation_json) VALUES(1,'open',NULL,0,0,'{}');")?;
-        migrate_schema(&conn, &log_dir)?;
+        migrate_schema(&mut conn, &log_dir)?;
         conn.execute(
             "INSERT OR IGNORE INTO metadata(key,value) VALUES('schedule_monitor_started_at_ms',?1)",
             [now_ms().to_string()],
@@ -958,6 +1023,24 @@ impl Daemon {
     pub fn resource_guard_status(&self) -> Result<Value> {
         let conn = self.conn()?;
         resource_guard_status_from_connection(&conn)
+    }
+
+    pub fn import_data_catalog_manifest(
+        &self,
+        manifest_bytes: &[u8],
+    ) -> Result<data_catalog::DataCatalogImportOutcome> {
+        let mut conn = self.conn()?;
+        data_catalog::import_manifest(&mut conn, manifest_bytes, now_ms())
+    }
+
+    pub fn export_data_catalog_manifest(&self) -> Result<Vec<u8>> {
+        let conn = self.conn()?;
+        data_catalog::export_manifest(&conn)
+    }
+
+    pub fn data_catalog_status(&self) -> Result<Value> {
+        let conn = self.conn()?;
+        data_catalog::status(&conn)
     }
 
     fn frozen_resource_guard(&self) -> Result<Option<Value>> {
@@ -5193,8 +5276,9 @@ fn available_free_vram_bytes() -> Result<u64> {
 /// `pub`: reused by `main.rs`'s `verify-training` subcommand for the same self-identity
 /// receipt field the daemon already stamps on every dispatch (`Daemon::open`).
 pub fn ember_lab_source_hash() -> String {
-    let sources: [&[u8]; 6] = [
+    let sources: [&[u8]; 7] = [
         include_bytes!("lib.rs"),
+        include_bytes!("data_catalog.rs"),
         include_bytes!("rpc.rs"),
         include_bytes!("main.rs"),
         include_bytes!("training_verify.rs"),
@@ -5220,9 +5304,35 @@ fn seal_log_hashes(tx: &rusqlite::Transaction<'_>, job_id: &str) -> Result<(Stri
     ))
 }
 
-fn migrate_schema(conn: &Connection, log_dir: &Path) -> Result<()> {
+fn migrate_schema(conn: &mut Connection, log_dir: &Path) -> Result<()> {
+    let schema_version_text: String = conn.query_row(
+        "SELECT value FROM metadata WHERE key='schema_version'",
+        [],
+        |row| row.get(0),
+    )?;
+    let schema_version =
+        schema_version_text
+            .parse::<u32>()
+            .map_err(|_| EmberLabError::InvalidDataCatalog {
+                detail: "database schema version must be a canonical unsigned integer".into(),
+            })?;
+    if schema_version.to_string() != schema_version_text {
+        return Err(EmberLabError::InvalidDataCatalog {
+            detail: "database schema version must be a canonical unsigned integer".into(),
+        });
+    }
+    if schema_version == 0 || schema_version > CURRENT_DATABASE_SCHEMA_VERSION {
+        return Err(EmberLabError::InvalidDataCatalog {
+            detail: format!(
+                "database schema version {schema_version} is outside the supported migration range 1..={CURRENT_DATABASE_SCHEMA_VERSION}"
+            ),
+        });
+    }
+
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+
     let columns: Vec<String> = {
-        let mut statement = conn.prepare("PRAGMA table_info(jobs)")?;
+        let mut statement = tx.prepare("PRAGMA table_info(jobs)")?;
         let rows = statement
             .query_map([], |row| row.get(1))?
             .collect::<std::result::Result<_, _>>()?;
@@ -5241,14 +5351,14 @@ fn migrate_schema(conn: &Connection, log_dir: &Path) -> Result<()> {
         ("exited_at_ms", "INTEGER"),
     ] {
         if !columns.iter().any(|existing| existing == column) {
-            conn.execute_batch(&format!(
+            tx.execute_batch(&format!(
                 "ALTER TABLE jobs ADD COLUMN {column} {definition}"
             ))?;
         }
     }
     let jobs: Vec<String> = {
         let mut statement =
-            conn.prepare("SELECT job_id FROM jobs WHERE stdout_log_path='' OR stderr_log_path=''")?;
+            tx.prepare("SELECT job_id FROM jobs WHERE stdout_log_path='' OR stderr_log_path=''")?;
         let rows = statement
             .query_map([], |row| row.get(0))?
             .collect::<std::result::Result<_, _>>()?;
@@ -5258,24 +5368,26 @@ fn migrate_schema(conn: &Connection, log_dir: &Path) -> Result<()> {
         let key = hash_bytes(job_id.as_bytes());
         let stdout = log_dir.join(format!("{key}.stdout.log"));
         let stderr = log_dir.join(format!("{key}.stderr.log"));
-        conn.execute(
+        tx.execute(
             "UPDATE jobs SET stdout_log_path=?2,stderr_log_path=?3 WHERE job_id=?1",
             params![job_id, stdout.to_string_lossy(), stderr.to_string_lossy()],
         )?;
     }
-    conn.execute(
+    tx.execute(
         "UPDATE jobs SET outage_event_cutoff_seq=(SELECT COALESCE(MAX(seq),0) FROM outage_events) WHERE outage_event_cutoff_seq IS NULL AND state IN ('stopped','exited','failed')",
         [],
     )?;
-    conn.execute_batch(
+    tx.execute_batch(
         "CREATE TABLE IF NOT EXISTS resource_guard_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), admission_state TEXT NOT NULL CHECK(admission_state IN ('open','frozen')), reason TEXT, observed_at_ms INTEGER NOT NULL, oracle_evidence_required INTEGER NOT NULL CHECK(oracle_evidence_required IN (0,1)), observation_json TEXT NOT NULL);
          CREATE TABLE IF NOT EXISTS resource_guard_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL);
          INSERT OR IGNORE INTO resource_guard_state(singleton,admission_state,reason,observed_at_ms,oracle_evidence_required,observation_json) VALUES(1,'open',NULL,0,0,'{}');",
     )?;
-    conn.execute(
-        "UPDATE metadata SET value='4' WHERE key='schema_version'",
-        [],
+    data_catalog::migrate(&tx)?;
+    tx.execute(
+        "UPDATE metadata SET value=?1 WHERE key='schema_version'",
+        [CURRENT_DATABASE_SCHEMA_VERSION.to_string()],
     )?;
+    tx.commit()?;
     Ok(())
 }
 

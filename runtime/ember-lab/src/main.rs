@@ -4,8 +4,8 @@
 
 use ember_lab::rehearsal::{self, Phase, PhaseOutcome, RehearsalManifest, RehearsalRunner};
 use ember_lab::{
-    ember_lab_source_hash, hash_file, rpc::serve_named_pipe, training_verify, Daemon,
-    DispatchManifest, DispatchOutcome, MAX_DISPATCH_MANIFEST_BYTES,
+    ember_lab_source_hash, hash_file, read_data_catalog_status, rpc::serve_named_pipe,
+    training_verify, Daemon, DispatchManifest, DispatchOutcome, MAX_DISPATCH_MANIFEST_BYTES,
 };
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 fn usage() -> &'static str {
-    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
+    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab data-catalog-status --db <path>\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
 }
 
 enum Command {
@@ -27,6 +27,9 @@ enum Command {
     Dispatch {
         pipe: String,
         manifest: PathBuf,
+    },
+    DataCatalogStatus {
+        db: PathBuf,
     },
     ProduceMinimalSlice {
         root: PathBuf,
@@ -187,6 +190,24 @@ fn parse_args() -> Result<Command, String> {
         }
         return Ok(Command::Runbook {
             output: PathBuf::from(output),
+        });
+    }
+
+    if command == "data-catalog-status" {
+        let flag = args
+            .next()
+            .ok_or_else(|| format!("missing --db\n{}", usage()))?;
+        let db = args
+            .next()
+            .ok_or_else(|| format!("missing value for {flag}\n{}", usage()))?;
+        if flag != "--db" || args.next().is_some() {
+            return Err(format!(
+                "arguments do not match data-catalog-status\n{}",
+                usage()
+            ));
+        }
+        return Ok(Command::DataCatalogStatus {
+            db: PathBuf::from(db),
         });
     }
 
@@ -501,6 +522,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         Command::Dispatch { pipe, manifest } => {
             println!("{}", serde_json::to_string(&dispatch(&pipe, &manifest)?)?);
+        }
+        Command::DataCatalogStatus { db } => {
+            println!(
+                "{}",
+                serde_json::to_string(&read_data_catalog_status(&db)?)?
+            );
         }
         Command::ProduceMinimalSlice { root, job_id } => {
             rehearsal::produce_minimal_slice(&root, &job_id)?;
