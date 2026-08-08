@@ -33,7 +33,7 @@ def _manifest_row(name: str, payload: bytes) -> dict[str, object]:
 
 def _write_fixture(tmp_path: Path) -> tuple[Path, Path]:
     root = tmp_path / "courtlistener"
-    root.mkdir()
+    root.mkdir(parents=True)
     payload = (
         b"id,date_created,case_name,syllabus,headnotes,summary,disposition\n"
         b"1,2026-01-01,Example,,,,\n"
@@ -108,3 +108,33 @@ def test_courtlistener_annotation_accepts_legacy_blank_csv_header_columns(tmp_pa
 
     annotation = build_content_annotation(manifest, root, sample_rows=2)
     assert annotation["files"][0]["content_class"] == "STRUCTURED_METADATA"
+
+
+def test_courtlistener_annotation_rejects_traversal_duplicate_and_malformed_rows(tmp_path: Path) -> None:
+    root, manifest = _write_fixture(tmp_path)
+    row = json.loads(manifest.read_text(encoding="utf-8"))
+    row["source_url"] = "https://example.test/bulk-data/../opinion-clusters.csv"
+    manifest.write_text(json.dumps(row) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="basename"):
+        build_content_annotation(manifest, root)
+
+    duplicate_root, duplicate_manifest = _write_fixture(tmp_path / "duplicate")
+    duplicate_row = json.loads(duplicate_manifest.read_text(encoding="utf-8"))
+    duplicate_manifest.write_text("\n".join(json.dumps(item) for item in [duplicate_row, duplicate_row]) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="duplicate"):
+        build_content_annotation(duplicate_manifest, duplicate_root)
+
+    other_root, other_manifest = _write_fixture(tmp_path / "other")
+    annotation = build_content_annotation(other_manifest, other_root)
+    annotation["files"][0] = "not-a-row"
+    annotation_path = other_root / "malformed-annotation.json"
+    annotation_path.write_text(json.dumps(annotation), encoding="utf-8")
+    third_root, third_manifest = _write_fixture(tmp_path / "third")
+    with pytest.raises(ValueError, match="file row"):
+        validate_content_annotation(annotation_path, third_manifest, third_root)
+
+
+def test_courtlistener_annotation_writer_keeps_output_inside_custody_root(tmp_path: Path) -> None:
+    root, manifest = _write_fixture(tmp_path)
+    with pytest.raises(ValueError, match="custody root"):
+        write_content_annotation(manifest, root, tmp_path / "outside.json")

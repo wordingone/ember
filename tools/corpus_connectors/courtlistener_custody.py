@@ -16,7 +16,7 @@ import hashlib
 import json
 import os
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import urlparse
 
 ANNOTATION_SCHEMA = "corpus-courtlistener-content-annotation-v1"
@@ -106,7 +106,13 @@ def _read_manifest(path: Path) -> tuple[list[dict], bytes]:
 def _safe_source_path(root: Path, source_url: str) -> tuple[str, Path]:
     if not isinstance(source_url, str) or not source_url:
         raise ValueError("manifest source_url is invalid")
-    name = Path(urlparse(source_url).path).name
+    url_path = urlparse(source_url).path
+    if not url_path or "\\" in url_path:
+        raise ValueError("manifest source_url does not identify one basename")
+    url_parts = PurePosixPath(url_path).parts
+    if any(part in {".", ".."} for part in url_parts):
+        raise ValueError("manifest source_url does not identify one basename")
+    name = url_parts[-1] if url_parts else ""
     if not name or name in {".", ".."} or "/" in name or "\\" in name:
         raise ValueError("manifest source_url does not identify one basename")
     path = (root / name).resolve()
@@ -170,9 +176,13 @@ def build_content_annotation(manifest_path: Path, data_root: Path, *, sample_row
     data_root = Path(data_root)
     rows, manifest_bytes = _read_manifest(manifest_path)
     files = []
+    seen_paths: set[str] = set()
     raw_bytes = 0
     for row in rows:
         name, path = _safe_source_path(data_root, row["source_url"])
+        if name in seen_paths:
+            raise ValueError(f"duplicate CourtListener source path: {name}")
+        seen_paths.add(name)
         actual_bytes = path.stat().st_size
         if type(row["bytes"]) is not int or row["bytes"] < 0 or actual_bytes != row["bytes"]:
             raise ValueError(f"source byte count mismatch for {name}")
@@ -229,6 +239,9 @@ def _validate_shape(annotation: dict) -> None:
         raise ValueError("CourtListener prose-gap admission is not fail-closed")
     if not isinstance(annotation["files"], list) or not annotation["files"]:
         raise ValueError("content annotation files are invalid")
+    for item in annotation["files"]:
+        if not isinstance(item, dict) or set(item) != FILE_FIELDS:
+            raise ValueError("content annotation file row schema is invalid")
     if not isinstance(annotation["projection"], dict) or set(annotation["projection"]) != {"raw_bytes", "eligible_prose_bytes", "eligible_sources"}:
         raise ValueError("content annotation projection is invalid")
 
@@ -268,9 +281,12 @@ def prose_gap_projection(annotation: dict) -> dict:
 
 
 def write_content_annotation(manifest_path: Path, data_root: Path, output_path: Path, *, sample_rows: int = 64) -> Path:
+    data_root = Path(data_root).resolve()
     output_path = Path(output_path)
     if output_path.exists():
         raise ValueError(f"content annotation already exists: {output_path.name}")
+    if output_path.resolve().parent != data_root:
+        raise ValueError("content annotation output must stay inside its custody root")
     annotation = build_content_annotation(manifest_path, data_root, sample_rows=sample_rows)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fd, temp_name = tempfile.mkstemp(prefix=output_path.name + ".", suffix=".tmp", dir=output_path.parent)
