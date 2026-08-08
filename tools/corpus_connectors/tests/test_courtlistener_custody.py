@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 import json
 import sys
 from pathlib import Path

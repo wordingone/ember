@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Bind CourtListener's wave-1 bytes to a truthful content disposition.
 
 The existing connector ``manifest.jsonl`` is deliberately kept in its flat

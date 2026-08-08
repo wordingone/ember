@@ -18,9 +18,9 @@ To recreate the raw sidecar without downloading or rewriting corpus bytes:
 
 ```text
 python -B tools/corpus_connectors/courtlistener_custody.py \
-  --manifest B:/M/ember-data/raw/courtlistener/manifest.jsonl \
-  --data-root B:/M/ember-data/raw/courtlistener \
-  --output B:/M/ember-data/raw/courtlistener/content-annotation-v1.json \
+  --manifest <RAW_CUSTODY_ROOT>/courtlistener/manifest.jsonl \
+  --data-root <RAW_CUSTODY_ROOT>/courtlistener \
+  --output <RAW_CUSTODY_ROOT>/courtlistener/content-annotation-v1.json \
   --sample-rows 8
 ```
 
