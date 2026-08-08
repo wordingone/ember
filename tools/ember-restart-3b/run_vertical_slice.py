@@ -26,7 +26,7 @@ from typing import Any, Callable, Iterable, Mapping
 import tokenizers
 import torch
 
-from checkpoint_artifacts import CheckpointDeferredLowCommit, _atomic_publish_no_replace, load_checkpoint_artifacts, load_checkpoint_model_only_transition, optimizer_covers_every_expert_route, preflight_specialist_lineage_sources, published_checkpoint_receipt, write_checkpoint_artifacts
+from checkpoint_artifacts import CheckpointDeferredLowCommit, _atomic_publish_no_replace, _empty_failure_comparison_operands, _normalize_failure_comparison_operands, load_checkpoint_artifacts, load_checkpoint_model_only_transition, optimizer_covers_every_expert_route, preflight_specialist_lineage_sources, published_checkpoint_receipt, write_checkpoint_artifacts
 from parameter_counter import validate_realization_receipt
 from model import RestartDecoderConfig, UnifiedDecoder
 from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
@@ -620,6 +620,7 @@ def _write_low_commit_deferral_receipt(
     error: CheckpointDeferredLowCommit,
     retry_error: CheckpointDeferredLowCommit | None = None,
     released_record_count: int | None = None,
+    comparison_operands: Mapping[str, object] | None = None,
 ) -> Path:
     """Bounded, receipted evidence for one DEFERRED_LOW_COMMIT checkpoint boundary.
 
@@ -641,6 +642,11 @@ def _write_low_commit_deferral_receipt(
         "streaming_peak_bytes": error.streaming_peak_bytes,
         "reserve_bytes": error.reserve_bytes,
         "observed_at_ns": time.time_ns(),
+        "comparison_operands": _normalize_failure_comparison_operands(
+            comparison_operands
+            if comparison_operands is not None
+            else _empty_failure_comparison_operands()
+        ),
     }
     if retry_error is not None:
         payload["retry_observed_commit_bytes"] = retry_error.available_commit_bytes
@@ -707,6 +713,7 @@ def _publish_checkpoint_with_low_commit_deferral(
     telemetry_run_id: str | None,
     policy_path: Path | None = None,
     release_for_final_retry: Callable[[], dict[str, object]] | None = None,
+    comparison_operands: Mapping[str, object] | None = None,
 ) -> tuple[dict[str, object], dict[str, object]] | None:
     """Publish one checkpoint boundary, deferring (never silently dropping, never
     continuing indefinitely) on insufficient host commit headroom.
@@ -760,6 +767,22 @@ def _publish_checkpoint_with_low_commit_deferral(
                 retry_error = second_error
         deferral_state["count"] += 1
         distance = global_step - last_checkpointed_step
+        comparison_operands = _normalize_failure_comparison_operands(
+            error.comparison_operands
+            if error.comparison_operands is not None
+            else comparison_operands
+        )
+        derived_bound = checkpoint_retention_budget_bytes(config_path)
+        if comparison_operands["derived_byte_bound_bytes"] is None:
+            comparison_operands["derived_byte_bound_bytes"] = derived_bound
+        comparison_operands["derived_byte_bound_inputs"].update(
+            {
+                "max_serialized_bytes": derived_bound,
+                "model_config_sha256": _sha256(config_path),
+            }
+        )
+        comparison_operands["available_commit_bytes"] = error.available_commit_bytes
+        comparison_operands["required_commit_bytes"] = error.required_commit_bytes
         receipt_path = _write_low_commit_deferral_receipt(
             checkpoint_parent,
             global_step=global_step,
@@ -768,6 +791,7 @@ def _publish_checkpoint_with_low_commit_deferral(
             error=error,
             retry_error=retry_error,
             released_record_count=released_record_count,
+            comparison_operands=comparison_operands,
         )
         if telemetry_path is not None and telemetry_run_id is not None:
             append_training_telemetry(telemetry_path, kind="checkpoint_deferred", payload={

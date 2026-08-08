@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 import checkpoint_artifacts
 import durable_io
 
-from checkpoint_artifacts import CheckpointDeferredLowCommit, _default_optimizer_contract, _optimizer_realization, _select_detached_state, _validate_runtime_optimizer_realization, admit_quarantined_checkpoint, checkpoint_commit_preflight, configured_maximum_available_commit_bytes, load_checkpoint_artifacts, load_checkpoint_model_only_transition, write_checkpoint_artifacts as _write_checkpoint_artifacts_public
+from checkpoint_artifacts import CheckpointDeferredLowCommit, _default_optimizer_contract, _empty_failure_comparison_operands, _normalize_failure_comparison_operands, _optimizer_realization, _select_detached_state, _validate_runtime_optimizer_realization, admit_quarantined_checkpoint, checkpoint_commit_preflight, configured_maximum_available_commit_bytes, load_checkpoint_artifacts, load_checkpoint_model_only_transition, write_checkpoint_artifacts as _write_checkpoint_artifacts_public
 from model import RestartDecoderConfig, UnifiedDecoder
 from parameter_counter import measure_parameter_counts
 from run_vertical_slice import load_optimizer_contract
@@ -479,7 +479,24 @@ class CheckpointArtifactTests(unittest.TestCase):
             self.assertTrue(candidates[0].joinpath("shared-model.pt").is_file())
             self.assertTrue(candidates[0].joinpath("optimizer-state.pt").is_file())
             self.assertTrue(candidates[0].joinpath("replay-state.pt").is_file())
-            self.assertTrue(any(path.name.startswith("checkpoint-write-failed-") for path in (parent / ".checkpoint-quarantine").glob("*.json")))
+            evidence = [
+                path
+                for path in (parent / ".checkpoint-quarantine").glob("*.json")
+                if path.name.startswith("checkpoint-write-failed-")
+            ]
+            self.assertEqual(len(evidence), 1)
+            self.assertEqual(
+                set(json.loads(evidence[0].read_text(encoding="utf-8"))["comparison_operands"]),
+                {
+                    "derived_byte_bound_bytes",
+                    "derived_byte_bound_inputs",
+                    "projected_storage_floor_bytes",
+                    "projected_storage_floor_inputs",
+                    "staged_shard_bytes",
+                    "available_commit_bytes",
+                    "required_commit_bytes",
+                },
+            )
 
     def test_verifier_mutation_of_existing_shard_is_rejected_before_promotion(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
@@ -2435,7 +2452,7 @@ class CheckpointArtifactTests(unittest.TestCase):
         per_shard_ceiling = max(bounds.values()) + 1
         with self.assertRaisesRegex(
             RuntimeError, "all-expert projected tensor-storage"
-        ):
+        ) as raised:
             checkpoint_artifacts._derive_checkpoint_storage_projection(
                 model=model,
                 optimizer=optimizer,
@@ -2447,7 +2464,13 @@ class CheckpointArtifactTests(unittest.TestCase):
                 max_transient_scratch_bytes=per_shard_ceiling,
                 max_serialized_bytes=per_shard_ceiling,
                 specialist_parent_optimizer_routes=None,
+                model_config_sha256="a" * 64,
+                contract_sha256="b" * 64,
+                active_parameters=checkpoint_artifacts.measure_parameter_counts(model)["active_parameters"],
             )
+        self.assertIsNotNone(
+            raised.exception.comparison_operands["derived_byte_bound_inputs"]["active_parameters"]
+        )
 
     def test_v5_storage_projection_rejects_rehashed_route_tamper(self) -> None:
         projection = {
@@ -2928,12 +2951,64 @@ class CheckpointArtifactTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory)
             with self.assertRaisesRegex(RuntimeError, "transient scratch"):
-                write_checkpoint_artifacts(model, optimizer, parent / "v5", launch_seed=84, rng_state=_valid_rng_state(), data_cursor={"shard": "owned", "record_index": 0, "global_step": 0, "tokens_seen": 0}, model_config_sha256="a" * 64, contract_sha256="b" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes(), max_transient_scratch_bytes=1)
+                write_checkpoint_artifacts(model, optimizer, parent / "v5", launch_seed=84, rng_state=_valid_rng_state(), data_cursor={"shard": "owned", "record_index": 0, "global_step": 0, "tokens_seen": 0}, model_config_sha256="a" * 64, contract_sha256="b" * 64, expert_genesis_sha256=model.expert_bank_genesis_hashes(), max_transient_scratch_bytes=1, max_serialized_bytes=1)
             self.assertEqual(list(parent.rglob("*.tmp")), [])
             self.assertEqual(list(parent.glob(".*.staging")), [])
             evidence = list((parent / ".checkpoint-quarantine").glob("checkpoint-write-failed-*.json"))
             self.assertEqual(len(evidence), 1)
             self.assertLess(evidence[0].stat().st_size, checkpoint_artifacts._FAILURE_EVIDENCE_LIMIT)
+            payload = json.loads(evidence[0].read_text(encoding="utf-8"))
+            operands = payload["comparison_operands"]
+            self.assertEqual(
+                set(operands),
+                {
+                    "derived_byte_bound_bytes",
+                    "derived_byte_bound_inputs",
+                    "projected_storage_floor_bytes",
+                    "projected_storage_floor_inputs",
+                    "staged_shard_bytes",
+                    "available_commit_bytes",
+                    "required_commit_bytes",
+                },
+            )
+            self.assertEqual(operands["derived_byte_bound_bytes"], 1)
+            self.assertIsInstance(operands["derived_byte_bound_inputs"], dict)
+            self.assertIsInstance(operands["projected_storage_floor_bytes"], int)
+            self.assertIsInstance(operands["projected_storage_floor_inputs"], dict)
+            self.assertIsInstance(
+                operands["projected_storage_floor_inputs"]["route_multiplier"], int
+            )
+            self.assertIsInstance(
+                operands["projected_storage_floor_inputs"]["optimizer_state_tensor_storage_by_route_bytes"],
+                dict,
+            )
+            self.assertEqual(operands["staged_shard_bytes"], [])
+            self.assertIsInstance(
+                operands["derived_byte_bound_inputs"]["active_parameters"], int
+            )
+            self.assertGreater(
+                operands["derived_byte_bound_inputs"]["active_parameters"], 0
+            )
+            self.assertIsNone(operands["available_commit_bytes"])
+            self.assertIsNone(operands["required_commit_bytes"])
+
+    def test_failure_comparison_operands_are_closed_and_finite(self) -> None:
+        valid = _empty_failure_comparison_operands()
+        for malformed in (
+            {key: value for key, value in valid.items() if key != "staged_shard_bytes"},
+            {**valid, "unexpected": 1},
+            {**valid, "derived_byte_bound_bytes": float("nan")},
+            {
+                **valid,
+                "staged_shard_bytes": [{"path": "../outside", "bytes": 1}],
+            },
+        ):
+            with self.subTest(malformed=malformed), self.assertRaises(ValueError):
+                _normalize_failure_comparison_operands(malformed)
+        self.assertEqual(
+            _normalize_failure_comparison_operands(valid),
+            valid,
+        )
 
     def test_explicit_v3_shared_fixture_still_loads_model_optimizer_and_cursor(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
