@@ -785,12 +785,31 @@ def load_development_shared_runtime(
         records[path] = record
     schema_version = checkpoint_manifest.get("schema_version")
     if schema_version == "ember-sparse-checkpoint-v5":
-        expected_paths = {
+        static_paths = {
             "shared-model.pt",
-            "optimizer-state.pt",
             "replay-state.pt",
             *(f"expert-{name}.pt" for name in model_module.EXPERT_NAMES),
         }
+        optimizer_state_layout = checkpoint_manifest.get("optimizer_state_layout")
+        if optimizer_state_layout is None:
+            expected_paths = static_paths | {"optimizer-state.pt"}
+        elif optimizer_state_layout == "owner-sharded-v1":
+            owner_ids = checkpoint_manifest.get("optimizer_state_owner_ids")
+            allowed_owners = {"shared", *model_module.EXPERT_NAMES}
+            if (
+                not isinstance(owner_ids, list)
+                or not owner_ids
+                or any(type(owner) is not str for owner in owner_ids)
+                or owner_ids[0] != "shared"
+                or len(set(owner_ids)) != len(owner_ids)
+                or any(owner not in allowed_owners for owner in owner_ids)
+            ):
+                raise ValueError("development checkpoint owner-sharded optimizer owners are invalid")
+            expected_paths = static_paths | {
+                f"optimizer-state-{owner}.pt" for owner in owner_ids
+            }
+        else:
+            raise ValueError("development checkpoint has an unsupported optimizer layout")
         if set(records) != expected_paths:
             raise ValueError("development checkpoint closed v5 shard set is invalid")
         shared_path = "shared-model.pt"

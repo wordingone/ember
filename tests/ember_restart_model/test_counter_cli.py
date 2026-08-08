@@ -39,6 +39,75 @@ from parameter_counter import REALIZATION_RECEIPT_FIELDS, _CheckpointMetadataUnp
 
 
 class CounterCliTests(unittest.TestCase):
+    def test_counter_inspects_v5_owner_sharded_optimizer_records(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+        )
+        model = UnifiedDecoder(config, genesis_seed=913)
+        model._activate_expert("shared")
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        model(
+            torch.tensor([[1, 2, 3]], dtype=torch.long),
+            active_expert="shared",
+        ).float().square().mean().backward()
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path = root / "config.json"
+            config_payload = {
+                "architecture_revision": "ember-sparse-3b-v2",
+                "model": {
+                    "hidden_size": 32,
+                    "layers": 2,
+                    "attention_heads": 4,
+                    "vocab_size": 64,
+                    "tied_embeddings": True,
+                    "image_projection": {"input_shape": [48, 48, 3], "output_size": 32},
+                    "audio_projection": {"frame_samples": 640, "output_size": 32},
+                    "expert_routing": {"expert_names": ["vision", "audio", "reasoning", "tool"]},
+                },
+            }
+            config_path.write_text(json.dumps(config_payload), encoding="utf-8")
+            checkpoint = root / "checkpoint"
+            write_checkpoint_artifacts(
+                model,
+                optimizer,
+                checkpoint,
+                launch_seed=913,
+                rng_state={"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
+                data_cursor={"shard": "owned", "record_index": 1, "global_step": 1, "tokens_seen": 3},
+                model_config_sha256=hashlib.sha256(config_path.read_bytes()).hexdigest(),
+                contract_sha256="d" * 64,
+                expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                optimizer_state_layout="owner-sharded-v1",
+            )
+            measured = execute_counter(
+                model_config=config_path,
+                checkpoint_manifest=checkpoint / "checkpoint-manifest.json",
+                active_expert="shared",
+            )
+            self.assertEqual(measured["result"], "MEASURED")
+            self.assertEqual(measured["active_expert_ids"], ["shared"])
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    "-I",
+                    str(ROOT / "tools" / "ember-restart-3b" / "parameter_counter.py"),
+                    "--model-config",
+                    str(config_path),
+                    "--checkpoint-manifest",
+                    str(checkpoint / "checkpoint-manifest.json"),
+                    "--active-expert",
+                    "shared",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(json.loads(completed.stdout)["result"], "MEASURED")
+
     def test_counter_rejects_v5_top_level_split_shard_identity_drift(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=39)

@@ -29,6 +29,13 @@ _P2B_STREAM_BUILD_RECEIPT_SHA256 = "748787e23c3100836713f6672a05629185a914563475
 _P2B_STREAM_CORPUS_ROOT_SHA256 = "42d1aac14c1e59563d348b7a53ce83dcce499a48217569d7d00a3966199141ab"
 EXPERT_NAMES = ("vision", "audio", "reasoning", "tool")
 ARCHITECTURE_REVISION = "ember-sparse-3b-v2"
+
+
+def _optimizer_owner_for_name(name: str) -> str:
+    for expert_name in EXPERT_NAMES:
+        if f".experts.{expert_name}." in name:
+            return expert_name
+    return "shared"
 # `active_parameters` / `episode_trainable_parameters` semantics (issue #1329
 # finding 3, decided not redefined): see the `_counts` docstring.
 REALIZATION_RECEIPT_FIELDS = frozenset(
@@ -703,13 +710,31 @@ def _inspect_realization(manifest_path: Path, manifest: Mapping[str, Any], *, ac
     records = manifest.get("shards")
     if not isinstance(records, list): raise ValueError("checkpoint manifest lacks shard records")
     schema_version = manifest.get("schema_version")
+    optimizer_state_layout = manifest.get("optimizer_state_layout", "legacy-v1")
     if schema_version == "ember-sparse-checkpoint-v5":
-        required = {
-            "shared-model.pt",
-            "optimizer-state.pt",
-            "replay-state.pt",
-            *(f"expert-{name}.pt" for name in EXPERT_NAMES),
-        }
+        if optimizer_state_layout == "owner-sharded-v1":
+            owner_ids = manifest.get("optimizer_state_owner_ids")
+            if (
+                not isinstance(owner_ids, list)
+                or owner_ids != [owner for owner in ("shared", *EXPERT_NAMES) if owner in owner_ids]
+                or not owner_ids
+            ):
+                raise ValueError("checkpoint owner-sharded optimizer layout is not closed")
+            required = {
+                "shared-model.pt",
+                "replay-state.pt",
+                *(f"optimizer-state-{owner}.pt" for owner in owner_ids),
+                *(f"expert-{name}.pt" for name in EXPERT_NAMES),
+            }
+        elif optimizer_state_layout == "legacy-v1":
+            required = {
+                "shared-model.pt",
+                "optimizer-state.pt",
+                "replay-state.pt",
+                *(f"expert-{name}.pt" for name in EXPERT_NAMES),
+            }
+        else:
+            raise ValueError("checkpoint optimizer state layout is unsupported")
     elif schema_version in {"ember-sparse-checkpoint-v3", "ember-sparse-checkpoint-v4"}:
         required = {"shared.pt", "replay-state.pt", *(f"expert-{name}.pt" for name in EXPERT_NAMES)}
     else:
@@ -722,10 +747,24 @@ def _inspect_realization(manifest_path: Path, manifest: Mapping[str, Any], *, ac
         by_path[relative] = record
     if set(by_path) != required: raise ValueError("checkpoint realization shard set is not closed for its schema")
     if schema_version == "ember-sparse-checkpoint-v5":
-        if (
-            manifest.get("shared_model_shard_sha256") != by_path["shared-model.pt"].get("sha256")
-            or manifest.get("optimizer_state_shard_sha256") != by_path["optimizer-state.pt"].get("sha256")
-        ):
+        if manifest.get("shared_model_shard_sha256") != by_path["shared-model.pt"].get("sha256"):
+            raise ValueError("checkpoint v5 split shard identity does not match its closed records")
+        if optimizer_state_layout == "owner-sharded-v1":
+            owner_ids = manifest["optimizer_state_owner_ids"]
+            owner_hashes = manifest.get("optimizer_state_owner_shard_sha256")
+            owner_by_parameter = manifest.get("optimizer_state_owner_by_parameter")
+            if (
+                not isinstance(owner_hashes, Mapping)
+                or set(owner_hashes) != set(owner_ids)
+                or not isinstance(owner_by_parameter, Mapping)
+                or not owner_by_parameter
+                or set(owner_by_parameter.values()) - set(owner_ids)
+            ):
+                raise ValueError("checkpoint owner-sharded optimizer identity is not closed")
+            for owner in owner_ids:
+                if owner_hashes[owner] != by_path[f"optimizer-state-{owner}.pt"].get("sha256"):
+                    raise ValueError("checkpoint owner-sharded optimizer identity does not match its closed records")
+        elif manifest.get("optimizer_state_shard_sha256") != by_path["optimizer-state.pt"].get("sha256"):
             raise ValueError("checkpoint v5 split shard identity does not match its closed records")
     elif manifest.get("shared_optimizer_shard_sha256") != by_path["shared.pt"].get("sha256"):
         raise ValueError("legacy shared optimizer shard identity does not match its closed record")
@@ -738,6 +777,10 @@ def _inspect_realization(manifest_path: Path, manifest: Mapping[str, Any], *, ac
     genesis, expert_hashes = manifest.get("expert_genesis_sha256"), manifest.get("expert_checkpoint_sha256")
     if not isinstance(genesis, dict) or set(genesis) != set(EXPERT_NAMES) or not isinstance(expert_hashes, dict) or set(expert_hashes) != set(EXPERT_NAMES): raise ValueError("checkpoint lacks the four expert genesis/checkpoint hashes")
     for name, digest in genesis.items(): _sha256_value(digest, label=f"{name} genesis hash")
+    authorized_parameter_names = set(_expected_shared(shape))
+    for expert_name in EXPERT_NAMES:
+        authorized_parameter_names.update(_expected_expert(shape, expert_name))
+    owner_state_names: set[str] = set()
     for relative, record in by_path.items():
         shard = manifest_path.parent / relative
         if not shard.is_file() or shard.stat().st_size != record.get("bytes"): raise ValueError(f"checkpoint shard byte-size mismatch: {relative}")
@@ -753,6 +796,31 @@ def _inspect_realization(manifest_path: Path, manifest: Mapping[str, Any], *, ac
                         _validate_state(payload.get("model") if isinstance(payload, dict) else None, _expected_shared(shape), label="shared")
                     elif relative == "optimizer-state.pt":
                         if not isinstance(payload, dict) or "optimizer" not in payload: raise ValueError("shared checkpoint lacks optimizer realization")
+                    elif relative.startswith("optimizer-state-") and optimizer_state_layout == "owner-sharded-v1":
+                        owner = relative[len("optimizer-state-"):-len(".pt")]
+                        if (
+                            not isinstance(payload, dict)
+                            or set(payload) != {"schema_version", "owner", "state", "param_groups", "optimizer_contract", "optimizer_realization"}
+                            or payload.get("schema_version") != "ember-optimizer-owner-shard-v1"
+                            or payload.get("owner") != owner
+                            or payload.get("optimizer_contract") != manifest.get("optimizer_contract")
+                            or payload.get("optimizer_realization") != manifest.get("optimizer_realization")
+                            or not isinstance(payload.get("state"), Mapping)
+                            or not payload["state"]
+                            or not isinstance(payload.get("param_groups"), list)
+                        ):
+                            raise ValueError(f"checkpoint owner optimizer payload is malformed: {owner}")
+                        for name in payload["state"]:
+                            if (
+                                not isinstance(name, str)
+                                or name not in authorized_parameter_names
+                                or name not in manifest["optimizer_state_owner_by_parameter"]
+                                or manifest["optimizer_state_owner_by_parameter"][name] != owner
+                                or _optimizer_owner_for_name(name) != owner
+                                or name in owner_state_names
+                            ):
+                                raise ValueError("checkpoint owner optimizer payload violates parameter ownership")
+                            owner_state_names.add(name)
                     else:
                         name = relative[len("expert-"):-len(".pt")]
                         if expert_hashes[name] != record["sha256"]: raise ValueError(f"checkpoint expert hash is not bound: {name}")
@@ -763,6 +831,9 @@ def _inspect_realization(manifest_path: Path, manifest: Mapping[str, Any], *, ac
         except (OSError, zipfile.BadZipFile, ValueError) as error:
             if isinstance(error, ValueError): raise
             raise ValueError(f"checkpoint realization cannot be safely inspected: {error}") from error
+    if schema_version == "ember-sparse-checkpoint-v5" and optimizer_state_layout == "owner-sharded-v1":
+        if owner_state_names != set(manifest["optimizer_state_owner_by_parameter"]):
+            raise ValueError("checkpoint owner optimizer projection does not match shard payloads")
     return dict(manifest)
 def _counts(shape: Mapping[str, int], *, active_expert: str) -> dict[str, int]:
     """Measure the receipt's parameter-count fields.
