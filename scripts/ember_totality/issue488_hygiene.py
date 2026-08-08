@@ -601,7 +601,11 @@ def apply_safe_cleanup(
             path.unlink()
             deleted.append({"path": relative, "bytes": row["bytes"], "sha256": row["sha256"]})
         after = _snapshot(root)
-        working_set_after = _working_set_from_tree(root, sorted(tracked))
+        deleted_paths = {row["path"] for row in deleted}
+        working_set_after = _working_set_from_tree(
+            root,
+            [path for path in sorted(tracked) if path not in deleted_paths],
+        )
         receipt = {
             "ticket": "EMBER-488-HYGIENE",
             "ts": _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
