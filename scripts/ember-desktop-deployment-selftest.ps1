@@ -1,0 +1,145 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+$ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
+
+$installer = Join-Path $PSScriptRoot "install-ember-desktop.ps1"
+$launcher = Join-Path $PSScriptRoot "launch-installed-ember.ps1"
+$temporary = Join-Path ([IO.Path]::GetTempPath()) ("ember-desktop-selftest-" + [Guid]::NewGuid().ToString("N"))
+$install = Join-Path $temporary "install"
+$desktop = Join-Path $temporary "desktop"
+$menu = Join-Path $temporary "menu"
+$fake = Join-Path $temporary "Ember.exe"
+$repository = Join-Path $temporary "repository"
+
+function Assert-True([bool]$Condition, [string]$Message) { if (-not $Condition) { throw $Message } }
+function Invoke-Deploy([string]$Action) {
+    & $installer -Action $Action -InstallRoot $install -RepositoryRoot $repository -DesktopRoot $desktop -StartMenuProgramsRoot $menu
+    if (-not $?) { throw "Deployment $Action failed." }
+}
+
+function Invoke-DeployExpectFailure([string]$Action) {
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $installer `
+            -Action $Action -InstallRoot $install -RepositoryRoot $repository `
+            -DesktopRoot $desktop -StartMenuProgramsRoot $menu 2>$null | Out-Null
+        $childExit = $LASTEXITCODE
+    }
+    finally { $ErrorActionPreference = $previousPreference }
+    if ($childExit -eq 0) { throw "Deployment $Action unexpectedly succeeded." }
+}
+
+function Get-TestCommit {
+    $value = (& git -C $repository rev-parse HEAD | Select-Object -First 1).Trim()
+    if ($value -notmatch '^[0-9a-f]{40}$') { throw "Could not resolve selftest commit." }
+    return $value
+}
+
+try {
+    New-Item -ItemType Directory -Force -Path $temporary | Out-Null
+    Add-Type -TypeDefinition @"
+public static class EmberDesktopExitProbe {
+    public static int Main() { return 23; }
+}
+"@ -OutputAssembly $fake -OutputType ConsoleApplication
+    New-Item -ItemType Directory -Force -Path (Join-Path $repository "scripts") | Out-Null
+    $env:EMBER_SELFTEST_APPLICATION = $fake
+    "param([switch]`$PrepareApplicationOnly)`nWrite-Host 'preparing fixture'`nWrite-Output ''`nWrite-Output `$env:EMBER_SELFTEST_APPLICATION`n" |
+        Set-Content -LiteralPath (Join-Path $repository "scripts\launch-ember-cli.ps1") -Encoding UTF8
+    "first`n" | Set-Content -LiteralPath (Join-Path $repository "tracked.txt") -Encoding UTF8
+    & git -C $repository init --quiet --object-format=sha1
+    & git -C $repository config user.name "Ember deployment selftest"
+    & git -C $repository config user.email "selftest@invalid.local"
+    & git -C $repository add scripts/launch-ember-cli.ps1 tracked.txt
+    & git -C $repository commit --quiet -m "selftest first version"
+    if ($LASTEXITCODE -ne 0) { throw "Could not create first selftest source commit." }
+    $a = Get-TestCommit
+
+    Invoke-Deploy "Install"
+    Assert-True (Test-Path (Join-Path $desktop "Ember.lnk")) "Desktop shortcut absent."
+    Assert-True (Test-Path (Join-Path $menu "Ember.lnk")) "Start Menu shortcut absent."
+    Assert-True (Test-Path (Join-Path $install "versions\$a\version.json")) "Version record absent."
+    $shell = New-Object -ComObject WScript.Shell
+    try {
+        $shortcut = $shell.CreateShortcut((Join-Path $desktop "Ember.lnk"))
+        Assert-True ($shortcut.TargetPath -like "*powershell.exe") "Shortcut target is not stable PowerShell."
+        Assert-True ($shortcut.Arguments -like "*launch-installed-ember.ps1*") "Shortcut arguments do not bind installed launcher."
+        Assert-True ($shortcut.IconLocation -like "*versions*$a*Ember.exe,0") "Shortcut icon is not the admitted version."
+    }
+    finally { [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell) | Out-Null }
+
+    $launchProcess = Start-Process -FilePath "powershell.exe" -ArgumentList @(
+        "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", $launcher,
+        "-InstallRoot", $install
+    ) -Wait -PassThru -WindowStyle Hidden
+    Assert-True ($launchProcess.ExitCode -eq 23) "Installed launcher did not preserve the admitted executable exit code."
+
+    # Idempotent same-version install.
+    Invoke-Deploy "Install"
+    "second`n" | Set-Content -LiteralPath (Join-Path $repository "tracked.txt") -Encoding UTF8
+    & git -C $repository add tracked.txt
+    & git -C $repository commit --quiet -m "selftest second version"
+    if ($LASTEXITCODE -ne 0) { throw "Could not create second selftest source commit." }
+    $b = Get-TestCommit
+    $beforeInterrupted = Get-Content (Join-Path $install "current.json") -Raw
+    $env:EMBER_SELFTEST_APPLICATION = Join-Path $temporary "missing.exe"
+    Invoke-DeployExpectFailure "Install"
+    Assert-True ((Get-Content (Join-Path $install "current.json") -Raw) -eq $beforeInterrupted) "Interrupted publication changed current.json."
+    $env:EMBER_SELFTEST_APPLICATION = $fake
+    Invoke-Deploy "Install"
+
+    Add-Content -LiteralPath (Join-Path $install "versions\$a\Ember.exe") -Value "rollback tamper"
+    Invoke-DeployExpectFailure "Rollback"
+    Assert-True ((Get-Content (Join-Path $install "current.json") -Raw | ConvertFrom-Json).source_commit -eq $b) "Refused rollback changed current.json."
+    Copy-Item -LiteralPath $fake -Destination (Join-Path $install "versions\$a\Ember.exe") -Force
+    Invoke-Deploy "Rollback"
+    $current = Get-Content (Join-Path $install "current.json") -Raw | ConvertFrom-Json
+    Assert-True ($current.source_commit -eq $a) "Rollback did not restore the authenticated version."
+
+    # Installed launcher rejects unknown fields, traversal, and byte tampering before spawn.
+    $saved = Get-Content (Join-Path $install "current.json") -Raw
+    $bad = $saved | ConvertFrom-Json
+    $bad | Add-Member -NotePropertyName foreign -NotePropertyValue 1
+    $bad | ConvertTo-Json | Set-Content (Join-Path $install "current.json") -Encoding UTF8
+    $env:EMBER_INSTALLED_LAUNCH_LIBRARY_ONLY = "1"
+    . $launcher
+    $closed = $false
+    try { Read-EmberInstalledManifest $install } catch { $closed = $true }
+    Assert-True $closed "Unknown manifest field was accepted."
+    $missing = $saved | ConvertFrom-Json
+    $missing.PSObject.Properties.Remove("installed_at_utc")
+    $missing | ConvertTo-Json | Set-Content (Join-Path $install "current.json") -Encoding UTF8
+    $closed = $false
+    try { Read-EmberInstalledManifest $install } catch { $closed = $true }
+    Assert-True $closed "Missing manifest field was accepted."
+    $saved | Set-Content (Join-Path $install "current.json") -Encoding UTF8
+    $manifest = Read-EmberInstalledManifest $install
+    $manifest.executable_relative_path = "../Ember.exe"
+    $traversal = $false
+    try { Resolve-EmberInstalledExecutable $install $manifest } catch { $traversal = $true }
+    Assert-True $traversal "Traversal was accepted."
+    Add-Content -LiteralPath (Join-Path $install "versions\$a\Ember.exe") -Value "tamper"
+    $tamper = $false
+    try { Resolve-EmberInstalledExecutable $install (Read-EmberInstalledManifest $install) } catch { $tamper = $true }
+    Assert-True $tamper "Executable tampering was accepted."
+
+    # Restore by rolling forward to b, repair shortcuts, then scoped uninstall.
+    $bRecord = Get-Content (Join-Path $install "versions\$b\version.json") -Raw | ConvertFrom-Json
+    $next = [ordered]@{ schema_version=1; source_commit=$b; executable_sha256=$bRecord.executable_sha256; executable_relative_path="versions/$b/Ember.exe"; installed_at_utc=[DateTime]::UtcNow.ToString("o"); previous_source_commit="" }
+    $next | ConvertTo-Json | Set-Content (Join-Path $install "current.json") -Encoding UTF8
+    Invoke-Deploy "Repair"
+    $foreign = Join-Path $temporary "foreign.txt"
+    "keep" | Set-Content $foreign
+    Invoke-Deploy "Uninstall"
+    Assert-True (-not (Test-Path $install)) "Install root survived uninstall."
+    Assert-True (Test-Path $foreign) "Uninstall removed a foreign file."
+    Write-Output "EMBER_DESKTOP_DEPLOYMENT_SELFTEST_PASS"
+}
+finally {
+    Remove-Item Env:EMBER_INSTALLED_LAUNCH_LIBRARY_ONLY -ErrorAction SilentlyContinue
+    Remove-Item Env:EMBER_SELFTEST_APPLICATION -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Recurse -Force }
+}

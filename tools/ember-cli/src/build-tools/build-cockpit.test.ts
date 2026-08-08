@@ -3,6 +3,7 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 import { describe, expect, it } from "bun:test";
+import { readFileSync } from "fs";
 import {
   buildCommitBanner,
   cockpitCompileArgs,
@@ -32,7 +33,8 @@ describe("cockpit build commit binding", () => {
 
   it("brands every compiled Windows binary as Ember", () => {
     const commit = "c".repeat(40);
-    expect(cockpitCompileArgs(commit, "owned-temp/ember.exe")).toEqual([
+    const args = cockpitCompileArgs(commit, "owned-temp/ember.exe");
+    expect(args).toEqual([
       "build",
       "./entrypoints/main.ts",
       "--compile",
@@ -48,6 +50,11 @@ describe("cockpit build commit binding", () => {
       "0.1.0.0",
       "--windows-description",
       "Ember local AI laboratory",
+      "--windows-icon",
+      expect.stringMatching(/[\\/]assets[\\/]ember\.ico$/),
     ]);
+    const iconPath = args.at(-1)!;
+    const icon = readFileSync(iconPath);
+    expect(icon.subarray(0, 4)).toEqual(Buffer.from([0, 0, 1, 0]));
   });
 });

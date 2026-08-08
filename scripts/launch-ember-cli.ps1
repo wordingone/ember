@@ -1,6 +1,10 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+param(
+    [switch]$PrepareApplicationOnly
+)
+
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
@@ -486,7 +490,9 @@ try {
         return
     }
 
-    Stop-StaleOwnedEmberApplications $stateRoot
+    if (-not $PrepareApplicationOnly) {
+        Stop-StaleOwnedEmberApplications $stateRoot
+    }
 
     $commit = (& git -C $repositoryRoot rev-parse HEAD 2>$null | Select-Object -First 1).Trim()
     if ($commit -notmatch "^[0-9a-f]{40}$") {
@@ -550,6 +556,11 @@ try {
         }
     }
     Assert-EmberStateIsExternal $repositoryRoot
+
+    if ($PrepareApplicationOnly) {
+        Write-Output ([System.IO.Path]::GetFullPath($application))
+        return
+    }
 
     $windowHandle = Get-EmberHostWindowHandle
     Set-EmberWindowToLeftWorkArea $windowHandle | Out-Null

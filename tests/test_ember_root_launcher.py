@@ -164,6 +164,18 @@ class EmberRootLauncherTests(unittest.TestCase):
         self.assertIn('$ErrorActionPreference = "Continue"', implementation)
         self.assertNotIn('$LASTEXITCODE -ne 0 -or $commit', implementation)
         self.assertNotIn('& $bun run entrypoints/main.ts\n    if ($LASTEXITCODE', implementation)
+
+    def test_prepare_application_only_returns_before_window_or_child_launch(self) -> None:
+        implementation = LAUNCH_IMPL.read_text(encoding="utf-8")
+        self.assertIn("[switch]$PrepareApplicationOnly", implementation)
+        prepare = implementation.index("if ($PrepareApplicationOnly)")
+        window = implementation.index("$windowHandle = Get-EmberHostWindowHandle")
+        child = implementation.index("& $application", window)
+        self.assertLess(prepare, window)
+        self.assertLess(prepare, child)
+        block = implementation[prepare:window]
+        self.assertIn("GetFullPath($application)", block)
+        self.assertIn("return", block)
     def run_library_command(self, body: str) -> subprocess.CompletedProcess[str]:
         script = str(LAUNCH_IMPL).replace("'", "''")
         command = f"$env:EMBER_LAUNCH_LIBRARY_ONLY='1'; . '{script}'; {body}"

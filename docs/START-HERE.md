@@ -1,6 +1,8 @@
 # Start here
 
-On Windows, launch the operator body from the repository root by running `Ember.cmd`.
+On Windows, launch the operator body from the repository root by running `Ember.cmd`. For a
+versioned per-user installation with Desktop and Start Menu shortcuts, see
+[`docs/operations/windows-desktop-install.md`](operations/windows-desktop-install.md).
 
 This page exists so a first-time reader — someone with no prior context on this repo — can
 verify one claim end-to-end without reverse-engineering the vocabulary first. It does not repeat
