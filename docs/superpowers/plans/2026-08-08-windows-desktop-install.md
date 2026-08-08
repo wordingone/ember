@@ -22,17 +22,17 @@
 ### Task 1: Branded canonical executable
 
 **Files:**
-- Create: `tools/ember-cli/src/assets/ember.ico`
+- Create: `assets/ember.ico`
 - Modify: `tools/ember-cli/src/build-tools/build-cockpit.ts`
 - Modify: `tools/ember-cli/src/build-tools/build-cockpit.test.ts`
 
 **Interfaces:**
 - Produces: canonical `cockpitCompileArgs()` containing exactly one `--windows-icon` argument bound to the tracked icon.
 
-- [ ] Write a failing build-argument test requiring the tracked icon.
-- [ ] Run the focused Bun test and capture the missing-argument RED.
-- [ ] Add the tracked icon and minimal build argument.
-- [ ] Run the focused test GREEN and verify the ICO header/resolutions.
+- [x] Write a failing build-argument test requiring the tracked icon.
+- [x] Run the focused Bun test and capture the missing-argument RED.
+- [x] Add the tracked icon and minimal build argument.
+- [x] Run the focused test GREEN and verify the ICO header/resolutions.
 
 ### Task 2: Prepare-only canonical build
 
@@ -43,10 +43,10 @@
 **Interfaces:**
 - Produces: `scripts/launch-ember-cli.ps1 -PrepareApplicationOnly`, which prints one absolute built executable path and never launches a window.
 
-- [ ] Add a failing source/behavior test for prepare-only mode.
-- [ ] Run the focused root-launcher selector and capture RED.
-- [ ] Extract the minimum build-return boundary and implement the switch.
-- [ ] Run the focused and full root-launcher tests GREEN.
+- [x] Add a failing source/behavior test for prepare-only mode.
+- [x] Run the focused root-launcher selector and capture RED.
+- [x] Extract the minimum build-return boundary and implement the switch.
+- [x] Run the focused and full root-launcher tests GREEN.
 
 ### Task 3: Closed installed-launch admission
 
@@ -57,10 +57,10 @@
 **Interfaces:**
 - Produces: `Read-EmberInstalledManifest`, `Resolve-EmberInstalledExecutable`, and CLI launch behavior returning the admitted executable's exit code.
 
-- [ ] Write RED cases for absent launcher, unknown/missing manifest keys, traversal, and SHA tampering.
-- [ ] Run the selftest and capture RED.
-- [ ] Implement closed manifest parsing, contained path resolution, SHA admission, and exact exit propagation.
-- [ ] Run launcher selectors GREEN.
+- [x] Write RED cases for absent launcher, unknown/missing manifest keys, traversal, and SHA tampering.
+- [x] Run the selftest and capture RED.
+- [x] Implement closed manifest parsing, contained path resolution, SHA admission, and exact exit propagation.
+- [x] Run launcher selectors GREEN.
 
 ### Task 4: Versioned deployment lifecycle
 
@@ -71,10 +71,10 @@
 **Interfaces:**
 - Produces: `Install`, `Repair`, `Rollback`, and `Uninstall` actions; immutable `version.json`; atomic `current.json`; path-free `install-receipt.json`.
 
-- [ ] Add RED cases for missing deployment entrypoint, interrupted publication, idempotence, rollback authentication, and scoped uninstall.
-- [ ] Run selftest and capture RED.
-- [ ] Implement source cleanliness/identity, prepare-only build invocation, destination-volume staging, immutable publication, atomic manifest switch, rollback, repair, uninstall, and receipts.
-- [ ] Run lifecycle selectors GREEN.
+- [x] Add RED cases for missing deployment entrypoint, interrupted publication, idempotence, rollback authentication, and scoped uninstall.
+- [x] Run selftest and capture RED.
+- [x] Implement source cleanliness/identity, prepare-only build invocation, destination-volume staging, immutable publication, atomic manifest switch, rollback, repair, uninstall, and receipts.
+- [x] Run lifecycle selectors GREEN.
 
 ### Task 5: Real Windows shortcut adapter
 
@@ -85,10 +85,10 @@
 **Interfaces:**
 - Produces: idempotent Desktop and Start Menu `Ember.lnk` files targeting the stable installed launcher with exact target, fixed arguments, working directory, description, and current icon.
 
-- [ ] Add a real WScript.Shell `.lnk` RED/readback selector.
-- [ ] Run it and capture RED.
-- [ ] Implement temporary shortcut creation, readback verification, and atomic replacement.
-- [ ] Run shortcut/lifecycle selftests GREEN.
+- [x] Add a real WScript.Shell `.lnk` RED/readback selector.
+- [x] Run it and capture RED.
+- [x] Implement temporary shortcut creation, readback verification, and atomic replacement.
+- [x] Run shortcut/lifecycle selftests GREEN.
 
 ### Task 6: CI, operator docs, and real installation
 
@@ -100,7 +100,7 @@
 **Interfaces:**
 - CI runs the deployment selftest on Windows; operators have exact install/repair/rollback/uninstall commands.
 
-- [ ] Add the Windows CI invocation and documentation.
+- [x] Add the Windows CI invocation and documentation.
 - [ ] Run PowerShell selftests, root launcher tests, build tests, source compile/parser checks, and diff-check.
 - [ ] Build and install exact current branch bytes into the real per-user install root.
 - [ ] Verify real Desktop/Start Menu shortcut metadata, manifests, binary SHA, and a bounded launcher smoke.
