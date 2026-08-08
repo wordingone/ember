@@ -350,7 +350,12 @@ fail-closed behavior unchanged). `--domain` filters to one charter letter;
 `--include-bulk` also lists the bulk veins. `--execute` additionally requires
 positive `--bulk-budget-bytes`, a closed resolution JSON object mapping every
 selected vein to `{urls, resolution_receipt_sha256}` (with concrete URLs and a
-lowercase 64-hex resolution receipt hash for each entry page), and a closed
+lowercase 64-hex resolution receipt hash for each entry page). The hash is the
+SHA-256 of canonical JSON `{"schema":"ember-wave2-bulk-resolution-v1",
+"vein":<name>,"urls":[<ordered concrete URLs>]}`; the direct Wikipedia
+artifact binds its own URL in the same projection. This makes the receipt
+commit to the exact URL set rather than merely accepting caller-supplied hex,
+and a closed
 license-evidence JSON object mapping every selected vein to an external
 source-read license page/file. Missing or self-referential evidence, unresolved
 entry pages, unknown keys, duplicate URLs, bad receipt hashes, and malformed

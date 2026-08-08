@@ -37,6 +37,7 @@ unchanged -- this module adds no separate execution path of its own.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import subprocess
 import sys
@@ -46,6 +47,7 @@ from typing import List, Optional
 from urllib.parse import urlparse
 
 HERE = Path(__file__).resolve().parent
+BULK_RESOLUTION_SCHEMA = "ember-wave2-bulk-resolution-v1"
 
 CHARTER_DOMAINS = {
     "A": "Math",
@@ -440,6 +442,16 @@ def validate_domain_diversity() -> dict[str, list[str]]:
     return deficits
 
 
+def _resolution_receipt_sha256(vein_name: str, urls: list[str]) -> str:
+    payload = {
+        "schema": BULK_RESOLUTION_SCHEMA,
+        "vein": vein_name,
+        "urls": list(urls),
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def _load_bulk_mapping(path: str, selected: list[BulkVein], label: str) -> dict[str, object]:
     try:
         payload = json.loads(Path(path).read_text(encoding="utf-8"))
@@ -478,9 +490,12 @@ def _bulk_dispatch_plan(
                 raise ValueError(f"bulk vein {vein.name} has no concrete resolved artifact URLs")
             if len(set(urls)) != len(urls):
                 raise ValueError(f"bulk vein {vein.name} resolution receipt has duplicate URLs")
-        elif urls not in (None, [], [vein.url]):
-            raise ValueError(f"bulk vein {vein.name} must not replace its direct artifact URL")
-        target_urls = [vein.url] if not vein.requires_resolution else urls
+        elif urls != [vein.url]:
+            raise ValueError(f"bulk vein {vein.name} receipt must bind its direct artifact URL")
+        target_urls = urls
+        expected_receipt_sha256 = _resolution_receipt_sha256(vein.name, target_urls)
+        if receipt_sha256 != expected_receipt_sha256:
+            raise ValueError(f"bulk vein {vein.name} resolution receipt does not bind its URL set")
         text = evidence[vein.name]
         if not isinstance(text, str) or not text.strip() or "wave_manifest.py" in text.casefold():
             raise ValueError(f"bulk vein {vein.name} has invalid external license evidence")

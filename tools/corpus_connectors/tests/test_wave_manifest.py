@@ -10,6 +10,7 @@ CLI's print/dry-run/--execute wiring, mocking subprocess.run for --execute.
 """
 from __future__ import annotations
 
+import hashlib
 import subprocess
 import sys
 import tempfile
@@ -21,6 +22,16 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import wave_manifest as wm  # noqa: E402
+
+
+def resolution_receipt_sha256(vein_name, urls):
+    payload = {
+        "schema": "ember-wave2-bulk-resolution-v1",
+        "vein": vein_name,
+        "urls": list(urls),
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
 
 
 class SourceTableInvariantTests(unittest.TestCase):
@@ -227,7 +238,10 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             resolution = Path(tmp) / "resolution.json"
             evidence = Path(tmp) / "evidence.json"
-            resolution.write_text(json.dumps({vein_name: {"urls": [], "resolution_receipt_sha256": "a" * 64}}), encoding="utf-8")
+            resolution.write_text(json.dumps({vein_name: {
+                "urls": [wm.WAVE2_BULK_VEINS[-1].url],
+                "resolution_receipt_sha256": resolution_receipt_sha256(vein_name, [wm.WAVE2_BULK_VEINS[-1].url]),
+            }}), encoding="utf-8")
             evidence.write_text(json.dumps({vein_name: "wave_manifest.py generated license claim"}), encoding="utf-8")
             with mock.patch("wave_manifest.subprocess.run") as run_mock:
                 rc = wm.main([
@@ -247,7 +261,9 @@ class CliTests(unittest.TestCase):
             resolution.write_text(json.dumps({
                 vein.name: {
                     "urls": [f"https://example.test/{vein.name}.tar"],
-                    "resolution_receipt_sha256": "a" * 64,
+                    "resolution_receipt_sha256": resolution_receipt_sha256(
+                        vein.name, [f"https://example.test/{vein.name}.tar"]
+                    ),
                 }
                 for vein in selected
             }), encoding="utf-8")
@@ -269,12 +285,15 @@ class CliTests(unittest.TestCase):
             self.assertIn(f"https://example.test/{vein.name}.tar", command)
             self.assertNotIn(vein.url, command)
 
-    def test_execute_bulk_rejects_bad_resolution_receipt_hash_before_subprocess(self):
+    def test_execute_bulk_rejects_rehashed_but_wrong_resolution_receipt_before_subprocess(self):
         vein_name = "wikipedia-en-baseline"
         with tempfile.TemporaryDirectory() as tmp:
             resolution = Path(tmp) / "resolution.json"
             evidence = Path(tmp) / "evidence.json"
-            resolution.write_text(json.dumps({vein_name: {"urls": [], "resolution_receipt_sha256": "not-a-sha"}}), encoding="utf-8")
+            resolution.write_text(json.dumps({vein_name: {
+                "urls": ["https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2"],
+                "resolution_receipt_sha256": "a" * 64,
+            }}), encoding="utf-8")
             evidence.write_text(json.dumps({vein_name: "Wikimedia dump license page and terms"}), encoding="utf-8")
             with mock.patch("wave_manifest.subprocess.run") as run_mock:
                 rc = wm.main([
@@ -291,7 +310,13 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             resolution = Path(tmp) / "resolution.json"
             evidence = Path(tmp) / "evidence.json"
-            resolution.write_text(json.dumps({vein_name: {"urls": [], "resolution_receipt_sha256": "a" * 64}}), encoding="utf-8")
+            resolution.write_text(json.dumps({vein_name: {
+                "urls": ["https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2"],
+                "resolution_receipt_sha256": resolution_receipt_sha256(
+                    vein_name,
+                    ["https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2"],
+                ),
+            }}), encoding="utf-8")
             evidence.write_text(json.dumps({vein_name: "Wikimedia dump license page and terms"}), encoding="utf-8")
             with mock.patch("wave_manifest.subprocess.run") as run_mock:
                 rc = wm.main([
