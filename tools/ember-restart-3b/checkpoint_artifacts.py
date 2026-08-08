@@ -1605,19 +1605,47 @@ def _validate_owner_sharded_optimizer_payloads(
     root: Path,
     receipt: Mapping[str, Any],
     records: Mapping[str, Mapping[str, Any]],
+    *,
+    expected_optimizer_contract: Mapping[str, Any] | None = None,
+    expected_optimizer_realization: Mapping[str, Any] | None = None,
+    expected_parameter_names: set[str] | None = None,
 ) -> None:
     optimizer_contract = _validate_optimizer_contract(receipt.get("optimizer_contract", {}))
     optimizer_realization = _validate_optimizer_realization(
         optimizer_contract, receipt.get("optimizer_realization")
     )
+    if expected_optimizer_contract is not None:
+        expected_contract = _validate_optimizer_contract(expected_optimizer_contract)
+        if optimizer_contract != expected_contract:
+            raise ValueError("checkpoint optimizer contract does not match runtime optimizer authority")
+        if expected_optimizer_realization is None:
+            raise ValueError("runtime optimizer realization is required with runtime optimizer contract")
+        expected_realization = _validate_optimizer_realization(
+            expected_contract, expected_optimizer_realization
+        )
+        if optimizer_realization != expected_realization:
+            raise ValueError("checkpoint optimizer realization does not match runtime optimizer authority")
     owner_ids = receipt.get("optimizer_state_owner_ids")
     owner_by_parameter = receipt.get("optimizer_state_owner_by_parameter")
-    if not isinstance(owner_ids, list) or not isinstance(owner_by_parameter, Mapping):
+    owner_hashes = receipt.get("optimizer_state_owner_shard_sha256")
+    if (
+        not isinstance(owner_ids, list)
+        or not isinstance(owner_by_parameter, Mapping)
+        or not isinstance(owner_hashes, Mapping)
+        or owner_ids != [owner for owner in ["shared", *EXPERT_NAMES] if owner in owner_ids]
+        or set(owner_ids) != set(owner_hashes)
+        or set(owner_by_parameter.values()) - set(owner_ids)
+    ):
         raise ValueError("checkpoint optimizer owner projection is not closed")
     _optimizer_state_shard_paths(owner_ids)
     merged: dict[str, str] = {}
+    parameter_groups: list[Mapping[str, Any]] | None = None
     for owner in owner_ids:
         relative = f"optimizer-state-{owner}.pt"
+        if relative not in records:
+            raise ValueError(f"checkpoint optimizer owner shard is missing: {owner}")
+        if owner_hashes.get(owner) != records[relative].get("sha256"):
+            raise ValueError(f"checkpoint optimizer owner shard hash is not bound: {owner}")
         payload = torch.load(root / relative, map_location="cpu", weights_only=False, mmap=True)
         if (
             not isinstance(payload, Mapping)
@@ -1631,16 +1659,46 @@ def _validate_owner_sharded_optimizer_payloads(
             or not isinstance(payload.get("param_groups"), list)
         ):
             raise ValueError(f"checkpoint optimizer owner payload is malformed: {owner}")
+        if parameter_groups is None:
+            parameter_groups = payload["param_groups"]
+        elif payload["param_groups"] != parameter_groups:
+            raise ValueError("checkpoint optimizer owner payloads disagree on parameter groups")
         for name in payload["state"]:
-            if not isinstance(name, str) or _optimizer_owner_for_parameter(name) != owner or name in merged:
+            if (
+                not isinstance(name, str)
+                or (expected_parameter_names is not None and name not in expected_parameter_names)
+                or _optimizer_owner_for_parameter(name) != owner
+                or name in merged
+            ):
                 raise ValueError("checkpoint optimizer owner payload violates closed ownership")
             merged[name] = owner
         del payload
     if dict(sorted(merged.items())) != dict(sorted(owner_by_parameter.items())):
         raise ValueError("checkpoint optimizer owner projection does not match shard payloads")
+    if parameter_groups is None:
+        raise ValueError("checkpoint optimizer owner payloads have no parameter groups")
+    for descriptor in parameter_groups:
+        if not isinstance(descriptor, Mapping) or "param_names" not in descriptor:
+            raise ValueError("checkpoint optimizer parameter-group descriptor is malformed")
+        names = descriptor["param_names"]
+        if (
+            not isinstance(names, list)
+            or len(names) != len(set(names))
+            or any(not isinstance(name, str) for name in names)
+            or (
+                expected_parameter_names is not None
+                and any(name not in expected_parameter_names for name in names)
+            )
+        ):
+            raise ValueError("checkpoint optimizer parameter-group names are invalid")
 
 
-def _checkpoint_candidate_receipt(candidate: Path) -> dict[str, Any]:
+def _checkpoint_candidate_receipt(
+    candidate: Path,
+    *,
+    expected_optimizer_contract: Mapping[str, Any] | None = None,
+    expected_optimizer_realization: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     manifest_path = candidate / "checkpoint-manifest.json"
     if _is_link_or_reparse(manifest_path):
         raise ValueError("checkpoint manifest cannot be a symlink or reparse point")
@@ -1655,8 +1713,16 @@ def _checkpoint_candidate_receipt(candidate: Path) -> dict[str, Any]:
     receipt = {**manifest, "checkpoint_manifest_sha256": manifest_sha256}
     records = _validated_records(candidate, receipt)
     if receipt.get("optimizer_state_layout") == _OWNER_SHARDED_OPTIMIZER_STATE_LAYOUT:
+        if expected_optimizer_contract is None or expected_optimizer_realization is None:
+            raise ValueError("owner-sharded checkpoint admission requires runtime optimizer authority")
         try:
-            _validate_owner_sharded_optimizer_payloads(candidate, receipt, records)
+            _validate_owner_sharded_optimizer_payloads(
+                candidate,
+                receipt,
+                records,
+                expected_optimizer_contract=expected_optimizer_contract,
+                expected_optimizer_realization=expected_optimizer_realization,
+            )
         except ValueError:
             raise
         except Exception as error:
@@ -1784,6 +1850,8 @@ def admit_quarantined_checkpoint(
     *,
     verifier: Callable[[Path, dict[str, Any]], Mapping[str, Any]],
     max_serialized_bytes: int | None = None,
+    expected_optimizer_contract: Mapping[str, Any] | None = None,
+    expected_optimizer_realization: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Judge durable raw bytes and atomically make only a passing candidate selectable."""
 
@@ -1797,7 +1865,11 @@ def admit_quarantined_checkpoint(
         raise FileExistsError(f"published checkpoint bundle already exists: {published_root}")
     if (candidate / _STAGING_LEASE).exists():
         raise ValueError("quarantined checkpoint candidate retains a writer lease")
-    receipt = _checkpoint_candidate_receipt(candidate)
+    receipt = _checkpoint_candidate_receipt(
+        candidate,
+        expected_optimizer_contract=expected_optimizer_contract,
+        expected_optimizer_realization=expected_optimizer_realization,
+    )
     if receipt.get("storage_projection") is not None:
         _validate_checkpoint_storage_projection(
             receipt["storage_projection"],
@@ -1809,7 +1881,11 @@ def admit_quarantined_checkpoint(
         # after final_snapshot.
         returned_counter_receipt = verifier(candidate, dict(receipt))
         try:
-            post_callback_receipt = _checkpoint_candidate_receipt(candidate)
+            post_callback_receipt = _checkpoint_candidate_receipt(
+                candidate,
+                expected_optimizer_contract=expected_optimizer_contract,
+                expected_optimizer_realization=expected_optimizer_realization,
+            )
         except Exception as error:
             if isinstance(error, ValueError) and "symlink or reparse" in str(error):
                 raise
@@ -1827,7 +1903,11 @@ def admit_quarantined_checkpoint(
         if published_root.exists():
             raise FileExistsError(f"published checkpoint bundle appeared during admission: {published_root}")
         # This is deliberately the final candidate operation before no-replace promotion.
-        final_receipt = _checkpoint_candidate_receipt(candidate)
+        final_receipt = _checkpoint_candidate_receipt(
+            candidate,
+            expected_optimizer_contract=expected_optimizer_contract,
+            expected_optimizer_realization=expected_optimizer_realization,
+        )
         if final_receipt != post_callback_receipt:
             raise ValueError("checkpoint candidate changed after verifier validation")
     except Exception as error:
@@ -2154,6 +2234,8 @@ def _write_checkpoint_artifacts_impl(
                 published_root,
                 verifier=pre_publish_verifier,
                 max_serialized_bytes=max_serialized_bytes,
+                expected_optimizer_contract=optimizer_contract,
+                expected_optimizer_realization=optimizer_realization,
             )
         _atomic_publish_no_replace(root, published_root)
         return _bind_checkpoint_identity(published_root, receipt)
@@ -2288,7 +2370,7 @@ def _validate_model_state(expected: Mapping[str, torch.Tensor], actual: Any, *, 
     return actual
 
 
-def _load_owner_sharded_optimizer_state(
+def _prepare_owner_sharded_optimizer_state(
     model: UnifiedDecoder,
     optimizer: torch.optim.Optimizer,
     root: Path,
@@ -2296,7 +2378,7 @@ def _load_owner_sharded_optimizer_state(
     records: Mapping[str, Mapping[str, Any]],
     optimizer_contract: Mapping[str, Any],
     optimizer_realization: Mapping[str, Any],
-) -> None:
+) -> dict[str, Any]:
     owner_ids = receipt.get("optimizer_state_owner_ids")
     owner_by_parameter = receipt.get("optimizer_state_owner_by_parameter")
     owner_hashes = receipt.get("optimizer_state_owner_shard_sha256")
@@ -2392,15 +2474,13 @@ def _load_owner_sharded_optimizer_state(
         for key, value in descriptor.items():
             if key != "param_names":
                 loaded_groups[index][key] = value
-    optimizer.load_state_dict(
-        {
-            "state": {
-                parameter_ids_by_name[name]: state
-                for name, state in merged_state.items()
-            },
-            "param_groups": loaded_groups,
-        }
-    )
+    return {
+        "state": {
+            parameter_ids_by_name[name]: state
+            for name, state in merged_state.items()
+        },
+        "param_groups": loaded_groups,
+    }
 
 
 def load_checkpoint_artifacts(
@@ -2453,7 +2533,14 @@ def load_checkpoint_artifacts(
     )
     if owner_sharded:
         try:
-            _validate_owner_sharded_optimizer_payloads(root, receipt, records)
+            _validate_owner_sharded_optimizer_payloads(
+                root,
+                receipt,
+                records,
+                expected_optimizer_contract=optimizer_contract,
+                expected_optimizer_realization=optimizer_realization,
+                expected_parameter_names=set(dict(model.named_parameters())),
+            )
         except ValueError:
             raise
         except Exception as error:
@@ -2526,20 +2613,25 @@ def load_checkpoint_artifacts(
         }
         expert_states[name] = _validate_model_state(expert_expected, payload.get("model"), label=f"expert {name}")
 
+    prepared_optimizer_state: dict[str, Any] | None = None
+    if optimizer is not None and owner_sharded:
+        prepared_optimizer_state = _prepare_owner_sharded_optimizer_state(
+            model,
+            optimizer,
+            root,
+            receipt,
+            records,
+            optimizer_contract,
+            optimizer_realization,
+        )
+
     model.load_state_dict(shared_state, strict=False)
     for state in expert_states.values():
         model.load_state_dict(state, strict=False)
     if optimizer is not None:
         if owner_sharded:
-            _load_owner_sharded_optimizer_state(
-                model,
-                optimizer,
-                root,
-                receipt,
-                records,
-                optimizer_contract,
-                optimizer_realization,
-            )
+            assert prepared_optimizer_state is not None
+            optimizer.load_state_dict(prepared_optimizer_state)
         else:
             optimizer.load_state_dict(optimizer_payload["optimizer"])
     model._activate_expert(active[0])
@@ -2590,6 +2682,16 @@ def load_checkpoint_model_only_transition(
     if not isinstance(active, list) or len(active) != 1 or active[0] not in {*EXPERT_NAMES, "shared"}:
         raise ValueError("checkpoint receipt lacks exactly one declared active expert")
     records = _validated_records(root, receipt)
+    if (
+        schema_version == "ember-sparse-checkpoint-v5"
+        and receipt.get("optimizer_state_layout") == _OWNER_SHARDED_OPTIMIZER_STATE_LAYOUT
+    ):
+        _validate_owner_sharded_optimizer_payloads(
+            root,
+            receipt,
+            records,
+            expected_parameter_names=set(dict(model.named_parameters())),
+        )
     expected_state = model.state_dict()
 
     replay_payload = torch.load(root / "replay-state.pt", map_location="cpu", weights_only=False, mmap=True)
