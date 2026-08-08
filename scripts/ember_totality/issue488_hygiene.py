@@ -492,7 +492,18 @@ def build_reference_manifest(
     return manifest
 
 
-def _snapshot(root: Path) -> dict[str, int]:
+def _snapshot(root: Path, tracked: list[str] | None = None) -> dict[str, int]:
+    if tracked is not None:
+        files = []
+        for relative in tracked:
+            _validate_relative_path(relative)
+            path = root / Path(relative)
+            if path.is_file() and not path.is_symlink():
+                files.append(path)
+        return {
+            "files": len(files),
+            "bytes": sum(path.stat().st_size for path in files),
+        }
     count = 0
     total_bytes = 0
     for path in root.rglob("*"):
@@ -592,7 +603,7 @@ def apply_safe_cleanup(
         selected.append((relative, row, path))
 
     backups = [(path, path.read_bytes()) for _relative, _row, path in selected]
-    before = _snapshot(root)
+    before = _snapshot(root, sorted(tracked))
     working_set_before = manifest.get("working_set")
     deleted = []
     temporary_receipt = destination.with_name(destination.name + ".tmp")
@@ -600,7 +611,7 @@ def apply_safe_cleanup(
         for relative, row, path in selected:
             path.unlink()
             deleted.append({"path": relative, "bytes": row["bytes"], "sha256": row["sha256"]})
-        after = _snapshot(root)
+        after = _snapshot(root, sorted(tracked))
         deleted_paths = {row["path"] for row in deleted}
         working_set_after = _working_set_from_tree(
             root,
@@ -682,7 +693,7 @@ def validate_post_cleanup(
         historical_root = Path(directory)
         _extract_validated_git_archive(archive, historical_root)
         _validate_manifest(historical_root, manifest, historical=True, tracked_override=tracked)
-        expected_before = _snapshot(historical_root)
+        expected_before = _snapshot(historical_root, tracked)
         expected_working_set_before = compute_working_set(
             historical_root,
             tracked_override=tracked,
@@ -725,8 +736,8 @@ def validate_post_cleanup(
             if historical_path.stat().st_size != row["bytes"] or _sha256_file(historical_path) != row["sha256"]:
                 raise ValueError("cleanup receipt historical candidate bytes drift")
             historical_path.unlink()
-        expected_after = _snapshot(historical_root)
         deleted_paths = {row["path"] for row in deleted}
+        expected_after = _snapshot(historical_root, [path for path in tracked if path not in deleted_paths])
         expected_working_set_after = compute_working_set(
             historical_root,
             tracked_override=[path for path in tracked if path not in deleted_paths],
