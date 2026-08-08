@@ -1181,6 +1181,24 @@ def check_configs(root: Path, policy: dict[str, Any] | None, errors: list[dict[s
         errors.append(finding(4, "config.classification_target_missing", rel))
 
 
+def _tracked_relative_paths(root: Path) -> set[str] | None:
+    """Return the index paths for a Git worktree, or ``None`` off-Git."""
+    if not (root / ".git").exists():
+        return None
+    tracked = subprocess.run(
+        ["git", "-C", str(root), "ls-files", "-z"],
+        capture_output=True,
+        check=False,
+    )
+    if tracked.returncode != 0:
+        return None
+    return {
+        raw.decode("utf-8", "surrogateescape")
+        for raw in tracked.stdout.split(b"\0")
+        if raw
+    }
+
+
 def check_lower_precedence_authority(root: Path, errors: list[dict[str, Any]]) -> None:
     allowed = {
         "GOAL.md",
@@ -1194,10 +1212,19 @@ def check_lower_precedence_authority(root: Path, errors: list[dict[str, Any]]) -
         "scripts/ember_totality/receipts-",
     )
     suffixes = {".md", ".json", ".toml", ".yaml", ".yml"}
+    # A live checkout may contain large, untracked run products under
+    # ``scratch/``.  They are not part of the commit being guarded and must
+    # not be able to block a push merely because a copied historical note
+    # contains authority-shaped prose.  Keep scanning tracked scratch files
+    # and every other untracked path; only untracked ``scratch/`` is outside
+    # this commit-level authority check.
+    tracked_rel = _tracked_relative_paths(root)
     for path in sorted(root.rglob("*")):
         if not path.is_file() or path.suffix.lower() not in suffixes:
             continue
         rel = path.relative_to(root).as_posix()
+        if tracked_rel is not None and rel.startswith("scratch/") and rel not in tracked_rel:
+            continue
         if rel in allowed or rel.startswith(excluded_prefixes):
             continue
         try:
