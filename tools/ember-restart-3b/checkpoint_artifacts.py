@@ -1621,6 +1621,7 @@ def _validate_owner_sharded_optimizer_payloads(
             or payload.get("schema_version") != "ember-optimizer-owner-shard-v1"
             or payload.get("owner") != owner
             or not isinstance(payload.get("state"), Mapping)
+            or not payload["state"]
             or not isinstance(payload.get("param_groups"), list)
         ):
             raise ValueError(f"checkpoint optimizer owner payload is malformed: {owner}")
@@ -2320,6 +2321,7 @@ def _load_owner_sharded_optimizer_state(
             or payload.get("optimizer_contract") != dict(optimizer_contract)
             or payload.get("optimizer_realization") != dict(optimizer_realization)
             or not isinstance(payload.get("state"), Mapping)
+            or not payload["state"]
             or not isinstance(payload.get("param_groups"), list)
         ):
             raise ValueError(f"checkpoint optimizer owner payload is malformed: {owner}")
