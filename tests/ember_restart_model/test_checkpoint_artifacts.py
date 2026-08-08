@@ -1372,6 +1372,210 @@ class CheckpointArtifactTests(unittest.TestCase):
                     self.assertTrue(torch.equal(value, before_model[name]), name)
                 self.assertEqual(set(target_optimizer.state), before_optimizer_state_keys)
 
+    def test_v5_owner_payload_parameter_groups_are_validated_before_restore_mutation(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+        )
+        source = UnifiedDecoder(config, genesis_seed=918)
+        source._activate_expert("vision")
+        source_optimizer = torch.optim.AdamW(source.parameters(), lr=1e-4)
+        source(
+            torch.tensor([[1, 2, 3]], dtype=torch.long), active_expert="vision"
+        ).float().square().mean().backward()
+        source_optimizer.step()
+        source_optimizer.zero_grad(set_to_none=True)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "owner-sharded-v5"
+            write_checkpoint_artifacts(
+                source,
+                source_optimizer,
+                root,
+                launch_seed=918,
+                rng_state=_valid_rng_state(),
+                data_cursor={
+                    "shard": "owned",
+                    "record_index": 1,
+                    "global_step": 1,
+                    "tokens_seen": 3,
+                },
+                model_config_sha256="a" * 64,
+                contract_sha256="b" * 64,
+                expert_genesis_sha256=source.expert_bank_genesis_hashes(),
+                optimizer_state_layout="owner-sharded-v1",
+                max_transient_scratch_bytes=1024**3,
+                max_serialized_bytes=1024**3,
+            )
+            manifest_path = root / "checkpoint-manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            for owner in manifest["optimizer_state_owner_ids"]:
+                payload_path = root / f"optimizer-state-{owner}.pt"
+                payload = torch.load(payload_path, map_location="cpu", weights_only=False)
+                payload["param_groups"][0]["param_names"] = ["foreign.parameter"]
+                torch.save(payload, payload_path)
+                digest = checkpoint_artifacts._sha256(payload_path)
+                record = next(
+                    item for item in manifest["shards"] if item["path"] == payload_path.name
+                )
+                record["sha256"] = digest
+                record["bytes"] = payload_path.stat().st_size
+                record["incremental_bytes"] = record["bytes"]
+                manifest["optimizer_state_owner_shard_sha256"][owner] = digest
+                manifest["storage_projection"]["per_shard_sha256"][payload_path.name] = digest
+            projection = manifest["storage_projection"]
+            projection["projection_sha256"] = checkpoint_artifacts._canonical_sha256(
+                {key: value for key, value in projection.items() if key != "projection_sha256"}
+            )
+            manifest_path.write_text(
+                json.dumps(manifest, sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+
+            target = UnifiedDecoder(config, genesis_seed=919)
+            target_optimizer = torch.optim.AdamW(target.parameters(), lr=1e-4)
+            before_model = {
+                name: value.detach().clone() for name, value in target.state_dict().items()
+            }
+            before_optimizer_state = set(target_optimizer.state)
+            candidate_receipt = checkpoint_artifacts.published_checkpoint_receipt(root)
+            with self.assertRaisesRegex(ValueError, "optimizer parameter-group names"):
+                load_checkpoint_artifacts(target, target_optimizer, root, candidate_receipt)
+            for name, value in target.state_dict().items():
+                self.assertTrue(torch.equal(value, before_model[name]), name)
+            self.assertEqual(set(target_optimizer.state), before_optimizer_state)
+
+    def test_v5_owner_payload_prevalidator_rejects_unbound_owner_hash_projection(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+        )
+        model = UnifiedDecoder(config, genesis_seed=920)
+        model._activate_expert("vision")
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        model(
+            torch.tensor([[1, 2, 3]], dtype=torch.long), active_expert="vision"
+        ).float().square().mean().backward()
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "owner-sharded-v5"
+            receipt = write_checkpoint_artifacts(
+                model,
+                optimizer,
+                root,
+                launch_seed=920,
+                rng_state=_valid_rng_state(),
+                data_cursor={
+                    "shard": "owned",
+                    "record_index": 1,
+                    "global_step": 1,
+                    "tokens_seen": 3,
+                },
+                model_config_sha256="a" * 64,
+                contract_sha256="b" * 64,
+                expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                optimizer_state_layout="owner-sharded-v1",
+            )
+            records = checkpoint_artifacts._validated_records(root, receipt)
+            forged_receipt = json.loads(json.dumps(receipt))
+            forged_receipt["optimizer_state_owner_shard_sha256"]["shared"] = "0" * 64
+            with self.assertRaisesRegex(ValueError, "owner shard hash"):
+                checkpoint_artifacts._validate_owner_sharded_optimizer_payloads(
+                    root, forged_receipt, records
+                )
+
+    def test_v5_owner_payload_groups_are_validated_before_model_only_mutation(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+        )
+        source = UnifiedDecoder(config, genesis_seed=920)
+        source._activate_expert("vision")
+        source_optimizer = torch.optim.AdamW(source.parameters(), lr=1e-4)
+        source(
+            torch.tensor([[1, 2, 3]], dtype=torch.long), active_expert="vision"
+        ).float().square().mean().backward()
+        source_optimizer.step()
+        source_optimizer.zero_grad(set_to_none=True)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "owner-sharded-v5"
+            write_checkpoint_artifacts(
+                source,
+                source_optimizer,
+                root,
+                launch_seed=920,
+                rng_state=_valid_rng_state(),
+                data_cursor={
+                    "shard": "owned",
+                    "record_index": 1,
+                    "global_step": 1,
+                    "tokens_seen": 3,
+                },
+                model_config_sha256="a" * 64,
+                contract_sha256="b" * 64,
+                expert_genesis_sha256=source.expert_bank_genesis_hashes(),
+                optimizer_state_layout="owner-sharded-v1",
+                max_transient_scratch_bytes=1024**3,
+                max_serialized_bytes=1024**3,
+            )
+            manifest_path = root / "checkpoint-manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            canonical_contract = {
+                "name": "paged_8bit_adamw",
+                "implementation": "bitsandbytes.optim.PagedAdamW8bit",
+                "hyperparameters": {
+                    "learning_rate": 1e-4,
+                    "weight_decay": 0.01,
+                    "percentile_clipping": 100,
+                    "block_wise": True,
+                },
+                "state_format": "bitsandbytes-paged-8bit-adamw-state-dict-v1",
+            }
+            canonical_realization = {
+                "implementation": canonical_contract["implementation"],
+                "implementation_source_sha256": "a" * 64,
+                "state_format": canonical_contract["state_format"],
+                "optimizer_contract_sha256": checkpoint_artifacts._canonical_sha256(
+                    canonical_contract
+                ),
+            }
+            manifest["optimizer_contract"] = canonical_contract
+            manifest["optimizer_realization"] = canonical_realization
+            for owner in manifest["optimizer_state_owner_ids"]:
+                payload_path = root / f"optimizer-state-{owner}.pt"
+                payload = torch.load(payload_path, map_location="cpu", weights_only=False)
+                payload["optimizer_contract"] = canonical_contract
+                payload["optimizer_realization"] = canonical_realization
+                payload["param_groups"][0]["param_names"] = ["foreign.parameter"]
+                torch.save(payload, payload_path)
+                digest = checkpoint_artifacts._sha256(payload_path)
+                record = next(
+                    item for item in manifest["shards"] if item["path"] == payload_path.name
+                )
+                record["sha256"] = digest
+                record["bytes"] = payload_path.stat().st_size
+                record["incremental_bytes"] = record["bytes"]
+                manifest["optimizer_state_owner_shard_sha256"][owner] = digest
+                manifest["storage_projection"]["per_shard_sha256"][payload_path.name] = digest
+            projection = manifest["storage_projection"]
+            projection["projection_sha256"] = checkpoint_artifacts._canonical_sha256(
+                {key: value for key, value in projection.items() if key != "projection_sha256"}
+            )
+            manifest_path.write_text(
+                json.dumps(manifest, sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+
+            target = UnifiedDecoder(config, genesis_seed=921)
+            before_model = {
+                name: value.detach().clone() for name, value in target.state_dict().items()
+            }
+            candidate_receipt = checkpoint_artifacts.published_checkpoint_receipt(root)
+            with self.assertRaisesRegex(ValueError, "optimizer parameter-group names"):
+                load_checkpoint_model_only_transition(target, root, candidate_receipt)
+            for name, value in target.state_dict().items():
+                self.assertTrue(torch.equal(value, before_model[name]), name)
+
     def test_v5_owner_quarantine_rejects_self_consistent_forged_runtime_authority(self) -> None:
         config = RestartDecoderConfig.small_for_tests(
             hidden_size=32, layers=2, attention_heads=4, vocab_size=64
