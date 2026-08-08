@@ -125,7 +125,7 @@ jobs:
       # The repository currently carries unrelated full-suite/typecheck debt.
       # Keep the merge gate executable and deterministic instead of making
       # every PR inherit that historical failure surface.
-      - run: bun test build-tools/lifecycle-smoke.test.ts
+      - run: bun run test -- build-tools/lifecycle-smoke.test.ts
       # The launcher compiles the cockpit straight into its external state root by
       # setting EMBER_BUILD_OUTFILE (#1330). Nothing in CI exercised that override, so
       # a regression in it only surfaced on a real launch. This runs BEFORE the default
