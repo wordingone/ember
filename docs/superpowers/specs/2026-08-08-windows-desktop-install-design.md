@@ -23,9 +23,12 @@ The installed artifacts live below `%LOCALAPPDATA%\Programs\Ember` unless `-Inst
   versions/
     <40-lowercase-source-sha>/
       Ember.exe
+      version.json
 ```
 
 `current.json` is a closed schema containing `schema_version`, `source_commit`, `executable_sha256`, `executable_relative_path`, `installed_at_utc`, and `previous_source_commit`. Paths are forward-slash relative paths. The launcher rejects unknown or missing keys, absolute or escaping paths, invalid hashes, missing files, and byte mismatches before process creation.
+
+Each immutable version directory also contains a closed `version.json` with the source commit, executable SHA-256, relative executable filename, and publication timestamp. Rollback derives authority from this per-version record; it never trusts a source SHA or directory name alone.
 
 ## Build and publication
 
@@ -50,7 +53,7 @@ Both shortcuts target only stable installed files. The icon comes from the curre
 
 - `Install`: build, publish immutable version, install stable launchers and shortcuts, then switch `current.json`.
 - `Repair`: validate current authority and recreate stable launchers/shortcuts without changing the version.
-- `Rollback`: validate `previous_source_commit`, validate that installed version's manifest evidence, switch current and previous, then repair shortcuts.
+- `Rollback`: validate `previous_source_commit`, reopen that version's closed `version.json`, rehash its executable, switch current and previous, then repair shortcuts.
 - `Uninstall`: remove the two owned shortcuts and installation root only. Repository files, model data, cockpit state, receipts outside the install root, and unrelated shortcuts are untouched.
 
 Every successful or refused action writes a closed, path-free local receipt under the install root when that root exists. It records action, source/executable hashes, shortcut kinds, verdict, and error class, never host paths.
