@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02B
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Canonical regeneration path for the text-lab input-identity pin (#1461, #1470).
 
 The checked-in identity file (owned-text-lab-input-identity-v2.json) pins
