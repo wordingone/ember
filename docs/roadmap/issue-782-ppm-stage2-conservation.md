@@ -12,9 +12,9 @@ Review packet SHA-256:
 
 Canonical owner: EMBER-02/#1116. Publish with #703 and #705.
 
-- `[PENDING_ACCEPTED_782_TRANSFER_ON_1116]`
-- `[PENDING_BIDIRECTIONAL_LINK_FROM_782]`
-- `[PENDING_VERSION_CONTROLLED_CARRIER_MERGE]`
+- accepted #1116 transfer: https://github.com/wordingone/ember/issues/1116#issuecomment-5224705657
+- bidirectional source link: https://github.com/wordingone/ember/issues/782; its terminal closure comment must link this carrier and the accepted transfer after merge
+- version-controlled carrier gate: https://github.com/wordingone/ember/pull/1552 at exact candidate head `780f8fe4580216e61734ad66df7c3e193d235afd`; closure remains forbidden until this carrier is independently reviewed, green, and merged
 
 ## Historical-only retirement
 

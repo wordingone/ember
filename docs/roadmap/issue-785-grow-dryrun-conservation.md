@@ -13,10 +13,10 @@ Review packet SHA-256:
 Scientific owner: EMBER-05/#1119. Execution, refusal, and process custody owner:
 Ember Lab/#898. Both transfers are required.
 
-- `[PENDING_ACCEPTED_785_TRANSFER_ON_1119]`
-- `[PENDING_ACCEPTED_785_TRANSFER_ON_898]`
-- `[PENDING_BIDIRECTIONAL_LINK_FROM_785]`
-- `[PENDING_VERSION_CONTROLLED_CARRIER_MERGE]`
+- accepted #1119 transfer: https://github.com/wordingone/ember/issues/1119#issuecomment-5224705710
+- accepted #898 transfer: https://github.com/wordingone/ember/issues/898#issuecomment-5224705754
+- bidirectional source link: https://github.com/wordingone/ember/issues/785; its terminal closure comment must link this carrier and both accepted transfers after merge
+- version-controlled carrier gate: https://github.com/wordingone/ember/pull/1552 at exact candidate head `780f8fe4580216e61734ad66df7c3e193d235afd`; closure remains forbidden until this carrier is independently reviewed, green, and merged
 
 ## Historical-only retirement
 
