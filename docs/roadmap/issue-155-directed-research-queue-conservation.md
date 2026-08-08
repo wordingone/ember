@@ -29,7 +29,7 @@ All six legs remain independently open on their canonical owners:
 
 Contention priority remains `5 -> 2 -> 1 -> 4 -> 3 -> 6`. Every leg freezes identities, controls, metrics, implications, order, resources, negatives and rollback before consumption. Only operator word kills; workers may PARK only with a named wall-break and reopen trigger. One leg's evidence cannot promote or kill another.
 
-Current Ember Lab replaces historical `emberd`/raw-runner vocabulary and, with existing custody, is sole execution authority. #898 owns process/resource/refusal receipts, #1413 runtime performance, #1116 current foundation science/admission, #1119 growth/sleep science and #1120 autonomous research. No parallel launcher, daemon, model, corpus, ledger, evaluator or receipt family is introduced.
+Current Ember Lab replaces historical daemon/raw-runner vocabulary and, with existing custody, is sole execution authority. #898 owns process/resource/refusal receipts, #1413 runtime performance, #1116 current foundation science/admission, #1119 growth/sleep science and #1120 autonomous research. No parallel launcher, daemon, model, corpus, ledger, evaluator or receipt family is introduced.
 
 ## Falsifier and claim boundary
 
