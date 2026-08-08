@@ -1369,9 +1369,9 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   // The interactive TUI is the operator-seat surface (#154): its cwd is where the agent's
   // Read/Bash tools resolve GOAL.md and everything else. process.cwd() alone is not
   // reliable here under a compiled binary launched from an arbitrary directory (#172) --
-  // resolve the real repo root (env var / cwd-walk / exe-path-walk), falling back to
-  // today's process.cwd() only if none of those anchors find it (e.g. a genuinely
-  // unrelated project directory), so this never regresses a non-ember working directory.
+  // resolve the real repo root (env var / cwd-walk / exe-path-walk). If none of those
+  // anchors find an Ember checkout, resolveEmberSourceRootOrCwd preserves the typed
+  // SourceRootError refusal; the interactive surface never guesses from process.cwd().
   const replProps = {
     config: freshInteractiveReplConfig(process.env["EMBER_MODEL_NAME"] ?? "ember"),
     cwd:    resolveEmberSourceRootOrCwd({}, "[ember-cli]"),
