@@ -107,6 +107,25 @@ jobs:
       - run: python -m pip install "tokenizers==0.22.2"
       - name: Replay checked-in production rung from canonical owned sources
         run: python -B tools/ember-restart-3b/production_rung.py --repo-root .
+  text-lab-identity-freshness:
+    # Class-kill for #1461: a commit editing text_lab_corpus.py, train.py, or
+    # run_vertical_slice.py without re-running remint_text_lab_input_identity.py
+    # strands the checked-in code_files pin and reddens test_text_lab_corpus.py
+    # at master -- exactly what happened to #1470's fix within hours (commit
+    # e9e0671). This must fail HERE, on the PR that causes the drift, not at
+    # the next "the sweep is red again" report.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - name: Verify text-lab input-identity code_files pins match live bytes
+        run: python -B tools/ember-restart-3b/remint_text_lab_input_identity.py --check
   cli:
     runs-on: windows-latest
     timeout-minutes: 25
@@ -162,7 +181,7 @@ jobs:
         run: python -B scripts/ember_gate_process_supervision_selftest.py
   ci-pr:
     if: always()
-    needs: [python, rust, cli, launcher, production-rung-replay]
+    needs: [python, rust, cli, launcher, production-rung-replay, text-lab-identity-freshness]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
