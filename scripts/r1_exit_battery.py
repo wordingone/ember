@@ -333,7 +333,7 @@ def find_quarantined_telemetry_files(run_root: Path) -> list[Path]:
     return found
 
 
-def _evidence_excluded(path: Path) -> bool:
+def _evidence_excluded(path: Path, run_root: Path) -> bool:
     """True when a path may not serve as E5 EVIDENCE: anything under
     .checkpoint-quarantine (copied-in archive material must not vouch for a
     run) or under a preserved failed-attempt dir (attempt-*/ -- the
@@ -343,9 +343,13 @@ def _evidence_excluded(path: Path) -> bool:
     train_step rows belong to the same run_id and are still counted
     (rev-1490 item 6: both modules must agree, and exclusion mirrors how
     the quarantine dir is already handled)."""
+    try:
+        relative_parts = path.relative_to(run_root).parts
+    except ValueError:
+        return True
     return any(
         part == ".checkpoint-quarantine" or part.startswith("attempt-")
-        for part in path.parts
+        for part in relative_parts
     )
 
 
@@ -1302,7 +1306,7 @@ def _validate_frontier_content(
         receipts are history, not this run's evidence; rev-1490 item 6),
         require the receipt's sha to match its bytes, and return
         (path, parsed JSON). None (with defects appended) otherwise."""
-        candidates = sorted(p for p in run_root.rglob(rel_name) if not _evidence_excluded(p)) if run_root.is_dir() else []
+        candidates = sorted(p for p in run_root.rglob(rel_name) if not _evidence_excluded(p, run_root)) if run_root.is_dir() else []
         if not candidates:
             defects.append(f"{label}: no {rel_name} under the run root")
             return None
@@ -1717,7 +1721,7 @@ def check_r1_e5(run_root: Path, thresholds: dict[str, Any], *, repo_root: Path =
     fixed_prior_present = manifest_cfg.is_file()
     frontier_receipt_candidates = sorted(
         p for p in (run_root.rglob("*frontier*receipt*.json") if run_root.is_dir() else [])
-        if not _evidence_excluded(p)
+        if not _evidence_excluded(p, run_root)
     )
     # Placement-invariant disclosure (rev-1490 round-3): quarantined .jsonl
     # holding real train_step rows never blocks E5, but it is surfaced --

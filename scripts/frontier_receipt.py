@@ -94,7 +94,6 @@ RUN_ATTEMPTS_REGISTRY = "receipts/run-attempts.jsonl"
 # 2,048-token anchor) and binds its checkpoint manifest by hash
 # (receipt_binding.checkpoint_manifest_sha256 = bf20f050...). The admission-
 # contract dry-run validates ENTRY later; it is a gate record, not the genesis.
-GENESIS_RECEIPT_PATH = "receipts/ember-restart-3b/native-cost-calibration-seed83-certificate.json"
 
 # Section 5.1 class 1, quoted categories; each must attest false (a true value is a
 # stopped program, not a receipt field -- "fail-closed on unknown provenance").
@@ -160,21 +159,41 @@ def _battery():
     return r1_exit_battery
 
 
-def _excluded_from_evidence(path: Path) -> bool:
+def _genesis_receipt_path() -> str:
+    """Resolve the validator's pinned predecessor; never duplicate its path."""
+    return _battery().E5_GENESIS_RECEIPT_PATH
+
+
+def _validate_predecessor(predecessor_rel: str) -> str:
+    expected = Path(_genesis_receipt_path()).as_posix()
+    candidate = Path(predecessor_rel).as_posix()
+    if candidate != expected:
+        raise FrontierRefusal(
+            f"PREDECESSOR_REFUSED: {candidate!r} is not the pinned genesis "
+            f"receipt {expected!r}"
+        )
+    return expected
+
+
+def _excluded_from_evidence(path: Path, run_root: Path) -> bool:
     """Twin of r1_exit_battery._evidence_excluded, kept in agreement (rev-1490
     E5 item 6: both modules must resolve the retained-failed-attempt shape the
     same way): nothing under .checkpoint-quarantine or a preserved attempt-*/
     dir serves as evidence -- a failed attempt's receipts are history, and a
     run that retained one must stay mintable from its root-level evidence."""
+    try:
+        relative_parts = path.relative_to(run_root).parts
+    except ValueError:
+        return True
     return any(
         part == ".checkpoint-quarantine" or part.startswith("attempt-")
-        for part in path.parts
+        for part in relative_parts
     )
 
 
 def _find_one(run_root: Path, pattern: str, what: str, needs: str) -> Path:
     candidates = sorted(
-        p for p in run_root.rglob(pattern) if not _excluded_from_evidence(p)
+        p for p in run_root.rglob(pattern) if not _excluded_from_evidence(p, run_root)
     )
     if not candidates:
         raise FrontierRefusal(f"{what}: no {pattern} under {run_root} ({needs})")
@@ -526,7 +545,7 @@ def ledger_host_accounting(run_root: Path) -> dict[str, Any]:
         "not_measured": {},
     }
     e4_candidates = sorted(
-        p for p in run_root.rglob("e4-measurement-receipt.json") if not _excluded_from_evidence(p)
+        p for p in run_root.rglob("e4-measurement-receipt.json") if not _excluded_from_evidence(p, run_root)
     )
     if len(e4_candidates) == 1:
         e4 = _read_json(e4_candidates[0], "LEDGER_INCOMPLETE:host_accounting")
@@ -662,6 +681,7 @@ def leg_invariant(predecessor_rel: str) -> tuple[dict[str, str], dict[str, str]]
 # --- assembly -----------------------------------------------------------------
 
 def build_receipt(run_root: Path, predecessor_rel: str, run_id: str | None = None) -> dict[str, Any]:
+    predecessor_rel = _validate_predecessor(predecessor_rel)
     battery = _battery()
     thresholds, _ = battery.load_thresholds()
     t01, t06 = int(thresholds["T-01"]), float(thresholds["T-06"])
@@ -738,7 +758,7 @@ def main() -> int:
     parser.add_argument("--run-root", required=True, type=Path)
     parser.add_argument("--out", type=Path, default=None,
                         help="receipt path (default: <run-root>/frontier-receipt.json)")
-    parser.add_argument("--predecessor", type=str, default=GENESIS_RECEIPT_PATH,
+    parser.add_argument("--predecessor", type=str, default=_genesis_receipt_path(),
                         help="repo-relative predecessor receipt (default: the candidate's genesis receipt; "
                              "the R1 battery validator pins exactly the default -- an override refuses at adjudication)")
     parser.add_argument("--run-id", type=str, default=None,
