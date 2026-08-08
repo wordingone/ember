@@ -650,7 +650,7 @@ def test_lower_precedence_document_cannot_authorize_completion(tmp_path: Path) -
 def test_untracked_authority_shaped_scratch_is_not_part_of_git_guard(tmp_path: Path, monkeypatch) -> None:
     """Only untracked scratch products are outside the commit-level scan."""
     (tmp_path / ".git").write_text("gitdir: fixture\n", encoding="utf-8")
-    tracked = "docs/tracked.md"
+    tracked = "scratch/tracked.md"
     sys.path.insert(0, str(REPO_ROOT / "scripts"))
     import verify_authority_conservation as verifier
 
@@ -670,9 +670,11 @@ def test_untracked_authority_shaped_scratch_is_not_part_of_git_guard(tmp_path: P
         "This document is a binding completion law and authorizes a completed Ember model.\n",
         encoding="utf-8",
     )
+    tracked_file = tmp_path / tracked
+    tracked_file.write_text(rogue.read_text(encoding="utf-8"), encoding="utf-8")
     errors: list[dict] = []
     verifier.check_lower_precedence_authority(tmp_path, errors)
-    assert errors == []
+    assert [item["code"] for item in errors] == ["authority.lower_precedence_claim"]
 
 
 def test_explicitly_historical_document_has_no_live_authority(tmp_path: Path) -> None:
