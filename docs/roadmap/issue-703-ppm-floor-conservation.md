@@ -16,7 +16,7 @@ issue identity and falsifiers.
 
 - accepted #1116 transfer: https://github.com/wordingone/ember/issues/1116#issuecomment-5224705162
 - bidirectional source link: https://github.com/wordingone/ember/issues/703; its terminal closure comment must link this carrier and the accepted transfer after merge
-- version-controlled carrier gate: https://github.com/wordingone/ember/pull/1552 at exact candidate head `780f8fe4580216e61734ad66df7c3e193d235afd`; closure remains forbidden until this carrier is independently reviewed, green, and merged
+- version-controlled carrier gate: https://github.com/wordingone/ember/pull/1552; closure remains forbidden until its current public head is independently reviewed, green, and merged
 
 ## Historical-only retirement and corrected classification
 

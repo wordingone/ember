@@ -15,7 +15,7 @@ with #703 and #782 while retaining this independent metric contract.
 
 - accepted #1116 transfer: https://github.com/wordingone/ember/issues/1116#issuecomment-5224705331
 - bidirectional source link: https://github.com/wordingone/ember/issues/705; its terminal closure comment must link this carrier and the accepted transfer after merge
-- version-controlled carrier gate: https://github.com/wordingone/ember/pull/1552 at exact candidate head `780f8fe4580216e61734ad66df7c3e193d235afd`; closure remains forbidden until this carrier is independently reviewed, green, and merged
+- version-controlled carrier gate: https://github.com/wordingone/ember/pull/1552; closure remains forbidden until its current public head is independently reviewed, green, and merged
 
 ## Retired metric
 

@@ -16,7 +16,7 @@ Canonical owner: EMBER-05/#1119. Existing accepted #1119 comment
 
 - accepted #1119 transfer: https://github.com/wordingone/ember/issues/1119#issuecomment-5224705111
 - bidirectional source link: https://github.com/wordingone/ember/issues/701; its terminal closure comment must link this carrier and the accepted transfer after merge
-- version-controlled carrier gate: https://github.com/wordingone/ember/pull/1552 at exact candidate head `780f8fe4580216e61734ad66df7c3e193d235afd`; closure remains forbidden until this carrier is independently reviewed, green, and merged
+- version-controlled carrier gate: https://github.com/wordingone/ember/pull/1552; closure remains forbidden until its current public head is independently reviewed, green, and merged
 
 ## Historical-only retirement
 
