@@ -12,6 +12,7 @@ Accepted transfers:
 - #1117: https://github.com/wordingone/ember/issues/1117#issuecomment-5226027236
 - #1120: https://github.com/wordingone/ember/issues/1120#issuecomment-5226027889
 - #483 bridge: https://github.com/wordingone/ember/issues/483#issuecomment-5226031010
+- #483 bridge correction: https://github.com/wordingone/ember/issues/483#issuecomment-5226054301
 
 ## Historical Rung-A boundary
 
@@ -50,11 +51,13 @@ autonomy, capability, training or result.
    wall-clock target. The owned-3B short/medium/long and deletion receipts under
    `receipts/ember-mvp/c11-experience-horizon/` must pass all nine recomputed
    checks in `scripts/ember_totality/test_c11.py`, blob
-   `529f2f9727159d858b108704e3f09b085f5e8539`: novel-set ordering; novelty;
-   real parameter change; gradient-step Merkle binding; adjacent heldout delta
-   above `0.02`; contamination refusal; live re-execution; deletion against the
-   short checkpoint; and duration invariance/invalid-token refusal. A Rung-B
-   session alone cannot satisfy C11.
+   `529f2f9727159d858b108704e3f09b085f5e8539`: increasing novel-problem-set
+   ordering; no repeats or pretrain overlap; real pre/post parameter change
+   with distinct checkpoints; gradient steps Merkle-bound to novel IDs;
+   adjacent heldout delta above `0.02`; exact heldout/training disjointness;
+   live re-execution; deletion of long consolidation against the short
+   checkpoint; and duration-field invariance plus invalid-token refusal. A
+   Rung-B session alone cannot satisfy C11.
 7. Silent loop starvation ages loudly in the persisted board/journal. Synthetic
    ticks cannot reset cadence.
 
