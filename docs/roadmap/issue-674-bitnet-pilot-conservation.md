@@ -8,7 +8,11 @@ Public-master basis: `2ff1cd844f8d984d3f594a847c1f510534fc7919`.
 
 Accepted owner: https://github.com/wordingone/ember/issues/1116#issuecomment-5225623244
 
+Owner gradient-accumulation correction: https://github.com/wordingone/ember/issues/1116#issuecomment-5225642303
+
 Bidirectional bridge: https://github.com/wordingone/ember/issues/674#issuecomment-5225624373
+
+Bidirectional gradient-accumulation correction: https://github.com/wordingone/ember/issues/674#issuecomment-5225643283
 
 Sole changed path: `docs/roadmap/issue-674-bitnet-pilot-conservation.md`.
 
@@ -22,13 +26,13 @@ Merged PR #1549, the #676 carrier and accepted #676 transfer preserve current ex
 
 ## Conserved current contract
 
-On the first admissible owned >=3B subject, #1116 retains architecture-identical Dense/treatment twins; exact realized model/tokenizer/corpus/checkpoint/evaluator identities; two paired seeds 0/1 with reversed arm order; frozen AdamW end-to-end, identical arm hyperparameters and identical WSD unless a dated tighten-only amendment is posted before consumption; matched 5B effective non-padding tokens; and 50M/500M/1B/2B/5B checkpoints.
+On the first admissible owned >=3B subject, #1116 retains architecture-identical Dense/treatment twins; exact realized model/tokenizer/corpus/checkpoint/evaluator identities; two paired seeds 0/1 with reversed arm order; frozen AdamW end-to-end, identical arm hyperparameters and identical WSD unless a dated tighten-only amendment is posted before consumption; matched 5B effective non-padding tokens; and 50M/500M/1B/2B/5B checkpoints. Within each Dense/treatment pair, initialization seed, token order, batch construction, gradient-accumulation schedule and realized accumulation count, tokenizer, checkpoint boundaries, and evaluation rows are identical.
 
 Every arm, seed and checkpoint uses one byte-identical frozen decontaminated heldout token manifest. The primary metric is heldout next-token perplexity at exactly 5B effective non-padding tokens. The historical v0 tokenized namespace remains tainted and only supported an internal differential screen; it grants no clean-final-model or field-level inference. Future corpus/evaluator admission comes only from current #1116 authority.
 
 The treatment remains WEIGHT-ONLY ternary STE on attention/FFN linears with high-precision latents/state; Dense refuses quantizers; embeddings/head/norms remain non-ternary. Native b1.58 requires a frozen Dense/ternary x unquantized/INT8-activation 2x2 factorial.
 
-Before full runs, the paired 50M gate binds source/config/realized architecture, actual ternary matmul operands/counts, Dense refusal, zero/sign-flip/latent-bypass/STE/module-enumeration fixtures, identical FP32-master policy, paired latent hashes, realized dtypes, norm/QK/final-scale update survival, finite values, resources, throughput, token order/eval identity and deliberate mismatch refusals. It is apparatus/pricing evidence only.
+Before full runs, the paired 50M gate binds source/config/realized architecture, actual ternary matmul operands/counts, Dense refusal, zero/sign-flip/latent-bypass/STE/module-enumeration fixtures, identical FP32-master policy, paired latent hashes, realized dtypes, norm/QK/final-scale update survival, finite values, resources, throughput, token order, batch construction, configured and realized gradient accumulation, checkpoint boundaries, evaluator rows and deliberate mismatch refusals. Every registered checkpoint receipt binds that identity. Missing, foreign, stale, unequal, or decorative gradient-accumulation evidence makes the pair `BITNET_PILOT_INVALID` before any scientific sentence. The gate is apparatus/pricing evidence only.
 
 This conservation carrier authorizes no GPU dispatch. The historical 50M permission is not current authority. A future 50M pair needs fresh governed/operator authorization, and each long run needs separate governed/operator authorization after current #1116 corpus/evaluator admission, identity, pricing and efficiency gates pass.
 
@@ -46,7 +50,7 @@ Measured preflight pricing must project <=7 sequential GPU-days for four full ru
 
 ## Falsifier and reopen
 
-Reopen if #1116/carrier loses any seed/order, AdamW/hyperparameter/WSD identity, heldout-manifest/5B-primary-metric identity, historical-v0 taint/current-admission boundary, checkpoint, preflight, honest-mechanism, factorial, execution-binding, precision/update, outcome, invalid-fixture, no-dispatch/separate-authority rule, resource, L3, negative, rollback or no-credit clause; or if historical/preflight evidence is promoted into a result.
+Reopen if #1116/carrier loses any seed/order, batch or gradient-accumulation identity and mismatch refusal, AdamW/hyperparameter/WSD identity, heldout-manifest/5B-primary-metric identity, historical-v0 taint/current-admission boundary, checkpoint, preflight, honest-mechanism, factorial, execution-binding, precision/update, outcome, invalid-fixture, no-dispatch/separate-authority rule, resource, L3, negative, rollback or no-credit clause; or if historical/preflight evidence is promoted into a result.
 
 ```text
 completion_credit=false
