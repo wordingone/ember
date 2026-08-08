@@ -190,7 +190,10 @@ class SupersessionIndexPerformanceTest(unittest.TestCase):
     def test_indexed_lookup_is_near_linear_not_quadratic(self) -> None:
         small = self._build_corpus(60)
         # Reuse the same directory's file count by adding more for the large run.
-        large_dir = self.root.parent / "large_corpus"
+        # Keep the synthetic corpus inside this test's private temporary root.
+        # A fixed sibling name leaked after interrupted runs and made the next
+        # collection fail with FileExistsError before exercising the index.
+        large_dir = self.root / "large_corpus"
         large_dir.mkdir()
         large: list[Path] = []
         for i in range(240):
