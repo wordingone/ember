@@ -162,7 +162,11 @@ def _duplicate_candidates(root: Path, tracked: list[str], references: dict[str, 
 
 def _working_set_from_tree(root: Path, tracked: list[str]) -> dict[str, Any]:
     """Compatibility wrapper around the canonical working-set producer."""
-    return compute_working_set(root, tracked_override=tracked, include_open_issues=False)
+    # The totality board owns the live open-issue population.  Keep this
+    # adapter pointed at that producer rather than reimplementing its query;
+    # the receipt timestamp records when this non-authoritative observation
+    # was taken, while Git/tree fields remain the replayable authority.
+    return compute_working_set(root, tracked_override=tracked, include_open_issues=True)
 
 
 def _policy_contract() -> dict[str, Any]:
@@ -238,10 +242,24 @@ def _validate_receipt_projection(
             raise ValueError(f"cleanup receipt {name} snapshot values malformed")
         if value != expected:
             raise ValueError(f"cleanup receipt {name} snapshot mismatch")
-    if receipt["working_set_before"] != expected_working_set_before:
-        raise ValueError("cleanup receipt working-set-before mismatch")
-    if receipt["working_set_after_cleanup"] != expected_working_set_after:
-        raise ValueError("cleanup receipt working-set-after mismatch")
+    stable_working_set_fields = {
+        "tracked_files",
+        "docs_files",
+        "scripts_files",
+        "tracked_receipts",
+        "untracked_receipts_on_disk",
+    }
+    for name, actual, expected in (
+        ("before", receipt["working_set_before"], expected_working_set_before),
+        ("after", receipt["working_set_after_cleanup"], expected_working_set_after),
+    ):
+        if not isinstance(actual, dict) or not isinstance(expected, dict):
+            raise ValueError(f"cleanup receipt working-set-{name} malformed")
+        if any(actual.get(field) != expected.get(field) for field in stable_working_set_fields):
+            raise ValueError(f"cleanup receipt working-set-{name} mismatch")
+        observed_open_issues = actual.get("open_issues_count")
+        if type(observed_open_issues) is not int or observed_open_issues < 0:
+            raise ValueError(f"cleanup receipt working-set-{name} live issue observation malformed")
     deleted = receipt["deleted"]
     if not isinstance(deleted, list) or len({row.get("path") for row in deleted if isinstance(row, dict)}) != len(deleted):
         raise ValueError("cleanup receipt deletion projection malformed")
@@ -414,6 +432,20 @@ def _validate_manifest(
             include_open_issues=False,
         )
         for field in ("working_set", "inventory", "candidates"):
+            if field == "working_set" and historical:
+                stable_keys = {
+                    "tracked_files",
+                    "docs_files",
+                    "scripts_files",
+                    "tracked_receipts",
+                    "untracked_receipts_on_disk",
+                }
+                if any(
+                    manifest[field].get(key) != expected[field].get(key)
+                    for key in stable_keys
+                ):
+                    raise ValueError(f"manifest {field} projection drift")
+                continue
             if manifest[field] != expected[field]:
                 raise ValueError(f"manifest {field} projection drift")
 
@@ -604,7 +636,7 @@ def apply_safe_cleanup(
 
     backups = [(path, path.read_bytes()) for _relative, _row, path in selected]
     before = _snapshot(root, sorted(tracked))
-    working_set_before = manifest.get("working_set")
+    working_set_before = _working_set_from_tree(root, sorted(tracked))
     deleted = []
     temporary_receipt = destination.with_name(destination.name + ".tmp")
     try:
@@ -659,7 +691,7 @@ def write_manifest(repo_root: str | os.PathLike[str], destination: str | os.Path
     path = Path(destination)
     if path.exists():
         raise ValueError("refusing to overwrite reference manifest")
-    manifest = build_reference_manifest(repo_root)
+    manifest = build_reference_manifest(repo_root, include_open_issues=True)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(_canonical(manifest) + b"\n")
     return manifest

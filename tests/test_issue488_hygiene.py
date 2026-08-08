@@ -571,6 +571,59 @@ class Issue488HygieneTests(unittest.TestCase):
                 )
         self.assertEqual(manifest["working_set"], canonical)
 
+    def test_apply_receipt_binds_live_totality_board_open_issue_population(self):
+        """The cleanup receipt must carry the canonical board's live issue count."""
+        mod = _module()
+        spec = importlib.import_module("scripts.ember_totality.ember_totality_spec")
+        root = self._fixture()
+        tracked = [
+            "docs/readme.md",
+            "scripts/run.py",
+            "receipts/canonical.json",
+            "receipts/duplicate.json",
+        ]
+
+        def gh_open_issues(args, **kwargs):
+            self.assertEqual(args[:2], ["gh", "issue"])
+            return subprocess.CompletedProcess(
+                args=args,
+                returncode=0,
+                stdout='[{"number": 101}, {"number": 102}, {"number": 103}]',
+                stderr="",
+            )
+
+        with patch.object(mod, "_git", side_effect=_fixture_git), patch.object(
+            spec.subprocess, "run", side_effect=gh_open_issues
+        ):
+            manifest = mod.build_reference_manifest(
+                root,
+                tracked_override=tracked,
+                source_commit_override="0" * 40,
+                source_clean_override=True,
+                include_open_issues=True,
+            )
+        candidate = next(row for row in manifest["candidates"] if row["action"] == "DELETE_CANDIDATE")
+        receipt_path = root / "cleanup-receipt.json"
+
+        def apply_git(_root, *args):
+            if args == ("rev-parse", "--show-toplevel"):
+                return str(root)
+            if args == ("rev-parse", "HEAD"):
+                return "0" * 40
+            if args == ("status", "--porcelain"):
+                return ""
+            if args == ("ls-files", "-z"):
+                return "\x00".join(tracked)
+            raise OSError("isolated fixture has no other Git query")
+
+        with patch.object(mod, "_validate_manifest"), patch.object(
+            mod, "_git", side_effect=apply_git
+        ), patch.object(spec.subprocess, "run", side_effect=gh_open_issues):
+            receipt = mod.apply_safe_cleanup(root, manifest, [candidate["path"]], receipt_path)
+
+        self.assertEqual(receipt["working_set_before"]["open_issues_count"], 3)
+        self.assertEqual(receipt["working_set_after_cleanup"]["open_issues_count"], 3)
+
     def _checked_post_cleanup_inputs(self, mod):
         manifest = json.loads(
             (REPO_ROOT / "docs/hygiene/issue-488-reference-manifest-v1.json").read_text(encoding="utf-8")
@@ -593,6 +646,12 @@ class Issue488HygieneTests(unittest.TestCase):
                 text=True,
             ).stdout.splitlines()
             tracked_set = set(tracked)
+            observed_open_issues = mod.compute_working_set(
+                REPO_ROOT,
+                tracked_override=tracked,
+                include_open_issues=True,
+            )["open_issues_count"]
+            self.assertIsInstance(observed_open_issues, int)
             def working_set(tracked_view):
                 untracked = sum(
                     1
@@ -605,7 +664,7 @@ class Issue488HygieneTests(unittest.TestCase):
                     "scripts_files": sum(path.startswith("scripts/") for path in tracked_view),
                     "tracked_receipts": sum(path.startswith("receipts/") for path in tracked_view),
                     "untracked_receipts_on_disk": untracked,
-                    "open_issues_count": None,
+                    "open_issues_count": observed_open_issues,
                 }
             receipt["before"] = mod._snapshot(historical_root)
             receipt["working_set_before"] = working_set(tracked)
