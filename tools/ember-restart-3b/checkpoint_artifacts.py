@@ -33,6 +33,231 @@ _FAILURE_EVIDENCE_LIMIT = 64 * 1024
 _STREAMING_OVERHEAD_BYTES = 64 * 1024 * 1024
 _OWNER_SHARDED_OPTIMIZER_STATE_LAYOUT = "owner-sharded-v1"
 
+_FAILURE_COMPARISON_OPERAND_FIELDS = {
+    "derived_byte_bound_bytes",
+    "derived_byte_bound_inputs",
+    "projected_storage_floor_bytes",
+    "projected_storage_floor_inputs",
+    "staged_shard_bytes",
+    "available_commit_bytes",
+    "required_commit_bytes",
+}
+_FAILURE_DERIVED_INPUT_FIELDS = {
+    "max_serialized_bytes",
+    "max_transient_scratch_bytes",
+    "active_parameters",
+    "model_config_sha256",
+    "contract_sha256",
+    "optimizer_state_layout",
+}
+_FAILURE_PROJECTED_INPUT_FIELDS = {
+    "route_multiplier",
+    "active_expert",
+    "optimizer_state_layout",
+    "optimizer_state_tensor_storage_lower_bound_bytes",
+    "projected_optimizer_state_tensor_storage_lower_bound_bytes",
+    "optimizer_state_tensor_storage_by_route_bytes",
+    "per_shard_tensor_storage_lower_bound_bytes",
+    "retained_shard_paths",
+}
+
+
+def _failure_operand_int(value: Any, *, name: str, nullable: bool = True) -> int | None:
+    if value is None and nullable:
+        return None
+    if type(value) is not int or value < 0:
+        raise ValueError(f"checkpoint failure operand {name} must be a nonnegative integer")
+    return value
+
+
+def _failure_operand_path(value: Any, *, name: str) -> str:
+    if (
+        not isinstance(value, str)
+        or not value
+        or "\\" in value
+        or value.startswith("/")
+        or ":" in value
+        or any(part in {"", ".", ".."} for part in value.split("/"))
+    ):
+        raise ValueError(f"checkpoint failure operand {name} must be a relative path")
+    return value
+
+
+def _empty_failure_comparison_operands() -> dict[str, Any]:
+    return {
+        "derived_byte_bound_bytes": None,
+        "derived_byte_bound_inputs": {
+            "max_serialized_bytes": None,
+            "max_transient_scratch_bytes": None,
+            "active_parameters": None,
+            "model_config_sha256": None,
+            "contract_sha256": None,
+            "optimizer_state_layout": None,
+        },
+        "projected_storage_floor_bytes": None,
+        "projected_storage_floor_inputs": {
+            "route_multiplier": None,
+            "active_expert": None,
+            "optimizer_state_layout": None,
+            "optimizer_state_tensor_storage_lower_bound_bytes": None,
+            "projected_optimizer_state_tensor_storage_lower_bound_bytes": None,
+            "optimizer_state_tensor_storage_by_route_bytes": {},
+            "per_shard_tensor_storage_lower_bound_bytes": {},
+            "retained_shard_paths": [],
+        },
+        "staged_shard_bytes": [],
+        "available_commit_bytes": None,
+        "required_commit_bytes": None,
+    }
+
+
+def _normalize_failure_comparison_operands(value: Mapping[str, Any] | None) -> dict[str, Any]:
+    if value is None:
+        value = _empty_failure_comparison_operands()
+    if not isinstance(value, Mapping) or set(value) != _FAILURE_COMPARISON_OPERAND_FIELDS:
+        raise ValueError("checkpoint failure comparison operands have an invalid shape")
+
+    derived = value["derived_byte_bound_inputs"]
+    if not isinstance(derived, Mapping) or set(derived) != _FAILURE_DERIVED_INPUT_FIELDS:
+        raise ValueError("checkpoint failure derived-bound inputs have an invalid shape")
+    projected = value["projected_storage_floor_inputs"]
+    if not isinstance(projected, Mapping) or set(projected) != _FAILURE_PROJECTED_INPUT_FIELDS:
+        raise ValueError("checkpoint failure projected-floor inputs have an invalid shape")
+
+    normalized_derived: dict[str, Any] = {
+        "max_serialized_bytes": _failure_operand_int(derived["max_serialized_bytes"], name="max_serialized_bytes"),
+        "max_transient_scratch_bytes": _failure_operand_int(derived["max_transient_scratch_bytes"], name="max_transient_scratch_bytes"),
+        "active_parameters": _failure_operand_int(derived["active_parameters"], name="active_parameters"),
+        "model_config_sha256": derived["model_config_sha256"],
+        "contract_sha256": derived["contract_sha256"],
+        "optimizer_state_layout": derived["optimizer_state_layout"],
+    }
+    for field in ("model_config_sha256", "contract_sha256"):
+        digest = normalized_derived[field]
+        if digest is not None:
+            _sha256_value(digest, name=f"checkpoint failure {field}")
+    if normalized_derived["optimizer_state_layout"] is not None and (
+        not isinstance(normalized_derived["optimizer_state_layout"], str)
+        or not normalized_derived["optimizer_state_layout"]
+    ):
+        raise ValueError("checkpoint failure optimizer state layout is invalid")
+
+    route_bytes = projected["optimizer_state_tensor_storage_by_route_bytes"]
+    shard_bytes = projected["per_shard_tensor_storage_lower_bound_bytes"]
+    if not isinstance(route_bytes, Mapping) or not isinstance(shard_bytes, Mapping):
+        raise ValueError("checkpoint failure projected tensor maps have an invalid shape")
+    normalized_route_bytes = {
+        _failure_operand_path(name, name="optimizer route"): _failure_operand_int(
+            amount, name="optimizer route bytes", nullable=False
+        )
+        for name, amount in sorted(route_bytes.items())
+    }
+    normalized_shard_bytes = {
+        _failure_operand_path(name, name="projected shard"): _failure_operand_int(
+            amount, name="projected shard bytes", nullable=False
+        )
+        for name, amount in sorted(shard_bytes.items())
+    }
+    retained = projected["retained_shard_paths"]
+    if not isinstance(retained, list):
+        raise ValueError("checkpoint failure retained shard paths have an invalid shape")
+    normalized_retained_values = [
+        _failure_operand_path(path, name="retained shard") for path in retained
+    ]
+    if len(normalized_retained_values) != len(set(normalized_retained_values)):
+        raise ValueError("checkpoint failure retained shard paths are duplicated")
+    normalized_retained = sorted(normalized_retained_values)
+    normalized_projected: dict[str, Any] = {
+        "route_multiplier": _failure_operand_int(projected["route_multiplier"], name="route_multiplier"),
+        "active_expert": projected["active_expert"],
+        "optimizer_state_layout": projected["optimizer_state_layout"],
+        "optimizer_state_tensor_storage_lower_bound_bytes": _failure_operand_int(
+            projected["optimizer_state_tensor_storage_lower_bound_bytes"],
+            name="optimizer state floor",
+        ),
+        "projected_optimizer_state_tensor_storage_lower_bound_bytes": _failure_operand_int(
+            projected["projected_optimizer_state_tensor_storage_lower_bound_bytes"],
+            name="projected optimizer state floor",
+        ),
+        "optimizer_state_tensor_storage_by_route_bytes": normalized_route_bytes,
+        "per_shard_tensor_storage_lower_bound_bytes": normalized_shard_bytes,
+        "retained_shard_paths": normalized_retained,
+    }
+    if normalized_projected["active_expert"] is not None and (
+        not isinstance(normalized_projected["active_expert"], str)
+        or not normalized_projected["active_expert"]
+    ):
+        raise ValueError("checkpoint failure active expert is invalid")
+    if normalized_projected["optimizer_state_layout"] is not None and (
+        not isinstance(normalized_projected["optimizer_state_layout"], str)
+        or not normalized_projected["optimizer_state_layout"]
+    ):
+        raise ValueError("checkpoint failure projected optimizer layout is invalid")
+
+    staged = value["staged_shard_bytes"]
+    if not isinstance(staged, list):
+        raise ValueError("checkpoint failure staged shard inventory has an invalid shape")
+    normalized_staged: list[dict[str, Any]] = []
+    seen_staged: set[str] = set()
+    for item in staged:
+        if not isinstance(item, Mapping) or set(item) != {"path", "bytes"}:
+            raise ValueError("checkpoint failure staged shard inventory has an invalid row")
+        path = _failure_operand_path(item["path"], name="staged shard")
+        if path in seen_staged:
+            raise ValueError("checkpoint failure staged shard inventory is duplicated")
+        seen_staged.add(path)
+        normalized_staged.append({"path": path, "bytes": _failure_operand_int(item["bytes"], name="staged shard bytes", nullable=False)})
+    normalized_staged.sort(key=lambda item: item["path"])
+
+    normalized = {
+        "derived_byte_bound_bytes": _failure_operand_int(value["derived_byte_bound_bytes"], name="derived byte bound"),
+        "derived_byte_bound_inputs": normalized_derived,
+        "projected_storage_floor_bytes": _failure_operand_int(value["projected_storage_floor_bytes"], name="projected storage floor"),
+        "projected_storage_floor_inputs": normalized_projected,
+        "staged_shard_bytes": normalized_staged,
+        "available_commit_bytes": _failure_operand_int(value["available_commit_bytes"], name="available commit"),
+        "required_commit_bytes": _failure_operand_int(value["required_commit_bytes"], name="required commit"),
+    }
+    if (
+        normalized["available_commit_bytes"] is not None
+        and normalized["required_commit_bytes"] is None
+    ) or (
+        normalized["available_commit_bytes"] is None
+        and normalized["required_commit_bytes"] is not None
+    ):
+        raise ValueError("checkpoint failure host commit operands must be paired")
+    return normalized
+
+
+def _merge_failure_comparison_operands(
+    base: Mapping[str, Any], update: Mapping[str, Any] | None
+) -> dict[str, Any]:
+    current = _normalize_failure_comparison_operands(base)
+    if update is None:
+        return current
+    incoming = _normalize_failure_comparison_operands(update)
+    for field in ("derived_byte_bound_bytes", "projected_storage_floor_bytes", "available_commit_bytes", "required_commit_bytes"):
+        if incoming[field] is not None:
+            current[field] = incoming[field]
+    for field in ("derived_byte_bound_inputs", "projected_storage_floor_inputs"):
+        current[field] = {
+            **current[field],
+            **{
+                key: val
+                for key, val in incoming[field].items()
+                if val not in (None, {}, [])
+            },
+        }
+    if incoming["staged_shard_bytes"]:
+        current["staged_shard_bytes"] = incoming["staged_shard_bytes"]
+    return _normalize_failure_comparison_operands(current)
+
+
+class _CheckpointWriteRefusal(RuntimeError):
+    def __init__(self, message: str, *, comparison_operands: Mapping[str, Any]) -> None:
+        self.comparison_operands = _normalize_failure_comparison_operands(comparison_operands)
+        super().__init__(message)
+
 
 class CheckpointIdentityMismatch(ValueError):
     """A checkpoint's recorded cond3 identity manifest binding diverges from its
@@ -68,11 +293,15 @@ class CheckpointDeferredLowCommit(RuntimeError):
         required_commit_bytes: int,
         streaming_peak_bytes: int,
         reserve_bytes: int,
+        comparison_operands: Mapping[str, Any] | None = None,
     ) -> None:
         self.available_commit_bytes = available_commit_bytes
         self.required_commit_bytes = required_commit_bytes
         self.streaming_peak_bytes = streaming_peak_bytes
         self.reserve_bytes = reserve_bytes
+        self.comparison_operands = _normalize_failure_comparison_operands(
+            comparison_operands
+        ) if comparison_operands is not None else None
         super().__init__(
             "checkpoint host commit reserve is insufficient: "
             f"available={available_commit_bytes}, required={required_commit_bytes}, "
@@ -419,6 +648,7 @@ def checkpoint_commit_preflight(
     available_commit_bytes: int,
     streaming_peak_bytes: int,
     reserve_bytes: int,
+    comparison_operands: Mapping[str, Any] | None = None,
 ) -> dict[str, int | str]:
     if any(type(value) is not int or value < 0 for value in (available_commit_bytes, streaming_peak_bytes, reserve_bytes)):
         raise ValueError("checkpoint host commit values must be nonnegative integers")
@@ -429,6 +659,7 @@ def checkpoint_commit_preflight(
             required_commit_bytes=required,
             streaming_peak_bytes=streaming_peak_bytes,
             reserve_bytes=reserve_bytes,
+            comparison_operands=comparison_operands,
         )
     return {
         "status": "PASS",
@@ -439,12 +670,82 @@ def checkpoint_commit_preflight(
     }
 
 
+def _staged_failure_inventory(staging_root: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    if not staging_root.exists():
+        return rows
+    for path in sorted(staging_root.rglob("*")):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(staging_root).as_posix()
+        rows.append({"path": relative, "bytes": path.stat().st_size})
+    return rows
+
+
+def _failure_comparison_operands_from_receipt(
+    receipt: Mapping[str, Any],
+    candidate: Path,
+    *,
+    max_serialized_bytes: int | None = None,
+) -> dict[str, Any]:
+    operands = _empty_failure_comparison_operands()
+    projection = receipt.get("storage_projection")
+    architecture = receipt.get("architecture")
+    if isinstance(projection, Mapping):
+        optimizer_actual = projection.get("optimizer_state_tensor_storage_lower_bound_bytes")
+        projected_optimizer = projection.get(
+            "projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes"
+        )
+        if type(optimizer_actual) is int and type(projected_optimizer) is int:
+            route_multiplier = projected_optimizer // max(1, optimizer_actual)
+        else:
+            route_multiplier = None
+        operands = _merge_failure_comparison_operands(
+            operands,
+            {
+                "derived_byte_bound_bytes": max_serialized_bytes,
+                "derived_byte_bound_inputs": {
+                    "max_serialized_bytes": max_serialized_bytes,
+                    "max_transient_scratch_bytes": projection.get("max_transient_scratch_bytes"),
+                    "active_parameters": architecture.get("active_parameters") if isinstance(architecture, Mapping) else None,
+                    "model_config_sha256": receipt.get("model_config_sha256"),
+                    "contract_sha256": receipt.get("contract_sha256"),
+                    "optimizer_state_layout": projection.get("optimizer_state_layout"),
+                },
+                "projected_storage_floor_bytes": projection.get(
+                    "all_expert_projected_tensor_storage_lower_bound_bytes"
+                ),
+                "projected_storage_floor_inputs": {
+                    "route_multiplier": route_multiplier,
+                    "active_expert": projection.get("active_expert"),
+                    "optimizer_state_layout": projection.get("optimizer_state_layout"),
+                    "optimizer_state_tensor_storage_lower_bound_bytes": optimizer_actual,
+                    "projected_optimizer_state_tensor_storage_lower_bound_bytes": projected_optimizer,
+                    "optimizer_state_tensor_storage_by_route_bytes": projection.get("optimizer_state_tensor_storage_by_route_bytes", {}),
+                    "per_shard_tensor_storage_lower_bound_bytes": projection.get("per_shard_tensor_storage_lower_bound_bytes", {}),
+                    "retained_shard_paths": projection.get("retained_shard_paths", []),
+                },
+                "staged_shard_bytes": _staged_failure_inventory(candidate),
+                "available_commit_bytes": None,
+                "required_commit_bytes": None,
+            },
+        )
+    if not operands["staged_shard_bytes"]:
+        operands["staged_shard_bytes"] = _staged_failure_inventory(candidate)
+    host_plan = receipt.get("host_commit_preflight")
+    if isinstance(host_plan, Mapping):
+        operands["available_commit_bytes"] = host_plan.get("available_commit_bytes")
+        operands["required_commit_bytes"] = host_plan.get("required_commit_bytes")
+    return _normalize_failure_comparison_operands(operands)
+
+
 def _retain_write_failure_evidence(
     published_root: Path,
     staging_root: Path,
     error: BaseException,
     *,
     quarantine_candidate: str | None = None,
+    comparison_operands: Mapping[str, Any] | None = None,
 ) -> Path:
     manifest_path = staging_root / "checkpoint-manifest.json"
     manifest_sha256 = _sha256(manifest_path) if manifest_path.is_file() else None
@@ -460,6 +761,7 @@ def _retain_write_failure_evidence(
                     })
         except (OSError, ValueError, TypeError):
             shards = []
+    operands = _normalize_failure_comparison_operands(comparison_operands)
     payload = {
         "schema_version": "ember-checkpoint-write-failure-v1",
         "target": published_root.name,
@@ -468,6 +770,7 @@ def _retain_write_failure_evidence(
         "error_message": str(error)[:4096],
         "checkpoint_manifest_sha256": manifest_sha256,
         "shards": shards,
+        "comparison_operands": operands,
     }
     encoded = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
     if len(encoded) >= _FAILURE_EVIDENCE_LIMIT:
@@ -643,6 +946,59 @@ def optimizer_covers_every_expert_route(
     return all(routed[name] > 0 for name in EXPERT_NAMES)
 
 
+def _storage_failure_comparison_operands(
+    *,
+    model: UnifiedDecoder,
+    optimizer: torch.optim.Optimizer,
+    optimizer_file_payload: Mapping[str, Any],
+    shard_storage_lower_bounds: Mapping[str, int],
+    max_transient_scratch_bytes: int | None,
+    max_serialized_bytes: int | None,
+    optimizer_state_layout: str,
+    model_config_sha256: str | None = None,
+    contract_sha256: str | None = None,
+    active_parameters: int | None = None,
+    shard_publication_modes: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    routed_optimizer = _optimizer_tensor_storage_by_route(model, optimizer)
+    optimizer_actual = _unique_tensor_storage_bytes(optimizer_file_payload)
+    specialist_routes = [name for name in EXPERT_NAMES if routed_optimizer[name] > 0]
+    route_multiplier = (
+        1
+        if model.active_expert == "shared" or specialist_routes == list(EXPERT_NAMES)
+        else len(EXPERT_NAMES)
+    )
+    projected_optimizer = optimizer_actual * route_multiplier
+    projected_floor = sum(shard_storage_lower_bounds.values()) - optimizer_actual + projected_optimizer
+    publication_modes = shard_publication_modes or {}
+    retained = sorted(path for path, mode in publication_modes.items() if mode == "hardlink")
+    return {
+        "derived_byte_bound_bytes": max_serialized_bytes,
+        "derived_byte_bound_inputs": {
+            "max_serialized_bytes": max_serialized_bytes,
+            "max_transient_scratch_bytes": max_transient_scratch_bytes,
+            "active_parameters": active_parameters,
+            "model_config_sha256": model_config_sha256,
+            "contract_sha256": contract_sha256,
+            "optimizer_state_layout": optimizer_state_layout,
+        },
+        "projected_storage_floor_bytes": projected_floor,
+        "projected_storage_floor_inputs": {
+            "route_multiplier": route_multiplier,
+            "active_expert": model.active_expert,
+            "optimizer_state_layout": optimizer_state_layout,
+            "optimizer_state_tensor_storage_lower_bound_bytes": optimizer_actual,
+            "projected_optimizer_state_tensor_storage_lower_bound_bytes": projected_optimizer,
+            "optimizer_state_tensor_storage_by_route_bytes": routed_optimizer,
+            "per_shard_tensor_storage_lower_bound_bytes": dict(sorted(shard_storage_lower_bounds.items())),
+            "retained_shard_paths": retained,
+        },
+        "staged_shard_bytes": [],
+        "available_commit_bytes": None,
+        "required_commit_bytes": None,
+    }
+
+
 def _derive_checkpoint_storage_projection(
     *,
     model: UnifiedDecoder,
@@ -656,6 +1012,9 @@ def _derive_checkpoint_storage_projection(
     max_serialized_bytes: int,
     specialist_parent_optimizer_routes: tuple[str, ...] | None,
     optimizer_state_layout: str = "legacy-v1",
+    model_config_sha256: str | None = None,
+    contract_sha256: str | None = None,
+    active_parameters: int | None = None,
 ) -> dict[str, Any]:
     """Bind the post-update optimizer floor and four-expert checkpoint floor.
 
@@ -792,14 +1151,29 @@ def _derive_checkpoint_storage_projection(
         ),
         default=0,
     )
+    comparison_operands = _storage_failure_comparison_operands(
+        model=model,
+        optimizer=optimizer,
+        optimizer_file_payload=optimizer_file_payload,
+        shard_storage_lower_bounds=shard_storage_lower_bounds,
+        max_transient_scratch_bytes=max_transient_scratch_bytes,
+        max_serialized_bytes=max_serialized_bytes,
+        optimizer_state_layout=optimizer_state_layout,
+        shard_publication_modes=publication_modes,
+        model_config_sha256=model_config_sha256,
+        contract_sha256=contract_sha256,
+        active_parameters=active_parameters,
+    )
     if transient_new_write_peak > max_transient_scratch_bytes:
-        raise RuntimeError(
-            "checkpoint transient new-write projection exceeds scratch cap"
+        raise _CheckpointWriteRefusal(
+            "checkpoint transient new-write projection exceeds scratch cap",
+            comparison_operands=comparison_operands,
         )
     if projected_checkpoint_floor > max_serialized_bytes:
-        raise RuntimeError(
+        raise _CheckpointWriteRefusal(
             "checkpoint all-expert projected tensor-storage lower bound "
-            "exceeds the derived serialized byte bound"
+            "exceeds the derived serialized byte bound",
+            comparison_operands=comparison_operands,
         )
 
     projection = {
@@ -1875,6 +2249,11 @@ def admit_quarantined_checkpoint(
             receipt["storage_projection"],
             max_serialized_bytes=max_serialized_bytes,
         )
+    failure_operands = _failure_comparison_operands_from_receipt(
+        receipt,
+        candidate,
+        max_serialized_bytes=max_serialized_bytes,
+    )
     try:
         # Take a snapshot after direct verifier work, then materialize the returned
         # Mapping before the final snapshot.  No callback-controlled object is touched
@@ -1911,13 +2290,23 @@ def admit_quarantined_checkpoint(
         if final_receipt != post_callback_receipt:
             raise ValueError("checkpoint candidate changed after verifier validation")
     except Exception as error:
-        _retain_write_failure_evidence(published_root, candidate, error)
+        _retain_write_failure_evidence(
+            published_root,
+            candidate,
+            error,
+            comparison_operands=failure_operands,
+        )
         raise
     try:
         _atomic_publish_no_replace(candidate, published_root)
     except OSError as error:
         if isinstance(error, FileExistsError) or error.errno in (errno.EEXIST, errno.ENOTEMPTY) or published_root.exists():
-            _retain_write_failure_evidence(published_root, candidate, error)
+            _retain_write_failure_evidence(
+                published_root,
+                candidate,
+                error,
+                comparison_operands=failure_operands,
+            )
             raise FileExistsError(f"published checkpoint bundle appeared during admission: {published_root}") from error
         raise
     published_receipt = {key: value for key, value in final_receipt.items() if key != "_counter_receipt_payload"}
@@ -1944,6 +2333,7 @@ def _write_checkpoint_artifacts_impl(
 ) -> dict[str, Any]:
     """Publish complete post-step artifacts, manifest last, with replay bindings."""
 
+    comparison_operands = _empty_failure_comparison_operands()
     if max_serialized_bytes is not None and (type(max_serialized_bytes) is not int or max_serialized_bytes < 1):
         raise ValueError("max_serialized_bytes must be a positive integer")
     if max_transient_scratch_bytes is not None and (
@@ -1953,6 +2343,25 @@ def _write_checkpoint_artifacts_impl(
         raise ValueError("max_transient_scratch_bytes must be a positive integer")
     if not callable(pre_publish_verifier):
         raise ValueError("pre-publish verifier is required")
+    comparison_operands = _merge_failure_comparison_operands(
+        comparison_operands,
+        {
+            "derived_byte_bound_bytes": max_serialized_bytes,
+            "derived_byte_bound_inputs": {
+                "max_serialized_bytes": max_serialized_bytes,
+                "max_transient_scratch_bytes": max_transient_scratch_bytes,
+                "active_parameters": None,
+                "model_config_sha256": model_config_sha256,
+                "contract_sha256": contract_sha256,
+                "optimizer_state_layout": optimizer_state_layout,
+            },
+            "projected_storage_floor_bytes": None,
+            "projected_storage_floor_inputs": _empty_failure_comparison_operands()["projected_storage_floor_inputs"],
+            "staged_shard_bytes": [],
+            "available_commit_bytes": None,
+            "required_commit_bytes": None,
+        },
+    )
     _validate_replay_bindings(
         launch_seed=launch_seed,
         rng_state=rng_state,
@@ -1975,73 +2384,102 @@ def _write_checkpoint_artifacts_impl(
     if published_root.exists():
         raise FileExistsError(f"published checkpoint bundle already exists: {published_root}")
     published_root.parent.mkdir(parents=True, exist_ok=True)
+    staging_root = published_root.parent / f".{published_root.name}.{os.getpid()}.{uuid.uuid4().hex}.staging"
+    model_state = model.state_dict()
+    counts = measure_parameter_counts(model)
+    comparison_operands["derived_byte_bound_inputs"]["active_parameters"] = int(
+        counts["active_parameters"]
+    )
+    shared_state = _select_detached_state(model_state, lambda name: ".experts." not in name)
+    optimizer_state_payload = optimizer.state_dict()
+    optimizer_file_payload = {
+        "optimizer": optimizer_state_payload,
+        "optimizer_contract": optimizer_contract,
+        "optimizer_realization": optimizer_realization,
+    }
+    owner_payloads: dict[str, dict[str, Any]] = {}
+    owner_by_parameter: dict[str, str] = {}
+    if optimizer_state_layout == _OWNER_SHARDED_OPTIMIZER_STATE_LAYOUT:
+        owner_payloads, owner_by_parameter = _optimizer_owner_payloads(
+            model,
+            optimizer,
+            optimizer_contract,
+            optimizer_realization,
+        )
+    optimizer_owner_ids = list(owner_payloads)
+    shard_storage_lower_bounds = {
+        "shared-model.pt": _unique_tensor_storage_bytes(shared_state),
+    }
+    if optimizer_state_layout == _OWNER_SHARDED_OPTIMIZER_STATE_LAYOUT:
+        shard_storage_lower_bounds.update(
+            {
+                f"optimizer-state-{owner}.pt": _unique_tensor_storage_bytes(
+                    owner_payloads[owner]
+                )
+                for owner in optimizer_owner_ids
+            }
+        )
+    else:
+        shard_storage_lower_bounds["optimizer-state.pt"] = _unique_tensor_storage_bytes(
+            optimizer_file_payload
+        )
+    shard_storage_lower_bounds["replay-state.pt"] = _unique_tensor_storage_bytes(rng_state)
+    shard_storage_lower_bounds.update(
+        {
+            f"expert-{name}.pt": _unique_tensor_storage_bytes(
+                _select_detached_state(
+                    model_state,
+                    lambda key, selected=name: f".experts.{selected}." in key,
+                )
+            )
+            for name in EXPERT_NAMES
+        }
+    )
+    if max_transient_scratch_bytes is not None:
+        comparison_operands = _merge_failure_comparison_operands(
+            comparison_operands,
+            _storage_failure_comparison_operands(
+                model=model,
+                optimizer=optimizer,
+                optimizer_file_payload=optimizer_file_payload,
+                shard_storage_lower_bounds=shard_storage_lower_bounds,
+                max_transient_scratch_bytes=max_transient_scratch_bytes,
+                max_serialized_bytes=max_serialized_bytes,
+                optimizer_state_layout=optimizer_state_layout,
+                model_config_sha256=model_config_sha256,
+                contract_sha256=contract_sha256,
+                active_parameters=int(counts["active_parameters"]),
+            ),
+        )
+        for shard_name, lower_bound in shard_storage_lower_bounds.items():
+            if lower_bound > max_transient_scratch_bytes:
+                error = _CheckpointWriteRefusal(
+                    f"checkpoint {shard_name} tensor-storage lower bound "
+                    f"{lower_bound} exceeds transient scratch cap "
+                    f"{max_transient_scratch_bytes}",
+                    comparison_operands=comparison_operands,
+                )
+                _retain_write_failure_evidence(
+                    published_root,
+                    staging_root,
+                    error,
+                    comparison_operands=comparison_operands,
+                )
+                raise error
     host_commit_plan: dict[str, int | str] | None = None
     if host_commit_reserve_bytes is not None:
         host_commit_plan = checkpoint_commit_preflight(
             available_commit_bytes=available_host_commit_bytes(),
             streaming_peak_bytes=checkpoint_streaming_peak_bytes(model, optimizer),
             reserve_bytes=host_commit_reserve_bytes,
+            comparison_operands=comparison_operands,
         )
     # The PID in the private name lets a later retention pass distinguish an
     # active writer from crash residue without publishing a mutable lease file
     # inside the checkpoint bundle.
-    root = published_root.parent / f".{published_root.name}.{os.getpid()}.{uuid.uuid4().hex}.staging"
+    root = staging_root
     root.mkdir()
     try:
-        model_state = model.state_dict()
-        shared_state = _select_detached_state(model_state, lambda name: ".experts." not in name)
-        optimizer_state_payload = optimizer.state_dict()
-        optimizer_file_payload = {
-            "optimizer": optimizer_state_payload,
-            "optimizer_contract": optimizer_contract,
-            "optimizer_realization": optimizer_realization,
-        }
-        owner_payloads: dict[str, dict[str, Any]] = {}
-        owner_by_parameter: dict[str, str] = {}
-        if optimizer_state_layout == _OWNER_SHARDED_OPTIMIZER_STATE_LAYOUT:
-            owner_payloads, owner_by_parameter = _optimizer_owner_payloads(
-                model,
-                optimizer,
-                optimizer_contract,
-                optimizer_realization,
-            )
-        optimizer_owner_ids = list(owner_payloads)
-        shard_storage_lower_bounds = {
-            "shared-model.pt": _unique_tensor_storage_bytes(shared_state),
-        }
-        if optimizer_state_layout == _OWNER_SHARDED_OPTIMIZER_STATE_LAYOUT:
-            shard_storage_lower_bounds.update(
-                {
-                    f"optimizer-state-{owner}.pt": _unique_tensor_storage_bytes(
-                        owner_payloads[owner]
-                    )
-                    for owner in optimizer_owner_ids
-                }
-            )
-        else:
-            shard_storage_lower_bounds["optimizer-state.pt"] = _unique_tensor_storage_bytes(
-                optimizer_file_payload
-            )
-        shard_storage_lower_bounds["replay-state.pt"] = _unique_tensor_storage_bytes(rng_state)
-        shard_storage_lower_bounds.update(
-            {
-                f"expert-{name}.pt": _unique_tensor_storage_bytes(
-                    _select_detached_state(
-                        model_state,
-                        lambda key, selected=name: f".experts.{selected}." in key,
-                    )
-                )
-                for name in EXPERT_NAMES
-            }
-        )
-        if max_transient_scratch_bytes is not None:
-            for shard_name, lower_bound in shard_storage_lower_bounds.items():
-                if lower_bound > max_transient_scratch_bytes:
-                    raise RuntimeError(
-                        f"checkpoint {shard_name} tensor-storage lower bound "
-                        f"{lower_bound} exceeds transient scratch cap "
-                        f"{max_transient_scratch_bytes}"
-                    )
         _write_json_atomic(
             root,
             _STAGING_LEASE,
@@ -2141,9 +2579,35 @@ def _write_checkpoint_artifacts_impl(
                 max_serialized_bytes=int(max_serialized_bytes),
                 specialist_parent_optimizer_routes=specialist_parent_optimizer_routes,
                 optimizer_state_layout=optimizer_state_layout,
+                model_config_sha256=model_config_sha256,
+                contract_sha256=contract_sha256,
+                active_parameters=int(counts["active_parameters"]),
+            )
+            comparison_operands = _merge_failure_comparison_operands(
+                comparison_operands,
+                {
+                    "derived_byte_bound_bytes": max_serialized_bytes,
+                    "derived_byte_bound_inputs": comparison_operands["derived_byte_bound_inputs"],
+                    "projected_storage_floor_bytes": storage_projection["all_expert_projected_tensor_storage_lower_bound_bytes"],
+                    "projected_storage_floor_inputs": {
+                        "route_multiplier": storage_projection["projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes"] // max(1, storage_projection["optimizer_state_tensor_storage_lower_bound_bytes"]),
+                        "active_expert": storage_projection["active_expert"],
+                        "optimizer_state_layout": optimizer_state_layout,
+                        "optimizer_state_tensor_storage_lower_bound_bytes": storage_projection["optimizer_state_tensor_storage_lower_bound_bytes"],
+                        "projected_optimizer_state_tensor_storage_lower_bound_bytes": storage_projection["projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes"],
+                        "optimizer_state_tensor_storage_by_route_bytes": storage_projection["optimizer_state_tensor_storage_by_route_bytes"],
+                        "per_shard_tensor_storage_lower_bound_bytes": storage_projection["per_shard_tensor_storage_lower_bound_bytes"],
+                        "retained_shard_paths": storage_projection["retained_shard_paths"],
+                    },
+                    "staged_shard_bytes": [],
+                    "available_commit_bytes": None,
+                    "required_commit_bytes": None,
+                },
             )
 
-        counts = measure_parameter_counts(model)
+        comparison_operands["derived_byte_bound_inputs"]["active_parameters"] = int(
+            counts["active_parameters"]
+        )
         expert_parameter_sha256 = model.expert_bank_genesis_hashes()
         lineage = None
         manifest_genesis = dict(expert_genesis_sha256)
@@ -2214,7 +2678,10 @@ def _write_checkpoint_artifacts_impl(
             raise ValueError("checkpoint bundle contains unrecorded files")
         incremental_publication_bytes = sum(int(record["incremental_bytes"]) for record in shards) + manifest_path.stat().st_size
         if max_serialized_bytes is not None and incremental_publication_bytes > max_serialized_bytes:
-            raise ValueError("serialized checkpoint exceeds the derived byte bound")
+            raise _CheckpointWriteRefusal(
+                "serialized checkpoint exceeds the derived byte bound",
+                comparison_operands=comparison_operands,
+            )
         receipt = {
             **manifest,
             "checkpoint_manifest_sha256": _sha256(manifest_path),
@@ -2240,6 +2707,10 @@ def _write_checkpoint_artifacts_impl(
         _atomic_publish_no_replace(root, published_root)
         return _bind_checkpoint_identity(published_root, receipt)
     except Exception as error:
+        comparison_operands = _merge_failure_comparison_operands(
+            comparison_operands,
+            getattr(error, "comparison_operands", None),
+        )
         evidence_error: Exception | None = None
         if root.exists():
             try:
@@ -2252,6 +2723,13 @@ def _write_checkpoint_artifacts_impl(
                     candidate,
                     error,
                     quarantine_candidate=candidate.name,
+                    comparison_operands={
+                        **comparison_operands,
+                        "staged_shard_bytes": (
+                            _staged_failure_inventory(candidate)
+                            or comparison_operands["staged_shard_bytes"]
+                        ),
+                    },
                 )
             except Exception as retention_error:
                 evidence_error = retention_error
