@@ -10,12 +10,15 @@ content-addressed operation and never touches ``.git`` or untracked bytes.
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
 import subprocess
 import argparse
 import datetime as _dt
 import sys
+import tarfile
+import tempfile
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -30,9 +33,12 @@ from scripts.ember_totality.ember_totality_spec import compute_working_set
 
 MANIFEST_SCHEMA = "ember-issue-488-reference-manifest-v1"
 CLEANUP_SCHEMA = "ember-issue-488-cleanup-receipt-v1"
+POLICY_SCHEMA = "ember-issue-488-hygiene-policy-v1"
 GOAL_ID = "EMBER-02"
 WORKSTREAM_ID = "EMBER-02A"
 NEXT_EXECUTED_OUTCOME = "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+CANONICAL_CARRIER = "GOVERNANCE.md"
+ABSORBED_248_COMMENT = "https://github.com/wordingone/ember/issues/488#issuecomment-5101881455"
 _HEX64 = set("0123456789abcdef")
 
 
@@ -139,7 +145,7 @@ def _duplicate_candidates(root: Path, tracked: list[str], references: dict[str, 
                 "bytes": path.stat().st_size,
                 "sha256": digest,
                 "reference_count": len(refs),
-                "references": refs[:20],
+                "references": refs,
                 "action": "PROTECTED_EVIDENCE" if protected else "DELETE_CANDIDATE",
                 "superseded_by": canonical,
                 "reason": "byte-identical duplicate with no tracked reference" if not protected else "referenced tracked evidence",
@@ -147,15 +153,219 @@ def _duplicate_candidates(root: Path, tracked: list[str], references: dict[str, 
     return candidates
 
 
-def build_reference_manifest(repo_root: str | os.PathLike[str]) -> dict[str, Any]:
+def _working_set_from_tree(root: Path, tracked: list[str]) -> dict[str, Any]:
+    """Derive replayable working-set counts from one exact Git/tree snapshot."""
+    tracked_set = set(tracked)
+    receipts_root = root / "receipts"
+    untracked_receipts = 0
+    if receipts_root.is_dir():
+        for path in receipts_root.rglob("*"):
+            if path.is_file() and path.relative_to(root).as_posix() not in tracked_set:
+                untracked_receipts += 1
+    return {
+        "tracked_files": len(tracked),
+        "docs_files": sum(1 for path in tracked if path.startswith("docs/")),
+        "scripts_files": sum(1 for path in tracked if path.startswith("scripts/")),
+        "tracked_receipts": sum(1 for path in tracked if path.startswith("receipts/")),
+        "untracked_receipts_on_disk": untracked_receipts,
+        "open_issues_count": None,
+    }
+
+
+def _policy_contract() -> dict[str, Any]:
+    """Return the closed, path-free policy carried by every #488 manifest."""
+    return {
+        "schema_version": POLICY_SCHEMA,
+        "canonical_carrier": CANONICAL_CARRIER,
+        "first_bounded_cleanup_pass": True,
+        "remaining_cadence_transferred": True,
+        "transfer_basis": ABSORBED_248_COMMENT,
+        "doc_supersession": "declare_supersedes_or_invalidates_and_delete_superseded_in_superseding_pr",
+        "receipt_retention": "protect_claimed_or_cited; annex_uncited_older_than_30d_quarterly; working_readable",
+        "script_taxonomy": "propose_unreferenced_deletion_with_scan_and_atomic_consumer_updates",
+        "issue_cadence": "silent_over_14d_pointer_park_or_operator_kill_only",
+        "trend_wince": "working_set_growth_without_battery_movement_is_named_wince",
+        "carrier_discipline": "extend_existing_carrier_before_opening_issue",
+        "eng_sync_tally": "classify_protected_annex_or_duplicate_before_move",
+        "receipt_atomicity": "claims_index_board_receipt_check_and_consumers_move_atomically",
+        "ledger_archive": "receipts/ledger_append_only_with_v1_archived_reconstruction",
+        "dispatch_equivalence": "equivalence_tests_and_reviewed_manifest_before_stub_removal",
+    }
+
+
+def _is_sha256(value: Any) -> bool:
+    return isinstance(value, str) and len(value) == 64 and set(value) <= _HEX64
+
+
+def _exact_child(root: Path, relative: str) -> Path:
+    """Resolve one relative path without symlink, reparse, or case aliases."""
+    _validate_relative_path(relative)
+    if relative.replace("\\", "/") != relative:
+        raise ValueError("path separator alias")
+    cursor = root
+    for part in Path(relative).parts:
+        children = [child for child in cursor.iterdir() if child.name.casefold() == part.casefold()]
+        if len(children) != 1 or children[0].name != part:
+            raise ValueError("path case or reparse alias")
+        cursor = children[0]
+        attributes = getattr(os.lstat(cursor), "st_file_attributes", 0)
+        if cursor.is_symlink() or attributes & 0x400:
+            raise ValueError("symlink or reparse cleanup path")
+    return cursor
+
+
+def _validate_manifest(
+    root: Path,
+    manifest: dict[str, Any],
+    *,
+    historical: bool = False,
+    tracked_override: list[str] | None = None,
+) -> None:
+    """Validate a producer-shaped manifest before any cleanup mutation."""
+    expected_keys = {
+        "schema_version", "source_commit", "source_clean", "policy",
+        "working_set", "inventory", "candidates", "selected_cleanup", "completed_cleanup", "manifest_sha256",
+    }
+    if not isinstance(manifest, dict) or set(manifest) != expected_keys:
+        raise ValueError("closed hygiene manifest fields required")
+    if manifest["schema_version"] != MANIFEST_SCHEMA:
+        raise ValueError("unsupported hygiene manifest")
+    if not isinstance(manifest["source_commit"], str) or len(manifest["source_commit"]) != 40 or set(manifest["source_commit"]) - set("0123456789abcdef"):
+        raise ValueError("manifest source commit malformed")
+    if type(manifest["source_clean"]) is not bool:
+        raise ValueError("manifest source_clean malformed")
+    if historical:
+        if manifest["source_clean"] is not True:
+            raise ValueError("historical manifest source was not clean")
+    else:
+        try:
+            live_head = _git(root, "rev-parse", "HEAD")
+            live_status = _git(root, "status", "--porcelain")
+        except (OSError, subprocess.CalledProcessError) as exc:
+            raise ValueError("manifest requires live Git authority") from exc
+        if live_head != manifest["source_commit"]:
+            raise ValueError("manifest source commit drift")
+        if live_status or manifest["source_clean"] is not True:
+            raise ValueError("manifest source tree is not clean")
+    if manifest["policy"] != _policy_contract():
+        raise ValueError("hygiene policy contract drift")
+    if not _is_sha256(manifest["manifest_sha256"]):
+        raise ValueError("manifest hash malformed")
+    body = dict(manifest)
+    recorded_hash = body.pop("manifest_sha256")
+    if _sha256_bytes(_canonical(body)) != recorded_hash:
+        raise ValueError("manifest hash mismatch")
+    if not isinstance(manifest["working_set"], dict) or not isinstance(manifest["inventory"], dict):
+        raise ValueError("manifest working-set or inventory malformed")
+    inventory = manifest["inventory"]
+    if set(inventory) != {"docs", "scripts", "tracked_receipts", "untracked_receipts", "git_packs"}:
+        raise ValueError("manifest inventory fields malformed")
+    for bucket in inventory.values():
+        if not isinstance(bucket, dict) or set(bucket) != {"count", "bytes", "sha256"}:
+            raise ValueError("manifest inventory bucket malformed")
+        if type(bucket["count"]) is not int or bucket["count"] < 0 or type(bucket["bytes"]) is not int or bucket["bytes"] < 0 or not _is_sha256(bucket["sha256"]):
+            raise ValueError("manifest inventory values malformed")
+    candidates = manifest["candidates"]
+    if not isinstance(candidates, list):
+        raise ValueError("manifest candidates malformed")
+    seen: set[str] = set()
+    for row in candidates:
+        fields = {"path", "kind", "bytes", "sha256", "reference_count", "references", "action", "superseded_by", "reason"}
+        if not isinstance(row, dict) or set(row) != fields:
+            raise ValueError("manifest candidate fields malformed")
+        relative = row["path"]
+        if not isinstance(relative, str) or relative in seen:
+            raise ValueError("manifest candidate path duplicated")
+        seen.add(relative)
+        if type(row["bytes"]) is not int or row["bytes"] < 0 or not _is_sha256(row["sha256"]):
+            raise ValueError("manifest candidate bytes/hash malformed")
+        if row["kind"] != "tracked_duplicate" or row["action"] not in {"PROTECTED_EVIDENCE", "ANNEX_CANDIDATE", "DELETE_CANDIDATE"}:
+            raise ValueError("manifest candidate kind/action malformed")
+        if type(row["reference_count"]) is not int or row["reference_count"] < 0 or not isinstance(row["references"], list) or any(not isinstance(item, str) for item in row["references"]):
+            raise ValueError("manifest candidate references malformed")
+        if row["reference_count"] != len(row["references"]):
+            raise ValueError("manifest candidate reference count mismatch")
+        target = _exact_child(root, relative)
+        if target.stat().st_size != row["bytes"] or _sha256_file(target) != row["sha256"]:
+            raise ValueError("manifest candidate bytes drift")
+        if row["action"] == "DELETE_CANDIDATE":
+            if row["reference_count"] != 0 or row["references"] or not isinstance(row["superseded_by"], str):
+                raise ValueError("delete candidate is referenced or lacks canonical")
+            canonical = _exact_child(root, row["superseded_by"])
+            if canonical.stat().st_size != row["bytes"] or _sha256_file(canonical) != row["sha256"]:
+                raise ValueError("delete candidate canonical mismatch")
+        elif row["action"] == "PROTECTED_EVIDENCE" and row["reference_count"] == 0:
+            raise ValueError("protected candidate lacks reference evidence")
+    selected = manifest["selected_cleanup"]
+    if not isinstance(selected, list):
+        raise ValueError("selected cleanup projection malformed")
+    candidate_by_path = {row["path"]: row for row in candidates}
+    selected_paths: set[str] = set()
+    for row in selected:
+        if not isinstance(row, dict) or set(row) != {"path", "bytes", "sha256", "superseded_by"}:
+            raise ValueError("selected cleanup row malformed")
+        relative = row["path"]
+        if not isinstance(relative, str) or relative in selected_paths:
+            raise ValueError("selected cleanup path duplicated")
+        selected_paths.add(relative)
+        candidate = candidate_by_path.get(relative)
+        if candidate is None or candidate["action"] != "DELETE_CANDIDATE":
+            raise ValueError("selected cleanup path is not a deletion candidate")
+        if row["bytes"] != candidate["bytes"] or row["sha256"] != candidate["sha256"] or row["superseded_by"] != candidate["superseded_by"]:
+            raise ValueError("selected cleanup candidate binding mismatch")
+        if not _is_sha256(row["sha256"]):
+            raise ValueError("selected cleanup hash malformed")
+        canonical = _exact_child(root, row["superseded_by"])
+        if canonical.stat().st_size != row["bytes"] or _sha256_file(canonical) != row["sha256"]:
+            raise ValueError("selected cleanup canonical mismatch")
+    completed = manifest["completed_cleanup"]
+    if not isinstance(completed, list):
+        raise ValueError("completed cleanup projection malformed")
+    for row in completed:
+        if not isinstance(row, dict) or set(row) != {"path", "bytes", "sha256", "superseded_by", "receipt_path"}:
+            raise ValueError("completed cleanup row malformed")
+        if row["path"] in seen or not isinstance(row["path"], str) or not _is_sha256(row["sha256"]):
+            raise ValueError("completed cleanup path/hash malformed")
+        seen.add(row["path"])
+        if type(row["bytes"]) is not int or row["bytes"] < 0 or not isinstance(row["superseded_by"], str) or not isinstance(row["receipt_path"], str):
+            raise ValueError("completed cleanup values malformed")
+        canonical = _exact_child(root, row["superseded_by"])
+        if canonical.stat().st_size != row["bytes"] or _sha256_file(canonical) != row["sha256"]:
+            raise ValueError("completed cleanup rollback mismatch")
+
+    tracked = tracked_override if tracked_override is not None else _tracked_paths(root)
+    if tracked:
+        expected = build_reference_manifest(
+            root,
+            tracked_override=tracked,
+            source_commit_override=manifest["source_commit"] if historical else None,
+            source_clean_override=True if historical else None,
+        )
+        for field in ("working_set", "inventory", "candidates"):
+            if manifest[field] != expected[field]:
+                raise ValueError(f"manifest {field} projection drift")
+
+
+def build_reference_manifest(
+    repo_root: str | os.PathLike[str],
+    *,
+    tracked_override: list[str] | None = None,
+    source_commit_override: str | None = None,
+    source_clean_override: bool | None = None,
+    working_set_override: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     root = Path(repo_root).resolve()
-    tracked = _tracked_paths(root)
-    try:
-        source_commit = _git(root, "rev-parse", "HEAD")
-        source_clean = not bool(_git(root, "status", "--porcelain"))
-    except (OSError, subprocess.CalledProcessError):
-        source_commit = "0" * 40
-        source_clean = False
+    tracked = tracked_override if tracked_override is not None else _tracked_paths(root)
+    if source_commit_override is not None:
+        source_commit = source_commit_override
+        source_clean = True if source_clean_override is None else source_clean_override
+    else:
+        try:
+            source_commit = _git(root, "rev-parse", "HEAD")
+            source_clean = not bool(_git(root, "status", "--porcelain"))
+        except (OSError, subprocess.CalledProcessError):
+            source_commit = "0" * 40
+            source_clean = False
 
     tracked_receipts = [p for p in tracked if p.startswith("receipts/")]
     untracked_receipts = []
@@ -194,9 +404,12 @@ def build_reference_manifest(repo_root: str | os.PathLike[str]) -> dict[str, Any
         "schema_version": MANIFEST_SCHEMA,
         "source_commit": source_commit,
         "source_clean": source_clean,
-        "working_set": compute_working_set(str(root)),
+        "policy": _policy_contract(),
+        "working_set": working_set_override if working_set_override is not None else _working_set_from_tree(root, tracked),
         "inventory": inventory,
         "candidates": candidates,
+        "selected_cleanup": [],
+        "completed_cleanup": [],
     }
     manifest["manifest_sha256"] = _sha256_bytes(_canonical(manifest))
     return manifest
@@ -221,18 +434,52 @@ def _validate_relative_path(relative: str) -> None:
         raise ValueError(".git mutation is forbidden")
 
 
+def _extract_validated_git_archive(archive: bytes, destination: Path) -> None:
+    """Materialize a Git archive only after rejecting traversal and links."""
+    with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as bundle:
+        members = bundle.getmembers()
+        for member in members:
+            name = member.name.replace("\\", "/")
+            pure = Path(name)
+            if not name or pure.is_absolute() or ".." in pure.parts or "\\" in member.name:
+                raise ValueError("historical archive path traversal")
+            if member.issym() or member.islnk() or not (member.isdir() or member.isfile()):
+                raise ValueError("historical archive member type is unsafe")
+        for member in members:
+            target = destination / Path(member.name)
+            if member.isdir():
+                target.mkdir(parents=True, exist_ok=True)
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            source = bundle.extractfile(member)
+            if source is None:
+                raise ValueError("historical archive file is unreadable")
+            with target.open("wb") as output:
+                for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                    output.write(chunk)
+
+
+def _git_archive(root: Path, source_commit: str) -> bytes:
+    result = subprocess.run(
+        ["git", "-C", str(root), "archive", "--format=tar", source_commit],
+        check=True,
+        capture_output=True,
+    )
+    return result.stdout
+
+
 def apply_safe_cleanup(
     repo_root: str | os.PathLike[str],
     manifest: dict[str, Any],
     paths: list[str],
     receipt_path: str | os.PathLike[str],
 ) -> dict[str, Any]:
-    if manifest.get("schema_version") != MANIFEST_SCHEMA:
-        raise ValueError("unsupported hygiene manifest")
+    root = Path(repo_root).resolve()
+    _validate_manifest(root, manifest)
+    policy = manifest["policy"]
     rows = {row.get("path"): row for row in manifest.get("candidates", [])}
     if len(paths) != len(set(paths)):
         raise ValueError("duplicate cleanup path")
-    root = Path(repo_root).resolve()
     destination = Path(receipt_path)
     if destination.exists():
         raise ValueError("refusing to overwrite cleanup receipt")
@@ -277,7 +524,7 @@ def apply_safe_cleanup(
             path.unlink()
             deleted.append({"path": relative, "bytes": row["bytes"], "sha256": row["sha256"]})
         after = _snapshot(root)
-        working_set_after = compute_working_set(str(root))
+        working_set_after = _working_set_from_tree(root, sorted(tracked))
         receipt = {
             "ticket": "EMBER-488-HYGIENE",
             "ts": _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
@@ -287,6 +534,13 @@ def apply_safe_cleanup(
             "workstream_id": WORKSTREAM_ID,
             "next_executed_outcome": NEXT_EXECUTED_OUTCOME,
             "artifact_class": "hygiene_evidence",
+            "policy": policy,
+            "cleanup_scope": {
+                "kind": "first_bounded_cleanup_pass",
+                "canonical_carrier": CANONICAL_CARRIER,
+                "remaining_cadence_transferred": True,
+                "transfer_basis": ABSORBED_248_COMMENT,
+            },
             "manifest_sha256": manifest.get("manifest_sha256"),
             "before": before,
             "after": after,
@@ -318,12 +572,92 @@ def write_manifest(repo_root: str | os.PathLike[str], destination: str | os.Path
     return manifest
 
 
+def validate_post_cleanup(
+    repo_root: str | os.PathLike[str],
+    manifest_path: str | os.PathLike[str],
+    receipt_path: str | os.PathLike[str],
+) -> None:
+    """Reopen the pre-cleanup Git tree and verify the later deletion receipt."""
+    root = Path(repo_root).resolve()
+    manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+    source_commit = manifest.get("source_commit")
+    if not isinstance(source_commit, str) or len(source_commit) != 40:
+        raise ValueError("historical source commit malformed")
+    try:
+        _git(root, "cat-file", "-e", f"{source_commit}^{{commit}}")
+        _git(root, "merge-base", "--is-ancestor", source_commit, "HEAD")
+        if _git(root, "status", "--porcelain"):
+            raise ValueError("post-cleanup source tree is dirty")
+        tracked = [item for item in _git(root, "ls-tree", "-r", "--name-only", source_commit).splitlines() if item]
+        archive = _git_archive(root, source_commit)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise ValueError("historical source commit is not an ancestor of this Git tree") from exc
+    with tempfile.TemporaryDirectory(dir=os.environ.get("TEMP") or os.environ.get("TMP")) as directory:
+        historical_root = Path(directory)
+        _extract_validated_git_archive(archive, historical_root)
+        _validate_manifest(historical_root, manifest, historical=True, tracked_override=tracked)
+    receipt_path_obj = Path(receipt_path).resolve()
+    receipt = json.loads(receipt_path_obj.read_text(encoding="utf-8"))
+    if receipt.get("manifest_sha256") != manifest.get("manifest_sha256"):
+        raise ValueError("cleanup receipt manifest binding mismatch")
+    deleted = receipt.get("deleted")
+    if not isinstance(deleted, list) or len({row.get("path") for row in deleted if isinstance(row, dict)}) != len(deleted):
+        raise ValueError("cleanup receipt deletion projection malformed")
+    candidates = {
+        row["path"]: row
+        for row in manifest.get("candidates", [])
+        if isinstance(row, dict) and row.get("action") == "DELETE_CANDIDATE"
+    }
+    selected = manifest.get("selected_cleanup", [])
+    selected_by_path = {row["path"]: row for row in selected}
+    if selected_by_path and set(selected_by_path) != {row.get("path") for row in deleted}:
+        raise ValueError("cleanup receipt selected deletion mismatch")
+    completed = manifest.get("completed_cleanup", [])
+    if completed:
+        completed_projection = {
+            row["path"]: {"bytes": row["bytes"], "sha256": row["sha256"]}
+            for row in completed
+        }
+        if completed_projection != {
+            row.get("path"): {"bytes": row.get("bytes"), "sha256": row.get("sha256")}
+            for row in deleted
+        }:
+            raise ValueError("cleanup receipt completed deletion mismatch")
+    for row in deleted:
+        if not isinstance(row, dict) or set(row) != {"path", "bytes", "sha256"}:
+            raise ValueError("cleanup receipt deletion row malformed")
+        candidate = candidates.get(row["path"])
+        if candidate is None or row["bytes"] != candidate["bytes"] or row["sha256"] != candidate["sha256"]:
+            raise ValueError("cleanup receipt selected candidate mismatch")
+        if selected_by_path:
+            selected_row = selected_by_path[row["path"]]
+            if row["bytes"] != selected_row["bytes"] or row["sha256"] != selected_row["sha256"]:
+                raise ValueError("cleanup receipt selected candidate binding mismatch")
+    for row in deleted:
+        candidate = candidates[row["path"]]
+        deleted_path = root / Path(row["path"])
+        if deleted_path.exists() or deleted_path.is_symlink():
+            raise ValueError("selected cleanup path still exists")
+        canonical = _exact_child(root, candidate["superseded_by"])
+        if canonical.stat().st_size != row["bytes"] or _sha256_file(canonical) != row["sha256"]:
+            raise ValueError("selected cleanup canonical bytes drift")
+    if receipt.get("non_regression") != {
+        "git_metadata_mutated": False,
+        "private_or_untracked_bytes_deleted": False,
+    }:
+        raise ValueError("cleanup receipt non-regression binding mismatch")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Issue #488 closed hygiene inventory")
     subparsers = parser.add_subparsers(dest="command", required=True)
     scan = subparsers.add_parser("scan")
     scan.add_argument("repo_root", type=Path)
     scan.add_argument("manifest", type=Path)
+    validate = subparsers.add_parser("validate")
+    validate.add_argument("repo_root", type=Path)
+    validate.add_argument("manifest", type=Path)
+    validate.add_argument("receipt", type=Path)
     apply = subparsers.add_parser("apply")
     apply.add_argument("repo_root", type=Path)
     apply.add_argument("manifest", type=Path)
@@ -334,6 +668,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.manifest.exists():
             raise SystemExit("refusing to overwrite reference manifest")
         write_manifest(args.repo_root, args.manifest)
+    elif args.command == "validate":
+        validate_post_cleanup(args.repo_root, args.manifest, args.receipt)
     else:
         payload = json.loads(args.manifest.read_text(encoding="utf-8"))
         apply_safe_cleanup(args.repo_root, payload, args.paths, args.receipt)
