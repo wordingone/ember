@@ -10,6 +10,7 @@ import importlib
 import json
 import os
 import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -29,6 +30,13 @@ def _seal_manifest(mod, manifest):
     body.pop("manifest_sha256", None)
     manifest["manifest_sha256"] = mod._sha256_bytes(mod._canonical(body))
     return manifest
+
+
+def _seal_receipt(mod, receipt):
+    body = dict(receipt)
+    body.pop("receipt_sha256", None)
+    receipt["receipt_sha256"] = mod._sha256_bytes(mod._canonical(body))
+    return receipt
 
 
 def _empty_inventory(mod):
@@ -535,6 +543,141 @@ class Issue488HygieneTests(unittest.TestCase):
         with patch.object(mod, "_git", side_effect=_fixture_git):
             with self.assertRaises(ValueError):
                 mod._validate_manifest(root, manifest, historical=True, tracked_override=tracked)
+
+    def test_manifest_binds_canonical_working_set_producer(self):
+        mod = _module()
+        root = self._fixture()
+        tracked = [
+            "docs/readme.md",
+            "scripts/run.py",
+            "receipts/canonical.json",
+            "receipts/duplicate.json",
+        ]
+        canonical = {
+            "tracked_files": 4,
+            "docs_files": 1,
+            "scripts_files": 1,
+            "tracked_receipts": 2,
+            "untracked_receipts_on_disk": 1,
+            "open_issues_count": 123,
+        }
+        with patch.object(mod, "compute_working_set", return_value=canonical):
+            with patch.object(mod, "_git", side_effect=_fixture_git):
+                manifest = mod.build_reference_manifest(
+                    root,
+                    tracked_override=tracked,
+                    source_commit_override="0" * 40,
+                    source_clean_override=True,
+                )
+        self.assertEqual(manifest["working_set"], canonical)
+
+    def _checked_post_cleanup_inputs(self, mod):
+        manifest = json.loads(
+            (REPO_ROOT / "docs/hygiene/issue-488-reference-manifest-v1.json").read_text(encoding="utf-8")
+        )
+        receipt = json.loads(
+            (REPO_ROOT / "receipts/hygiene/issue-488-first-cleanup-v1.json").read_text(encoding="utf-8")
+        )
+        manifest["source_commit"] = "e8a3768bcc2a1623ac4fcaa2acdc98b1a3e22079"
+        manifest = _seal_manifest(mod, manifest)
+        receipt["manifest_sha256"] = manifest["manifest_sha256"]
+        source = manifest["source_commit"]
+        archive = mod._git_archive(REPO_ROOT, source)
+        with tempfile.TemporaryDirectory(dir=os.environ.get("TEMP") or os.environ.get("TMP")) as directory:
+            historical_root = Path(directory)
+            mod._extract_validated_git_archive(archive, historical_root)
+            tracked = subprocess.run(
+                ["git", "-C", str(REPO_ROOT), "ls-tree", "-r", "--name-only", source],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.splitlines()
+            tracked_set = set(tracked)
+            def working_set(tracked_view):
+                untracked = sum(
+                    1
+                    for path in (historical_root / "receipts").rglob("*")
+                    if path.is_file() and path.relative_to(historical_root).as_posix() not in tracked_set
+                ) if (historical_root / "receipts").is_dir() else 0
+                return {
+                    "tracked_files": len(tracked_view),
+                    "docs_files": sum(path.startswith("docs/") for path in tracked_view),
+                    "scripts_files": sum(path.startswith("scripts/") for path in tracked_view),
+                    "tracked_receipts": sum(path.startswith("receipts/") for path in tracked_view),
+                    "untracked_receipts_on_disk": untracked,
+                    "open_issues_count": None,
+                }
+            receipt["before"] = mod._snapshot(historical_root)
+            receipt["working_set_before"] = working_set(tracked)
+            for row in receipt["deleted"]:
+                (historical_root / Path(row["path"])).unlink()
+            receipt["after"] = mod._snapshot(historical_root)
+            deleted_paths = {row["path"] for row in receipt["deleted"]}
+            receipt["working_set_after_cleanup"] = working_set(
+                [path for path in tracked if path not in deleted_paths]
+            )
+        receipt = _seal_receipt(mod, receipt)
+        return manifest, _seal_receipt(mod, receipt)
+
+    def _historical_git(self, _root, *args):
+        if args == ("status", "--porcelain"):
+            return ""
+        if args[:1] in {("cat-file",), ("merge-base",)}:
+            return ""
+        if args[:1] == ("ls-tree",):
+            result = subprocess.run(
+                ["git", "-C", str(REPO_ROOT), *args],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            return result.stdout.strip()
+        if args[:1] == ("diff",):
+            return "D\tdocs/verification/receipts-20260706/resize-probe/resize-after-100x30.txt\n"
+        raise AssertionError(f"unexpected git query: {args}")
+
+    def test_post_cleanup_rejects_unselected_tracked_deletion(self):
+        mod = _module()
+        manifest, receipt = self._checked_post_cleanup_inputs(mod)
+        with tempfile.TemporaryDirectory(dir=os.environ.get("TEMP") or os.environ.get("TMP")) as directory:
+            manifest_path = Path(directory) / "manifest.json"
+            receipt_path = Path(directory) / "receipt.json"
+            manifest_path.write_bytes(mod._canonical(manifest) + b"\n")
+            receipt_path.write_bytes(mod._canonical(receipt) + b"\n")
+            def extra_deletion_git(root, *args):
+                if args[:1] == ("diff",):
+                    return "D\tforeign-unselected.txt\n"
+                return self._historical_git(root, *args)
+            with patch.object(mod, "_git", side_effect=extra_deletion_git), patch.object(mod, "_validate_manifest"):
+                with self.assertRaisesRegex(ValueError, "tracked deletion"):
+                    mod.validate_post_cleanup(REPO_ROOT, manifest_path, receipt_path)
+
+    def test_post_cleanup_authenticates_receipt_schema_snapshots_and_content(self):
+        mod = _module()
+        mutations = {
+            "schema": lambda receipt: receipt.update({"schema_version": "forged"}),
+            "policy": lambda receipt: receipt.update({"policy": {"forged": True}}),
+            "scope": lambda receipt: receipt.update({"cleanup_scope": {"forged": True}}),
+            "before": lambda receipt: receipt["before"].update({"files": 1}),
+            "after": lambda receipt: receipt["after"].update({"bytes": 1}),
+            "working_set_before": lambda receipt: receipt["working_set_before"].update({"tracked_files": 1}),
+            "working_set_after": lambda receipt: receipt["working_set_after_cleanup"].update({"tracked_files": 1}),
+            "rollback": lambda receipt: receipt.update({"rollback": {"files": [], "action": "forged"}}),
+            "content_hash": lambda receipt: receipt.update({"receipt_sha256": "0" * 64}),
+            "extra_field": lambda receipt: receipt.update({"unexpected": True}),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                manifest, receipt = self._checked_post_cleanup_inputs(mod)
+                mutate(receipt)
+                with tempfile.TemporaryDirectory(dir=os.environ.get("TEMP") or os.environ.get("TMP")) as directory:
+                    manifest_path = Path(directory) / "manifest.json"
+                    receipt_path = Path(directory) / "receipt.json"
+                    manifest_path.write_bytes(mod._canonical(manifest) + b"\n")
+                    receipt_path.write_bytes(mod._canonical(receipt) + b"\n")
+                    with patch.object(mod, "_git", side_effect=self._historical_git), patch.object(mod, "_validate_manifest"):
+                        with self.assertRaises(ValueError):
+                            mod.validate_post_cleanup(REPO_ROOT, manifest_path, receipt_path)
 
 
 if __name__ == "__main__":

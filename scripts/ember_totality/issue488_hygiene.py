@@ -40,6 +40,13 @@ NEXT_EXECUTED_OUTCOME = "EMBER-02 first sufficiently pretrained clean-genesis 3B
 CANONICAL_CARRIER = "GOVERNANCE.md"
 ABSORBED_248_COMMENT = "https://github.com/wordingone/ember/issues/488#issuecomment-5101881455"
 _HEX64 = set("0123456789abcdef")
+_RECEIPT_FIELDS = {
+    "ticket", "ts", "sha_convention", "schema_version", "goal_id",
+    "workstream_id", "next_executed_outcome", "artifact_class", "policy",
+    "cleanup_scope", "manifest_sha256", "before", "after",
+    "working_set_before", "working_set_after_cleanup", "deleted", "rollback",
+    "non_regression", "receipt_sha256",
+}
 
 
 def _canonical(value: Any) -> bytes:
@@ -154,22 +161,8 @@ def _duplicate_candidates(root: Path, tracked: list[str], references: dict[str, 
 
 
 def _working_set_from_tree(root: Path, tracked: list[str]) -> dict[str, Any]:
-    """Derive replayable working-set counts from one exact Git/tree snapshot."""
-    tracked_set = set(tracked)
-    receipts_root = root / "receipts"
-    untracked_receipts = 0
-    if receipts_root.is_dir():
-        for path in receipts_root.rglob("*"):
-            if path.is_file() and path.relative_to(root).as_posix() not in tracked_set:
-                untracked_receipts += 1
-    return {
-        "tracked_files": len(tracked),
-        "docs_files": sum(1 for path in tracked if path.startswith("docs/")),
-        "scripts_files": sum(1 for path in tracked if path.startswith("scripts/")),
-        "tracked_receipts": sum(1 for path in tracked if path.startswith("receipts/")),
-        "untracked_receipts_on_disk": untracked_receipts,
-        "open_issues_count": None,
-    }
+    """Compatibility wrapper around the canonical working-set producer."""
+    return compute_working_set(root, tracked_override=tracked, include_open_issues=False)
 
 
 def _policy_contract() -> dict[str, Any]:
@@ -191,6 +184,82 @@ def _policy_contract() -> dict[str, Any]:
         "ledger_archive": "receipts/ledger_append_only_with_v1_archived_reconstruction",
         "dispatch_equivalence": "equivalence_tests_and_reviewed_manifest_before_stub_removal",
     }
+
+
+def _receipt_content_hash(receipt: dict[str, Any]) -> str:
+    body = dict(receipt)
+    body.pop("receipt_sha256", None)
+    return _sha256_bytes(_canonical(body))
+
+
+def _validate_receipt_projection(
+    receipt: dict[str, Any],
+    manifest: dict[str, Any],
+    *,
+    expected_before: dict[str, int],
+    expected_after: dict[str, int],
+    expected_working_set_before: dict[str, Any],
+    expected_working_set_after: dict[str, Any],
+) -> None:
+    """Authenticate every receipt authority field against the historical tree."""
+    if not isinstance(receipt, dict) or set(receipt) != _RECEIPT_FIELDS:
+        raise ValueError("cleanup receipt fields malformed")
+    if receipt["schema_version"] != CLEANUP_SCHEMA:
+        raise ValueError("cleanup receipt schema mismatch")
+    if receipt["ticket"] != "EMBER-488-HYGIENE" or receipt["goal_id"] != GOAL_ID:
+        raise ValueError("cleanup receipt identity mismatch")
+    if receipt["workstream_id"] != WORKSTREAM_ID or receipt["next_executed_outcome"] != NEXT_EXECUTED_OUTCOME:
+        raise ValueError("cleanup receipt workstream mismatch")
+    if receipt["artifact_class"] != "hygiene_evidence":
+        raise ValueError("cleanup receipt artifact class mismatch")
+    if receipt["sha_convention"] != "sha256 over on-disk raw bytes (binary read, no line-ending normalization)":
+        raise ValueError("cleanup receipt hash convention mismatch")
+    if receipt["policy"] != _policy_contract() or receipt["policy"] != manifest.get("policy"):
+        raise ValueError("cleanup receipt policy mismatch")
+    expected_scope = {
+        "kind": "first_bounded_cleanup_pass",
+        "canonical_carrier": CANONICAL_CARRIER,
+        "remaining_cadence_transferred": True,
+        "transfer_basis": ABSORBED_248_COMMENT,
+    }
+    if receipt["cleanup_scope"] != expected_scope:
+        raise ValueError("cleanup receipt scope mismatch")
+    if not _is_sha256(receipt["manifest_sha256"]) or receipt["manifest_sha256"] != manifest.get("manifest_sha256"):
+        raise ValueError("cleanup receipt manifest binding mismatch")
+    if not _is_sha256(receipt["receipt_sha256"]):
+        raise ValueError("cleanup receipt content hash malformed")
+    if _receipt_content_hash(receipt) != receipt["receipt_sha256"]:
+        raise ValueError("cleanup receipt content hash mismatch")
+    for name, expected in (("before", expected_before), ("after", expected_after)):
+        value = receipt[name]
+        if not isinstance(value, dict) or set(value) != {"files", "bytes"}:
+            raise ValueError(f"cleanup receipt {name} snapshot malformed")
+        if type(value["files"]) is not int or value["files"] < 0 or type(value["bytes"]) is not int or value["bytes"] < 0:
+            raise ValueError(f"cleanup receipt {name} snapshot values malformed")
+        if value != expected:
+            raise ValueError(f"cleanup receipt {name} snapshot mismatch")
+    if receipt["working_set_before"] != expected_working_set_before:
+        raise ValueError("cleanup receipt working-set-before mismatch")
+    if receipt["working_set_after_cleanup"] != expected_working_set_after:
+        raise ValueError("cleanup receipt working-set-after mismatch")
+    deleted = receipt["deleted"]
+    if not isinstance(deleted, list) or len({row.get("path") for row in deleted if isinstance(row, dict)}) != len(deleted):
+        raise ValueError("cleanup receipt deletion projection malformed")
+    for row in deleted:
+        if not isinstance(row, dict) or set(row) != {"path", "bytes", "sha256"}:
+            raise ValueError("cleanup receipt deletion row malformed")
+        if not isinstance(row["path"], str) or type(row["bytes"]) is not int or row["bytes"] < 0 or not _is_sha256(row["sha256"]):
+            raise ValueError("cleanup receipt deletion values malformed")
+    if receipt["rollback"] != {
+        "files": deleted,
+        "action": "restore exact bytes from the recorded hashes",
+    }:
+        raise ValueError("cleanup receipt rollback binding mismatch")
+    if receipt["non_regression"] != {
+        "git_metadata_mutated": False,
+        "private_or_untracked_bytes_deleted": False,
+    }:
+        raise ValueError("cleanup receipt non-regression binding mismatch")
 
 
 def _is_sha256(value: Any) -> bool:
@@ -340,6 +409,7 @@ def _validate_manifest(
             tracked_override=tracked,
             source_commit_override=manifest["source_commit"] if historical else None,
             source_clean_override=True if historical else None,
+            include_open_issues=not historical,
         )
         for field in ("working_set", "inventory", "candidates"):
             if manifest[field] != expected[field]:
@@ -353,6 +423,7 @@ def build_reference_manifest(
     source_commit_override: str | None = None,
     source_clean_override: bool | None = None,
     working_set_override: dict[str, Any] | None = None,
+    include_open_issues: bool = False,
 ) -> dict[str, Any]:
     root = Path(repo_root).resolve()
     tracked = tracked_override if tracked_override is not None else _tracked_paths(root)
@@ -405,7 +476,11 @@ def build_reference_manifest(
         "source_commit": source_commit,
         "source_clean": source_clean,
         "policy": _policy_contract(),
-        "working_set": working_set_override if working_set_override is not None else _working_set_from_tree(root, tracked),
+        "working_set": working_set_override if working_set_override is not None else compute_working_set(
+            root,
+            tracked_override=tracked,
+            include_open_issues=include_open_issues,
+        ),
         "inventory": inventory,
         "candidates": candidates,
         "selected_cleanup": [],
@@ -550,6 +625,7 @@ def apply_safe_cleanup(
             "rollback": {"files": deleted, "action": "restore exact bytes from the recorded hashes"},
             "non_regression": {"git_metadata_mutated": False, "private_or_untracked_bytes_deleted": False},
         }
+        receipt["receipt_sha256"] = _receipt_content_hash(receipt)
         temporary_receipt.write_bytes(_canonical(receipt) + b"\n")
         os.replace(temporary_receipt, destination)
         return receipt
@@ -579,7 +655,11 @@ def validate_post_cleanup(
 ) -> None:
     """Reopen the pre-cleanup Git tree and verify the later deletion receipt."""
     root = Path(repo_root).resolve()
-    manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+    try:
+        manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+        receipt = json.loads(Path(receipt_path).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("cleanup manifest or receipt is unreadable") from exc
     source_commit = manifest.get("source_commit")
     if not isinstance(source_commit, str) or len(source_commit) != 40:
         raise ValueError("historical source commit malformed")
@@ -596,43 +676,72 @@ def validate_post_cleanup(
         historical_root = Path(directory)
         _extract_validated_git_archive(archive, historical_root)
         _validate_manifest(historical_root, manifest, historical=True, tracked_override=tracked)
-    receipt_path_obj = Path(receipt_path).resolve()
-    receipt = json.loads(receipt_path_obj.read_text(encoding="utf-8"))
-    if receipt.get("manifest_sha256") != manifest.get("manifest_sha256"):
-        raise ValueError("cleanup receipt manifest binding mismatch")
-    deleted = receipt.get("deleted")
-    if not isinstance(deleted, list) or len({row.get("path") for row in deleted if isinstance(row, dict)}) != len(deleted):
-        raise ValueError("cleanup receipt deletion projection malformed")
-    candidates = {
-        row["path"]: row
-        for row in manifest.get("candidates", [])
-        if isinstance(row, dict) and row.get("action") == "DELETE_CANDIDATE"
-    }
-    selected = manifest.get("selected_cleanup", [])
-    selected_by_path = {row["path"]: row for row in selected}
-    if selected_by_path and set(selected_by_path) != {row.get("path") for row in deleted}:
-        raise ValueError("cleanup receipt selected deletion mismatch")
-    completed = manifest.get("completed_cleanup", [])
-    if completed:
-        completed_projection = {
-            row["path"]: {"bytes": row["bytes"], "sha256": row["sha256"]}
-            for row in completed
+        expected_before = _snapshot(historical_root)
+        expected_working_set_before = compute_working_set(
+            historical_root,
+            tracked_override=tracked,
+            include_open_issues=False,
+        )
+        deleted = receipt.get("deleted") if isinstance(receipt, dict) else None
+        if not isinstance(deleted, list):
+            raise ValueError("cleanup receipt deletion projection malformed")
+        candidates = {
+            row["path"]: row
+            for row in manifest.get("candidates", [])
+            if isinstance(row, dict) and row.get("action") == "DELETE_CANDIDATE"
         }
-        if completed_projection != {
-            row.get("path"): {"bytes": row.get("bytes"), "sha256": row.get("sha256")}
-            for row in deleted
-        }:
-            raise ValueError("cleanup receipt completed deletion mismatch")
-    for row in deleted:
-        if not isinstance(row, dict) or set(row) != {"path", "bytes", "sha256"}:
-            raise ValueError("cleanup receipt deletion row malformed")
-        candidate = candidates.get(row["path"])
-        if candidate is None or row["bytes"] != candidate["bytes"] or row["sha256"] != candidate["sha256"]:
-            raise ValueError("cleanup receipt selected candidate mismatch")
-        if selected_by_path:
-            selected_row = selected_by_path[row["path"]]
+        selected = manifest.get("selected_cleanup")
+        if not isinstance(selected, list):
+            raise ValueError("manifest selected cleanup projection malformed")
+        selected_by_path = {row["path"]: row for row in selected if isinstance(row, dict)}
+        deleted_paths = {row.get("path") for row in deleted if isinstance(row, dict)}
+        if set(selected_by_path) != deleted_paths:
+            raise ValueError("cleanup receipt selected deletion mismatch")
+        completed = manifest.get("completed_cleanup")
+        if not isinstance(completed, list):
+            raise ValueError("manifest completed cleanup projection malformed")
+        if completed:
+            completed_paths = {row.get("path") for row in completed if isinstance(row, dict)}
+            if completed_paths != deleted_paths:
+                raise ValueError("cleanup receipt completed deletion mismatch")
+        for row in deleted:
+            if not isinstance(row, dict) or set(row) != {"path", "bytes", "sha256"}:
+                raise ValueError("cleanup receipt deletion row malformed")
+            candidate = candidates.get(row["path"])
+            selected_row = selected_by_path.get(row["path"])
+            if candidate is None or selected_row is None:
+                raise ValueError("cleanup receipt selected candidate mismatch")
+            if row["bytes"] != candidate["bytes"] or row["sha256"] != candidate["sha256"]:
+                raise ValueError("cleanup receipt selected candidate mismatch")
             if row["bytes"] != selected_row["bytes"] or row["sha256"] != selected_row["sha256"]:
                 raise ValueError("cleanup receipt selected candidate binding mismatch")
+            historical_path = _exact_child(historical_root, row["path"])
+            if historical_path.stat().st_size != row["bytes"] or _sha256_file(historical_path) != row["sha256"]:
+                raise ValueError("cleanup receipt historical candidate bytes drift")
+            historical_path.unlink()
+        expected_after = _snapshot(historical_root)
+        deleted_paths = {row["path"] for row in deleted}
+        expected_working_set_after = compute_working_set(
+            historical_root,
+            tracked_override=[path for path in tracked if path not in deleted_paths],
+            include_open_issues=False,
+        )
+        _validate_receipt_projection(
+            receipt,
+            manifest,
+            expected_before=expected_before,
+            expected_after=expected_after,
+            expected_working_set_before=expected_working_set_before,
+            expected_working_set_after=expected_working_set_after,
+        )
+    diff_lines = _git(root, "diff", "--name-status", source_commit, "HEAD").splitlines()
+    deleted_from_git = {
+        line.split("\t", 1)[1]
+        for line in diff_lines
+        if line.startswith("D\t") and "\t" in line
+    }
+    if deleted_from_git != {row["path"] for row in receipt["deleted"]}:
+        raise ValueError("tracked deletion set is not receipt-selected")
     for row in deleted:
         candidate = candidates[row["path"]]
         deleted_path = root / Path(row["path"])
@@ -641,11 +750,6 @@ def validate_post_cleanup(
         canonical = _exact_child(root, candidate["superseded_by"])
         if canonical.stat().st_size != row["bytes"] or _sha256_file(canonical) != row["sha256"]:
             raise ValueError("selected cleanup canonical bytes drift")
-    if receipt.get("non_regression") != {
-        "git_metadata_mutated": False,
-        "private_or_untracked_bytes_deleted": False,
-    }:
-        raise ValueError("cleanup receipt non-regression binding mismatch")
 
 
 def main(argv: list[str] | None = None) -> int:

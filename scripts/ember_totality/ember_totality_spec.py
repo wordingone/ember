@@ -928,7 +928,7 @@ def run_probe(path, env):
     return row
 
 
-def compute_working_set(repo_root=None):
+def compute_working_set(repo_root=None, *, tracked_override=None, include_open_issues=True):
     """Repo hygiene working-set metric (GOVERNANCE.md §9 / issue #488).
 
     Cheap git/glob-only counts appended to each board receipt's summary so
@@ -948,16 +948,19 @@ def compute_working_set(repo_root=None):
         "open_issues_count": None,
     }
 
-    tracked = None
-    try:
-        proc = subprocess.run(
-            ["git", "-C", root, "ls-files"],
-            capture_output=True, text=True, timeout=10,
-        )
-        if proc.returncode == 0:
-            tracked = [line for line in proc.stdout.splitlines() if line]
-    except (OSError, subprocess.SubprocessError):
+    if tracked_override is not None:
+        tracked = [line for line in tracked_override if line]
+    else:
         tracked = None
+        try:
+            proc = subprocess.run(
+                ["git", "-C", root, "ls-files"],
+                capture_output=True, text=True, timeout=10,
+            )
+            if proc.returncode == 0:
+                tracked = [line for line in proc.stdout.splitlines() if line]
+        except (OSError, subprocess.SubprocessError):
+            tracked = None
 
     if tracked is not None:
         working_set["tracked_files"] = len(tracked)
@@ -977,18 +980,19 @@ def compute_working_set(repo_root=None):
                         untracked += 1
             working_set["untracked_receipts_on_disk"] = untracked
 
-    try:
-        proc = subprocess.run(
-            ["gh", "issue", "list", "--state", "open", "--limit", "1000",
-             "--json", "number"],
-            capture_output=True, text=True, timeout=10, cwd=root,
-        )
-        if proc.returncode == 0:
-            working_set["open_issues_count"] = len(json.loads(proc.stdout))
-    except (OSError, subprocess.SubprocessError, ValueError):
-        # gh not installed, no network, not a repo gh recognizes, or
-        # unparseable output: fall back to None (issue #488 accepts this).
-        working_set["open_issues_count"] = None
+    if include_open_issues:
+        try:
+            proc = subprocess.run(
+                ["gh", "issue", "list", "--state", "open", "--limit", "1000",
+                 "--json", "number"],
+                capture_output=True, text=True, timeout=10, cwd=root,
+            )
+            if proc.returncode == 0:
+                working_set["open_issues_count"] = len(json.loads(proc.stdout))
+        except (OSError, subprocess.SubprocessError, ValueError):
+            # gh not installed, no network, no repo recognition, or
+            # unparseable output: fall back to None.
+            working_set["open_issues_count"] = None
 
     return working_set
 
