@@ -29,6 +29,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.ember_totality.ember_totality_spec import compute_working_set
+from scripts.lib.invariant import INVARIANT_SHA256
 
 
 MANIFEST_SCHEMA = "ember-issue-488-reference-manifest-v1"
@@ -45,7 +46,7 @@ _RECEIPT_FIELDS = {
     "workstream_id", "next_executed_outcome", "artifact_class", "policy",
     "cleanup_scope", "manifest_sha256", "before", "after",
     "working_set_before", "working_set_after_cleanup", "deleted", "rollback",
-    "non_regression", "receipt_sha256",
+    "non_regression", "invariant_sha256", "receipt_sha256",
 }
 
 
@@ -216,6 +217,8 @@ def _validate_receipt_projection(
         raise ValueError("cleanup receipt workstream mismatch")
     if receipt["artifact_class"] != "hygiene_evidence":
         raise ValueError("cleanup receipt artifact class mismatch")
+    if receipt["invariant_sha256"] != INVARIANT_SHA256:
+        raise ValueError("cleanup receipt constitutional invariant mismatch")
     if receipt["sha_convention"] != "sha256 over on-disk raw bytes (binary read, no line-ending normalization)":
         raise ValueError("cleanup receipt hash convention mismatch")
     if receipt["policy"] != _policy_contract() or receipt["policy"] != manifest.get("policy"):
@@ -680,6 +683,7 @@ def apply_safe_cleanup(
             "deleted": deleted,
             "rollback": {"files": deleted, "action": "restore exact bytes from the recorded hashes"},
             "non_regression": {"git_metadata_mutated": False, "private_or_untracked_bytes_deleted": False},
+            "invariant_sha256": INVARIANT_SHA256,
         }
         receipt["receipt_sha256"] = _receipt_content_hash(receipt)
         temporary_receipt.write_bytes(_canonical(receipt) + b"\n")

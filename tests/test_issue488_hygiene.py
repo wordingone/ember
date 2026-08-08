@@ -856,6 +856,38 @@ class Issue488HygieneTests(unittest.TestCase):
             receipt["working_set_before"]["docs_files"] - 1,
         )
 
+    def test_cleanup_receipt_emits_constitutional_invariant(self):
+        mod = _module()
+        receipt = json.loads(
+            (REPO_ROOT / "receipts/hygiene/issue-488-first-cleanup-v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(receipt["invariant_sha256"], mod.INVARIANT_SHA256)
+
+    def test_cleanup_receipt_rejects_missing_constitutional_invariant(self):
+        mod = _module()
+        manifest = json.loads(
+            (REPO_ROOT / "docs/hygiene/issue-488-reference-manifest-v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        receipt = json.loads(
+            (REPO_ROOT / "receipts/hygiene/issue-488-first-cleanup-v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        receipt.pop("invariant_sha256", None)
+        with self.assertRaises(ValueError):
+            mod._validate_receipt_projection(
+                receipt,
+                manifest,
+                expected_before=receipt["before"],
+                expected_after=receipt["after"],
+                expected_working_set_before=receipt["working_set_before"],
+                expected_working_set_after=receipt["working_set_after_cleanup"],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
