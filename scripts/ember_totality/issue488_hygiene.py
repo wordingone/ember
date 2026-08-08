@@ -15,8 +15,15 @@ import os
 import subprocess
 import argparse
 import datetime as _dt
+import sys
 from pathlib import Path
 from typing import Any, Iterable
+
+# Make direct ``python scripts/ember_totality/issue488_hygiene.py`` execution
+# resolve only this repository's package, without ambient PYTHONPATH.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.ember_totality.ember_totality_spec import compute_working_set
 
