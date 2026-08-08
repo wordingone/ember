@@ -296,6 +296,30 @@ pub struct CertificateCheckResult {
     pub pin_is_ancestor: bool,
 }
 
+fn validate_public_master_sha(public_master_sha: &str) -> Result<()> {
+    let is_lower_hex_commit = public_master_sha.len() == 40
+        && public_master_sha
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
+    if !is_lower_hex_commit {
+        return Err(TrainingVerifyError::Manifest(
+            "certificate public_master_sha must be exactly 40 lowercase hexadecimal bytes".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn local_git_pin_is_ancestor(root: &Path, public_master_sha: &str) -> Result<bool> {
+    validate_public_master_sha(public_master_sha)?;
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["merge-base", "--is-ancestor", public_master_sha, "HEAD"])
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .output()?;
+    Ok(output.status.success())
+}
+
 /// The certificate's `closure_sha256` must equal the live-computed hash, and its
 /// `public_master_sha` must be an ancestor of live HEAD -- exactly the two checks
 /// `tools/ember-restart-3b/certified_train_launch.py::validate_certified_request` makes for
@@ -321,13 +345,7 @@ pub fn check_certificate(
             TrainingVerifyError::Manifest("certificate lacks public_master_sha".into())
         })?;
 
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(["merge-base", "--is-ancestor", public_master_sha, "HEAD"])
-        .env("GIT_OPTIONAL_LOCKS", "0")
-        .output()?;
-    let pin_is_ancestor = output.status.success();
+    let pin_is_ancestor = local_git_pin_is_ancestor(root, public_master_sha)?;
 
     Ok(CertificateCheckResult {
         path: certificate_path.to_string_lossy().into_owned(),
@@ -487,7 +505,83 @@ pub fn write_receipt(path: &Path, receipt: &Value) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::OsString;
     use std::fs;
+    use std::process::Command;
+    use std::sync::Mutex;
+
+    static PATH_LOCK: Mutex<()> = Mutex::new(());
+
+    const VALID_PUBLIC_MASTER_SHA: &str = "3ceada9dbf6b13b6153798a5fafc718ee052942d";
+
+    struct EnvRestore {
+        path: Option<OsString>,
+    }
+
+    impl Drop for EnvRestore {
+        fn drop(&mut self) {
+            match self.path.take() {
+                Some(path) => std::env::set_var("PATH", path),
+                None => std::env::remove_var("PATH"),
+            }
+            for name in [
+                "EMBER_TEST_GIT_LOG",
+                "EMBER_TEST_GIT_ROOT",
+                "EMBER_TEST_GIT_SHA",
+            ] {
+                std::env::remove_var(name);
+            }
+        }
+    }
+
+    fn install_recording_git_stub(tmp: &Path, root: &Path) -> EnvRestore {
+        let stub_source = tmp.join("git-stub.rs");
+        let stub_exe = tmp.join(if cfg!(windows) { "git.exe" } else { "git" });
+        write(
+            &stub_source,
+            br#"use std::fs;
+use std::path::PathBuf;
+fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let log = PathBuf::from(std::env::var_os("EMBER_TEST_GIT_LOG").unwrap());
+    fs::write(&log, args.join("\n")).unwrap();
+    let root = std::env::var("EMBER_TEST_GIT_ROOT").unwrap();
+    let sha = std::env::var("EMBER_TEST_GIT_SHA").unwrap();
+    let expected = vec!["-C", &root, "merge-base", "--is-ancestor", &sha, "HEAD"];
+    if args.iter().map(String::as_str).eq(expected) {
+        std::process::exit(0);
+    }
+    std::process::exit(97);
+}
+"#,
+        );
+        let rustc = std::env::var_os("RUSTC").unwrap_or_else(|| OsString::from("rustc"));
+        let status = Command::new(rustc)
+            .arg(&stub_source)
+            .arg("-o")
+            .arg(&stub_exe)
+            .status()
+            .expect("recording git stub must compile");
+        assert!(status.success(), "recording git stub compilation failed");
+
+        let log = tmp.join("git-argv.log");
+        std::env::set_var("EMBER_TEST_GIT_LOG", &log);
+        std::env::set_var("EMBER_TEST_GIT_ROOT", root);
+        std::env::set_var("EMBER_TEST_GIT_SHA", VALID_PUBLIC_MASTER_SHA);
+        let restore = EnvRestore {
+            path: std::env::var_os("PATH"),
+        };
+        std::env::set_var("PATH", tmp);
+        restore
+    }
+
+    fn write_certificate(path: &Path, public_master_sha: &str) {
+        let certificate = json!({
+            "closure_sha256": "closure",
+            "public_master_sha": public_master_sha,
+        });
+        write(path, &serde_json::to_vec(&certificate).unwrap());
+    }
 
     fn write(path: &Path, bytes: &[u8]) {
         if let Some(parent) = path.parent() {
@@ -599,5 +693,61 @@ mod tests {
              regenerate per tests/fixtures/training-closure-golden.json's own _comment; \
              otherwise this is a real byte-parity regression"
         );
+    }
+
+    #[test]
+    fn certificate_ancestor_check_invokes_only_the_local_git_allowlist() {
+        let _lock = PATH_LOCK.lock().unwrap();
+        let tmp = std::env::temp_dir().join(format!("ember-lab-tv-git-ok-{}", now_ms()));
+        fs::create_dir_all(&tmp).unwrap();
+        let root = tmp.join("repo");
+        fs::create_dir_all(&root).unwrap();
+        let certificate = tmp.join("certificate.json");
+        write_certificate(&certificate, VALID_PUBLIC_MASTER_SHA);
+        let _restore = install_recording_git_stub(&tmp, &root);
+
+        let result = check_certificate(&root, &certificate, "closure").unwrap();
+
+        assert!(result.closure_sha256_matches);
+        assert!(result.pin_is_ancestor);
+        let argv = fs::read_to_string(tmp.join("git-argv.log")).unwrap();
+        assert_eq!(
+            argv,
+            format!(
+                "-C\n{}\nmerge-base\n--is-ancestor\n{}\nHEAD",
+                root.display(),
+                VALID_PUBLIC_MASTER_SHA
+            )
+        );
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn certificate_rejects_network_or_option_like_pin_before_git_spawn() {
+        let _lock = PATH_LOCK.lock().unwrap();
+        for (case, invalid_pin) in [
+            ("url", "https://example.invalid/ember.git"),
+            ("option", "--upload-pack=https://example.invalid/escape"),
+        ] {
+            let tmp = std::env::temp_dir().join(format!("ember-lab-tv-git-{case}-{}", now_ms()));
+            fs::create_dir_all(&tmp).unwrap();
+            let root = tmp.join("repo");
+            fs::create_dir_all(&root).unwrap();
+            let certificate = tmp.join("certificate.json");
+            write_certificate(&certificate, invalid_pin);
+            let _restore = install_recording_git_stub(&tmp, &root);
+
+            let result = check_certificate(&root, &certificate, "closure");
+
+            assert!(
+                matches!(result, Err(TrainingVerifyError::Manifest(_))),
+                "{case} pin must fail validation before spawning git: {result:?}"
+            );
+            assert!(
+                !tmp.join("git-argv.log").exists(),
+                "{case} pin reached the git subprocess"
+            );
+            let _ = fs::remove_dir_all(&tmp);
+        }
     }
 }
