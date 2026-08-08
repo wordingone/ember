@@ -93,6 +93,28 @@ def main() -> int:
         assert normal.stderr == "owned-err\n"
         assert normal.cleanup_verified is True
 
+        secret = "SENTINEL_SECRET_MUST_NOT_APPEAR"
+        cli = subprocess.run(
+            [
+                sys.executable,
+                str(Path(__file__).with_name("owned_process.py")),
+                "--timeout-seconds",
+                "5",
+                "--",
+                sys.executable,
+                "-c",
+                "pass",
+                secret,
+            ],
+            text=True,
+            capture_output=True,
+            timeout=10,
+        )
+        assert cli.returncode == 0
+        assert secret not in cli.stderr, "owned runner status leaked a command argument"
+        assert '"command_sha256"' in cli.stderr
+        assert '"command_argv_count"' in cli.stderr
+
         descendant_pid_path = repo / "descendant.pid"
         descendant_code = "import time; time.sleep(60)"
         parent_code = (

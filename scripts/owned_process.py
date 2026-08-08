@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import hashlib
 import json
 import os
 import signal
@@ -215,6 +216,9 @@ def main() -> int:
     status = asdict(result)
     status.pop("stdout")
     status.pop("stderr")
+    command_parts = status.pop("command")
+    status["command_argv_count"] = len(command_parts)
+    status["command_sha256"] = hashlib.sha256("\0".join(command_parts).encode("utf-8")).hexdigest()
     print(f"OWNED_PROCESS_STATUS {json.dumps(status, sort_keys=True)}", file=sys.stderr)
     return 124 if result.status == "terminated" else result.returncode
 
