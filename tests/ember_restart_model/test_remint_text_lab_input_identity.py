@@ -138,6 +138,35 @@ class RemintTextLabInputIdentityTests(unittest.TestCase):
             self.assertEqual(after_index["input_identity"]["schema"], before_index["input_identity"]["schema"])
             self.assertNotEqual(after_index["input_identity"]["sha256"], before_index["input_identity"]["sha256"])
 
+    def test_write_cures_only_stale_downstream_index_pin(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._sandbox(Path(tmp))
+            script = root / "tools/ember-restart-3b/remint_text_lab_input_identity.py"
+            identity_path = root / IDENTITY_REL
+            index_path = root / INDEX_REL
+            identity_before = identity_path.read_bytes()
+            index = json.loads(index_path.read_bytes())
+            index["input_identity"]["sha256"] = "0" * 64
+            index_path.write_bytes(json.dumps(index).encode("utf-8"))
+
+            write = subprocess.run(
+                [sys.executable, "-B", str(script), "--write"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(write.returncode, 0, write.stdout + write.stderr)
+            self.assertEqual(identity_path.read_bytes(), identity_before)
+            repaired_index = json.loads(index_path.read_bytes())
+            self.assertEqual(repaired_index["input_identity"]["sha256"], sha(identity_before))
+            check = subprocess.run(
+                [sys.executable, "-B", str(script), "--check"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(check.returncode, 0, check.stdout + check.stderr)
+
     def test_write_is_a_no_op_when_already_fresh(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = self._sandbox(Path(tmp))

@@ -121,10 +121,11 @@ def main() -> int:
     live = live_code_hashes()
     pinned = identity.get("code_files", {})
     stale = {name: (pinned.get(name), live[name]) for name in EXPECTED_CODE if pinned.get(name) != live[name]}
+    identity_sha = _sha_bytes(IDENTITY_PATH.read_bytes())
+    index_stale = index["input_identity"]["sha256"] != identity_sha
 
     if args.check:
-        identity_sha = _sha_bytes(IDENTITY_PATH.read_bytes())
-        if index["input_identity"]["sha256"] != identity_sha:
+        if index_stale:
             print("STALE PIN: text-lab-authority-index-v1.json input_identity.sha256 does not match identity bytes")
             return 1
         if not stale:
@@ -136,20 +137,21 @@ def main() -> int:
         print("Cure: python tools/ember-restart-3b/remint_text_lab_input_identity.py --write")
         return 1
 
-    if not stale:
+    if not stale and not index_stale:
         print("text-lab input identity: already fresh, no write needed")
         return 0
 
-    identity["code_files"] = live
-    IDENTITY_PATH.write_bytes(_dump(identity))
-    new_identity_sha = _sha_bytes(IDENTITY_PATH.read_bytes())
+    if stale:
+        identity["code_files"] = live
+        IDENTITY_PATH.write_bytes(_dump(identity))
+        identity_sha = _sha_bytes(IDENTITY_PATH.read_bytes())
 
-    index["input_identity"]["sha256"] = new_identity_sha
+    index["input_identity"]["sha256"] = identity_sha
     INDEX_PATH.write_bytes(_dump(index))
 
     for name, (old, new) in stale.items():
         print(f"re-minted {name}: {old} -> {new}")
-    print(f"re-minted input_identity.sha256 in text-lab-authority-index-v1.json -> {new_identity_sha}")
+    print(f"re-minted input_identity.sha256 in text-lab-authority-index-v1.json -> {identity_sha}")
     return 0
 
 
