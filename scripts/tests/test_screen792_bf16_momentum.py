@@ -94,8 +94,18 @@ import tempfile
 from pathlib import Path
 from unittest import mock
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import screen792_bf16_momentum as s792  # noqa: E402
+try:
+    import screen792_bf16_momentum as s792  # noqa: E402
+except SystemExit as exc:
+    if "historical_only" in str(exc):
+        pytest.skip(
+            "screen792 imports execution-denied historical_only trainer",
+            allow_module_level=True,
+        )
+    raise
 
 # Working magnitude the momentum buffer sits at once warmed up. bfloat16 has
 # an 8-bit mantissa (7 explicit + 1 implicit) -- at magnitude ~1.0 its ULP is

@@ -12,6 +12,8 @@ import hashlib
 import unittest
 from pathlib import Path
 
+import pytest
+
 from scripts.ember_phase3_c14 import floor_contract_manifest as floor
 
 
@@ -84,8 +86,17 @@ def test_native_engine_board_review_is_closed_and_carries_t2_t3_every_run():
     assert board_source.count('"native_engine_trigger_review"') == 1
 
 
+@pytest.mark.parametrize(
+    "field,replacement,error_token",
+    [
+        ("disposition", floor.USED_NOW, "preserved_trigger_gated"),
+        ("trigger", "T1 and T3 and T4 only", "T2"),
+        ("trigger", "T1 and T2 and T4 only", "T3"),
+        ("pilot", "uncoupled pilot", "#155"),
+    ],
+)
 def test_native_engine_row_fails_closed_when_authority_is_weakened(
-    field, replacement, error_token
+    field: str, replacement: str, error_token: str
 ):
     manifest = copy.deepcopy(_manifest())
     manifest[ROW_KEY][field] = replacement
