@@ -11,6 +11,8 @@ import subprocess
 import tempfile
 import unittest
 
+import yaml
+
 from scripts.github.live_pr_policy import (
     pinned_head_covers_live_head,
     validate_live_pull_request,
@@ -79,6 +81,20 @@ def human_pr() -> dict[str, object]:
 
 
 class LivePullRequestPolicyTests(unittest.TestCase):
+    def test_dependabot_github_actions_prefix_matches_live_policy(self) -> None:
+        config_path = pathlib.Path(__file__).parents[2] / ".github" / "dependabot.yml"
+        config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        updates = [
+            update
+            for update in config["updates"]
+            if update.get("package-ecosystem") == "github-actions"
+        ]
+        self.assertEqual(len(updates), 1)
+        self.assertEqual(
+            updates[0].get("commit-message", {}).get("prefix"),
+            "build(deps)",
+        )
+
     def test_accepts_native_dependabot_title_under_closed_bot_schema(self) -> None:
         snapshot = human_pr()
         snapshot.update(

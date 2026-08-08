@@ -13,3 +13,5 @@ updates:
       - area:ci
       - state:ready
       - priority:p3
+    commit-message:
+      prefix: "build(deps)"
