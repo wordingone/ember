@@ -7,8 +7,11 @@ Source: https://github.com/wordingone/ember/issues/339
 ## Accepted current owners
 
 - OPEN EMBER-05/#1119 accepts growth/control interpretation: https://github.com/wordingone/ember/issues/1119#issuecomment-5225432950
+- #1119 append-only threshold/W2 correction: https://github.com/wordingone/ember/issues/1119#issuecomment-5225469242
 - OPEN EMBER-02/#1116 accepts heldout/statistical admission: https://github.com/wordingone/ember/issues/1116#issuecomment-5225432899
+- #1116 append-only target-provenance correction: https://github.com/wordingone/ember/issues/1116#issuecomment-5225469286
 - bidirectional #339 acknowledgement: https://github.com/wordingone/ember/issues/339#issuecomment-5225434048
+- #339 append-only correction bridge: https://github.com/wordingone/ember/issues/339#issuecomment-5225470496
 
 The owners are complementary and remain open. Neither inherits evidence from the other. Current Ember Lab and existing corpus/evaluator/receipt custody remain sole execution authority.
 
@@ -36,11 +39,20 @@ Seven checks remain unresolved for the owned current-3B subject:
 6. At least three newly certified out-of-region paired strata.
 7. A co-launched current-3B scratch control, at least 128 certified fp32 target windows, split accounting, and a conditional registered shrink-perturb third leg.
 
-Disposition remains exact: confirmed cheap match may PARK with named exits; late match HOLDS for another seed and 2-of-3; no match by the registered ceiling HOLDS provisionally valuable pending discrepancy and duplication checks; very early match requires a finer target before PARK. Token match alone never licenses PARK.
+Disposition remains exact:
+
+- cheap match at or before approximately 1.6M tokens may PARK only reversibly and with both named exits preserved: reopen when a later-rung scratch cost exceeds the cumulative bill, or when the registered shrink-perturb leg falsifies the reading;
+- late match beyond 2x the registered comparison threshold HOLDS for another seed and requires 2-of-3 before any stronger disposition;
+- no match by the exact 25,100,288-token ceiling HOLDS the lever provisionally valuable pending discrepancy, duplication, and evaluator checks;
+- very early match before 409,600 tokens is evidence that the target may be weak and requires a finer target before PARK.
+
+Token match alone never licenses PARK.
 
 EMBER-05/#1119 owns growth/control science, outcome grammar, matched arms, marginal/cumulative accounting, extended curves, W2/G-arm inheritance, shrink-perturb, reversible disposition, and rollback.
 
 EMBER-02/#1116 owns current corpus/heldout/evaluator identity, certification, paired-fp32/CI admission, target resolution, training-region duplication, out-of-region strata, and refusal.
+
+W2 fail-to-match inheritance preserves the two-leg shape and caps the matched control at 2.0x cumulative work. The target must be computed at launch on the destination checkpoint with the same `eval_fn`, fp32, and at least 128 certified windows; a copied historical target or a different evaluator cannot authorize admission or disposition.
 
 #440 and #370 remain separate historical/current contracts for their corpus predicate/exclusion and persistent-index obligations. #372 remains independently open; this carrier neither executes nor closes it.
 
