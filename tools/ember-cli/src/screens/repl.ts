@@ -103,7 +103,10 @@ import {
 import type { AppState } from "../state/app-state.ts";
 import type { EmberMessage } from "../types/message-types.ts";
 import type { CallModelParams, ModelResponse } from "../query/query-loop-support.ts";
-import { tryDispatchSlashCommand, parseSlashInput } from "../services/slash-dispatch.ts";
+import {
+  tryDispatchSlashCommandSafely,
+  parseSlashInput,
+} from "../services/slash-dispatch.ts";
 import { consumePostCompaction } from "../session-state.ts";
 import { OperatorInjector } from "../services/operator-input.ts";
 import { startOperatorPipe } from "../services/operator-pipe.ts";
@@ -1457,7 +1460,7 @@ export function ReplScreen({
 
     // Slash-command dispatch — execute a registered command instead of a model
     // turn. Returns null for ordinary input, which falls through to the engine.
-    const slashResult = await tryDispatchSlashCommand(text, {
+    const slashResult = await tryDispatchSlashCommandSafely(text, {
       sessionId: sessionIdRef.current,
       mode:      String(permMode),
       cwd,

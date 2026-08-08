@@ -1,10 +1,18 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // services/slash-dispatch.test.ts — behavioral tests for the slash-command dispatch
 // seam. Asserts the registry IS consulted for slash input and is NOT for ordinary
 // input (the latter must fall through to a normal model turn). Locks the contract so a
 // regression that silently sends "/help" to the model is caught.
 
 import { describe, it, expect } from "bun:test";
-import { parseSlashInput, tryDispatchSlashCommand, type SlashDispatchDeps } from "./slash-dispatch.ts";
+import {
+  parseSlashInput,
+  tryDispatchSlashCommand,
+  tryDispatchSlashCommandSafely,
+  type SlashDispatchDeps,
+} from "./slash-dispatch.ts";
 import type { CommandContext, CommandResult, RegistryCommand } from "../types/command-types.ts";
 
 const CTX: CommandContext = { sessionId: "s1", mode: "default", cwd: "/tmp/x" };
@@ -95,5 +103,19 @@ describe("tryDispatchSlashCommand — dispatch", () => {
     const c = cmd({ name: "clear", execute: async () => { /* side effect only */ } });
     const out = await tryDispatchSlashCommand("/clear", CTX, deps([c]));
     expect(out).toEqual({ type: "message", message: "/clear ran." });
+  });
+});
+
+describe("tryDispatchSlashCommandSafely — interactive error boundary", () => {
+  it("turns a command failure into a renderable message instead of rejecting", async () => {
+    const exploding = cmd({
+      name: "explode",
+      execute: async () => { throw new Error("synthetic command failure"); },
+    });
+    const out = await tryDispatchSlashCommandSafely("/explode", CTX, deps([exploding]));
+    expect(out).toEqual({
+      type: "message",
+      message: "/explode failed: synthetic command failure",
+    });
   });
 });
