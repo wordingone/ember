@@ -368,7 +368,7 @@ class SpecialistLineageTests(unittest.TestCase):
             self.assertGreater(linked["serialized_bytes"], cap)
             import checkpoint_artifacts
             with patch.object(checkpoint_artifacts.os, "link", side_effect=OSError("forced copy fallback")):
-                with self.assertRaisesRegex(ValueError, "serialized checkpoint exceeds"):
+                with self.assertRaisesRegex(RuntimeError, "serialized checkpoint exceeds"):
                     self._write_vision_successor(base / "copied", max_serialized_bytes=cap)
             self.assertFalse((base / "copied" / "candidate").exists())
     def test_specialist_copy_fallback_charges_full_reused_shard_bytes(self) -> None:
@@ -468,7 +468,7 @@ class SpecialistLineageTests(unittest.TestCase):
             config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
             model = UnifiedDecoder(config, genesis_seed=83)
             optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
-            with self.assertRaisesRegex(ValueError, "serialized checkpoint exceeds"):
+            with self.assertRaisesRegex(RuntimeError, "serialized checkpoint exceeds"):
                 write_checkpoint_artifacts(
                     model, optimizer, base / "too-large", launch_seed=83, rng_state=_rng_state(),
                     data_cursor={"shard": "test", "record_index": 0, "global_step": 0, "tokens_seen": 0},
@@ -501,7 +501,15 @@ class SpecialistInheritedOptimizerRouteTests(unittest.TestCase):
             model(torch.tensor([[1, 2, 3]], dtype=torch.long), active_expert=expert).float().square().mean().backward()
             optimizer.step()
         optimizer.zero_grad(set_to_none=True)
-        caps = {"max_transient_scratch_bytes": 1024**3, "max_serialized_bytes": 1024**3} if with_projection else {}
+        caps = (
+            {
+                "optimizer_state_layout": "owner-sharded-v1",
+                "max_transient_scratch_bytes": 1024**3,
+                "max_serialized_bytes": 1024**3,
+            }
+            if with_projection
+            else {}
+        )
         receipt = write_checkpoint_artifacts(
             model, optimizer, base / "root", launch_seed=83, rng_state=_rng_state(),
             data_cursor={"shard": "TOKEN-SHARDS-V0:test", "record_index": 4, "global_step": 4, "tokens_seen": 12},

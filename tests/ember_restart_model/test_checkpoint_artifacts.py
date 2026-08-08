@@ -1251,6 +1251,113 @@ class CheckpointArtifactTests(unittest.TestCase):
             self.assertNotIn("optimizer-state-reasoning.pt", load_calls)
             self.assertNotIn("optimizer-state-tool.pt", load_calls)
 
+    def test_v5_owner_shards_reject_self_signed_full_coverage_projection(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+        )
+        model = UnifiedDecoder(config, genesis_seed=903)
+        model._activate_expert("vision")
+        optimizer = torch.optim.AdamW(
+            (parameter for parameter in model.parameters() if parameter.requires_grad),
+            lr=1e-4,
+        )
+        model(
+            torch.tensor([[1, 2, 3]], dtype=torch.long),
+            active_expert="vision",
+        ).float().square().mean().backward()
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "owner-sharded-v5"
+            receipt = write_checkpoint_artifacts(
+                model,
+                optimizer,
+                root,
+                launch_seed=903,
+                rng_state=_valid_rng_state(),
+                data_cursor={
+                    "shard": "owned",
+                    "record_index": 1,
+                    "global_step": 1,
+                    "tokens_seen": 3,
+                },
+                model_config_sha256="a" * 64,
+                contract_sha256="b" * 64,
+                expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                optimizer_state_layout="owner-sharded-v1",
+                max_transient_scratch_bytes=1024**3,
+                max_serialized_bytes=1024**3,
+            )
+            manifest_path = root / "checkpoint-manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            projection = manifest["storage_projection"]
+            optimizer_bytes = projection[
+                "optimizer_state_tensor_storage_lower_bound_bytes"
+            ]
+            for owner in checkpoint_artifacts.EXPERT_NAMES:
+                projection["optimizer_state_tensor_storage_by_route_bytes"][owner] = max(
+                    1,
+                    projection["optimizer_state_tensor_storage_by_route_bytes"][owner],
+                )
+            projection["optimizer_state_active_expert_ids"] = list(
+                checkpoint_artifacts.EXPERT_NAMES
+            )
+            projection[
+                "projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes"
+            ] = optimizer_bytes
+            projection["all_expert_projected_tensor_storage_lower_bound_bytes"] = sum(
+                projection["per_shard_tensor_storage_lower_bound_bytes"].values()
+            )
+            projection["projection_sha256"] = checkpoint_artifacts._canonical_sha256(
+                {
+                    key: value
+                    for key, value in projection.items()
+                    if key != "projection_sha256"
+                }
+            )
+            manifest_path.write_text(
+                json.dumps(manifest, sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                ValueError, "optimizer owner payload does not match storage projection"
+            ):
+                checkpoint_artifacts._checkpoint_candidate_receipt(
+                    root,
+                    expected_optimizer_contract=receipt["optimizer_contract"],
+                    expected_optimizer_realization=receipt["optimizer_realization"],
+                )
+
+            target = UnifiedDecoder(config, genesis_seed=904)
+            target._activate_expert("vision")
+            target_optimizer = torch.optim.AdamW(
+                (
+                    parameter
+                    for parameter in target.parameters()
+                    if parameter.requires_grad
+                ),
+                lr=1e-4,
+            )
+            before_model = {
+                name: value.detach().clone()
+                for name, value in target.state_dict().items()
+            }
+            before_optimizer_state = set(target_optimizer.state)
+            candidate_receipt = checkpoint_artifacts.published_checkpoint_receipt(
+                root
+            )
+            with self.assertRaisesRegex(
+                ValueError, "optimizer owner payload does not match storage projection"
+            ):
+                load_checkpoint_artifacts(
+                    target, target_optimizer, root, candidate_receipt
+                )
+            for name, value in target.state_dict().items():
+                self.assertTrue(torch.equal(value, before_model[name]), name)
+            self.assertEqual(set(target_optimizer.state), before_optimizer_state)
+
     def test_v5_owner_shards_reject_missing_foreign_duplicate_and_malformed_authority(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
 
@@ -2220,8 +2327,8 @@ class CheckpointArtifactTests(unittest.TestCase):
     def test_v5_storage_projection_admits_parent_attested_full_route_inheritance(self) -> None:
         """#1473: a single-specialist lineage episode exact-resumed from the
         full-coverage root carries the root's four inherited optimizer routes;
-        with the parent's digest-bound projection attesting the full set the
-        state is admissible and projects at factor 1 (already fully realized)."""
+        with independently reopened parent ownership admitting the full set,
+        the live writer's derived full-route state remains factor one."""
         config = RestartDecoderConfig.small_for_tests(
             hidden_size=32, layers=2, attention_heads=4, vocab_size=64
         )
@@ -2381,7 +2488,7 @@ class CheckpointArtifactTests(unittest.TestCase):
             checkpoint_artifacts._attested_parent_optimizer_expert_routes(
                 {"storage_projection": full}
             ),
-            tuple(checkpoint_artifacts.EXPERT_NAMES),
+            (),
         )
         single = self._signed_projection(
             active_expert="vision",
@@ -2393,7 +2500,7 @@ class CheckpointArtifactTests(unittest.TestCase):
             checkpoint_artifacts._attested_parent_optimizer_expert_routes(
                 {"storage_projection": single}
             ),
-            ("vision",),
+            (),
         )
         shared = self._signed_projection(
             active_expert="shared",
@@ -2420,6 +2527,163 @@ class CheckpointArtifactTests(unittest.TestCase):
             ),
             (),
         )
+
+    def test_specialist_lineage_rederives_parent_owner_shards_before_publication(self) -> None:
+        """A digest-valid parent projection cannot grant inherited routes that
+        its immutable owner shards do not independently attest."""
+
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root = base / "root"
+            parent_model = UnifiedDecoder(config, genesis_seed=193)
+            parent_optimizer = torch.optim.AdamW(parent_model.parameters(), lr=1e-4)
+            for expert in checkpoint_artifacts.EXPERT_NAMES:
+                parent_optimizer.zero_grad(set_to_none=True)
+                parent_model(
+                    torch.tensor([[1, 2, 3]], dtype=torch.long),
+                    active_expert=expert,
+                ).float().square().mean().backward()
+                parent_optimizer.step()
+            parent_optimizer.zero_grad(set_to_none=True)
+            parent_receipt = write_checkpoint_artifacts(
+                parent_model,
+                parent_optimizer,
+                root,
+                launch_seed=193,
+                rng_state=_valid_rng_state(),
+                data_cursor={
+                    "shard": "owned",
+                    "record_index": 4,
+                    "global_step": 4,
+                    "tokens_seen": 12,
+                },
+                model_config_sha256="a" * 64,
+                contract_sha256="b" * 64,
+                expert_genesis_sha256=parent_model.expert_bank_genesis_hashes(),
+                optimizer_state_layout="owner-sharded-v1",
+                max_transient_scratch_bytes=1024**3,
+                max_serialized_bytes=1024**3,
+            )
+            manifest_path = root / "checkpoint-manifest.json"
+
+            candidate_model = UnifiedDecoder(config, genesis_seed=194)
+            candidate_optimizer = torch.optim.AdamW(candidate_model.parameters(), lr=1e-4)
+            load_checkpoint_artifacts(
+                candidate_model,
+                candidate_optimizer,
+                root,
+                {
+                    **parent_receipt,
+                    "checkpoint_manifest_sha256": hashlib.sha256(
+                        manifest_path.read_bytes()
+                    ).hexdigest(),
+                },
+            )
+            candidate_model._activate_expert("vision")
+            candidate_optimizer.zero_grad(set_to_none=True)
+            candidate_model(
+                torch.tensor([[1, 2, 3]], dtype=torch.long),
+                active_expert="vision",
+            ).float().square().mean().backward()
+            candidate_optimizer.step()
+            candidate_optimizer.zero_grad(set_to_none=True)
+
+            # Keep the manifest/projection internally digest-valid while lying
+            # about one independently reopenable owner shard's tensor bytes.
+            forged = json.loads(manifest_path.read_text(encoding="utf-8"))
+            projection = forged["storage_projection"]
+            projection["optimizer_state_tensor_storage_by_route_bytes"]["audio"] += 1
+            projection["projection_sha256"] = checkpoint_artifacts._canonical_sha256(
+                {
+                    key: value
+                    for key, value in projection.items()
+                    if key != "projection_sha256"
+                }
+            )
+            manifest_path.write_text(
+                json.dumps(forged, sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+            before = {
+                name: value.detach().clone()
+                for name, value in candidate_model.state_dict().items()
+            }
+            verification = {
+                "schema_version": "ember-training-data-verification-v1",
+                "result": "VERIFIED",
+                "capability": "image",
+                "data_manifest_sha256": "c" * 64,
+                "tokenizer_sha256": "d" * 64,
+                "verifier_sha256": "e" * 64,
+                "data_class": "SEMANTIC_PRETRAINING",
+                "generator_replay_verified": True,
+                "record_count": 4,
+                "token_count": 64,
+                "source_manifest_sha256": "f" * 64,
+                "records_artifact_sha256": "0" * 64,
+                "semantic_checks": [
+                    "token_roundtrip",
+                    "source_target_pair",
+                    "raw_image_text_pair",
+                ],
+                "admission": "ADMISSIBLE_SEMANTIC_CONTRACT",
+                "semantic_model_contract_sha256": "1" * 64,
+                "runtime_semantic_model_contract_sha256": "1" * 64,
+            }
+            with self.assertRaisesRegex(
+                ValueError, "optimizer owner payload does not match storage projection"
+            ):
+                write_checkpoint_artifacts(
+                    candidate_model,
+                    candidate_optimizer,
+                    base / "candidate",
+                    launch_seed=194,
+                    rng_state=_valid_rng_state(),
+                    data_cursor={
+                        "shard": "verified-vision",
+                        "record_index": 2,
+                        "global_step": 5,
+                        "tokens_seen": 15,
+                    },
+                    model_config_sha256="a" * 64,
+                    contract_sha256="b" * 64,
+                    expert_genesis_sha256=parent_receipt["expert_genesis_sha256"],
+                    optimizer_state_layout="owner-sharded-v1",
+                    specialist_lineage={
+                        "parent_manifest": manifest_path,
+                        "root_manifest": manifest_path,
+                        "trained_expert_ids": ["vision"],
+                        "data_verification_receipt": verification,
+                        "execution_slice": {
+                            "schema_version": "ember-specialist-execution-slice-v1",
+                            "start_record": 0,
+                            "record_count": 2,
+                            "token_count": 32,
+                            "records_sha256": "2" * 64,
+                            "tokens_sha256": "3" * 64,
+                            "scene_split_record_count": 2,
+                        },
+                        "scene_split_selection": {
+                            "schema_version": "ember-specialist-scene-split-selection-v1",
+                            "capability": "image",
+                            "scene_split": "train",
+                            "full_records_artifact_sha256": "0" * 64,
+                            "selected_record_count": 2,
+                            "selected_token_count": 32,
+                            "selected_records_sha256": "2" * 64,
+                            "selected_tokens_sha256": "3" * 64,
+                        },
+                    },
+                    max_transient_scratch_bytes=1024**3,
+                    max_serialized_bytes=1024**3,
+                )
+            self.assertFalse((base / "candidate").exists())
+            self.assertFalse(list(base.glob(".candidate.*.staging")))
+            for name, value in candidate_model.state_dict().items():
+                self.assertTrue(torch.equal(value, before[name]), name)
 
     def test_v5_storage_projection_rejects_all_expert_aggregate_over_serialized_gate(self) -> None:
         config = RestartDecoderConfig.small_for_tests(
