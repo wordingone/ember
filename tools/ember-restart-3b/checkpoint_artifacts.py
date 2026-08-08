@@ -1126,14 +1126,21 @@ def _derive_checkpoint_storage_projection(
         )
     # Admission cannot recover the runtime parameter-to-route identity from a
     # generic optimizer state_dict without trusting candidate-authored labels.
-    # Use the closed worst-case bound: every initialized byte may belong to the
-    # one active specialist and therefore exist once per specialist at full
-    # four-expert realization. When every specialist route is already
-    # realized, the state itself is the full-realization floor.
+    # Use the closed worst-case bound when route ownership cannot be reopened:
+    # every initialized byte may belong to the one active specialist and
+    # therefore exist once per specialist at full four-expert realization.
+    # Only name-addressed owner shards can independently prove that shared-only
+    # or full-route state is already the complete realization floor.
+    projection_has_independent_route_authority = (
+        optimizer_state_layout == _OWNER_SHARDED_OPTIMIZER_STATE_LAYOUT
+        and (
+            model.active_expert == "shared"
+            or specialist_routes == list(EXPERT_NAMES)
+        )
+    )
     projected_optimizer = optimizer_actual * (
         1
-        if model.active_expert == "shared"
-        or specialist_routes == list(EXPERT_NAMES)
+        if projection_has_independent_route_authority
         else len(EXPERT_NAMES)
     )
     actual_checkpoint_floor = sum(shard_storage_lower_bounds.values())
@@ -1350,10 +1357,16 @@ def _validate_checkpoint_storage_projection(
     optimizer_actual = materialized[
         "optimizer_state_tensor_storage_lower_bound_bytes"
     ]
+    projection_has_independent_route_authority = (
+        optimizer_state_layout == _OWNER_SHARDED_OPTIMIZER_STATE_LAYOUT
+        and (
+            active_expert == "shared"
+            or specialist_routes == list(EXPERT_NAMES)
+        )
+    )
     expected_projected_optimizer = optimizer_actual * (
         1
-        if active_expert == "shared"
-        or specialist_routes == list(EXPERT_NAMES)
+        if projection_has_independent_route_authority
         else len(EXPERT_NAMES)
     )
     optimizer_shard_total = sum(
@@ -1431,11 +1444,17 @@ def _measure_candidate_storage_projection(
     )
     if optimizer_state_layout == "legacy-v1":
         optimizer_actual = measured["optimizer-state.pt"]
+    projection_has_independent_route_authority = (
+        optimizer_state_layout == _OWNER_SHARDED_OPTIMIZER_STATE_LAYOUT
+        and (
+            projection["active_expert"] == "shared"
+            or projection["optimizer_state_active_expert_ids"]
+            == list(EXPERT_NAMES)
+        )
+    )
     projected_optimizer = optimizer_actual * (
         1
-        if projection["active_expert"] == "shared"
-        or projection["optimizer_state_active_expert_ids"]
-        == list(EXPERT_NAMES)
+        if projection_has_independent_route_authority
         else len(EXPERT_NAMES)
     )
     projected_checkpoint = (
@@ -1983,7 +2002,7 @@ def _validate_owner_sharded_optimizer_payloads(
     expected_optimizer_contract: Mapping[str, Any] | None = None,
     expected_optimizer_realization: Mapping[str, Any] | None = None,
     expected_parameter_names: set[str] | None = None,
-) -> None:
+) -> dict[str, Any]:
     optimizer_contract = _validate_optimizer_contract(receipt.get("optimizer_contract", {}))
     optimizer_realization = _validate_optimizer_realization(
         optimizer_contract, receipt.get("optimizer_realization")
@@ -2013,6 +2032,7 @@ def _validate_owner_sharded_optimizer_payloads(
         raise ValueError("checkpoint optimizer owner projection is not closed")
     _optimizer_state_shard_paths(owner_ids)
     merged: dict[str, str] = {}
+    route_storage_bytes = {"shared": 0, **{name: 0 for name in EXPERT_NAMES}}
     parameter_groups: list[Mapping[str, Any]] | None = None
     for owner in owner_ids:
         relative = f"optimizer-state-{owner}.pt"
@@ -2046,6 +2066,11 @@ def _validate_owner_sharded_optimizer_payloads(
             ):
                 raise ValueError("checkpoint optimizer owner payload violates closed ownership")
             merged[name] = owner
+        route_storage_bytes[owner] = _unique_tensor_storage_bytes(payload["state"])
+        if route_storage_bytes[owner] < 1:
+            raise ValueError(
+                f"checkpoint optimizer owner payload has no tensor storage: {owner}"
+            )
         del payload
     if dict(sorted(merged.items())) != dict(sorted(owner_by_parameter.items())):
         raise ValueError("checkpoint optimizer owner projection does not match shard payloads")
@@ -2065,6 +2090,51 @@ def _validate_owner_sharded_optimizer_payloads(
             )
         ):
             raise ValueError("checkpoint optimizer parameter-group names are invalid")
+    return {
+        "route_storage_bytes": route_storage_bytes,
+        "specialist_owner_ids": [
+            name for name in EXPERT_NAMES if route_storage_bytes[name] > 0
+        ],
+        "optimizer_state_tensor_storage_lower_bound_bytes": sum(
+            route_storage_bytes.values()
+        ),
+    }
+
+
+def _validate_owner_storage_projection_authority(
+    receipt: Mapping[str, Any],
+    owner_storage_authority: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Bind candidate projection claims to reopened owner-shard tensor bytes."""
+
+    validated_projection = _validate_checkpoint_storage_projection(
+        receipt.get("storage_projection")
+    )
+    expected_active_ids = (
+        ["shared"]
+        if validated_projection["active_expert"] == "shared"
+        else owner_storage_authority["specialist_owner_ids"]
+    )
+    if (
+        validated_projection.get("optimizer_state_owner_ids")
+        != receipt.get("optimizer_state_owner_ids")
+        or validated_projection[
+            "optimizer_state_tensor_storage_by_route_bytes"
+        ]
+        != owner_storage_authority["route_storage_bytes"]
+        or validated_projection["optimizer_state_active_expert_ids"]
+        != expected_active_ids
+        or validated_projection[
+            "optimizer_state_tensor_storage_lower_bound_bytes"
+        ]
+        != owner_storage_authority[
+            "optimizer_state_tensor_storage_lower_bound_bytes"
+        ]
+    ):
+        raise ValueError(
+            "checkpoint optimizer owner payload does not match storage projection"
+        )
+    return validated_projection
 
 
 def _checkpoint_candidate_receipt(
@@ -2086,11 +2156,12 @@ def _checkpoint_candidate_receipt(
     manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
     receipt = {**manifest, "checkpoint_manifest_sha256": manifest_sha256}
     records = _validated_records(candidate, receipt)
+    owner_storage_authority: dict[str, Any] | None = None
     if receipt.get("optimizer_state_layout") == _OWNER_SHARDED_OPTIMIZER_STATE_LAYOUT:
         if expected_optimizer_contract is None or expected_optimizer_realization is None:
             raise ValueError("owner-sharded checkpoint admission requires runtime optimizer authority")
         try:
-            _validate_owner_sharded_optimizer_payloads(
+            owner_storage_authority = _validate_owner_sharded_optimizer_payloads(
                 candidate,
                 receipt,
                 records,
@@ -2103,8 +2174,12 @@ def _checkpoint_candidate_receipt(
             raise ValueError("checkpoint optimizer owner payload cannot be read") from error
     projection = receipt.get("storage_projection")
     if projection is not None:
-        validated_projection = _validate_checkpoint_storage_projection(
-            projection
+        validated_projection = (
+            _validate_owner_storage_projection_authority(
+                receipt, owner_storage_authority
+            )
+            if owner_storage_authority is not None
+            else _validate_checkpoint_storage_projection(projection)
         )
         retained_paths = sorted(
             path
@@ -3011,7 +3086,7 @@ def load_checkpoint_artifacts(
     )
     if owner_sharded:
         try:
-            _validate_owner_sharded_optimizer_payloads(
+            owner_storage_authority = _validate_owner_sharded_optimizer_payloads(
                 root,
                 receipt,
                 records,
@@ -3019,6 +3094,10 @@ def load_checkpoint_artifacts(
                 expected_optimizer_realization=optimizer_realization,
                 expected_parameter_names=set(dict(model.named_parameters())),
             )
+            if receipt.get("storage_projection") is not None:
+                _validate_owner_storage_projection_authority(
+                    receipt, owner_storage_authority
+                )
         except ValueError:
             raise
         except Exception as error:
@@ -3164,12 +3243,16 @@ def load_checkpoint_model_only_transition(
         schema_version == "ember-sparse-checkpoint-v5"
         and receipt.get("optimizer_state_layout") == _OWNER_SHARDED_OPTIMIZER_STATE_LAYOUT
     ):
-        _validate_owner_sharded_optimizer_payloads(
+        owner_storage_authority = _validate_owner_sharded_optimizer_payloads(
             root,
             receipt,
             records,
             expected_parameter_names=set(dict(model.named_parameters())),
         )
+        if receipt.get("storage_projection") is not None:
+            _validate_owner_storage_projection_authority(
+                receipt, owner_storage_authority
+            )
     expected_state = model.state_dict()
 
     replay_payload = torch.load(root / "replay-state.pt", map_location="cpu", weights_only=False, mmap=True)
