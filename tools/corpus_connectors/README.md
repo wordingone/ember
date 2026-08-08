@@ -177,6 +177,7 @@ python bulk_fetch.py URL --budget-bytes N [--chunk-size-bytes N]
                      [--disk-margin-bytes N] [--sha256 EXPECTED]
                      [--license STR --license-evidence STR]
                      [--dest DIR] [--allow-unverified-license] [--timeout N]
+                     [--max-retries N] [--retry-backoff-seconds N]
 ```
 
 For bulk dumps that exceed `receipt.py`'s 512 MiB single-fetch cap (Wikipedia
@@ -205,6 +206,16 @@ partial file) is `ChunkDigestMismatchError` -- a corrupted resume is refused,
 never silently trusted or silently restarted. A `.partial` found with no
 matching sidecar is also refused (`ResumeStateMismatchError`) rather than
 guessed at.
+
+**Bounded transient retry (issue #1453).** `--max-retries` (default 3) retries
+only HTTP 5xx, connection-reset, and timeout failures for the current chunk;
+`--retry-backoff-seconds` (default 1) applies exponential delays. HTTP 404/416,
+range-unsupported responses, disk-margin refusals, license refusals, and other
+terminal errors are never retried. Exhausting the bound preserves the existing
+fail-closed `BLOCKED` result and resumable sidecars when prior chunks were
+committed. Successful bulk receipts and chunk manifests carry
+`retry_attempts` and the ordered `retry_events` status list (including explicit
+zero/empty values when no retry occurred).
 
 **Fail-closed on every ambiguity**, each its own machine-readable
 `BlockedError` subclass (ten in total, all defined in `chunked_download.py`):
