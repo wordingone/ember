@@ -250,11 +250,28 @@ def build_row(
     }
 
 
+def _identity(row: dict[str, Any]) -> tuple:
+    # The root ref is part of the identity: a resumed root shares its
+    # predecessor's telemetry run_id and relative source paths, and without
+    # the root in the tuple its backfill row dedupe-collides with a sibling
+    # root's. Outcome remains part of the identity so a running spawn leg and
+    # its terminal exit leg are distinct, while an exact leg cannot be counted
+    # twice.
+    return (
+        row.get("run_root_ref"),
+        row.get("run_id"),
+        row.get("attempt_id"),
+        row.get("source_receipt"),
+        row.get("outcome"),
+    )
+
+
 def read_existing_rows(registry: Path) -> tuple[list[dict[str, Any]], list[str]]:
     """Parse the registry as the consumer does. Corrupt lines are
     reported (never repaired -- append-only)."""
     rows: list[dict[str, Any]] = []
     defects: list[str] = []
+    identity_lines: dict[tuple, int] = {}
     if not registry.is_file():
         return rows, defects
     for i, line in enumerate(registry.read_text(encoding="utf-8").splitlines()):
@@ -268,10 +285,21 @@ def read_existing_rows(registry: Path) -> tuple[list[dict[str, Any]], list[str]]
         if not isinstance(row, dict):
             defects.append(f"pre-existing registry line {i + 1} is not a JSON object")
             continue
+        row_defects = validate_row(row)
         defects.extend(
             f"pre-existing registry line {i + 1}: {defect}"
-            for defect in validate_row(row)
+            for defect in row_defects
         )
+        if not row_defects:
+            identity = _identity(row)
+            prior_line = identity_lines.get(identity)
+            if prior_line is not None:
+                defects.append(
+                    f"pre-existing registry line {i + 1}: duplicate attempt identity "
+                    f"already present on line {prior_line}"
+                )
+            else:
+                identity_lines[identity] = i + 1
         rows.append(row)
     return rows, defects
 
@@ -279,9 +307,20 @@ def read_existing_rows(registry: Path) -> tuple[list[dict[str, Any]], list[str]]
 def append_rows(registry: Path, new_rows: list[dict[str, Any]]) -> list[str]:
     """Validate then append rows (LF-terminated, compact JSON), then
     verify the appended tail round-trips. Never rewrites prior bytes."""
-    defects: list[str] = []
-    for row in new_rows:
-        defects.extend(validate_row(row))
+    existing, defects = read_existing_rows(registry)
+    seen = {_identity(row) for row in existing}
+    for index, row in enumerate(new_rows, start=1):
+        row_defects = validate_row(row)
+        defects.extend(row_defects)
+        if row_defects:
+            continue
+        identity = _identity(row)
+        if identity in seen:
+            defects.append(
+                f"new registry row {index}: duplicate attempt identity already present"
+            )
+        else:
+            seen.add(identity)
     if defects:
         return defects
     registry.parent.mkdir(parents=True, exist_ok=True)
@@ -297,23 +336,6 @@ def append_rows(registry: Path, new_rows: list[dict[str, Any]]) -> list[str]:
             defects.append("post-append verification failed: tail bytes do not round-trip")
             break
     return defects
-
-
-def _identity(row: dict[str, Any]) -> tuple:
-    # The root ref is part of the identity: a resumed root shares its
-    # predecessor's telemetry run_id and relative source paths, and without
-    # the root in the tuple its backfill row dedupe-collides with a sibling
-    # root's (found live TWICE: r2-resume-20260804's evidence-floor row
-    # collided with r1-warm100-20260802's identical-shaped one). One root's
-    # row must never stand in for another root's attempt.
-    return (
-        row.get("run_root_ref"),
-        row.get("run_id"),
-        row.get("attempt_id"),
-        row.get("source_receipt"),
-        row.get("outcome"),
-    )
-
 
 def _telemetry_run_ids(root: Path, *, exclude_attempt_dirs: bool) -> dict[str, list[Path]]:
     """Distinct train_step run_ids -> telemetry files, matching the

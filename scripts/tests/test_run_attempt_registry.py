@@ -73,3 +73,45 @@ def test_run_root_ref_must_bind_exact_root_name(tmp_path: Path):
     row = _valid_row(tmp_path)
     row["run_root_ref"] = "custody:some-other-run"
     assert any("run_root_ref" in defect for defect in registry.validate_row(row))
+
+
+def test_duplicate_attempt_identity_refuses_before_append(tmp_path: Path):
+    path = tmp_path / "receipts" / "run-attempts.jsonl"
+    row = _valid_row(tmp_path)
+
+    assert registry.append_rows(path, [row]) == []
+    original = path.read_bytes()
+
+    defects = registry.append_rows(path, [dict(row)])
+    assert any("duplicate attempt identity" in defect for defect in defects)
+    assert path.read_bytes() == original
+
+    within_call = tmp_path / "receipts" / "same-call.jsonl"
+    defects = registry.append_rows(within_call, [row, dict(row)])
+    assert any("duplicate attempt identity" in defect for defect in defects)
+    assert not within_call.exists()
+
+
+def test_preexisting_duplicate_attempt_identity_refuses_cmd_append(tmp_path: Path):
+    path = tmp_path / "receipts" / "run-attempts.jsonl"
+    path.parent.mkdir(parents=True)
+    row = _valid_row(tmp_path)
+    line = json.dumps(row, sort_keys=True).encode("utf-8") + b"\n"
+    original = line + line
+    path.write_bytes(original)
+
+    args = argparse.Namespace(
+        registry=str(path),
+        run_root=str(tmp_path / "run-B"),
+        outcome="running",
+        run_id="run-B",
+        attempt_id="attempt-1",
+        start_utc="2026-08-08T00:02:00Z",
+        end_utc=None,
+        checkpoint_manifest_sha=None,
+        launch_receipt_ref="receipts/launch.json",
+        source_receipt="receipts/launch.json",
+        outcome_basis="spawn",
+    )
+    assert registry.cmd_append(args) != 0
+    assert path.read_bytes() == original
