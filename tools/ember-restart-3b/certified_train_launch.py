@@ -265,6 +265,36 @@ TRAINING_VERIFY_RECEIPT_KEYS = {
     "ember_lab_source_sha256",
 }
 
+# Must remain byte-identical to runtime/ember-lab/src/lib.rs::
+# `ember_lab_source_hash`.  The Rust producer hashes these seven embedded
+# files in this order, prefixing each payload with its little-endian u64 byte
+# length.  Re-deriving the value here makes the receipt's self-identity
+# fields load-bearing at the launch consumer rather than merely present.
+EMBER_LAB_SOURCE_RELATIVE_PATHS = (
+    "runtime/ember-lab/src/lib.rs",
+    "runtime/ember-lab/src/data_catalog.rs",
+    "runtime/ember-lab/src/rpc.rs",
+    "runtime/ember-lab/src/main.rs",
+    "runtime/ember-lab/src/training_verify.rs",
+    "runtime/ember-lab/Cargo.toml",
+    "runtime/ember-lab/Cargo.lock",
+)
+
+
+def _live_ember_lab_source_sha256(repo_root: pathlib.Path) -> str:
+    digest = hashlib.sha256()
+    for relative in EMBER_LAB_SOURCE_RELATIVE_PATHS:
+        path = repo_root / relative
+        try:
+            payload = path.read_bytes()
+        except OSError as exc:
+            raise ValueError(
+                f"live Ember Lab source is unreadable: {relative}"
+            ) from exc
+        digest.update(len(payload).to_bytes(8, "little", signed=False))
+        digest.update(payload)
+    return digest.hexdigest()
+
 
 class ValidatedLaunch(NamedTuple):
     certificate_sha256: str
@@ -649,6 +679,16 @@ def _validate_training_verify_receipt(
                 "training verify check is red: "
                 f"{check.get('name', f'check {index}')}"
             )
+
+    receipt_source_sha256 = _require_sha256(
+        receipt.get("ember_lab_source_sha256"),
+        "training verify ember_lab_source_sha256",
+    )
+    live_source_sha256 = _live_ember_lab_source_sha256(repo_root)
+    if receipt_source_sha256 != live_source_sha256:
+        raise ValueError(
+            "training verify receipt Ember Lab source identity does not match the live tree"
+        )
 
 
 class ResumeRequest(NamedTuple):
