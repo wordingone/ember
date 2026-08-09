@@ -38,7 +38,7 @@ TITLE_RE = re.compile(
 )
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 DEPENDABOT_TITLE_RE = re.compile(
-    r"^(?:build\(deps(?:-dev)?\): bump|Bump) [^\r\n]{3,120}$"
+    r"^(?:(?:build|chore)\(deps(?:-dev)?\): bump|Bump) [^\r\n]{3,120}$"
 )
 REQUIRED_SECTIONS = (
     "Linked issue or governing contract",
