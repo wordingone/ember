@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import pathlib
@@ -239,7 +240,7 @@ class Issue1508AttemptRetentionTests(unittest.TestCase):
         ):
             self.assertIn(required, spec)
 
-    def test_frontier_registry_snapshot_changes_after_late_launch(self):
+    def test_frontier_registry_prefix_remains_bound_after_late_launch(self):
         frontier = load_frontier()
         with tempfile.TemporaryDirectory() as directory:
             repo = pathlib.Path(directory) / "repo"
@@ -254,15 +255,26 @@ class Issue1508AttemptRetentionTests(unittest.TestCase):
             coverage = frontier.ledger_all_compute_coverage(
                 run_root, "run-1", "m" * 64
             )
-            self.assertEqual(coverage["registry_sha256"], frontier._sha256(registry))
+            _, registry_prefix = frontier._read_registry_rows_and_prefix(registry)
+            registry_prefix_sha256 = hashlib.sha256(registry_prefix).hexdigest()
+            self.assertEqual(
+                coverage["registry_prefix_sha256"], registry_prefix_sha256
+            )
+            self.assertEqual(coverage["registry_rows"], 1)
 
-            # A launch after mint changes the closed registry snapshot, so the
-            # previously minted receipt is no longer admissible to the battery.
+            # Later valid rows change the live whole-file digest without
+            # invalidating the one-row bound prefix.
             registry.write_text(
                 '{"run_id":"run-1"}\n{"run_id":"late-launch"}\n',
                 encoding="utf-8",
             )
-            self.assertNotEqual(coverage["registry_sha256"], frontier._sha256(registry))
+            self.assertEqual(
+                coverage["registry_prefix_sha256"], registry_prefix_sha256
+            )
+            self.assertEqual(coverage["registry_rows"], 1)
+            self.assertNotEqual(
+                coverage["registry_prefix_sha256"], frontier._sha256(registry)
+            )
 
     def test_execute_failure_retains_certified_receipt_before_retry(self):
         module = load_module()
