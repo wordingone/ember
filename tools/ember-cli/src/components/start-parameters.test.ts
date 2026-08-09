@@ -29,9 +29,9 @@ describe("START parameter dialog contract", () => {
     }) as unknown as { props?: { children?: unknown[] }; children?: unknown[] };
     const children = (tree.props?.children ?? tree.children ?? []) as Array<{ props?: { onPress?: () => void } }>;
     const buttons = children.filter((child) => typeof child?.props?.onPress === "function");
-    expect(buttons).toHaveLength(2);
-    buttons[0]!.props!.onPress!();
-    buttons[1]!.props!.onPress!();
+    expect(buttons).toHaveLength(5);
+    buttons[3]!.props!.onPress!();
+    buttons[4]!.props!.onPress!();
     expect(confirmed).toEqual([{ dataSize: 1, steps: 100000, timeBudgetMinutes: 1 }]);
     expect(cancelled).toBe(1);
   });

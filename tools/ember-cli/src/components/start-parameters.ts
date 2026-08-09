@@ -58,15 +58,20 @@ export interface StartParametersDialogProps {
   initial?: StartParameters;
   onConfirm: (parameters: StartParameters) => void;
   onCancel: () => void;
+  onEdit?: (field: keyof StartParameters, value: number) => void;
 }
 
-export function StartParametersDialog({ initial = DEFAULT_START_PARAMETERS, onConfirm, onCancel }: StartParametersDialogProps): React.ReactElement {
+export function StartParametersDialog({ initial = DEFAULT_START_PARAMETERS, onConfirm, onCancel, onEdit }: StartParametersDialogProps): React.ReactElement {
   const parameters = clampStartParameters(initial);
+  const edit = (field: keyof StartParameters, delta: number) => onEdit?.(field, parameters[field] + delta);
   return React.createElement(
     Box,
     { borderStyle: "single", flexDirection: "column", flexShrink: 0, paddingX: 1 },
     React.createElement(Text, null, "START PARAMETERS"),
     React.createElement(Text, null, `data=${parameters.dataSize} steps=${parameters.steps} budget=${parameters.timeBudgetMinutes}`),
+    React.createElement(Button, { onPress: () => edit("dataSize", 1) }, "DATA+"),
+    React.createElement(Button, { onPress: () => edit("steps", 1) }, "STEPS+"),
+    React.createElement(Button, { onPress: () => edit("timeBudgetMinutes", 1) }, "BUDGET+"),
     React.createElement(Button, { onPress: () => onConfirm(parameters) }, "CONFIRM"),
     React.createElement(Button, { onPress: onCancel }, "CANCEL"),
   );

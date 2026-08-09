@@ -114,7 +114,7 @@ import {
   createOperatorReceiptWriter,
   type OperatorReceiptWriter,
 } from "../services/operator-receipts.ts";
-import { formatStartTrainCommand, type StartParameters } from "../components/start-parameters.ts";
+import { clampStartParameters, DEFAULT_START_PARAMETERS, formatStartTrainCommand, type StartParameters } from "../components/start-parameters.ts";
 import {
   createLivenessHeartbeatWriter,
   readHeartbeatRow,
@@ -757,6 +757,7 @@ export function ReplScreen({
   const [activityScrollOffset, setActivityScrollOffset] = useState(0);
   const [controlDisabledReason, setControlDisabledReason] = useState<string | undefined>(undefined);
   const [startDialogOpen, setStartDialogOpen] = useState(false);
+  const [startDialogParameters, setStartDialogParameters] = useState<StartParameters>({ ...DEFAULT_START_PARAMETERS });
 
   // #1475: click-first SELECT PROCESS run control. The selection is the START control's arming
   // state; the open/page/hover values are pure dropdown presentation. Like the command bar, the
@@ -2052,6 +2053,9 @@ export function ReplScreen({
       terminalRows,
       onControl: handleOperatorControl,
       onStartParameters: dispatchStartParameters,
+      onStartOpen: () => { setStartDialogParameters({ ...DEFAULT_START_PARAMETERS }); setStartDialogOpen(true); },
+      startDialogParameters,
+      onStartEdit: (field, value) => setStartDialogParameters((current) => clampStartParameters({ ...current, [field]: value })),
       startDialogOpen,
       onStartCancel: () => { setStartDialogOpen(false); setControlDisabledReason(undefined); },
       focusedControlIndex: paneFocused ? focusedControlIndex : undefined,

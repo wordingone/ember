@@ -724,6 +724,9 @@ export function buildOperatorSurfaceSnapshot({
 export interface OperatorSurfacePaneProps extends OperatorSurfaceInput {
   startDialogOpen?: boolean;
   onStartParameters?: (parameters: import("./start-parameters.ts").StartParameters) => void;
+  onStartOpen?: () => void;
+  startDialogParameters?: import("./start-parameters.ts").StartParameters;
+  onStartEdit?: (field: import("./start-parameters.ts").StartParameters extends infer T ? keyof T : never, value: number) => void;
   onStartCancel?: () => void;
   onControl?: (action: OperatorControlAction, runId?: string) => void;
   width?: number;
@@ -1124,6 +1127,9 @@ export function OperatorSurfacePane({
   onActivityScroll,
   onControl,
   onStartParameters,
+  onStartOpen,
+  startDialogParameters,
+  onStartEdit,
   startDialogOpen = false,
   onStartCancel,
   focusedControlIndex,
@@ -1216,7 +1222,7 @@ export function OperatorSurfacePane({
             onControl?.(action, selectedControlRunId);
             return;
           }
-          onStartParameters?.({ dataSize: 1, steps: 100, timeBudgetMinutes: 30 });
+          onStartOpen?.();
         }
       : undefined;
     return React.createElement(
@@ -1468,6 +1474,8 @@ export function OperatorSurfacePane({
     controlsElement,
     onStartParameters && startDialogOpen ? React.createElement(StartParametersDialog, {
       key: "start-dialog",
+      initial: startDialogParameters,
+      onEdit: onStartEdit,
       onConfirm: onStartParameters,
       onCancel: onStartCancel ?? (() => {}),
     }) : null,
