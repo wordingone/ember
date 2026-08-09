@@ -120,7 +120,7 @@ describe("maybeContinueIfIdle — user preemption (acceptance leg c)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// goal cleared/edited mid-check race (spec §3 step 3)
+// goal cleared/edited mid-check race (current "Continuation loop" section)
 // ---------------------------------------------------------------------------
 
 describe("maybeContinueIfIdle — goal changed mid-check race", () => {

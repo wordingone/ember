@@ -38,7 +38,8 @@ export function getGoalStore(): GoalStore {
 }
 
 /**
- * Spec §1: "Goals require a persistent session; ephemeral sessions refuse with
+ * The current "Selection and persistence" section: "Goals require a
+ * persistent session; ephemeral sessions refuse with
  * a clear message." ember-cli does not yet have a real persistent/ephemeral
  * session concept distinct from ToolUseContext.isNonInteractiveSession itself
  * -- and that flag is NEVER set by query-engine.ts's _buildToolUseContext, so
@@ -75,7 +76,8 @@ export function resetGoalRuntimeForTests(): void {
 
 /** The receipt writer bound to the live production store, if one has been
  *  constructed yet. Exposed for the continuation engine, which receipts its
- *  own fire/skip events (spec §7.1) through the SAME session file the store's
+ *  own fire/skip events (the current "Artifact binding" section) through the
+ *  SAME session file the store's
  *  transitions go to. */
 export function getGoalReceiptWriter(): GoalReceiptWriter | null {
   if (_storeOverride) return null;

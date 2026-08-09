@@ -3,7 +3,8 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 // services/goal-persistence.ts — file-backed GoalStorePersistence (ember issue
-// #211, spec §1: "Goal persisted in the session state store"). One JSON file
+// #211, the current "Selection and persistence" section: "Goal persisted in
+// the session state store"). One JSON file
 // per session under <emberStateRoot>/goals/<sessionId>.json. Fails OPEN on
 // read (a corrupt/missing file behaves as "no goal", never a crash) but
 // SURFACES write failures via console.warn so a silently-lost goal record

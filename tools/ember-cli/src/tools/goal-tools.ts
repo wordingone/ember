@@ -2,7 +2,8 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-// tools/goal-tools.ts — model-side goal tools (ember issue #211, spec §2):
+// tools/goal-tools.ts — model-side goal tools (ember issue #211, current
+// "Selection and persistence" section):
 // get_goal (read), create_goal (fails if one exists), update_goal (STATUS
 // ONLY). Objective immutability is enforced in TWO independent layers so a
 // single bug can't smuggle a rewrite through:
@@ -18,7 +19,8 @@
 // budget) applied directly by goal-runtime/goal-continuation, never something
 // the model can assert about itself -- otherwise a model under budget pressure
 // could self-report a fake limit to avoid the completion audit. This is one of
-// this port's "then improve" deltas (spec §7).
+// this port's "then improve" deltas (the current "Continuation loop" and
+// "Operator relationship" sections).
 
 import { z } from "zod";
 import { buildTool } from "../core/tool-interface.ts";
@@ -230,7 +232,8 @@ export const UpdateGoalTool = buildTool<UpdateGoalInput, unknown>({
       };
     }
 
-    // BLOCKED AUDIT (spec §4): "never blocked merely because the work is hard,
+    // BLOCKED AUDIT (the current "Continuation loop" section): "never blocked
+    // merely because the work is hard,
     // slow, uncertain, incomplete" -- this is the one completion-adjacent gate
     // that IS code-checkable (a counter threshold), so it's enforced here
     // rather than left entirely to doctrine-text compliance. A Blocked call
