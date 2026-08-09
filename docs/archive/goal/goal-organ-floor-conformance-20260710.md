@@ -119,3 +119,35 @@ suite claims rather than what it tests:
    recorded the 2026-08-03 re-verification of the gap.
 
 No test was weakened, and no assertion was removed.
+
+## Issue #1348 — bounded-exception disposition (route a)
+
+**ISSUE-1348-ROUTE-A-ACCEPTED**: the production five-second re-arm is accepted
+as a bounded exception to clause 3's literal “without polling” limb. This is
+not a full six-clause conformance or completion claim. The event-driven
+continuation path remains the only path that can start work; the timer may
+only retry the same `poke` after the live `featureEnabled` and `shouldPoke`
+gates pass.
+
+The permanent guard is the existing CLAUSE 3c evidence in
+`goal-organ-floor-conformance-642.test.ts`: injectable scheduler, closed
+`shouldPoke`/operator-preemption gate, `EMBER_GOAL_CONTINUATION` kill switch,
+session cleanup, and finite positive interval validation. These guards are
+the bounded-exception contract; a future change that bypasses any one of them
+reopens #1348 rather than silently widening the timer.
+
+This ruling is re-bound to current public master
+`4b5868370c4472152313894ccf4a389e81fa3525`: `goal-continuation-wiring.ts`
+blob `0b141c37e25ff7f439d170f64ea9fede38d91e7e`, `screens/repl.ts` blob
+`cbed052374d1a2be2673a4fcf46f27ac473c739a`, and the current floor document
+`docs/goal-mode-mechanism.md` blob `69484c1f6904630b611162c9dda7f6898d0b886a`.
+The merged #1158 implementation and its closed #279 rationale remain
+historical provenance for the exception, not a new authority.
+
+The goal organ's source comments now cite the current unnumbered sections by
+name: **Selection and persistence**, **Continuation loop**, **Artifact
+binding**, and **Operator relationship**. Numeric `spec §4`, `spec §5`, and
+`spec §7.1` references are not current section identifiers. The separate
+completion-audit gap remains explicitly unresolved: **#663 remains OPEN**;
+this route does not claim a completion proof, model, training, capability, or
+full-spec result.
