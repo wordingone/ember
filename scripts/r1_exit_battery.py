@@ -498,12 +498,14 @@ def _iter_jsonl_events(path: Path):
                     continue
                 try:
                     event = json.loads(raw_line.decode("utf-8"))
-                except (UnicodeDecodeError, json.JSONDecodeError):
+                except UnicodeDecodeError as error:
+                    raise R1ExitBatteryRefusal(f"TELEMETRY_UNREADABLE: {path}: {error}") from error
+                except json.JSONDecodeError:
                     continue
                 if isinstance(event, dict):
                     yield event
-    except OSError:
-        return
+    except OSError as error:
+        raise R1ExitBatteryRefusal(f"TELEMETRY_UNREADABLE: {path}: {error}") from error
 
 
 def find_telemetry_files(run_root: Path) -> list[Path]:
@@ -1059,7 +1061,9 @@ def check_r1_e4(run_root: Path, thresholds: dict[str, Any], *, run_id: str | Non
         for raw_line in reversed(lines):
             try:
                 payload = json.loads(raw_line.decode("utf-8"))
-            except (UnicodeDecodeError, json.JSONDecodeError):
+            except UnicodeDecodeError:
+                continue
+            except json.JSONDecodeError:
                 continue
             if isinstance(payload, dict) and "peak_memory_bytes" in payload:
                 peak_memory_bytes = payload.get("peak_memory_bytes")
@@ -2154,16 +2158,25 @@ def _validate_recalibration_content(
                 f"run_id selector mismatch: caller selected {run_id!r}, receipt names {receipt_run_id!r}"
             )
         selection_run_id = receipt_run_id
-    selected_run_id, series, series_counts = _select_series(
-        run_root, run_id=selection_run_id
-    )
+    try:
+        selected_run_id, series, series_counts = _select_series(
+            run_root, run_id=selection_run_id
+        )
+    except R1ExitBatteryRefusal as error:
+        defects.append(str(error))
+        selected_run_id, series, series_counts = selection_run_id, [], {}
     telemetry_sha = receipt.get("telemetry_sha256")
     if not isinstance(telemetry_sha, str) or not re.fullmatch(r"[0-9a-f]{64}", telemetry_sha):
         defects.append("telemetry_sha256 binding field missing or malformed")
     else:
-        telemetry_paths = find_telemetry_files(run_root)
+        try:
+            telemetry_paths = find_telemetry_files(run_root)
+        except R1ExitBatteryRefusal as error:
+            defects.append(str(error))
+            telemetry_paths = []
         if not telemetry_paths:
-            defects.append("telemetry_sha256 cannot be re-derived: no non-quarantined telemetry files")
+            if not any("TELEMETRY_UNREADABLE" in defect for defect in defects):
+                defects.append("telemetry_sha256 cannot be re-derived: no non-quarantined telemetry files")
         else:
             digest = hashlib.sha256()
             for telemetry_path in telemetry_paths:

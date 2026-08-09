@@ -65,10 +65,34 @@ def sha256_file(path: Path) -> str:
 
 
 def telemetry_paths(run_root: Path) -> list[Path]:
+    """Return the exact telemetry domain consumed by the E6 validator.
+
+    The producer must hash the same source-qualified JSONL files that the
+    consumer will parse; unrelated JSONL artifacts are deliberately outside
+    this content-addressed domain.
+    """
     return sorted(
         p for p in run_root.rglob("*.jsonl")
         if ".checkpoint-quarantine" not in p.parts
+        and any(
+            isinstance(row, dict) and row.get("source") == "ember-restart-3b"
+            for row in _iter_jsonl(p)
+        )
     )
+
+
+def _iter_jsonl(path: Path):
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                try:
+                    value = json.loads(line)
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    continue
+                if isinstance(value, dict):
+                    yield value
+    except (OSError, UnicodeError) as error:
+        raise RecalibrationRefusal(f"TELEMETRY_UNREADABLE: {path}: {error}") from error
 
 
 def telemetry_sha256(run_root: Path) -> str:
