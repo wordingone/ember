@@ -114,6 +114,7 @@ import {
   createOperatorReceiptWriter,
   type OperatorReceiptWriter,
 } from "../services/operator-receipts.ts";
+import { formatStartTrainCommand, type StartParameters } from "../components/start-parameters.ts";
 import {
   createLivenessHeartbeatWriter,
   readHeartbeatRow,
@@ -755,6 +756,7 @@ export function ReplScreen({
   const [hoveredControl, setHoveredControl] = useState<OperatorControlAction | undefined>(undefined);
   const [activityScrollOffset, setActivityScrollOffset] = useState(0);
   const [controlDisabledReason, setControlDisabledReason] = useState<string | undefined>(undefined);
+  const [startDialogOpen, setStartDialogOpen] = useState(false);
 
   // #1475: click-first SELECT PROCESS run control. The selection is the START control's arming
   // state; the open/page/hover values are pure dropdown presentation. Like the command bar, the
@@ -1921,6 +1923,19 @@ export function ReplScreen({
   // disabled command) surfaces its named reason on the controls' own reason row. Assigned every
   // render so the closure always sees the LIVE selection/offer (see activateStartRef's
   // declaration next to handleOperatorControl).
+  const dispatchStartParameters = (parameters: StartParameters): void => {
+    const selected = processOptions.find((option) => option.name === selectedProcess);
+    const activation = startActivation(selected, processOffer);
+    if (activation.kind === "rejected") {
+      setControlDisabledReason(activation.reason);
+      return;
+    }
+    setControlDisabledReason(undefined);
+    operatorReceiptsRef.current?.append("start_parameters_confirmed", JSON.stringify(parameters));
+    setStartDialogOpen(false);
+    handleCommandButton({ ...activation, text: formatStartTrainCommand(parameters) });
+  };
+
   activateStartRef.current = () => {
     const selected = processOptions.find((option) => option.name === selectedProcess);
     const activation = startActivation(selected, processOffer);
@@ -2036,6 +2051,9 @@ export function ReplScreen({
       terminalColumns: terminalCols,
       terminalRows,
       onControl: handleOperatorControl,
+      onStartParameters: dispatchStartParameters,
+      startDialogOpen,
+      onStartCancel: () => { setStartDialogOpen(false); setControlDisabledReason(undefined); },
       focusedControlIndex: paneFocused ? focusedControlIndex : undefined,
       disabledActionReason: controlDisabledReason,
       hoveredControl,
