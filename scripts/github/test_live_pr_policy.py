@@ -246,12 +246,16 @@ class HeadPinBranchUpdateTests(unittest.TestCase):
         run = lambda *a: self._run(repo, *a, env=self.env)
         run("init", "-b", "master")
         pathlib.Path(repo, "master_only.txt").write_text("m0\n", encoding="utf-8")
-        pathlib.Path(repo, "pr_file.txt").write_text("p0\n", encoding="utf-8")
+        pathlib.Path(repo, "pr_file.txt").write_text(
+            "if True:\n    value = 1\nprint(value)\n", encoding="utf-8"
+        )
         run("add", "-A")
         run("commit", "-m", "base")
         self.pinned_base = run("rev-parse", "HEAD")
         run("checkout", "-b", "pr")
-        pathlib.Path(repo, "pr_file.txt").write_text("p1\n", encoding="utf-8")
+        pathlib.Path(repo, "pr_file.txt").write_text(
+            "if True:\n    value = 2\nprint(value)\n", encoding="utf-8"
+        )
         run("commit", "-am", "pr change")
         self.pinned_head = run("rev-parse", "HEAD")
         run("checkout", "master")
@@ -311,7 +315,9 @@ class HeadPinBranchUpdateTests(unittest.TestCase):
             env=self.env,
         )
         self.assertNotEqual(merge.returncode, 0)
-        pathlib.Path(self.tmp, "pr_file.txt").write_text("p1\n", encoding="utf-8")
+        pathlib.Path(self.tmp, "pr_file.txt").write_text(
+            "if True:\n    value = 2\nprint(value)\n", encoding="utf-8"
+        )
         self.run("add", "pr_file.txt")
         self.run("commit", "-m", "resolve overlap with reviewed PR content")
         overlapping_head = self.run("rev-parse", "HEAD")
@@ -343,6 +349,21 @@ class HeadPinBranchUpdateTests(unittest.TestCase):
         self.run("checkout", "pr")
         pathlib.Path(self.tmp, "pr_file.txt").write_text("p2\n", encoding="utf-8")
         self.run("commit", "-am", "post-pin edit")
+        tampered_head = self.run("rev-parse", "HEAD")
+        self.run("checkout", "--detach", "master")
+        self.run("merge", "--no-ff", "--no-edit", "pr")
+        self.assertFalse(
+            pinned_head_covers_live_head(
+                pathlib.Path(self.tmp), self.pinned_head, tampered_head
+            )
+        )
+
+    def test_whitespace_only_post_pin_tamper_still_fails(self) -> None:
+        self.run("checkout", "pr")
+        pathlib.Path(self.tmp, "pr_file.txt").write_text(
+            "if True:\n        value = 2\nprint(value)\n", encoding="utf-8"
+        )
+        self.run("commit", "-am", "post-pin indentation tamper")
         tampered_head = self.run("rev-parse", "HEAD")
         self.run("checkout", "--detach", "master")
         self.run("merge", "--no-ff", "--no-edit", "pr")
