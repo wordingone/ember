@@ -141,6 +141,8 @@ ISSUE_REF = "#1463"
 PREREG_DOC = "docs/spec/ember02-preregistration-v1.md"
 PREREG_PIN = "3d48d3870919bd04cec735f68d0fad45fcfae0b2"
 RECEIPT_SCHEMA = "r1-exit-battery/v1"
+RUN_ROOT_LAYOUT_SPEC_PATH = "docs/spec/ember-run-root-layout-v1.md"
+RUN_ROOT_LAYOUT_SPEC = RUN_ROOT_LAYOUT_SPEC_PATH
 
 SHA_CONVENTION = (
     "sha256 over on-disk raw bytes (binary read, no line-ending "
@@ -151,6 +153,16 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_THRESHOLDS_PATH = REPO_ROOT / "docs" / "spec" / "ember02-preregistration-thresholds-v1.json"
 FIXED_PRIOR_MANIFEST_REL = "manifests/ember-restart-3b/fixed-prior-manifest-v1.json"
 DEFAULT_FIXED_PRIOR_MANIFEST = REPO_ROOT / FIXED_PRIOR_MANIFEST_REL
+
+
+def _layout_spec_path(repo_root: Path = REPO_ROOT) -> Path:
+    """Return the checked-in run-root layout authority used by discovery."""
+    path = Path(repo_root) / RUN_ROOT_LAYOUT_SPEC_PATH
+    if not path.is_file():
+        raise R1ExitBatteryRefusal(
+            f"RUN_ROOT_LAYOUT_SPEC_MISSING: {RUN_ROOT_LAYOUT_SPEC_PATH} is required"
+        )
+    return path
 
 # F-11 is required alongside T-01..T-09: R1-E8's parity leg quotes its frozen
 # band formula from the thresholds document, never from a transcription here.
@@ -500,6 +512,7 @@ def find_telemetry_files(run_root: Path) -> list[Path]:
     top-level "source"=="ember-restart-3b"). A file with zero matching
     lines is not returned -- an incidental unrelated .jsonl file must not
     be mistaken for a telemetry channel."""
+    _layout_spec_path()
     if not run_root.is_dir():
         return []
     found = []
@@ -538,6 +551,7 @@ def find_quarantined_telemetry_files(run_root: Path) -> list[Path]:
     already a violation candidate, and an UNREADABLE one is the case where
     something is actively wrong -- a read error counts it and surfaces it
     rather than reporting the quarantine clean (rev-1490 non-blocking 3)."""
+    _layout_spec_path()
     if not run_root.is_dir():
         return []
     found = []
@@ -564,6 +578,7 @@ def _evidence_excluded(path: Path, run_root: Path) -> bool:
     train_step rows belong to the same run_id and are still counted
     (rev-1490 item 6: both modules must agree, and exclusion mirrors how
     the quarantine dir is already handled)."""
+    _layout_spec_path()
     try:
         relative_parts = path.relative_to(run_root).parts
     except ValueError:
@@ -1960,6 +1975,7 @@ def _validate_frontier_content(
 
 
 def check_r1_e5(run_root: Path, thresholds: dict[str, Any], *, repo_root: Path = REPO_ROOT, fixed_prior_manifest_path: Path | None = None, run_id: str | None = None) -> dict[str, Any]:
+    layout_spec_path = _layout_spec_path()
     t01 = int(thresholds["T-01"])
     t06 = float(thresholds["T-06"])
     manifest_cfg = fixed_prior_manifest_path or (repo_root / FIXED_PRIOR_MANIFEST_REL)
@@ -1987,6 +2003,8 @@ def check_r1_e5(run_root: Path, thresholds: dict[str, Any], *, repo_root: Path =
                 "scripts/frontier_receipt.py --run-root <this root>"
             ),
             "components": {
+                "layout_spec": RUN_ROOT_LAYOUT_SPEC,
+                "layout_spec_sha256": _sha256_file(layout_spec_path),
                 "fixed_prior_manifest_present": fixed_prior_present,
                 "fixed_prior_manifest_path": str(manifest_cfg),
                 "fixed_prior_manifest_sha256": _sha256_file(manifest_cfg) if fixed_prior_present else None,
@@ -2007,6 +2025,8 @@ def check_r1_e5(run_root: Path, thresholds: dict[str, Any], *, repo_root: Path =
     ]
     valid = [v for v in validations if not v["defects"]]
     components: dict[str, Any] = {
+        "layout_spec": RUN_ROOT_LAYOUT_SPEC,
+        "layout_spec_sha256": _sha256_file(layout_spec_path),
         "candidate_validation": validations,
         "quarantined_telemetry_files": quarantined_telemetry,
     }
@@ -2765,6 +2785,10 @@ def _synthetic_checkpoint(tmp_dir: Path, *, seed: int = 830001, corrupt_shard: b
 def run_selftest() -> None:
     thresholds, thresholds_sha256 = load_thresholds()
     assert thresholds["T-01"] == 100 and thresholds["T-07"] == 2, thresholds
+    layout_spec_path = _layout_spec_path()
+    layout_spec_text = layout_spec_path.read_text(encoding="utf-8")
+    assert RUN_ROOT_LAYOUT_SPEC == "docs/spec/ember-run-root-layout-v1.md", RUN_ROOT_LAYOUT_SPEC
+    assert "attempt-" in layout_spec_text and "telemetry" in layout_spec_text, layout_spec_path
 
     with tempfile.TemporaryDirectory(prefix="r1_exit_battery_selftest_") as tmp:
         tmp_path = Path(tmp)
@@ -2781,6 +2805,23 @@ def run_selftest() -> None:
         r1 = check_r1_e1(clean_root, thresholds)
         assert r1["status"] == "MET", r1
         assert r1["steps_observed"] == 100 and r1["non_finite_count"] == 0, r1
+
+        # The launcher-retained attempt layout is excluded from authoritative
+        # receipt discovery, while its telemetry remains part of the run's
+        # train-step series.  This is the production boundary documented by
+        # RUN_ROOT_LAYOUT_SPEC, not a filename-only assertion.
+        retained_attempt = clean_root / "attempt-1-CHILD_FAILED-SELFTEST"
+        retained_telemetry = retained_attempt / "telemetry" / "events.jsonl"
+        _write_jsonl(
+            retained_telemetry,
+            _synthetic_train_step_events(
+                run_id="SELFTEST_FIXTURE_run", n_steps=1
+            ),
+        )
+        retained_receipt = retained_attempt / "frontier-receipt.json"
+        retained_receipt.write_text("{}", encoding="utf-8")
+        assert retained_telemetry in find_telemetry_files(clean_root), retained_telemetry
+        assert _evidence_excluded(retained_receipt, clean_root), retained_receipt
 
         # --- E1: NaN at step 50 -> NOT_MET, non_finite_count >= 1 ---
         nan_root = tmp_path / "nan_run"
