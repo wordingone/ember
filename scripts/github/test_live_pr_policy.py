@@ -246,11 +246,16 @@ class HeadPinBranchUpdateTests(unittest.TestCase):
         run = lambda *a: self._run(repo, *a, env=self.env)
         run("init", "-b", "master")
         pathlib.Path(repo, "master_only.txt").write_text("m0\n", encoding="utf-8")
-        pathlib.Path(repo, "pr_file.txt").write_text("p0\n", encoding="utf-8")
+        pathlib.Path(repo, "pr_file.txt").write_text(
+            "if True:\n    value = 1\nprint(value)\n", encoding="utf-8"
+        )
         run("add", "-A")
         run("commit", "-m", "base")
+        self.pinned_base = run("rev-parse", "HEAD")
         run("checkout", "-b", "pr")
-        pathlib.Path(repo, "pr_file.txt").write_text("p1\n", encoding="utf-8")
+        pathlib.Path(repo, "pr_file.txt").write_text(
+            "if True:\n    value = 2\nprint(value)\n", encoding="utf-8"
+        )
         run("commit", "-am", "pr change")
         self.pinned_head = run("rev-parse", "HEAD")
         run("checkout", "master")
@@ -264,6 +269,75 @@ class HeadPinBranchUpdateTests(unittest.TestCase):
         run("merge", "--no-ff", "--no-edit", "pr")
         self.run = run
 
+    def _snapshot(self, *, base: str, head: str, reviewed_head: str) -> dict[str, object]:
+        snapshot = human_pr()
+        snapshot.update(
+            {
+                "base_sha": base,
+                "head_sha": head,
+                "event_base_sha": base,
+                "event_head_sha": head,
+                "changed_files": ["pr_file.txt"],
+                "body": human_body()
+                .replace(BASE, self.pinned_base)
+                .replace(HEAD, reviewed_head),
+            }
+        )
+        return snapshot
+
+    def test_reviewed_base_survives_unrelated_master_merge_only(self) -> None:
+        snapshot = self._snapshot(
+            base=self.master_tip,
+            head=self.live_head,
+            reviewed_head=self.pinned_head,
+        )
+        self.assertEqual(
+            [],
+            validate_live_pull_request(
+                snapshot,
+                base_root=pathlib.Path(self.tmp),
+                subject_root=pathlib.Path(self.tmp),
+            ),
+        )
+
+        self.run("checkout", "master")
+        pathlib.Path(self.tmp, "pr_file.txt").write_text(
+            "master-overlap\n", encoding="utf-8"
+        )
+        self.run("commit", "-am", "overlapping master edit")
+        overlapping_base = self.run("rev-parse", "HEAD")
+        self.run("checkout", "pr")
+        merge = subprocess.run(
+            ["git", "merge", "--no-edit", "master"],
+            cwd=self.tmp,
+            capture_output=True,
+            text=True,
+            env=self.env,
+        )
+        self.assertNotEqual(merge.returncode, 0)
+        pathlib.Path(self.tmp, "pr_file.txt").write_text(
+            "if True:\n    value = 2\nprint(value)\n", encoding="utf-8"
+        )
+        self.run("add", "pr_file.txt")
+        self.run("commit", "-m", "resolve overlap with reviewed PR content")
+        overlapping_head = self.run("rev-parse", "HEAD")
+        self.run("checkout", "--detach", "master")
+        self.run("merge", "--no-ff", "--no-edit", "pr")
+
+        tampered = self._snapshot(
+            base=overlapping_base,
+            head=overlapping_head,
+            reviewed_head=overlapping_head,
+        )
+        self.assertIn(
+            "body:base-sha-mismatch",
+            validate_live_pull_request(
+                tampered,
+                base_root=pathlib.Path(self.tmp),
+                subject_root=pathlib.Path(self.tmp),
+            ),
+        )
+
     def test_pinned_head_survives_unrelated_master_merge(self) -> None:
         self.assertTrue(
             pinned_head_covers_live_head(
@@ -275,6 +349,21 @@ class HeadPinBranchUpdateTests(unittest.TestCase):
         self.run("checkout", "pr")
         pathlib.Path(self.tmp, "pr_file.txt").write_text("p2\n", encoding="utf-8")
         self.run("commit", "-am", "post-pin edit")
+        tampered_head = self.run("rev-parse", "HEAD")
+        self.run("checkout", "--detach", "master")
+        self.run("merge", "--no-ff", "--no-edit", "pr")
+        self.assertFalse(
+            pinned_head_covers_live_head(
+                pathlib.Path(self.tmp), self.pinned_head, tampered_head
+            )
+        )
+
+    def test_whitespace_only_post_pin_tamper_still_fails(self) -> None:
+        self.run("checkout", "pr")
+        pathlib.Path(self.tmp, "pr_file.txt").write_text(
+            "if True:\n        value = 2\nprint(value)\n", encoding="utf-8"
+        )
+        self.run("commit", "-am", "post-pin indentation tamper")
         tampered_head = self.run("rev-parse", "HEAD")
         self.run("checkout", "--detach", "master")
         self.run("merge", "--no-ff", "--no-edit", "pr")

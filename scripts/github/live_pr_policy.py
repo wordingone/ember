@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import subprocess
@@ -86,20 +87,38 @@ def _git(repo: Path, *args: str, stdin: bytes | None = None) -> tuple[int, str]:
     return result.returncode, result.stdout.decode("utf-8", errors="replace")
 
 
-def _own_diff_patch_id(repo: Path, base_tip: str, head: str) -> str | None:
-    """Patch-id of the PR's own diff: merge-base(base_tip, head)..head."""
+def _own_diff_identity(repo: Path, base_tip: str, head: str) -> str | None:
+    """Byte-sensitive identity of merge-base(base_tip, head)..head.
+
+    The explicit diff options make the byte stream independent of user Git
+    configuration.  Unlike ``git patch-id``, the digest preserves whitespace
+    and every other diff byte while remaining unaffected by unrelated base
+    commits outside the PR's own diff.
+    """
     code, merge_base = _git(repo, "merge-base", base_tip, head)
     if code != 0:
         return None
-    code, patch = _git(repo, "diff", "--full-index", merge_base.strip(), head)
-    if code != 0:
+    result = subprocess.run(
+        [
+            "git",
+            "diff",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--no-color",
+            "--no-renames",
+            "--binary",
+            "--full-index",
+            merge_base.strip(),
+            head,
+            "--",
+        ],
+        cwd=repo,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
         return None
-    if not patch.strip():
-        return ""
-    code, out = _git(repo, "patch-id", "--stable", stdin=patch.encode("utf-8"))
-    if code != 0:
-        return None
-    return out.split()[0] if out.split() else ""
+    return hashlib.sha256(result.stdout).hexdigest()
 
 
 def pinned_head_covers_live_head(
@@ -108,8 +127,8 @@ def pinned_head_covers_live_head(
     """Accept a stale head pin only when the branch update left the PR's own
     diff byte-identical: the pinned reviewed head must be an ancestor of the
     live head, and the own-diff (merge-base against the live base tip) must
-    carry the same patch-id at both heads. Any PR-side edit after the pin
-    changes the patch-id and still fails."""
+    carry the same byte-sensitive own-diff identity at both heads. Any PR-side
+    edit after the pin, including whitespace, changes that identity and fails."""
     if not SHA_RE.fullmatch(pinned_head or ""):
         return False
     code, _ = _git(repo, "merge-base", "--is-ancestor", pinned_head, live_head)
@@ -125,8 +144,40 @@ def pinned_head_covers_live_head(
         base_tip = base_tip.strip()
     else:
         return False
-    pinned_id = _own_diff_patch_id(repo, base_tip, pinned_head)
-    live_id = _own_diff_patch_id(repo, base_tip, live_head)
+    pinned_id = _own_diff_identity(repo, base_tip, pinned_head)
+    live_id = _own_diff_identity(repo, base_tip, live_head)
+    return pinned_id is not None and pinned_id == live_id
+
+
+def pinned_base_covers_live_base(
+    repo: Path,
+    pinned_base: str,
+    pinned_head: str,
+    live_base: str,
+    live_head: str,
+) -> bool:
+    """Accept a stale reviewed base only when the reviewed PR patch is intact.
+
+    Base advancement alone is harmless when both reviewed tips remain ancestors
+    of their live counterparts and the PR's own byte-sensitive diff identity
+    is identical between the reviewed and live base/head pairs. Overlap
+    resolution or any PR-side mutation changes that identity and therefore
+    refuses until re-pin.
+    """
+    if not all(
+        SHA_RE.fullmatch(value or "")
+        for value in (pinned_base, pinned_head, live_base, live_head)
+    ):
+        return False
+    for ancestor, descendant in (
+        (pinned_base, live_base),
+        (pinned_head, live_head),
+    ):
+        code, _ = _git(repo, "merge-base", "--is-ancestor", ancestor, descendant)
+        if code != 0:
+            return False
+    pinned_id = _own_diff_identity(repo, pinned_base, pinned_head)
+    live_id = _own_diff_identity(repo, live_base, live_head)
     return pinned_id is not None and pinned_id == live_id
 
 
@@ -257,7 +308,16 @@ def validate_live_pull_request(
             errors.append(f"body:section-empty:{heading}")
     base_section = sections.get("Exact base SHA", "").strip("` \r\n")
     head_section = sections.get("Exact reviewed head SHA", "").strip("` \r\n")
-    if base_section != snapshot["base_sha"]:
+    if base_section != snapshot["base_sha"] and not (
+        subject_root is not None
+        and pinned_base_covers_live_base(
+            subject_root,
+            base_section,
+            head_section,
+            snapshot["base_sha"],
+            snapshot["head_sha"],
+        )
+    ):
         errors.append("body:base-sha-mismatch")
     if head_section != snapshot["head_sha"] and not (
         subject_root is not None
