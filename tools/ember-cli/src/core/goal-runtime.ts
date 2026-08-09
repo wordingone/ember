@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // core/goal-runtime.ts — production singleton wiring for the goal organ
 // (ember issue #211). Composes the pure core/goal-store.ts state machine with
 // file persistence (services/goal-persistence.ts) and the receipt writer

@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // core/goal-continuation.ts — the event-driven autonomy loop (ember issue
 // #211, the current "Continuation loop" section's "event-driven" contract).
 // Every task/turn completion pokes

@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // core/goal-continuation-prompt.ts — the continuation prompt template (ember
 // issue #211, the current "Continuation loop" section). Ports the codex
 // continuation.md doctrine in spirit,

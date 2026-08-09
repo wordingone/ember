@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // commands/goal.ts — /goal slash command (ember issue #211, current
 // "Selection and persistence" section): set/view/
 // clear the goal objective, available mid-task. This REPLACES the earlier

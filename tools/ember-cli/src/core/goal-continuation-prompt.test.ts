@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // core/goal-continuation-prompt.test.ts — doctrine-completeness tests for the
 // continuation prompt templates (ember issue #211, current "Continuation loop"
 // section). Every clause the
