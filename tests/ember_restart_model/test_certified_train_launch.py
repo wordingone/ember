@@ -23,6 +23,27 @@ MODULE_PATH = ROOT / "tools" / "ember-restart-3b" / "certified_train_launch.py"
 SHA = "a" * 40
 EVIDENCE_SHA256 = "b" * 64
 
+EMBER_LAB_SOURCE_FIXTURE = (
+    ("runtime/ember-lab/src/lib.rs", b"fixture lib\\n"),
+    ("runtime/ember-lab/src/data_catalog.rs", b"fixture data catalog\\n"),
+    ("runtime/ember-lab/src/rpc.rs", b"fixture rpc\\n"),
+    ("runtime/ember-lab/src/main.rs", b"fixture main\\n"),
+    ("runtime/ember-lab/src/training_verify.rs", b"fixture training verify\\n"),
+    ("runtime/ember-lab/Cargo.toml", b"[package]\\nname='fixture'\\n"),
+    ("runtime/ember-lab/Cargo.lock", b"# fixture lock\\n"),
+)
+
+
+def install_ember_lab_source_fixture(repo: pathlib.Path) -> str:
+    digest = hashlib.sha256()
+    for relative, payload in EMBER_LAB_SOURCE_FIXTURE:
+        path = repo / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(payload)
+        digest.update(len(payload).to_bytes(8, "little", signed=False))
+        digest.update(payload)
+    return digest.hexdigest()
+
 
 def canonical_bytes(value: object) -> bytes:
     return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
@@ -1712,7 +1733,7 @@ ANCESTOR_SHA = "e" * 40
 
 
 def valid_training_verify_receipt(
-    repo: pathlib.Path, closure_sha256: str
+    repo: pathlib.Path, closure_sha256: str, source_sha256: str = EVIDENCE_SHA256
 ) -> dict[str, object]:
     """Mirrors runtime/ember-lab/src/training_verify.rs::run's receipt."""
 
@@ -1753,7 +1774,7 @@ def valid_training_verify_receipt(
             },
         ],
         "ember_lab_binary_sha256": EVIDENCE_SHA256,
-        "ember_lab_source_sha256": EVIDENCE_SHA256,
+        "ember_lab_source_sha256": source_sha256,
     }
 
 
@@ -1775,7 +1796,10 @@ class CompletionHeadAncestorTests(unittest.TestCase):
             paths, lambda cert: cert.update({"closure_sha256": closure_sha256})
         )
 
-        receipt = valid_training_verify_receipt(paths["repo"], closure_sha256)
+        source_sha256 = install_ember_lab_source_fixture(paths["repo"])
+        receipt = valid_training_verify_receipt(
+            paths["repo"], closure_sha256, source_sha256
+        )
         if mutate_receipt is not None:
             mutate_receipt(receipt)
         receipt_path = paths["custody_root"] / "training-verify.json"
@@ -1812,6 +1836,25 @@ class CompletionHeadAncestorTests(unittest.TestCase):
                 )
             self.assertEqual(launch.closure_sha256, closure_sha256)
             self.assertEqual(launch.public_master_sha, SHA)
+
+    def test_stale_ember_lab_source_hash_is_refused(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths, _ = self._ancestor_bundle(directory)
+            receipt_path = paths["custody_root"] / "training-verify.json"
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            receipt["ember_lab_source_sha256"] = EVIDENCE_SHA256
+            write_json(receipt_path, receipt)
+            with self._patched(module):
+                with self.assertRaisesRegex(
+                    ValueError, "Ember Lab source identity does not match"
+                ):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
 
     def test_equal_head_without_training_receipt_stays_accepted(self) -> None:
         """Back-compat: the pre-#1419 shape needs no new evidence and no git."""
