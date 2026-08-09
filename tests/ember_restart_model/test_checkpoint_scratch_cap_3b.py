@@ -1,14 +1,12 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02B
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Class-kill for #1305: the transient checkpoint scratch cap must clear 3B.
+"""The owner-sharded v5 first-checkpoint scratch bound must clear 3B.
 
-The 2026-08-02 certified launch train-5 died at its FIRST checkpoint write:
-the 3B optimizer state's tensor-storage lower bound (7,798,675,456 bytes,
-quarantine receipt sha256 d09e090b...) exceeded the then-4-GiB
-_MAX_TRANSIENT_CHECKPOINT_SCRATCH_BYTES. These tests pin the cap above the
-observed 3B bound and to the certified launch scope, so a cap reduction or
-a config growth past the cap fails here instead of mid-run.
+The 2026-08-02 train-5 receipt recorded a superseded monolithic optimizer
+payload (7,798,675,456 bytes). It is retained as historical evidence only;
+the live v5 contract writes one optimizer shard per closed owner, so this test
+derives the per-owner floors from the checked-in 3B ownership/config contract.
 """
 from __future__ import annotations
 
@@ -33,8 +31,14 @@ OBSERVED_3B_OPTIMIZER_LOWER_BOUND = 7_798_675_456
 CERTIFIED_TRANSIENT_CHECKPOINT_BYTES = 4 * 1024**3
 
 
-def _owner_optimizer_storage_bounds() -> dict[str, int]:
-    """Derive 3B owner-shard optimizer floors from the checked contract."""
+def _owner_sharded_v5_projection() -> dict[str, object]:
+    """Derive the closed 3B owner-sharded-v5 lower-bound inventory.
+
+    This is the checked-in owner route used by checkpoint_artifacts: shared
+    parameters are owned by ``shared`` and each named expert owns exactly one
+    ``12*hidden_size**2`` slice. The result is a lower-bound projection, not
+    a monolithic receipt or a model allocation.
+    """
     config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     model = config["model"]
     serialization = config["checkpoints"]["serialization"]
@@ -44,18 +48,34 @@ def _owner_optimizer_storage_bounds() -> dict[str, int]:
     bytes_per_parameter = int(
         serialization["optimizer_state_bytes_per_active_parameter"]
     )
+    if model["expert_routing"].get("expert_parameter_formula") != "12*hidden_size^2":
+        raise AssertionError("3B owner projection formula drifted from checkpoint ownership")
+    if model["expert_routing"].get("active_experts_per_episode_or_batch") != 1:
+        raise AssertionError("3B owner projection requires one active expert per episode")
+    if model["expert_routing"].get("inactive_experts_frozen") is not True:
+        raise AssertionError("3B owner projection requires inactive experts to be frozen")
     expert_parameters = layers * 12 * hidden_size**2
     shared_parameters = int(model["total_unique_trainable_parameters"]) - (
         len(expert_names) * expert_parameters
     )
+    if len(expert_names) != 4 or len(set(expert_names)) != len(expert_names):
+        raise AssertionError("3B owner-sharded v5 expert owner set is not closed")
     if shared_parameters < 1 or bytes_per_parameter < 1:
         raise AssertionError("owner-sharded 3B optimizer projection is invalid")
+    owner_parameter_counts = {
+        "shared": shared_parameters,
+        **{name: expert_parameters for name in expert_names},
+    }
+    owner_storage_lower_bounds = {
+        owner: parameters * bytes_per_parameter
+        for owner, parameters in owner_parameter_counts.items()
+    }
     return {
-        "shared": shared_parameters * bytes_per_parameter,
-        **{
-            name: expert_parameters * bytes_per_parameter
-            for name in expert_names
-        },
+        "optimizer_state_layout": "owner-sharded-v1",
+        "owner_ids": ("shared", *expert_names),
+        "owner_parameter_counts": owner_parameter_counts,
+        "owner_storage_lower_bounds": owner_storage_lower_bounds,
+        "max_owner_storage_lower_bound": max(owner_storage_lower_bounds.values()),
     }
 
 
@@ -105,12 +125,22 @@ def _read_cap_constant() -> int:
 class CheckpointScratchCap3BTests(unittest.TestCase):
     def test_cap_covers_every_owner_sharded_optimizer_write(self) -> None:
         cap = _read_cap_constant()
-        owner_bounds = _owner_optimizer_storage_bounds()
+        projection = _owner_sharded_v5_projection()
+        owner_bounds = projection["owner_storage_lower_bounds"]
+        self.assertEqual(projection["optimizer_state_layout"], "owner-sharded-v1")
+        self.assertEqual(
+            projection["owner_ids"],
+            ("shared", "vision", "audio", "reasoning", "tool"),
+        )
         self.assertLessEqual(
-            max(owner_bounds.values()),
+            projection["max_owner_storage_lower_bound"],
             cap,
             "an owner-sharded 3B optimizer write exceeds the transient scratch"
             " cap: the first-checkpoint #1305 failure class remains reachable",
+        )
+        self.assertEqual(
+            projection["max_owner_storage_lower_bound"],
+            max(owner_bounds.values()),
         )
         self.assertGreater(
             OBSERVED_3B_OPTIMIZER_LOWER_BOUND,
