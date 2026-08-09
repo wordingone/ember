@@ -328,7 +328,8 @@ describe("createGoalStore — recordUsage", () => {
 });
 
 // ---------------------------------------------------------------------------
-// noteBlocked — the >=3-consecutive-turns audit (spec §4 BLOCKED AUDIT)
+// noteBlocked — the >=3-consecutive-turns audit (current "Continuation loop"
+// section BLOCKED AUDIT)
 // ---------------------------------------------------------------------------
 
 describe("createGoalStore — noteBlocked", () => {

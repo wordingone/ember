@@ -1,4 +1,9 @@
-// commands/goal.ts — /goal slash command (ember issue #211, spec §2): set/view/
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
+// commands/goal.ts — /goal slash command (ember issue #211, current
+// "Selection and persistence" section): set/view/
 // clear the goal objective, available mid-task. This REPLACES the earlier
 // bounded ~5-iteration prototype (a fixed-iteration loop wrapping
 // QueryEngine.submitMessage, never wired into command-registry.ts's builtin
@@ -6,11 +11,13 @@
 // record (core/goal-store.ts) driving an EVENT-DRIVEN continuation engine
 // (core/goal-continuation.ts), not a scheduler. The bounded-loop's
 // event->fireball phase wiring is left for the separate flame-integration
-// work (issue #214, spec §7.2) rather than folded in here.
+// work (issue #214, current "Operator relationship" section) rather than
+// folded in here.
 //
 // Command surface:
 //   /goal <objective>   -- sets a NEW goal (if none exists) or EDITS the
-//                          existing one (spec §2: "mid-flight edits inject an
+//                          existing one (the current "Selection and persistence"
+//                          section: "mid-flight edits inject an
 //                          objective-updated steering prompt so the model
 //                          re-anchors"). Either way, also pokes the
 //                          continuation engine once so a genuinely idle
@@ -149,7 +156,8 @@ export function createGoalCommand(deps: GoalCommandDeps = {}): RegistryCommand {
         };
       }
 
-      // Existing goal present -- this is a mid-task EDIT (spec §2), not a
+      // Existing goal present -- this is a mid-task EDIT (the current
+      // "Selection and persistence" section), not a
       // second create. Objective immutability still holds for the MODEL:
       // this path is reachable only through the human-typed /goal command,
       // never through a model-side tool call.

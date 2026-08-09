@@ -1324,7 +1324,8 @@ export function ReplScreen({
   // operator-pipe/keyboard priority gate above already reads: the input
   // buffer (inputStateRef, this file, line ~651) and the operator queue
   // depth (OperatorInjector.queueLength, services/operator-input.ts:39-41).
-  // Both count as queued user input per docs/goal-mode-mechanism.md §7 delta 3
+  // Both count as queued user input per the current "Operator relationship"
+  // and "Continuation loop" sections of docs/goal-mode-mechanism.md
   // ("Operator preemption via the operator pipe as well as the TUI").
   const goalContinuationEngineRef = useRef<GoalContinuationEngine | null>(null);
   if (!goalContinuationEngineRef.current) {
@@ -1690,7 +1691,8 @@ export function ReplScreen({
       // it can never survive past the request it described.
       setRetryStatus({ active: false });
       // ember #211: every turn-exit path also pokes the goal continuation
-      // engine (spec §3: "every task/turn completion pokes maybe-continue-
+      // engine (the current "Continuation loop" section: "every task/turn
+      // completion pokes maybe-continue-
       // if-idle"). Whenever THIS submitPrompt call was itself invoked as the
       // engine's own startTurn callback, this poke arrives while that outer
       // call's semaphore is still held and harmlessly no-ops

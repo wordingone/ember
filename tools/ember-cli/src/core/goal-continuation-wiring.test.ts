@@ -242,7 +242,7 @@ describe("goal-continuation bounded re-arm (issue #279)", () => {
     stop();
   });
 });
-describe("createGoalContinuationPoke — receipt-store wiring (spec §7.1)", () => {
+describe("createGoalContinuationPoke — receipt-store wiring (current \"Artifact binding\" section)", () => {
   function fakeWriter(): GoalReceiptWriter & { rows: Array<{ event: string; goalId?: string; detail?: Record<string, unknown> }> } {
     const rows: Array<{ event: string; goalId?: string; detail?: Record<string, unknown> }> = [];
     return {

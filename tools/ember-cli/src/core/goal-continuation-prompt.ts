@@ -1,12 +1,18 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // core/goal-continuation-prompt.ts — the continuation prompt template (ember
-// issue #211, spec §4). Ports the codex continuation.md doctrine in spirit,
+// issue #211, the current "Continuation loop" section). Ports the codex
+// continuation.md doctrine in spirit,
 // ember terms: injection guard, anti-scope-shrink, anti-substitution,
 // alignment definition, work-from-evidence, a completion audit that must
 // PROVE completion requirement-by-requirement, and a blocked audit gated on
 // the SAME blocker repeating >=3 consecutive goal turns.
 //
 // Every rendered prompt is wrapped in marker-wrapped, runtime-owned fragment
-// tags (spec §3 step 4: "a HIDDEN runtime-owned user-role fragment, marker-
+// tags (the current "Continuation loop" section: "a HIDDEN runtime-owned
+// user-role fragment, marker-
 // wrapped, separated from real user text") so a REPL renderer can recognize
 // and hide/label it distinctly from text the human actually typed.
 
@@ -30,7 +36,8 @@ function usageLine(ctx: ContinuationPromptContext): string {
 
 /**
  * Wraps the doctrine body in the hidden-fragment markers, with the objective
- * repeated at the top (spec §4: "rendered with objective + tokens used/
+ * repeated at the top (the current "Continuation loop" section: "rendered
+ * with objective + tokens used/
  * budget/remaining").
  */
 function wrap(body: string): string {
@@ -39,7 +46,8 @@ function wrap(body: string): string {
 
 /**
  * The standard continuation prompt injected by maybe-continue-if-idle on
- * every autonomous fire. Every doctrine clause from spec §4 is present so a
+ * every autonomous fire. Every doctrine clause from the current "Continuation
+ * loop" section is present so a
  * receipt of the rendered text is itself evidence the mechanism didn't drop
  * a clause silently.
  */
@@ -90,7 +98,8 @@ Continue working toward the objective now.`;
 
 /**
  * Wrap-up steer injected when the goal's token budget has just been reached
- * (spec §5: "a soft landing, never a kill"). Explicitly forbids new
+ * (the current "Continuation loop" section: "a soft landing, never a kill").
+ * Explicitly forbids new
  * substantive work and forbids marking complete unless the goal is
  * genuinely, already met — completion-fraud at the budget edge is banned.
  */
@@ -113,7 +122,8 @@ running out of budget is never itself a justification for a completion claim.`;
 
 /**
  * Steering message injected when a mid-task /goal edit changes the objective
- * (spec §2: "mid-flight edits inject an objective-updated steering prompt so
+ * (the current "Selection and persistence" section: "mid-flight edits inject
+ * an objective-updated steering prompt so
  * the model re-anchors").
  */
 export function renderObjectiveUpdatedPrompt(newObjective: string): string {

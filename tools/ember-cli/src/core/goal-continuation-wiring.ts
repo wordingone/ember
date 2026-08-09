@@ -22,7 +22,7 @@
 // that call fired — so a single external kick (the end of a real human/
 // operator turn) is enough to sustain an arbitrarily long autonomous chain,
 // bounded only by budget/blocked/complete/user-preemption, exactly as spec
-// (docs/goal-mode-mechanism.md §3/§5) requires.
+// (docs/goal-mode-mechanism.md "Continuation loop") requires.
 
 import type {
   GoalContinuationEngine,
@@ -120,7 +120,8 @@ export function startGoalContinuationRearm(
   return () => scheduler.clearInterval(handle);
 }
 /**
- * Feature kill-switch for the autonomous continuation loop (spec §3 step 2:
+ * Feature kill-switch for the autonomous continuation loop (the current
+ * "Continuation loop" section's feature boundary:
  * "feature on" is its own gate, independent of goal existence/state).
  * EMBER_GOAL_CONTINUATION='0' disables; unset or any other value enables —
  * same "'0' means off" convention as EMBER_SYNTAX_HIGHLIGHT (process-entry.ts).

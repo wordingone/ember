@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // core/goal-continuation.test.ts — eligibility-race tests for the event-driven
 // continuation engine (ember issue #211). Covers acceptance leg (a) unit
 // tests (state-machine-adjacent eligibility) and leg (c) user-preemption.
@@ -120,7 +124,7 @@ describe("maybeContinueIfIdle — user preemption (acceptance leg c)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// goal cleared/edited mid-check race (spec §3 step 3)
+// goal cleared/edited mid-check race (current "Continuation loop" section)
 // ---------------------------------------------------------------------------
 
 describe("maybeContinueIfIdle — goal changed mid-check race", () => {

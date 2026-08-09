@@ -67,7 +67,7 @@ afterEach(() => {
 
 // ===========================================================================
 // CLAUSE 1 — Persistent objective IMMUTABLE to the executor
-// (GOAL.md §6 / docs/goal-mode-mechanism.md §1-§2)
+// (docs/goal-mode-mechanism.md "Selection and persistence")
 // Code path: core/goal-store.ts (updateStatus signature carries no objective
 // param) + tools/goal-tools.ts (update_goal's zod schema has no objective
 // field; GOAL_TOOLS exposes no model-side objective-editing tool at all).
@@ -174,7 +174,8 @@ describe("CLAUSE 2 — status-only transitions, closed transition table", () => 
 // CLAUSE 3 — Event-driven continue-on-idle with user preemption
 // Code path: core/goal-continuation.ts (maybeContinueIfIdle) +
 // core/goal-continuation-wiring.ts (createGoalContinuationPoke, the
-// self-chaining seam). "Event-driven, no scheduler" per spec §3.
+// self-chaining seam). "Event-driven, no scheduler" per the current
+// "Continuation loop" section.
 // ===========================================================================
 
 describe("CLAUSE 3a — no polling: the engine never installs a timer of its own", () => {

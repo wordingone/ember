@@ -3,7 +3,8 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 // services/goal-receipts.ts — JSONL receipt writer for the goal organ (ember
-// issue #211, spec §6/§7.1: "every transition and continuation fire ALSO
+// issue #211, the current "Continuation loop" and "Artifact binding" sections:
+// "every transition and continuation fire ALSO
 // appends to the receipt store -- the organ itself obeys receipts-only law").
 //
 // Same fail-open contract as operator-receipts.ts (issue #165/#154): a
@@ -98,7 +99,8 @@ export function createGoalReceiptWriter(
 /**
  * Maps a GoalStore transition event to a receipted row -- the single seam
  * goal-runtime.ts wires as the store's onTransition callback, so EVERY
- * transition the state machine can produce is receipted uniformly (spec §6:
+ * transition the state machine can produce is receipted uniformly (the current
+ * "Continuation loop" section:
  * "every transition ... appends to the receipt store").
  */
 export function receiptGoalTransition(writer: GoalReceiptWriter, event: GoalTransitionEvent): void {
