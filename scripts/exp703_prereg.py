@@ -21,7 +21,7 @@ SCHEMA = "ember-703-ppm-screen-prereg-v1"
 _REQUIRED = {
     "schema", "issue", "order_cap", "escape_method", "train_target_bytes",
     "selection", "heldout_manifest_sha256", "shard_ids", "lambda_grid",
-    "seed", "raw_byte_custody", "manifest_sha256",
+    "seed", "raw_byte_custody", "consumer", "manifest_sha256",
 }
 _HEX64 = set("0123456789abcdefABCDEF")
 
@@ -46,13 +46,22 @@ def _sha(value: Any, label: str) -> None:
 
 
 class ValidatedPrereg(dict):
-    def require_launch_ready(self, consumer: str | Path | None = None) -> None:
-        if consumer is None:
-            raise LaunchNotReady("DECISIVE_CONSUMER_UNBOUND: run_measure entrypoint is absent")
-        path = Path(consumer)
+    def require_launch_ready(self, consumer_root: str | Path | None = None) -> None:
+        if consumer_root is None:
+            raise LaunchNotReady("DECISIVE_CONSUMER_UNBOUND: consumer root is absent")
+        root = Path(consumer_root).resolve()
+        spec = self["consumer"]
+        path_value = spec["path"]
+        path = (root / Path(path_value)).resolve()
+        if not path.is_relative_to(root):
+            raise LaunchNotReady("DECISIVE_CONSUMER_UNBOUND: consumer path escapes repository root")
         if not path.is_file():
             raise LaunchNotReady("DECISIVE_CONSUMER_UNBOUND: consumer path is not a file")
-        text = path.read_text(encoding="utf-8")
+        raw = path.read_bytes()
+        actual = hashlib.sha256(raw).hexdigest()
+        if actual != spec["sha256"]:
+            raise LaunchNotReady("DECISIVE_CONSUMER_UNBOUND: consumer sha256 mismatch")
+        text = raw.decode("utf-8")
         if "def run_measure" not in text or "--confirm-go" not in text:
             raise LaunchNotReady("DECISIVE_CONSUMER_UNBOUND: consumer lacks governed run_measure/confirm-go")
 
@@ -108,6 +117,16 @@ def validate_prereg_manifest(path: str | Path) -> ValidatedPrereg:
     if not isinstance(custody["source_url"], str) or not custody["source_url"].startswith("https://"):
         raise ValueError("raw_byte_custody.source_url must be https")
     _sha(custody["sha256"], "raw_byte_custody.sha256")
+    consumer = value["consumer"]
+    if not isinstance(consumer, dict) or set(consumer) != {"path", "sha256"}:
+        raise ValueError("consumer must be path/sha256")
+    consumer_path = consumer["path"]
+    if (not isinstance(consumer_path, str) or not consumer_path
+            or Path(consumer_path).is_absolute()
+            or ".." in Path(consumer_path).parts
+            or "\\" in consumer_path):
+        raise ValueError("consumer.path must be a normalized relative POSIX path")
+    _sha(consumer["sha256"], "consumer.sha256")
     return ValidatedPrereg(value)
 
 

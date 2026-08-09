@@ -23,6 +23,7 @@ def _manifest():
         "lambda_grid": [i / 100 for i in range(1, 100)],
         "seed": 703,
         "raw_byte_custody": {"source_url": "https://example.invalid/raw", "sha256": "c" * 64},
+        "consumer": {"path": "scripts/exp703_measure.py", "sha256": "d" * 64},
     }
 
 
@@ -59,8 +60,21 @@ def test_unknown_field_and_unbound_consumer_refuse(tmp_path: Path):
     value = _manifest()
     value["manifest_sha256"] = canonical_manifest_sha256(value)
     path.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
-    consumer = tmp_path / "consumer.py"
-    consumer.write_text("def run_measure(): pass\n", encoding="utf-8")
     validated = validate_prereg_manifest(path)
     with pytest.raises(LaunchNotReady, match="DECISIVE_CONSUMER_UNBOUND"):
-        validated.require_launch_ready(consumer)
+        validated.require_launch_ready(tmp_path)
+
+
+def test_foreign_consumer_bytes_are_rejected(tmp_path: Path):
+    value = _manifest()
+    value["consumer"] = {"path": "scripts/exp703_measure.py", "sha256": "d" * 64}
+    value["manifest_sha256"] = canonical_manifest_sha256(value)
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "exp703_measure.py").write_text(
+        "def run_measure(): pass\n--confirm-go\n", encoding="utf-8"
+    )
+    path = tmp_path / "prereg.json"
+    path.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
+    validated = validate_prereg_manifest(path)
+    with pytest.raises(LaunchNotReady, match="consumer sha256 mismatch"):
+        validated.require_launch_ready(tmp_path)
