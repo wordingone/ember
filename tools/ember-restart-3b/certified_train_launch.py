@@ -10,9 +10,11 @@ import importlib.util
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timezone
 from typing import Any, NamedTuple
 
 
@@ -169,6 +171,9 @@ OPTIONAL_RUN_SPEC_KEYS = (
 CHECKPOINT_MANIFEST_NAME = "checkpoint-manifest.json"
 CONFIG_RELATIVE_PATH = "configs/ember-restart-3b.json"
 CHECKPOINT_QUARANTINE_COMPONENT = ".checkpoint-quarantine"
+RUN_ROOT_LAYOUT_SPEC_PATH = "docs/spec/ember-run-root-layout-v1.md"
+_ATTEMPT_REASON_RE = re.compile(r"^[A-Z0-9]+(?:_[A-Z0-9]+)*$")
+_ATTEMPT_TIMESTAMP_RE = re.compile(r"^[0-9]{8}T[0-9]{6}Z$")
 AUTHORIZED_SCOPE_KEYS = {
     "purpose",
     "allowed_modes",
@@ -301,6 +306,10 @@ class ValidatedLaunch(NamedTuple):
     specialist_telemetry_path: pathlib.Path | None = None
     specialist_telemetry_run_id: str | None = None
     specialist_model_chat_restore_not_before: str | None = None
+    # Exact authority inputs validated for this launch. Failed-attempt
+    # retention keeps these at the live run root so a retry can be
+    # revalidated against the same certificate/ledger/spec bytes.
+    authority_paths: tuple[pathlib.Path, ...] = ()
 
 
 def _canonical_bytes(value: object) -> bytes:
@@ -1426,6 +1435,7 @@ def validate_certified_request(
     # training-scoped verify receipt supplies it. An equal-head launch keeps the
     # pre-#1419 shape exactly: the census already ran at this very commit.
     training_verify_receipt_path = run_spec.get("training_verify_receipt_path")
+    training_verify_path: pathlib.Path | None = None
     if training_verify_receipt_path is not None:
         if (
             not isinstance(training_verify_receipt_path, str)
@@ -1441,6 +1451,7 @@ def validate_certified_request(
         training_path = pathlib.Path(training_verify_receipt_path)
         if not training_path.is_absolute():
             training_path = run_spec_path.parent / training_path
+        training_verify_path = training_path
         _validate_training_verify_receipt(
             training_path, repo_root, certificate_closure_sha256
         )
@@ -1551,6 +1562,34 @@ def validate_certified_request(
                 "run scope exceeds certificate: training_telemetry_path"
             ) from error
 
+    authority_candidates: list[pathlib.Path | None] = [
+        certificate_path,
+        declaration_ledger_path,
+        run_spec_path,
+        completion_path,
+        training_verify_path,
+        None if resume is None else resume.checkpoint,
+        None if resume is None else resume.evidence_path,
+        None if specialist is None else specialist.data_manifest,
+        None if specialist is None else specialist.tokenizer_path,
+        None if specialist is None else specialist.parent_manifest,
+        None if specialist is None else specialist.root_manifest,
+    ]
+    resolved_custody_root = custody_root.resolve(strict=False)
+    authority_paths: list[pathlib.Path] = []
+    for candidate in authority_candidates:
+        if candidate is None:
+            continue
+        resolved_candidate = candidate.resolve(strict=False)
+        # Retention can only move bytes below the live run root.  External
+        # repo/custody inputs stay where they are and need no move exclusion.
+        if (
+            resolved_candidate != resolved_custody_root
+            and resolved_candidate.is_relative_to(resolved_custody_root)
+            and resolved_candidate not in authority_paths
+        ):
+            authority_paths.append(resolved_candidate)
+
     return ValidatedLaunch(
         certificate_sha256=certificate_sha256,
         run_spec_sha256=_file_sha256(run_spec_path, "run spec"),
@@ -1591,6 +1630,7 @@ def validate_certified_request(
         specialist_model_chat_restore_not_before=(
             None if specialist is None else specialist.model_chat_restore_not_before
         ),
+        authority_paths=tuple(authority_paths),
     )
 
 
@@ -1738,14 +1778,174 @@ def _child_log_path(launch: ValidatedLaunch) -> pathlib.Path:
     return launch.custody_root / f"{launch.runner_receipt.stem}-child.log"
 
 
+def retain_failed_attempt(
+    run_root: pathlib.Path,
+    *,
+    reason: str,
+    timestamp: str | None = None,
+    artifact_root: pathlib.Path | None = None,
+    protected_paths: tuple[pathlib.Path, ...] = (),
+) -> pathlib.Path:
+    """Atomically retain one failed attempt under the launcher-owned root.
+
+    The launcher owns the transition: current-attempt outputs are renamed into
+    a fresh ``attempt-<n>-<reason>-<stamp>/`` sibling and replacement output
+    directories are created before promotion. Telemetry remains discoverable
+    because the battery intentionally loads JSONL below retained attempts,
+    while receipt/checkpoint discovery excludes the attempt namespace.
+    Append-only registries and launch declarations stay at the run-root level.
+    No caller-provided retention destination is accepted.
+    """
+    root = pathlib.Path(run_root).resolve(strict=False)
+    if not root.is_dir() or root.name.startswith("attempt-"):
+        raise ValueError("failed-attempt retention requires a non-attempt run root")
+    normalized_reason = str(reason).strip().upper()
+    if not _ATTEMPT_REASON_RE.fullmatch(normalized_reason):
+        raise ValueError("failed-attempt reason must be a closed uppercase token")
+    stamp = timestamp or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    if not _ATTEMPT_TIMESTAMP_RE.fullmatch(stamp):
+        raise ValueError("failed-attempt timestamp must be UTC YYYYMMDDTHHMMSSZ")
+    attempts: list[int] = []
+    for child in root.iterdir():
+        if not child.is_dir():
+            continue
+        match = re.fullmatch(r"attempt-([1-9][0-9]*)-[A-Z0-9]+(?:_[A-Z0-9]+)*-[0-9]{8}T[0-9]{6}Z", child.name)
+        if match:
+            attempts.append(int(match.group(1)))
+    sequence = max(attempts, default=0) + 1
+    target = root / f"attempt-{sequence}-{normalized_reason}-{stamp}"
+    staging = root / f".attempt-{sequence}-{normalized_reason}-{stamp}.staging"
+    if target.exists() or staging.exists():
+        raise RuntimeError("failed-attempt retention destination already exists")
+    selected_artifact_root = pathlib.Path(artifact_root or (root / "artifacts")).resolve(strict=False)
+    if selected_artifact_root == root or not selected_artifact_root.is_relative_to(root):
+        raise ValueError("failed-attempt artifact_root must stay inside the run root")
+    if selected_artifact_root.exists() and (
+        selected_artifact_root.is_symlink() or not selected_artifact_root.is_dir()
+    ):
+        raise ValueError("failed-attempt artifact_root must be a regular directory")
+    selected_relative = selected_artifact_root.relative_to(root)
+    protected: set[pathlib.Path] = set()
+    for authority_path in protected_paths:
+        authority_path = pathlib.Path(authority_path)
+        if authority_path.is_symlink():
+            raise ValueError("protected authority path must not be a symlink")
+        protected_path = authority_path.resolve(strict=False)
+        if protected_path == root or not protected_path.is_relative_to(root):
+            raise ValueError("protected authority path must stay inside the run root")
+        if not (protected_path.is_file() or protected_path.is_dir()):
+            raise ValueError("protected authority path must be a regular file or directory")
+        protected.add(protected_path)
+
+    def has_protected_descendant(directory: pathlib.Path) -> bool:
+        return any(
+            protected_path != directory
+            and protected_path.is_relative_to(directory)
+            for protected_path in protected
+        )
+
+    def has_artifact_descendant(directory: pathlib.Path) -> bool:
+        return (
+            selected_artifact_root != directory
+            and selected_artifact_root.is_relative_to(directory)
+        )
+
+    selected_entries: list[tuple[pathlib.Path, pathlib.Path]] = []
+
+    def select_entry(source: pathlib.Path, relative: pathlib.Path) -> None:
+        resolved_source = source.resolve(strict=False)
+        if resolved_source in protected:
+            return
+        if source.is_symlink():
+            raise ValueError(f"failed-attempt output cannot be a symlink: {relative}")
+        if source.is_dir() and (
+            has_protected_descendant(resolved_source)
+            or has_artifact_descendant(resolved_source)
+        ):
+            for nested in sorted(source.iterdir(), key=lambda item: item.name):
+                select_entry(nested, relative / nested.name)
+            return
+        if source.is_file() or source.is_dir():
+            selected_entries.append((relative, source))
+
+    for child in sorted(root.iterdir(), key=lambda item: item.name):
+        if child.name.startswith("attempt-") or child == staging:
+            continue
+        resolved_child = child.resolve(strict=False)
+        if (
+            child.name.startswith(".")
+            and child.name != ".checkpoint-quarantine"
+            and resolved_child != selected_artifact_root
+            and not has_artifact_descendant(resolved_child)
+        ):
+            continue
+        select_entry(child, pathlib.Path(child.name))
+    staging.mkdir()
+    moved: list[tuple[pathlib.Path, pathlib.Path]] = []
+    replacement_created = False
+    try:
+        for relative, source in selected_entries:
+            destination = staging / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            source.rename(destination)
+            moved.append((source, destination))
+        (root / selected_relative).mkdir(parents=True, exist_ok=True)
+        replacement_created = True
+        retention = {
+            "schema_version": "ember-run-attempt-retention-v1",
+            "reason": normalized_reason,
+            "timestamp_utc": stamp,
+            "attempt_number": sequence,
+            "source_relative": selected_relative.as_posix(),
+            "retained_relative": (
+                f"attempt-{sequence}-{normalized_reason}-{stamp}/"
+                f"{selected_relative.as_posix()}"
+            ),
+            "retained_entries": [relative.as_posix() for relative, _ in selected_entries],
+            "protected_authority_relative": sorted(
+                path.relative_to(root).as_posix() for path in protected
+            ),
+            "telemetry_discovery": "included",
+            "evidence_discovery": "excluded",
+        }
+        retention_path = staging / "attempt-retention.json"
+        temporary = staging / ".attempt-retention.json.tmp"
+        temporary.write_bytes(_canonical_bytes(retention))
+        os.replace(temporary, retention_path)
+        staging.rename(target)
+    except Exception:
+        replacement = root / selected_relative
+        if replacement_created and replacement.exists():
+            try:
+                replacement.rmdir()
+            except OSError:
+                pass
+        for source, destination in reversed(moved):
+            if destination.exists() and not source.exists():
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.rename(source)
+        if staging.exists():
+            for child in sorted(staging.rglob("*"), reverse=True):
+                if child.is_file() or child.is_symlink():
+                    child.unlink()
+                elif child.is_dir():
+                    child.rmdir()
+            staging.rmdir()
+        raise
+    return target
+
+
 def _write_execution_receipt(
     launch: ValidatedLaunch,
     argv: list[str],
     exit_code: int,
     child_log_path: pathlib.Path | None = None,
     energy_sidecar: dict[str, Any] | None = None,
+    attempt_retention: dict[str, Any] | None = None,
+    receipt_path: pathlib.Path | None = None,
+    runner_receipt_path: pathlib.Path | None = None,
 ) -> pathlib.Path:
-    receipt_path = _execution_receipt_path(launch)
+    receipt_path = receipt_path or _execution_receipt_path(launch)
     receipt = {
         "schema_version": "ember-certified-train-execution-v1",
         "certificate_sha256": launch.certificate_sha256,
@@ -1755,9 +1955,10 @@ def _write_execution_receipt(
         "argv": argv,
         "exit_code": exit_code,
         "artifact_root": str(launch.artifact_root),
-        "runner_receipt": str(launch.runner_receipt),
+        "runner_receipt": str(runner_receipt_path or launch.runner_receipt),
         "child_log": str(child_log_path) if child_log_path is not None else None,
         "energy_sidecar": energy_sidecar,
+        "attempt_retention": attempt_retention,
         "claim_scope": {
             "capability_claimed": False,
             "admission_claimed": False,
@@ -1955,9 +2156,72 @@ def execute_validated_launch(
     finally:
         if sidecar_pidfile is not None:
             _finish_energy_sidecar(sidecar_process, sidecar_pidfile, sidecar_disclosure)
+    attempt_retention: dict[str, Any] | None = None
+    bound_runner_receipt_path = launch.runner_receipt
+    if exit_code != 0:
+        # Materialize the failed execution receipt before retention moves the
+        # current attempt.  This makes the receipt itself part of the
+        # launcher-owned atomic evidence set instead of leaving it at the live
+        # root where a retry could overwrite it.
+        _write_execution_receipt(
+            launch,
+            argv,
+            exit_code,
+            child_log_path=child_log_path,
+            energy_sidecar=sidecar_disclosure,
+            attempt_retention={
+                "schema_version": "ember-run-attempt-retention-v1",
+                "status": "PENDING_RETENTION",
+            },
+        )
+        try:
+            retained = retain_failed_attempt(
+                launch.custody_root,
+                reason="CHILD_FAILED",
+                artifact_root=launch.artifact_root,
+                protected_paths=launch.authority_paths,
+            )
+            attempt_retention = {
+                "schema_version": "ember-run-attempt-retention-v1",
+                "status": "RETAINED",
+                "relative_path": retained.relative_to(launch.custody_root).as_posix(),
+            }
+            execution_receipt = _execution_receipt_path(launch)
+            receipt_relative = execution_receipt.resolve(strict=False).relative_to(
+                launch.custody_root.resolve(strict=False)
+            )
+            retained_child_log_path = child_log_path
+            if child_log_path is not None:
+                child_log_relative = child_log_path.resolve(strict=False).relative_to(
+                    launch.custody_root.resolve(strict=False)
+                )
+                retained_child_log_path = retained / child_log_relative
+            runner_receipt_relative = launch.runner_receipt.resolve(
+                strict=False
+            ).relative_to(launch.custody_root.resolve(strict=False))
+            bound_runner_receipt_path = retained / runner_receipt_relative
+            _write_execution_receipt(
+                launch,
+                argv,
+                exit_code,
+                child_log_path=retained_child_log_path,
+                energy_sidecar=sidecar_disclosure,
+                attempt_retention=attempt_retention,
+                receipt_path=retained / receipt_relative,
+                runner_receipt_path=bound_runner_receipt_path,
+            )
+            child_log_path = retained_child_log_path
+        except (OSError, RuntimeError, ValueError) as error:
+            attempt_retention = {
+                "schema_version": "ember-run-attempt-retention-v1",
+                "status": "RETENTION_FAILED",
+                "error": type(error).__name__,
+            }
     _write_execution_receipt(
         launch, argv, exit_code, child_log_path=child_log_path,
         energy_sidecar=sidecar_disclosure,
+        attempt_retention=attempt_retention,
+        runner_receipt_path=bound_runner_receipt_path,
     )
     return exit_code
 
