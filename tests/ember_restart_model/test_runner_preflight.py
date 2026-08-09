@@ -132,6 +132,50 @@ class RunnerPreflightTests(unittest.TestCase):
             self.assertEqual(terminal["payload"]["phase"], "FAILED")
             self.assertEqual(terminal["payload"]["last_completed_step"], 7)
 
+    def test_e4_receipt_write_failure_emits_one_path_free_diagnostic(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            channel = Path(directory) / "ember-telemetry.jsonl"
+            accumulator: dict[str, object] = {"write_failures": 0}
+
+            run_vertical_slice._record_e4_measurement_write_failure(
+                accumulator,
+                telemetry_path=channel,
+                telemetry_run_id="vision-v4",
+                error=PermissionError("refused at C:/private/run/e4-measurement-receipt.json"),
+            )
+            run_vertical_slice._record_e4_measurement_write_failure(
+                accumulator,
+                telemetry_path=channel,
+                telemetry_run_id="vision-v4",
+                error=RuntimeError("deterministic writer bug"),
+            )
+
+            self.assertEqual(accumulator["write_failures"], 2)
+            events = [json.loads(line) for line in channel.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual(len(events), 1)
+            self.assertEqual(events[0]["kind"], "e4_receipt_write_failure")
+            self.assertEqual(events[0]["payload"], {
+                "error_type": "PermissionError",
+                "failure_class": "IO_ERROR",
+                "run_id": "vision-v4",
+                "write_failures": 1,
+            })
+            self.assertNotIn("private", json.dumps(events[0]))
+
+            blocked: dict[str, object] = {"write_failures": 0}
+            with patch.object(
+                run_vertical_slice,
+                "append_training_telemetry",
+                side_effect=OSError("primary telemetry unavailable"),
+            ), self.assertRaisesRegex(OSError, "primary telemetry unavailable"):
+                run_vertical_slice._record_e4_measurement_write_failure(
+                    blocked,
+                    telemetry_path=channel,
+                    telemetry_run_id="vision-v5",
+                    error=RuntimeError("receipt writer bug"),
+                )
+            self.assertEqual(blocked["write_failures"], 1)
+
     def test_specialist_failure_emits_path_free_failed_status_with_last_completed_step(self) -> None:
         records = [
             {"active_expert": "vision", "scene_split": "train", "token_ids": [1], "row_id": "train"},
