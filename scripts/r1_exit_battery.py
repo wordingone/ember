@@ -2077,7 +2077,10 @@ E6_FORECAST_PATH = "docs/spec/ember02-r1-forecast-v1.json"
 E6_SCALAR_QUANTITIES = ("step_time_ms", "tokens_per_second", "proxy_joules_per_token", "peak_vram_gib")
 
 
-def _validate_recalibration_content(path: Path, *, repo_root: Path, run_root: Path, t01: int) -> list[str]:
+def _validate_recalibration_content(
+    path: Path, *, repo_root: Path, run_root: Path, t01: int,
+    run_id: str | None = None,
+) -> list[str]:
     """Return the list of content defects (empty = valid) for one candidate
     recalibration receipt, per §3's closing-receipts clause. Fail-closed: every
     check that cannot be performed is itself a defect. Three bindings must all
@@ -2121,6 +2124,36 @@ def _validate_recalibration_content(path: Path, *, repo_root: Path, run_root: Pa
     steps_measured = receipt.get("steps_measured")
     if not isinstance(steps_measured, int) or isinstance(steps_measured, bool) or steps_measured < t01:
         defects.append(f"steps_measured={steps_measured!r} below T-01={t01} -- recalibration requires the measured baseline the prereg names")
+
+    # The producer's headline count is only valid when the same run can be
+    # selected and re-derived from this root.  A receipt may not choose a
+    # foreign run or pool steps across multiple run IDs.
+    selected_run_id, series, series_counts = _select_series(run_root, run_id=run_id)
+    receipt_run_id = receipt.get("run_id")
+    if not isinstance(receipt_run_id, str) or not receipt_run_id.strip():
+        defects.append("run_id binding field missing -- the receipt must name the telemetry run it describes")
+    if not series:
+        if selected_run_id is None and len(series_counts) > 1:
+            defects.append(
+                "steps_measured cannot be re-derived: multiple telemetry run_ids under the run root "
+                f"({series_counts!r}) and no --run-id selects one -- ambiguous adjudication is refused"
+            )
+        else:
+            defects.append(
+                "steps_measured cannot be re-derived: no train_step telemetry for the selected run "
+                f"(run_id={run_id!r}; run_ids_seen={series_counts!r})"
+            )
+    else:
+        if isinstance(receipt_run_id, str) and receipt_run_id.strip() and receipt_run_id != selected_run_id:
+            defects.append(
+                f"run_id mismatch: receipt names {receipt_run_id!r}, the adjudicated series is "
+                f"{selected_run_id!r} -- one run's recalibration must not credit another's telemetry"
+            )
+        if isinstance(steps_measured, int) and not isinstance(steps_measured, bool) and steps_measured != len(series):
+            defects.append(
+                f"steps_measured={steps_measured!r} does not equal the re-derived deduped series "
+                f"length {len(series)} for run_id={selected_run_id!r}"
+            )
 
     forecast_predicted: dict[str, Any] = {}
     forecast_bound = False  # True only once THE preregistered forecast is loaded and schema-validated
@@ -2210,7 +2243,10 @@ def _validate_recalibration_content(path: Path, *, repo_root: Path, run_root: Pa
     return defects
 
 
-def check_r1_e6(run_root: Path, thresholds: dict[str, Any], *, repo_root: Path = REPO_ROOT) -> dict[str, Any]:
+def check_r1_e6(
+    run_root: Path, thresholds: dict[str, Any], *, repo_root: Path = REPO_ROOT,
+    run_id: str | None = None,
+) -> dict[str, Any]:
     t01 = int(thresholds["T-01"])
     forecast_matches = set(p for p in run_root.rglob("*forecast*.json") if ".checkpoint-quarantine" not in p.parts) if run_root.is_dir() else set()
     recalibration_matches = set(p for p in run_root.rglob("*recalibrat*.json") if ".checkpoint-quarantine" not in p.parts) if run_root.is_dir() else set()
@@ -2250,7 +2286,10 @@ def check_r1_e6(run_root: Path, thresholds: dict[str, Any], *, repo_root: Path =
             ),
         }
     validations = [
-        {**doc, "defects": _validate_recalibration_content(Path(doc["path"]), repo_root=repo_root, run_root=run_root, t01=t01)}
+        {**doc, "defects": _validate_recalibration_content(
+            Path(doc["path"]), repo_root=repo_root, run_root=run_root, t01=t01,
+            run_id=run_id,
+        )}
         for doc in candidate_documents
     ]
     # The dispositive population is the candidates that CLAIM to be the
@@ -2632,7 +2671,7 @@ def _run_one_exit(
     elif exit_id == "e5":
         result = check_r1_e5(run_root, thresholds, run_id=run_id)
     elif exit_id == "e6":
-        result = check_r1_e6(run_root, thresholds)
+        result = check_r1_e6(run_root, thresholds, run_id=run_id)
     elif exit_id == "e7":
         result = check_r1_e7(seed_roots_effective, thresholds)
     elif exit_id == "e8":
@@ -3776,6 +3815,10 @@ def run_selftest() -> None:
         (e6_repo / "docs" / "spec" / "ember02-r1-forecast-v1.json").write_bytes(e6_forecast_bytes)
         e6_met_root = tmp_path / "e6_met_run"
         e6_met_root.mkdir()
+        _write_jsonl(
+            e6_met_root / "telemetry" / "train.jsonl",
+            _synthetic_train_step_events(run_id="SELFTEST_E6_run", n_steps=100),
+        )
         def _e6_scalar(predicted: float, measured: float) -> dict[str, Any]:
             return {"predicted": predicted, "measured": measured, "abs_error": abs(measured - predicted), "rel_error": abs(measured - predicted) / abs(predicted)}
         e6_receipt = {
@@ -3784,6 +3827,7 @@ def run_selftest() -> None:
             "forecast_path": "docs/spec/ember02-r1-forecast-v1.json",
             "forecast_sha256": hashlib.sha256(e6_forecast_bytes).hexdigest(),
             "run_root": str(e6_met_root),
+            "run_id": "SELFTEST_E6_run",
             "steps_measured": 100,
             "quantities": {
                 "step_time_ms": _e6_scalar(174.0, 181.5),
@@ -3796,6 +3840,49 @@ def run_selftest() -> None:
         (e6_met_root / "forecast-recalibration.json").write_text(json.dumps(e6_receipt), encoding="utf-8")
         e6_met = check_r1_e6(e6_met_root, thresholds, repo_root=e6_repo)
         assert e6_met["status"] == "MET", e6_met
+
+        # --- E6: the headline count must be re-derived from this run's
+        # telemetry, not accepted from the receipt's claimed integer ---
+        e6_inflated = json.loads(json.dumps(e6_receipt))
+        e6_inflated["steps_measured"] = 101
+        e6_inflated_root = tmp_path / "e6_inflated_run"
+        e6_inflated_root.mkdir()
+        _write_jsonl(
+            e6_inflated_root / "telemetry" / "train.jsonl",
+            _synthetic_train_step_events(run_id="SELFTEST_E6_run", n_steps=100),
+        )
+        e6_inflated["run_root"] = str(e6_inflated_root)
+        (e6_inflated_root / "forecast-recalibration.json").write_text(
+            json.dumps(e6_inflated), encoding="utf-8"
+        )
+        e6_inflated_res = check_r1_e6(e6_inflated_root, thresholds, repo_root=e6_repo)
+        assert e6_inflated_res["status"] == "NOT_MET", e6_inflated_res
+        assert any(
+            "re-derived deduped series" in defect
+            for row in e6_inflated_res["components"]["candidate_validation"]
+            for defect in row["defects"]
+        ), e6_inflated_res
+
+        # --- E6: a receipt naming a foreign telemetry run must refuse ---
+        e6_foreign_id = json.loads(json.dumps(e6_receipt))
+        e6_foreign_id["run_id"] = "SELFTEST_E6_foreign"
+        e6_foreign_id_root = tmp_path / "e6_foreign_id_run"
+        e6_foreign_id_root.mkdir()
+        _write_jsonl(
+            e6_foreign_id_root / "telemetry" / "train.jsonl",
+            _synthetic_train_step_events(run_id="SELFTEST_E6_run", n_steps=100),
+        )
+        e6_foreign_id["run_root"] = str(e6_foreign_id_root)
+        (e6_foreign_id_root / "forecast-recalibration.json").write_text(
+            json.dumps(e6_foreign_id), encoding="utf-8"
+        )
+        e6_foreign_id_res = check_r1_e6(e6_foreign_id_root, thresholds, repo_root=e6_repo)
+        assert e6_foreign_id_res["status"] == "NOT_MET", e6_foreign_id_res
+        assert any(
+            "run_id mismatch" in defect
+            for row in e6_foreign_id_res["components"]["candidate_validation"]
+            for defect in row["defects"]
+        ), e6_foreign_id_res
 
         # --- E6 (rev-1490 f6): the valid receipt plus TWO forecast-named companions stays MET ---
         (e6_met_root / "disk-forecast.json").write_text(json.dumps({"noise": 1}), encoding="utf-8")

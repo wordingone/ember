@@ -91,9 +91,14 @@ def load_forecast(path: Path) -> dict[str, Any]:
     return doc
 
 
-def load_train_series(run_root: Path) -> list[dict[str, Any]]:
-    """Deduped train_step payload rows, last occurrence per step, ascending step."""
-    best: dict[int, dict[str, Any]] = {}
+def load_train_series(run_root: Path) -> dict[str, list[dict[str, Any]]]:
+    """Deduped train_step payload rows grouped by run_id.
+
+    A run root may contain resumed or retried attempts.  Keep the latest row
+    by timestamp for each ``(run_id, step)`` pair so a different run cannot
+    overwrite the selected run's evidence.
+    """
+    best: dict[tuple[str, int], tuple[str, dict[str, Any]]] = {}
     for telemetry_path in sorted(p for p in run_root.rglob("*.jsonl") if ".checkpoint-quarantine" not in p.parts):
         try:
             lines = telemetry_path.read_text(encoding="utf-8", errors="replace").splitlines()
@@ -109,10 +114,46 @@ def load_train_series(run_root: Path) -> list[dict[str, Any]]:
             payload = row.get("payload")
             if not isinstance(payload, dict):
                 continue
+            run_id = payload.get("run_id")
             step = payload.get("step")
-            if isinstance(step, int) and not isinstance(step, bool):
-                best[step] = payload
-    return [best[s] for s in sorted(best)]
+            ts = row.get("ts")
+            if (
+                isinstance(run_id, str) and run_id.strip()
+                and isinstance(step, int) and not isinstance(step, bool)
+                and isinstance(ts, str) and ts
+            ):
+                key = (run_id, step)
+                prior = best.get(key)
+                if prior is None or ts > prior[0]:
+                    best[key] = (ts, payload)
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for (run_id, _step), (_ts, payload) in best.items():
+        grouped.setdefault(run_id, []).append(payload)
+    for series in grouped.values():
+        series.sort(key=lambda row: row["step"])
+    return grouped
+
+
+def select_train_series(run_root: Path, *, run_id: str | None = None) -> tuple[str, list[dict[str, Any]]]:
+    """Select exactly one telemetry run for a recalibration receipt."""
+    grouped = load_train_series(run_root)
+    if run_id is not None:
+        series = grouped.get(run_id)
+        if not series:
+            raise RecalibrationRefusal(
+                f"RUN_ID_NOT_FOUND: requested run_id={run_id!r} has no train_step telemetry "
+                f"under {run_root} (run_ids_seen={sorted(grouped)!r})"
+            )
+        return run_id, series
+    if not grouped:
+        raise RecalibrationRefusal(f"UNMEASURABLE: no train_step telemetry under {run_root}")
+    if len(grouped) != 1:
+        raise RecalibrationRefusal(
+            "AMBIGUOUS_RUN_ID: more than one telemetry run_id under the run root; "
+            f"pass --run-id to select one (run_ids_seen={sorted(grouped)!r})"
+        )
+    selected_run_id, series = next(iter(grouped.items()))
+    return selected_run_id, series
 
 
 def find_checkpoint_manifest(run_root: Path) -> tuple[Path, dict[str, Any]]:
@@ -308,14 +349,12 @@ def repo_relative_forecast_path(forecast_path: Path) -> str:
     return rel
 
 
-def build_receipt(forecast_path: Path, run_root: Path) -> dict[str, Any]:
+def build_receipt(forecast_path: Path, run_root: Path, *, run_id: str | None = None) -> dict[str, Any]:
     forecast = load_forecast(forecast_path)
     forecast_rel = repo_relative_forecast_path(forecast_path)
     t01 = load_t01()
     quantities = forecast["quantities"]
-    series = load_train_series(run_root)
-    if not series:
-        raise RecalibrationRefusal(f"UNMEASURABLE: no train_step telemetry under {run_root}")
+    selected_run_id, series = select_train_series(run_root, run_id=run_id)
     if len(series) < t01:
         raise RecalibrationRefusal(
             f"UNMEASURABLE: series has {len(series)} deduped steps, below the T-01={t01} measured "
@@ -350,6 +389,7 @@ def build_receipt(forecast_path: Path, run_root: Path) -> dict[str, Any]:
         "forecast_path": forecast_rel,
         "forecast_sha256": sha256_file(forecast_path),
         "run_root": str(run_root),
+        "run_id": selected_run_id,
         "steps_measured": len(series),
         "quantities": {
             "step_time_ms": scalar("step_time_ms", step_time),
@@ -365,6 +405,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--forecast", required=True, type=Path)
     parser.add_argument("--run-root", required=True, type=Path)
+    parser.add_argument("--run-id", default=None, help="select one telemetry run when the root contains multiple run IDs")
     parser.add_argument("--out", type=Path, default=None,
                         help="receipt path (default: <run-root>/forecast-recalibration.json)")
     parser.add_argument("--selftest", action="store_true", help=argparse.SUPPRESS)
@@ -372,7 +413,7 @@ def main() -> int:
 
     out_path = args.out or (args.run_root / "forecast-recalibration.json")
     try:
-        receipt = build_receipt(args.forecast, args.run_root)
+        receipt = build_receipt(args.forecast, args.run_root, run_id=args.run_id)
     except RecalibrationRefusal as refusal:
         print(f"forecast_recalibration: REFUSED: {refusal}", file=sys.stderr)
         print("no receipt written -- a partial recalibration must never mint one", file=sys.stderr)
