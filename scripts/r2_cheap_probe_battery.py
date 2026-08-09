@@ -150,7 +150,8 @@ Refusal reasons (R2ProbeBatteryRefusal, always prefixed onto the message):
   CHECKPOINT_MANIFEST_MISSING, CHECKPOINT_MODEL_CONFIG_MISSING,
   CHECKPOINT_VERIFY_FAILED, CHECKPOINT_UNBOUND, PROBE_MANIFEST_UNREADABLE,
   PROBE_MANIFEST_SHA_MISMATCH, PROBE_MANIFEST_SCHEMA_INVALID,
-  PROBE_SPEC_INVALID, PROBE_HAS_NO_ITEMS, PROBE_METRIC_TYPE_UNSUPPORTED,
+  PROBE_SPEC_INVALID, PROBE_HAS_NO_ITEMS, CHANCE_RATE_INCONSISTENT,
+  PROBE_METRIC_TYPE_UNSUPPORTED,
   BATTERY_UNDEFINED, SCORER_RETURNED_WRONG_SHAPE, SCORER_RETURNED_NONFINITE,
   DETERMINISM_MISMATCH, SIGMA_SEED_MISSING, SIGMA_SEED_RECEIPT_UNREADABLE,
   SIGMA_SEED_RECEIPT_INVALID, SIGMA_SEED_INVALID, CI_INPUT_INVALID,
@@ -372,6 +373,22 @@ class ProbeSpec:
             raise R2ProbeBatteryRefusal(f"PROBE_SPEC_INVALID: probe_id={self.probe_id!r} chance_rate={self.chance_rate!r}")
         if not self.items:
             raise R2ProbeBatteryRefusal(f"PROBE_HAS_NO_ITEMS: probe_id={self.probe_id!r}")
+        if self.metric_type == "proportion":
+            cardinalities = {len(item.choices) for item in self.items}
+            if len(cardinalities) != 1:
+                raise R2ProbeBatteryRefusal(
+                    "CHANCE_RATE_INCONSISTENT: "
+                    f"probe_id={self.probe_id!r} proportion probes require uniform "
+                    f"choice cardinality; observed={sorted(cardinalities)!r}"
+                )
+            cardinality = next(iter(cardinalities))
+            expected = 1.0 / cardinality
+            if abs(float(self.chance_rate) - expected) >= 1e-12:
+                raise R2ProbeBatteryRefusal(
+                    "CHANCE_RATE_INCONSISTENT: "
+                    f"probe_id={self.probe_id!r} chance_rate={self.chance_rate!r} "
+                    f"expected=1/{cardinality}={expected!r}"
+                )
 
 
 # The battery, as specified. See module docstring, SPEC-DEFECT-1435-A: this
@@ -997,7 +1014,31 @@ def _selftest_manifest_roundtrip(failures: list, tmp_dir: Path) -> None:
         if "duplicate probe_id" not in str(exc):
             failures.append(f"manifest_roundtrip FAIL: wrong refusal reason for duplicate id: {exc}")
 
-    print("SELFTEST battery 1: probe-manifest round trip + sha/schema/duplicate refusals PASS")
+    rate_doc = json.loads(json.dumps(doc))
+    rate_doc["probes"][0]["chance_rate"] = 0.25
+    rate_path = tmp_dir / "manifest_bad_rate.json"
+    rate_raw = json.dumps(rate_doc, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    rate_path.write_bytes(rate_raw)
+    try:
+        load_probe_manifest(rate_path, _sha256_bytes(rate_raw))
+        failures.append("manifest_roundtrip FAIL: inconsistent chance rate did not refuse")
+    except R2ProbeBatteryRefusal as exc:
+        if "CHANCE_RATE_INCONSISTENT" not in str(exc):
+            failures.append(f"manifest_roundtrip FAIL: wrong refusal reason for chance rate: {exc}")
+
+    mixed_doc = json.loads(json.dumps(doc))
+    mixed_doc["probes"][0]["items"][0]["choices"] = [[10], [11], [12]]
+    mixed_path = tmp_dir / "manifest_bad_cardinality.json"
+    mixed_raw = json.dumps(mixed_doc, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    mixed_path.write_bytes(mixed_raw)
+    try:
+        load_probe_manifest(mixed_path, _sha256_bytes(mixed_raw))
+        failures.append("manifest_roundtrip FAIL: mixed choice cardinality did not refuse")
+    except R2ProbeBatteryRefusal as exc:
+        if "CHANCE_RATE_INCONSISTENT" not in str(exc):
+            failures.append(f"manifest_roundtrip FAIL: wrong refusal reason for cardinality: {exc}")
+
+    print("SELFTEST battery 1: probe-manifest round trip + sha/schema/duplicate/chance-cardinality refusals PASS")
 
 
 def _selftest_ci_primitives(failures: list) -> None:
@@ -1034,6 +1075,34 @@ def _selftest_ci_primitives(failures: list) -> None:
 
 def _selftest_r2e4(failures: list) -> None:
     checkpoint_identity = {"checkpoint_manifest_sha256": "f" * 64, "arm": "SELFTEST_FIXTURE"}
+
+    two_choice_items = (
+        ProbeItem("SELFTEST_FIXTURE_RATE-item-0", (1, 2), ((10,), (11,)), 0),
+        ProbeItem("SELFTEST_FIXTURE_RATE-item-1", (1, 3), ((10,), (11,)), 1),
+    )
+    try:
+        ProbeSpec(
+            probe_id="SELFTEST_FIXTURE_RATE", metric_id="selftest.rate", metric_type="proportion",
+            chance_rate=0.25, source_note="SELFTEST_FIXTURE", items=two_choice_items,
+        )
+        failures.append("r2e4 FAIL: inconsistent uniform chance rate did not refuse")
+    except R2ProbeBatteryRefusal as exc:
+        if "CHANCE_RATE_INCONSISTENT" not in str(exc):
+            failures.append(f"r2e4 FAIL: wrong refusal reason for inconsistent rate: {exc}")
+
+    mixed_choice_items = (
+        ProbeItem("SELFTEST_FIXTURE_MIXED-item-0", (1, 2), ((10,), (11,)), 0),
+        ProbeItem("SELFTEST_FIXTURE_MIXED-item-1", (1, 3), ((10,), (11,), (12,), (13,)), 1),
+    )
+    try:
+        ProbeSpec(
+            probe_id="SELFTEST_FIXTURE_MIXED", metric_id="selftest.mixed", metric_type="proportion",
+            chance_rate=0.5, source_note="SELFTEST_FIXTURE", items=mixed_choice_items,
+        )
+        failures.append("r2e4 FAIL: mixed choice cardinality did not refuse")
+    except R2ProbeBatteryRefusal as exc:
+        if "CHANCE_RATE_INCONSISTENT" not in str(exc):
+            failures.append(f"r2e4 FAIL: wrong refusal reason for mixed cardinality: {exc}")
 
     # Empty registry -> BATTERY_UNDEFINED, never a silent pass.
     try:
