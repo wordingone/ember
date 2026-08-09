@@ -130,6 +130,37 @@ def pinned_head_covers_live_head(
     return pinned_id is not None and pinned_id == live_id
 
 
+def pinned_base_covers_live_base(
+    repo: Path,
+    pinned_base: str,
+    pinned_head: str,
+    live_base: str,
+    live_head: str,
+) -> bool:
+    """Accept a stale reviewed base only when the reviewed PR patch is intact.
+
+    Base advancement alone is harmless when both reviewed tips remain ancestors
+    of their live counterparts and the PR's own stable patch-id is identical
+    between the reviewed and live base/head pairs. Overlap resolution or any
+    PR-side mutation changes that patch-id and therefore refuses until re-pin.
+    """
+    if not all(
+        SHA_RE.fullmatch(value or "")
+        for value in (pinned_base, pinned_head, live_base, live_head)
+    ):
+        return False
+    for ancestor, descendant in (
+        (pinned_base, live_base),
+        (pinned_head, live_head),
+    ):
+        code, _ = _git(repo, "merge-base", "--is-ancestor", ancestor, descendant)
+        if code != 0:
+            return False
+    pinned_id = _own_diff_patch_id(repo, pinned_base, pinned_head)
+    live_id = _own_diff_patch_id(repo, live_base, live_head)
+    return pinned_id is not None and pinned_id == live_id
+
+
 def _sections(body: str) -> dict[str, str]:
     matches = list(re.finditer(r"(?m)^## ([^\r\n]+)\s*$", body))
     result: dict[str, str] = {}
@@ -257,7 +288,16 @@ def validate_live_pull_request(
             errors.append(f"body:section-empty:{heading}")
     base_section = sections.get("Exact base SHA", "").strip("` \r\n")
     head_section = sections.get("Exact reviewed head SHA", "").strip("` \r\n")
-    if base_section != snapshot["base_sha"]:
+    if base_section != snapshot["base_sha"] and not (
+        subject_root is not None
+        and pinned_base_covers_live_base(
+            subject_root,
+            base_section,
+            head_section,
+            snapshot["base_sha"],
+            snapshot["head_sha"],
+        )
+    ):
         errors.append("body:base-sha-mismatch")
     if head_section != snapshot["head_sha"] and not (
         subject_root is not None
