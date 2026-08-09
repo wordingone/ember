@@ -572,7 +572,7 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(retention_bounds, [run_vertical_slice.checkpoint_retention_budget_bytes(ROOT / "configs" / "ember-restart-3b.json")])
         self.assertEqual(writer.call_count, 1)
         self.assertEqual(writer.call_args.kwargs["max_serialized_bytes"], bound)
-        self.assertEqual(writer.call_args.kwargs["max_transient_scratch_bytes"], 8 * 1024**3)
+        self.assertEqual(writer.call_args.kwargs["max_transient_scratch_bytes"], 4 * 1024**3)
         self.assertEqual(writer.call_args.kwargs["host_commit_reserve_bytes"], 8 * 1024**3)
         self.assertEqual(writer.call_args.kwargs["data_cursor"]["governor"], {"free_gb": 32.0})
         self.assertEqual(result["governor"], {"free_gb": 32.0})
@@ -585,7 +585,7 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(result["publication_plan"], {"publication_count": 2, "checkpoint_byte_bound": bound, "projected_write_bytes": 2 * bound})
         self.assertEqual(writer.call_count, 2)
         self.assertTrue(all(call.kwargs["max_serialized_bytes"] == bound for call in writer.call_args_list))
-        self.assertTrue(all(call.kwargs["max_transient_scratch_bytes"] == 8 * 1024**3 for call in writer.call_args_list))
+        self.assertTrue(all(call.kwargs["max_transient_scratch_bytes"] == 4 * 1024**3 for call in writer.call_args_list))
         self.assertTrue(all(call.kwargs["host_commit_reserve_bytes"] == 8 * 1024**3 for call in writer.call_args_list))
         receipt = self._semantic_restore_loader.call_args.args[3]
         self.assertIs(receipt, self._semantic_resume_receipt)
@@ -889,8 +889,8 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertTrue(str(specialist_kwargs["data_shard_id"]).startswith("VERIFIED_SPECIALIST:"))
         self.assertEqual(ordinary_writer.call_args.kwargs["max_serialized_bytes"], full_coverage_bound)
         self.assertEqual(specialist_writer.call_args.kwargs["max_serialized_bytes"], specialist_bound)
-        self.assertEqual(ordinary_writer.call_args.kwargs["max_transient_scratch_bytes"], 8 * 1024**3)
-        self.assertEqual(specialist_writer.call_args.kwargs["max_transient_scratch_bytes"], 8 * 1024**3)
+        self.assertEqual(ordinary_writer.call_args.kwargs["max_transient_scratch_bytes"], 4 * 1024**3)
+        self.assertEqual(specialist_writer.call_args.kwargs["max_transient_scratch_bytes"], 4 * 1024**3)
     def test_vertical_resume_passes_frozen_manifest_identity_to_checkpoint_loader(self) -> None:
         """The full runner resume handoff retains the disk manifest's identity receipt."""
 
