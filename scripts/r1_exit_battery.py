@@ -2093,12 +2093,27 @@ E6_FORECAST_SCHEMA = "ember02-r1-forecast/v1"
 # this pin, any of the repo's 1,324 quantities-free JSON files was a valid-sha
 # decoy that silently disabled the whole value binding).
 E6_FORECAST_PATH = "docs/spec/ember02-r1-forecast-v1.json"
+E6_FORECAST_PATHS = {
+    "R1": E6_FORECAST_PATH,
+    "R2": "docs/spec/ember02-r2-forecast-v1.json",
+}
 E6_SCALAR_QUANTITIES = ("step_time_ms", "tokens_per_second", "proxy_joules_per_token", "peak_vram_gib")
+
+
+def canonical_e6_forecast_path(rung: str) -> str:
+    if not isinstance(rung, str) or rung not in E6_FORECAST_PATHS:
+        raise R1ExitBatteryRefusal(
+            f"UNKNOWN_RUNG: {rung!r}; known E6 forecast rungs are {sorted(E6_FORECAST_PATHS)}"
+        )
+    paths = tuple(E6_FORECAST_PATHS.values())
+    if len(paths) != len(set(paths)):
+        raise R1ExitBatteryRefusal("DUPLICATE_FORECAST_PATH: canonical E6 rung mapping is not one-to-one")
+    return E6_FORECAST_PATHS[rung]
 
 
 def _validate_recalibration_content(
     path: Path, *, repo_root: Path, run_root: Path, t01: int,
-    run_id: str | None = None,
+    run_id: str | None = None, rung: str = "R1",
 ) -> list[str]:
     """Return the list of content defects (empty = valid) for one candidate
     recalibration receipt, per §3's closing-receipts clause. Fail-closed: every
@@ -2130,6 +2145,15 @@ def _validate_recalibration_content(
         return ["top level is not a JSON object"]
     if receipt.get("schema_version") != RECALIBRATION_SCHEMA:
         defects.append(f"schema_version is {receipt.get('schema_version')!r}, need {RECALIBRATION_SCHEMA!r}")
+
+    receipt_rung = receipt.get("rung", "R1")
+    try:
+        canonical_forecast_path = canonical_e6_forecast_path(rung)
+    except R1ExitBatteryRefusal as error:
+        defects.append(str(error))
+        canonical_forecast_path = None
+    if receipt_rung != rung:
+        defects.append(f"rung mismatch: receipt names {receipt_rung!r}, adjudicating {rung!r}")
 
     receipt_run_root = receipt.get("run_root")
     if not isinstance(receipt_run_root, str) or not receipt_run_root:
@@ -2228,8 +2252,8 @@ def _validate_recalibration_content(
         repo_resolved = repo_root.resolve()
         if Path(forecast_rel).is_absolute():
             defects.append(f"forecast_path is absolute ({forecast_rel!r}) -- the binding must be repo-relative so it names the preregistered document, not an arbitrary file")
-        elif PurePath(forecast_rel).as_posix() != E6_FORECAST_PATH:
-            defects.append(f"forecast_path {forecast_rel!r} does not name the preregistered forecast document ({E6_FORECAST_PATH}) -- binding any other repo file is refused (rev-1490 round-2: a quantities-free decoy JSON silently disabled the value binding)")
+        elif canonical_forecast_path is None or PurePath(forecast_rel).as_posix() != canonical_forecast_path:
+            defects.append(f"forecast_path {forecast_rel!r} does not name the preregistered forecast document for rung {rung!r} ({canonical_forecast_path!r}) -- cross-rung or non-canonical paths are refused")
         else:
             forecast_abs = (repo_root / forecast_rel).resolve()
             if repo_resolved not in forecast_abs.parents and forecast_abs != repo_resolved:
