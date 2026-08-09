@@ -423,6 +423,7 @@ class Issue1508AttemptRetentionTests(unittest.TestCase):
                         paths["ledger"],
                         paths["run_spec"],
                         paths["completion"],
+                        module._run_attempt_registry_log_path(launch),
                     )
                 },
             )
