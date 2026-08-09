@@ -240,7 +240,7 @@ class Issue1508AttemptRetentionTests(unittest.TestCase):
         ):
             self.assertIn(required, spec)
 
-    def test_frontier_registry_snapshot_changes_after_late_launch(self):
+    def test_frontier_registry_prefix_remains_bound_after_late_launch(self):
         frontier = load_frontier()
         with tempfile.TemporaryDirectory() as directory:
             repo = pathlib.Path(directory) / "repo"
@@ -262,8 +262,8 @@ class Issue1508AttemptRetentionTests(unittest.TestCase):
             )
             self.assertEqual(coverage["registry_rows"], 1)
 
-            # A launch after mint changes the closed registry snapshot, so the
-            # previously minted receipt is no longer admissible to the battery.
+            # Later valid rows change the live whole-file digest without
+            # invalidating the one-row bound prefix.
             registry.write_text(
                 '{"run_id":"run-1"}\n{"run_id":"late-launch"}\n',
                 encoding="utf-8",
