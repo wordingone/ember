@@ -83,7 +83,10 @@ def telemetry_paths(run_root: Path) -> list[Path]:
 
 def _iter_jsonl(path: Path):
     try:
-        for line in path.read_text(encoding="utf-8").splitlines():
+        for raw_line in path.read_bytes().splitlines(keepends=True):
+            if len(raw_line) > 4096:
+                continue
+            line = raw_line.decode("utf-8")
             if line.strip():
                 try:
                     value = json.loads(line)

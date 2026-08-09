@@ -117,6 +117,25 @@ def test_e6_hash_domain_matches_consumer_and_rejects_unreadable_drift(tmp_path: 
         module.telemetry_paths(run_root)
 
 
+def test_e6_hash_domain_excludes_oversized_governed_rows_on_both_sides(tmp_path: Path) -> None:
+    module, forecast, run_root = write_fixture(tmp_path, run_ids=("run-a",))
+    oversized = run_root / "telemetry" / "oversized.jsonl"
+    oversized.write_text(
+        json.dumps({"source": "ember-restart-3b", "padding": "x" * 4096}) + "\n",
+        encoding="utf-8",
+    )
+    receipt = module.build_receipt(forecast, run_root)
+    assert oversized not in module.telemetry_paths(run_root)
+
+    battery_path = ROOT / "scripts" / "r1_exit_battery.py"
+    spec = importlib.util.spec_from_file_location("r1_exit_battery", battery_path)
+    assert spec is not None and spec.loader is not None
+    battery = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(battery)
+    assert oversized not in battery.find_telemetry_files(run_root)
+    assert receipt["telemetry_sha256"] == battery._telemetry_sha256(run_root)
+
+
 def test_validator_rejects_missing_or_foreign_telemetry_binding(tmp_path: Path) -> None:
     module, forecast, run_root = write_fixture(tmp_path, run_ids=("run-a",))
     receipt = module.build_receipt(forecast, run_root)
