@@ -2093,12 +2093,27 @@ E6_FORECAST_SCHEMA = "ember02-r1-forecast/v1"
 # this pin, any of the repo's 1,324 quantities-free JSON files was a valid-sha
 # decoy that silently disabled the whole value binding).
 E6_FORECAST_PATH = "docs/spec/ember02-r1-forecast-v1.json"
+E6_FORECAST_PATHS = {
+    "R1": E6_FORECAST_PATH,
+    "R2": "docs/spec/ember02-r2-forecast-v1.json",
+}
 E6_SCALAR_QUANTITIES = ("step_time_ms", "tokens_per_second", "proxy_joules_per_token", "peak_vram_gib")
+
+
+def canonical_e6_forecast_path(rung: str) -> str:
+    if not isinstance(rung, str) or rung not in E6_FORECAST_PATHS:
+        raise R1ExitBatteryRefusal(
+            f"UNKNOWN_RUNG: {rung!r}; known E6 forecast rungs are {sorted(E6_FORECAST_PATHS)}"
+        )
+    paths = tuple(E6_FORECAST_PATHS.values())
+    if len(paths) != len(set(paths)):
+        raise R1ExitBatteryRefusal("DUPLICATE_FORECAST_PATH: canonical E6 rung mapping is not one-to-one")
+    return E6_FORECAST_PATHS[rung]
 
 
 def _validate_recalibration_content(
     path: Path, *, repo_root: Path, run_root: Path, t01: int,
-    run_id: str | None = None,
+    run_id: str | None = None, rung: str = "R1",
 ) -> list[str]:
     """Return the list of content defects (empty = valid) for one candidate
     recalibration receipt, per §3's closing-receipts clause. Fail-closed: every
@@ -2130,6 +2145,15 @@ def _validate_recalibration_content(
         return ["top level is not a JSON object"]
     if receipt.get("schema_version") != RECALIBRATION_SCHEMA:
         defects.append(f"schema_version is {receipt.get('schema_version')!r}, need {RECALIBRATION_SCHEMA!r}")
+
+    receipt_rung = receipt.get("rung", "R1")
+    try:
+        canonical_forecast_path = canonical_e6_forecast_path(rung)
+    except R1ExitBatteryRefusal as error:
+        defects.append(str(error))
+        canonical_forecast_path = None
+    if receipt_rung != rung:
+        defects.append(f"rung mismatch: receipt names {receipt_rung!r}, adjudicating {rung!r}")
 
     receipt_run_root = receipt.get("run_root")
     if not isinstance(receipt_run_root, str) or not receipt_run_root:
@@ -2228,8 +2252,8 @@ def _validate_recalibration_content(
         repo_resolved = repo_root.resolve()
         if Path(forecast_rel).is_absolute():
             defects.append(f"forecast_path is absolute ({forecast_rel!r}) -- the binding must be repo-relative so it names the preregistered document, not an arbitrary file")
-        elif PurePath(forecast_rel).as_posix() != E6_FORECAST_PATH:
-            defects.append(f"forecast_path {forecast_rel!r} does not name the preregistered forecast document ({E6_FORECAST_PATH}) -- binding any other repo file is refused (rev-1490 round-2: a quantities-free decoy JSON silently disabled the value binding)")
+        elif canonical_forecast_path is None or PurePath(forecast_rel).as_posix() != canonical_forecast_path:
+            defects.append(f"forecast_path {forecast_rel!r} does not name the preregistered forecast document for rung {rung!r} ({canonical_forecast_path!r}) -- cross-rung or non-canonical paths are refused")
         else:
             forecast_abs = (repo_root / forecast_rel).resolve()
             if repo_resolved not in forecast_abs.parents and forecast_abs != repo_resolved:
@@ -2308,8 +2332,9 @@ def _validate_recalibration_content(
 
 def check_r1_e6(
     run_root: Path, thresholds: dict[str, Any], *, repo_root: Path = REPO_ROOT,
-    run_id: str | None = None,
+    run_id: str | None = None, rung: str = "R1",
 ) -> dict[str, Any]:
+    canonical_e6_forecast_path(rung)
     t01 = int(thresholds["T-01"])
     forecast_matches = set(p for p in run_root.rglob("*forecast*.json") if ".checkpoint-quarantine" not in p.parts) if run_root.is_dir() else set()
     recalibration_matches = set(p for p in run_root.rglob("*recalibrat*.json") if ".checkpoint-quarantine" not in p.parts) if run_root.is_dir() else set()
@@ -2341,7 +2366,7 @@ def check_r1_e6(
                 "quantity named, until the run root carries the evidence each quantity needs -- "
                 f"including a measured >= T-01={t01}-step baseline)"
             ),
-            "components": {"candidate_documents": [], "required_predicted_vs_measured": required},
+            "components": {"rung": rung, "candidate_documents": [], "required_predicted_vs_measured": required},
             "needs": (
                 "a forecast-recalibration receipt whose CONTENT carries predicted vs measured step time, "
                 "tokens/s, proxy-joules/token, peak VRAM, and loss trajectory (prereg §3 closing-receipts "
@@ -2351,7 +2376,7 @@ def check_r1_e6(
     validations = [
         {**doc, "defects": _validate_recalibration_content(
             Path(doc["path"]), repo_root=repo_root, run_root=run_root, t01=t01,
-            run_id=run_id,
+            run_id=run_id, rung=rung,
         )}
         for doc in candidate_documents
     ]
@@ -2367,7 +2392,7 @@ def check_r1_e6(
             "status": "MET",
             "forecast_recalibration_validation": "IMPLEMENTED",
             "detail": f"validated forecast-recalibration receipt: {valid_claimants[0]['path']}",
-            "components": {"candidate_validation": validations, "required_predicted_vs_measured": required},
+            "components": {"rung": rung, "candidate_validation": validations, "required_predicted_vs_measured": required},
         }
     if not claimants:
         return {
@@ -2377,7 +2402,7 @@ def check_r1_e6(
                 f"{len(validations)} name-matched candidate(s) but none claims to be a recalibration "
                 "receipt; generate one with scripts/forecast_recalibration.py"
             ),
-            "components": {"candidate_validation": validations, "required_predicted_vs_measured": required},
+            "components": {"rung": rung, "candidate_validation": validations, "required_predicted_vs_measured": required},
             "needs": "a content-valid recalibration receipt under the run root",
         }
     return {
@@ -2388,7 +2413,7 @@ def check_r1_e6(
             + ("ambiguous -- more than one candidate claims to be the recalibration receipt" if len(claimants) > 1 else
                "; ".join(f"{v['path']}: {'; '.join(v['defects'])}" for v in claimants if v["defects"]))
         ),
-        "components": {"candidate_validation": validations, "required_predicted_vs_measured": required},
+        "components": {"rung": rung, "candidate_validation": validations, "required_predicted_vs_measured": required},
         "needs": "exactly one content-valid recalibration receipt (plus optionally the bound forecast document) under the run root",
     }
 
@@ -2721,6 +2746,8 @@ def _run_one_exit(
     thresholds: dict[str, Any],
     thresholds_sha256: str,
     run_id: str | None = None,
+    rung: str = "R1",
+    repo_root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
     seed_roots_effective = list(seed_roots) or [run_root]
     if exit_id == "e1":
@@ -2734,7 +2761,7 @@ def _run_one_exit(
     elif exit_id == "e5":
         result = check_r1_e5(run_root, thresholds, run_id=run_id)
     elif exit_id == "e6":
-        result = check_r1_e6(run_root, thresholds, run_id=run_id)
+        result = check_r1_e6(run_root, thresholds, repo_root=repo_root, run_id=run_id, rung=rung)
     elif exit_id == "e7":
         result = check_r1_e7(seed_roots_effective, thresholds)
     elif exit_id == "e8":
@@ -2751,6 +2778,8 @@ def _run_one_exit(
     }
     if run_id is not None:
         subject["run_id"] = run_id
+    if exit_id == "e6":
+        subject["rung"] = rung
     return build_receipt(
         ticket=f"r1-exit-battery-{exit_id}",
         exit_criterion=f"R1-{exit_id.upper()}",
@@ -2768,6 +2797,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed-root", type=Path, action="append", default=[], help="a run directory representing one seed replica, for R1-E7 (repeatable; defaults to --run-root alone)")
     ap.add_argument("--checkpoint-manifest", type=Path, default=None, help="explicit checkpoint-manifest.json path for R1-E3 (default: auto-glob under --run-root)")
     ap.add_argument("--run-id", type=str, default=None, help="explicit telemetry run_id to adjudicate for R1-E1/E2/E4/E5 (default: the single run_id present under --run-root; multiple run_ids without this flag refuse)")
+    ap.add_argument("--rung", choices=tuple(E6_FORECAST_PATHS), default="R1", help="governed rung to adjudicate for E6 (default: R1)")
     ap.add_argument("--thresholds", type=Path, default=None, help="override thresholds JSON path")
     ap.add_argument("--exit", dest="exit_id", choices=(*EXIT_IDS, "all"), default="all")
     ap.add_argument("--out-dir", type=Path, default=Path("receipts") / "ember-02-r1-exits")
@@ -2799,12 +2829,17 @@ def main(argv: list[str] | None = None) -> int:
                 thresholds=thresholds,
                 thresholds_sha256=thresholds_sha256,
                 run_id=args.run_id,
+                rung=args.rung,
+                repo_root=REPO_ROOT,
             )
         except R1ExitBatteryRefusal as exc:
+            subject = {"run_root": str(args.run_root)}
+            if exit_id == "e6":
+                subject["rung"] = args.rung
             receipt = build_receipt(
                 ticket=f"r1-exit-battery-{exit_id}",
                 exit_criterion=f"R1-{exit_id.upper()}",
-                subject={"run_root": str(args.run_root)},
+                subject=subject,
                 thresholds_sha256=thresholds_sha256,
                 result={"status": "REFUSED", "refusal_reason": str(exc)},
             )
