@@ -3099,6 +3099,26 @@ def run_selftest() -> None:
         assert e5_met["components"]["steps_measured"] == e5_pristine["steps_measured"], e5_met
         assert e5_met["components"]["energy_boundary"] == "DEGRADED_PROXY", e5_met
 
+        # The run root itself may use the retained-attempt naming convention.
+        # Exclusion is scoped below the selected root, so complete evidence in
+        # an attempt-* root must still adjudicate normally as MET.
+        attempt_root_repo = _e5_repo("e5_attempt_root_repo")
+        attempt_root, attempt_root_manifest = _e5_run(
+            "attempt-7-CHILD_FAILED-20260808T230500Z"
+        )
+        attempt_root_receipt = _e5_receipt(
+            attempt_root_repo, attempt_root, attempt_root_manifest
+        )
+        (attempt_root / "frontier-receipt.json").write_bytes(
+            json.dumps(attempt_root_receipt).encode("utf-8")
+        )
+        e5_attempt_root = check_r1_e5(
+            attempt_root,
+            thresholds,
+            repo_root=attempt_root_repo,
+        )
+        assert e5_attempt_root["status"] == "MET", e5_attempt_root
+
         # Envelope poisons.
         def _set(path_keys, value):
             def mutate(receipt):
