@@ -1,3 +1,7 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 """w1_baseline_replay_closure.py -- W1 step25->step50 REPLAY closure (#735 Leg A).
 
 Issue #735 names the ONE closure gap on the closest trustworthy salvage
@@ -765,7 +769,9 @@ def _selftest() -> None:
         real_arch = _tiny_real_arch()
         pretrain_contract = load_json(PRETRAIN_CONTRACT_PATH)
         shard_dir = _build_tiny_shard_dir(tmp, vocab=real_arch["vocab"])
-        loader = PackedShardLoader(shard_dir, real_arch["seq"], n_mtp=real_arch["n_mtp"])
+        loader = PackedShardLoader(
+            shard_dir, real_arch["seq"], n_mtp=real_arch["n_mtp"],
+            excluded_ranges=None)
         device = "cpu"
 
         # --- (d) API-conformance: construct every real object this script
@@ -1118,7 +1124,7 @@ def main(argv: "list[str] | None" = None) -> int:
         mmap_cache_dir = os.path.join(out_dir, "mmap_cache")
         loader_for_preflight = PackedShardLoader(
             shard_dir, real_arch_probe["seq"], n_mtp=real_arch_probe["n_mtp"],
-            mmap_cache_dir=mmap_cache_dir)
+            mmap_cache_dir=mmap_cache_dir, excluded_ranges=None)
 
     preflight, eval_x, eval_y = preflight_verify(
         repo_root=repo_root, pricing_receipt_path=pricing_receipt_path,
@@ -1173,7 +1179,8 @@ def main(argv: "list[str] | None" = None) -> int:
     pretrain_contract = load_json(PRETRAIN_CONTRACT_PATH)
     loader = loader_for_preflight or PackedShardLoader(
         shard_dir, real_arch["seq"], n_mtp=real_arch["n_mtp"],
-        mmap_cache_dir=os.path.join(out_dir, "mmap_cache"))
+        mmap_cache_dir=os.path.join(out_dir, "mmap_cache"),
+        excluded_ranges=None)
 
     replay = replay_and_close(
         real_arch=real_arch, pretrain_contract=pretrain_contract,

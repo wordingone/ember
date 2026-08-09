@@ -1,3 +1,7 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 """w1_fullstate_resume_verify.py -- W1 leg-A full-state resume verifier
 (#735 supplementary; coordinator erratum, issue #735 comment 4942417647).
 
@@ -736,7 +740,9 @@ def _build_tiny_stepped_checkpoint(tmp: str, *, real_arch: dict,
     "exact pre-save state" reference the erratum names, only obtainable
     because this selftest controls the whole process end to end."""
     shard_dir = _build_tiny_shard_dir(tmp, vocab=real_arch["vocab"])
-    loader = PackedShardLoader(shard_dir, real_arch["seq"], n_mtp=real_arch["n_mtp"])
+    loader = PackedShardLoader(
+        shard_dir, real_arch["seq"], n_mtp=real_arch["n_mtp"],
+        excluded_ranges=None)
     device = "cpu"
     model = build_real_model(real_arch, device, seed=seed)
     optimizers, base_lrs, _routing = build_split_optimizer(

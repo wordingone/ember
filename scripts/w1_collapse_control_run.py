@@ -2197,7 +2197,8 @@ def run_phase2_live(cfg_real: dict, real_arch: dict, *, ceiling_steps: int,
             mmap_cache_dir = os.path.join(out_dir, "mmap_cache")
         loader = PackedShardLoader(shard_dir, real_arch["seq"],
                                    n_mtp=real_arch["n_mtp"],
-                                   mmap_cache_dir=mmap_cache_dir)
+                                   mmap_cache_dir=mmap_cache_dir,
+                                   excluded_ranges=None)
         assert (loader.mmap_cache_report is not None) == (mmap_cache_dir is not None), (
             f"W1_LIVE_MMAP_CACHE_DIR_FORWARD_BROKEN: mmap_cache_dir={mmap_cache_dir!r} "
             f"but mmap_cache_report={loader.mmap_cache_report!r} -- forwarding "
@@ -2587,7 +2588,8 @@ def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
     mmap_cache_dir = os.path.join(out_dir, "mmap_cache")
     eval_loader = PackedShardLoader(args.shard_dir, real_arch["seq"],
                                     n_mtp=real_arch["n_mtp"],
-                                    mmap_cache_dir=mmap_cache_dir)
+                                    mmap_cache_dir=mmap_cache_dir,
+                                    excluded_ranges=None)
     assert (eval_loader.mmap_cache_report is not None) == (mmap_cache_dir is not None), (
         f"W1_LIVE_MMAP_CACHE_DIR_FORWARD_BROKEN: mmap_cache_dir={mmap_cache_dir!r} "
         f"but mmap_cache_report={eval_loader.mmap_cache_report!r} -- forwarding "
