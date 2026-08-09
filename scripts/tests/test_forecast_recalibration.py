@@ -85,6 +85,51 @@ def test_producer_selects_one_run_and_emits_run_id(tmp_path: Path) -> None:
 
     assert receipt["run_id"] == "run-a"
     assert receipt["steps_measured"] == 2
+    assert receipt["telemetry_sha256"] == module.telemetry_sha256(run_root)
+
+
+def test_producer_binds_every_telemetry_file_and_rejects_mutation(tmp_path: Path) -> None:
+    module, forecast, run_root = write_fixture(tmp_path, run_ids=("run-a",))
+    second = run_root / "telemetry" / "other.jsonl"
+    second.write_text("{\"source\":\"unrelated\"}\n", encoding="utf-8")
+
+    receipt = module.build_receipt(forecast, run_root)
+    assert receipt["telemetry_sha256"] == module.telemetry_sha256(run_root)
+
+    second.write_text("{\"source\":\"foreign\"}\n", encoding="utf-8")
+    with pytest.raises(module.RecalibrationRefusal, match="TELEMETRY"):
+        module.validate_telemetry_binding(receipt, run_root)
+
+
+def test_validator_rejects_missing_or_foreign_telemetry_binding(tmp_path: Path) -> None:
+    module, forecast, run_root = write_fixture(tmp_path, run_ids=("run-a",))
+    receipt = module.build_receipt(forecast, run_root)
+    missing = dict(receipt)
+    missing.pop("telemetry_sha256")
+    with pytest.raises(module.RecalibrationRefusal, match="TELEMETRY_SHA256"):
+        module.validate_telemetry_binding(missing, run_root)
+
+    foreign = dict(receipt)
+    foreign["telemetry_sha256"] = "f" * 64
+    with pytest.raises(module.RecalibrationRefusal, match="TELEMETRY_SHA256"):
+        module.validate_telemetry_binding(foreign, run_root)
+
+
+def test_e6_consumer_rejects_receipt_without_telemetry_binding(tmp_path: Path) -> None:
+    module, forecast, run_root = write_fixture(tmp_path, run_ids=("run-a",))
+    receipt = module.build_receipt(forecast, run_root)
+    receipt.pop("telemetry_sha256")
+    candidate = run_root / "forecast-recalibration.json"
+    candidate.write_text(json.dumps(receipt), encoding="utf-8")
+    battery_path = ROOT / "scripts" / "r1_exit_battery.py"
+    spec = importlib.util.spec_from_file_location("r1_exit_battery", battery_path)
+    assert spec is not None and spec.loader is not None
+    battery = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(battery)
+    thresholds = {"T-01": 2}
+    result = battery.check_r1_e6(run_root, thresholds, repo_root=run_root.parent)
+    assert result["status"] != "MET"
+    assert any("telemetry_sha256" in defect for row in result["components"]["candidate_validation"] for defect in row["defects"])
 
 
 def test_producer_refuses_ambiguous_run_ids(tmp_path: Path) -> None:

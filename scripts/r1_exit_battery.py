@@ -540,6 +540,21 @@ def find_telemetry_files(run_root: Path) -> list[Path]:
     return found
 
 
+def _telemetry_sha256(run_root: Path) -> str:
+    paths = find_telemetry_files(run_root)
+    if not paths:
+        raise R1ExitBatteryRefusal("TELEMETRY_MISSING: no non-quarantined telemetry files")
+    digest = hashlib.sha256()
+    for path in paths:
+        relative = path.relative_to(run_root).as_posix().encode("utf-8")
+        payload = path.read_bytes()
+        digest.update(len(relative).to_bytes(8, "big"))
+        digest.update(relative)
+        digest.update(len(payload).to_bytes(8, "big"))
+        digest.update(payload)
+    return digest.hexdigest()
+
+
 def find_quarantined_telemetry_files(run_root: Path) -> list[Path]:
     """Every *.jsonl under a .checkpoint-quarantine dir that carries real
     ember-restart-3b train_step rows -- OR that cannot be read at all.
@@ -2142,6 +2157,31 @@ def _validate_recalibration_content(
     selected_run_id, series, series_counts = _select_series(
         run_root, run_id=selection_run_id
     )
+    telemetry_sha = receipt.get("telemetry_sha256")
+    if not isinstance(telemetry_sha, str) or not re.fullmatch(r"[0-9a-f]{64}", telemetry_sha):
+        defects.append("telemetry_sha256 binding field missing or malformed")
+    else:
+        telemetry_paths = find_telemetry_files(run_root)
+        if not telemetry_paths:
+            defects.append("telemetry_sha256 cannot be re-derived: no non-quarantined telemetry files")
+        else:
+            digest = hashlib.sha256()
+            for telemetry_path in telemetry_paths:
+                try:
+                    relative = telemetry_path.relative_to(run_root).as_posix().encode("utf-8")
+                    payload = telemetry_path.read_bytes()
+                except OSError as error:
+                    defects.append(f"telemetry_sha256 cannot be re-derived: {telemetry_path}: {error}")
+                    continue
+                digest.update(len(relative).to_bytes(8, "big"))
+                digest.update(relative)
+                digest.update(len(payload).to_bytes(8, "big"))
+                digest.update(payload)
+            if digest.hexdigest() != telemetry_sha:
+                defects.append(
+                    f"telemetry_sha256 does not match the bytes of non-quarantined telemetry files "
+                    f"(receipt={telemetry_sha}, actual={digest.hexdigest()})"
+                )
     if not series:
         if selected_run_id is None and len(series_counts) > 1:
             defects.append(
@@ -3839,6 +3879,7 @@ def run_selftest() -> None:
             "run_root": str(e6_met_root),
             "run_id": "SELFTEST_E6_run",
             "steps_measured": 100,
+            "telemetry_sha256": _telemetry_sha256(e6_met_root),
             "quantities": {
                 "step_time_ms": _e6_scalar(174.0, 181.5),
                 "tokens_per_second": _e6_scalar(44.4, 42.6),
@@ -3906,6 +3947,7 @@ def run_selftest() -> None:
         )
         e6_multi = json.loads(json.dumps(e6_receipt))
         e6_multi["run_root"] = str(e6_multi_root)
+        e6_multi["telemetry_sha256"] = _telemetry_sha256(e6_multi_root)
         (e6_multi_root / "forecast-recalibration.json").write_text(
             json.dumps(e6_multi), encoding="utf-8"
         )
