@@ -450,6 +450,12 @@ fn named_pipe_refuses_raw_start_job_before_process_creation() {
 
 #[test]
 fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
+    if let Err(error) = probe_host_commit_capacity() {
+        eprintln!(
+            "skipping governed restart/adoption replay because this host refuses the production commit-capacity probe: {error}"
+        );
+        return;
+    }
     let root = sandbox("restart");
     let db = root.join("ember-lab.sqlite3");
     let receipt = root.join("receipt.json");
