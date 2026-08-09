@@ -64,6 +64,71 @@ def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def telemetry_paths(run_root: Path) -> list[Path]:
+    """Return the exact telemetry domain consumed by the E6 validator.
+
+    The producer must hash the same source-qualified JSONL files that the
+    consumer will parse; unrelated JSONL artifacts are deliberately outside
+    this content-addressed domain.
+    """
+    return sorted(
+        p for p in run_root.rglob("*.jsonl")
+        if ".checkpoint-quarantine" not in p.parts
+        and any(
+            isinstance(row, dict) and row.get("source") == "ember-restart-3b"
+            for row in _iter_jsonl(p)
+        )
+    )
+
+
+def _iter_jsonl(path: Path):
+    try:
+        for raw_line in path.read_bytes().splitlines(keepends=True):
+            if len(raw_line) > 4096:
+                continue
+            line = raw_line.decode("utf-8")
+            if line.strip():
+                try:
+                    value = json.loads(line)
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    continue
+                if isinstance(value, dict):
+                    yield value
+    except (OSError, UnicodeError) as error:
+        raise RecalibrationRefusal(f"TELEMETRY_UNREADABLE: {path}: {error}") from error
+
+
+def telemetry_sha256(run_root: Path) -> str:
+    digest = hashlib.sha256()
+    paths = telemetry_paths(run_root)
+    if not paths:
+        raise RecalibrationRefusal(
+            f"TELEMETRY_MISSING: no non-quarantined JSONL telemetry under {run_root}"
+        )
+    for path in paths:
+        try:
+            relative = path.relative_to(run_root).as_posix().encode("utf-8")
+            payload = path.read_bytes()
+        except OSError as error:
+            raise RecalibrationRefusal(f"TELEMETRY_UNREADABLE: {path}: {error}") from error
+        digest.update(len(relative).to_bytes(8, "big"))
+        digest.update(relative)
+        digest.update(len(payload).to_bytes(8, "big"))
+        digest.update(payload)
+    return digest.hexdigest()
+
+
+def validate_telemetry_binding(receipt: dict[str, Any], run_root: Path) -> None:
+    claimed = receipt.get("telemetry_sha256")
+    if not isinstance(claimed, str) or len(claimed) != 64 or any(c not in "0123456789abcdef" for c in claimed):
+        raise RecalibrationRefusal("TELEMETRY_SHA256_MISSING: receipt must bind telemetry bytes")
+    actual = telemetry_sha256(run_root)
+    if claimed != actual:
+        raise RecalibrationRefusal(
+            f"TELEMETRY_SHA256_MISMATCH: receipt={claimed} actual={actual}"
+        )
+
+
 def load_forecast(path: Path) -> dict[str, Any]:
     try:
         doc = json.loads(path.read_text(encoding="utf-8"))
@@ -366,6 +431,7 @@ def build_receipt(forecast_path: Path, run_root: Path, *, run_id: str | None = N
     energy = measure_proxy_joules_per_token(run_root, series, tokens["tokens_per_step"])
     vram = measure_peak_vram_gib(run_root, series)
     losses = measure_loss_anchors(series, quantities["loss_trajectory"]["predicted_anchors"])
+    telemetry_digest = telemetry_sha256(run_root)
 
     def scalar(name: str, measurement: dict[str, Any]) -> dict[str, Any]:
         predicted = quantities[name]["predicted"]
@@ -391,6 +457,7 @@ def build_receipt(forecast_path: Path, run_root: Path, *, run_id: str | None = N
         "run_root": str(run_root),
         "run_id": selected_run_id,
         "steps_measured": len(series),
+        "telemetry_sha256": telemetry_digest,
         "quantities": {
             "step_time_ms": scalar("step_time_ms", step_time),
             "tokens_per_second": scalar("tokens_per_second", tokens),
