@@ -124,6 +124,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import json
 import math
@@ -141,6 +142,17 @@ ISSUE_REF = "#1463"
 PREREG_DOC = "docs/spec/ember02-preregistration-v1.md"
 PREREG_PIN = "3d48d3870919bd04cec735f68d0fad45fcfae0b2"
 RECEIPT_SCHEMA = "r1-exit-battery/v1"
+RUN_ROOT_LAYOUT_SPEC_PATH = "docs/spec/ember-run-root-layout-v1.md"
+RUN_ROOT_LAYOUT_DISCOVERY_MARKERS = {
+    "telemetry": (
+        "telemetry discovery deliberately includes JSONL",
+        "Quarantine is always non-selectable for both classes",
+    ),
+    "evidence": (
+        "receipt globs exclude retained",
+        "Quarantine is always non-selectable for both classes",
+    ),
+}
 
 SHA_CONVENTION = (
     "sha256 over on-disk raw bytes (binary read, no line-ending "
@@ -179,6 +191,33 @@ class R1ExitBatteryRefusal(Exception):
 
 def _sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+@functools.lru_cache(maxsize=8)
+def _require_run_root_layout_spec(
+    discovery_class: str,
+    repo_root: Path = REPO_ROOT,
+) -> Path:
+    """Bind discovery behavior to the launcher-owned run-root layout spec."""
+    required_markers = RUN_ROOT_LAYOUT_DISCOVERY_MARKERS.get(discovery_class)
+    if required_markers is None:
+        raise R1ExitBatteryRefusal(
+            f"RUN_ROOT_LAYOUT_SPEC_UNKNOWN_DISCOVERY_CLASS:{discovery_class}"
+        )
+    path = Path(repo_root) / RUN_ROOT_LAYOUT_SPEC_PATH
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        raise R1ExitBatteryRefusal(
+            f"RUN_ROOT_LAYOUT_SPEC_UNREADABLE:{RUN_ROOT_LAYOUT_SPEC_PATH}:{error}"
+        ) from error
+    missing = [marker for marker in required_markers if marker not in text]
+    if missing:
+        raise R1ExitBatteryRefusal(
+            "RUN_ROOT_LAYOUT_SPEC_DRIFT:"
+            f"{discovery_class}:missing_markers={missing}"
+        )
+    return path
 
 
 def _sha256_file(path: Path) -> str:
@@ -278,7 +317,9 @@ def find_telemetry_files(run_root: Path) -> list[Path]:
     ember-restart-3b telemetry (append_training_telemetry's exact shape:
     top-level "source"=="ember-restart-3b"). A file with zero matching
     lines is not returned -- an incidental unrelated .jsonl file must not
-    be mistaken for a telemetry channel."""
+    be mistaken for a telemetry channel. Discovery is governed by
+    docs/spec/ember-run-root-layout-v1.md."""
+    _require_run_root_layout_spec("telemetry", REPO_ROOT)
     if not run_root.is_dir():
         return []
     found = []
@@ -342,7 +383,9 @@ def _evidence_excluded(path: Path, run_root: Path) -> bool:
     Telemetry loading deliberately does NOT use this: a failed attempt's
     train_step rows belong to the same run_id and are still counted
     (rev-1490 item 6: both modules must agree, and exclusion mirrors how
-    the quarantine dir is already handled)."""
+    the quarantine dir is already handled). The exclusion glob is governed
+    by docs/spec/ember-run-root-layout-v1.md."""
+    _require_run_root_layout_spec("evidence", REPO_ROOT)
     try:
         relative_parts = path.relative_to(run_root).parts
     except ValueError:
@@ -2520,9 +2563,34 @@ def _synthetic_checkpoint(tmp_dir: Path, *, seed: int = 830001, corrupt_shard: b
 def run_selftest() -> None:
     thresholds, thresholds_sha256 = load_thresholds()
     assert thresholds["T-01"] == 100 and thresholds["T-07"] == 2, thresholds
+    assert RUN_ROOT_LAYOUT_SPEC_PATH == "docs/spec/ember-run-root-layout-v1.md"
+    assert _require_run_root_layout_spec("telemetry").is_file()
+    assert _require_run_root_layout_spec("evidence").is_file()
+    assert RUN_ROOT_LAYOUT_SPEC_PATH in (find_telemetry_files.__doc__ or "")
+    assert RUN_ROOT_LAYOUT_SPEC_PATH in (_evidence_excluded.__doc__ or "")
 
     with tempfile.TemporaryDirectory(prefix="r1_exit_battery_selftest_") as tmp:
         tmp_path = Path(tmp)
+
+        missing_layout_repo = tmp_path / "missing_layout_repo"
+        try:
+            _require_run_root_layout_spec("telemetry", missing_layout_repo)
+        except R1ExitBatteryRefusal as error:
+            assert "RUN_ROOT_LAYOUT_SPEC_UNREADABLE" in str(error), error
+        else:
+            raise AssertionError("missing run-root layout spec was accepted")
+        incomplete_layout = missing_layout_repo / RUN_ROOT_LAYOUT_SPEC_PATH
+        incomplete_layout.parent.mkdir(parents=True, exist_ok=True)
+        incomplete_layout.write_text(
+            "telemetry discovery deliberately includes JSONL\n",
+            encoding="utf-8",
+        )
+        try:
+            _require_run_root_layout_spec("telemetry", missing_layout_repo)
+        except R1ExitBatteryRefusal as error:
+            assert "RUN_ROOT_LAYOUT_SPEC_DRIFT" in str(error), error
+        else:
+            raise AssertionError("incomplete run-root layout spec was accepted")
 
         # --- E1/E2: missing telemetry -> EVIDENCE_MISSING ---
         empty_root = tmp_path / "empty_run"
