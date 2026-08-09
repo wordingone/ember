@@ -385,7 +385,7 @@ def load_t01() -> int:
         raise RecalibrationRefusal(f"THRESHOLDS_UNREADABLE: via r1_exit_battery.load_thresholds: {error}") from error
 
 
-def repo_relative_forecast_path(forecast_path: Path) -> str:
+def repo_relative_forecast_path(forecast_path: Path, *, rung: str = "R1") -> str:
     """The receipt binds the PREREGISTERED document, so the path it records must
     be repo-relative, inside the repo, and equal to THE preregistered path the
     battery pins (rev-1490 finding 2 + round-2: any other repo JSON is a decoy
@@ -403,20 +403,26 @@ def repo_relative_forecast_path(forecast_path: Path) -> str:
         ) from None
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
-        from r1_exit_battery import E6_FORECAST_PATH
+        from r1_exit_battery import canonical_e6_forecast_path
     except ImportError as error:
         raise RecalibrationRefusal(f"BATTERY_UNIMPORTABLE: cannot bind the canonical forecast path: {error}") from error
-    if rel != E6_FORECAST_PATH:
+    try:
+        canonical_path = canonical_e6_forecast_path(rung)
+    except Exception as error:
+        raise RecalibrationRefusal(str(error)) from error
+    if rel != canonical_path:
         raise RecalibrationRefusal(
             f"FORECAST_NOT_PREREGISTERED: {rel} is not the preregistered forecast document "
-            f"({E6_FORECAST_PATH}); the battery refuses receipts bound to any other file"
+            f"for rung {rung} ({canonical_path}); the battery refuses cross-rung or non-canonical files"
         )
     return rel
 
 
-def build_receipt(forecast_path: Path, run_root: Path, *, run_id: str | None = None) -> dict[str, Any]:
+def build_receipt(
+    forecast_path: Path, run_root: Path, *, run_id: str | None = None, rung: str = "R1"
+) -> dict[str, Any]:
     forecast = load_forecast(forecast_path)
-    forecast_rel = repo_relative_forecast_path(forecast_path)
+    forecast_rel = repo_relative_forecast_path(forecast_path, rung=rung)
     t01 = load_t01()
     quantities = forecast["quantities"]
     selected_run_id, series = select_train_series(run_root, run_id=run_id)
@@ -452,6 +458,7 @@ def build_receipt(forecast_path: Path, run_root: Path, *, run_id: str | None = N
         "schema_version": SCHEMA_VERSION,
         "generated_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "generator": GENERATOR,
+        "rung": rung,
         "forecast_path": forecast_rel,
         "forecast_sha256": sha256_file(forecast_path),
         "run_root": str(run_root),
@@ -473,6 +480,7 @@ def main() -> int:
     parser.add_argument("--forecast", required=True, type=Path)
     parser.add_argument("--run-root", required=True, type=Path)
     parser.add_argument("--run-id", default=None, help="select one telemetry run when the root contains multiple run IDs")
+    parser.add_argument("--rung", default="R1", help="forecast rung whose canonical document is being recalibrated")
     parser.add_argument("--out", type=Path, default=None,
                         help="receipt path (default: <run-root>/forecast-recalibration.json)")
     parser.add_argument("--selftest", action="store_true", help=argparse.SUPPRESS)
@@ -480,7 +488,7 @@ def main() -> int:
 
     out_path = args.out or (args.run_root / "forecast-recalibration.json")
     try:
-        receipt = build_receipt(args.forecast, args.run_root, run_id=args.run_id)
+        receipt = build_receipt(args.forecast, args.run_root, run_id=args.run_id, rung=args.rung)
     except RecalibrationRefusal as refusal:
         print(f"forecast_recalibration: REFUSED: {refusal}", file=sys.stderr)
         print("no receipt written -- a partial recalibration must never mint one", file=sys.stderr)
