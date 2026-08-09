@@ -429,16 +429,37 @@ def domains_covered() -> set:
     return covered
 
 
+def _independence_projection(entry: WaveSource | BulkVein) -> tuple[str, str]:
+    """Return the closed register/license identity used for diversity checks."""
+    if isinstance(entry, WaveSource):
+        urls = [token for token in entry.argv if token.startswith(("http://", "https://"))]
+        register_input = urls[0] if urls else f"{entry.connector}|{' '.join(entry.argv)}"
+        connector = entry.connector
+    else:
+        register_input = entry.url
+        connector = "bulk_fetch"
+    parsed = urlparse(register_input)
+    if parsed.scheme and parsed.netloc:
+        register = f"{parsed.scheme}://{parsed.netloc}{parsed.path.rstrip('/')}".casefold()
+    else:
+        register = register_input.strip().casefold()
+    license_basis = " ".join(entry.license_basis.split()).casefold()
+    return f"{connector.casefold()}|{register}", license_basis
+
+
 def validate_domain_diversity() -> dict[str, list[str]]:
-    """Return lettered charter domains lacking two independent registers."""
+    """Return domains lacking two distinct register and license identities."""
     deficits: dict[str, list[str]] = {}
     for domain in CHARTER_DOMAINS:
         if domain == "baseline":
             continue
-        names = [s.name for s in WAVE2_SOURCES if domain in s.domains]
-        names.extend(v.name for v in WAVE2_BULK_VEINS if domain in v.domains)
-        if len(names) < 2:
-            deficits[domain] = names
+        entries = [s for s in WAVE2_SOURCES if domain in s.domains]
+        entries.extend(v for v in WAVE2_BULK_VEINS if domain in v.domains)
+        projections = [_independence_projection(entry) for entry in entries]
+        registers = {register for register, _ in projections}
+        licenses = {license_basis for _, license_basis in projections}
+        if len(entries) < 2 or len(registers) < 2 or len(licenses) < 2:
+            deficits[domain] = [entry.name for entry in entries]
     return deficits
 
 

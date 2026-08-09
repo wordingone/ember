@@ -167,6 +167,31 @@ class BuildArgvTests(unittest.TestCase):
     def test_charter_domain_diversity_requires_two_sources_or_explicit_waiver(self):
         self.assertEqual(wm.validate_domain_diversity(), {})
 
+    def test_charter_domain_diversity_rejects_same_register_and_license_aliases(self):
+        aliases = [
+            wm.WaveSource(
+                name="h-register-alias-a",
+                domains=("H",),
+                license_basis="MIT",
+                connector="http_fetch",
+                argv=("https://docs.example/reference/", "--license-evidence", "MIT license"),
+                est_tokens_low_b=0.1,
+                est_tokens_high_b=0.2,
+            ),
+            wm.WaveSource(
+                name="h-register-alias-b",
+                domains=("H",),
+                license_basis="MIT",
+                connector="http_fetch",
+                argv=("https://docs.example/reference/", "--license-evidence", "MIT license"),
+                est_tokens_low_b=0.1,
+                est_tokens_high_b=0.2,
+            ),
+        ]
+        with mock.patch.object(wm, "WAVE2_SOURCES", aliases), mock.patch.object(wm, "WAVE2_BULK_VEINS", []):
+            deficits = wm.validate_domain_diversity()
+        self.assertIn("H", deficits)
+
 
 class FilterTests(unittest.TestCase):
     def test_iter_sources_filters_by_domain(self):

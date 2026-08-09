@@ -364,8 +364,11 @@ artifact does not require replacement resolution but still requires external
 evidence. `domains_covered()` is the
 machine-checkable form of the sizing doc's claim that every charter domain
 A-K plus the Wikipedia baseline has at least one routed source; a test
-asserts it holds, and `validate_domain_diversity()` requires two independent
-registers per lettered domain (H includes Python and Rust reference docs).
+asserts it holds, and `validate_domain_diversity()` derives a normalized
+connector/register identity from each source URL (or connector argv) plus its
+normalized license basis. It requires two distinct register identities and two
+distinct license bases per lettered domain, rejecting same-register aliases
+(H includes Python and Rust reference docs).
 
 ## Tests
 
