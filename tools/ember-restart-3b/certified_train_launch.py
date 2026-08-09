@@ -14,6 +14,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import uuid
 from datetime import datetime, timezone
 from typing import Any, NamedTuple
 
@@ -310,6 +311,13 @@ class ValidatedLaunch(NamedTuple):
     # retention keeps these at the live run root so a retry can be
     # revalidated against the same certificate/ledger/spec bytes.
     authority_paths: tuple[pathlib.Path, ...] = ()
+    # Stable run identity from the closed run spec. Kept as a trailing default
+    # so older production-shaped tests that construct this tuple directly do
+    # not silently acquire synthetic registry authority.
+    run_id: str = ""
+    # Existing, hash-bound launch authority used for the live-attempt row.
+    # Kept trailing/defaulted for the same compatibility reason as run_id.
+    run_spec_path: pathlib.Path | None = None
 
 
 def _canonical_bytes(value: object) -> bytes:
@@ -1603,6 +1611,8 @@ def validate_certified_request(
         max_records=requested_max_records,
         max_c_write_gib=float(requested_scope["max_c_write_gib"]),
         max_b_write_gib=float(requested_scope["max_b_write_gib"]),
+        run_id=run_spec["run_id"],
+        run_spec_path=run_spec_path,
         resume_checkpoint=None if resume is None else resume.checkpoint,
         resume_evidence_flag=None if resume is None else resume.evidence_flag,
         resume_evidence_path=None if resume is None else resume.evidence_path,
@@ -1935,6 +1945,207 @@ def retain_failed_attempt(
     return target
 
 
+RUN_ATTEMPT_REGISTRY_RELATIVE_PATH = "receipts/run-attempts.jsonl"
+RUN_ATTEMPT_REGISTRY_TIMEOUT_SECONDS = 5.0
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _run_attempt_registry_log_path(launch: ValidatedLaunch) -> pathlib.Path:
+    return launch.runner_receipt.with_name(
+        f"{launch.runner_receipt.stem}-run-attempt-registry.jsonl"
+    )
+
+
+def _custody_evidence_ref(
+    launch: ValidatedLaunch,
+    evidence_path: pathlib.Path | None,
+    *,
+    expected_sha256: str | None = None,
+) -> tuple[str, bytes]:
+    if evidence_path is None:
+        raise ValueError("run-attempt registry evidence path is absent")
+    path = pathlib.Path(evidence_path)
+    if path.is_symlink():
+        raise ValueError("run-attempt registry evidence must not be a symlink")
+    try:
+        resolved = path.resolve(strict=True)
+        relative = resolved.relative_to(
+            launch.custody_root.resolve(strict=False)
+        )
+    except (OSError, ValueError) as error:
+        raise ValueError(
+            "run-attempt registry requires existing custody-relative evidence"
+        ) from error
+    if not resolved.is_file():
+        raise ValueError("run-attempt registry evidence must be a regular file")
+    raw = resolved.read_bytes()
+    if not raw:
+        raise ValueError("run-attempt registry evidence must not be empty")
+    if expected_sha256 is not None and hashlib.sha256(raw).hexdigest() != expected_sha256:
+        raise ValueError("run-attempt registry launch authority digest mismatch")
+    value = relative.as_posix()
+    if not value or value == ".":
+        raise ValueError(
+            "run-attempt registry requires a non-empty evidence reference"
+        )
+    return value, raw
+
+
+def _append_registry_disclosure(
+    launch: ValidatedLaunch, disclosure: dict[str, Any]
+) -> dict[str, Any]:
+    log_path = _run_attempt_registry_log_path(launch)
+    disclosure["log_persisted"] = True
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_path, "ab") as handle:
+            handle.write(_canonical_bytes(disclosure))
+            handle.flush()
+            os.fsync(handle.fileno())
+    except OSError:
+        # Registry evidence is deliberately fail-safe (#1489): inability to
+        # persist this diagnostic cannot terminate the governed child. The
+        # returned disclosure still lands in the final execution receipt when
+        # that receipt can be written.
+        disclosure["log_persisted"] = False
+    return disclosure
+
+
+def _record_run_attempt(
+    repo_root: pathlib.Path,
+    launch: ValidatedLaunch,
+    *,
+    attempt_id: str,
+    outcome: str,
+    start_utc: str,
+    end_utc: str | None,
+    outcome_basis: str,
+    evidence_path: pathlib.Path | None,
+    evidence_sha256: str | None = None,
+    expected_runner_exit_code: int | None = None,
+) -> dict[str, Any]:
+    """Invoke the sole EMBER-02A registry producer without owning its schema.
+
+    Every defect is converted into a path-free disclosure and never blocks or
+    changes the governed child outcome. The producer itself remains the only
+    authority that validates and appends registry rows.
+    """
+    stdout = ""
+    stderr = ""
+    returncode: int | None = None
+    error_type: str | None = None
+    launch_receipt_ref: str | None = None
+    try:
+        if not isinstance(launch.run_id, str) or not launch.run_id.strip():
+            raise ValueError("validated launch carries no stable run_id")
+        launch_receipt_ref, evidence_bytes = _custody_evidence_ref(
+            launch,
+            evidence_path,
+            expected_sha256=evidence_sha256,
+        )
+        if outcome in {"completed", "failed"}:
+            try:
+                runner_receipt = json.loads(evidence_bytes.decode("utf-8"))
+            except (UnicodeDecodeError, ValueError) as error:
+                raise ValueError("terminal runner receipt is not valid UTF-8 JSON") from error
+            if not isinstance(runner_receipt, dict):
+                raise ValueError("terminal runner receipt is not a JSON object")
+            if runner_receipt.get("schema_version") != 7:
+                raise ValueError("terminal runner receipt schema_version is not 7")
+            if (
+                expected_runner_exit_code is None
+                or runner_receipt.get("runner_exit_code") != expected_runner_exit_code
+            ):
+                raise ValueError("terminal runner receipt exit code mismatch")
+        elif outcome == "aborted":
+            try:
+                disclosure_rows = [
+                    json.loads(line)
+                    for line in evidence_bytes.decode("utf-8").splitlines()
+                    if line.strip()
+                ]
+            except (UnicodeDecodeError, ValueError) as error:
+                raise ValueError("aborted-attempt disclosure is not valid JSONL") from error
+            if not any(
+                isinstance(row, dict)
+                and row.get("attempt_id") == attempt_id
+                and row.get("outcome") == "running"
+                for row in disclosure_rows
+            ):
+                raise ValueError("aborted-attempt disclosure does not bind the live attempt")
+        producer = repo_root / "scripts" / "run_attempt_registry.py"
+        command = [
+            sys.executable,
+            "-B",
+            str(producer),
+            "--fail-safe",
+            "append",
+            "--registry",
+            str(repo_root / RUN_ATTEMPT_REGISTRY_RELATIVE_PATH),
+            "--run-root",
+            str(launch.custody_root),
+            "--run-id",
+            launch.run_id,
+            "--attempt-id",
+            attempt_id,
+            "--outcome",
+            outcome,
+            "--start-utc",
+            start_utc,
+            "--launch-receipt-ref",
+            launch_receipt_ref,
+            "--source-receipt",
+            launch_receipt_ref,
+            "--outcome-basis",
+            outcome_basis,
+        ]
+        if end_utc is not None:
+            command.extend(["--end-utc", end_utc])
+        completed = subprocess.run(
+            command,
+            shell=False,
+            check=False,
+            cwd=repo_root,
+            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+            capture_output=True,
+            text=True,
+            timeout=RUN_ATTEMPT_REGISTRY_TIMEOUT_SECONDS,
+        )
+        returncode = int(completed.returncode)
+        stdout = completed.stdout or ""
+        stderr = completed.stderr or ""
+    except Exception as error:  # noqa: BLE001 -- this boundary is fail-safe by contract
+        error_type = type(error).__name__
+        stderr = error_type
+    diagnostic_sha256 = hashlib.sha256(
+        (stdout + "\0" + stderr).encode("utf-8", errors="replace")
+    ).hexdigest()
+    accepted = (
+        returncode == 0
+        and "FAIL-SAFE:" not in stderr
+        and not error_type
+    )
+    return _append_registry_disclosure(
+        launch,
+        {
+            "schema_version": "ember-run-attempt-registry-invocation-v1",
+            "registry_ref": RUN_ATTEMPT_REGISTRY_RELATIVE_PATH,
+            "run_root_name": launch.custody_root.name,
+            "run_id": launch.run_id or None,
+            "attempt_id": attempt_id,
+            "outcome": outcome,
+            "launch_receipt_ref": launch_receipt_ref,
+            "accepted": accepted,
+            "returncode": returncode,
+            "error_type": error_type,
+            "diagnostic_sha256": diagnostic_sha256,
+        },
+    )
+
+
 def _write_execution_receipt(
     launch: ValidatedLaunch,
     argv: list[str],
@@ -1944,6 +2155,7 @@ def _write_execution_receipt(
     attempt_retention: dict[str, Any] | None = None,
     receipt_path: pathlib.Path | None = None,
     runner_receipt_path: pathlib.Path | None = None,
+    run_attempt_registry: list[dict[str, Any]] | None = None,
 ) -> pathlib.Path:
     receipt_path = receipt_path or _execution_receipt_path(launch)
     receipt = {
@@ -1959,6 +2171,7 @@ def _write_execution_receipt(
         "child_log": str(child_log_path) if child_log_path is not None else None,
         "energy_sidecar": energy_sidecar,
         "attempt_retention": attempt_retention,
+        "run_attempt_registry": run_attempt_registry or [],
         "claim_scope": {
             "capability_claimed": False,
             "admission_claimed": False,
@@ -2124,6 +2337,21 @@ def execute_validated_launch(
             "spawned": False,
             "note": "sidecar skipped: injected run_process (test double)",
         }
+    attempt_id = f"attempt-{uuid.uuid4().hex}"
+    attempt_started_utc = _utc_now()
+    registry_disclosures = [
+        _record_run_attempt(
+            repo_root,
+            launch,
+            attempt_id=attempt_id,
+            outcome="running",
+            start_utc=attempt_started_utc,
+            end_utc=None,
+            outcome_basis="certified launcher spawn",
+            evidence_path=launch.run_spec_path,
+            evidence_sha256=launch.run_spec_sha256,
+        )
+    ]
     # The child (disk_budget_runner -> run_vertical_slice) must NEVER inherit
     # this consumer's stdout: this process's own final line is the cockpit's
     # machine-readable handshake (main()'s json.dumps), and any training-log
@@ -2131,8 +2359,8 @@ def execute_validated_launch(
     # (issue #1408). Redirect the child's stdout+stderr to a log file under
     # custody_root instead -- preserved for debugging, never devnulled.
     child_log_path = _child_log_path(launch)
-    child_log_path.parent.mkdir(parents=True, exist_ok=True)
     try:
+        child_log_path.parent.mkdir(parents=True, exist_ok=True)
         if sidecar_pidfile is not None and sidecar_process is not None:
             try:
                 # The pidfile's lifetime IS the sidecar's measured window; its
@@ -2153,11 +2381,26 @@ def execute_validated_launch(
                 stderr=subprocess.STDOUT,
             )
         exit_code = int(result.returncode)
+    except Exception as error:
+        registry_disclosures.append(
+            _record_run_attempt(
+                repo_root,
+                launch,
+                attempt_id=attempt_id,
+                outcome="aborted",
+                start_utc=attempt_started_utc,
+                end_utc=_utc_now(),
+                outcome_basis=f"certified child exception {type(error).__name__}",
+                evidence_path=_run_attempt_registry_log_path(launch),
+            )
+        )
+        raise
     finally:
         if sidecar_pidfile is not None:
             _finish_energy_sidecar(sidecar_process, sidecar_pidfile, sidecar_disclosure)
     attempt_retention: dict[str, Any] | None = None
     bound_runner_receipt_path = launch.runner_receipt
+    retained_execution_receipt_path: pathlib.Path | None = None
     if exit_code != 0:
         # Materialize the failed execution receipt before retention moves the
         # current attempt.  This makes the receipt itself part of the
@@ -2173,13 +2416,18 @@ def execute_validated_launch(
                 "schema_version": "ember-run-attempt-retention-v1",
                 "status": "PENDING_RETENTION",
             },
+            run_attempt_registry=registry_disclosures,
         )
         try:
+            protected_paths = list(launch.authority_paths)
+            registry_log_path = _run_attempt_registry_log_path(launch)
+            if registry_log_path.is_file():
+                protected_paths.append(registry_log_path)
             retained = retain_failed_attempt(
                 launch.custody_root,
                 reason="CHILD_FAILED",
                 artifact_root=launch.artifact_root,
-                protected_paths=launch.authority_paths,
+                protected_paths=tuple(protected_paths),
             )
             attempt_retention = {
                 "schema_version": "ember-run-attempt-retention-v1",
@@ -2200,16 +2448,7 @@ def execute_validated_launch(
                 strict=False
             ).relative_to(launch.custody_root.resolve(strict=False))
             bound_runner_receipt_path = retained / runner_receipt_relative
-            _write_execution_receipt(
-                launch,
-                argv,
-                exit_code,
-                child_log_path=retained_child_log_path,
-                energy_sidecar=sidecar_disclosure,
-                attempt_retention=attempt_retention,
-                receipt_path=retained / receipt_relative,
-                runner_receipt_path=bound_runner_receipt_path,
-            )
+            retained_execution_receipt_path = retained / receipt_relative
             child_log_path = retained_child_log_path
         except (OSError, RuntimeError, ValueError) as error:
             attempt_retention = {
@@ -2217,11 +2456,37 @@ def execute_validated_launch(
                 "status": "RETENTION_FAILED",
                 "error": type(error).__name__,
             }
+    registry_disclosures.append(
+        _record_run_attempt(
+            repo_root,
+            launch,
+            attempt_id=attempt_id,
+            outcome="completed" if exit_code == 0 else "failed",
+            start_utc=attempt_started_utc,
+            end_utc=_utc_now(),
+            outcome_basis=f"certified child exit {exit_code}",
+            evidence_path=bound_runner_receipt_path,
+            expected_runner_exit_code=exit_code,
+        )
+    )
+    if retained_execution_receipt_path is not None:
+        _write_execution_receipt(
+            launch,
+            argv,
+            exit_code,
+            child_log_path=child_log_path,
+            energy_sidecar=sidecar_disclosure,
+            attempt_retention=attempt_retention,
+            receipt_path=retained_execution_receipt_path,
+            runner_receipt_path=bound_runner_receipt_path,
+            run_attempt_registry=registry_disclosures,
+        )
     _write_execution_receipt(
         launch, argv, exit_code, child_log_path=child_log_path,
         energy_sidecar=sidecar_disclosure,
         attempt_retention=attempt_retention,
         runner_receipt_path=bound_runner_receipt_path,
+        run_attempt_registry=registry_disclosures,
     )
     return exit_code
 

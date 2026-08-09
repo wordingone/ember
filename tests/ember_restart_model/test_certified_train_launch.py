@@ -45,6 +45,15 @@ def load_module():
     return module
 
 
+def load_frontier_module():
+    path = ROOT / "scripts" / "frontier_receipt.py"
+    spec = importlib.util.spec_from_file_location("frontier_receipt_under_test", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def valid_completion_receipt() -> dict[str, object]:
     return {
         "schema": "ember-01-completion-receipt-v1",
@@ -693,6 +702,401 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                 ).read_text(encoding="utf-8")
             )
             self.assertEqual(receipt["exit_code"], 17)
+
+    def _install_run_attempt_registry(self, repo: pathlib.Path) -> pathlib.Path:
+        producer = repo / "scripts" / "run_attempt_registry.py"
+        producer.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / "scripts" / "run_attempt_registry.py", producer)
+        return repo / "receipts" / "run-attempts.jsonl"
+
+    def _validated_registry_launch(self, module, paths: dict[str, pathlib.Path]):
+        with mock.patch.object(module, "read_current_master", return_value=SHA):
+            return module.validate_certified_request(
+                paths["repo"],
+                paths["certificate"],
+                paths["ledger"],
+                paths["run_spec"],
+            )
+
+    def _write_runner_receipt(self, launch, exit_code: int) -> None:
+        write_json(
+            launch.runner_receipt,
+            {
+                "schema_version": 7,
+                "runner_exit_code": exit_code,
+                "outcome": "COMPLETED" if exit_code == 0 else "CHILD_FAILED",
+            },
+        )
+
+    def test_launcher_appends_stable_spawn_and_completed_attempt_rows(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            registry_path = self._install_run_attempt_registry(paths["repo"])
+            launch = self._validated_registry_launch(module, paths)
+
+            def complete(argv, **kwargs):
+                self._write_runner_receipt(launch, 0)
+                return subprocess.CompletedProcess(argv, 0)
+
+            result = module.execute_validated_launch(
+                paths["repo"],
+                launch,
+                run_process=complete,
+            )
+
+            self.assertEqual(result, 0)
+            rows = [
+                json.loads(line)
+                for line in registry_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            self.assertEqual([row["outcome"] for row in rows], ["running", "completed"])
+            self.assertEqual(rows[0]["attempt_id"], rows[1]["attempt_id"])
+            self.assertTrue(rows[0]["attempt_id"].startswith("attempt-"))
+            self.assertEqual({row["run_id"] for row in rows}, {"owned-3b-canary-test"})
+            self.assertEqual({row["run_root_name"] for row in rows}, {paths["custody_root"].name})
+            self.assertEqual(
+                [row["launch_receipt_ref"] for row in rows],
+                ["run-spec.json", "runner-receipt.json"],
+            )
+            self.assertEqual(
+                [row["source_receipt"] for row in rows],
+                ["run-spec.json", "runner-receipt.json"],
+            )
+            self.assertIsNone(rows[0]["end_utc"])
+            self.assertIsInstance(rows[1]["end_utc"], str)
+            frontier = load_frontier_module()
+            frontier.REPO_ROOT = paths["repo"]
+            coverage = frontier.ledger_all_compute_coverage(
+                paths["custody_root"], "owned-3b-canary-test", "d" * 64
+            )
+            self.assertTrue(coverage["failed_work_included"])
+            self.assertEqual(coverage["registry_rows"], 2)
+            receipt = json.loads(
+                (paths["custody_root"] / "runner-receipt-certified-launch.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(
+                [entry["outcome"] for entry in receipt["run_attempt_registry"]],
+                ["running", "completed"],
+            )
+            self.assertTrue(all(entry["accepted"] for entry in receipt["run_attempt_registry"]))
+
+    def test_launcher_records_failed_and_aborted_terminal_attempts(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            failed_paths = write_valid_bundle(root / "failed")
+            failed_registry = self._install_run_attempt_registry(failed_paths["repo"])
+            failed_launch = self._validated_registry_launch(module, failed_paths)
+
+            def fail(argv, **kwargs):
+                self._write_runner_receipt(failed_launch, 17)
+                return subprocess.CompletedProcess(argv, 17)
+
+            self.assertEqual(
+                module.execute_validated_launch(
+                    failed_paths["repo"],
+                    failed_launch,
+                    run_process=fail,
+                ),
+                17,
+            )
+            failed_rows = [
+                json.loads(line)
+                for line in failed_registry.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            self.assertEqual([row["outcome"] for row in failed_rows], ["running", "failed"])
+            self.assertTrue(all(row["launch_receipt_ref"] for row in failed_rows))
+            retained_attempts = list(
+                failed_paths["custody_root"].glob("attempt-*-CHILD_FAILED-*")
+            )
+            self.assertEqual(len(retained_attempts), 1)
+            retained_attempt = retained_attempts[0]
+            retained_runner_receipt = retained_attempt / "runner-receipt.json"
+            self.assertTrue(retained_runner_receipt.is_file())
+            retained_runner_ref = retained_runner_receipt.relative_to(
+                failed_paths["custody_root"]
+            ).as_posix()
+            self.assertEqual(
+                failed_rows[1]["launch_receipt_ref"], retained_runner_ref
+            )
+            self.assertEqual(failed_rows[1]["source_receipt"], retained_runner_ref)
+
+            failed_disclosure_path = module._run_attempt_registry_log_path(
+                failed_launch
+            )
+            self.assertTrue(failed_disclosure_path.is_file())
+            failed_disclosures = [
+                json.loads(line)
+                for line in failed_disclosure_path.read_text(
+                    encoding="utf-8"
+                ).splitlines()
+                if line.strip()
+            ]
+            self.assertEqual(
+                [row["outcome"] for row in failed_disclosures],
+                ["running", "failed"],
+            )
+            self.assertTrue(all(row["accepted"] for row in failed_disclosures))
+            self.assertEqual(
+                failed_disclosures[1]["launch_receipt_ref"], retained_runner_ref
+            )
+
+            root_execution_receipt = (
+                failed_paths["custody_root"]
+                / "runner-receipt-certified-launch.json"
+            )
+            retained_execution_receipt = (
+                retained_attempt / "runner-receipt-certified-launch.json"
+            )
+            for execution_receipt_path in (
+                root_execution_receipt,
+                retained_execution_receipt,
+            ):
+                receipt = json.loads(
+                    execution_receipt_path.read_text(encoding="utf-8")
+                )
+                self.assertEqual(
+                    receipt["attempt_retention"]["status"], "RETAINED"
+                )
+                self.assertEqual(
+                    receipt["attempt_retention"]["relative_path"],
+                    retained_attempt.name,
+                )
+                self.assertEqual(
+                    [row["outcome"] for row in receipt["run_attempt_registry"]],
+                    ["running", "failed"],
+                )
+                self.assertEqual(
+                    pathlib.Path(receipt["runner_receipt"]).resolve(),
+                    retained_runner_receipt.resolve(),
+                )
+                self.assertTrue(pathlib.Path(receipt["child_log"]).is_file())
+                self.assertTrue(
+                    pathlib.Path(receipt["child_log"])
+                    .resolve()
+                    .is_relative_to(retained_attempt.resolve())
+                )
+
+            aborted_paths = write_valid_bundle(root / "aborted")
+            aborted_registry = self._install_run_attempt_registry(aborted_paths["repo"])
+            aborted_launch = self._validated_registry_launch(module, aborted_paths)
+
+            def abort(*args, **kwargs):
+                raise RuntimeError("synthetic child spawn failure")
+
+            with self.assertRaisesRegex(RuntimeError, "synthetic child spawn failure"):
+                module.execute_validated_launch(
+                    aborted_paths["repo"], aborted_launch, run_process=abort
+                )
+            aborted_rows = [
+                json.loads(line)
+                for line in aborted_registry.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            self.assertEqual(
+                [row["outcome"] for row in aborted_rows], ["running", "aborted"]
+            )
+            self.assertEqual(
+                aborted_rows[1]["source_receipt"],
+                "runner-receipt-run-attempt-registry.jsonl",
+            )
+            disclosure_rows = [
+                json.loads(line)
+                for line in module._run_attempt_registry_log_path(aborted_launch)
+                .read_text(encoding="utf-8")
+                .splitlines()
+                if line.strip()
+            ]
+            self.assertEqual(
+                [row["outcome"] for row in disclosure_rows], ["running", "aborted"]
+            )
+
+    def test_registry_refusal_is_visible_but_never_kills_the_child(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            registry_path = self._install_run_attempt_registry(paths["repo"])
+            registry_path.parent.mkdir(parents=True, exist_ok=True)
+            registry_path.write_text("not-json\n", encoding="utf-8")
+            launch = self._validated_registry_launch(module, paths)
+            child_calls: list[list[str]] = []
+
+            def complete(argv, **kwargs):
+                child_calls.append(argv)
+                self._write_runner_receipt(launch, 0)
+                return subprocess.CompletedProcess(argv, 0)
+
+            result = module.execute_validated_launch(
+                paths["repo"],
+                launch,
+                run_process=complete,
+            )
+
+            self.assertEqual(result, 0)
+            self.assertEqual(len(child_calls), 1)
+            self.assertEqual(registry_path.read_text(encoding="utf-8"), "not-json\n")
+            receipt = json.loads(
+                (paths["custody_root"] / "runner-receipt-certified-launch.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(len(receipt["run_attempt_registry"]), 2)
+            self.assertTrue(all(not row["accepted"] for row in receipt["run_attempt_registry"]))
+            self.assertTrue(
+                all(row["diagnostic_sha256"] for row in receipt["run_attempt_registry"])
+            )
+
+    def test_missing_terminal_runner_receipt_is_disclosed_not_registered(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            registry_path = self._install_run_attempt_registry(paths["repo"])
+            launch = self._validated_registry_launch(module, paths)
+
+            result = module.execute_validated_launch(
+                paths["repo"],
+                launch,
+                run_process=lambda argv, **kwargs: subprocess.CompletedProcess(argv, 0),
+            )
+
+            self.assertEqual(result, 0)
+            rows = [
+                json.loads(line)
+                for line in registry_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            self.assertEqual([row["outcome"] for row in rows], ["running"])
+            receipt = json.loads(
+                (paths["custody_root"] / "runner-receipt-certified-launch.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertTrue(receipt["run_attempt_registry"][0]["accepted"])
+            self.assertFalse(receipt["run_attempt_registry"][1]["accepted"])
+            self.assertEqual(
+                receipt["run_attempt_registry"][1]["error_type"], "ValueError"
+            )
+
+    def test_terminal_runner_receipt_schema_and_exit_code_are_reopened(self) -> None:
+        module = load_module()
+        cases = {
+            "wrong-schema": {"schema_version": 6, "runner_exit_code": 0},
+            "wrong-exit": {"schema_version": 7, "runner_exit_code": 17},
+            "scalar": ["not", "a", "receipt"],
+        }
+        for name, payload in cases.items():
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                paths = write_valid_bundle(pathlib.Path(directory))
+                registry_path = self._install_run_attempt_registry(paths["repo"])
+                launch = self._validated_registry_launch(module, paths)
+
+                def complete(argv, **kwargs):
+                    write_json(launch.runner_receipt, payload)
+                    return subprocess.CompletedProcess(argv, 0)
+
+                self.assertEqual(
+                    module.execute_validated_launch(
+                        paths["repo"], launch, run_process=complete
+                    ),
+                    0,
+                )
+                rows = [
+                    json.loads(line)
+                    for line in registry_path.read_text(encoding="utf-8").splitlines()
+                    if line.strip()
+                ]
+                self.assertEqual([row["outcome"] for row in rows], ["running"])
+                receipt = json.loads(
+                    (
+                        paths["custody_root"]
+                        / "runner-receipt-certified-launch.json"
+                    ).read_text(encoding="utf-8")
+                )
+                self.assertFalse(receipt["run_attempt_registry"][1]["accepted"])
+                self.assertEqual(
+                    receipt["run_attempt_registry"][1]["error_type"], "ValueError"
+                )
+
+    def test_running_row_reopens_the_hash_bound_run_spec(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            registry_path = self._install_run_attempt_registry(paths["repo"])
+            launch = self._validated_registry_launch(module, paths)
+            paths["run_spec"].write_bytes(paths["run_spec"].read_bytes() + b"\n")
+
+            def complete(argv, **kwargs):
+                self._write_runner_receipt(launch, 0)
+                return subprocess.CompletedProcess(argv, 0)
+
+            self.assertEqual(
+                module.execute_validated_launch(
+                    paths["repo"], launch, run_process=complete
+                ),
+                0,
+            )
+            rows = [
+                json.loads(line)
+                for line in registry_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            self.assertEqual([row["outcome"] for row in rows], ["completed"])
+            receipt = json.loads(
+                (paths["custody_root"] / "runner-receipt-certified-launch.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertFalse(receipt["run_attempt_registry"][0]["accepted"])
+            self.assertTrue(receipt["run_attempt_registry"][1]["accepted"])
+
+    def test_registry_timeout_is_visible_and_child_still_runs_once(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            self._install_run_attempt_registry(paths["repo"])
+            launch = self._validated_registry_launch(module, paths)
+            child_calls: list[list[str]] = []
+
+            def complete(argv, **kwargs):
+                child_calls.append(argv)
+                self._write_runner_receipt(launch, 0)
+                return subprocess.CompletedProcess(argv, 0)
+
+            with mock.patch.object(
+                module.subprocess,
+                "run",
+                side_effect=subprocess.TimeoutExpired(["registry"], 5.0),
+            ) as registry_run:
+                result = module.execute_validated_launch(
+                    paths["repo"], launch, run_process=complete
+                )
+
+            self.assertEqual(result, 0)
+            self.assertEqual(len(child_calls), 1)
+            self.assertEqual(registry_run.call_count, 2)
+            self.assertTrue(
+                all(
+                    call.kwargs["timeout"]
+                    == module.RUN_ATTEMPT_REGISTRY_TIMEOUT_SECONDS
+                    for call in registry_run.call_args_list
+                )
+            )
+            receipt = json.loads(
+                (paths["custody_root"] / "runner-receipt-certified-launch.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertTrue(
+                all(
+                    not row["accepted"] and row["error_type"] == "TimeoutExpired"
+                    for row in receipt["run_attempt_registry"]
+                )
+            )
 
     def test_runner_receipt_outside_authorized_custody_fails_before_process(
         self,
