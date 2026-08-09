@@ -74,7 +74,7 @@
       "tools/ember-restart-3b/verify_training_data.py"
     ],
     "tools/ember-restart-3b/specialist_stream.py": [
-      "no repo target: a controlled __import__ replacement that admits only the declared module allowlist"
+      "no repo target: controlled __import__ admits only the declared module allowlist; exec compiles only source bytes re-read through exact sha256 bindings"
     ],
     "tools/ember-restart-3b/tokenizer_runtime_bundle.py": [
       "no repo target: import_module('tokenizers'), pinned by manifests/python-environment-v1.json"

@@ -13,13 +13,14 @@ is the single implementation of the narrower binding:
   configs and sibling programs they execute, and the manifest itself).
 * ``walk_reachable`` recomputes what the entrypoints actually reach: static
   imports (at any nesting depth, so function-level imports count) resolved
-  against the repo, plus exec edges recovered from ``.py`` string literals
-  (``Path(__file__).with_name("verify_training_data.py")`` and friends).
+  against the repo, plus executable-script edges recovered from string
+  literals (``Path(__file__).with_name("verify_training_data.py")`` and
+  friends).
 * ``dynamic_call_sites`` finds the call shapes a static walk CANNOT follow --
-  ``subprocess``, ``importlib``, ``runpy``, ``__import__``. Every closure member
-  that uses one must declare it in the manifest, and a declaration for a file
-  that no longer uses one is equally a failure. An undeclared dynamic edge is a
-  red, not a gap.
+  ``subprocess``, ``importlib``, ``runpy``, ``__import__``, ``exec``/``eval``,
+  and process-launching ``os`` calls. Every closure member that uses one must
+  declare it in the manifest, and a declaration for a file that no longer uses
+  one is equally a failure. An undeclared dynamic edge is a red, not a gap.
 * ``audit_closure`` compares all of that against the declaration and is the
   machine-enforced boundary -- a reachable file outside the manifest, a manifest
   entry that does not exist, or an undeclared dynamic edge is a failure. The
@@ -65,6 +66,8 @@ DYNAMIC_CALL_NAMES = frozenset(
     }
 )
 DYNAMIC_CALL_ROOTS = frozenset({"builtins", "importlib", "runpy", "subprocess"})
+DYNAMIC_BARE_CALL_NAMES = frozenset({"__import__", "eval", "exec"})
+EXECUTABLE_LITERAL_SUFFIXES = (".cmd", ".ps1", ".py", ".sh")
 
 
 class ClosureAudit(NamedTuple):
@@ -93,8 +96,8 @@ class ClosureAudit(NamedTuple):
             lines.extend(f"  - {path}" for path in self.missing)
         if self.undeclared_dynamic:
             lines.append(
-                "closure members reach code through subprocess/importlib/runpy/"
-                f"__import__ without a dynamic_call_sites entry in "
+                "closure members reach code through a dynamic import, eval, "
+                f"exec, or process launch without a dynamic_call_sites entry in "
                 f"{MANIFEST_RELATIVE_PATH} (declare the target, or the edge is "
                 "invisible to the walk):"
             )
@@ -232,11 +235,12 @@ def _import_edges(
 
 
 def _exec_edges(root: pathlib.Path, source: pathlib.Path, tree: ast.Module) -> set[str]:
-    """Repo ``.py`` programs named by string literals inside ``source``.
+    """Repo executable programs named by string literals inside ``source``.
 
     Covers the shapes the training chain actually uses to spawn siblings:
     ``Path(__file__).with_name("verify_training_data.py")`` and the
     repo-relative ``"tools/ember-restart-3b/verify_capability_record.py"``.
+    Script targets remain closure edges across Python, PowerShell, cmd, and sh.
     """
 
     edges: set[str] = set()
@@ -244,7 +248,7 @@ def _exec_edges(root: pathlib.Path, source: pathlib.Path, tree: ast.Module) -> s
         if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
             continue
         literal = node.value
-        if not literal.endswith(".py") or "\n" in literal:
+        if not literal.endswith(EXECUTABLE_LITERAL_SUFFIXES) or "\n" in literal:
             continue
         for candidate in (source.parent / literal, root / literal):
             if not candidate.is_file():
@@ -261,15 +265,23 @@ def _is_dynamic_call(node: ast.AST) -> bool:
         return False
     function = node.func
     if isinstance(function, ast.Name):
-        return function.id == "__import__"
+        return function.id in DYNAMIC_BARE_CALL_NAMES
     if not isinstance(function, ast.Attribute):
-        return False
-    if function.attr not in DYNAMIC_CALL_NAMES:
         return False
     root = function.value
     while isinstance(root, ast.Attribute):
         root = root.value
-    return isinstance(root, ast.Name) and root.id in DYNAMIC_CALL_ROOTS
+    if not isinstance(root, ast.Name):
+        return False
+    if root.id == "os":
+        return (
+            function.attr in {"popen", "posix_spawn", "posix_spawnp", "system"}
+            or function.attr.startswith("exec")
+            or function.attr.startswith("spawn")
+        )
+    return root.id in DYNAMIC_CALL_ROOTS and function.attr in (
+        DYNAMIC_CALL_NAMES | DYNAMIC_BARE_CALL_NAMES
+    )
 
 
 def dynamic_call_sites(root: pathlib.Path, relative: str) -> bool:
