@@ -2706,7 +2706,28 @@ def run(
     if write_budget_bytes is not None:
         if type(write_budget_bytes) is not int or write_budget_bytes < 1:
             raise ValueError("vertical write budget must be a positive integer")
-        if checkpoint_serialization_byte_bound(config_path) > write_budget_bytes:
+        # The episode's own bound, not the shared-only default: a governed-vertical
+        # episode (specialist_lineage is None) always serializes full-coverage
+        # optimizer state (mirrors governed_vertical_checkpoint_byte_bound), and a
+        # specialist episode's true coverage is decided later by the live optimizer
+        # (specialist_checkpoint_bound_active_parameters) -- the shared-plus-one-
+        # expert bound computed here is that path's floor, which
+        # specialist_publication_plan re-checks exactly once the live coverage is
+        # known (#1324: the shared-only default under-counted by ~5.6 GB against
+        # the governed-vertical full-coverage bound). This scope loads its own
+        # config rather than hoisting the load above -- the config file need not
+        # exist when write_budget_bytes is None, and the ordering below (this
+        # check, then the integration-contract file check) is pinned by existing
+        # coverage.
+        early_config = RestartDecoderConfig.from_contract(config_path)
+        early_total_parameters = early_config.structural_parameter_count()
+        if specialist_lineage is None:
+            early_active_parameters = early_total_parameters
+        else:
+            early_active_parameters = early_total_parameters - (
+                (len(early_config.expert_names) - 1) * early_config.layers * 12 * early_config.hidden_size * early_config.hidden_size
+            )
+        if checkpoint_serialization_byte_bound(config_path, active_parameters=early_active_parameters) > write_budget_bytes:
             raise ValueError("vertical checkpoint publication bound exceeds the declared write budget")
     if canonical_runner_authority is not None:
         if type(write_budget_bytes) is not int:

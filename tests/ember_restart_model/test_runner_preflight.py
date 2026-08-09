@@ -1153,13 +1153,13 @@ class RunnerPreflightTests(unittest.TestCase):
     def test_run_path_reserves_full_coverage_bound_for_nonspecialist_episodes(self) -> None:
         # #1483: the selection moved into specialist_checkpoint_bound_active_parameters,
         # whose own tests pin all four (lineage, coverage) combinations -- including
-        # that nonspecialist episodes always reserve the full-coverage bound. This pin
-        # keeps run() delegating to that closed selection rather than inlining a new one.
-        source = inspect.getsource(run_vertical_slice.run)
-        self.assertIn(
-            "active_parameters=specialist_checkpoint_bound_active_parameters(",
-            source,
-        )
+        # that nonspecialist episodes always reserve the full-coverage bound.
+        # #1324 (reviewer nit): the prior version of this test pinned run()'s
+        # delegation via inspect.getsource string matching, which is brittle to
+        # reformatting and satisfiable by a stray comment. The real behavioral
+        # coverage for run() delegating correctly lives in
+        # test_vertical_resume_preserves_owned_cursor_but_resets_only_specialist_cursor
+        # (asserts the actual max_serialized_bytes each episode shape publishes with).
         self.assertEqual(
             run_vertical_slice.specialist_checkpoint_bound_active_parameters(
                 specialist_lineage=None,
@@ -1169,6 +1169,48 @@ class RunnerPreflightTests(unittest.TestCase):
             ),
             3_839_161_856,
         )
+
+    def test_run_early_write_budget_check_validates_against_the_episode_bound(self) -> None:
+        # #1324: run()'s early write-budget sanity check validated against the
+        # shared-only bound (10,793,244,672 here) regardless of episode shape,
+        # so a budget well short of what a governed-vertical (specialist_lineage
+        # is None) episode actually needs -- full-coverage optimizer state,
+        # 16,430,389,248 -- silently passed this gate and only failed much later
+        # (or, for a direct run() call bypassing run_governed_vertical, not at
+        # all inside run() itself).
+        config_path = ROOT / "configs" / "ember-restart-3b.json"
+        shared_only_bound = run_vertical_slice.checkpoint_serialization_byte_bound(config_path)
+        full_coverage_bound = run_vertical_slice.checkpoint_serialization_byte_bound(
+            config_path, active_parameters=3_839_161_856,
+        )
+        specialist_bound = run_vertical_slice.checkpoint_serialization_byte_bound(
+            config_path, active_parameters=1_725_232_640,
+        )
+        self.assertLess(shared_only_bound, specialist_bound)
+        self.assertLess(specialist_bound, full_coverage_bound)
+        under_full_coverage_budget = shared_only_bound + 1_000_000_000
+        self.assertLess(under_full_coverage_budget, full_coverage_bound)
+        # production_artifact_root requires an explicit B: path regardless of
+        # where this test file itself resides (e.g. a linked worktree); a
+        # nonexistent-but-lexically-valid B: path clears that unrelated
+        # precondition without touching the filesystem, isolating the budget
+        # gate under test. torch.cuda.is_available is forced False so this
+        # unit test can never fall through into a real production launch on a
+        # host that actually has a GPU (pre-training gate: no GPU/training work
+        # from this test suite, ever).
+        artifact_root = Path("B:/") / "ember-runner-preflight-test-1324-artifact-root"
+        # Governed-vertical (specialist_lineage=None): the fixed check now uses
+        # the full-coverage bound and refuses a budget the shared-only bound
+        # would previously have waved through.
+        with self.assertRaisesRegex(ValueError, "checkpoint publication bound exceeds"):
+            run_vertical_slice.run(seed=83, artifact_root=artifact_root, write_budget_bytes=under_full_coverage_budget)
+        # A budget that actually covers the full-coverage bound clears this
+        # check and fails later, on an unrelated precondition -- proving the
+        # ValueError above came from the budget gate, not from something else
+        # run() validates first.
+        with patch.object(run_vertical_slice.torch.cuda, "is_available", return_value=False):
+            with self.assertRaisesRegex(RuntimeError, "CUDA is required"):
+                run_vertical_slice.run(seed=83, artifact_root=artifact_root, write_budget_bytes=full_coverage_bound)
 
     def test_governed_vertical_refuses_successor_four_gib_checkpoint_envelope(self) -> None:
         with self.assertRaisesRegex(ValueError, "checkpoint publication bound"):
