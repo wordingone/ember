@@ -124,12 +124,13 @@ def test_duplicate_attempt_identity_refuses_before_append(tmp_path: Path):
     assert registry.append_rows(path, [row]) == []
     original = path.read_bytes()
 
-    defects = registry.append_rows(path, [dict(row)])
+    changed_evidence = dict(row, source_receipt="receipts/alternate-launch.json")
+    defects = registry.append_rows(path, [changed_evidence])
     assert any("duplicate attempt identity" in defect for defect in defects)
     assert path.read_bytes() == original
 
     within_call = tmp_path / "receipts" / "same-call.jsonl"
-    defects = registry.append_rows(within_call, [row, dict(row)])
+    defects = registry.append_rows(within_call, [row, changed_evidence])
     assert any("duplicate attempt identity" in defect for defect in defects)
     assert not within_call.exists()
 
@@ -138,8 +139,10 @@ def test_preexisting_duplicate_attempt_identity_refuses_cmd_append(tmp_path: Pat
     path = tmp_path / "receipts" / "run-attempts.jsonl"
     path.parent.mkdir(parents=True)
     row = _valid_row(tmp_path)
+    changed_evidence = dict(row, source_receipt="receipts/alternate-launch.json")
     line = json.dumps(row, sort_keys=True).encode("utf-8") + b"\n"
-    original = line + line
+    changed_line = json.dumps(changed_evidence, sort_keys=True).encode("utf-8") + b"\n"
+    original = line + changed_line
     path.write_bytes(original)
 
     args = argparse.Namespace(

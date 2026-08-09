@@ -261,7 +261,6 @@ def _identity(row: dict[str, Any]) -> tuple:
         row.get("run_root_ref"),
         row.get("run_id"),
         row.get("attempt_id"),
-        row.get("source_receipt"),
         row.get("outcome"),
     )
 
