@@ -440,7 +440,10 @@ def _independence_projection(entry: WaveSource | BulkVein) -> tuple[str, str]:
         connector = "bulk_fetch"
     parsed = urlparse(register_input)
     if parsed.scheme and parsed.netloc:
-        register = f"{parsed.scheme}://{parsed.netloc}{parsed.path.rstrip('/')}".casefold()
+        # A register is the publishing host, not an arbitrary page path.
+        # Counting /reference and /tutorial as separate registers would let
+        # same-host aliases satisfy the independence gate.
+        register = f"{parsed.scheme}://{parsed.netloc}".casefold()
     else:
         register = register_input.strip().casefold()
     license_basis = " ".join(entry.license_basis.split()).casefold()

@@ -192,6 +192,31 @@ class BuildArgvTests(unittest.TestCase):
             deficits = wm.validate_domain_diversity()
         self.assertIn("H", deficits)
 
+    def test_charter_domain_diversity_rejects_same_host_different_paths(self):
+        aliases = [
+            wm.WaveSource(
+                name="h-register-page-a",
+                domains=("H",),
+                license_basis="MIT",
+                connector="http_fetch",
+                argv=("https://docs.example/reference/", "--license-evidence", "MIT license"),
+                est_tokens_low_b=0.1,
+                est_tokens_high_b=0.2,
+            ),
+            wm.WaveSource(
+                name="h-register-page-b",
+                domains=("H",),
+                license_basis="Apache-2.0",
+                connector="http_fetch",
+                argv=("https://docs.example/tutorial/", "--license-evidence", "Apache license"),
+                est_tokens_low_b=0.1,
+                est_tokens_high_b=0.2,
+            ),
+        ]
+        with mock.patch.object(wm, "WAVE2_SOURCES", aliases), mock.patch.object(wm, "WAVE2_BULK_VEINS", []):
+            deficits = wm.validate_domain_diversity()
+        self.assertIn("H", deficits)
+
 
 class FilterTests(unittest.TestCase):
     def test_iter_sources_filters_by_domain(self):
