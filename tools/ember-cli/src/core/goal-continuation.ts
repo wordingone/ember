@@ -1,5 +1,10 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // core/goal-continuation.ts — the event-driven autonomy loop (ember issue
-// #211, spec §3: "no scheduler"). Every task/turn completion pokes
+// #211, the current "Continuation loop" section's "event-driven" contract).
+// Every task/turn completion pokes
 // maybeContinueIfIdle(): eligibility gates on genuine idleness (feature on,
 // not plan mode, no active turn, NO QUEUED USER INPUT -- the user always
 // preempts), a semaphore makes double-fire structurally impossible, and the
@@ -28,7 +33,7 @@ export interface ContinuationEligibilitySignals {
   planMode: boolean;
   turnActive: boolean;
   /** The user ALWAYS preempts: true here skips unconditionally, regardless of
-   *  goal state (spec §3 step 2 / acceptance leg (c)). */
+   *  goal state (the current "Continuation loop" section / acceptance leg (c)). */
   queuedUserInput: boolean;
 }
 
@@ -36,7 +41,8 @@ export interface MaybeContinueDeps {
   store: GoalStore;
   getEligibilitySignals: () => ContinuationEligibilitySignals;
   /** Starts an ordinary turn with the given (hidden, marker-wrapped) prompt
-   *  text -- "the loop reuses the same turn machinery" (spec §3 step 5). Held
+   *  text -- "the loop reuses the same turn machinery" (the current
+   *  "Continuation loop" section). Held
    *  across this async call while the semaphore is locked, so a slow turn
    *  never overlaps a second continuation attempt. */
   startTurn: (prompt: string) => Promise<void>;
@@ -81,7 +87,8 @@ export function createGoalContinuationEngine(): GoalContinuationEngine {
       if (firstRead.status !== "Active") return { fired: false, reason: "goal_not_active" };
       const goalId = firstRead.goalId;
 
-      // Re-read right before commit (spec §3 step 3): a race with a concurrent
+      // Re-read right before commit (the current "Continuation loop" section):
+      // a race with a concurrent
       // edit/clear that happened between the first read above and this line
       // must lose safely, never fire against stale state.
       const secondRead = deps.store.getGoal();

@@ -3,7 +3,8 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 // core/goal-store.ts — persisted goal state machine (ember issue #211, spec:
-// docs/goal-mode-mechanism.md §1/§2). Data model: goal_id, objective (max 4000
+// docs/goal-mode-mechanism.md "Selection and persistence"). Data model:
+// goal_id, objective (max 4000
 // chars, immutable to the model), status machine, optional token_budget,
 // system-tallied usage. Objective immutability is enforced AT THE API LAYER
 // here (updateStatus's signature never accepts an objective field at all) --
@@ -29,7 +30,8 @@ export type GoalStatus =
 export const OBJECTIVE_MAX_CHARS = 4000;
 
 /** Consecutive same-blocker goal-turns required before Active -> Blocked is legitimate
- *  (spec §4: "never blocked merely because the work is hard, slow, uncertain, incomplete"). */
+ *  (the current "Continuation loop" section: "never blocked merely because
+ *  the work is hard, slow, uncertain, incomplete"). */
 export const BLOCKED_TURNS_THRESHOLD = 3;
 
 export interface GoalUsage {
@@ -70,9 +72,11 @@ export interface GoalRecord {
 const LEGAL_TRANSITIONS: Record<GoalStatus, ReadonlyArray<GoalStatus>> = {
   Active: ["Paused", "Blocked", "UsageLimited", "BudgetLimited", "Complete"],
   // Every limited/paused/blocked state's only way out is a resume back to Active
-  // ("resume resets the audit" -- spec §4/§5); BudgetLimited additionally allows a
+  // ("resume resets the audit" -- the current "Continuation loop" section);
+  // BudgetLimited additionally allows a
   // direct Complete when the wrap-up steer's completion audit finds the objective
-  // genuinely already met (spec §5: "never mark complete unless actually complete" --
+  // genuinely already met (the current "Continuation loop" section: "never
+  // mark complete unless actually complete" --
   // the store only enforces the transition is STRUCTURALLY legal; that the completion
   // is genuine is a doctrine-level guarantee, not something a state machine can verify).
   Paused: ["Active"],
@@ -167,8 +171,9 @@ export function createInMemoryGoalPersistence(
 
 // ---------------------------------------------------------------------------
 // Transition events — emitted for the receipt store (goal-runtime.ts wires
-// these to services/goal-receipts.ts; every clause of spec §6/§7.1 goes
-// through this single seam so nothing can transition without a receipt).
+// these to services/goal-receipts.ts; the current "Continuation loop" and
+// "Artifact binding" sections go through this single seam so nothing can
+// transition without a receipt).
 // ---------------------------------------------------------------------------
 
 export type GoalTransitionEvent =
@@ -186,7 +191,8 @@ export type GoalResult = { ok: true; goal: GoalRecord } | { ok: false; message: 
 
 export interface CreateGoalOptions {
   tokenBudget?: number;
-  /** Spec §1: "Goals require a persistent session; ephemeral sessions refuse with a
+  /** The current "Selection and persistence" section: "Goals require a
+   * persistent session; ephemeral sessions refuse with a
    *  clear message." Caller (goal-runtime.ts) resolves this from the real session. */
   isEphemeralSession?: boolean;
 }
@@ -201,7 +207,8 @@ export interface NoteBlockedResult {
 export interface GoalStore {
   getGoal(): GoalRecord | null;
   /** Fails if a goal record already exists (of any status) -- "only when explicitly
-   *  requested -- never inferred from ordinary tasks" (spec §2). /goal clear removes
+   *  requested -- never inferred from ordinary tasks" (the current "Selection
+   *  and persistence" section). /goal clear removes
    *  the existing record first if the caller wants to start over. */
   createGoal(objective: string, opts?: CreateGoalOptions): GoalResult;
   /** The ONLY way the objective can change. Never called from a model-side tool --
