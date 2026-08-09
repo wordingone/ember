@@ -1,0 +1,26 @@
+{
+  "bytes": 122,
+  "expert": "tool",
+  "fetched_ts": "2026-08-09T00:00:00Z",
+  "goal_id": "EMBER-02",
+  "human_provenance_basis": "checked-in deterministic CPU fixture; source-authored record; no generated labels or model filters",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "license": "CC0",
+  "provenance": {
+    "borrowed_model_outputs": false,
+    "generated_labels": false,
+    "model_derived_data": false,
+    "teacher_outputs": false
+  },
+  "result": "VERIFIED",
+  "schema_version": "ember-owned-domain-source-receipt-v1",
+  "sha_convention": "sha256 over raw shard bytes on disk; no normalization",
+  "selection_rule": "issue-648-fixture-v1/tool",
+  "sha256": "fd2c95528319c6177145c19c4f18402b9c046062fefc6894f93e02aa664a00cc",
+  "shard_sha256": "fd2c95528319c6177145c19c4f18402b9c046062fefc6894f93e02aa664a00cc",
+  "source_url": "fixture://ember/issue-648/tool-v1",
+  "ticket": "EMBER-648-DOMAIN-FIXTURE-V1/tool",
+  "ts": "2026-08-09T00:00:00Z",
+  "workstream_id": "EMBER-02B",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+}

@@ -1,0 +1,35 @@
+{
+  "artifact_id": "owned-domain-fixture-v1",
+  "domains": [
+    {
+      "expert": "audio",
+      "shard_path": "data/ember-restart-3b/domain-fixtures/audio.json",
+      "shard_sha256": "771f913d359456c23f17684f504f3304df549b55ad58287855b60d574ef8435f",
+      "source_receipt_path": "receipts/ember-restart-3b/domain-fixtures/audio.json",
+      "source_receipt_sha256": "54ea1be7b13d701a480657186b55b03b7a843711bfa0041c1fce2969e93406a8"
+    },
+    {
+      "expert": "reasoning",
+      "shard_path": "data/ember-restart-3b/domain-fixtures/reasoning.json",
+      "shard_sha256": "ec2a836c31cb3f7e85fdb6e15e78895b73232efb17f1df313157a606ed00ee48",
+      "source_receipt_path": "receipts/ember-restart-3b/domain-fixtures/reasoning.json",
+      "source_receipt_sha256": "ddce49f91b251b0e7d1c954a05f80efc2ff607e87a6d59aede138e84524a3de6"
+    },
+    {
+      "expert": "tool",
+      "shard_path": "data/ember-restart-3b/domain-fixtures/tool.json",
+      "shard_sha256": "fd2c95528319c6177145c19c4f18402b9c046062fefc6894f93e02aa664a00cc",
+      "source_receipt_path": "receipts/ember-restart-3b/domain-fixtures/tool.json",
+      "source_receipt_sha256": "708eb19cd3cb415f2114e599898cb27bfbf535a8f98e0ea4a586c4bc1ff55027"
+    },
+    {
+      "expert": "vision",
+      "shard_path": "data/ember-restart-3b/domain-fixtures/vision.json",
+      "shard_sha256": "e664d31298f7cdd2deab699b63f2ea555cb84be5d26e2648c89d40ebbddc18ff",
+      "source_receipt_path": "receipts/ember-restart-3b/domain-fixtures/vision.json",
+      "source_receipt_sha256": "fdd4d8de429d7e309e8c5313599a7341e870e25123ce1e925e8bada2f5cffa41"
+    }
+  ],
+  "schema_version": "ember-owned-domain-training-manifest-v1",
+  "shard_path": "data/ember-restart-3b/domain-fixtures"
+}
