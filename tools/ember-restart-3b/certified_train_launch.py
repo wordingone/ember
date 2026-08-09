@@ -724,6 +724,29 @@ def _require_resume_string(value: object, key: str) -> str:
     return value
 
 
+def _reject_filesystem_anchor_roots(
+    declared: object,
+    key: str,
+) -> None:
+    """Reject a root/drive anchor before it can authorize a whole volume."""
+
+    if not isinstance(declared, list) or not all(
+        isinstance(item, str) and item for item in declared
+    ):
+        return
+    for item in declared:
+        raw = pathlib.Path(item)
+        if raw.anchor and raw == pathlib.Path(raw.anchor):
+            raise ValueError(
+                f"certificate {key} entry {item!r} must not be a filesystem anchor"
+            )
+        resolved = raw.resolve(strict=False)
+        if resolved.parent == resolved:
+            raise ValueError(
+                f"certificate {key} entry {item!r} must not be a filesystem anchor"
+            )
+
+
 def _authorized_resume_roots(
     authorized: dict[str, Any]
 ) -> list[pathlib.Path] | None:
@@ -752,6 +775,7 @@ def _authorized_resume_roots(
             "certificate allowed_resume_roots must be a list of non-empty "
             "strings"
         )
+    _reject_filesystem_anchor_roots(declared, "allowed_resume_roots")
     return [pathlib.Path(item).resolve(strict=False) for item in declared]
 
 
@@ -1334,6 +1358,7 @@ def _require_scope_subset(
     )
     for requested_key, allowed_key in root_pairs:
         allowed = authorized[allowed_key]
+        _reject_filesystem_anchor_roots(allowed, allowed_key)
         if (
             not isinstance(allowed, list)
             or not all(isinstance(item, str) for item in allowed)
