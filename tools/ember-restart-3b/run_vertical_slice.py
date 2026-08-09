@@ -76,12 +76,11 @@ def governed_resource_preflight() -> dict[str, object]:
     return {**dict(receipt), "governor_source_sha256": _sha256(governor_path)}
 
 _CANONICAL_RUNNER_CACHE_ENV = ("TEMP", "TMP", "TORCH_HOME", "TRITON_CACHE_DIR", "CUDA_CACHE_PATH", "HF_HOME", "XDG_CACHE_HOME")
-# 8 GiB: the certified launch scope's max_transient_checkpoint_gib. The 3B
-# config's optimizer state alone needs ~7.27 GiB of transient scratch, so the
-# previous 4 GiB cap killed every 3B governed run at its first checkpoint
-# write (#1305). tests/ember_restart_model/test_checkpoint_scratch_cap_3b.py
-# pins this constant above the observed 3B bound and to the certified scope.
-_MAX_TRANSIENT_CHECKPOINT_SCRATCH_BYTES = 8 * 1024**3
+# Owner-sharded v5 keeps each temporary optimizer shard and the aggregate
+# transient write set within the 4 GiB scratch contract. The checkpoint writer
+# derives the per-owner projection and enforces this ceiling before and during
+# every shard write; retained checkpoint bytes remain governed separately.
+_MAX_TRANSIENT_CHECKPOINT_SCRATCH_BYTES = 4 * 1024**3
 
 
 def _canonical_json_bytes(payload: Mapping[str, object]) -> bytes:
