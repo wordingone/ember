@@ -59,6 +59,10 @@ jobs:
             --snapshot-output "${RUNNER_TEMP}/pr-policy-snapshot.json"
       - name: Run deterministic policy tests
         run: python -B -m unittest discover -s scripts/github -p "test_*.py" -v
+      - name: Verify text-lab input identity pins are fresh
+        run: python -B tools/ember-restart-3b/remint_text_lab_input_identity.py --check
+      - name: Run text-lab identity freshness regressions
+        run: python -B -m unittest discover -s tests/ember_restart_model -p "test_remint_text_lab_input_identity.py" -v
       - name: Verify POSIX owned process-tree cleanup
         run: python -B scripts/ember_gate_process_supervision_selftest.py
   rust:
