@@ -44,6 +44,48 @@ def test_row_schema_rejects_unknown_fields_and_missing_launch_receipt(tmp_path: 
     missing = dict(row, launch_receipt_ref=None)
     assert any("launch_receipt_ref" in defect for defect in registry.validate_row(missing))
 
+    identityless = dict(row, run_id=None, attempt_id=None)
+    defects = registry.validate_row(identityless)
+    assert any("run_id" in defect for defect in defects)
+    assert any("attempt_id" in defect for defect in defects)
+
+
+def test_receipt_only_backfill_derives_stable_run_and_attempt_identities(tmp_path: Path):
+    run_root = tmp_path / "runs" / "run-receipt-only"
+    run_root.mkdir(parents=True)
+    (run_root / "disk-budget-runner-receipt.json").write_text(
+        '{"outcome":"aborted"}\n', encoding="utf-8"
+    )
+    path = tmp_path / "receipts" / "run-attempts.jsonl"
+
+    args = argparse.Namespace(registry=str(path), run_root=str(run_root))
+    assert registry.cmd_backfill(args) == 0
+    rows, defects = registry.read_existing_rows(path)
+
+    assert defects == []
+    assert len(rows) == 1
+    assert rows[0]["run_id"] == run_root.name
+    assert rows[0]["attempt_id"] == "evidence-floor"
+
+
+def test_retained_attempt_without_telemetry_derives_stable_run_identity(tmp_path: Path):
+    run_root = tmp_path / "runs" / "run-retained-only"
+    attempt = run_root / "attempt-1-child-failed"
+    attempt.mkdir(parents=True)
+    (run_root / "disk-budget-runner-receipt.json").write_text(
+        '{"outcome":"failed"}\n', encoding="utf-8"
+    )
+    path = tmp_path / "receipts" / "run-attempts.jsonl"
+
+    args = argparse.Namespace(registry=str(path), run_root=str(run_root))
+    assert registry.cmd_backfill(args) == 0
+    rows, defects = registry.read_existing_rows(path)
+
+    assert defects == []
+    assert len(rows) == 1
+    assert rows[0]["run_id"] == run_root.name
+    assert rows[0]["attempt_id"] == attempt.name
+
 
 def test_existing_invalid_row_refuses_before_append(tmp_path: Path):
     path = tmp_path / "receipts" / "run-attempts.jsonl"

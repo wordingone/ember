@@ -18,7 +18,7 @@ E5 leg + scripts/frontier_receipt.py ledger_all_compute_coverage):
   field-name-agnostic recursive scan of each row's string values for
   the telemetry run_id, the run-root directory name, or the
   checkpoint-manifest sha256. Every row here therefore carries
-  run_root_name explicitly.
+  run_root_name explicitly, plus a non-empty stable run_id and attempt_id.
 
 Two repo laws are enforced AT WRITE TIME (a limit is real only when it
 is always enforced where the bytes are made, not in a later gate):
@@ -180,8 +180,8 @@ def validate_row(row: Any) -> list[str]:
     if not isinstance(row.get("backfill"), bool):
         defects.append("backfill must be boolean")
     attempt_id = row.get("attempt_id")
-    if attempt_id is not None and not _nonempty_str(attempt_id):
-        defects.append("attempt_id must be a non-empty string or null")
+    if not _nonempty_str(attempt_id):
+        defects.append("attempt_id must be a non-empty stable attempt identity")
     checkpoint_sha = row.get("checkpoint_manifest_sha256")
     if checkpoint_sha is not None and (
         not isinstance(checkpoint_sha, str) or _SHA256.fullmatch(checkpoint_sha) is None
@@ -200,8 +200,8 @@ def validate_row(row: Any) -> list[str]:
     elif row.get("outcome") in OUTCOMES and not _nonempty_str(row.get("end_utc")):
         defects.append(f"end_utc required for outcome={row.get('outcome')!r}")
     run_id = row.get("run_id")
-    if run_id is not None and not _nonempty_str(run_id):
-        defects.append("run_id must be a non-empty string or null")
+    if not _nonempty_str(run_id):
+        defects.append("run_id must be a non-empty stable run identity")
     try:
         line = json.dumps(row, sort_keys=True, separators=(",", ":"))
     except (TypeError, ValueError) as e:
@@ -434,7 +434,7 @@ def cmd_backfill(args: argparse.Namespace) -> int:
             outcome, basis = "aborted", "no checkpoint manifest under artifacts/checkpoints/"
         mtimes = sorted(_utc_from_mtime(f) for f in files)
         new_rows.append(build_row(
-            run_root=run_root, outcome=outcome, run_id=rid, attempt_id=None,
+            run_root=run_root, outcome=outcome, run_id=rid, attempt_id="primary",
             start_utc=mtimes[0], end_utc=mtimes[-1],
             checkpoint_manifest_sha256=manifest_sha, launch_receipt_ref=launch_ref,
             source_receipt=files[0].relative_to(run_root).as_posix(),
@@ -445,7 +445,9 @@ def cmd_backfill(args: argparse.Namespace) -> int:
     # 5.1 class 7: failed runs, aborted segments, restarts are charged).
     for attempt_dir in sorted(p for p in run_root.glob("attempt-*") if p.is_dir()):
         att_ids = _telemetry_run_ids(attempt_dir, exclude_attempt_dirs=False)
-        rid = sorted(att_ids)[0] if att_ids else (sorted(primary)[0] if primary else None)
+        rid = sorted(att_ids)[0] if att_ids else (
+            sorted(primary)[0] if primary else run_root.name
+        )
         new_rows.append(build_row(
             run_root=run_root, outcome="failed", run_id=rid,
             attempt_id=attempt_dir.name,
@@ -462,7 +464,7 @@ def cmd_backfill(args: argparse.Namespace) -> int:
         new_rows.append(build_row(
             run_root=run_root,
             outcome="completed" if manifest_sha else "aborted",
-            run_id=None, attempt_id=None,
+            run_id=run_root.name, attempt_id="evidence-floor",
             start_utc=_utc_from_mtime(run_root), end_utc=_utc_from_mtime(run_root),
             checkpoint_manifest_sha256=manifest_sha, launch_receipt_ref=launch_ref,
             source_receipt=launch_ref or manifest_rel,
