@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import pathlib
@@ -254,7 +255,12 @@ class Issue1508AttemptRetentionTests(unittest.TestCase):
             coverage = frontier.ledger_all_compute_coverage(
                 run_root, "run-1", "m" * 64
             )
-            self.assertEqual(coverage["registry_sha256"], frontier._sha256(registry))
+            _, registry_prefix = frontier._read_registry_rows_and_prefix(registry)
+            registry_prefix_sha256 = hashlib.sha256(registry_prefix).hexdigest()
+            self.assertEqual(
+                coverage["registry_prefix_sha256"], registry_prefix_sha256
+            )
+            self.assertEqual(coverage["registry_rows"], 1)
 
             # A launch after mint changes the closed registry snapshot, so the
             # previously minted receipt is no longer admissible to the battery.
@@ -262,7 +268,13 @@ class Issue1508AttemptRetentionTests(unittest.TestCase):
                 '{"run_id":"run-1"}\n{"run_id":"late-launch"}\n',
                 encoding="utf-8",
             )
-            self.assertNotEqual(coverage["registry_sha256"], frontier._sha256(registry))
+            self.assertEqual(
+                coverage["registry_prefix_sha256"], registry_prefix_sha256
+            )
+            self.assertEqual(coverage["registry_rows"], 1)
+            self.assertNotEqual(
+                coverage["registry_prefix_sha256"], frontier._sha256(registry)
+            )
 
     def test_execute_failure_retains_certified_receipt_before_retry(self):
         module = load_module()
