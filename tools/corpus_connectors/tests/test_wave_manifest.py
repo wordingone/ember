@@ -10,15 +10,28 @@ CLI's print/dry-run/--execute wiring, mocking subprocess.run for --execute.
 """
 from __future__ import annotations
 
+import hashlib
 import subprocess
 import sys
+import tempfile
 import unittest
+import json
 from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import wave_manifest as wm  # noqa: E402
+
+
+def resolution_receipt_sha256(vein_name, urls):
+    payload = {
+        "schema": "ember-wave2-bulk-resolution-v1",
+        "vein": vein_name,
+        "urls": list(urls),
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
 
 
 class SourceTableInvariantTests(unittest.TestCase):
@@ -44,6 +57,12 @@ class SourceTableInvariantTests(unittest.TestCase):
     def test_bulk_vein_names_are_unique(self):
         names = [v.name for v in wm.WAVE2_BULK_VEINS]
         self.assertEqual(len(names), len(set(names)), "duplicate vein name in WAVE2_BULK_VEINS")
+
+    def test_bulk_entry_pages_require_resolution_and_direct_artifact_does_not(self):
+        entry_pages = [v for v in wm.WAVE2_BULK_VEINS if v.name != "wikipedia-en-baseline"]
+        self.assertTrue(entry_pages)
+        self.assertTrue(all(v.requires_resolution for v in entry_pages))
+        self.assertFalse(next(v for v in wm.WAVE2_BULK_VEINS if v.name == "wikipedia-en-baseline").requires_resolution)
 
     def test_bad_source_rejected_at_construction(self):
         with self.assertRaises(ValueError):
@@ -126,13 +145,77 @@ class BuildArgvTests(unittest.TestCase):
     def test_bulk_vein_build_argv_requires_positive_budget(self):
         vein = wm.WAVE2_BULK_VEINS[0]
         with self.assertRaises(ValueError):
-            vein.build_argv(0)
+            vein.build_argv(0, license_evidence="external license page")
         with self.assertRaises(ValueError):
-            vein.build_argv(-1)
-        argv = vein.build_argv(1024)
+            vein.build_argv(-1, license_evidence="external license page")
+        argv = vein.build_argv(
+            1024,
+            license_evidence="arXiv bulk access terms at arxiv.org/help/bulk_data",
+            resolved_url="https://arxiv.org/bulk/2026.tar",
+        )
         self.assertIn("--budget-bytes", argv)
         self.assertIn("1024", argv)
-        self.assertIn(vein.url, argv)
+        self.assertIn("https://arxiv.org/bulk/2026.tar", argv)
+
+    def test_bulk_vein_rejects_missing_or_self_referential_license_evidence(self):
+        vein = wm.WAVE2_BULK_VEINS[0]
+        with self.assertRaises(ValueError):
+            vein.build_argv(1024, license_evidence="")
+        with self.assertRaises(ValueError):
+            vein.build_argv(1024, license_evidence="wave_manifest.py named-source license determination")
+
+    def test_charter_domain_diversity_requires_two_sources_or_explicit_waiver(self):
+        self.assertEqual(wm.validate_domain_diversity(), {})
+
+    def test_charter_domain_diversity_rejects_same_register_and_license_aliases(self):
+        aliases = [
+            wm.WaveSource(
+                name="h-register-alias-a",
+                domains=("H",),
+                license_basis="MIT",
+                connector="http_fetch",
+                argv=("https://docs.example/reference/", "--license-evidence", "MIT license"),
+                est_tokens_low_b=0.1,
+                est_tokens_high_b=0.2,
+            ),
+            wm.WaveSource(
+                name="h-register-alias-b",
+                domains=("H",),
+                license_basis="MIT",
+                connector="http_fetch",
+                argv=("https://docs.example/reference/", "--license-evidence", "MIT license"),
+                est_tokens_low_b=0.1,
+                est_tokens_high_b=0.2,
+            ),
+        ]
+        with mock.patch.object(wm, "WAVE2_SOURCES", aliases), mock.patch.object(wm, "WAVE2_BULK_VEINS", []):
+            deficits = wm.validate_domain_diversity()
+        self.assertIn("H", deficits)
+
+    def test_charter_domain_diversity_rejects_same_host_different_paths(self):
+        aliases = [
+            wm.WaveSource(
+                name="h-register-page-a",
+                domains=("H",),
+                license_basis="MIT",
+                connector="http_fetch",
+                argv=("https://docs.example/reference/", "--license-evidence", "MIT license"),
+                est_tokens_low_b=0.1,
+                est_tokens_high_b=0.2,
+            ),
+            wm.WaveSource(
+                name="h-register-page-b",
+                domains=("H",),
+                license_basis="Apache-2.0",
+                connector="http_fetch",
+                argv=("https://docs.example/tutorial/", "--license-evidence", "Apache license"),
+                est_tokens_low_b=0.1,
+                est_tokens_high_b=0.2,
+            ),
+        ]
+        with mock.patch.object(wm, "WAVE2_SOURCES", aliases), mock.patch.object(wm, "WAVE2_BULK_VEINS", []):
+            deficits = wm.validate_domain_diversity()
+        self.assertIn("H", deficits)
 
 
 class FilterTests(unittest.TestCase):
@@ -181,12 +264,117 @@ class CliTests(unittest.TestCase):
         self.assertEqual(rc, 1)
         run_mock.assert_not_called()
 
-    def test_execute_bulk_with_budget_dispatches(self):
+    def test_execute_bulk_with_nonpositive_budget_refuses_before_subprocess(self):
         with mock.patch("wave_manifest.subprocess.run") as run_mock:
             rc = wm.main([
                 "--domain", "baseline", "--include-bulk", "--execute",
-                "--bulk-budget-bytes", "1000000",
+                "--bulk-budget-bytes", "-1",
             ])
+        self.assertEqual(rc, 1)
+        run_mock.assert_not_called()
+
+    def test_execute_entry_page_without_resolution_refuses_before_subprocess(self):
+        with mock.patch("wave_manifest.subprocess.run") as run_mock:
+            rc = wm.main([
+                "--domain", "A", "--include-bulk", "--execute",
+                "--bulk-budget-bytes", "1000000",
+                "--bulk-license-evidence-file", "missing-evidence.json",
+            ])
+        self.assertEqual(rc, 1)
+        run_mock.assert_not_called()
+
+    def test_execute_bulk_rejects_self_citing_evidence_before_subprocess(self):
+        vein_name = "wikipedia-en-baseline"
+        with tempfile.TemporaryDirectory() as tmp:
+            resolution = Path(tmp) / "resolution.json"
+            evidence = Path(tmp) / "evidence.json"
+            resolution.write_text(json.dumps({vein_name: {
+                "urls": [wm.WAVE2_BULK_VEINS[-1].url],
+                "resolution_receipt_sha256": resolution_receipt_sha256(vein_name, [wm.WAVE2_BULK_VEINS[-1].url]),
+            }}), encoding="utf-8")
+            evidence.write_text(json.dumps({vein_name: "wave_manifest.py generated license claim"}), encoding="utf-8")
+            with mock.patch("wave_manifest.subprocess.run") as run_mock:
+                rc = wm.main([
+                    "--domain", "baseline", "--include-bulk", "--execute",
+                    "--bulk-budget-bytes", "1000000",
+                    "--bulk-resolution-file", str(resolution),
+                    "--bulk-license-evidence-file", str(evidence),
+                ])
+        self.assertEqual(rc, 1)
+        run_mock.assert_not_called()
+
+    def test_execute_entry_page_dispatches_only_resolved_artifact_urls(self):
+        selected = wm.iter_bulk_veins("A")
+        with tempfile.TemporaryDirectory() as tmp:
+            resolution = Path(tmp) / "resolution.json"
+            evidence = Path(tmp) / "evidence.json"
+            resolution.write_text(json.dumps({
+                vein.name: {
+                    "urls": [f"https://example.test/{vein.name}.tar"],
+                    "resolution_receipt_sha256": resolution_receipt_sha256(
+                        vein.name, [f"https://example.test/{vein.name}.tar"]
+                    ),
+                }
+                for vein in selected
+            }), encoding="utf-8")
+            evidence.write_text(json.dumps({
+                vein.name: f"{vein.name} external license page"
+                for vein in selected
+            }), encoding="utf-8")
+            with mock.patch("wave_manifest.subprocess.run") as run_mock:
+                rc = wm.main([
+                    "--domain", "A", "--include-bulk", "--execute",
+                    "--bulk-budget-bytes", "1000000",
+                    "--bulk-resolution-file", str(resolution),
+                    "--bulk-license-evidence-file", str(evidence),
+                ])
+        self.assertEqual(rc, 0)
+        bulk_commands = [call.args[0] for call in run_mock.call_args_list if "bulk_fetch.py" in str(call.args[0])]
+        self.assertEqual(len(bulk_commands), len(selected))
+        for vein, command in zip(selected, bulk_commands):
+            self.assertIn(f"https://example.test/{vein.name}.tar", command)
+            self.assertNotIn(vein.url, command)
+
+    def test_execute_bulk_rejects_rehashed_but_wrong_resolution_receipt_before_subprocess(self):
+        vein_name = "wikipedia-en-baseline"
+        with tempfile.TemporaryDirectory() as tmp:
+            resolution = Path(tmp) / "resolution.json"
+            evidence = Path(tmp) / "evidence.json"
+            resolution.write_text(json.dumps({vein_name: {
+                "urls": ["https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2"],
+                "resolution_receipt_sha256": "a" * 64,
+            }}), encoding="utf-8")
+            evidence.write_text(json.dumps({vein_name: "Wikimedia dump license page and terms"}), encoding="utf-8")
+            with mock.patch("wave_manifest.subprocess.run") as run_mock:
+                rc = wm.main([
+                    "--domain", "baseline", "--include-bulk", "--execute",
+                    "--bulk-budget-bytes", "1000000",
+                    "--bulk-resolution-file", str(resolution),
+                    "--bulk-license-evidence-file", str(evidence),
+                ])
+        self.assertEqual(rc, 1)
+        run_mock.assert_not_called()
+
+    def test_execute_bulk_with_budget_dispatches(self):
+        vein_name = "wikipedia-en-baseline"
+        with tempfile.TemporaryDirectory() as tmp:
+            resolution = Path(tmp) / "resolution.json"
+            evidence = Path(tmp) / "evidence.json"
+            resolution.write_text(json.dumps({vein_name: {
+                "urls": ["https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2"],
+                "resolution_receipt_sha256": resolution_receipt_sha256(
+                    vein_name,
+                    ["https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2"],
+                ),
+            }}), encoding="utf-8")
+            evidence.write_text(json.dumps({vein_name: "Wikimedia dump license page and terms"}), encoding="utf-8")
+            with mock.patch("wave_manifest.subprocess.run") as run_mock:
+                rc = wm.main([
+                    "--domain", "baseline", "--include-bulk", "--execute",
+                    "--bulk-budget-bytes", "1000000",
+                    "--bulk-resolution-file", str(resolution),
+                    "--bulk-license-evidence-file", str(evidence),
+                ])
         self.assertEqual(rc, 0)
         run_mock.assert_called_once()
         cmd = run_mock.call_args.args[0]

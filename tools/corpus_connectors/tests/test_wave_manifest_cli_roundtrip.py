@@ -27,7 +27,10 @@ import wave_manifest as wm  # noqa: E402
 # Every destination build_parser() produces. serialize_args() below is only a
 # faithful inverse while this set is exhaustive; the guard test locks the two
 # together so a new CLI option cannot silently escape round-trip coverage.
-PARSER_DESTS = {"domain", "include_bulk", "bulk_budget_bytes", "execute"}
+PARSER_DESTS = {
+    "domain", "include_bulk", "bulk_budget_bytes", "bulk_resolution_file",
+    "bulk_license_evidence_file", "execute",
+}
 
 
 def serialize_args(args: argparse.Namespace) -> List[str]:
@@ -39,6 +42,10 @@ def serialize_args(args: argparse.Namespace) -> List[str]:
         argv.append("--include-bulk")
     if args.bulk_budget_bytes is not None:
         argv += ["--bulk-budget-bytes", str(args.bulk_budget_bytes)]
+    if args.bulk_resolution_file is not None:
+        argv += ["--bulk-resolution-file", args.bulk_resolution_file]
+    if args.bulk_license_evidence_file is not None:
+        argv += ["--bulk-license-evidence-file", args.bulk_license_evidence_file]
     if args.execute:
         argv.append("--execute")
     return argv
@@ -57,6 +64,7 @@ ACCEPTED_ARG_SETS: List[List[str]] = [
     ["--bulk-budget-bytes", "0"],  # parser accepts; main() blocks it (falsy)
     ["--bulk-budget-bytes", "-5"],  # parser accepts; range is enforced downstream
     ["--bulk-budget-bytes", str(10**18)],  # arbitrary-precision int survives
+    ["--bulk-resolution-file", "resolution.json", "--bulk-license-evidence-file", "evidence.json"],
     ["--domain", "baseline", "--include-bulk", "--execute", "--bulk-budget-bytes", "1000000"],
     # options in non-canonical order must canonicalize to the same namespace
     ["--execute", "--bulk-budget-bytes", "7", "--domain", "G", "--include-bulk"],
