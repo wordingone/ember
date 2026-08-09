@@ -29,6 +29,17 @@ _P2B_STREAM_BUILD_RECEIPT_SHA256 = "748787e23c3100836713f6672a05629185a914563475
 _P2B_STREAM_CORPUS_ROOT_SHA256 = "42d1aac14c1e59563d348b7a53ce83dcce499a48217569d7d00a3966199141ab"
 EXPERT_NAMES = ("vision", "audio", "reasoning", "tool")
 ARCHITECTURE_REVISION = "ember-sparse-3b-v2"
+_EXPERT_GENESIS_AUTHORITY_SCHEMA = "ember-expert-genesis-authority-v1"
+_EXPERT_GENESIS_AUTHORITY_FIELDS = frozenset(
+    {
+        "schema_version",
+        "architecture_revision",
+        "model_config_sha256",
+        "contract_sha256",
+        "checkpoint_manifest_sha256",
+        "expert_genesis_sha256",
+    }
+)
 
 
 def _optimizer_owner_for_name(name: str) -> str:
@@ -706,7 +717,54 @@ def _full_coverage_root_projection(manifest: Mapping[str, Any], *, active_expert
     return True
 
 
-def _inspect_realization(manifest_path: Path, manifest: Mapping[str, Any], *, active_expert: str, shape: Mapping[str, int], full_coverage_root: bool = False) -> dict[str, Any]:
+def _validate_external_genesis_authority(
+    authority: Mapping[str, Any],
+    *,
+    config_sha256: str,
+    subject_checkpoint_sha256: str,
+    manifest: Mapping[str, Any],
+) -> dict[str, str]:
+    """Validate the independent, content-addressed genesis binding."""
+
+    if set(authority) != _EXPERT_GENESIS_AUTHORITY_FIELDS:
+        raise ValueError("external genesis authority has an invalid closed schema")
+    if authority.get("schema_version") != _EXPERT_GENESIS_AUTHORITY_SCHEMA:
+        raise ValueError("external genesis authority has an unsupported schema")
+    if authority.get("architecture_revision") != ARCHITECTURE_REVISION:
+        raise ValueError("external genesis authority architecture revision drifted")
+    if authority.get("model_config_sha256") != config_sha256:
+        raise ValueError("external genesis authority model-config hash mismatch")
+    if authority.get("checkpoint_manifest_sha256") != subject_checkpoint_sha256:
+        raise ValueError("external genesis authority checkpoint hash mismatch")
+    contract_sha256 = _sha256_value(authority.get("contract_sha256"), label="external genesis contract hash")
+    manifest_contract_sha256 = _sha256_value(manifest.get("contract_sha256"), label="checkpoint contract hash")
+    if contract_sha256 != manifest_contract_sha256:
+        raise ValueError("external genesis authority contract hash mismatch")
+    genesis = authority.get("expert_genesis_sha256")
+    if not isinstance(genesis, Mapping) or set(genesis) != set(EXPERT_NAMES):
+        raise ValueError("external genesis authority lacks the four expert hashes")
+    validated_genesis: dict[str, str] = {}
+    for expert in EXPERT_NAMES:
+        validated_genesis[expert] = _sha256_value(
+            genesis.get(expert), label=f"external {expert} genesis hash"
+        )
+    manifest_genesis = manifest.get("expert_genesis_sha256")
+    if not isinstance(manifest_genesis, Mapping) or set(manifest_genesis) != set(EXPERT_NAMES):
+        raise ValueError("checkpoint lacks the four expert genesis hashes")
+    if dict(manifest_genesis) != validated_genesis:
+        raise ValueError("checkpoint genesis map disagrees with external authority")
+    return validated_genesis
+
+
+def _inspect_realization(
+    manifest_path: Path,
+    manifest: Mapping[str, Any],
+    *,
+    active_expert: str,
+    shape: Mapping[str, int],
+    full_coverage_root: bool = False,
+    genesis_override: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
     records = manifest.get("shards")
     if not isinstance(records, list): raise ValueError("checkpoint manifest lacks shard records")
     schema_version = manifest.get("schema_version")
@@ -774,7 +832,8 @@ def _inspect_realization(manifest_path: Path, manifest: Mapping[str, Any], *, ac
         or not isinstance(manifest.get("lineage"), Mapping)
     ) and not _full_coverage_root_projection(manifest, active_expert=active_expert):
         raise ValueError("specialist-active realization requires a lineage manifest")
-    genesis, expert_hashes = manifest.get("expert_genesis_sha256"), manifest.get("expert_checkpoint_sha256")
+    genesis = genesis_override if genesis_override is not None else manifest.get("expert_genesis_sha256")
+    expert_hashes = manifest.get("expert_checkpoint_sha256")
     if not isinstance(genesis, dict) or set(genesis) != set(EXPERT_NAMES) or not isinstance(expert_hashes, dict) or set(expert_hashes) != set(EXPERT_NAMES): raise ValueError("checkpoint lacks the four expert genesis/checkpoint hashes")
     for name, digest in genesis.items(): _sha256_value(digest, label=f"{name} genesis hash")
     authorized_parameter_names = set(_expected_shared(shape))
@@ -880,9 +939,22 @@ def execute_counter(
     p2b_repo_root: Path | None = None, p2b_stream_manifest: Path | None = None,
     p2b_stream_build_receipt: Path | None = None, p2b_tokenizer_runtime_root: Path | None = None,
     p2b_tokenizer_runtime_manifest: Path | None = None,
+    expert_genesis_authority: Path | None = None,
+    expert_genesis_authority_sha256: str | None = None,
 ) -> dict[str, Any]:
+    """Measure a checkpoint using an independent genesis authority when supplied.
+
+    The authority is a closed JSON snapshot whose expected SHA-256 is supplied
+    separately; its expert map is checked against the checkpoint manifest before
+    any shard payload is inspected.  Legacy in-process callers may omit this
+    optional binding for compatibility, while governed external-genesis callers
+    must provide both the path and expected content hash.
+    """
+
     if active_expert not in {*EXPERT_NAMES, "shared"}:
         raise ValueError("active expert must be shared or one of the four authorized banks")
+    if (expert_genesis_authority is None) != (expert_genesis_authority_sha256 is None):
+        raise ValueError("external genesis authority path and SHA-256 are required together")
     config, config_sha256 = _read_json_snapshot(model_config, label="model config")
     if config.get("architecture_revision") != ARCHITECTURE_REVISION:
         raise ValueError("model config revision is not ember-sparse-3b-v2")
@@ -892,7 +964,31 @@ def execute_counter(
     # discriminator can be threaded into `_inspect_realization` for the inverted
     # genesis byte-verification (Finding 2, issue #1329) in the same shard pass.
     full_coverage_root = _full_coverage_root_projection(manifest_snapshot, active_expert=active_expert)
-    manifest = _inspect_realization(checkpoint_manifest, manifest_snapshot, active_expert=active_expert, shape=shape, full_coverage_root=full_coverage_root)
+    external_genesis: dict[str, str] | None = None
+    if expert_genesis_authority is not None:
+        expected_authority_sha256 = _sha256_value(
+            expert_genesis_authority_sha256,
+            label="external genesis authority SHA-256",
+        )
+        authority_snapshot, authority_sha256 = _read_json_snapshot(
+            Path(expert_genesis_authority), label="external genesis authority"
+        )
+        if authority_sha256 != expected_authority_sha256:
+            raise ValueError("external genesis authority content hash mismatch")
+        external_genesis = _validate_external_genesis_authority(
+            authority_snapshot,
+            config_sha256=config_sha256,
+            subject_checkpoint_sha256=subject_checkpoint_sha256,
+            manifest=manifest_snapshot,
+        )
+    manifest = _inspect_realization(
+        checkpoint_manifest,
+        manifest_snapshot,
+        active_expert=active_expert,
+        shape=shape,
+        full_coverage_root=full_coverage_root,
+        genesis_override=external_genesis,
+    )
     p2b_inputs = (p2b_repo_root, p2b_stream_manifest, p2b_stream_build_receipt, p2b_tokenizer_runtime_root, p2b_tokenizer_runtime_manifest)
     runtime_authority: dict[str, Any] = dict(_RUNTIME_AUTHORITY_NONE)
     if active_expert == "shared" and any(value is not None for value in p2b_inputs):
@@ -1070,20 +1166,28 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--p2b-stream-build-receipt", type=Path)
     parser.add_argument("--p2b-tokenizer-runtime-root", type=Path)
     parser.add_argument("--p2b-tokenizer-runtime-manifest", type=Path)
+    parser.add_argument("--expert-genesis-authority", type=Path)
+    parser.add_argument("--expert-genesis-authority-sha256")
     args = parser.parse_args(argv)
     try:
-        print(json.dumps(execute_counter(
-            model_config=args.model_config,
-            checkpoint_manifest=args.checkpoint_manifest,
-            active_expert=args.active_expert,
-            parent_manifest=args.parent_manifest,
-            root_manifest=args.root_manifest,
-            p2b_repo_root=args.p2b_repo_root,
-            p2b_stream_manifest=args.p2b_stream_manifest,
-            p2b_stream_build_receipt=args.p2b_stream_build_receipt,
-            p2b_tokenizer_runtime_root=args.p2b_tokenizer_runtime_root,
-            p2b_tokenizer_runtime_manifest=args.p2b_tokenizer_runtime_manifest,
-        ), sort_keys=True))
+        counter_kwargs = {
+            "model_config": args.model_config,
+            "checkpoint_manifest": args.checkpoint_manifest,
+            "active_expert": args.active_expert,
+            "parent_manifest": args.parent_manifest,
+            "root_manifest": args.root_manifest,
+            "p2b_repo_root": args.p2b_repo_root,
+            "p2b_stream_manifest": args.p2b_stream_manifest,
+            "p2b_stream_build_receipt": args.p2b_stream_build_receipt,
+            "p2b_tokenizer_runtime_root": args.p2b_tokenizer_runtime_root,
+            "p2b_tokenizer_runtime_manifest": args.p2b_tokenizer_runtime_manifest,
+        }
+        if args.expert_genesis_authority is not None or args.expert_genesis_authority_sha256 is not None:
+            counter_kwargs.update(
+                expert_genesis_authority=args.expert_genesis_authority,
+                expert_genesis_authority_sha256=args.expert_genesis_authority_sha256,
+            )
+        print(json.dumps(execute_counter(**counter_kwargs), sort_keys=True))
     except Exception as error:
         print(f"parameter realization failed: {error}", file=sys.stderr)
         return 2
