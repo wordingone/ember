@@ -59,9 +59,10 @@ Evidence inputs (all under the adjudicated run root unless noted):
     receipts/run-attempts.jsonl    repo-level append-only launch-attempt registry
                                    (issue #1497) -- "failed work included" is
                                    unattestable from a single run root without it;
-                                   rows must be JSON objects and at least one row
-                                   must NAME this run (by run_id, run-root name,
-                                   or checkpoint-manifest sha in any string value).
+                                   every live running row for this exact run/root
+                                   must precede exactly one matching terminal row,
+                                   while canonical terminal-only backfills remain
+                                   accepted as historical evidence.
                                    The receipt binds the exact non-empty row
                                    prefix it read, so later append-only launches
                                    do not invalidate an already minted receipt.
@@ -622,29 +623,15 @@ def ledger_all_compute_coverage(run_root: Path, run_id: str, manifest_sha: str) 
     if not rows:
         raise FrontierRefusal("LEDGER_INCOMPLETE:all_compute_coverage: run-attempt registry is empty")
 
-    # The adjudicated run must APPEAR in the registry: a non-empty file that
-    # never mentions this run attests nothing about its failed work (rev-1490
-    # item 4). Field-name-agnostic (issue #1497's schema is not invented
-    # here): any string value in a row equal to the telemetry run_id, the
-    # run-root directory name, or the checkpoint-manifest sha names the run.
-    run_tokens = {t for t in (run_id, run_root.name, manifest_sha) if isinstance(t, str) and t}
-
-    def _row_strings(value: Any):
-        if isinstance(value, str):
-            yield value
-        elif isinstance(value, dict):
-            for v in value.values():
-                yield from _row_strings(v)
-        elif isinstance(value, list):
-            for v in value:
-                yield from _row_strings(v)
-
-    if not any(any(s in run_tokens for s in _row_strings(row)) for row in rows):
+    completion_defects = _battery().validate_run_attempt_completion(
+        rows,
+        selected_run_id=run_id,
+        run_root=run_root,
+        bound_row_count=len(rows),
+    )
+    if completion_defects:
         raise FrontierRefusal(
-            "LEDGER_INCOMPLETE:all_compute_coverage: no registry row names this run "
-            f"(looked for run_id {run_id!r}, run-root name {run_root.name!r}, or the "
-            "checkpoint-manifest sha among row string values) -- 'failed work included' "
-            "cannot be asserted from rows that never mention the run"
+            "LEDGER_INCOMPLETE:all_compute_coverage: " + "; ".join(completion_defects)
         )
     components = {}
     for component in COMPUTE_COMPONENTS:
