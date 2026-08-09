@@ -1562,6 +1562,34 @@ def validate_certified_request(
                 "run scope exceeds certificate: training_telemetry_path"
             ) from error
 
+    authority_candidates: list[pathlib.Path | None] = [
+        certificate_path,
+        declaration_ledger_path,
+        run_spec_path,
+        completion_path,
+        training_verify_path,
+        None if resume is None else resume.checkpoint,
+        None if resume is None else resume.evidence_path,
+        None if specialist is None else specialist.data_manifest,
+        None if specialist is None else specialist.tokenizer_path,
+        None if specialist is None else specialist.parent_manifest,
+        None if specialist is None else specialist.root_manifest,
+    ]
+    resolved_custody_root = custody_root.resolve(strict=False)
+    authority_paths: list[pathlib.Path] = []
+    for candidate in authority_candidates:
+        if candidate is None:
+            continue
+        resolved_candidate = candidate.resolve(strict=False)
+        # Retention can only move bytes below the live run root.  External
+        # repo/custody inputs stay where they are and need no move exclusion.
+        if (
+            resolved_candidate != resolved_custody_root
+            and resolved_candidate.is_relative_to(resolved_custody_root)
+            and resolved_candidate not in authority_paths
+        ):
+            authority_paths.append(resolved_candidate)
+
     return ValidatedLaunch(
         certificate_sha256=certificate_sha256,
         run_spec_sha256=_file_sha256(run_spec_path, "run spec"),
@@ -1602,20 +1630,7 @@ def validate_certified_request(
         specialist_model_chat_restore_not_before=(
             None if specialist is None else specialist.model_chat_restore_not_before
         ),
-        authority_paths=tuple(
-            path.resolve(strict=False)
-            for path in (
-                certificate_path,
-                declaration_ledger_path,
-                run_spec_path,
-                completion_path,
-                *(
-                    [training_verify_path]
-                    if training_verify_path is not None
-                    else []
-                ),
-            )
-        ),
+        authority_paths=tuple(authority_paths),
     )
 
 
@@ -1818,8 +1833,8 @@ def retain_failed_attempt(
         protected_path = authority_path.resolve(strict=False)
         if protected_path == root or not protected_path.is_relative_to(root):
             raise ValueError("protected authority path must stay inside the run root")
-        if not protected_path.is_file():
-            raise ValueError("protected authority path must be a regular file")
+        if not (protected_path.is_file() or protected_path.is_dir()):
+            raise ValueError("protected authority path must be a regular file or directory")
         protected.add(protected_path)
 
     def has_protected_descendant(directory: pathlib.Path) -> bool:
@@ -1827,6 +1842,12 @@ def retain_failed_attempt(
             protected_path != directory
             and protected_path.is_relative_to(directory)
             for protected_path in protected
+        )
+
+    def has_artifact_descendant(directory: pathlib.Path) -> bool:
+        return (
+            selected_artifact_root != directory
+            and selected_artifact_root.is_relative_to(directory)
         )
 
     selected_entries: list[tuple[pathlib.Path, pathlib.Path]] = []
@@ -1837,7 +1858,10 @@ def retain_failed_attempt(
             return
         if source.is_symlink():
             raise ValueError(f"failed-attempt output cannot be a symlink: {relative}")
-        if source.is_dir() and has_protected_descendant(resolved_source):
+        if source.is_dir() and (
+            has_protected_descendant(resolved_source)
+            or has_artifact_descendant(resolved_source)
+        ):
             for nested in sorted(source.iterdir(), key=lambda item: item.name):
                 select_entry(nested, relative / nested.name)
             return
@@ -1847,13 +1871,15 @@ def retain_failed_attempt(
     for child in sorted(root.iterdir(), key=lambda item: item.name):
         if child.name.startswith("attempt-") or child == staging:
             continue
-        if child.name.startswith(".") and child.name != ".checkpoint-quarantine":
+        resolved_child = child.resolve(strict=False)
+        if (
+            child.name.startswith(".")
+            and child.name != ".checkpoint-quarantine"
+            and resolved_child != selected_artifact_root
+            and not has_artifact_descendant(resolved_child)
+        ):
             continue
         select_entry(child, pathlib.Path(child.name))
-    if selected_artifact_root.exists() and not any(
-        source == selected_artifact_root for _, source in selected_entries
-    ) and selected_artifact_root not in protected:
-        select_entry(selected_artifact_root, selected_relative)
     staging.mkdir()
     moved: list[tuple[pathlib.Path, pathlib.Path]] = []
     replacement_created = False

@@ -1,5 +1,5 @@
 # goal_id: EMBER-02
-# workstream_id: EMBER-02A
+# workstream_id: EMBER-02B
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 from __future__ import annotations
@@ -201,13 +201,43 @@ class Issue1508AttemptRetentionTests(unittest.TestCase):
             )
             self.assertTrue((retained / "outputs" / "checkpoint.json").is_file())
 
-    def test_layout_spec_closes_registry_before_frontier_receipt_mint(self):
+    def test_retention_handles_a_nested_launch_artifact_root_once(self):
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory) / "run-root"
+            outputs = root / "outputs"
+            artifacts = outputs / "artifacts"
+            artifacts.mkdir(parents=True)
+            (artifacts / "checkpoint.json").write_text(
+                "checkpoint", encoding="utf-8"
+            )
+            (outputs / "sibling.log").write_text("log", encoding="utf-8")
+
+            retained = module.retain_failed_attempt(
+                root,
+                reason="CHILD_FAILED",
+                timestamp="20260808T230507Z",
+                artifact_root=artifacts,
+            )
+
+            self.assertTrue(
+                (retained / "outputs" / "artifacts" / "checkpoint.json").is_file()
+            )
+            self.assertTrue((retained / "outputs" / "sibling.log").is_file())
+            self.assertTrue(artifacts.is_dir())
+
+    def test_layout_spec_names_the_battery_discovery_classes(self):
         module = load_module()
         spec = (ROOT / module.RUN_ROOT_LAYOUT_SPEC_PATH).read_text(encoding="utf-8")
-        self.assertIn("spawn/terminal", spec)
-        self.assertIn("quiesce", spec)
-        self.assertIn("mint all frontier receipts", spec)
-        self.assertIn("no launch may start after mint", spec)
+        for required in (
+            "frontier-receipt.json",
+            "frozen-eval-results.json",
+            "energy-proxy-receipt.json",
+            "human-interventions.json",
+            "walls-checklist.json",
+            "receipts/run-attempts.jsonl",
+        ):
+            self.assertIn(required, spec)
 
     def test_frontier_registry_snapshot_changes_after_late_launch(self):
         frontier = load_frontier()
@@ -345,7 +375,7 @@ class Issue1508AttemptRetentionTests(unittest.TestCase):
     def test_failed_bundle_preserves_validated_authority_for_retry(self):
         module = load_module()
         fixtures = load_certified_fixtures()
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = fixtures.write_valid_bundle(pathlib.Path(directory))
             with mock.patch.object(module, "read_current_master", return_value=fixtures.SHA):
                 launch = module.validate_certified_request(
@@ -392,6 +422,69 @@ class Issue1508AttemptRetentionTests(unittest.TestCase):
                     paths["run_spec"],
                 )
             self.assertEqual(reloaded.authority_paths, launch.authority_paths)
+
+            class SuccessfulChild:
+                returncode = 0
+
+            self.assertEqual(
+                module.execute_validated_launch(
+                    paths["repo"],
+                    reloaded,
+                    run_process=lambda *args, **kwargs: SuccessfulChild(),
+                ),
+                0,
+            )
+
+    def test_failed_resume_preserves_checkpoint_and_evidence_for_revalidation(self):
+        module = load_module()
+        fixtures = load_certified_fixtures()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = fixtures.write_valid_bundle(pathlib.Path(directory))
+            fixtures.install_model_config(
+                paths["repo"], fixtures.ARCHITECTURE_REVISION
+            )
+            checkpoint, evidence = fixtures.install_resume_material(
+                paths["custody_root"]
+            )
+            fixtures.set_resume_paths(paths, checkpoint, evidence)
+            fixtures.authorize_resume_roots(paths, paths["custody_root"])
+
+            with mock.patch.object(
+                module, "read_current_master", return_value=fixtures.SHA
+            ):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            self.assertIn(checkpoint.resolve(), launch.authority_paths)
+            self.assertIn(evidence.resolve(), launch.authority_paths)
+
+            class FailedChild:
+                returncode = 23
+
+            self.assertEqual(
+                module.execute_validated_launch(
+                    paths["repo"],
+                    launch,
+                    run_process=lambda *args, **kwargs: FailedChild(),
+                ),
+                23,
+            )
+            self.assertTrue(checkpoint.is_dir())
+            self.assertTrue(evidence.is_file())
+            with mock.patch.object(
+                module, "read_current_master", return_value=fixtures.SHA
+            ):
+                reloaded = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            self.assertEqual(reloaded.resume_checkpoint, checkpoint)
+            self.assertEqual(reloaded.resume_evidence_path, evidence)
 
             class SuccessfulChild:
                 returncode = 0
