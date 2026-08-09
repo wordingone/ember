@@ -44,6 +44,15 @@ def load_frontier():
     return module
 
 
+def load_run_attempt_registry():
+    path = ROOT / "scripts" / "run_attempt_registry.py"
+    spec = importlib.util.spec_from_file_location("run_attempt_registry", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_certified_fixtures():
     spec = importlib.util.spec_from_file_location(
         "test_certified_train_launch_fixtures", CERTIFIED_TEST_PATH
@@ -242,13 +251,30 @@ class Issue1508AttemptRetentionTests(unittest.TestCase):
 
     def test_frontier_registry_prefix_remains_bound_after_late_launch(self):
         frontier = load_frontier()
+        registry_module = load_run_attempt_registry()
         with tempfile.TemporaryDirectory() as directory:
             repo = pathlib.Path(directory) / "repo"
             registry = repo / "receipts" / "run-attempts.jsonl"
             run_root = repo / "run-1"
             registry.parent.mkdir(parents=True)
             run_root.mkdir(parents=True)
-            registry.write_text('{"run_id":"run-1"}\n', encoding="utf-8")
+            for name in ("run-spec.json", "terminal.json", "late-run-spec.json", "late-terminal.json"):
+                (run_root / name).write_text("{}", encoding="utf-8")
+            first_row = registry_module.build_row(
+                run_root=run_root,
+                outcome="completed",
+                run_id="run-1",
+                attempt_id="attempt-1",
+                start_utc="2026-08-08T00:00:00Z",
+                end_utc="2026-08-08T00:01:00Z",
+                checkpoint_manifest_sha256="a" * 64,
+                launch_receipt_ref="run-spec.json",
+                source_receipt="terminal.json",
+                outcome_basis="test backfill",
+                backfill=True,
+            )
+            first_row["recorded_utc"] = "2026-08-08T00:01:00Z"
+            registry.write_text(json.dumps(first_row, sort_keys=True) + "\n", encoding="utf-8")
             frontier.REPO_ROOT = repo
             frontier.RUN_ATTEMPTS_REGISTRY = "receipts/run-attempts.jsonl"
 
@@ -264,8 +290,25 @@ class Issue1508AttemptRetentionTests(unittest.TestCase):
 
             # Later valid rows change the live whole-file digest without
             # invalidating the one-row bound prefix.
+            later_row = registry_module.build_row(
+                run_root=run_root,
+                outcome="completed",
+                run_id="run-1",
+                attempt_id="attempt-2",
+                start_utc="2026-08-08T01:00:00Z",
+                end_utc="2026-08-08T01:01:00Z",
+                checkpoint_manifest_sha256="b" * 64,
+                launch_receipt_ref="late-run-spec.json",
+                source_receipt="late-terminal.json",
+                outcome_basis="later valid backfill",
+                backfill=True,
+            )
+            later_row["recorded_utc"] = "2026-08-08T01:01:00Z"
             registry.write_text(
-                '{"run_id":"run-1"}\n{"run_id":"late-launch"}\n',
+                json.dumps(first_row, sort_keys=True)
+                + "\n"
+                + json.dumps(later_row, sort_keys=True)
+                + "\n",
                 encoding="utf-8",
             )
             self.assertEqual(
