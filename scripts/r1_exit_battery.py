@@ -1631,17 +1631,19 @@ def _validate_frontier_content(
                         f"ledger.all_compute_coverage.registry_rows {coverage_block.get('registry_rows')!r} "
                         f"cannot be re-read from the registry prefix (found {len(bound_entries)} rows)"
                     )
+                has_prefix_sha = "registry_prefix_sha256" in coverage_block
+                has_legacy_sha = "registry_sha256" in coverage_block
                 prefix_sha = coverage_block.get("registry_prefix_sha256")
                 legacy_sha = coverage_block.get("registry_sha256")
-                if prefix_sha is not None and legacy_sha is not None:
+                if has_prefix_sha and has_legacy_sha:
                     defects.append(
                         "ledger.all_compute_coverage must not mix registry_prefix_sha256 "
                         "with legacy registry_sha256"
                     )
-                elif prefix_sha is not None:
+                elif has_prefix_sha:
                     if not _nonempty_str(prefix_sha) or _sha256_bytes(registry_prefix) != prefix_sha:
                         defects.append("ledger.all_compute_coverage.registry prefix sha256 does not match the bound rows on disk")
-                elif legacy_sha is not None:
+                elif has_legacy_sha:
                     if not _nonempty_str(legacy_sha) or _sha256_file(registry_disk) != legacy_sha:
                         defects.append("ledger.all_compute_coverage.registry_sha256 does not match the registry bytes on disk")
                     if len(line_entries) != declared_rows:
@@ -3200,6 +3202,18 @@ def run_selftest() -> None:
 
         e5_legacy = _e5_case(_legacy_registry_binding)
         assert e5_legacy["status"] == "MET", e5_legacy
+
+        def _legacy_with_null_prefix(receipt: dict[str, Any]) -> None:
+            _legacy_registry_binding(receipt)
+            receipt["ledger"]["all_compute_coverage"][
+                "registry_prefix_sha256"
+            ] = None
+
+        def _prefix_with_null_legacy(receipt: dict[str, Any]) -> None:
+            receipt["ledger"]["all_compute_coverage"]["registry_sha256"] = None
+
+        _e5_defect(_e5_case(_legacy_with_null_prefix), "must not mix")
+        _e5_defect(_e5_case(_prefix_with_null_legacy), "must not mix")
 
         registry_path.write_bytes(
             registry_before_append
