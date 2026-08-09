@@ -3,12 +3,11 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 use crate::{
-    server_supervisor::ServerLiveCycleRequest, Daemon, JobSpec, RestartPolicy, SchedulePrediction,
+    server_supervisor::ServerLiveCycleRequest, Daemon, SchedulePrediction,
     MAX_DISPATCH_MANIFEST_BYTES,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::collections::BTreeMap;
 use std::io;
 use std::path::PathBuf;
 use std::sync::{
@@ -66,18 +65,6 @@ struct AlarmStateParams {
 #[derive(Debug, Deserialize)]
 struct JobIdParams {
     job_id: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct StartJobParams {
-    job_id: String,
-    program: String,
-    args: Vec<String>,
-    resource_lease: String,
-    #[serde(default)]
-    env: BTreeMap<String, String>,
-    #[serde(default)]
-    restart_policy: RestartPolicy,
 }
 
 #[derive(Debug, Deserialize)]
@@ -230,26 +217,6 @@ fn dispatch(daemon: &Daemon, request: WireRequest) -> (Value, bool) {
             };
             match daemon.acquire_lease(&params.resource, &params.job_id) {
                 Ok(()) => (success(id, json!({"acquired": true})), false),
-                Err(error) => (operation_error(id, error), false),
-            }
-        }
-        "start_job" => {
-            let params: StartJobParams = match decode(&id, request.params) {
-                Ok(value) => value,
-                Err(response) => return (response, false),
-            };
-            let mut spec = JobSpec::new(
-                params.job_id,
-                params.program,
-                params.args,
-                params.resource_lease,
-            );
-            spec = spec.with_restart_policy(params.restart_policy);
-            for (key, value) in params.env {
-                spec = spec.with_env(key, value);
-            }
-            match daemon.start_job(spec) {
-                Ok(handle) => (success(id, json!({"pid": handle.pid})), false),
                 Err(error) => (operation_error(id, error), false),
             }
         }
