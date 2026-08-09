@@ -181,6 +181,24 @@ def test_probe_spec_rejects_no_items():
         battery.ProbeSpec(probe_id="p", metric_id="m", metric_type="proportion", chance_rate=0.5, source_note="", items=())
 
 
+def test_probe_spec_rejects_inconsistent_uniform_chance_rate():
+    items = (_item("R2E4-RATE-0", 0, n_choices=2), _item("R2E4-RATE-1", 1, n_choices=2))
+    with pytest.raises(battery.R2ProbeBatteryRefusal, match="CHANCE_RATE_INCONSISTENT"):
+        battery.ProbeSpec(
+            probe_id="R2E4_RATE", metric_id="r2e4.rate", metric_type="proportion",
+            chance_rate=0.25, source_note="test fixture", items=items,
+        )
+
+
+def test_probe_spec_rejects_mixed_choice_cardinality():
+    items = (_item("R2E4-A", 0, n_choices=2), _item("R2E4-B", 1, n_choices=4))
+    with pytest.raises(battery.R2ProbeBatteryRefusal, match="CHANCE_RATE_INCONSISTENT"):
+        battery.ProbeSpec(
+            probe_id="R2E4_MIXED", metric_id="r2e4.mixed", metric_type="proportion",
+            chance_rate=0.5, source_note="test fixture", items=items,
+        )
+
+
 # ---------------------------------------------------------------------------
 # probe manifest loader
 # ---------------------------------------------------------------------------
@@ -192,6 +210,26 @@ def test_load_probe_manifest_round_trip(tmp_path):
     assert registry[0].probe_id == "TEST_PROBE_1"
     assert len(registry[0].items) == 3
     assert meta == {"path": str(path), "sha256": sha, "schema": battery.PROBE_MANIFEST_SCHEMA, "issue": "TEST-FIXTURE", "probe_count": 1}
+
+
+def test_load_probe_manifest_rejects_inconsistent_chance_rate(tmp_path):
+    path, _ = _write_probe_manifest(tmp_path, n_items=2)
+    doc = json.loads(path.read_text())
+    doc["probes"][0]["chance_rate"] = 0.25
+    raw = json.dumps(doc).encode("utf-8")
+    path.write_bytes(raw)
+    with pytest.raises(battery.R2ProbeBatteryRefusal, match="CHANCE_RATE_INCONSISTENT"):
+        battery.load_probe_manifest(path, battery._sha256_bytes(raw))
+
+
+def test_load_probe_manifest_rejects_mixed_choice_cardinality(tmp_path):
+    path, _ = _write_probe_manifest(tmp_path, n_items=2)
+    doc = json.loads(path.read_text())
+    doc["probes"][0]["items"][1]["choices"] = [[1], [2], [3], [4]]
+    raw = json.dumps(doc).encode("utf-8")
+    path.write_bytes(raw)
+    with pytest.raises(battery.R2ProbeBatteryRefusal, match="CHANCE_RATE_INCONSISTENT"):
+        battery.load_probe_manifest(path, battery._sha256_bytes(raw))
 
 
 def test_load_probe_manifest_sha_mismatch(tmp_path):
