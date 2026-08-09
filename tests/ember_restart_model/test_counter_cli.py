@@ -38,6 +38,62 @@ from .checkpoint_fixture import write_checkpoint_artifacts
 from parameter_counter import REALIZATION_RECEIPT_FIELDS, _CheckpointMetadataUnpickler, _StorageRef, _TensorTypeSentinel, _rebuild_tensor, _rebuild_tensor_from_type, execute_counter, main, validate_realization_receipt
 
 
+def _write_external_genesis_fixture(root: Path) -> tuple[Path, Path, Path, str]:
+    """Build a tiny v5 bundle plus its independent genesis authority."""
+
+    config_path = root / "config.json"
+    config_payload = {
+        "architecture_revision": "ember-sparse-3b-v2",
+        "model": {
+            "hidden_size": 32,
+            "layers": 2,
+            "attention_heads": 4,
+            "vocab_size": 64,
+            "tied_embeddings": True,
+            "image_projection": {"input_shape": [48, 48, 3], "output_size": 32},
+            "audio_projection": {"frame_samples": 640, "output_size": 32},
+            "expert_routing": {"expert_names": ["vision", "audio", "reasoning", "tool"]},
+        },
+    }
+    config_path.write_text(json.dumps(config_payload), encoding="utf-8")
+    model = UnifiedDecoder(RestartDecoderConfig.small_for_tests(
+        hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+    ), genesis_seed=913)
+    model._activate_expert("shared")
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+    model(
+        torch.tensor([[1, 2, 3]], dtype=torch.long),
+        active_expert="shared",
+    ).float().square().mean().backward()
+    optimizer.step()
+    optimizer.zero_grad(set_to_none=True)
+    checkpoint = root / "checkpoint"
+    write_checkpoint_artifacts(
+        model,
+        optimizer,
+        checkpoint,
+        launch_seed=913,
+        rng_state={"cpu": torch.get_rng_state().clone(), "cuda": torch.tensor([1, 2, 3], dtype=torch.uint8)},
+        data_cursor={"shard": "owned", "record_index": 1, "global_step": 1, "tokens_seen": 3},
+        model_config_sha256=hashlib.sha256(config_path.read_bytes()).hexdigest(),
+        contract_sha256="d" * 64,
+        expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+        optimizer_state_layout="owner-sharded-v1",
+    )
+    manifest_path = checkpoint / "checkpoint-manifest.json"
+    authority_path = root / "expert-genesis-authority.json"
+    authority_path.write_text(json.dumps({
+        "schema_version": "ember-expert-genesis-authority-v1",
+        "architecture_revision": "ember-sparse-3b-v2",
+        "model_config_sha256": hashlib.sha256(config_path.read_bytes()).hexdigest(),
+        "contract_sha256": "d" * 64,
+        "checkpoint_manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+        "expert_genesis_sha256": model.expert_bank_genesis_hashes(),
+    }, sort_keys=True), encoding="utf-8")
+    authority_sha256 = hashlib.sha256(authority_path.read_bytes()).hexdigest()
+    return config_path, manifest_path, authority_path, authority_sha256
+
+
 class CounterCliTests(unittest.TestCase):
     def test_counter_inspects_v5_owner_sharded_optimizer_records(self) -> None:
         config = RestartDecoderConfig.small_for_tests(
@@ -82,10 +138,23 @@ class CounterCliTests(unittest.TestCase):
                 expert_genesis_sha256=model.expert_bank_genesis_hashes(),
                 optimizer_state_layout="owner-sharded-v1",
             )
+            manifest_path = checkpoint / "checkpoint-manifest.json"
+            authority_path = root / "expert-genesis-authority.json"
+            authority_path.write_text(json.dumps({
+                "schema_version": "ember-expert-genesis-authority-v1",
+                "architecture_revision": "ember-sparse-3b-v2",
+                "model_config_sha256": hashlib.sha256(config_path.read_bytes()).hexdigest(),
+                "contract_sha256": "d" * 64,
+                "checkpoint_manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+                "expert_genesis_sha256": model.expert_bank_genesis_hashes(),
+            }, sort_keys=True), encoding="utf-8")
+            authority_sha256 = hashlib.sha256(authority_path.read_bytes()).hexdigest()
             measured = execute_counter(
                 model_config=config_path,
-                checkpoint_manifest=checkpoint / "checkpoint-manifest.json",
+                checkpoint_manifest=manifest_path,
                 active_expert="shared",
+                expert_genesis_authority=authority_path,
+                expert_genesis_authority_sha256=authority_sha256,
             )
             self.assertEqual(measured["result"], "MEASURED")
             self.assertEqual(measured["active_expert_ids"], ["shared"])
@@ -97,9 +166,13 @@ class CounterCliTests(unittest.TestCase):
                     "--model-config",
                     str(config_path),
                     "--checkpoint-manifest",
-                    str(checkpoint / "checkpoint-manifest.json"),
+                    str(manifest_path),
                     "--active-expert",
                     "shared",
+                    "--expert-genesis-authority",
+                    str(authority_path),
+                    "--expert-genesis-authority-sha256",
+                    authority_sha256,
                 ],
                 check=False,
                 capture_output=True,
@@ -107,6 +180,79 @@ class CounterCliTests(unittest.TestCase):
             )
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertEqual(json.loads(completed.stdout)["result"], "MEASURED")
+
+    def test_counter_rejects_external_genesis_authority_hash_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config_path, manifest_path, authority_path, _authority_sha256 = _write_external_genesis_fixture(Path(directory))
+            with self.assertRaisesRegex(ValueError, "content hash mismatch"):
+                execute_counter(
+                    model_config=config_path,
+                    checkpoint_manifest=manifest_path,
+                    active_expert="shared",
+                    expert_genesis_authority=authority_path,
+                    expert_genesis_authority_sha256="0" * 64,
+                )
+
+    def test_counter_rejects_missing_or_malformed_external_genesis_authority(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path, manifest_path, authority_path, _authority_sha256 = _write_external_genesis_fixture(root)
+            with self.assertRaisesRegex(ValueError, "required together"):
+                execute_counter(
+                    model_config=config_path,
+                    checkpoint_manifest=manifest_path,
+                    active_expert="shared",
+                    expert_genesis_authority=authority_path,
+                )
+            authority_path.write_text("[]", encoding="utf-8")
+            malformed_sha256 = hashlib.sha256(authority_path.read_bytes()).hexdigest()
+            with self.assertRaisesRegex(ValueError, "must contain a JSON object"):
+                execute_counter(
+                    model_config=config_path,
+                    checkpoint_manifest=manifest_path,
+                    active_expert="shared",
+                    expert_genesis_authority=authority_path,
+                    expert_genesis_authority_sha256=malformed_sha256,
+                )
+
+    def test_counter_rejects_external_genesis_map_disagreement(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path, manifest_path, authority_path, _authority_sha256 = _write_external_genesis_fixture(root)
+            authority = json.loads(authority_path.read_text(encoding="utf-8"))
+            authority["expert_genesis_sha256"]["vision"] = "0" * 64
+            authority_path.write_text(json.dumps(authority, sort_keys=True), encoding="utf-8")
+            authority_sha256 = hashlib.sha256(authority_path.read_bytes()).hexdigest()
+            with self.assertRaisesRegex(ValueError, "disagrees with external authority"):
+                execute_counter(
+                    model_config=config_path,
+                    checkpoint_manifest=manifest_path,
+                    active_expert="shared",
+                    expert_genesis_authority=authority_path,
+                    expert_genesis_authority_sha256=authority_sha256,
+                )
+
+    def test_counter_rejects_external_genesis_authority_field_drift(self) -> None:
+        for field, message in (
+            ("model_config_sha256", "model-config hash mismatch"),
+            ("contract_sha256", "contract hash mismatch"),
+            ("checkpoint_manifest_sha256", "checkpoint hash mismatch"),
+        ):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                config_path, manifest_path, authority_path, _authority_sha256 = _write_external_genesis_fixture(root)
+                authority = json.loads(authority_path.read_text(encoding="utf-8"))
+                authority[field] = "0" * 64
+                authority_path.write_text(json.dumps(authority, sort_keys=True), encoding="utf-8")
+                authority_sha256 = hashlib.sha256(authority_path.read_bytes()).hexdigest()
+                with self.assertRaisesRegex(ValueError, message):
+                    execute_counter(
+                        model_config=config_path,
+                        checkpoint_manifest=manifest_path,
+                        active_expert="shared",
+                        expert_genesis_authority=authority_path,
+                        expert_genesis_authority_sha256=authority_sha256,
+                    )
 
     def test_counter_rejects_v5_top_level_split_shard_identity_drift(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
