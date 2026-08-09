@@ -2825,6 +2825,43 @@ class ResumeRootAuthorizationTests(_ResumeBundleMixin, unittest.TestCase):
                 paths, "run scope exceeds certificate: resume_checkpoint"
             )
 
+    def test_anchor_only_certificate_root_allowlists_fail_closed(self) -> None:
+        """A drive/root anchor must not authorize an entire filesystem volume."""
+
+        module = load_module()
+        anchor = pathlib.Path.cwd().anchor
+        artifact_root = pathlib.Path.cwd() / "artifacts"
+        custody_root = pathlib.Path.cwd() / "custody"
+        requested = valid_run_spec(
+            "a" * 64, artifact_root, custody_root
+        )["requested_scope"]
+        authorized = valid_scope(artifact_root, custody_root)
+        cases = (
+            ("allowed_resume_roots", None),
+            ("allowed_artifact_roots", "artifact_root"),
+            ("allowed_custody_roots", "custody_root"),
+        )
+        for allowlist_key, requested_key in cases:
+            with self.subTest(allowlist_key=allowlist_key):
+                if requested_key is None:
+                    with self.assertRaisesRegex(
+                        ValueError,
+                        rf"certificate {allowlist_key} entry .*filesystem anchor",
+                    ):
+                        module._authorized_resume_roots(
+                            {allowlist_key: [anchor]}
+                        )
+                    continue
+                authorized_case = dict(authorized)
+                authorized_case[allowlist_key] = [anchor]
+                requested_case = dict(requested)
+                requested_case[requested_key] = anchor
+                with self.assertRaisesRegex(
+                    ValueError,
+                    rf"certificate {allowlist_key} entry .*filesystem anchor",
+                ):
+                    module._require_scope_subset(requested_case, authorized_case)
+
     def test_malformed_allowed_resume_roots_fails_closed(self) -> None:
         for declared in ("not-a-list", [""], [None], [str(pathlib.Path.cwd()), 7]):
             with self.subTest(declared=declared), tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
