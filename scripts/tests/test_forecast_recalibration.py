@@ -256,6 +256,84 @@ def test_consumer_refuses_foreign_rung_and_path_tamper(tmp_path: Path) -> None:
     assert any("forecast_path" in defect for defect in defects)
 
 
+def test_public_e6_path_adjudicates_r2_and_binds_selected_rung(tmp_path: Path) -> None:
+    module, r1_forecast, run_root = write_fixture(tmp_path, run_ids=("run-a",))
+    r2_forecast = r1_forecast.with_name("ember02-r2-forecast-v1.json")
+    r2_forecast.write_bytes(r1_forecast.read_bytes())
+    receipt = module.build_receipt(r2_forecast, run_root, rung="R2")
+    (run_root / "forecast-recalibration.json").write_text(json.dumps(receipt), encoding="utf-8")
+    battery = load_battery()
+
+    result = battery.check_r1_e6(run_root, {"T-01": 2}, repo_root=run_root.parent, rung="R2")
+
+    assert result["status"] == "MET"
+    assert result["components"]["rung"] == "R2"
+
+
+@pytest.mark.parametrize("rung", ["", "R3"])
+def test_public_e6_path_refuses_absent_or_unknown_rung(tmp_path: Path, rung: str) -> None:
+    _, _, run_root = write_fixture(tmp_path, run_ids=("run-a",))
+    battery = load_battery()
+
+    with pytest.raises(battery.R1ExitBatteryRefusal, match="UNKNOWN_RUNG"):
+        battery.check_r1_e6(run_root, {"T-01": 2}, repo_root=run_root.parent, rung=rung)
+
+
+def test_public_e6_path_refuses_cross_rung_receipt(tmp_path: Path) -> None:
+    module, r1_forecast, run_root = write_fixture(tmp_path, run_ids=("run-a",))
+    receipt = module.build_receipt(r1_forecast, run_root, rung="R1")
+    (run_root / "forecast-recalibration.json").write_text(json.dumps(receipt), encoding="utf-8")
+    battery = load_battery()
+
+    result = battery.check_r1_e6(run_root, {"T-01": 2}, repo_root=run_root.parent, rung="R2")
+
+    assert result["status"] == "NOT_MET"
+    assert any(
+        "rung mismatch" in defect
+        for row in result["components"]["candidate_validation"]
+        for defect in row["defects"]
+    )
+
+
+def test_battery_cli_adjudicates_r2_receipt_and_records_rung(tmp_path: Path) -> None:
+    module, r1_forecast, run_root = write_fixture(tmp_path, run_ids=("run-a",))
+    r2_forecast = r1_forecast.with_name("ember02-r2-forecast-v1.json")
+    r2_forecast.write_bytes(r1_forecast.read_bytes())
+    receipt = module.build_receipt(r2_forecast, run_root, rung="R2")
+    (run_root / "forecast-recalibration.json").write_text(json.dumps(receipt), encoding="utf-8")
+    out_dir = tmp_path / "receipts"
+    battery = load_battery()
+    thresholds_path = battery.DEFAULT_THRESHOLDS_PATH
+    telemetry = run_root / "telemetry" / "train.jsonl"
+    template = json.loads(telemetry.read_text(encoding="utf-8").splitlines()[0])
+    rows = []
+    for step in range(1, 101):
+        row = json.loads(json.dumps(template))
+        row["payload"]["step"] = step
+        rows.append(row)
+    telemetry.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+    receipt = module.build_receipt(r2_forecast, run_root, rung="R2")
+    (run_root / "forecast-recalibration.json").write_text(json.dumps(receipt), encoding="utf-8")
+
+    original_repo_root = battery.REPO_ROOT
+    battery.REPO_ROOT = run_root.parent
+    try:
+        code = battery.main(
+            [
+                "--run-root", str(run_root), "--exit", "e6", "--rung", "R2",
+                "--thresholds", str(thresholds_path), "--out-dir", str(out_dir),
+            ]
+        )
+    finally:
+        battery.REPO_ROOT = original_repo_root
+
+    assert code == 0
+    emitted = json.loads(next(out_dir.glob("r1-e6-*.json")).read_text(encoding="utf-8"))
+    assert emitted["status"] == "MET"
+    assert emitted["subject"]["rung"] == "R2"
+    assert emitted["result"]["components"]["rung"] == "R2"
+
+
 def test_cli_emits_selected_rung_and_canonical_path(tmp_path: Path) -> None:
     module, fixture_forecast, run_root = write_fixture(tmp_path, run_ids=("run-a",))
     telemetry = run_root / "telemetry" / "train.jsonl"
