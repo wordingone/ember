@@ -2125,13 +2125,23 @@ def _validate_recalibration_content(
     if not isinstance(steps_measured, int) or isinstance(steps_measured, bool) or steps_measured < t01:
         defects.append(f"steps_measured={steps_measured!r} below T-01={t01} -- recalibration requires the measured baseline the prereg names")
 
-    # The producer's headline count is only valid when the same run can be
-    # selected and re-derived from this root.  A receipt may not choose a
-    # foreign run or pool steps across multiple run IDs.
-    selected_run_id, series, series_counts = _select_series(run_root, run_id=run_id)
     receipt_run_id = receipt.get("run_id")
     if not isinstance(receipt_run_id, str) or not receipt_run_id.strip():
         defects.append("run_id binding field missing -- the receipt must name the telemetry run it describes")
+    # The receipt's run_id is the authoritative selector for E6: a root may
+    # contain several valid runs, and the receipt must identify which one its
+    # measured values describe.  A caller-supplied selector remains an
+    # optional cross-check only; it may never silently select a different run.
+    selection_run_id = run_id
+    if isinstance(receipt_run_id, str) and receipt_run_id.strip():
+        if run_id is not None and run_id != receipt_run_id:
+            defects.append(
+                f"run_id selector mismatch: caller selected {run_id!r}, receipt names {receipt_run_id!r}"
+            )
+        selection_run_id = receipt_run_id
+    selected_run_id, series, series_counts = _select_series(
+        run_root, run_id=selection_run_id
+    )
     if not series:
         if selected_run_id is None and len(series_counts) > 1:
             defects.append(
@@ -2141,12 +2151,12 @@ def _validate_recalibration_content(
         else:
             defects.append(
                 "steps_measured cannot be re-derived: no train_step telemetry for the selected run "
-                f"(run_id={run_id!r}; run_ids_seen={series_counts!r})"
+                f"(run_id={selection_run_id!r}; run_ids_seen={series_counts!r})"
             )
     else:
         if isinstance(receipt_run_id, str) and receipt_run_id.strip() and receipt_run_id != selected_run_id:
             defects.append(
-                f"run_id mismatch: receipt names {receipt_run_id!r}, the adjudicated series is "
+                f"run_id selector mismatch: receipt names {receipt_run_id!r}, the adjudicated series is "
                 f"{selected_run_id!r} -- one run's recalibration must not credit another's telemetry"
             )
         if isinstance(steps_measured, int) and not isinstance(steps_measured, bool) and steps_measured != len(series):
@@ -3879,10 +3889,37 @@ def run_selftest() -> None:
         e6_foreign_id_res = check_r1_e6(e6_foreign_id_root, thresholds, repo_root=e6_repo)
         assert e6_foreign_id_res["status"] == "NOT_MET", e6_foreign_id_res
         assert any(
-            "run_id mismatch" in defect
+            "selected run" in defect
             for row in e6_foreign_id_res["components"]["candidate_validation"]
             for defect in row["defects"]
         ), e6_foreign_id_res
+
+        # --- E6: a receipt's run_id is the selector when a root contains
+        # multiple valid telemetry runs; an explicit caller selector must
+        # agree with that receipt identity (Niko #1604 P1). ---
+        e6_multi_root = tmp_path / "e6_multi_run"
+        e6_multi_root.mkdir()
+        _write_jsonl(
+            e6_multi_root / "telemetry" / "train.jsonl",
+            _synthetic_train_step_events(run_id="SELFTEST_E6_run", n_steps=100)
+            + _synthetic_train_step_events(run_id="SELFTEST_E6_other", n_steps=100),
+        )
+        e6_multi = json.loads(json.dumps(e6_receipt))
+        e6_multi["run_root"] = str(e6_multi_root)
+        (e6_multi_root / "forecast-recalibration.json").write_text(
+            json.dumps(e6_multi), encoding="utf-8"
+        )
+        e6_multi_valid = check_r1_e6(e6_multi_root, thresholds, repo_root=e6_repo)
+        assert e6_multi_valid["status"] == "MET", e6_multi_valid
+        e6_multi_mismatch = check_r1_e6(
+            e6_multi_root, thresholds, repo_root=e6_repo, run_id="SELFTEST_E6_other"
+        )
+        assert e6_multi_mismatch["status"] == "NOT_MET", e6_multi_mismatch
+        assert any(
+            "run_id selector mismatch" in defect
+            for row in e6_multi_mismatch["components"]["candidate_validation"]
+            for defect in row["defects"]
+        ), e6_multi_mismatch
 
         # --- E6 (rev-1490 f6): the valid receipt plus TWO forecast-named companions stays MET ---
         (e6_met_root / "disk-forecast.json").write_text(json.dumps({"noise": 1}), encoding="utf-8")
