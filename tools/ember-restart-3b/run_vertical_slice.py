@@ -388,7 +388,13 @@ def validate_specialist_execution_slice(
 def append_training_telemetry(path: Path, *, kind: str, payload: dict[str, object]) -> None:
     """Append one bounded, path-free cockpit event from the canonical trainer."""
 
-    if kind not in {"run_status", "train_step", "checkpoint", "checkpoint_deferred"}:
+    if kind not in {
+        "run_status",
+        "train_step",
+        "checkpoint",
+        "checkpoint_deferred",
+        "e4_receipt_write_failure",
+    }:
         raise ValueError("training telemetry kind is not authorized")
     if any("path" in key.lower() for key in payload):
         raise ValueError("training telemetry payload must not disclose filesystem paths")
@@ -464,6 +470,34 @@ def _training_failure_class(error: Exception) -> str:
     if isinstance(error, ValueError):
         return "CONTRACT_ERROR"
     return "TRAINER_ERROR"
+
+
+def _record_e4_measurement_write_failure(
+    accumulator: dict[str, object],
+    *,
+    telemetry_path: Path,
+    telemetry_run_id: str,
+    error: Exception,
+) -> None:
+    """Count every failed receipt write and disclose the first through telemetry."""
+
+    write_failures = int(accumulator["write_failures"]) + 1
+    accumulator["write_failures"] = write_failures
+    if write_failures != 1:
+        return
+    # Deliberately unguarded: telemetry is primary evidence for the credited
+    # run. If this independent channel cannot write, continuing would create an
+    # uncreditable GPU leg rather than merely lose the secondary E4 receipt.
+    append_training_telemetry(
+        telemetry_path,
+        kind="e4_receipt_write_failure",
+        payload={
+            "run_id": telemetry_run_id,
+            "failure_class": _training_failure_class(error),
+            "error_type": type(error).__name__,
+            "write_failures": write_failures,
+        },
+    )
 
 
 def specialist_resume_cursor(cursor: dict[str, object], *, data_shard_id: str) -> dict[str, object]:
@@ -3027,7 +3061,7 @@ def run(
             e4_accumulator["step_ms_sum"] = float(e4_accumulator["step_ms_sum"]) + float(step_ms)
         try:
             _write_e4_measurement_receipt()
-        except Exception:
+        except Exception as error:
             # rev-1495 finding 1: the evidence writer must never kill the
             # certified run it documents (that would invert the #1489 lesson --
             # the receipt exists BECAUSE crashes destroy evidence). A full
@@ -3036,7 +3070,12 @@ def run(
             # counted here and disclosed in the next successful receipt; the
             # accumulator itself lost nothing. KeyboardInterrupt/SystemExit
             # still propagate (BaseException, not Exception).
-            e4_accumulator["write_failures"] = int(e4_accumulator["write_failures"]) + 1
+            _record_e4_measurement_write_failure(
+                e4_accumulator,
+                telemetry_path=telemetry_path,
+                telemetry_run_id=telemetry_run_id,
+                error=error,
+            )
 
     segment = run_pretraining_segment(
         model=model, optimizer=optimizer, records=records, config=config, device=torch.device("cuda"),
