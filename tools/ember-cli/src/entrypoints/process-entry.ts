@@ -7,6 +7,7 @@
 // Bundle: entrypoints/process-entry.ts (lines 323033–323519)
 
 import { readFile, writeFile, stat, mkdir } from "fs/promises";
+import { createHash } from "node:crypto";
 import { openSync, closeSync } from "fs";
 import { join, dirname, resolve } from "path";
 import { spawn } from "child_process";
@@ -149,6 +150,8 @@ const FAST_PATH_SUBCMDS = new Set<string>([
   "reply",
   "environment-runner",
   "self-hosted-runner",
+  "goal-session-smoke",
+  "goal-session-live",
   "gh",
   "liveness",
 ]);
@@ -492,7 +495,7 @@ export async function spawnLlamaServer(opts: ServerSpawnOptions): Promise<Server
 // (W1 attempt-3 OOM'd 10:39Z after the cockpit's 10:13:46Z boot spawned
 // llama-server) is exactly that collision. This reuses the SAME
 // planned-outage.json marker + parse/effective-check pair
-// services/brain-server-supervisor.ts's resolveDeviceForSpawn already reads
+// Ember Lab's daemon-owned device policy already reads
 // for its own cuda/cpu device policy (issue #588/#602/#614 lineage) --
 // no new lease mechanism, no new marker format, same fail-open contract
 // (absent/unreadable/malformed marker = no lease, never a false refusal).
@@ -500,7 +503,7 @@ export async function spawnLlamaServer(opts: ServerSpawnOptions): Promise<Server
 
 /** Reads tools/ember-cli/state/planned-outage.json relative to the resolved ember
  *  source root and returns the effective marker, or null if none is live.
- *  Fail-open on any read/parse error, matching brain-server-supervisor.ts's
+ *  Fail-open on any read/parse error, matching the current Ember Lab policy's
  *  resolveDeviceForSpawn (an outage system that fails CLOSED on marker read errors
  *  would itself become an availability hazard). */
 export async function defaultCheckGpuLease(): Promise<OutageMarker | null> {
@@ -609,7 +612,7 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
       `\n` +
       `Subcommands:\n` +
       `  remote-control (rc), sync, bridge, daemon, ps, logs, attach, kill,\n` +
-      `  new, list, reply, environment-runner, self-hosted-runner, gh doctor,\n` +
+      `  new, list, reply, environment-runner, self-hosted-runner, goal-session-smoke, goal-session-live, gh doctor,\n` +
       `  liveness install [--executable C:\\path\\to\\ember.exe]\n` +
       `\n` +
       `Environment:\n` +
@@ -719,6 +722,24 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
     }
     process.stderr.write(`gh: unknown subcommand "${sub ?? ""}" (supported: doctor)\n`);
     process.exit(1);
+    return true;
+  }
+
+  if (first === "goal-session-smoke" || first === "goal-session-live") {
+    const { runGoalLiveOperatorSession } = await import("../services/goal-live-session.ts");
+    try {
+      const executable_sha256 = createHash("sha256").update(await readFile(process.execPath)).digest("hex");
+      const receipt = await runGoalLiveOperatorSession({ executable_sha256 });
+      process.stdout.write(JSON.stringify(receipt) + "\n");
+      process.exit(0);
+    } catch (error) {
+      process.stderr.write(
+        (first + " failed: ") +
+          (error instanceof Error ? error.message : String(error)) +
+          "\n",
+      );
+      process.exit(1);
+    }
     return true;
   }
 
@@ -849,12 +870,12 @@ export interface MainOptions {
 
 export function freshInteractiveReplConfig(model: string): {
   model: string;
-  permissionMode: "interactive";
+  permissionMode: "regular";
   baseSystemPrompt: string;
 } {
   return {
     model,
-    permissionMode: "interactive",
+    permissionMode: "regular",
     baseSystemPrompt: "",
   };
 }
@@ -902,7 +923,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   // while the code below still tries to spawn a server). An explicit EMBER_MODEL_URL still
   // wins over a lease (checked via envModelUrlBeforeConfigApply, identical precedence to
   // the existing GPU-free flag). Reuses the SAME planned-outage.json marker
-  // services/brain-server-supervisor.ts's resolveDeviceForSpawn already reads for its own
+  // Ember Lab's owned-server supervisor already reads this for its own
   // cuda/cpu device policy -- no new lease mechanism.
   const gpuLeaseMarker = envModelUrlBeforeConfigApply === undefined
     ? await (opts.checkGpuLease ?? defaultCheckGpuLease)()
@@ -1112,6 +1133,19 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     serverUrl    = externalUrl;
     detectedNCtx = await detectNCtx(serverUrl).catch(() => modelsCfg?.nCtx ?? 4096);
   } else {
+    // No direct launcher path may become an accidental third authority.  The
+    // only seat permitted to use this local-spawn compatibility branch is an
+    // explicitly requested REFERENCE_ONLY seat; owned seats already passed
+    // through Ember Lab's ensureOwnedServer above, and an ordinary unbound
+    // boot is refused by resolveModelSeat before reaching here.
+    if (seatDecision.seat !== "REFERENCE_ONLY") {
+      process.env["EMBER_MODEL_NAME"] = "OFFLINE - no model";
+      process.stderr.write(
+        "[ember] ERROR: direct model spawn requires a bound Ember Lab identity or explicit reference seat\n",
+      );
+      doExitMain(1);
+      return;
+    }
     const exeDir    = resolve(dirname(process.execPath ?? process.argv[0] ?? process.cwd()));
     const port      = await resolveServerPort(exeDir);
     const binPath   = resolve(exeDir, modelsCfg?.binary ?? "llama-server.exe");
@@ -1335,9 +1369,9 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   // The interactive TUI is the operator-seat surface (#154): its cwd is where the agent's
   // Read/Bash tools resolve GOAL.md and everything else. process.cwd() alone is not
   // reliable here under a compiled binary launched from an arbitrary directory (#172) --
-  // resolve the real repo root (env var / cwd-walk / exe-path-walk), falling back to
-  // today's process.cwd() only if none of those anchors find it (e.g. a genuinely
-  // unrelated project directory), so this never regresses a non-ember working directory.
+  // resolve the real repo root (env var / cwd-walk / exe-path-walk). If none of those
+  // anchors find an Ember checkout, resolveEmberSourceRootOrCwd preserves the typed
+  // SourceRootError refusal; the interactive surface never guesses from process.cwd().
   const replProps = {
     config: freshInteractiveReplConfig(process.env["EMBER_MODEL_NAME"] ?? "ember"),
     cwd:    resolveEmberSourceRootOrCwd({}, "[ember-cli]"),

@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // core/goal-store.ts — persisted goal state machine (ember issue #211, spec:
 // docs/goal-mode-mechanism.md §1/§2). Data model: goal_id, objective (max 4000
 // chars, immutable to the model), status machine, optional token_budget,
@@ -33,6 +37,16 @@ export interface GoalUsage {
   elapsedMs: number;
 }
 
+/** Requirement-by-requirement evidence required to prove a Complete transition. */
+export interface CompletionAuditItem {
+  id: string;
+  evidence: string;
+}
+
+export interface CompletionAudit {
+  requirements: CompletionAuditItem[];
+}
+
 export interface GoalRecord {
   goalId: string;
   /** Immutable to the model. Only editObjective() (never exposed as a model tool) may change this. */
@@ -45,6 +59,8 @@ export interface GoalRecord {
   /** Consecutive goal-turns the CURRENT blocking condition has repeated; reset on any transition to Active. */
   consecutiveBlockedTurns: number;
   lastBlockReason?: string;
+  /** Exact evidence supplied for the terminal Complete transition, when present. */
+  completionAudit?: CompletionAudit;
 }
 
 // ---------------------------------------------------------------------------
@@ -78,6 +94,39 @@ export function isLegalTransition(from: GoalStatus, to: GoalStatus): boolean {
 // ---------------------------------------------------------------------------
 
 export type ValidationOutcome = { ok: true } | { ok: false; message: string };
+
+export function validateCompletionAudit(value: unknown): ValidationOutcome {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { ok: false, message: "Complete requires a completionAudit object" };
+  }
+  const audit = value as Record<string, unknown>;
+  if (Object.keys(audit).length !== 1 || !Object.prototype.hasOwnProperty.call(audit, "requirements")) {
+    return { ok: false, message: "completionAudit must contain only requirements" };
+  }
+  if (!Array.isArray(audit.requirements) || audit.requirements.length === 0) {
+    return { ok: false, message: "completionAudit.requirements must contain at least one item" };
+  }
+  const seen = new Set<string>();
+  for (const item of audit.requirements) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      return { ok: false, message: "completionAudit requirements must be objects" };
+    }
+    const record = item as Record<string, unknown>;
+    if (Object.keys(record).length !== 2 || typeof record.id !== "string" || typeof record.evidence !== "string") {
+      return { ok: false, message: "completionAudit items require only non-empty id and evidence" };
+    }
+    const id = record.id.trim();
+    const evidence = record.evidence.trim();
+    if (!id || !evidence) {
+      return { ok: false, message: "completionAudit items require non-empty id and evidence" };
+    }
+    if (seen.has(id)) {
+      return { ok: false, message: `completionAudit repeats requirement ${id}` };
+    }
+    seen.add(id);
+  }
+  return { ok: true };
+}
 
 export function validateObjective(objective: string): ValidationOutcome {
   const trimmed = objective.trim();
@@ -124,7 +173,7 @@ export function createInMemoryGoalPersistence(
 
 export type GoalTransitionEvent =
   | { kind: "created"; goal: GoalRecord }
-  | { kind: "status_changed"; goal: GoalRecord; from: GoalStatus; to: GoalStatus; reason?: string }
+  | { kind: "status_changed"; goal: GoalRecord; from: GoalStatus; to: GoalStatus; reason?: string; completionAudit?: CompletionAudit }
   | { kind: "objective_edited"; goal: GoalRecord; previousObjective: string }
   | { kind: "usage_recorded"; goal: GoalRecord }
   | { kind: "cleared"; goalId: string };
@@ -161,7 +210,7 @@ export interface GoalStore {
   /** Status-only transition, gated by isLegalTransition. This is what update_goal calls --
    *  its input schema has no objective field, so there is no code path from the model
    *  into this method that could smuggle an objective change through. */
-  updateStatus(status: GoalStatus, opts?: { reason?: string }): GoalResult;
+  updateStatus(status: GoalStatus, opts?: { reason?: string; completionAudit?: CompletionAudit }): GoalResult;
   recordUsage(tokensDelta: number, elapsedMsDelta?: number): GoalResult;
   noteBlocked(reason: string): NoteBlockedResult;
   /** Called on any transition to Active (resume) -- "resume resets the audit". */
@@ -236,7 +285,7 @@ export function createGoalStore(deps: GoalStoreDeps = {}): GoalStore {
     return { ok: true, goal: updated };
   }
 
-  function updateStatus(status: GoalStatus, opts: { reason?: string } = {}): GoalResult {
+  function updateStatus(status: GoalStatus, opts: { reason?: string; completionAudit?: CompletionAudit } = {}): GoalResult {
     const existing = persistence.read();
     if (!existing) return { ok: false, message: "no active goal" };
     if (!isLegalTransition(existing.status, status)) {
@@ -245,6 +294,13 @@ export function createGoalStore(deps: GoalStoreDeps = {}): GoalStore {
         message: `illegal transition ${existing.status} -> ${status}`,
       };
     }
+    if (opts.completionAudit !== undefined && status !== "Complete") {
+      return { ok: false, message: "completionAudit is valid only for Complete transitions" };
+    }
+    if (status === "Complete") {
+      const completionAudit = validateCompletionAudit(opts.completionAudit);
+      if (!completionAudit.ok) return completionAudit;
+    }
     const resetsAudit = status === "Active";
     const updated: GoalRecord = {
       ...existing,
@@ -252,6 +308,9 @@ export function createGoalStore(deps: GoalStoreDeps = {}): GoalStore {
       updatedAt: now().toISOString(),
       consecutiveBlockedTurns: resetsAudit ? 0 : existing.consecutiveBlockedTurns,
       ...(resetsAudit ? { lastBlockReason: undefined } : {}),
+      ...(status === "Complete" && opts.completionAudit !== undefined
+        ? { completionAudit: opts.completionAudit }
+        : {}),
     };
     persistence.write(updated);
     emit({
@@ -260,6 +319,9 @@ export function createGoalStore(deps: GoalStoreDeps = {}): GoalStore {
       from: existing.status,
       to: status,
       ...(opts.reason !== undefined ? { reason: opts.reason } : {}),
+      ...(status === "Complete" && opts.completionAudit !== undefined
+        ? { completionAudit: opts.completionAudit }
+        : {}),
     });
     return { ok: true, goal: updated };
   }

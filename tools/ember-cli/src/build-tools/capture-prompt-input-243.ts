@@ -109,10 +109,12 @@ export function redactHostPaths(
   return { publicBytes, redactions };
 }
 
-function frameLines(terminal: Terminal): string[] {
+export function visibleFrameLines(terminal: Terminal): string[] {
   const start = terminal.buffer.active.viewportY;
   return Array.from({ length: terminal.rows }, (_, row) =>
-    terminal.buffer.active.getLine(start + row)?.translateToString(false) ?? "",
+    (terminal.buffer.active.getLine(start + row)?.translateToString(false, 0, terminal.cols) ?? "")
+      .padEnd(terminal.cols)
+      .slice(0, terminal.cols),
   );
 }
 
@@ -371,7 +373,7 @@ async function waitForRegion(
   while (Date.now() < deadline) {
     if (rawChunks.length > 0) {
       await flushWrites();
-      const current = frameLines(terminal);
+      const current = visibleFrameLines(terminal);
       try {
         return { lines: current, region: findClosedPromptRegion(current, terminal.cols) };
       } catch (error) {
@@ -475,7 +477,10 @@ export async function capturePromptInput243(argv: string[]): Promise<void> {
       const privateRawBytes = Buffer.from(rawChunks.join(""), "utf8");
       const privateFrameText = `${observed.lines.join("\n")}\n`;
       const stem = `stage-${index + 1}-${columns}`;
-      const rawPath = join(outDir, `${stem}.raw`);
+      // ConPTY output is an opaque byte stream and legitimately contains CRLF.
+      // Publish it as binary evidence so Git never normalizes bytes after the
+      // receipt has committed their exact hash.
+      const rawPath = join(outDir, `${stem}.raw.bin`);
       const privateRawPath = join(privateOutDir, `${stem}.raw`);
       const framePath = join(outDir, `${stem}.frame.txt`);
       const rawRedaction = redactHostPaths(privateRawBytes, [binary, repoRoot, resolvedEmberRoot]);
@@ -496,7 +501,7 @@ export async function capturePromptInput243(argv: string[]): Promise<void> {
       stages.push({
         columns,
         rows: ROWS,
-        rawPath: `${outArtifact}/${stem}.raw`,
+        rawPath: `${outArtifact}/${stem}.raw.bin`,
         privateRawLocator: `EMBER_PRIVATE_EVIDENCE:ember-cli/issue-243/live-resize-v1/${sourceCommit}/${stem}.raw`,
         privateRawBytes,
         redactions: rawRedaction.redactions,

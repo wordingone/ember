@@ -59,6 +59,12 @@ jobs:
             --snapshot-output "${RUNNER_TEMP}/pr-policy-snapshot.json"
       - name: Run deterministic policy tests
         run: python -B -m unittest discover -s scripts/github -p "test_*.py" -v
+      - name: Verify text-lab input identity pins are fresh
+        run: python -B tools/ember-restart-3b/remint_text_lab_input_identity.py --check
+      - name: Run text-lab identity freshness regressions
+        run: python -B -m unittest discover -s tests/ember_restart_model -p "test_remint_text_lab_input_identity.py" -v
+      - name: Verify POSIX owned process-tree cleanup
+        run: python -B scripts/ember_gate_process_supervision_selftest.py
   rust:
     runs-on: windows-latest
     timeout-minutes: 25
@@ -123,7 +129,7 @@ jobs:
       # The repository currently carries unrelated full-suite/typecheck debt.
       # Keep the merge gate executable and deterministic instead of making
       # every PR inherit that historical failure surface.
-      - run: bun test build-tools/lifecycle-smoke.test.ts
+      - run: bun run test -- build-tools/lifecycle-smoke.test.ts
       # The launcher compiles the cockpit straight into its external state root by
       # setting EMBER_BUILD_OUTFILE (#1330). Nothing in CI exercised that override, so
       # a regression in it only surfaced on a real launch. This runs BEFORE the default
@@ -154,6 +160,10 @@ jobs:
           python-version: "3.12"
       - name: Run root launcher suite
         run: python -B -m unittest discover -s tests -p "test_ember_root_launcher.py" -v
+      - name: Verify versioned desktop deployment and shortcuts
+        run: powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/ember-desktop-deployment-selftest.ps1
+      - name: Verify Windows Job Object process-tree cleanup
+        run: python -B scripts/ember_gate_process_supervision_selftest.py
   ci-pr:
     if: always()
     needs: [python, rust, cli, launcher, production-rung-replay]

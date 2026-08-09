@@ -1,0 +1,24 @@
+╭─ ember ──────────╮┌LIVE RUN / ACTIVI…┐
+│    ▀       ember ││ IDLE             │
+│   ▀▀▀      infere││ [SELECT PROCESS… │
+│            nce +…││   [START]        │
+│  ▀▀▀▀▀     OFFLIN││   [PAUSE]        │
+│   ▀▀▀      <p>~~~││   [RESUME]       │
+│            \ember││   [RESTART]      │
+│            -303  ││ inspect          │
+│    ▀       Data:…││ [observatory]    │
+│Spine — what Ember││ [watch] [model]  │
+╰──────────────────╯│ +6 more          │
+                    │ SOURCE UNVERIFI… │
+                    │ ┌HOST MEMORY G…┐ │
+                    │ │ 0.20 GiB | m~│ │
+                    │ └──────────────┘ │
+                    │ ┌─ HOST RAM GIB  │
+                    │ │ 24.53 GiB | ~│ │
+                    │ └──────────────┘ │
+                    │ … 8 more charts  │
+                    │ ACTIVITY/EVENT … │
+╭──────────────────╮│ activity: none … │
+│ ❯                ││                  │
+│ ○ observe · ○ s… ││                  │
+╰──────────────────╯└──────────────────┘

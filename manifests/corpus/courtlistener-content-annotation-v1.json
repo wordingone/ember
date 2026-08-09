@@ -1,0 +1,71 @@
+{
+  "annotation_sha256": "3804009324d2488561971bb5a060c5be459acb6babef7308060d5ed5f2a64757",
+  "files": [
+    {
+      "bytes": 81180,
+      "classification_basis": "header_and_bounded_sample; no model-mediated filter",
+      "content_class": "STRUCTURED_METADATA",
+      "header_sha256": "3d9373fa2957100f7dd36364077fa6d982cc454d35243ea21f0b158a2e92148b",
+      "nonempty_prose_cells": 0,
+      "path": "courts-2026-06-30.csv.bz2",
+      "prose_gap_eligible": false,
+      "sample_rows": 8,
+      "selection_rule": "federal courts bulk metadata",
+      "sha256": "d5a7a5aa902cb4cdb1b99eb3e6a160867a77ce4b2401682291081499537ea8be",
+      "source_url": "https://com-courtlistener-storage.s3-us-west-2.amazonaws.com/bulk-data/courts-2026-06-30.csv.bz2",
+      "usable_prose_bytes": 0
+    },
+    {
+      "bytes": 2457231057,
+      "classification_basis": "header_and_bounded_sample; no model-mediated filter",
+      "content_class": "METADATA_ONLY_NO_PROSE_OBSERVED",
+      "header_sha256": "864c6b0883102d9922bcb0eaeac9fdab7fa3fc8f6e08f689c6fa28485432e671",
+      "nonempty_prose_cells": 0,
+      "path": "opinion-clusters-2026-06-30.csv.bz2",
+      "prose_gap_eligible": false,
+      "sample_rows": 8,
+      "selection_rule": "federal courts opinion-clusters bulk set",
+      "sha256": "bddbd5ca78377ef2fe56ed2ef506e12afe291b6fc7fc31fac6721f4de33b182f",
+      "source_url": "https://com-courtlistener-storage.s3-us-west-2.amazonaws.com/bulk-data/opinion-clusters-2026-06-30.csv.bz2",
+      "usable_prose_bytes": 0
+    },
+    {
+      "bytes": 243879573,
+      "classification_basis": "header_and_bounded_sample; no model-mediated filter",
+      "content_class": "STRUCTURED_METADATA",
+      "header_sha256": "cd5a5f6f64609f89a348d803b9591e685c31baff3a017c050bc82acb5089cf87",
+      "nonempty_prose_cells": 0,
+      "path": "scotus_caption_data.csv",
+      "prose_gap_eligible": false,
+      "sample_rows": 8,
+      "selection_rule": "supreme-court opinions set",
+      "sha256": "3da7f0e192b1b76b38fa0d77f62f8d0413fc7c0126fe9c6401cc925736a61330",
+      "source_url": "https://com-courtlistener-storage.s3-us-west-2.amazonaws.com/bulk-data/randoms/scotus_caption_data.csv",
+      "usable_prose_bytes": 0
+    },
+    {
+      "bytes": 6955630,
+      "classification_basis": "header_and_bounded_sample; no model-mediated filter",
+      "content_class": "STRUCTURED_METADATA",
+      "header_sha256": "711444e4dca2827cb92fd2f73293a0c92947dde7f288c998b26b3f5e44bf57f5",
+      "nonempty_prose_cells": 0,
+      "path": "scotus_network.csv",
+      "prose_gap_eligible": false,
+      "sample_rows": 8,
+      "selection_rule": "supreme-court opinion citation network",
+      "sha256": "c20e06cce8e65ae971f6f0660af5feb5428130cd7dcb76fe91d2aef708c03ac0",
+      "source_url": "https://com-courtlistener-storage.s3-us-west-2.amazonaws.com/bulk-data/randoms/scotus_network.csv",
+      "usable_prose_bytes": 0
+    }
+  ],
+  "manifest_sha256": "1207fc73c16a5a9af9a7d0595b282bfbe78037d94aa678e752a8365f6c29883b",
+  "projection": {
+    "eligible_prose_bytes": 0,
+    "eligible_sources": [],
+    "raw_bytes": 2708147440
+  },
+  "prose_gap_admission": "NOT_ADMITTED",
+  "result": "CONTENT_CLASSIFIED",
+  "schema_version": "corpus-courtlistener-content-annotation-v1",
+  "source_id": "courtlistener-wave-1"
+}

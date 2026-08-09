@@ -2,7 +2,7 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
+use rusqlite::{params, Connection, OpenFlags, OptionalExtension, TransactionBehavior};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -18,14 +18,78 @@ use std::sync::{Arc, Mutex};
 use std::sync::{RwLock, Weak};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+pub mod data_catalog;
+pub mod rehearsal;
 pub mod rpc;
 pub mod scratch;
+pub mod server_supervisor;
 pub mod training_verify;
 
 pub type Result<T> = std::result::Result<T, EmberLabError>;
 
 /// Largest UTF-8 dispatch-manifest payload that fits the 64 KiB JSON-RPC line envelope even when JSON string escaping doubles every source byte.
 pub const MAX_DISPATCH_MANIFEST_BYTES: usize = 30_000;
+const CURRENT_DATABASE_SCHEMA_VERSION: u32 = 5;
+
+pub fn read_data_catalog_status(path: &Path) -> Result<Value> {
+    let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    conn.busy_timeout(Duration::from_secs(10))?;
+    conn.execute_batch("PRAGMA foreign_keys=ON;")?;
+    let schema_version: String = conn.query_row(
+        "SELECT value FROM metadata WHERE key='schema_version'",
+        [],
+        |row| row.get(0),
+    )?;
+    if schema_version != CURRENT_DATABASE_SCHEMA_VERSION.to_string() {
+        return Err(EmberLabError::InvalidDataCatalog {
+            detail: format!(
+                "read-only data catalog status requires database schema version {CURRENT_DATABASE_SCHEMA_VERSION}, found {schema_version}"
+            ),
+        });
+    }
+    data_catalog::status(&conn)
+}
+
+pub fn rollback_empty_data_catalog_migration(path: &Path) -> Result<()> {
+    let _state_writer_lock = acquire_state_writer_lock(path)?;
+    let mut conn = Connection::open(path)?;
+    conn.busy_timeout(Duration::from_secs(10))?;
+    conn.execute_batch("PRAGMA foreign_keys=ON;")?;
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let schema_version: String = tx.query_row(
+        "SELECT value FROM metadata WHERE key='schema_version'",
+        [],
+        |row| row.get(0),
+    )?;
+    if schema_version != CURRENT_DATABASE_SCHEMA_VERSION.to_string() {
+        return Err(EmberLabError::InvalidDataCatalog {
+            detail: format!(
+                "data catalog rollback requires database schema version {CURRENT_DATABASE_SCHEMA_VERSION}, found {schema_version}"
+            ),
+        });
+    }
+    let catalog_rows: i64 = tx.query_row(
+        "SELECT
+             (SELECT COUNT(*) FROM data_catalog_records)
+           + (SELECT COUNT(*) FROM data_catalog_edges)
+           + (SELECT COUNT(*) FROM data_catalog_imports)",
+        [],
+        |row| row.get(0),
+    )?;
+    if catalog_rows != 0 {
+        return Err(EmberLabError::InvalidDataCatalog {
+            detail: "data catalog rollback refuses after immutable catalog data exists".into(),
+        });
+    }
+    tx.execute_batch(
+        "DROP TABLE data_catalog_edges;
+         DROP TABLE data_catalog_imports;
+         DROP TABLE data_catalog_records;
+         UPDATE metadata SET value='4' WHERE key='schema_version';",
+    )?;
+    tx.commit()?;
+    Ok(())
+}
 
 #[derive(Debug)]
 pub enum EmberLabError {
@@ -164,6 +228,9 @@ pub enum EmberLabError {
     ResourceAdmissionFrozen {
         reason: String,
         receipt_path: PathBuf,
+    },
+    InvalidDataCatalog {
+        detail: String,
     },
     Poisoned,
 }
@@ -882,7 +949,7 @@ impl Daemon {
         fs::create_dir_all(&log_dir)?;
         #[cfg(windows)]
         let monitor_shutdown = create_monitor_shutdown()?;
-        let conn = Connection::open(path)?;
+        let mut conn = Connection::open(path)?;
         let ember_lab_binary_sha256 = hash_file(&std::env::current_exe()?)?;
         let ember_lab_source_sha256 = ember_lab_source_hash();
         conn.busy_timeout(Duration::from_secs(10))?;
@@ -901,7 +968,7 @@ impl Daemon {
             CREATE TABLE IF NOT EXISTS resource_guard_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), admission_state TEXT NOT NULL CHECK(admission_state IN ('open','frozen')), reason TEXT, observed_at_ms INTEGER NOT NULL, oracle_evidence_required INTEGER NOT NULL CHECK(oracle_evidence_required IN (0,1)), observation_json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS resource_guard_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL);
             INSERT OR IGNORE INTO resource_guard_state(singleton,admission_state,reason,observed_at_ms,oracle_evidence_required,observation_json) VALUES(1,'open',NULL,0,0,'{}');")?;
-        migrate_schema(&conn, &log_dir)?;
+        migrate_schema(&mut conn, &log_dir)?;
         conn.execute(
             "INSERT OR IGNORE INTO metadata(key,value) VALUES('schedule_monitor_started_at_ms',?1)",
             [now_ms().to_string()],
@@ -956,6 +1023,24 @@ impl Daemon {
     pub fn resource_guard_status(&self) -> Result<Value> {
         let conn = self.conn()?;
         resource_guard_status_from_connection(&conn)
+    }
+
+    pub fn import_data_catalog_manifest(
+        &self,
+        manifest_bytes: &[u8],
+    ) -> Result<data_catalog::DataCatalogImportOutcome> {
+        let mut conn = self.conn()?;
+        data_catalog::import_manifest(&mut conn, manifest_bytes, now_ms())
+    }
+
+    pub fn export_data_catalog_manifest(&self) -> Result<Vec<u8>> {
+        let conn = self.conn()?;
+        data_catalog::export_manifest(&conn)
+    }
+
+    pub fn data_catalog_status(&self) -> Result<Value> {
+        let conn = self.conn()?;
+        data_catalog::status(&conn)
     }
 
     fn frozen_resource_guard(&self) -> Result<Option<Value>> {
@@ -2183,6 +2268,16 @@ impl Daemon {
             PROTECTIVE_CHECKPOINT_RESPONSE_ENV.into(),
             checkpoint_response_path.to_string_lossy().into_owned(),
         );
+        if spec.env.get("EMBER_LAB_MINIMAL_SLICE").map(String::as_str) == Some("1") {
+            let output_root = self
+                .log_dir
+                .join("rehearsal")
+                .join(hash_bytes(spec.job_id.as_bytes()));
+            spec.env.insert(
+                "EMBER_LAB_PHASE_OUTPUT_ROOT".into(),
+                output_root.to_string_lossy().into_owned(),
+            );
+        }
         let argv_json = serde_json::to_string(&spec.args)?;
         let env_json = serde_json::to_string(&spec.env)?;
         let argv_sha = hash_bytes(argv_json.as_bytes());
@@ -2352,6 +2447,16 @@ impl Daemon {
             })
             .optional()?;
         value.map(|v| JobState::parse(&v)).transpose()
+    }
+
+    pub fn job_pid(&self, job_id: &str) -> Result<Option<u32>> {
+        Ok(self
+            .conn()?
+            .query_row("SELECT pid FROM jobs WHERE job_id=?1", [job_id], |row| {
+                row.get::<_, i64>(0)
+            })
+            .optional()?
+            .and_then(|pid| u32::try_from(pid).ok()))
     }
 
     pub fn job_exit_code(&self, job_id: &str) -> Result<Option<i64>> {
@@ -2738,26 +2843,41 @@ impl Daemon {
                 state: state.as_str().into(),
             });
         }
-        let bytes = self.receipt_bytes(job_id)?;
-        let sha256 = hash_bytes(&bytes);
-        fs::create_dir_all(directory)?;
-        let path = directory.join(format!("{sha256}.json"));
-        if path.exists() {
-            if fs::read(&path)? == bytes {
-                return Ok(ReceiptArtifact { path, sha256 });
-            }
-            return Err(EmberLabError::ReceiptHashCollision { path });
+        write_content_addressed_receipt(directory, &self.receipt_bytes(job_id)?)
+    }
+
+    /// Export the daemon-owned terminal receipt with one observation nested in
+    /// the same operational receipt family. The base receipt is rebuilt from
+    /// the verified job/identity/event database; callers cannot replace it in
+    /// place or self-author a new authority family.
+    pub fn export_content_addressed_receipt_with_observation(
+        &self,
+        job_id: &str,
+        directory: &Path,
+        observation: &Value,
+    ) -> Result<ReceiptArtifact> {
+        let state = self
+            .job_state(job_id)?
+            .ok_or_else(|| EmberLabError::JobNotFound {
+                job_id: job_id.into(),
+            })?;
+        if !matches!(
+            state,
+            JobState::Stopped | JobState::Exited | JobState::Failed
+        ) {
+            return Err(EmberLabError::NonTerminalReceipt {
+                job_id: job_id.into(),
+                state: state.as_str().into(),
+            });
         }
-        match atomic_create(&path, &bytes) {
-            Ok(()) => Ok(ReceiptArtifact { path, sha256 }),
-            Err(EmberLabError::ReceiptAlreadyExists { .. }) if fs::read(&path)? == bytes => {
-                Ok(ReceiptArtifact { path, sha256 })
-            }
-            Err(EmberLabError::ReceiptAlreadyExists { .. }) => {
-                Err(EmberLabError::ReceiptHashCollision { path })
-            }
-            Err(error) => Err(error),
-        }
+        let mut receipt: Value = serde_json::from_slice(&self.receipt_bytes(job_id)?)?;
+        receipt
+            .as_object_mut()
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                detail: "daemon operational receipt is not a JSON object".into(),
+            })?
+            .insert("rehearsal".into(), observation.clone());
+        write_content_addressed_receipt(directory, &serde_json::to_vec_pretty(&receipt)?)
     }
     #[cfg(windows)]
     fn retain_and_monitor(&self, job_id: &str, live: LiveProcess) -> Result<()> {
@@ -2848,6 +2968,1139 @@ impl Daemon {
             .query_map([job_id], |r| r.get(0))?
             .collect::<std::result::Result<_, _>>()?;
         Ok(rows)
+    }
+
+    fn consume_minimal_slice(
+        &self,
+        job_id: &str,
+        expected_whole_run_peak_bytes: u64,
+        readiness_deadline_ms: i64,
+    ) -> Result<Vec<crate::rehearsal::PhaseEvidence>> {
+        use crate::rehearsal::{Phase, PhaseEvidence};
+        let _caller_supplied_peak = expected_whole_run_peak_bytes;
+        let phases = [
+            Phase::DataVerify,
+            Phase::Train,
+            Phase::Checkpoint,
+            Phase::Publish,
+            Phase::SelectableCheckpoint,
+            Phase::Restore,
+        ];
+        if expected_whole_run_peak_bytes == 0 {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "minimal-slice whole-run host peak must be measured".into(),
+            });
+        }
+        self.identity_hash(job_id)?
+            .ok_or_else(|| EmberLabError::IdentityNotFound {
+                job_id: job_id.into(),
+            })?;
+        let phase_dir = self
+            .log_dir
+            .join("rehearsal")
+            .join(hash_bytes(job_id.as_bytes()));
+        let initial_row = self.job_process_row(job_id)?;
+        if initial_row.state != JobState::Running
+            || !self.lease_matches_process_row(job_id, &initial_row)?
+        {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "minimal-slice producer is not running under its fenced lease".into(),
+            });
+        }
+        let completion_path = phase_dir.join("completion.json");
+        let completion_bytes = {
+            loop {
+                let current_row = self.job_process_row(job_id)?;
+                if current_row.state != JobState::Running
+                    || !same_job_process_fence(&initial_row, &current_row)
+                    || !self.lease_matches_process_row(job_id, &current_row)?
+                {
+                    return Err(EmberLabError::InvalidTransition {
+                        job_id: job_id.into(),
+                        detail: "minimal-slice producer identity or lease changed before readiness"
+                            .into(),
+                    });
+                }
+                if now_ms() >= readiness_deadline_ms {
+                    return Err(EmberLabError::InvalidTransition {
+                        job_id: job_id.into(),
+                        detail: "minimal-slice readiness deadline expired before completion".into(),
+                    });
+                }
+                match fs::read(&completion_path) {
+                    Ok(bytes) => break bytes,
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                        std::thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(error) => {
+                        return Err(EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: format!(
+                                "minimal-slice durable completion marker is unavailable: {error}"
+                            ),
+                        });
+                    }
+                }
+            }
+        };
+        let row = self.job_process_row(job_id)?;
+        if row.state != JobState::Running
+            || !same_job_process_fence(&initial_row, &row)
+            || !self.lease_matches_process_row(job_id, &row)?
+        {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "minimal-slice producer identity or lease changed at readiness".into(),
+            });
+        }
+        let completion: Value = serde_json::from_slice(&completion_bytes).map_err(|_| {
+            EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "minimal-slice durable completion marker is malformed".into(),
+            }
+        })?;
+        let host_peak_path = phase_dir.join("host_peak.json");
+        let host_peak_bytes =
+            fs::read(&host_peak_path).map_err(|_| EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "minimal-slice measured host peak artifact is absent".into(),
+            })?;
+        let host_peak: Value = serde_json::from_slice(&host_peak_bytes).map_err(|_| {
+            EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "minimal-slice measured host peak artifact is malformed".into(),
+            }
+        })?;
+        let executable_sha256 = hash_file(Path::new(&row.executable))?;
+        let phase_artifact_sha256 =
+            crate::rehearsal::phase_artifact_digest(&phase_dir).map_err(EmberLabError::Io)?;
+        let completion_valid = completion.get("schema")
+            == Some(&Value::String(
+                "ember-lab-minimal-slice-completion-v1".into(),
+            ))
+            && completion.get("producer")
+                == Some(&Value::String("ember-lab-minimal-slice-producer".into()))
+            && completion.get("result") == Some(&Value::String("COMPLETED".into()))
+            && completion.get("job_id") == Some(&Value::String(job_id.into()))
+            && completion.get("producer_pid").and_then(Value::as_u64) == Some(row.pid as u64)
+            && completion
+                .get("completed_at_ms")
+                .and_then(Value::as_i64)
+                .is_some_and(|completed_at_ms| {
+                    completed_at_ms >= row.started_at_ms && completed_at_ms <= readiness_deadline_ms
+                })
+            && completion.get("phase_count").and_then(Value::as_u64) == Some(6)
+            && completion.get("host_peak_sha256").and_then(Value::as_str)
+                == Some(hash_bytes(&host_peak_bytes).as_str())
+            && completion
+                .get("phase_artifact_sha256")
+                .and_then(Value::as_str)
+                == Some(phase_artifact_sha256.as_str())
+            && completion
+                .get("producer_binary_sha256")
+                .and_then(Value::as_str)
+                == Some(executable_sha256.as_str())
+            && completion
+                .get("producer_source_sha256")
+                .and_then(Value::as_str)
+                == Some(self.ember_lab_source_sha256.as_str());
+        if !completion_valid {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail:
+                    "minimal-slice completion marker is not bound to this daemon job/source/binary"
+                        .into(),
+            });
+        }
+        if host_peak.get("schema") != Some(&Value::String("ember-lab-host-peak-v1".into()))
+            || host_peak.get("producer")
+                != Some(&Value::String("ember-lab-minimal-slice-producer".into()))
+            || host_peak.get("result") != Some(&Value::String("MEASURED".into()))
+            || host_peak.get("job_id") != Some(&Value::String(job_id.into()))
+            || host_peak.get("producer_pid").and_then(Value::as_u64) != Some(row.pid as u64)
+            || host_peak
+                .get("sample_count")
+                .and_then(Value::as_u64)
+                .unwrap_or(0)
+                < 2
+            || host_peak
+                .get("whole_run_peak_bytes")
+                .and_then(Value::as_u64)
+                .unwrap_or(0)
+                == 0
+        {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "minimal-slice measured host peak is not bound to this child/run".into(),
+            });
+        }
+        let observed_peak_bytes = observe_owned_process_tree_peak_bytes(&row)?;
+        let observed_path = phase_dir.join("host_peak.observed.json");
+        if observed_path.exists() {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "daemon-owned whole-run peak receipt already exists".into(),
+            });
+        }
+        let observed_receipt = serde_json::to_vec(&json!({
+            "schema": "ember-lab-daemon-host-peak-v1",
+            "producer": "ember-lab-daemon",
+            "result": "MEASURED",
+            "job_id": job_id,
+            "pid": row.pid,
+            "process_start_token": row.start_token,
+            "executable_identity": row.executable,
+            "job_object_name": row.job_object_name,
+            "lease_epoch": row.lease_epoch,
+            "producer_schema": "ember-lab-host-peak-v1",
+            "producer_binary_sha256": executable_sha256,
+            "producer_source_sha256": self.ember_lab_source_sha256,
+            "completion_sha256": hash_bytes(&completion_bytes),
+            "child_host_peak_sha256": hash_bytes(&host_peak_bytes),
+            "whole_run_peak_bytes": observed_peak_bytes,
+            "observed_at_ms": now_ms(),
+        }))?;
+        atomic_create(&observed_path, &observed_receipt)?;
+        self.record_daemon_peak_event(
+            job_id,
+            &row,
+            &hash_bytes(&observed_receipt),
+            observed_peak_bytes,
+            &hash_bytes(&completion_bytes),
+            &hash_bytes(&host_peak_bytes),
+            &executable_sha256,
+        )?;
+        let mut operations = std::collections::BTreeMap::<Phase, Value>::new();
+        let mut produced = Vec::with_capacity(phases.len());
+        for phase in phases {
+            let row = self.job_process_row(job_id)?;
+            if row.state != JobState::Running {
+                return Err(EmberLabError::InvalidTransition {
+                    job_id: job_id.into(),
+                    detail: format!("minimal-slice phase {} is not running", phase.as_str()),
+                });
+            }
+            let path = phase_dir.join(format!("{}.json", phase.as_str()));
+            let bytes = fs::read(&path).map_err(|_| EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: format!(
+                    "minimal-slice producer output is absent for {}",
+                    phase.as_str()
+                ),
+            })?;
+            let value: Value =
+                serde_json::from_slice(&bytes).map_err(|_| EmberLabError::InvalidTransition {
+                    job_id: job_id.into(),
+                    detail: format!(
+                        "minimal-slice producer output is malformed for {}",
+                        phase.as_str()
+                    ),
+                })?;
+            if value.get("schema") != Some(&Value::String("ember-lab-phase-producer-v1".into()))
+                || value.get("producer")
+                    != Some(&Value::String("ember-lab-minimal-slice-producer".into()))
+                || value.get("result") != Some(&Value::String("COMPLETED".into()))
+                || value.get("job_id") != Some(&Value::String(job_id.into()))
+                || value.get("phase") != Some(&Value::String(phase.as_str().into()))
+                || value.get("producer_pid").and_then(Value::as_u64) != Some(row.pid as u64)
+                || value.get("sequence").and_then(Value::as_u64)
+                    != Some((produced.len() + 1) as u64)
+            {
+                return Err(EmberLabError::InvalidTransition {
+                    job_id: job_id.into(),
+                    detail: format!(
+                        "minimal-slice producer identity/sequence mismatch for {}",
+                        phase.as_str()
+                    ),
+                });
+            }
+            let operation = value.get("operation").cloned().ok_or_else(|| {
+                EmberLabError::InvalidTransition {
+                    job_id: job_id.into(),
+                    detail: format!("minimal-slice operation is absent for {}", phase.as_str()),
+                }
+            })?;
+            let operation_sha256 = hash_bytes(&serde_json::to_vec(&operation)?);
+            if value.get("operation_sha256") != Some(&Value::String(operation_sha256.clone())) {
+                return Err(EmberLabError::InvalidTransition {
+                    job_id: job_id.into(),
+                    detail: format!(
+                        "minimal-slice operation hash is not bound for {}",
+                        phase.as_str()
+                    ),
+                });
+            }
+            let object = operation
+                .as_object()
+                .ok_or_else(|| EmberLabError::InvalidTransition {
+                    job_id: job_id.into(),
+                    detail: format!(
+                        "minimal-slice operation is not an object for {}",
+                        phase.as_str()
+                    ),
+                })?;
+            let kind = object.get("kind").and_then(Value::as_str).unwrap_or("");
+            let child_file = |name: &str| -> Result<PathBuf> {
+                let candidate = Path::new(name);
+                if name.trim().is_empty()
+                    || candidate.file_name().and_then(|v| v.to_str()) != Some(name)
+                {
+                    return Err(EmberLabError::InvalidTransition {
+                        job_id: job_id.into(),
+                        detail: "minimal-slice producer path is not a basename".into(),
+                    });
+                }
+                Ok(phase_dir.join(name))
+            };
+            let hash_named = |name: &str| -> Result<String> { hash_file(&child_file(name)?) };
+            match phase {
+                Phase::DataVerify => {
+                    if kind != "data_verify_completed"
+                        || object.get("record_count").and_then(Value::as_u64) != Some(3)
+                        || object.get("subset_records").and_then(Value::as_u64) != Some(3)
+                    {
+                        return Err(EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "data verify did not prove three subset records".into(),
+                        });
+                    }
+                    let name = object
+                        .get("input_file")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "data verify input file is absent".into(),
+                        })?;
+                    let actual = hash_named(name)?;
+                    if object.get("input_sha256").and_then(Value::as_str) != Some(actual.as_str())
+                        || fs::read(child_file(name)?)?
+                            .split(|byte| *byte == b'\n')
+                            .filter(|line| !line.is_empty())
+                            .count()
+                            != 3
+                    {
+                        return Err(EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "data verify input bytes are not bound".into(),
+                        });
+                    }
+                }
+                Phase::Train => {
+                    if kind != "train_steps_completed"
+                        || object
+                            .get("train_steps")
+                            .and_then(Value::as_u64)
+                            .unwrap_or(0)
+                            < 3
+                        || object
+                            .get("update_count")
+                            .and_then(Value::as_u64)
+                            .unwrap_or(0)
+                            < 3
+                    {
+                        return Err(EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "train did not prove nonzero update steps".into(),
+                        });
+                    }
+                    let name = object
+                        .get("optimizer_state_file")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "optimizer state is absent".into(),
+                        })?;
+                    let actual = hash_named(name)?;
+                    if object.get("optimizer_state_sha256").and_then(Value::as_str)
+                        != Some(actual.as_str())
+                    {
+                        return Err(EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "optimizer state bytes are not bound".into(),
+                        });
+                    }
+                }
+                Phase::Checkpoint => {
+                    if kind != "checkpoint_written"
+                        || object.get("final_checkpoint") != Some(&Value::Bool(true))
+                    {
+                        return Err(EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "final checkpoint evidence is absent".into(),
+                        });
+                    }
+                    let name = object
+                        .get("checkpoint_file")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "checkpoint bytes are absent".into(),
+                        })?;
+                    let actual = hash_named(name)?;
+                    if object.get("checkpoint_sha256").and_then(Value::as_str)
+                        != Some(actual.as_str())
+                        || object.get("source_optimizer_state_sha256")
+                            != operations
+                                .get(&Phase::Train)
+                                .and_then(|value| value.get("optimizer_state_sha256"))
+                    {
+                        return Err(EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "checkpoint is not bound to train state".into(),
+                        });
+                    }
+                }
+                Phase::Publish => {
+                    if kind != "checkpoint_published" {
+                        return Err(EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "checkpoint publish evidence is absent".into(),
+                        });
+                    }
+                    let name = object
+                        .get("published_file")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "published checkpoint is absent".into(),
+                        })?;
+                    let actual = hash_named(name)?;
+                    if object
+                        .get("published_checkpoint_sha256")
+                        .and_then(Value::as_str)
+                        != Some(actual.as_str())
+                        || object.get("source_checkpoint_sha256")
+                            != operations
+                                .get(&Phase::Checkpoint)
+                                .and_then(|value| value.get("checkpoint_sha256"))
+                    {
+                        return Err(EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "published checkpoint is not bound".into(),
+                        });
+                    }
+                }
+                Phase::SelectableCheckpoint => {
+                    if kind != "selectable_checkpoint_verified" {
+                        return Err(EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "selectable checkpoint evidence is absent".into(),
+                        });
+                    }
+                    let name = object
+                        .get("selected_file")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "selected checkpoint is absent".into(),
+                        })?;
+                    let actual = hash_named(name)?;
+                    if object
+                        .get("selected_checkpoint_sha256")
+                        .and_then(Value::as_str)
+                        != Some(actual.as_str())
+                        || object.get("selected_checkpoint_sha256")
+                            != operations
+                                .get(&Phase::Publish)
+                                .and_then(|value| value.get("published_checkpoint_sha256"))
+                    {
+                        return Err(EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "selected checkpoint is not bound".into(),
+                        });
+                    }
+                }
+                Phase::Restore => {
+                    if kind != "checkpoint_restored"
+                        || object.get("restore_verified") != Some(&Value::Bool(true))
+                    {
+                        return Err(EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "checkpoint restore evidence is absent".into(),
+                        });
+                    }
+                    let name = object
+                        .get("restored_file")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "restored checkpoint is absent".into(),
+                        })?;
+                    let actual = hash_named(name)?;
+                    if object
+                        .get("restored_checkpoint_sha256")
+                        .and_then(Value::as_str)
+                        != Some(actual.as_str())
+                        || object.get("restored_checkpoint_sha256")
+                            != operations
+                                .get(&Phase::SelectableCheckpoint)
+                                .and_then(|value| value.get("selected_checkpoint_sha256"))
+                    {
+                        return Err(EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "restored checkpoint is not bound".into(),
+                        });
+                    }
+                }
+                Phase::Admission => unreachable!("admission is owned by dispatch_manifest"),
+            }
+            self.verify_identity(job_id)?;
+            if !self
+                .job_event_kinds(job_id)?
+                .iter()
+                .any(|kind| kind == "job_started")
+            {
+                return Err(EmberLabError::InvalidTransition {
+                    job_id: job_id.into(),
+                    detail: "current Ember Lab phase owner has no durable job-start evidence"
+                        .into(),
+                });
+            }
+            let observed_at_ms = now_ms();
+            self.record_phase_operation(job_id, phase, &operation_sha256, observed_at_ms, &row)?;
+            let evidence_sha256 = hash_bytes(&bytes);
+            self.record_phase_event(
+                job_id,
+                phase,
+                &path,
+                &evidence_sha256,
+                &operation_sha256,
+                observed_at_ms,
+                &row,
+            )?;
+            operations.insert(phase, operation);
+            produced.push(PhaseEvidence {
+                phase,
+                path,
+                sha256: evidence_sha256,
+            });
+        }
+        Ok(produced)
+    }
+
+    /// Consume the six current Ember Lab phase outputs for a live dispatched job.
+    /// The child producer performs each operation; this method only records the
+    /// existing bytes through the daemon's fenced event authority.
+    pub fn execute_minimal_episode(
+        &self,
+        job_id: &str,
+        expected_whole_run_peak_bytes: u64,
+        readiness_deadline_ms: i64,
+    ) -> Result<Vec<crate::rehearsal::PhaseEvidence>> {
+        self.consume_minimal_slice(job_id, expected_whole_run_peak_bytes, readiness_deadline_ms)
+    }
+
+    /// Return the immutable daemon-owned whole-process-tree observation that
+    /// was created during minimal-slice consumption.  Callers must use this
+    /// artifact for the terminal rehearsal receipt; the producer's raw
+    /// `host_peak.json` is only supporting evidence.
+    pub fn authoritative_whole_run_peak(&self, job_id: &str) -> Result<(PathBuf, String, u64)> {
+        let row = self.job_process_row(job_id)?;
+        if row.state != JobState::Running || !self.lease_matches_process_row(job_id, &row)? {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "daemon-owned whole-run peak job row is no longer running under its lease"
+                    .into(),
+            });
+        }
+        #[cfg(windows)]
+        match open_live_status(&row) {
+            LiveStatus::Verified(_) => {}
+            LiveStatus::Dead => {
+                return Err(EmberLabError::ProcessUnavailable {
+                    job_id: job_id.into(),
+                    pid: row.pid,
+                })
+            }
+            LiveStatus::Orphaned(detail) | LiveStatus::IdentityConflict(detail) => {
+                return Err(EmberLabError::ProcessControlUncertain {
+                    job_id: job_id.into(),
+                    pid: row.pid,
+                    detail,
+                })
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            let identity =
+                inspect_process(row.pid).map_err(|_| EmberLabError::ProcessUnavailable {
+                    job_id: job_id.into(),
+                    pid: row.pid,
+                })?;
+            if identity.start_token != row.start_token
+                || !same_executable(&identity.executable, &row.executable)
+            {
+                return Err(EmberLabError::ProcessIdentityMismatch {
+                    job_id: job_id.into(),
+                    pid: row.pid,
+                });
+            }
+        }
+        let path = self
+            .log_dir
+            .join("rehearsal")
+            .join(hash_bytes(job_id.as_bytes()))
+            .join("host_peak.observed.json");
+        let bytes = fs::read(&path).map_err(|_| EmberLabError::InvalidTransition {
+            job_id: job_id.into(),
+            detail: "daemon-owned whole-run peak receipt is absent".into(),
+        })?;
+        let value: Value =
+            serde_json::from_slice(&bytes).map_err(|_| EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "daemon-owned whole-run peak receipt is malformed".into(),
+            })?;
+        let phase_dir = path
+            .parent()
+            .ok_or_else(|| EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "daemon-owned whole-run peak receipt has no phase directory".into(),
+            })?;
+        let completion_path = phase_dir.join("completion.json");
+        let child_peak_path = phase_dir.join("host_peak.json");
+        let completion_bytes =
+            fs::read(&completion_path).map_err(|_| EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "minimal-slice completion marker is absent while reopening peak".into(),
+            })?;
+        let child_peak_bytes =
+            fs::read(&child_peak_path).map_err(|_| EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "minimal-slice child peak is absent while reopening peak".into(),
+            })?;
+        let completion: Value = serde_json::from_slice(&completion_bytes).map_err(|_| {
+            EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "minimal-slice completion marker is malformed while reopening peak".into(),
+            }
+        })?;
+        let child_peak: Value = serde_json::from_slice(&child_peak_bytes).map_err(|_| {
+            EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "minimal-slice child peak is malformed while reopening peak".into(),
+            }
+        })?;
+        let binary_sha256 = hash_file(Path::new(&row.executable))?;
+        let completion_sha256 = hash_bytes(&completion_bytes);
+        let child_peak_sha256 = hash_bytes(&child_peak_bytes);
+        let phase_artifact_sha256 =
+            crate::rehearsal::phase_artifact_digest(phase_dir).map_err(EmberLabError::Io)?;
+        let child_peak_valid = child_peak.get("schema")
+            == Some(&Value::String("ember-lab-host-peak-v1".into()))
+            && child_peak.get("producer")
+                == Some(&Value::String("ember-lab-minimal-slice-producer".into()))
+            && child_peak.get("result") == Some(&Value::String("MEASURED".into()))
+            && child_peak.get("job_id") == Some(&Value::String(job_id.into()))
+            && child_peak.get("producer_pid").and_then(Value::as_u64) == Some(row.pid as u64)
+            && child_peak
+                .get("sample_count")
+                .and_then(Value::as_u64)
+                .unwrap_or(0)
+                >= 2
+            && child_peak
+                .get("whole_run_peak_bytes")
+                .and_then(Value::as_u64)
+                .unwrap_or(0)
+                > 0;
+        let completion_valid = completion.get("schema")
+            == Some(&Value::String(
+                "ember-lab-minimal-slice-completion-v1".into(),
+            ))
+            && completion.get("producer")
+                == Some(&Value::String("ember-lab-minimal-slice-producer".into()))
+            && completion.get("result") == Some(&Value::String("COMPLETED".into()))
+            && completion.get("job_id") == Some(&Value::String(job_id.into()))
+            && completion.get("producer_pid").and_then(Value::as_u64) == Some(row.pid as u64)
+            && completion.get("phase_count").and_then(Value::as_u64) == Some(6)
+            && completion.get("host_peak_sha256").and_then(Value::as_str)
+                == Some(child_peak_sha256.as_str())
+            && completion
+                .get("phase_artifact_sha256")
+                .and_then(Value::as_str)
+                == Some(phase_artifact_sha256.as_str())
+            && completion
+                .get("producer_binary_sha256")
+                .and_then(Value::as_str)
+                == Some(binary_sha256.as_str())
+            && completion
+                .get("producer_source_sha256")
+                .and_then(Value::as_str)
+                == Some(self.ember_lab_source_sha256.as_str());
+        if !child_peak_valid || !completion_valid {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "daemon-owned whole-run peak child evidence is not bound to the current process/source/binary".into(),
+            });
+        }
+        let observed_valid = value.get("schema")
+            == Some(&Value::String("ember-lab-daemon-host-peak-v1".into()))
+            && value.get("producer") == Some(&Value::String("ember-lab-daemon".into()))
+            && value.get("result") == Some(&Value::String("MEASURED".into()))
+            && value.get("job_id") == Some(&Value::String(job_id.into()))
+            && value.get("pid").and_then(Value::as_u64) == Some(row.pid as u64)
+            && value.get("process_start_token").and_then(Value::as_str)
+                == Some(row.start_token.as_str())
+            && value.get("executable_identity").and_then(Value::as_str)
+                == Some(row.executable.as_str())
+            && value.get("job_object_name").and_then(Value::as_str)
+                == Some(row.job_object_name.as_str())
+            && value.get("lease_epoch").and_then(Value::as_i64) == Some(row.lease_epoch)
+            && value.get("producer_schema").and_then(Value::as_str)
+                == Some("ember-lab-host-peak-v1")
+            && value.get("producer_binary_sha256").and_then(Value::as_str)
+                == Some(binary_sha256.as_str())
+            && value.get("producer_source_sha256").and_then(Value::as_str)
+                == Some(self.ember_lab_source_sha256.as_str())
+            && value.get("completion_sha256").and_then(Value::as_str)
+                == Some(completion_sha256.as_str())
+            && value.get("child_host_peak_sha256").and_then(Value::as_str)
+                == Some(child_peak_sha256.as_str())
+            && value
+                .get("whole_run_peak_bytes")
+                .and_then(Value::as_u64)
+                .unwrap_or(0)
+                > 0;
+        if !observed_valid {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "daemon-owned whole-run peak receipt is not valid".into(),
+            });
+        }
+        let observed_sha256 = hash_bytes(&bytes);
+        let event_payload: Option<String> = self
+            .conn()?
+            .query_row(
+                "SELECT payload_json FROM events WHERE job_id=?1 AND kind='ember_lab_daemon_host_peak' ORDER BY seq DESC LIMIT 1",
+                [job_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        let Some(event_payload) = event_payload else {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "daemon-owned whole-run peak has no persisted authority event".into(),
+            });
+        };
+        let event: Value = serde_json::from_str(&event_payload)?;
+        let event_matches = event.get("producer")
+            == Some(&Value::String("ember-lab-daemon".into()))
+            && event.get("job_id") == Some(&Value::String(job_id.into()))
+            && event.get("observed_sha256").and_then(Value::as_str)
+                == Some(observed_sha256.as_str())
+            && event.get("whole_run_peak_bytes").and_then(Value::as_u64)
+                == value.get("whole_run_peak_bytes").and_then(Value::as_u64)
+            && event.get("completion_sha256").and_then(Value::as_str)
+                == Some(completion_sha256.as_str())
+            && event.get("child_host_peak_sha256").and_then(Value::as_str)
+                == Some(child_peak_sha256.as_str())
+            && event.get("pid").and_then(Value::as_u64) == Some(row.pid as u64)
+            && event.get("process_start_token").and_then(Value::as_str)
+                == Some(row.start_token.as_str())
+            && event.get("executable_identity").and_then(Value::as_str)
+                == Some(row.executable.as_str())
+            && event.get("job_object_name").and_then(Value::as_str)
+                == Some(row.job_object_name.as_str())
+            && event.get("lease_epoch").and_then(Value::as_i64) == Some(row.lease_epoch)
+            && event.get("producer_binary_sha256").and_then(Value::as_str)
+                == Some(binary_sha256.as_str())
+            && event.get("producer_source_sha256").and_then(Value::as_str)
+                == Some(self.ember_lab_source_sha256.as_str());
+        if !event_matches {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "daemon-owned whole-run peak receipt changed after authority event".into(),
+            });
+        }
+        let sha256 = hash_bytes(&bytes);
+        let peak = value
+            .get("whole_run_peak_bytes")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "daemon-owned whole-run peak is missing".into(),
+            })?;
+        Ok((path, sha256, peak))
+    }
+
+    /// Persist one phase event through the daemon's existing job/lease
+    /// authority.  This private helper is reachable only from production phase
+    /// owners; callers can never supply a producer/authority string to it.
+    fn record_phase_operation(
+        &self,
+        job_id: &str,
+        phase: crate::rehearsal::Phase,
+        operation_sha256: &str,
+        observed_at_ms: i64,
+        row: &JobProcessRow,
+    ) -> Result<()> {
+        let operation_authority_sha256 = hash_bytes(
+            format!(
+                "ember-lab-phase-operation-v1|{}|{}|{}|{}|{}|{}",
+                job_id,
+                phase.as_str(),
+                operation_sha256,
+                row.lease_epoch,
+                row.pid,
+                self.ember_lab_source_sha256,
+            )
+            .as_bytes(),
+        );
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let inserted = tx.execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,?4)",
+            params![
+                job_id,
+                observed_at_ms,
+                format!("ember_lab_phase_operation_{}", phase.as_str()),
+                json!({
+                    "producer": "ember-lab-daemon",
+                    "job_id": job_id,
+                    "phase": phase.as_str(),
+                    "operation_sha256": operation_sha256,
+                    "operation_authority_sha256": operation_authority_sha256,
+                    "lease_epoch": row.lease_epoch,
+                    "pid": row.pid,
+                })
+                .to_string(),
+            ],
+        )?;
+        if inserted != 1 {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "current Ember Lab phase operation was not persisted".into(),
+            });
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn record_daemon_peak_event(
+        &self,
+        job_id: &str,
+        row: &JobProcessRow,
+        observed_sha256: &str,
+        whole_run_peak_bytes: u64,
+        completion_sha256: &str,
+        child_host_peak_sha256: &str,
+        producer_binary_sha256: &str,
+    ) -> Result<()> {
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let inserted = tx.execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'ember_lab_daemon_host_peak',?3)",
+            params![
+                job_id,
+                now_ms(),
+                json!({
+                    "producer": "ember-lab-daemon",
+                    "job_id": job_id,
+                    "observed_sha256": observed_sha256,
+                    "whole_run_peak_bytes": whole_run_peak_bytes,
+                    "completion_sha256": completion_sha256,
+                    "child_host_peak_sha256": child_host_peak_sha256,
+                    "pid": row.pid,
+                    "process_start_token": row.start_token,
+                    "executable_identity": row.executable,
+                    "job_object_name": row.job_object_name,
+                    "lease_epoch": row.lease_epoch,
+                    "producer_binary_sha256": producer_binary_sha256,
+                    "producer_source_sha256": self.ember_lab_source_sha256,
+                })
+                .to_string(),
+            ],
+        )?;
+        if inserted != 1 {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "daemon-owned whole-run peak authority event was not persisted".into(),
+            });
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn record_phase_event(
+        &self,
+        job_id: &str,
+        phase: crate::rehearsal::Phase,
+        evidence_path: &Path,
+        evidence_sha256: &str,
+        operation_sha256: &str,
+        observed_at_ms: i64,
+        row: &JobProcessRow,
+    ) -> Result<()> {
+        let canonical = fs::canonicalize(evidence_path)?;
+        if hash_file(&canonical)? != evidence_sha256 {
+            return Err(EmberLabError::DispatchBindingMismatch {
+                path: canonical,
+                expected: evidence_sha256.into(),
+                actual: hash_file(evidence_path)?,
+            });
+        }
+        let evidence_file_name = canonical
+            .file_name()
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                detail: "phase evidence path has no file name".into(),
+            })?
+            .to_string_lossy()
+            .into_owned();
+        let event_authority_sha256 = hash_bytes(
+            format!(
+                "ember-lab-phase-authority-v2|{}|{}|{}|{}|{}|{}|{}|{}",
+                job_id,
+                phase.as_str(),
+                evidence_sha256,
+                operation_sha256,
+                row.lease_epoch,
+                row.pid,
+                self.ember_lab_binary_sha256,
+                self.ember_lab_source_sha256,
+            )
+            .as_bytes(),
+        );
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let fenced = tx.execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,?4)",
+            params![
+                job_id,
+                observed_at_ms,
+                format!("ember_lab_phase_{}", phase.as_str()),
+                json!({
+                    "producer": "ember-lab-daemon",
+                    "job_id": job_id,
+                    "phase": phase.as_str(),
+                    "evidence_file_name": evidence_file_name,
+                    "evidence_sha256": evidence_sha256,
+                    "operation_sha256": operation_sha256,
+                    "event_authority_sha256": event_authority_sha256,
+                    "lease_epoch": row.lease_epoch,
+                    "pid": row.pid,
+                })
+                .to_string(),
+            ],
+        )?;
+        if fenced != 1 {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "current Ember Lab phase event was not persisted".into(),
+            });
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Consume only phase evidence already emitted by the current daemon
+    /// owners.  No file or event is created here; missing, forged, malformed,
+    /// or unbound evidence fails the episode before a later phase can run.
+    pub fn load_authorized_phase_evidence(
+        &self,
+        job_id: &str,
+    ) -> Result<Vec<crate::rehearsal::PhaseEvidence>> {
+        use crate::rehearsal::{Phase, PhaseEvidence};
+
+        let expected_root = self
+            .log_dir
+            .join("rehearsal")
+            .join(hash_bytes(job_id.as_bytes()));
+        let mut consumed = Vec::with_capacity(6);
+        for phase in [
+            Phase::DataVerify,
+            Phase::Train,
+            Phase::Checkpoint,
+            Phase::Publish,
+            Phase::SelectableCheckpoint,
+            Phase::Restore,
+        ] {
+            let kind = format!("ember_lab_phase_{}", phase.as_str());
+            // Materialize the event payloads before asking phase_event_authorized
+            // to open its own connection. Holding the query cursor across that
+            // call can make SQLite's Windows WAL busy timeout fire once per
+            // phase, turning a six-phase consume into an apparent hang.
+            let payloads: Vec<String> = {
+                let conn = self.conn()?;
+                let mut stmt = conn.prepare(
+                    "SELECT payload_json FROM events WHERE job_id=?1 AND kind=?2 ORDER BY seq",
+                )?;
+                let mut payloads = Vec::new();
+                for payload in
+                    stmt.query_map(params![job_id, kind], |row| row.get::<_, String>(0))?
+                {
+                    payloads.push(payload?);
+                }
+                payloads
+            };
+            let mut found = None;
+            for payload in payloads {
+                let value: Value = match serde_json::from_str(&payload) {
+                    Ok(value) => value,
+                    Err(_) => continue,
+                };
+                let Some(file_name) = value.get("evidence_file_name").and_then(Value::as_str)
+                else {
+                    continue;
+                };
+                let Some(evidence_sha256) = value.get("evidence_sha256").and_then(Value::as_str)
+                else {
+                    continue;
+                };
+                let Some(operation_sha256) = value.get("operation_sha256").and_then(Value::as_str)
+                else {
+                    continue;
+                };
+                let path = expected_root.join(file_name);
+                if path.parent() != Some(expected_root.as_path())
+                    || value.get("producer") != Some(&Value::String("ember-lab-daemon".into()))
+                    || value.get("job_id") != Some(&Value::String(job_id.into()))
+                    || value.get("phase") != Some(&Value::String(phase.as_str().into()))
+                    || !path.is_file()
+                    || !self.phase_event_authorized(job_id, phase.as_str(), evidence_sha256)?
+                {
+                    continue;
+                }
+                let bytes = fs::read(&path)?;
+                let evidence: Value = match serde_json::from_slice(&bytes) {
+                    Ok(value) => value,
+                    Err(_) => continue,
+                };
+                if evidence.get("schema")
+                    != Some(&Value::String("ember-lab-phase-producer-v1".into()))
+                    || evidence.get("producer")
+                        != Some(&Value::String("ember-lab-minimal-slice-producer".into()))
+                    || evidence.get("result") != Some(&Value::String("COMPLETED".into()))
+                    || evidence.get("job_id") != Some(&Value::String(job_id.into()))
+                    || evidence.get("phase") != Some(&Value::String(phase.as_str().into()))
+                    || evidence.get("operation_sha256")
+                        != Some(&Value::String(operation_sha256.into()))
+                    || hash_bytes(&bytes) != evidence_sha256
+                {
+                    continue;
+                }
+                found = Some(PhaseEvidence {
+                    phase,
+                    path,
+                    sha256: evidence_sha256.into(),
+                });
+                break;
+            }
+            let evidence = found.ok_or_else(|| EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: format!(
+                    "current Ember Lab production phase evidence is absent or unbound for {}",
+                    phase.as_str()
+                ),
+            })?;
+            consumed.push(evidence);
+        }
+        Ok(consumed)
+    }
+
+    pub fn phase_event_authorized(
+        &self,
+        job_id: &str,
+        phase: &str,
+        evidence_sha256: &str,
+    ) -> Result<bool> {
+        let expected_root = self
+            .log_dir
+            .join("rehearsal")
+            .join(hash_bytes(job_id.as_bytes()));
+        let kind = format!("ember_lab_phase_{phase}");
+        let conn = self.conn()?;
+        let mut stmt = conn
+            .prepare("SELECT payload_json FROM events WHERE job_id=?1 AND kind=?2 ORDER BY seq")?;
+        for payload in stmt.query_map(params![job_id, kind], |row| row.get::<_, String>(0))? {
+            let payload = payload?;
+            let value: Value = serde_json::from_str(&payload)?;
+            let Some(file_name) = value.get("evidence_file_name").and_then(Value::as_str) else {
+                continue;
+            };
+            let Some(lease_epoch) = value.get("lease_epoch").and_then(Value::as_i64) else {
+                continue;
+            };
+            let Some(pid) = value.get("pid").and_then(Value::as_u64) else {
+                continue;
+            };
+            let Some(operation_sha256) = value.get("operation_sha256").and_then(Value::as_str)
+            else {
+                continue;
+            };
+            let expected_path = expected_root.join(file_name);
+            if expected_path.parent() != Some(expected_root.as_path())
+                || !expected_path.is_file()
+                || hash_file(&expected_path)? != evidence_sha256
+            {
+                continue;
+            }
+            let authority = hash_bytes(
+                format!(
+                    "ember-lab-phase-authority-v2|{}|{}|{}|{}|{}|{}|{}|{}",
+                    job_id,
+                    phase,
+                    evidence_sha256,
+                    operation_sha256,
+                    lease_epoch,
+                    pid,
+                    self.ember_lab_binary_sha256,
+                    self.ember_lab_source_sha256,
+                )
+                .as_bytes(),
+            );
+            let operation_kind = format!("ember_lab_phase_operation_{phase}");
+            let mut operation_stmt =
+                conn.prepare("SELECT payload_json FROM events WHERE job_id=?1 AND kind=?2")?;
+            let operation_bound = operation_stmt
+                .query_map(params![job_id, operation_kind], |row| {
+                    row.get::<_, String>(0)
+                })?
+                .filter_map(|payload| payload.ok())
+                .any(|payload| {
+                    let Ok(operation) = serde_json::from_str::<Value>(&payload) else {
+                        return false;
+                    };
+                    let Some(operation_authority) = operation
+                        .get("operation_authority_sha256")
+                        .and_then(Value::as_str)
+                    else {
+                        return false;
+                    };
+                    let expected_operation_authority = hash_bytes(
+                        format!(
+                            "ember-lab-phase-operation-v1|{}|{}|{}|{}|{}|{}",
+                            job_id,
+                            phase,
+                            operation_sha256,
+                            lease_epoch,
+                            pid,
+                            self.ember_lab_source_sha256,
+                        )
+                        .as_bytes(),
+                    );
+                    operation.get("producer") == Some(&Value::String("ember-lab-daemon".into()))
+                        && operation.get("job_id") == Some(&Value::String(job_id.into()))
+                        && operation.get("phase") == Some(&Value::String(phase.into()))
+                        && operation.get("operation_sha256")
+                            == Some(&Value::String(operation_sha256.into()))
+                        && operation.get("lease_epoch") == Some(&Value::from(lease_epoch))
+                        && operation.get("pid") == Some(&Value::from(pid))
+                        && operation_authority == expected_operation_authority
+                });
+            if operation_bound
+                && value.get("producer") == Some(&Value::String("ember-lab-daemon".into()))
+                && value.get("job_id") == Some(&Value::String(job_id.into()))
+                && value.get("phase") == Some(&Value::String(phase.into()))
+                && value.get("evidence_sha256") == Some(&Value::String(evidence_sha256.into()))
+                && value.get("event_authority_sha256") == Some(&Value::String(authority))
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     pub fn reconcile(&self) -> Result<()> {
@@ -3210,6 +4463,18 @@ impl Daemon {
         let conn = self.conn()?;
         job_process_row_from_connection(&conn, job_id)
     }
+
+    fn lease_matches_process_row(&self, job_id: &str, row: &JobProcessRow) -> Result<bool> {
+        let conn = self.conn()?;
+        Ok(conn
+            .query_row(
+                "SELECT 1 FROM leases WHERE resource=?1 AND owner_job_id=?2 AND lease_epoch=?3",
+                params![row.resource, job_id, row.lease_epoch],
+                |_| Ok(()),
+            )
+            .optional()?
+            .is_some())
+    }
 }
 
 fn finalize_stopped_in_connection(
@@ -3259,7 +4524,7 @@ fn finalize_stopped_in_connection(
 
 fn job_process_row_from_connection(conn: &Connection, job_id: &str) -> Result<JobProcessRow> {
     conn.query_row(
-        "SELECT pid,process_start_token,executable_identity,resource,state,job_object_name,main_thread_id,lease_epoch,stdout_log_path,stderr_log_path,stdout_child_handle,stderr_child_handle FROM jobs WHERE job_id=?1",
+        "SELECT pid,process_start_token,executable_identity,resource,state,job_object_name,main_thread_id,lease_epoch,stdout_log_path,stderr_log_path,stdout_child_handle,stderr_child_handle,started_at_ms FROM jobs WHERE job_id=?1",
         [job_id],
         |row| {
             let state: String = row.get(4)?;
@@ -3276,6 +4541,7 @@ fn job_process_row_from_connection(conn: &Connection, job_id: &str) -> Result<Jo
                 row.get::<_, String>(9)?,
                 row.get::<_, i64>(10)?,
                 row.get::<_, i64>(11)?,
+                row.get::<_, i64>(12)?,
             ))
         },
     )
@@ -3297,9 +4563,72 @@ fn job_process_row_from_connection(conn: &Connection, job_id: &str) -> Result<Jo
             stderr_log_path: PathBuf::from(row.9),
             stdout_child_handle: row.10,
             stderr_child_handle: row.11,
+            started_at_ms: row.12,
         })
     })
 }
+
+fn observe_owned_process_tree_peak_bytes(row: &JobProcessRow) -> Result<u64> {
+    #[cfg(windows)]
+    {
+        use std::mem::zeroed;
+        use windows_sys::Win32::Foundation::CloseHandle;
+        use windows_sys::Win32::System::JobObjects::{
+            JobObjectExtendedLimitInformation, OpenJobObjectW, QueryInformationJobObject,
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        };
+        const JOB_OBJECT_QUERY_RIGHT: u32 = 0x0004;
+        let name = wide(&row.job_object_name);
+        let job = unsafe { OpenJobObjectW(JOB_OBJECT_QUERY_RIGHT, 0, name.as_ptr()) };
+        if job.is_null() {
+            return Err(EmberLabError::ProcessUnavailable {
+                job_id: String::new(),
+                pid: row.pid,
+            });
+        }
+        let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { zeroed() };
+        let ok = unsafe {
+            QueryInformationJobObject(
+                job,
+                JobObjectExtendedLimitInformation,
+                (&mut info as *mut JOBOBJECT_EXTENDED_LIMIT_INFORMATION).cast(),
+                std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+                std::ptr::null_mut(),
+            )
+        };
+        unsafe { CloseHandle(job) };
+        if ok == 0 || info.PeakJobMemoryUsed == 0 {
+            return Err(EmberLabError::ProcessUnavailable {
+                job_id: String::new(),
+                pid: row.pid,
+            });
+        }
+        Ok(info.PeakJobMemoryUsed as u64)
+    }
+    #[cfg(not(windows))]
+    {
+        let status = fs::read_to_string(format!("/proc/{}/status", row.pid))?;
+        let kib = status
+            .lines()
+            .find_map(|line| line.strip_prefix("VmHWM:")?.split_whitespace().next())
+            .ok_or_else(|| EmberLabError::ProcessUnavailable {
+                job_id: String::new(),
+                pid: row.pid,
+            })?
+            .parse::<u64>()
+            .map_err(|_| EmberLabError::ProcessUnavailable {
+                job_id: String::new(),
+                pid: row.pid,
+            })?;
+        kib.checked_mul(1024)
+            .filter(|bytes| *bytes > 0)
+            .ok_or_else(|| EmberLabError::ProcessUnavailable {
+                job_id: String::new(),
+                pid: row.pid,
+            })
+    }
+}
+
 struct JobProcessRow {
     pid: u32,
     start_token: String,
@@ -3313,6 +4642,17 @@ struct JobProcessRow {
     stderr_log_path: PathBuf,
     stdout_child_handle: i64,
     stderr_child_handle: i64,
+    started_at_ms: i64,
+}
+
+fn same_job_process_fence(expected: &JobProcessRow, observed: &JobProcessRow) -> bool {
+    expected.pid == observed.pid
+        && expected.start_token == observed.start_token
+        && expected.executable == observed.executable
+        && expected.resource == observed.resource
+        && expected.job_object_name == observed.job_object_name
+        && expected.main_thread_id == observed.main_thread_id
+        && expected.lease_epoch == observed.lease_epoch
 }
 
 #[cfg(windows)]
@@ -3936,8 +5276,9 @@ fn available_free_vram_bytes() -> Result<u64> {
 /// `pub`: reused by `main.rs`'s `verify-training` subcommand for the same self-identity
 /// receipt field the daemon already stamps on every dispatch (`Daemon::open`).
 pub fn ember_lab_source_hash() -> String {
-    let sources: [&[u8]; 6] = [
+    let sources: [&[u8]; 7] = [
         include_bytes!("lib.rs"),
+        include_bytes!("data_catalog.rs"),
         include_bytes!("rpc.rs"),
         include_bytes!("main.rs"),
         include_bytes!("training_verify.rs"),
@@ -3963,9 +5304,35 @@ fn seal_log_hashes(tx: &rusqlite::Transaction<'_>, job_id: &str) -> Result<(Stri
     ))
 }
 
-fn migrate_schema(conn: &Connection, log_dir: &Path) -> Result<()> {
+fn migrate_schema(conn: &mut Connection, log_dir: &Path) -> Result<()> {
+    let schema_version_text: String = conn.query_row(
+        "SELECT value FROM metadata WHERE key='schema_version'",
+        [],
+        |row| row.get(0),
+    )?;
+    let schema_version =
+        schema_version_text
+            .parse::<u32>()
+            .map_err(|_| EmberLabError::InvalidDataCatalog {
+                detail: "database schema version must be a canonical unsigned integer".into(),
+            })?;
+    if schema_version.to_string() != schema_version_text {
+        return Err(EmberLabError::InvalidDataCatalog {
+            detail: "database schema version must be a canonical unsigned integer".into(),
+        });
+    }
+    if schema_version == 0 || schema_version > CURRENT_DATABASE_SCHEMA_VERSION {
+        return Err(EmberLabError::InvalidDataCatalog {
+            detail: format!(
+                "database schema version {schema_version} is outside the supported migration range 1..={CURRENT_DATABASE_SCHEMA_VERSION}"
+            ),
+        });
+    }
+
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+
     let columns: Vec<String> = {
-        let mut statement = conn.prepare("PRAGMA table_info(jobs)")?;
+        let mut statement = tx.prepare("PRAGMA table_info(jobs)")?;
         let rows = statement
             .query_map([], |row| row.get(1))?
             .collect::<std::result::Result<_, _>>()?;
@@ -3984,14 +5351,14 @@ fn migrate_schema(conn: &Connection, log_dir: &Path) -> Result<()> {
         ("exited_at_ms", "INTEGER"),
     ] {
         if !columns.iter().any(|existing| existing == column) {
-            conn.execute_batch(&format!(
+            tx.execute_batch(&format!(
                 "ALTER TABLE jobs ADD COLUMN {column} {definition}"
             ))?;
         }
     }
     let jobs: Vec<String> = {
         let mut statement =
-            conn.prepare("SELECT job_id FROM jobs WHERE stdout_log_path='' OR stderr_log_path=''")?;
+            tx.prepare("SELECT job_id FROM jobs WHERE stdout_log_path='' OR stderr_log_path=''")?;
         let rows = statement
             .query_map([], |row| row.get(0))?
             .collect::<std::result::Result<_, _>>()?;
@@ -4001,24 +5368,26 @@ fn migrate_schema(conn: &Connection, log_dir: &Path) -> Result<()> {
         let key = hash_bytes(job_id.as_bytes());
         let stdout = log_dir.join(format!("{key}.stdout.log"));
         let stderr = log_dir.join(format!("{key}.stderr.log"));
-        conn.execute(
+        tx.execute(
             "UPDATE jobs SET stdout_log_path=?2,stderr_log_path=?3 WHERE job_id=?1",
             params![job_id, stdout.to_string_lossy(), stderr.to_string_lossy()],
         )?;
     }
-    conn.execute(
+    tx.execute(
         "UPDATE jobs SET outage_event_cutoff_seq=(SELECT COALESCE(MAX(seq),0) FROM outage_events) WHERE outage_event_cutoff_seq IS NULL AND state IN ('stopped','exited','failed')",
         [],
     )?;
-    conn.execute_batch(
+    tx.execute_batch(
         "CREATE TABLE IF NOT EXISTS resource_guard_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), admission_state TEXT NOT NULL CHECK(admission_state IN ('open','frozen')), reason TEXT, observed_at_ms INTEGER NOT NULL, oracle_evidence_required INTEGER NOT NULL CHECK(oracle_evidence_required IN (0,1)), observation_json TEXT NOT NULL);
          CREATE TABLE IF NOT EXISTS resource_guard_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL);
          INSERT OR IGNORE INTO resource_guard_state(singleton,admission_state,reason,observed_at_ms,oracle_evidence_required,observation_json) VALUES(1,'open',NULL,0,0,'{}');",
     )?;
-    conn.execute(
-        "UPDATE metadata SET value='4' WHERE key='schema_version'",
-        [],
+    data_catalog::migrate(&tx)?;
+    tx.execute(
+        "UPDATE metadata SET value=?1 WHERE key='schema_version'",
+        [CURRENT_DATABASE_SCHEMA_VERSION.to_string()],
     )?;
+    tx.commit()?;
     Ok(())
 }
 
@@ -4438,6 +5807,28 @@ fn atomic_replace(path: &Path, bytes: &[u8]) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn write_content_addressed_receipt(directory: &Path, bytes: &[u8]) -> Result<ReceiptArtifact> {
+    let sha256 = hash_bytes(bytes);
+    fs::create_dir_all(directory)?;
+    let path = directory.join(format!("{sha256}.json"));
+    if path.exists() {
+        if fs::read(&path)? == bytes {
+            return Ok(ReceiptArtifact { path, sha256 });
+        }
+        return Err(EmberLabError::ReceiptHashCollision { path });
+    }
+    match atomic_create(&path, bytes) {
+        Ok(()) => Ok(ReceiptArtifact { path, sha256 }),
+        Err(EmberLabError::ReceiptAlreadyExists { .. }) if fs::read(&path)? == bytes => {
+            Ok(ReceiptArtifact { path, sha256 })
+        }
+        Err(EmberLabError::ReceiptAlreadyExists { .. }) => {
+            Err(EmberLabError::ReceiptHashCollision { path })
+        }
+        Err(error) => Err(error),
+    }
 }
 
 fn atomic_create(path: &Path, bytes: &[u8]) -> Result<()> {

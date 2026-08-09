@@ -6,6 +6,9 @@
 // survive. This mirrors the bottom-chrome fireball (screens/repl.ts), which already ticks fine off
 // its own `fireballTick` state/useInterval -- the fix threads that SAME tick down into Homescreen
 // instead of freezing it, so both surfaces animate off one clock and stay one art family.
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import { describe, test, expect } from "bun:test";
 import React from "react";
 import { Homescreen } from "./logo-homescreen.ts";
@@ -20,10 +23,17 @@ function mountAndCapture(el: React.ReactElement): string {
 }
 
 // Fireball glyphs sit at the panel's top-left corner (rows 1-9, cols 1-9 inside the border).
-function fireballCells(frame: ReturnType<typeof buildFrame>, rows: number): string {
+function fireballCells(
+  frame: ReturnType<typeof buildFrame>,
+  rows: number,
+  pool: StylePool,
+): string {
   const lines: string[] = [];
   for (let r = 1; r <= 9 && r < rows; r++) {
-    lines.push(frame.cells[r].slice(1, 10).map((c) => c?.char ?? " ").join(""));
+    lines.push(frame.cells[r].slice(1, 10).map((cell) => JSON.stringify({
+      char: cell?.char ?? " ",
+      style: pool.lookup(cell?.styleRef ?? 0),
+    })).join("|"));
   }
   return lines.join("\n");
 }
@@ -58,11 +68,11 @@ describe("Homescreen's welcome-panel fireball tracks a live tick (not frozen at 
       { stream, stdout: { columns: cols, rows } },
     );
     parseRenderedIntoFrame(buf, frame, pool);
-    const before = fireballCells(frame, rows);
+    const before = fireballCells(frame, rows, pool);
     buf = "";
     handle.update(React.createElement(Homescreen, { state, viewportWidth: 120, fireballTick: 1 }));
     parseRenderedIntoFrame(buf, frame, pool);
-    const after = fireballCells(frame, rows);
+    const after = fireballCells(frame, rows, pool);
     expect(before).not.toBe(after);
   });
 });

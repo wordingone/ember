@@ -59,9 +59,13 @@ Evidence inputs (all under the adjudicated run root unless noted):
     receipts/run-attempts.jsonl    repo-level append-only launch-attempt registry
                                    (issue #1497) -- "failed work included" is
                                    unattestable from a single run root without it;
-                                   rows must be JSON objects and at least one row
-                                   must NAME this run (by run_id, run-root name,
-                                   or checkpoint-manifest sha in any string value).
+                                   every live running row for this exact run/root
+                                   must precede exactly one matching terminal row,
+                                   while canonical terminal-only backfills remain
+                                   accepted as historical evidence.
+                                   The receipt binds the exact non-empty row
+                                   prefix it read, so later append-only launches
+                                   do not invalidate an already minted receipt.
 """
 from __future__ import annotations
 
@@ -94,7 +98,6 @@ RUN_ATTEMPTS_REGISTRY = "receipts/run-attempts.jsonl"
 # 2,048-token anchor) and binds its checkpoint manifest by hash
 # (receipt_binding.checkpoint_manifest_sha256 = bf20f050...). The admission-
 # contract dry-run validates ENTRY later; it is a gate record, not the genesis.
-GENESIS_RECEIPT_PATH = "receipts/ember-restart-3b/native-cost-calibration-seed83-certificate.json"
 
 # Section 5.1 class 1, quoted categories; each must attest false (a true value is a
 # stopped program, not a receipt field -- "fail-closed on unknown provenance").
@@ -139,6 +142,43 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _read_registry_rows_and_prefix(path: Path) -> tuple[list[dict[str, Any]], bytes]:
+    """Read registry rows and retain the exact bytes through the last row read.
+
+    Blank lines after the last non-empty row are outside the bound. Bytes before
+    and between rows remain part of the prefix, preserving append-only receipt
+    semantics without normalizing line endings or JSON whitespace.
+    """
+    raw = path.read_bytes()
+    rows: list[dict[str, Any]] = []
+    prefix_end = 0
+    cursor = 0
+    for line_number, raw_line in enumerate(raw.splitlines(keepends=True), 1):
+        cursor += len(raw_line)
+        try:
+            line = raw_line.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise FrontierRefusal(
+                f"LEDGER_INCOMPLETE:all_compute_coverage: registry line {line_number} is not UTF-8: {error}"
+            ) from error
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except ValueError as error:
+            raise FrontierRefusal(
+                f"LEDGER_INCOMPLETE:all_compute_coverage: registry line {line_number} unparseable: {error}"
+            ) from error
+        if not isinstance(row, dict):
+            raise FrontierRefusal(
+                f"LEDGER_INCOMPLETE:all_compute_coverage: registry line {line_number} is not a JSON object "
+                "-- a scalar line is not an attempt record (rev-1490 item 4)"
+            )
+        rows.append(row)
+        prefix_end = cursor
+    return rows, raw[:prefix_end]
+
+
 def _read_json(path: Path, what: str) -> Any:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -160,21 +200,41 @@ def _battery():
     return r1_exit_battery
 
 
-def _excluded_from_evidence(path: Path) -> bool:
+def _genesis_receipt_path() -> str:
+    """Resolve the validator's pinned predecessor; never duplicate its path."""
+    return _battery().E5_GENESIS_RECEIPT_PATH
+
+
+def _validate_predecessor(predecessor_rel: str) -> str:
+    expected = Path(_genesis_receipt_path()).as_posix()
+    candidate = Path(predecessor_rel).as_posix()
+    if candidate != expected:
+        raise FrontierRefusal(
+            f"PREDECESSOR_REFUSED: {candidate!r} is not the pinned genesis "
+            f"receipt {expected!r}"
+        )
+    return expected
+
+
+def _excluded_from_evidence(path: Path, run_root: Path) -> bool:
     """Twin of r1_exit_battery._evidence_excluded, kept in agreement (rev-1490
     E5 item 6: both modules must resolve the retained-failed-attempt shape the
     same way): nothing under .checkpoint-quarantine or a preserved attempt-*/
     dir serves as evidence -- a failed attempt's receipts are history, and a
     run that retained one must stay mintable from its root-level evidence."""
+    try:
+        relative_parts = path.relative_to(run_root).parts
+    except ValueError:
+        return True
     return any(
         part == ".checkpoint-quarantine" or part.startswith("attempt-")
-        for part in path.parts
+        for part in relative_parts
     )
 
 
 def _find_one(run_root: Path, pattern: str, what: str, needs: str) -> Path:
     candidates = sorted(
-        p for p in run_root.rglob(pattern) if not _excluded_from_evidence(p)
+        p for p in run_root.rglob(pattern) if not _excluded_from_evidence(p, run_root)
     )
     if not candidates:
         raise FrontierRefusal(f"{what}: no {pattern} under {run_root} ({needs})")
@@ -526,7 +586,7 @@ def ledger_host_accounting(run_root: Path) -> dict[str, Any]:
         "not_measured": {},
     }
     e4_candidates = sorted(
-        p for p in run_root.rglob("e4-measurement-receipt.json") if not _excluded_from_evidence(p)
+        p for p in run_root.rglob("e4-measurement-receipt.json") if not _excluded_from_evidence(p, run_root)
     )
     if len(e4_candidates) == 1:
         e4 = _read_json(e4_candidates[0], "LEDGER_INCOMPLETE:host_accounting")
@@ -559,49 +619,19 @@ def ledger_all_compute_coverage(run_root: Path, run_id: str, manifest_sha: str) 
             f"{RUN_ATTEMPTS_REGISTRY} -- 'failed work included' is unattestable from a single "
             "run root; the registry (issue #1497) must enumerate failed/aborted attempts"
         )
-    rows = []
-    for i, line in enumerate(registry_path.read_text(encoding="utf-8").splitlines()):
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            row = json.loads(line)
-        except ValueError as error:
-            raise FrontierRefusal(
-                f"LEDGER_INCOMPLETE:all_compute_coverage: registry line {i + 1} unparseable: {error}"
-            ) from error
-        if not isinstance(row, dict):
-            raise FrontierRefusal(
-                f"LEDGER_INCOMPLETE:all_compute_coverage: registry line {i + 1} is not a JSON "
-                "object -- a scalar line is not an attempt record (rev-1490 item 4)"
-            )
-        rows.append(row)
+    rows, registry_prefix = _read_registry_rows_and_prefix(registry_path)
     if not rows:
         raise FrontierRefusal("LEDGER_INCOMPLETE:all_compute_coverage: run-attempt registry is empty")
 
-    # The adjudicated run must APPEAR in the registry: a non-empty file that
-    # never mentions this run attests nothing about its failed work (rev-1490
-    # item 4). Field-name-agnostic (issue #1497's schema is not invented
-    # here): any string value in a row equal to the telemetry run_id, the
-    # run-root directory name, or the checkpoint-manifest sha names the run.
-    run_tokens = {t for t in (run_id, run_root.name, manifest_sha) if isinstance(t, str) and t}
-
-    def _row_strings(value: Any):
-        if isinstance(value, str):
-            yield value
-        elif isinstance(value, dict):
-            for v in value.values():
-                yield from _row_strings(v)
-        elif isinstance(value, list):
-            for v in value:
-                yield from _row_strings(v)
-
-    if not any(any(s in run_tokens for s in _row_strings(row)) for row in rows):
+    completion_defects = _battery().validate_run_attempt_completion(
+        rows,
+        selected_run_id=run_id,
+        run_root=run_root,
+        bound_row_count=len(rows),
+    )
+    if completion_defects:
         raise FrontierRefusal(
-            "LEDGER_INCOMPLETE:all_compute_coverage: no registry row names this run "
-            f"(looked for run_id {run_id!r}, run-root name {run_root.name!r}, or the "
-            "checkpoint-manifest sha among row string values) -- 'failed work included' "
-            "cannot be asserted from rows that never mention the run"
+            "LEDGER_INCOMPLETE:all_compute_coverage: " + "; ".join(completion_defects)
         )
     components = {}
     for component in COMPUTE_COMPONENTS:
@@ -615,7 +645,7 @@ def ledger_all_compute_coverage(run_root: Path, run_id: str, manifest_sha: str) 
         "components": components,
         "failed_work_included": True,
         "registry_path": RUN_ATTEMPTS_REGISTRY,
-        "registry_sha256": _sha256(registry_path),
+        "registry_prefix_sha256": hashlib.sha256(registry_prefix).hexdigest(),
         "registry_rows": len(rows),
     }
 
@@ -662,6 +692,7 @@ def leg_invariant(predecessor_rel: str) -> tuple[dict[str, str], dict[str, str]]
 # --- assembly -----------------------------------------------------------------
 
 def build_receipt(run_root: Path, predecessor_rel: str, run_id: str | None = None) -> dict[str, Any]:
+    predecessor_rel = _validate_predecessor(predecessor_rel)
     battery = _battery()
     thresholds, _ = battery.load_thresholds()
     t01, t06 = int(thresholds["T-01"]), float(thresholds["T-06"])
@@ -738,7 +769,7 @@ def main() -> int:
     parser.add_argument("--run-root", required=True, type=Path)
     parser.add_argument("--out", type=Path, default=None,
                         help="receipt path (default: <run-root>/frontier-receipt.json)")
-    parser.add_argument("--predecessor", type=str, default=GENESIS_RECEIPT_PATH,
+    parser.add_argument("--predecessor", type=str, default=_genesis_receipt_path(),
                         help="repo-relative predecessor receipt (default: the candidate's genesis receipt; "
                              "the R1 battery validator pins exactly the default -- an override refuses at adjudication)")
     parser.add_argument("--run-id", type=str, default=None,

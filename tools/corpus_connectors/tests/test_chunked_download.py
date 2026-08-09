@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import collections
 import hashlib
+import urllib.error
+import urllib.request
 import json
 import sys
 import tempfile
@@ -554,6 +556,170 @@ class ContentRangeParsingTests(unittest.TestCase):
 
     def test_well_formed_header_parses(self):
         self.assertEqual(bulk._parse_content_range("bytes 0-99/500"), (0, 99, 500))
+
+
+class RetryPolicyTests(ChunkedFetchServerTestCase):
+    def test_transient_5xx_retries_with_backoff_and_records_attempts(self):
+        payload = _payload(300)
+        url, _ = self._serve(payload)
+        calls = []
+        sleeps = []
+
+        def opener(request, timeout=60):
+            if len(calls) < 2:
+                calls.append("503")
+                raise urllib.error.HTTPError(
+                    request.full_url, 503, "temporary", {}, None
+                )
+            calls.append("ok")
+            return urllib.request.urlopen(request, timeout=timeout)
+
+        with tempfile.TemporaryDirectory() as td:
+            result = bulk.fetch_chunked(
+                url,
+                Path(td) / "out.bin",
+                budget_bytes=10_000,
+                chunk_size=128,
+                max_retries=2,
+                backoff_base_seconds=0.25,
+                sleep_fn=sleeps.append,
+                opener=opener,
+            )
+
+        self.assertEqual(calls[:2], ["503", "503"])
+        self.assertEqual(len(sleeps), 2)
+        self.assertEqual(sleeps, [0.25, 0.5])
+        self.assertEqual(result.retry_attempts, 2)
+        self.assertEqual([e["status"] for e in result.retry_events], ["http_503", "http_503"])
+
+    def test_exhausted_transient_retries_leave_no_initial_partial(self):
+        payload = _payload(100)
+        url, _ = self._serve(payload)
+        calls = []
+
+        def opener(request, timeout=60):
+            calls.append(request)
+            raise urllib.error.HTTPError(
+                request.full_url, 503, "temporary", {}, None
+            )
+
+        with tempfile.TemporaryDirectory() as td:
+            dest = Path(td) / "out.bin"
+            with self.assertRaises(bulk.ChunkFetchError):
+                bulk.fetch_chunked(
+                    url,
+                    dest,
+                    budget_bytes=10_000,
+                    chunk_size=128,
+                    max_retries=2,
+                    sleep_fn=lambda _seconds: None,
+                    opener=opener,
+                )
+            self.assertEqual(len(calls), 3)
+            self.assertFalse(dest.exists())
+            self.assertFalse(dest.with_name(dest.name + ".partial").exists())
+            self.assertFalse(dest.with_name(dest.name + ".bulkstate.json").exists())
+
+    def test_terminal_http_status_is_never_retried(self):
+        payload = _payload(100)
+        url, _ = self._serve(payload)
+        calls = []
+
+        def opener(request, timeout=60):
+            calls.append(request)
+            raise urllib.error.HTTPError(
+                request.full_url, 416, "range refused", {}, None
+            )
+
+        with tempfile.TemporaryDirectory() as td:
+            with self.assertRaises(bulk.ChunkFetchError):
+                bulk.fetch_chunked(
+                    url,
+                    Path(td) / "out.bin",
+                    budget_bytes=10_000,
+                    chunk_size=128,
+                    max_retries=5,
+                    sleep_fn=lambda _seconds: None,
+                    opener=opener,
+                )
+        self.assertEqual(len(calls), 1)
+
+    def test_connection_reset_and_timeout_are_transient(self):
+        payload = _payload(100)
+        url, _ = self._serve(payload)
+
+        for transient, expected_status in (
+            (ConnectionResetError("reset"), "connection_reset"),
+            (TimeoutError("timeout"), "timeout"),
+        ):
+            calls = {"n": 0}
+
+            def opener(request, timeout=60, transient=transient):
+                if calls["n"] == 0:
+                    calls["n"] += 1
+                    raise transient
+                return urllib.request.urlopen(request, timeout=timeout)
+
+            with tempfile.TemporaryDirectory() as td:
+                result = bulk.fetch_chunked(
+                    url,
+                    Path(td) / "out.bin",
+                    budget_bytes=10_000,
+                    chunk_size=128,
+                    max_retries=1,
+                    backoff_base_seconds=0,
+                    sleep_fn=lambda _seconds: None,
+                    opener=opener,
+                )
+            self.assertEqual(result.retry_attempts, 1)
+            self.assertEqual(result.retry_events[0]["status"], expected_status)
+
+    def test_retry_bound_applies_per_chunk_not_across_the_transfer(self):
+        payload = _payload(300)
+        url, _ = self._serve(payload)
+        failed_ranges = set()
+
+        def opener(request, timeout=60):
+            range_header = request.headers["Range"]
+            if range_header not in failed_ranges:
+                failed_ranges.add(range_header)
+                raise urllib.error.HTTPError(
+                    request.full_url, 503, "temporary", {}, None
+                )
+            return urllib.request.urlopen(request, timeout=timeout)
+
+        with tempfile.TemporaryDirectory() as td:
+            result = bulk.fetch_chunked(
+                url,
+                Path(td) / "out.bin",
+                budget_bytes=10_000,
+                chunk_size=128,
+                max_retries=1,
+                backoff_base_seconds=0,
+                sleep_fn=lambda _seconds: None,
+                opener=opener,
+            )
+
+        self.assertEqual(result.retry_attempts, 3)
+        self.assertEqual([e["chunk_index"] for e in result.retry_events], [0, 1, 2])
+
+    def test_retry_controls_reject_negative_or_nonfinite_values(self):
+        with tempfile.TemporaryDirectory() as td:
+            dest = Path(td) / "out.bin"
+            with self.assertRaises(rcpt.BlockedError):
+                bulk.fetch_chunked(
+                    "http://127.0.0.1:1/unused",
+                    dest,
+                    budget_bytes=10_000,
+                    max_retries=-1,
+                )
+            with self.assertRaises(rcpt.BlockedError):
+                bulk.fetch_chunked(
+                    "http://127.0.0.1:1/unused",
+                    dest,
+                    budget_bytes=10_000,
+                    backoff_base_seconds=float("nan"),
+                )
 
 
 if __name__ == "__main__":

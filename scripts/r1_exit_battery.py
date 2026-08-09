@@ -141,6 +141,8 @@ ISSUE_REF = "#1463"
 PREREG_DOC = "docs/spec/ember02-preregistration-v1.md"
 PREREG_PIN = "3d48d3870919bd04cec735f68d0fad45fcfae0b2"
 RECEIPT_SCHEMA = "r1-exit-battery/v1"
+RUN_ROOT_LAYOUT_SPEC_PATH = "docs/spec/ember-run-root-layout-v1.md"
+RUN_ROOT_LAYOUT_SPEC = RUN_ROOT_LAYOUT_SPEC_PATH
 
 SHA_CONVENTION = (
     "sha256 over on-disk raw bytes (binary read, no line-ending "
@@ -151,6 +153,16 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_THRESHOLDS_PATH = REPO_ROOT / "docs" / "spec" / "ember02-preregistration-thresholds-v1.json"
 FIXED_PRIOR_MANIFEST_REL = "manifests/ember-restart-3b/fixed-prior-manifest-v1.json"
 DEFAULT_FIXED_PRIOR_MANIFEST = REPO_ROOT / FIXED_PRIOR_MANIFEST_REL
+
+
+def _layout_spec_path(repo_root: Path = REPO_ROOT) -> Path:
+    """Return the checked-in run-root layout authority used by discovery."""
+    path = Path(repo_root) / RUN_ROOT_LAYOUT_SPEC_PATH
+    if not path.is_file():
+        raise R1ExitBatteryRefusal(
+            f"RUN_ROOT_LAYOUT_SPEC_MISSING: {RUN_ROOT_LAYOUT_SPEC_PATH} is required"
+        )
+    return path
 
 # F-11 is required alongside T-01..T-09: R1-E8's parity leg quotes its frozen
 # band formula from the thresholds document, never from a transcription here.
@@ -187,6 +199,227 @@ def _sha256_file(path: Path) -> str:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _registry_rows_and_prefix(
+    path: Path, row_limit: int | None = None
+) -> tuple[list[tuple[int, str]], bytes]:
+    """Return every non-empty registry line plus exact bytes through the bound.
+
+    ``row_limit`` selects the immutable prefix only.  The scan deliberately
+    continues through the current tail so appended corruption cannot hide
+    behind an otherwise valid historical prefix.
+    """
+    raw = path.read_bytes()
+    lines: list[tuple[int, str]] = []
+    prefix_end = 0
+    cursor = 0
+    for line_number, raw_line in enumerate(raw.splitlines(keepends=True), 1):
+        cursor += len(raw_line)
+        line = raw_line.decode("utf-8")
+        if not line.strip():
+            continue
+        lines.append((line_number, line.strip()))
+        if row_limit is None or len(lines) <= row_limit:
+            prefix_end = cursor
+    return lines, raw[:prefix_end]
+
+
+def validate_run_attempt_completion(
+    rows: list[dict[str, Any]],
+    *,
+    selected_run_id: str,
+    run_root: Path,
+    bound_row_count: int | None = None,
+) -> list[str]:
+    """Validate issue #1497's terminal-completeness contract.
+
+    Every current row is schema-checked so an appended malformed tail cannot
+    hide behind an older receipt prefix.  Attempt pairing is deliberately
+    limited to ``bound_row_count``: a valid later append must not invalidate
+    an already-minted #1510 prefix receipt.
+
+    Historical ``backfill=true`` terminal rows predate the live spawn/exit
+    chain and remain self-contained compatibility evidence.  New live rows
+    require exactly one running row followed by exactly one terminal row for
+    the same run-root/run/attempt identity.
+    """
+    import run_attempt_registry as registry
+
+    defects: list[str] = []
+    if bound_row_count is None:
+        bound_row_count = len(rows)
+    elif not isinstance(bound_row_count, int) or isinstance(bound_row_count, bool):
+        defects.append("bound_row_count must be an integer")
+        return defects
+    if bound_row_count < 0 or bound_row_count > len(rows):
+        defects.append(
+            f"bound_row_count {bound_row_count} is outside the current {len(rows)} rows"
+        )
+        return defects
+    if not isinstance(selected_run_id, str) or not selected_run_id.strip():
+        defects.append("selected run identity is missing")
+        return defects
+
+    valid_rows: list[tuple[int, dict[str, Any]]] = []
+    for index, row in enumerate(rows, start=1):
+        row_defects = registry.validate_row(row)
+        defects.extend(f"registry row {index}: {defect}" for defect in row_defects)
+        if not row_defects:
+            valid_rows.append((index, row))
+
+    resolved_root = run_root.resolve()
+    expected_root_ref = f"{resolved_root.parent.name}:{resolved_root.name}"
+    relevant: list[tuple[int, dict[str, Any]]] = []
+    for index, row in valid_rows:
+        if index > bound_row_count:
+            continue
+        same_run = row["run_id"] == selected_run_id
+        same_root_name = row["run_root_name"] == resolved_root.name
+        if same_root_name and not same_run:
+            defects.append(
+                f"registry row {index}: foreign run {row['run_id']!r} under selected root "
+                f"{resolved_root.name!r}"
+            )
+            continue
+        if same_run and not same_root_name:
+            defects.append(
+                f"registry row {index}: foreign root {row['run_root_name']!r} for selected "
+                f"run {selected_run_id!r}"
+            )
+            continue
+        if not same_run and not same_root_name:
+            continue
+        if row["run_root_ref"] != expected_root_ref:
+            defects.append(
+                f"registry row {index}: foreign root reference {row['run_root_ref']!r}; "
+                f"expected {expected_root_ref!r}"
+            )
+            continue
+        relevant.append((index, row))
+
+    if not relevant:
+        defects.append(
+            "no registry row names the selected run/root identity "
+            f"({selected_run_id!r}, {resolved_root.name!r})"
+        )
+        return defects
+
+    def _parse_utc(value: Any, *, index: int, field: str) -> datetime | None:
+        if not isinstance(value, str):
+            return None
+        try:
+            return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(
+                tzinfo=timezone.utc
+            )
+        except ValueError:
+            defects.append(
+                f"registry row {index}: {field} must be canonical UTC YYYY-MM-DDTHH:MM:SSZ"
+            )
+            return None
+
+    def _evidence_path(
+        value: Any, *, index: int, field: str, require_file: bool
+    ) -> Path | None:
+        if not isinstance(value, str) or not value.strip():
+            return None
+        candidate = Path(value)
+        try:
+            resolved = (resolved_root / candidate).resolve()
+            resolved.relative_to(resolved_root)
+        except (OSError, ValueError):
+            defects.append(
+                f"registry row {index}: {field} escapes the selected run root"
+            )
+            return None
+        if not resolved.exists():
+            defects.append(
+                f"registry row {index}: {field} does not resolve to existing custody evidence"
+            )
+            return None
+        if require_file and not resolved.is_file():
+            defects.append(
+                f"registry row {index}: {field} must resolve to a regular evidence file"
+            )
+            return None
+        return resolved
+
+    grouped: dict[tuple[str, str, str], list[tuple[int, dict[str, Any]]]] = {}
+    for index, row in relevant:
+        start = _parse_utc(row.get("start_utc"), index=index, field="start_utc")
+        end = None
+        if row.get("outcome") != "running":
+            end = _parse_utc(row.get("end_utc"), index=index, field="end_utc")
+        if start is not None and end is not None and end < start:
+            defects.append(f"registry row {index}: end_utc precedes start_utc")
+
+        live = row["backfill"] is False
+        launch_path = _evidence_path(
+            row.get("launch_receipt_ref"),
+            index=index,
+            field="launch_receipt_ref",
+            require_file=live,
+        )
+        source_path = _evidence_path(
+            row.get("source_receipt"),
+            index=index,
+            field="source_receipt",
+            require_file=live,
+        )
+        if live and row.get("launch_receipt_ref") != row.get("source_receipt"):
+            phase = "running" if row["outcome"] == "running" else "terminal"
+            defects.append(
+                f"registry row {index}: {phase} receipt references are inconsistent"
+            )
+        if launch_path is not None and source_path is not None and live:
+            if launch_path != source_path:
+                phase = "running" if row["outcome"] == "running" else "terminal"
+                defects.append(
+                    f"registry row {index}: {phase} receipt references resolve to different evidence"
+                )
+
+        key = (row["run_root_ref"], row["run_id"], row["attempt_id"])
+        grouped.setdefault(key, []).append((index, row))
+
+    for key, attempt_rows in grouped.items():
+        running = [(i, row) for i, row in attempt_rows if row["outcome"] == "running"]
+        terminal = [(i, row) for i, row in attempt_rows if row["outcome"] != "running"]
+        backfill_values = {row["backfill"] for _, row in attempt_rows}
+        identity = f"run/root/attempt {key!r}"
+
+        if backfill_values == {True}:
+            if running:
+                defects.append(f"{identity}: backfill running row is not terminal evidence")
+            if len(terminal) == 0:
+                defects.append(f"{identity}: historical backfill is missing a terminal row")
+            elif len(terminal) > 1:
+                defects.append(f"{identity}: duplicate terminal backfill rows")
+            continue
+        if len(backfill_values) > 1:
+            defects.append(f"{identity}: live and backfill rows must not be mixed")
+
+        if len(running) == 0:
+            defects.append(f"{identity}: orphan terminal row (foreign attempt)")
+            continue
+        if len(running) > 1:
+            defects.append(f"{identity}: duplicate running rows")
+        if len(terminal) == 0:
+            defects.append(f"{identity}: missing terminal row")
+            continue
+        if len(terminal) > 1:
+            defects.append(f"{identity}: duplicate terminal rows")
+            continue
+
+        running_index, running_row = running[0]
+        terminal_index, terminal_row = terminal[0]
+        if terminal_index < running_index:
+            defects.append(f"{identity}: terminal precedes running row")
+        if terminal_row["start_utc"] != running_row["start_utc"]:
+            defects.append(f"{identity}: terminal start_utc does not match running start_utc")
+        if terminal_row["launch_receipt_ref"] == running_row["launch_receipt_ref"]:
+            defects.append(f"{identity}: terminal must not reuse running evidence")
+
+    return defects
 
 
 def _json_safe_number(value: Any) -> Any:
@@ -279,6 +512,7 @@ def find_telemetry_files(run_root: Path) -> list[Path]:
     top-level "source"=="ember-restart-3b"). A file with zero matching
     lines is not returned -- an incidental unrelated .jsonl file must not
     be mistaken for a telemetry channel."""
+    _layout_spec_path()
     if not run_root.is_dir():
         return []
     found = []
@@ -317,6 +551,7 @@ def find_quarantined_telemetry_files(run_root: Path) -> list[Path]:
     already a violation candidate, and an UNREADABLE one is the case where
     something is actively wrong -- a read error counts it and surfaces it
     rather than reporting the quarantine clean (rev-1490 non-blocking 3)."""
+    _layout_spec_path()
     if not run_root.is_dir():
         return []
     found = []
@@ -333,7 +568,7 @@ def find_quarantined_telemetry_files(run_root: Path) -> list[Path]:
     return found
 
 
-def _evidence_excluded(path: Path) -> bool:
+def _evidence_excluded(path: Path, run_root: Path) -> bool:
     """True when a path may not serve as E5 EVIDENCE: anything under
     .checkpoint-quarantine (copied-in archive material must not vouch for a
     run) or under a preserved failed-attempt dir (attempt-*/ -- the
@@ -343,9 +578,14 @@ def _evidence_excluded(path: Path) -> bool:
     train_step rows belong to the same run_id and are still counted
     (rev-1490 item 6: both modules must agree, and exclusion mirrors how
     the quarantine dir is already handled)."""
+    _layout_spec_path()
+    try:
+        relative_parts = path.relative_to(run_root).parts
+    except ValueError:
+        return True
     return any(
         part == ".checkpoint-quarantine" or part.startswith("attempt-")
-        for part in path.parts
+        for part in relative_parts
     )
 
 
@@ -1302,7 +1542,7 @@ def _validate_frontier_content(
         receipts are history, not this run's evidence; rev-1490 item 6),
         require the receipt's sha to match its bytes, and return
         (path, parsed JSON). None (with defects appended) otherwise."""
-        candidates = sorted(p for p in run_root.rglob(rel_name) if not _evidence_excluded(p)) if run_root.is_dir() else []
+        candidates = sorted(p for p in run_root.rglob(rel_name) if not _evidence_excluded(p, run_root)) if run_root.is_dir() else []
         if not candidates:
             defects.append(f"{label}: no {rel_name} under the run root")
             return None
@@ -1587,23 +1827,61 @@ def _validate_frontier_content(
                 defects.append(f"ledger.all_compute_coverage.registry_path does not name {E5_RUN_ATTEMPTS_REGISTRY}")
             if not registry_disk.is_file():
                 defects.append(f"ledger.all_compute_coverage: no run-attempt registry at {E5_RUN_ATTEMPTS_REGISTRY} -- 'failed work included' is unattestable without it (issue #1497)")
-            elif not _nonempty_str(coverage_block.get("registry_sha256")) or _sha256_file(registry_disk) != coverage_block.get("registry_sha256"):
-                defects.append("ledger.all_compute_coverage.registry_sha256 does not match the registry bytes on disk")
             else:
-                lines = [ln for ln in registry_disk.read_text(encoding="utf-8").splitlines() if ln.strip()]
+                declared_rows = coverage_block.get("registry_rows")
+                if not isinstance(declared_rows, int) or isinstance(declared_rows, bool) or declared_rows < 1:
+                    defects.append("ledger.all_compute_coverage.registry_rows must be a positive integer")
+                    declared_rows = 0
+                try:
+                    line_entries, registry_prefix = _registry_rows_and_prefix(registry_disk, declared_rows)
+                except (OSError, UnicodeDecodeError) as error:
+                    line_entries, registry_prefix = [], b""
+                    defects.append(f"ledger.all_compute_coverage: registry unreadable: {error}")
+                bound_entries = line_entries[:declared_rows]
+                if len(bound_entries) != declared_rows:
+                    defects.append(
+                        f"ledger.all_compute_coverage.registry_rows {coverage_block.get('registry_rows')!r} "
+                        f"cannot be re-read from the registry prefix (found {len(bound_entries)} rows)"
+                    )
+                has_prefix_sha = "registry_prefix_sha256" in coverage_block
+                has_legacy_sha = "registry_sha256" in coverage_block
+                prefix_sha = coverage_block.get("registry_prefix_sha256")
+                legacy_sha = coverage_block.get("registry_sha256")
+                if has_prefix_sha and has_legacy_sha:
+                    defects.append(
+                        "ledger.all_compute_coverage must not mix registry_prefix_sha256 "
+                        "with legacy registry_sha256"
+                    )
+                elif has_prefix_sha:
+                    if not _nonempty_str(prefix_sha) or _sha256_bytes(registry_prefix) != prefix_sha:
+                        defects.append("ledger.all_compute_coverage.registry prefix sha256 does not match the bound rows on disk")
+                elif has_legacy_sha:
+                    if not _nonempty_str(legacy_sha) or _sha256_file(registry_disk) != legacy_sha:
+                        defects.append("ledger.all_compute_coverage.registry_sha256 does not match the registry bytes on disk")
+                    if len(line_entries) != declared_rows:
+                        defects.append(
+                            f"legacy ledger.all_compute_coverage.registry_rows {coverage_block.get('registry_rows')!r} "
+                            f"does not equal the registry's {len(line_entries)} rows"
+                        )
+                else:
+                    defects.append(
+                        "ledger.all_compute_coverage requires registry_prefix_sha256 "
+                        "or legacy registry_sha256"
+                    )
+                lines = [line for _, line in bound_entries]
                 parse_failures = []
                 non_object_rows = []
-                rows = []
-                for i, line in enumerate(lines):
+                all_rows = []
+                for line_number, line in line_entries:
                     try:
                         row = json.loads(line)
                     except ValueError:
-                        parse_failures.append(i + 1)
+                        parse_failures.append(line_number)
                         continue
                     if not isinstance(row, dict):
-                        non_object_rows.append(i + 1)
+                        non_object_rows.append(line_number)
                         continue
-                    rows.append(row)
+                    all_rows.append(row)
                 if parse_failures:
                     defects.append(f"ledger.all_compute_coverage: registry lines unparseable: {parse_failures}")
                 if non_object_rows:
@@ -1613,35 +1891,21 @@ def _validate_frontier_content(
                     )
                 if not lines:
                     defects.append("ledger.all_compute_coverage: run-attempt registry is empty")
-                if coverage_block.get("registry_rows") != len(lines):
-                    defects.append(f"ledger.all_compute_coverage.registry_rows {coverage_block.get('registry_rows')!r} does not equal the registry's {len(lines)} rows")
-                # The adjudicated run must APPEAR in the registry: a
-                # non-empty file that never mentions this run attests
-                # nothing about its failed work (rev-1490 item 4). The
-                # match is field-name-agnostic (issue #1497's schema is
-                # not invented here): any string value in an object row
-                # equal to the run's telemetry run_id, the run-root
-                # directory name, or the checkpoint-manifest sha names it.
-                run_tokens = {t for t in (selected_run_id, run_root.name, disk_manifest_sha) if _nonempty_str(t)}
-
-                def _row_strings(value: Any):
-                    if isinstance(value, str):
-                        yield value
-                    elif isinstance(value, dict):
-                        for v in value.values():
-                            yield from _row_strings(v)
-                    elif isinstance(value, list):
-                        for v in value:
-                            yield from _row_strings(v)
-
-                if rows and run_tokens and not any(
-                    any(s in run_tokens for s in _row_strings(row)) for row in rows
+                if (
+                    all_rows
+                    and not parse_failures
+                    and not non_object_rows
+                    and _nonempty_str(selected_run_id)
                 ):
-                    defects.append(
-                        "ledger.all_compute_coverage: no registry row names the adjudicated run "
-                        f"(looked for run_id {selected_run_id!r}, run-root name {run_root.name!r}, "
-                        "or the checkpoint-manifest sha among row string values) -- 'failed work "
-                        "included' is unattestable from rows that never mention this run"
+                    completion_defects = validate_run_attempt_completion(
+                        all_rows,
+                        selected_run_id=selected_run_id,
+                        run_root=run_root,
+                        bound_row_count=declared_rows,
+                    )
+                    defects.extend(
+                        f"ledger.all_compute_coverage: {defect}"
+                        for defect in completion_defects
                     )
             if coverage_block.get("failed_work_included") is not True:
                 defects.append("ledger.all_compute_coverage.failed_work_included must be true")
@@ -1711,13 +1975,14 @@ def _validate_frontier_content(
 
 
 def check_r1_e5(run_root: Path, thresholds: dict[str, Any], *, repo_root: Path = REPO_ROOT, fixed_prior_manifest_path: Path | None = None, run_id: str | None = None) -> dict[str, Any]:
+    layout_spec_path = _layout_spec_path()
     t01 = int(thresholds["T-01"])
     t06 = float(thresholds["T-06"])
     manifest_cfg = fixed_prior_manifest_path or (repo_root / FIXED_PRIOR_MANIFEST_REL)
     fixed_prior_present = manifest_cfg.is_file()
     frontier_receipt_candidates = sorted(
         p for p in (run_root.rglob("*frontier*receipt*.json") if run_root.is_dir() else [])
-        if not _evidence_excluded(p)
+        if not _evidence_excluded(p, run_root)
     )
     # Placement-invariant disclosure (rev-1490 round-3): quarantined .jsonl
     # holding real train_step rows never blocks E5, but it is surfaced --
@@ -1738,6 +2003,8 @@ def check_r1_e5(run_root: Path, thresholds: dict[str, Any], *, repo_root: Path =
                 "scripts/frontier_receipt.py --run-root <this root>"
             ),
             "components": {
+                "layout_spec": RUN_ROOT_LAYOUT_SPEC,
+                "layout_spec_sha256": _sha256_file(layout_spec_path),
                 "fixed_prior_manifest_present": fixed_prior_present,
                 "fixed_prior_manifest_path": str(manifest_cfg),
                 "fixed_prior_manifest_sha256": _sha256_file(manifest_cfg) if fixed_prior_present else None,
@@ -1758,6 +2025,8 @@ def check_r1_e5(run_root: Path, thresholds: dict[str, Any], *, repo_root: Path =
     ]
     valid = [v for v in validations if not v["defects"]]
     components: dict[str, Any] = {
+        "layout_spec": RUN_ROOT_LAYOUT_SPEC,
+        "layout_spec_sha256": _sha256_file(layout_spec_path),
         "candidate_validation": validations,
         "quarantined_telemetry_files": quarantined_telemetry,
     }
@@ -2516,6 +2785,10 @@ def _synthetic_checkpoint(tmp_dir: Path, *, seed: int = 830001, corrupt_shard: b
 def run_selftest() -> None:
     thresholds, thresholds_sha256 = load_thresholds()
     assert thresholds["T-01"] == 100 and thresholds["T-07"] == 2, thresholds
+    layout_spec_path = _layout_spec_path()
+    layout_spec_text = layout_spec_path.read_text(encoding="utf-8")
+    assert RUN_ROOT_LAYOUT_SPEC == "docs/spec/ember-run-root-layout-v1.md", RUN_ROOT_LAYOUT_SPEC
+    assert "attempt-" in layout_spec_text and "telemetry" in layout_spec_text, layout_spec_path
 
     with tempfile.TemporaryDirectory(prefix="r1_exit_battery_selftest_") as tmp:
         tmp_path = Path(tmp)
@@ -2532,6 +2805,23 @@ def run_selftest() -> None:
         r1 = check_r1_e1(clean_root, thresholds)
         assert r1["status"] == "MET", r1
         assert r1["steps_observed"] == 100 and r1["non_finite_count"] == 0, r1
+
+        # The launcher-retained attempt layout is excluded from authoritative
+        # receipt discovery, while its telemetry remains part of the run's
+        # train-step series.  This is the production boundary documented by
+        # RUN_ROOT_LAYOUT_SPEC, not a filename-only assertion.
+        retained_attempt = clean_root / "attempt-1-CHILD_FAILED-SELFTEST"
+        retained_telemetry = retained_attempt / "telemetry" / "events.jsonl"
+        _write_jsonl(
+            retained_telemetry,
+            _synthetic_train_step_events(
+                run_id="SELFTEST_FIXTURE_run", n_steps=1
+            ),
+        )
+        retained_receipt = retained_attempt / "frontier-receipt.json"
+        retained_receipt.write_text("{}", encoding="utf-8")
+        assert retained_telemetry in find_telemetry_files(clean_root), retained_telemetry
+        assert _evidence_excluded(retained_receipt, clean_root), retained_receipt
 
         # --- E1: NaN at step 50 -> NOT_MET, non_finite_count >= 1 ---
         nan_root = tmp_path / "nan_run"
@@ -2889,8 +3179,6 @@ def run_selftest() -> None:
                 json.dumps({"SELFTEST_FIXTURE": "tokenizer"}).encode("utf-8"))
             (repo / "receipts" / "ember-restart-3b" / "native-cost-calibration-seed83-certificate.json").write_bytes(
                 json.dumps({"SELFTEST_FIXTURE": "genesis", "adjudication": "PASS"}).encode("utf-8"))
-            (repo / "receipts" / "run-attempts.jsonl").write_bytes(
-                json.dumps({"run_id": "SELFTEST_E5_run", "outcome": "completed"}).encode("utf-8") + b"\n")
             return repo
 
         def _e5_run(name: str) -> tuple[Path, dict[str, Any]]:
@@ -2940,6 +3228,50 @@ def run_selftest() -> None:
                 [{"wall_id": wall_id, "verdict": "not_probed"} for wall_id in E5_WALL_IDS]
             ).encode("utf-8"))
             return run, manifest
+
+        def _write_e5_registry(repo: Path, run: Path) -> list[dict[str, Any]]:
+            """Write one production-shaped live spawn/terminal pair."""
+            import run_attempt_registry as registry_module
+
+            (run / "run-spec.json").write_text(
+                '{"schema_version":"SELFTEST_FIXTURE"}\n', encoding="utf-8"
+            )
+            rows = [
+                registry_module.build_row(
+                    run_root=run,
+                    outcome="running",
+                    run_id="SELFTEST_E5_run",
+                    attempt_id="attempt-selftest",
+                    start_utc="2026-08-06T12:00:00Z",
+                    end_utc=None,
+                    checkpoint_manifest_sha256=None,
+                    launch_receipt_ref="run-spec.json",
+                    source_receipt="run-spec.json",
+                    outcome_basis="SELFTEST_FIXTURE certified launcher spawn",
+                    backfill=False,
+                ),
+                registry_module.build_row(
+                    run_root=run,
+                    outcome="completed",
+                    run_id="SELFTEST_E5_run",
+                    attempt_id="attempt-selftest",
+                    start_utc="2026-08-06T12:00:00Z",
+                    end_utc="2026-08-06T12:12:22Z",
+                    checkpoint_manifest_sha256=None,
+                    launch_receipt_ref="disk-budget-runner-receipt.json",
+                    source_receipt="disk-budget-runner-receipt.json",
+                    outcome_basis="SELFTEST_FIXTURE certified child exit 0",
+                    backfill=False,
+                ),
+            ]
+            registry_path = repo / E5_RUN_ATTEMPTS_REGISTRY
+            registry_path.write_bytes(
+                b"".join(
+                    json.dumps(row, sort_keys=True).encode("utf-8") + b"\n"
+                    for row in rows
+                )
+            )
+            return rows
 
         def _e5_receipt(repo: Path, run: Path, manifest: dict[str, Any]) -> dict[str, Any]:
             """Assemble a receipt whose every binding matches the fixture bytes
@@ -3007,8 +3339,12 @@ def run_selftest() -> None:
                         },
                         "failed_work_included": True,
                         "registry_path": E5_RUN_ATTEMPTS_REGISTRY,
-                        "registry_sha256": sha_of(repo / E5_RUN_ATTEMPTS_REGISTRY),
-                        "registry_rows": 1,
+                        "registry_prefix_sha256": sha_of(repo / E5_RUN_ATTEMPTS_REGISTRY),
+                        "registry_rows": len(
+                            _registry_rows_and_prefix(
+                                repo / E5_RUN_ATTEMPTS_REGISTRY
+                            )[0]
+                        ),
                     },
                     "walls_checklist": {
                         "rows": json.loads((run / "walls-checklist.json").read_text(encoding="utf-8")),
@@ -3074,6 +3410,7 @@ def run_selftest() -> None:
 
         e5_repo = _e5_repo("e5_repo")
         e5_run, e5_manifest = _e5_run("e5_full_run")
+        _write_e5_registry(e5_repo, e5_run)
         e5_pristine = _e5_receipt(e5_repo, e5_run, e5_manifest)
 
         def _e5_case(mutate=None, run_id=None) -> dict[str, Any]:
@@ -3094,6 +3431,129 @@ def run_selftest() -> None:
         assert e5_met["frontier_receipt_validation"] == "IMPLEMENTED", e5_met
         assert e5_met["components"]["steps_measured"] == e5_pristine["steps_measured"], e5_met
         assert e5_met["components"]["energy_boundary"] == "DEGRADED_PROXY", e5_met
+
+        # The producer's independent byte helper must bind exactly the rows it
+        # read, not the mutable whole-file hash.
+        import frontier_receipt as frontier_receipt_module
+        producer_rows, producer_prefix = frontier_receipt_module._read_registry_rows_and_prefix(
+            e5_repo / E5_RUN_ATTEMPTS_REGISTRY
+        )
+        assert len(producer_rows) == 2, producer_rows
+        assert hashlib.sha256(producer_prefix).hexdigest() == e5_pristine[
+            "ledger"
+        ]["all_compute_coverage"]["registry_prefix_sha256"]
+        generator_repo_root = frontier_receipt_module.REPO_ROOT
+        frontier_receipt_module.REPO_ROOT = e5_repo
+        try:
+            generated_coverage = frontier_receipt_module.ledger_all_compute_coverage(
+                e5_run,
+                "SELFTEST_E5_run",
+                e5_pristine["identity_spine"]["checkpoint_manifest_sha256"],
+            )
+        finally:
+            frontier_receipt_module.REPO_ROOT = generator_repo_root
+        assert generated_coverage["registry_rows"] == 2, generated_coverage
+        assert generated_coverage["registry_prefix_sha256"] == e5_pristine[
+            "ledger"
+        ]["all_compute_coverage"]["registry_prefix_sha256"]
+
+        # #1510: a later append must not invalidate a receipt bound to the
+        # first registry row it read; editing that bound prefix must refuse.
+        registry_path = e5_repo / E5_RUN_ATTEMPTS_REGISTRY
+        registry_before_append = registry_path.read_bytes()
+
+        # Existing v1 receipts used a whole-file registry_sha256.  Preserve
+        # that exact behavior for already-minted receipts while new receipts
+        # use the append-stable prefix field.
+        def _legacy_registry_binding(receipt: dict[str, Any]) -> None:
+            coverage = receipt["ledger"]["all_compute_coverage"]
+            coverage.pop("registry_prefix_sha256")
+            coverage["registry_sha256"] = hashlib.sha256(
+                registry_before_append
+            ).hexdigest()
+
+        e5_legacy = _e5_case(_legacy_registry_binding)
+        assert e5_legacy["status"] == "MET", e5_legacy
+
+        def _legacy_with_null_prefix(receipt: dict[str, Any]) -> None:
+            _legacy_registry_binding(receipt)
+            receipt["ledger"]["all_compute_coverage"][
+                "registry_prefix_sha256"
+            ] = None
+
+        def _prefix_with_null_legacy(receipt: dict[str, Any]) -> None:
+            receipt["ledger"]["all_compute_coverage"]["registry_sha256"] = None
+
+        _e5_defect(_e5_case(_legacy_with_null_prefix), "must not mix")
+        _e5_defect(_e5_case(_prefix_with_null_legacy), "must not mix")
+
+        import run_attempt_registry as registry_module
+        (e5_run / "later-run-spec.json").write_text(
+            '{"schema_version":"SELFTEST_FIXTURE-later"}\n', encoding="utf-8"
+        )
+        later_row = registry_module.build_row(
+            run_root=e5_run,
+            outcome="running",
+            run_id="SELFTEST_E5_run",
+            attempt_id="attempt-appended-after-mint",
+            start_utc="2026-08-06T13:00:00Z",
+            end_utc=None,
+            checkpoint_manifest_sha256=None,
+            launch_receipt_ref="later-run-spec.json",
+            source_receipt="later-run-spec.json",
+            outcome_basis="SELFTEST_FIXTURE later live append",
+            backfill=False,
+        )
+        registry_path.write_bytes(
+            registry_before_append
+            + json.dumps(later_row, sort_keys=True).encode("utf-8")
+            + b"\n"
+        )
+        e5_append_after_mint = _e5_case()
+        assert e5_append_after_mint["status"] == "MET", e5_append_after_mint
+        registry_after_append = registry_path.read_bytes()
+
+        # The prefix hash ignores valid later appends, but the current registry
+        # must remain structurally readable end to end.  Corrupt tails never
+        # inherit authority from an earlier valid prefix.
+        for poison, fragment in (
+            (b"\xff\n", "registry unreadable"),
+            (b'{"run_id":\n', "unparseable"),
+            (b"0\n", "not JSON objects"),
+        ):
+            registry_path.write_bytes(registry_before_append + poison)
+            _e5_defect(_e5_case(), fragment)
+
+        registry_path.write_bytes(registry_after_append)
+        registry_path.write_bytes(
+            registry_after_append.replace(
+                b'"outcome": "completed"', b'"outcome": "tampered"', 1
+            )
+        )
+        e5_edited_prefix = _e5_case()
+        _e5_defect(e5_edited_prefix, "registry prefix")
+        registry_path.write_bytes(registry_before_append)
+
+        # The run root itself may use the retained-attempt naming convention.
+        # Exclusion is scoped below the selected root, so complete evidence in
+        # an attempt-* root must still adjudicate normally as MET.
+        attempt_root_repo = _e5_repo("e5_attempt_root_repo")
+        attempt_root, attempt_root_manifest = _e5_run(
+            "attempt-7-CHILD_FAILED-20260808T230500Z"
+        )
+        _write_e5_registry(attempt_root_repo, attempt_root)
+        attempt_root_receipt = _e5_receipt(
+            attempt_root_repo, attempt_root, attempt_root_manifest
+        )
+        (attempt_root / "frontier-receipt.json").write_bytes(
+            json.dumps(attempt_root_receipt).encode("utf-8")
+        )
+        e5_attempt_root = check_r1_e5(
+            attempt_root,
+            thresholds,
+            repo_root=attempt_root_repo,
+        )
+        assert e5_attempt_root["status"] == "MET", e5_attempt_root
 
         # Envelope poisons.
         def _set(path_keys, value):
@@ -3204,13 +3664,35 @@ def run_selftest() -> None:
         registry_file = e5_repo / "receipts" / "run-attempts.jsonl"
         original_registry = registry_file.read_bytes()
         registry_file.write_bytes(b"0\n")
-        _e5_defect(_e5_case(_set(["ledger", "all_compute_coverage", "registry_sha256"],
+        _e5_defect(_e5_case(_set(["ledger", "all_compute_coverage", "registry_prefix_sha256"],
                                  hashlib.sha256(b"0\n").hexdigest())), "not JSON objects")
-        # Item 4: object rows that never mention the adjudicated run attest nothing.
-        foreign_row = json.dumps({"run_id": "SOMEONE_ELSE", "outcome": "completed"}).encode("utf-8") + b"\n"
+        # Item 4: canonical object rows that never name the adjudicated
+        # run/root still attest nothing.
+        foreign_row_doc = registry_module.build_row(
+            run_root=tmp_path / "foreign-e5-root",
+            outcome="completed",
+            run_id="SOMEONE_ELSE",
+            attempt_id="evidence-floor",
+            start_utc="2026-08-06T14:00:00Z",
+            end_utc="2026-08-06T14:00:00Z",
+            checkpoint_manifest_sha256=None,
+            launch_receipt_ref="historical-receipt.json",
+            source_receipt="historical-receipt.json",
+            outcome_basis="SELFTEST_FIXTURE foreign history",
+            backfill=True,
+        )
+        foreign_row = json.dumps(foreign_row_doc, sort_keys=True).encode("utf-8") + b"\n"
         registry_file.write_bytes(foreign_row)
-        _e5_defect(_e5_case(_set(["ledger", "all_compute_coverage", "registry_sha256"],
-                                 hashlib.sha256(foreign_row).hexdigest())), "no registry row names the adjudicated run")
+
+        def _bind_foreign_registry(receipt: dict[str, Any]) -> None:
+            coverage = receipt["ledger"]["all_compute_coverage"]
+            coverage["registry_prefix_sha256"] = hashlib.sha256(foreign_row).hexdigest()
+            coverage["registry_rows"] = 1
+
+        _e5_defect(
+            _e5_case(_bind_foreign_registry),
+            "no registry row names the selected run/root identity",
+        )
         registry_file.write_bytes(original_registry)
 
         # Item 5: a second energy producer receipt on disk is ambiguous evidence,

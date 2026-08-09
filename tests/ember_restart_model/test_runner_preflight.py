@@ -132,6 +132,50 @@ class RunnerPreflightTests(unittest.TestCase):
             self.assertEqual(terminal["payload"]["phase"], "FAILED")
             self.assertEqual(terminal["payload"]["last_completed_step"], 7)
 
+    def test_e4_receipt_write_failure_emits_one_path_free_diagnostic(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            channel = Path(directory) / "ember-telemetry.jsonl"
+            accumulator: dict[str, object] = {"write_failures": 0}
+
+            run_vertical_slice._record_e4_measurement_write_failure(
+                accumulator,
+                telemetry_path=channel,
+                telemetry_run_id="vision-v4",
+                error=PermissionError("refused at C:/private/run/e4-measurement-receipt.json"),
+            )
+            run_vertical_slice._record_e4_measurement_write_failure(
+                accumulator,
+                telemetry_path=channel,
+                telemetry_run_id="vision-v4",
+                error=RuntimeError("deterministic writer bug"),
+            )
+
+            self.assertEqual(accumulator["write_failures"], 2)
+            events = [json.loads(line) for line in channel.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual(len(events), 1)
+            self.assertEqual(events[0]["kind"], "e4_receipt_write_failure")
+            self.assertEqual(events[0]["payload"], {
+                "error_type": "PermissionError",
+                "failure_class": "IO_ERROR",
+                "run_id": "vision-v4",
+                "write_failures": 1,
+            })
+            self.assertNotIn("private", json.dumps(events[0]))
+
+            blocked: dict[str, object] = {"write_failures": 0}
+            with patch.object(
+                run_vertical_slice,
+                "append_training_telemetry",
+                side_effect=OSError("primary telemetry unavailable"),
+            ), self.assertRaisesRegex(OSError, "primary telemetry unavailable"):
+                run_vertical_slice._record_e4_measurement_write_failure(
+                    blocked,
+                    telemetry_path=channel,
+                    telemetry_run_id="vision-v5",
+                    error=RuntimeError("receipt writer bug"),
+                )
+            self.assertEqual(blocked["write_failures"], 1)
+
     def test_specialist_failure_emits_path_free_failed_status_with_last_completed_step(self) -> None:
         records = [
             {"active_expert": "vision", "scene_split": "train", "token_ids": [1], "row_id": "train"},
@@ -1903,12 +1947,41 @@ class RunnerPreflightTests(unittest.TestCase):
         return config_path, policy_path
 
     def test_publish_checkpoint_with_low_commit_deferral_preserves_prior_and_receipts(self) -> None:
-        from checkpoint_artifacts import CheckpointDeferredLowCommit
+        from checkpoint_artifacts import CheckpointDeferredLowCommit, _empty_failure_comparison_operands
         with tempfile.TemporaryDirectory() as directory:
             directory = Path(directory)
             config_path, policy_path = self._low_commit_deferral_config(directory, max_deferrals=2, max_distance=100)
             checkpoint_parent = directory / "checkpoints"
             telemetry_path = directory / "telemetry.jsonl"
+            comparison_operands = _empty_failure_comparison_operands()
+            comparison_operands["derived_byte_bound_bytes"] = 4_096
+            comparison_operands["derived_byte_bound_inputs"].update({
+                "max_serialized_bytes": 4_096,
+                "max_transient_scratch_bytes": 1_024,
+                "active_parameters": 123,
+                "model_config_sha256": "a" * 64,
+                "contract_sha256": "b" * 64,
+                "optimizer_state_layout": "owner-sharded-v1",
+            })
+            comparison_operands["projected_storage_floor_bytes"] = 8_192
+            comparison_operands["projected_storage_floor_inputs"].update({
+                "route_multiplier": 5,
+                "active_expert": "vision",
+                "optimizer_state_layout": "owner-sharded-v1",
+                "optimizer_state_tensor_storage_lower_bound_bytes": 2_048,
+                "projected_optimizer_state_tensor_storage_lower_bound_bytes": 10_240,
+                "optimizer_state_tensor_storage_by_route_bytes": {
+                    "shared": 512,
+                    "vision": 1_536,
+                    "audio": 0,
+                    "reasoning": 0,
+                    "tool": 0,
+                },
+                "per_shard_tensor_storage_lower_bound_bytes": {
+                    "shared-model.pt": 1_024,
+                },
+                "retained_shard_paths": [],
+            })
 
             def publish() -> tuple[dict[str, object], dict[str, object]]:
                 raise CheckpointDeferredLowCommit(
@@ -1921,6 +1994,7 @@ class RunnerPreflightTests(unittest.TestCase):
                 checkpoint_parent=checkpoint_parent, config_path=config_path, global_step=10,
                 last_checkpointed_step=0, deferral_state=state, publish=publish,
                 telemetry_path=telemetry_path, telemetry_run_id="run-1", policy_path=policy_path,
+                comparison_operands=comparison_operands,
             )
             self.assertIsNone(result)
             self.assertEqual(state["count"], 1)
@@ -1939,6 +2013,35 @@ class RunnerPreflightTests(unittest.TestCase):
             self.assertEqual(receipt["required_commit_bytes"], 5_000)
             self.assertEqual(receipt["streaming_peak_bytes"], 4_000)
             self.assertEqual(receipt["reserve_bytes"], 1_000)
+            self.assertEqual(
+                set(receipt["comparison_operands"]),
+                {
+                    "derived_byte_bound_bytes",
+                    "derived_byte_bound_inputs",
+                    "projected_storage_floor_bytes",
+                    "projected_storage_floor_inputs",
+                    "staged_shard_bytes",
+                    "available_commit_bytes",
+                    "required_commit_bytes",
+                },
+            )
+            self.assertEqual(
+                receipt["comparison_operands"]["available_commit_bytes"],
+                1_000,
+            )
+            self.assertEqual(
+                receipt["comparison_operands"]["required_commit_bytes"],
+                5_000,
+            )
+            bound_inputs = receipt["comparison_operands"]["derived_byte_bound_inputs"]
+            self.assertIsNotNone(bound_inputs["active_parameters"])
+            self.assertEqual(bound_inputs["model_config_sha256"], run_vertical_slice._sha256(config_path))
+            self.assertEqual(bound_inputs["contract_sha256"], "b" * 64)
+            self.assertEqual(bound_inputs["optimizer_state_layout"], "owner-sharded-v1")
+            self.assertEqual(bound_inputs["max_transient_scratch_bytes"], 1_024)
+            floor_inputs = receipt["comparison_operands"]["projected_storage_floor_inputs"]
+            self.assertIsNotNone(floor_inputs["route_multiplier"])
+            self.assertTrue(floor_inputs["optimizer_state_tensor_storage_by_route_bytes"])
             events = [json.loads(line) for line in telemetry_path.read_text(encoding="utf-8").splitlines()]
             self.assertEqual(len(events), 1)
             self.assertEqual(events[0]["kind"], "checkpoint_deferred")

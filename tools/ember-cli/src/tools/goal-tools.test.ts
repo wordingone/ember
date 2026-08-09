@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // tools/goal-tools.test.ts — model-side tool tests for get_goal / create_goal /
 // update_goal (ember issue #211). Every test wires setGoalStoreForTests to an
 // in-memory store so no filesystem is ever touched.
@@ -114,6 +118,53 @@ describe("create_goal", () => {
 // ---------------------------------------------------------------------------
 
 describe("update_goal — status-only, objective immutable", () => {
+  it("requires structured completion-audit evidence before Complete", async () => {
+    const store = createGoalStore({ persistence: createInMemoryGoalPersistence() });
+    store.createGoal("reach the summit");
+    setGoalStoreForTests(store);
+
+    const missing = await UpdateGoalTool.call({ status: "Complete" }, fakeContext());
+    expect((missing.data as { ok: boolean }).ok).toBe(false);
+    expect(store.getGoal()?.status).toBe("Active");
+
+    const completionAudit = {
+      requirements: [{ id: "objective", evidence: "receipt:objective-proven" }],
+    };
+    const accepted = await UpdateGoalTool.call({ status: "Complete", completionAudit }, fakeContext());
+    expect((accepted.data as { ok: boolean }).ok).toBe(true);
+    expect(store.getGoal()?.completionAudit).toEqual(completionAudit);
+  });
+
+  it("validateInput requires a closed, unique completion-audit requirement set", () => {
+    expect(UpdateGoalTool.validateInput?.({ status: "Complete" })?.result).toBe(false);
+    expect(UpdateGoalTool.validateInput?.({
+      status: "Complete",
+      completionAudit: {
+        requirements: [{ id: "objective", evidence: "ok" }],
+        extra: true,
+      },
+    })?.result).toBe(false);
+    expect(UpdateGoalTool.validateInput?.({
+      status: "Complete",
+      completionAudit: {
+        requirements: [
+          { id: "objective", evidence: "ok" },
+          { id: "objective", evidence: "duplicate" },
+        ],
+      },
+    })?.result).toBe(false);
+    expect(UpdateGoalTool.validateInput?.({
+      status: "Complete",
+      completionAudit: { requirements: [{ id: "objective", evidence: "ok" }] },
+    })?.result).toBe(true);
+    for (const status of ["Active", "Paused", "Blocked"] as const) {
+      expect(UpdateGoalTool.validateInput?.({
+        status,
+        completionAudit: { requirements: [{ id: "objective", evidence: "ok" }] },
+      })?.result).toBe(false);
+    }
+  });
+
   it("validateInput REJECTS a payload carrying an 'objective' field — the schema has no such field", () => {
     const result = UpdateGoalTool.validateInput?.({
       status: "Paused",

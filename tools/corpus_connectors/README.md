@@ -177,6 +177,7 @@ python bulk_fetch.py URL --budget-bytes N [--chunk-size-bytes N]
                      [--disk-margin-bytes N] [--sha256 EXPECTED]
                      [--license STR --license-evidence STR]
                      [--dest DIR] [--allow-unverified-license] [--timeout N]
+                     [--max-retries N] [--retry-backoff-seconds N]
 ```
 
 For bulk dumps that exceed `receipt.py`'s 512 MiB single-fetch cap (Wikipedia
@@ -205,6 +206,16 @@ partial file) is `ChunkDigestMismatchError` -- a corrupted resume is refused,
 never silently trusted or silently restarted. A `.partial` found with no
 matching sidecar is also refused (`ResumeStateMismatchError`) rather than
 guessed at.
+
+**Bounded transient retry (issue #1453).** `--max-retries` (default 3) retries
+only HTTP 5xx, connection-reset, and timeout failures for the current chunk;
+`--retry-backoff-seconds` (default 1) applies exponential delays. HTTP 404/416,
+range-unsupported responses, disk-margin refusals, license refusals, and other
+terminal errors are never retried. Exhausting the bound preserves the existing
+fail-closed `BLOCKED` result and resumable sidecars when prior chunks were
+committed. Successful bulk receipts and chunk manifests carry
+`retry_attempts` and the ordered `retry_events` status list (including explicit
+zero/empty values when no retry occurred).
 
 **Fail-closed on every ambiguity**, each its own machine-readable
 `BlockedError` subclass (ten in total, all defined in `chunked_download.py`):
@@ -322,6 +333,8 @@ verifies the download and deletes the partial file on mismatch.
 ```
 python wave_manifest.py [--domain LETTER] [--include-bulk]
                         [--bulk-budget-bytes N] [--execute]
+                        [--bulk-resolution-file JSON]
+                        [--bulk-license-evidence-file JSON]
 ```
 
 Encodes the per-charter-domain source table from
@@ -334,12 +347,28 @@ instead of being re-derived by hand at fetch time. Performs no network I/O
 of its own: default mode prints each routed command; `--execute` shells out
 to the already-tested connector CLIs (inheriting their own license/receipt/
 fail-closed behavior unchanged). `--domain` filters to one charter letter;
-`--include-bulk` also lists the bulk veins (each needs `--bulk-budget-bytes`
-to actually dispatch under `--execute`, per the charter's per-wave disk cap
--- there is no baked-in default budget). `domains_covered()` is the
+`--include-bulk` also lists the bulk veins. `--execute` additionally requires
+positive `--bulk-budget-bytes`, a closed resolution JSON object mapping every
+selected vein to `{urls, resolution_receipt_sha256}` (with concrete URLs and a
+lowercase 64-hex resolution receipt hash for each entry page). The hash is the
+SHA-256 of canonical JSON `{"schema":"ember-wave2-bulk-resolution-v1",
+"vein":<name>,"urls":[<ordered concrete URLs>]}`; the direct Wikipedia
+artifact binds its own URL in the same projection. This makes the receipt
+commit to the exact URL set rather than merely accepting caller-supplied hex,
+and a closed
+license-evidence JSON object mapping every selected vein to an external
+source-read license page/file. Missing or self-referential evidence, unresolved
+entry pages, unknown keys, duplicate URLs, bad receipt hashes, and malformed
+URLs refuse before any connector subprocess is started; the direct Wikipedia
+artifact does not require replacement resolution but still requires external
+evidence. `domains_covered()` is the
 machine-checkable form of the sizing doc's claim that every charter domain
 A-K plus the Wikipedia baseline has at least one routed source; a test
-asserts it holds.
+asserts it holds, and `validate_domain_diversity()` derives a normalized
+connector/register identity from each source URL (or connector argv) plus its
+normalized license basis. It requires two distinct register identities and two
+distinct license bases per lettered domain, rejecting same-register aliases
+(H includes Python and Rust reference docs).
 
 ## Tests
 

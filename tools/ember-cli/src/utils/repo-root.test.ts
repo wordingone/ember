@@ -262,7 +262,6 @@ describe("root-authority consumer wiring", () => {
     const canonicalStateConsumers = [
       "hardening/hardening-receipts.ts",
       "services/activity-feed.ts",
-      "services/brain-server-supervisor.ts",
       "services/github-receipts.ts",
       "services/goal-persistence.ts",
       "services/goal-receipts.ts",

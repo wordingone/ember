@@ -26,7 +26,7 @@ from typing import Any, Callable, Iterable, Mapping
 import tokenizers
 import torch
 
-from checkpoint_artifacts import CheckpointDeferredLowCommit, _atomic_publish_no_replace, load_checkpoint_artifacts, load_checkpoint_model_only_transition, optimizer_covers_every_expert_route, preflight_specialist_lineage_sources, published_checkpoint_receipt, write_checkpoint_artifacts
+from checkpoint_artifacts import CheckpointDeferredLowCommit, _atomic_publish_no_replace, _empty_failure_comparison_operands, _normalize_failure_comparison_operands, load_checkpoint_artifacts, load_checkpoint_model_only_transition, optimizer_covers_every_expert_route, preflight_specialist_lineage_sources, published_checkpoint_receipt, write_checkpoint_artifacts
 from parameter_counter import validate_realization_receipt
 from model import RestartDecoderConfig, UnifiedDecoder
 from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
@@ -388,7 +388,13 @@ def validate_specialist_execution_slice(
 def append_training_telemetry(path: Path, *, kind: str, payload: dict[str, object]) -> None:
     """Append one bounded, path-free cockpit event from the canonical trainer."""
 
-    if kind not in {"run_status", "train_step", "checkpoint", "checkpoint_deferred"}:
+    if kind not in {
+        "run_status",
+        "train_step",
+        "checkpoint",
+        "checkpoint_deferred",
+        "e4_receipt_write_failure",
+    }:
         raise ValueError("training telemetry kind is not authorized")
     if any("path" in key.lower() for key in payload):
         raise ValueError("training telemetry payload must not disclose filesystem paths")
@@ -464,6 +470,34 @@ def _training_failure_class(error: Exception) -> str:
     if isinstance(error, ValueError):
         return "CONTRACT_ERROR"
     return "TRAINER_ERROR"
+
+
+def _record_e4_measurement_write_failure(
+    accumulator: dict[str, object],
+    *,
+    telemetry_path: Path,
+    telemetry_run_id: str,
+    error: Exception,
+) -> None:
+    """Count every failed receipt write and disclose the first through telemetry."""
+
+    write_failures = int(accumulator["write_failures"]) + 1
+    accumulator["write_failures"] = write_failures
+    if write_failures != 1:
+        return
+    # Deliberately unguarded: telemetry is primary evidence for the credited
+    # run. If this independent channel cannot write, continuing would create an
+    # uncreditable GPU leg rather than merely lose the secondary E4 receipt.
+    append_training_telemetry(
+        telemetry_path,
+        kind="e4_receipt_write_failure",
+        payload={
+            "run_id": telemetry_run_id,
+            "failure_class": _training_failure_class(error),
+            "error_type": type(error).__name__,
+            "write_failures": write_failures,
+        },
+    )
 
 
 def specialist_resume_cursor(cursor: dict[str, object], *, data_shard_id: str) -> dict[str, object]:
@@ -620,6 +654,7 @@ def _write_low_commit_deferral_receipt(
     error: CheckpointDeferredLowCommit,
     retry_error: CheckpointDeferredLowCommit | None = None,
     released_record_count: int | None = None,
+    comparison_operands: Mapping[str, object] | None = None,
 ) -> Path:
     """Bounded, receipted evidence for one DEFERRED_LOW_COMMIT checkpoint boundary.
 
@@ -641,6 +676,11 @@ def _write_low_commit_deferral_receipt(
         "streaming_peak_bytes": error.streaming_peak_bytes,
         "reserve_bytes": error.reserve_bytes,
         "observed_at_ns": time.time_ns(),
+        "comparison_operands": _normalize_failure_comparison_operands(
+            comparison_operands
+            if comparison_operands is not None
+            else _empty_failure_comparison_operands()
+        ),
     }
     if retry_error is not None:
         payload["retry_observed_commit_bytes"] = retry_error.available_commit_bytes
@@ -707,6 +747,7 @@ def _publish_checkpoint_with_low_commit_deferral(
     telemetry_run_id: str | None,
     policy_path: Path | None = None,
     release_for_final_retry: Callable[[], dict[str, object]] | None = None,
+    comparison_operands: Mapping[str, object] | None = None,
 ) -> tuple[dict[str, object], dict[str, object]] | None:
     """Publish one checkpoint boundary, deferring (never silently dropping, never
     continuing indefinitely) on insufficient host commit headroom.
@@ -760,6 +801,22 @@ def _publish_checkpoint_with_low_commit_deferral(
                 retry_error = second_error
         deferral_state["count"] += 1
         distance = global_step - last_checkpointed_step
+        comparison_operands = _normalize_failure_comparison_operands(
+            error.comparison_operands
+            if error.comparison_operands is not None
+            else comparison_operands
+        )
+        derived_bound = checkpoint_retention_budget_bytes(config_path)
+        if comparison_operands["derived_byte_bound_bytes"] is None:
+            comparison_operands["derived_byte_bound_bytes"] = derived_bound
+        comparison_operands["derived_byte_bound_inputs"].update(
+            {
+                "max_serialized_bytes": derived_bound,
+                "model_config_sha256": _sha256(config_path),
+            }
+        )
+        comparison_operands["available_commit_bytes"] = error.available_commit_bytes
+        comparison_operands["required_commit_bytes"] = error.required_commit_bytes
         receipt_path = _write_low_commit_deferral_receipt(
             checkpoint_parent,
             global_step=global_step,
@@ -768,6 +825,7 @@ def _publish_checkpoint_with_low_commit_deferral(
             error=error,
             retry_error=retry_error,
             released_record_count=released_record_count,
+            comparison_operands=comparison_operands,
         )
         if telemetry_path is not None and telemetry_run_id is not None:
             append_training_telemetry(telemetry_path, kind="checkpoint_deferred", payload={
@@ -2899,6 +2957,7 @@ def run(
                 rng_state=_rng_state(torch.device("cuda")), data_cursor=data_cursor,
                 model_config_sha256=_sha256(config_path), contract_sha256=_sha256(integration_contract_path),
                 expert_genesis_sha256=genesis_hashes, optimizer_contract=optimizer_contract,
+                optimizer_state_layout="owner-sharded-v1",
                 specialist_lineage=current_lineage, max_serialized_bytes=checkpoint_byte_bound,
                 max_transient_scratch_bytes=_MAX_TRANSIENT_CHECKPOINT_SCRATCH_BYTES,
                 host_commit_reserve_bytes=checkpoint_host_commit_reserve_bytes(config_path),
@@ -3023,7 +3082,7 @@ def run(
             e4_accumulator["step_ms_sum"] = float(e4_accumulator["step_ms_sum"]) + float(step_ms)
         try:
             _write_e4_measurement_receipt()
-        except Exception:
+        except Exception as error:
             # rev-1495 finding 1: the evidence writer must never kill the
             # certified run it documents (that would invert the #1489 lesson --
             # the receipt exists BECAUSE crashes destroy evidence). A full
@@ -3032,7 +3091,12 @@ def run(
             # counted here and disclosed in the next successful receipt; the
             # accumulator itself lost nothing. KeyboardInterrupt/SystemExit
             # still propagate (BaseException, not Exception).
-            e4_accumulator["write_failures"] = int(e4_accumulator["write_failures"]) + 1
+            _record_e4_measurement_write_failure(
+                e4_accumulator,
+                telemetry_path=telemetry_path,
+                telemetry_run_id=telemetry_run_id,
+                error=error,
+            )
 
     segment = run_pretraining_segment(
         model=model, optimizer=optimizer, records=records, config=config, device=torch.device("cuda"),
@@ -3325,6 +3389,7 @@ def run_semantic(
                 rng_state=_rng_state(torch.device("cuda")), data_cursor=data_cursor,
                 model_config_sha256=_sha256(config_path), contract_sha256=_sha256(integration_contract_path),
                 expert_genesis_sha256=genesis_hashes, optimizer_contract=optimizer_contract,
+                optimizer_state_layout="owner-sharded-v1",
                 max_serialized_bytes=checkpoint_byte_bound,
                 max_transient_scratch_bytes=_MAX_TRANSIENT_CHECKPOINT_SCRATCH_BYTES,
                 host_commit_reserve_bytes=checkpoint_host_commit_reserve_bytes(config_path),

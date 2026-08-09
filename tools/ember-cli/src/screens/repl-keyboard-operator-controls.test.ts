@@ -125,7 +125,7 @@ interface Mounted {
  *  file before mount so the pane observes them on its first poll. */
 async function mountForKeyboard(
   seedLines: Array<Record<string, unknown>>,
-  options: { columns?: number; rows?: number; permissionMode?: "bypass" | "interactive" } = {},
+  options: { columns?: number; rows?: number; permissionMode?: "bypass" | "regular" } = {},
 ): Promise<Mounted> {
   resetCommandRegistryForTests();
   const telemetryPath = join(tmpdir(), `test-kbd-telemetry-${Date.now()}-${Math.random()}.jsonl`);
@@ -723,7 +723,7 @@ describe("repl keyboard operator controls (R2b)", () => {
   }, 15000);
 
   test("DD1b: one Shift+Tab action changes a fresh full REPL from sandbox to bypass exactly once", async () => {
-    const mounted = await mountForKeyboard([], { permissionMode: "interactive" });
+    const mounted = await mountForKeyboard([], { permissionMode: "regular" });
     const previous = (mounted.handle as unknown as { _previousTelemetryEnv?: string })._previousTelemetryEnv;
     try {
       const sandboxVisible = await waitFor(() =>
@@ -750,7 +750,7 @@ describe("repl keyboard operator controls (R2b)", () => {
   // `key.alt && input === "p"` branch also matches the same keystroke and would (pre-fix) open
   // the model picker.
   // -----------------------------------------------------------------------
-  test("DD2: Alt+P never dispatches PAUSE and the prompt model picker remains focus-gated", async () => {
+  test("DD2: Alt+P is no longer a dead accelerator and never dispatches PAUSE", async () => {
     // PANE HALF -- full ReplScreen, real \x1bp bytes (node readline: meta:true, name:"p").
     const now = new Date().toISOString();
     const m = await mountForKeyboard([trainEvent(RUN_ID, now)]); // status RUNNING -- only PAUSE enabled
@@ -792,7 +792,7 @@ describe("repl keyboard operator controls (R2b)", () => {
     try {
       send(active.stdin, KEY.ALT_P);
       await flushRepl();
-      expect(activeCalls).toEqual(["open"]);
+      expect(activeCalls).toEqual([]);
     } finally {
       active.stopBridge();
       active.unmount();

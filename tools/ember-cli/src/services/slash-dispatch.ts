@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // services/slash-dispatch.ts — routes "/name args" REPL input to the command registry.
 //
 // Without this seam the slash-command subsystem (command-registry.ts + commands/*.ts)
@@ -77,4 +80,23 @@ export async function tryDispatchSlashCommand(
 
   const result = await cmd.execute(args, ctx);
   return result ?? { type: "message", message: `/${name} ran.` };
+}
+
+/**
+ * Interactive boundary for slash dispatch: convert registry and command failures
+ * into a renderable message so one bad command cannot reject the REPL turn.
+ */
+export async function tryDispatchSlashCommandSafely(
+  text: string,
+  ctx: CommandContext,
+  deps: SlashDispatchDeps = defaultDeps,
+): Promise<CommandResult | null> {
+  try {
+    return await tryDispatchSlashCommand(text, ctx, deps);
+  } catch (error) {
+    const parsed = parseSlashInput(text);
+    const command = parsed ? `/${parsed.name}` : "slash command";
+    const detail = error instanceof Error ? error.message : String(error);
+    return { type: "message", message: `${command} failed: ${detail}` };
+  }
 }
