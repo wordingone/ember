@@ -76,7 +76,7 @@ fn start_server(binary: &Path, db: &Path, pipe: &str) -> ServerGuard {
     )
 }
 
-fn rpc(pipe: &str, id: u64, method: &str, params: Value) -> Value {
+fn rpc_response(pipe: &str, id: u64, method: &str, params: Value) -> Value {
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
         match OpenOptions::new().read(true).write(true).open(pipe) {
@@ -94,11 +94,7 @@ fn rpc(pipe: &str, id: u64, method: &str, params: Value) -> Value {
                 let response: Value = serde_json::from_str(&response).unwrap();
                 assert_eq!(response["jsonrpc"], "2.0");
                 assert_eq!(response["id"], id);
-                assert!(
-                    response.get("error").is_none(),
-                    "RPC {method} failed: {response}"
-                );
-                return response["result"].clone();
+                return response;
             }
             Err(error) if Instant::now() < deadline => {
                 let _ = error;
@@ -107,6 +103,15 @@ fn rpc(pipe: &str, id: u64, method: &str, params: Value) -> Value {
             Err(error) => panic!("timed out connecting to {pipe}: {error}"),
         }
     }
+}
+
+fn rpc(pipe: &str, id: u64, method: &str, params: Value) -> Value {
+    let response = rpc_response(pipe, id, method, params);
+    assert!(
+        response.get("error").is_none(),
+        "RPC {method} failed: {response}"
+    );
+    response["result"].clone()
 }
 
 fn wait_for_exit(server: &mut ServerGuard) {
@@ -386,19 +391,80 @@ fn named_pipe_dispatch_consumes_the_bound_manifest_bytes_after_source_mutation()
     wait_for_exit(&mut server);
 }
 #[test]
-fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
-    let root = sandbox("restart");
+fn named_pipe_refuses_raw_start_job_before_process_creation() {
+    let root = sandbox("raw-start-refusal");
     let db = root.join("ember-lab.sqlite3");
     let identity = root.join("identity.json");
+    fs::write(&identity, b"{\"identity\":\"bound\"}").unwrap();
+    let pipe = format!(
+        r"\\.\pipe\ember-lab-raw-start-refusal-test-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
+    let binary = ember_lab_binary();
+    let mut server = start_server(&binary, &db, &pipe);
+    rpc(
+        &pipe,
+        300,
+        "bind_identity",
+        json!({
+            "job_id": "raw-start-job",
+            "path": identity,
+            "sha256": sha256(&identity),
+        }),
+    );
+    rpc(
+        &pipe,
+        301,
+        "acquire_lease",
+        json!({"resource": "cpu-fixture", "job_id": "raw-start-job"}),
+    );
+
+    let fixture = std::env::current_exe().unwrap();
+    let response = rpc_response(
+        &pipe,
+        302,
+        "start_job",
+        json!({
+            "job_id": "raw-start-job",
+            "program": fixture,
+            "args": ["--exact", "fixture_rpc_child_process", "--nocapture"],
+            "resource_lease": "cpu-fixture",
+            "env": {"EMBER_LAB_RPC_FIXTURE_CHILD": "1"},
+            "restart_policy": "never",
+        }),
+    );
+    let state = rpc(&pipe, 303, "job_state", json!({"job_id": "raw-start-job"}));
+    if state["state"] == "running" {
+        rpc(&pipe, 304, "stop_job", json!({"job_id": "raw-start-job"}));
+    }
+    rpc(&pipe, 305, "shutdown", json!({}));
+    wait_for_exit(&mut server);
+
+    assert_eq!(response["error"]["code"], -32601, "{response}");
+    assert!(state["state"].is_null(), "raw start created a job: {state}");
+}
+
+#[test]
+fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
+    if let Err(error) = probe_host_commit_capacity() {
+        eprintln!(
+            "skipping governed restart/adoption replay because this host refuses the production commit-capacity probe: {error}"
+        );
+        return;
+    }
+    let root = sandbox("restart");
+    let db = root.join("ember-lab.sqlite3");
     let receipt = root.join("receipt.json");
     let alarm_path = root.join("schedule-alarms.json");
     let content_addressed_receipts = root.join("content-addressed-receipts");
-    fs::write(
-        &identity,
-        br#"{"schema":"ember-identity-v1","model_id":"fixture-owned-3b","checkpoint_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","lineage":"clean_genesis"}"#,
-    )
-    .unwrap();
-    let identity_hash = sha256(&identity);
+    let manifest = write_dispatch_manifest(&root, "rpc-job");
+    let manifest_bytes = fs::read(&manifest).unwrap();
+    let manifest_sha256 = format!("{:x}", Sha256::digest(&manifest_bytes));
+    let manifest_utf8 = String::from_utf8(manifest_bytes).unwrap();
     let pipe = format!(
         r"\\.\pipe\ember-lab-rpc-test-{}-{}",
         std::process::id(),
@@ -415,36 +481,13 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
 
     let mut first = start_server(&binary, &db, &pipe);
     assert_eq!(rpc(&pipe, 1, "ping", json!({}))["status"], "ok");
-    rpc(
-        &pipe,
-        2,
-        "bind_identity",
-        json!({
-            "job_id": "rpc-job",
-            "path": identity,
-            "sha256": identity_hash,
-        }),
-    );
-    rpc(
-        &pipe,
-        3,
-        "acquire_lease",
-        json!({"resource": "cpu-fixture", "job_id": "rpc-job"}),
-    );
-    let fixture = std::env::current_exe().unwrap();
-    let mut env = BTreeMap::new();
-    env.insert("EMBER_LAB_RPC_FIXTURE_CHILD", "1");
     let started = rpc(
         &pipe,
         4,
-        "start_job",
+        "dispatch_manifest",
         json!({
-            "job_id": "rpc-job",
-            "program": fixture,
-            "args": ["--exact", "fixture_rpc_child_process", "--nocapture"],
-            "resource_lease": "cpu-fixture",
-            "env": env,
-            "restart_policy": "never",
+            "manifest_utf8": manifest_utf8,
+            "manifest_sha256": manifest_sha256,
         }),
     );
     assert!(started["pid"].as_u64().unwrap() > 0);
