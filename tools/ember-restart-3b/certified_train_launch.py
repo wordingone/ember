@@ -2306,16 +2306,16 @@ def _start_energy_sidecar(
                 stale.unlink()
         launch.artifact_root.mkdir(parents=True, exist_ok=True)
         launch.custody_root.mkdir(parents=True, exist_ok=True)
-        sidecar_log_handle = open(sidecar_log, "wb")
-        process = subprocess.Popen(
-            [sys.executable, "-B", str(logger_path),
-             "--watch-pidfile", str(pidfile), "--receipt", str(receipt_path)],
-            shell=False,
-            cwd=repo_root,
-            env=child_env,
-            stdout=sidecar_log_handle,
-            stderr=subprocess.STDOUT,
-        )
+        with open(sidecar_log, "wb") as sidecar_log_handle:
+            process = subprocess.Popen(
+                [sys.executable, "-B", str(logger_path),
+                 "--watch-pidfile", str(pidfile), "--receipt", str(receipt_path)],
+                shell=False,
+                cwd=repo_root,
+                env=child_env,
+                stdout=sidecar_log_handle,
+                stderr=subprocess.STDOUT,
+            )
     except Exception as error:
         disclosure["note"] = f"sidecar spawn failed: {error!r}"
         return None, pidfile, disclosure
@@ -2462,7 +2462,16 @@ def execute_validated_launch(
         raise
     finally:
         if sidecar_pidfile is not None:
-            _finish_energy_sidecar(sidecar_process, sidecar_pidfile, sidecar_disclosure)
+            try:
+                _finish_energy_sidecar(
+                    sidecar_process, sidecar_pidfile, sidecar_disclosure
+                )
+            except Exception as error:  # noqa: BLE001 -- evidence must not mask child outcome
+                prior_note = sidecar_disclosure.get("note")
+                finalize_note = f"sidecar finalize failed: {type(error).__name__}"
+                sidecar_disclosure["note"] = (
+                    f"{prior_note}; {finalize_note}" if prior_note else finalize_note
+                )
     attempt_retention: dict[str, Any] | None = None
     bound_runner_receipt_path = launch.runner_receipt
     retained_execution_receipt_path: pathlib.Path | None = None

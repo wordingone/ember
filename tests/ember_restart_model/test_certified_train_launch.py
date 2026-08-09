@@ -642,6 +642,141 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                 "execution receipt must not claim capability or admission",
             )
 
+    def test_energy_sidecar_spawn_failure_is_disclosed(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            logger = paths["repo"] / "scripts" / "energy_proxy_logger.py"
+            logger.parent.mkdir(parents=True, exist_ok=True)
+            logger.write_text("# test logger\n", encoding="utf-8")
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            with mock.patch.object(
+                module.subprocess,
+                "Popen",
+                side_effect=OSError("spawn refused"),
+            ):
+                process, pidfile, disclosure = module._start_energy_sidecar(
+                    paths["repo"], launch, {}
+                )
+            self.assertIsNone(process)
+            self.assertEqual(pidfile, paths["custody_root"] / "energy-sidecar.pid")
+            self.assertFalse(disclosure["spawned"])
+            self.assertIn("sidecar spawn failed", disclosure["note"])
+            self.assertIn("OSError", disclosure["note"])
+
+    def test_energy_sidecar_baseline_timeout_is_disclosed_nonfatally(self) -> None:
+        module = load_module()
+        process = mock.Mock()
+        process.poll.return_value = None
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            logger = paths["repo"] / "scripts" / "energy_proxy_logger.py"
+            logger.parent.mkdir(parents=True, exist_ok=True)
+            logger.write_text("# test logger\n", encoding="utf-8")
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            with (
+                mock.patch.object(module.subprocess, "Popen", return_value=process),
+                mock.patch.object(module, "ENERGY_SIDECAR_BASELINE_WAIT_S", 0.0),
+            ):
+                actual, _pidfile, disclosure = module._start_energy_sidecar(
+                    paths["repo"], launch, {}
+                )
+            self.assertIs(actual, process)
+            self.assertTrue(disclosure["spawned"])
+            self.assertIn("idle-baseline marker not seen within 0s", disclosure["note"])
+
+    def test_energy_sidecar_finalize_overrun_is_left_running_and_disclosed(
+        self,
+    ) -> None:
+        module = load_module()
+        process = mock.Mock()
+        process.poll.return_value = None
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            pidfile = root / "energy-sidecar.pid"
+            pidfile.write_text("123", encoding="utf-8")
+            disclosure = {
+                "note": "idle baseline completed",
+                "receipt_path": str(root / "energy-proxy-receipt.json"),
+            }
+            with mock.patch.object(module, "ENERGY_SIDECAR_FINALIZE_WAIT_S", 0.0):
+                module._finish_energy_sidecar(process, pidfile, disclosure)
+            self.assertFalse(pidfile.exists())
+            self.assertIsNone(disclosure["exit_code"])
+            self.assertFalse(disclosure["receipt_written"])
+            self.assertIn("left running", disclosure["note"])
+
+    def test_energy_sidecar_finalize_exception_is_disclosed_in_execution_receipt(
+        self,
+    ) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+
+            def complete(argv, **kwargs):
+                self._write_runner_receipt(launch, 0)
+                return subprocess.CompletedProcess(argv, 0)
+
+            sidecar_pidfile = paths["custody_root"] / "energy-sidecar.pid"
+            disclosure = {
+                "spawned": True,
+                "receipt_path": str(paths["artifact_root"] / "energy-proxy-receipt.json"),
+                "pidfile": str(sidecar_pidfile),
+                "log": str(paths["custody_root"] / "energy-sidecar.log"),
+                "note": "idle baseline completed",
+            }
+            with (
+                mock.patch.object(module.subprocess, "run", side_effect=complete),
+                mock.patch.object(
+                    module,
+                    "_start_energy_sidecar",
+                    return_value=(mock.Mock(), sidecar_pidfile, disclosure),
+                ),
+                mock.patch.object(
+                    module,
+                    "_finish_energy_sidecar",
+                    side_effect=RuntimeError("finalize exploded"),
+                ),
+                mock.patch.object(
+                    module,
+                    "_record_run_attempt",
+                    return_value={"accepted": True},
+                ),
+            ):
+                exit_code = module.execute_validated_launch(
+                    paths["repo"], launch, run_process=module.subprocess.run
+                )
+
+            self.assertEqual(exit_code, 0)
+            receipt = json.loads(
+                (
+                    paths["custody_root"] / "runner-receipt-certified-launch.json"
+                ).read_text(encoding="utf-8")
+            )
+            self.assertIn(
+                "sidecar finalize failed: RuntimeError",
+                receipt["energy_sidecar"]["note"],
+            )
+
     def test_child_stdout_is_redirected_to_a_custody_log_not_inherited(
         self,
     ) -> None:
