@@ -189,6 +189,30 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _registry_rows_and_prefix(
+    path: Path, row_limit: int | None = None
+) -> tuple[list[tuple[int, str]], bytes]:
+    """Return every non-empty registry line plus exact bytes through the bound.
+
+    ``row_limit`` selects the immutable prefix only.  The scan deliberately
+    continues through the current tail so appended corruption cannot hide
+    behind an otherwise valid historical prefix.
+    """
+    raw = path.read_bytes()
+    lines: list[tuple[int, str]] = []
+    prefix_end = 0
+    cursor = 0
+    for line_number, raw_line in enumerate(raw.splitlines(keepends=True), 1):
+        cursor += len(raw_line)
+        line = raw_line.decode("utf-8")
+        if not line.strip():
+            continue
+        lines.append((line_number, line.strip()))
+        if row_limit is None or len(lines) <= row_limit:
+            prefix_end = cursor
+    return lines, raw[:prefix_end]
+
+
 def _json_safe_number(value: Any) -> Any:
     """Receipts must be strictly valid JSON. A NaN/Inf loss or grad_norm is
     exactly the finding R1-E1 exists to catch -- embed it as a disclosed
@@ -1591,23 +1615,62 @@ def _validate_frontier_content(
                 defects.append(f"ledger.all_compute_coverage.registry_path does not name {E5_RUN_ATTEMPTS_REGISTRY}")
             if not registry_disk.is_file():
                 defects.append(f"ledger.all_compute_coverage: no run-attempt registry at {E5_RUN_ATTEMPTS_REGISTRY} -- 'failed work included' is unattestable without it (issue #1497)")
-            elif not _nonempty_str(coverage_block.get("registry_sha256")) or _sha256_file(registry_disk) != coverage_block.get("registry_sha256"):
-                defects.append("ledger.all_compute_coverage.registry_sha256 does not match the registry bytes on disk")
             else:
-                lines = [ln for ln in registry_disk.read_text(encoding="utf-8").splitlines() if ln.strip()]
+                declared_rows = coverage_block.get("registry_rows")
+                if not isinstance(declared_rows, int) or isinstance(declared_rows, bool) or declared_rows < 1:
+                    defects.append("ledger.all_compute_coverage.registry_rows must be a positive integer")
+                    declared_rows = 0
+                try:
+                    line_entries, registry_prefix = _registry_rows_and_prefix(registry_disk, declared_rows)
+                except (OSError, UnicodeDecodeError) as error:
+                    line_entries, registry_prefix = [], b""
+                    defects.append(f"ledger.all_compute_coverage: registry unreadable: {error}")
+                bound_entries = line_entries[:declared_rows]
+                if len(bound_entries) != declared_rows:
+                    defects.append(
+                        f"ledger.all_compute_coverage.registry_rows {coverage_block.get('registry_rows')!r} "
+                        f"cannot be re-read from the registry prefix (found {len(bound_entries)} rows)"
+                    )
+                has_prefix_sha = "registry_prefix_sha256" in coverage_block
+                has_legacy_sha = "registry_sha256" in coverage_block
+                prefix_sha = coverage_block.get("registry_prefix_sha256")
+                legacy_sha = coverage_block.get("registry_sha256")
+                if has_prefix_sha and has_legacy_sha:
+                    defects.append(
+                        "ledger.all_compute_coverage must not mix registry_prefix_sha256 "
+                        "with legacy registry_sha256"
+                    )
+                elif has_prefix_sha:
+                    if not _nonempty_str(prefix_sha) or _sha256_bytes(registry_prefix) != prefix_sha:
+                        defects.append("ledger.all_compute_coverage.registry prefix sha256 does not match the bound rows on disk")
+                elif has_legacy_sha:
+                    if not _nonempty_str(legacy_sha) or _sha256_file(registry_disk) != legacy_sha:
+                        defects.append("ledger.all_compute_coverage.registry_sha256 does not match the registry bytes on disk")
+                    if len(line_entries) != declared_rows:
+                        defects.append(
+                            f"legacy ledger.all_compute_coverage.registry_rows {coverage_block.get('registry_rows')!r} "
+                            f"does not equal the registry's {len(line_entries)} rows"
+                        )
+                else:
+                    defects.append(
+                        "ledger.all_compute_coverage requires registry_prefix_sha256 "
+                        "or legacy registry_sha256"
+                    )
+                lines = [line for _, line in bound_entries]
                 parse_failures = []
                 non_object_rows = []
-                rows = []
-                for i, line in enumerate(lines):
+                bound_rows = []
+                for entry_index, (line_number, line) in enumerate(line_entries):
                     try:
                         row = json.loads(line)
                     except ValueError:
-                        parse_failures.append(i + 1)
+                        parse_failures.append(line_number)
                         continue
                     if not isinstance(row, dict):
-                        non_object_rows.append(i + 1)
+                        non_object_rows.append(line_number)
                         continue
-                    rows.append(row)
+                    if entry_index < declared_rows:
+                        bound_rows.append(row)
                 if parse_failures:
                     defects.append(f"ledger.all_compute_coverage: registry lines unparseable: {parse_failures}")
                 if non_object_rows:
@@ -1617,8 +1680,6 @@ def _validate_frontier_content(
                     )
                 if not lines:
                     defects.append("ledger.all_compute_coverage: run-attempt registry is empty")
-                if coverage_block.get("registry_rows") != len(lines):
-                    defects.append(f"ledger.all_compute_coverage.registry_rows {coverage_block.get('registry_rows')!r} does not equal the registry's {len(lines)} rows")
                 # The adjudicated run must APPEAR in the registry: a
                 # non-empty file that never mentions this run attests
                 # nothing about its failed work (rev-1490 item 4). The
@@ -1638,8 +1699,8 @@ def _validate_frontier_content(
                         for v in value:
                             yield from _row_strings(v)
 
-                if rows and run_tokens and not any(
-                    any(s in run_tokens for s in _row_strings(row)) for row in rows
+                if bound_rows and run_tokens and not any(
+                    any(s in run_tokens for s in _row_strings(row)) for row in bound_rows
                 ):
                     defects.append(
                         "ledger.all_compute_coverage: no registry row names the adjudicated run "
@@ -3011,7 +3072,7 @@ def run_selftest() -> None:
                         },
                         "failed_work_included": True,
                         "registry_path": E5_RUN_ATTEMPTS_REGISTRY,
-                        "registry_sha256": sha_of(repo / E5_RUN_ATTEMPTS_REGISTRY),
+                        "registry_prefix_sha256": sha_of(repo / E5_RUN_ATTEMPTS_REGISTRY),
                         "registry_rows": 1,
                     },
                     "walls_checklist": {
@@ -3098,6 +3159,91 @@ def run_selftest() -> None:
         assert e5_met["frontier_receipt_validation"] == "IMPLEMENTED", e5_met
         assert e5_met["components"]["steps_measured"] == e5_pristine["steps_measured"], e5_met
         assert e5_met["components"]["energy_boundary"] == "DEGRADED_PROXY", e5_met
+
+        # The producer's independent byte helper must bind exactly the rows it
+        # read, not the mutable whole-file hash.
+        import frontier_receipt as frontier_receipt_module
+        producer_rows, producer_prefix = frontier_receipt_module._read_registry_rows_and_prefix(
+            e5_repo / E5_RUN_ATTEMPTS_REGISTRY
+        )
+        assert len(producer_rows) == 1, producer_rows
+        assert hashlib.sha256(producer_prefix).hexdigest() == e5_pristine[
+            "ledger"
+        ]["all_compute_coverage"]["registry_prefix_sha256"]
+        generator_repo_root = frontier_receipt_module.REPO_ROOT
+        frontier_receipt_module.REPO_ROOT = e5_repo
+        try:
+            generated_coverage = frontier_receipt_module.ledger_all_compute_coverage(
+                e5_run,
+                "SELFTEST_E5_run",
+                e5_pristine["identity_spine"]["checkpoint_manifest_sha256"],
+            )
+        finally:
+            frontier_receipt_module.REPO_ROOT = generator_repo_root
+        assert generated_coverage["registry_rows"] == 1, generated_coverage
+        assert generated_coverage["registry_prefix_sha256"] == e5_pristine[
+            "ledger"
+        ]["all_compute_coverage"]["registry_prefix_sha256"]
+
+        # #1510: a later append must not invalidate a receipt bound to the
+        # first registry row it read; editing that bound prefix must refuse.
+        registry_path = e5_repo / E5_RUN_ATTEMPTS_REGISTRY
+        registry_before_append = registry_path.read_bytes()
+
+        # Existing v1 receipts used a whole-file registry_sha256.  Preserve
+        # that exact behavior for already-minted receipts while new receipts
+        # use the append-stable prefix field.
+        def _legacy_registry_binding(receipt: dict[str, Any]) -> None:
+            coverage = receipt["ledger"]["all_compute_coverage"]
+            coverage.pop("registry_prefix_sha256")
+            coverage["registry_sha256"] = hashlib.sha256(
+                registry_before_append
+            ).hexdigest()
+
+        e5_legacy = _e5_case(_legacy_registry_binding)
+        assert e5_legacy["status"] == "MET", e5_legacy
+
+        def _legacy_with_null_prefix(receipt: dict[str, Any]) -> None:
+            _legacy_registry_binding(receipt)
+            receipt["ledger"]["all_compute_coverage"][
+                "registry_prefix_sha256"
+            ] = None
+
+        def _prefix_with_null_legacy(receipt: dict[str, Any]) -> None:
+            receipt["ledger"]["all_compute_coverage"]["registry_sha256"] = None
+
+        _e5_defect(_e5_case(_legacy_with_null_prefix), "must not mix")
+        _e5_defect(_e5_case(_prefix_with_null_legacy), "must not mix")
+
+        registry_path.write_bytes(
+            registry_before_append
+            + json.dumps({"run_id": "SELFTEST_E5_later", "outcome": "completed"}).encode("utf-8")
+            + b"\n"
+        )
+        e5_append_after_mint = _e5_case()
+        assert e5_append_after_mint["status"] == "MET", e5_append_after_mint
+        registry_after_append = registry_path.read_bytes()
+
+        # The prefix hash ignores valid later appends, but the current registry
+        # must remain structurally readable end to end.  Corrupt tails never
+        # inherit authority from an earlier valid prefix.
+        for poison, fragment in (
+            (b"\xff\n", "registry unreadable"),
+            (b'{"run_id":\n', "unparseable"),
+            (b"0\n", "not JSON objects"),
+        ):
+            registry_path.write_bytes(registry_before_append + poison)
+            _e5_defect(_e5_case(), fragment)
+
+        registry_path.write_bytes(registry_after_append)
+        registry_path.write_bytes(
+            registry_after_append.replace(
+                b'"outcome": "completed"', b'"outcome": "tampered"', 1
+            )
+        )
+        e5_edited_prefix = _e5_case()
+        _e5_defect(e5_edited_prefix, "registry prefix")
+        registry_path.write_bytes(registry_before_append)
 
         # The run root itself may use the retained-attempt naming convention.
         # Exclusion is scoped below the selected root, so complete evidence in
@@ -3228,12 +3374,12 @@ def run_selftest() -> None:
         registry_file = e5_repo / "receipts" / "run-attempts.jsonl"
         original_registry = registry_file.read_bytes()
         registry_file.write_bytes(b"0\n")
-        _e5_defect(_e5_case(_set(["ledger", "all_compute_coverage", "registry_sha256"],
+        _e5_defect(_e5_case(_set(["ledger", "all_compute_coverage", "registry_prefix_sha256"],
                                  hashlib.sha256(b"0\n").hexdigest())), "not JSON objects")
         # Item 4: object rows that never mention the adjudicated run attest nothing.
         foreign_row = json.dumps({"run_id": "SOMEONE_ELSE", "outcome": "completed"}).encode("utf-8") + b"\n"
         registry_file.write_bytes(foreign_row)
-        _e5_defect(_e5_case(_set(["ledger", "all_compute_coverage", "registry_sha256"],
+        _e5_defect(_e5_case(_set(["ledger", "all_compute_coverage", "registry_prefix_sha256"],
                                  hashlib.sha256(foreign_row).hexdigest())), "no registry row names the adjudicated run")
         registry_file.write_bytes(original_registry)
 

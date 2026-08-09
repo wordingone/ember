@@ -62,6 +62,9 @@ Evidence inputs (all under the adjudicated run root unless noted):
                                    rows must be JSON objects and at least one row
                                    must NAME this run (by run_id, run-root name,
                                    or checkpoint-manifest sha in any string value).
+                                   The receipt binds the exact non-empty row
+                                   prefix it read, so later append-only launches
+                                   do not invalidate an already minted receipt.
 """
 from __future__ import annotations
 
@@ -136,6 +139,43 @@ def _finite(x: Any) -> bool:
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _read_registry_rows_and_prefix(path: Path) -> tuple[list[dict[str, Any]], bytes]:
+    """Read registry rows and retain the exact bytes through the last row read.
+
+    Blank lines after the last non-empty row are outside the bound. Bytes before
+    and between rows remain part of the prefix, preserving append-only receipt
+    semantics without normalizing line endings or JSON whitespace.
+    """
+    raw = path.read_bytes()
+    rows: list[dict[str, Any]] = []
+    prefix_end = 0
+    cursor = 0
+    for line_number, raw_line in enumerate(raw.splitlines(keepends=True), 1):
+        cursor += len(raw_line)
+        try:
+            line = raw_line.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise FrontierRefusal(
+                f"LEDGER_INCOMPLETE:all_compute_coverage: registry line {line_number} is not UTF-8: {error}"
+            ) from error
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except ValueError as error:
+            raise FrontierRefusal(
+                f"LEDGER_INCOMPLETE:all_compute_coverage: registry line {line_number} unparseable: {error}"
+            ) from error
+        if not isinstance(row, dict):
+            raise FrontierRefusal(
+                f"LEDGER_INCOMPLETE:all_compute_coverage: registry line {line_number} is not a JSON object "
+                "-- a scalar line is not an attempt record (rev-1490 item 4)"
+            )
+        rows.append(row)
+        prefix_end = cursor
+    return rows, raw[:prefix_end]
 
 
 def _read_json(path: Path, what: str) -> Any:
@@ -578,23 +618,7 @@ def ledger_all_compute_coverage(run_root: Path, run_id: str, manifest_sha: str) 
             f"{RUN_ATTEMPTS_REGISTRY} -- 'failed work included' is unattestable from a single "
             "run root; the registry (issue #1497) must enumerate failed/aborted attempts"
         )
-    rows = []
-    for i, line in enumerate(registry_path.read_text(encoding="utf-8").splitlines()):
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            row = json.loads(line)
-        except ValueError as error:
-            raise FrontierRefusal(
-                f"LEDGER_INCOMPLETE:all_compute_coverage: registry line {i + 1} unparseable: {error}"
-            ) from error
-        if not isinstance(row, dict):
-            raise FrontierRefusal(
-                f"LEDGER_INCOMPLETE:all_compute_coverage: registry line {i + 1} is not a JSON "
-                "object -- a scalar line is not an attempt record (rev-1490 item 4)"
-            )
-        rows.append(row)
+    rows, registry_prefix = _read_registry_rows_and_prefix(registry_path)
     if not rows:
         raise FrontierRefusal("LEDGER_INCOMPLETE:all_compute_coverage: run-attempt registry is empty")
 
@@ -634,7 +658,7 @@ def ledger_all_compute_coverage(run_root: Path, run_id: str, manifest_sha: str) 
         "components": components,
         "failed_work_included": True,
         "registry_path": RUN_ATTEMPTS_REGISTRY,
-        "registry_sha256": _sha256(registry_path),
+        "registry_prefix_sha256": hashlib.sha256(registry_prefix).hexdigest(),
         "registry_rows": len(rows),
     }
 
