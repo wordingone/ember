@@ -136,6 +136,15 @@ def fresh_dir(path):
     return path
 
 
+def pinned_fixture_root(name, required_paths):
+    """Return a committed fixture root without rewriting its pinned bytes."""
+    root = os.path.join(FIXTURES_DIR, name)
+    missing = [rel for rel in required_paths if not os.path.isfile(os.path.join(root, rel))]
+    if missing:
+        raise FileNotFoundError(f"pinned fixture {name!r} is incomplete: {missing!r}")
+    return root
+
+
 def run_probe(probe_name, fixture_root, env_var="EMBER_TOTALITY_ROOT"):
     """Execute the real probe as a subprocess with `env_var` set to
     fixture_root (default EMBER_TOTALITY_ROOT; test_surface2.py instead reads
@@ -513,20 +522,23 @@ def build_c14_identity_binding():
 # --- (3) C7: evidence-in-receipt (numeric per-arm scores) ---------------------
 
 def build_c7():
-    pos_root = fresh_dir(os.path.join(FIXTURES_DIR, "c7_pos"))
-    neg_root = fresh_dir(os.path.join(FIXTURES_DIR, "c7_neg"))
+    required = (
+        os.path.join("scripts", "ember_phase5_c7", "c7_selftest.py"),
+        os.path.join("scripts", "ember_phase5_c7", "regime_operator.py"),
+    )
+    pos_root = pinned_fixture_root("c7_pos", required)
+    neg_root = pinned_fixture_root("c7_neg", required)
 
-    src_pkg = os.path.join(REPO_ROOT, "scripts", "ember_phase5_c7")
     for root in (pos_root, neg_root):
-        dst_pkg = os.path.join(root, "scripts", "ember_phase5_c7")
-        os.makedirs(dst_pkg, exist_ok=True)
-        for fname in ("c7_selftest.py", "regime_operator.py"):
-            shutil.copy2(os.path.join(src_pkg, fname), os.path.join(dst_pkg, fname))
+        fresh_dir(os.path.join(root, "receipts"))
 
-    # Compute the LIVE operator_constants_hash exactly as the probe does, by
-    # importing the (identical-bytes) real module once here.
+    # Compute the operator_constants_hash from the pinned fixture itself.
+    # The fixture deliberately carries receipt-returning hardening that the
+    # older live C7 helper does not, so copying or importing the live helper
+    # would silently weaken the control.
+    pinned_pkg = os.path.join(pos_root, "scripts", "ember_phase5_c7")
     spec = importlib.util.spec_from_file_location(
-        "c7_selftest_fixture_builder", os.path.join(src_pkg, "c7_selftest.py"))
+        "c7_selftest_fixture_builder", os.path.join(pinned_pkg, "c7_selftest.py"))
     mod = importlib.util.module_from_spec(spec)
     sys.modules["c7_selftest_fixture_builder"] = mod
     spec.loader.exec_module(mod)
@@ -1726,21 +1738,27 @@ _C_LEGIB_AGENTS_MD = """# AGENTS (fixture)
 | `receipts/` | fixture receipts | data |
 """
 
-_C_LEGIB_CITATION_CHECKER = "import sys\nsys.exit(0)\n"
-
-
 def build_cure5_c_legib(variant):
     """variant: 'pos' (stray .pytest_cache/, no genuine unmapped dir) |
     'neg' (a genuinely unmapped real working dir alongside the same stray
     tooling cache)."""
-    root = fresh_dir(os.path.join(FIXTURES_DIR, f"cure5_legib_{variant}"))
+    if variant not in {"pos", "neg"}:
+        raise ValueError(f"unsupported C-LEGIB fixture variant: {variant!r}")
+    root = pinned_fixture_root(
+        f"cure5_legib_{variant}",
+        (os.path.join("scripts", "check_goal_citations.py"),),
+    )
+
+    for generated_name in ("docs", "receipts", ".pytest_cache", "unmapped_real_dir"):
+        generated_path = os.path.join(root, generated_name)
+        if os.path.isdir(generated_path):
+            shutil.rmtree(generated_path, onerror=_rmtree_onerror)
+        elif os.path.exists(generated_path):
+            os.remove(generated_path)
 
     with open(os.path.join(root, "AGENTS.md"), "w", encoding="utf-8") as fh:
         fh.write(_C_LEGIB_AGENTS_MD)
     os.makedirs(os.path.join(root, "docs"), exist_ok=True)
-    os.makedirs(os.path.join(root, "scripts"), exist_ok=True)
-    with open(os.path.join(root, "scripts", "check_goal_citations.py"), "w", encoding="utf-8") as fh:
-        fh.write(_C_LEGIB_CITATION_CHECKER)
 
     write_json_no_marker(
         os.path.join(root, "receipts", "cold-read-reprobe", "cure5-fixture-20990101T000000Z.json"),
