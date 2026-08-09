@@ -13,11 +13,13 @@ a config growth past the cap fails here instead of mid-run.
 from __future__ import annotations
 
 import ast
+import json
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SLICE_SOURCE = ROOT / "tools" / "ember-restart-3b" / "run_vertical_slice.py"
+CONFIG_PATH = ROOT / "configs" / "ember-restart-3b.json"
 
 # Observed tensor-storage lower bound of the 3B config's optimizer-state.pt,
 # from the ember-checkpoint-write-failure-v1 quarantine receipt
@@ -28,7 +30,33 @@ OBSERVED_3B_OPTIMIZER_LOWER_BOUND = 7_798_675_456
 
 # The certified launch scope's max_transient_checkpoint_gib (launch-authority
 # certificate, execution_scope) — the cap and the scope must agree.
-CERTIFIED_TRANSIENT_CHECKPOINT_BYTES = 8 * 1024**3
+CERTIFIED_TRANSIENT_CHECKPOINT_BYTES = 4 * 1024**3
+
+
+def _owner_optimizer_storage_bounds() -> dict[str, int]:
+    """Derive 3B owner-shard optimizer floors from the checked contract."""
+    config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    model = config["model"]
+    serialization = config["checkpoints"]["serialization"]
+    hidden_size = int(model["hidden_size"])
+    layers = int(model["layers"])
+    expert_names = tuple(model["expert_routing"]["expert_names"])
+    bytes_per_parameter = int(
+        serialization["optimizer_state_bytes_per_active_parameter"]
+    )
+    expert_parameters = layers * 12 * hidden_size**2
+    shared_parameters = int(model["total_unique_trainable_parameters"]) - (
+        len(expert_names) * expert_parameters
+    )
+    if shared_parameters < 1 or bytes_per_parameter < 1:
+        raise AssertionError("owner-sharded 3B optimizer projection is invalid")
+    return {
+        "shared": shared_parameters * bytes_per_parameter,
+        **{
+            name: expert_parameters * bytes_per_parameter
+            for name in expert_names
+        },
+    }
 
 
 def _eval_int_expr(node: ast.expr) -> int:
@@ -75,14 +103,20 @@ def _read_cap_constant() -> int:
 
 
 class CheckpointScratchCap3BTests(unittest.TestCase):
-    def test_cap_exceeds_observed_3b_optimizer_lower_bound(self) -> None:
+    def test_cap_covers_every_owner_sharded_optimizer_write(self) -> None:
         cap = _read_cap_constant()
-        self.assertGreater(
+        owner_bounds = _owner_optimizer_storage_bounds()
+        self.assertLessEqual(
+            max(owner_bounds.values()),
             cap,
+            "an owner-sharded 3B optimizer write exceeds the transient scratch"
+            " cap: the first-checkpoint #1305 failure class remains reachable",
+        )
+        self.assertGreater(
             OBSERVED_3B_OPTIMIZER_LOWER_BOUND,
-            "transient scratch cap is at or below the observed 3B"
-            " optimizer-state lower bound: every 3B governed run dies at its"
-            " first checkpoint write (#1305 class)",
+            cap,
+            "the historical monolithic receipt must remain distinct from the"
+            " active owner-sharded write bound",
         )
 
     def test_cap_matches_certified_launch_scope(self) -> None:
@@ -91,7 +125,7 @@ class CheckpointScratchCap3BTests(unittest.TestCase):
             cap,
             CERTIFIED_TRANSIENT_CHECKPOINT_BYTES,
             "transient scratch cap must equal the certified launch scope's"
-            " max_transient_checkpoint_gib (8 GiB); change both together or"
+            " max_transient_checkpoint_gib (4 GiB); change both together or"
             " the runner enforces a bound the certificate never authorized",
         )
 
