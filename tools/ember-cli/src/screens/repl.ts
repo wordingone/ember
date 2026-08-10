@@ -49,7 +49,7 @@ import {
   slashDropdownMaxVisible,
   slashDropdownCanRender,
 } from "../services/slash-dropdown.ts";
-import { getCommands } from "../command-registry.ts";
+import { findCommand, getCommands } from "../command-registry.ts";
 import type { RegistryCommand } from "../types/command-types.ts";
 import {
   buildMessageLookups,
@@ -1780,8 +1780,9 @@ export function ReplScreen({
     }
 
     // Slash-command dropdown navigation takes priority over every other binding while it's open
-    // (b22 item 1) -- Enter completes the highlighted command into the input instead of falling
-    // through to message-submit below.
+    // (b22 item 1). Enter completes a partial command (or a command that still needs arguments),
+    // but an exact argument-free registered command must fall through to the ordinary submit
+    // path so its first Enter dispatches exactly once (#1369 acceptance amendment).
     if (dropdownOpen && dropdownDisplay.visible.length > 0) {
       // 2026-07-25 palette-overflow-render finding: wrap over the FULL match list
       // (dropdownMatches), not the visible-cap slice -- computeSlashDropdownDisplay now scrolls
@@ -1797,8 +1798,14 @@ export function ReplScreen({
       }
       if (key.return) {
         const chosen = dropdownDisplay.visible[dropdownDisplay.selectedIndex];
-        if (chosen) inputActions.setText(completeSlashSelection(chosen));
-        return;
+        if (!chosen) return;
+        const liveCommand = inputActions.getSnapshot().text.trim();
+        const exactCommand = findCommand(slashQueryFrom(liveCommand), dropdownMatches);
+        const isExactArgumentFreeCommand = exactCommand !== undefined && !exactCommand.argumentHint;
+        if (!isExactArgumentFreeCommand) {
+          inputActions.setText(completeSlashSelection(chosen));
+          return;
+        }
       }
     }
 
@@ -1989,15 +1996,11 @@ export function ReplScreen({
     React.createElement(
       Box,
       { key: "main-column", flexDirection: "column", width: mainColumnWidth, minWidth: mainColumnWidth, height: terminalRows, flexShrink: 0, overflow: "hidden" },
-      // The palette owns the banner rows while slash composition is active. Outside the
-      // palette, retain #243's shrinkable banner so prompt/status chrome remains visible.
-      dropdownOpen
-        ? null
-        : React.createElement(
-            Box,
-            { key: "banner", flexShrink: 1, minHeight: 0, overflow: "hidden" },
-            React.createElement(Homescreen, homescreenProps),
-          ),
+      React.createElement(
+        Box,
+        { key: "banner", flexShrink: 1, minHeight: 0, overflow: "hidden" },
+        React.createElement(Homescreen, homescreenProps),
+      ),
       React.createElement(
         Box,
         { key: "workspace", flexDirection: "column", flexGrow: 1, minHeight: 0, overflow: "hidden" },
