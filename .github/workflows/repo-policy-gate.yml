@@ -58,6 +58,7 @@ jobs:
           REPO_GUARD_NAMES: ${{ secrets.REPO_GUARD_NAMES }}
           REPO_GUARD_KERNEL_ROOT: ${{ github.workspace }}/guard-kernel
           REPO_GUARD_SUBJECT_ROOT: ${{ github.workspace }}/guard-subject
+          REPO_GUARD_PR_MERGE_SUBJECT: ${{ github.event_name == 'pull_request_target' && 'true' || 'false' }}
           BASE_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || github.event.before }}
         run: |
           set -euo pipefail

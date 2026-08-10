@@ -104,7 +104,11 @@ def commit_fixture(tmp: Path) -> None:
 GIT_BASH = "C:/Program Files/Git/bin/bash.exe"
 
 
-def run_guard(tmp: Path, extra_env: dict | None = None) -> tuple[int, str]:
+def run_guard(
+    tmp: Path,
+    extra_env: dict | None = None,
+    args: tuple[str, ...] = (),
+) -> tuple[int, str]:
     import os
     env = dict(os.environ)
     env.pop("CI", None)
@@ -113,7 +117,7 @@ def run_guard(tmp: Path, extra_env: dict | None = None) -> tuple[int, str]:
     if extra_env:
         env.update(extra_env)
     proc = subprocess.run(
-        [GIT_BASH, "tools/repo-guard.sh"], cwd=str(tmp), env=env,
+        [GIT_BASH, "tools/repo-guard.sh", *args], cwd=str(tmp), env=env,
         capture_output=True, text=True,
     )
     return proc.returncode, proc.stdout + proc.stderr
@@ -1157,6 +1161,95 @@ def test_red_line_endings_staged_bypass_worktree_restore():
         cleanup(tmp)
 
 
+def test_green_pr_merge_excludes_live_base_squash_commit():
+    tmp = make_fixture("master")
+    try:
+        def git(*args: str) -> str:
+            return subprocess.run(
+                ["git", "-C", str(tmp), *args], check=True,
+                capture_output=True, text=True,
+            ).stdout.strip()
+
+        def commit(message: str) -> str:
+            git("add", "-A")
+            git("-c", "user.email=selftest@example.invalid", "-c",
+                "user.name=selftest", "commit", "-q", "-m", message)
+            return git("rev-parse", "HEAD")
+
+        commit_fixture(tmp)
+        stale_event_base = git("rev-parse", "HEAD")
+        git("checkout", "-q", "-b", "fix/pr-safe")
+        (tmp / "docs" / "pr-note.md").write_bytes(b"branch-authored change\n")
+        commit("safe branch change")
+
+        git("checkout", "-q", "master")
+        (tmp / "GOAL.md").write_bytes(b"live-base authority update\n")
+        (tmp / "receipts").mkdir(exist_ok=True)
+        (tmp / "receipts" / "live-base-note.md").write_bytes(
+            b"already reviewed before squash\n"
+        )
+        commit("squashed live-base goal and evidence")
+        git("checkout", stale_event_base, "--", "GOAL.md")
+        commit("restore frozen goal authority")
+        git("-c", "user.email=selftest@example.invalid", "-c",
+            "user.name=selftest", "merge", "-q", "--no-ff", "fix/pr-safe",
+            "-m", "synthetic pull-request merge")
+
+        _rc, output = run_guard(
+            tmp,
+            extra_env={"REPO_GUARD_PR_MERGE_SUBJECT": "true"},
+            args=("--base", stale_event_base),
+        )
+        assert "ok   [goal/evidence]" in output, output
+        assert "FAIL [goal/evidence]" not in output, output
+    finally:
+        cleanup(tmp)
+
+
+def test_red_pr_merge_still_rejects_branch_goal_evidence_commit():
+    tmp = make_fixture("master")
+    try:
+        def git(*args: str) -> str:
+            return subprocess.run(
+                ["git", "-C", str(tmp), *args], check=True,
+                capture_output=True, text=True,
+            ).stdout.strip()
+
+        def commit(message: str) -> str:
+            git("add", "-A")
+            git("-c", "user.email=selftest@example.invalid", "-c",
+                "user.name=selftest", "commit", "-q", "-m", message)
+            return git("rev-parse", "HEAD")
+
+        commit_fixture(tmp)
+        stale_event_base = git("rev-parse", "HEAD")
+        git("checkout", "-q", "-b", "fix/pr-bad")
+        (tmp / "GOAL.md").write_bytes(b"branch authority update\n")
+        (tmp / "receipts").mkdir(exist_ok=True)
+        (tmp / "receipts" / "branch-note.md").write_bytes(
+            b"branch evidence update\n"
+        )
+        bad_commit = commit("bad branch goal and evidence")
+
+        git("checkout", "-q", "master")
+        (tmp / "README.md").write_bytes(b"new live-base prose\n")
+        commit("advance live base")
+        git("-c", "user.email=selftest@example.invalid", "-c",
+            "user.name=selftest", "merge", "-q", "--no-ff", "fix/pr-bad",
+            "-m", "synthetic pull-request merge")
+
+        rc, output = run_guard(
+            tmp,
+            extra_env={"REPO_GUARD_PR_MERGE_SUBJECT": "true"},
+            args=("--base", stale_event_base),
+        )
+        assert rc != 0, output
+        assert "FAIL [goal/evidence]" in output, output
+        assert bad_commit in output, output
+    finally:
+        cleanup(tmp)
+
+
 ALL_TESTS = [
     test_red_name_via_hash_match,
     test_red_absolute_path_single_separator,
@@ -1196,6 +1289,8 @@ ALL_TESTS = [
     test_red_cockpit_state_as_a_file,
     test_green_empty_cockpit_state_dir,
     test_red_pathfrags_staged_bypass_worktree_restore,
+    test_green_pr_merge_excludes_live_base_squash_commit,
+    test_red_pr_merge_still_rejects_branch_goal_evidence_commit,
     test_red_line_endings_staged_bypass_worktree_restore,
 ]
 
