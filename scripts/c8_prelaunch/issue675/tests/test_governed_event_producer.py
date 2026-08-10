@@ -71,7 +71,7 @@ def test_producer_mints_future_b3_then_calls_capture(tmp_path, monkeypatch):
     assert captured["batch_manifest_path"] == Path(args.batch_manifest)
     assert captured["lineage_run_id"] == "historical"
     assert captured["learning_rate"] == 0.02
-    assert set(captured["binding_files"]) == {"source_sha256", "config_sha256", "checkpoint_sha256", "optimizer_sha256", "momentum_sha256", "batch_sha256", "replay_sha256", "threshold_sha256", "verifier_sha256"}
+    assert set(captured["binding_files"]) == {"source_sha256", "config_sha256", "checkpoint_sha256", "optimizer_sha256", "momentum_sha256", "b3_receipt_sha256", "batch_sha256", "replay_sha256", "threshold_sha256", "verifier_sha256"}
 
 
 def test_producer_refuses_b1m_batch_mismatch_before_capture(tmp_path, monkeypatch):

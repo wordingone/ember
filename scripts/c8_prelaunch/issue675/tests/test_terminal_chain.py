@@ -36,42 +36,31 @@ def _seal(value: dict[str, object], field: str = "receipt_sha256") -> dict[str, 
 
 
 def _write(root: Path) -> dict[str, Path]:
-    root.mkdir()
-    job = "q2-actual-update-001"
-    capture = _seal(
-        {
-            "schema": "q2-actual-update-capture-v1",
-            "run_id": job,
-            "scope": "TARGET_TENSOR_COUNTERFACTUAL",
-            "verdict": "CAPTURED_NOT_ADJUDICATED",
-            "no_new_parallel_authority": True,
-        },
-        "manifest_sha256",
-    )
-    capture_path = root / "capture.json"
-    capture_path.write_bytes(_canonical(capture))
+    fixture_path = ROOT / "tests" / "test_capture_loader.py"
+    spec = importlib.util.spec_from_file_location("q2_terminal_loader_fixture", fixture_path)
+    assert spec is not None and spec.loader is not None
+    fixture = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fixture)
+    capture_path, dispatch_path, terminal_path = fixture._write_fixture(root)
+    capture = json.loads(capture_path.read_text(encoding="utf-8"))
+    dispatch = json.loads(dispatch_path.read_text(encoding="utf-8"))
+    job = capture["run_id"]
     capture_sha = hashlib.sha256(capture_path.read_bytes()).hexdigest()
-
-    terminal = {
-        "schema": "ember-lab-operational-receipt-v1",
-        "job_id": job,
-        "state": "exited",
-        "exit_code": 0,
-        "scientific_capability_evidence": False,
-    }
-    terminal_raw = _canonical(terminal)
-    terminal_sha = hashlib.sha256(terminal_raw).hexdigest()
-    terminal_path = root / f"{terminal_sha}.json"
-    terminal_path.write_bytes(terminal_raw)
+    terminal_sha = hashlib.sha256(terminal_path.read_bytes()).hexdigest()
 
     adjudication = _seal(
         {
+            "schema": "q2-actual-update-successor-receipt-v1",
             "schema_version": "q2-actual-update-successor-receipt-v1",
             "verdict": "NON_NULL_ORIENTATION",
             "event_custody": {
                 "job_id": job,
+                "authority": "EMBER_LAB_TERMINAL_EXIT_ZERO",
                 "capture_manifest_sha256": capture["manifest_sha256"],
+                "dispatch_manifest_sha256": capture["dispatch"]["manifest_sha256"],
+                "preflight_receipt_sha256": capture["dispatch"]["preflight_receipt_sha256"],
                 "terminal_receipt_sha256": terminal_sha,
+                "ember_lab_identity": dispatch["ember_lab_identity"],
             },
             "credits": {"whole_step": False, "material_loss_bridge": False},
             "no_new_parallel_authority": True,
@@ -120,6 +109,7 @@ def _write(root: Path) -> dict[str, Path]:
     cleanup_path.write_bytes(_canonical(cleanup))
     return {
         "capture": capture_path,
+        "dispatch": dispatch_path,
         "terminal": terminal_path,
         "adjudication": adjudication_path,
         "review": review_path,
@@ -146,7 +136,7 @@ def test_seals_one_path_free_terminal_chain(tmp_path: Path):
         ("adjudication", lambda row: row["event_custody"].update(job_id="foreign"), "TERMINAL_CHAIN_JOB_MISMATCH"),
         ("review", lambda row: row.update(verdict="P1"), "TERMINAL_CHAIN_REVIEW_NOT_PASS"),
         ("cleanup", lambda row: row["preconditions"].update(consumer_receipt_sha256="0" * 64), "TERMINAL_CHAIN_CLEANUP_MISMATCH"),
-        ("terminal", lambda row: row.update(exit_code=1), "TERMINAL_CHAIN_TERMINAL_FAILED"),
+        ("terminal", lambda row: row.update(exit_code=1), "TERMINAL_CHAIN_CAPTURE_ADMISSION_REFUSED"),
     ],
 )
 def test_refuses_cross_run_or_failed_chain(tmp_path: Path, target, mutate, code: str):
@@ -160,3 +150,19 @@ def test_refuses_cross_run_or_failed_chain(tmp_path: Path, target, mutate, code:
 
     with pytest.raises(module.TerminalChainRefusal, match=code):
         module.validate_terminal_chain(**{f"{key}_path": item for key, item in paths.items()})
+
+
+def test_refuses_self_hashed_but_incomplete_capture_before_chain_selection(tmp_path: Path):
+    module = _load()
+    paths = _write(tmp_path / "chain")
+    capture = json.loads(paths["capture"].read_text(encoding="utf-8"))
+    capture.pop("artifacts")
+    _seal(capture, "manifest_sha256")
+    paths["capture"].write_bytes(_canonical(capture))
+
+    with pytest.raises(
+        module.TerminalChainRefusal, match="TERMINAL_CHAIN_CAPTURE_ADMISSION_REFUSED"
+    ):
+        module.validate_terminal_chain(
+            **{f"{key}_path": item for key, item in paths.items()}
+        )

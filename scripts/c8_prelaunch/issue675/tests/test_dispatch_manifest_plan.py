@@ -218,6 +218,7 @@ def test_dispatch_plan_builds_closed_governed_vertical_manifest(tmp_path: Path):
     assert manifest["args"][0] == str(files["producer"].resolve())
     assert manifest["args"][1] == "governed-vertical"
     assert manifest["workload_profile"]["profile_id"] == "governed_vertical"
+    assert manifest["workload_profile"]["cpu_rate_percent"] == 80
     assert [row["kind"] for row in manifest["workload_profile"]["pinned_host_producers"]] == [
         "training_data_loader", "checkpoint_writer", "telemetry_buffer"
     ]

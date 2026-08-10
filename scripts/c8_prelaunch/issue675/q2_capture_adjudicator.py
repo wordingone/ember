@@ -94,12 +94,13 @@ def adjudicate_capture(
         "batch_sha256": admitted["bindings"]["batch_sha256"],
         "optimizer_sha256": admitted["bindings"]["optimizer_sha256"],
         "momentum_sha256": admitted["bindings"]["momentum_sha256"],
+        "b3_receipt_sha256": admitted["bindings"]["b3_receipt_sha256"],
         "replay_sha256": admitted["bindings"]["replay_sha256"],
         "learning_rate": admitted["optimizer"]["learning_rate"],
         "optimizer_scale": admitted["optimizer"]["scale"],
         "optimizer_name": admitted["optimizer"]["name"],
         "capture_receipt_sha256": admitted["capture_manifest_sha256"],
-        "event_authority": "FUTURE_CAPTURED_GPU_EVENT",
+        "event_authority": admitted["event_authority"],
     }
     try:
         receipt = verifier.evaluate_actual_update(
@@ -128,7 +129,18 @@ def adjudicate_capture(
 
     receipt = dict(receipt)
     receipt.pop("receipt_sha256", None)
+    receipt["credits"] = {
+        **receipt["credits"],
+        "actual_update": True,
+        "orientation": receipt["orientation"]["verdict"] == "NON_NULL_ORIENTATION",
+        "signed_first_order": receipt["losses"]["same_nonzero_sign"],
+        "first_order_dominant": receipt["losses"]["first_order_dominant"],
+        "material_loss_bridge": receipt["bridge_verdict"] == "MATERIAL_LOSS_BRIDGE",
+    }
+    receipt["schema_version"] = receipt["schema"]
+    receipt["verdict"] = receipt["orientation"]["verdict"]
     receipt["event_custody"] = {
+        "job_id": admitted["run_id"],
         "authority": admitted["event_authority"],
         "capture_manifest_sha256": admitted["capture_manifest_sha256"],
         "dispatch_manifest_sha256": admitted["dispatch_manifest_sha256"],

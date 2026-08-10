@@ -11,6 +11,7 @@ independent-review, and cleanup receipts are mutually bound.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import re
 from pathlib import Path
@@ -83,9 +84,28 @@ def _self_hash(value: Mapping[str, Any], field: str, code: str) -> str:
     return supplied
 
 
+def _reopen_capture(
+    capture_path: Path, dispatch_path: Path, terminal_path: Path
+) -> dict[str, object]:
+    """Invoke the canonical capture loader without creating a second schema."""
+    module_path = Path(__file__).with_name("q2_capture_loader.py")
+    try:
+        spec = importlib.util.spec_from_file_location("q2_terminal_capture_loader", module_path)
+        if spec is None or spec.loader is None:
+            _refuse("TERMINAL_CHAIN_CAPTURE_ADMISSION_REFUSED")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.load_capture(capture_path, dispatch_path, terminal_path)
+    except TerminalChainRefusal:
+        raise
+    except Exception:
+        _refuse("TERMINAL_CHAIN_CAPTURE_ADMISSION_REFUSED")
+
+
 def validate_terminal_chain(
     *,
     capture_path: Path,
+    dispatch_path: Path,
     terminal_path: Path,
     adjudication_path: Path,
     review_path: Path,
@@ -93,20 +113,12 @@ def validate_terminal_chain(
 ) -> dict[str, Any]:
     """Return a path-free chain receipt, or refuse before terminal selection."""
 
+    admitted = _reopen_capture(capture_path, dispatch_path, terminal_path)
     capture, capture_raw = _read(capture_path, "TERMINAL_CHAIN_CAPTURE_MALFORMED")
-    if (
-        capture.get("schema") != "q2-actual-update-capture-v1"
-        or capture.get("scope") != "TARGET_TENSOR_COUNTERFACTUAL"
-        or capture.get("verdict") != "CAPTURED_NOT_ADJUDICATED"
-        or capture.get("no_new_parallel_authority") is not True
-    ):
-        _refuse("TERMINAL_CHAIN_CAPTURE_INVALID")
-    job_id = capture.get("run_id")
+    job_id = admitted.get("run_id")
     if not isinstance(job_id, str) or _JOB_ID.fullmatch(job_id) is None:
         _refuse("TERMINAL_CHAIN_JOB_INVALID")
-    capture_manifest_sha = _self_hash(
-        capture, "manifest_sha256", "TERMINAL_CHAIN_CAPTURE_HASH_INVALID"
-    )
+    capture_manifest_sha = admitted["capture_manifest_sha256"]
     capture_file_sha = _sha_bytes(capture_raw)
 
     terminal, terminal_raw = _read(terminal_path, "TERMINAL_CHAIN_TERMINAL_MALFORMED")
@@ -136,6 +148,11 @@ def validate_terminal_chain(
     if (
         custody.get("capture_manifest_sha256") != capture_manifest_sha
         or custody.get("terminal_receipt_sha256") != terminal_sha
+        or custody.get("dispatch_manifest_sha256")
+        != admitted["dispatch_manifest_sha256"]
+        or custody.get("preflight_receipt_sha256")
+        != admitted["preflight_receipt_sha256"]
+        or custody.get("ember_lab_identity") != admitted["ember_lab_identity"]
     ):
         _refuse("TERMINAL_CHAIN_ADJUDICATION_CUSTODY_MISMATCH")
     if (

@@ -34,8 +34,11 @@ def _sha(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _manifest(path: Path, *, schema: str, code: str) -> dict[str, object]:
+def _manifest(root: Path, path: Path, *, schema: str, code: str) -> dict[str, object]:
     try:
+        path = Path(path).resolve(strict=True)
+        if path.parent != root or not path.is_file() or path.is_symlink():
+            _refuse(code + "_OUTSIDE_CUSTODY")
         raw = path.read_bytes()
         value = json.loads(raw)
     except (OSError, UnicodeError, json.JSONDecodeError):
@@ -93,8 +96,8 @@ def admit_event_inputs(
         _refuse("EVENT_CUSTODY_UNAVAILABLE")
     if not root.is_dir():
         _refuse("EVENT_CUSTODY_UNAVAILABLE")
-    checkpoint = _manifest(Path(checkpoint_manifest_path), schema="q2-event-checkpoint-input-v1", code="EVENT_CHECKPOINT")
-    batch = _manifest(Path(batch_manifest_path), schema="q2-event-batch-input-v1", code="EVENT_BATCH")
+    checkpoint = _manifest(root, Path(checkpoint_manifest_path), schema="q2-event-checkpoint-input-v1", code="EVENT_CHECKPOINT")
+    batch = _manifest(root, Path(batch_manifest_path), schema="q2-event-batch-input-v1", code="EVENT_BATCH")
     checkpoint_keys = {"schema", "source_commit", "run_id", "lineage_run_id", "target_name", "intermediate_size", "files", "manifest_sha256"}
     batch_keys = {"schema", "source_commit", "run_id", "builder_sha256", "microsteps", "payload_sha256", "batch_sha256", "manifest_sha256"}
     if set(checkpoint) != checkpoint_keys or set(batch) != batch_keys:

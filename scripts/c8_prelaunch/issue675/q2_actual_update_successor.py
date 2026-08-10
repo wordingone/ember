@@ -28,7 +28,7 @@ ALPHA = 0.003
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _IDENTITY_KEYS = {
     "source_sha256", "config_sha256", "batch_sha256", "optimizer_sha256",
-    "momentum_sha256", "replay_sha256", "learning_rate", "optimizer_scale",
+    "momentum_sha256", "b3_receipt_sha256", "replay_sha256", "learning_rate", "optimizer_scale",
     "optimizer_name", "capture_receipt_sha256", "event_authority",
 }
 
@@ -39,6 +39,11 @@ class Refusal(ValueError):
     @property
     def code(self) -> str:
         return str(self)
+
+
+def _orientation_verdict(p_upper: float) -> str:
+    """Apply the frozen inclusive #675 orientation boundary."""
+    return "NON_NULL_ORIENTATION" if p_upper <= ALPHA else "INCONCLUSIVE_ORIENTATION"
 
 
 def _canonical_bytes(value: object) -> bytes:
@@ -86,9 +91,12 @@ def build_materiality_artifact(*, delta_min: float, frozen_at: str,
 
 def _parse_ts(value: str) -> datetime:
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except (AttributeError, ValueError) as exc:
         raise Refusal("INVALID_TIMESTAMP") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise Refusal("INVALID_TIMESTAMP")
+    return parsed
 
 
 def _require_sha(name: str, value: object) -> None:
@@ -97,11 +105,13 @@ def _require_sha(name: str, value: object) -> None:
 
 
 def _validate_identities(identities: Mapping[str, object]) -> dict[str, object]:
+    if not isinstance(identities, Mapping):
+        raise Refusal("IDENTITY_SCHEMA_MISMATCH")
     if set(identities) != _IDENTITY_KEYS:
         raise Refusal("IDENTITY_SCHEMA_MISMATCH")
     result = dict(identities)
     for key in ("source_sha256", "config_sha256", "batch_sha256",
-                "optimizer_sha256", "momentum_sha256", "replay_sha256"):
+                "optimizer_sha256", "momentum_sha256", "b3_receipt_sha256", "replay_sha256"):
         _require_sha(key, result[key])
     _require_sha("capture_receipt_sha256", result["capture_receipt_sha256"])
     for key in ("learning_rate", "optimizer_scale"):
@@ -111,8 +121,8 @@ def _validate_identities(identities: Mapping[str, object]) -> dict[str, object]:
         result[key] = float(value)
     if not isinstance(result["optimizer_name"], str) or not result["optimizer_name"]:
         raise Refusal("INVALID_EXECUTION_IDENTITY:optimizer_name")
-    if result["event_authority"] != "FUTURE_CAPTURED_GPU_EVENT":
-        raise Refusal("HISTORICAL_OR_RECONSTRUCTED_EVENT_FORBIDDEN")
+    if result["event_authority"] != "EMBER_LAB_TERMINAL_EXIT_ZERO":
+        raise Refusal("UNADMITTED_EVENT_AUTHORITY")
     return result
 
 
@@ -267,7 +277,7 @@ def evaluate_actual_update(
     mn = int(difference.numel())
     threshold = _validated_threshold(threshold_artifact, mn)
     p_upper = 1.0 if rho_perp == 0.0 else min(1.0, 1.0 / (mn * rho_perp * rho_perp))
-    orientation = "NON_NULL_ORIENTATION" if p_upper < ALPHA else "INCONCLUSIVE_ORIENTATION"
+    orientation = _orientation_verdict(p_upper)
 
     # All structural validation completes before either branch is evaluated.
     loss_reset = float(loss_fn({name: value.clone() for name, value in reset.items()}))
@@ -342,12 +352,12 @@ def evaluate_actual_update(
         "materiality_artifact_sha256": None if materiality is None else materiality["artifact_sha256"],
         "bridge_verdict": bridge_verdict,
         "credits": {
-            "whole_step": scope == WHOLE_STEP,
-            "actual_update": True,
-            "orientation": orientation == "NON_NULL_ORIENTATION",
-            "signed_first_order": same_nonzero_sign,
-            "first_order_dominant": dominant,
-            "material_loss_bridge": material,
+            "whole_step": False,
+            "actual_update": False,
+            "orientation": False,
+            "signed_first_order": False,
+            "first_order_dominant": False,
+            "material_loss_bridge": False,
             "model_result": False,
             "checkpoint_result": False,
             "capability": False,

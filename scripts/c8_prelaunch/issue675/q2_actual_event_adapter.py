@@ -73,11 +73,13 @@ def _verify_lineage_receipt_binding(
     binding_files: Mapping[str, Path],
     b2_receipt_path: Path,
     b1m_receipt_path: Path,
+    b3_receipt_path: Path,
     batch_manifest_path: Path,
 ) -> None:
     for key, receipt_path, code in (
         ("checkpoint_sha256", b2_receipt_path, "EVENT_LINEAGE_BINDING_MISMATCH"),
         ("momentum_sha256", b1m_receipt_path, "EVENT_MOMENTUM_BINDING_MISMATCH"),
+        ("b3_receipt_sha256", b3_receipt_path, "EVENT_GRADIENT_RECEIPT_BINDING_MISMATCH"),
         ("batch_sha256", batch_manifest_path, "EVENT_BATCH_BINDING_MISMATCH"),
     ):
         try:
@@ -93,26 +95,41 @@ def _run_arm(
     *,
     model: torch.nn.Module,
     baseline: Mapping[str, torch.Tensor],
-    target: torch.Tensor,
+    target_name: str,
     gradient: torch.Tensor,
     momentum: torch.Tensor,
     learning_rate: float,
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    parameters = dict(model.named_parameters())
+    target = parameters.get(target_name)
+    if target is None:
+        _refuse("EVENT_TARGET_NOT_PARAMETER")
+    if target.device.type != "cuda":
+        _refuse("EVENT_GPU_APPLICATION_REQUIRED")
     try:
         result = muon_step_in_copy(
-            target.clone(),
-            gradient.clone(),
-            momentum.clone(),
+            target.detach().to(dtype=torch.float32).clone(),
+            gradient.to(device=target.device, dtype=torch.float32),
+            momentum.to(device=target.device, dtype=torch.float32),
             learning_rate=learning_rate,
         )
+        with torch.no_grad():
+            target.copy_(result)
+        torch.cuda.synchronize(target.device)
     except Exception:
         _refuse("EVENT_STEP_FAILED")
     after = _snapshot(model)
-    if not _same_state(baseline, after):
-        _refuse("EVENT_STEP_MUTATED_LIVE_MODEL")
-    if not isinstance(result, torch.Tensor):
-        _refuse("EVENT_STEP_RESULT_INVALID")
-    return result.detach().to(device="cpu").contiguous(), after
+    for name in sorted(baseline):
+        if name != target_name and not torch.equal(baseline[name], after[name]):
+            _refuse("EVENT_STEP_MUTATED_NON_TARGET")
+    try:
+        model.load_state_dict(dict(baseline), strict=True)
+        torch.cuda.synchronize(target.device)
+    except Exception:
+        _refuse("EVENT_STEP_RESTORE_FAILED")
+    if not _same_state(baseline, _snapshot(model)):
+        _refuse("EVENT_STEP_RESTORE_MISMATCH")
+    return after[target_name], after
 
 
 def capture_actual_event(
@@ -148,7 +165,7 @@ def capture_actual_event(
 
     _verify_executed_source_bindings(binding_files)
     _verify_lineage_receipt_binding(
-        binding_files, b2_receipt_path, b1m_receipt_path, batch_manifest_path
+        binding_files, b2_receipt_path, b1m_receipt_path, b3_receipt_path, batch_manifest_path
     )
     baseline = _snapshot(model)
     try:
@@ -191,7 +208,12 @@ def capture_actual_event(
         _refuse("EVENT_GRADIENT_LINEAGE_REFUSED")
     if target_name not in baseline:
         _refuse("EVENT_TARGET_NOT_FOUND")
-    pre = baseline[target_name].to(torch.float32)
+    target_parameter = dict(model.named_parameters()).get(target_name)
+    if target_parameter is None:
+        _refuse("EVENT_TARGET_NOT_PARAMETER")
+    if target_parameter.device.type != "cuda":
+        _refuse("EVENT_GPU_APPLICATION_REQUIRED")
+    pre = baseline[target_name]
     if gradient.shape != pre.shape:
         _refuse("EVENT_GRADIENT_TARGET_SHAPE_MISMATCH")
     non_target_pre = {
@@ -203,7 +225,7 @@ def capture_actual_event(
     reset_post, reset_state = _run_arm(
         model=model,
         baseline=baseline,
-        target=pre,
+        target_name=target_name,
         gradient=gradient,
         momentum=reset_momentum,
         learning_rate=learning_rate,
@@ -211,7 +233,7 @@ def capture_actual_event(
     transplant_post, transplant_state = _run_arm(
         model=model,
         baseline=baseline,
-        target=pre,
+        target_name=target_name,
         gradient=gradient,
         momentum=transplant_momentum,
         learning_rate=learning_rate,

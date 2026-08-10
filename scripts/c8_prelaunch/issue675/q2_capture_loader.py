@@ -30,6 +30,7 @@ _BINDING_KEYS = {
     "optimizer_sha256",
     "momentum_sha256",
     "batch_sha256",
+    "b3_receipt_sha256",
     "replay_sha256",
     "threshold_sha256",
     "verifier_sha256",
@@ -261,6 +262,11 @@ def load_capture(
         _refuse("CAPTURE_ARTIFACT_SCHEMA_INVALID")
     artifact_hashes: dict[str, str] = {}
     artifact_tensors: dict[str, torch.Tensor] = {}
+    dtype_by_name = {
+        "float32": torch.float32,
+        "bfloat16": torch.bfloat16,
+        "float16": torch.float16,
+    }
     for key in sorted(_ARTIFACT_KEYS):
         artifact = artifacts[key]
         if not isinstance(artifact, dict) or set(artifact) != {
@@ -276,7 +282,8 @@ def load_capture(
         expected = _require_sha(artifact.get("sha256"), "CAPTURE_ARTIFACT_HASH_INVALID")
         if _sha_bytes(raw) != expected or len(raw) != artifact.get("bytes"):
             _refuse("CAPTURE_ARTIFACT_HASH_MISMATCH")
-        if artifact.get("dtype") != "float32" or not _valid_shape(artifact.get("shape")):
+        declared_dtype = dtype_by_name.get(str(artifact.get("dtype")))
+        if declared_dtype is None or not _valid_shape(artifact.get("shape")):
             _refuse("CAPTURE_ARTIFACT_TENSOR_IDENTITY_INVALID")
         try:
             tensor = torch.load(path, map_location="cpu", weights_only=True)
@@ -284,7 +291,7 @@ def load_capture(
             _refuse("CAPTURE_ARTIFACT_TENSOR_MALFORMED")
         if (
             not isinstance(tensor, torch.Tensor)
-            or tensor.dtype != torch.float32
+            or tensor.dtype != declared_dtype
             or list(tensor.shape) != artifact["shape"]
             or not bool(torch.isfinite(tensor).all())
         ):
@@ -317,13 +324,24 @@ def load_capture(
     if (
         not isinstance(target, dict)
         or set(target) != {"name", "dtype", "shape", "mn"}
-        or target.get("dtype") != "float32"
+        or target.get("dtype") not in dtype_by_name
         or not _valid_shape(target.get("shape"))
         or target.get("mn") != _shape_product(target["shape"])
     ):
         _refuse("CAPTURE_TARGET_IDENTITY_INVALID")
     if any(list(tensor.shape) != target["shape"] for tensor in artifact_tensors.values()):
         _refuse("CAPTURE_TARGET_TENSOR_SHAPE_MISMATCH")
+    target_dtype = dtype_by_name[target["dtype"]]
+    if any(
+        artifact_tensors[key].dtype != target_dtype
+        for key in ("pre", "reset_post", "transplant_post")
+    ):
+        _refuse("CAPTURE_TARGET_TENSOR_DTYPE_MISMATCH")
+    if any(
+        artifact_tensors[key].dtype != torch.float32
+        for key in ("gradient", "reset_momentum", "transplant_momentum")
+    ):
+        _refuse("CAPTURE_OPERAND_TENSOR_DTYPE_MISMATCH")
     if bool(torch.count_nonzero(artifact_tensors["reset_momentum"])):
         _refuse("RESET_MOMENTUM_NOT_ZERO")
     if not bool(torch.count_nonzero(artifact_tensors["transplant_momentum"])):

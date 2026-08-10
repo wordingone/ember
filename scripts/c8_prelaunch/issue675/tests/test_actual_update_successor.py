@@ -24,11 +24,12 @@ IDENTITY = {
     "optimizer_sha256": "4" * 64,
     "replay_sha256": "5" * 64,
     "momentum_sha256": "6" * 64,
+    "b3_receipt_sha256": "8" * 64,
     "learning_rate": 0.01,
     "optimizer_scale": 1.0,
     "optimizer_name": "synthetic-sgd",
     "capture_receipt_sha256": "7" * 64,
-    "event_authority": "FUTURE_CAPTURED_GPU_EVENT",
+    "event_authority": "EMBER_LAB_TERMINAL_EXIT_ZERO",
 }
 
 
@@ -104,7 +105,8 @@ def test_whole_step_uses_full_manifest_and_catches_opposite_sign_interference():
     assert receipt["tensor_manifest"]["names"] == ["interferer", "target"]
     assert receipt["losses"]["first_order_gap"] > 0
     assert float(torch.dot(gradients["target"], transplant["target"] - reset["target"])) < 0
-    assert receipt["credits"]["whole_step"] is True
+    assert receipt["credits"]["whole_step"] is False
+    assert receipt["credits"]["actual_update"] is False
 
 
 def test_whole_step_refuses_incomplete_gradient_manifest_before_loss_evaluation():
@@ -135,6 +137,10 @@ def test_threshold_is_separate_pre_event_and_contains_no_observed_statistic():
     assert "observed_tensor" not in encoded
     assert "observed_loss" not in encoded
     assert q2.artifact_sha256(threshold) == threshold["artifact_sha256"]
+
+
+def test_orientation_accepts_the_contracts_inclusive_alpha_boundary():
+    assert q2._orientation_verdict(q2.ALPHA) == "NON_NULL_ORIENTATION"
 
 
 def test_material_bridge_requires_pre_event_delta_min_and_dominant_remainder():
@@ -206,7 +212,7 @@ def test_closed_schemas_refuse_unknown_identity_threshold_and_path_name():
     )
     with pytest.raises(q2.Refusal, match="IDENTITY_SCHEMA_MISMATCH"):
         q2.evaluate_actual_update(**common, identities={**IDENTITY, "foreign": "x"})
-    with pytest.raises(q2.Refusal, match="HISTORICAL_OR_RECONSTRUCTED_EVENT_FORBIDDEN"):
+    with pytest.raises(q2.Refusal, match="UNADMITTED_EVENT_AUTHORITY"):
         q2.evaluate_actual_update(
             **common, identities={**IDENTITY, "event_authority": "HISTORICAL_SIBLING"})
     tampered = _threshold(1)
@@ -219,3 +225,38 @@ def test_closed_schemas_refuse_unknown_identity_threshold_and_path_name():
                "reset_state": {"B:/host/path": torch.tensor([1.0])},
                "transplant_state": {"B:/host/path": torch.tensor([2.0])},
                "gradients": {"B:/host/path": torch.tensor([1.0])}}, identities=IDENTITY)
+
+
+def test_public_boundary_seals_malformed_identity_instead_of_leaking_type_error():
+    receipt = q2.evaluate_or_refuse(
+        pre_state={"w": torch.tensor([0.0])},
+        reset_state={"w": torch.tensor([1.0])},
+        transplant_state={"w": torch.tensor([2.0])},
+        gradients={"w": torch.tensor([1.0])},
+        scope=q2.WHOLE_STEP,
+        target_tensor=None,
+        identities=None,
+        loss_fn=_loss,
+        threshold_artifact=_threshold(1),
+        event_captured_at="2026-08-09T22:00:00Z",
+    )
+    assert receipt["verdict"] == "FAILED_ENGAGEMENT"
+    assert receipt["refusal_code"] == "IDENTITY_SCHEMA_MISMATCH"
+    assert not any(receipt["credits"].values())
+
+
+def test_public_boundary_refuses_naive_timestamp_with_named_receipt():
+    receipt = q2.evaluate_or_refuse(
+        pre_state={"w": torch.tensor([0.0])},
+        reset_state={"w": torch.tensor([1.0])},
+        transplant_state={"w": torch.tensor([2.0])},
+        gradients={"w": torch.tensor([1.0])},
+        scope=q2.WHOLE_STEP,
+        target_tensor=None,
+        identities=IDENTITY,
+        loss_fn=_loss,
+        threshold_artifact=_threshold(1),
+        event_captured_at="2026-08-09T22:00:00",
+    )
+    assert receipt["verdict"] == "FAILED_ENGAGEMENT"
+    assert receipt["refusal_code"] == "INVALID_TIMESTAMP"

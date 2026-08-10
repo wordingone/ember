@@ -114,7 +114,7 @@ def _preflight(path: Path, run_id: str) -> dict[str, object]:
 
 
 def _copy_bindings(
-    *, root: Path, config: Path, b2: Path, b1m: Path, batch: Path,
+    *, root: Path, config: Path, b2: Path, b1m: Path, b3: Path, batch: Path,
     threshold: Path, verifier: Path,
 ) -> dict[str, Path]:
     sources = {
@@ -123,6 +123,7 @@ def _copy_bindings(
         "checkpoint_sha256": b2,
         "optimizer_sha256": Path(_muon.__file__).resolve(),
         "momentum_sha256": b1m,
+        "b3_receipt_sha256": b3,
         "batch_sha256": batch,
         "replay_sha256": Path(_runtime.__file__).resolve(),
         "threshold_sha256": threshold,
@@ -203,7 +204,7 @@ def run_governed_vertical(args: argparse.Namespace) -> Path:
     reset = torch.zeros_like(gradient)
     transplant = torch.cat([pre_momentum, pre_momentum], dim=0)
     bindings = _copy_bindings(
-        root=root, config=files["config"], b2=files["b2_receipt"], b1m=files["b1m_receipt"],
+        root=root, config=files["config"], b2=files["b2_receipt"], b1m=files["b1m_receipt"], b3=b3_path,
         batch=Path(args.batch_manifest), threshold=Path(args.threshold), verifier=Path(args.verifier),
     )
     non_target = {name: value.detach().cpu().clone() for name, value in model.state_dict().items() if name != inputs["target_name"]}

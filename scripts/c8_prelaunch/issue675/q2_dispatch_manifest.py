@@ -22,6 +22,7 @@ _GIB = 1024**3
 _HOST_COMMIT_RESERVE = 10 * _GIB
 _MIN_VRAM = 21_746_679_808
 _MIN_STORAGE = 42_949_672_960
+_CPU_RATE_PERCENT = 80
 _PRODUCER_KINDS = (
     "training_data_loader",
     "checkpoint_writer",
@@ -306,6 +307,7 @@ def build_dispatch_manifest(
                 for kind in _PRODUCER_KINDS
             ],
             "requires_ui_responsiveness": False,
+            "cpu_rate_percent": _CPU_RATE_PERCENT,
         },
         "env": env,
         "bindings": binding_rows,

@@ -84,3 +84,22 @@ def test_refuses_nonclosed_or_foreign_inputs(tmp_path, mutation):
         batch["run_id"] = "foreign"; batch.pop("manifest_sha256"); _write_json(bp, batch)
     with pytest.raises(EventInputRefusal):
         admit_event_inputs(custody_root=tmp_path, checkpoint_manifest_path=cp, batch_manifest_path=bp, expected_source_commit=source, expected_run_id=run)
+
+
+def test_refuses_valid_manifest_bytes_outside_custody(tmp_path):
+    custody = tmp_path / "custody"
+    custody.mkdir()
+    source, run, cp, bp = _fixture(custody)
+    foreign = tmp_path / "foreign"
+    foreign.mkdir()
+    foreign_cp = foreign / "checkpoint.json"
+    foreign_cp.write_bytes(cp.read_bytes())
+
+    with pytest.raises(EventInputRefusal, match="EVENT_CHECKPOINT_OUTSIDE_CUSTODY"):
+        admit_event_inputs(
+            custody_root=custody,
+            checkpoint_manifest_path=foreign_cp,
+            batch_manifest_path=bp,
+            expected_source_commit=source,
+            expected_run_id=run,
+        )

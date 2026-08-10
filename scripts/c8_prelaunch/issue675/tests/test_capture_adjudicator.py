@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import sys
 from pathlib import Path
 
+import pytest
 import torch
 
 
@@ -16,6 +18,7 @@ ADJUDICATOR_PATH = ROOT / "q2_capture_adjudicator.py"
 ADAPTER_PATH = ROOT / "q2_actual_event_adapter.py"
 ADAPTER_FIXTURE_PATH = ROOT / "tests" / "test_actual_event_adapter.py"
 PRESERVED_CONSUMER = ROOT / "q2_actual_update_successor.py"
+TERMINAL_CHAIN_PATH = ROOT / "q2_terminal_chain.py"
 
 
 def _load(path: Path, name: str):
@@ -40,6 +43,17 @@ class TinyModel(torch.nn.Module):
 
 def _canonical(value: object) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+
+
+def _sha(raw: bytes) -> str:
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _seal(value: dict[str, object]) -> dict[str, object]:
+    unsigned = dict(value)
+    unsigned.pop("receipt_sha256", None)
+    value["receipt_sha256"] = _sha(_canonical(unsigned))
+    return value
 
 
 def _terminal(root: Path) -> Path:
@@ -67,18 +81,20 @@ def _terminal(root: Path) -> Path:
     return path
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="actual post-state capture requires CUDA")
 def test_adjudicator_binds_terminal_event_and_exact_replay_bytes(tmp_path: Path):
     adapter = _load(ADAPTER_PATH, "q2_adapter_adjudicator_test")
     adjudicator = _load(ADJUDICATOR_PATH, "q2_capture_adjudicator")
     verifier = _load(PRESERVED_CONSUMER, "q2_preserved_consumer")
     fixture = _load(ADAPTER_FIXTURE_PATH, "q2_adapter_fixture")
     custody = tmp_path / "custody"
-    model = fixture.TinyModel()
+    model = fixture.TinyModel().cuda()
     lineage = fixture._lineage(custody, model, "q2-adjudicator-test")
     dispatch_path, bindings = fixture._authority(
         custody,
         lineage["b2_receipt_path"],
         lineage["b1m_receipt_path"],
+        lineage["b3_receipt_path"],
         lineage["batch_manifest_path"],
         "q2-adjudicator-test",
     )
@@ -117,15 +133,79 @@ def test_adjudicator_binds_terminal_event_and_exact_replay_bytes(tmp_path: Path)
         **lineage,
     )
 
+    terminal_path = _terminal(custody)
     receipt = adjudicator.adjudicate_capture(
         manifest_path=manifest_path,
         dispatch_receipt_path=dispatch_path,
-        terminal_receipt_path=_terminal(custody),
+        terminal_receipt_path=terminal_path,
     )
 
     assert receipt["scope"] == "TARGET_TENSOR_COUNTERFACTUAL"
     assert receipt["event_custody"]["authority"] == "EMBER_LAB_TERMINAL_EXIT_ZERO"
     assert receipt["event_custody"]["terminal_receipt_sha256"]
     assert receipt["credits"]["whole_step"] is False
+    assert receipt["credits"]["actual_update"] is True
+    assert receipt["schema_version"] == "q2-actual-update-successor-receipt-v1"
+    assert receipt["verdict"] == receipt["orientation"]["verdict"]
+    assert receipt["event_custody"]["job_id"] == "q2-adjudicator-test"
     assert receipt["credits"]["material_loss_bridge"] is False
     assert verifier.artifact_sha256(receipt) == receipt["receipt_sha256"]
+
+    adjudication_path = custody / "adjudication.json"
+    adjudication_path.write_bytes(_canonical(receipt))
+    adjudication_sha = _sha(adjudication_path.read_bytes())
+    terminal_sha = _sha(terminal_path.read_bytes())
+    review_path = custody / "review.json"
+    review_path.write_bytes(
+        _canonical(
+            _seal(
+                {
+                    "schema_version": "q2-independent-event-review-v1",
+                    "job_id": "q2-adjudicator-test",
+                    "reviewer": "independent-verifier",
+                    "verdict": "PASS",
+                    "reviewed": {
+                        "capture_file_sha256": _sha(manifest_path.read_bytes()),
+                        "adjudication_file_sha256": adjudication_sha,
+                        "terminal_receipt_sha256": terminal_sha,
+                    },
+                    "no_new_parallel_authority": True,
+                }
+            )
+        )
+    )
+    cleanup_path = custody / "cleanup.json"
+    cleanup_path.write_bytes(
+        _canonical(
+            _seal(
+                {
+                    "schema_version": "q2-cleanup-receipt-v1",
+                    "job_id": "q2-adjudicator-test",
+                    "authority": "ember-lab",
+                    "preconditions": {
+                        "terminal_receipt_sha256": terminal_sha,
+                        "consumer_receipt_sha256": adjudication_sha,
+                        "independent_review_receipt_sha256": _sha(review_path.read_bytes()),
+                    },
+                    "cleanup_complete": True,
+                    "event_credit": False,
+                    "scientific_credit": False,
+                    "issue_completion_credit": False,
+                    "no_new_parallel_authority": True,
+                }
+            )
+        )
+    )
+    terminal_chain = _load(TERMINAL_CHAIN_PATH, "q2_terminal_chain_integration")
+    chain = terminal_chain.validate_terminal_chain(
+        capture_path=manifest_path,
+        dispatch_path=dispatch_path,
+        terminal_path=terminal_path,
+        adjudication_path=adjudication_path,
+        review_path=review_path,
+        cleanup_path=cleanup_path,
+    )
+    assert chain["event_chain_complete"] is True
+    assert chain["event_credit"] is False
+    assert chain["scientific_credit"] is False
+    assert chain["issue_completion_credit"] is False

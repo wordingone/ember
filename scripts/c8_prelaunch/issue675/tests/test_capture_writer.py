@@ -54,6 +54,7 @@ def _authority(root: Path) -> tuple[Path, dict[str, Path]]:
         "optimizer_sha256",
         "momentum_sha256",
         "batch_sha256",
+        "b3_receipt_sha256",
         "replay_sha256",
         "threshold_sha256",
         "verifier_sha256",

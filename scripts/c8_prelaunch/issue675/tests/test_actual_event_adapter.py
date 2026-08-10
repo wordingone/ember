@@ -57,6 +57,7 @@ def _authority(
     root: Path,
     b2_receipt: Path,
     b1m_receipt: Path,
+    b3_receipt: Path,
     batch_manifest: Path,
     job_id: str = "q2-adapter-test",
 ) -> tuple[Path, dict[str, Path]]:
@@ -78,6 +79,7 @@ def _authority(
         "optimizer_sha256",
         "momentum_sha256",
         "batch_sha256",
+        "b3_receipt_sha256",
         "replay_sha256",
         "threshold_sha256",
         "verifier_sha256",
@@ -95,6 +97,8 @@ def _authority(
             path.write_bytes(b1m_receipt.read_bytes())
         elif key == "batch_sha256":
             path.write_bytes(batch_manifest.read_bytes())
+        elif key == "b3_receipt_sha256":
+            path.write_bytes(b3_receipt.read_bytes())
         else:
             path.write_bytes(f"{key}:{index}".encode())
         files[key] = path
@@ -304,15 +308,17 @@ def _loss(target: torch.Tensor, non_target: dict[str, torch.Tensor]) -> float:
     return float(target.sum() + sum(value.sum() for value in non_target.values()))
 
 
-def test_adapter_derives_target_arms_and_non_target_identity(tmp_path: Path):
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="actual post-state capture requires CUDA")
+def test_adapter_derives_gpu_applied_target_arms_and_non_target_identity(tmp_path: Path):
     adapter = _load()
-    model = TinyModel()
+    model = TinyModel().cuda()
     custody = tmp_path / "custody"
     lineage = _lineage(custody, model, "q2-adapter-test")
     dispatch, bindings = _authority(
         custody,
         lineage["b2_receipt_path"],
         lineage["b1m_receipt_path"],
+        lineage["b3_receipt_path"],
         lineage["batch_manifest_path"],
     )
     gradient = torch.load(
@@ -347,7 +353,7 @@ def test_adapter_derives_target_arms_and_non_target_identity(tmp_path: Path):
     assert admitted["non_target_state"]["aux_counter"].item() == 7
 
 
-def test_adapter_refuses_step_that_mutates_live_model_before_manifest(tmp_path: Path):
+def test_adapter_refuses_cpu_reconstruction_before_manifest(tmp_path: Path):
     adapter = _load()
     model = TinyModel()
     custody = tmp_path / "custody"
@@ -356,20 +362,14 @@ def test_adapter_refuses_step_that_mutates_live_model_before_manifest(tmp_path: 
         custody,
         lineage["b2_receipt_path"],
         lineage["b1m_receipt_path"],
+        lineage["b3_receipt_path"],
         lineage["batch_manifest_path"],
     )
     gradient = torch.load(
         lineage["persisted_gradient_path"], map_location="cpu", weights_only=True
     )
 
-    def mutating_step(target: torch.Tensor, grad: torch.Tensor, momentum: torch.Tensor, *, learning_rate: float) -> torch.Tensor:
-        with torch.no_grad():
-            model.backbone_model.norm.weight.add_(1)
-        return target - grad
-
-    adapter.muon_step_in_copy = mutating_step
-
-    with pytest.raises(adapter.CaptureAdapterRefusal, match="EVENT_STEP_MUTATED_LIVE_MODEL"):
+    with pytest.raises(adapter.CaptureAdapterRefusal, match="EVENT_GPU_APPLICATION_REQUIRED"):
         adapter.capture_actual_event(
             custody_root=custody,
             run_id="q2-adapter-test",
@@ -397,6 +397,7 @@ def test_adapter_refuses_forged_optimizer_binding_before_manifest(tmp_path: Path
         custody,
         lineage["b2_receipt_path"],
         lineage["b1m_receipt_path"],
+        lineage["b3_receipt_path"],
         lineage["batch_manifest_path"],
     )
     bindings["optimizer_sha256"].write_text("forged optimizer", encoding="utf-8")
@@ -432,6 +433,7 @@ def test_adapter_refuses_mutated_persisted_gradient_before_manifest(tmp_path: Pa
         custody,
         lineage["b2_receipt_path"],
         lineage["b1m_receipt_path"],
+        lineage["b3_receipt_path"],
         lineage["batch_manifest_path"],
     )
     original = torch.load(

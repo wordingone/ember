@@ -30,6 +30,7 @@ _BINDING_KEYS = {
     "optimizer_sha256",
     "momentum_sha256",
     "batch_sha256",
+    "b3_receipt_sha256",
     "replay_sha256",
     "threshold_sha256",
     "verifier_sha256",
@@ -91,6 +92,17 @@ def _tensor(value: object, name: str) -> torch.Tensor:
     if (
         not isinstance(value, torch.Tensor)
         or value.dtype != torch.float32
+        or value.numel() == 0
+        or not bool(torch.isfinite(value).all())
+    ):
+        _refuse(f"{name.upper()}_TENSOR_INVALID")
+    return value.detach().to(device="cpu").contiguous()
+
+
+def _target_tensor(value: object, name: str) -> torch.Tensor:
+    if (
+        not isinstance(value, torch.Tensor)
+        or value.dtype not in {torch.float32, torch.bfloat16, torch.float16}
         or value.numel() == 0
         or not bool(torch.isfinite(value).all())
     ):
@@ -249,9 +261,9 @@ def write_capture(
         logical_bindings[key] = path.name
 
     tensors = {
-        "pre": _tensor(pre, "pre"),
-        "reset_post": _tensor(reset_post, "reset_post"),
-        "transplant_post": _tensor(transplant_post, "transplant_post"),
+        "pre": _target_tensor(pre, "pre"),
+        "reset_post": _target_tensor(reset_post, "reset_post"),
+        "transplant_post": _target_tensor(transplant_post, "transplant_post"),
         "gradient": _tensor(gradient, "gradient"),
         "reset_momentum": _tensor(reset_momentum, "reset_momentum"),
         "transplant_momentum": _tensor(transplant_momentum, "transplant_momentum"),
@@ -259,6 +271,11 @@ def write_capture(
     target_shape = tuple(tensors["pre"].shape)
     if any(tuple(value.shape) != target_shape for value in tensors.values()):
         _refuse("CAPTURE_TARGET_TENSOR_SHAPE_MISMATCH")
+    if any(
+        tensors[key].dtype != tensors["pre"].dtype
+        for key in ("reset_post", "transplant_post")
+    ):
+        _refuse("CAPTURE_TARGET_TENSOR_DTYPE_MISMATCH")
     if bool(torch.count_nonzero(tensors["reset_momentum"])):
         _refuse("RESET_MOMENTUM_NOT_ZERO")
     if not bool(torch.count_nonzero(tensors["transplant_momentum"])):
@@ -333,7 +350,7 @@ def write_capture(
             "logical_name": path.name,
             "sha256": _sha(raw),
             "bytes": len(raw),
-            "dtype": "float32",
+            "dtype": str(tensors[key].dtype).removeprefix("torch."),
             "shape": list(tensors[key].shape),
         }
 
@@ -353,7 +370,7 @@ def write_capture(
         "binding_files": logical_bindings,
         "target": {
             "name": target_name,
-            "dtype": "float32",
+            "dtype": str(tensors["pre"].dtype).removeprefix("torch."),
             "shape": list(target_shape),
             "mn": tensors["pre"].numel(),
         },
