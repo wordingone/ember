@@ -12,11 +12,16 @@ import { describe, it, expect } from "bun:test";
 import {
   CERTIFIED_LAUNCH_TIMEOUT_MS,
   PREFLIGHT_TIMEOUT_MS,
+  _defaultCertifiedLaunchRunner,
   createTrainCommand,
   type LaunchPacketRunResult,
 } from "./train.ts";
 import type { CommandContext } from "../types/command-types.ts";
 import { tryDispatchSlashCommand } from "../services/slash-dispatch.ts";
+import {
+  getActivityFeedState,
+  startActivityFeed,
+} from "../services/activity-feed.ts";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -174,6 +179,194 @@ function assertOnlyPreflightSpawned(spawns: RecordedSpawn[]): void {
 }
 
 describe("train command", () => {
+  it("keeps the event loop live while the certified consumer is running", async () => {
+    let eventLoopTurnRan = false;
+    setTimeout(() => {
+      eventLoopTurnRan = true;
+    }, 0);
+
+    const started = await _defaultCertifiedLaunchRunner(process.execPath, [
+      "-e",
+      "setTimeout(() => process.exit(0), 100)",
+    ]);
+
+    expect("kind" in started && started.kind === "background").toBe(true);
+    if (!("kind" in started) || started.kind !== "background") {
+      throw new Error("certified child did not start");
+    }
+    expect(started.pid).toBeGreaterThan(0);
+    await Bun.sleep(10);
+    expect(eventLoopTurnRan).toBe(true);
+    expect((await started.completion).status).toBe(0);
+  });
+
+  it("returns /train confirm after spawn while the certified consumer continues in background", async () => {
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-async-confirm-"));
+    try {
+      writeCanonicalArtifacts(scratch);
+      let finishCertifiedLaunch: ((result: LaunchPacketRunResult) => void) | undefined;
+      const completion = new Promise<LaunchPacketRunResult>((resolve) => {
+        finishCertifiedLaunch = resolve;
+      });
+      const cmd = createTrainCommand({
+        repoRoot: scratch,
+        runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+        runCertifiedLaunch: () => ({ kind: "background", pid: 4321, completion }),
+      });
+      const dispatchDeps = {
+        getCommands: async () => [cmd],
+        findCommand: (name: string) => (name === "train" ? cmd : undefined),
+      };
+      const offer = await tryDispatchSlashCommand("/train", mockCtx, dispatchDeps);
+      const offerId = offer?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
+      expect(offerId).toBeDefined();
+
+      let childFinished = false;
+      void completion.then(() => { childFinished = true; });
+      const confirmation = await tryDispatchSlashCommand(
+        `/train confirm ${offerId}`,
+        mockCtx,
+        dispatchDeps,
+      );
+      expect(confirmation?.message).toContain("started in background");
+      expect(confirmation?.message).toContain("child pid: 4321");
+      expect(confirmation?.message).toContain("activity feed");
+      expect(childFinished).toBe(false);
+
+      finishCertifiedLaunch?.({
+        status: 0,
+        stdout: JSON.stringify({ execution_receipt: "receipt.json", artifact_root: "artifacts/run" }),
+      });
+      await completion;
+      expect(childFinished).toBe(true);
+    } finally {
+      fs.rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  it("hands receipt-less background terminal failures to the cockpit monitor exactly once", async () => {
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-background-failure-"));
+    try {
+      writeCanonicalArtifacts(scratch);
+      for (const terminal of [
+        { status: 9, stdout: "" },
+        { status: null, stdout: "" },
+        { status: 0, stdout: "not-a-certified-response" },
+      ] satisfies LaunchPacketRunResult[]) {
+        let finish: ((result: LaunchPacketRunResult) => void) | undefined;
+        const completion = new Promise<LaunchPacketRunResult>((resolve) => { finish = resolve; });
+        const failures: Array<{ pid: number; status: number | null; message: string }> = [];
+        const cmd = createTrainCommand({
+          repoRoot: scratch,
+          runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+          runCertifiedLaunch: () => ({ kind: "background", pid: 4321, completion }),
+          reportCertifiedLaunchFailure: (failure) => failures.push(failure),
+        });
+        const dispatchDeps = {
+          getCommands: async () => [cmd],
+          findCommand: (name: string) => (name === "train" ? cmd : undefined),
+        };
+        const offer = await tryDispatchSlashCommand("/train", mockCtx, dispatchDeps);
+        const offerId = offer?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
+        expect(offerId).toBeDefined();
+        await tryDispatchSlashCommand(`/train confirm ${offerId}`, mockCtx, dispatchDeps);
+
+        finish?.(terminal);
+        await completion;
+        await Promise.resolve();
+
+        expect(failures).toHaveLength(1);
+        expect(failures[0]?.pid).toBe(4321);
+        expect(failures[0]?.status).toBe(terminal.status);
+        expect(failures[0]?.message).toContain("certified train consumer");
+      }
+    } finally {
+      fs.rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  it("routes a rejected certified completion through the mounted activity feed exactly once", async () => {
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-background-rejection-"));
+    const monitor = startActivityFeed({
+      receiptsDir: path.join(scratch, "receipts"),
+      totalityDir: path.join(scratch, "totality"),
+      outageMarkerPath: path.join(scratch, "planned-outage.json"),
+      restartLogPath: path.join(scratch, "restart-log.jsonl"),
+      watchdogStatePath: path.join(scratch, "watchdog-state.json"),
+      ledgerPath: path.join(scratch, "ledger.jsonl"),
+    });
+    try {
+      writeCanonicalArtifacts(scratch);
+      let rejectCompletion: ((error: Error) => void) | undefined;
+      const completion = new Promise<LaunchPacketRunResult>((_resolve, reject) => {
+        rejectCompletion = reject;
+      });
+      const cmd = createTrainCommand({
+        repoRoot: scratch,
+        runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+        runCertifiedLaunch: () => ({ kind: "background", pid: 2468, completion }),
+      });
+      const dispatchDeps = {
+        getCommands: async () => [cmd],
+        findCommand: (name: string) => (name === "train" ? cmd : undefined),
+      };
+      const offer = await tryDispatchSlashCommand("/train", mockCtx, dispatchDeps);
+      const offerId = offer?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
+      expect(offerId).toBeDefined();
+      await tryDispatchSlashCommand(`/train confirm ${offerId}`, mockCtx, dispatchDeps);
+
+      rejectCompletion?.(new Error("child monitor transport failed"));
+      await completion.catch(() => undefined);
+      await Bun.sleep(20);
+
+      const matching = getActivityFeedState().recentLines.filter((line) =>
+        line.text.includes("completion monitor failed") && line.text.includes("child pid=2468"),
+      );
+      expect(matching).toHaveLength(1);
+      const ledger = fs.readFileSync(path.join(scratch, "ledger.jsonl"), "utf8");
+      expect(ledger.match(/completion monitor failed/g)).toHaveLength(1);
+      expect(ledger).not.toContain("execution_receipt");
+    } finally {
+      monitor.stop();
+      fs.rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  it("leaves a valid certified background completion to the receipt watcher", async () => {
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-background-success-"));
+    try {
+      writeCanonicalArtifacts(scratch);
+      let finish: ((result: LaunchPacketRunResult) => void) | undefined;
+      const completion = new Promise<LaunchPacketRunResult>((resolve) => { finish = resolve; });
+      const failures: Array<{ pid: number; status: number | null; message: string }> = [];
+      const cmd = createTrainCommand({
+        repoRoot: scratch,
+        runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+        runCertifiedLaunch: () => ({ kind: "background", pid: 9876, completion }),
+        reportCertifiedLaunchFailure: (failure) => failures.push(failure),
+      });
+      const dispatchDeps = {
+        getCommands: async () => [cmd],
+        findCommand: (name: string) => (name === "train" ? cmd : undefined),
+      };
+      const offer = await tryDispatchSlashCommand("/train", mockCtx, dispatchDeps);
+      const offerId = offer?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
+      expect(offerId).toBeDefined();
+      await tryDispatchSlashCommand(`/train confirm ${offerId}`, mockCtx, dispatchDeps);
+
+      finish?.({
+        status: 0,
+        stdout: JSON.stringify({ execution_receipt: "receipt.json", artifact_root: "artifacts/run" }),
+      });
+      await completion;
+      await Promise.resolve();
+
+      expect(failures).toEqual([]);
+    } finally {
+      fs.rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
   it("routes the displayed /train confirm instruction through the production slash dispatcher", async () => {
     const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-dispatch-"));
     try {

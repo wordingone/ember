@@ -512,11 +512,21 @@ export interface ActivityFeedHandle {
 
 let _state: ActivityFeedState = { recentLines: [] };
 let _stopFns: Array<() => void> = [];
+let _publishExternalEvent: ((event: { source: ActivityFeedSource; text: string; path?: string }) => void) | null = null;
 
 let _nextSequence = 0;
 /** Returns a shallow copy safe to read at any time; last-polled snapshot. */
 export function getActivityFeedState(): ActivityFeedState {
   return _state;
+}
+
+/** Publish a real process-monitor observation through the already-running activity-feed engine.
+ * Returns false when the cockpit monitor is not mounted; callers must not invent a parallel
+ * ledger or receipt writer in that case. */
+export function publishActivityFeedInfrastructureFailure(text: string): boolean {
+  if (_publishExternalEvent === null) return false;
+  _publishExternalEvent({ source: "watchdog", text });
+  return true;
 }
 
 interface TailState {
@@ -712,6 +722,12 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
       JSON.stringify({ ts: line.ts, source: line.source, path: line.path ?? null, line: line.text }),
     ).catch(() => {});
   }
+
+  const publishThisEngine = renderEvent;
+  _publishExternalEvent = publishThisEngine;
+  _stopFns.push(() => {
+    if (_publishExternalEvent === publishThisEngine) _publishExternalEvent = null;
+  });
 
   /** P0-B: writes the watermark using a FRESH stat at the moment a file's processing is fully
    *  settled (success or terminally-unparsable) — never at first sight. A receipt is commonly
