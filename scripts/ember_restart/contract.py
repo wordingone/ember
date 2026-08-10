@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import re
 import subprocess
 import sys
@@ -81,6 +82,51 @@ ARCHITECTURE_SHAPE = {
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 
+# R1 WARM-100 entry evidence is an adapter around this module's existing
+# ember-owned-rung validator.  It deliberately does not become a second
+# admission authority: a candidate must pass ``validate_manifest`` before this
+# closed, PREP_ONLY receipt can be emitted.  The runtime/CLI path remains the
+# only execution authority, and the receipt's execution=false boundary keeps a
+# source-only entry from being mistaken for a run result.
+R1_ENTRY_SCHEMA = "ember-r1-warm100-entry-v1"
+R1_ENTRY_SOURCE_FILES = {
+    "contract": "scripts/ember_restart/contract.py",
+    "cli_train": "tools/ember-cli/src/commands/train.ts",
+    "certified_consumer": "tools/ember-restart-3b/certified_train_launch.py",
+    "ember_lab_verify": "runtime/ember-lab/src/training_verify.rs",
+}
+R1_ENTRY_PINNED_FILES = {
+    "prereg_sha256": "docs/spec/ember02-preregistration-v1.md",
+    "config_sha256": "configs/ember-restart-3b.json",
+    "fixed_prior_manifest_sha256": "manifests/ember-restart-3b/fixed-prior-manifest-v1.json",
+}
+R1_ENTRY_CLAIM_BOUNDARY = {
+    "steps": 100,
+    "execution": False,
+    "sufficiency": False,
+    "capability": False,
+    "benchmark": False,
+}
+R1_ENTRY_KEYS = {
+    "schema",
+    "source_commit",
+    "manifest_sha256",
+    "manifest_stage",
+    "run_id",
+    "entry",
+    "steps",
+    "prereg_sha256",
+    "config_sha256",
+    "fixed_prior_manifest_sha256",
+    "source_files",
+    "dispatch",
+    "energy",
+    "closed_boundary",
+    "claim_boundary",
+    "result",
+    "receipt_sha256",
+}
+
 
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
@@ -88,6 +134,211 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _run_git(source_root: Path, *git_args: str, text: bool = False) -> subprocess.CompletedProcess:
+    """Run a Git authority probe without creating a visible Windows console."""
+    return subprocess.run(
+        ["git", "-C", str(source_root), *git_args],
+        check=False,
+        capture_output=True,
+        text=text,
+        shell=False,
+        creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+    )
+
+
+def _git_blob_sha256(source_root: Path, source_commit: str, relative_path: str) -> str:
+    """Hash one immutable Git blob, never a mutable checkout path."""
+    if not COMMIT_RE.fullmatch(source_commit):
+        raise ValueError("source_commit: expected lowercase 40-character Git SHA")
+    result = _run_git(source_root, "show", f"{source_commit}:{relative_path}")
+    if result.returncode != 0:
+        raise ValueError(f"source blob unavailable: {source_commit}:{relative_path}")
+    return hashlib.sha256(result.stdout).hexdigest()
+
+
+def _current_source_commit(source_root: Path) -> str:
+    """Return the exact clean-checkout authority used for new R1 entries."""
+    result = _run_git(source_root, "rev-parse", "--verify", "HEAD^{commit}", text=True)
+    current = result.stdout.strip().lower()
+    if result.returncode != 0 or not COMMIT_RE.fullmatch(current):
+        raise ValueError("R1 WARM-100 entry: current source commit is unavailable")
+    return current
+
+
+def _require_clean_source_tree(source_root: Path) -> None:
+    """Refuse authority claims from a checkout with uncommitted source bytes."""
+    result = _run_git(
+        source_root,
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=all",
+        text=True,
+    )
+    if result.returncode != 0:
+        raise ValueError("R1 WARM-100 entry: source tree status is unavailable")
+    if result.stdout.strip():
+        raise ValueError("R1 WARM-100 entry: source tree is dirty")
+
+
+def _r1_entry_canonical(payload: dict[str, Any]) -> bytes:
+    unsigned = {key: value for key, value in payload.items() if key != "receipt_sha256"}
+    return (json.dumps(unsigned, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+def validate_r1_warm100_entry(
+    payload: dict[str, Any],
+    *,
+    source_root: Path,
+    manifest_path: Path,
+) -> dict[str, Any]:
+    """Validate the closed WARM-100 *entry* receipt, not a run result.
+
+    All candidate-admission decisions remain in :func:`validate_manifest`.
+    This consumer only checks the source/dispatch/claim envelope produced after
+    that authority returned green, and therefore cannot unlock a launcher or
+    grant execution credit on its own.
+    """
+    if not isinstance(payload, dict) or set(payload) != R1_ENTRY_KEYS:
+        raise ValueError("R1 WARM-100 entry: closed schema keys required")
+    source_commit = payload.get("source_commit")
+    if not isinstance(source_commit, str) or not COMMIT_RE.fullmatch(source_commit):
+        raise ValueError("R1 WARM-100 entry: source_commit is invalid")
+    if source_commit != _current_source_commit(source_root):
+        raise ValueError("R1 WARM-100 entry: source_commit is not the current source commit")
+    _require_clean_source_tree(source_root)
+    if payload.get("schema") != R1_ENTRY_SCHEMA:
+        raise ValueError("R1 WARM-100 entry: schema mismatch")
+    if payload.get("entry") != "WARM-100" or payload.get("steps") != 100:
+        raise ValueError("R1 WARM-100 entry: entry/steps mismatch")
+    if payload.get("result") != "PREP_ONLY":
+        raise ValueError("R1 WARM-100 entry: only PREP_ONLY is valid before execution")
+    if payload.get("manifest_stage") != "CHECKPOINT_CANDIDATE":
+        raise ValueError("R1 WARM-100 entry: candidate stage required")
+    if not isinstance(payload.get("run_id"), str) or not payload["run_id"].strip():
+        raise ValueError("R1 WARM-100 entry: run_id is required")
+    for field in ("manifest_sha256", "prereg_sha256", "config_sha256", "fixed_prior_manifest_sha256"):
+        value = payload.get(field)
+        if not isinstance(value, str) or not SHA256_RE.fullmatch(value):
+            raise ValueError(f"R1 WARM-100 entry: {field} is not lowercase SHA-256")
+    if _sha256(manifest_path) != payload["manifest_sha256"]:
+        raise ValueError("R1 WARM-100 entry: manifest bytes drifted")
+    try:
+        reopened_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"R1 WARM-100 entry: manifest cannot be reopened: {exc}") from exc
+    if (
+        not isinstance(reopened_manifest, dict)
+        or reopened_manifest.get("source_commit") != source_commit
+        or reopened_manifest.get("stage") != payload["manifest_stage"]
+        or reopened_manifest.get("run_id") != payload["run_id"]
+    ):
+        raise ValueError("R1 WARM-100 entry: reopened manifest identity drifted")
+    expected_pins = {
+        field: _git_blob_sha256(source_root, source_commit, path)
+        for field, path in R1_ENTRY_PINNED_FILES.items()
+    }
+    if any(payload[field] != expected for field, expected in expected_pins.items()):
+        raise ValueError("R1 WARM-100 entry: prereg/config/fixed-prior bytes drifted")
+    expected_sources = {
+        name: {
+            "path": path,
+            "sha256": _git_blob_sha256(source_root, source_commit, path),
+        }
+        for name, path in R1_ENTRY_SOURCE_FILES.items()
+    }
+    if payload.get("source_files") != expected_sources:
+        raise ValueError("R1 WARM-100 entry: source authority bytes/path drifted")
+    if payload.get("dispatch") != {
+        "surface": "ember-cli",
+        "authority": "ember-lab",
+        "consumer": "certified_train_launch.py",
+        "mode": "WARM-100",
+    }:
+        raise ValueError("R1 WARM-100 entry: dispatch must remain Ember CLI -> Ember Lab")
+    if payload.get("energy") != {"boundary": "DEGRADED_PROXY", "disclosed": True}:
+        raise ValueError("R1 WARM-100 entry: energy boundary must be disclosed")
+    if payload.get("closed_boundary") != {
+        "schema": "ember-r1-warm100-closed-boundary-v1",
+        "status": "PENDING_EXECUTION",
+        "ledger_complete": False,
+        "fixed_prior_bound": payload["fixed_prior_manifest_sha256"],
+    }:
+        raise ValueError("R1 WARM-100 entry: closed-boundary status is not PREP_ONLY")
+    if payload.get("claim_boundary") != R1_ENTRY_CLAIM_BOUNDARY:
+        raise ValueError("R1 WARM-100 entry: claim boundary widened")
+    if payload.get("receipt_sha256") != hashlib.sha256(_r1_entry_canonical(payload)).hexdigest():
+        raise ValueError("R1 WARM-100 entry: receipt self-hash mismatch")
+    return payload
+
+
+def build_r1_warm100_entry(
+    manifest_path: Path,
+    *,
+    source_commit: str,
+    source_root: Path,
+    prereg_path: Path,
+    config_path: Path,
+    fixed_prior_path: Path,
+    trusted_verifier_registry: Path | None = None,
+    expected_trusted_verifier_registry_sha256: str | None = None,
+) -> dict[str, Any]:
+    """Build a source-bound PREP_ONLY WARM-100 entry around the canonical validator."""
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"R1 WARM-100 entry: manifest unreadable: {exc}") from exc
+    validation = validate_manifest(
+        manifest_path,
+        trusted_verifier_registry,
+        expected_trusted_verifier_registry_sha256,
+    )
+    if not validation["valid"]:
+        raise ValueError(
+            "R1 WARM-100 entry: canonical manifest validation refused: "
+            + "; ".join(validation["errors"])
+        )
+    if manifest.get("source_commit") != source_commit:
+        raise ValueError("R1 WARM-100 entry: manifest/source commit mismatch")
+    if source_commit != _current_source_commit(source_root):
+        raise ValueError("R1 WARM-100 entry: source_commit is not the current source commit")
+    _require_clean_source_tree(source_root)
+    source_rows = {
+        name: {"path": path, "sha256": _git_blob_sha256(source_root, source_commit, path)}
+        for name, path in R1_ENTRY_SOURCE_FILES.items()
+    }
+    payload: dict[str, Any] = {
+        "schema": R1_ENTRY_SCHEMA,
+        "source_commit": source_commit,
+        "manifest_sha256": _sha256(manifest_path),
+        "manifest_stage": manifest["stage"],
+        "run_id": manifest["run_id"],
+        "entry": "WARM-100",
+        "steps": 100,
+        "prereg_sha256": _git_blob_sha256(source_root, source_commit, str(prereg_path.relative_to(source_root)).replace("\\", "/")),
+        "config_sha256": _git_blob_sha256(source_root, source_commit, str(config_path.relative_to(source_root)).replace("\\", "/")),
+        "fixed_prior_manifest_sha256": _git_blob_sha256(source_root, source_commit, str(fixed_prior_path.relative_to(source_root)).replace("\\", "/")),
+        "source_files": source_rows,
+        "dispatch": {
+            "surface": "ember-cli",
+            "authority": "ember-lab",
+            "consumer": "certified_train_launch.py",
+            "mode": "WARM-100",
+        },
+        "energy": {"boundary": "DEGRADED_PROXY", "disclosed": True},
+        "closed_boundary": {
+            "schema": "ember-r1-warm100-closed-boundary-v1",
+            "status": "PENDING_EXECUTION",
+            "ledger_complete": False,
+            "fixed_prior_bound": "",
+        },
+        "claim_boundary": dict(R1_ENTRY_CLAIM_BOUNDARY),
+        "result": "PREP_ONLY",
+    }
+    payload["closed_boundary"]["fixed_prior_bound"] = payload["fixed_prior_manifest_sha256"]
+    payload["receipt_sha256"] = hashlib.sha256(_r1_entry_canonical(payload)).hexdigest()
+    return validate_r1_warm100_entry(payload, source_root=source_root, manifest_path=manifest_path)
 
 
 def _artifact(root: Path, value: Any, field: str, errors: list[str]) -> Path | None:
@@ -1827,7 +2078,59 @@ def main(argv: list[str] | None = None) -> int:
     validate.add_argument("manifest", type=Path)
     validate.add_argument("--trusted-verifier-registry", type=Path)
     validate.add_argument("--trusted-verifier-registry-approval", type=Path)
+    entry = subparsers.add_parser(
+        "r1-entry",
+        help="emit a source-bound PREP_ONLY R1 WARM-100 entry receipt after canonical validation",
+    )
+    entry.add_argument("manifest", type=Path)
+    entry.add_argument("--source-commit", required=True)
+    entry.add_argument("--source-root", type=Path, required=True)
+    entry.add_argument("--prereg", type=Path, required=True)
+    entry.add_argument("--config", type=Path, required=True)
+    entry.add_argument("--fixed-prior", type=Path, required=True)
+    entry.add_argument("--trusted-verifier-registry", type=Path)
+    entry.add_argument("--trusted-verifier-registry-approval", type=Path)
+    entry.add_argument("--out", type=Path)
     args = parser.parse_args(argv)
+    if args.command == "r1-entry":
+        try:
+            expected_registry_sha256 = _load_trusted_verifier_registry_approval(
+                args.trusted_verifier_registry_approval
+            )
+            payload = build_r1_warm100_entry(
+                args.manifest,
+                source_commit=args.source_commit,
+                source_root=args.source_root,
+                prereg_path=args.prereg,
+                config_path=args.config,
+                fixed_prior_path=args.fixed_prior,
+                trusted_verifier_registry=args.trusted_verifier_registry,
+                expected_trusted_verifier_registry_sha256=expected_registry_sha256,
+            )
+            encoded = json.dumps(payload, sort_keys=True, indent=2) + "\n"
+            if args.out is not None:
+                args.out.parent.mkdir(parents=True, exist_ok=True)
+                args.out.write_text(encoded, encoding="utf-8")
+            print(encoded, end="")
+            return 0
+        except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as exc:
+            refusal: dict[str, Any] = {
+                "schema": "ember-r1-warm100-entry-refusal-v1",
+                "source_commit": args.source_commit,
+                "validator": "scripts/ember_restart/contract.py r1-entry",
+                "result": "REFUSED",
+                "valid": False,
+                "errors": [str(exc)],
+                "next_action": "author and validate the governed R1 WARM-100 manifest",
+                "claim_boundary": dict(R1_ENTRY_CLAIM_BOUNDARY),
+            }
+            refusal["receipt_sha256"] = hashlib.sha256(_r1_entry_canonical(refusal)).hexdigest()
+            encoded = json.dumps(refusal, sort_keys=True, indent=2) + "\n"
+            if args.out is not None:
+                args.out.parent.mkdir(parents=True, exist_ok=True)
+                args.out.write_text(encoded, encoding="utf-8")
+            print(encoded, end="")
+            return 1
     try:
         expected_registry_sha256 = _load_trusted_verifier_registry_approval(
             args.trusted_verifier_registry_approval

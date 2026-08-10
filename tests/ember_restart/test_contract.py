@@ -7,9 +7,17 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VALIDATOR = REPO_ROOT / "scripts" / "ember_restart" / "contract.py"
+
+
+def _current_source_commit() -> str:
+    return subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, text=True
+    ).strip()
 
 
 def _sha256(path: Path) -> str:
@@ -515,3 +523,198 @@ def test_checkpoint_candidate_binds_owned_multimodal_reasoning_tool_path(tmp_pat
     payload = json.loads(result.stdout)
     assert payload["valid"] is True
     assert payload["stage"] == "CHECKPOINT_CANDIDATE"
+
+
+def test_git_authority_probe_hides_windows_console(monkeypatch: pytest.MonkeyPatch):
+    from scripts.ember_restart import contract
+
+    observed: dict[str, object] = {}
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess:
+        observed["command"] = command
+        observed["kwargs"] = kwargs
+        return subprocess.CompletedProcess(command, 0, b"", "")
+
+    monkeypatch.setattr(contract.os, "name", "nt")
+    monkeypatch.setattr(contract.subprocess, "run", fake_run)
+
+    contract._run_git(REPO_ROOT, "status", "--porcelain=v1")
+
+    kwargs = observed["kwargs"]
+    assert isinstance(kwargs, dict)
+    assert kwargs["shell"] is False
+    assert kwargs["creationflags"] == subprocess.CREATE_NO_WINDOW
+
+
+def test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary(tmp_path: Path):
+    """The R1 entry producer must delegate admission to the canonical contract.
+
+    This is intentionally a PREP_ONLY artifact: no WARM-100 execution, result, or
+    sufficiency credit is implied until the governed Ember CLI -> Ember Lab path
+    supplies the missing runtime receipts.
+    """
+    from scripts.ember_restart.contract import build_r1_warm100_entry, validate_r1_warm100_entry
+
+    manifest_path = _candidate_manifest(tmp_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["source_commit"] = _current_source_commit()
+    _write_json(manifest_path, manifest)
+    payload = build_r1_warm100_entry(
+        manifest_path,
+        source_commit=manifest["source_commit"],
+        source_root=REPO_ROOT,
+        prereg_path=REPO_ROOT / "docs/spec/ember02-preregistration-v1.md",
+        config_path=REPO_ROOT / "configs/ember-restart-3b.json",
+        fixed_prior_path=REPO_ROOT / "manifests/ember-restart-3b/fixed-prior-manifest-v1.json",
+        trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
+    )
+    assert validate_r1_warm100_entry(payload, source_root=REPO_ROOT, manifest_path=manifest_path)
+    assert payload["entry"] == "WARM-100"
+    assert payload["result"] == "PREP_ONLY"
+    assert payload["claim_boundary"] == {
+        "steps": 100,
+        "execution": False,
+        "sufficiency": False,
+        "capability": False,
+        "benchmark": False,
+    }
+
+    for mutate in (
+        lambda candidate: candidate["dispatch"].update({"authority": "standalone-launcher"}),
+        lambda candidate: candidate["source_files"]["cli_train"].update({"sha256": "0" * 64}),
+        lambda candidate: candidate.update({"config_sha256": "0" * 64}),
+        lambda candidate: candidate.update({"receipt_sha256": "0" * 64}),
+    ):
+        tampered = json.loads(json.dumps(payload))
+        mutate(tampered)
+        try:
+            validate_r1_warm100_entry(tampered, source_root=REPO_ROOT, manifest_path=manifest_path)
+        except ValueError:
+            continue
+        raise AssertionError("tampered R1 entry was accepted")
+
+
+def test_r1_warm100_entry_rejects_stale_source_commit(tmp_path: Path):
+    """A reachable but stale source tree cannot mint a current R1 entry."""
+    from scripts.ember_restart.contract import build_r1_warm100_entry
+
+    current = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, text=True
+    ).strip()
+    stale = subprocess.check_output(
+        ["git", "rev-parse", "HEAD^"], cwd=REPO_ROOT, text=True
+    ).strip()
+    assert stale and stale != current
+    manifest_path = _candidate_manifest(tmp_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["source_commit"] = stale
+    _write_json(manifest_path, manifest)
+
+    with pytest.raises(ValueError, match="current source commit"):
+        build_r1_warm100_entry(
+            manifest_path,
+            source_commit=stale,
+            source_root=REPO_ROOT,
+            prereg_path=REPO_ROOT / "docs/spec/ember02-preregistration-v1.md",
+            config_path=REPO_ROOT / "configs/ember-restart-3b.json",
+            fixed_prior_path=REPO_ROOT / "manifests/ember-restart-3b/fixed-prior-manifest-v1.json",
+            trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
+        )
+
+
+def test_r1_warm100_entry_rejects_dirty_source_tree(tmp_path: Path):
+    """A dirty checkout cannot mint a source-authoritative R1 entry."""
+    from scripts.ember_restart.contract import build_r1_warm100_entry
+
+    manifest_path = _candidate_manifest(tmp_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["source_commit"] = _current_source_commit()
+    _write_json(manifest_path, manifest)
+    dirty_path = REPO_ROOT / "docs/ember-restart/r1-warm100-entry-v1.md"
+    original = dirty_path.read_bytes()
+    try:
+        dirty_path.write_bytes(original + b"\nlocal-dirty-source\n")
+        with pytest.raises(ValueError, match="source tree is dirty"):
+            build_r1_warm100_entry(
+                manifest_path,
+                source_commit=manifest["source_commit"],
+                source_root=REPO_ROOT,
+                prereg_path=REPO_ROOT / "docs/spec/ember02-preregistration-v1.md",
+                config_path=REPO_ROOT / "configs/ember-restart-3b.json",
+                fixed_prior_path=REPO_ROOT / "manifests/ember-restart-3b/fixed-prior-manifest-v1.json",
+                trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
+            )
+    finally:
+        dirty_path.write_bytes(original)
+
+
+def test_r1_warm100_entry_cli_emits_path_free_receipt(tmp_path: Path):
+    manifest_path = _candidate_manifest(tmp_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["source_commit"] = _current_source_commit()
+    _write_json(manifest_path, manifest)
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            "r1-entry",
+            str(manifest_path),
+            "--source-commit",
+            manifest["source_commit"],
+            "--source-root",
+            str(REPO_ROOT),
+            "--prereg",
+            str(REPO_ROOT / "docs/spec/ember02-preregistration-v1.md"),
+            "--config",
+            str(REPO_ROOT / "configs/ember-restart-3b.json"),
+            "--fixed-prior",
+            str(REPO_ROOT / "manifests/ember-restart-3b/fixed-prior-manifest-v1.json"),
+            "--trusted-verifier-registry",
+            str(tmp_path / "trusted-verifiers.json"),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["schema"] == "ember-r1-warm100-entry-v1"
+    assert payload["result"] == "PREP_ONLY"
+    assert all("\\" not in row["path"] and ":" not in row["path"] for row in payload["source_files"].values())
+
+
+def test_r1_warm100_entry_cli_refusal_is_content_addressed(tmp_path: Path):
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            "r1-entry",
+            str(REPO_ROOT / "configs/ember-restart-3b.json"),
+            "--source-commit",
+            "60c0c6fe8d2fe66e10be4e1168d8be560642d954",
+            "--source-root",
+            str(REPO_ROOT),
+            "--prereg",
+            str(REPO_ROOT / "docs/spec/ember02-preregistration-v1.md"),
+            "--config",
+            str(REPO_ROOT / "configs/ember-restart-3b.json"),
+            "--fixed-prior",
+            str(REPO_ROOT / "manifests/ember-restart-3b/fixed-prior-manifest-v1.json"),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert payload["schema"] == "ember-r1-warm100-entry-refusal-v1"
+    assert payload["source_commit"] == "60c0c6fe8d2fe66e10be4e1168d8be560642d954"
+    assert payload["result"] == "REFUSED"
+    assert payload["claim_boundary"]["execution"] is False
+    assert payload["next_action"] == "author and validate the governed R1 WARM-100 manifest"
+    unsigned = {key: value for key, value in payload.items() if key != "receipt_sha256"}
+    assert payload["receipt_sha256"] == hashlib.sha256(
+        (json.dumps(unsigned, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    ).hexdigest()
