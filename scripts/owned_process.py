@@ -335,7 +335,8 @@ class OwnedProcessRunner:
             self._kill_posix_group(proc.pid)
             stdout, stderr = proc.communicate(timeout=5)
         finally:
-            self._kill_posix_group(proc.pid)
+            if not timed_out:
+                self._kill_posix_group(proc.pid)
             os.close(death_write_fd)
         return OwnedProcessResult(
             argv,
