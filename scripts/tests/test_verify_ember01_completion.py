@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import shutil
 import json
 import subprocess
@@ -22,6 +23,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import verify_ember01_completion as completion  # noqa: E402
+from ember_01_identity.cond4_battery_surface import (  # noqa: E402
+    completion_verifier_binding_valid,
+    cond4_receipt_transition_valid,
+)
 
 
 def _live_issue(number: int = 7, title: str = "Live obligation") -> dict:
@@ -1250,10 +1255,44 @@ def test_committed_cond4_receipt_binds_shipping_verifiers_and_all_axes() -> None
             / "cond4-tamper-battery-bf20f050-v1.json"
         ).read_text(encoding="utf-8")
     )
+    marker = receipt["verification"]["cond4_battery_execution"]
+    current_source = (REPO_ROOT / "scripts" / "verify_ember01_completion.py").read_bytes()
+    assert marker["completion_verifier_surface_sha256"] == receipt["implementation"][
+        "completion_verifier"
+    ]["battery_surface"]["sha256"]
+    assert marker["result"] == "PASS"
 
-    for binding in receipt["implementation"].values():
+    base_ref = os.environ.get("EMBER_COND4_BASE_SHA", "HEAD^1")
+    base_source = subprocess.run(
+        ["git", "show", f"{base_ref}:scripts/verify_ember01_completion.py"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+    ).stdout
+    base_receipt = json.loads(
+        subprocess.run(
+            [
+                "git",
+                "show",
+                f"{base_ref}:receipts/ember-01-completion/cond4-tamper-battery-bf20f050-v1.json",
+            ],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    )
+    assert cond4_receipt_transition_valid(
+        base_source, current_source, base_receipt, receipt
+    )
+
+    for name, binding in receipt["implementation"].items():
         path = REPO_ROOT / binding["path"]
-        assert hashlib.sha256(path.read_bytes()).hexdigest() == binding["sha256"]
+        source = path.read_bytes()
+        if name == "completion_verifier":
+            assert completion_verifier_binding_valid(source, binding)
+        else:
+            assert hashlib.sha256(source).hexdigest() == binding["sha256"]
     identity_binding = receipt["subject"]["identity_manifest"]
     assert (
         hashlib.sha256((REPO_ROOT / identity_binding["path"]).read_bytes()).hexdigest()

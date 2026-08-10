@@ -29,11 +29,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.12"
-      - run: python -m pip install "PyYAML==6.0.2"
+      - run: python -m pip install "pytest==8.4.1" "PyYAML==6.0.2"
       - name: Compile changed governance tooling
         run: python -B -m compileall -q scripts/github
       - name: Bootstrap exact-head live PR policy (read-only)
@@ -59,6 +60,14 @@ jobs:
             --snapshot-output "${RUNNER_TEMP}/pr-policy-snapshot.json"
       - name: Run deterministic policy tests
         run: python -B -m unittest discover -s scripts/github -p "test_*.py" -v
+      - name: Enforce Cond-4 battery surface transition
+        if: github.event_name == 'pull_request'
+        env:
+          EMBER_COND4_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          python -B -m pytest -q \
+            scripts/tests/test_issue1396_cond4_surface.py \
+            scripts/tests/test_verify_ember01_completion.py -k "cond4"
       - name: Verify text-lab input identity pins are fresh
         run: python -B tools/ember-restart-3b/remint_text_lab_input_identity.py --check
       - name: Run text-lab identity freshness regressions
