@@ -1,0 +1,25 @@
+{
+  "schema": "ember-timeshare-importer-classification-v1",
+  "source": "scripts/timeshare_pretrain.py",
+  "source_sha256": "9f998ba64836e39d3cc530d963846802de2ead1334d791aba9083acdc2d7b866",
+  "import_denial": "execution_only",
+  "rows_derived": "AST direct imports plus current header goal_id",
+  "importers": [
+    {"path": "scripts/c04_harness.py", "classification": "historical_only", "import_outcome": "importable", "sha256": "3598f8e263246a477b81ba69614ee3bbbdcab5078e5c6d9893b0a95de4419f6b"},
+    {"path": "scripts/cbase_grow_live.py", "classification": "historical_only", "import_outcome": "importable", "sha256": "94a1a34e2ff079ae4d622607f0bd3643f60d82988bae11ea593ae4160f302268"},
+    {"path": "scripts/cbase_grow_rung.py", "classification": "historical_only", "import_outcome": "execution_denied_by_own_guard", "sha256": "5fd9df2559d814614dc651b7ddcfa0fec41978fb53ea7e467f591c50512fff52"},
+    {"path": "scripts/cbase_grow_rung2_stabilize.py", "classification": "historical_only", "import_outcome": "importable", "sha256": "ac60ef492330b692911c4142b4bdfa489853e332ffbf5d7078c60c24a93b4225"},
+    {"path": "scripts/ember_cbase_mixture.py", "classification": "historical_only", "import_outcome": "execution_denied_by_own_guard", "sha256": "2b74e18b585d50c4b092a21c3bbeb18694bcabd37b1d20a580dd3742221fda36"},
+    {"path": "scripts/ember_ceff_closure_confirmation.py", "classification": "historical_only", "import_outcome": "importable", "sha256": "733e368b5a15905066672afe53ac3c76fb0ff9f6305c485bbfef1645649a6d36"},
+    {"path": "scripts/ember_ceff_composition_ab.py", "classification": "historical_only", "import_outcome": "importable", "sha256": "2b50e163b94254b47b2d7ead5ac65787e9a39861fd6f3331bb10953a7a301a10"},
+    {"path": "scripts/exp711_intervals.py", "classification": "historical_only", "import_outcome": "importable", "sha256": "8eeb84f10cfd1c6c0f94655431f4643b3c75675c08c564f5cec48f4b63fc6bff"},
+    {"path": "scripts/p1_envelope_sweep.py", "classification": "historical_only", "import_outcome": "importable", "sha256": "3e12a6c92302a3574f8935bf5af6fdc8ef93a017bd8efe4a24decc9bbbad23d2"},
+    {"path": "scripts/p5_ratio_audit/run_p5_audit.py", "classification": "historical_only", "import_outcome": "importable", "sha256": "b6a07432ee14225be3df5d69017e8431195e5d5b7de0d0ee008cd705417a14e0"},
+    {"path": "scripts/screen792_bf16_momentum.py", "classification": "historical_only", "import_outcome": "importable", "sha256": "07cedca7193a10c38a9c864a5ce21276796824b5e075e4b196436c3ccc198498"},
+    {"path": "scripts/test_580_optimizer_id_helper.py", "classification": "historical_only", "import_outcome": "importable", "sha256": "494083c9b495c2d38aa773491e6ccb2deada0484802ab8f46d1664e6629997d7"},
+    {"path": "scripts/train_multimodal_v0.py", "classification": "historical_only", "import_outcome": "execution_denied_by_own_guard", "sha256": "5761bc1e78a1c550909d5f9d217886c163b83d360e821d16a0cf8e4023b6bf4a"},
+    {"path": "scripts/w1_baseline_replay_closure.py", "classification": "historical_only", "import_outcome": "importable", "sha256": "d956a58ae3761f02e3a596c989caa09e9a311dcb92ba105b26611279609b309b"},
+    {"path": "scripts/w1_collapse_control_run.py", "classification": "historical_only", "import_outcome": "importable", "sha256": "af5f09343459ba3b375c2576d27cc9065d7a9fd131b702b7bc8c943c358be88e"},
+    {"path": "scripts/w1_fullstate_resume_verify.py", "classification": "historical_only", "import_outcome": "importable", "sha256": "b318369cf1f0af53ec23ec0bd24c9446ae63d940b0fc93bb447da96cd28a730f"}
+  ]
+}

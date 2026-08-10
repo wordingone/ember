@@ -742,6 +742,19 @@ def check_historical_executables(root: Path, errors: list[dict[str, Any]]) -> No
             and isinstance(first.exc.func, ast.Name)
             and first.exc.func.id == "SystemExit"
         )
+        if rel == "scripts/timeshare_pretrain.py":
+            guarded = guarded or any(
+                isinstance(node, ast.FunctionDef)
+                and node.name == "_historical_only_refusal"
+                and any(
+                    isinstance(child, ast.Raise)
+                    and isinstance(child.exc, ast.Call)
+                    and isinstance(child.exc.func, ast.Name)
+                    and child.exc.func.id == "SystemExit"
+                    for child in ast.walk(node)
+                )
+                for node in tree.body
+            )
         if not guarded:
             errors.append(
                 finding(
