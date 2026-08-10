@@ -2186,6 +2186,7 @@ def _write_execution_receipt(
     receipt_path: pathlib.Path | None = None,
     runner_receipt_path: pathlib.Path | None = None,
     run_attempt_registry: list[dict[str, Any]] | None = None,
+    prelaunch_refusal: dict[str, str] | None = None,
 ) -> pathlib.Path:
     receipt_path = receipt_path or _execution_receipt_path(launch)
     receipt = {
@@ -2210,6 +2211,8 @@ def _write_execution_receipt(
             "competitiveness_claimed": False,
         },
     }
+    if prelaunch_refusal is not None:
+        receipt["prelaunch_refusal"] = prelaunch_refusal
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
         mode="wb",
@@ -2234,6 +2237,45 @@ def _execution_receipt_path(launch: ValidatedLaunch) -> pathlib.Path:
 
 ENERGY_SIDECAR_BASELINE_WAIT_S = 120.0
 ENERGY_SIDECAR_FINALIZE_WAIT_S = 60.0
+
+CHAINED_SPECIALIST_SAME_MANIFEST_REFUSED = (
+    "CHAINED_SPECIALIST_SAME_MANIFEST_REFUSED"
+)
+
+
+def _chained_specialist_prelaunch_refusal(
+    launch: ValidatedLaunch,
+) -> dict[str, str] | None:
+    """Refuse the unsupported same-manifest second specialist hop (#1445)."""
+
+    if (
+        launch.specialist_data_manifest is None
+        or launch.specialist_parent_manifest is None
+    ):
+        return None
+    parent = _load_json(
+        launch.specialist_parent_manifest, "specialist parent checkpoint manifest"
+    )
+    lineage = parent.get("lineage")
+    episode = lineage.get("episode") if isinstance(lineage, dict) else None
+    verification = (
+        episode.get("data_verification_receipt")
+        if isinstance(episode, dict)
+        else None
+    )
+    prior_manifest_sha256 = (
+        verification.get("data_manifest_sha256")
+        if isinstance(verification, dict)
+        else None
+    )
+    if prior_manifest_sha256 != _file_sha256(
+        launch.specialist_data_manifest, "training data manifest"
+    ):
+        return None
+    return {
+        "code": CHAINED_SPECIALIST_SAME_MANIFEST_REFUSED,
+        "outcome": "PRELAUNCH_REJECTED",
+    }
 
 
 def _start_energy_sidecar(
@@ -2345,6 +2387,22 @@ def execute_validated_launch(
 ) -> int:
     repo_root = pathlib.Path(repo_root)
     argv = build_runner_argv(repo_root, launch)
+    prelaunch_refusal = _chained_specialist_prelaunch_refusal(launch)
+    if prelaunch_refusal is not None:
+        # Exit 125 is the established PRELAUNCH_REJECTED runner boundary.  No
+        # runner/sidecar/attempt is started, but the certified receipt records
+        # the stable refusal code so this cannot look like a silent no-op.
+        _write_execution_receipt(
+            launch,
+            argv,
+            125,
+            energy_sidecar={
+                "spawned": False,
+                "note": "sidecar not spawned: certified prelaunch refusal",
+            },
+            prelaunch_refusal=prelaunch_refusal,
+        )
+        return 125
     # argv is certificate-visible (an execution receipt pins argv[1] to the
     # fixed runner path) so bytecode suppression rides the spawn env instead
     # of an -B argv insertion, which would shift that pinned position.
