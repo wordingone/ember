@@ -253,6 +253,48 @@ class RunnerPreflightTests(unittest.TestCase):
             })
             self.assertNotIn("private", json.dumps(events[-1]))
 
+    def test_post_publication_housekeeping_failure_emits_safe_checkpoint_locator(self) -> None:
+        records = [
+            {"active_expert": "vision", "scene_split": "train", "token_ids": [1], "row_id": "train"},
+            {"active_expert": "vision", "scene_split": "validation", "token_ids": [2], "row_id": "validation"},
+            {"active_expert": "vision", "scene_split": "test", "token_ids": [3], "row_id": "test"},
+        ]
+        verification = {"result": "VERIFIED", "capability": "image", "records_artifact_sha256": "a" * 64}
+        with tempfile.TemporaryDirectory() as directory:
+            channel = Path(directory) / "ember-telemetry.jsonl"
+            error = run_vertical_slice.PublishedHousekeepingError(
+                published_checkpoint_id="checkpoint-continue-seed-830001-from-step-204",
+                cause=RuntimeError("retention failed at B:/private/custody"),
+            )
+            with patch.object(run_vertical_slice, "load_verified_specialist_records", return_value=(records, verification, b"{}")), patch.object(
+                run_vertical_slice,
+                "specialist_lineage_request",
+                side_effect=lambda **kwargs: {"parent_manifest": "parent", "root_manifest": "root", "execution_slice": kwargs["execution_slice"], "scene_split_selection": kwargs["scene_split_selection"]},
+            ), patch.object(run_vertical_slice, "run", side_effect=error), self.assertRaises(run_vertical_slice.PublishedHousekeepingError):
+                run_vertical_slice.run_specialist(
+                    seed=84, artifact_root=Path("B:/ember-artifacts"), data_manifest=Path("data/vision.json"),
+                    tokenizer_path=Path("tokenizer.json"), capability="image", resume_checkpoint=Path("B:/parent"),
+                    parent_manifest=Path("B:/parent/checkpoint-manifest.json"), root_manifest=Path("B:/root/checkpoint-manifest.json"),
+                    checkpoint_interval=8192, write_budget_bytes=120 * 1024**3, start_record=0, max_records=1,
+                    telemetry_path=channel, telemetry_run_id="vision-v4", model_chat_restore_not_before="2026-07-18T11:00:00-07:00",
+                )
+            terminal = json.loads(channel.read_text(encoding="utf-8").splitlines()[-1])
+            self.assertEqual(terminal["payload"], {
+                "failure_class": "PUBLISHED_HOUSEKEEPING_FAILED",
+                "last_completed_step": 0,
+                "model_chat": "OFFLINE",
+                "phase": "PUBLISHED_HOUSEKEEPING_FAILED",
+                "published_checkpoint_id": "checkpoint-continue-seed-830001-from-step-204",
+                "restore_not_before": "2026-07-18T11:00:00-07:00",
+                "run_id": "vision-v4",
+            })
+            self.assertNotIn("B:/", json.dumps(terminal))
+
+        with self.assertRaisesRegex(ValueError, "locator"):
+            run_vertical_slice.PublishedHousekeepingError(
+                published_checkpoint_id="B:/private/checkpoint-204", cause=RuntimeError("retention"),
+            )
+
     def test_specialist_loader_ignores_ambient_pythonpath_and_prioritizes_canonical_verifier(self) -> None:
         """The independent verifier must never import ambient generator/tokenizer modules."""
         from build_specialist_bundle import emit_bundle
@@ -408,6 +450,7 @@ class RunnerPreflightTests(unittest.TestCase):
         contract = ROOT / "configs" / "ember-restart-3b.json"
         self.assertTrue(hasattr(run_vertical_slice, "checkpoint_retention_budget_bytes"))
         self.assertEqual(run_vertical_slice.checkpoint_retention_budget_bytes(contract), 24 * 1024**3)
+        self.assertEqual(run_vertical_slice.checkpoint_quarantine_budget_bytes(contract), 24 * 1024**3)
     def test_runtime_loads_the_exact_bf16_memory_contract(self) -> None:
         self.assertTrue(hasattr(run_vertical_slice, "load_memory_contract"))
         memory = run_vertical_slice.load_memory_contract(ROOT / "configs" / "ember-restart-3b.json")
@@ -2148,7 +2191,16 @@ class RunnerPreflightTests(unittest.TestCase):
                 last_checkpointed_step=0, deferral_state=state, publish=publish,
                 telemetry_path=None, telemetry_run_id=None, policy_path=policy_path,
             )
-            self.assertEqual(result, published)
+            self.assertEqual(result, ({
+                "checkpoint": "ok",
+                "retention_accounting": {
+                    "schema_version": "ember-checkpoint-retention-accounting-v1",
+                    "live_budget_bytes": 1024**3,
+                    "live_charged_bytes": 0,
+                    "quarantine_budget_bytes": 1024**3,
+                    "quarantine_charged_bytes": 0,
+                },
+            }, published[1]))
             self.assertEqual(state["count"], 0)
             self.assertFalse((checkpoint_parent / ".checkpoint-deferrals").exists())
 
