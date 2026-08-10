@@ -6,6 +6,31 @@ export const REFERENCE_SEAT_FLAG = "--reference-seat";
 
 export type ModelSeat = "OWNED_ADMITTED" | "OWNED_DEVELOPMENT" | "REFERENCE_ONLY" | "OFFLINE";
 
+/** The operator-visible seat lifecycle.  This is a projection of the existing
+ * model-seat authority, not a second launcher or ownership registry. */
+export type ModelSeatPhase = "ABSENT" | "LOADING" | "RESIDENT";
+
+export type ModelSeatState =
+  | { phase: "ABSENT"; owner?: string; endpoint?: never; vramBytes?: never }
+  | { phase: "LOADING"; owner?: string; endpoint?: never; vramBytes?: never }
+  | { phase: "RESIDENT"; owner: string; endpoint: string; vramBytes: number };
+
+/** Runtime fail-closed guard for stale or untyped cockpit state.  Internal
+ * callers get the discriminated-union guarantee above; this guard prevents a
+ * malformed external value from ever being displayed as resident. */
+export function normalizeModelSeatState(state: ModelSeatState): ModelSeatState {
+  if (state.phase !== "RESIDENT") return state;
+  if (
+    typeof state.owner === "string" && state.owner.trim() !== "" &&
+    typeof state.endpoint === "string" && state.endpoint.trim() !== "" &&
+    typeof state.vramBytes === "number" &&
+    Number.isSafeInteger(state.vramBytes) && state.vramBytes >= 0
+  ) {
+    return state;
+  }
+  return { phase: "ABSENT" };
+}
+
 interface OwnedServerLaunchBase {
   pythonExecutable: string;
   serverPath: string;
@@ -68,6 +93,10 @@ export interface OwnedModelIdentity {
    * served identity's `modelConfigSha256` above (see `selectedModelContract`).
    */
   modelConfigCapabilities?: ModelConfigCapabilities;
+}
+
+export interface OwnedResidentIdentity extends OwnedModelIdentity {
+  vramBytes: number;
 }
 
 const MODEL_FREE_FAST_FLAGS = new Set([
