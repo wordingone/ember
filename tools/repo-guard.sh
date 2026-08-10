@@ -446,7 +446,27 @@ RANGE=""
 if [ "${1:-}" = "--range" ] && [ -n "${2:-}" ]; then
   RANGE="$2"
 elif [ "${1:-}" = "--base" ] && [ -n "${2:-}" ]; then
-  RANGE="$(git merge-base "$2" HEAD)..HEAD"
+  if [ "${REPO_GUARD_PR_MERGE_SUBJECT:-}" = "true" ]; then
+    # pull_request_target checks run against refs/pull/<n>/merge. Its first
+    # parent is the live base actually used to construct that merge subject;
+    # the event payload's base SHA can lag behind it. Scanning from the stale
+    # payload base blames later PRs for squash commits already on the live base.
+    LIVE_MERGE_PARENT="$(git rev-parse --verify HEAD^1 2>/dev/null || true)"
+    MERGE_HEAD_PARENT="$(git rev-parse --verify HEAD^2 2>/dev/null || true)"
+    if [ -z "$LIVE_MERGE_PARENT" ] || [ -z "$MERGE_HEAD_PARENT" ]; then
+      fail "range" "PR merge subject is not a two-parent merge commit"
+      RANGE="$2..HEAD"
+    elif ! git merge-base --is-ancestor "$2" "$LIVE_MERGE_PARENT" 2>/dev/null; then
+      fail "range" "event base is not reachable from the live PR merge parent"
+      RANGE="$2..HEAD"
+    else
+      # Exclude the exact live first parent while retaining every
+      # branch-authored commit reachable only through the second parent.
+      RANGE="$LIVE_MERGE_PARENT..HEAD"
+    fi
+  else
+    RANGE="$(git merge-base "$2" HEAD)..HEAD"
+  fi
 fi
 # ---- 8b. every changed receipt must pass the fail-closed schema floor -----
 # Historical debt remains visible to `receipt_check.py --all`, but it cannot
