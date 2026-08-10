@@ -9,6 +9,7 @@ import net from "node:net";
 import {
   callEmberLab,
   configuredEmberLabPipe,
+  identifyEmberLabRuntime,
   pingEmberLab,
 } from "./ember-lab-rpc.ts";
 import { operatorPipeName } from "./operator-pipe.ts";
@@ -118,6 +119,50 @@ winTest("pingEmberLab sends one exact JSON-RPC ping and accepts only its matchin
 
   await expect(pingEmberLab({ pipeName: pipe, requestId: "p2c-ping", timeoutMs: 500 })).resolves.toBeUndefined();
   expect(requests).toEqual([{ jsonrpc: "2.0", id: "p2c-ping", method: "ping", params: {} }]);
+});
+
+winTest("identifyEmberLabRuntime returns one closed resident process identity", async () => {
+  const pipe = `\\\\.\\pipe\\ember-lab-runtime-${process.pid}-${Math.random().toString(16).slice(2)}`;
+  const server = net.createServer((socket) => {
+    socket.setEncoding("utf8");
+    socket.once("data", (line: string) => {
+      const request = JSON.parse(line) as { id: string; method: string };
+      expect(request.method).toBe("runtime_identity");
+      socket.end(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { schema_version: "ember-lab-runtime-identity-v1", pid: 4321 },
+      }) + "\n");
+    });
+  });
+  servers.push(server);
+  await new Promise<void>((resolve, reject) => server.listen(pipe, () => resolve()).once("error", reject));
+
+  await expect(identifyEmberLabRuntime({ pipeName: pipe, requestId: "runtime" }))
+    .resolves.toEqual({ schema_version: "ember-lab-runtime-identity-v1", pid: 4321 });
+});
+
+winTest("identifyEmberLabRuntime refuses malformed or widened identities", async () => {
+  const malformed = [
+    { schema_version: "ember-lab-runtime-identity-v1", pid: 0 },
+    { schema_version: "ember-lab-runtime-identity-v0", pid: 4321 },
+    { schema_version: "ember-lab-runtime-identity-v1", pid: 4321, owner: "caller" },
+  ];
+  for (const [index, result] of malformed.entries()) {
+    const pipe = `\\\\.\\pipe\\ember-lab-runtime-invalid-${process.pid}-${index}-${Math.random().toString(16).slice(2)}`;
+    const server = net.createServer((socket) => {
+      socket.setEncoding("utf8");
+      socket.once("data", (line: string) => {
+        const request = JSON.parse(line) as { id: string };
+        socket.end(JSON.stringify({ jsonrpc: "2.0", id: request.id, result }) + "\n");
+      });
+    });
+    servers.push(server);
+    await new Promise<void>((resolve, reject) => server.listen(pipe, () => resolve()).once("error", reject));
+
+    await expect(identifyEmberLabRuntime({ pipeName: pipe, requestId: `invalid-${index}` }))
+      .rejects.toThrow("runtime identity result is malformed");
+  }
 });
 
 winTest("pingEmberLab rejects an idle response at the bounded deadline", async () => {
