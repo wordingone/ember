@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """cbase_grow_rung2_gpu_offload_probe.py — DEV-002 cure-PR follow-up:
 MEASURED GPU-peak probe for the CPU-offloaded optimizer config (PR #429,
 issue #411).
@@ -64,7 +67,6 @@ import sys
 import tempfile
 import threading
 import time
-import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -79,6 +81,7 @@ from cpu_offload_adamw import (                                      # noqa: E40
     estimate_required_gib_offloaded, vram_preflight, nvidia_smi_vram,
 )
 from receipt_write import checked_write                              # noqa: E402
+from endpoint_identity import assert_board_endpoint_identity          # noqa: E402
 import timeshare_pretrain as ts                                      # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
@@ -112,12 +115,7 @@ def _ts() -> str:
 
 
 def _probe_server(url: str) -> dict:
-    try:
-        with urllib.request.urlopen(url, timeout=5) as resp:
-            body = resp.read().decode("utf-8", errors="replace")
-            return {"reachable": True, "status_code": resp.status, "body": body}
-    except Exception as e:
-        return {"reachable": False, "error": str(e)}
+    return assert_board_endpoint_identity(url, "27b")
 
 
 def _nvidia_smi_vram_resilient(retries: int = 3, backoff_s: float = 1.0) -> dict:
