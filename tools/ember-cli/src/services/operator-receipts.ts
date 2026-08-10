@@ -13,7 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
 
-export type OperatorReceiptEvent = "pipe_connected" | "prompt_injected" | "command_completed" | "response_rendered";
+export type OperatorReceiptEvent = "pipe_connected" | "prompt_injected" | "command_completed" | "response_rendered" | "start_parameters_confirmed";
 
 export interface OperatorReceiptRow {
   ts: string;

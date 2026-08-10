@@ -367,6 +367,7 @@ pub struct JobSpec {
     env: BTreeMap<String, String>,
     restart_policy: RestartPolicy,
     maximum_job_memory_bytes: Option<u64>,
+    cpu_rate_percent: Option<u32>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -432,6 +433,7 @@ pub struct DispatchWorkloadProfile {
     pub profile_id: DispatchWorkloadProfileId,
     pub pinned_host_producers: Vec<DispatchPinnedHostProducer>,
     pub requires_ui_responsiveness: bool,
+    pub cpu_rate_percent: u32,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -491,6 +493,7 @@ impl JobSpec {
             env: BTreeMap::new(),
             restart_policy: RestartPolicy::Never,
             maximum_job_memory_bytes: None,
+            cpu_rate_percent: None,
         }
     }
     pub fn with_env<K: Into<String>, V: Into<String>>(mut self, key: K, value: V) -> Self {
@@ -505,6 +508,11 @@ impl JobSpec {
 
     pub fn with_maximum_job_memory_bytes(mut self, maximum_job_memory_bytes: u64) -> Self {
         self.maximum_job_memory_bytes = Some(maximum_job_memory_bytes);
+        self
+    }
+
+    pub fn with_cpu_rate_percent(mut self, cpu_rate_percent: u32) -> Self {
+        self.cpu_rate_percent = Some(cpu_rate_percent);
         self
     }
 }
@@ -2078,7 +2086,8 @@ impl Daemon {
             manifest.args,
             resource_lease.clone(),
         )
-        .with_maximum_job_memory_bytes(manifest.maximum_job_memory_bytes);
+        .with_maximum_job_memory_bytes(manifest.maximum_job_memory_bytes)
+        .with_cpu_rate_percent(manifest.workload_profile.cpu_rate_percent);
         for (key, value) in manifest.env {
             spec = spec.with_env(key, value);
         }
@@ -2338,7 +2347,7 @@ impl Daemon {
             )?;
             tx.execute(
                 "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_start_reserved',?3)",
-                params![spec.job_id, now_ms(), json!({"job_object_name":job_object_name}).to_string()],
+                params![spec.job_id, now_ms(), json!({"job_object_name":job_object_name,"cpu_rate_percent":spec.cpu_rate_percent}).to_string()],
             )?;
             tx.commit()?;
         }
@@ -2367,7 +2376,7 @@ impl Daemon {
             }
             tx.execute(
                 "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_prepared',?3)",
-                params![spec.job_id, now_ms(), json!({"pid":pid,"job_object_name":job_object_name}).to_string()],
+                params![spec.job_id, now_ms(), json!({"pid":pid,"job_object_name":job_object_name,"cpu_rate_percent":spec.cpu_rate_percent}).to_string()],
             )?;
             tx.commit()?;
             Ok(())
@@ -4718,6 +4727,11 @@ fn validate_dispatch_workload_profile(
     maximum_job_memory_bytes: u64,
     simulated_peak_commit_bytes: u64,
 ) -> Result<()> {
+    if !(1..=100).contains(&profile.cpu_rate_percent) {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "dispatch workload CPU rate must be between 1 and 100 percent".into(),
+        });
+    }
     if profile.pinned_host_producers.is_empty() {
         return Err(EmberLabError::InvalidDispatchManifest {
             detail: "dispatch workload profile has no pinned-host producer budget".into(),
@@ -6103,8 +6117,10 @@ fn spawn_managed(
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Foundation::{DuplicateHandle, DUPLICATE_SAME_ACCESS};
     use windows_sys::Win32::System::JobObjects::{
-        CreateJobObjectW, JobObjectExtendedLimitInformation, SetInformationJobObject,
-        TerminateJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_JOB_MEMORY,
+        CreateJobObjectW, JobObjectCpuRateControlInformation, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, TerminateJobObject, JOBOBJECT_CPU_RATE_CONTROL_INFORMATION,
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_CPU_RATE_CONTROL_ENABLE,
+        JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP, JOB_OBJECT_LIMIT_JOB_MEMORY,
         JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     };
     use windows_sys::Win32::System::Threading::{
@@ -6120,6 +6136,9 @@ fn spawn_managed(
         .map_err(|_| EmberLabError::InvalidDispatchManifest {
             detail: "maximum job memory does not fit the current Windows address space".into(),
         })?;
+    let cpu_rate = spec
+        .cpu_rate_percent
+        .map(|percent| percent.saturating_mul(100));
 
     unsafe { windows_sys::Win32::Foundation::SetLastError(0) };
     let name = wide(job_name);
@@ -6153,6 +6172,26 @@ fn spawn_managed(
         let error = std::io::Error::last_os_error();
         unsafe { windows_sys::Win32::Foundation::CloseHandle(job) };
         return Err(error.into());
+    }
+
+    if let Some(cpu_rate) = cpu_rate {
+        let mut cpu: JOBOBJECT_CPU_RATE_CONTROL_INFORMATION = unsafe { zeroed() };
+        cpu.ControlFlags =
+            JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP;
+        cpu.Anonymous.CpuRate = cpu_rate;
+        if unsafe {
+            SetInformationJobObject(
+                job,
+                JobObjectCpuRateControlInformation,
+                (&cpu as *const JOBOBJECT_CPU_RATE_CONTROL_INFORMATION).cast(),
+                size_of::<JOBOBJECT_CPU_RATE_CONTROL_INFORMATION>() as u32,
+            )
+        } == 0
+        {
+            let error = std::io::Error::last_os_error();
+            unsafe { windows_sys::Win32::Foundation::CloseHandle(job) };
+            return Err(error.into());
+        }
     }
 
     let inherited_stdio = (|| -> Result<(OwnedHandle, OwnedHandle, OwnedHandle)> {
