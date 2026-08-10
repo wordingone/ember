@@ -13,7 +13,18 @@
   "implementation": {
     "completion_verifier": {
       "path": "scripts/verify_ember01_completion.py",
-      "sha256": "56393b4de9051d74a02a01fef077fe3a501e8fec39dd38e4d4302f42b76f177c"
+      "sha256": "56393b4de9051d74a02a01fef077fe3a501e8fec39dd38e4d4302f42b76f177c",
+      "battery_surface": {
+        "schema": "ember-cond4-battery-surface-v4",
+        "symbols": [
+          "VALIDATE_IDENTITY_REL",
+          "run",
+          "_flipped_sha256",
+          "_identity_tamper_mutants",
+          "_run_identity_tamper_battery"
+        ],
+        "sha256": "c3d65d2d7c4bbe21cc4daf83dabde8cec0bc3061cfa0b7435b0a736f74e24b2e"
+      }
     },
     "issue_census_builder": {
       "path": "scripts/ember_01_custody/issue_census.py",
@@ -127,6 +138,23 @@
     }
   },
   "verification": {
+    "cond4_battery_execution": {
+      "schema": "ember-cond4-battery-execution-v1",
+      "completion_verifier_surface_sha256": "c3d65d2d7c4bbe21cc4daf83dabde8cec0bc3061cfa0b7435b0a736f74e24b2e",
+      "output_sha256": "a6b33f19029012b20fcbbadfc57eb058250fa3ef8b8674a6de266e80cfcdd9a6",
+      "executed_at": "2026-08-03T21:41:38Z",
+      "command": [
+        "python",
+        "-B",
+        "-m",
+        "pytest",
+        "-q",
+        "scripts/tests/test_verify_ember01_completion.py",
+        "tests/ember_01_custody/test_census.py",
+        "tests/ember_01_custody/test_issue_census.py"
+      ],
+      "result": "PASS"
+    },
     "focused_completion_and_custody_tests": {
       "command": [
         "python",
