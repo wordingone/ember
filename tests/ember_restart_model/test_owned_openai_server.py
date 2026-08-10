@@ -35,6 +35,7 @@ from serve_owned_openai import (
     resolve_development_identity,
     load_development_shared_runtime,
     resolve_runtime_inputs,
+    resident_vram_bytes,
     start_parent_watchdog,
     _read_bound_json_snapshot,
     _config_snapshot_path,
@@ -52,6 +53,7 @@ class _Runtime:
             model_config_sha256="b" * 64,
             tokenizer_sha256="c" * 64,
             server_source_sha256="d" * 64,
+            vram_bytes=123_456_789,
         )
         self.calls: list[tuple[str, list[dict[str, object]]]] = []
         self.max_tokens_seen: list[int] = []
@@ -156,6 +158,7 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         expected_name = "ember-owned:" + ("a" * 12)
         self.assertEqual(status, 200)
         self.assertEqual(identity["seat"], "OWNED_ADMITTED")
+        self.assertEqual(identity["vram_bytes"], 123_456_789)
         self.assertEqual(identity["checkpoint_sha256"], "a" * 64)
         self.assertEqual(identity["model_name"], expected_name)
         self.assertEqual(identity["data"][0]["id"], expected_name)
@@ -166,6 +169,12 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         self.assertEqual(completion["choices"][0]["message"]["content"], "owned answer")
         self.assertEqual(len(self.runtime.calls), 1)
         self.assertEqual(self.runtime.calls[0][0], "row-1")
+
+    def test_resident_vram_bytes_uses_the_loaded_cuda_allocator(self) -> None:
+        with patch("serve_owned_openai.torch.cuda.memory_allocated", return_value=987_654_321) as measured:
+            self.assertEqual(resident_vram_bytes(torch.device("cuda")), 987_654_321)
+        measured.assert_called_once()
+        self.assertEqual(resident_vram_bytes(torch.device("cpu")), 0)
 
     def test_chat_rejects_identity_mismatch_and_target_leak_before_runtime(self) -> None:
         status, response = self._request("/v1/chat/completions", {"model": "ember-owned:wrong", "messages": [{"role": "user", "content": "hello"}]})
