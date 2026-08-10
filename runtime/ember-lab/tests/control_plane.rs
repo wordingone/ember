@@ -100,7 +100,8 @@ fn write_restore_manifest(root: &Path, job_id: &str) -> PathBuf {
             "workload_profile": {
                 "profile_id": "evidence_verifier",
                 "pinned_host_producers": [{"kind": "receipt_verifier", "maximum_bytes": 1}],
-                "requires_ui_responsiveness": false
+                "requires_ui_responsiveness": false,
+                "cpu_rate_percent": 100
             },
             "env": env,
             "bindings": [

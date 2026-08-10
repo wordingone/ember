@@ -23,6 +23,7 @@ const DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES: u64 = 16 * GIB;
 const MAXIMUM_JOB_MEMORY_BYTES: u64 =
     DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES - HOST_COMMIT_RESERVE_BYTES;
 const SIMULATED_PEAK_COMMIT_BYTES: u64 = GIB;
+const CPU_RATE_PERCENT: u32 = 25;
 
 fn host_capacity(available_maximum_commit_bytes: u64) -> HostCommitCapacity {
     HostCommitCapacity {
@@ -114,7 +115,8 @@ fn write_manifest(root: &Path, job_id: &str, not_before_ms: i64) -> PathBuf {
                     "kind": "receipt_verifier",
                     "maximum_bytes": SIMULATED_PEAK_COMMIT_BYTES
                 }],
-                "requires_ui_responsiveness": false
+                "requires_ui_responsiveness": false,
+                "cpu_rate_percent": CPU_RATE_PERCENT
             },
             "env": env,
         "bindings": [
@@ -183,6 +185,10 @@ fn dispatch_manifest_hashes_preflights_and_governs_spawn() {
         receipt["workload_profile"]["pinned_host_producers"][0]["maximum_bytes"],
         SIMULATED_PEAK_COMMIT_BYTES
     );
+    assert_eq!(
+        receipt["workload_profile"]["cpu_rate_percent"],
+        CPU_RATE_PERCENT
+    );
     assert_eq!(receipt["vram_reserve"]["minimum_free_bytes"], 1);
     assert_eq!(receipt["vram_reserve"]["available_free_bytes"], 2048);
     assert_eq!(
@@ -229,6 +235,98 @@ fn dispatch_manifest_hashes_preflights_and_governs_spawn() {
         SIMULATED_PEAK_COMMIT_BYTES
     );
     daemon.stop_job("dispatch-green").unwrap();
+}
+
+#[test]
+fn dispatch_manifest_requires_a_bounded_cpu_rate_before_identity_or_spawn() {
+    for (name, rate) in [("missing", None), ("zero", Some(0)), ("over", Some(101))] {
+        let root = sandbox(&format!("cpu-rate-{name}"));
+        let job_id = format!("dispatch-cpu-rate-{name}");
+        let manifest = write_manifest(&root, &job_id, 10_000);
+        let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+        match rate {
+            Some(rate) => payload["workload_profile"]["cpu_rate_percent"] = json!(rate),
+            None => {
+                payload["workload_profile"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("cpu_rate_percent");
+            }
+        }
+        fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+        let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
+        assert!(matches!(
+            daemon.dispatch_manifest_at_with_probes_and_host(
+                &manifest,
+                10_001,
+                |_root| Ok(1024),
+                || Ok(2048),
+                || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            ),
+            Err(EmberLabError::InvalidDispatchManifest { .. })
+        ));
+        assert_eq!(daemon.identity_hash(&job_id).unwrap(), None);
+        assert_eq!(daemon.job_state(&job_id).unwrap(), None);
+        assert!(!root.join("custody").join("preflight.json").exists());
+    }
+}
+
+#[test]
+fn dispatch_manifest_applies_the_declared_windows_cpu_hard_cap() {
+    use std::mem::{size_of, zeroed};
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::JobObjects::{
+        JobObjectCpuRateControlInformation, OpenJobObjectW, QueryInformationJobObject,
+        JOBOBJECT_CPU_RATE_CONTROL_INFORMATION, JOB_OBJECT_CPU_RATE_CONTROL_ENABLE,
+        JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP,
+    };
+
+    let root = sandbox("cpu-hard-cap");
+    let manifest = write_manifest(&root, "dispatch-cpu-hard-cap", 10_000);
+    let db = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap();
+    let connection = Connection::open(&db).unwrap();
+    let job_object_name: String = connection
+        .query_row(
+            "SELECT job_object_name FROM jobs WHERE job_id='dispatch-cpu-hard-cap'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let wide: Vec<u16> = std::ffi::OsStr::new(&job_object_name)
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    let job = unsafe { OpenJobObjectW(0x0004, 0, wide.as_ptr()) };
+    assert!(!job.is_null());
+    let mut info: JOBOBJECT_CPU_RATE_CONTROL_INFORMATION = unsafe { zeroed() };
+    let ok = unsafe {
+        QueryInformationJobObject(
+            job,
+            JobObjectCpuRateControlInformation,
+            (&mut info as *mut JOBOBJECT_CPU_RATE_CONTROL_INFORMATION).cast(),
+            size_of::<JOBOBJECT_CPU_RATE_CONTROL_INFORMATION>() as u32,
+            std::ptr::null_mut(),
+        )
+    };
+    unsafe { CloseHandle(job) };
+    assert_ne!(ok, 0);
+    assert_eq!(
+        info.ControlFlags,
+        JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP
+    );
+    assert_eq!(unsafe { info.Anonymous.CpuRate }, CPU_RATE_PERCENT * 100);
+    daemon.stop_job("dispatch-cpu-hard-cap").unwrap();
 }
 
 #[test]
