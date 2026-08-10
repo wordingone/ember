@@ -13,7 +13,8 @@
 
 import type { CommandContext, RegistryCommand } from "../types/command-types.ts";
 import { resolveEmberSourceRootOrCwd } from "../utils/repo-root.ts";
-import { spawnSync } from "child_process";
+import { publishActivityFeedInfrastructureFailure } from "../services/activity-feed.ts";
+import { spawn, spawnSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 
@@ -27,6 +28,23 @@ export interface LaunchPacketRunResult {
   status: number | null;
   /** Captured stdout (JSONL preflight rows + a summary object + comment lines). */
   stdout: string;
+}
+
+/** A certified consumer that has crossed the only synchronous boundary the cockpit needs:
+ * the OS accepted the child spawn.  Its terminal receipt remains owned by the certified
+ * consumer and is surfaced by the existing receipt/activity watcher. */
+export interface CertifiedLaunchHandle {
+  kind: "background";
+  pid: number;
+  completion: Promise<LaunchPacketRunResult>;
+}
+
+export type CertifiedLaunchRunnerResult = LaunchPacketRunResult | CertifiedLaunchHandle;
+
+export interface CertifiedLaunchFailure {
+  pid: number;
+  status: number | null;
+  message: string;
 }
 
 export const PREFLIGHT_TIMEOUT_MS = 600_000;
@@ -52,6 +70,72 @@ function _runPythonProcess(
   }
 }
 
+function _runPythonProcessInBackground(
+  executable: string,
+  args: string[],
+  timeout: number,
+): Promise<CertifiedLaunchRunnerResult> {
+  return new Promise((resolveStarted) => {
+    let stdout = "";
+    let settled = false;
+    let startSettled = false;
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    let resolveCompletion!: (result: LaunchPacketRunResult) => void;
+    const completion = new Promise<LaunchPacketRunResult>((resolve) => {
+      resolveCompletion = resolve;
+    });
+
+    const finish = (result: LaunchPacketRunResult): void => {
+      if (settled) return;
+      settled = true;
+      if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+      resolveCompletion(result);
+      if (!startSettled) {
+        startSettled = true;
+        resolveStarted(result);
+      }
+    };
+
+    try {
+      const child = spawn(executable, args, {
+        windowsHide: true,
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+      child.stdout.setEncoding("utf8");
+      child.stdout.on("data", (chunk: string) => {
+        stdout += chunk;
+        if (Buffer.byteLength(stdout, "utf8") > 16 * 1024 * 1024) {
+          child.kill();
+          finish({ status: null, stdout: "" });
+        }
+      });
+      const publishStarted = (): void => {
+        if (startSettled) return;
+        if (child.pid === undefined) return;
+        startSettled = true;
+        resolveStarted({
+          kind: "background",
+          pid: child.pid,
+          completion,
+        });
+      };
+      // Node and Bun both expose the owned child PID synchronously once the OS has accepted the
+      // spawn. Bun does not consistently emit Node's optional `spawn` event, so publish from the
+      // PID first and retain the event only as a compatibility fallback.
+      publishStarted();
+      child.once("spawn", publishStarted);
+      child.once("error", () => finish({ status: null, stdout: "" }));
+      child.once("close", (status) => finish({ status, stdout }));
+      timeoutHandle = setTimeout(() => {
+        child.kill();
+        finish({ status: null, stdout: "" });
+      }, timeout);
+    } catch {
+      finish({ status: null, stdout: "" });
+    }
+  });
+}
+
 /**
  * Real launch-packet runner: spawns `python launch_packet.py --config <cfg>`,
  * CPU-only, no GPU allocated (launch_packet.py itself allocates nothing). Any
@@ -74,8 +158,8 @@ export function _defaultLaunchPacketRunner(
 export function _defaultCertifiedLaunchRunner(
   executable: string,
   args: string[],
-): LaunchPacketRunResult {
-  return _runPythonProcess(executable, args, CERTIFIED_LAUNCH_TIMEOUT_MS);
+): Promise<CertifiedLaunchRunnerResult> {
+  return _runPythonProcessInBackground(executable, args, CERTIFIED_LAUNCH_TIMEOUT_MS);
 }
 
 // ---------------------------------------------------------------------------
@@ -185,7 +269,12 @@ interface TrainCommandDeps {
    */
   runLaunchPacket?: (executable: string, args: string[]) => LaunchPacketRunResult;
   /** Certified B7 consumer with a timeout separate from the CPU preflight. */
-  runCertifiedLaunch?: (executable: string, args: string[]) => LaunchPacketRunResult;
+  runCertifiedLaunch?: (
+    executable: string,
+    args: string[],
+  ) => CertifiedLaunchRunnerResult | Promise<CertifiedLaunchRunnerResult>;
+  /** Existing cockpit monitor-owned surface for receipt-less child failures. */
+  reportCertifiedLaunchFailure?: (failure: CertifiedLaunchFailure) => void;
   /** Python executable; defaults to EMBER_PYTHON_BIN env, else "python". */
   pythonBin?: string;
   /** Ember repo root override; defaults to _defaultRepoRoot(ctx.cwd). */
@@ -465,6 +554,45 @@ function _interpretCertifiedResult(
   };
 }
 
+function _isCertifiedLaunchHandle(
+  value: CertifiedLaunchRunnerResult,
+): value is CertifiedLaunchHandle {
+  return "kind" in value && value.kind === "background";
+}
+
+/** Return control to the cockpit at spawn, never at child exit.  The certified consumer remains
+ * the sole terminal receipt authority; the existing activity watcher renders that receipt when
+ * it lands.  Keeping a rejection handler attached prevents a background failure from becoming an
+ * unhandled promise without fabricating a second completion surface. */
+function _interpretCertifiedDispatch(
+  result: CertifiedLaunchRunnerResult,
+  reportFailure: (failure: CertifiedLaunchFailure) => void,
+): { type: "message"; message: string; exitCode?: number } {
+  if (!_isCertifiedLaunchHandle(result)) return _interpretCertifiedResult(result);
+  void result.completion.then(
+    (terminal) => {
+      const interpreted = _interpretCertifiedResult(terminal);
+      if (interpreted.exitCode === undefined) return;
+      reportFailure({ pid: result.pid, status: terminal.status, message: interpreted.message });
+    },
+    () => {
+      reportFailure({
+        pid: result.pid,
+        status: null,
+        message: "error: certified train consumer completion monitor failed before a terminal execution receipt was observed.",
+      });
+    },
+  );
+  return {
+    type: "message" as const,
+    message: [
+      "certified train consumer started in background.",
+      `child pid: ${result.pid}`,
+      "terminal execution receipt will appear in the activity feed.",
+    ].join("\n"),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
@@ -491,6 +619,12 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
   const runLaunchPacket = deps.runLaunchPacket ?? _defaultLaunchPacketRunner;
   const runCertifiedLaunch =
     deps.runCertifiedLaunch ?? _defaultCertifiedLaunchRunner;
+  const reportCertifiedLaunchFailure =
+    deps.reportCertifiedLaunchFailure ?? ((failure: CertifiedLaunchFailure) => {
+      publishActivityFeedInfrastructureFailure(
+        `${failure.message} child pid=${failure.pid}; exit=${failure.status ?? "null"}`,
+      );
+    });
 
   // Offer state is module-scoped (trainOffers, above) -- deliberately NOT redeclared
   // here -- so it is single and session-scoped regardless of how many
@@ -553,9 +687,9 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
           deps.certifiedLaunchScriptPath ??
           join(repoRoot, "tools", "ember-restart-3b", "certified_train_launch.py");
 
-        let certifiedResult: LaunchPacketRunResult;
+        let certifiedResult: CertifiedLaunchRunnerResult;
         try {
-          certifiedResult = runCertifiedLaunch(pythonBin, [
+          certifiedResult = await runCertifiedLaunch(pythonBin, [
             certifiedLaunchScriptPath,
             "--root",
             repoRoot,
@@ -574,7 +708,7 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
             exitCode: 1,
           };
         }
-        return _interpretCertifiedResult(certifiedResult);
+        return _interpretCertifiedDispatch(certifiedResult, reportCertifiedLaunchFailure);
       }
 
       let trainArgs: TrainArgs;
@@ -662,9 +796,9 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
       if (trainArgs.execute) {
         // Explicit flags always beat canonical resolution (C8): the canonical
         // launch-authority tree under repoRoot is never consulted on this path.
-        let certifiedResult: LaunchPacketRunResult;
+        let certifiedResult: CertifiedLaunchRunnerResult;
         try {
-          certifiedResult = runCertifiedLaunch(pythonBin, [
+          certifiedResult = await runCertifiedLaunch(pythonBin, [
             certifiedLaunchScriptPath,
             "--root",
             repoRoot,
@@ -683,7 +817,7 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
             exitCode: 1,
           };
         }
-        return _interpretCertifiedResult(certifiedResult);
+        return _interpretCertifiedDispatch(certifiedResult, reportCertifiedLaunchFailure);
       }
 
       // Default mode (no --execute, extracted command validated above but no longer
