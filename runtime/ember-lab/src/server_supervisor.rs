@@ -11,7 +11,8 @@
 //! create a second launcher, registry, ledger, or receipt family.
 
 use crate::{
-    atomic_create, hash_bytes, Daemon, DispatchManifest, DispatchOutcome, EmberLabError, Result,
+    atomic_create, hash_bytes, Daemon, DispatchBindingKind, DispatchManifest, DispatchOutcome,
+    EmberLabError, Result,
 };
 use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
@@ -19,11 +20,20 @@ use serde_json::Value;
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::{Duration, Instant};
+
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
 pub const SERVER_AUTHORITY_SCHEMA: &str = "ember-lab-server-authority-v1";
 pub const SERVER_SUPERVISION_ID_SCHEMA: &str = "ember-lab-server-supervision-v1";
+pub const SERVING_CONTRACT_SCHEMA: &str = "ember-lab-serving-contract-v1";
+const SERVING_VRAM_TOLERANCE_BASIS_POINTS: u64 = 1_500;
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 fn supervision_identity(resource_lease: &str) -> String {
     format!("{SERVER_SUPERVISION_ID_SCHEMA}:{resource_lease}")
@@ -40,6 +50,10 @@ pub struct ServerAuthority {
     pub port: u16,
     pub pid: u32,
     pub identity_sha256: String,
+    #[serde(default)]
+    pub serving_contract_path: Option<PathBuf>,
+    #[serde(default)]
+    pub serving_contract_sha256: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -88,6 +102,55 @@ impl PlannedOutageState {
 pub struct RestoreEvidence {
     pub restore_cost_s: f64,
     pub health_status: u16,
+    pub contract_assertions: Option<ServingContractAssertions>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ServingContract {
+    pub schema_version: String,
+    pub contract_id: String,
+    pub model_name: String,
+    pub quantization: String,
+    pub expected_vram_bytes: u64,
+    pub endpoint: String,
+    pub model_config_path: PathBuf,
+    pub model_config_sha256: String,
+    pub launcher_path: PathBuf,
+    pub launcher_sha256: String,
+    pub launcher_args: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ServingContractAssertions {
+    pub contract_sha256: String,
+    pub restored_job_id: String,
+    pub observed_model_name: String,
+    pub observed_vram_bytes: u64,
+    pub observation_error: Option<String>,
+    pub model_name_matches: bool,
+    pub vram_within_band: bool,
+    pub endpoint_matches: bool,
+    pub launcher_matches: bool,
+    pub quantization_matches: bool,
+}
+
+impl ServingContractAssertions {
+    fn all_match(&self) -> bool {
+        self.observation_error.is_none()
+            && self.model_name_matches
+            && self.vram_within_band
+            && self.endpoint_matches
+            && self.launcher_matches
+            && self.quantization_matches
+    }
+}
+
+#[derive(Clone, Debug)]
+struct ObservedServingIdentity {
+    model_name: String,
+    vram_bytes: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -107,6 +170,8 @@ pub struct ServerLiveCycleRequest {
     pub authority_sha256: String,
     pub receipt_path: PathBuf,
     pub restore_manifest_path: PathBuf,
+    pub serving_contract_path: PathBuf,
+    pub serving_contract_sha256: String,
     pub required_headroom_bytes: u64,
     pub now_ms: i64,
 }
@@ -127,6 +192,9 @@ pub struct ServerCycleReceipt {
     pub death_cause: Option<String>,
     pub restore_cost_s: Option<f64>,
     pub health_status: Option<u16>,
+    pub serving_contract_id: Option<String>,
+    pub serving_contract_sha256: Option<String>,
+    pub serving_contract_assertions: Option<ServingContractAssertions>,
     pub restarts_last_hour: u32,
     pub activity_event: String,
 }
@@ -143,6 +211,100 @@ fn invalid(detail: impl Into<String>) -> EmberLabError {
         job_id: String::new(),
         detail: detail.into(),
     }
+}
+
+fn canonical_path(path: &Path, label: &str) -> Result<PathBuf> {
+    path.canonicalize()
+        .map_err(|error| invalid(format!("{label} is not a readable canonical file: {error}")))
+}
+
+fn contract_quantization_is_bound(contract: &ServingContract) -> bool {
+    let explicit = contract
+        .launcher_args
+        .windows(2)
+        .any(|pair| pair[0] == "--quantization" && pair[1] == contract.quantization)
+        || contract
+            .launcher_args
+            .iter()
+            .any(|arg| arg == &format!("--quantization={}", contract.quantization));
+    if contract.quantization == "none" {
+        !contract
+            .launcher_args
+            .iter()
+            .any(|arg| arg == "--quantization" || arg.starts_with("--quantization="))
+    } else {
+        explicit
+    }
+}
+
+fn load_serving_contract(path: &Path, expected_sha256: &str) -> Result<ServingContract> {
+    if !valid_sha(expected_sha256) {
+        return Err(invalid("serving contract hash is not lowercase sha256"));
+    }
+    let canonical = canonical_path(path, "serving contract")?;
+    let bytes = fs::read(&canonical)?;
+    if hash_bytes(&bytes) != expected_sha256 {
+        return Err(invalid(
+            "serving contract bytes do not match supplied sha256",
+        ));
+    }
+    let mut contract: ServingContract = serde_json::from_slice(&bytes)
+        .map_err(|error| invalid(format!("serving contract is not closed JSON: {error}")))?;
+    let launcher = canonical_path(&contract.launcher_path, "serving contract launcher")?;
+    let model_config = canonical_path(&contract.model_config_path, "serving model config")?;
+    let model_config_bytes = fs::read(&model_config)?;
+    let model_config_payload: Value = serde_json::from_slice(&model_config_bytes)
+        .map_err(|error| invalid(format!("serving model config is invalid JSON: {error}")))?;
+    let endpoint = contract.endpoint.trim_end_matches('/');
+    if contract.schema_version != SERVING_CONTRACT_SCHEMA
+        || contract.contract_id.trim().is_empty()
+        || contract.model_name.trim().is_empty()
+        || contract.quantization.trim().is_empty()
+        || contract.expected_vram_bytes == 0
+        || !matches!(endpoint.strip_prefix("http://"), Some(rest) if rest.starts_with("127.0.0.1:") || rest.starts_with("localhost:") || rest.starts_with("[::1]:"))
+        || !valid_sha(&contract.launcher_sha256)
+        || hash_bytes(&fs::read(&launcher)?) != contract.launcher_sha256
+        || !valid_sha(&contract.model_config_sha256)
+        || hash_bytes(&model_config_bytes) != contract.model_config_sha256
+        || model_config_payload
+            .get("quantization")
+            .and_then(Value::as_str)
+            != Some(contract.quantization.as_str())
+        || contract.launcher_args.is_empty()
+        || !contract_quantization_is_bound(&contract)
+    {
+        return Err(invalid("serving contract fields are invalid"));
+    }
+    contract.launcher_path = launcher;
+    contract.model_config_path = model_config;
+    Ok(contract)
+}
+
+fn vram_within_contract_band(observed: u64, expected: u64) -> bool {
+    if expected == 0 {
+        return false;
+    }
+    let delta = observed.abs_diff(expected) as u128;
+    delta * 10_000_u128 <= expected as u128 * SERVING_VRAM_TOLERANCE_BASIS_POINTS as u128
+}
+
+fn manifest_matches_contract(manifest: &DispatchManifest, contract: &ServingContract) -> bool {
+    manifest
+        .program
+        .path
+        .canonicalize()
+        .is_ok_and(|path| path == contract.launcher_path)
+        && manifest.program.sha256 == contract.launcher_sha256
+        && manifest.args == contract.launcher_args
+        && manifest.bindings.iter().any(|binding| {
+            binding.kind == DispatchBindingKind::Config
+                && binding
+                    .path
+                    .canonicalize()
+                    .is_ok_and(|path| path == contract.model_config_path)
+                && binding.sha256 == contract.model_config_sha256
+        })
+        && contract_quantization_is_bound(contract)
 }
 
 fn load_authority(path: &std::path::Path, expected_sha256: &str) -> Result<ServerAuthority> {
@@ -166,6 +328,11 @@ fn load_authority(path: &std::path::Path, expected_sha256: &str) -> Result<Serve
         || authority.port == 0
         || authority.pid == 0
         || !valid_sha(&authority.identity_sha256)
+        || authority.serving_contract_path.is_some() != authority.serving_contract_sha256.is_some()
+        || authority
+            .serving_contract_sha256
+            .as_deref()
+            .is_some_and(|sha| !valid_sha(sha))
     {
         return Err(invalid("server authority fields are invalid"));
     }
@@ -188,6 +355,52 @@ fn validate_receipt_destination(
         return Err(invalid("server receipt is outside authority custody"));
     }
     Ok(())
+}
+
+fn validate_contract_binding(
+    authority_path: &Path,
+    authority: &ServerAuthority,
+    serving_contract_path: &Path,
+    serving_contract_sha256: &str,
+) -> Result<PathBuf> {
+    if serving_contract_path.as_os_str().is_empty() || !valid_sha(serving_contract_sha256) {
+        return Err(invalid(
+            "server supervision lacks a serving contract citation",
+        ));
+    }
+    let authority_root = authority_path
+        .parent()
+        .ok_or_else(|| invalid("server authority has no custody root"))?
+        .canonicalize()
+        .map_err(|error| {
+            invalid(format!(
+                "server authority custody root is unreadable: {error}"
+            ))
+        })?;
+    let serving_contract_path = canonical_path(serving_contract_path, "serving contract")?;
+    if !serving_contract_path.starts_with(&authority_root) {
+        return Err(invalid("serving contract is outside authority custody"));
+    }
+    let authority_contract_path = authority
+        .serving_contract_path
+        .as_deref()
+        .ok_or_else(|| invalid("server authority lacks a serving contract path"))?;
+    let authority_contract_path =
+        canonical_path(authority_contract_path, "server authority serving contract")?;
+    if authority_contract_path != serving_contract_path
+        || authority.serving_contract_sha256.as_deref() != Some(serving_contract_sha256)
+    {
+        return Err(invalid(
+            "server supervision serving contract does not match authority binding",
+        ));
+    }
+    let serving_contract_bytes = fs::read(&serving_contract_path)?;
+    if hash_bytes(&serving_contract_bytes) != serving_contract_sha256 {
+        return Err(invalid(
+            "serving contract bytes do not match supplied sha256",
+        ));
+    }
+    Ok(serving_contract_path)
 }
 
 pub fn probe_endpoint(authority: &ServerAuthority) -> EndpointHealth {
@@ -223,6 +436,112 @@ pub fn probe_endpoint(authority: &ServerAuthority) -> EndpointHealth {
         Err(error) if error.kind() == std::io::ErrorKind::TimedOut => EndpointHealth::Hung,
         Err(_) => EndpointHealth::Dead,
     }
+}
+
+fn probe_model_name(authority: &ServerAuthority) -> Result<String> {
+    let address = format!("{}:{}", authority.host, authority.port);
+    let mut addresses = address
+        .to_socket_addrs()
+        .map_err(|error| invalid(format!("serving endpoint address is invalid: {error}")))?;
+    let address = addresses
+        .next()
+        .ok_or_else(|| invalid("serving endpoint address did not resolve"))?;
+    let mut stream = TcpStream::connect_timeout(&address, Duration::from_millis(500))
+        .map_err(|error| invalid(format!("serving identity endpoint is unreachable: {error}")))?;
+    stream.set_read_timeout(Some(Duration::from_millis(750)))?;
+    stream.set_write_timeout(Some(Duration::from_millis(250)))?;
+    stream.write_all(b"GET /v1/models HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")?;
+    let mut response = Vec::new();
+    stream.take(64 * 1024).read_to_end(&mut response)?;
+    let separator = b"\r\n\r\n";
+    let body_offset = response
+        .windows(separator.len())
+        .position(|window| window == separator)
+        .map(|offset| offset + separator.len())
+        .ok_or_else(|| invalid("serving identity response has no HTTP body"))?;
+    let status = String::from_utf8_lossy(&response[..body_offset]);
+    if !(status.starts_with("HTTP/1.1 200") || status.starts_with("HTTP/1.0 200")) {
+        return Err(invalid("serving identity endpoint did not return HTTP 200"));
+    }
+    let payload: Value = serde_json::from_slice(&response[body_offset..]).map_err(|error| {
+        invalid(format!(
+            "serving identity response is invalid JSON: {error}"
+        ))
+    })?;
+    let models = payload
+        .get("data")
+        .and_then(Value::as_array)
+        .ok_or_else(|| invalid("serving identity response lacks a data array"))?;
+    if models.len() != 1 {
+        return Err(invalid(
+            "serving identity response must contain exactly one model",
+        ));
+    }
+    models[0]
+        .get("id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_owned)
+        .ok_or_else(|| invalid("serving identity response model id is invalid"))
+}
+
+fn observe_process_vram_bytes(pid: u32) -> Result<u64> {
+    let mut command = Command::new("nvidia-smi");
+    command.args([
+        "--query-compute-apps=pid,used_gpu_memory",
+        "--format=csv,noheader,nounits",
+    ]);
+    #[cfg(windows)]
+    command.creation_flags(CREATE_NO_WINDOW);
+    let output = command
+        .output()
+        .map_err(|error| invalid(format!("nvidia-smi observation failed: {error}")))?;
+    if !output.status.success() {
+        return Err(invalid("nvidia-smi observation returned a nonzero status"));
+    }
+    let stdout = std::str::from_utf8(&output.stdout)
+        .map_err(|_| invalid("nvidia-smi observation was not UTF-8"))?;
+    parse_process_vram_bytes(stdout, pid)
+}
+
+fn parse_process_vram_bytes(stdout: &str, pid: u32) -> Result<u64> {
+    let mut total_mib = 0_u64;
+    let mut matched = false;
+    for line in stdout.lines().filter(|line| !line.trim().is_empty()) {
+        let mut fields = line.split(',').map(str::trim);
+        let observed_pid = fields
+            .next()
+            .and_then(|value| value.parse::<u32>().ok())
+            .ok_or_else(|| invalid("nvidia-smi observation has an invalid pid"))?;
+        let used_mib = fields
+            .next()
+            .and_then(|value| value.parse::<u64>().ok())
+            .ok_or_else(|| invalid("nvidia-smi observation has invalid memory"))?;
+        if fields.next().is_some() {
+            return Err(invalid("nvidia-smi observation has extra fields"));
+        }
+        if observed_pid == pid {
+            matched = true;
+            total_mib = total_mib
+                .checked_add(used_mib)
+                .ok_or_else(|| invalid("nvidia-smi memory observation overflowed"))?;
+        }
+    }
+    if !matched {
+        return Err(invalid(
+            "restored server pid is absent from nvidia-smi compute processes",
+        ));
+    }
+    total_mib
+        .checked_mul(1024 * 1024)
+        .ok_or_else(|| invalid("nvidia-smi byte observation overflowed"))
+}
+
+fn observe_serving_identity(authority: &ServerAuthority) -> Result<ObservedServingIdentity> {
+    Ok(ObservedServingIdentity {
+        model_name: probe_model_name(authority)?,
+        vram_bytes: observe_process_vram_bytes(authority.pid)?,
+    })
 }
 
 fn planned_outage_state(
@@ -267,34 +586,68 @@ fn sweep_expired_outage(daemon: &Daemon, resource: &str, now_ms: i64) -> Result<
 
 impl Daemon {
     fn ensure_server_supervisions_table(&self) -> Result<()> {
-        self.conn()?.execute_batch(
+        let conn = self.conn()?;
+        conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS server_supervisions(
                job_id TEXT PRIMARY KEY,
                authority_path TEXT NOT NULL,
                authority_sha256 TEXT NOT NULL,
                receipt_path TEXT NOT NULL,
                restore_manifest_path TEXT NOT NULL,
+               serving_contract_path TEXT NOT NULL,
+               serving_contract_sha256 TEXT NOT NULL,
                required_headroom_bytes INTEGER NOT NULL,
                updated_at_ms INTEGER NOT NULL
              );",
         )?;
+        let columns: Vec<String> = conn
+            .prepare("PRAGMA table_info(server_supervisions)")?
+            .query_map([], |row| row.get(1))?
+            .collect::<std::result::Result<_, _>>()?;
+        if !columns
+            .iter()
+            .any(|column| column == "serving_contract_path")
+        {
+            conn.execute(
+                "ALTER TABLE server_supervisions ADD COLUMN serving_contract_path TEXT NOT NULL DEFAULT ''",
+                [],
+            )?;
+        }
+        if !columns
+            .iter()
+            .any(|column| column == "serving_contract_sha256")
+        {
+            conn.execute(
+                "ALTER TABLE server_supervisions ADD COLUMN serving_contract_sha256 TEXT NOT NULL DEFAULT ''",
+                [],
+            )?;
+        }
         Ok(())
     }
 
     pub fn register_server_supervision(&self, request: &ServerLiveCycleRequest) -> Result<()> {
         validate_receipt_destination(&request.authority_path, &request.receipt_path)?;
         let authority = load_authority(&request.authority_path, &request.authority_sha256)?;
+        let serving_contract_path = validate_contract_binding(
+            &request.authority_path,
+            &authority,
+            &request.serving_contract_path,
+            &request.serving_contract_sha256,
+        )?;
         self.ensure_server_supervisions_table()?;
         self.conn()?.execute(
             "INSERT INTO server_supervisions(
                job_id,authority_path,authority_sha256,receipt_path,
-               restore_manifest_path,required_headroom_bytes,updated_at_ms
-             ) VALUES(?1,?2,?3,?4,?5,?6,?7)
+               restore_manifest_path,serving_contract_path,serving_contract_sha256,
+               required_headroom_bytes,updated_at_ms
+             ) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)
              ON CONFLICT(job_id) DO UPDATE SET
                authority_path=excluded.authority_path,
                authority_sha256=excluded.authority_sha256,
                receipt_path=excluded.receipt_path,
                restore_manifest_path=excluded.restore_manifest_path,
+               serving_contract_path=excluded.serving_contract_path,
+               serving_contract_sha256=excluded.serving_contract_sha256,
                required_headroom_bytes=excluded.required_headroom_bytes,
                updated_at_ms=excluded.updated_at_ms",
             rusqlite::params![
@@ -303,6 +656,8 @@ impl Daemon {
                 request.authority_sha256,
                 request.receipt_path.to_string_lossy(),
                 request.restore_manifest_path.to_string_lossy(),
+                serving_contract_path.to_string_lossy(),
+                request.serving_contract_sha256,
                 request.required_headroom_bytes,
                 request.now_ms,
             ],
@@ -426,6 +781,8 @@ impl Daemon {
             port: previous.port,
             pid: outcome.handle.pid,
             identity_sha256,
+            serving_contract_path: previous.serving_contract_path.clone(),
+            serving_contract_sha256: previous.serving_contract_sha256.clone(),
         };
         let authority_root = request
             .authority_path
@@ -454,14 +811,17 @@ impl Daemon {
         tx.execute(
             "INSERT INTO server_supervisions(
                job_id,authority_path,authority_sha256,receipt_path,
-               restore_manifest_path,required_headroom_bytes,updated_at_ms
-             ) VALUES(?1,?2,?3,?4,?5,?6,?7)",
+               restore_manifest_path,serving_contract_path,serving_contract_sha256,
+               required_headroom_bytes,updated_at_ms
+             ) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)",
             rusqlite::params![
                 &rebound.job_id,
                 rebound_path.to_string_lossy(),
                 rebound_sha256,
                 request.receipt_path.to_string_lossy(),
                 request.restore_manifest_path.to_string_lossy(),
+                request.serving_contract_path.to_string_lossy(),
+                request.serving_contract_sha256,
                 request.required_headroom_bytes,
                 request.now_ms,
             ],
@@ -503,7 +863,8 @@ impl Daemon {
             let conn = self.conn()?;
             let mut statement = conn.prepare(
                 "SELECT authority_path,authority_sha256,receipt_path,
-                        restore_manifest_path,required_headroom_bytes
+                        restore_manifest_path,serving_contract_path,
+                        serving_contract_sha256,required_headroom_bytes
                  FROM server_supervisions ORDER BY job_id",
             )?;
             let rows = statement
@@ -513,7 +874,9 @@ impl Daemon {
                         authority_sha256: row.get(1)?,
                         receipt_path: PathBuf::from(row.get::<_, String>(2)?),
                         restore_manifest_path: PathBuf::from(row.get::<_, String>(3)?),
-                        required_headroom_bytes: row.get(4)?,
+                        serving_contract_path: PathBuf::from(row.get::<_, String>(4)?),
+                        serving_contract_sha256: row.get(5)?,
+                        required_headroom_bytes: row.get(6)?,
                         now_ms,
                     })
                 })?
@@ -579,7 +942,7 @@ impl Daemon {
     where
         F: FnOnce(&ServerAuthority) -> Result<RestoreEvidence>,
     {
-        self.supervise_server_cycle_inner(request, restore, false)
+        self.supervise_server_cycle_inner(request, restore, false, None, None)
     }
 
     fn supervise_server_cycle_inner<F>(
@@ -587,6 +950,8 @@ impl Daemon {
         request: ServerCycleRequest,
         restore: F,
         allow_released_lease: bool,
+        serving_contract: Option<(String, String)>,
+        preflight_contract_failure: Option<ServingContractAssertions>,
     ) -> Result<ServerCycleReceipt>
     where
         F: FnOnce(&ServerAuthority) -> Result<RestoreEvidence>,
@@ -633,61 +998,93 @@ impl Daemon {
         } else {
             Some("process_dead")
         };
-        let (decision, death_cause, restore_cost_s, health_status) = match failure {
-            None => ("HEALTHY".to_string(), None, None, None),
-            Some(cause) if outage == PlannedOutageState::Open => (
-                "WAIT_PLANNED_OUTAGE".to_string(),
-                Some(cause.to_string()),
-                None,
-                None,
-            ),
-            Some(cause) if restarts_last_hour >= 3 => (
-                "ALARM_BACKOFF".to_string(),
-                Some(cause.to_string()),
-                None,
-                None,
-            ),
-            Some(cause) if request.available_headroom_bytes < request.required_headroom_bytes => (
-                "RESTORE_REFUSED_HEADROOM".to_string(),
-                Some(cause.to_string()),
-                None,
-                None,
-            ),
-            Some(cause) => match restore(&authority) {
-                Ok(evidence)
-                    if evidence.restore_cost_s.is_finite()
-                        && evidence.restore_cost_s >= 0.0
-                        && evidence.health_status == 200 =>
-                {
-                    (
-                        "RESTORED".to_string(),
+        let (decision, death_cause, restore_cost_s, health_status, contract_assertions) =
+            if let Some(assertions) = preflight_contract_failure {
+                (
+                    "RESTORE_FAILED_CONTRACT".to_string(),
+                    Some("contract_preflight_failed".to_string()),
+                    None,
+                    None,
+                    Some(assertions),
+                )
+            } else {
+                match failure {
+                    None => ("HEALTHY".to_string(), None, None, None, None),
+                    Some(cause) if outage == PlannedOutageState::Open => (
+                        "WAIT_PLANNED_OUTAGE".to_string(),
                         Some(cause.to_string()),
-                        Some(evidence.restore_cost_s),
-                        Some(evidence.health_status),
-                    )
+                        None,
+                        None,
+                        None,
+                    ),
+                    Some(cause) if restarts_last_hour >= 3 => (
+                        "ALARM_BACKOFF".to_string(),
+                        Some(cause.to_string()),
+                        None,
+                        None,
+                        None,
+                    ),
+                    Some(cause)
+                        if request.available_headroom_bytes < request.required_headroom_bytes =>
+                    {
+                        (
+                            "RESTORE_REFUSED_HEADROOM".to_string(),
+                            Some(cause.to_string()),
+                            None,
+                            None,
+                            None,
+                        )
+                    }
+                    Some(cause) => match restore(&authority) {
+                        Ok(evidence) => {
+                            let assertions = evidence.contract_assertions.clone();
+                            let base_success = evidence.restore_cost_s.is_finite()
+                                && evidence.restore_cost_s >= 0.0
+                                && evidence.health_status == 200;
+                            let contract_success = match (&serving_contract, &assertions) {
+                                (None, None) => true,
+                                (Some((_path, expected_sha)), Some(actual)) => {
+                                    actual.contract_sha256 == *expected_sha && actual.all_match()
+                                }
+                                _ => false,
+                            };
+                            let decision = if base_success && contract_success {
+                                "RESTORED"
+                            } else if serving_contract.is_some() && !contract_success {
+                                "RESTORE_FAILED_CONTRACT"
+                            } else {
+                                "RESTORE_FAILED"
+                            };
+                            (
+                                decision.to_string(),
+                                Some(cause.to_string()),
+                                Some(evidence.restore_cost_s),
+                                Some(evidence.health_status),
+                                assertions,
+                            )
+                        }
+                        Err(_error) => (
+                            "RESTORE_FAILED".to_string(),
+                            Some(cause.to_string()),
+                            None,
+                            None,
+                            None,
+                        ),
+                    },
                 }
-                Ok(evidence) => (
-                    "RESTORE_FAILED".to_string(),
-                    Some(cause.to_string()),
-                    Some(evidence.restore_cost_s),
-                    Some(evidence.health_status),
-                ),
-                Err(_error) => (
-                    "RESTORE_FAILED".to_string(),
-                    Some(cause.to_string()),
-                    None,
-                    None,
-                ),
-            },
-        };
+            };
         let activity_event = match decision.as_str() {
             "HEALTHY" => "server_healthy",
             "WAIT_PLANNED_OUTAGE" => "server_wait_planned_outage",
             "ALARM_BACKOFF" => "server_alarm_backoff",
             "RESTORE_REFUSED_HEADROOM" => "server_restore_refused_headroom",
             "RESTORED" => "server_restored",
+            "RESTORE_FAILED_CONTRACT" => "server_restore_failed_contract",
             _ => "server_restore_failed",
         };
+        let (serving_contract_id, serving_contract_sha256) = serving_contract
+            .map(|(contract_id, sha)| (Some(contract_id), Some(sha)))
+            .unwrap_or((None, None));
         let receipt = ServerCycleReceipt {
             authority_sha256: request.authority_sha256,
             supervision_id: supervision_id.clone(),
@@ -702,8 +1099,23 @@ impl Daemon {
             death_cause,
             restore_cost_s,
             health_status,
+            serving_contract_id,
+            serving_contract_sha256,
+            serving_contract_assertions: contract_assertions,
             restarts_last_hour,
             activity_event: activity_event.into(),
+        };
+        let preflight_contract_refusal = receipt.decision == "RESTORE_FAILED_CONTRACT"
+            && receipt
+                .serving_contract_assertions
+                .as_ref()
+                .is_some_and(|assertions| assertions.restored_job_id.is_empty());
+        let operational_state = if preflight_contract_refusal && receipt.process_alive {
+            "running"
+        } else if receipt.decision == "RESTORE_FAILED_CONTRACT" {
+            "stopped"
+        } else {
+            "running"
         };
         let receipt_bytes = serde_json::to_vec_pretty(&serde_json::json!({
             "schema": "ember-lab-operational-receipt-v1",
@@ -715,7 +1127,7 @@ impl Daemon {
             "supervision_id": &supervision_id,
             "identity_sha256": &authority.identity_sha256,
             "resource_lease": &authority.resource_lease,
-            "state": "running",
+            "state": operational_state,
             "events": [{
                 "kind": activity_event,
                 "payload": receipt,
@@ -749,6 +1161,30 @@ impl Daemon {
         })
     }
 
+    /// Debug-build integration seam. It exercises the real dispatch, fencing,
+    /// rebind, contract, receipt, and cleanup paths while replacing only the
+    /// host GPU/model observation that a CPU test cannot produce. It is absent
+    /// from release builds and is not reachable through Ember Lab RPC.
+    #[cfg(debug_assertions)]
+    #[doc(hidden)]
+    pub fn supervise_server_live_cycle_with_test_observation(
+        &self,
+        request: ServerLiveCycleRequest,
+        model_name: String,
+        vram_bytes: u64,
+    ) -> Result<ServerCycleReceipt> {
+        self.supervise_server_live_cycle_with_dispatch_and_observer(
+            request,
+            |daemon, path| daemon.dispatch_manifest(path),
+            move |_authority| {
+                Ok(ObservedServingIdentity {
+                    model_name,
+                    vram_bytes,
+                })
+            },
+        )
+    }
+
     fn supervise_server_live_cycle_with_dispatch<F>(
         &self,
         request: ServerLiveCycleRequest,
@@ -757,8 +1193,25 @@ impl Daemon {
     where
         F: FnOnce(&Daemon, &std::path::Path) -> Result<DispatchOutcome>,
     {
-        self.register_server_supervision(&request)?;
+        self.supervise_server_live_cycle_with_dispatch_and_observer(
+            request,
+            dispatch,
+            observe_serving_identity,
+        )
+    }
+
+    fn supervise_server_live_cycle_with_dispatch_and_observer<F, O>(
+        &self,
+        request: ServerLiveCycleRequest,
+        dispatch: F,
+        observe: O,
+    ) -> Result<ServerCycleReceipt>
+    where
+        F: FnOnce(&Daemon, &std::path::Path) -> Result<DispatchOutcome>,
+        O: FnOnce(&ServerAuthority) -> Result<ObservedServingIdentity>,
+    {
         let authority = load_authority(&request.authority_path, &request.authority_sha256)?;
+        validate_receipt_destination(&request.authority_path, &request.receipt_path)?;
         if let Some(pid) = self.job_pid(&authority.job_id)? {
             if pid != authority.pid {
                 return Err(EmberLabError::ProcessIdentityMismatch {
@@ -795,10 +1248,93 @@ impl Daemon {
                     observation.endpoint,
                     EndpointHealth::Dead | EndpointHealth::Hung
                 ));
+        let mut contract_id = "contract-unavailable".to_string();
+        let canonical_contract_sha256 = authority
+            .serving_contract_sha256
+            .clone()
+            .unwrap_or_else(|| request.serving_contract_sha256.clone());
+        let contract_and_manifest = if restore_authorized {
+            let validated = (|| -> Result<(ServingContract, DispatchManifest)> {
+                let canonical_contract_path = validate_contract_binding(
+                    &request.authority_path,
+                    &authority,
+                    &request.serving_contract_path,
+                    &request.serving_contract_sha256,
+                )?;
+                let contract =
+                    load_serving_contract(&canonical_contract_path, &canonical_contract_sha256)?;
+                contract_id = contract.contract_id.clone();
+                if contract.endpoint != format!("http://{}:{}", authority.host, authority.port) {
+                    return Err(invalid(
+                        "serving contract endpoint does not match the supervised authority",
+                    ));
+                }
+                let manifest_bytes = fs::read(&request.restore_manifest_path).map_err(|error| {
+                    invalid(format!(
+                        "serving contract restore manifest is unreadable: {error}"
+                    ))
+                })?;
+                let manifest: DispatchManifest =
+                    serde_json::from_slice(&manifest_bytes).map_err(|error| {
+                        invalid(format!(
+                            "serving contract restore manifest is not closed JSON: {error}"
+                        ))
+                    })?;
+                if !manifest_matches_contract(&manifest, &contract) {
+                    return Err(invalid(
+                        "restore manifest launcher does not match the serving contract",
+                    ));
+                }
+                Ok((contract, manifest))
+            })();
+            match validated {
+                Ok(value) => Some(value),
+                Err(error) => {
+                    let assertions = ServingContractAssertions {
+                        contract_sha256: canonical_contract_sha256.clone(),
+                        restored_job_id: String::new(),
+                        observed_model_name: String::new(),
+                        observed_vram_bytes: 0,
+                        observation_error: Some(error.to_string()),
+                        model_name_matches: false,
+                        vram_within_band: false,
+                        endpoint_matches: false,
+                        launcher_matches: false,
+                        quantization_matches: false,
+                    };
+                    let cycle = ServerCycleRequest {
+                        authority_path: request.authority_path,
+                        authority_sha256: request.authority_sha256,
+                        receipt_path: request.receipt_path,
+                        observation,
+                        available_headroom_bytes,
+                        required_headroom_bytes: request.required_headroom_bytes,
+                        now_ms: request.now_ms,
+                    };
+                    return self.supervise_server_cycle_inner(
+                        cycle,
+                        |_authority| Err(invalid("contract preflight failure must not dispatch")),
+                        true,
+                        Some((contract_id, canonical_contract_sha256)),
+                        Some(assertions),
+                    );
+                }
+            }
+        } else {
+            None
+        };
+        self.register_server_supervision(&request)?;
         if restore_authorized {
             self.fence_server_for_recovery(&authority, process_alive)?;
         }
         let registration = request.clone();
+        let serving_contract_sha256 = request.serving_contract_sha256.clone();
+        let contract_binding = contract_and_manifest.as_ref().map(|(contract, _)| {
+            (
+                contract.contract_id.clone(),
+                serving_contract_sha256.clone(),
+            )
+        });
         let cycle = ServerCycleRequest {
             authority_path: request.authority_path,
             authority_sha256: request.authority_sha256,
@@ -813,9 +1349,47 @@ impl Daemon {
             cycle,
             |authority| {
                 let started = Instant::now();
+                let (contract, manifest) = contract_and_manifest
+                    .as_ref()
+                    .ok_or_else(|| invalid("restore callback lacks its serving contract"))?;
                 let outcome = dispatch(self, &manifest_path)?;
                 let rebound = self.rebind_server_supervision(authority, &registration, &outcome)?;
                 let health = probe_endpoint(&rebound);
+                let observed = observe(&rebound);
+                let assertions = match observed {
+                    Ok(observed) => ServingContractAssertions {
+                        contract_sha256: serving_contract_sha256.clone(),
+                        restored_job_id: rebound.job_id.clone(),
+                        observed_model_name: observed.model_name.clone(),
+                        observed_vram_bytes: observed.vram_bytes,
+                        observation_error: None,
+                        model_name_matches: observed.model_name == contract.model_name,
+                        vram_within_band: vram_within_contract_band(
+                            observed.vram_bytes,
+                            contract.expected_vram_bytes,
+                        ),
+                        endpoint_matches: contract.endpoint
+                            == format!("http://{}:{}", rebound.host, rebound.port),
+                        launcher_matches: manifest_matches_contract(manifest, contract),
+                        quantization_matches: contract_quantization_is_bound(contract),
+                    },
+                    Err(error) => ServingContractAssertions {
+                        contract_sha256: serving_contract_sha256.clone(),
+                        restored_job_id: rebound.job_id.clone(),
+                        observed_model_name: String::new(),
+                        observed_vram_bytes: 0,
+                        observation_error: Some(error.to_string()),
+                        model_name_matches: false,
+                        vram_within_band: false,
+                        endpoint_matches: contract.endpoint
+                            == format!("http://{}:{}", rebound.host, rebound.port),
+                        launcher_matches: true,
+                        quantization_matches: true,
+                    },
+                };
+                if !assertions.all_match() {
+                    self.stop_job(&rebound.job_id)?;
+                }
                 Ok(RestoreEvidence {
                     restore_cost_s: started.elapsed().as_secs_f64(),
                     health_status: if health == EndpointHealth::Healthy {
@@ -823,9 +1397,12 @@ impl Daemon {
                     } else {
                         503
                     },
+                    contract_assertions: Some(assertions),
                 })
             },
             true,
+            contract_binding,
+            None,
         )
     }
 }
@@ -857,6 +1434,61 @@ mod tests {
 
     fn sha256(path: &Path) -> String {
         format!("{:x}", Sha256::digest(fs::read(path).unwrap()))
+    }
+
+    #[test]
+    fn serving_vram_band_is_inclusive_at_fifteen_percent_only() {
+        const EXPECTED: u64 = 10_000;
+        assert!(vram_within_contract_band(8_500, EXPECTED));
+        assert!(vram_within_contract_band(11_500, EXPECTED));
+        assert!(!vram_within_contract_band(8_499, EXPECTED));
+        assert!(!vram_within_contract_band(11_501, EXPECTED));
+    }
+
+    #[test]
+    fn serving_vram_observation_sums_only_the_rebound_pid() {
+        assert_eq!(
+            parse_process_vram_bytes("41, 100\n9, 999\n41, 25\n", 41).unwrap(),
+            125 * 1024 * 1024
+        );
+        assert!(parse_process_vram_bytes("9, 100\n", 41).is_err());
+        assert!(parse_process_vram_bytes("41, not-a-number\n", 41).is_err());
+        assert!(parse_process_vram_bytes("41, 100, foreign\n", 41).is_err());
+    }
+
+    #[test]
+    fn serving_contract_is_closed_and_content_addressed() {
+        let root = sandbox("serving-contract-closed");
+        let launcher = std::env::current_exe().unwrap().canonicalize().unwrap();
+        let model_config = root.join("model-config.json");
+        fs::write(&model_config, br#"{"quantization":"none"}"#).unwrap();
+        let contract_path = root.join("serving-contract.json");
+        let mut payload = serde_json::json!({
+            "schema_version": SERVING_CONTRACT_SCHEMA,
+            "contract_id": "owned-seat-fixture",
+            "model_name": "ember-owned:fixture",
+            "quantization": "none",
+            "expected_vram_bytes": 1024,
+            "endpoint": "http://127.0.0.1:8082",
+            "model_config_path": model_config.clone(),
+            "model_config_sha256": sha256(&model_config),
+            "launcher_path": launcher.clone(),
+            "launcher_sha256": sha256(&launcher),
+            "launcher_args": ["--serve"],
+        });
+        fs::write(&contract_path, serde_json::to_vec(&payload).unwrap()).unwrap();
+        let contract_sha = sha256(&contract_path);
+        assert!(load_serving_contract(&contract_path, &contract_sha).is_ok());
+        assert!(load_serving_contract(&contract_path, &"0".repeat(64)).is_err());
+
+        fs::write(&model_config, br#"{"quantization":"int4"}"#).unwrap();
+        assert!(load_serving_contract(&contract_path, &contract_sha).is_err());
+        fs::write(&model_config, br#"{"quantization":"none"}"#).unwrap();
+
+        payload["foreign_authority"] = serde_json::json!(true);
+        fs::write(&contract_path, serde_json::to_vec(&payload).unwrap()).unwrap();
+        let tampered_sha = sha256(&contract_path);
+        assert!(load_serving_contract(&contract_path, &tampered_sha).is_err());
     }
 
     #[test]
@@ -922,6 +1554,9 @@ mod tests {
                 );
             }
         });
+        let serving_contract_path = root.join("unused-serving-contract.json");
+        fs::write(&serving_contract_path, b"{}").unwrap();
+        let serving_contract_sha256 = sha256(&serving_contract_path);
         let old_authority = ServerAuthority {
             schema_version: SERVER_AUTHORITY_SCHEMA.into(),
             job_id: "old-server-job".into(),
@@ -931,6 +1566,8 @@ mod tests {
             port,
             pid: 1,
             identity_sha256: old_identity_sha,
+            serving_contract_path: Some(serving_contract_path.clone()),
+            serving_contract_sha256: Some(serving_contract_sha256.clone()),
         };
         let old_authority_path = root.join("server-authority.json");
         let old_authority_bytes = serde_json::to_vec(&old_authority).unwrap();
@@ -940,6 +1577,8 @@ mod tests {
             authority_sha256: hash_bytes(&old_authority_bytes),
             receipt_path: root.join("supervision-receipt.json"),
             restore_manifest_path: manifest_path,
+            serving_contract_path,
+            serving_contract_sha256,
             required_headroom_bytes: 1,
             now_ms: 1_000,
         };

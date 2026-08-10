@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """endpoint_identity.py — identity assertion for OpenAI-compatible endpoints (#516).
 
 Contract: assert_endpoint_identity(base_url, expected_model_substring) verifies that
@@ -20,7 +23,7 @@ import sys
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 
 def _now_iso() -> str:
@@ -115,6 +118,30 @@ def assert_endpoint_identity(
         "completion_model_field": completion_model_field,
         "ts": _now_iso(),
     }
+
+
+def assert_board_endpoint_identity(
+    endpoint_url: str,
+    expected_model_substring: str,
+    *,
+    assert_identity: Optional[Callable[[str, str], dict[str, Any]]] = None,
+) -> dict[str, Any]:
+    """Return one receipt-shaped board observation backed by model identity.
+
+    Historical board callers pass a ``.../health`` URL.  This adapter removes
+    only that exact suffix and delegates to :func:`assert_endpoint_identity`,
+    so a reachable but foreign model is recorded as a failed observation rather
+    than a green bare-health receipt.
+    """
+    normalized = endpoint_url.rstrip("/")
+    if normalized.endswith("/health"):
+        normalized = normalized[: -len("/health")]
+    verifier = assert_identity or assert_endpoint_identity
+    try:
+        identity = verifier(normalized, expected_model_substring)
+        return {"reachable": True, **identity}
+    except Exception as exc:
+        return {"reachable": False, "error": str(exc)}
 
 
 # Self-test (run via: python endpoint_identity.py selftest <url> <substring>)
