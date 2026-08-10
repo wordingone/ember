@@ -1,8 +1,9 @@
 # goal_id: EMBER-02
-# workstream_id: EMBER-02B
+# workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 from __future__ import annotations
 
+import ast
 import os
 from pathlib import Path
 import re
@@ -86,6 +87,46 @@ def _run(code: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _timeshare_import_scope(source: str) -> tuple[bool, int]:
+    tree = ast.parse(source)
+    module_scope = False
+    nested_count = 0
+
+    class Visitor(ast.NodeVisitor):
+        def __init__(self) -> None:
+            self.scope_depth = 0
+
+        def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+            self.scope_depth += 1
+            self.generic_visit(node)
+            self.scope_depth -= 1
+
+        visit_AsyncFunctionDef = visit_FunctionDef
+
+        def visit_ClassDef(self, node: ast.ClassDef) -> None:
+            self.scope_depth += 1
+            self.generic_visit(node)
+            self.scope_depth -= 1
+
+        def _record(self) -> None:
+            nonlocal module_scope, nested_count
+            if self.scope_depth:
+                nested_count += 1
+            else:
+                module_scope = True
+
+        def visit_Import(self, node: ast.Import) -> None:
+            if any(alias.name == "timeshare_pretrain" for alias in node.names):
+                self._record()
+
+        def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+            if node.module == "timeshare_pretrain":
+                self._record()
+
+    Visitor().visit(tree)
+    return module_scope, nested_count
+
+
 def test_timeshare_module_and_live_consumers_are_importable() -> None:
     assert len(IMPORTABLE_DIRECT_MODULES) == 13
     for module in ("timeshare_pretrain", *IMPORTABLE_DIRECT_MODULES):
@@ -150,6 +191,13 @@ def test_execution_only_manifest_binds_source_and_historical_importers() -> None
     assert {row["import_outcome"] for row in manifest["importers"]} == {
         "execution_denied_by_own_guard"
     }
+    for row in manifest["importers"]:
+        importer = REPO_ROOT / row["path"]
+        source_text = importer.read_text(encoding="utf-8")
+        module_scope, nested_count = _timeshare_import_scope(source_text)
+        assert row["sha256"] == hashlib.sha256(importer.read_bytes()).hexdigest()
+        assert row["module_scope"] is module_scope
+        assert row["nested_import_count"] == nested_count
 
 
 def test_every_ember02_direct_importer_has_an_explicit_classification() -> None:
