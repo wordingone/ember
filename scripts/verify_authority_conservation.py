@@ -22,7 +22,7 @@ import sys
 import tempfile
 from collections import Counter
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, Mapping
 
 
 INVARIANT_SHA256 = "08A0EB7418C09A8088BE4658E10785107ABBB7507FC2DBCDC789936AA54E02A6"
@@ -209,6 +209,23 @@ HISTORICAL_EXECUTABLES = [
     "scripts/timeshare_pretrain.py",
     "scripts/train_multimodal_v0.py",
 ]
+TIMESHARE_IMPORT_BOUNDARY_MANIFEST = (
+    "docs/ember-restart/timeshare-importer-classification-1451-v1.json"
+)
+TIMESHARE_EXECUTION_BOUNDARY_KEYS = {"helper", "main", "entrypoint"}
+TIMESHARE_IMPORT_MANIFEST_KEYS = {
+    "schema",
+    "source",
+    "source_sha256",
+    "import_denial",
+    "execution_boundary",
+    "importers",
+}
+TIMESHARE_EXECUTION_BOUNDARY = {
+    "helper": "_historical_only_refusal",
+    "main": "main",
+    "entrypoint": "__main__",
+}
 REQUIRED_OPERATOR_BENCHMARKS = [
     "SWE-Bench Pro",
     "FrontierCode Diamond",
@@ -704,7 +721,120 @@ def check_manifest(
             errors.append(finding(2, "manifest.evidence_missing", did))
 
 
+def _execution_boundary_for_source(root: Path) -> dict[str, str] | None:
+    manifest_path = root / TIMESHARE_IMPORT_BOUNDARY_MANIFEST
+    if not manifest_path.is_file():
+        return None
+    try:
+        payload = json.loads(read_text(manifest_path))
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    boundary = payload.get("execution_boundary")
+    if (
+        set(payload) != TIMESHARE_IMPORT_MANIFEST_KEYS
+        or payload.get("source") != "scripts/timeshare_pretrain.py"
+    ):
+        return None
+    if (
+        not isinstance(boundary, dict)
+        or set(boundary) != TIMESHARE_EXECUTION_BOUNDARY_KEYS
+        or boundary != TIMESHARE_EXECUTION_BOUNDARY
+    ):
+        return None
+    return {key: str(boundary[key]) for key in TIMESHARE_EXECUTION_BOUNDARY_KEYS}
+
+
+def _first_executable_statement(statements: list[ast.stmt]) -> ast.stmt | None:
+    statements = list(statements)
+    if (
+        statements
+        and isinstance(statements[0], ast.Expr)
+        and isinstance(statements[0].value, ast.Constant)
+        and isinstance(statements[0].value.value, str)
+    ):
+        statements.pop(0)
+    while (
+        statements
+        and isinstance(statements[0], ast.ImportFrom)
+        and statements[0].module == "__future__"
+    ):
+        statements.pop(0)
+    return statements[0] if statements else None
+
+
+def _check_execution_only_shape(
+    rel: str,
+    tree: ast.Module,
+    boundary: Mapping[str, str],
+    errors: list[dict[str, Any]],
+) -> None:
+    helper_name = boundary["helper"]
+    main_name = boundary["main"]
+    helper_defs = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == helper_name]
+    main_defs = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == main_name]
+    if len(helper_defs) != 1:
+        errors.append(finding(4, "historical.execution_helper_missing", rel))
+    if len(main_defs) != 1:
+        errors.append(finding(4, "historical.execution_main_missing", rel))
+    if len(helper_defs) != 1 or len(main_defs) != 1:
+        return
+
+    helper_first = _first_executable_statement(helper_defs[0].body)
+    helper_guarded = (
+        isinstance(helper_first, ast.Raise)
+        and isinstance(helper_first.exc, ast.Call)
+        and isinstance(helper_first.exc.func, ast.Name)
+        and helper_first.exc.func.id == "SystemExit"
+    )
+    if not helper_guarded:
+        errors.append(finding(4, "historical.execution_helper_guard", rel))
+
+    main_first = _first_executable_statement(main_defs[0].body)
+    main_calls_helper = (
+        isinstance(main_first, ast.Expr)
+        and isinstance(main_first.value, ast.Call)
+        and isinstance(main_first.value.func, ast.Name)
+        and main_first.value.func.id == helper_name
+        and not main_first.value.args
+        and not main_first.value.keywords
+    )
+    if not main_calls_helper:
+        errors.append(finding(4, "historical.execution_main_call", rel))
+
+    entrypoint_guards = []
+    for node in tree.body:
+        if not isinstance(node, ast.If) or not isinstance(node.test, ast.Compare):
+            continue
+        if (
+            isinstance(node.test.left, ast.Name)
+            and node.test.left.id == "__name__"
+            and len(node.test.ops) == 1
+            and isinstance(node.test.ops[0], ast.Eq)
+            and len(node.test.comparators) == 1
+            and isinstance(node.test.comparators[0], ast.Constant)
+            and node.test.comparators[0].value == boundary["entrypoint"]
+        ):
+            entrypoint_guards.append(node)
+    if len(entrypoint_guards) != 1:
+        errors.append(finding(4, "historical.execution_entrypoint", rel))
+        return
+    entry_first = _first_executable_statement(entrypoint_guards[0].body)
+    entry_calls_main = (
+        isinstance(entry_first, ast.Expr)
+        and isinstance(entry_first.value, ast.Call)
+        and isinstance(entry_first.value.func, ast.Name)
+        and entry_first.value.func.id == main_name
+        and not entry_first.value.args
+        and not entry_first.value.keywords
+    )
+    if not entry_calls_main:
+        errors.append(finding(4, "historical.execution_entrypoint", rel))
+
+
 def check_historical_executables(root: Path, errors: list[dict[str, Any]]) -> None:
+    execution_boundary = _execution_boundary_for_source(root)
     for rel in HISTORICAL_EXECUTABLES:
         path = root / rel
         if not path.is_file():
@@ -721,21 +851,10 @@ def check_historical_executables(root: Path, errors: list[dict[str, Any]]) -> No
         except SyntaxError as exc:
             errors.append(finding(4, "historical.syntax_invalid", f"{rel}: {exc}"))
             continue
-        statements = list(tree.body)
-        if (
-            statements
-            and isinstance(statements[0], ast.Expr)
-            and isinstance(statements[0].value, ast.Constant)
-            and isinstance(statements[0].value.value, str)
-        ):
-            statements.pop(0)
-        while (
-            statements
-            and isinstance(statements[0], ast.ImportFrom)
-            and statements[0].module == "__future__"
-        ):
-            statements.pop(0)
-        first = statements[0] if statements else None
+        if rel == "scripts/timeshare_pretrain.py" and execution_boundary is not None:
+            _check_execution_only_shape(rel, tree, execution_boundary, errors)
+            continue
+        first = _first_executable_statement(tree.body)
         guarded = (
             isinstance(first, ast.Raise)
             and isinstance(first.exc, ast.Call)
@@ -750,6 +869,158 @@ def check_historical_executables(root: Path, errors: list[dict[str, Any]]) -> No
                     f"{rel}: first executable statement must raise SystemExit",
                 )
             )
+
+
+def check_execution_only_import_boundary(
+    root: Path, errors: list[dict[str, Any]]
+) -> None:
+    """Validate the stage-2 importer contract without weakening the old lock.
+
+    The manifest is optional in stage 1: its absence means no importer
+    boundary has been enabled. A fully closed manifest enables the exact
+    helper/main/__main__ execution shape; malformed or foreign manifests leave
+    the base-kernel direct-raise rule active and are rejected below.
+    """
+    manifest_path = root / TIMESHARE_IMPORT_BOUNDARY_MANIFEST
+    if not manifest_path.is_file():
+        return
+    try:
+        payload = json.loads(read_text(manifest_path))
+    except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        errors.append(
+            finding(4, "historical.import_manifest_invalid", str(exc))
+        )
+        return
+    if not isinstance(payload, dict):
+        errors.append(
+            finding(4, "historical.import_manifest_invalid", "root must be an object")
+        )
+        return
+    if set(payload) != TIMESHARE_IMPORT_MANIFEST_KEYS:
+        errors.append(
+            finding(
+                4,
+                "historical.import_manifest_keys",
+                "exact top-level importer manifest keys required",
+            )
+        )
+    if payload.get("schema") != "ember-timeshare-importer-classification-v1":
+        errors.append(
+            finding(4, "historical.import_manifest_schema", str(payload.get("schema")))
+        )
+    if payload.get("import_denial") != "execution_only":
+        errors.append(
+            finding(4, "historical.import_manifest_denial", "execution_only required")
+        )
+    execution_boundary = payload.get("execution_boundary")
+    if (
+        not isinstance(execution_boundary, dict)
+        or set(execution_boundary) != TIMESHARE_EXECUTION_BOUNDARY_KEYS
+        or execution_boundary != TIMESHARE_EXECUTION_BOUNDARY
+    ):
+        errors.append(
+            finding(
+                4,
+                "historical.import_manifest_execution_contract",
+                "closed helper/main/__main__ execution boundary required",
+            )
+        )
+    source_rel = payload.get("source")
+    source_path = root / "scripts" / "timeshare_pretrain.py"
+    if source_rel != "scripts/timeshare_pretrain.py":
+        errors.append(
+            finding(4, "historical.import_manifest_source", str(source_rel))
+        )
+    source_hash = payload.get("source_sha256")
+    if not isinstance(source_hash, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", source_hash):
+        errors.append(
+            finding(4, "historical.import_manifest_source_hash", "64-hex source_sha256 required")
+        )
+    elif source_path.is_file() and sha256(source_path) != source_hash.upper():
+        errors.append(
+            finding(4, "historical.import_manifest_source_hash", "source bytes do not match")
+        )
+    rows = payload.get("importers")
+    if not isinstance(rows, list) or not rows:
+        errors.append(
+            finding(4, "historical.import_manifest_rows", "non-empty importers list required")
+        )
+        return
+    seen: set[str] = set()
+    required = {
+        "path", "classification", "import_outcome", "sha256",
+        "module_scope", "nested_import_count",
+    }
+
+    def is_timeshare_import(node: ast.AST) -> bool:
+        return (
+            isinstance(node, ast.Import)
+            and any(alias.name == "timeshare_pretrain" for alias in node.names)
+        ) or (
+            isinstance(node, ast.ImportFrom)
+            and node.module == "timeshare_pretrain"
+        )
+
+    for row in rows:
+        if not isinstance(row, dict) or set(row) != required:
+            errors.append(
+                finding(4, "historical.import_manifest_row", "closed importer row required")
+            )
+            continue
+        rel = row["path"]
+        if (
+            not isinstance(rel, str)
+            or not rel.startswith("scripts/")
+            or Path(rel).is_absolute()
+            or ".." in Path(rel).parts
+            or rel in seen
+            or rel == "scripts/timeshare_pretrain.py"
+        ):
+            errors.append(
+                finding(4, "historical.import_manifest_path", str(rel))
+            )
+            continue
+        seen.add(rel)
+        path = root / rel
+        if not path.is_file():
+            errors.append(finding(4, "historical.import_manifest_missing", rel))
+            continue
+        header = "\n".join(read_text(path).splitlines()[:20])
+        if "EMBER_ARTIFACT_CLASS=historical_only" not in header:
+            errors.append(finding(4, "historical.import_manifest_marker", rel))
+        if row["classification"] != "historical_only":
+            errors.append(finding(4, "historical.import_manifest_class", rel))
+        if row["import_outcome"] not in {
+            "importable", "execution_denied_by_own_guard"
+        }:
+            errors.append(finding(4, "historical.import_manifest_outcome", rel))
+        if not isinstance(row["module_scope"], bool):
+            errors.append(finding(4, "historical.import_manifest_scope", rel))
+        if (
+            isinstance(row["nested_import_count"], bool)
+            or not isinstance(row["nested_import_count"], int)
+            or row["nested_import_count"] < 0
+        ):
+            errors.append(finding(4, "historical.import_manifest_nested", rel))
+        try:
+            tree = ast.parse(read_text(path), filename=rel)
+            module_scope = any(is_timeshare_import(node) for node in tree.body)
+            nested_import_count = sum(
+                1
+                for node in ast.walk(tree)
+                if is_timeshare_import(node) and node not in tree.body
+            )
+            if row["module_scope"] is not module_scope:
+                errors.append(finding(4, "historical.import_manifest_scope", rel))
+            if row["nested_import_count"] != nested_import_count:
+                errors.append(finding(4, "historical.import_manifest_nested", rel))
+        except SyntaxError as exc:
+            errors.append(finding(4, "historical.import_manifest_syntax", f"{rel}: {exc}"))
+        row_hash = row["sha256"]
+        if not isinstance(row_hash, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", row_hash):
+            errors.append(finding(4, "historical.import_manifest_hash", rel))
+        elif sha256(path) != row_hash.upper():
+            errors.append(finding(4, "historical.import_manifest_hash", rel))
 
 
 def parse_graph_selection(
@@ -2289,6 +2560,7 @@ def verify(
     check_configs(root, policy, errors, active_goal)
     check_input_identity_pins(root, errors)
     check_historical_executables(root, errors)
+    check_execution_only_import_boundary(root, errors)
     check_lower_precedence_authority(root, errors)
     check_mechanism_registry(root, errors)
     check_authority_supersession_crosswalk(root, errors)
