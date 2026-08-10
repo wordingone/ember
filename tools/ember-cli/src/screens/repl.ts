@@ -1966,11 +1966,6 @@ export function ReplScreen({
       return;
     }
     setControlDisabledReason(undefined);
-    if (processOffer !== undefined && processOffer.process === selectedProcess) {
-      setStartDialogParameters({ ...DEFAULT_START_PARAMETERS });
-      setStartDialogOpen(true);
-      return;
-    }
     handleCommandButton(activation);
   };
 
@@ -2076,7 +2071,10 @@ export function ReplScreen({
       terminalRows,
       onControl: handleOperatorControl,
       onStartParameters: dispatchStartParameters,
-      onStartOpen: () => activateStartRef.current(),
+      onStartOpen: () => {
+        const selected = processOptions.find((option) => option.name === selectedProcess);
+        handleCommandButton(startActivation(selected, processOffer));
+      },
       startDialogParameters,
       onStartEdit: (field, value) => setStartDialogParameters((current) => clampStartParameters({ ...current, [field]: value })),
       startDialogOpen,
