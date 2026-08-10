@@ -1,6 +1,8 @@
 // goal_id: EMBER-02
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+// authority: current Ember CLI/Lab governed surface; no parallel runtime authority
+// claim_boundary: CPU/source-level START parameter dialog only; no training/result claim
 export interface StartParameters {
   dataSize: number;
   steps: number;
