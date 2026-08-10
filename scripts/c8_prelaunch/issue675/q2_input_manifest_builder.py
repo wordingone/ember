@@ -11,6 +11,7 @@ import math
 import os
 import re
 import shutil
+import stat
 import tempfile
 from pathlib import Path
 from typing import Mapping
@@ -113,9 +114,20 @@ def _load_json(path: Path, code: str) -> dict[str, object]:
 
 
 def _validate_canonical_b2_source(path: Path, lineage_run_id: str) -> dict[str, object]:
+    supplied = Path(os.path.abspath(os.fspath(path)))
+    canonical_path = Path(os.path.abspath(os.fspath(_CANONICAL_B2_RECEIPT_PATH)))
+    if os.path.normcase(os.fspath(supplied)) != os.path.normcase(os.fspath(canonical_path)):
+        _refuse("INPUT_B2_RECEIPT_PATH_MISMATCH")
     try:
-        resolved = Path(path).resolve(strict=True)
-        canonical = Path(_CANONICAL_B2_RECEIPT_PATH).resolve(strict=True)
+        for component in (supplied, *supplied.parents):
+            metadata = os.lstat(component)
+            if stat.S_ISLNK(metadata.st_mode) or (
+                getattr(metadata, "st_file_attributes", 0)
+                & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+            ):
+                _refuse("INPUT_B2_RECEIPT_PATH_MISMATCH")
+        resolved = supplied.resolve(strict=True)
+        canonical = canonical_path.resolve(strict=True)
     except OSError:
         _refuse("INPUT_B2_RECEIPT_UNAVAILABLE")
     if resolved != canonical:
