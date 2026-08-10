@@ -44,10 +44,6 @@ Selftest: python timeshare_pretrain.py --selftest
 
 from __future__ import annotations
 
-raise SystemExit(
-    "historical_only: the sub-3B cbase trainer and every importer are execution-denied"
-)
-
 import hashlib
 import json
 import os
@@ -2682,7 +2678,14 @@ def _selftest_v0ext() -> None:
 # Entry point
 # ---------------------------------------------------------------------------
 
+def _historical_only_refusal() -> None:
+    raise SystemExit(
+        "historical_only: the sub-3B cbase trainer is execution-denied"
+    )
+
+
 def main(argv: list[str] | None = None) -> None:
+    _historical_only_refusal()
     import argparse
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--selftest", action="store_true",
