@@ -3231,6 +3231,53 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
                 ],
             )
 
+    def test_same_manifest_chained_specialist_refuses_before_runner_with_receipt(
+        self,
+    ) -> None:
+        """Issue #1445: a second hop must not silently restart record zero."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            parent_manifest = paths["checkpoint"] / "checkpoint-manifest.json"
+            parent = json.loads(parent_manifest.read_text(encoding="utf-8"))
+            parent["lineage"] = {
+                "episode": {
+                    "data_verification_receipt": {
+                        "data_manifest_sha256": sha256_bytes(
+                            paths["manifest"].read_bytes()
+                        )
+                    }
+                }
+            }
+            write_json(parent_manifest, parent)
+
+            launch = self._validate(module, paths)
+            runner_calls: list[list[str]] = []
+
+            def forbidden_runner(argv, **_kwargs):
+                runner_calls.append(argv)
+                raise AssertionError("chained specialist refusal reached runner")
+
+            exit_code = module.execute_validated_launch(
+                paths["repo"], launch, run_process=forbidden_runner
+            )
+
+            self.assertEqual(exit_code, 125)
+            self.assertEqual(runner_calls, [])
+            self.assertFalse(launch.runner_receipt.exists())
+            receipt = json.loads(
+                module._execution_receipt_path(launch).read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                receipt["prelaunch_refusal"],
+                {
+                    "code": "CHAINED_SPECIALIST_SAME_MANIFEST_REFUSED",
+                    "outcome": "PRELAUNCH_REJECTED",
+                },
+            )
+            self.assertEqual(receipt["exit_code"], 125)
+
     def test_plain_bundle_has_no_specialist_route(self) -> None:
         """A run spec with neither training_data_manifest nor
         training_capability is the pre-#1430 shape -- ResumePlumbingTests'
