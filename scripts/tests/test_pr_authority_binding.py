@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -21,6 +22,20 @@ from check_pr_authority_binding import (  # noqa: E402
 GOAL = "EMBER-01"
 OUTCOME = "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
 WORKSTREAMS = ("EMBER-01A", "EMBER-01B", "EMBER-01C")
+
+
+def test_imports_as_scripts_namespace_package() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [sys.executable, "-B", "-c", "import scripts.check_pr_authority_binding"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        shell=False,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_exact_binding_passes() -> None:

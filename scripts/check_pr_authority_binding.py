@@ -14,7 +14,10 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
-from verify_authority_conservation import authority_path
+if __package__:
+    from .verify_authority_conservation import authority_path
+else:
+    from verify_authority_conservation import authority_path
 
 
 POLICY_RE = re.compile(
