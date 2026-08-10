@@ -13,6 +13,7 @@
 
 import type { CommandContext, RegistryCommand } from "../types/command-types.ts";
 import { resolveEmberSourceRootOrCwd } from "../utils/repo-root.ts";
+import { publishActivityFeedInfrastructureFailure } from "../services/activity-feed.ts";
 import { spawn, spawnSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
@@ -39,6 +40,12 @@ export interface CertifiedLaunchHandle {
 }
 
 export type CertifiedLaunchRunnerResult = LaunchPacketRunResult | CertifiedLaunchHandle;
+
+export interface CertifiedLaunchFailure {
+  pid: number;
+  status: number | null;
+  message: string;
+}
 
 export const PREFLIGHT_TIMEOUT_MS = 600_000;
 // The certificate permits at most 15 minutes of training. Keep one minute for
@@ -266,6 +273,8 @@ interface TrainCommandDeps {
     executable: string,
     args: string[],
   ) => CertifiedLaunchRunnerResult | Promise<CertifiedLaunchRunnerResult>;
+  /** Existing cockpit monitor-owned surface for receipt-less child failures. */
+  reportCertifiedLaunchFailure?: (failure: CertifiedLaunchFailure) => void;
   /** Python executable; defaults to EMBER_PYTHON_BIN env, else "python". */
   pythonBin?: string;
   /** Ember repo root override; defaults to _defaultRepoRoot(ctx.cwd). */
@@ -557,9 +566,23 @@ function _isCertifiedLaunchHandle(
  * unhandled promise without fabricating a second completion surface. */
 function _interpretCertifiedDispatch(
   result: CertifiedLaunchRunnerResult,
+  reportFailure: (failure: CertifiedLaunchFailure) => void,
 ): { type: "message"; message: string; exitCode?: number } {
   if (!_isCertifiedLaunchHandle(result)) return _interpretCertifiedResult(result);
-  void result.completion.catch(() => undefined);
+  void result.completion.then(
+    (terminal) => {
+      const interpreted = _interpretCertifiedResult(terminal);
+      if (interpreted.exitCode === undefined) return;
+      reportFailure({ pid: result.pid, status: terminal.status, message: interpreted.message });
+    },
+    () => {
+      reportFailure({
+        pid: result.pid,
+        status: null,
+        message: "error: certified train consumer completion monitor failed before a terminal execution receipt was observed.",
+      });
+    },
+  );
   return {
     type: "message" as const,
     message: [
@@ -596,6 +619,12 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
   const runLaunchPacket = deps.runLaunchPacket ?? _defaultLaunchPacketRunner;
   const runCertifiedLaunch =
     deps.runCertifiedLaunch ?? _defaultCertifiedLaunchRunner;
+  const reportCertifiedLaunchFailure =
+    deps.reportCertifiedLaunchFailure ?? ((failure: CertifiedLaunchFailure) => {
+      publishActivityFeedInfrastructureFailure(
+        `${failure.message} child pid=${failure.pid}; exit=${failure.status ?? "null"}`,
+      );
+    });
 
   // Offer state is module-scoped (trainOffers, above) -- deliberately NOT redeclared
   // here -- so it is single and session-scoped regardless of how many
@@ -679,7 +708,7 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
             exitCode: 1,
           };
         }
-        return _interpretCertifiedDispatch(certifiedResult);
+        return _interpretCertifiedDispatch(certifiedResult, reportCertifiedLaunchFailure);
       }
 
       let trainArgs: TrainArgs;
@@ -788,7 +817,7 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
             exitCode: 1,
           };
         }
-        return _interpretCertifiedDispatch(certifiedResult);
+        return _interpretCertifiedDispatch(certifiedResult, reportCertifiedLaunchFailure);
       }
 
       // Default mode (no --execute, extracted command validated above but no longer

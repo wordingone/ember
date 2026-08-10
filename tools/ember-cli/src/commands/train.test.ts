@@ -193,7 +193,7 @@ describe("train command", () => {
     expect(started.pid).toBeGreaterThan(0);
     await Bun.sleep(10);
     expect(eventLoopTurnRan).toBe(true);
-    expect([0, null]).toContain((await started.completion).status);
+    expect((await started.completion).status).toBe(0);
   });
 
   it("returns /train confirm after spawn while the certified consumer continues in background", async () => {
@@ -235,6 +235,82 @@ describe("train command", () => {
       });
       await completion;
       expect(childFinished).toBe(true);
+    } finally {
+      fs.rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  it("hands receipt-less background terminal failures to the cockpit monitor exactly once", async () => {
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-background-failure-"));
+    try {
+      writeCanonicalArtifacts(scratch);
+      for (const terminal of [
+        { status: 9, stdout: "" },
+        { status: null, stdout: "" },
+        { status: 0, stdout: "not-a-certified-response" },
+      ] satisfies LaunchPacketRunResult[]) {
+        let finish: ((result: LaunchPacketRunResult) => void) | undefined;
+        const completion = new Promise<LaunchPacketRunResult>((resolve) => { finish = resolve; });
+        const failures: Array<{ pid: number; status: number | null; message: string }> = [];
+        const cmd = createTrainCommand({
+          repoRoot: scratch,
+          runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+          runCertifiedLaunch: () => ({ kind: "background", pid: 4321, completion }),
+          reportCertifiedLaunchFailure: (failure) => failures.push(failure),
+        });
+        const dispatchDeps = {
+          getCommands: async () => [cmd],
+          findCommand: (name: string) => (name === "train" ? cmd : undefined),
+        };
+        const offer = await tryDispatchSlashCommand("/train", mockCtx, dispatchDeps);
+        const offerId = offer?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
+        expect(offerId).toBeDefined();
+        await tryDispatchSlashCommand(`/train confirm ${offerId}`, mockCtx, dispatchDeps);
+
+        finish?.(terminal);
+        await completion;
+        await Promise.resolve();
+
+        expect(failures).toHaveLength(1);
+        expect(failures[0]?.pid).toBe(4321);
+        expect(failures[0]?.status).toBe(terminal.status);
+        expect(failures[0]?.message).toContain("certified train consumer");
+      }
+    } finally {
+      fs.rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  it("leaves a valid certified background completion to the receipt watcher", async () => {
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-background-success-"));
+    try {
+      writeCanonicalArtifacts(scratch);
+      let finish: ((result: LaunchPacketRunResult) => void) | undefined;
+      const completion = new Promise<LaunchPacketRunResult>((resolve) => { finish = resolve; });
+      const failures: Array<{ pid: number; status: number | null; message: string }> = [];
+      const cmd = createTrainCommand({
+        repoRoot: scratch,
+        runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+        runCertifiedLaunch: () => ({ kind: "background", pid: 9876, completion }),
+        reportCertifiedLaunchFailure: (failure) => failures.push(failure),
+      });
+      const dispatchDeps = {
+        getCommands: async () => [cmd],
+        findCommand: (name: string) => (name === "train" ? cmd : undefined),
+      };
+      const offer = await tryDispatchSlashCommand("/train", mockCtx, dispatchDeps);
+      const offerId = offer?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
+      expect(offerId).toBeDefined();
+      await tryDispatchSlashCommand(`/train confirm ${offerId}`, mockCtx, dispatchDeps);
+
+      finish?.({
+        status: 0,
+        stdout: JSON.stringify({ execution_receipt: "receipt.json", artifact_root: "artifacts/run" }),
+      });
+      await completion;
+      await Promise.resolve();
+
+      expect(failures).toEqual([]);
     } finally {
       fs.rmSync(scratch, { recursive: true, force: true });
     }

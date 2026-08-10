@@ -28,6 +28,7 @@ import {
   formatGoalReceiptLine,
   startActivityFeed,
   getActivityFeedState,
+  publishActivityFeedInfrastructureFailure,
   RECEIPT_RETRY_DELAY_MS,
   MAX_TAIL_LINES_PER_TICK,
   BoundedSet,
@@ -476,6 +477,22 @@ describe("startActivityFeed — engine (real fs)", () => {
       ...overrides,
     };
   }
+
+  it("renders a real monitor-owned infrastructure failure and appends it to the ledger", async () => {
+    const deps = baseDeps();
+    handle = startActivityFeed(deps);
+
+    expect(publishActivityFeedInfrastructureFailure("certified train consumer exit=9")).toBe(true);
+    await sleep(20);
+
+    const found = getActivityFeedState().recentLines.find((line) =>
+      line.text.includes("certified train consumer exit=9"),
+    );
+    expect(found?.source).toBe("watchdog");
+    expect(fs.readFileSync(deps.ledgerPath, "utf-8")).toContain(
+      "certified train consumer exit=9",
+    );
+  });
 
   it(
     "renders a line for a new well-formed receipt file and appends the ledger",
