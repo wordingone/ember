@@ -114,7 +114,7 @@ import {
   createOperatorReceiptWriter,
   type OperatorReceiptWriter,
 } from "../services/operator-receipts.ts";
-import { clampStartParameters, DEFAULT_START_PARAMETERS, formatStartTrainCommand, type StartParameters } from "../components/start-parameters.ts";
+import { clampStartParameters, DEFAULT_START_PARAMETERS, type StartParameters } from "../components/start-parameters.ts";
 import {
   createLivenessHeartbeatWriter,
   readHeartbeatRow,
@@ -231,6 +231,7 @@ export interface ReplScreenProps {
   ideIntegration?: { context?: string };
   outputStyles?:   { activeStylePrompt?: string };
   session?:        unknown;
+  operatorReceiptWriter?: OperatorReceiptWriter;
   onExit?:         () => void;
 }
 
@@ -685,6 +686,7 @@ export function ReplScreen({
   ideIntegration,
   outputStyles,
   session:        _session,
+  operatorReceiptWriter,
   onExit:         _onExit,
 }: ReplScreenProps): React.ReactElement {
   const { rows: terminalRows, columns: terminalCols } = useContext(TerminalSizeContext);
@@ -831,7 +833,7 @@ export function ReplScreen({
   // mounted session.
   const operatorReceiptsRef = useRef<OperatorReceiptWriter | null>(null);
   if (!operatorReceiptsRef.current) {
-    operatorReceiptsRef.current = createOperatorReceiptWriter();
+    operatorReceiptsRef.current = operatorReceiptWriter ?? createOperatorReceiptWriter();
   }
 
   // #413: cockpit liveness heartbeat -- written every second by the unconditional tick below.
@@ -1934,7 +1936,7 @@ export function ReplScreen({
     setControlDisabledReason(undefined);
     operatorReceiptsRef.current?.append("start_parameters_confirmed", JSON.stringify(parameters));
     setStartDialogOpen(false);
-    handleCommandButton({ ...activation, text: formatStartTrainCommand(parameters) });
+    handleCommandButton(activation);
   };
 
   activateStartRef.current = () => {
@@ -1945,6 +1947,11 @@ export function ReplScreen({
       return;
     }
     setControlDisabledReason(undefined);
+    if (processOffer !== undefined && processOffer.process === selectedProcess) {
+      setStartDialogParameters({ ...DEFAULT_START_PARAMETERS });
+      setStartDialogOpen(true);
+      return;
+    }
     handleCommandButton(activation);
   };
 
@@ -2053,7 +2060,7 @@ export function ReplScreen({
       terminalRows,
       onControl: handleOperatorControl,
       onStartParameters: dispatchStartParameters,
-      onStartOpen: () => { setStartDialogParameters({ ...DEFAULT_START_PARAMETERS }); setStartDialogOpen(true); },
+      onStartOpen: () => activateStartRef.current(),
       startDialogParameters,
       onStartEdit: (field, value) => setStartDialogParameters((current) => clampStartParameters({ ...current, [field]: value })),
       startDialogOpen,

@@ -1218,7 +1218,7 @@ export function OperatorSurfacePane({
     const startColor = startControlStage === "confirm" ? "yellow" : startControlStage === "armed" ? "green" : "gray";
     const onStartClick = isStart
       ? () => {
-          if (!enabled) {
+          if (!enabled || startControlStage !== "confirm") {
             onControl?.(action, selectedControlRunId);
             return;
           }
