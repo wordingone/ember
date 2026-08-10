@@ -2,13 +2,14 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
 import { TerminalSizeContext } from "../ink/components.ts";
 import { _deliverKeyEvent } from "../ink/hooks.ts";
-import { resetCommandRegistryForTests } from "../command-registry.ts";
+import { resetCommandRegistryForTests, setCommandRegistryDeps } from "../command-registry.ts";
 import { IDENTITY_TAGLINE } from "../components/logo-homescreen.ts";
+import type { RegistryCommand } from "../types/command-types.ts";
 import { ReplScreen } from "./repl.ts";
 
 const COLS = 100;
@@ -27,7 +28,22 @@ function reconstructRows(out: string): Map<number, string> {
       col = Number(match[2]);
       continue;
     }
-    if (token.startsWith("\x1b[")) continue;
+    if (token.startsWith("\x1b[")) {
+      const eraseLine = /^\x1b\[([0-2]?)K$/.exec(token);
+      if (eraseLine) {
+        const mode = eraseLine[1] === "" ? 0 : Number(eraseLine[1]);
+        const cells = grid.get(row);
+        if (mode === 2) {
+          grid.delete(row);
+        } else if (cells) {
+          for (const column of [...cells.keys()]) {
+            if ((mode === 0 && column >= col) || (mode === 1 && column <= col)) cells.delete(column);
+          }
+          if (cells.size === 0) grid.delete(row);
+        }
+      }
+      continue;
+    }
     let cells = grid.get(row);
     if (!cells) {
       cells = new Map();
@@ -54,12 +70,14 @@ async function flush(): Promise<void> {
   }
 }
 
-const chunks: string[] = [];
-let handle: ReturnType<typeof mountInk> | null = null;
-
-beforeAll(() => {
+function mountRepl(commands?: RegistryCommand[]): {
+  chunks: string[];
+  unmount: () => void;
+} {
   resetCommandRegistryForTests();
-  handle = mountInk(
+  if (commands) setCommandRegistryDeps({ getBuiltinCommands: () => commands });
+  const chunks: string[] = [];
+  const handle = mountInk(
     React.createElement(
       TerminalSizeContext.Provider,
       { value: { columns: COLS, rows: ROWS } },
@@ -75,17 +93,60 @@ beforeAll(() => {
       stdout: { columns: COLS, rows: ROWS },
     },
   );
-});
-
-afterAll(() => handle?.unmount());
+  return {
+    chunks,
+    unmount: () => {
+      handle.unmount();
+      resetCommandRegistryForTests();
+    },
+  };
+}
 
 describe("#1369 autocomplete keeps the banner/spine region rendered", () => {
+  test("terminal-grid reconstruction applies CSI erase-line updates", () => {
+    const rows = reconstructRows("\x1b[1;1HIDENTITY\x1b[1;1H\x1b[2KNEW");
+    expect(rows.get(1)).toBe("NEW");
+  });
+
   test("typing '/' leaves both the palette and Homescreen identity in the final grid", async () => {
-    await flush();
-    _deliverKeyEvent("/", {});
-    await flush();
-    const rows = [...reconstructRows(chunks.join("")).values()];
-    expect(rows.some((line) => line.includes("/observatory"))).toBe(true);
-    expect(rows.some((line) => line.includes(IDENTITY_TAGLINE))).toBe(true);
+    const harness = mountRepl();
+    try {
+      await flush();
+      _deliverKeyEvent("/", {});
+      await flush();
+      const rows = [...reconstructRows(harness.chunks.join("")).values()];
+      expect(rows.some((line) => line.includes("/observatory"))).toBe(true);
+      expect(rows.some((line) => line.includes(IDENTITY_TAGLINE))).toBe(true);
+    } finally {
+      harness.unmount();
+    }
+  });
+
+  test("an exact argument-free registered command dispatches once on the first Enter", async () => {
+    const dispatched: string[] = [];
+    const harness = mountRepl([
+      {
+        name: "probeexact",
+        description: "first-enter dispatch probe",
+        isEnabled: () => true,
+        execute: async (args: string) => {
+          dispatched.push(args);
+          return { type: "message", message: "PROBEEXACT-EXECUTED" };
+        },
+      },
+    ]);
+    try {
+      await flush();
+      for (const character of "/probeexact") _deliverKeyEvent(character, {});
+      await flush();
+      _deliverKeyEvent("return", {});
+      await flush();
+
+      expect(dispatched).toEqual([""]);
+      const rows = [...reconstructRows(harness.chunks.join("")).values()];
+      expect(rows.some((line) => line.includes("PROBEEXACT-EXECUTED"))).toBe(true);
+    } finally {
+      harness.unmount();
+    }
   });
 });

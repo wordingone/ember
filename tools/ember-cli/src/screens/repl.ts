@@ -1775,8 +1775,9 @@ export function ReplScreen({
     }
 
     // Slash-command dropdown navigation takes priority over every other binding while it's open
-    // (b22 item 1) -- Enter completes the highlighted command into the input instead of falling
-    // through to message-submit below.
+    // (b22 item 1). Enter completes a partial command (or a command that still needs arguments),
+    // but an exact argument-free registered command must fall through to the ordinary submit
+    // path so its first Enter dispatches exactly once (#1369 acceptance amendment).
     if (dropdownOpen && dropdownDisplay.visible.length > 0) {
       // 2026-07-25 palette-overflow-render finding: wrap over the FULL match list
       // (dropdownMatches), not the visible-cap slice -- computeSlashDropdownDisplay now scrolls
@@ -1792,8 +1793,14 @@ export function ReplScreen({
       }
       if (key.return) {
         const chosen = dropdownDisplay.visible[dropdownDisplay.selectedIndex];
-        if (chosen) inputActions.setText(completeSlashSelection(chosen));
-        return;
+        if (!chosen) return;
+        const liveCommand = inputActions.getSnapshot().text.trim();
+        const isExactArgumentFreeCommand =
+          liveCommand === `/${chosen.name}` && !chosen.argumentHint;
+        if (!isExactArgumentFreeCommand) {
+          inputActions.setText(completeSlashSelection(chosen));
+          return;
+        }
       }
     }
 
