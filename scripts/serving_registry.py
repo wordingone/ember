@@ -1,9 +1,19 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """serving_registry.py — single-source-of-truth registry for all running model servers (#516).
 
 Contract: state/serving-registry.json (ABSOLUTE runtime location: the state/ dir inside the ember repo).
 Format: JSONL with one row per registered server.
 Row schema: {port, model_path, pid, launched_by, ts, device}
+
+Planned-outage marker contract: ``PLANNED_OUTAGE_MARKER_PATH`` is exactly
+``tools/ember-cli/state/planned-outage.json``.  Its closed field set is
+``{owner, reason, target, started, expires, kill_receipt_ref}``.  Consumers
+treat the marker as absent when it is missing or unreadable, JSON is malformed,
+any required field is missing or blank, or ``expires`` is not a valid future
+timestamp.  A partial or expired marker is never honored.
 
 Callers: serve_cbase_openai.py (on startup/shutdown), ember-cli body (before spawn decision),
 watchdog (drift detection), and board probes (identity verification).
@@ -38,6 +48,8 @@ try:
     REGISTRY_PATH_DEFAULT = _REPO_ROOT / "state" / "serving-registry.json"
 except Exception:
     REGISTRY_PATH_DEFAULT = None
+
+PLANNED_OUTAGE_MARKER_PATH = Path("tools/ember-cli/state/planned-outage.json")
 
 
 def _now_iso() -> str:

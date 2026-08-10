@@ -437,6 +437,10 @@ export async function ensureOwnedServer(
   identity: OwnedModelIdentity,
   deps: EnsureOwnedServerDeps = {},
 ): Promise<EnsureOwnedServerResult> {
+  // #1282 C4/AC5 integration contract: the legacy direct-spawn path remains in this TypeScript owner
+  // when Ember Lab is not connected. Before that path is promoted beyond this scoped carrier,
+  // it must consult the canonical serving registry before spawning, while preserving Ember Lab as the sole connected
+  // dispatch/lease/receipt authority. Do not create a second registry here.
   const { port } = endpoint(identity);
   const probePresence = deps.probePresence ?? probeOwnedEndpointPresence;
   const verifyEndpoint = deps.verifyEndpoint ?? verifyOwnedEndpointIdentity;
