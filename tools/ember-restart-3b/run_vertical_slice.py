@@ -497,6 +497,21 @@ def _training_failure_class(error: Exception) -> str:
     return "TRAINER_ERROR"
 
 
+class PublishedHousekeepingError(RuntimeError):
+    """A checkpoint is durable, but its post-publication housekeeping failed."""
+
+    def __init__(self, *, published_checkpoint_id: str, cause: Exception) -> None:
+        if (
+            not isinstance(published_checkpoint_id, str)
+            or re.fullmatch(r"checkpoint-[a-z0-9]+(?:-[a-z0-9]+)*", published_checkpoint_id) is None
+            or Path(published_checkpoint_id).name != published_checkpoint_id
+        ):
+            raise ValueError("published checkpoint locator is not a safe checkpoint ID")
+        self.published_checkpoint_id = published_checkpoint_id
+        self.cause = cause
+        super().__init__(f"published checkpoint housekeeping failed: {cause}")
+
+
 def _record_e4_measurement_write_failure(
     accumulator: dict[str, object],
     *,
@@ -807,6 +822,7 @@ def _publish_checkpoint_with_low_commit_deferral(
         return _retain_after_success(
             checkpoint_parent,
             max_serialized_bytes=checkpoint_retention_budget_bytes(config_path),
+            max_quarantine_serialized_bytes=checkpoint_quarantine_budget_bytes(config_path),
             receipt_aware=True,
             operation=publish,
         )
@@ -2125,7 +2141,14 @@ def _reclaim_unverified_orphans(parent: Path) -> None:
                 candidate,
                 reason=f"counter receipt invalid: {type(error).__name__}: {error}",
             )
-def _enforce_retention(parent: Path, *, max_count: int | None = None, max_serialized_bytes: int | None = None, receipt_aware: bool = False) -> None:
+def _enforce_retention(
+    parent: Path,
+    *,
+    max_count: int | None = None,
+    max_serialized_bytes: int | None = None,
+    max_quarantine_serialized_bytes: int | None = None,
+    receipt_aware: bool = False,
+) -> dict[str, object]:
     """Prune only older successful bundles; never delete the final known-good bundle."""
     if max_count is None and max_serialized_bytes is None:
         raise ValueError("checkpoint retention requires a count or serialized-byte budget")
@@ -2133,6 +2156,8 @@ def _enforce_retention(parent: Path, *, max_count: int | None = None, max_serial
         raise ValueError("checkpoint retention count must retain at least one bundle")
     if max_serialized_bytes is not None and max_serialized_bytes < 1:
         raise ValueError("checkpoint retention serialized-byte budget must be positive")
+    if max_quarantine_serialized_bytes is not None and max_quarantine_serialized_bytes < 1:
+        raise ValueError("checkpoint quarantine serialized-byte budget must be positive")
     parent.mkdir(parents=True, exist_ok=True)
     if receipt_aware:
         _reclaim_stale_staging(parent)
@@ -2153,17 +2178,38 @@ def _enforce_retention(parent: Path, *, max_count: int | None = None, max_serial
     bundles.sort(key=lambda path: (path.stat().st_mtime_ns, path.name))
     if max_count is not None and len(bundles) > max_count:
         raise RuntimeError("selectable checkpoint count cannot be reduced without evidence-qualified deletion")
+    reconciliation = _custody_reconciliation(parent)
+
+    def accounting() -> tuple[int, int]:
+        quarantine_bytes = int(reconciliation["quarantine_bytes"])
+        live_charged_bytes = int(reconciliation["reconciled_bytes"]) - quarantine_bytes
+        if max_quarantine_serialized_bytes is not None and quarantine_bytes > max_quarantine_serialized_bytes:
+            raise RuntimeError(
+                "separate quarantine byte budget exceeded: "
+                f"observed={quarantine_bytes} budget={max_quarantine_serialized_bytes}; evidence preserved"
+            )
+        return live_charged_bytes, quarantine_bytes
+
+    live_charged_bytes, quarantine_bytes = accounting()
     if max_serialized_bytes is not None:
-        total = int(_custody_reconciliation(parent)["reconciled_bytes"])
-        while total > max_serialized_bytes and len(bundles) > 1:
+        while live_charged_bytes > max_serialized_bytes and len(bundles) > 1:
             _move_bundle_to_quarantine(bundles.pop(0))
-            total = int(_custody_reconciliation(parent)["reconciled_bytes"])
-        if total > max_serialized_bytes:
-            raise RuntimeError("checkpoint custody exceeds serialized-byte retention budget; quarantined bytes remain charged")
+            reconciliation = _custody_reconciliation(parent)
+            live_charged_bytes, quarantine_bytes = accounting()
+        if live_charged_bytes > max_serialized_bytes:
+            raise RuntimeError("live checkpoint custody exceeds serialized-byte retention budget")
+    return {
+        "schema_version": "ember-checkpoint-retention-accounting-v1",
+        "live_budget_bytes": max_serialized_bytes,
+        "live_charged_bytes": live_charged_bytes,
+        "quarantine_budget_bytes": max_quarantine_serialized_bytes,
+        "quarantine_charged_bytes": quarantine_bytes,
+    }
 
 
 def _retain_after_success(
-    parent: Path, *, operation: Callable[[], Any], max_count: int | None = None, max_serialized_bytes: int | None = None, receipt_aware: bool = False
+    parent: Path, *, operation: Callable[[], Any], max_count: int | None = None, max_serialized_bytes: int | None = None,
+    max_quarantine_serialized_bytes: int | None = None, receipt_aware: bool = False
 ) -> Any:
     """Publish first, then prune only successful older bundles."""
 
@@ -2174,7 +2220,31 @@ def _retain_after_success(
         _reclaim_stale_staging(parent)
         _reclaim_unverified_orphans(parent)
     result = operation()
-    _enforce_retention(parent, max_count=max_count, max_serialized_bytes=max_serialized_bytes, receipt_aware=receipt_aware)
+    try:
+        retention = _enforce_retention(
+            parent,
+            max_count=max_count,
+            max_serialized_bytes=max_serialized_bytes,
+            max_quarantine_serialized_bytes=max_quarantine_serialized_bytes,
+            receipt_aware=receipt_aware,
+        )
+    except Exception as error:
+        published_checkpoint_id = (
+            result[0].get("published_checkpoint_id")
+            if isinstance(result, tuple) and result and isinstance(result[0], Mapping)
+            else None
+        )
+        if not isinstance(published_checkpoint_id, str):
+            raise
+        try:
+            published_error = PublishedHousekeepingError(
+                published_checkpoint_id=published_checkpoint_id, cause=error,
+            )
+        except ValueError:
+            raise error
+        raise published_error from error
+    if isinstance(result, tuple) and result and isinstance(result[0], Mapping):
+        return ({**result[0], "retention_accounting": retention}, *result[1:])
     return result
 
 
@@ -2522,6 +2592,12 @@ def checkpoint_retention_budget_bytes(config_path: Path) -> int:
     if not isinstance(gib, int) or gib < 1 or retention.get("preserve_last_known_good") is not True:
         raise ValueError("checkpoint retention must declare a positive serialized-byte budget and preserve the last good bundle")
     return gib * 1024**3
+
+
+def checkpoint_quarantine_budget_bytes(config_path: Path) -> int:
+    """Use the authorized ceiling independently for preserved quarantine custody."""
+
+    return checkpoint_retention_budget_bytes(config_path)
 
 def checkpoint_retention_limit(config_path: Path) -> int:
     """Read the contract retention policy instead of maintaining a runner-local copy."""
@@ -2988,7 +3064,7 @@ def run(
                 host_commit_reserve_bytes=checkpoint_host_commit_reserve_bytes(config_path),
                 pre_publish_verifier=verify_staging,
             )
-            return published, verified_holder["receipt"]
+            return {**published, "published_checkpoint_id": checkpoint_target.name}, verified_holder["receipt"]
 
         result = _publish_checkpoint_with_low_commit_deferral(
             checkpoint_parent=checkpoint_parent,
@@ -3260,6 +3336,18 @@ def run_specialist(
             telemetry_run_id=telemetry_run_id,
             model_chat_restore_not_before=model_chat_restore_not_before,
         )
+    except PublishedHousekeepingError as error:
+        if telemetry_path is not None and telemetry_run_id is not None and model_chat_restore_not_before is not None:
+            append_training_telemetry(telemetry_path, kind="run_status", payload={
+                "run_id": telemetry_run_id,
+                "phase": "PUBLISHED_HOUSEKEEPING_FAILED",
+                "failure_class": "PUBLISHED_HOUSEKEEPING_FAILED",
+                "published_checkpoint_id": error.published_checkpoint_id,
+                "model_chat": "OFFLINE",
+                "restore_not_before": model_chat_restore_not_before,
+                "last_completed_step": _latest_completed_training_step(telemetry_path, run_id=telemetry_run_id),
+            })
+        raise
     except Exception as error:
         if telemetry_path is not None and telemetry_run_id is not None and model_chat_restore_not_before is not None:
             append_training_telemetry(telemetry_path, kind="run_status", payload={
