@@ -151,7 +151,20 @@ def governed_vertical_checkpoint_byte_bound(config_path: Path) -> int:
     )
 
 
-def run_governed_vertical(*, seed: int, artifact_root: Path, write_budget_bytes: int, max_records: int | None = None, resume_checkpoint: Path | None = None, resume_counter_receipt: Path | None = None, resume_realization_registry: Path | None = None, resume_optimizer_transition_registry: Path | None = None, resume_optimizer_transition_registry_sha256: str | None = None) -> dict[str, object]:
+def run_governed_vertical(
+    *,
+    seed: int,
+    artifact_root: Path,
+    write_budget_bytes: int,
+    max_records: int | None = None,
+    resume_checkpoint: Path | None = None,
+    resume_counter_receipt: Path | None = None,
+    resume_realization_registry: Path | None = None,
+    resume_optimizer_transition_registry: Path | None = None,
+    resume_optimizer_transition_registry_sha256: str | None = None,
+    c_relocated_under_disk_budget_runner: bool = False,
+    relocation_custody_root: Path | None = None,
+) -> dict[str, object]:
     """Canonical-runner entrypoint; check launch inputs before governor/CUDA admission."""
     if type(seed) is not int or seed < 0 or type(write_budget_bytes) is not int or write_budget_bytes < 1:
         raise ValueError("governed vertical launch requires a nonnegative seed and positive byte budget")
@@ -170,7 +183,20 @@ def run_governed_vertical(*, seed: int, artifact_root: Path, write_budget_bytes:
         "checkpoint_byte_bound": checkpoint_bound,
         "write_budget_bytes": write_budget_bytes,
     }
-    return run(seed=seed, artifact_root=resolved_artifact_root, resume_checkpoint=resume_checkpoint, resume_counter_receipt=resume_counter_receipt, resume_realization_registry=resume_realization_registry, resume_optimizer_transition_registry=resume_optimizer_transition_registry, resume_optimizer_transition_registry_sha256=resume_optimizer_transition_registry_sha256, write_budget_bytes=write_budget_bytes, max_records=max_records, canonical_runner_authority=authority)
+    return run(
+        seed=seed,
+        artifact_root=resolved_artifact_root,
+        resume_checkpoint=resume_checkpoint,
+        resume_counter_receipt=resume_counter_receipt,
+        resume_realization_registry=resume_realization_registry,
+        resume_optimizer_transition_registry=resume_optimizer_transition_registry,
+        resume_optimizer_transition_registry_sha256=resume_optimizer_transition_registry_sha256,
+        write_budget_bytes=write_budget_bytes,
+        max_records=max_records,
+        canonical_runner_authority=authority,
+        c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
+        relocation_custody_root=relocation_custody_root,
+    )
 
 
 def preflight_governed_vertical(*, seed: int, artifact_root: Path, write_budget_bytes: int, max_records: int | None = None) -> dict[str, object]:
@@ -3471,6 +3497,8 @@ def main() -> None:
     governed_resume.add_argument("--resume-realization-registry", type=Path)
     governed_resume.add_argument("--resume-optimizer-transition-registry", type=Path)
     governed_vertical.add_argument("--resume-optimizer-transition-registry-sha256")
+    governed_vertical.add_argument("--c-relocated-under-disk-budget-runner", action="store_true")
+    governed_vertical.add_argument("--relocation-custody-root", type=Path)
     governed_preflight = subparsers.add_parser("governed-vertical-preflight")
     governed_preflight.add_argument("--seed", type=int, required=True)
     governed_preflight.add_argument("--artifact-root", type=Path, required=True)
@@ -3521,7 +3549,21 @@ def main() -> None:
     semantic.add_argument("--resume-optimizer-transition-registry-sha256")
     args = parser.parse_args()
     if args.command == "governed-vertical":
-        result = run_governed_vertical(seed=args.seed, artifact_root=args.artifact_root, write_budget_bytes=args.write_budget_bytes, max_records=args.max_records, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt, resume_realization_registry=args.resume_realization_registry, resume_optimizer_transition_registry=args.resume_optimizer_transition_registry, resume_optimizer_transition_registry_sha256=args.resume_optimizer_transition_registry_sha256)
+        result = run_governed_vertical(
+            seed=args.seed,
+            artifact_root=args.artifact_root,
+            write_budget_bytes=args.write_budget_bytes,
+            max_records=args.max_records,
+            resume_checkpoint=args.resume_checkpoint,
+            resume_counter_receipt=args.resume_counter_receipt,
+            resume_realization_registry=args.resume_realization_registry,
+            resume_optimizer_transition_registry=args.resume_optimizer_transition_registry,
+            resume_optimizer_transition_registry_sha256=args.resume_optimizer_transition_registry_sha256,
+            c_relocated_under_disk_budget_runner=(
+                args.c_relocated_under_disk_budget_runner
+            ),
+            relocation_custody_root=args.relocation_custody_root,
+        )
     elif args.command == "governed-vertical-preflight":
         result = preflight_governed_vertical(seed=args.seed, artifact_root=args.artifact_root, write_budget_bytes=args.write_budget_bytes, max_records=args.max_records)
     elif args.command == "specialist":
