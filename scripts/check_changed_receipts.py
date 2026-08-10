@@ -184,4 +184,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    from gate_provenance import emit_gate_provenance
+
+    emit_gate_provenance(__file__)
     raise SystemExit(main())
