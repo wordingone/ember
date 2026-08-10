@@ -194,6 +194,24 @@ def test_builder_refuses_foreign_symlink_alias_to_canonical_b2_receipt(tmp_path)
     assert not (root/"checkpoint-manifest.json").exists()
 
 
+def test_builder_refuses_dot_segment_that_hides_foreign_symlink_component(tmp_path):
+    sources,target=_sources(tmp_path)
+    foreign_target=tmp_path/"foreign-target"
+    foreign_target.mkdir()
+    foreign_link=tmp_path/"foreign-link"
+    try:
+        foreign_link.symlink_to(foreign_target,target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"host cannot create directory symlink: {exc}")
+    sources["b2_receipt"]=foreign_link/".."/"receipts"/sources["b2_receipt"].name
+    root=tmp_path/"custody"
+
+    with pytest.raises(InputBuildRefusal,match="INPUT_B2_RECEIPT_PATH_MISMATCH"):
+        stage_event_inputs(root=root,run_id="r",lineage_run_id="historical",source_commit="a"*40,sources=sources,target_name=target,intermediate_size=8,config=_config())
+
+    assert not (root/"checkpoint-manifest.json").exists()
+
+
 def test_builder_refuses_config_argument_that_differs_from_bound_file(tmp_path):
     sources,target=_sources(tmp_path)
     foreign_config=_config()

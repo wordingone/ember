@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 import shutil
 import subprocess
 import sys
@@ -17,7 +19,12 @@ SCRIPT = REPO_ROOT / "scripts" / "worktree_lifecycle.py"
 
 def run(*args: str, cwd: Path, check: bool = True) -> subprocess.CompletedProcess[str]:
     result = subprocess.run(
-        [*args], cwd=cwd, text=True, capture_output=True, encoding="utf-8"
+        [*args],
+        cwd=cwd,
+        text=True,
+        capture_output=True,
+        encoding="utf-8",
+        creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
     )
     if check and result.returncode:
         raise AssertionError(
@@ -562,12 +569,74 @@ def test_hooks_and_agents_require_lifecycle_guard() -> None:
     pre_push = (REPO_ROOT / ".githooks" / "pre-push").read_text(encoding="utf-8")
     agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
 
-    invocation = 'python "$ROOT/scripts/worktree_lifecycle.py" audit --strict --quiet'
+    invocation = 'bash "$ROOT/tools/run-python-hidden.sh" "$ROOT/scripts/worktree_lifecycle.py" audit --strict --quiet'
     assert invocation in pre_commit
     assert invocation in pre_push
     assert "scripts/worktree_lifecycle.py create" in agents
     assert "scripts/worktree_lifecycle.py retire" in agents
     assert "Raw `git worktree add` and recursive worktree deletion are forbidden" in agents
+
+
+def test_hooks_and_repo_guard_have_one_hidden_python_boundary() -> None:
+    surfaces = [
+        REPO_ROOT / ".githooks" / "pre-commit",
+        REPO_ROOT / ".githooks" / "pre-push",
+        REPO_ROOT / "tools" / "repo-guard.sh",
+    ]
+    for surface in surfaces:
+        source = surface.read_text(encoding="utf-8")
+        assert "run-python-hidden.sh" in source
+        assert re.search(r"(?m)(^|[=( ])python(?:3)?\s", source) is None
+
+    shell_launcher = (REPO_ROOT / "tools" / "run-python-hidden.sh").read_text(
+        encoding="utf-8"
+    )
+    assert '"${OS:-}" = "Windows_NT"' in shell_launcher
+    assert "-WindowStyle Hidden" in shell_launcher
+    assert "-EncodedCommand \"$encoded_command\"" in shell_launcher
+    assert "iconv -f UTF-8 -t UTF-16LE" in shell_launcher
+    assert "run-python-hidden.ps1" not in shell_launcher
+
+
+def test_windows_hidden_python_boundary_preserves_streams_args_and_exit(
+    tmp_path: Path,
+) -> None:
+    if os.name != "nt":
+        return
+    child = tmp_path / "child.py"
+    child.write_text(
+        "import sys\n"
+        "payload = sys.stdin.read()\n"
+        "print('ARGS:' + repr(sys.argv[1:]))\n"
+        "print('IN:' + payload)\n"
+        "print('ERR:' + sys.argv[2], file=sys.stderr)\n"
+        "raise SystemExit(7)\n",
+        encoding="utf-8",
+    )
+    env = dict(os.environ)
+    env["EMBER_PYTHON_BIN"] = sys.executable
+    env["EMBER_HIDDEN_HELPER"] = str(REPO_ROOT / "tools" / "run-python-hidden.sh")
+    env["EMBER_HIDDEN_CHILD"] = str(child)
+    env["EMBER_HIDDEN_ARG_SPACE"] = "alpha with space"
+    env["EMBER_HIDDEN_ARG_QUOTE"] = "beta'quoted"
+    result = subprocess.run(
+        [
+            "C:/Program Files/Git/bin/bash.exe",
+            "-lc",
+            'bash "$EMBER_HIDDEN_HELPER" "$EMBER_HIDDEN_CHILD" '
+            '"$EMBER_HIDDEN_ARG_SPACE" "$EMBER_HIDDEN_ARG_QUOTE" ""',
+        ],
+        text=True,
+        capture_output=True,
+        encoding="utf-8",
+        env=env,
+        input="stdin-value",
+        creationflags=subprocess.CREATE_NO_WINDOW,
+        check=False,
+    )
+    assert result.returncode == 7
+    assert result.stdout == "ARGS:['alpha with space', \"beta'quoted\", '']\nIN:stdin-value\n"
+    assert result.stderr == "ERR:beta'quoted\n"
 
 
 # ---------------------------------------------------------------------------

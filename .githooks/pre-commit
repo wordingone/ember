@@ -21,5 +21,5 @@ case "$top" in
 esac
 
 ROOT="$(git rev-parse --show-toplevel)"
-python "$ROOT/scripts/worktree_lifecycle.py" audit --strict --quiet || exit $?
+bash "$ROOT/tools/run-python-hidden.sh" "$ROOT/scripts/worktree_lifecycle.py" audit --strict --quiet || exit $?
 exec env REPO_GUARD_SCOPE=staged bash "$ROOT/tools/repo-guard.sh"

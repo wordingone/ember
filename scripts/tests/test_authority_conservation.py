@@ -406,6 +406,7 @@ def write_valid_fixture(root: Path) -> None:
     invariant = (REPO_ROOT / "INVARIANT.md").read_bytes()
     assert hashlib.sha256(invariant).hexdigest().upper() == INVARIANT_SHA256
     (root / "INVARIANT.md").write_bytes(invariant)
+    (root / "REDACTIONS.md").write_text("# Fixture redactions policy\n", encoding="utf-8")
 
     for rel in GOVERNING_SURFACES:
         if rel == "docs/ember-authority-matrix.md":
@@ -559,6 +560,101 @@ def test_valid_authority_fixture_passes(tmp_path: Path) -> None:
     payload = json.loads(result.stdout)
     assert payload["ok"] is True
     assert payload["certificate_legs"] == {str(i): True for i in range(1, 8)}
+
+
+def migrate_authority_fixture(root: Path) -> None:
+    authority = root / "docs" / "authority"
+    authority.mkdir(parents=True, exist_ok=True)
+    for name in (
+        "GOAL.md",
+        "INVARIANT.md",
+        "GOVERNANCE.md",
+        "CONTINUITY.md",
+        "REDACTIONS.md",
+        "STATE.md",
+    ):
+        (root / name).replace(authority / name)
+
+    matrix_path = root / "docs" / "ember-authority-matrix.md"
+    matrix_path.write_text(
+        matrix_path.read_text(encoding="utf-8").replace(
+            "| ENFORCED | GOAL.md |", "| ENFORCED | docs/authority/GOAL.md |"
+        ),
+        encoding="utf-8",
+    )
+    matrix_digest = hashlib.sha256(matrix_path.read_bytes()).hexdigest()
+    crosswalk_path = (
+        root
+        / "manifests"
+        / "authority"
+        / "issue-35-authority-supersession-crosswalk-v1.json"
+    )
+    crosswalk = json.loads(crosswalk_path.read_text(encoding="utf-8"))
+    crosswalk["current_authority"]["matrix_sha256"] = matrix_digest
+    for registry in crosswalk["source_registries"]:
+        for evidence in registry["evidence"]:
+            evidence["sha256"] = matrix_digest
+    for row in crosswalk["rows"]:
+        for evidence in row["evidence"]:
+            evidence["sha256"] = matrix_digest
+    crosswalk.pop("crosswalk_sha256")
+    crosswalk["crosswalk_sha256"] = hashlib.sha256(
+        json.dumps(
+            crosswalk, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
+    ).hexdigest()
+    crosswalk_path.write_text(
+        json.dumps(crosswalk, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+    goal_path = authority / "GOAL.md"
+    text = goal_path.read_text(encoding="utf-8")
+    match = re.search(r"<!--\s*EMBER_AUTHORITY_V1\s*\r?\n(.*?)\r?\n-->", text, re.DOTALL)
+    assert match is not None
+    policy = json.loads(match.group(1))
+    policy["highest_amendable_authority"] = "docs/authority/GOAL.md"
+    policy["required_governing_surfaces"] = [
+        f"docs/authority/{rel}"
+        if rel in {"GOVERNANCE.md", "CONTINUITY.md"}
+        else rel
+        for rel in policy["required_governing_surfaces"]
+    ]
+    hashes = policy["conservation_hashes"]["governing_surfaces_sha256"]
+    for name in ("GOVERNANCE.md", "CONTINUITY.md"):
+        hashes[f"docs/authority/{name}"] = hashes.pop(name)
+    hashes["docs/ember-authority-matrix.md"] = matrix_digest.upper()
+    policy["conservation_hashes"]["authority_matrix_sha256"] = matrix_digest.upper()
+    goal_path.write_text(render_goal(policy), encoding="utf-8")
+
+
+def test_migrated_authority_fixture_passes(tmp_path: Path) -> None:
+    write_valid_fixture(tmp_path)
+    migrate_authority_fixture(tmp_path)
+
+    result = run_verifier(tmp_path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("name", (
+    "GOAL.md",
+    "INVARIANT.md",
+    "GOVERNANCE.md",
+    "CONTINUITY.md",
+    "REDACTIONS.md",
+    "STATE.md",
+))
+def test_duplicate_authority_path_is_rejected(tmp_path: Path, name: str) -> None:
+    write_valid_fixture(tmp_path)
+    migrated = tmp_path / "docs" / "authority" / name
+    migrated.parent.mkdir(parents=True)
+    migrated.write_bytes((tmp_path / name).read_bytes())
+
+    result = run_verifier(tmp_path)
+
+    assert result.returncode != 0
+    assert "authority.path_duplicate" in result.stdout
+    assert name in result.stdout
 
 
 def test_execution_boundary_missing_is_rejected(tmp_path: Path) -> None:

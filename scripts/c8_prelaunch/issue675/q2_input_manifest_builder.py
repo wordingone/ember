@@ -114,7 +114,10 @@ def _load_json(path: Path, code: str) -> dict[str, object]:
 
 
 def _validate_canonical_b2_source(path: Path, lineage_run_id: str) -> dict[str, object]:
-    supplied = Path(os.path.abspath(os.fspath(path)))
+    raw_supplied = os.fspath(path)
+    if any(component in {".", ".."} for component in Path(raw_supplied).parts):
+        _refuse("INPUT_B2_RECEIPT_PATH_MISMATCH")
+    supplied = Path(os.path.abspath(raw_supplied))
     canonical_path = Path(os.path.abspath(os.fspath(_CANONICAL_B2_RECEIPT_PATH)))
     if os.path.normcase(os.fspath(supplied)) != os.path.normcase(os.fspath(canonical_path)):
         _refuse("INPUT_B2_RECEIPT_PATH_MISMATCH")
