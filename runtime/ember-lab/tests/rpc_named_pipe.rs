@@ -250,7 +250,7 @@ fn dispatch_cli_uses_persistent_named_pipe_daemon_and_governed_spawn() {
         runtime_identity["schema_version"],
         "ember-lab-runtime-identity-v1"
     );
-    assert_eq!(runtime_identity["pid"], server.id());
+    assert_eq!(runtime_identity["pid"], server.0.id());
 
     let output = Command::new(&binary)
         .args([
