@@ -24,6 +24,7 @@ from ember_01_identity.cond4_battery_surface import (  # noqa: E402
     behavior_surface_sha256,
     completion_verifier_binding_valid,
     completion_verifier_surface_sha256,
+    cond4_battery_output_sha256,
     cond4_receipt_transition_valid,
 )
 
@@ -180,8 +181,44 @@ def test_surface_change_requires_new_same_pr_execution_receipt() -> None:
         is False
     )
 
-    renewed = _receipt(head, executed_at="2026-08-10T12:00:00Z")
-    assert cond4_receipt_transition_valid(base, head, base_receipt, renewed) is True
+    self_attested = _receipt(head, executed_at="2026-08-10T12:00:00Z")
+    self_attested["verification"]["cond4_battery_execution"][
+        "output_sha256"
+    ] = "a" * 64
+    assert cond4_receipt_transition_valid(
+        base, head, base_receipt, self_attested
+    ) is False
+    assert cond4_receipt_transition_valid(
+        base,
+        head,
+        base_receipt,
+        self_attested,
+        observed_output_sha256="a" * 64,
+    ) is True
+
+
+def test_battery_output_digest_binds_stable_axis_results() -> None:
+    battery = {
+        "axis_count": 1,
+        "all_rejected": True,
+        "failures": [],
+        "axes": {
+            "checkpoint_bytes": {
+                "rejected": True,
+                "finding": "parameter_identity_mismatch",
+                "detail": "temporary path A",
+            }
+        },
+    }
+    same_result = json.loads(json.dumps(battery))
+    same_result["axes"]["checkpoint_bytes"]["detail"] = "temporary path B"
+    changed_result = json.loads(json.dumps(battery))
+    changed_result["axes"]["checkpoint_bytes"]["rejected"] = False
+
+    digest = cond4_battery_output_sha256(battery)
+    assert len(digest) == 64
+    assert digest == cond4_battery_output_sha256(same_result)
+    assert digest != cond4_battery_output_sha256(changed_result)
 
 
 def test_unrelated_change_does_not_force_battery_reexecution() -> None:

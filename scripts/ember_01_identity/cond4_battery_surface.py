@@ -22,6 +22,7 @@ COMPLETION_VERIFIER_SYMBOLS = (
 
 SURFACE_SCHEMA = "ember-cond4-battery-surface-v3"
 EXECUTION_SCHEMA = "ember-cond4-battery-execution-v1"
+OUTPUT_SCHEMA = "ember-cond4-battery-output-v1"
 
 
 class Cond4SurfaceError(ValueError):
@@ -151,6 +152,28 @@ def completion_verifier_binding_valid(
     )
 
 
+def cond4_battery_output_sha256(battery: Mapping[str, Any]) -> str:
+    axes = battery.get("axes")
+    if not isinstance(axes, Mapping):
+        raise Cond4SurfaceError("Cond-4 battery output has no axes mapping")
+    stable_axes: dict[str, dict[str, Any]] = {}
+    for axis, row in axes.items():
+        if not isinstance(axis, str) or not isinstance(row, Mapping):
+            raise Cond4SurfaceError("Cond-4 battery output has an invalid axis row")
+        stable_axes[axis] = {
+            key: value for key, value in row.items() if key != "detail"
+        }
+    payload = {
+        "schema": OUTPUT_SCHEMA,
+        "axis_count": battery.get("axis_count"),
+        "all_rejected": battery.get("all_rejected"),
+        "failures": battery.get("failures"),
+        "axes": stable_axes,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def _execution_marker(receipt: Mapping[str, Any]) -> Mapping[str, Any] | None:
     verification = receipt.get("verification")
     if not isinstance(verification, Mapping):
@@ -174,6 +197,8 @@ def cond4_receipt_transition_valid(
     head_source: bytes,
     base_receipt: Mapping[str, Any],
     head_receipt: Mapping[str, Any],
+    *,
+    observed_output_sha256: str | None = None,
 ) -> bool:
     """Require a new execution receipt whenever the Cond-4 behavior changes."""
     implementation = head_receipt.get("implementation")
@@ -199,6 +224,14 @@ def cond4_receipt_transition_valid(
     if head_marker.get("completion_verifier_surface_sha256") != head_surface:
         return False
     if head_marker.get("result") != "PASS":
+        return False
+    output_sha256 = head_marker.get("output_sha256")
+    if (
+        not isinstance(output_sha256, str)
+        or len(output_sha256) != 64
+        or any(character not in "0123456789abcdef" for character in output_sha256)
+        or observed_output_sha256 != output_sha256
+    ):
         return False
     command = head_marker.get("command")
     if not isinstance(command, list) or not command or not all(

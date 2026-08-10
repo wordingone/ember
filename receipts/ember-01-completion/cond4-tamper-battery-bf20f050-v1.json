@@ -141,6 +141,7 @@
     "cond4_battery_execution": {
       "schema": "ember-cond4-battery-execution-v1",
       "completion_verifier_surface_sha256": "51d5593ad6addc143db6fb1e7fba18fa799d8d77fe7307436d77c5e55ac7814c",
+      "output_sha256": "a6b33f19029012b20fcbbadfc57eb058250fa3ef8b8674a6de266e80cfcdd9a6",
       "executed_at": "2026-08-03T21:41:38Z",
       "command": [
         "python",
