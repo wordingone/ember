@@ -135,6 +135,33 @@ class SourceTableInvariantTests(unittest.TestCase):
         self.assertEqual(missing, set(), f"charter domains with no routed source: {sorted(missing)}")
 
 
+class ProseGapPlanTests(unittest.TestCase):
+    def test_rule_based_plan_has_all_charter_domains_and_nonempty_estimates(self):
+        plan = wm.build_prose_gap_plan()
+        self.assertEqual(plan.selection_policy, "RULE_BASED")
+        self.assertTrue(set(plan.domain_coverage) >= set("ABCDEFGHIJK"))
+        self.assertGreater(plan.current_clean_prose_tokens_b, 0)
+        self.assertTrue(all(row.license_evidence for row in plan.sources))
+        self.assertTrue(all(row.estimated_tokens_low_b > 0 for row in plan.sources))
+        self.assertTrue(all(row.estimated_tokens_high_b >= row.estimated_tokens_low_b for row in plan.sources))
+
+    def test_plan_is_deterministic_and_has_no_model_derived_filter(self):
+        first = wm.build_prose_gap_plan()
+        second = wm.build_prose_gap_plan()
+        self.assertEqual(first, second)
+        forbidden = ("fasttext", "classifier", "embedding", "llm", "model-derived")
+        self.assertFalse(any(term in repr(first).lower() for term in forbidden))
+
+    def test_rendered_plan_is_numbered_and_dry_run_only(self):
+        rendered = wm.render_prose_gap_plan(wm.build_prose_gap_plan())
+        self.assertIn("1. Current clean prose total", rendered)
+        self.assertIn("2. Rule-based target addition", rendered)
+        self.assertIn("3. Candidate additions", rendered)
+        self.assertIn("4. Domain coverage", rendered)
+        self.assertIn("RULE_BASED", rendered)
+        self.assertNotIn("--execute", rendered)
+
+
 class BuildArgvTests(unittest.TestCase):
     def test_build_argv_prefixes_the_connector_script_path(self):
         source = wm.WAVE2_SOURCES[0]

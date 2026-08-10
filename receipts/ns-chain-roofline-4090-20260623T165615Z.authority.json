@@ -1,0 +1,15 @@
+{
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "schema_version": "ember-content-addressed-authority-binding/v1",
+  "artifact_path": "receipts/ns-chain-roofline-4090-20260623T165615Z.json",
+  "artifact_sha256": "a766b3b2d07d90a4ce12353c30accf82a574d43e730743b3d251e3def90f056b",
+  "ticket": "1385",
+  "ts": "2026-08-10T01:00:00Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "reason": "content-addressed authority binding for the verbatim historical roofline receipt restored from commit 4e1f325; the evidence bytes themselves remain unchanged"
+}

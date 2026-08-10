@@ -171,7 +171,8 @@ fn write_dispatch_manifest(root: &Path, job_id: &str) -> PathBuf {
                     "kind": "receipt_verifier",
                     "maximum_bytes": 536_870_912u64
                 }],
-                "requires_ui_responsiveness": false
+                "requires_ui_responsiveness": false,
+                "cpu_rate_percent": 100
             },
             "job_id": job_id,
             "source_commit": "5326043c344227c1b145a4ddbb3519cfa62d4943",
