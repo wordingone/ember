@@ -163,6 +163,27 @@ def _current_source_commit(source_root: Path) -> str:
     return current
 
 
+def _require_clean_source_tree(source_root: Path) -> None:
+    """Refuse authority claims from a checkout with uncommitted source bytes."""
+    result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(source_root),
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise ValueError("R1 WARM-100 entry: source tree status is unavailable")
+    if result.stdout.strip():
+        raise ValueError("R1 WARM-100 entry: source tree is dirty")
+
+
 def _r1_entry_canonical(payload: dict[str, Any]) -> bytes:
     unsigned = {key: value for key, value in payload.items() if key != "receipt_sha256"}
     return (json.dumps(unsigned, sort_keys=True, separators=(",", ":")) + "\n").encode()
@@ -188,6 +209,7 @@ def validate_r1_warm100_entry(
         raise ValueError("R1 WARM-100 entry: source_commit is invalid")
     if source_commit != _current_source_commit(source_root):
         raise ValueError("R1 WARM-100 entry: source_commit is not the current source commit")
+    _require_clean_source_tree(source_root)
     if payload.get("schema") != R1_ENTRY_SCHEMA:
         raise ValueError("R1 WARM-100 entry: schema mismatch")
     if payload.get("entry") != "WARM-100" or payload.get("steps") != 100:
@@ -283,6 +305,7 @@ def build_r1_warm100_entry(
         raise ValueError("R1 WARM-100 entry: manifest/source commit mismatch")
     if source_commit != _current_source_commit(source_root):
         raise ValueError("R1 WARM-100 entry: source_commit is not the current source commit")
+    _require_clean_source_tree(source_root)
     source_rows = {
         name: {"path": path, "sha256": _git_blob_sha256(source_root, source_commit, path)}
         for name, path in R1_ENTRY_SOURCE_FILES.items()

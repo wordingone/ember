@@ -601,6 +601,32 @@ def test_r1_warm100_entry_rejects_stale_source_commit(tmp_path: Path):
         )
 
 
+def test_r1_warm100_entry_rejects_dirty_source_tree(tmp_path: Path):
+    """A dirty checkout cannot mint a source-authoritative R1 entry."""
+    from scripts.ember_restart.contract import build_r1_warm100_entry
+
+    manifest_path = _candidate_manifest(tmp_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["source_commit"] = _current_source_commit()
+    _write_json(manifest_path, manifest)
+    dirty_path = REPO_ROOT / "docs/ember-restart/r1-warm100-entry-v1.md"
+    original = dirty_path.read_bytes()
+    try:
+        dirty_path.write_bytes(original + b"\nlocal-dirty-source\n")
+        with pytest.raises(ValueError, match="source tree is dirty"):
+            build_r1_warm100_entry(
+                manifest_path,
+                source_commit=manifest["source_commit"],
+                source_root=REPO_ROOT,
+                prereg_path=REPO_ROOT / "docs/spec/ember02-preregistration-v1.md",
+                config_path=REPO_ROOT / "configs/ember-restart-3b.json",
+                fixed_prior_path=REPO_ROOT / "manifests/ember-restart-3b/fixed-prior-manifest-v1.json",
+                trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
+            )
+    finally:
+        dirty_path.write_bytes(original)
+
+
 def test_r1_warm100_entry_cli_emits_path_free_receipt(tmp_path: Path):
     manifest_path = _candidate_manifest(tmp_path)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
