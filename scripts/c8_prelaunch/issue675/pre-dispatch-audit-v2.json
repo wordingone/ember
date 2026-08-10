@@ -1,0 +1,60 @@
+{
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "schema": "q2-actual-update-pre-dispatch-audit-v2",
+  "issue": 675,
+  "observed_at": "2026-08-10T09:03:10Z",
+  "public_master": "f3c92ba984711ee34e91c6bea90713e6c89b4b4d",
+  "issue_contract_sha256": "992463793324f75d90e0d80128efbe980a3cc7ee9171300132b59b536b468f33",
+  "cpu_packet_binding": "external-manifest-last",
+  "source_admission": {
+    "historical_producer": "scripts/cbase_grow_rung2_event.py",
+    "historical_import_refusal": "historical_only: the sub-3B cbase trainer and every importer are execution-denied",
+    "governed_vertical_entrypoint_present": false,
+    "b3_gradient_persisted": true,
+    "b3_gradient_sha256_receipted": false,
+    "b3_gradient_target_batch_shape_receipted": false,
+    "caller_gradient_selection_removed": true,
+    "dispatch_rehashes_gradient_before_selection": true,
+    "current_b3_admission": "DISPATCH_GRADIENT_LINEAGE_REFUSED"
+  },
+  "hardware_observation": {
+    "gpu": "NVIDIA GeForce RTX 4090",
+    "gpu_total_mib": 24564,
+    "gpu_free_mib": 22884,
+    "gpu_used_mib": 1255,
+    "gpu_utilization_percent": 17,
+    "minimum_dispatch_free_vram_bytes": 21746679808,
+    "b_available_free_bytes": 273557979136,
+    "minimum_b_free_bytes": 42949672960,
+    "physical_available_bytes": 45157847040,
+    "available_pagefile_bytes": 61031260160,
+    "provisional_gpu_floor_pass": true,
+    "provisional_storage_floor_pass": true,
+    "provisional_commit_capacity_pass": true,
+    "measured_whole_process_peak_present": false
+  },
+  "decision": "REFUSE_CURRENT_HEAD",
+  "reason_codes": [
+    "HISTORICAL_IMPORT_EXECUTION_DENIED",
+    "CURRENT_GOVERNED_PRODUCER_NOT_MERGED",
+    "CURRENT_B3_GRADIENT_RECEIPT_LACKS_HASH",
+    "HOST_COMMIT_MEASUREMENT_RECEIPT_ABSENT",
+    "ACTUAL_GPU_EVENT_NOT_EXECUTED",
+    "INDEPENDENT_EVENT_REVIEW_ABSENT",
+    "CLEANUP_RECEIPT_ABSENT"
+  ],
+  "credits": {
+    "actual_event": false,
+    "scientific_result": false,
+    "whole_step": false,
+    "material_loss_bridge": false,
+    "training": false,
+    "checkpoint": false,
+    "capability": false,
+    "issue_completion": false
+  },
+  "no_new_parallel_authority": true,
+  "receipt_sha256": "94bf43112e7ab38b41e306be4321e8efe1ff597d97e54927b00b5c96a83f63a4"
+}
