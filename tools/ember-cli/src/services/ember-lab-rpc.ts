@@ -26,6 +26,11 @@ export interface EmberLabRequestOptions {
   timeoutMs?: number;
 }
 
+export interface EmberLabRuntimeIdentity {
+  schema_version: "ember-lab-runtime-identity-v1";
+  pid: number;
+}
+
 export function configuredEmberLabPipe(
   environment: Record<string, string | undefined> = process.env,
 ): string {
@@ -214,6 +219,27 @@ export async function pingEmberLab(options: EmberLabPingOptions): Promise<void> 
   if (result["status"] !== "ok") {
     throw responseError("ping result is malformed");
   }
+}
+
+export async function identifyEmberLabRuntime(
+  options: EmberLabPingOptions,
+): Promise<EmberLabRuntimeIdentity> {
+  const result = await callEmberLab({
+    pipeName: options.pipeName,
+    requestId: options.requestId,
+    timeoutMs: options.timeoutMs,
+    method: "runtime_identity",
+    params: {},
+  });
+  if (
+    Object.keys(result).sort().join(",") !== "pid,schema_version"
+    || result["schema_version"] !== "ember-lab-runtime-identity-v1"
+    || !Number.isSafeInteger(result["pid"])
+    || (result["pid"] as number) <= 0
+  ) {
+    throw responseError("runtime identity result is malformed");
+  }
+  return result as unknown as EmberLabRuntimeIdentity;
 }
 
 export async function handshakeConfiguredEmberLab(): Promise<void> {
