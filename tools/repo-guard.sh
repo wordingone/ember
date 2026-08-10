@@ -123,7 +123,7 @@ else
 fi
 
 # ---- 1b. tracked text files must be LF-only ------------------------------
-if python "$KERNEL_ROOT/tools/check_line_endings.py" "$SUBJECT_ROOT"; then
+if bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/tools/check_line_endings.py" "$SUBJECT_ROOT"; then
   :
 else
   FAIL=1
@@ -133,7 +133,7 @@ fi
 # Use trusted kernel bytes against the subject checkout. Git's -I heuristic
 # skips NUL-heavy content, so every Git text-attributed subject blob must pass
 # this explicit byte-level check before the names/path scans below.
-if python "$KERNEL_ROOT/tools/check_text_encoding.py" "$SUBJECT_ROOT"; then
+if bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/tools/check_text_encoding.py" "$SUBJECT_ROOT"; then
   :
 else
   FAIL=1
@@ -143,7 +143,7 @@ fi
 # Frozen receipts/prose may truthfully mention placeholders. The trusted
 # checker rejects only the runtime-crashing boundary: a redacted token used as
 # a percent-format or str.format operand (issue #502).
-if python "$KERNEL_ROOT/tools/check_executable_redaction_placeholders.py" "$SUBJECT_ROOT"; then
+if bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/tools/check_executable_redaction_placeholders.py" "$SUBJECT_ROOT"; then
   :
 else
   FAIL=1
@@ -305,7 +305,7 @@ if [ "$BACKUP_EXEMPTION_APPLIED" -eq 0 ]; then
       HASHED_SELF_ARGS+=(--scan-guard-surfaces)
     fi
     HASHED_OUT="$(
-      python "$KERNEL_ROOT/tools/check_names_hashed.py" \
+      bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/tools/check_names_hashed.py" \
         --root "$SUBJECT_ROOT" \
         --denylist "$KERNEL_ROOT/tools/repo-guard-denylist.sha256" \
         --names-exclude "$NAMES_EXCLUDE_FILE" "${HASHED_SELF_ARGS[@]}" 2>&1
@@ -378,7 +378,7 @@ if [ -z "$EMBERD_HITS" ]; then
 else
   EMBERD_PATHS="$(printf '%s\n' "$EMBERD_HITS" | cut -d: -f1 | sort -u)"
 fi
-EMBERD_CHECK_OUT="$(EMBERD_PATHS="$EMBERD_PATHS" python "$KERNEL_ROOT/tools/check_emberd_legacy_exceptions.py" 2>&1)"
+EMBERD_CHECK_OUT="$(EMBERD_PATHS="$EMBERD_PATHS" bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/tools/check_emberd_legacy_exceptions.py" 2>&1)"
 EMBERD_CHECK_RC=$?
 if [ "$EMBERD_CHECK_RC" -eq 0 ]; then
   if [ -z "$EMBERD_HITS" ]; then
@@ -481,14 +481,14 @@ elif [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
   CHANGED_RECEIPT_SCOPE=1
   CHANGED_RECEIPT_OUT="$(
     git diff --cached --name-only --diff-filter=ACMR -z -- receipts |
-      python "$KERNEL_ROOT/scripts/check_changed_receipts.py" --root "$SUBJECT_ROOT" --null 2>&1
+      bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/scripts/check_changed_receipts.py" --root "$SUBJECT_ROOT" --null 2>&1
   )"
   CHANGED_RECEIPT_RC=$?
 elif [ -n "$RANGE" ]; then
   CHANGED_RECEIPT_SCOPE=1
   CHANGED_RECEIPT_OUT="$(
     git diff --name-only --diff-filter=ACMR -z "$RANGE" -- receipts |
-      python "$KERNEL_ROOT/scripts/check_changed_receipts.py" --root "$SUBJECT_ROOT" --null 2>&1
+      bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/scripts/check_changed_receipts.py" --root "$SUBJECT_ROOT" --null 2>&1
   )"
   CHANGED_RECEIPT_RC=$?
 fi
@@ -526,7 +526,7 @@ else
   elif [ -n "$RANGE" ]; then
     AUTHORITY_ARGS+=(--changed-range "$RANGE")
   fi
-  AUTHORITY_OUT="$(python "$KERNEL_ROOT/scripts/verify_authority_conservation.py" "${AUTHORITY_ARGS[@]}" 2>&1)"
+  AUTHORITY_OUT="$(bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/scripts/verify_authority_conservation.py" "${AUTHORITY_ARGS[@]}" 2>&1)"
   AUTHORITY_RC=$?
   if [ "$AUTHORITY_RC" -eq 0 ]; then
     ok "authority" "EMBER authority conservation certificate passes"

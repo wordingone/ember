@@ -35,6 +35,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 GUARD_SUPPORT_FILES = [
     ".gitattributes",
     "tools/repo-guard.sh",
+    "tools/run-python-hidden.sh",
     "tools/check_line_endings.py",
     "tools/check_text_encoding.py",
     "tools/check_executable_redaction_placeholders.py",
@@ -157,6 +158,7 @@ def make_split_kernel(test_word: str) -> Path:
     kernel = Path(tempfile.mkdtemp(prefix="repo-guard-kernel-"))
     for relative in (
         "tools/repo-guard.sh",
+        "tools/run-python-hidden.sh",
         "tools/check_line_endings.py",
         "tools/check_text_encoding.py",
         "tools/check_executable_redaction_placeholders.py",
