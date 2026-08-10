@@ -105,6 +105,8 @@ struct ServerCycleParams {
     authority_sha256: String,
     receipt_path: PathBuf,
     restore_manifest_path: PathBuf,
+    serving_contract_path: PathBuf,
+    serving_contract_sha256: String,
     required_headroom_bytes: u64,
     now_ms: i64,
 }
@@ -267,6 +269,8 @@ fn dispatch(daemon: &Daemon, request: WireRequest) -> (Value, bool) {
                 authority_sha256: params.authority_sha256,
                 receipt_path: params.receipt_path,
                 restore_manifest_path: params.restore_manifest_path,
+                serving_contract_path: params.serving_contract_path,
+                serving_contract_sha256: params.serving_contract_sha256,
                 required_headroom_bytes: params.required_headroom_bytes,
                 now_ms: params.now_ms,
             };
@@ -764,9 +768,24 @@ mod tests {
             "authority_sha256": "a".repeat(64),
             "receipt_path": "receipt.json",
             "restore_manifest_path": "restore.json",
+            "serving_contract_path": "serving-contract.json",
+            "serving_contract_sha256": "b".repeat(64),
             "required_headroom_bytes": 1,
             "now_ms": 1,
             "restarts_last_hour": 3,
+        });
+        assert!(serde_json::from_value::<ServerCycleParams>(value).is_err());
+    }
+
+    #[test]
+    fn server_cycle_params_require_content_addressed_serving_contract() {
+        let value = serde_json::json!({
+            "authority_path": "authority.json",
+            "authority_sha256": "a".repeat(64),
+            "receipt_path": "receipt.json",
+            "restore_manifest_path": "restore.json",
+            "required_headroom_bytes": 1,
+            "now_ms": 1,
         });
         assert!(serde_json::from_value::<ServerCycleParams>(value).is_err());
     }

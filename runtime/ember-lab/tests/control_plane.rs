@@ -37,6 +37,13 @@ fn sha256(path: &Path) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
+fn write_contract_citation(root: &Path) -> (PathBuf, String) {
+    let path = root.join("unused-serving-contract.json");
+    fs::write(&path, b"{}").unwrap();
+    let sha256 = sha256(&path);
+    (path, sha256)
+}
+
 fn readiness_deadline_after_ms(delta_ms: u64) -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -82,7 +89,11 @@ fn write_restore_manifest(root: &Path, job_id: &str) -> PathBuf {
     env.insert("EMBER_LAB_FIXTURE_SLEEP_MS", "30000".into());
     let config = root.join("restore-config.json");
     let data_manifest = root.join("restore-data.json");
-    fs::write(&config, b"{\"config\":\"restore\"}").unwrap();
+    fs::write(
+        &config,
+        b"{\"config\":\"restore\",\"quantization\":\"none\"}",
+    )
+    .unwrap();
     fs::write(&data_manifest, b"{\"records\":1}").unwrap();
     let program = std::env::current_exe().unwrap();
     let manifest = root.join(format!("restore-manifest-{job_id}.json"));
@@ -120,6 +131,399 @@ fn write_restore_manifest(root: &Path, job_id: &str) -> PathBuf {
     )
     .unwrap();
     manifest
+}
+
+fn write_serving_contract(
+    root: &Path,
+    port: u16,
+    restore_manifest_path: &Path,
+) -> (PathBuf, String) {
+    let manifest: Value =
+        serde_json::from_slice(&fs::read(restore_manifest_path).unwrap()).unwrap();
+    let contract_path = root.join(format!(
+        "serving-contract-{}.json",
+        manifest["job_id"].as_str().unwrap()
+    ));
+    let contract = json!({
+        "schema_version": "ember-lab-serving-contract-v1",
+        "contract_id": format!("fixture-serving-contract:{}", manifest["job_id"].as_str().unwrap()),
+        "model_name": "fixture-owned-3b",
+        "quantization": "none",
+        "expected_vram_bytes": 100 * 1024 * 1024_u64,
+        "endpoint": format!("http://127.0.0.1:{port}"),
+        "model_config_path": manifest["bindings"][0]["path"],
+        "model_config_sha256": manifest["bindings"][0]["sha256"],
+        "launcher_path": manifest["program"]["path"],
+        "launcher_sha256": manifest["program"]["sha256"],
+        "launcher_args": manifest["args"],
+    });
+    fs::write(&contract_path, serde_json::to_vec(&contract).unwrap()).unwrap();
+    let contract_sha256 = sha256(&contract_path);
+    (contract_path, contract_sha256)
+}
+
+fn bind_serving_contract_to_authority(
+    authority_path: &Path,
+    serving_contract_path: &Path,
+    serving_contract_sha256: &str,
+) -> String {
+    let mut authority: Value = serde_json::from_slice(&fs::read(authority_path).unwrap()).unwrap();
+    authority["serving_contract_path"] =
+        Value::String(serving_contract_path.to_string_lossy().into_owned());
+    authority["serving_contract_sha256"] = Value::String(serving_contract_sha256.to_string());
+    fs::write(authority_path, serde_json::to_vec(&authority).unwrap()).unwrap();
+    sha256(authority_path)
+}
+
+fn write_dispatch_refused_restore_manifest(root: &Path, job_id: &str) -> PathBuf {
+    let path = write_restore_manifest(root, job_id);
+    let mut manifest: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    manifest["source_commit"] = Value::String("not-a-source-commit".into());
+    fs::write(&path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+    path
+}
+
+#[test]
+fn server_supervision_registration_refuses_missing_or_foreign_contract_without_row() {
+    use ember_lab::server_supervisor::ServerLiveCycleRequest;
+
+    let root = sandbox("server-supervision-contract-admission");
+    let db = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open(&db).unwrap();
+    let authority_path = root.join("server-authority.json");
+    let authority = json!({
+        "schema_version": "ember-lab-server-authority-v1",
+        "job_id": "contract-admission-job",
+        "resource_lease": "server:8082",
+        "target": "llama-server",
+        "host": "127.0.0.1",
+        "port": 8082,
+        "pid": 1,
+        "identity_sha256": "a".repeat(64),
+    });
+    fs::write(&authority_path, serde_json::to_vec(&authority).unwrap()).unwrap();
+    let authority_sha256 = sha256(&authority_path);
+    let request = ServerLiveCycleRequest {
+        authority_path,
+        authority_sha256,
+        receipt_path: root.join("receipt.json"),
+        restore_manifest_path: root.join("unused-restore-manifest.json"),
+        serving_contract_path: root.join("missing-serving-contract.json"),
+        serving_contract_sha256: "b".repeat(64),
+        required_headroom_bytes: 1,
+        now_ms: 1_000,
+    };
+
+    assert!(daemon.register_server_supervision(&request).is_err());
+
+    let (tampered_contract, _) = write_contract_citation(&root);
+    let tampered_request = ServerLiveCycleRequest {
+        serving_contract_path: tampered_contract,
+        serving_contract_sha256: "c".repeat(64),
+        ..request.clone()
+    };
+    assert!(daemon
+        .register_server_supervision(&tampered_request)
+        .is_err());
+
+    let foreign_root = sandbox("server-supervision-foreign-contract");
+    let restore_manifest = write_restore_manifest(&foreign_root, "foreign-contract-job");
+    let (foreign_contract, foreign_sha256) =
+        write_serving_contract(&foreign_root, 8082, &restore_manifest);
+    let foreign_request = ServerLiveCycleRequest {
+        serving_contract_path: foreign_contract,
+        serving_contract_sha256: foreign_sha256,
+        ..request
+    };
+    assert!(daemon
+        .register_server_supervision(&foreign_request)
+        .is_err());
+
+    let connection = rusqlite::Connection::open(&db).unwrap();
+    let table_count: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='server_supervisions'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        table_count, 0,
+        "refused contract admission must not create a queue row"
+    );
+}
+
+#[test]
+fn server_supervision_refuses_authority_contract_substitution_without_overwriting_queue() {
+    use ember_lab::server_supervisor::ServerLiveCycleRequest;
+
+    let root = sandbox("server-supervision-contract-substitution");
+    let db = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open(&db).unwrap();
+    let restore_manifest = write_restore_manifest(&root, "contract-bound-job");
+    let (canonical_contract, canonical_sha256) =
+        write_serving_contract(&root, 8082, &restore_manifest);
+    let authority_path = root.join("server-authority.json");
+    let authority = json!({
+        "schema_version": "ember-lab-server-authority-v1",
+        "job_id": "contract-bound-job",
+        "resource_lease": "server:8082",
+        "target": "llama-server",
+        "host": "127.0.0.1",
+        "port": 8082,
+        "pid": 1,
+        "identity_sha256": "a".repeat(64),
+        "serving_contract_path": canonical_contract,
+        "serving_contract_sha256": canonical_sha256,
+    });
+    fs::write(&authority_path, serde_json::to_vec(&authority).unwrap()).unwrap();
+    let request = ServerLiveCycleRequest {
+        authority_path: authority_path.clone(),
+        authority_sha256: sha256(&authority_path),
+        receipt_path: root.join("receipt.json"),
+        restore_manifest_path: restore_manifest.clone(),
+        serving_contract_path: PathBuf::from(authority["serving_contract_path"].as_str().unwrap()),
+        serving_contract_sha256: authority["serving_contract_sha256"]
+            .as_str()
+            .unwrap()
+            .to_string(),
+        required_headroom_bytes: 1,
+        now_ms: 1_000,
+    };
+    daemon.register_server_supervision(&request).unwrap();
+
+    let substituted_contract = root.join("substituted-serving-contract.json");
+    let mut substituted: Value =
+        serde_json::from_slice(&fs::read(&request.serving_contract_path).unwrap()).unwrap();
+    substituted["contract_id"] = Value::String("foreign-self-consistent-contract".into());
+    substituted["model_name"] = Value::String("foreign-model".into());
+    fs::write(
+        &substituted_contract,
+        serde_json::to_vec(&substituted).unwrap(),
+    )
+    .unwrap();
+    let substituted_request = ServerLiveCycleRequest {
+        serving_contract_path: substituted_contract,
+        serving_contract_sha256: sha256(&root.join("substituted-serving-contract.json")),
+        ..request.clone()
+    };
+
+    assert!(daemon
+        .register_server_supervision(&substituted_request)
+        .is_err());
+    let connection = rusqlite::Connection::open(&db).unwrap();
+    let queued: (String, String) = connection
+        .query_row(
+            "SELECT serving_contract_path,serving_contract_sha256 FROM server_supervisions WHERE job_id='contract-bound-job'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(
+        PathBuf::from(queued.0).canonicalize().unwrap(),
+        request.serving_contract_path.canonicalize().unwrap()
+    );
+    assert_eq!(queued.1, request.serving_contract_sha256);
+}
+
+#[test]
+fn server_contract_preflight_failures_receipt_without_dispatch_or_queue_mutation() {
+    use ember_lab::server_supervisor::ServerLiveCycleRequest;
+
+    for case in ["malformed", "raw-hash", "endpoint", "launcher"] {
+        let root = sandbox(&format!("server-contract-preflight-{case}"));
+        let db = root.join("ember-lab.sqlite3");
+        let daemon = Daemon::open(&db).unwrap();
+        let (identity, identity_sha256) = write_identity(&root);
+        daemon
+            .bind_identity("preflight-old-job", &identity, &identity_sha256)
+            .unwrap();
+        daemon
+            .acquire_lease("server:8082", "preflight-old-job")
+            .unwrap();
+        let restore_manifest_path = write_restore_manifest(&root, "must-not-dispatch-job");
+        let contract_port = if case == "endpoint" { 8083 } else { 8082 };
+        let (serving_contract_path, _serving_contract_sha256) =
+            write_serving_contract(&root, contract_port, &restore_manifest_path);
+        if case == "malformed" {
+            fs::write(&serving_contract_path, b"{").unwrap();
+        }
+        if case == "launcher" {
+            let mut manifest: Value =
+                serde_json::from_slice(&fs::read(&restore_manifest_path).unwrap()).unwrap();
+            manifest["args"] = json!(["--foreign-launcher-args"]);
+            fs::write(
+                &restore_manifest_path,
+                serde_json::to_vec(&manifest).unwrap(),
+            )
+            .unwrap();
+        }
+        let canonical_contract_sha256 = sha256(&serving_contract_path);
+        let authority_path = root.join("server-authority.json");
+        let authority = json!({
+            "schema_version": "ember-lab-server-authority-v1",
+            "job_id": "preflight-old-job",
+            "resource_lease": "server:8082",
+            "target": "llama-server",
+            "host": "127.0.0.1",
+            "port": 8082,
+            "pid": 1,
+            "identity_sha256": identity_sha256,
+            "serving_contract_path": serving_contract_path,
+            "serving_contract_sha256": canonical_contract_sha256,
+        });
+        fs::write(&authority_path, serde_json::to_vec(&authority).unwrap()).unwrap();
+        let receipt_path = root.join(format!("{case}-receipt.json"));
+        let request_sha256 = if case == "raw-hash" {
+            "b".repeat(64)
+        } else {
+            canonical_contract_sha256.clone()
+        };
+
+        let receipt = daemon
+            .supervise_server_live_cycle_with_test_observation(
+                ServerLiveCycleRequest {
+                    authority_path: authority_path.clone(),
+                    authority_sha256: sha256(&authority_path),
+                    receipt_path: receipt_path.clone(),
+                    restore_manifest_path,
+                    serving_contract_path: PathBuf::from(
+                        authority["serving_contract_path"].as_str().unwrap(),
+                    ),
+                    serving_contract_sha256: request_sha256,
+                    required_headroom_bytes: 1,
+                    now_ms: 1_000,
+                },
+                "foreign-model-that-would-match-a-substitute".into(),
+                100 * 1024 * 1024,
+            )
+            .unwrap();
+
+        assert_eq!(receipt.decision, "RESTORE_FAILED_CONTRACT", "{case}");
+        assert_eq!(
+            receipt.serving_contract_sha256.as_deref(),
+            Some(canonical_contract_sha256.as_str()),
+            "{case}"
+        );
+        assert!(receipt
+            .serving_contract_assertions
+            .as_ref()
+            .unwrap()
+            .observation_error
+            .as_deref()
+            .unwrap()
+            .contains("contract"));
+        let persisted: Value = serde_json::from_slice(&fs::read(&receipt_path).unwrap()).unwrap();
+        assert_eq!(
+            persisted["events"][0]["kind"], "server_restore_failed_contract",
+            "{case}"
+        );
+        assert!(daemon
+            .job_event_kinds("preflight-old-job")
+            .unwrap()
+            .iter()
+            .any(|kind| kind == "server_restore_failed_contract"));
+        assert_eq!(daemon.job_state("must-not-dispatch-job").unwrap(), None);
+        let connection = rusqlite::Connection::open(&db).unwrap();
+        let queued: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='server_supervisions'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(queued, 0, "{case}");
+    }
+}
+
+#[test]
+fn server_contract_preflight_hung_live_job_is_not_fenced_and_receipt_stays_running() {
+    use ember_lab::server_supervisor::ServerLiveCycleRequest;
+
+    let root = sandbox("server-contract-preflight-hung-live");
+    let db = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open(&db).unwrap();
+    let (identity, identity_sha256) = write_identity(&root);
+    daemon
+        .bind_identity("hung-live-job", &identity, &identity_sha256)
+        .unwrap();
+    daemon
+        .acquire_lease("server:8082", "hung-live-job")
+        .unwrap();
+    let started = daemon
+        .start_job(
+            JobSpec::new(
+                "hung-live-job",
+                std::env::current_exe().unwrap().to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "server:8082",
+            )
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000"),
+        )
+        .unwrap();
+    let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let hung_endpoint = thread::spawn(move || {
+        let (_stream, _) = listener.accept().unwrap();
+        thread::sleep(Duration::from_millis(1_000));
+    });
+    let serving_contract_path = root.join("malformed-serving-contract.json");
+    fs::write(&serving_contract_path, b"{").unwrap();
+    let serving_contract_sha256 = sha256(&serving_contract_path);
+    let authority_path = root.join("server-authority.json");
+    let authority = json!({
+        "schema_version": "ember-lab-server-authority-v1",
+        "job_id": "hung-live-job",
+        "resource_lease": "server:8082",
+        "target": "llama-server",
+        "host": "127.0.0.1",
+        "port": port,
+        "pid": started.pid,
+        "identity_sha256": identity_sha256,
+        "serving_contract_path": serving_contract_path,
+        "serving_contract_sha256": serving_contract_sha256,
+    });
+    fs::write(&authority_path, serde_json::to_vec(&authority).unwrap()).unwrap();
+    let receipt_path = root.join("hung-preflight-receipt.json");
+
+    let receipt = daemon
+        .supervise_server_live_cycle_with_test_observation(
+            ServerLiveCycleRequest {
+                authority_path: authority_path.clone(),
+                authority_sha256: sha256(&authority_path),
+                receipt_path: receipt_path.clone(),
+                restore_manifest_path: root.join("must-not-dispatch.json"),
+                serving_contract_path: PathBuf::from(
+                    authority["serving_contract_path"].as_str().unwrap(),
+                ),
+                serving_contract_sha256: authority["serving_contract_sha256"]
+                    .as_str()
+                    .unwrap()
+                    .to_string(),
+                required_headroom_bytes: 1,
+                now_ms: 1_000,
+            },
+            "must-not-observe".into(),
+            1,
+        )
+        .unwrap();
+
+    assert_eq!(receipt.decision, "RESTORE_FAILED_CONTRACT");
+    assert!(receipt.process_alive);
+    assert_eq!(receipt.endpoint_health, "hung");
+    assert_eq!(
+        daemon.job_state("hung-live-job").unwrap(),
+        Some(JobState::Running)
+    );
+    assert_eq!(
+        daemon.lease_owner("server:8082").unwrap().as_deref(),
+        Some("hung-live-job")
+    );
+    let persisted: Value = serde_json::from_slice(&fs::read(&receipt_path).unwrap()).unwrap();
+    assert_eq!(persisted["state"], "running");
+    daemon.stop_job("hung-live-job").unwrap();
+    hung_endpoint.join().unwrap();
 }
 
 fn start_phase_fixture(root: &Path, job_id: &str, producer: bool) -> (Daemon, PathBuf) {
@@ -508,6 +912,7 @@ fn ember_lab_server_cycle_uses_bound_authority_and_governed_restore() {
             Ok(RestoreEvidence {
                 restore_cost_s: 1.25,
                 health_status: 200,
+                contract_assertions: None,
             })
         })
         .unwrap();
@@ -585,6 +990,7 @@ fn ember_lab_server_cycle_covers_health_outage_hung_headroom_and_alarm_law() {
             Ok(ember_lab::server_supervisor::RestoreEvidence {
                 restore_cost_s: 1.0,
                 health_status: 200,
+                contract_assertions: None,
             })
         })
         .unwrap();
@@ -597,6 +1003,7 @@ fn ember_lab_server_cycle_covers_health_outage_hung_headroom_and_alarm_law() {
             Ok(ember_lab::server_supervisor::RestoreEvidence {
                 restore_cost_s: 1.0,
                 health_status: 200,
+                contract_assertions: None,
             })
         })
         .unwrap();
@@ -613,6 +1020,7 @@ fn ember_lab_server_cycle_covers_health_outage_hung_headroom_and_alarm_law() {
             Ok(ember_lab::server_supervisor::RestoreEvidence {
                 restore_cost_s: 1.0,
                 health_status: 200,
+                contract_assertions: None,
             })
         })
         .unwrap();
@@ -625,6 +1033,7 @@ fn ember_lab_server_cycle_covers_health_outage_hung_headroom_and_alarm_law() {
             Ok(ember_lab::server_supervisor::RestoreEvidence {
                 restore_cost_s: 2.0,
                 health_status: 503,
+                contract_assertions: None,
             })
         })
         .unwrap();
@@ -637,6 +1046,7 @@ fn ember_lab_server_cycle_covers_health_outage_hung_headroom_and_alarm_law() {
             Ok(ember_lab::server_supervisor::RestoreEvidence {
                 restore_cost_s: 1.0,
                 health_status: 200,
+                contract_assertions: None,
             })
         })
         .unwrap();
@@ -648,6 +1058,7 @@ fn ember_lab_server_cycle_covers_health_outage_hung_headroom_and_alarm_law() {
             Ok(ember_lab::server_supervisor::RestoreEvidence {
                 restore_cost_s: 1.0,
                 health_status: 200,
+                contract_assertions: None,
             })
         })
         .unwrap();
@@ -659,6 +1070,7 @@ fn ember_lab_server_cycle_covers_health_outage_hung_headroom_and_alarm_law() {
             Ok(ember_lab::server_supervisor::RestoreEvidence {
                 restore_cost_s: 1.0,
                 health_status: 200,
+                contract_assertions: None,
             })
         })
         .unwrap();
@@ -720,6 +1132,7 @@ fn ember_lab_server_cycle_rejects_unbound_or_overwritten_authority() {
             Ok(ember_lab::server_supervisor::RestoreEvidence {
                 restore_cost_s: 1.0,
                 health_status: 200,
+                contract_assertions: None,
             })
         })
         .is_ok());
@@ -790,12 +1203,19 @@ fn ember_lab_live_server_cycle_uses_real_endpoint_and_existing_dispatch_authorit
     });
     let authority_bytes = serde_json::to_vec(&authority).unwrap();
     fs::write(&authority_path, &authority_bytes).unwrap();
-    let authority_sha256 = format!("{:x}", Sha256::digest(&authority_bytes));
+    let (serving_contract_path, serving_contract_sha256) = write_contract_citation(&root);
+    let authority_sha256 = bind_serving_contract_to_authority(
+        &authority_path,
+        &serving_contract_path,
+        &serving_contract_sha256,
+    );
     let request = ServerLiveCycleRequest {
         authority_path,
         authority_sha256,
         receipt_path: root.join("live-cycle.json"),
         restore_manifest_path: root.join("unused-restore-manifest.json"),
+        serving_contract_path,
+        serving_contract_sha256,
         required_headroom_bytes: 1,
         now_ms: 1_000,
     };
@@ -881,6 +1301,7 @@ fn server_cycle_derives_restart_count_from_authoritative_activity_events() {
                 Ok(RestoreEvidence {
                     restore_cost_s: 1.0,
                     health_status: 200,
+                    contract_assertions: None,
                 })
             },
         )
@@ -957,6 +1378,7 @@ fn server_cycle_backoff_spans_rebound_job_ids_and_rejects_restore() {
                 Ok(RestoreEvidence {
                     restore_cost_s: 1.0,
                     health_status: 200,
+                    contract_assertions: None,
                 })
             },
         )
@@ -1013,12 +1435,19 @@ fn server_supervision_rejects_foreign_pid_and_receipt_custody_escape() {
     });
     let authority_bytes = serde_json::to_vec(&authority).unwrap();
     fs::write(&authority_path, &authority_bytes).unwrap();
-    let authority_sha256 = format!("{:x}", Sha256::digest(&authority_bytes));
+    let (serving_contract_path, serving_contract_sha256) = write_contract_citation(&root);
+    let authority_sha256 = bind_serving_contract_to_authority(
+        &authority_path,
+        &serving_contract_path,
+        &serving_contract_sha256,
+    );
     let escaped = ServerLiveCycleRequest {
         authority_path: authority_path.clone(),
         authority_sha256: authority_sha256.clone(),
         receipt_path: root.parent().unwrap().join("escaped-server-receipt.json"),
         restore_manifest_path: root.join("restore.json"),
+        serving_contract_path: serving_contract_path.clone(),
+        serving_contract_sha256: serving_contract_sha256.clone(),
         required_headroom_bytes: 1,
         now_ms: 1_000,
     };
@@ -1029,6 +1458,8 @@ fn server_supervision_rejects_foreign_pid_and_receipt_custody_escape() {
         authority_sha256,
         receipt_path: root.join("server-receipt.json"),
         restore_manifest_path: root.join("restore.json"),
+        serving_contract_path,
+        serving_contract_sha256,
         required_headroom_bytes: 1,
         now_ms: 1_000,
     };
@@ -1083,13 +1514,23 @@ fn server_live_cycle_fences_dead_endpoint_before_restore_dispatch() {
     });
     let authority_bytes = serde_json::to_vec(&authority).unwrap();
     fs::write(&authority_path, &authority_bytes).unwrap();
-    let authority_sha256 = format!("{:x}", Sha256::digest(&authority_bytes));
+    let restore_manifest_path =
+        write_dispatch_refused_restore_manifest(&root, "refused-handoff-job");
+    let (serving_contract_path, serving_contract_sha256) =
+        write_serving_contract(&root, port, &restore_manifest_path);
+    let authority_sha256 = bind_serving_contract_to_authority(
+        &authority_path,
+        &serving_contract_path,
+        &serving_contract_sha256,
+    );
     let receipt = daemon
         .supervise_server_live_cycle(ServerLiveCycleRequest {
             authority_path,
             authority_sha256,
             receipt_path: root.join("handoff-receipt.json"),
-            restore_manifest_path: root.join("invalid-restore.json"),
+            restore_manifest_path,
+            serving_contract_path,
+            serving_contract_sha256,
             required_headroom_bytes: 1,
             now_ms: 1_000,
         })
@@ -1143,13 +1584,20 @@ fn server_live_cycle_open_planned_outage_does_not_fence_or_dispatch() {
     });
     let authority_bytes = serde_json::to_vec(&authority).unwrap();
     fs::write(&authority_path, &authority_bytes).unwrap();
-    let authority_sha256 = format!("{:x}", Sha256::digest(&authority_bytes));
+    let (serving_contract_path, serving_contract_sha256) = write_contract_citation(&root);
+    let authority_sha256 = bind_serving_contract_to_authority(
+        &authority_path,
+        &serving_contract_path,
+        &serving_contract_sha256,
+    );
     let receipt = daemon
         .supervise_server_live_cycle(ServerLiveCycleRequest {
             authority_path,
             authority_sha256,
             receipt_path: root.join("outage-receipt.json"),
             restore_manifest_path: root.join("must-not-dispatch.json"),
+            serving_contract_path,
+            serving_contract_sha256,
             required_headroom_bytes: 1,
             now_ms: 1_000,
         })
@@ -1258,19 +1706,41 @@ fn server_live_cycle_rebinds_successful_restore_for_subsequent_ticks() {
     });
     let authority_bytes = serde_json::to_vec(&authority).unwrap();
     fs::write(&authority_path, &authority_bytes).unwrap();
-    let authority_sha256 = format!("{:x}", Sha256::digest(&authority_bytes));
     let manifest_path = write_restore_manifest(&root, "restored-server-job");
+    let (serving_contract_path, serving_contract_sha256) =
+        write_serving_contract(&root, port, &manifest_path);
+    let authority_sha256 = bind_serving_contract_to_authority(
+        &authority_path,
+        &serving_contract_path,
+        &serving_contract_sha256,
+    );
     let receipt = daemon
-        .supervise_server_live_cycle(ServerLiveCycleRequest {
-            authority_path,
-            authority_sha256,
-            receipt_path: root.join("rebind-receipt.json"),
-            restore_manifest_path: manifest_path,
-            required_headroom_bytes: 1,
-            now_ms: 1_000,
-        })
+        .supervise_server_live_cycle_with_test_observation(
+            ServerLiveCycleRequest {
+                authority_path,
+                authority_sha256,
+                receipt_path: root.join("rebind-receipt.json"),
+                restore_manifest_path: manifest_path,
+                serving_contract_path: serving_contract_path.clone(),
+                serving_contract_sha256: serving_contract_sha256.clone(),
+                required_headroom_bytes: 1,
+                now_ms: 1_000,
+            },
+            "fixture-owned-3b".into(),
+            115 * 1024 * 1024,
+        )
         .unwrap();
     assert_eq!(receipt.decision, "RESTORED");
+    assert_eq!(
+        receipt.serving_contract_id.as_deref(),
+        Some("fixture-serving-contract:restored-server-job")
+    );
+    let assertions = receipt.serving_contract_assertions.as_ref().unwrap();
+    assert!(assertions.model_name_matches);
+    assert!(assertions.vram_within_band);
+    assert!(assertions.endpoint_matches);
+    assert!(assertions.launcher_matches);
+    assert!(assertions.quantization_matches);
     assert_eq!(
         daemon.job_state("restored-server-job").unwrap(),
         Some(JobState::Running)
@@ -1294,8 +1764,55 @@ fn server_live_cycle_rebinds_successful_restore_for_subsequent_ticks() {
         Some("restored-server-job")
     );
     daemon.stop_job("restored-server-job").unwrap();
+
+    // A config swap reaches the same governed dispatch/rebind path but may not
+    // survive the post-restore contract gate merely because /health is 200.
+    let restored_hash = format!("{:x}", Sha256::digest(b"restored-server-job"));
+    let rebound_authority_path = root.join(format!(
+        "server-authority-rebound-{}.json",
+        &restored_hash[..16]
+    ));
+    let rebound_authority_sha256 = sha256(&rebound_authority_path);
+    let swapped_manifest = write_restore_manifest(&root, "swapped-server-job");
+    let swapped = daemon
+        .supervise_server_live_cycle_with_test_observation(
+            ServerLiveCycleRequest {
+                authority_path: rebound_authority_path,
+                authority_sha256: rebound_authority_sha256,
+                receipt_path: root.join("config-swap-receipt.json"),
+                restore_manifest_path: swapped_manifest,
+                serving_contract_path,
+                serving_contract_sha256,
+                required_headroom_bytes: 1,
+                now_ms: 4_000,
+            },
+            "foreign-config-swap".into(),
+            100 * 1024 * 1024,
+        )
+        .unwrap();
+    assert_eq!(swapped.decision, "RESTORE_FAILED_CONTRACT");
+    assert_eq!(
+        swapped
+            .serving_contract_assertions
+            .as_ref()
+            .unwrap()
+            .model_name_matches,
+        false
+    );
+    assert_eq!(
+        daemon.job_state("swapped-server-job").unwrap(),
+        Some(JobState::Stopped)
+    );
+    assert_eq!(daemon.lease_owner("server:8082").unwrap(), None);
+    let config_swap_receipt: Value =
+        serde_json::from_slice(&fs::read(root.join("config-swap-receipt.json")).unwrap()).unwrap();
+    assert_eq!(config_swap_receipt["state"], "stopped");
+    assert_eq!(
+        config_swap_receipt["events"][0]["kind"],
+        "server_restore_failed_contract"
+    );
     server.join().unwrap();
-    assert_eq!(responses.load(Ordering::SeqCst), 4);
+    assert!(responses.load(Ordering::SeqCst) >= 5);
 }
 
 #[test]
@@ -1364,6 +1881,14 @@ fn server_live_cycle_restarts_across_rebound_authorities_then_backs_off() {
     });
     let authority_bytes = serde_json::to_vec(&authority).unwrap();
     fs::write(&authority_path, &authority_bytes).unwrap();
+    let first_manifest_path = write_restore_manifest(&root, "rebound-server-job-1");
+    let (serving_contract_path, serving_contract_sha256) =
+        write_serving_contract(&root, port, &first_manifest_path);
+    bind_serving_contract_to_authority(
+        &authority_path,
+        &serving_contract_path,
+        &serving_contract_sha256,
+    );
     let mut job_id = "old-server-job".to_string();
 
     for iteration in 1..=3 {
@@ -1371,17 +1896,27 @@ fn server_live_cycle_restarts_across_rebound_authorities_then_backs_off() {
             daemon.stop_job(&job_id).unwrap();
         }
         let next_job_id = format!("rebound-server-job-{iteration}");
-        let manifest_path = write_restore_manifest(&root, &next_job_id);
+        let manifest_path = if iteration == 1 {
+            first_manifest_path.clone()
+        } else {
+            write_restore_manifest(&root, &next_job_id)
+        };
         let authority_bytes = fs::read(&authority_path).unwrap();
         let receipt = daemon
-            .supervise_server_live_cycle(ServerLiveCycleRequest {
-                authority_path: authority_path.clone(),
-                authority_sha256: format!("{:x}", Sha256::digest(&authority_bytes)),
-                receipt_path: root.join(format!("stable-backoff-{iteration}.json")),
-                restore_manifest_path: manifest_path,
-                required_headroom_bytes: 1,
-                now_ms: iteration * 1_000,
-            })
+            .supervise_server_live_cycle_with_test_observation(
+                ServerLiveCycleRequest {
+                    authority_path: authority_path.clone(),
+                    authority_sha256: format!("{:x}", Sha256::digest(&authority_bytes)),
+                    receipt_path: root.join(format!("stable-backoff-{iteration}.json")),
+                    restore_manifest_path: manifest_path,
+                    serving_contract_path: serving_contract_path.clone(),
+                    serving_contract_sha256: serving_contract_sha256.clone(),
+                    required_headroom_bytes: 1,
+                    now_ms: iteration * 1_000,
+                },
+                "fixture-owned-3b".into(),
+                100 * 1024 * 1024,
+            )
             .unwrap();
         assert_eq!(receipt.decision, "RESTORED");
         assert_eq!(
@@ -1409,6 +1944,8 @@ fn server_live_cycle_restarts_across_rebound_authorities_then_backs_off() {
             authority_sha256: format!("{:x}", Sha256::digest(&authority_bytes)),
             receipt_path: root.join("stable-backoff-fourth.json"),
             restore_manifest_path: root.join("must-not-dispatch-fourth.json"),
+            serving_contract_path,
+            serving_contract_sha256,
             required_headroom_bytes: 1,
             now_ms: 4_000,
         })
@@ -1472,13 +2009,23 @@ fn server_live_cycle_accepts_natural_exit_after_lease_release() {
     });
     let authority_bytes = serde_json::to_vec(&authority).unwrap();
     fs::write(&authority_path, &authority_bytes).unwrap();
-    let authority_sha256 = format!("{:x}", Sha256::digest(&authority_bytes));
+    let restore_manifest_path =
+        write_dispatch_refused_restore_manifest(&root, "refused-natural-exit-job");
+    let (serving_contract_path, serving_contract_sha256) =
+        write_serving_contract(&root, 6551, &restore_manifest_path);
+    let authority_sha256 = bind_serving_contract_to_authority(
+        &authority_path,
+        &serving_contract_path,
+        &serving_contract_sha256,
+    );
     let receipt = daemon
         .supervise_server_live_cycle(ServerLiveCycleRequest {
             authority_path,
             authority_sha256,
             receipt_path: root.join("natural-exit-receipt.json"),
-            restore_manifest_path: root.join("invalid-restore.json"),
+            restore_manifest_path,
+            serving_contract_path,
+            serving_contract_sha256,
             required_headroom_bytes: 1,
             now_ms: 1_000,
         })
