@@ -60,6 +60,16 @@ _ALLOWED_LICENSE_PREFIXES = (
     "BSD",
 )
 _ALLOWED_DOMAINS = frozenset("ABCDEFGHIJK")
+_PROVENANCE_PREFIX = "human-provenance:"
+_FORBIDDEN_PROVENANCE_MARKERS = (
+    "model-generated",
+    "model generated",
+    "llm-generated",
+    "classifier",
+    "machine-ranked",
+    "machine filtered",
+    "synthetic",
+)
 
 
 def _sha256(path: Path) -> str:
@@ -108,6 +118,28 @@ def _read_json(path: Path, label: str) -> dict[str, Any]:
     return value
 
 
+def _receipt_file_identity(*, root: Path, dest_root: object, file_path: object) -> str:
+    """Return the one canonical custody-relative path named by a receipt row."""
+    if not isinstance(dest_root, str) or not dest_root:
+        raise ValueError("source receipt dest_root is required for path binding")
+    if not isinstance(file_path, str) or not file_path or "\\" in file_path:
+        raise ValueError("source receipt file path must be normalized")
+    destination = Path(dest_root)
+    if not destination.is_absolute():
+        destination = root / destination
+    destination = destination.resolve()
+    try:
+        destination.relative_to(root)
+    except ValueError as error:
+        raise ValueError("source receipt dest_root escapes custody root") from error
+    candidate = (destination / file_path).resolve()
+    try:
+        relative = candidate.relative_to(root).as_posix()
+    except ValueError as error:
+        raise ValueError("source receipt file path escapes custody root") from error
+    return relative
+
+
 def load_authorized_source_inventory(*, manifest_path: Path, custody_root: Path) -> dict[str, Any]:
     """Validate a closed inventory and all receipt/raw-byte bindings."""
 
@@ -145,8 +177,8 @@ def load_authorized_source_inventory(*, manifest_path: Path, custody_root: Path)
         ):
             raise ValueError("source receipt schema is not admitted")
         files = receipt_payload.get("files")
-        if not isinstance(files, list) or not files:
-            raise ValueError("source receipt must bind at least one file")
+        if not isinstance(files, list) or len(files) != 1:
+            raise ValueError("source receipt must bind exactly one inventory file")
         file_rows: list[dict[str, Any]] = []
         for file_row in files:
             if not isinstance(file_row, dict) or set(file_row) != _FILE_FIELDS:
@@ -165,8 +197,22 @@ def load_authorized_source_inventory(*, manifest_path: Path, custody_root: Path)
             raise ValueError("source receipt manifest hash is not derived from its file rows")
         if receipt_payload.get("total_bytes") != sum(row["bytes"] for row in file_rows):
             raise ValueError("source receipt total bytes are not derived from its file rows")
+        if (
+            _receipt_file_identity(
+                root=root,
+                dest_root=receipt_payload.get("dest_root"),
+                file_path=file_rows[0]["path"],
+            )
+            != Path(source["raw_path"]).as_posix()
+        ):
+            raise ValueError("source receipt file identity does not match inventory raw_path")
         license_value = receipt_payload.get("license")
         normalized_license = license_value.upper() if isinstance(license_value, str) else ""
+        notes = receipt_payload.get("notes")
+        provenance_text = " ".join(
+            str(receipt_payload.get(key, ""))
+            for key in ("source", "canonical_url", "license_evidence", "notes")
+        ).lower()
         if (
             receipt_payload.get("source_id") != source_id
             or receipt_payload.get("l3_statement") != L3_STATEMENT
@@ -179,6 +225,9 @@ def load_authorized_source_inventory(*, manifest_path: Path, custody_root: Path)
             or not isinstance(receipt_payload.get("revision"), (str, type(None)))
             or not isinstance(license_value, str)
             or not license_value
+            or not isinstance(notes, str)
+            or not notes.startswith(_PROVENANCE_PREFIX)
+            or any(marker in provenance_text for marker in _FORBIDDEN_PROVENANCE_MARKERS)
             or normalized_license in {"UNSPECIFIED", "UNVERIFIED", "UNKNOWN"}
             or "-NC" in normalized_license
             or "-ND" in normalized_license
