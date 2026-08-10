@@ -123,7 +123,7 @@ else
 fi
 
 # ---- 1b. tracked text files must be LF-only ------------------------------
-if python "$KERNEL_ROOT/tools/check_line_endings.py" "$SUBJECT_ROOT"; then
+if bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/tools/check_line_endings.py" "$SUBJECT_ROOT"; then
   :
 else
   FAIL=1
@@ -133,7 +133,7 @@ fi
 # Use trusted kernel bytes against the subject checkout. Git's -I heuristic
 # skips NUL-heavy content, so every Git text-attributed subject blob must pass
 # this explicit byte-level check before the names/path scans below.
-if python "$KERNEL_ROOT/tools/check_text_encoding.py" "$SUBJECT_ROOT"; then
+if bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/tools/check_text_encoding.py" "$SUBJECT_ROOT"; then
   :
 else
   FAIL=1
@@ -143,7 +143,7 @@ fi
 # Frozen receipts/prose may truthfully mention placeholders. The trusted
 # checker rejects only the runtime-crashing boundary: a redacted token used as
 # a percent-format or str.format operand (issue #502).
-if python "$KERNEL_ROOT/tools/check_executable_redaction_placeholders.py" "$SUBJECT_ROOT"; then
+if bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/tools/check_executable_redaction_placeholders.py" "$SUBJECT_ROOT"; then
   :
 else
   FAIL=1
@@ -305,7 +305,7 @@ if [ "$BACKUP_EXEMPTION_APPLIED" -eq 0 ]; then
       HASHED_SELF_ARGS+=(--scan-guard-surfaces)
     fi
     HASHED_OUT="$(
-      python "$KERNEL_ROOT/tools/check_names_hashed.py" \
+      bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/tools/check_names_hashed.py" \
         --root "$SUBJECT_ROOT" \
         --denylist "$KERNEL_ROOT/tools/repo-guard-denylist.sha256" \
         --names-exclude "$NAMES_EXCLUDE_FILE" "${HASHED_SELF_ARGS[@]}" 2>&1
@@ -378,7 +378,7 @@ if [ -z "$EMBERD_HITS" ]; then
 else
   EMBERD_PATHS="$(printf '%s\n' "$EMBERD_HITS" | cut -d: -f1 | sort -u)"
 fi
-EMBERD_CHECK_OUT="$(EMBERD_PATHS="$EMBERD_PATHS" python "$KERNEL_ROOT/tools/check_emberd_legacy_exceptions.py" 2>&1)"
+EMBERD_CHECK_OUT="$(EMBERD_PATHS="$EMBERD_PATHS" bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/tools/check_emberd_legacy_exceptions.py" 2>&1)"
 EMBERD_CHECK_RC=$?
 if [ "$EMBERD_CHECK_RC" -eq 0 ]; then
   if [ -z "$EMBERD_HITS" ]; then
@@ -395,13 +395,39 @@ else
   printf '%s\n' "$EMBERD_CHECK_OUT" | sed 's/^/      /'
 fi
 
-# ---- 4. exactly one root goal document -----------------------------------
-GOALN="$(git ls-files | grep -cE '^GOAL[^/]*\.md$')"
-if [ "$GOALN" -eq 1 ]; then
-  ok "goal-doc" "exactly one (GOAL.md)"
+# ---- 4. exactly one old-or-new authority document ------------------------
+AUTHORITY_PATHS_OK=1
+GOAL_REL=""
+STATE_REL=""
+for AUTHORITY_NAME in GOAL.md INVARIANT.md GOVERNANCE.md CONTINUITY.md REDACTIONS.md STATE.md; do
+  OLD_REL="$AUTHORITY_NAME"
+  NEW_REL="docs/authority/$AUTHORITY_NAME"
+  OLD_PRESENT=0
+  NEW_PRESENT=0
+  git ls-files --error-unmatch "$OLD_REL" >/dev/null 2>&1 && OLD_PRESENT=1
+  git ls-files --error-unmatch "$NEW_REL" >/dev/null 2>&1 && NEW_PRESENT=1
+  AUTHORITY_COUNT=$((OLD_PRESENT + NEW_PRESENT))
+  if [ "$AUTHORITY_COUNT" -ne 1 ]; then
+    fail "authority-paths" "$AUTHORITY_NAME must exist at exactly one of '$OLD_REL' or '$NEW_REL' (found $AUTHORITY_COUNT)"
+    AUTHORITY_PATHS_OK=0
+  elif [ "$OLD_PRESENT" -eq 1 ]; then
+    [ "$AUTHORITY_NAME" = "GOAL.md" ] && GOAL_REL="$OLD_REL"
+    [ "$AUTHORITY_NAME" = "STATE.md" ] && STATE_REL="$OLD_REL"
+  else
+    [ "$AUTHORITY_NAME" = "GOAL.md" ] && GOAL_REL="$NEW_REL"
+    [ "$AUTHORITY_NAME" = "STATE.md" ] && STATE_REL="$NEW_REL"
+  fi
+done
+if [ "$AUTHORITY_PATHS_OK" -eq 1 ]; then
+  ok "authority-paths" "each authority document has exactly one canonical old-or-new path"
+fi
+
+GOALN="$(git ls-files | grep -cE '^(GOAL[^/]*\.md|docs/authority/GOAL[^/]*\.md)$')"
+if [ "$GOALN" -eq 1 ] && [ -n "$GOAL_REL" ]; then
+  ok "goal-doc" "exactly one ($GOAL_REL)"
 else
-  fail "goal-doc" "found $GOALN root GOAL*.md files; exactly one canonical GOAL.md is allowed"
-  git ls-files | grep -E '^GOAL[^/]*\.md$' | sed 's/^/      /'
+  fail "goal-doc" "found $GOALN GOAL*.md files across canonical authority locations; exactly one is allowed"
+  git ls-files | grep -E '^(GOAL[^/]*\.md|docs/authority/GOAL[^/]*\.md)$' | sed 's/^/      /'
 fi
 
 # ---- 5. no duplicate/overlapping top-level directories -------------------
@@ -417,11 +443,11 @@ DUPOK=$?
 [ "$FAIL" -eq 0 ] && ok "dup-dir" "no known duplicate dirs"
 
 # ---- 6. STATE.md is a bounded position ledger, not an append log ---------
-if git ls-files --error-unmatch STATE.md >/dev/null 2>&1; then
-  SL="$(git show ":STATE.md" 2>/dev/null | wc -l | tr -d ' ')"
-  [ -z "$SL" ] && SL="$(wc -l < STATE.md | tr -d ' ')"
+if [ -n "$STATE_REL" ] && git ls-files --error-unmatch "$STATE_REL" >/dev/null 2>&1; then
+  SL="$(git show ":$STATE_REL" 2>/dev/null | wc -l | tr -d ' ')"
+  [ -z "$SL" ] && SL="$(wc -l < "$STATE_REL" | tr -d ' ')"
   if [ "$SL" -le "$MAX_STATE_LINES" ]; then
-    ok "state" "STATE.md $SL lines (<= $MAX_STATE_LINES)"
+    ok "state" "$STATE_REL $SL lines (<= $MAX_STATE_LINES)"
   else
     fail "state" "STATE.md $SL lines exceeds $MAX_STATE_LINES — it is a position ledger, not an append log"
   fi
@@ -481,14 +507,14 @@ elif [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
   CHANGED_RECEIPT_SCOPE=1
   CHANGED_RECEIPT_OUT="$(
     git diff --cached --name-only --diff-filter=ACMR -z -- receipts |
-      python "$KERNEL_ROOT/scripts/check_changed_receipts.py" --root "$SUBJECT_ROOT" --null 2>&1
+      bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/scripts/check_changed_receipts.py" --root "$SUBJECT_ROOT" --null 2>&1
   )"
   CHANGED_RECEIPT_RC=$?
 elif [ -n "$RANGE" ]; then
   CHANGED_RECEIPT_SCOPE=1
   CHANGED_RECEIPT_OUT="$(
     git diff --name-only --diff-filter=ACMR -z "$RANGE" -- receipts |
-      python "$KERNEL_ROOT/scripts/check_changed_receipts.py" --root "$SUBJECT_ROOT" --null 2>&1
+      bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/scripts/check_changed_receipts.py" --root "$SUBJECT_ROOT" --null 2>&1
   )"
   CHANGED_RECEIPT_RC=$?
 fi
@@ -505,7 +531,7 @@ if [ -n "$RANGE" ]; then
   BAD=""
   for c in $(git rev-list "$RANGE" 2>/dev/null); do
     files="$(git show --name-only --format= "$c")"
-    if echo "$files" | grep -qE '^GOAL[^/]*\.md$' && echo "$files" | grep -qE '^receipts/'; then
+    if echo "$files" | grep -qE '^(GOAL\.md|docs/authority/GOAL\.md)$' && echo "$files" | grep -qE '^receipts/'; then
       BAD="$BAD $c"
     fi
   done
@@ -526,7 +552,7 @@ else
   elif [ -n "$RANGE" ]; then
     AUTHORITY_ARGS+=(--changed-range "$RANGE")
   fi
-  AUTHORITY_OUT="$(python "$KERNEL_ROOT/scripts/verify_authority_conservation.py" "${AUTHORITY_ARGS[@]}" 2>&1)"
+  AUTHORITY_OUT="$(bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/scripts/verify_authority_conservation.py" "${AUTHORITY_ARGS[@]}" 2>&1)"
   AUTHORITY_RC=$?
   if [ "$AUTHORITY_RC" -eq 0 ]; then
     ok "authority" "EMBER authority conservation certificate passes"

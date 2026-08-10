@@ -147,6 +147,15 @@ REQUIRED_SURFACES = [
     "README.md",
     "CONTINUITY.md",
 ]
+AUTHORITY_DOCUMENT_NAMES = (
+    "GOAL.md",
+    "INVARIANT.md",
+    "GOVERNANCE.md",
+    "CONTINUITY.md",
+    "REDACTIONS.md",
+    "STATE.md",
+)
+AUTHORITY_DIRECTORY = PurePosixPath("docs/authority")
 FORBIDDEN_MODEL_SIGNALS = [
     "weights",
     "outputs",
@@ -272,10 +281,66 @@ def sha256(path: Path) -> str:
     return digest.hexdigest().upper()
 
 
+def authority_relative_path(root: Path, name: str) -> str:
+    if name not in AUTHORITY_DOCUMENT_NAMES:
+        raise ValueError(f"unknown authority document: {name}")
+    old_rel = PurePosixPath(name)
+    new_rel = AUTHORITY_DIRECTORY / name
+    present = [
+        rel.as_posix()
+        for rel in (old_rel, new_rel)
+        if (root / rel).exists() or (root / rel).is_symlink()
+    ]
+    if len(present) > 1:
+        raise ValueError(
+            f"duplicate canonical authority document {name}: {', '.join(present)}"
+        )
+    if not present:
+        raise ValueError(
+            f"canonical authority document {name} is absent from both "
+            f"{old_rel.as_posix()} and {new_rel.as_posix()}"
+        )
+    selected = root / present[0]
+    if not selected.is_file() or selected.is_symlink():
+        raise ValueError(
+            f"canonical authority document {name} is not a regular file: {present[0]}"
+        )
+    return present[0]
+
+
+def authority_path(root: Path, name: str) -> Path:
+    return root / authority_relative_path(root, name)
+
+
+def canonical_authority_reference(root: Path, name: str) -> str:
+    new_rel = (AUTHORITY_DIRECTORY / name).as_posix()
+    if (root / new_rel).is_file() and not (root / name).is_file():
+        return new_rel
+    return name
+
+
+def expected_governing_surfaces(root: Path) -> list[str]:
+    authority_names = set(AUTHORITY_DOCUMENT_NAMES)
+    return [
+        canonical_authority_reference(root, rel) if rel in authority_names else rel
+        for rel in REQUIRED_SURFACES
+    ]
+
+
+def check_authority_path_layout(root: Path, errors: list[dict[str, Any]]) -> None:
+    for name in AUTHORITY_DOCUMENT_NAMES:
+        try:
+            authority_relative_path(root, name)
+        except ValueError as exc:
+            code = "authority.path_duplicate" if "duplicate" in str(exc) else "authority.path_missing"
+            errors.append(finding(3, code, str(exc)))
+
+
 def parse_goal_policy(root: Path, errors: list[dict[str, Any]]) -> dict[str, Any] | None:
-    path = root / "GOAL.md"
-    if not path.is_file():
-        errors.append(finding(3, "goal.missing", "GOAL.md is absent"))
+    try:
+        path = authority_path(root, "GOAL.md")
+    except ValueError as exc:
+        errors.append(finding(3, "goal.missing", str(exc)))
         return None
     try:
         text = read_text(path)
@@ -310,7 +375,7 @@ def expect(
         errors.append(finding(leg, code, detail))
 
 
-def check_policy(policy: dict[str, Any] | None, errors: list[dict[str, Any]]) -> None:
+def check_policy(root: Path, policy: dict[str, Any] | None, errors: list[dict[str, Any]]) -> None:
     if policy is None:
         for leg in (1, 3, 4, 5, 7):
             errors.append(finding(leg, "policy.unavailable", "GOAL machine contract unavailable"))
@@ -362,14 +427,14 @@ def check_policy(policy: dict[str, Any] | None, errors: list[dict[str, Any]]) ->
     expect(
         errors,
         3,
-        policy.get("highest_amendable_authority") == "GOAL.md",
+        policy.get("highest_amendable_authority") == canonical_authority_reference(root, "GOAL.md"),
         "policy.highest_amendable_authority",
-        "must be GOAL.md",
+        f"must be {canonical_authority_reference(root, 'GOAL.md')}",
     )
     expect(
         errors,
         3,
-        policy.get("required_governing_surfaces") == REQUIRED_SURFACES,
+        policy.get("required_governing_surfaces") == expected_governing_surfaces(root),
         "policy.governing_surfaces",
         "required governing surface list drifted",
     )
@@ -570,9 +635,10 @@ def check_policy(policy: dict[str, Any] | None, errors: list[dict[str, Any]]) ->
 
 
 def check_invariant(root: Path, policy: dict[str, Any] | None, errors: list[dict[str, Any]]) -> None:
-    path = root / "INVARIANT.md"
-    if not path.is_file():
-        errors.append(finding(1, "invariant.missing", "INVARIANT.md is absent"))
+    try:
+        path = authority_path(root, "INVARIANT.md")
+    except ValueError as exc:
+        errors.append(finding(1, "invariant.missing", str(exc)))
         return
     actual = sha256(path)
     expect(errors, 1, actual == INVARIANT_SHA256, "invariant.hash", f"expected {INVARIANT_SHA256}, got {actual}")
@@ -599,7 +665,8 @@ def parse_conservation_header(text: str) -> dict[str, str] | None:
 
 
 def check_governing_surfaces(root: Path, policy: dict[str, Any] | None, errors: list[dict[str, Any]]) -> None:
-    surfaces = REQUIRED_SURFACES if policy is None else policy.get("required_governing_surfaces", REQUIRED_SURFACES)
+    expected_surfaces = expected_governing_surfaces(root)
+    surfaces = expected_surfaces if policy is None else policy.get("required_governing_surfaces", expected_surfaces)
     if not isinstance(surfaces, list):
         errors.append(finding(3, "surfaces.invalid_list", "required_governing_surfaces must be a list"))
         return
@@ -1305,8 +1372,9 @@ def parse_selection(
 def parse_config_classifications(
     root: Path, errors: list[dict[str, Any]]
 ) -> dict[str, dict[str, str]]:
-    continuity_path = root / "CONTINUITY.md"
-    if not continuity_path.is_file():
+    try:
+        continuity_path = authority_path(root, "CONTINUITY.md")
+    except ValueError:
         return {}
     lines = read_text(continuity_path).splitlines()
     table_rows: list[list[str]] = []
@@ -1472,9 +1540,8 @@ def _tracked_relative_paths(root: Path) -> set[str] | None:
 
 def check_lower_precedence_authority(root: Path, errors: list[dict[str, Any]]) -> None:
     allowed = {
-        "GOAL.md",
-        "INVARIANT.md",
-        *REQUIRED_SURFACES,
+        *(canonical_authority_reference(root, name) for name in AUTHORITY_DOCUMENT_NAMES),
+        *expected_governing_surfaces(root),
     }
     excluded_prefixes = (
         ".git/",
@@ -1602,17 +1669,15 @@ def parse_markdown_table(text: str, expected_columns: int) -> list[list[str]]:
 
 
 def check_state(root: Path, errors: list[dict[str, Any]]) -> None:
-    pointer_path = root / "STATE.md"
-    if not pointer_path.is_file():
-        errors.append(finding(6, "state.missing", "STATE.md is absent"))
+    try:
+        pointer_path = authority_path(root, "STATE.md")
+        path = authority_path(root, "CONTINUITY.md")
+    except ValueError as exc:
+        errors.append(finding(6, "state.missing", str(exc)))
         return
     pointer_lines = [line.strip() for line in read_text(pointer_path).splitlines() if line.strip()]
     if len(pointer_lines) != 1 or "CONTINUITY.md" not in pointer_lines[0]:
         errors.append(finding(6, "state.pointer_invalid", "STATE.md must be a one-line CONTINUITY.md pointer"))
-    path = root / "CONTINUITY.md"
-    if not path.is_file():
-        errors.append(finding(6, "state.missing", "CONTINUITY.md is absent"))
-        return
     rows = parse_markdown_table(read_text(path), 9)
     if not rows:
         errors.append(finding(6, "state.identity_rows_missing", "no 9-column identity rows in CONTINUITY.md"))
@@ -1655,9 +1720,10 @@ def check_execution_boundary(
     policy: dict[str, Any] | None,
     errors: list[dict[str, Any]],
 ) -> None:
-    path = root / "CONTINUITY.md"
-    if not path.is_file():
-        errors.append(finding(7, "boundary.missing", "CONTINUITY.md is absent"))
+    try:
+        path = authority_path(root, "CONTINUITY.md")
+    except ValueError as exc:
+        errors.append(finding(7, "boundary.missing", str(exc)))
         return
     try:
         text = read_text(path)
@@ -2543,8 +2609,9 @@ def verify(
             return build_certificate(staged_payload["errors"] + binding_errors)
 
     errors: list[dict[str, Any]] = []
+    check_authority_path_layout(root, errors)
     policy = parse_goal_policy(root, errors)
-    check_policy(policy, errors)
+    check_policy(root, policy, errors)
     active_goal = parse_selection(selection, errors, policy)
     if active_goal is not None and policy is not None:
         expect(

@@ -1,11 +1,14 @@
-# goal_id: EMBER-01
-# workstream_id: EMBER-01A
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -19,6 +22,20 @@ from check_pr_authority_binding import (  # noqa: E402
 GOAL = "EMBER-01"
 OUTCOME = "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
 WORKSTREAMS = ("EMBER-01A", "EMBER-01B", "EMBER-01C")
+
+
+def test_imports_as_scripts_namespace_package() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [sys.executable, "-B", "-c", "import scripts.check_pr_authority_binding"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        shell=False,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_exact_binding_passes() -> None:
@@ -46,6 +63,50 @@ def test_goal_binding_loads_exact_active_workstreams(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     assert load_goal_binding(tmp_path) == (GOAL, OUTCOME, WORKSTREAMS)
+
+
+def test_goal_binding_accepts_migrated_authority_path(tmp_path: Path) -> None:
+    from check_pr_authority_binding import load_goal_binding
+
+    authority = tmp_path / "docs" / "authority"
+    authority.mkdir(parents=True)
+    (authority / "GOAL.md").write_text(
+        "<!-- EMBER_AUTHORITY_V1\n"
+        + json.dumps(
+            {
+                "active_goal_id": GOAL,
+                "next_executed_outcome": OUTCOME,
+                "active_workstream_ids": list(WORKSTREAMS),
+            }
+        )
+        + "\n-->\n",
+        encoding="utf-8",
+    )
+
+    assert load_goal_binding(tmp_path) == (GOAL, OUTCOME, WORKSTREAMS)
+
+
+def test_goal_binding_rejects_duplicate_authority_paths(tmp_path: Path) -> None:
+    from check_pr_authority_binding import load_goal_binding
+
+    authority = tmp_path / "docs" / "authority"
+    authority.mkdir(parents=True)
+    payload = (
+        "<!-- EMBER_AUTHORITY_V1\n"
+        + json.dumps(
+            {
+                "active_goal_id": GOAL,
+                "next_executed_outcome": OUTCOME,
+                "active_workstream_ids": list(WORKSTREAMS),
+            }
+        )
+        + "\n-->\n"
+    )
+    (tmp_path / "GOAL.md").write_text(payload, encoding="utf-8")
+    (authority / "GOAL.md").write_text(payload, encoding="utf-8")
+
+    with pytest.raises(ValueError, match="duplicate canonical authority document"):
+        load_goal_binding(tmp_path)
 
 
 def test_missing_or_duplicate_fields_fail() -> None:
