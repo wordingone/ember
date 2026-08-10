@@ -415,19 +415,12 @@ export interface AlternateScreenProps {
 }
 
 export function AlternateScreen(
-  { enableMouseTracking = true, children }: AlternateScreenProps,
+  { enableMouseTracking: _enableMouseTracking = true, children }: AlternateScreenProps,
 ): React.ReactElement {
-  useEffect(() => {
-    // On mount: ENTER_ALT_SCREEN → ENABLE_MOUSE_TRACKING
-    process.stdout.write(ENTER_ALT_SCREEN);
-    if (enableMouseTracking) process.stdout.write(ENABLE_MOUSE_TRACKING);
-    return () => {
-      // On unmount: DISABLE_MOUSE_TRACKING → EXIT_ALT_SCREEN
-      if (enableMouseTracking) process.stdout.write(DISABLE_MOUSE_TRACKING);
-      process.stdout.write(EXIT_ALT_SCREEN);
-    };
-  }, [enableMouseTracking]);
-
+  // Terminal mode ownership belongs exclusively to TerminalSessionController
+  // at the production frontend root. This compatibility wrapper remains
+  // declarative so mounting a widget can never emit a second enter/exit or
+  // mouse-reporting sequence directly to process.stdout.
   return React.createElement(React.Fragment, null, children);
 }
 

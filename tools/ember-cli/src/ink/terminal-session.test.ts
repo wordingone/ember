@@ -12,6 +12,7 @@ import {
   HIDE_CURSOR,
   SHOW_CURSOR,
 } from "./termio.ts";
+import { AlternateScreen } from "./components.ts";
 import { createTerminalSessionController } from "./terminal-session.ts";
 import { mountInk } from "./reconciler.ts";
 
@@ -45,6 +46,45 @@ describe("terminal session ownership", () => {
     session.exit();
 
     expect(writes).toEqual([]);
+  });
+
+  it("keeps AlternateScreen declarative under the sole terminal-session controller", () => {
+    const controllerWrites: string[] = [];
+    const renderWrites: string[] = [];
+    const globalWrites: string[] = [];
+    const originalStdoutWrite = process.stdout.write;
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      globalWrites.push(String(chunk));
+      return true;
+    }) as typeof process.stdout.write;
+
+    try {
+      const session = createTerminalSessionController({
+        write: (value) => controllerWrites.push(value),
+      });
+      session.enter();
+      const handle = mountInk(
+        React.createElement(
+          AlternateScreen,
+          { enableMouseTracking: true },
+          React.createElement(React.Fragment, null),
+        ),
+        {
+          stream: { write: (value: string) => renderWrites.push(value) },
+          stdout: { columns: 80, rows: 24 },
+        },
+      );
+      handle.unmount();
+      session.exit();
+
+      expect(globalWrites).toEqual([]);
+      expect(controllerWrites.join("")).toBe(
+        ENTER_ALT_SCREEN + HIDE_CURSOR + ENABLE_MOUSE_TRACKING +
+        DISABLE_MOUSE_TRACKING + SHOW_CURSOR + EXIT_ALT_SCREEN,
+      );
+    } finally {
+      process.stdout.write = originalStdoutWrite;
+    }
   });
 
   it("restores terminal modes when the mounted application throws during render", () => {
