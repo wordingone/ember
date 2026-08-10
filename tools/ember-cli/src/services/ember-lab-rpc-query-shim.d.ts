@@ -21,8 +21,13 @@ declare module "./ember-lab-rpc.ts?*" {
   export {
     configuredEmberLabPipe,
     callEmberLab,
+    identifyEmberLabRuntime,
     pingEmberLab,
     handshakeConfiguredEmberLab,
   } from "./ember-lab-rpc.ts";
-  export type { EmberLabPingOptions, EmberLabRequestOptions } from "./ember-lab-rpc.ts";
+  export type {
+    EmberLabPingOptions,
+    EmberLabRequestOptions,
+    EmberLabRuntimeIdentity,
+  } from "./ember-lab-rpc.ts";
 }

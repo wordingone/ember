@@ -156,6 +156,16 @@ fn dispatch(daemon: &Daemon, request: WireRequest) -> (Value, bool) {
     }
     match request.method.as_str() {
         "ping" => (success(id, json!({"status": "ok"})), false),
+        "runtime_identity" => (
+            success(
+                id,
+                json!({
+                    "schema_version": "ember-lab-runtime-identity-v1",
+                    "pid": std::process::id(),
+                }),
+            ),
+            false,
+        ),
         "bind_identity" => {
             let params: BindIdentityParams = match decode(&id, request.params) {
                 Ok(value) => value,

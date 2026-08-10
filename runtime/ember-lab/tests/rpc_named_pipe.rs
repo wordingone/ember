@@ -245,6 +245,12 @@ fn dispatch_cli_uses_persistent_named_pipe_daemon_and_governed_spawn() {
     let manifest = write_dispatch_manifest(&root, "dispatch-cli-job");
     let mut server = start_server(&binary, &db, &pipe);
     assert_eq!(rpc(&pipe, 100, "ping", json!({}))["status"], "ok");
+    let runtime_identity = rpc(&pipe, 101, "runtime_identity", json!({}));
+    assert_eq!(
+        runtime_identity["schema_version"],
+        "ember-lab-runtime-identity-v1"
+    );
+    assert_eq!(runtime_identity["pid"], server.id());
 
     let output = Command::new(&binary)
         .args([
