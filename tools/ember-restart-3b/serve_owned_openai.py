@@ -61,6 +61,7 @@ class OwnedIdentity:
     model_config_sha256: str
     tokenizer_sha256: str
     server_source_sha256: str
+    vram_bytes: int = 0
     seat: str = "OWNED_ADMITTED"
 
     @property
@@ -77,6 +78,7 @@ class OwnedIdentity:
             "model_config_sha256": self.model_config_sha256,
             "tokenizer_sha256": self.tokenizer_sha256,
             "server_source_sha256": self.server_source_sha256,
+            "vram_bytes": self.vram_bytes,
         }
 
 
@@ -89,6 +91,7 @@ class DevelopmentIdentity:
     tokens_seen: int
     allocated_parameters: int
     active_parameters: int
+    vram_bytes: int = 0
     seat: str = "OWNED_DEVELOPMENT"
     claim_status: str = "NON_ADMISSIBLE"
 
@@ -104,7 +107,19 @@ class DevelopmentIdentity:
             "model_config_sha256": self.model_config_sha256, "tokenizer_sha256": self.tokenizer_sha256,
             "server_source_sha256": self.server_source_sha256, "tokens_seen": self.tokens_seen,
             "allocated_parameters": self.allocated_parameters, "active_parameters": self.active_parameters,
+            "vram_bytes": self.vram_bytes,
         }
+
+
+def resident_vram_bytes(device: torch.device | str) -> int:
+    """Return allocator-owned VRAM from the loaded runtime itself."""
+    resolved = torch.device(device)
+    if resolved.type != "cuda":
+        return 0
+    measured = torch.cuda.memory_allocated(resolved)
+    if isinstance(measured, bool) or not isinstance(measured, int) or measured <= 0:
+        raise RuntimeError("loaded CUDA runtime did not report positive allocator VRAM")
+    return measured
 
 class OwnedChatRuntime(Protocol):
     identity: OwnedIdentity | DevelopmentIdentity
@@ -720,6 +735,7 @@ class LoadedOwnedRuntime:
             model_config_sha256=model_config_sha256,
             tokenizer_sha256=tokenizer.sha256,
             server_source_sha256=sha(Path(__file__)),
+            vram_bytes=resident_vram_bytes(device),
             seat=str(admission["seat"]),
         )
         if admission["model_name"] != identity.model_name:
@@ -896,7 +912,7 @@ def main(argv: list[str] | None = None) -> int:
             device=args.device,
             config_bytes=config_bytes,
         )
-        identity = DevelopmentIdentity(checkpoint_sha256=str(development["checkpoint_sha256"]), model_config_sha256=str(development["model_config_sha256"]), tokenizer_sha256=tokenizer.sha256, server_source_sha256=sha(Path(__file__)), tokens_seen=int(development["tokens_seen"]), allocated_parameters=int(development["allocated_parameters"]), active_parameters=int(development["active_parameters"]))
+        identity = DevelopmentIdentity(checkpoint_sha256=str(development["checkpoint_sha256"]), model_config_sha256=str(development["model_config_sha256"]), tokenizer_sha256=tokenizer.sha256, server_source_sha256=sha(Path(__file__)), tokens_seen=int(development["tokens_seen"]), allocated_parameters=int(development["allocated_parameters"]), active_parameters=int(development["active_parameters"]), vram_bytes=resident_vram_bytes(args.device))
         runtime = LoadedOwnedRuntime(model=model, tokenizer=tokenizer, identity=identity, device=torch.device(args.device), frozen_split=frozen_split)
     else:
         if args.trusted_verifier_registry is None:
