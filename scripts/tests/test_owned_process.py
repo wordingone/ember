@@ -86,6 +86,45 @@ def test_posix_runner_uses_exec_guard_without_preexec_fork(
     assert len(kwargs["pass_fds"]) == 1
 
 
+def test_posix_timeout_kills_owned_group_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    class TimedOutProcess:
+        pid = 12345
+        returncode = -owned_process._SIGKILL
+        communicate_calls = 0
+
+        @classmethod
+        def communicate(cls, timeout: float) -> tuple[str, str]:
+            cls.communicate_calls += 1
+            if cls.communicate_calls == 1:
+                raise subprocess.TimeoutExpired(["command"], timeout)
+            return "", ""
+
+    monkeypatch.setattr(
+        owned_process.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: TimedOutProcess(),
+    )
+    killed: list[int] = []
+
+    def kill_once(pid: int) -> None:
+        killed.append(pid)
+        if len(killed) > 1:
+            raise PermissionError("macOS refused the redundant group kill")
+
+    monkeypatch.setattr(
+        owned_process.OwnedProcessRunner,
+        "_kill_posix_group",
+        staticmethod(kill_once),
+    )
+
+    result = owned_process.OwnedProcessRunner()._run_posix(
+        ["command"], 0.2, cwd=None, env=None
+    )
+
+    assert result.status == "terminated"
+    assert killed == [12345]
+
+
 def test_private_posix_guard_refuses_unowned_process_group_before_install(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
