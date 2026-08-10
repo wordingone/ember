@@ -6,9 +6,10 @@
 battery runner (issue #1435).
 
 ============================================================================
-BLOCKING SPEC DEFECT (report this before anything else -- read it before
-trusting any exit code this script prints): the R2 cheap-probe battery this
-script is named for HAS NO DEFINITION anywhere in the tree.
+DEFERRED BATTERY AUTHORITY: the R2 cheap-probe battery has no accepted probe
+manifest. D-03 in docs/spec/ember02-r2-cheap-probe-amendment-v1.json makes
+that absence explicit and forbids R2 advancement/R3 funding while this runner
+returns BATTERY_UNDEFINED.
 ============================================================================
 
 docs/spec/ember02-preregistration-v1.md refers to "the frozen cheap-probe
@@ -97,11 +98,13 @@ command with zero further code changes:
     its code is retired W1-baseline (sub-3B) tooling and must not be
     imported by anything EMBER-02-scoped.
 
-SECONDARY SPEC AMBIGUITY (disclosed, non-blocking): R2-E4's "one-sided
-lower confidence bound at level T-24" does not bind a computation method.
+RATIFIED STATISTICAL METHOD: D-03 binds R2-E4 proportion probes to this
+runner's one-sided Wilson lower confidence bound at T-24, without continuity
+correction, and requires `lower_bound > chance_rate`.
 Unlike F-08/F-09, which explicitly cite `sigma_credit(m)` (sec2), R2-E4 (and
 D-01's backstop text, which says it "mirrors R2-E4") names only a
-confidence LEVEL, not a method. This script's disclosed default: Wilson
+confidence LEVEL, not a method. The previously disclosed implementation, now
+ratified by D-03, is the Wilson
 score interval (scripts/power.py's `wilson()`, imported not reimplemented
 -- the same tool this repo already uses for "single-arm floors" per
 docs/archive/pre-restart/r2-prereg.md's "single-arm floors read as Wilson intervals" precedent)
@@ -175,7 +178,7 @@ Usage:
 Both --run-r2e4/--run-r2e3 refuse (exit 3) with BATTERY_UNDEFINED today,
 by design, and WRITE that refusal as a checkpoint-bound receipt -- this is
 the honest, current, correct output of "run the R2 cheap-probe battery"
-against a preregistration that never defined one.
+under D-03 while no accepted battery manifest exists.
 """
 
 from __future__ import annotations
@@ -199,8 +202,12 @@ if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
 ISSUE_REF = "#1435"
+AUTHORITY_ISSUE_REF = "#1442"
 PREREG_DOC = "docs/spec/ember02-preregistration-v1.md"
 PREREG_PIN = "3d48d3870919bd04cec735f68d0fad45fcfae0b2"
+R2_AUTHORITY_DOC = "docs/spec/ember02-r2-cheap-probe-amendment-v1.json"
+R2_AUTHORITY_SCHEMA = "ember02-r2-cheap-probe-amendment/v1"
+R2_AUTHORITY_DECISION_ID = "D-03"
 
 # Frozen threshold table, sec8 -- imported as VALUES here (the formula-freeze
 # rule, sec2: substituting measured/frozen numbers is mechanical, not an
@@ -247,6 +254,8 @@ SPEC_DEFECTS = [
     {
         "id": "SPEC-DEFECT-1435-A",
         "severity": "BLOCKING",
+        "authority_status": "DEFERRED_BY_D-03",
+        "authority_path": R2_AUTHORITY_DOC,
         "exit_criteria_affected": ["R2-E3", "R2-E4", "F-03"],
         "summary": (
             "the frozen cheap-probe battery is referenced as an existing, "
@@ -271,8 +280,9 @@ SPEC_DEFECTS = [
             "built yet) but are explicitly typed frozen_form: "
             "deferred_amendment in ember02-preregistration-thresholds-v1.json, "
             "each with a disclosed backstop (E-G) and a stated reason. The "
-            "R2 cheap-probe battery carries no deferred_amendment row, no "
-            "backstop, and no D-0x id anywhere in the document or the JSON."
+            "The original v1 files carry no deferred_amendment row for R2. "
+            "Append-only D-03 now supplies that missing authority without "
+            "rewriting the frozen v1 files."
         ),
         "consequence": (
             "R2-E3 and R2-E4 cannot be adjudicated as written. This "
@@ -281,17 +291,19 @@ SPEC_DEFECTS = [
             "content."
         ),
         "remediation": (
-            "A superseding preregistration version must define the "
+            "D-03 requires a later accepted superseding amendment to define the "
             "battery (probe ids, per-item context/choices/correct answer, "
             "chance rate, metric id per probe) -- the same treatment D-01/"
             "D-02 already anticipate for R3/R4 -- or retype R2-E3/R2-E4 as "
-            "DEFERRED-AMENDMENT with a pre-committed backstop before R2 "
-            "can exit on these criteria."
+            "battery before R2 dispatch. Until then BATTERY_UNDEFINED blocks "
+            "R2 advancement credit and R3 funding."
         ),
     },
     {
         "id": "SPEC-DEFECT-1435-B",
         "severity": "SECONDARY",
+        "authority_status": "RATIFIED_BY_D-03",
+        "authority_path": R2_AUTHORITY_DOC,
         "exit_criteria_affected": ["R2-E4"],
         "summary": (
             "R2-E4's 'one-sided lower confidence bound at level T-24' "
@@ -301,16 +313,17 @@ SPEC_DEFECTS = [
             "Unlike F-08/F-09, which explicitly cite sigma_credit(m) per "
             "sec2, R2-E4 (and D-01's backstop text, which says it "
             "'mirrors R2-E4') names only a confidence LEVEL (T-24=0.95), "
-            "never a method. sec2 defines sigma_eval (bootstrap, 10,000 "
+            "never a method. D-03 now ratifies this runner's Wilson one-sided "
+            "lower bound for proportion probes, without continuity correction. "
+            "sec2 defines sigma_eval (bootstrap, 10,000 "
             "resamples, or exact binomial SE) for a DIFFERENT consumer "
             "(F-08/F-09 suite metrics). This runner's disclosed default: "
             "Wilson score interval (scripts/power.py wilson(), imported) "
             "for metric_type=proportion probes, one-sided by substituting "
             "the one-sided-T-24 z for the two-sided default; nonparametric "
             "bootstrap (sec2's named 10,000-resample count) for a future "
-            "metric_type=graded probe. A disclosed default, not a spec "
-            "requirement -- a superseding amendment should bind this "
-            "explicitly."
+            "metric_type=graded probe. D-03 defines no graded probes and "
+            "does not authorize that future path."
         ),
     },
 ]
@@ -391,8 +404,8 @@ class ProbeSpec:
                 )
 
 
-# The battery, as specified. See module docstring, SPEC-DEFECT-1435-A: this
-# is empty because the preregistration never names a single probe. Do not
+# The battery, as specified. See module docstring and D-03: this is empty
+# because no accepted amendment names a single probe. Do not
 # populate this with invented content -- load a hash-pinned, spec-derived
 # manifest via --probe-manifest instead, the moment one is frozen.
 DEFAULT_PROBE_REGISTRY: tuple[ProbeSpec, ...] = ()
@@ -647,7 +660,7 @@ def one_sided_lower_bootstrap(
     """Nonparametric percentile-bootstrap one-sided lower bound at
     `confidence`, over `resamples` resamples (sec2's named 10,000 default).
     Provided for a future metric_type=graded probe -- not exercised against
-    real items today (see module docstring, secondary ambiguity)."""
+    real items today (see module docstring and D-03 scope boundary)."""
     if not item_scores:
         raise R2ProbeBatteryRefusal("CI_INPUT_INVALID: item_scores is empty")
     if resamples < 2:
@@ -703,8 +716,8 @@ def run_r2e4(*, checkpoint_identity: Mapping[str, Any], registry: Sequence[Probe
     if not registry:
         raise R2ProbeBatteryRefusal(
             "BATTERY_UNDEFINED: the R2 cheap-probe battery has zero probes -- "
-            "see SPEC-DEFECT-1435-A (docs/spec/ember02-preregistration-v1.md "
-            "never enumerates the R2-E3/R2-E4 'frozen cheap-probe battery')"
+            "D-03 explicitly defers R2-E3/R2-E4/F-03 and forbids advancement "
+            "until an accepted nonempty battery amendment lands"
         )
     per_probe = []
     for probe in registry:
@@ -793,8 +806,8 @@ def run_r2e3(
     if not registry:
         raise R2ProbeBatteryRefusal(
             "BATTERY_UNDEFINED: the R2 cheap-probe battery has zero probes -- "
-            "see SPEC-DEFECT-1435-A (docs/spec/ember02-preregistration-v1.md "
-            "never enumerates the R2-E3/R2-E4 'frozen cheap-probe battery')"
+            "D-03 explicitly defers R2-E3/R2-E4/F-03 and forbids advancement "
+            "until an accepted nonempty battery amendment lands"
         )
     per_probe = []
     for probe in registry:
@@ -862,10 +875,15 @@ def build_receipt(
         "ticket": ticket,
         "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
         "schema": RECEIPT_SCHEMA,
-        "issue_refs": [ISSUE_REF],
+        "issue_refs": [ISSUE_REF, AUTHORITY_ISSUE_REF],
         "sha_convention": SHA_CONVENTION,
         "invariant_sha256": receipt_check.INVARIANT_SHA256,
         "prereg": {"document": PREREG_DOC, "pin": PREREG_PIN},
+        "r2_battery_authority": {
+            "document": R2_AUTHORITY_DOC,
+            "schema": R2_AUTHORITY_SCHEMA,
+            "decision_id": R2_AUTHORITY_DECISION_ID,
+        },
         "exit_criterion": exit_criterion,
         "checkpoint": checkpoint,
         "probe_manifest": probe_manifest_meta or {"path": None, "sha256": None, "schema": None, "probe_count": 0},
@@ -1378,7 +1396,7 @@ def _selftest_receipt_shape(failures: list, tmp_dir: Path) -> None:
 def _selftest() -> int:
     import tempfile
     print("[r2-cheap-probe-battery-selftest] starting CPU-only synthetic-fixture selftest")
-    print("[r2-cheap-probe-battery-selftest] NOTE: SPEC-DEFECT-1435-A means the REAL R2-E4/R2-E3 "
+    print("[r2-cheap-probe-battery-selftest] NOTE: D-03 means the REAL R2-E4/R2-E3 "
           "CLI paths refuse BATTERY_UNDEFINED today -- this selftest exercises the adjudication "
           "machinery against synthetic SELFTEST_FIXTURE_* probes only, never real R2 evidence")
     failures: list[str] = []
@@ -1433,7 +1451,7 @@ def _cli_run_r2e4(args) -> int:
         if not registry:
             raise R2ProbeBatteryRefusal(
                 "BATTERY_UNDEFINED: the R2 cheap-probe battery has zero probes -- "
-                "see SPEC-DEFECT-1435-A"
+                "see D-03 (docs/spec/ember02-r2-cheap-probe-amendment-v1.json)"
             )
         # A nonempty registry exists but no scorer backend is wired in this PR
         # (see module docstring, scope boundary) -- refuse distinctly rather
@@ -1480,7 +1498,7 @@ def _cli_run_r2e3(args) -> int:
         if not registry:
             raise R2ProbeBatteryRefusal(
                 "BATTERY_UNDEFINED: the R2 cheap-probe battery has zero probes -- "
-                "see SPEC-DEFECT-1435-A"
+                "see D-03 (docs/spec/ember02-r2-cheap-probe-amendment-v1.json)"
             )
         raise R2ProbeBatteryRefusal(
             f"SCORER_BACKEND_NOT_CONFIGURED: {len(registry)} probe(s) loaded from "
