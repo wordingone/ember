@@ -231,6 +231,8 @@ def test_unrelated_change_does_not_force_battery_reexecution() -> None:
 def test_ci_enforces_transition_against_exact_pull_request_base() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     assert "fetch-depth: 0" in workflow
+    assert '"jsonschema==4.26.0"' in workflow
+    assert '"cryptography==49.0.0"' in workflow
     assert "EMBER_COND4_BASE_SHA: ${{ github.event.pull_request.base.sha }}" in workflow
     assert "scripts/tests/test_issue1396_cond4_surface.py" in workflow
     assert 'scripts/tests/test_verify_ember01_completion.py -k "cond4"' in workflow
