@@ -9,7 +9,7 @@ ROOT="$(git rev-parse --show-toplevel)"
 REMOTE="${1:-origin}"
 PUSH_REMOTE_URL="$(git config --get remote.$REMOTE.url 2>/dev/null || echo '')"
 
-python "$ROOT/scripts/worktree_lifecycle.py" audit --strict --quiet || exit $?
+bash "$ROOT/tools/run-python-hidden.sh" "$ROOT/scripts/worktree_lifecycle.py" audit --strict --quiet || exit $?
 
 REMOTE_MASTER="$REMOTE/master"
 if git rev-parse --verify -q "$REMOTE_MASTER" >/dev/null; then
