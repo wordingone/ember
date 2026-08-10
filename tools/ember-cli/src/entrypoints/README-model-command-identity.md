@@ -22,12 +22,14 @@ from the outside, that what the supervisor actually launched is what actually go
    hashes.
 3. **Served identity.** Once the endpoint is up, the server exposes `GET /v1/models`
    (`serve_owned_openai.py`'s `Handler.do_GET`), returning `seat`, `mode`, `checkpoint_sha256`,
-   `model_name`, `model_config_sha256`, `server_source_sha256`, `tokenizer_sha256`, and (for the
+   `model_name`, `model_config_sha256`, `server_source_sha256`, `tokenizer_sha256`, the loaded
+   runtime's allocator-owned `vram_bytes`, and (for the
    development seat) `claim_status` / `tokens_seen` / `allocated_parameters` /
    `active_parameters`.
 4. **Closed-loop assertion.** `verifyOwnedEndpointIdentity()` (`owned-seat-loader.ts`) fetches that
-   endpoint and asserts every one of those served fields equals the launch manifest's identity
-   fields. Any mismatch, any non-200 response, or any unreachable/network-error endpoint throws —
+   endpoint and asserts every launch-bound field equals the manifest identity, while validating
+   `vram_bytes` as the resident runtime measurement returned only after load. Any mismatch, any
+   non-200 response, or any unreachable/network-error endpoint throws —
    the endpoint is never treated as identity-bearing on a failed or absent check.
 5. **Wiring.** `ensureOwnedServer()` uses `verifyOwnedEndpointIdentity` as the default
    `verifyEndpoint` dependency, called by `defaultWaitUntilReady` (direct spawn path) and

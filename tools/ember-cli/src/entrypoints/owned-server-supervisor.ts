@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { isAbsolute, join, relative, resolve } from "path";
 import { createConnection } from "node:net";
 
-import type { OwnedModelIdentity } from "./model-seat.ts";
+import type { OwnedModelIdentity, OwnedResidentIdentity } from "./model-seat.ts";
 import { verifyOwnedEndpointIdentity } from "./owned-seat-loader.ts";
 import { callEmberLab, configuredEmberLabPipe } from "../services/ember-lab-rpc.ts";
 
@@ -71,8 +71,8 @@ export interface OwnedDaemonDispatch {
 }
 
 export type EnsureOwnedServerResult =
-  | { outcome: "spawned"; port: number; handle: OwnedServerHandle }
-  | { outcome: "dispatched"; port: number; pid: number };
+  | { outcome: "spawned"; port: number; handle: OwnedServerHandle; vramBytes: number }
+  | { outcome: "dispatched"; port: number; pid: number; vramBytes: number };
 
 export interface SuperviseOwnedServerCycleOptions {
   pipeName: string;
@@ -113,7 +113,7 @@ export async function superviseOwnedServerCycle(
   });
 }
 
-type VerifyEndpoint = (identity: OwnedModelIdentity) => Promise<void>;
+type VerifyEndpoint = (identity: OwnedModelIdentity) => Promise<OwnedResidentIdentity>;
 
 export interface EnsureOwnedServerDeps {
   device?: OwnedServerDevice;
@@ -126,11 +126,11 @@ export interface EnsureOwnedServerDeps {
     identity: OwnedModelIdentity,
     handle: OwnedServerHandle,
     verifyEndpoint: VerifyEndpoint,
-  ) => Promise<void>;
+  ) => Promise<OwnedResidentIdentity>;
   waitForDispatchReady?: (
     identity: OwnedModelIdentity,
     verifyEndpoint: VerifyEndpoint,
-  ) => Promise<void>;
+  ) => Promise<OwnedResidentIdentity>;
 }
 
 function endpoint(identity: OwnedModelIdentity): { host: string; port: number } {
@@ -271,7 +271,7 @@ async function defaultWaitUntilReady(
   identity: OwnedModelIdentity,
   handle: OwnedServerHandle,
   verifyEndpoint: VerifyEndpoint,
-): Promise<void> {
+): Promise<OwnedResidentIdentity> {
   const deadline = Date.now() + 240_000;
   let lastError = "owned endpoint did not become ready";
   while (Date.now() < deadline) {
@@ -284,8 +284,7 @@ async function defaultWaitUntilReady(
       );
     }
     try {
-      await verifyEndpoint(identity);
-      return;
+      return await verifyEndpoint(identity);
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
     }
@@ -424,11 +423,11 @@ async function defaultDispatchManifest(identity: OwnedModelIdentity): Promise<Ow
 async function defaultWaitForDispatchReady(
   identity: OwnedModelIdentity,
   verifyEndpoint: VerifyEndpoint,
-): Promise<void> {
+): Promise<OwnedResidentIdentity> {
   const deadline = Date.now() + 240_000;
   let lastError = "owned endpoint did not become ready";
   while (Date.now() < deadline) {
-    try { await verifyEndpoint(identity); return; }
+    try { return await verifyEndpoint(identity); }
     catch (error) { lastError = error instanceof Error ? error.message : String(error); }
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
   }
@@ -457,8 +456,8 @@ export async function ensureOwnedServer(
         typeof dispatched.preflightReceiptSha256 !== "string" || !/^[0-9a-f]{64}$/.test(dispatched.preflightReceiptSha256)) {
       throw new Error("ember-lab dispatch result lacks preflight receipt custody");
     }
-    await (deps.waitForDispatchReady ?? defaultWaitForDispatchReady)(identity, verifyEndpoint);
-    return { outcome: "dispatched", port, pid: dispatched.pid };
+    const resident = await (deps.waitForDispatchReady ?? defaultWaitForDispatchReady)(identity, verifyEndpoint);
+    return { outcome: "dispatched", port, pid: dispatched.pid, vramBytes: resident.vramBytes };
   }
   const device = deps.device ?? (process.env["EMBER_OWNED_DEVICE"] === "cpu" ? "cpu" : "cuda");
   const command = buildOwnedServerCommand(identity, device);
@@ -477,10 +476,10 @@ export async function ensureOwnedServer(
     handle.process.once("exit", cleanup);
   }
   try {
-    await (deps.waitUntilReady ?? defaultWaitUntilReady)(identity, handle, verifyEndpoint);
+    const resident = await (deps.waitUntilReady ?? defaultWaitUntilReady)(identity, handle, verifyEndpoint);
+    return { outcome: "spawned", port, handle, vramBytes: resident.vramBytes };
   } catch (error) {
     cleanup();
     throw error;
   }
-  return { outcome: "spawned", port, handle };
 }

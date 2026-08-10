@@ -13,6 +13,7 @@ import {
   formatTokenCount,
   formatGb,
   formatModelMetrics,
+  formatModelSeatState,
   formatDegradedBannerText,
   DegradedBanner,
   formatOutageBannerText,
@@ -32,6 +33,7 @@ import {
   type StatusBarOptionalSegment,
 } from "./status-bar.ts";
 import type { CognitiveMode } from "../cognitive-mode.ts";
+import type { ModelSeatState } from "../entrypoints/model-seat.ts";
 
 const ALL_MODES: CognitiveMode[] = [
   "observe", "orient", "act", "verify",
@@ -166,6 +168,21 @@ describe("AC6: formatModelMetrics", () => {
   it("0 t/s renders as '0t/s' (not NaN)", () => {
     const zero = { ...sample, tokensPerSec: 0 };
     expect(formatModelMetrics(zero)).toContain("0t/s");
+  });
+});
+
+describe("#1361 model-seat residency disclosure", () => {
+  it("fails closed instead of rendering RESIDENT when VRAM custody is missing", () => {
+    const malformed = {
+      phase: "RESIDENT",
+      owner: "ember-owned:test",
+      endpoint: "http://127.0.0.1:29771",
+    } as unknown as ModelSeatState;
+
+    const rendered = formatModelSeatState(malformed);
+    expect(rendered).toBe("model seat absent");
+    expect(rendered).not.toContain("resident");
+    expect(rendered).not.toContain("vram=unknown");
   });
 });
 

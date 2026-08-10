@@ -302,9 +302,10 @@ describe("owned server supervisor", () => {
         expect(handle).toBe(fakeHandle);
         expect(cleanupRegistrations).toBe(1);
         waited += 1;
+        return { ..._identity, vramBytes: 123_456 };
       },
     });
-    expect(result).toEqual({ outcome: "spawned", port: 8083, handle: fakeHandle });
+    expect(result).toEqual({ outcome: "spawned", port: 8083, handle: fakeHandle, vramBytes: 123_456 });
     expect(waited).toBe(1);
   });
 
@@ -324,7 +325,7 @@ describe("owned server supervisor", () => {
           spawned += 1;
           throw new Error("CLI-owned spawn is forbidden for connected owned seats");
         },
-        waitForDispatchReady: async () => {},
+        waitForDispatchReady: async (owned) => ({ ...owned, vramBytes: 123_456 }),
       });
       expect(result).toMatchObject({ outcome: "dispatched", port: 8083, pid: 77 });
       expect(dispatched).toBe(1);
@@ -434,7 +435,7 @@ describe("owned server supervisor", () => {
       const result = await ensureOwnedServer(owned, {
         probePresence: async () => "absent",
         spawnServer: () => { throw new Error("connected mode must never direct-spawn"); },
-        waitForDispatchReady: async () => {},
+        waitForDispatchReady: async (identity) => ({ ...identity, vramBytes: 123_456 }),
       });
       expect(result).toMatchObject({ outcome: "dispatched", pid: 77 });
       expect(receivedManifest).toEqual({

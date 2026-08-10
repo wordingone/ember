@@ -20,6 +20,7 @@ import type { CognitiveMode } from "../cognitive-mode.ts";
 import { modeGlyph as cognitiveGlyph } from "../cognitive-mode.ts";
 import { telemetryMemoKey } from "../services/telemetry-label.ts";
 import type { TelemetryState } from "../services/telemetry-watch.ts";
+import { normalizeModelSeatState, type ModelSeatState } from "../entrypoints/model-seat.ts";
 
 // ---------------------------------------------------------------------------
 // Public constants (preserve exactly)
@@ -401,6 +402,17 @@ export function formatModelMetrics(m: ModelMetrics): string {
   return `${ctx}${SEGMENT_SEPARATOR}${tps}${SEGMENT_SEPARATOR}${vram}`;
 }
 
+/** Deterministic operator-facing model-seat state.  A selected owner label may
+ * be shown while ABSENT/LOADING; RESIDENT is disclosed only with the complete
+ * owner/endpoint/VRAM projection from the existing Ember Lab authority. */
+export function formatModelSeatState(state: ModelSeatState): string {
+  const admitted = normalizeModelSeatState(state);
+  const phase = admitted.phase.toLowerCase();
+  const owner = admitted.owner ? ` owner=${admitted.owner}` : "";
+  const vram = admitted.phase === "RESIDENT" ? ` vram=${admitted.vramBytes}` : "";
+  return `model seat ${phase}${owner}${vram}`;
+}
+
 export interface ModelMetricsBarProps {
   metrics: ModelMetrics;
 }
@@ -472,6 +484,8 @@ export interface StatusLineProps {
   cognitiveMode?: CognitiveMode;
   /** Live inference metrics from the model server; absent → meter hidden. */
   modelMetrics?: ModelMetrics;
+  /** Live model-seat lifecycle, projected by the existing seat authority. */
+  modelSeat?: ModelSeatState;
   /** issue #239: circuit-breaker degraded state; absent/inactive → banner hidden. */
   degraded?: DegradedBannerState;
   /** issue #475: planned-outage marker state; absent/inactive → banner hidden. Rendered
@@ -498,6 +512,7 @@ export function StatusLine({
   effort,
   cognitiveMode,
   modelMetrics,
+  modelSeat,
   degraded,
   outage,
   roundtripAge,
@@ -517,6 +532,9 @@ export function StatusLine({
   // unique-capability meter) survive longer than the roundtrip age indicator when width runs out.
   const coreText = `${modeIndicator}${SEGMENT_SEPARATOR}${text}`;
   const modelMetricsText = !compact && modelMetrics != null ? formatModelMetrics(modelMetrics) : null;
+  // The seat lifecycle is control-plane state, not optional telemetry: keep
+  // absent/loading/resident visible even in compact mode.
+  const modelSeatText = modelSeat != null ? formatModelSeatState(modelSeat) : null;
   const roundtripText = !compact && roundtripAge != null ? formatRoundtripAgeText(roundtripAge, Date.now()) : null;
   const optionalSegments: StatusBarOptionalSegment[] = [
     ...(modelMetricsText != null ? [{ key: "metrics", text: modelMetricsText }] : []),
@@ -543,6 +561,9 @@ export function StatusLine({
       : null,
     !compact && coordinator != null
       ? React.createElement(CoordinatorAgentStatus, { key: "coord", coordinator })
+      : null,
+    modelSeatText != null
+      ? React.createElement(Text, { key: "model-seat", color: "cyan", dimColor: true }, modelSeatText)
       : null,
     !compact && taskPanel.visible
       ? React.createElement(TaskListV2, { key: "tasks", tasks: taskPanel.tasks })

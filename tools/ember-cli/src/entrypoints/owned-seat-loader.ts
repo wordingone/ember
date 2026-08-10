@@ -12,6 +12,7 @@ import { emberScratchDir } from "../utils/ember-scratch.ts";
 import type {
   ModelConfigCapabilities,
   OwnedModelIdentity,
+  OwnedResidentIdentity,
   OwnedServerLaunch,
 } from "./model-seat.ts";
 
@@ -800,7 +801,7 @@ type FetchLike = (
 export async function verifyOwnedEndpointIdentity(
   identity: OwnedModelIdentity,
   fetchFn: FetchLike = fetch,
-): Promise<void> {
+): Promise<OwnedResidentIdentity> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 5_000);
   let response: Response;
@@ -847,4 +848,9 @@ export async function verifyOwnedEndpointIdentity(
   ) {
     throw new Error("owned endpoint identity does not match admitted checkpoint or bound development seat");
   }
+  const vramBytes = payload["vram_bytes"];
+  if (typeof vramBytes !== "number" || !Number.isSafeInteger(vramBytes) || vramBytes < 0) {
+    throw new Error("owned endpoint identity lacks a valid resident VRAM measurement");
+  }
+  return { ...identity, vramBytes };
 }

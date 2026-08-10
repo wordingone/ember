@@ -964,6 +964,7 @@ describe("owned seat loader", () => {
         model_config_sha256: identity.modelConfigSha256,
         server_source_sha256: identity.serverSourceSha256,
         tokenizer_sha256: identity.tokenizerSha256,
+        vram_bytes: 987_654_321,
       }),
     );
   });
@@ -1033,7 +1034,7 @@ describe("owned seat loader", () => {
       tokenizerSha256: "c".repeat(64),
     };
     let requested = "";
-    await verifyOwnedEndpointIdentity(identity, async (input) => {
+    const resident = await verifyOwnedEndpointIdentity(identity, async (input) => {
       requested = String(input);
       return Response.json({
         seat: "OWNED_ADMITTED",
@@ -1043,9 +1044,37 @@ describe("owned seat loader", () => {
         model_config_sha256: identity.modelConfigSha256,
         server_source_sha256: identity.serverSourceSha256,
         tokenizer_sha256: identity.tokenizerSha256,
+        vram_bytes: 123_456_789,
       });
     });
     expect(requested).toBe(identity.identityUrl);
+    expect(resident.vramBytes).toBe(123_456_789);
+  });
+
+  it("rejects a matching resident identity without integer VRAM custody", async () => {
+    const identity = {
+      checkpointSha256: CHECKPOINT,
+      endpointUrl: "http://127.0.0.1:8083",
+      identityUrl: "http://127.0.0.1:8083/v1/models",
+      modelConfigSha256: "b".repeat(64),
+      modelName: "ember-owned:" + CHECKPOINT.slice(0, 12),
+      serverSourceSha256: "a".repeat(64),
+      tokenizerSha256: "c".repeat(64),
+    };
+    const payload = {
+      seat: "OWNED_ADMITTED",
+      mode: "INTERACTIVE",
+      checkpoint_sha256: CHECKPOINT,
+      model_name: identity.modelName,
+      model_config_sha256: identity.modelConfigSha256,
+      server_source_sha256: identity.serverSourceSha256,
+      tokenizer_sha256: identity.tokenizerSha256,
+    };
+    for (const vram_bytes of [undefined, -1, 1.5, true]) {
+      await expect(verifyOwnedEndpointIdentity(identity, async () =>
+        Response.json({ ...payload, vram_bytes }),
+      )).rejects.toThrow("valid resident VRAM measurement");
+    }
   });
 
   it("rejects a frozen-eval endpoint when the CLI requested interactive mode", async () => {

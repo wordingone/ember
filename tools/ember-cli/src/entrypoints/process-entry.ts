@@ -19,7 +19,7 @@ import {
   resolveModelSeat,
   selectedModelContract,
 } from "./model-seat.ts";
-import type { ModelSeatDecision, SelectedModelContract } from "./model-seat.ts";
+import type { ModelSeatDecision, SelectedModelContract, ModelSeatState } from "./model-seat.ts";
 import {
   loadOwnedDevelopmentIdentity,
   loadOwnedModelIdentity,
@@ -852,7 +852,11 @@ export interface MainOptions {
     nonInteractive?: boolean;
     modelCapabilities?: ModelCapabilityDeclaration | null;
     servedModelConfigSha256?: string | null;
+    lazyOwnedServerStarter?: () => Promise<string | null | { endpoint: string; owner: string; vramBytes: number }>;
+    onModelSeatState?: (state: ModelSeatState) => void;
   }) => Promise<void>;
+  /** Test-only interactive seam: runs after real session-init wiring without loading React/Ink. */
+  interactiveRunner?: (deps: LoopDeps) => Promise<void>;
   getLoopDepsFn?:  () => LoopDeps;
   headlessRunner?: (
     prompt:  string,
@@ -992,12 +996,46 @@ export async function main(opts: MainOptions = {}): Promise<void> {
       }
     }
   }
+  // Ordinary no-env boot is a valid ABSENT seat: it must reach the cockpit so
+  // the first interaction can use the existing lazy Ember Lab authority. A
+  // malformed explicit/owned decision remains refused after session init.
+  let ordinaryOfflineBoot = false;
+  if (!seatDecision.allowed && envModelUrlBeforeConfigApply === undefined &&
+      !process.env["EMBER_REFERENCE_SEAT"] && !gpuFreeRequested && !rawArgv.includes("--mcp") &&
+      !rawArgv.includes("-p") && !rawArgv.includes("--print") && !opts.initFn) {
+    seatDecision = { ...seatDecision, allowed: true, seat: "OFFLINE", error: undefined };
+    ordinaryOfflineBoot = true;
+  }
+  if ((rawArgv.includes("-p") || rawArgv.includes("--print") || rawArgv.includes("--mcp")) &&
+      !gpuFreeRequested && envModelUrlBeforeConfigApply === undefined &&
+      !seatDecision.ownedIdentity && seatDecision.seat === "OFFLINE") {
+    seatDecision = {
+      ...seatDecision,
+      allowed: false,
+      seat: null,
+      source: "none",
+      error: "no admitted owned Ember identity is available; headless launch refuses an unbound seat",
+    };
+  }
+  // Invalid interactive seats refuse before session initialization.  No
+  // telemetry, model client, local fallback, or UI setup may run for a null
+  // or malformed seat; ordinary no-env interactive boot was explicitly
+  // demoted to OFFLINE above and therefore remains allowed.
+  // Invalid interactive seats refuse before session initialization
+  if (!seatDecision.allowed || seatDecision.seat === null) {
+    process.stderr.write("[ember] ERROR: " + seatDecision.error + "\n");
+    doExitMain(1);
+    return;
+  }
   const argv = seatDecision.argv;
   const seatBannerStream = argv.slice(2)[0] === "--mcp"
     ? process.stderr
     : process.stdout;
 
-  if (!seatDecision.allowed || seatDecision.seat === null) {
+  // MCP is a machine-facing surface: unlike the interactive cockpit it must
+  // refuse an unbound seat before emitting any session traffic.
+  if ((!seatDecision.allowed || seatDecision.seat === null) &&
+      (rawArgv.includes("--mcp") || rawArgv.includes("-p") || rawArgv.includes("--print"))) {
     process.stderr.write("[ember] ERROR: " + seatDecision.error + "\n");
     doExitMain(1);
     return;
@@ -1007,7 +1045,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     applyModelsJsonToEnv(modelsCfg);
   }
 
-  process.env["EMBER_MODEL_SEAT"] = seatDecision.seat;
+  process.env["EMBER_MODEL_SEAT"] = seatDecision.seat ?? "OFFLINE";
   // Fix #51 P1 repair (PR #948): the seat-authorized identity + capability
   // contract is derived exactly ONCE per seat construction, here -- never
   // re-derived ad-hoc per branch below. `EMBER_MODEL_NAME` for a seat that
@@ -1065,7 +1103,10 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   const didSeatGatedFastPath = await dispatchFastPath(argv);
   if (didSeatGatedFastPath) return;
 
-  if (seatDecision.ownedIdentity) {
+  // Test-injected initFn callers retain the established eager supervision seam;
+  // the real Ember Lab path (no injected init) uses the first-call lazy seam.
+  if (seatDecision.ownedIdentity && opts.initFn) {
+    const identity = seatDecision.ownedIdentity;
     try {
       await (opts.handshakeEmberLabFn ?? handshakeConfiguredEmberLab)();
     } catch (error) {
@@ -1076,9 +1117,15 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     }
     try {
       const verifyEndpoint = opts.verifyOwnedEndpointFn ?? verifyOwnedEndpointIdentity;
-      const ensure = opts.ensureOwnedServerFn ?? ((identity) =>
-        ensureOwnedServer(identity, { verifyEndpoint }));
-      await ensure(seatDecision.ownedIdentity);
+      if (opts.ensureOwnedServerFn) {
+        // Test/integration seams may replace the authority function and therefore
+        // cannot receive the production dependency object; keep their explicit
+        // readiness assertion while the real ensureOwnedServer call binds it once.
+        await opts.ensureOwnedServerFn(identity);
+        await verifyEndpoint(identity);
+      } else {
+        await ensureOwnedServer(identity, { verifyEndpoint });
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       process.stderr.write("[ember] ERROR: could not establish bound owned server (" + message + ")\n");
@@ -1086,6 +1133,44 @@ export async function main(opts: MainOptions = {}): Promise<void> {
       return;
     }
   }
+
+  const lazyOwnedServerStarter = (ordinaryOfflineBoot || seatDecision.ownedIdentity) && !opts.initFn
+    ? async (): Promise<string | null | { endpoint: string; owner: string; vramBytes: number }> => {
+        let identity = seatDecision.ownedIdentity;
+        if (!identity) {
+          const repoRoot = resolveEmberSourceRootOrCwd({}, "[ember-cli]");
+          const configHome = getEmberConfigHomeDir();
+          identity = (opts.loadOwnedIdentityFn ?? loadOwnedModelIdentity)({
+            repoRoot,
+            configHome,
+            manifestPath: process.env["EMBER_OWNED_RUNG_MANIFEST"],
+            verifierRegistryPath: process.env["EMBER_TRUSTED_VERIFIER_REGISTRY"],
+            pythonExecutable: process.env["EMBER_PYTHON"],
+          }) ?? (opts.loadOwnedDevelopmentIdentityFn ?? loadOwnedDevelopmentIdentity)({
+            repoRoot,
+            configHome,
+            manifestPath: process.env["EMBER_OWNED_DEVELOPMENT_MANIFEST"],
+            pythonExecutable: process.env["EMBER_PYTHON"],
+          });
+        }
+        if (!identity) return null;
+        await (opts.handshakeEmberLabFn ?? handshakeConfiguredEmberLab)();
+        const verifyEndpoint = opts.verifyOwnedEndpointFn ?? verifyOwnedEndpointIdentity;
+        let vramBytes: number;
+        if (opts.ensureOwnedServerFn) {
+          await opts.ensureOwnedServerFn(identity);
+          const resident = await verifyEndpoint(identity);
+          vramBytes = resident.vramBytes;
+        } else {
+          const resident = await ensureOwnedServer(identity, { verifyEndpoint });
+          vramBytes = resident.vramBytes;
+        }
+        if (!Number.isSafeInteger(vramBytes) || vramBytes < 0) {
+          throw new Error("owned server admission lacks a valid resident VRAM measurement");
+        }
+        return { endpoint: identity.endpointUrl, owner: identity.modelName, vramBytes };
+      }
+    : undefined;
 
   // issue #196 / #602: one disclosure line, always -- so a leaked/stale EMBER_MODEL_URL (or
   // a models.json "binary"/"endpoint" field silently discarding an explicit override, or a
@@ -1097,7 +1182,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
       : "admitted checkpoint manifest";
     process.stdout.write(
       "[ember] model endpoint: " + seatDecision.ownedIdentity.endpointUrl +
-        " -- bound by " + authority + "; supervised server started\n",
+        " -- bound by " + authority + "; supervised server started lazily on first model interaction\n",
     );
   } else {
     process.stdout.write(
@@ -1109,7 +1194,10 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   // an explicit EMBER_MODEL_URL always wins over models.json (env > config >
   // managed) -- envModelUrlBeforeConfigApply is the pre-config snapshot, so a
   // config-populated env value can never masquerade as an operator override.
-  const externalUrl = seatDecision.ownedIdentity?.endpointUrl ?? envModelUrlBeforeConfigApply ?? modelsCfg?.endpoint;
+  const lazyOwnedSeat = Boolean(seatDecision.ownedIdentity && !opts.initFn);
+  const externalUrl = ordinaryOfflineBoot
+    ? undefined
+    : seatDecision.ownedIdentity?.endpointUrl ?? envModelUrlBeforeConfigApply ?? modelsCfg?.endpoint;
 
   // string | null: null is the explicit GPU-free signal session-init.ts's `!serverUrl`
   // check relies on (issue #602) -- a real, typed null, not an unsafe cast.
@@ -1130,15 +1218,30 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     detectedNCtx = modelsCfg?.nCtx ?? 4096;
   } else if (externalUrl) {
     process.env["EMBER_MODEL_URL"] ??= externalUrl;
-    serverUrl    = externalUrl;
-    detectedNCtx = await detectNCtx(serverUrl).catch(() => modelsCfg?.nCtx ?? 4096);
+    if (lazyOwnedSeat) {
+      // The owned endpoint is an identity binding, not a boot-time connection.
+      // Keep init explicitly offline so preconnect()/n_ctx probing cannot touch
+      // the server before the first model interaction invokes Ember Lab.
+      serverUrl    = null;
+      detectedNCtx = modelsCfg?.nCtx ?? 4096;
+    } else {
+      serverUrl    = externalUrl;
+      detectedNCtx = await detectNCtx(serverUrl).catch(() => modelsCfg?.nCtx ?? 4096);
+    }
   } else {
+    if (seatDecision.seat === "OFFLINE") {
+      // Ordinary interactive boot is deliberately model-free.  Do not enter
+      // the legacy local-spawn compatibility path; only an explicit
+      // REFERENCE_ONLY seat may use that path below.
+      serverUrl    = null;
+      detectedNCtx = modelsCfg?.nCtx ?? 4096;
+    } else {
     // No direct launcher path may become an accidental third authority.  The
     // only seat permitted to use this local-spawn compatibility branch is an
-    // explicitly requested REFERENCE_ONLY seat; owned seats already passed
-    // through Ember Lab's ensureOwnedServer above, and an ordinary unbound
-    // boot is refused by resolveModelSeat before reaching here.
-    if (seatDecision.seat !== "REFERENCE_ONLY") {
+    // explicitly requested REFERENCE_ONLY seat; owned seats are admitted by
+    // the lazy Ember Lab starter on first interaction, while an ordinary
+    // unbound interactive boot remains the explicit OFFLINE seat.
+    if (seatDecision.seat !== "REFERENCE_ONLY" && seatDecision.seat !== "OFFLINE" && seatDecision.seat !== null) {
       process.env["EMBER_MODEL_NAME"] = "OFFLINE - no model";
       process.stderr.write(
         "[ember] ERROR: direct model spawn requires a bound Ember Lab identity or explicit reference seat\n",
@@ -1263,18 +1366,6 @@ export async function main(opts: MainOptions = {}): Promise<void> {
       });
       void serverHandle; // handle held in closure via cleanup hooks
     }
-  }
-
-  if (seatDecision.ownedIdentity) {
-    try {
-      await (opts.verifyOwnedEndpointFn ?? verifyOwnedEndpointIdentity)(
-        seatDecision.ownedIdentity,
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      process.stderr.write("[ember] ERROR: " + message + "\n");
-      doExitMain(1);
-      return;
     }
   }
 
@@ -1298,7 +1389,21 @@ export async function main(opts: MainOptions = {}): Promise<void> {
         }
       : null,
     servedModelConfigSha256: modelContract?.modelConfigSha256 ?? null,
+    lazyOwnedServerStarter,
+    seatOwner: modelContract?.modelName,
+    onModelSeatState: (state) => { process.env["EMBER_MODEL_SEAT_STATE"] = state.phase; },
   });
+
+  if (opts.interactiveRunner) {
+    await opts.interactiveRunner(sessionMod.getLoopDeps());
+    return;
+  }
+
+  if (!seatDecision.allowed || seatDecision.seat === null) {
+    process.stderr.write("[ember] ERROR: " + seatDecision.error + "\n");
+    doExitMain(1);
+    return;
+  }
 
   // Headless path (-p / --print)
   const headlessSpec = parseHeadlessPrint(argv);
@@ -1375,6 +1480,9 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   const replProps = {
     config: freshInteractiveReplConfig(process.env["EMBER_MODEL_NAME"] ?? "ember"),
     cwd:    resolveEmberSourceRootOrCwd({}, "[ember-cli]"),
+    modelSeat: seatDecision.ownedIdentity
+      ? { phase: "ABSENT" as const, owner: seatDecision.ownedIdentity.modelName }
+      : { phase: "ABSENT" as const },
     onExit: (): void => { resolveExit(); },
   };
 
@@ -1409,6 +1517,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
             {
               config: (props as Record<string, unknown>)["config"],
               cwd:    (props as Record<string, unknown>)["cwd"],
+              modelSeat: (props as Record<string, unknown>)["modelSeat"],
               onExit: (props as Record<string, unknown>)["onExit"],
             },
           ),

@@ -153,6 +153,8 @@ import {
   startActivation,
 } from "../services/process-select.ts";
 import { verifySourceBinding } from "../entrypoints/source-binding-verifier.ts";
+import type { ModelSeatState } from "../entrypoints/model-seat.ts";
+import { getModelSeatState } from "../entrypoints/session-init.ts";
 
 // ---------------------------------------------------------------------------
 // Constants (spec — preserve exactly)
@@ -233,6 +235,8 @@ export interface ReplScreenProps {
   session?:        unknown;
   operatorReceiptWriter?: OperatorReceiptWriter;
   onExit?:         () => void;
+  /** Existing model-seat authority's live lifecycle projection. */
+  modelSeat?:      ModelSeatState;
 }
 
 // ---------------------------------------------------------------------------
@@ -688,6 +692,7 @@ export function ReplScreen({
   session:        _session,
   operatorReceiptWriter,
   onExit:         _onExit,
+  modelSeat,
 }: ReplScreenProps): React.ReactElement {
   const { rows: terminalRows, columns: terminalCols } = useContext(TerminalSizeContext);
   // Hoisted because the homescreen, prompt, and palette below all consume the same conversation
@@ -697,6 +702,13 @@ export function ReplScreen({
 
   const useVirtualScroll = shouldUseVirtualScroll(env);
   const writeTitle       = shouldWriteTerminalTitle(env);
+  const [liveModelSeat, setLiveModelSeat] = useState<ModelSeatState | undefined>(modelSeat);
+  useInterval(() => {
+    const next = getModelSeatState();
+    setLiveModelSeat((current) => current && current.phase === next.phase &&
+      current.owner === next.owner && current.endpoint === next.endpoint &&
+      current.vramBytes === next.vramBytes ? current : next);
+  }, 250);
 
   // #924: the operator surface's source-provenance contract (#921) requires
   // sourceBindingVerified===true before it will render anything but "SOURCE
@@ -2040,6 +2052,7 @@ export function ReplScreen({
           taskPanel:      taskPanelState,
           telemetry,
           modelMetrics:   modelMetrics ?? undefined,
+          modelSeat: liveModelSeat,
           effort:         retryStatus,
           degraded:       degradedBanner,
           outage:         outageBanner,
