@@ -1,5 +1,6 @@
 {"path": "receipts/580-corrected-rerun-forensic-20260710T161827Z.json", "verdict": "PASS"}
 {"issue": "580", "path": "receipts/580rerun-20260710-cache-tensor-commitment.json", "ticket": "580RERUN-CACHE-TENSOR-COMMITMENT", "ts": "2026-07-10T17:32:00.000000+00:00", "verdict": "COMMITMENT_RECORDED_REPLAY_BOUNDED_NONPUBLIC"}
+{"claim_fields": {"claim_boundary": "{\"exact_private_tensor_bytes_replayed\":false,\"historical_tensor_identity_claim_reasserted\":false,\"issue_580_completion_…"}, "issue": "700", "path": "receipts/580rerun-cache-tensor-commitment-revalidation-20260729T112854Z.json", "ticket": "580RERUN-CACHE-TENSOR-COMMITMENT", "ts": "2026-07-29T11:28:54Z", "verdict": "PUBLIC_COMMITMENT_REVALIDATED_PRIVATE_BYTES_UNAVAILABLE"}
 {"path": "receipts/a1-predicate-scan/a1-bmulti1-scan-20260710T045852Z.json", "ticket": "A1-BMULTI1-SCAN", "ts": "2026-07-10T05:07:19.775217+00:00"}
 {"path": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T230806Z.json", "ticket": "A1-PREDICATE-SCAN-440", "ts": "2026-07-09T23:18:21.049659+00:00"}
 {"path": "receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z.json", "ticket": "A1-PREDICATE-SCAN-440", "ts": "2026-07-09T23:29:16.286846+00:00"}
@@ -12,10 +13,11 @@
 {"path": "receipts/arcade-random-smoke-20260610T233807Z.json", "ticket": "ARCADE-HARNESS", "ts": "20260610T233807Z"}
 {"path": "receipts/assembly-sha-as-manifest-adjudication-20260702T162500Z.json", "ts": "20260702T162500Z", "verdict": "ASSEMBLY_SHA_AS_MANIFEST_HISTORICAL"}
 {"issue": "wordingone/ember#702", "path": "receipts/attribution-702-20260711T135717Z-redacted-edition.json", "ticket": "EMBER-702-ATTRIBUTION", "ts": "20260711T135717Z", "verdict": "FACTOR1_FIRST"}
+{"claim_fields": {"claim_boundary": "{\"branch_a_ns5_routing_claim\":false,\"contract_grade_attribution_claim\":false,\"current_interval_tenancy_proof_recovered\"…"}, "issue": "700", "path": "receipts/attribution-702-public-revalidation-20260729T114829Z.json", "ticket": "EMBER-702-ATTRIBUTION", "ts": "2026-07-29T11:48:35Z", "verdict": "COMBINED_INNER_ARITHMETIC_REVALIDATED_CONTRACT_GRADE_BLOCKED"}
 {"pass": true, "path": "receipts/b-multi-1-acquire-20260616T051423Z.json", "ticket": "B-MULTI-1-ACQUIRE", "ts": "20260616T051423Z"}
 {"path": "receipts/bits-account-20260610T223429Z.json", "ticket": "BITS-ACCOUNT", "ts": "20260610T223429Z"}
 {"path": "receipts/bits-account-20260611T031459Z.json", "ticket": "BITS-ACCOUNT", "ts": "20260611T031459Z"}
-{"claim_fields": {"claim_limits": "[\"PARK is the fail-closed default; LAND requires an explicit per-file override.\",\"This inventory grants no branch delet…"}, "path": "receipts/branch-inventory/branch-inventory-current.json"}
+{"claim_fields": {"claim_limits": "[\"PARK is the fail-closed default; LAND requires an explicit per-file override.\",\"This inventory grants no branch delet…"}, "path": "receipts/branch-inventory/branch-inventory-current.json", "ticket": "EMBER-BRANCH-INVENTORY", "ts": "2026-08-01T04:47:09Z"}
 {"path": "receipts/c-base-provenance-gap-archaeology-20260707T025647Z.json", "ticket": "C-BASE-PROVENANCE-GAP-ARCHAEOLOGY", "ts": "2026-07-07T02:56:47Z", "verdict": "L4_PROVENANCE_VIOLATION_CONFIRMED"}
 {"claim_fields": {"condition": "C-INV"}, "path": "receipts/c-invariant-probe.json"}
 {"issue": "96", "pass": true, "path": "receipts/c-pin-selftest-20260705T040630Z.json", "ticket": "C-PIN-SELFTEST", "ts": "20260705T040630Z"}
@@ -68,11 +70,15 @@
 {"path": "receipts/cbase-grow-dryrun-20260702T190532Z-redacted-edition.json", "ticket": "CBASE-GROW-OPERATOR-DRYRUN", "ts": "2026-07-02T19:05:51Z", "verdict": "GROW_DRYRUN_PASS"}
 {"path": "receipts/cbase-grow-dryrun-20260702T190532Z.json", "ticket": "CBASE-GROW-OPERATOR-DRYRUN", "ts": "2026-07-02T19:05:51Z", "verdict": "GROW_DRYRUN_PASS"}
 {"pass": true, "path": "receipts/cbase-grow-live/cbase-grow-live-live-20260703T053225Z.json", "ticket": "CBASE-GROW-LIVE", "ts": "2026-07-03T05:36:11Z", "verdict": "GROW_LIVE_PASS"}
+{"claim_fields": {"claim_boundary": "[\"This receipt corrects one historical citation name without rewriting the historical snapshot.\",\"The canonical target …"}, "path": "receipts/cbase-grow-live/citation-correction-20260731T155500Z.json", "ticket": "C-CUSTODY-CITATION-CORRECTION", "ts": "2026-07-31T15:55:00Z"}
 {"issue": "626", "path": "receipts/cbase-grow-rung/c-grow-before-after-probe-20260710T172700Z.json", "ticket": "C-GROW-BEFORE-AFTER-PROBE", "ts": "2026-07-10T17:27:00Z"}
+{"claim_fields": {"claim_boundary": "{\"current_probe_replayed_across_distinct_commits\":true,\"historical_worktree_prose_reasserted\":false,\"model_capability_c…"}, "issue": "700", "path": "receipts/cbase-grow-rung/c-grow-before-after-probe-20260729T111025Z.json", "ticket": "C-GROW-BEFORE-AFTER-PROBE", "ts": "2026-07-29T11:10:34Z"}
 {"issue": "626", "path": "receipts/cbase-grow-rung/c-grow-candidate-audit-20260710T172304Z.json", "ticket": "C-GROW-CANDIDATE-AUDIT", "ts": "2026-07-10T17:24:40Z"}
+{"claim_fields": {"claim_boundary": "{\"c_grow_current_probe_green\":true,\"candidate_population_reexecuted\":true,\"historical_candidate_rows_reasserted\":false,…"}, "issue": "700", "path": "receipts/cbase-grow-rung/c-grow-candidate-audit-20260729T104531Z.json", "ticket": "C-GROW-CANDIDATE-AUDIT", "ts": "2026-07-29T10:46:40Z"}
 {"issue": "refs the C-GROW owning issue (docs/spec/conditions-v1.md C-GROW; scripts/ember_totality/test_c_grow.py)", "pass": true, "path": "receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json", "ticket": "CBASE-GROW-MEASURED-FLOPS", "ts": "2026-07-10T00:54:12Z", "verdict": "GROW_MEASURED_FLOPS_PASS"}
 {"issue": "29", "pass": true, "path": "receipts/cbase-grow-rung/cbase-grow-rung1-live-20260703T155711Z.json", "ticket": "CBASE-GROW-RUNG", "ts": "2026-07-03T15:57:11Z", "verdict": "GROW_RUNG_PASS"}
 {"issue": "626", "path": "receipts/cbase-grow-rung/cbase-grow-rung2-completion-20260710T172500Z.json", "ticket": "CBASE-GROW-RUNG2-COMPLETION", "ts": "2026-07-10T17:25:00Z"}
+{"claim_fields": {"claim_boundary": "{\"c_grow_current_probe_green\":true,\"historical_private_path_claims_reasserted\":false,\"model_capability_claim\":false,\"ru…"}, "issue": "700", "path": "receipts/cbase-grow-rung/cbase-grow-rung2-completion-20260729T102106Z.json", "ticket": "CBASE-GROW-RUNG2-COMPLETION", "ts": "2026-07-29T10:21:22Z"}
 {"issue": "411", "path": "receipts/cbase-grow-rung2-contended-launch-gate-20260708T125724Z.json", "ticket": "CBASE-GROW-RUNG2-CONTENDED-LAUNCH-GATE", "ts": "2026-07-08T12:57:24.819220+00:00", "verdict": "LAUNCH_PERMITTED"}
 {"issue": "449", "path": "receipts/cbase-grow-rung2-eps0-fingerprint-20260709T112243Z.json", "ticket": "CBASE-GROW-RUNG2-EPS0-FINGERPRINT", "ts": "2026-07-09T11:24:04.657053+00:00", "verdict": "MEASUREMENT_COMPLETE_NO_ADJUDICATION"}
 {"issue": "466", "path": "receipts/cbase-grow-rung2-event-580rerun-20260710-b1.json", "ticket": "CBASE-GROW-RUNG2-EVENT-B1", "ts": "2026-07-10T16:54:36.128873+00:00", "verdict": "B1_QUIESCE_PROVEN"}
@@ -112,6 +118,8 @@
 {"issue": "123", "path": "receipts/cbase-grow-rung2-spectral-nonequivalence-20260710T041019Z.json", "ticket": "CBASE-GROW-RUNG2-SPECTRAL-NONEQUIVALENCE-CHECK"}
 {"issue": "480", "path": "receipts/cbase-grow-rung2-stabilize-transplant-wall-diagnostic-20260709T130000Z.json", "ticket": "CBASE-GROW-RUNG2-STABILIZE-LEG1-TRANSPLANT-WALL-DIAGNOSTIC", "ts": "2026-07-09T13:05:30.068868+00:00", "verdict": "TRUE_GAP (b)"}
 {"issue": "123", "path": "receipts/cbase-grow-rung2-vacuity-check-20260709T234736Z.json", "ticket": "CBASE-GROW-RUNG2-VACUITY-CHECK"}
+{"claim_fields": {"claim_boundary": "Harness, frozen slice authority, and fail-closed refusal only. No heldout metric, capability, same-quality, milestone-c…"}, "issue": "760", "path": "receipts/cbase-heldout-eval/issue-760-preflight-v1.json", "ticket": "WAVE-011-ISSUE-760-HELDOUT-PREFLIGHT", "ts": "20260731T005114Z"}
+{"issue": "760", "path": "receipts/cbase-heldout-eval/issue-760-slice-regeneration-finding.json", "ticket": "ISSUE-760-SLICE-REGENERATION-FINDING", "ts": "20260805T180338Z"}
 {"path": "receipts/cbase-verify-attempt3-20260707T073843.json", "ticket": "CBASE-VERIFY-ATTEMPT-3", "ts": "2026-07-07T07:38:43.255128Z", "verdict": "PASS"}
 {"path": "receipts/cbase-verify-attempt3-VOID5-20260707T104500Z.json", "ticket": "C-BASE-VOID", "ts": "2026-07-07T10:45:00Z", "verdict": "VOID"}
 {"issue": "24", "path": "receipts/ceff-RESOLVED-20260703T124623Z-import-edition-redacted-edition.json", "ticket": "CEFF-RESOLVED-CLOSURE", "ts": "20260703T124623Z", "verdict": "PRICED_SCALEOUT_RESIDUAL"}
@@ -121,6 +129,7 @@
 {"pass": true, "path": "receipts/citation-check-20260704T203557Z.json"}
 {"pass": true, "path": "receipts/citation-check-20260705T081952Z.json"}
 {"pass": false, "path": "receipts/citation-check-20260710T230829Z-redacted-edition.json"}
+{"pass": true, "path": "receipts/citation-check-20260804T072213Z.json", "ticket": "EMBER-ISSUE-107-C11-EXPERIENCE-HORIZON", "ts": "20260804T072213Z"}
 {"path": "receipts/cold-read-reprobe/2026-07-06T01Z.json", "verdict": "PASS"}
 {"path": "receipts/completeness-sweep/c34-launch-rail-issue-mapping-20260705T125847Z.json", "ticket": "C34", "ts": "20260705T125847Z", "verdict": "ISSUE_MAPPING_COMPLETE"}
 {"path": "receipts/completeness-sweep/c53-fp34-band-freeze-prestage-20260705T125847Z.json", "ticket": "C53", "ts": "20260705T125847Z"}
@@ -150,23 +159,55 @@
 {"path": "receipts/disconfirmation-eval-20260707T174158Z.json", "ticket": "EMBER-TOTALITY-DISCONFIRMATION", "ts": "20260707T174158Z"}
 {"path": "receipts/disconfirmation-eval-20260707T184903Z.json", "ticket": "EMBER-TOTALITY-DISCONFIRMATION", "ts": "20260707T184903Z"}
 {"path": "receipts/dt1-delta-rule-20260616T165810Z.json", "ticket": "DT1-DELTA-RULE-DIAGNOSTIC", "ts": "20260616T165810Z"}
-{"claim_fields": {"claim_boundary": "{\"counts_as_capability_evidence\":false,\"counts_as_full_ember_completion\":false,\"counts_as_owned_checkpoint\":false,\"coun…"}, "path": "receipts/ember-01-completion/cond4-tamper-battery-bf20f050-v1.json"}
+{"claim_fields": {"claim_boundary": "{\"counts_as_capability_evidence\":false,\"counts_as_full_ember_completion\":false,\"counts_as_owned_checkpoint\":false,\"coun…"}, "path": "receipts/ember-01-completion/cond4-tamper-battery-bf20f050-v1.json", "ticket": "EMBER-01-COND4-BATTERY-REMINT-1331", "ts": "2026-08-03T21:41:38Z"}
+{"claim_fields": {"claim_scope": "{\"benchmark_completed\":false,\"model_completed\":false,\"note\":\"Copied from the verifier receipt this pack ships: a bare c…"}, "path": "receipts/ember-01-completion/evidence-pack-v1/INDEX.json", "ticket": "1401", "ts": "2026-08-04T20:15:00Z"}
+{"claim_fields": {"claim_scope": "{\"benchmark_completed\":false,\"model_completed\":false,\"note\":\"A bare clean clone honestly reports the operator-machine-b…"}, "path": "receipts/ember-01-completion/evidence-pack-v1/completion-receipt-9leg-20260802.json"}
+{"claim_fields": {"claim_scope": "{\"benchmark_completed\":false,\"model_completed\":false,\"note\":\"A bare clean clone honestly reports the operator-machine-b…"}, "path": "receipts/ember-01-completion/evidence-pack-v1/verifier-receipt-9leg-20260804.json"}
+{"path": "receipts/ember-01-completion/evidence-pack-v1/verify-run-receipt-20260804.authority.json", "ticket": "1401", "ts": "2026-08-04T19:39:52Z"}
 {"claim_fields": {"claim_scope": "{\"benchmark_completed\":false,\"model_completed\":false,\"note\":\"A bare clean clone honestly reports the operator-machine-b…"}, "path": "receipts/ember-01-completion/live-census-verifier-replay-96d8c83-v1.json"}
+{"claim_fields": {"claim_boundary": "{\"capability_claim\":false,\"deletion_performed\":false,\"restoration_performed\":false}"}, "path": "receipts/ember-01-custody/documented-absent-custody-dispositions-v1.json", "ticket": "C-CUSTODY-DOCUMENTED-ABSENT-WAVE029", "ts": "2026-07-31T15:28:00Z"}
+{"claim_fields": {"claim_boundary": "{\"capability_claim\":false,\"issue_closure_authorized\":false,\"reconstruction_performed\":false,\"restoration_performed\":fal…"}, "path": "receipts/ember-01-custody/documented-absent-custody-dispositions-wave031-v1.json", "ticket": "C-CUSTODY-DOCUMENTED-ABSENT-WAVE031", "ts": "2026-07-31T16:28:18Z"}
+{"claim_fields": {"claim_limits": "[\"This receipt reports hash and known-format integrity only.\",\"A verified pin is not model, training, checkpoint-admiss…"}, "path": "receipts/ember-01-custody/freeze-artifact-integrity-issue531-v1.json", "ticket": "FREEZE-ARTIFACT-INTEGRITY-ISSUE531", "ts": "2026-07-31T12:41:45.229549Z"}
+{"path": "receipts/ember-02-launch-authority/certificate.authority.json", "ticket": "1401", "ts": "2026-08-04T19:39:52Z"}
+{"path": "receipts/ember-02-launch-authority/declaration-ledger.authority.json", "ticket": "1401", "ts": "2026-08-04T20:15:00Z"}
+{"path": "receipts/ember-02-launch-authority/run-spec.authority.json", "ticket": "1401", "ts": "2026-08-04T20:15:00Z"}
+{"path": "receipts/ember-02-launch-authority/sha-binding-map.authority.json", "ticket": "1401", "ts": "2026-08-04T19:39:52Z"}
+{"path": "receipts/ember-02-r1-exits/r1-e1-20260805T172045Z.json", "ticket": "r1-exit-battery-e1", "ts": "20260805T172045Z"}
+{"path": "receipts/ember-02-r1-exits/r1-e2-20260805T172045Z.json", "ticket": "r1-exit-battery-e2", "ts": "20260805T172045Z"}
+{"path": "receipts/ember-02-r1-exits/r1-e3-20260805T172055Z.json", "ticket": "r1-exit-battery-e3", "ts": "20260805T172055Z"}
+{"path": "receipts/ember-02-r1-exits/r1-e4-20260805T172055Z.json", "ticket": "r1-exit-battery-e4", "ts": "20260805T172055Z"}
+{"path": "receipts/ember-02-r1-exits/r1-e5-20260805T172055Z.json", "ticket": "r1-exit-battery-e5", "ts": "20260805T172055Z"}
+{"path": "receipts/ember-02-r1-exits/r1-e6-20260805T172055Z.json", "ticket": "r1-exit-battery-e6", "ts": "20260805T172055Z"}
+{"path": "receipts/ember-02-r1-exits/r1-e7-20260805T172055Z.json", "ticket": "r1-exit-battery-e7", "ts": "20260805T172055Z"}
+{"path": "receipts/ember-02-r1-exits/r1-e8-20260805T172055Z.json", "ticket": "r1-exit-battery-e8", "ts": "20260805T172055Z"}
+{"claim_fields": {"condition": "C-ANAT"}, "path": "receipts/ember-anatomy/c-anat-anatomy-set-completion-20260801T224931Z.json", "ticket": "EMBER-C-ANAT-ANATOMY-SET-COMPLETION", "ts": "20260801T224931Z"}
+{"claim_fields": {"condition": "C-ANAT"}, "path": "receipts/ember-anatomy/c-anat-anatomy-set-completion-20260801T224944Z.json", "ticket": "EMBER-C-ANAT-DOC-SET", "ts": "20260801T224944Z"}
 {"path": "receipts/ember-c-e2b-paired/ember-c-e2b-paired-20260705T041045Z.json", "ticket": "C-E2B-PAIRED-RUN", "ts": "2026-07-05T04:10:45Z", "verdict": "measured_distance"}
+{"path": "receipts/ember-c-obs-proof-pack/20260801T235000Z/receipt.json", "ticket": "C-OBS-PROOF-PACK", "ts": "20260801T235000Z"}
 {"issue": "75", "path": "receipts/ember-c-scale/c-scale-s3-working-set-20260704T122236Z.json", "ticket": "C-SCALE-S3-WORKING-SET-LIVE", "ts": "20260704T122236Z", "verdict": "S3_WORKING_SET_LIVE_MEASURED_FIT"}
 {"issue": "ember#210", "pass": true, "path": "receipts/ember-c-scale/land210g-experiment-runners-receipt.json", "ticket": "LAND210G-EXPERIMENT-RUNNERS", "ts": "20260711T070014Z", "verdict": "LAND210G_EXPERIMENT_RUNNERS_26_LANDED_7_EXCLUDED"}
+{"claim_fields": {"claim_boundary": "{\"all_26_historical_landing_hashes_revalidated\":false,\"all_34_candidates_tracked_at_subject\":true,\"gpu_experiment_repla…"}, "issue": "ember#210", "path": "receipts/ember-c-scale/land210g-public-revalidation-20260729T122328Z.json", "ticket": "LAND210G-EXPERIMENT-RUNNERS", "ts": "2026-07-29T12:26:03Z", "verdict": "HISTORICAL_24_BYTES_DIRECTLY_VERIFIED_8_EXCLUSIONS_CORRECTED_ALL_34_TRACKED"}
 {"issue": "ember#210", "pass": true, "path": "receipts/ember-c-scale/land210h-ops-tools-receipt.json", "ticket": "LAND210H-OPS-TOOLS", "ts": "20260711T081015Z", "verdict": "LAND210H_OPS_TOOLS_5_LANDED_0_EXCLUDED_1_PREEXISTING_DEFECT_DISCLOSED"}
+{"claim_fields": {"claim_boundary": "{\"all_five_landing_git_objects_unchanged_at_subject\":true,\"current_historical_execution_denial_revalidated\":true,\"curre…"}, "issue": "ember#210", "path": "receipts/ember-c-scale/land210h-public-revalidation-20260729T125110Z.json", "ticket": "LAND210H-OPS-TOOLS", "ts": "2026-07-29T12:51:12Z", "verdict": "HISTORICAL_5_LANDING_BYTES_VERIFIED_CURRENT_TOKENIZER_LOADS_HISTORICAL_PIPELINE_EXECUTION_DENIED"}
 {"issue": "ember#210", "pass": true, "path": "receipts/ember-c-scale/land210i-harness-entry-receipt.json", "ticket": "LAND210I-HARNESS-ENTRY", "ts": "20260711T074053Z", "verdict": "LAND210I_HARNESS_ENTRY_4_SCRIPTS_2_DATA_LANDED_0_EXCLUDED"}
+{"claim_fields": {"claim_boundary": "{\"borrowed_model_credit_claim\":false,\"current_cpu_only_selftests_replayed\":true,\"current_session_selection_test_repaire…"}, "issue": "ember#210", "path": "receipts/ember-c-scale/land210i-public-revalidation-20260729T132700Z.json", "ticket": "LAND210I-HARNESS-ENTRY", "ts": "2026-07-29T13:27:00Z", "verdict": "HISTORICAL_6_FILE_LANDING_VERIFIED_CURRENT_CPU_SELFTESTS_PASS_SESSION_SELECTION_REGRESSION_REPAIRED"}
 {"issue": "ember#210", "pass": true, "path": "receipts/ember-c-scale/land210j-family3-stragglers-receipt.json", "ticket": "LAND210J-FAMILY3-STRAGGLERS", "ts": "20260711T084415Z", "verdict": "LAND210J_FAMILY3_STRAGGLERS_7_LANDED_0_EXCLUDED_2_PREEXISTING_DEFECT_CLASSES_DISCLOSED_6_RECEIPTS_BACKFILLED"}
+{"claim_fields": {"claim_boundary": "{\"borrowed_model_credit_claim\":false,\"current_owned_synthetic_cpu_training_and_inference_replayed\":true,\"external_check…"}, "path": "receipts/ember-c-scale/land210j-public-revalidation-20260729T135005Z.json", "ticket": "LAND210J-FAMILY3-STRAGGLERS", "ts": "2026-07-29T13:50:05Z", "verdict": "LAND210J_LINEAGE_REVALIDATED_AND_R3_DRYRUN_REPAIRED_TO_OWNED_RANDOM_INIT_CPU_PROOF"}
+{"claim_fields": {"claim_boundary": "{\"checkpoint_or_capability_claim\":false,\"gpu_claim\":false,\"historical_metrics_or_verdict_reexecuted\":false,\"historical_…"}, "path": "receipts/ember-c-scale/land210k-e2b-pair-receipt-c-inv-supersession-20260802T015004Z.json", "ticket": "LAND210K-E2B-PAIR", "ts": "20260802T015004Z", "verdict": "C_INV_BATCH_SUPERSESSION_GIT_LINEAGE_AND_BYTE_IDENTITY_VERIFIED"}
 {"issue": "ember#210", "pass": true, "path": "receipts/ember-c-scale/land210k-e2b-pair-receipt.json", "ticket": "LAND210K-E2B-PAIR", "ts": "20260711T091500Z", "verdict": "LAND210K_E2B_PAIR_3_LANDED_1_EXCLUDED_2_PREEXISTING_DEFECT_CLASSES_DISCLOSED"}
+{"claim_fields": {"claim_boundary": "{\"checkpoint_or_capability_claim\":false,\"gpu_claim\":false,\"historical_metrics_or_verdict_reexecuted\":false,\"historical_…"}, "path": "receipts/ember-c-scale/w1-baseline-replay-closure-20260711T025650Z-redacted-edition-c-inv-supersession-20260802T015004Z.json", "ticket": "W1-BASELINE-REPLAY-CLOSURE", "ts": "20260802T015004Z", "verdict": "C_INV_BATCH_SUPERSESSION_GIT_LINEAGE_AND_BYTE_IDENTITY_VERIFIED"}
 {"issue": "735", "path": "receipts/ember-c-scale/w1-baseline-replay-closure-20260711T025650Z-redacted-edition.json", "ticket": "W1-BASELINE-REPLAY-CLOSURE", "ts": "20260711T025650Z", "verdict": "REPLAY_TRUSTWORTHY"}
 {"issue": "71", "path": "receipts/ember-c-scale/w1-certification-check-20260707T114707Z.json", "ticket": "W1-CERTIFICATION-CHECK", "ts": "20260707T114707Z"}
 {"issue": "71", "pass": true, "path": "receipts/ember-c-scale/w1-collapse-control-20260707T110256Z.json", "ticket": "W1-COLLAPSE-CONTROL", "ts": "20260707T110256Z", "verdict": "W1_CONTROL_LIVE_COMPLETE"}
 {"issue": "71", "pass": true, "path": "receipts/ember-c-scale/w1-collapse-control-20260707T135344Z.json", "ticket": "W1-COLLAPSE-CONTROL", "ts": "20260707T135344Z", "verdict": "W1_CONTROL_LIVE_COMPLETE"}
 {"issue": "71", "path": "receipts/ember-c-scale/w1-fp32-check-20260707T114517Z.json", "ticket": "W1-FP32-REEVAL-CHECK", "ts": "20260707T114517Z"}
+{"claim_fields": {"claim_boundary": "{\"checkpoint_or_capability_claim\":false,\"gpu_claim\":false,\"historical_metrics_or_verdict_reexecuted\":false,\"historical_…"}, "path": "receipts/ember-c-scale/w1-fullstate-resume-verify-20260711T045424Z-redacted-edition-c-inv-supersession-20260802T015004Z.json", "ticket": "W1-FULLSTATE-RESUME-VERIFY", "ts": "20260802T015004Z", "verdict": "C_INV_BATCH_SUPERSESSION_GIT_LINEAGE_AND_BYTE_IDENTITY_VERIFIED"}
 {"issue": "735", "path": "receipts/ember-c-scale/w1-fullstate-resume-verify-20260711T045424Z-redacted-edition.json", "ticket": "W1-FULLSTATE-RESUME-VERIFY", "ts": "20260711T045424Z", "verdict": "FULLSTATE_RESUME_EXACT"}
+{"claim_fields": {"claim_boundary": "{\"checkpoint_or_capability_claim\":false,\"gpu_claim\":false,\"historical_metrics_or_verdict_reexecuted\":false,\"historical_…"}, "path": "receipts/ember-c-scale/w1-fullstate-resume-verify-20260711T054130Z-redacted-edition-c-inv-supersession-20260802T015004Z.json", "ticket": "W1-FULLSTATE-RESUME-VERIFY", "ts": "20260802T015004Z", "verdict": "C_INV_BATCH_SUPERSESSION_GIT_LINEAGE_AND_BYTE_IDENTITY_VERIFIED"}
 {"issue": "735", "path": "receipts/ember-c-scale/w1-fullstate-resume-verify-20260711T054130Z-redacted-edition.json", "ticket": "W1-FULLSTATE-RESUME-VERIFY", "ts": "20260711T054130Z", "verdict": "FULLSTATE_RESUME_EXACT"}
+{"claim_fields": {"claim_boundary": "{\"checkpoint_or_capability_claim\":false,\"gpu_claim\":false,\"historical_metrics_or_verdict_reexecuted\":false,\"historical_…"}, "path": "receipts/ember-c-scale/w1-fullstate-resume-verify-20260711T060432Z-redacted-edition-c-inv-supersession-20260802T015004Z.json", "ticket": "W1-FULLSTATE-RESUME-VERIFY", "ts": "20260802T015004Z", "verdict": "C_INV_BATCH_SUPERSESSION_GIT_LINEAGE_AND_BYTE_IDENTITY_VERIFIED"}
 {"issue": "735", "path": "receipts/ember-c-scale/w1-fullstate-resume-verify-20260711T060432Z-redacted-edition.json", "ticket": "W1-FULLSTATE-RESUME-VERIFY", "ts": "20260711T060432Z", "verdict": "FULLSTATE_LOAD_PATH_EXACT"}
+{"claim_fields": {"claim_boundary": "{\"checkpoint_or_capability_claim\":false,\"gpu_claim\":false,\"historical_metrics_or_verdict_reexecuted\":false,\"historical_…"}, "path": "receipts/ember-c-scale/w1-fullstate-resume-verify-20260711T062151Z-redacted-edition-c-inv-supersession-20260802T015004Z.json", "ticket": "W1-FULLSTATE-RESUME-VERIFY", "ts": "20260802T015004Z", "verdict": "C_INV_BATCH_SUPERSESSION_GIT_LINEAGE_AND_BYTE_IDENTITY_VERIFIED"}
 {"issue": "735", "path": "receipts/ember-c-scale/w1-fullstate-resume-verify-20260711T062151Z-redacted-edition.json", "ticket": "W1-FULLSTATE-RESUME-VERIFY", "ts": "20260711T062151Z", "verdict": "FULLSTATE_LOAD_PATH_EXACT"}
 {"issue": "355", "path": "receipts/ember-c-scale/w1b-fp32-check-20260707T144427Z.json", "ticket": "W1B-FP32-REEVAL-CHECK"}
 {"path": "receipts/ember-c-scale/w2-garm-108-verification-w2-garm-dryrun-20260706T043654Z.json", "ticket": "ISSUE-113-W2-GARM-108-VERIFICATION", "ts": "20260706T043658Z"}
@@ -180,7 +221,11 @@
 {"path": "receipts/ember-c14-owned-run/live-20260703T141139Z-import-edition.json", "ticket": "C14-OWNED-RUN", "ts": "2026-07-03T14:11:39Z", "verdict": "C14-LIVE-NOT-CLEARED"}
 {"path": "receipts/ember-c14-owned-run/live-20260703T215130Z.json", "ticket": "C14-OWNED-RUN", "ts": "2026-07-03T21:51:30Z", "verdict": "C14-LIVE-NOT-CLEARED"}
 {"claim_fields": {"candidate_claim": "{\"candidate_name\":\"Receipt-semantic execution-binding self-attestation detector (scripts/receipt_semantic_check.py's S1…", "field_level_claim_proven": "true"}, "path": "receipts/ember-c8-execution-binding/field-level-contribution-proof-20260703T081125Z.json", "ticket": "EMBER-FIELD-LEVEL-CONTRIBUTION-PROOF", "ts": "20260703T081125Z", "verdict": "FIELD_LEVEL_CONTRIBUTION_PROOF_PASS"}
+{"claim_fields": {"claim_boundary": "compiled text wrapping and one-row truncation only"}, "issue": "1043", "path": "receipts/ember-cli/issue-1043-text-wrap/capture-receipt.json", "verdict": "PASS"}
+{"claim_fields": {"claim_boundary": "{\"binary_reconstructed\":false,\"capability_claim\":false,\"restoration_performed\":false,\"training_claim\":false}"}, "path": "receipts/ember-cli/issue-1043-text-wrap/embedded-runtime-subject-disposition-v1.json", "ticket": "C-CUSTODY-ISSUE-1043-RUNTIME-SUBJECT", "ts": "2026-07-31T16:28:18Z"}
 {"claim_fields": {"claim_boundary": "{\"derived\":[\"captured binary equals an independent rebuild from source_commit\",\"independent rebuild used the recorded e…"}, "issue": "243", "path": "receipts/ember-cli/issue-243-live-resize-v1.json"}
+{"claim_fields": {"claim_boundary": "[\"terminal geometry and resize behavior only\",\"no model, training, benchmark, or capability claim\"]"}, "path": "receipts/ember-cli/issue-303-terminal-layout.json", "ticket": "EMBER-CLI-ISSUE-303-TERMINAL-LAYOUT", "ts": "2026-08-07T00:00:00.000Z"}
+{"claim_fields": {"claim_boundary": "[\"installed Ember UI geometry and color-pulse evidence only\",\"no model, training, benchmark, or capability claim\",\"art-…"}, "path": "receipts/ember-cli/issue-54-fireball-installed-capture.json", "ticket": "EMBER-CLI-ISSUE-54-FIREBALL-CAPTURE", "ts": "2026-08-07T15:27:46.771Z"}
 {"path": "receipts/ember-cockpit-live-surface1/2026-06-28T02-42-00Z/receipt-redacted-edition.json", "ts": "2026-06-28T02:42:00.404Z", "verdict": "SURFACE1_LIVE_COCKPIT_PASS"}
 {"path": "receipts/ember-cockpit-live-surface1/2026-06-28T02-44-43Z/receipt-redacted-edition.json", "ts": "2026-06-28T02:44:44.043Z", "verdict": "PARTIAL"}
 {"path": "receipts/ember-cockpit-live-surface1/2026-06-28T02-53-31Z/receipt-redacted-edition.json", "ts": "2026-06-28T02:53:31.459Z", "verdict": "SURFACE1_LIVE_COCKPIT_PASS"}
@@ -391,6 +436,7 @@
 {"claim_fields": {"next_missing_precondition": "clean_room_reference_cli_resident_harness", "preconditions": "{\"clean_room_reference_cli\":{\"blockers\":[\"reference_ps1_surface_missing_or_command_points_to_missing_script\",\"clean_roo…"}, "path": "receipts/ember-preloop-resident-gate/preloop-resident-gate-20260621T152149Z.json", "ticket": "EMBER-PRELOOP-RESIDENT-GATE", "ts": "20260621T152150Z", "verdict": "PRELOOP_RESIDENT_GATE_BLOCKED"}
 {"claim_fields": {"next_missing_precondition": "rerun_full_parity_gate_with_process_supervision_receipt"}, "path": "receipts/ember-preloop-resident-gate/process-supervision-20260621T225437Z.json", "ticket": "EMBER-reference-CLI-PROCESS-SUPERVISION-GATE", "ts": "20260621T225437Z", "verdict": "PROCESS_SUPERVISION_GATE_PASS"}
 {"claim_fields": {"next_missing_precondition": "rerun_full_parity_gate_with_receipt_store_receipt"}, "path": "receipts/ember-preloop-resident-gate/receipt-store-20260622T000100Z.json", "ticket": "EMBER-reference-CLI-RECEIPT-STORE-GATE", "ts": "20260621T233501Z", "verdict": "RECEIPT_STORE_GATE_PASS"}
+{"claim_fields": {"claim_boundary": "{\"capability_claim\":false,\"deletion_performed\":false,\"restoration_performed\":false}"}, "path": "receipts/ember-preloop-resident-gate/reference-cli-full-parity-harness-gate-VOID-20260731T152800Z.json", "ticket": "EMBER-reference-CLI-FULL-PARITY-HARNESS-GATE-VOID", "ts": "2026-07-31T15:28:00Z", "verdict": "VOID"}
 {"path": "receipts/ember-preloop-resident-gate/reference-uiux-ax-observation-20260622T151722Z-meta.json", "ticket": "EMBER-REAL-reference-UIUX-AX-OBSERVATION"}
 {"claim_fields": {"pass_condition": "The full-parity harness may consume this receipt only as real-reference UI/UX/AX observation evidence. It does not sati…"}, "path": "receipts/ember-preloop-resident-gate/reference-uiux-ax-observation-20260622T151722Z.json", "ticket": "EMBER-REAL-reference-UIUX-AX-OBSERVATION", "ts": "20260622T151955Z", "verdict": "REAL_reference_UIUX_AX_OBSERVATION_PASS"}
 {"path": "receipts/ember-preloop-resident-gate/reference-uiux-ax-observation-VOID-20260707T112100Z.json", "ticket": "EMBER-REAL-reference-UIUX-AX-OBSERVATION-VOID", "ts": "2026-07-07T11:21:00Z", "verdict": "VOID"}
@@ -414,6 +460,13 @@
 {"path": "receipts/ember-resident-training-gate/resident-training-gate-20260622T155000Z-blocked.json", "ticket": "EMBER-RESIDENT-TRAINING-GATE", "ts": "20260622T150327Z", "verdict": "RESIDENT_TRAINING_GATE_BLOCKED"}
 {"path": "receipts/ember-resident-training-gate/resident-training-gate-20260704T062951Z-issue69-cured-redacted-edition.json", "ticket": "EMBER-RESIDENT-TRAINING-GATE", "ts": "20260704T062951Z", "verdict": "RESIDENT_TRAINING_GATE_PASS"}
 {"path": "receipts/ember-resident-training-gate/resident-training-gate-20260704T065507Z-intree-issue70-redacted-edition.json", "ticket": "EMBER-RESIDENT-TRAINING-GATE", "ts": "20260704T065507Z", "verdict": "RESIDENT_TRAINING_GATE_PASS"}
+{"path": "receipts/ember-restart-3b/admission-contract-dryrun-v1.json", "ticket": "R1-ENTRY-ADMISSION-DRYRUN", "ts": "2026-08-02T00:32:10+00:00"}
+{"path": "receipts/ember-restart-3b/domain-fixtures/audio.json", "ticket": "EMBER-648-DOMAIN-FIXTURE-V1/audio", "ts": "2026-08-09T00:00:00Z"}
+{"path": "receipts/ember-restart-3b/domain-fixtures/reasoning.json", "ticket": "EMBER-648-DOMAIN-FIXTURE-V1/reasoning", "ts": "2026-08-09T00:00:00Z"}
+{"path": "receipts/ember-restart-3b/domain-fixtures/tool.json", "ticket": "EMBER-648-DOMAIN-FIXTURE-V1/tool", "ts": "2026-08-09T00:00:00Z"}
+{"path": "receipts/ember-restart-3b/domain-fixtures/vision.json", "ticket": "EMBER-648-DOMAIN-FIXTURE-V1/vision", "ts": "2026-08-09T00:00:00Z"}
+{"path": "receipts/ember-restart-3b/energy-proxy-logger-smoke-v1.json", "ticket": "R1-ENTRY-ENERGY-SMOKE", "ts": "2026-08-02T00:31:41+00:00"}
+{"claim_fields": {"claim_boundary": "checkpoint-custody durability and recovery only; no checkpoint availability, resumability, training, admission, suffici…"}, "issue": "930", "path": "receipts/ember-restart-3b/issue-930-native-windows-replay-v1.json"}
 {"path": "receipts/ember-sovereign-retrieval/design-spec-20260624T142553Z.json", "ticket": "ember-sovereign-retrieval-probe DESIGN", "ts": "20260624T142553Z", "verdict": "CONDITIONAL. Replaceable by sub-linear-in-t content retrieval ONLY IF four conditions jointly hold UNDER MEASUREMENT (not assumption): (C1) live per-step cost INCLUDING index insertion fits log-log s…"}
 {"claim_fields": {"verifier_conditioned_training_command": "python scripts\\ember_tiny_bitnet_comparison.py --out-dir <out>"}, "path": "receipts/ember-tiny-bitnet-comparison/20260622T011334Z-tiny-bitnet-comparison/tiny_bitnet_comparison_receipt.json", "ticket": "EMBER-TINY-BITNET-COMPARISON", "ts": "20260622T011338Z", "verdict": "BITNET_COMPARISON_PASS"}
 {"claim_fields": {"verifier_conditioned_training_command": "python scripts\\ember_tiny_bitnet_comparison.py --out-dir <out>"}, "path": "receipts/ember-tiny-bitnet-comparison/20260622T145500Z-full-parity-reconciled/tiny_bitnet_comparison_receipt.json", "ticket": "EMBER-TINY-BITNET-COMPARISON", "ts": "20260622T144836Z", "verdict": "BITNET_COMPARISON_PASS"}
@@ -423,9 +476,12 @@
 {"claim_fields": {"per_condition": "{\"C(-1)\":{\"evidence\":\"spend-annex-20260708T072000Z.json (landed PR #539 this window) spot-verified: 262 rows each carry…"}, "path": "receipts/ember-totality-audit/audit-20260709T102500Z.json", "ticket": "EMBER-TOTALITY-AUDIT", "ts": "2026-07-09T10:25:00Z"}
 {"claim_fields": {"per_condition": "{\"C-PROC\":{\"fix\":\"refresh process-visibility receipt on next REVIEW-tick landing pass; include publication_state naming…"}, "path": "receipts/ember-totality-audit/audit-20260709T123516Z.json", "ticket": "EMBER-TOTALITY-AUDIT", "ts": "20260709T123516Z"}
 {"claim_fields": {"per_condition": "{\"C-PROC\":{\"cheap_pass\":\"none - probe binds to receipt ts vs merge times\",\"evidence\":\"gh mergedAt receipts this session…"}, "path": "receipts/ember-totality-audit/audit-20260709T171500Z.json", "ticket": "board-integrity-audit-tick", "ts": "2026-07-09T17:15:00Z"}
+{"claim_fields": {"claim_boundary": "{\"checkpoint_or_capability_claim\":false,\"gpu_claim\":false,\"historical_metrics_or_verdict_reexecuted\":false,\"historical_…"}, "path": "receipts/ember-totality-audit/audit-20260711T020000Z-c-inv-supersession-20260802T015004Z.json", "ticket": "EMBER-TOTALITY-AUDIT", "ts": "20260802T015004Z", "verdict": "C_INV_BATCH_SUPERSESSION_GIT_LINEAGE_AND_BYTE_IDENTITY_VERIFIED"}
 {"claim_fields": {"per_condition": "{\"C-EFF\":{\"evidence\":\"carried from audit-20260709T012500Z; closure receipt verdict=PRICED_SCALEOUT_RESIDUAL with compou…"}, "path": "receipts/ember-totality-audit/audit-20260711T020000Z.json", "ticket": "EMBER-TOTALITY-AUDIT", "ts": "20260711T020000Z"}
+{"claim_fields": {"claim_boundary": "{\"checkpoint_or_capability_claim\":false,\"gpu_claim\":false,\"historical_metrics_or_verdict_reexecuted\":false,\"historical_…"}, "path": "receipts/ember-totality-audit/audit-20260711T083809Z-c-inv-supersession-20260802T015004Z.json", "ticket": "BOARD-INTEGRITY-AUDIT-TICK", "ts": "20260802T015004Z", "verdict": "C_INV_BATCH_SUPERSESSION_GIT_LINEAGE_AND_BYTE_IDENTITY_VERIFIED"}
 {"path": "receipts/ember-totality-audit/audit-20260711T083809Z.json", "ticket": "BOARD-INTEGRITY-AUDIT-TICK", "ts": "2026-07-11T08:38:09Z"}
 {"claim_fields": {"per_condition_note": "Full per-condition sweep unchanged from audit-20260711T083809Z (needs_work was empty there); this tick's findings are N…"}, "path": "receipts/ember-totality-audit/audit-20260711T104500Z.json", "ts": "20260711T104500Z"}
+{"claim_fields": {"claim_boundary": "{\"checkpoint_or_capability_claim\":false,\"gpu_claim\":false,\"historical_metrics_or_verdict_reexecuted\":false,\"historical_…"}, "path": "receipts/ember-totality-audit/audit-20260711T122800Z-delta-c-inv-supersession-20260802T015004Z.json", "ticket": "BOARD-INTEGRITY-AUDIT-DELTA", "ts": "20260802T015004Z", "verdict": "C_INV_BATCH_SUPERSESSION_GIT_LINEAGE_AND_BYTE_IDENTITY_VERIFIED"}
 {"path": "receipts/ember-totality-audit/audit-20260711T122800Z-delta.json", "ticket": "BOARD-INTEGRITY-AUDIT-DELTA", "ts": "2026-07-11T12:28:00Z"}
 {"path": "receipts/ember437-er2c-20260616T064826Z.json", "ticket": "EMBER-437-ER-2C-PACKED-TOKPS", "ts": "20260616T064826Z"}
 {"path": "receipts/ember437-er2d-20260616T072423Z.json", "ticket": "EMBER-437-ER-2D-MATCHED-PACKED-TOKPS", "ts": "20260616T072423Z"}
@@ -584,6 +640,12 @@
 {"issue": "207", "path": "receipts/expc1-dryrun-20260706T170642Z.json", "ticket": "EXPC1-RANK-SWEEP", "ts": "20260706T170642Z"}
 {"issue": "207", "path": "receipts/expc1-rank-sweep-20260706T175635Z.json", "ticket": "EXPC1-RANK-SWEEP", "ts": "20260706T175635Z"}
 {"issue": "207", "path": "receipts/expc1b-spectrum-20260706T220949Z.json", "ticket": "EXPC1B-SPECTRUM", "ts": "20260706T220949Z"}
+{"path": "receipts/failure-classes/checkpoint-byte-bound-single-expert-invariant.json", "ticket": "#1320", "ts": "2026-08-03T10:41:50Z"}
+{"path": "receipts/failure-classes/checkpoint-counter-full-coverage-root.json", "ticket": "#1326", "ts": "2026-08-03T13:37:35Z"}
+{"path": "receipts/failure-classes/checkpoint-storage-projection-lineage-inherited-routes.json", "ticket": "#1473", "ts": "2026-08-05T20:33:22Z"}
+{"path": "receipts/failure-classes/checkpoint-storage-projection-single-expert-route.json", "ticket": "#1315", "ts": "2026-08-03T16:43:20Z"}
+{"path": "receipts/failure-classes/checkpoint-transient-scratch-cap-3b.json", "ticket": "#1305", "ts": "2026-08-02T22:01:21Z"}
+{"path": "receipts/fineweb-edu-exclusion-preflight-20260805T140123Z.json", "ticket": "FINEWEB-EDU-EXCLUSION-PREFLIGHT", "ts": "20260805T140123Z"}
 {"path": "receipts/floor_contract_manifest_final_20260705T132713Z.json", "ts": "2026-07-05T13:27:13Z", "verdict": "FLOOR_CONTRACT_MANIFEST_FINAL_ALL_TESTS_PASS"}
 {"path": "receipts/floor_contract_manifest_selftest_20260705T130358Z.json", "ticket": "FLOOR-CONTRACT-MANIFEST-SELFTEST", "ts": "20260705T130358Z", "verdict": "FLOOR_CONTRACT_MANIFEST_SELFTEST_PASS"}
 {"path": "receipts/founder_likeness_selftest_20260705T111347Z.json", "ticket": "FOUNDER_LIKENESS_SELFTEST", "ts": "20260705T111347Z"}
@@ -664,6 +726,12 @@
 {"path": "receipts/g1-r2w-verdict-20260611T050209Z.json", "ticket": "G1-R2W-VERDICT", "ts": "20260611T050209Z"}
 {"path": "receipts/gate-stats-346-20260612T202900Z.json", "ticket": "#346", "ts": "20260612T202900Z"}
 {"issue": "128", "path": "receipts/gh128-resident-gate-econ-wiring-selftest-20260705T105938Z.json", "ticket": "GH-128-RESIDENT-GATE-ECON-WIRING-SELFTEST", "ts": "20260705T105938Z"}
+{"path": "receipts/github-work-system-v1/deprecated-label-retirement-v1.json", "ticket": "EMBER-GITHUB-DEPRECATED-LABEL-RETIREMENT", "ts": "2026-07-29T18:11:45.2412821Z"}
+{"path": "receipts/github-work-system-v1/live-label-verification-v1.json", "ticket": "EMBER-GITHUB-LABEL-VERIFICATION", "ts": "2026-07-29T18:11:45.2412821Z"}
+{"claim_fields": {"claim_boundary": "GitHub work-system structure and metadata only; no issue acceptance, closure, roadmap, model, training, benchmark, rese…"}, "path": "receipts/github-work-system-v1/migration-summary-v1.json", "ticket": "EMBER-GITHUB-WORK-SYSTEM-MIGRATION-SUMMARY", "ts": "2026-07-29T18:11:45.2412821Z"}
+{"path": "receipts/github-work-system-v1/native-relationship-apply-v1.json", "ticket": "EMBER-GITHUB-NATIVE-RELATIONSHIP-APPLY", "ts": "2026-07-29T18:11:45.2412821Z"}
+{"path": "receipts/github-work-system-v1/native-relationship-verify-v1.json", "ticket": "EMBER-GITHUB-NATIVE-RELATIONSHIP-VERIFY", "ts": "2026-07-29T18:11:45.2412821Z"}
+{"path": "receipts/github-work-system-v1/open-work-apply-v1.json", "ticket": "EMBER-GITHUB-OPEN-WORK-APPLY", "ts": "2026-07-29T18:11:45.2412821Z"}
 {"path": "receipts/grow-op-rung2-void-20260708T060900Z.json", "ticket": "CBASE-GROW-RUNG2-VOID", "ts": "2026-07-08T06:24:36.924798+00:00", "verdict": "VOID"}
 {"path": "receipts/grow-op-verify-20260707T220138Z.json", "verdict": "PASS"}
 {"path": "receipts/grow-op-verify-20260708T060841Z.json", "ticket": "CBASE-GROW-RUNG2-OP-VERIFY", "ts": "2026-07-08T06:08:41.945884+00:00", "verdict": "PASS"}
@@ -673,14 +741,27 @@
 {"path": "receipts/heartbeat-runner-selftest-20260612T045619Z.json", "ticket": "HEARTBEAT-RUNNER-SELFTEST", "ts": "20260612T045619Z", "verdict": "PASS"}
 {"path": "receipts/heldout-v21-fcalib-20260708T164705Z.json", "ticket": "HELDOUT-V21-FCALIB", "ts": "20260708T164733Z"}
 {"path": "receipts/heldout-v21-fcalib-20260708T190000Z.json", "ticket": "HELDOUT-V21-FCALIB", "ts": "20260708T230457Z"}
+{"path": "receipts/hygiene/issue-488-first-cleanup-v1.json", "ticket": "EMBER-488-HYGIENE", "ts": "20260808T051309Z"}
+{"path": "receipts/ind3-operate/ind3-interrupted-resume-20260729T094448Z.json", "ticket": "EMBER-700", "ts": "20260729T094448Z"}
+{"path": "receipts/ind3-operate/ind3-launch-20260729T094447Z.json", "ticket": "EMBER-700", "ts": "20260729T094447Z"}
+{"path": "receipts/ind3-operate/ind3-teardown-20260729T094447Z.json", "ticket": "EMBER-700", "ts": "20260729T094447Z"}
+{"claim_fields": {"claim_boundary": "{\"checkpoint_or_capability_claim\":false,\"gpu_claim\":false,\"historical_metrics_or_verdict_reexecuted\":false,\"historical_…"}, "path": "receipts/issue-378-atomic-receipt-publication-v1-c-inv-supersession-20260802T015004Z.json", "ticket": "EMBER-ISSUE-378-ATOMIC-RECEIPT-PUBLICATION", "ts": "20260802T015004Z", "verdict": "C_INV_BATCH_SUPERSESSION_GIT_LINEAGE_AND_BYTE_IDENTITY_VERIFIED"}
+{"claim_fields": {"claim_boundary": "atomic checked receipt publication and last-known-good preservation only; no historical receipt restoration, total cust…"}, "issue": "378", "path": "receipts/issue-378-atomic-receipt-publication-v1.json", "ticket": "EMBER-ISSUE-378-ATOMIC-RECEIPT-PUBLICATION", "ts": "20260728T235900Z"}
+{"claim_fields": {"claim_boundary": "This receipt proves only the current file-backed optimizer surfaces, a bounded CPU first-step private-commit measuremen…"}, "issue": "wordingone/ember#457", "path": "receipts/issue-457-current-acceptance-20260730.json", "ticket": "ISSUE-457-CURRENT-ACCEPTANCE", "ts": "2026-07-30T20:11:53.577211+00:00", "verdict": "ISSUE_457_ACCEPTANCE_PASS"}
+{"claim_fields": {"claim_boundary": "{\"full_training_claim\":false,\"model_capability_claim\":false,\"new_gpu_run\":false,\"private_checkpoint_replay\":false,\"what…"}, "issue": "wordingone/ember#580", "path": "receipts/issue-580-pr-b-retro-audit-20260730.json", "ticket": "ISSUE-580-PR-B-RETRO-AUDIT", "ts": "2026-07-30T19:31:56.5714200Z", "verdict": "PR_B_SOURCE_AND_CUSTODY_CURE_READY_FOR_INDEPENDENT_REVIEW"}
+{"claim_fields": {"claim_boundary": "Historical umbrella custody is conserved without reconstructing missing wording. Current D-row, roadmap, corpus, traini…"}, "issue": "35", "path": "receipts/issue35/issue-35-terminal-conservation-v1.json", "ticket": "ISSUE35-TERMINAL-CONSERVATION", "ts": "2026-08-10T05:05:00Z", "verdict": "PASS_FOR_TERMINAL_ZERO_CREDIT"}
 {"pass": true, "path": "receipts/joules-selftest-20260705T024616Z.json", "ticket": "JOULES-SELFTEST", "ts": "20260705T024616Z"}
 {"pass": true, "path": "receipts/joules-selftest-20260705T031506Z.json", "ticket": "JOULES-SELFTEST", "ts": "20260705T031506Z"}
 {"issue": "349", "path": "receipts/launch-efficiency-20260612T220622Z.json", "ticket": "V0-LAUNCH-EFFICIENCY", "ts": "20260612T220622Z"}
 {"issue": "349", "path": "receipts/launch-efficiency-20260613T015000Z.json", "ticket": "V0-LAUNCH-EFFICIENCY", "ts": "20260613T015000Z"}
 {"issue": "349", "path": "receipts/launch-efficiency-20260706T131425Z.json", "ticket": "V0-LAUNCH-EFFICIENCY", "ts": "20260706T131425Z"}
+{"claim_fields": {"claim_boundary": "{\"checkpoint_or_capability_claim\":false,\"gpu_claim\":false,\"historical_metrics_or_verdict_reexecuted\":false,\"historical_…"}, "path": "receipts/legb-scorer/legb-scorer-evaluator-run-20260711T000900Z-c-inv-supersession-20260802T015004Z.json", "ticket": "LEGB-757-INPROCESS-SCORER-EVALUATOR-RUN", "ts": "20260802T015004Z", "verdict": "C_INV_BATCH_SUPERSESSION_GIT_LINEAGE_AND_BYTE_IDENTITY_VERIFIED"}
 {"path": "receipts/legb-scorer/legb-scorer-evaluator-run-20260711T000900Z.json", "ticket": "LEGB-757-INPROCESS-SCORER-EVALUATOR-RUN", "ts": "20260711T071041Z"}
+{"claim_fields": {"claim_boundary": "{\"checkpoint_or_capability_claim\":false,\"gpu_claim\":false,\"historical_metrics_or_verdict_reexecuted\":false,\"historical_…"}, "path": "receipts/legb-scorer/legb-scorer-evaluator-run-arc-full-20260711T080900Z-c-inv-supersession-20260802T015004Z.json", "ticket": "LEGB-757-INPROCESS-SCORER-EVALUATOR-RUN", "ts": "20260802T015004Z", "verdict": "C_INV_BATCH_SUPERSESSION_GIT_LINEAGE_AND_BYTE_IDENTITY_VERIFIED"}
 {"path": "receipts/legb-scorer/legb-scorer-evaluator-run-arc-full-20260711T080900Z.json", "ticket": "LEGB-757-INPROCESS-SCORER-EVALUATOR-RUN", "ts": "20260711T080900Z"}
+{"claim_fields": {"claim_boundary": "{\"checkpoint_or_capability_claim\":false,\"gpu_claim\":false,\"historical_metrics_or_verdict_reexecuted\":false,\"historical_…"}, "path": "receipts/legb-scorer/legb-scorer-evaluator-run-hella-full-20260711T095448Z-c-inv-supersession-20260802T015004Z.json", "ticket": "LEGB-757-INPROCESS-SCORER-EVALUATOR-RUN", "ts": "20260802T015004Z", "verdict": "C_INV_BATCH_SUPERSESSION_GIT_LINEAGE_AND_BYTE_IDENTITY_VERIFIED"}
 {"path": "receipts/legb-scorer/legb-scorer-evaluator-run-hella-full-20260711T095448Z.json", "ticket": "LEGB-757-INPROCESS-SCORER-EVALUATOR-RUN", "ts": "20260711T095448Z"}
+{"claim_fields": {"claim_boundary": "{\"checkpoint_or_capability_claim\":false,\"gpu_claim\":false,\"historical_metrics_or_verdict_reexecuted\":false,\"historical_…"}, "path": "receipts/legb-scorer/legb-scorer-live-cpu-doc-step50-20260711T070900Z-c-inv-supersession-20260802T015004Z.json", "ticket": "LEGB-757-INPROCESS-SCORER-LIVE-CPU-DOC", "ts": "20260802T015004Z", "verdict": "C_INV_BATCH_SUPERSESSION_GIT_LINEAGE_AND_BYTE_IDENTITY_VERIFIED"}
 {"path": "receipts/legb-scorer/legb-scorer-live-cpu-doc-step50-20260711T070900Z.json", "ticket": "LEGB-757-INPROCESS-SCORER-LIVE-CPU-DOC", "ts": "20260711T071229Z"}
 {"claim_fields": {"claim_limits": "[\"No ref/worktree deletion occurred.\",\"No issue closure or capability, training, checkpoint, or model claim follows.\"]"}, "path": "receipts/lifecycle-census/ember-inherited-drawdown-002-execution-v1.json"}
 {"claim_fields": {"claim_limits": "[\"No ref/worktree deletion occurred.\",\"No issue closure or capability, training, checkpoint, or model claim follows.\"]"}, "path": "receipts/lifecycle-census/ember-inherited-drawdown-002-execution-v2.json"}
@@ -714,9 +795,15 @@
 {"path": "receipts/muon-ab-retry-20260705/muon-ab-smallfoot-retry-20260705T233603Z.json", "ticket": "MUON_FUSED_AB_SMALLFOOT_RETRY"}
 {"path": "receipts/native-smoke-20260610T230236Z.json", "verdict": "NATIVE_SMOKE_PASS"}
 {"path": "receipts/native-smoke-20260610T230645Z.json", "verdict": "NATIVE_SMOKE_PASS"}
+{"path": "receipts/nativization-motion/nm-20260807T014339Z.json", "ticket": "S5-NATIVIZATION-MOTION", "ts": "2026-08-07T04:11:25Z"}
+{"path": "receipts/nativization-motion/nm-20260807T051659Z.json", "ticket": "S5-NATIVIZATION-MOTION", "ts": "2026-08-07T05:16:59Z"}
+{"path": "receipts/nativization-motion/nm-20260807T060000Z.json", "ticket": "S5-NATIVIZATION-MOTION", "ts": "2026-08-07T05:52:44Z"}
+{"path": "receipts/nativization-motion/nm-20260807T060100Z.json", "ticket": "S5-NATIVIZATION-MOTION", "ts": "2026-08-07T05:54:41Z"}
 {"path": "receipts/nck-e2e-proof-20260612T134413Z.json", "ticket": "NCK-E2E-PROOF", "ts": "20260612T134413Z"}
 {"path": "receipts/nck-e2e-proof-20260612T142318Z.json", "ticket": "NCK-E2E-PROOF", "ts": "20260612T142318Z"}
 {"issue": "298", "path": "receipts/none-arm-298-20260612T174042Z.json", "ticket": "NONE-ARM-298", "ts": "20260612T174042Z"}
+{"path": "receipts/ns-chain-roofline-4090-20260623T165615Z.authority.json", "ticket": "1385", "ts": "2026-08-10T01:00:00Z"}
+{"claim_fields": {"claims_vs_measured": "{\"H1024_empirical_verdict\":{\"achieved_bytes_per_s\":108442322702.0,\"achieved_tflops\":21.6476,\"analytical_bound\":\"COMPUTE…"}, "path": "receipts/ns-chain-roofline-4090-20260623T165615Z.json", "ticket": "NS-CHAIN-ROOFLINE-4090", "ts": "20260623T165615Z"}
 {"path": "receipts/owned-core-widen-selftest-20260705T104739Z.json", "ticket": "OWNED-CORE-WIDEN-SELFTEST", "ts": "2026-07-05T10:47:39.546790+00:00Z", "verdict": "OWNED_CORE_WIDEN_SELFTEST_PASS"}
 {"path": "receipts/p-gate-114-post-assembled-20260611T064723Z.json", "ticket": "P-GATE-114-ASSEMBLED", "ts": "20260611T064721Z"}
 {"path": "receipts/p-gate-114-pre-assembled-20260611T064723Z.json", "ticket": "P-GATE-114-ASSEMBLED", "ts": "20260611T064719Z"}
@@ -737,6 +824,7 @@
 {"issue": "207", "path": "receipts/p5-ratio-audit-dryrun-20260706T182854Z.json", "ticket": "P5-RATIO-AUDIT", "ts": "20260706T182854Z"}
 {"issue": "207", "path": "receipts/p5-ratio-audit-dryrun-20260709T035824Z.json", "ticket": "P5-RATIO-AUDIT", "ts": "20260709T035824Z"}
 {"claim_fields": {"kill_condition_evaluation": "{\"kill_lr_muon_wrong (==0.015)\":false,\"kill_old_resolver_nonzero (rms>=1e-6)\":false,\"killed\":false}", "pre_registered_kill_conditions_verbatim": "KILL: U_k-consumed buffer rms >= 1e-6 under the old resolver, or lr_muon = 0.015 in the resolved cfg."}, "issue": "513", "path": "receipts/p513-p3-forensic-20260709T041108Z.json", "ticket": "P513-P3-FORENSIC", "ts": "2026-07-09T04:11:08.829633+00:00", "verdict": "PASS_NOT_KILLED"}
+{"claim_fields": {"claim_boundary": "{\"checkpoint_or_capability_claim\":false,\"gpu_claim\":false,\"historical_metrics_or_verdict_reexecuted\":false,\"historical_…"}, "path": "receipts/p513-p3-forensic-20260710T170210Z-erratum-c-inv-supersession-20260802T015004Z.json", "ticket": "P513-P3-FORENSIC-ERRATUM", "ts": "20260802T015004Z", "verdict": "C_INV_BATCH_SUPERSESSION_GIT_LINEAGE_AND_BYTE_IDENTITY_VERIFIED"}
 {"path": "receipts/p513-p3-forensic-20260710T170210Z-erratum.json", "ticket": "P513-P3-FORENSIC-ERRATUM", "ts": "2026-07-10T17:31:00.000000+00:00", "verdict": "ERRATUM_FILED_CORRECTED_RECEIPT_UNCHANGED"}
 {"claim_fields": {"kill_condition_evaluation": "{\"kill_lr_muon_wrong (==0.015)\":false,\"kill_old_resolver_nonzero (rms>=1e-6)\":false,\"killed\":false}", "pre_registered_kill_conditions_verbatim": "KILL: U_k-consumed buffer rms >= 1e-6 under the old resolver, or lr_muon = 0.015 in the resolved cfg."}, "issue": "513", "path": "receipts/p513-p3-forensic-20260710T170210Z.json", "ticket": "P513-P3-FORENSIC", "ts": "2026-07-10T17:02:10.520072+00:00", "verdict": "PASS_NOT_KILLED"}
 {"issue": "513", "path": "receipts/planned-outage-513-b4rerun.json", "ticket": "CBASE-GROW-RUNG2-EVENT-PLANNED-OUTAGE-MARKER", "ts": "2026-07-09T05:38:22.482170+00:00", "verdict": "SUPERSEDED_BY_UNKNOWN_SUPERVISOR_AUTORESTART"}
@@ -753,7 +841,9 @@
 {"path": "receipts/probe-meminfo-20260610T043457Z.json", "ticket": "NC0-r1-diag", "verdict": "H-B: mem_get_info sane idle -> step-0 transient"}
 {"path": "receipts/process-visibility/process-visibility-20260709T094500Z.json", "ticket": "EMBER-PROCESS-VISIBILITY", "ts": "20260709T094500Z"}
 {"path": "receipts/process-visibility/process-visibility-20260709T124202Z.json", "ticket": "EMBER-PROCESS-VISIBILITY", "ts": "20260709T124202Z"}
+{"path": "receipts/process-visibility/process-visibility-20260801T220214Z.json", "ticket": "EMBER-PROCESS-VISIBILITY", "ts": "20260801T220214Z"}
 {"path": "receipts/proof-frontier-protocol-20260702T065351Z.json", "ticket": "PROOF-FRONTIER-PROJECTION", "ts": "20260702T065351Z", "verdict": "PASS"}
+{"claim_fields": {"claim": "math-core-v1.md #6 growth operator: FP-exact depthwise growth step G exists (zero-init residual graft) and the grown mo…"}, "pass": true, "path": "receipts/proof-growth-identity-20260702T064211Z.json", "ticket": "PROOF-GROWTH-IDENTITY", "ts": "2026-07-02T06:42:11Z"}
 {"path": "receipts/proof-ocal-sweep-20260702T094209Z.json", "ticket": "OCAL-1-WITNESS-SWEEP", "ts": "20260702T094209Z", "verdict": "PASS"}
 {"claim_fields": {"claim": "math-core-v1.md #5 BOOTSTRAP_PASS thresholds are non-degenerate: a pass region exists, adjacent regions fail (on the bi…"}, "pass": true, "path": "receipts/proof-threshold-sweep-20260702T065226Z.json"}
 {"path": "receipts/proxy-speedrun-baseline-20260612T054435Z.json", "ticket": "PROXY_SPEEDRUN_BASELINE", "ts": "20260612T054435Z"}
@@ -810,6 +900,7 @@
 {"path": "receipts/spend-annex/spend-annex-20260709T133843Z.json", "verdict": "PASS"}
 {"path": "receipts/spend-annex/spend-annex-20260709T232435Z.json", "verdict": "PASS"}
 {"path": "receipts/spend-annex/spend-annex-20260710T011551Z.json", "verdict": "PASS"}
+{"path": "receipts/spend-annex/spend-annex-20260731T171420Z.json", "ticket": "ISSUE-586-SPEND-ANNEX-ROUND4", "ts": "2026-07-31T17:26:31Z", "verdict": "PASS"}
 {"path": "receipts/t0-preflight.json", "ticket": "NC0-T0", "ts": "2026-06-09T22:28:22.997093+00:00"}
 {"path": "receipts/t1-selftest-20260609T223350Z.json", "ticket": "NC0-T1", "ts": "20260609T223350Z"}
 {"path": "receipts/t1-selftest-20260609T223420Z.json", "ticket": "NC0-T1", "ts": "20260609T223420Z"}

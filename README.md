@@ -6,7 +6,7 @@ borrowed_lineage=frozen_reference_only
 mechanism_erasure=forbidden
 -->
 
-<!-- state-as-of: 2026-08-01 -->
+<!-- state-as-of: 2026-08-09 -->
 
 # Ember
 
@@ -60,7 +60,7 @@ independently installed.
 maintainer-operator constitutional interview; the totality board was
 honestly **reset** under stricter probes rather than carried forward from the
 pre-refound era. The counts above will not resemble the prior 29-GREEN board
-and are not a regression — that record is archive only (`docs/goal-archive.md`),
+and are not a regression — that record is archive only (`docs/archive/goal/goal-archive.md`),
 describing a goal document and a probe set that no longer exist. Read the
 counts above as the honest starting line under the current constitution, not
 as a drop from a prior score.
