@@ -11,6 +11,7 @@ Status: CURRENT
 Issue: #1475 (operator directive 2026-08-05)
 
 Consumer: `tools/ember-cli/src/services/process-select.ts`
+Consumer: `tools/ember-cli/src/components/start-parameters.ts`
 
 ## Operator mandate this node implements
 
