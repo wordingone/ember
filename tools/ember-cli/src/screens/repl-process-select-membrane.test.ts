@@ -28,7 +28,8 @@ import { TerminalSizeContext } from "../ink/components.ts";
 import { startStdinBridge } from "../ink/stdin-bridge.ts";
 import { resetCommandRegistryForTests, setCommandRegistryDeps } from "../command-registry.ts";
 import { startTelemetryWatch } from "../services/telemetry-watch.ts";
-import { createTrainCommand } from "../commands/train.ts";
+import { createTrainCommand, outstandingTrainOfferForSession } from "../commands/train.ts";
+import { buildProcessOptions, startActivation } from "../services/process-select.ts";
 import type { CommandContext, RegistryCommand } from "../types/command-types.ts";
 import { ReplScreen } from "./repl.ts";
 
@@ -222,8 +223,8 @@ describe("#1475 START dispatch rides the single execution spine", () => {
   }, 25000);
 });
 
-describe("#1475 the /train confirm-only membrane is preserved through START", () => {
-  test("unarmed refuses; armed mints; confirm dialog cancels cleanly then spends one offer with one receipt", async () => {
+describe("#1488 the /train confirm-only membrane is preserved through START", () => {
+  test("click-only SELECT -> START -> CONFIRM spends the exact single-use offer", async () => {
     resetCommandRegistryForTests();
     startTelemetryWatch().stop();
 
@@ -293,39 +294,16 @@ describe("#1475 the /train confirm-only membrane is preserved through START", ()
       expect(lines.some((line) => line.includes("START PARAMETERS"))).toBe(false);
       expect(lines.some((line) => line.includes("OFFER train-"))).toBe(true);
       expect(lines.some((line) => line.includes("/train confirm"))).toBe(true);
-      let confirmAt = findGlyph(lines, "[CONFIRM START]");
+      const confirmAt = findGlyph(lines, "[CONFIRM START]");
       expect(confirmAt).toBeDefined();
 
       // Second START — the explicit confirm act: the consumer runs exactly once, with the
       // offer's own resolved artifact paths, and the preflight is NEVER re-run on confirm.
       click(m, { col: confirmAt!.col + 1, row: confirmAt!.row });
-      lines = await waitLines(m, (l) => l.some((line) => line.includes("START PARAMETERS")));
-      expect(preflightCalls).toHaveLength(1);
-      expect(consumerCalls).toHaveLength(0);
-      expect(operatorReceiptEvents.filter((row) => row.event === "start_parameters_confirmed")).toHaveLength(0);
-
-      const cancelAt = findGlyph(lines, "CANCEL");
-      expect(cancelAt).toBeDefined();
-      click(m, { col: cancelAt!.col + 1, row: cancelAt!.row });
-      lines = await waitLines(m, (l) =>
-        !l.some((line) => line.includes("START PARAMETERS")) &&
-        l.some((line) => line.includes("[CONFIRM START]")));
-      expect(preflightCalls).toHaveLength(1);
-      expect(consumerCalls).toHaveLength(0);
-      expect(operatorReceiptEvents.filter((row) => row.event === "start_parameters_confirmed")).toHaveLength(0);
-
-      confirmAt = findGlyph(lines, "[CONFIRM START]");
-      expect(confirmAt).toBeDefined();
-      click(m, { col: confirmAt!.col + 1, row: confirmAt!.row });
-      lines = await waitLines(m, (l) => l.some((line) => line.includes("START PARAMETERS")));
-      const dialogAt = findGlyph(lines, "START PARAMETERS");
-      expect(dialogAt).toBeDefined();
-      const submitAt = findGlyphFrom(lines, "CONFIRM", dialogAt!.row + 1, 0);
-      expect(submitAt).toBeDefined();
-      click(m, { col: submitAt!.col + 1, row: submitAt!.row });
       lines = await waitLines(m, (l) =>
         l.some((line) => line.includes("certified bounded canary process completed.")));
       expect(lines.some((line) => line.includes("certified bounded canary process completed."))).toBe(true);
+      expect(lines.some((line) => line.includes("START PARAMETERS"))).toBe(false);
       expect(consumerCalls).toHaveLength(1);
       expect(consumerCalls[0]!.slice(1)).toEqual([
         "--root", artifactDir,
@@ -334,10 +312,7 @@ describe("#1475 the /train confirm-only membrane is preserved through START", ()
         "--run-spec", runSpecPath,
       ]);
       expect(preflightCalls).toHaveLength(1);
-      expect(operatorReceiptEvents.filter((row) => row.event === "start_parameters_confirmed")).toEqual([{
-        event: "start_parameters_confirmed",
-        detail: JSON.stringify({ dataSize: 1, steps: 100, timeBudgetMinutes: 30 }),
-      }]);
+      expect(operatorReceiptEvents.filter((row) => row.event === "start_parameters_confirmed")).toHaveLength(0);
 
       // The offer/refusal text remains visible after the confirm, and the spent offer disarms
       // the confirm stage — START is back to its armed label, never a stale confirm button.
@@ -352,4 +327,80 @@ describe("#1475 the /train confirm-only membrane is preserved through START", ()
       await rm(artifactDir, { recursive: true, force: true }).catch(() => {});
     }
   }, 25000);
+
+  test("one render-captured CONFIRM activation is single-use", async () => {
+    const artifactDir = await mkdtemp(join(tmpdir(), "psm-train-repeat-"));
+    const certificatePath = join(artifactDir, "certificate.json");
+    const ledgerPath = join(artifactDir, "declaration-ledger.jsonl");
+    const runSpecPath = join(artifactDir, "run-spec.json");
+    await Promise.all([
+      writeFile(certificatePath, `${JSON.stringify({ kind: "certificate" })}\n`),
+      writeFile(ledgerPath, `${JSON.stringify({ kind: "declaration" })}\n`),
+      writeFile(runSpecPath, `${JSON.stringify({ kind: "run-spec" })}\n`),
+    ]);
+
+    const preflightCalls: string[][] = [];
+    const consumerCalls: string[][] = [];
+    const trainCmd = createTrainCommand({
+      runLaunchPacket: (_executable, args) => {
+        preflightCalls.push(args);
+        return {
+          status: 0,
+          stdout: `${JSON.stringify({
+            record: "launch-packet-summary",
+            overall_ready: true,
+            named_ember02_command: { command: "python run_vertical_slice.py --config c.json" },
+          })}\n`,
+        };
+      },
+      runCertifiedLaunch: (_executable, args) => {
+        consumerCalls.push(args);
+        return {
+          status: 0,
+          stdout: `${JSON.stringify({ execution_receipt: "receipt-psm-repeat", artifact_root: "artifacts/psm-repeat" })}\n`,
+        };
+      },
+      repoRoot: artifactDir,
+      pythonBin: "python-never-spawned",
+      certificatePath,
+      declarationLedgerPath: ledgerPath,
+      runSpecPath,
+    });
+    const ctx: CommandContext = {
+      sessionId: "issue1488-repeat",
+      mode: "interactive",
+      cwd: artifactDir,
+    };
+
+    try {
+      await trainCmd.execute("", ctx);
+      const offer = outstandingTrainOfferForSession(ctx.sessionId);
+      expect(offer).toBeDefined();
+      const selected = buildProcessOptions([trainCmd])[0];
+      expect(selected).toBeDefined();
+
+      // This is the exact activation captured by the rendered CONFIRM button. Reusing that
+      // same captured click context must hit the membrane's spent-offer refusal, never a
+      // newly inferred START action.
+      const captured = startActivation(selected, { process: "train", offerId: offer!.offerId });
+      expect(captured).toEqual({ kind: "dispatch", text: `/train confirm ${offer!.offerId}` });
+      if (captured.kind !== "dispatch") throw new Error("expected captured train confirmation");
+      const args = captured.text.slice("/train ".length);
+      const first = await trainCmd.execute(args, ctx);
+      const second = await trainCmd.execute(args, ctx);
+
+      expect(first?.message).toContain("certified bounded canary process completed");
+      expect(second?.message).toContain("no outstanding train-launch offer");
+      expect(preflightCalls).toHaveLength(1);
+      expect(consumerCalls).toHaveLength(1);
+      expect(consumerCalls[0]!.slice(1)).toEqual([
+        "--root", artifactDir,
+        "--certificate", certificatePath,
+        "--declaration-ledger", ledgerPath,
+        "--run-spec", runSpecPath,
+      ]);
+    } finally {
+      await rm(artifactDir, { recursive: true, force: true }).catch(() => {});
+    }
+  });
 });
