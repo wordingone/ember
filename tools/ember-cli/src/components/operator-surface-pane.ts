@@ -3,6 +3,7 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import React from "react";
 import { Box, Text } from "../ink/components.ts";
+import { StartParametersDialog } from "./start-parameters.ts";
 import {
   ACTIVE_RUN_TTL_MS,
   type TelemetryEvent,
@@ -721,6 +722,12 @@ export function buildOperatorSurfaceSnapshot({
 }
 
 export interface OperatorSurfacePaneProps extends OperatorSurfaceInput {
+  startDialogOpen?: boolean;
+  onStartParameters?: (parameters: import("./start-parameters.ts").StartParameters) => void;
+  onStartOpen?: () => void;
+  startDialogParameters?: import("./start-parameters.ts").StartParameters;
+  onStartEdit?: (field: import("./start-parameters.ts").StartParameters extends infer T ? keyof T : never, value: number) => void;
+  onStartCancel?: () => void;
   onControl?: (action: OperatorControlAction, runId?: string) => void;
   width?: number;
   hoveredControl?: OperatorControlAction;
@@ -1119,6 +1126,12 @@ export function OperatorSurfacePane({
   activityScrollOffset = 0,
   onActivityScroll,
   onControl,
+  onStartParameters,
+  onStartOpen,
+  startDialogParameters,
+  onStartEdit,
+  startDialogOpen = false,
+  onStartCancel,
   focusedControlIndex,
   disabledActionReason,
   commands,
@@ -1203,13 +1216,22 @@ export function OperatorSurfacePane({
     // confirm act and the button says so.
     const highlighted = isStart && startControlStage !== "unarmed";
     const startColor = startControlStage === "confirm" ? "yellow" : startControlStage === "armed" ? "green" : "gray";
+    const onStartClick = isStart
+      ? () => {
+          if (!enabled || startControlStage !== "confirm") {
+            onControl?.(action, selectedControlRunId);
+            return;
+          }
+          onStartOpen?.();
+        }
+      : undefined;
     return React.createElement(
       Box,
       {
         key: `control-${action}`,
         flexShrink: 0,
         paddingRight: 1,
-        onClick: clickable ? () => onControl?.(action, selectedControlRunId) : undefined,
+        onClick: clickable ? (onStartClick ?? (() => onControl?.(action, selectedControlRunId))) : undefined,
         onMouseEnter: clickable ? () => onControlHover?.(action) : undefined,
         onMouseLeave: clickable ? () => onControlHover?.(undefined) : undefined,
       },
@@ -1450,6 +1472,13 @@ export function OperatorSurfacePane({
     selectButtonElement,
     menuElement,
     controlsElement,
+    onStartParameters && startDialogOpen ? React.createElement(StartParametersDialog, {
+      key: "start-dialog",
+      initial: startDialogParameters,
+      onEdit: onStartEdit,
+      onConfirm: onStartParameters,
+      onCancel: onStartCancel ?? (() => {}),
+    }) : null,
     commandBarElement,
     ...disabledReasonLines.map((line) => React.createElement(Box, { key: `disabled-reason-${line}`, height: 1, flexShrink: 0 }, React.createElement(Text, { color: "yellow", wrap: "truncate-end" }, line))),
     ...compactMetrics.map((metric) => React.createElement(Box, { key: metric, height: 1, flexShrink: 0 }, React.createElement(Text, { wrap: "truncate-end" }, metric))),

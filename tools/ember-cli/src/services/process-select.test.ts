@@ -5,6 +5,8 @@
 // services/process-select.test.ts — the pure half of #1475: the registry split that feeds the
 // SELECT PROCESS dropdown, the START stage machine, and the activation START dispatches.
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { RegistryCommand } from "../types/command-types.ts";
 import { commandButtonActivation, buildCommandButtons } from "./command-buttons.ts";
 import {
@@ -20,6 +22,20 @@ import {
   subordinateCommands,
   START_NEEDS_SELECTION_REASON,
 } from "./process-select.ts";
+
+const PROCESS_SELECT_DOC = join(import.meta.dir, "../../specs/process-select-run-control.md");
+
+test("#1298 operator doc names the keyboard START path and its real regression", () => {
+  const doc = readFileSync(PROCESS_SELECT_DOC, "utf8");
+  expect(doc).toContain("Consumer: `tools/ember-cli/src/services/process-select.ts`");
+  expect(doc).toContain("Consumer: `tools/ember-cli/src/components/start-parameters.ts`");
+  expect(doc).toContain("Keyboard path and workaround");
+  expect(doc).toContain("Tab");
+  expect(doc).toContain("Enter or Space");
+  expect(doc).toContain("/train confirm <offerId>");
+  expect(doc).toContain("src/screens/repl-process-select-membrane.test.ts");
+  expect(doc).toContain("click-START and typed /name invoke the SAME registered handler");
+});
 
 function cmd(name: string, overrides: Partial<RegistryCommand> = {}): RegistryCommand {
   return {

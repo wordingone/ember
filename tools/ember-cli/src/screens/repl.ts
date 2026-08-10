@@ -114,6 +114,7 @@ import {
   createOperatorReceiptWriter,
   type OperatorReceiptWriter,
 } from "../services/operator-receipts.ts";
+import { clampStartParameters, DEFAULT_START_PARAMETERS, type StartParameters } from "../components/start-parameters.ts";
 import {
   createLivenessHeartbeatWriter,
   readHeartbeatRow,
@@ -230,6 +231,7 @@ export interface ReplScreenProps {
   ideIntegration?: { context?: string };
   outputStyles?:   { activeStylePrompt?: string };
   session?:        unknown;
+  operatorReceiptWriter?: OperatorReceiptWriter;
   onExit?:         () => void;
 }
 
@@ -684,6 +686,7 @@ export function ReplScreen({
   ideIntegration,
   outputStyles,
   session:        _session,
+  operatorReceiptWriter,
   onExit:         _onExit,
 }: ReplScreenProps): React.ReactElement {
   const { rows: terminalRows, columns: terminalCols } = useContext(TerminalSizeContext);
@@ -755,6 +758,8 @@ export function ReplScreen({
   const [hoveredControl, setHoveredControl] = useState<OperatorControlAction | undefined>(undefined);
   const [activityScrollOffset, setActivityScrollOffset] = useState(0);
   const [controlDisabledReason, setControlDisabledReason] = useState<string | undefined>(undefined);
+  const [startDialogOpen, setStartDialogOpen] = useState(false);
+  const [startDialogParameters, setStartDialogParameters] = useState<StartParameters>({ ...DEFAULT_START_PARAMETERS });
 
   // #1475: click-first SELECT PROCESS run control. The selection is the START control's arming
   // state; the open/page/hover values are pure dropdown presentation. Like the command bar, the
@@ -828,7 +833,7 @@ export function ReplScreen({
   // mounted session.
   const operatorReceiptsRef = useRef<OperatorReceiptWriter | null>(null);
   if (!operatorReceiptsRef.current) {
-    operatorReceiptsRef.current = createOperatorReceiptWriter();
+    operatorReceiptsRef.current = operatorReceiptWriter ?? createOperatorReceiptWriter();
   }
 
   // #413: cockpit liveness heartbeat -- written every second by the unconditional tick below.
@@ -1921,6 +1926,19 @@ export function ReplScreen({
   // disabled command) surfaces its named reason on the controls' own reason row. Assigned every
   // render so the closure always sees the LIVE selection/offer (see activateStartRef's
   // declaration next to handleOperatorControl).
+  const dispatchStartParameters = (parameters: StartParameters): void => {
+    const selected = processOptions.find((option) => option.name === selectedProcess);
+    const activation = startActivation(selected, processOffer);
+    if (activation.kind === "rejected") {
+      setControlDisabledReason(activation.reason);
+      return;
+    }
+    setControlDisabledReason(undefined);
+    operatorReceiptsRef.current?.append("start_parameters_confirmed", JSON.stringify(parameters));
+    setStartDialogOpen(false);
+    handleCommandButton(activation);
+  };
+
   activateStartRef.current = () => {
     const selected = processOptions.find((option) => option.name === selectedProcess);
     const activation = startActivation(selected, processOffer);
@@ -1929,6 +1947,11 @@ export function ReplScreen({
       return;
     }
     setControlDisabledReason(undefined);
+    if (processOffer !== undefined && processOffer.process === selectedProcess) {
+      setStartDialogParameters({ ...DEFAULT_START_PARAMETERS });
+      setStartDialogOpen(true);
+      return;
+    }
     handleCommandButton(activation);
   };
 
@@ -2036,6 +2059,12 @@ export function ReplScreen({
       terminalColumns: terminalCols,
       terminalRows,
       onControl: handleOperatorControl,
+      onStartParameters: dispatchStartParameters,
+      onStartOpen: () => activateStartRef.current(),
+      startDialogParameters,
+      onStartEdit: (field, value) => setStartDialogParameters((current) => clampStartParameters({ ...current, [field]: value })),
+      startDialogOpen,
+      onStartCancel: () => { setStartDialogOpen(false); setControlDisabledReason(undefined); },
       focusedControlIndex: paneFocused ? focusedControlIndex : undefined,
       disabledActionReason: controlDisabledReason,
       hoveredControl,
