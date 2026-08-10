@@ -20,7 +20,7 @@ import type { CognitiveMode } from "../cognitive-mode.ts";
 import { modeGlyph as cognitiveGlyph } from "../cognitive-mode.ts";
 import { telemetryMemoKey } from "../services/telemetry-label.ts";
 import type { TelemetryState } from "../services/telemetry-watch.ts";
-import type { ModelSeatState } from "../entrypoints/model-seat.ts";
+import { normalizeModelSeatState, type ModelSeatState } from "../entrypoints/model-seat.ts";
 
 // ---------------------------------------------------------------------------
 // Public constants (preserve exactly)
@@ -403,14 +403,13 @@ export function formatModelMetrics(m: ModelMetrics): string {
 }
 
 /** Deterministic operator-facing model-seat state.  A selected owner label may
- * be shown while ABSENT/LOADING; endpoint and VRAM are disclosed only from the
- * existing Ember Lab resident projection (or as explicit unknown VRAM). */
+ * be shown while ABSENT/LOADING; RESIDENT is disclosed only with the complete
+ * owner/endpoint/VRAM projection from the existing Ember Lab authority. */
 export function formatModelSeatState(state: ModelSeatState): string {
-  const phase = state.phase.toLowerCase();
-  const owner = state.owner ? ` owner=${state.owner}` : "";
-  const vram = state.vramBytes != null
-    ? ` vram=${state.vramBytes}`
-    : state.phase === "RESIDENT" ? " vram=unknown" : "";
+  const admitted = normalizeModelSeatState(state);
+  const phase = admitted.phase.toLowerCase();
+  const owner = admitted.owner ? ` owner=${admitted.owner}` : "";
+  const vram = admitted.phase === "RESIDENT" ? ` vram=${admitted.vramBytes}` : "";
   return `model seat ${phase}${owner}${vram}`;
 }
 

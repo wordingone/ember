@@ -100,7 +100,8 @@ describe("#1361 production lazy model-seat contract", () => {
     const text = await source(STATUS_BAR);
     expect(text).toMatch(/ModelSeatState|SeatPhase|ABSENT|LOADING|RESIDENT/);
     expect(text).toMatch(/owner|vramBytes|vr[aA][mM]/);
-    expect(text).toMatch(/vram=unknown/);
+    expect(text).not.toMatch(/vram=unknown/);
+    expect(text).toMatch(/normalizeModelSeatState/);
     expect(text).toMatch(/const modelSeatText = modelSeat != null/);
   });
 
@@ -141,6 +142,23 @@ describe("#1361 production lazy model-seat contract", () => {
     ]);
     expect(states[1]?.endpoint).toBe("http://127.0.0.1:1");
     expect(states[1]?.vramBytes).toBe(456_789);
+  });
+
+  test("first interaction never publishes RESIDENT without bound VRAM", async () => {
+    const states: string[] = [];
+    const lazy = buildLazyOwnedCallModel(
+      { serverUrl: "", nCtx: 4096, modelCapabilities: null, servedModelConfigSha256: null },
+      async () => ({
+        endpoint: "http://127.0.0.1:1",
+        owner: "ember-owned:missing-vram",
+      }) as never,
+      (state) => { states.push(state.phase); },
+      "ember-owned:missing-vram",
+    );
+
+    await expect(lazy.callModel({} as never)).rejects.toThrow("VRAM measurement");
+    expect(states).toEqual(["LOADING", "ABSENT"]);
+    expect(getModelSeatState().phase).toBe("ABSENT");
   });
 
   test("concurrent first interactions share one governed handoff", async () => {

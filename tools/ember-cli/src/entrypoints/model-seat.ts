@@ -10,11 +10,25 @@ export type ModelSeat = "OWNED_ADMITTED" | "OWNED_DEVELOPMENT" | "REFERENCE_ONLY
  * model-seat authority, not a second launcher or ownership registry. */
 export type ModelSeatPhase = "ABSENT" | "LOADING" | "RESIDENT";
 
-export interface ModelSeatState {
-  phase: ModelSeatPhase;
-  owner?: string;
-  vramBytes?: number;
-  endpoint?: string;
+export type ModelSeatState =
+  | { phase: "ABSENT"; owner?: string; endpoint?: never; vramBytes?: never }
+  | { phase: "LOADING"; owner?: string; endpoint?: never; vramBytes?: never }
+  | { phase: "RESIDENT"; owner: string; endpoint: string; vramBytes: number };
+
+/** Runtime fail-closed guard for stale or untyped cockpit state.  Internal
+ * callers get the discriminated-union guarantee above; this guard prevents a
+ * malformed external value from ever being displayed as resident. */
+export function normalizeModelSeatState(state: ModelSeatState): ModelSeatState {
+  if (state.phase !== "RESIDENT") return state;
+  if (
+    typeof state.owner === "string" && state.owner.trim() !== "" &&
+    typeof state.endpoint === "string" && state.endpoint.trim() !== "" &&
+    typeof state.vramBytes === "number" &&
+    Number.isSafeInteger(state.vramBytes) && state.vramBytes >= 0
+  ) {
+    return state;
+  }
+  return { phase: "ABSENT" };
 }
 
 interface OwnedServerLaunchBase {
