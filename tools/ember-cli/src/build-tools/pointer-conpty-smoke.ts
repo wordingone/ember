@@ -19,6 +19,7 @@ import {
   HIDE_CURSOR,
   SHOW_CURSOR,
 } from "../ink/termio.ts";
+import { requireNulFreeConptyOutput } from "./conpty-output-integrity.ts";
 
 const { Terminal } = xtermHeadless;
 const COLS = 100;
@@ -184,6 +185,7 @@ async function main(): Promise<void> {
     await sleep(300);
     await writes;
     const output = raw.join("");
+    const transportIntegrity = requireNulFreeConptyOutput(output);
     const readyAt = output.indexOf(READY_OSC);
     const negotiation = [ENTER_ALT_SCREEN, HIDE_CURSOR, ENABLE_MOUSE_TRACKING].map((sequence) => output.indexOf(sequence));
     if (negotiation.some((index) => index < 0 || index > readyAt)) throw new Error("mouse/viewport negotiation was not complete before readiness");
@@ -199,6 +201,7 @@ async function main(): Promise<void> {
       implementation_commit: implementationCommit,
       binary: { name: basename(binary), sha256: sha256File(binary) },
       transport: "windows-conpty/node-pty",
+      transport_integrity: transportIntegrity,
       geometry: { columns: COLS, rows: ROWS },
       negotiation: { alternate_screen: true, cursor_hidden: true, sgr_mouse_1003_1006: true },
       pointer: {
