@@ -98,6 +98,130 @@ class WaveSource:
             raise ValueError(f"{self.name}: est_tokens bounds must be positive and ordered")
 
 
+@dataclass(frozen=True)
+class ProseGapSource:
+    """One rule-based prose-gap row; estimates remain planning-only until receipted."""
+
+    name: str
+    domains: tuple
+    estimated_tokens_low_b: float
+    estimated_tokens_high_b: float
+    license_evidence: str
+    status: str = "candidate-unfetched"
+
+    def __post_init__(self) -> None:
+        if not self.name or not self.domains:
+            raise ValueError("prose-gap source requires a name and domain")
+        for domain in self.domains:
+            if domain not in CHARTER_DOMAINS or domain == "baseline":
+                raise ValueError(f"{self.name}: invalid prose-gap domain {domain!r}")
+        if self.estimated_tokens_low_b <= 0 or self.estimated_tokens_high_b < self.estimated_tokens_low_b:
+            raise ValueError(f"{self.name}: estimated token bounds must be positive and ordered")
+        if not self.license_evidence.strip():
+            raise ValueError(f"{self.name}: license evidence is required")
+        if self.status not in {"existing-receipted-pending-normalize", "unverified", "candidate-unfetched"}:
+            raise ValueError(f"{self.name}: unknown planning status {self.status!r}")
+
+
+@dataclass(frozen=True)
+class ProseGapPlan:
+    """Closed, deterministic, CPU-only planning projection for issue #1437."""
+
+    selection_policy: str
+    current_clean_prose_tokens_b: float
+    target_additional_tokens_b: float
+    domain_coverage: tuple
+    sources: tuple
+    baseline_basis: str
+    claim_boundary: str
+
+
+def build_prose_gap_plan() -> ProseGapPlan:
+    """Build the rule-based plan without fetching or executing any connector."""
+
+    sources = (
+        ProseGapSource(
+            name="arxiv-abstracts",
+            domains=("E", "I"),
+            estimated_tokens_low_b=0.405,
+            estimated_tokens_high_b=0.670,
+            license_evidence="arXiv per-paper license records in the existing L4 receipt",
+            status="existing-receipted-pending-normalize",
+        ),
+        ProseGapSource(
+            name="stackexchange-dumps",
+            domains=("D", "H", "K"),
+            estimated_tokens_low_b=0.9,
+            estimated_tokens_high_b=1.1,
+            license_evidence="Stack Exchange data-dump CC-BY-SA-4.0 terms",
+            status="unverified",
+        ),
+        ProseGapSource(
+            name="pubmed-abstracts-pre-2022",
+            domains=("E", "I", "J"),
+            estimated_tokens_low_b=0.2,
+            estimated_tokens_high_b=0.5,
+            license_evidence="NLM terms and PubMed source notice",
+        ),
+        ProseGapSource(
+            name="uspto-patents-public-domain",
+            domains=("D", "I", "K"),
+            estimated_tokens_low_b=0.3,
+            estimated_tokens_high_b=0.6,
+            license_evidence="USPTO public-domain publication terms",
+        ),
+        ProseGapSource(
+            name="europarl-un-multilingual",
+            domains=("B", "D", "K"),
+            estimated_tokens_low_b=0.2,
+            estimated_tokens_high_b=0.4,
+            license_evidence="EuroParl/UN open multilingual source terms",
+        ),
+        ProseGapSource(
+            name="gutenberg-expansion",
+            domains=("H", "K"),
+            estimated_tokens_low_b=0.3,
+            estimated_tokens_high_b=0.6,
+            license_evidence="Project Gutenberg public-domain item records",
+        ),
+    )
+    coverage = tuple(sorted(set(domains_covered()) & set("ABCDEFGHIJK")))
+    if coverage != tuple("ABCDEFGHIJK"):
+        raise ValueError("wave routing table does not cover every A-K charter domain")
+    return ProseGapPlan(
+        selection_policy="RULE_BASED",
+        current_clean_prose_tokens_b=1.253,
+        target_additional_tokens_b=1.67,
+        domain_coverage=coverage,
+        sources=sources,
+        baseline_basis="issue-1437 L3 audit dated 2026-08-04",
+        claim_boundary="PREP_ONLY; zero source is credited until canonical L4 receipt and deterministic import validation",
+    )
+
+
+def render_prose_gap_plan(plan: ProseGapPlan) -> str:
+    """Render the numbered plan; this function performs no I/O or fetching."""
+
+    lines = [
+        "# 1437 prose-gap plan (PREP_ONLY)",
+        "",
+        f"1. Current clean prose total: {plan.current_clean_prose_tokens_b:.3f}B planning tokens.",
+        f"2. Rule-based target addition: {plan.target_additional_tokens_b:.3f}B planning tokens.",
+        "3. Candidate additions require human provenance, license evidence, and a canonical connector receipt before credit.",
+        "4. Domain coverage is recomputed from the routed table before any governed import.",
+        "",
+        f"Selection policy: {plan.selection_policy}; no model-derived filter, rank, score, or language-ID step.",
+        f"Baseline: {plan.baseline_basis}.",
+        f"Claim boundary: {plan.claim_boundary}.",
+    ]
+    for source in plan.sources:
+        lines.append(
+            f"- {source.name}: {source.estimated_tokens_low_b:g}-{source.estimated_tokens_high_b:g}B; "
+            f"domains={','.join(source.domains)}; status={source.status}; license={source.license_evidence}."
+        )
+    return "\n".join(lines) + "\n"
+
+
 # Per-domain source table, transcribed from corpus-sizing-v1.md's "Wave-2
 # source list" (operator-directed 2026-08-04, REBOUND to
 # docs/ai-lab-corpus-charter.md). Only the sub-512MiB-per-fetch sources are
