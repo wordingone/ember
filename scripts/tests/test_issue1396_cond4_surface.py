@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import hashlib
 import os
@@ -236,3 +237,17 @@ def test_ci_enforces_transition_against_exact_pull_request_base() -> None:
     assert "EMBER_COND4_BASE_SHA: ${{ github.event.pull_request.base.sha }}" in workflow
     assert "scripts/tests/test_issue1396_cond4_surface.py" in workflow
     assert 'scripts/tests/test_verify_ember01_completion.py -k "cond4"' in workflow
+
+
+def test_surface_hash_ignores_interpreter_added_empty_type_params() -> None:
+    source = b"def run():\n    return 1\n"
+    baseline = behavior_surface_sha256(source, ("run",))
+    original_fields = ast.FunctionDef._fields
+    try:
+        if "type_params" not in original_fields:
+            ast.FunctionDef._fields = (*original_fields, "type_params")
+        tree = ast.parse(source)
+        tree.body[0].type_params = []
+        assert behavior_surface_sha256(source, ("run",)) == baseline
+    finally:
+        ast.FunctionDef._fields = original_fields

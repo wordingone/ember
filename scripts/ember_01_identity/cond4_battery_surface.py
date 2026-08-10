@@ -20,13 +20,40 @@ COMPLETION_VERIFIER_SYMBOLS = (
     "_run_identity_tamper_battery",
 )
 
-SURFACE_SCHEMA = "ember-cond4-battery-surface-v3"
+SURFACE_SCHEMA = "ember-cond4-battery-surface-v4"
 EXECUTION_SCHEMA = "ember-cond4-battery-execution-v1"
 OUTPUT_SCHEMA = "ember-cond4-battery-output-v1"
 
 
 class Cond4SurfaceError(ValueError):
     pass
+
+
+def _stable_ast(node: Any) -> Any:
+    """Serialize supported Python ASTs without interpreter-added empty fields."""
+    if isinstance(node, ast.AST):
+        fields: dict[str, Any] = {}
+        for field in node._fields:
+            value = getattr(node, field, None)
+            if field == "type_params":
+                if value:
+                    raise Cond4SurfaceError(
+                        "generic type parameters are outside the portable Cond-4 surface"
+                    )
+                continue
+            fields[field] = _stable_ast(value)
+        return {"node": type(node).__name__, "fields": fields}
+    if isinstance(node, list):
+        return [_stable_ast(item) for item in node]
+    if isinstance(node, bytes):
+        return {"bytes_hex": node.hex()}
+    if isinstance(node, complex):
+        return {"complex": [node.real, node.imag]}
+    if node is Ellipsis:
+        return {"ellipsis": True}
+    if node is None or isinstance(node, (bool, int, float, str)):
+        return node
+    raise Cond4SurfaceError(f"unsupported AST scalar: {type(node).__name__}")
 
 
 def _target_names(target: ast.AST) -> set[str]:
@@ -119,10 +146,7 @@ def behavior_surface_sha256(source: bytes, names: Iterable[str]) -> str:
         "definitions": [
             {
                 "name": name,
-                "ast": [
-                    ast.dump(node, annotate_fields=True, include_attributes=False)
-                    for node in definitions[name]
-                ],
+                "ast": [_stable_ast(node) for node in definitions[name]],
             }
             for name in sorted(closure)
         ],
