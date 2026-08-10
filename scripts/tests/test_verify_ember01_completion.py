@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import shutil
 import json
 import subprocess
@@ -22,6 +23,13 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import verify_ember01_completion as completion  # noqa: E402
+from ember_01_identity.cond4_battery_surface import (  # noqa: E402
+    COMPLETION_VERIFIER_SYMBOLS,
+    behavior_surface_sha256,
+    completion_verifier_binding_valid,
+    cond4_battery_output_sha256,
+    cond4_receipt_transition_valid,
+)
 
 
 def _live_issue(number: int = 7, title: str = "Live obligation") -> dict:
@@ -1147,26 +1155,22 @@ def _battery_receipt(payload: dict[str, object]) -> dict[str, object]:
     }
 
 
-def test_tamper_battery_runs_all_eight_axes_through_real_validator(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def _rederive_cond4_battery(scratch_root: Path) -> dict[str, object]:
     payload = _historical_identity_payload()
-    monkeypatch.setattr(
-        completion,
-        "verify_parameter_identity_binding",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            completion.ParameterIdentityMismatch("tampered checkpoint manifest")
-        ),
-    )
-
-    result = completion._run_identity_tamper_battery(
+    return completion._run_identity_tamper_battery(
         root=REPO_ROOT,
         payload=payload,
         receipt=_battery_receipt(payload),
         checkpoint_bytes=b'{"real":"checkpoint-manifest"}',
-        model_config=tmp_path / "config.json",
-        scratch_root=tmp_path,
+        model_config=REPO_ROOT / "configs" / "ember-restart-3b.json",
+        scratch_root=scratch_root,
     )
+
+
+def test_cond4_tamper_battery_runs_all_eight_axes_through_real_validator(
+    tmp_path: Path,
+) -> None:
+    result = _rederive_cond4_battery(tmp_path)
 
     assert result["all_rejected"] is True
     assert result["failures"] == []
@@ -1182,6 +1186,17 @@ def test_tamper_battery_runs_all_eight_axes_through_real_validator(
     }
     assert all(row["rejected"] is True for row in result["axes"].values())
     assert list(tmp_path.glob(".ember01-cond4-*")) == []
+    receipt = json.loads(
+        (
+            REPO_ROOT
+            / "receipts"
+            / "ember-01-completion"
+            / "cond4-tamper-battery-bf20f050-v1.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert cond4_battery_output_sha256(result) == receipt["verification"][
+        "cond4_battery_execution"
+    ]["output_sha256"]
 
 
 def test_tamper_battery_names_one_seeded_fail_open(
@@ -1241,7 +1256,9 @@ def test_identity_legs_are_unresolved_without_real_checkpoint(
     assert result["4"]["state"] == completion.UNRESOLVED
 
 
-def test_committed_cond4_receipt_binds_shipping_verifiers_and_all_axes() -> None:
+def test_committed_cond4_receipt_binds_shipping_verifiers_and_all_axes(
+    tmp_path: Path,
+) -> None:
     receipt = json.loads(
         (
             REPO_ROOT
@@ -1250,10 +1267,56 @@ def test_committed_cond4_receipt_binds_shipping_verifiers_and_all_axes() -> None
             / "cond4-tamper-battery-bf20f050-v1.json"
         ).read_text(encoding="utf-8")
     )
+    marker = receipt["verification"]["cond4_battery_execution"]
+    current_source = (REPO_ROOT / "scripts" / "verify_ember01_completion.py").read_bytes()
+    assert marker["completion_verifier_surface_sha256"] == receipt["implementation"][
+        "completion_verifier"
+    ]["battery_surface"]["sha256"]
+    assert marker["result"] == "PASS"
+    assert marker["output_sha256"] == cond4_battery_output_sha256(receipt["leg4"])
 
-    for binding in receipt["implementation"].values():
+    base_ref = os.environ.get("EMBER_COND4_BASE_SHA", "HEAD^1")
+    base_source = subprocess.run(
+        ["git", "show", f"{base_ref}:scripts/verify_ember01_completion.py"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+    ).stdout
+    base_receipt = json.loads(
+        subprocess.run(
+            [
+                "git",
+                "show",
+                f"{base_ref}:receipts/ember-01-completion/cond4-tamper-battery-bf20f050-v1.json",
+            ],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    )
+    observed_output_sha256 = None
+    if behavior_surface_sha256(
+        base_source, COMPLETION_VERIFIER_SYMBOLS
+    ) != behavior_surface_sha256(current_source, COMPLETION_VERIFIER_SYMBOLS):
+        observed_output_sha256 = cond4_battery_output_sha256(
+            _rederive_cond4_battery(tmp_path)
+        )
+    assert cond4_receipt_transition_valid(
+        base_source,
+        current_source,
+        base_receipt,
+        receipt,
+        observed_output_sha256=observed_output_sha256,
+    )
+
+    for name, binding in receipt["implementation"].items():
         path = REPO_ROOT / binding["path"]
-        assert hashlib.sha256(path.read_bytes()).hexdigest() == binding["sha256"]
+        source = path.read_bytes()
+        if name == "completion_verifier":
+            assert completion_verifier_binding_valid(source, binding)
+        else:
+            assert hashlib.sha256(source).hexdigest() == binding["sha256"]
     identity_binding = receipt["subject"]["identity_manifest"]
     assert (
         hashlib.sha256((REPO_ROOT / identity_binding["path"]).read_bytes()).hexdigest()
@@ -1465,4 +1528,3 @@ def test_closure_evidence_missing_manifest_is_unavailable(tmp_path: Path) -> Non
 
     assert value is None
     assert reason.startswith("unavailable:")
-
