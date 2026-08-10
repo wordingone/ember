@@ -128,6 +128,7 @@ def test_public_contract():
         "one_sided_lower_bootstrap", "adjudicate_r2e4_probe", "run_r2e4",
         "adjudicate_f03", "load_sigma_seed_receipt", "run_r2e3",
         "build_receipt", "write_receipt", "main",
+        "R2_AUTHORITY_DOC", "R2_AUTHORITY_SCHEMA", "R2_AUTHORITY_DECISION_ID",
     }
     assert names.issubset(vars(battery))
 
@@ -142,7 +143,59 @@ def test_default_registry_is_empty_and_spec_defect_is_disclosed():
     assert "SPEC-DEFECT-1435-A" in ids
     blocking = next(d for d in battery.SPEC_DEFECTS if d["id"] == "SPEC-DEFECT-1435-A")
     assert blocking["severity"] == "BLOCKING"
+    assert blocking["authority_status"] == "DEFERRED_BY_D-03"
+    assert blocking["authority_path"] == battery.R2_AUTHORITY_DOC
     assert set(blocking["exit_criteria_affected"]) == {"R2-E3", "R2-E4", "F-03"}
+    statistic = next(d for d in battery.SPEC_DEFECTS if d["id"] == "SPEC-DEFECT-1435-B")
+    assert statistic["authority_status"] == "RATIFIED_BY_D-03"
+
+
+def test_d03_authority_is_append_only_deferred_and_fail_closed():
+    authority_path = REPO_ROOT / battery.R2_AUTHORITY_DOC
+    record = json.loads(authority_path.read_text(encoding="utf-8"))
+
+    assert record["schema"] == battery.R2_AUTHORITY_SCHEMA
+    assert record["issue"] == 1442
+    assert record["extends"] == [
+        "docs/spec/ember02-preregistration-v1.md",
+        "docs/spec/ember02-preregistration-thresholds-v1.json",
+    ]
+
+    decision = record["decision"]
+    assert decision["id"] == battery.R2_AUTHORITY_DECISION_ID
+    assert decision["frozen_form"] == "deferred_amendment"
+    assert decision["affected_exit_criteria"] == ["R2-E3", "R2-E4", "F-03"]
+    assert decision["registry_state"] == "EMPTY"
+    assert decision["defined_probes"] == []
+    assert decision["runner_refusal"] == "BATTERY_UNDEFINED"
+    assert decision["advancement_credit"] is False
+    assert decision["r3_funding_allowed"] is False
+
+    settlement = decision["settlement_requirements"]
+    assert settlement["timing"] == "BEFORE_R2_DISPATCH"
+    assert settlement["minimum_probe_count"] > 0
+    assert settlement["requires_executable_scorer"] is True
+    assert settlement["requires_manifest_custody"] is True
+    assert settlement["requires_superseding_accepted_amendment"] is True
+
+
+def test_d03_ratifies_runner_statistic_without_faking_a_battery():
+    record = json.loads((REPO_ROOT / battery.R2_AUTHORITY_DOC).read_text(encoding="utf-8"))
+    assert record["decision"]["proportion_probe_statistic"] == {
+        "method": "wilson_one_sided_lower",
+        "confidence_threshold_id": "T-24",
+        "confidence": 0.95,
+        "continuity_correction": False,
+        "pass_predicate": "lower_bound > chance_rate",
+    }
+
+    narrative = (REPO_ROOT / "docs/spec/ember02-r2-cheap-probe-amendment-v1.md").read_text(encoding="utf-8")
+    for clause in (
+        "R2-E3", "R2-E4", "F-03", "BATTERY_UNDEFINED",
+        "no R2 advancement credit", "no R3 funding", "one-sided Wilson",
+        "before R2 dispatch",
+    ):
+        assert clause in narrative
 
 
 # ---------------------------------------------------------------------------
@@ -641,7 +694,12 @@ def test_build_receipt_passes_schema_floor():
     assert receipt_check.validate_receipt(receipt) == []
     assert receipt["invariant_sha256"] == receipt_check.INVARIANT_SHA256
     assert receipt["spec_defects"][0]["id"] == "SPEC-DEFECT-1435-A"
-    assert receipt["issue_refs"] == ["#1435"]
+    assert receipt["issue_refs"] == ["#1435", "#1442"]
+    assert receipt["r2_battery_authority"] == {
+        "document": battery.R2_AUTHORITY_DOC,
+        "schema": battery.R2_AUTHORITY_SCHEMA,
+        "decision_id": battery.R2_AUTHORITY_DECISION_ID,
+    }
 
 
 def test_build_receipt_with_result():
