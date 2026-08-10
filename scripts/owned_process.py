@@ -11,11 +11,16 @@ import hashlib
 import json
 import os
 import signal
+import stat
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Mapping, Sequence
+
+
+_SIGKILL = int(getattr(signal, "SIGKILL", 9))
+_POSIX_GUARD_FLAG = "--owned-process-posix-guard"
 
 
 class ProcessContainmentError(RuntimeError):
@@ -33,6 +38,141 @@ class OwnedProcessResult:
     stderr: str
     backend: str
     cleanup_verified: bool
+
+
+def _posix_controller_death_backend(platform: str | None = None) -> str | None:
+    """Return the closed controller-death backend for a POSIX platform.
+
+    The public runner remains the sole process authority.  The private
+    process-group sentinel installed by that runner is only a kernel-facing
+    cleanup guard; it is not a second launcher or caller-visible API.
+    """
+    platform_name = sys.platform if platform is None else platform
+    if platform_name == "linux":
+        return "linux-prctl-pdeathsig+process-group-sentinel"
+    if platform_name == "darwin":
+        return "darwin-process-group-sentinel"
+    return None
+
+
+def _set_linux_parent_death_signal() -> None:
+    """Arm Linux's native fast path; the pipe sentinel remains authoritative."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    prctl = getattr(libc, "prctl", None)
+    if prctl is None or prctl(1, _SIGKILL, 0, 0, 0) != 0:
+        error = ctypes.get_errno()
+        raise ProcessContainmentError(f"prctl(PR_SET_PDEATHSIG) failed: {error}")
+
+
+def _monitor_controller_pipe(death_fd: int, process_group: int) -> None:
+    """Kill the command group when the controller-owned pipe reaches EOF.
+
+    EOF is a kernel-held lifetime token: it cannot confuse PID reuse for the
+    original controller and needs no Darwin-only process API.  The sentinel is
+    forked only after this module has been exec'd as the private guard, so it
+    cannot inherit CPython Popen's internal pre-exec error pipe.
+    """
+    try:
+        while os.read(death_fd, 1):
+            pass
+    except OSError:
+        pass
+    try:
+        os.killpg(process_group, _SIGKILL)
+    except OSError:
+        pass
+
+
+def _close_sentinel_descriptors(death_fd: int) -> None:
+    """Keep only the controller lifetime token in the non-execing sentinel."""
+    for descriptor in (0, 1, 2):
+        if descriptor != death_fd:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+    try:
+        maximum = int(os.sysconf("SC_OPEN_MAX"))
+    except (OSError, ValueError):
+        maximum = 256
+    os.closerange(3, death_fd)
+    os.closerange(death_fd + 1, maximum)
+
+
+def _validate_posix_guard_context(death_fd: int) -> int:
+    """Bind the private guard to its new session and inherited read pipe."""
+
+    pid = os.getpid()
+    try:
+        process_group = os.getpgrp()
+        session = os.getsid(0)
+    except (AttributeError, OSError) as exc:
+        raise ProcessContainmentError("POSIX guard could not verify its owned session") from exc
+    if pid != process_group or pid != session:
+        raise ProcessContainmentError("private POSIX guard is not its owned session leader")
+    if death_fd < 0:
+        raise ProcessContainmentError("private POSIX guard lacks a readable pipe")
+    try:
+        import fcntl
+
+        descriptor = os.fstat(death_fd)
+        flags = fcntl.fcntl(death_fd, fcntl.F_GETFL)
+    except (ImportError, OSError) as exc:
+        raise ProcessContainmentError("private POSIX guard lacks a readable pipe") from exc
+    if not stat.S_ISFIFO(descriptor.st_mode) or (flags & os.O_ACCMODE) != os.O_RDONLY:
+        raise ProcessContainmentError("private POSIX guard lacks a readable pipe")
+    return process_group
+
+
+def _install_posix_controller_death_guard(death_fd: int) -> None:
+    """Install one private pipe sentinel, plus Linux's native fast path."""
+    backend = _posix_controller_death_backend()
+    if backend is None:
+        raise ProcessContainmentError(f"POSIX controller-death backend unavailable on {sys.platform}")
+    process_group = _validate_posix_guard_context(death_fd)
+    try:
+        monitor_pid = os.fork()
+    except OSError as exc:
+        raise ProcessContainmentError(f"controller-death sentinel fork failed: {exc}") from exc
+    if monitor_pid == 0:
+        try:
+            _close_sentinel_descriptors(death_fd)
+            _monitor_controller_pipe(death_fd, process_group)
+        finally:
+            os._exit(0)
+    os.close(death_fd)
+    if backend.startswith("linux-"):
+        _set_linux_parent_death_signal()
+
+
+def _posix_guard_argv(argv: Sequence[str], death_fd: int) -> list[str]:
+    return [
+        sys.executable,
+        str(Path(__file__).resolve()),
+        _POSIX_GUARD_FLAG,
+        str(death_fd),
+        "--",
+        *argv,
+    ]
+
+
+def _run_posix_guard(arguments: Sequence[str]) -> int:
+    """Become the requested command after installing the private sentinel."""
+    if len(arguments) < 3 or arguments[1] != "--":
+        raise ProcessContainmentError("internal POSIX guard arguments are invalid")
+    try:
+        death_fd = int(arguments[0])
+    except ValueError as exc:
+        raise ProcessContainmentError("internal POSIX guard descriptor is invalid") from exc
+    command = [str(part) for part in arguments[2:]]
+    if not command:
+        raise ProcessContainmentError("internal POSIX guard command is empty")
+    _validate_posix_guard_context(death_fd)
+    _install_posix_controller_death_guard(death_fd)
+    try:
+        os.execvpe(command[0], command, os.environ)
+    except OSError as exc:
+        raise ProcessContainmentError(f"POSIX guarded exec failed: {exc}") from exc
 
 
 if sys.platform == "win32":
@@ -173,11 +313,20 @@ class OwnedProcessRunner:
         return OwnedProcessResult(argv, proc.pid, timeout_s, "terminated" if timed_out else "completed", int(proc.returncode), stdout, stderr, "windows-job-object", True)
 
     def _run_posix(self, argv: list[str], timeout_s: float, *, cwd: str | os.PathLike[str] | None, env: Mapping[str, str] | None) -> OwnedProcessResult:
-        proc = subprocess.Popen(
-            argv, cwd=cwd, env=dict(env) if env is not None else None,
-            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, start_new_session=True,
-        )
+        death_read_fd, death_write_fd = os.pipe()
+        try:
+            proc = subprocess.Popen(
+                _posix_guard_argv(argv, death_read_fd),
+                cwd=cwd, env=dict(env) if env is not None else None,
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                text=True, start_new_session=True,
+                pass_fds=(death_read_fd,),
+            )
+        except Exception as exc:
+            os.close(death_read_fd)
+            os.close(death_write_fd)
+            raise ProcessContainmentError(f"POSIX controller-death containment refused: {exc}") from exc
+        os.close(death_read_fd)
         timed_out = False
         try:
             stdout, stderr = proc.communicate(timeout=timeout_s)
@@ -187,17 +336,34 @@ class OwnedProcessRunner:
             stdout, stderr = proc.communicate(timeout=5)
         finally:
             self._kill_posix_group(proc.pid)
-        return OwnedProcessResult(argv, proc.pid, timeout_s, "terminated" if timed_out else "completed", int(proc.returncode), stdout, stderr, "posix-process-group", True)
+            os.close(death_write_fd)
+        return OwnedProcessResult(
+            argv,
+            proc.pid,
+            timeout_s,
+            "terminated" if timed_out else "completed",
+            int(proc.returncode),
+            stdout,
+            stderr,
+            "posix-process-group",
+            True,
+        )
 
     @staticmethod
     def _kill_posix_group(pid: int) -> None:
         try:
-            os.killpg(pid, signal.SIGKILL)
+            os.killpg(pid, _SIGKILL)
         except ProcessLookupError:
             pass
 
 
 def main() -> int:
+    if sys.argv[1:2] == [_POSIX_GUARD_FLAG]:
+        try:
+            return _run_posix_guard(sys.argv[2:])
+        except ProcessContainmentError as exc:
+            print(f"OWNED_PROCESS_REFUSED: {exc}", file=sys.stderr)
+            return 125
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--timeout-seconds", type=float, required=True)
     parser.add_argument("--cwd", type=Path)

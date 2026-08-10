@@ -46,7 +46,14 @@ class LivePullRequestWorkflowIntegrationTests(unittest.TestCase):
             if str(step.get("uses", "")).startswith("actions/checkout@")
         ]
         self.assertEqual(
-            {"python", "rust", "cli", "launcher", "production-rung-replay"},
+            {
+                "python",
+                "rust",
+                "cli",
+                "launcher",
+                "production-rung-replay",
+                "owned-process-posix",
+            },
             {name for name, _ in checkouts},
         )
         for name, ref in checkouts:

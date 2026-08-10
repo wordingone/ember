@@ -74,6 +74,24 @@ jobs:
         run: python -B -m unittest discover -s tests/ember_restart_model -p "test_remint_text_lab_input_identity.py" -v
       - name: Verify POSIX owned process-tree cleanup
         run: python -B scripts/ember_gate_process_supervision_selftest.py
+  owned-process-posix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - run: python -m pip install "pytest==8.4.1"
+      - name: Prove controller-death cleanup on ${{ matrix.os }}
+        run: python -B scripts/owned_process.py --timeout-seconds 120 -- python -B -m pytest -q scripts/tests/test_owned_process.py
   rust:
     runs-on: windows-latest
     timeout-minutes: 25
@@ -175,7 +193,7 @@ jobs:
         run: python -B scripts/ember_gate_process_supervision_selftest.py
   ci-pr:
     if: always()
-    needs: [python, rust, cli, launcher, production-rung-replay]
+    needs: [python, owned-process-posix, rust, cli, launcher, production-rung-replay]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
