@@ -62,7 +62,7 @@ def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _read_dispatch(path: Path, root: Path) -> tuple[dict[str, object], bytes]:
+def validate_dispatch_preflight(path: Path, root: Path) -> tuple[dict[str, object], bytes]:
     try:
         canonical = path.resolve(strict=True)
         if canonical.parent != root:
@@ -240,7 +240,7 @@ def write_capture(
     if manifest_path.exists():
         _refuse("CAPTURE_RUN_ALREADY_EXISTS")
 
-    dispatch, dispatch_raw = _read_dispatch(Path(dispatch_receipt_path), root)
+    dispatch, dispatch_raw = validate_dispatch_preflight(Path(dispatch_receipt_path), root)
     if dispatch["job_id"] != run_id:
         _refuse("CAPTURE_RUN_DISPATCH_MISMATCH")
 

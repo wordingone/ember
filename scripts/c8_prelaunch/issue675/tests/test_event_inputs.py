@@ -38,6 +38,23 @@ def _fixture(tmp_path):
         "config", "seed_model", "seed_optimizer", "grown_model", "seed_manifest",
         "b1m_receipt", "b2_receipt", "pre_momentum", "grow_operator",
     )}
+    runtime_config = {
+        "schema": "q2-event-runtime-config-v1",
+        "source_commit": source,
+        "historical_config_sha256": "4" * 64,
+        "scope": "TARGET_TENSOR_COUNTERFACTUAL",
+        "execution_authority": "EMBER_LAB_Q2_EVENT_ONLY",
+        "model": {"vocab": 32, "hidden": 8, "layers": 1, "heads": 1, "seq": 2, "tied_embeddings": True, "grad_checkpointing": False},
+        "objective": {"mtp_aux_heads": {"enabled": True, "n_heads": 1, "weight": 0.3}},
+        "precision": {"qat": {"enabled": True}},
+        "optimizer": {"lr_muon": 0.02},
+        "no_new_parallel_authority": True,
+    }
+    runtime_config["config_sha256"] = hashlib.sha256(_canonical(runtime_config)).hexdigest()
+    config_bytes = _canonical(runtime_config)
+    config_path = tmp_path / files["config"]["logical_path"]
+    config_path.write_bytes(config_bytes)
+    files["config"] = {"logical_path": files["config"]["logical_path"], "sha256": hashlib.sha256(config_bytes).hexdigest(), "bytes": len(config_bytes)}
     refs = []
     hashes = []
     for name in ("x", "y0", "mtp"):
@@ -103,3 +120,19 @@ def test_refuses_valid_manifest_bytes_outside_custody(tmp_path):
             expected_source_commit=source,
             expected_run_id=run,
         )
+
+
+def test_refuses_historical_or_unsealed_runtime_config(tmp_path):
+    source, run, cp, bp = _fixture(tmp_path)
+    checkpoint = json.loads(cp.read_text(encoding="utf-8"))
+    config_row = checkpoint["files"]["config"]
+    config_path = tmp_path / config_row["logical_path"]
+    historical = {"authority": {"artifact_class": "historical_only", "execution_authority": "denied"}, "model": {}}
+    config_path.write_bytes(_canonical(historical))
+    config_row["sha256"] = hashlib.sha256(config_path.read_bytes()).hexdigest()
+    config_row["bytes"] = config_path.stat().st_size
+    checkpoint.pop("manifest_sha256")
+    _write_json(cp, checkpoint)
+
+    with pytest.raises(EventInputRefusal, match="EVENT_RUNTIME_CONFIG_INVALID"):
+        admit_event_inputs(custody_root=tmp_path, checkpoint_manifest_path=cp, batch_manifest_path=bp, expected_source_commit=source, expected_run_id=run)

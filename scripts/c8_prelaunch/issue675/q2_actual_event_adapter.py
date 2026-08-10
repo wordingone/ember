@@ -9,12 +9,15 @@ dispatch authority and ``q2_capture_writer`` remains the manifest authority.
 
 from __future__ import annotations
 
+import os
+import stat
 from pathlib import Path
 from typing import Callable, Mapping
 
 import torch
 
-from q2_capture_writer import write_capture
+from q2_capture_writer import CaptureWriteRefusal, validate_dispatch_preflight, write_capture
+from q2_event_inputs import EventInputRefusal, validate_runtime_config
 from q2_gradient_lineage import validate_gradient_lineage
 from q2_model_lineage import validate_model_lineage
 from q2_momentum_lineage import validate_momentum_lineage
@@ -24,6 +27,18 @@ from q2_muon_primitives import muon_step_in_copy
 
 _ADAPTER_SOURCE_PATH = Path(__file__).resolve()
 _MUON_SOURCE_PATH = Path(_muon_primitives.__file__).resolve()
+_BINDING_KEYS = {
+    "batch_sha256",
+    "b3_receipt_sha256",
+    "checkpoint_sha256",
+    "config_sha256",
+    "momentum_sha256",
+    "optimizer_sha256",
+    "replay_sha256",
+    "source_sha256",
+    "threshold_sha256",
+    "verifier_sha256",
+}
 
 
 class CaptureAdapterRefusal(ValueError):
@@ -55,6 +70,95 @@ def _same_state(
     )
 
 
+def _has_reparse_component(path: Path, stop: Path | None = None) -> bool:
+    """Detect symlinks and Windows junction/reparse components without following them."""
+
+    current = Path(os.path.abspath(os.fspath(path)))
+    boundary = Path(os.path.abspath(os.fspath(stop))) if stop is not None else None
+    while True:
+        try:
+            status = current.lstat()
+        except OSError:
+            return True
+        attributes = getattr(status, "st_file_attributes", 0)
+        reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+        if stat.S_ISLNK(status.st_mode) or bool(attributes & reparse_flag):
+            return True
+        if current == boundary:
+            return False
+        parent = current.parent
+        if parent == current:
+            return boundary is not None
+        current = parent
+
+
+def _admit_custody_root(path: Path) -> Path:
+    supplied = Path(path)
+    if _has_reparse_component(supplied):
+        _refuse("EVENT_CUSTODY_ROOT_REFUSED")
+    try:
+        canonical = supplied.resolve(strict=True)
+    except OSError:
+        _refuse("EVENT_CUSTODY_ROOT_REFUSED")
+    if not canonical.is_dir():
+        _refuse("EVENT_CUSTODY_ROOT_REFUSED")
+    return canonical
+
+
+def _admit_file(root: Path, path: Path, code: str) -> Path:
+    """Resolve one immutable input inside custody before model/GPU access."""
+
+    supplied = Path(path)
+    lexical = Path(os.path.abspath(os.fspath(supplied)))
+    if not lexical.is_relative_to(root) or _has_reparse_component(lexical, root):
+        _refuse(code)
+    try:
+        canonical = lexical.resolve(strict=True)
+    except OSError:
+        _refuse(code)
+    if not canonical.is_file() or not canonical.is_relative_to(root):
+        _refuse(code)
+    return canonical
+
+
+def _admit_directory(root: Path, path: Path, code: str) -> Path:
+    supplied = Path(path)
+    lexical = Path(os.path.abspath(os.fspath(supplied)))
+    if not lexical.is_relative_to(root) or _has_reparse_component(lexical, root):
+        _refuse(code)
+    try:
+        canonical = lexical.resolve(strict=True)
+    except OSError:
+        _refuse(code)
+    if not canonical.is_dir() or not canonical.is_relative_to(root):
+        _refuse(code)
+    return canonical
+
+
+def _admit_event_inputs(
+    root: Path,
+    binding_files: Mapping[str, Path],
+    file_inputs: Mapping[str, Path],
+    gradient_data_root: Path,
+) -> tuple[dict[str, Path], dict[str, Path], Path]:
+    """Close every caller path before state snapshot, CUDA, or tensor loading."""
+
+    if set(binding_files) != _BINDING_KEYS:
+        _refuse("EVENT_BINDING_SET_INVALID")
+    admitted_bindings = {
+        key: _admit_file(root, path, "EVENT_BINDING_CUSTODY_REFUSED")
+        for key, path in binding_files.items()
+    }
+    admitted_files = {
+        key: _admit_file(root, path, f"EVENT_{key.upper()}_CUSTODY_REFUSED")
+        for key, path in file_inputs.items()
+    }
+    admitted_data_root = _admit_directory(
+        root, gradient_data_root, "EVENT_GRADIENT_ROOT_CUSTODY_REFUSED"
+    )
+    return admitted_bindings, admitted_files, admitted_data_root
+
+
 def _verify_executed_source_bindings(binding_files: Mapping[str, Path]) -> None:
     for key, source, code in (
         ("source_sha256", _ADAPTER_SOURCE_PATH, "EVENT_SOURCE_BINDING_MISMATCH"),
@@ -72,11 +176,13 @@ def _verify_executed_source_bindings(binding_files: Mapping[str, Path]) -> None:
 def _verify_lineage_receipt_binding(
     binding_files: Mapping[str, Path],
     b2_receipt_path: Path,
+    runtime_config_path: Path,
     b1m_receipt_path: Path,
     b3_receipt_path: Path,
     batch_manifest_path: Path,
 ) -> None:
     for key, receipt_path, code in (
+        ("config_sha256", runtime_config_path, "EVENT_RUNTIME_CONFIG_BINDING_MISMATCH"),
         ("checkpoint_sha256", b2_receipt_path, "EVENT_LINEAGE_BINDING_MISMATCH"),
         ("momentum_sha256", b1m_receipt_path, "EVENT_MOMENTUM_BINDING_MISMATCH"),
         ("b3_receipt_sha256", b3_receipt_path, "EVENT_GRADIENT_RECEIPT_BINDING_MISMATCH"),
@@ -137,6 +243,7 @@ def capture_actual_event(
     custody_root: Path,
     run_id: str,
     lineage_run_id: str,
+    expected_source_commit: str,
     dispatch_receipt_path: Path,
     binding_files: Mapping[str, Path],
     model: torch.nn.Module,
@@ -151,6 +258,7 @@ def capture_actual_event(
     seed_optimizer_path: Path,
     grown_model_path: Path,
     b2_receipt_path: Path,
+    runtime_config_path: Path,
     b1m_receipt_path: Path,
     b3_receipt_path: Path,
     batch_manifest_path: Path,
@@ -163,10 +271,64 @@ def capture_actual_event(
 ) -> Path:
     """Derive both target arms and prove the live model stayed byte-identical."""
 
+    try:
+        custody = _admit_custody_root(custody_root)
+        dispatch_receipt_path = _admit_file(
+            custody, dispatch_receipt_path, "EVENT_DISPATCH_PREFLIGHT_REFUSED"
+        )
+        dispatch, _dispatch_raw = validate_dispatch_preflight(
+            dispatch_receipt_path, custody
+        )
+    except (OSError, CaptureWriteRefusal, CaptureAdapterRefusal):
+        _refuse("EVENT_DISPATCH_PREFLIGHT_REFUSED")
+    if dispatch["job_id"] != run_id:
+        _refuse("EVENT_DISPATCH_JOB_MISMATCH")
+    if dispatch["source_commit"] != expected_source_commit:
+        _refuse("EVENT_DISPATCH_SOURCE_MISMATCH")
+    binding_files, admitted, gradient_data_root = _admit_event_inputs(
+        custody,
+        binding_files,
+        {
+            "seed_manifest": seed_manifest_path,
+            "seed_model": seed_model_path,
+            "seed_optimizer": seed_optimizer_path,
+            "grown_model": grown_model_path,
+            "b2_receipt": b2_receipt_path,
+            "runtime_config": runtime_config_path,
+            "b1m_receipt": b1m_receipt_path,
+            "b3_receipt": b3_receipt_path,
+            "batch_manifest": batch_manifest_path,
+            "persisted_pre_momentum": persisted_pre_momentum_path,
+            "persisted_gradient": persisted_gradient_path,
+            "grow_operator": grow_operator_path,
+        },
+        gradient_data_root,
+    )
+    seed_manifest_path = admitted["seed_manifest"]
+    seed_model_path = admitted["seed_model"]
+    seed_optimizer_path = admitted["seed_optimizer"]
+    grown_model_path = admitted["grown_model"]
+    b2_receipt_path = admitted["b2_receipt"]
+    runtime_config_path = admitted["runtime_config"]
+    b1m_receipt_path = admitted["b1m_receipt"]
+    b3_receipt_path = admitted["b3_receipt"]
+    batch_manifest_path = admitted["batch_manifest"]
+    persisted_pre_momentum_path = admitted["persisted_pre_momentum"]
+    persisted_gradient_path = admitted["persisted_gradient"]
+    grow_operator_path = admitted["grow_operator"]
     _verify_executed_source_bindings(binding_files)
     _verify_lineage_receipt_binding(
-        binding_files, b2_receipt_path, b1m_receipt_path, b3_receipt_path, batch_manifest_path
+        binding_files,
+        b2_receipt_path,
+        runtime_config_path,
+        b1m_receipt_path,
+        b3_receipt_path,
+        batch_manifest_path,
     )
+    try:
+        validate_runtime_config(runtime_config_path, expected_source_commit)
+    except EventInputRefusal:
+        _refuse("EVENT_RUNTIME_CONFIG_REFUSED")
     baseline = _snapshot(model)
     try:
         validate_model_lineage(
@@ -176,7 +338,9 @@ def capture_actual_event(
             grown_model_path=grown_model_path,
             b2_receipt_path=b2_receipt_path,
             grow_operator_path=grow_operator_path,
+            runtime_config_path=runtime_config_path,
             expected_run_id=lineage_run_id,
+            expected_source_commit=expected_source_commit,
             n_layers=n_layers,
         )
     except Exception:

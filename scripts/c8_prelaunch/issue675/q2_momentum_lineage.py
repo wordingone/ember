@@ -65,6 +65,38 @@ def _muon_name_to_id(model_state: Mapping[str, torch.Tensor]) -> dict[str, int]:
     return {name: index for index, name in enumerate(names)}
 
 
+def resolve_seed_momentum(
+    *, seed_model_path: Path, seed_optimizer_path: Path, target_name: str
+) -> torch.Tensor:
+    """Reopen the surviving B1 checkpoint and resolve its target Muon buffer."""
+
+    try:
+        model_state = torch.load(seed_model_path, map_location="cpu", weights_only=True)
+        optimizer_state = torch.load(
+            seed_optimizer_path, map_location="cpu", weights_only=True
+        )
+    except Exception:
+        _refuse("MOMENTUM_LINEAGE_LOAD_FAILED")
+    if not isinstance(model_state, Mapping) or target_name not in model_state:
+        _refuse("SEED_MODEL_STATE_INVALID")
+    ids = _muon_name_to_id(model_state)
+    muon_id = ids.get(target_name)
+    if muon_id is None or not isinstance(optimizer_state, Mapping):
+        _refuse("SEED_GATE_MOMENTUM_UNRESOLVED")
+    state = optimizer_state.get("muon", {}).get("state")
+    if not state:
+        state = optimizer_state.get("state", {})
+    try:
+        resolved = _tensor(
+            state[muon_id]["momentum_buffer"], "SEED_GATE_MOMENTUM_INVALID"
+        )
+    except (KeyError, TypeError):
+        _refuse("SEED_GATE_MOMENTUM_UNRESOLVED")
+    if float(resolved.square().mean().sqrt()) < 1e-10:
+        _refuse("SEED_GATE_MOMENTUM_NEAR_ZERO")
+    return resolved
+
+
 def validate_momentum_lineage(
     *,
     seed_manifest_path: Path,
@@ -107,13 +139,11 @@ def validate_momentum_lineage(
         != "B1 snapshot pre-grow momentum_buffer (parent-carried)"
         or not isinstance(cache_paths, dict)
         or not isinstance(cache_paths.get("pre_momentum"), str)
-        or Path(cache_paths["pre_momentum"]).name != Path(persisted_pre_momentum_path).name
+        or not Path(cache_paths["pre_momentum"]).name
     ):
         _refuse("B1M_RECEIPT_INVALID")
 
     try:
-        model_state = torch.load(seed_model_path, map_location="cpu", weights_only=True)
-        optimizer_state = torch.load(seed_optimizer_path, map_location="cpu", weights_only=True)
         persisted = _tensor(
             torch.load(persisted_pre_momentum_path, map_location="cpu", weights_only=True),
             "B1M_PERSISTED_MOMENTUM_INVALID",
@@ -122,26 +152,16 @@ def validate_momentum_lineage(
         raise
     except Exception:
         _refuse("MOMENTUM_LINEAGE_LOAD_FAILED")
-    if not isinstance(model_state, Mapping) or target_name not in model_state:
-        _refuse("SEED_MODEL_STATE_INVALID")
-    ids = _muon_name_to_id(model_state)
-    muon_id = ids.get(target_name)
-    if muon_id is None or not isinstance(optimizer_state, Mapping):
-        _refuse("SEED_GATE_MOMENTUM_UNRESOLVED")
-    state = optimizer_state.get("muon", {}).get("state")
-    if not state:
-        state = optimizer_state.get("state", {})
-    try:
-        resolved = _tensor(
-            state[muon_id]["momentum_buffer"], "SEED_GATE_MOMENTUM_INVALID"
-        )
-    except (KeyError, TypeError):
-        _refuse("SEED_GATE_MOMENTUM_UNRESOLVED")
+    resolved = resolve_seed_momentum(
+        seed_model_path=seed_model_path,
+        seed_optimizer_path=seed_optimizer_path,
+        target_name=target_name,
+    )
+    muon_id = _muon_name_to_id(
+        torch.load(seed_model_path, map_location="cpu", weights_only=True)
+    )[target_name]
     if not torch.equal(resolved, persisted):
         _refuse("B1M_PERSISTED_MOMENTUM_MISMATCH")
-    if float(resolved.square().mean().sqrt()) < 1e-10:
-        _refuse("SEED_GATE_MOMENTUM_NEAR_ZERO")
-
     expected_transplant = torch.cat([resolved, resolved], dim=0)
     reset = _tensor(reset_momentum, "RESET_MOMENTUM_INVALID")
     transplant = _tensor(transplant_momentum, "TRANSPLANT_MOMENTUM_INVALID")
@@ -158,6 +178,7 @@ def validate_momentum_lineage(
         "seed_optimizer_sha256": optimizer_sha,
         "b1m_receipt_sha256": _sha(b1m_receipt_path),
         "persisted_pre_momentum_sha256": _sha(persisted_pre_momentum_path),
+        "historical_pre_momentum_name": Path(cache_paths["pre_momentum"]).name,
         "muon_local_id": muon_id,
         "pushforward": "gate-row-duplication",
         "reset_exact_zero": True,

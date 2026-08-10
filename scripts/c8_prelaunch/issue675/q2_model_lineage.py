@@ -22,6 +22,11 @@ import torch
 
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 _JOB_ID = re.compile(r"[A-Za-z0-9_.-]{1,128}")
+CANONICAL_B2_RECEIPT_SHA256 = "fbf0440b98f439a01c03f399e8c7fb48ba3500b8b48386ca1c55562cf772de66"
+CANONICAL_B2_LINEAGE_RUN_ID = "grow-rung2-20260709-remeasure"
+CANONICAL_B2_OPERATOR_SHA256 = "5d9c16f49b2c4ad056cc174a692a92f18ab034d881699a8564f3da763f51a40f"
+CANONICAL_B2_EPS_SIGMA = 0.05
+CANONICAL_B2_EPS_SEED = 0
 
 
 class ModelLineageRefusal(ValueError):
@@ -37,6 +42,10 @@ def _sha(path: Path) -> str:
         return hashlib.sha256(Path(path).read_bytes()).hexdigest()
     except OSError:
         _refuse("MODEL_LINEAGE_FILE_UNAVAILABLE")
+
+
+def _canonical(value: object) -> bytes:
+    return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
 
 
 def _state(value: object, code: str) -> dict[str, torch.Tensor]:
@@ -125,38 +134,67 @@ def validate_model_lineage(
     grown_model_path: Path,
     b2_receipt_path: Path,
     grow_operator_path: Path,
+    runtime_config_path: Path,
     expected_run_id: str,
+    expected_source_commit: str,
     n_layers: int,
 ) -> dict[str, object]:
     """Prove seed -> canonical B2 grow -> persisted state -> live state."""
 
     if not isinstance(expected_run_id, str) or _JOB_ID.fullmatch(expected_run_id) is None:
         _refuse("MODEL_LINEAGE_RUN_ID_INVALID")
+    if not isinstance(expected_source_commit, str) or re.fullmatch(r"[0-9a-f]{40}", expected_source_commit) is None:
+        _refuse("MODEL_LINEAGE_SOURCE_COMMIT_INVALID")
     try:
         receipt = json.loads(Path(b2_receipt_path).read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         _refuse("B2_RECEIPT_MALFORMED")
     if not isinstance(receipt, dict):
         _refuse("B2_RECEIPT_MALFORMED")
-    eps = receipt.get("eps")
-    cache = receipt.get("cache")
-    proof = receipt.get("realized_proof")
+    historical = receipt.get("historical")
+    law = receipt.get("law")
+    inputs = receipt.get("inputs")
+    output = receipt.get("output")
+    receipt_without_sha = {key: value for key, value in receipt.items() if key != "receipt_sha256"}
     if (
-        receipt.get("ticket") != "CBASE-GROW-RUNG2-EVENT-B2"
-        or receipt.get("run_id") != expected_run_id
-        or receipt.get("verdict") != "B2_REALIZED_PASS"
-        or not isinstance(eps, dict)
-        or eps.get("banned_zero_assertion_passed") is not True
-        or not isinstance(cache, dict)
-        or cache.get("distinct_from_eps0_cache") is not True
-        or not isinstance(proof, dict)
-        or proof.get("eta_band_pass") is not True
-        or proof.get("twin_cosine_pass") is not True
+        set(receipt) != {"schema", "source_commit", "lineage_run_id", "verdict", "historical", "law", "inputs", "operator_sha256", "output", "receipt_sha256"}
+        or receipt.get("schema") != "q2-b2-replay-remint-receipt-v1"
+        or receipt.get("source_commit") != expected_source_commit
+        or receipt.get("lineage_run_id") != expected_run_id
+        or receipt.get("verdict") != "B2_REPLAY_REMINTED"
+        or not isinstance(historical, dict)
+        or set(historical) != {"receipt_sha256", "operator_sha256", "ticket", "verdict"}
+        or historical.get("ticket") != "CBASE-GROW-RUNG2-EVENT-B2"
+        or historical.get("verdict") != "B2_REALIZED_PASS"
+        or not isinstance(law, dict)
+        or set(law) != {"n_layers", "eps_sigma", "eps_seed", "banned_zero_assertion_passed", "distinct_from_eps0_cache", "eta_band_pass", "twin_cosine_pass"}
+        or law.get("n_layers") != n_layers
+        or law.get("banned_zero_assertion_passed") is not True
+        or law.get("distinct_from_eps0_cache") is not True
+        or law.get("eta_band_pass") is not True
+        or law.get("twin_cosine_pass") is not True
+        or not isinstance(inputs, dict)
+        or set(inputs) != {"seed_manifest_sha256", "seed_model_sha256", "runtime_config_sha256"}
+        or not isinstance(output, dict)
+        or set(output) != {"grown_model_sha256"}
+        or receipt.get("receipt_sha256") != hashlib.sha256(_canonical(receipt_without_sha)).hexdigest()
     ):
-        _refuse("B2_RECEIPT_NOT_GREEN")
-    operator_sha = _sha(grow_operator_path)
-    if receipt.get("operator_sha256") != operator_sha:
-        _refuse("B2_OPERATOR_HASH_MISMATCH")
+        _refuse("B2_REPLAY_RECEIPT_INVALID")
+    historical_operator_sha = historical.get("operator_sha256")
+    if (
+        expected_run_id != CANONICAL_B2_LINEAGE_RUN_ID
+        or historical.get("receipt_sha256") != CANONICAL_B2_RECEIPT_SHA256
+        or historical_operator_sha != CANONICAL_B2_OPERATOR_SHA256
+    ):
+        _refuse("B2_HISTORICAL_BINDING_INVALID")
+    if (
+        law.get("eps_sigma") != CANONICAL_B2_EPS_SIGMA
+        or law.get("eps_seed") != CANONICAL_B2_EPS_SEED
+    ):
+        _refuse("B2_FROZEN_LAW_MISMATCH")
+    replay_operator_sha = _sha(grow_operator_path)
+    if receipt.get("operator_sha256") != replay_operator_sha or replay_operator_sha != _sha(Path(__file__).resolve()):
+        _refuse("B2_REPLAY_OPERATOR_HASH_MISMATCH")
 
     try:
         seed_manifest = json.loads(Path(seed_manifest_path).read_text(encoding="utf-8"))
@@ -167,8 +205,14 @@ def validate_model_lineage(
         not isinstance(seed_manifest, dict)
         or not isinstance(seed_manifest.get("files"), dict)
         or seed_manifest["files"].get("model.pt") != seed_model_sha
+        or inputs.get("seed_manifest_sha256") != _sha(seed_manifest_path)
+        or inputs.get("seed_model_sha256") != seed_model_sha
     ):
         _refuse("SEED_MODEL_HASH_MISMATCH")
+    if output.get("grown_model_sha256") != _sha(grown_model_path):
+        _refuse("GROWN_MODEL_HASH_MISMATCH")
+    if inputs.get("runtime_config_sha256") != _sha(runtime_config_path):
+        _refuse("B2_RUNTIME_CONFIG_HASH_MISMATCH")
 
     try:
         seed_state = _state(
@@ -186,8 +230,8 @@ def validate_model_lineage(
     expected_grown = replay_b2_widen(
         seed_state,
         n_layers=n_layers,
-        eps_sigma=eps.get("eps_sigma"),
-        eps_seed=eps.get("eps_seed"),
+        eps_sigma=law.get("eps_sigma"),
+        eps_seed=law.get("eps_seed"),
     )
     if not _same_state(expected_grown, grown_state):
         _refuse("GROWN_MODEL_REPLAY_MISMATCH")
@@ -202,10 +246,12 @@ def validate_model_lineage(
         "seed_model_sha256": seed_model_sha,
         "grown_model_sha256": _sha(grown_model_path),
         "b2_receipt_sha256": _sha(b2_receipt_path),
-        "grow_operator_sha256": operator_sha,
+        "historical_grow_operator_sha256": historical_operator_sha,
+        "replay_operator_sha256": replay_operator_sha,
+        "grow_operator_sha256": replay_operator_sha,
         "n_layers": n_layers,
-        "eps_sigma": float(eps["eps_sigma"]),
-        "eps_seed": eps["eps_seed"],
+        "eps_sigma": float(law["eps_sigma"]),
+        "eps_seed": law["eps_seed"],
         "state_entry_count": len(grown_state),
         "live_state_matches_grown": True,
         "event_credit": False,

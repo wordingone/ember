@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from pathlib import Path
 from typing import Mapping
@@ -84,6 +85,62 @@ def _bound_file(root: Path, row: object, *, code: str) -> Path:
     return path
 
 
+def validate_runtime_config(path: Path, expected_source_commit: str) -> None:
+    try:
+        config = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        _refuse("EVENT_RUNTIME_CONFIG_INVALID")
+    if not isinstance(config, dict):
+        _refuse("EVENT_RUNTIME_CONFIG_INVALID")
+    unsigned = {key: value for key, value in config.items() if key != "config_sha256"}
+    model = config.get("model")
+    objective = config.get("objective")
+    precision = config.get("precision")
+    optimizer = config.get("optimizer")
+    mtp = objective.get("mtp_aux_heads") if isinstance(objective, dict) else None
+    qat = precision.get("qat") if isinstance(precision, dict) else None
+    if (
+        set(config) != {"schema", "source_commit", "historical_config_sha256", "scope", "execution_authority", "model", "objective", "precision", "optimizer", "no_new_parallel_authority", "config_sha256"}
+        or config.get("schema") != "q2-event-runtime-config-v1"
+        or config.get("source_commit") != expected_source_commit
+        or not isinstance(config.get("historical_config_sha256"), str)
+        or re.fullmatch(r"[0-9a-f]{64}", config["historical_config_sha256"]) is None
+        or config.get("scope") != "TARGET_TENSOR_COUNTERFACTUAL"
+        or config.get("execution_authority") != "EMBER_LAB_Q2_EVENT_ONLY"
+        or config.get("no_new_parallel_authority") is not True
+        or config.get("config_sha256") != hashlib.sha256(_canonical(unsigned)).hexdigest()
+        or not isinstance(model, dict)
+        or set(model) != {"vocab", "hidden", "layers", "heads", "seq", "tied_embeddings", "grad_checkpointing"}
+        or any(not isinstance(model[key], int) or isinstance(model[key], bool) or model[key] <= 0 for key in ("vocab", "hidden", "layers", "heads", "seq"))
+        or model.get("tied_embeddings") not in (True, False)
+        or model.get("grad_checkpointing") not in (True, False)
+        or not isinstance(objective, dict)
+        or set(objective) != {"mtp_aux_heads"}
+        or not isinstance(mtp, dict)
+        or set(mtp) != {"enabled", "n_heads", "weight"}
+        or mtp.get("enabled") not in (True, False)
+        or not isinstance(mtp.get("n_heads"), int)
+        or isinstance(mtp.get("n_heads"), bool)
+        or mtp["n_heads"] < 0
+        or not isinstance(mtp.get("weight"), (int, float))
+        or isinstance(mtp.get("weight"), bool)
+        or not math.isfinite(float(mtp["weight"]))
+        or mtp["weight"] < 0
+        or not isinstance(precision, dict)
+        or set(precision) != {"qat"}
+        or not isinstance(qat, dict)
+        or set(qat) != {"enabled"}
+        or qat.get("enabled") not in (True, False)
+        or not isinstance(optimizer, dict)
+        or set(optimizer) != {"lr_muon"}
+        or isinstance(optimizer.get("lr_muon"), bool)
+        or not isinstance(optimizer.get("lr_muon"), (int, float))
+        or not math.isfinite(float(optimizer["lr_muon"]))
+        or optimizer["lr_muon"] <= 0
+    ):
+        _refuse("EVENT_RUNTIME_CONFIG_INVALID")
+
+
 def admit_event_inputs(
     *, custody_root: Path, checkpoint_manifest_path: Path,
     batch_manifest_path: Path, expected_source_commit: str, expected_run_id: str,
@@ -117,6 +174,7 @@ def admit_event_inputs(
     if not isinstance(files, dict) or set(files) != required:
         _refuse("EVENT_CHECKPOINT_FILE_SET_INVALID")
     resolved = {name: _bound_file(root, row, code="EVENT_CHECKPOINT") for name, row in files.items()}
+    validate_runtime_config(resolved["config"], expected_source_commit)
     rows = batch["microsteps"]
     if not isinstance(rows, list) or not rows:
         _refuse("EVENT_BATCH_ROWS_INVALID")

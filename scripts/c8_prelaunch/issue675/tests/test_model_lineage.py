@@ -42,26 +42,59 @@ def _fixture(root: Path):
     torch.save(seed, seed_path)
     manifest_path = root / "manifest.json"
     manifest_path.write_text(json.dumps({"files": {"model.pt": _sha(seed_path)}}), encoding="utf-8")
-    operator_path = root / "cbase_grow_dryrun.py"
-    operator_path.write_text("canonical grow operator\n", encoding="utf-8")
+    operator_path = root / "q2_model_lineage.py"
+    operator_path.write_bytes(MODULE_PATH.read_bytes())
+    runtime_config_path = root / "runtime-config.json"
+    runtime_config_path.write_text('{"schema":"q2-event-runtime-config-v1"}\n', encoding="utf-8")
+    module = _load()
+    grown = module.replay_b2_widen(
+        seed,
+        n_layers=1,
+        eps_sigma=module.CANONICAL_B2_EPS_SIGMA,
+        eps_seed=module.CANONICAL_B2_EPS_SEED,
+    )
+    grown_path = root / "grown.pt"
+    torch.save(grown, grown_path)
     receipt = {
-        "ticket": "CBASE-GROW-RUNG2-EVENT-B2",
-        "run_id": "q2-lineage-test",
-        "eps": {"eps_sigma": 0.1, "eps_seed": 17, "banned_zero_assertion_passed": True},
+        "schema": "q2-b2-replay-remint-receipt-v1",
+        "source_commit": "a" * 40,
+        "lineage_run_id": module.CANONICAL_B2_LINEAGE_RUN_ID,
+        "verdict": "B2_REPLAY_REMINTED",
+        "historical": {
+            "receipt_sha256": module.CANONICAL_B2_RECEIPT_SHA256,
+            "operator_sha256": module.CANONICAL_B2_OPERATOR_SHA256,
+            "ticket": "CBASE-GROW-RUNG2-EVENT-B2",
+            "verdict": "B2_REALIZED_PASS",
+        },
+        "law": {
+            "n_layers": 1,
+            "eps_sigma": module.CANONICAL_B2_EPS_SIGMA,
+            "eps_seed": module.CANONICAL_B2_EPS_SEED,
+            "banned_zero_assertion_passed": True,
+            "distinct_from_eps0_cache": True,
+            "eta_band_pass": True,
+            "twin_cosine_pass": True,
+        },
+        "inputs": {
+            "seed_manifest_sha256": _sha(manifest_path),
+            "seed_model_sha256": _sha(seed_path),
+            "runtime_config_sha256": _sha(runtime_config_path),
+        },
         "operator_sha256": _sha(operator_path),
-        "cache": {"cache_path": "grown.pt", "distinct_from_eps0_cache": True},
-        "realized_proof": {"eta_band_pass": True, "twin_cosine_pass": True},
-        "verdict": "B2_REALIZED_PASS",
+        "output": {"grown_model_sha256": _sha(grown_path)},
     }
+    receipt["receipt_sha256"] = hashlib.sha256(
+        (json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    ).hexdigest()
     receipt_path = root / "b2.json"
     receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
-    return seed, seed_path, manifest_path, operator_path, receipt_path
+    return seed, seed_path, manifest_path, operator_path, runtime_config_path, receipt_path
 
 
 def test_replays_b2_widen_and_binds_live_state(tmp_path: Path):
     module = _load()
-    seed, seed_path, manifest_path, operator_path, receipt_path = _fixture(tmp_path / "lineage")
-    grown = module.replay_b2_widen(seed, n_layers=1, eps_sigma=0.1, eps_seed=17)
+    seed, seed_path, manifest_path, operator_path, runtime_config_path, receipt_path = _fixture(tmp_path / "lineage")
+    grown = module.replay_b2_widen(seed, n_layers=1, eps_sigma=module.CANONICAL_B2_EPS_SIGMA, eps_seed=module.CANONICAL_B2_EPS_SEED)
     grown_path = tmp_path / "lineage" / "grown.pt"
     torch.save(grown, grown_path)
 
@@ -72,7 +105,9 @@ def test_replays_b2_widen_and_binds_live_state(tmp_path: Path):
         grown_model_path=grown_path,
         b2_receipt_path=receipt_path,
         grow_operator_path=operator_path,
-        expected_run_id="q2-lineage-test",
+        runtime_config_path=runtime_config_path,
+        expected_run_id=module.CANONICAL_B2_LINEAGE_RUN_ID,
+        expected_source_commit="a" * 40,
         n_layers=1,
     )
 
@@ -80,19 +115,21 @@ def test_replays_b2_widen_and_binds_live_state(tmp_path: Path):
     assert result["seed_model_sha256"] == _sha(seed_path)
     assert result["grown_model_sha256"] == _sha(grown_path)
     assert result["b2_receipt_sha256"] == _sha(receipt_path)
+    assert result["historical_grow_operator_sha256"] == module.CANONICAL_B2_OPERATOR_SHA256
+    assert result["replay_operator_sha256"] == _sha(operator_path)
     assert result["live_state_matches_grown"] is True
     assert "path" not in json.dumps(result).lower()
 
 
 def test_refuses_tampered_grown_state(tmp_path: Path):
     module = _load()
-    seed, seed_path, manifest_path, operator_path, receipt_path = _fixture(tmp_path / "lineage")
-    grown = module.replay_b2_widen(seed, n_layers=1, eps_sigma=0.1, eps_seed=17)
+    seed, seed_path, manifest_path, operator_path, runtime_config_path, receipt_path = _fixture(tmp_path / "lineage")
+    grown = module.replay_b2_widen(seed, n_layers=1, eps_sigma=module.CANONICAL_B2_EPS_SIGMA, eps_seed=module.CANONICAL_B2_EPS_SEED)
     grown[next(iter(grown))] = grown[next(iter(grown))].clone().add(1)
     grown_path = tmp_path / "lineage" / "grown.pt"
     torch.save(grown, grown_path)
 
-    with pytest.raises(module.ModelLineageRefusal, match="GROWN_MODEL_REPLAY_MISMATCH"):
+    with pytest.raises(module.ModelLineageRefusal, match="GROWN_MODEL_HASH_MISMATCH"):
         module.validate_model_lineage(
             live_state=grown,
             seed_manifest_path=manifest_path,
@@ -100,19 +137,21 @@ def test_refuses_tampered_grown_state(tmp_path: Path):
             grown_model_path=grown_path,
             b2_receipt_path=receipt_path,
             grow_operator_path=operator_path,
-            expected_run_id="q2-lineage-test",
+            runtime_config_path=runtime_config_path,
+            expected_run_id=module.CANONICAL_B2_LINEAGE_RUN_ID,
+            expected_source_commit="a" * 40,
             n_layers=1,
         )
 
 
 def test_refuses_foreign_operator_before_loading_grown(tmp_path: Path):
     module = _load()
-    seed, seed_path, manifest_path, operator_path, receipt_path = _fixture(tmp_path / "lineage")
+    seed, seed_path, manifest_path, operator_path, runtime_config_path, receipt_path = _fixture(tmp_path / "lineage")
     operator_path.write_text("foreign operator\n", encoding="utf-8")
     grown_path = tmp_path / "lineage" / "grown.pt"
     torch.save(seed, grown_path)
 
-    with pytest.raises(module.ModelLineageRefusal, match="B2_OPERATOR_HASH_MISMATCH"):
+    with pytest.raises(module.ModelLineageRefusal, match="B2_REPLAY_OPERATOR_HASH_MISMATCH"):
         module.validate_model_lineage(
             live_state=seed,
             seed_manifest_path=manifest_path,
@@ -120,6 +159,87 @@ def test_refuses_foreign_operator_before_loading_grown(tmp_path: Path):
             grown_model_path=grown_path,
             b2_receipt_path=receipt_path,
             grow_operator_path=operator_path,
-            expected_run_id="q2-lineage-test",
+            runtime_config_path=runtime_config_path,
+            expected_run_id=module.CANONICAL_B2_LINEAGE_RUN_ID,
+            expected_source_commit="a" * 40,
+            n_layers=1,
+        )
+
+
+def test_refuses_tampered_remint_receipt_or_source_commit(tmp_path: Path):
+    module = _load()
+    seed, seed_path, manifest_path, operator_path, runtime_config_path, receipt_path = _fixture(tmp_path / "lineage")
+    grown = module.replay_b2_widen(seed, n_layers=1, eps_sigma=module.CANONICAL_B2_EPS_SIGMA, eps_seed=module.CANONICAL_B2_EPS_SEED)
+    grown_path = tmp_path / "lineage" / "grown.pt"
+    torch.save(grown, grown_path)
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["law"]["eps_seed"] = 18
+    receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+
+    with pytest.raises(module.ModelLineageRefusal, match="B2_REPLAY_RECEIPT_INVALID"):
+        module.validate_model_lineage(
+            live_state=grown,
+            seed_manifest_path=manifest_path,
+            seed_model_path=seed_path,
+            grown_model_path=grown_path,
+            b2_receipt_path=receipt_path,
+            grow_operator_path=operator_path,
+            runtime_config_path=runtime_config_path,
+            expected_run_id=module.CANONICAL_B2_LINEAGE_RUN_ID,
+            expected_source_commit="b" * 40,
+            n_layers=1,
+        )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "code"),
+    [
+        ("historical_receipt", "B2_HISTORICAL_BINDING_INVALID"),
+        ("historical_operator", "B2_HISTORICAL_BINDING_INVALID"),
+        ("eps_sigma", "B2_FROZEN_LAW_MISMATCH"),
+        ("eps_seed", "B2_FROZEN_LAW_MISMATCH"),
+    ],
+)
+def test_refuses_self_hashed_foreign_remint_authority(
+    tmp_path: Path, mutation: str, code: str
+):
+    module = _load()
+    seed, seed_path, manifest_path, operator_path, runtime_config_path, receipt_path = _fixture(
+        tmp_path / "lineage"
+    )
+    grown = module.replay_b2_widen(
+        seed,
+        n_layers=1,
+        eps_sigma=module.CANONICAL_B2_EPS_SIGMA,
+        eps_seed=module.CANONICAL_B2_EPS_SEED,
+    )
+    grown_path = tmp_path / "lineage" / "grown.pt"
+    torch.save(grown, grown_path)
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    if mutation == "historical_receipt":
+        receipt["historical"]["receipt_sha256"] = "6" * 64
+    elif mutation == "historical_operator":
+        receipt["historical"]["operator_sha256"] = "7" * 64
+    elif mutation == "eps_sigma":
+        receipt["law"]["eps_sigma"] = 0.1
+    else:
+        receipt["law"]["eps_seed"] = 17
+    receipt.pop("receipt_sha256")
+    receipt["receipt_sha256"] = hashlib.sha256(
+        (json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    ).hexdigest()
+    receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+
+    with pytest.raises(module.ModelLineageRefusal, match=code):
+        module.validate_model_lineage(
+            live_state=grown,
+            seed_manifest_path=manifest_path,
+            seed_model_path=seed_path,
+            grown_model_path=grown_path,
+            b2_receipt_path=receipt_path,
+            grow_operator_path=operator_path,
+            runtime_config_path=runtime_config_path,
+            expected_run_id=module.CANONICAL_B2_LINEAGE_RUN_ID,
+            expected_source_commit="a" * 40,
             n_layers=1,
         )

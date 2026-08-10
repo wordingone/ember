@@ -93,6 +93,7 @@ def test_adjudicator_binds_terminal_event_and_exact_replay_bytes(tmp_path: Path)
     dispatch_path, bindings = fixture._authority(
         custody,
         lineage["b2_receipt_path"],
+        lineage["runtime_config_path"],
         lineage["b1m_receipt_path"],
         lineage["b3_receipt_path"],
         lineage["batch_manifest_path"],

@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -16,8 +18,20 @@ from typing import Mapping
 import numpy as np
 import torch
 
+import q2_model_lineage as _model_lineage
+from q2_model_lineage import replay_b2_widen
+from q2_momentum_lineage import resolve_seed_momentum
+
 
 _MAX_TEMP = 4 * 1024**3
+_CANONICAL_B2_RECEIPT_NAME = "cbase-grow-rung2-event-grow-rung2-20260709-remeasure-b2.json"
+_CANONICAL_B2_PATH_SUFFIX = ("receipts", _CANONICAL_B2_RECEIPT_NAME)
+_CANONICAL_B2_RECEIPT_PATH = Path(__file__).resolve().parents[3] / "receipts" / _CANONICAL_B2_RECEIPT_NAME
+_CANONICAL_B2_RECEIPT_SHA256 = _model_lineage.CANONICAL_B2_RECEIPT_SHA256
+_CANONICAL_B2_LINEAGE_RUN_ID = _model_lineage.CANONICAL_B2_LINEAGE_RUN_ID
+_CANONICAL_B2_OPERATOR_SHA256 = _model_lineage.CANONICAL_B2_OPERATOR_SHA256
+_CANONICAL_B2_EPS_SIGMA = _model_lineage.CANONICAL_B2_EPS_SIGMA
+_CANONICAL_B2_EPS_SEED = _model_lineage.CANONICAL_B2_EPS_SEED
 
 
 class InputBuildRefusal(ValueError):
@@ -88,6 +102,211 @@ def _atomic_torch(value: torch.Tensor, target: Path) -> dict[str, object]:
     return {"logical_path": target.relative_to(target.parents[1]).as_posix(), "sha256": _sha(target), "bytes": target.stat().st_size}
 
 
+def _load_json(path: Path, code: str) -> dict[str, object]:
+    try:
+        value = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        _refuse(code)
+    if not isinstance(value, dict):
+        _refuse(code)
+    return value
+
+
+def _validate_canonical_b2_source(path: Path, lineage_run_id: str) -> dict[str, object]:
+    try:
+        resolved = Path(path).resolve(strict=True)
+        canonical = Path(_CANONICAL_B2_RECEIPT_PATH).resolve(strict=True)
+    except OSError:
+        _refuse("INPUT_B2_RECEIPT_UNAVAILABLE")
+    if resolved != canonical:
+        _refuse("INPUT_B2_RECEIPT_PATH_MISMATCH")
+    if _sha(resolved) != _CANONICAL_B2_RECEIPT_SHA256:
+        _refuse("INPUT_B2_RECEIPT_IDENTITY_MISMATCH")
+    receipt = _load_json(resolved, "INPUT_B2_RECEIPT_INVALID")
+    eps = receipt.get("eps")
+    cache = receipt.get("cache")
+    proof = receipt.get("realized_proof")
+    if (
+        lineage_run_id != _CANONICAL_B2_LINEAGE_RUN_ID
+        or receipt.get("ticket") != "CBASE-GROW-RUNG2-EVENT-B2"
+        or receipt.get("run_id") != _CANONICAL_B2_LINEAGE_RUN_ID
+        or receipt.get("verdict") != "B2_REALIZED_PASS"
+        or receipt.get("operator_sha256") != _CANONICAL_B2_OPERATOR_SHA256
+        or not isinstance(eps, Mapping)
+        or eps.get("eps_sigma") != _CANONICAL_B2_EPS_SIGMA
+        or eps.get("eps_seed") != _CANONICAL_B2_EPS_SEED
+        or eps.get("banned_zero_assertion_passed") is not True
+        or not isinstance(cache, Mapping)
+        or cache.get("distinct_from_eps0_cache") is not True
+        or not isinstance(proof, Mapping)
+        or proof.get("eta_band_pass") is not True
+        or proof.get("twin_cosine_pass") is not True
+    ):
+        _refuse("INPUT_B2_FROZEN_LAW_MISMATCH")
+    return receipt
+
+
+def _materialize_replay_inputs(
+    *,
+    root: Path,
+    sources: Mapping[str, Path],
+    target_name: str,
+    config: Mapping[str, object],
+    source_commit: str,
+    lineage_run_id: str,
+    runtime_config_sha256: str,
+) -> dict[str, dict[str, object]]:
+    try:
+        seed_state = torch.load(sources["seed_model"], map_location="cpu", weights_only=True)
+        b2 = _validate_canonical_b2_source(sources["b2_receipt"], lineage_run_id)
+        eps = b2["eps"]
+        layers = config["model"]["layers"]
+        cache = b2["cache"]
+        proof = b2["realized_proof"]
+        if (
+            b2.get("ticket") != "CBASE-GROW-RUNG2-EVENT-B2"
+            or b2.get("run_id") != lineage_run_id
+            or b2.get("verdict") != "B2_REALIZED_PASS"
+            or not isinstance(eps, Mapping)
+            or eps.get("banned_zero_assertion_passed") is not True
+            or not isinstance(cache, Mapping)
+            or cache.get("distinct_from_eps0_cache") is not True
+            or not isinstance(proof, Mapping)
+            or proof.get("eta_band_pass") is not True
+            or proof.get("twin_cosine_pass") is not True
+            or not isinstance(b2.get("operator_sha256"), str)
+            or re.fullmatch(r"[0-9a-f]{64}", b2["operator_sha256"]) is None
+        ):
+            raise TypeError
+        grown = replay_b2_widen(
+            seed_state,
+            n_layers=layers,
+            eps_sigma=eps["eps_sigma"],
+            eps_seed=eps["eps_seed"],
+        )
+    except InputBuildRefusal:
+        raise
+    except Exception:
+        _refuse("INPUT_B2_REPLAY_INVALID")
+    grown_row = _atomic_torch(grown, root / "inputs" / "grown_model.pt")
+    momentum = resolve_seed_momentum(
+        seed_model_path=sources["seed_model"],
+        seed_optimizer_path=sources["seed_optimizer"],
+        target_name=target_name,
+    )
+    momentum_row = _atomic_torch(momentum, root / "inputs" / "pre_momentum.pt")
+    operator_row = _atomic_copy(
+        Path(_model_lineage.__file__).resolve(), root / "inputs" / "grow_operator.py"
+    )
+    historical_receipt_sha = _sha(sources["b2_receipt"])
+    receipt = {
+        "schema": "q2-b2-replay-remint-receipt-v1",
+        "source_commit": source_commit,
+        "lineage_run_id": lineage_run_id,
+        "verdict": "B2_REPLAY_REMINTED",
+        "historical": {
+            "receipt_sha256": historical_receipt_sha,
+            "operator_sha256": b2["operator_sha256"],
+            "ticket": b2["ticket"],
+            "verdict": b2["verdict"],
+        },
+        "law": {
+            "n_layers": layers,
+            "eps_sigma": eps["eps_sigma"],
+            "eps_seed": eps["eps_seed"],
+            "banned_zero_assertion_passed": True,
+            "distinct_from_eps0_cache": True,
+            "eta_band_pass": True,
+            "twin_cosine_pass": True,
+        },
+        "inputs": {
+            "seed_manifest_sha256": _sha(sources["seed_manifest"]),
+            "seed_model_sha256": _sha(sources["seed_model"]),
+            "runtime_config_sha256": runtime_config_sha256,
+        },
+        "operator_sha256": operator_row["sha256"],
+        "output": {"grown_model_sha256": grown_row["sha256"]},
+    }
+    receipt["receipt_sha256"] = hashlib.sha256(_canonical(receipt)).hexdigest()
+    receipt_path = root / "inputs" / "b2_receipt.json"
+    receipt_row = _atomic_bytes(_canonical(receipt), receipt_path)
+    return {
+        "grown_model": grown_row,
+        "pre_momentum": momentum_row,
+        "grow_operator": operator_row,
+        "b2_receipt": receipt_row,
+    }
+
+
+def _atomic_bytes(value: bytes, target: Path) -> dict[str, object]:
+    if target.exists():
+        _refuse("INPUT_OUTPUT_ALREADY_EXISTS")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".tmp", dir=target.parent)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(value)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, target)
+    except Exception:
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise
+    return {
+        "logical_path": target.relative_to(target.parents[1]).as_posix(),
+        "sha256": _sha(target),
+        "bytes": target.stat().st_size,
+    }
+
+
+def _materialize_runtime_config(
+    *, root: Path, historical_config: Mapping[str, object], historical_path: Path, source_commit: str
+) -> dict[str, object]:
+    try:
+        model = historical_config["model"]
+        objective = historical_config["objective"]
+        mtp = objective["mtp_aux_heads"]
+        precision = historical_config["precision"]
+        qat = precision["qat"]
+        optimizer = historical_config["optimizer"]
+        if not all(isinstance(value, Mapping) for value in (model, objective, mtp, precision, qat, optimizer)):
+            raise TypeError
+        lr_muon = optimizer["lr_muon"]
+        if (
+            isinstance(lr_muon, bool)
+            or not isinstance(lr_muon, (int, float))
+            or not math.isfinite(float(lr_muon))
+            or lr_muon <= 0
+        ):
+            raise TypeError
+        body = {
+            "schema": "q2-event-runtime-config-v1",
+            "source_commit": source_commit,
+            "historical_config_sha256": _sha(historical_path),
+            "scope": "TARGET_TENSOR_COUNTERFACTUAL",
+            "execution_authority": "EMBER_LAB_Q2_EVENT_ONLY",
+            "model": {
+                key: model[key]
+                for key in ("vocab", "hidden", "layers", "heads", "seq", "tied_embeddings", "grad_checkpointing")
+            },
+            "objective": {
+                "mtp_aux_heads": {
+                    key: mtp[key] for key in ("enabled", "n_heads", "weight")
+                }
+            },
+            "precision": {"qat": {"enabled": qat["enabled"]}},
+            "optimizer": {"lr_muon": lr_muon},
+            "no_new_parallel_authority": True,
+        }
+    except (KeyError, TypeError):
+        _refuse("INPUT_CONFIG_SOURCE_INVALID")
+    body["config_sha256"] = hashlib.sha256(_canonical(body)).hexdigest()
+    return _atomic_bytes(_canonical(body), root / "inputs" / "config.json")
+
+
 def _write_manifest(path: Path, body: dict[str, object]) -> Path:
     if path.exists(): _refuse("INPUT_OUTPUT_ALREADY_EXISTS")
     body["manifest_sha256"] = hashlib.sha256(_canonical(body)).hexdigest()
@@ -134,9 +353,15 @@ def build_frozen_batch(*, root: Path, run_id: str, source_commit: str, config: M
 
 def stage_event_inputs(*, root: Path, run_id: str, lineage_run_id: str, source_commit: str, sources: Mapping[str, Path], target_name: str, intermediate_size: int, config: Mapping[str, object]) -> tuple[Path, Path]:
     root = Path(root).resolve(); root.mkdir(parents=True, exist_ok=True)
-    expected={"config","seed_model","seed_optimizer","grown_model","seed_manifest","b1m_receipt","b2_receipt","pre_momentum","grow_operator"}
+    expected={"config","seed_model","seed_optimizer","seed_manifest","b1m_receipt","b2_receipt"}
     if set(sources)!=expected or not target_name or not lineage_run_id or intermediate_size<=0: _refuse("INPUT_CHECKPOINT_SCHEMA_INVALID")
-    rows={name:_atomic_copy(Path(path),root/"inputs"/f"{name}{Path(path).suffix or '.bin'}") for name,path in sources.items()}
+    if _load_json(sources["config"], "INPUT_CONFIG_SOURCE_INVALID") != config:
+        _refuse("INPUT_CONFIG_ARGUMENT_MISMATCH")
+    _validate_canonical_b2_source(sources["b2_receipt"], lineage_run_id)
+    rows={name:_atomic_copy(Path(path),root/"inputs"/f"{name}{Path(path).suffix or '.bin'}") for name,path in sources.items() if name not in {"b2_receipt","config"}}
+    config_row=_materialize_runtime_config(root=root,historical_config=config,historical_path=sources["config"],source_commit=source_commit)
+    rows["config"]=config_row
+    rows.update(_materialize_replay_inputs(root=root,sources=sources,target_name=target_name,config=config,source_commit=source_commit,lineage_run_id=lineage_run_id,runtime_config_sha256=config_row["sha256"]))
     checkpoint={"schema":"q2-event-checkpoint-input-v1","source_commit":source_commit,"run_id":run_id,"lineage_run_id":lineage_run_id,"target_name":target_name,"intermediate_size":intermediate_size,"files":rows}
     checkpoint_path=_write_manifest(root/"checkpoint-manifest.json",checkpoint)
     batch_path=build_frozen_batch(root=root,run_id=run_id,source_commit=source_commit,config=config)
