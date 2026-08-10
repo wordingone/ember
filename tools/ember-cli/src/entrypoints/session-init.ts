@@ -33,6 +33,7 @@ import {
 import { createMicrocompact } from "../services/compaction.ts";
 import { wrapModelClientWithCircuitBreaker } from "../services/model-circuit-breaker-client.ts";
 import type { CircuitBreakerState } from "../services/model-circuit-breaker.ts";
+import type { ModelSeatState } from "./model-seat.ts";
 import {
   modelSupportsStructuredOutputs,
   type ModelCapabilityDeclaration,
@@ -51,6 +52,11 @@ let _cleanupHandlers:   Array<() => unknown>  = [];
 let _resolvedNCtx:       number | null        = null;
 /** issue #239: the live circuit breaker guarding the production model client; null before init(). */
 let _circuitBreakerHandle: GuardedProductionCallModel | null = null;
+let _modelSeatState: ModelSeatState = { phase: "ABSENT" };
+
+export function getModelSeatState(): ModelSeatState {
+  return { ..._modelSeatState };
+}
 
 // ---------------------------------------------------------------------------
 // n_ctx-derived tool-result budget (issue #157; conversation-total extension #197)
@@ -508,6 +514,89 @@ function buildOfflineCallModel(): GuardedProductionCallModel {
   return guarded;
 }
 
+/** Defers the existing Ember Lab handshake/owned-server admission until the
+ * first model call.  The callback is the sole authority boundary; this helper
+ * only memoizes its result and exposes the operator seat projection. */
+export type LazyOwnedServerResult =
+  | string
+  | null
+  | { endpoint: string; owner: string; vramBytes: number };
+
+export function buildLazyOwnedCallModel(
+  opts: ProductionCallModelOpts,
+  startOwnedServer: () => Promise<LazyOwnedServerResult>,
+  onSeatState?: (state: ModelSeatState) => void,
+  seatOwner?: string,
+): GuardedProductionCallModel {
+  let delegate: GuardedProductionCallModel | null = null;
+  let startPromise: Promise<GuardedProductionCallModel> | null = null;
+  const publishState = (state: ModelSeatState): void => {
+    _modelSeatState = { ...state };
+    onSeatState?.(state);
+  };
+  const start = async (): Promise<GuardedProductionCallModel> => {
+    if (delegate) return delegate;
+    if (!startPromise) {
+      publishState({ phase: "LOADING", owner: seatOwner });
+      startPromise = startOwnedServer().then((result) => {
+        const admission = typeof result === "string"
+          ? { endpoint: result, owner: seatOwner }
+          : result === null
+            ? { endpoint: null, owner: seatOwner }
+            : result;
+        const endpoint = admission.endpoint;
+        const owner = admission.owner;
+        const vramBytes = "vramBytes" in admission ? admission.vramBytes : undefined;
+        if (endpoint && (
+          typeof owner !== "string" || owner.trim() === "" ||
+          typeof vramBytes !== "number" || !Number.isSafeInteger(vramBytes) || vramBytes < 0
+        )) {
+          throw new Error("owned resident admission lacks a valid owner or VRAM measurement");
+        }
+        delegate = endpoint
+          ? buildGuardedProductionCallModel({ ...opts, serverUrl: endpoint })
+          : {
+              callModel: async (_params: CallModelParams): Promise<ModelResponse> => {
+                throw new ModelHttpError(503, "Model seat is absent; no owned endpoint was admitted.");
+              },
+              getCircuitState: () => ({
+                state: "closed" as const,
+                consecutiveFailures: 0,
+                openedAt: null,
+                lastProbeAt: null,
+                lastStatus: 503,
+                lastReason: "model seat absent",
+                endpoint: null,
+                lastSuccessAt: null,
+              }),
+            };
+        publishState(endpoint
+          ? { phase: "RESIDENT", owner, endpoint, vramBytes }
+          : { phase: "ABSENT", owner });
+        return delegate;
+      }).catch((error) => {
+        publishState({ phase: "ABSENT", owner: seatOwner });
+        startPromise = null;
+        throw error;
+      });
+    }
+    return startPromise;
+  };
+  return {
+    callModel: async (params) => (await start()).callModel(params),
+    getCircuitState: () => delegate?.getCircuitState() ?? {
+      state: "closed",
+      consecutiveFailures: 0,
+      openedAt: null,
+      lastProbeAt: null,
+      lastStatus: null,
+      lastReason: null,
+      endpoint: null,
+      lastSuccessAt: null,
+    },
+  };
+}
+
 /**
  * Returns the live circuit-breaker state for the production model client, or
  * null before init() has wired one up. Polled by the TUI's degraded-state
@@ -604,6 +693,12 @@ export interface InitOpts {
   /** The currently served model's exact `modelConfigSha256`, from the same
    *  seat-produced contract. Never inferred; `null`/`undefined` means none. */
   servedModelConfigSha256?: string | null;
+  /** Existing Ember Lab authority invoked on first model interaction. */
+  lazyOwnedServerStarter?: () => Promise<LazyOwnedServerResult>;
+  /** Owner label from the selected model-seat contract; never inferred. */
+  seatOwner?: string;
+  /** Sink for the existing model-seat status surface. */
+  onModelSeatState?: (state: ModelSeatState) => void;
 }
 
 export async function init(opts: InitOpts = {}): Promise<void> {
@@ -688,7 +783,14 @@ async function _runInit(opts: InitOpts): Promise<void> {
   // just buildProductionCallModel's raw fetch -- see buildGuardedProductionCallModel's
   // docstring for why this replaces the bare productionCallModel wiring.
   // GPU-free mode: serverUrl is null, so use the offline stub instead.
-  _circuitBreakerHandle = !serverUrl
+  _circuitBreakerHandle = opts.lazyOwnedServerStarter
+    ? buildLazyOwnedCallModel({
+        serverUrl: serverUrl ?? "",
+        nCtx,
+        modelCapabilities:       opts.modelCapabilities ?? null,
+        servedModelConfigSha256: opts.servedModelConfigSha256 ?? null,
+      }, opts.lazyOwnedServerStarter, opts.onModelSeatState, opts.seatOwner)
+    : !serverUrl
     ? buildOfflineCallModel()
     : buildGuardedProductionCallModel({
         serverUrl,

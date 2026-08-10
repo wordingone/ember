@@ -6,6 +6,17 @@ export const REFERENCE_SEAT_FLAG = "--reference-seat";
 
 export type ModelSeat = "OWNED_ADMITTED" | "OWNED_DEVELOPMENT" | "REFERENCE_ONLY" | "OFFLINE";
 
+/** The operator-visible seat lifecycle.  This is a projection of the existing
+ * model-seat authority, not a second launcher or ownership registry. */
+export type ModelSeatPhase = "ABSENT" | "LOADING" | "RESIDENT";
+
+export interface ModelSeatState {
+  phase: ModelSeatPhase;
+  owner?: string;
+  vramBytes?: number;
+  endpoint?: string;
+}
+
 interface OwnedServerLaunchBase {
   pythonExecutable: string;
   serverPath: string;
@@ -68,6 +79,10 @@ export interface OwnedModelIdentity {
    * served identity's `modelConfigSha256` above (see `selectedModelContract`).
    */
   modelConfigCapabilities?: ModelConfigCapabilities;
+}
+
+export interface OwnedResidentIdentity extends OwnedModelIdentity {
+  vramBytes: number;
 }
 
 const MODEL_FREE_FAST_FLAGS = new Set([
