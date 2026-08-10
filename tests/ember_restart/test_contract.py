@@ -525,6 +525,27 @@ def test_checkpoint_candidate_binds_owned_multimodal_reasoning_tool_path(tmp_pat
     assert payload["stage"] == "CHECKPOINT_CANDIDATE"
 
 
+def test_git_authority_probe_hides_windows_console(monkeypatch: pytest.MonkeyPatch):
+    from scripts.ember_restart import contract
+
+    observed: dict[str, object] = {}
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess:
+        observed["command"] = command
+        observed["kwargs"] = kwargs
+        return subprocess.CompletedProcess(command, 0, b"", "")
+
+    monkeypatch.setattr(contract.os, "name", "nt")
+    monkeypatch.setattr(contract.subprocess, "run", fake_run)
+
+    contract._run_git(REPO_ROOT, "status", "--porcelain=v1")
+
+    kwargs = observed["kwargs"]
+    assert isinstance(kwargs, dict)
+    assert kwargs["shell"] is False
+    assert kwargs["creationflags"] == subprocess.CREATE_NO_WINDOW
+
+
 def test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary(tmp_path: Path):
     """The R1 entry producer must delegate admission to the canonical contract.
 

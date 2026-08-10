@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import re
 import subprocess
 import sys
@@ -135,15 +136,23 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _run_git(source_root: Path, *git_args: str, text: bool = False) -> subprocess.CompletedProcess:
+    """Run a Git authority probe without creating a visible Windows console."""
+    return subprocess.run(
+        ["git", "-C", str(source_root), *git_args],
+        check=False,
+        capture_output=True,
+        text=text,
+        shell=False,
+        creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+    )
+
+
 def _git_blob_sha256(source_root: Path, source_commit: str, relative_path: str) -> str:
     """Hash one immutable Git blob, never a mutable checkout path."""
     if not COMMIT_RE.fullmatch(source_commit):
         raise ValueError("source_commit: expected lowercase 40-character Git SHA")
-    result = subprocess.run(
-        ["git", "-C", str(source_root), "show", f"{source_commit}:{relative_path}"],
-        check=False,
-        capture_output=True,
-    )
+    result = _run_git(source_root, "show", f"{source_commit}:{relative_path}")
     if result.returncode != 0:
         raise ValueError(f"source blob unavailable: {source_commit}:{relative_path}")
     return hashlib.sha256(result.stdout).hexdigest()
@@ -151,12 +160,7 @@ def _git_blob_sha256(source_root: Path, source_commit: str, relative_path: str) 
 
 def _current_source_commit(source_root: Path) -> str:
     """Return the exact clean-checkout authority used for new R1 entries."""
-    result = subprocess.run(
-        ["git", "-C", str(source_root), "rev-parse", "--verify", "HEAD^{commit}"],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    result = _run_git(source_root, "rev-parse", "--verify", "HEAD^{commit}", text=True)
     current = result.stdout.strip().lower()
     if result.returncode != 0 or not COMMIT_RE.fullmatch(current):
         raise ValueError("R1 WARM-100 entry: current source commit is unavailable")
@@ -165,17 +169,11 @@ def _current_source_commit(source_root: Path) -> str:
 
 def _require_clean_source_tree(source_root: Path) -> None:
     """Refuse authority claims from a checkout with uncommitted source bytes."""
-    result = subprocess.run(
-        [
-            "git",
-            "-C",
-            str(source_root),
-            "status",
-            "--porcelain=v1",
-            "--untracked-files=all",
-        ],
-        check=False,
-        capture_output=True,
+    result = _run_git(
+        source_root,
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=all",
         text=True,
     )
     if result.returncode != 0:
