@@ -57,6 +57,24 @@ Menu layout reuses `resolveCommandBarPage` row-budget tiers; the pane counts the
 menu rows in its fixed chrome so chart cards stay truthful; controls wrap and never truncate at
 any supported width.
 
+## Keyboard path and workaround
+
+The pointer is the primary path, but START is not pointer-only. After selecting a process, press
+`Tab` from an empty prompt with no completion showing. Focus enters the LIVE RUN controls at the
+first enabled control, which is START while the selected run is idle. Press `Enter or Space` to
+activate that same START action. If `/train` produces an offer, `[CONFIRM START]` remains the
+focused action; `Enter or Space` activates its confirmation dialog through the same control
+handler as a click. `Escape` returns focus to the prompt without dispatching.
+
+The keyboard-only workaround is the slash-command spelling shown by the membrane: type `/train`
+and press Enter to request the offer, then type `/train confirm <offerId>` using the exact visible
+offer id and press Enter. Both pointer START and typed input enter the same `OperatorInjector` and
+registered command handler; neither is a second launch authority. The behavioral regression is
+`src/screens/repl-process-select-membrane.test.ts`, test
+`click-START and typed /name invoke the SAME registered handler, same session`; keyboard traversal
+and Enter/Space activation are separately pinned by
+`src/screens/repl-keyboard-operator-controls.test.ts`.
+
 ## Acceptance
 
 1. The directive flow renders exactly: SELECT PROCESS under the state line, dropdown at the
