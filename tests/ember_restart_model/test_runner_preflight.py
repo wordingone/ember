@@ -1086,7 +1086,41 @@ class RunnerPreflightTests(unittest.TestCase):
                 resume_optimizer_transition_registry=None,
                 resume_optimizer_transition_registry_sha256=None,
                 write_budget_bytes=4096, max_records=3, canonical_runner_authority=assertion_authority,
+                c_relocated_under_disk_budget_runner=False,
+                relocation_custody_root=None,
             )
+
+    def test_governed_vertical_forwards_relocation_to_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            custody = Path(directory) / "custody"
+            artifact_root = custody / "artifacts"
+            cache = custody / "tmp"
+            cache.mkdir(parents=True)
+            artifact_root.mkdir(parents=True)
+            bindings = {name: str((custody / name.lower()).resolve()) for name in (
+                "TEMP", "TMP", "TORCH_HOME", "TRITON_CACHE_DIR", "CUDA_CACHE_PATH", "HF_HOME", "XDG_CACHE_HOME",
+            )}
+            bindings["TEMP"] = str(cache.resolve())
+            bindings["TMP"] = str(cache.resolve())
+            for value in set(bindings.values()):
+                Path(value).mkdir(parents=True, exist_ok=True)
+            nonce = "f" * 32
+            assertion = custody / "child-env-startup.json"
+            assertion.write_text(json.dumps({"schema_version": 1, "nonce": nonce, "bindings": bindings}), encoding="utf-8")
+            relocation = custody / "relocated"
+            relocation.mkdir()
+            with patch.dict(os.environ, {**bindings, "EMBER_DISK_BUDGET_ENV_ASSERTION": str(assertion), "EMBER_DISK_BUDGET_ENV_NONCE": nonce}, clear=True):
+                with patch.object(run_vertical_slice, "checkpoint_serialization_byte_bound", return_value=4096):
+                    with patch.object(run_vertical_slice, "run", return_value={}) as vertical_run:
+                        run_vertical_slice.run_governed_vertical(
+                            seed=83,
+                            artifact_root=artifact_root,
+                            write_budget_bytes=4096,
+                            c_relocated_under_disk_budget_runner=True,
+                            relocation_custody_root=relocation,
+                        )
+            self.assertIs(vertical_run.call_args.kwargs["c_relocated_under_disk_budget_runner"], True)
+            self.assertEqual(vertical_run.call_args.kwargs["relocation_custody_root"], relocation)
 
     def test_governed_vertical_wrapper_reaches_real_run_authority_equality(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

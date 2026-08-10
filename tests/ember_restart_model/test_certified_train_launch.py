@@ -3789,23 +3789,18 @@ class ResumeRelocationCustodyTests(_ResumeBundleMixin, unittest.TestCase):
     """Issue #1452: run_vertical_slice.authorize_production_resume_checkpoint
     accepts a resume checkpoint that resolves off B: only when the runner also
     receives --c-relocated-under-disk-budget-runner and a
-    --relocation-custody-root, and only the specialist subparser declares
-    them (issue #1462: governed-vertical has neither the CLI flags nor the
-    Python parameters -- verified directly against run_vertical_slice.py's
-    governed-vertical subparser and run_governed_vertical's own signature).
-    certified_train_launch.py emitted neither, so build_runner_argv could
+    --relocation-custody-root. Before #1462 only the specialist route declared
+    and forwarded them, so build_runner_argv could
     build parse-perfect argv the runner deterministically refused the moment
     the certificate's authorized resume root lived off B: -- after the
     certificate was minted, the expensive place. The cure has two parts:
     (1) the relocation custody root is a certificate decision, read from the
     certificate and never derived from the checkpoint path or local disk
-    (mirrors #1426's allowed_resume_roots); (2) since governed-vertical
-    cannot express relocation at all, a governed-vertical launch whose resume
-    is relocated is refused fail-closed before any argv exists, instead of
-    emitting argv the runner would reject. ONE predicate --
+    (mirrors #1426's allowed_resume_roots); (2) both governed-vertical and
+    specialist tails forward the exact certificate pair. ONE predicate --
     resume.relocation_custody_root is not None, surfaced on ValidatedLaunch
-    as resume_relocation_custody_root -- drives both that refusal and the
-    specialist tail's flag emission, so the two cannot drift apart."""
+    as resume_relocation_custody_root -- drives both tails' flag emission, so
+    they cannot drift apart."""
 
     def _specialist_bundle(self, directory: str) -> dict[str, pathlib.Path]:
         """A fully valid specialist launch: everything SpecialistRoutingTests.
@@ -3890,17 +3885,12 @@ class ResumeRelocationCustodyTests(_ResumeBundleMixin, unittest.TestCase):
                 ],
             )
 
-    def test_governed_vertical_route_with_relocated_resume_is_refused(self) -> None:
-        """Matrix (b). A PLAIN (non-specialist) bundle whose resume is
-        properly authorized for relocation -- the certificate declares a
-        containing custody root, exactly as (a)'s does -- is still refused,
-        because governed-vertical cannot express the relocation at all
-        (issue #1462), not because the certificate is incomplete. Distinct
-        from test_c_rooted_resume_without_declared_custody_root_is_refused
-        below, which is the OTHER refusal (missing declaration, fires on
-        either route since _validate_resume_request runs before route
-        determination)."""
+    def test_governed_vertical_route_with_relocated_resume_emits_both_flags(self) -> None:
+        """A certificate-authorized relocated resume is expressible on the
+        governed route and emits the same closed relocation pair as the
+        specialist route."""
 
+        module = load_module()
         with tempfile.TemporaryDirectory() as directory:
             paths = self._bundle(directory)
             custody_root = paths["custody_root"]
@@ -3915,13 +3905,16 @@ class ResumeRelocationCustodyTests(_ResumeBundleMixin, unittest.TestCase):
                     }
                 ),
             )
-            # Pins the #1462 citation too, not just the leading clause -- a
-            # future edit that dropped the citation (the refusal's only
-            # pointer to the cure path) would otherwise pass this untested.
-            self._refused(
-                paths,
-                "governed-vertical route cannot express a relocated resume "
-                "checkpoint.*issue #1462",
+            launch = self._validate(module, paths)
+            argv = module.build_runner_argv(paths["repo"], launch)
+            self.assertIn("governed-vertical", argv)
+            self.assertEqual(
+                argv[-3:],
+                [
+                    "--c-relocated-under-disk-budget-runner",
+                    "--relocation-custody-root",
+                    str(custody_root.resolve()),
+                ],
             )
 
     def test_governed_vertical_route_with_b_rooted_resume_is_unaffected(self) -> None:
@@ -3959,21 +3952,11 @@ class ResumeRelocationCustodyTests(_ResumeBundleMixin, unittest.TestCase):
                 ["--resume-counter-receipt", str(evidence)],
             )
 
-    def test_governed_vertical_tail_structurally_never_carries_relocation_flags(
+    def test_governed_vertical_tail_carries_certificate_relocation_flags(
         self,
     ) -> None:
-        """Matrix (d). Defense in depth, independent of validate_certified_
-        request's refusal: constructs a ValidatedLaunch directly (bypassing
-        validation entirely, the same technique SpecialistRoutingTests.
-        test_specialist_flags_match_the_runner_argparse uses to exercise
-        build_runner_argv as a pure function) with specialist_capability=None
-        and resume_relocation_custody_root SET, and asserts the governed-
-        vertical argv build_runner_argv produces carries neither flag. This
-        pins build_runner_argv's OWN structure -- the governed-vertical tail
-        has no code path that can reach either flag string -- so a future
-        edit to that tail cannot silently reintroduce the argparse crash
-        #1452 exists to prevent, even if validate_certified_request's
-        refusal were ever weakened or bypassed."""
+        """The pure argv builder forwards the certificate value without
+        deriving it from the checkpoint path."""
 
         module = load_module()
         launch = module.ValidatedLaunch(
@@ -3997,8 +3980,14 @@ class ResumeRelocationCustodyTests(_ResumeBundleMixin, unittest.TestCase):
         self.assertIsNone(launch.specialist_capability)
         argv = module.build_runner_argv(pathlib.Path("/repo"), launch)
         self.assertIn("governed-vertical", argv)
-        self.assertNotIn("--c-relocated-under-disk-budget-runner", argv)
-        self.assertNotIn("--relocation-custody-root", argv)
+        self.assertEqual(
+            argv[-3:],
+            [
+                "--c-relocated-under-disk-budget-runner",
+                "--relocation-custody-root",
+                "C:\\relocated-custody",
+            ],
+        )
 
     def test_c_rooted_resume_without_declared_custody_root_is_refused(self) -> None:
         """The other refusal: a non-B: authorized root with no declared
