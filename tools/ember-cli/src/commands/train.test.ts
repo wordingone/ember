@@ -18,6 +18,10 @@ import {
 } from "./train.ts";
 import type { CommandContext } from "../types/command-types.ts";
 import { tryDispatchSlashCommand } from "../services/slash-dispatch.ts";
+import {
+  getActivityFeedState,
+  startActivityFeed,
+} from "../services/activity-feed.ts";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -277,6 +281,53 @@ describe("train command", () => {
         expect(failures[0]?.message).toContain("certified train consumer");
       }
     } finally {
+      fs.rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  it("routes a rejected certified completion through the mounted activity feed exactly once", async () => {
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-background-rejection-"));
+    const monitor = startActivityFeed({
+      receiptsDir: path.join(scratch, "receipts"),
+      totalityDir: path.join(scratch, "totality"),
+      outageMarkerPath: path.join(scratch, "planned-outage.json"),
+      restartLogPath: path.join(scratch, "restart-log.jsonl"),
+      watchdogStatePath: path.join(scratch, "watchdog-state.json"),
+      ledgerPath: path.join(scratch, "ledger.jsonl"),
+    });
+    try {
+      writeCanonicalArtifacts(scratch);
+      let rejectCompletion: ((error: Error) => void) | undefined;
+      const completion = new Promise<LaunchPacketRunResult>((_resolve, reject) => {
+        rejectCompletion = reject;
+      });
+      const cmd = createTrainCommand({
+        repoRoot: scratch,
+        runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+        runCertifiedLaunch: () => ({ kind: "background", pid: 2468, completion }),
+      });
+      const dispatchDeps = {
+        getCommands: async () => [cmd],
+        findCommand: (name: string) => (name === "train" ? cmd : undefined),
+      };
+      const offer = await tryDispatchSlashCommand("/train", mockCtx, dispatchDeps);
+      const offerId = offer?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
+      expect(offerId).toBeDefined();
+      await tryDispatchSlashCommand(`/train confirm ${offerId}`, mockCtx, dispatchDeps);
+
+      rejectCompletion?.(new Error("child monitor transport failed"));
+      await completion.catch(() => undefined);
+      await Bun.sleep(20);
+
+      const matching = getActivityFeedState().recentLines.filter((line) =>
+        line.text.includes("completion monitor failed") && line.text.includes("child pid=2468"),
+      );
+      expect(matching).toHaveLength(1);
+      const ledger = fs.readFileSync(path.join(scratch, "ledger.jsonl"), "utf8");
+      expect(ledger.match(/completion monitor failed/g)).toHaveLength(1);
+      expect(ledger).not.toContain("execution_receipt");
+    } finally {
+      monitor.stop();
       fs.rmSync(scratch, { recursive: true, force: true });
     }
   });
