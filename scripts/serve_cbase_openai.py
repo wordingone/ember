@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """serve_cbase_openai.py — OpenAI-compatible HTTP endpoint for cbase 2.2B rung-2 (refs #508).
 
 Serves the ember-created checkpoint (b1-snapshot) behind /v1/completions and /v1/chat/completions,
@@ -48,6 +51,8 @@ except ImportError as e:
     print(f"ERROR: Missing required dependency: {e}", file=sys.stderr)
     print("Install: pip install torch transformers fastapi pydantic uvicorn tokenizers", file=sys.stderr)
     sys.exit(1)
+
+from serving_registry import deregister, register
 
 # ============================================================================
 # Configuration & Constants
@@ -507,6 +512,19 @@ async def startup():
         tokenizer_path=args.tokenizer if args.tokenizer else None,
         receipt_path=args.receipt_path if getattr(args, "receipt_path", None) else None,
     )
+    register(
+        args.port,
+        str(args.checkpoint.resolve()),
+        os.getpid(),
+        "serve_cbase_openai",
+        args.device,
+    )
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    """Remove this exact process from the serving registry on normal or signal exit."""
+    deregister(pid=os.getpid())
 
 
 @app.get("/health")

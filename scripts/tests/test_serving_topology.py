@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_serving_topology.py — pytest suite for serving topology contract (#516).
 
 CPU-only, no real servers. Tests include:
@@ -9,6 +12,7 @@ CPU-only, no real servers. Tests include:
 Run via: pytest scripts/tests/test_serving_topology.py -v
 """
 
+import ast
 import json
 import os
 import sys
@@ -23,6 +27,8 @@ import pytest
 # Add scripts to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import endpoint_identity
+import serving_registry
 from serving_registry import register, deregister, read, find_for_model
 from endpoint_identity import assert_endpoint_identity
 
@@ -121,6 +127,11 @@ class TestServingRegistry:
 
             found = find_for_model("/path/to/nonexistent", registry_path)
             assert found is None
+
+    def test_planned_outage_marker_uses_the_canonical_cockpit_state_path(self):
+        """A wrong marker location must not silently disable planned-outage handling."""
+        expected = Path("tools/ember-cli/state/planned-outage.json")
+        assert getattr(serving_registry, "PLANNED_OUTAGE_MARKER_PATH", None) == expected
 
 
 class TestEndpointIdentity:
@@ -224,6 +235,136 @@ class TestEndpointIdentity:
         with mock.patch("urllib.request.urlopen", side_effect=mock_urlopen_fail):
             with pytest.raises(ValueError, match="Failed to fetch"):
                 assert_endpoint_identity("http://localhost:8082", "27b")
+
+    def test_board_probe_records_both_endpoint_identity_fields(self):
+        """A board receipt must never accept a bare /health response as identity."""
+        calls = []
+
+        def fake_assert(base_url, expected_model_substring):
+            calls.append((base_url, expected_model_substring))
+            return {
+                "models_field": "cbase-27b",
+                "completion_model_field": "cbase-27b",
+                "ts": "2026-08-10T12:00:00Z",
+            }
+
+        probe = getattr(endpoint_identity, "assert_board_endpoint_identity", None)
+        assert callable(probe), "shared board endpoint-identity probe is missing"
+        result = probe(
+            "http://127.0.0.1:8082/health",
+            "27b",
+            assert_identity=fake_assert,
+        )
+
+        assert calls == [("http://127.0.0.1:8082", "27b")]
+        assert result == {
+            "reachable": True,
+            "models_field": "cbase-27b",
+            "completion_model_field": "cbase-27b",
+            "ts": "2026-08-10T12:00:00Z",
+        }
+
+    @pytest.mark.parametrize(
+        "relative_path",
+        [
+            "cbase_grow_rung2_contended_launch_gate.py",
+            "cbase_grow_rung2_gpu_offload_probe.py",
+        ],
+    )
+    def test_board_conditions_delegate_to_the_shared_identity_probe(self, relative_path):
+        """Removing the shared call would restore the defective bare-health receipt path."""
+        source_path = Path(__file__).parent.parent / relative_path
+        tree = ast.parse(source_path.read_text(encoding="utf-8"))
+        probe_functions = [
+            node for node in tree.body
+            if isinstance(node, ast.FunctionDef) and node.name == "_probe_server"
+        ]
+        assert len(probe_functions) == 1
+        calls = [node for node in ast.walk(probe_functions[0]) if isinstance(node, ast.Call)]
+        assert any(
+            isinstance(call.func, ast.Name)
+            and call.func.id == "assert_board_endpoint_identity"
+            for call in calls
+        ), f"{relative_path} does not bind receipts to endpoint identity"
+
+    def test_board_condition_consumer_census_is_closed(self):
+        """The per-consumer proof must fail when a new health-based receipt appears."""
+        scripts_dir = Path(__file__).parent.parent
+        consumers = {
+            path.relative_to(scripts_dir).as_posix()
+            for path in scripts_dir.rglob("*.py")
+            if "tests" not in path.relative_to(scripts_dir).parts
+            and not path.name.startswith("test_")
+            and "--server-health-url" in path.read_text(encoding="utf-8")
+        }
+        assert consumers == {
+            "cbase_grow_rung2_contended_launch_gate.py",
+            "cbase_grow_rung2_gpu_offload_probe.py",
+        }
+
+
+class TestServeCbaseRegistryLifecycle:
+    def test_startup_registers_and_shutdown_deregisters_the_exact_process(self):
+        """A running legacy shim must register after load and remove its real PID on exit."""
+        source_path = Path(__file__).parent.parent / "serve_cbase_openai.py"
+        tree = ast.parse(source_path.read_text(encoding="utf-8"))
+        functions = {
+            node.name: node
+            for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        assert "startup" in functions
+        assert "shutdown" in functions
+
+        startup_calls = [node for node in ast.walk(functions["startup"]) if isinstance(node, ast.Call)]
+        shutdown_calls = [node for node in ast.walk(functions["shutdown"]) if isinstance(node, ast.Call)]
+        assert any(isinstance(call.func, ast.Name) and call.func.id == "register" for call in startup_calls)
+        assert any(isinstance(call.func, ast.Name) and call.func.id == "deregister" for call in shutdown_calls)
+
+        load_call = next(
+            call for call in startup_calls
+            if isinstance(call.func, ast.Attribute)
+            and isinstance(call.func.value, ast.Name)
+            and call.func.value.id == "model_server"
+            and call.func.attr == "load"
+        )
+        register_call = next(
+            call for call in startup_calls
+            if isinstance(call.func, ast.Name) and call.func.id == "register"
+        )
+        assert register_call.lineno > load_call.lineno
+        assert len(register_call.args) == 5
+        assert isinstance(register_call.args[3], ast.Constant)
+        assert register_call.args[3].value == "serve_cbase_openai"
+
+        deregister_call = next(
+            call for call in shutdown_calls
+            if isinstance(call.func, ast.Name) and call.func.id == "deregister"
+        )
+        assert len(deregister_call.keywords) == 1
+        assert deregister_call.keywords[0].arg == "pid"
+        assert isinstance(deregister_call.keywords[0].value, ast.Call)
+        assert isinstance(deregister_call.keywords[0].value.func, ast.Attribute)
+        assert deregister_call.keywords[0].value.func.attr == "getpid"
+
+
+class TestCliManagedSpawnAuthority:
+    def test_legacy_spawn_path_carries_the_registry_integration_contract(self):
+        """AC5 preserves the path but makes its registry obligation explicit."""
+        source_path = (
+            Path(__file__).parents[2]
+            / "tools"
+            / "ember-cli"
+            / "src"
+            / "entrypoints"
+            / "owned-server-supervisor.ts"
+        )
+        source = source_path.read_text(encoding="utf-8")
+        ensure_body = source.split("export async function ensureOwnedServer(", 1)[1]
+        assert "(deps.spawnServer ?? defaultSpawnServer)(command)" in ensure_body
+        assert "legacy direct-spawn path remains in this TypeScript owner" in ensure_body
+        assert "must consult the canonical serving registry before spawning" in ensure_body
+        assert "#1282" in ensure_body
 
 
 class TestTopologyDrift:
