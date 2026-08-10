@@ -1,0 +1,77 @@
+{
+  "schema_version": "ember-issue35-terminal-conservation-receipt-v1",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "file_sha256 values hash raw on-disk bytes without normalization; canonical_sha256, packet_sha256, and receipt_sha256 hash canonical JSON with the named self-hash field omitted",
+  "ticket": "ISSUE35-TERMINAL-CONSERVATION",
+  "ts": "2026-08-10T05:05:00Z",
+  "issue": 35,
+  "repository": "wordingone/ember",
+  "base_sha": "60f83718f4032905b3e39fa1cfc7565a01211c25",
+  "source_crosswalk": {
+    "path": "manifests/authority/issue-35-authority-supersession-crosswalk-v1.json",
+    "file_sha256": "99eee3b1790b826587d2cc1da2de821aa64ddd13e6da10aa4d99bd5f36229754",
+    "canonical_sha256": "b2252524dda8cdf647d36065f89b304f56aeb77676e29cddcf63f791cbd3bfc9",
+    "row_count": 251,
+    "recoverable_or_transferred_rows": 125,
+    "custody_gap_rows": 126
+  },
+  "terminal_dispositions": {
+    "path": "manifests/authority/issue-35-terminal-dispositions-v1.json",
+    "file_sha256": "981a05d92fe2fc2886992753a530223567ad48107246ce42b6c24b9b598adb85",
+    "canonical_sha256": "da0e581f1a91bf544fb223a11cdfd10c5b849607162ffc94bf970a8ee51381a0",
+    "operator_disposition_rows": 126,
+    "set_equal_to_custody_gaps": true,
+    "target": "HISTORICAL_ORPHANED",
+    "reopen_rule": "REOPEN_ON_AUTHENTIC_SOURCE_RECOVERY"
+  },
+  "denominators": {
+    "issue35_mandates": 102,
+    "issue35_defects": 13,
+    "issue35_unwatched": 26,
+    "issue35_doc_divergences": 7,
+    "issue265_transfer": 7,
+    "legacy_milestones": 55,
+    "legacy_conditions": 41,
+    "total_rows": 251
+  },
+  "verified_artifacts": {
+    "scripts/verify_issue35_terminal_conservation.py": "785f7d47086be9971b36553509ac11f033c5191212044134af7d6856b4cd294b",
+    "tests/test_issue35_terminal_conservation.py": "e4378da6164c300e7eac500d2437b2da233c26ee2071099b5dc383830476a456",
+    "docs/audit/issue-35-terminal-conservation.md": "9611f99695216ed435c214f50e933ccae82879471646ae35b16ab2576768d646",
+    "README.md": "4e54d768a68c608fe2688becc70ae06427636a6f5ab583f2ada77934ed7bde38",
+    "GOAL.md": "deea3553b37d5232112d2fbf758e4f71e01ee7e5e39e4b86b75a6cb10b986a3e"
+  },
+  "executed_evidence": [
+    {
+      "command": "python -B -m pytest tests/test_issue35_terminal_conservation.py -q",
+      "result": "PASS 9/9"
+    },
+    {
+      "command": "python -B scripts/check_docs_freshness.py --repo .",
+      "result": "DOCS_FRESHNESS_CHECK_PASS"
+    },
+    {
+      "command": "python -B scripts/verify_issue35_terminal_conservation.py --repo . --packet manifests/authority/issue-35-terminal-dispositions-v1.json",
+      "result": "PASS_FOR_TERMINAL_ZERO_CREDIT 251/125/126"
+    }
+  ],
+  "claim_boundary": "Historical umbrella custody is conserved without reconstructing missing wording. Current D-row, roadmap, corpus, training, evaluation, custody, and REOPEN obligations remain with their existing owners.",
+  "credits": {
+    "completion": false,
+    "authority_completion": false,
+    "corpus_quality": false,
+    "training": false,
+    "checkpoint": false,
+    "evaluation": false,
+    "benchmark": false,
+    "capability": false,
+    "milestone": false,
+    "model_result": false
+  },
+  "no_new_parallel_authority": true,
+  "verdict": "PASS_FOR_TERMINAL_ZERO_CREDIT",
+  "receipt_sha256": "163e837904aaf25ef4c6023a97e1d24c23783b4eefd09638290baaaeb9b5f8cb"
+}
