@@ -149,4 +149,42 @@ describe("#1369 autocomplete keeps the banner/spine region rendered", () => {
       harness.unmount();
     }
   });
+
+  test("an exact argument-free command dispatches even when a longer prefix match is selected first", async () => {
+    const dispatched: string[] = [];
+    const harness = mountRepl([
+      {
+        name: "probeexact-longer",
+        description: "registry-order collision selected ahead of the exact command",
+        isEnabled: () => true,
+        execute: async (args: string) => {
+          dispatched.push(`longer:${args}`);
+          return { type: "message", message: "WRONG-COMMAND-EXECUTED" };
+        },
+      },
+      {
+        name: "probeexact",
+        description: "exact first-enter dispatch probe",
+        isEnabled: () => true,
+        execute: async (args: string) => {
+          dispatched.push(`exact:${args}`);
+          return { type: "message", message: "EXACT-COMMAND-EXECUTED" };
+        },
+      },
+    ]);
+    try {
+      await flush();
+      for (const character of "/probeexact") _deliverKeyEvent(character, {});
+      await flush();
+      _deliverKeyEvent("return", {});
+      await flush();
+
+      expect(dispatched).toEqual(["exact:"]);
+      const rows = [...reconstructRows(harness.chunks.join("")).values()];
+      expect(rows.some((line) => line.includes("EXACT-COMMAND-EXECUTED"))).toBe(true);
+      expect(rows.some((line) => line.includes("WRONG-COMMAND-EXECUTED"))).toBe(false);
+    } finally {
+      harness.unmount();
+    }
+  });
 });

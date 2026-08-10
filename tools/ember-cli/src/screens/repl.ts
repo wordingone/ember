@@ -49,7 +49,7 @@ import {
   slashDropdownMaxVisible,
   slashDropdownCanRender,
 } from "../services/slash-dropdown.ts";
-import { getCommands } from "../command-registry.ts";
+import { findCommand, getCommands } from "../command-registry.ts";
 import type { RegistryCommand } from "../types/command-types.ts";
 import {
   buildMessageLookups,
@@ -1800,8 +1800,8 @@ export function ReplScreen({
         const chosen = dropdownDisplay.visible[dropdownDisplay.selectedIndex];
         if (!chosen) return;
         const liveCommand = inputActions.getSnapshot().text.trim();
-        const isExactArgumentFreeCommand =
-          liveCommand === `/${chosen.name}` && !chosen.argumentHint;
+        const exactCommand = findCommand(slashQueryFrom(liveCommand), dropdownMatches);
+        const isExactArgumentFreeCommand = exactCommand !== undefined && !exactCommand.argumentHint;
         if (!isExactArgumentFreeCommand) {
           inputActions.setText(completeSlashSelection(chosen));
           return;
