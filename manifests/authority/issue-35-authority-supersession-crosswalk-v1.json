@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-authority-supersession-crosswalk-v1",
   "repository": "wordingone/ember",
-  "source_commit": "f85c19b631fa64bb4202ad612dc4944507f60c95",
+  "source_commit": "60f83718f4032905b3e39fa1cfc7565a01211c25",
   "current_authority": {
     "matrix_path": "docs/ember-authority-matrix.md",
     "matrix_sha256": "56b7dfdc2dda2aff04c2a48ce5fe7bd7367c81fe6056f9d10b2afcd03e2c5936",
@@ -203,7 +203,7 @@
         },
         {
           "path": "GOAL.md",
-          "sha256": "e672811db736fc558c15ac0b93f502856b7abbb9c4fb4acf2c71c849c1d23671"
+          "sha256": "deea3553b37d5232112d2fbf758e4f71e01ee7e5e39e4b86b75a6cb10b986a3e"
         }
       ]
     },
@@ -231,7 +231,7 @@
         },
         {
           "path": "GOAL.md",
-          "sha256": "e672811db736fc558c15ac0b93f502856b7abbb9c4fb4acf2c71c849c1d23671"
+          "sha256": "deea3553b37d5232112d2fbf758e4f71e01ee7e5e39e4b86b75a6cb10b986a3e"
         },
         {
           "path": "docs/spec/publishability-adjudication-v1.md",
@@ -2410,7 +2410,7 @@
         },
         {
           "path": "GOAL.md",
-          "sha256": "e672811db736fc558c15ac0b93f502856b7abbb9c4fb4acf2c71c849c1d23671"
+          "sha256": "deea3553b37d5232112d2fbf758e4f71e01ee7e5e39e4b86b75a6cb10b986a3e"
         },
         {
           "path": "docs/spec/publishability-adjudication-v1.md",
@@ -2435,7 +2435,7 @@
         },
         {
           "path": "GOAL.md",
-          "sha256": "e672811db736fc558c15ac0b93f502856b7abbb9c4fb4acf2c71c849c1d23671"
+          "sha256": "deea3553b37d5232112d2fbf758e4f71e01ee7e5e39e4b86b75a6cb10b986a3e"
         },
         {
           "path": "docs/spec/publishability-adjudication-v1.md",
@@ -2460,7 +2460,7 @@
         },
         {
           "path": "GOAL.md",
-          "sha256": "e672811db736fc558c15ac0b93f502856b7abbb9c4fb4acf2c71c849c1d23671"
+          "sha256": "deea3553b37d5232112d2fbf758e4f71e01ee7e5e39e4b86b75a6cb10b986a3e"
         },
         {
           "path": "docs/spec/publishability-adjudication-v1.md",
@@ -2485,7 +2485,7 @@
         },
         {
           "path": "GOAL.md",
-          "sha256": "e672811db736fc558c15ac0b93f502856b7abbb9c4fb4acf2c71c849c1d23671"
+          "sha256": "deea3553b37d5232112d2fbf758e4f71e01ee7e5e39e4b86b75a6cb10b986a3e"
         },
         {
           "path": "docs/spec/publishability-adjudication-v1.md",
@@ -2510,7 +2510,7 @@
         },
         {
           "path": "GOAL.md",
-          "sha256": "e672811db736fc558c15ac0b93f502856b7abbb9c4fb4acf2c71c849c1d23671"
+          "sha256": "deea3553b37d5232112d2fbf758e4f71e01ee7e5e39e4b86b75a6cb10b986a3e"
         },
         {
           "path": "docs/spec/publishability-adjudication-v1.md",
@@ -2535,7 +2535,7 @@
         },
         {
           "path": "GOAL.md",
-          "sha256": "e672811db736fc558c15ac0b93f502856b7abbb9c4fb4acf2c71c849c1d23671"
+          "sha256": "deea3553b37d5232112d2fbf758e4f71e01ee7e5e39e4b86b75a6cb10b986a3e"
         },
         {
           "path": "docs/spec/publishability-adjudication-v1.md",
@@ -2560,7 +2560,7 @@
         },
         {
           "path": "GOAL.md",
-          "sha256": "e672811db736fc558c15ac0b93f502856b7abbb9c4fb4acf2c71c849c1d23671"
+          "sha256": "deea3553b37d5232112d2fbf758e4f71e01ee7e5e39e4b86b75a6cb10b986a3e"
         },
         {
           "path": "docs/spec/publishability-adjudication-v1.md",
@@ -2585,7 +2585,7 @@
         },
         {
           "path": "GOAL.md",
-          "sha256": "e672811db736fc558c15ac0b93f502856b7abbb9c4fb4acf2c71c849c1d23671"
+          "sha256": "deea3553b37d5232112d2fbf758e4f71e01ee7e5e39e4b86b75a6cb10b986a3e"
         },
         {
           "path": "docs/spec/publishability-adjudication-v1.md",
@@ -2610,7 +2610,7 @@
         },
         {
           "path": "GOAL.md",
-          "sha256": "e672811db736fc558c15ac0b93f502856b7abbb9c4fb4acf2c71c849c1d23671"
+          "sha256": "deea3553b37d5232112d2fbf758e4f71e01ee7e5e39e4b86b75a6cb10b986a3e"
         },
         {
           "path": "docs/spec/publishability-adjudication-v1.md",
@@ -2635,7 +2635,7 @@
         },
         {
           "path": "GOAL.md",
-          "sha256": "e672811db736fc558c15ac0b93f502856b7abbb9c4fb4acf2c71c849c1d23671"
+          "sha256": "deea3553b37d5232112d2fbf758e4f71e01ee7e5e39e4b86b75a6cb10b986a3e"
         },
         {
           "path": "docs/spec/publishability-adjudication-v1.md",
@@ -2660,7 +2660,7 @@
         },
         {
           "path": "GOAL.md",
-          "sha256": "e672811db736fc558c15ac0b93f502856b7abbb9c4fb4acf2c71c849c1d23671"
+          "sha256": "deea3553b37d5232112d2fbf758e4f71e01ee7e5e39e4b86b75a6cb10b986a3e"
         },
         {
           "path": "docs/spec/publishability-adjudication-v1.md",
@@ -2685,7 +2685,7 @@
         },
         {
           "path": "GOAL.md",
-          "sha256": "e672811db736fc558c15ac0b93f502856b7abbb9c4fb4acf2c71c849c1d23671"
+          "sha256": "deea3553b37d5232112d2fbf758e4f71e01ee7e5e39e4b86b75a6cb10b986a3e"
         },
         {
           "path": "docs/spec/publishability-adjudication-v1.md",
@@ -5224,5 +5224,5 @@
       "completion_credit": false
     }
   ],
-  "crosswalk_sha256": "40a0ac05bd92fe0b55a01b5fa83b186de6d985279abae2e67707e70badc46712"
+  "crosswalk_sha256": "b2252524dda8cdf647d36065f89b304f56aeb77676e29cddcf63f791cbd3bfc9"
 }
