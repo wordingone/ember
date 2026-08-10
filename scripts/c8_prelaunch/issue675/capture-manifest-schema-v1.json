@@ -1,0 +1,220 @@
+{
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/wordingone/ember/schemas/q2-actual-update-capture-v1.json",
+  "title": "Q2 actual-update target-tensor capture",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "issue",
+    "scope",
+    "run_id",
+    "event_captured_at",
+    "source_commit",
+    "dispatch",
+    "bindings",
+    "binding_files",
+    "target",
+    "artifacts",
+    "non_target_manifest",
+    "optimizer",
+    "paired_losses",
+    "credits",
+    "no_new_parallel_authority",
+    "verdict",
+    "manifest_sha256"
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "shape": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "integer", "minimum": 1}
+    },
+    "tensorArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["logical_name", "sha256", "bytes", "dtype", "shape"],
+      "properties": {
+        "logical_name": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"type": "integer", "minimum": 1},
+        "dtype": {"enum": ["float32"]},
+        "shape": {"$ref": "#/$defs/shape"}
+      }
+    },
+    "falseCredits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "whole_step",
+        "null_confirmed",
+        "material_loss_bridge",
+        "training",
+        "checkpoint",
+        "capability",
+        "sufficient_pretraining"
+      ],
+      "properties": {
+        "whole_step": {"const": false},
+        "null_confirmed": {"const": false},
+        "material_loss_bridge": {"const": false},
+        "training": {"const": false},
+        "checkpoint": {"const": false},
+        "capability": {"const": false},
+        "sufficient_pretraining": {"const": false}
+      }
+    }
+  },
+  "properties": {
+    "schema": {"const": "q2-actual-update-capture-v1"},
+    "issue": {"const": 675},
+    "scope": {"const": "TARGET_TENSOR_COUNTERFACTUAL"},
+    "run_id": {"type": "string", "pattern": "^[A-Za-z0-9_.-]{1,128}$"},
+    "event_captured_at": {"type": "string", "format": "date-time"},
+    "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "dispatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["job_id", "manifest_sha256", "preflight_receipt_sha256"],
+      "properties": {
+        "job_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "preflight_receipt_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_sha256",
+        "config_sha256",
+        "checkpoint_sha256",
+        "optimizer_sha256",
+        "momentum_sha256",
+        "b3_receipt_sha256",
+        "batch_sha256",
+        "replay_sha256",
+        "threshold_sha256",
+        "verifier_sha256"
+      ],
+      "properties": {
+        "source_sha256": {"$ref": "#/$defs/sha256"},
+        "config_sha256": {"$ref": "#/$defs/sha256"},
+        "checkpoint_sha256": {"$ref": "#/$defs/sha256"},
+        "optimizer_sha256": {"$ref": "#/$defs/sha256"},
+        "momentum_sha256": {"$ref": "#/$defs/sha256"},
+        "b3_receipt_sha256": {"$ref": "#/$defs/sha256"},
+        "batch_sha256": {"$ref": "#/$defs/sha256"},
+        "replay_sha256": {"$ref": "#/$defs/sha256"},
+        "threshold_sha256": {"$ref": "#/$defs/sha256"},
+        "verifier_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "binding_files": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_sha256",
+        "config_sha256",
+        "checkpoint_sha256",
+        "optimizer_sha256",
+        "momentum_sha256",
+        "b3_receipt_sha256",
+        "batch_sha256",
+        "replay_sha256",
+        "threshold_sha256",
+        "verifier_sha256"
+      ],
+      "properties": {
+        "source_sha256": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+        "config_sha256": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+        "checkpoint_sha256": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+        "optimizer_sha256": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+        "momentum_sha256": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+        "b3_receipt_sha256": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+        "batch_sha256": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+        "replay_sha256": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+        "threshold_sha256": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+        "verifier_sha256": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"}
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "dtype", "shape", "mn"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "dtype": {"enum": ["float32"]},
+        "shape": {"$ref": "#/$defs/shape"},
+        "mn": {"type": "integer", "minimum": 1}
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pre", "reset_post", "transplant_post", "gradient", "reset_momentum", "transplant_momentum"],
+      "properties": {
+        "pre": {"$ref": "#/$defs/tensorArtifact"},
+        "reset_post": {"$ref": "#/$defs/tensorArtifact"},
+        "transplant_post": {"$ref": "#/$defs/tensorArtifact"},
+        "gradient": {"$ref": "#/$defs/tensorArtifact"},
+        "reset_momentum": {"$ref": "#/$defs/tensorArtifact"},
+        "transplant_momentum": {"$ref": "#/$defs/tensorArtifact"}
+      }
+    },
+    "non_target_manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["logical_name", "bytes", "entry_count", "sha256", "state_logical_name", "state_bytes", "state_sha256", "byte_identical_reset", "byte_identical_transplant"],
+      "properties": {
+        "logical_name": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+        "bytes": {"type": "integer", "minimum": 1},
+        "entry_count": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "state_logical_name": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+        "state_bytes": {"type": "integer", "minimum": 1, "maximum": 4294967296},
+        "state_sha256": {"$ref": "#/$defs/sha256"},
+        "byte_identical_reset": {"const": true},
+        "byte_identical_transplant": {"const": true}
+      }
+    },
+    "optimizer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "learning_rate", "scale", "reset_momentum_exact_zero", "transplant_momentum_nonzero"],
+      "properties": {
+        "name": {"const": "Muon"},
+        "learning_rate": {"type": "number", "exclusiveMinimum": 0},
+        "scale": {"type": "number", "exclusiveMinimum": 0},
+        "reset_momentum_exact_zero": {"const": true},
+        "transplant_momentum_nonzero": {"const": true}
+      }
+    },
+    "paired_losses": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reset", "transplant", "finite", "same_frozen_batch", "non_target_state_reused", "replay_count_per_arm", "deterministic", "replay_sha256"],
+      "properties": {
+        "reset": {"type": "number"},
+        "transplant": {"type": "number"},
+        "finite": {"const": true},
+        "same_frozen_batch": {"const": true},
+        "non_target_state_reused": {"const": true},
+        "replay_count_per_arm": {"const": 2},
+        "deterministic": {"const": true},
+        "replay_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "credits": {"$ref": "#/$defs/falseCredits"},
+    "no_new_parallel_authority": {"const": true},
+    "verdict": {"const": "CAPTURED_NOT_ADJUDICATED"},
+    "manifest_sha256": {"$ref": "#/$defs/sha256"}
+  }
+}
