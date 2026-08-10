@@ -14,6 +14,7 @@ Run: python tools/repo_guard_selftest.py
 """
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -42,12 +43,20 @@ GUARD_SUPPORT_FILES = [
     _LEGACY_CHECKER_REL,
     _LEGACY_POLICY_REL,
     "scripts/verify_authority_conservation.py",
+    "scripts/check_changed_receipts.py",
+    "scripts/gate_provenance.py",
+    "scripts/authority_supersession_gate.py",
+    "scripts/verify_authority_supersession_crosswalk.py",
+    "scripts/oldest_issue_disposition.py",
+    "scripts/receipt_check.py",
+    "tools/frozen-receipt-exceptions.json",
     "INVARIANT.md",
     "GOAL.md",
     "STATE.md",
     "GOVERNANCE.md",
     "README.md",
     "CONTINUITY.md",
+    "REDACTIONS.md",
     "docs/ember-completeness.md",
     "docs/ember-authority-matrix.md",
     "docs/ember-floor-contract.md",
@@ -86,7 +95,68 @@ def make_fixture(branch: str = "fix/selftest") -> Path:
         dst = tmp / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(REPO_ROOT / rel, dst)
+    for rel in (
+        "scripts/conv_c03_muon_ns3_live.py",
+        "scripts/timeshare_pretrain.py",
+        "scripts/train_multimodal_v0.py",
+    ):
+        (tmp / rel).write_text(
+            "# EMBER_ARTIFACT_CLASS=historical_only\n"
+            "raise SystemExit('historical_only: fixture')\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+    write_fixture_crosswalk(tmp)
     return tmp
+
+
+def write_fixture_crosswalk(root: Path) -> None:
+    matrix = root / "docs" / "ember-authority-matrix.md"
+    matrix_sha = hashlib.sha256(matrix.read_bytes()).hexdigest()
+    discrepancy_ids = sorted(
+        set(re.findall(r"\|\s*(D-\d{3})\s*\|", matrix.read_text(encoding="utf-8")))
+    )
+    milestone = root / "docs" / "roadmap" / "milestones" / "EMBER-02.md"
+    milestone.parent.mkdir(parents=True, exist_ok=True)
+    milestone.write_text("# EMBER-02\n\nFixture milestone.\n", encoding="utf-8", newline="\n")
+    evidence = [{"path": "docs/ember-authority-matrix.md", "sha256": matrix_sha}]
+    payload = {
+        "schema_version": "ember-authority-supersession-crosswalk-v1",
+        "repository": "wordingone/ember",
+        "source_commit": "0" * 40,
+        "current_authority": {
+            "matrix_path": "docs/ember-authority-matrix.md",
+            "matrix_sha256": matrix_sha,
+            "discrepancy_ids": discrepancy_ids,
+            "milestone_ids": ["EMBER-02"],
+            "historical_terminal": "HISTORICAL_ORPHANED",
+        },
+        "source_registries": [{
+            "registry_id": "fixture-registry",
+            "expected_source_ids": ["fixture-source"],
+            "evidence": evidence,
+        }],
+        "rows": [{
+            "source_registry": "fixture-registry",
+            "source_id": "fixture-source",
+            "source_kind": "legacy_condition",
+            "statement": "fixture obligation",
+            "disposition": "SUPERSEDED",
+            "targets": [discrepancy_ids[0], "EMBER-02"],
+            "evidence": evidence,
+            "completion_credit": False,
+        }],
+    }
+    payload["crosswalk_sha256"] = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    target = root / "manifests" / "authority" / "issue-35-authority-supersession-crosswalk-v1.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
 
 
 def commit_fixture(tmp: Path) -> None:
@@ -95,6 +165,86 @@ def commit_fixture(tmp: Path) -> None:
         ["git", "-C", str(tmp), "-c", "user.email=selftest@example.invalid",
          "-c", "user.name=selftest", "commit", "-q", "-m", "fixture init"],
         check=True,
+    )
+
+
+def migrate_fixture_authority_paths(tmp: Path) -> None:
+    authority = tmp / "docs" / "authority"
+    authority.mkdir(parents=True, exist_ok=True)
+    for name in (
+        "GOAL.md",
+        "INVARIANT.md",
+        "GOVERNANCE.md",
+        "CONTINUITY.md",
+        "REDACTIONS.md",
+        "STATE.md",
+    ):
+        (tmp / name).replace(authority / name)
+
+    matrix_path = tmp / "docs" / "ember-authority-matrix.md"
+    matrix_text = matrix_path.read_text(encoding="utf-8")
+    for name in (
+        "GOAL.md",
+        "INVARIANT.md",
+        "GOVERNANCE.md",
+        "CONTINUITY.md",
+        "REDACTIONS.md",
+        "STATE.md",
+    ):
+        matrix_text = matrix_text.replace(name, f"docs/authority/{name}")
+    matrix_path.write_text(
+        matrix_text,
+        encoding="utf-8",
+        newline="\n",
+    )
+    matrix_digest = hashlib.sha256(matrix_path.read_bytes()).hexdigest().upper()
+    crosswalk_path = (
+        tmp
+        / "manifests"
+        / "authority"
+        / "issue-35-authority-supersession-crosswalk-v1.json"
+    )
+    crosswalk = json.loads(crosswalk_path.read_text(encoding="utf-8"))
+    crosswalk["current_authority"]["matrix_sha256"] = matrix_digest.lower()
+    for registry in crosswalk["source_registries"]:
+        for evidence in registry["evidence"]:
+            evidence["sha256"] = matrix_digest.lower()
+    for row in crosswalk["rows"]:
+        for evidence in row["evidence"]:
+            evidence["sha256"] = matrix_digest.lower()
+    crosswalk.pop("crosswalk_sha256")
+    crosswalk["crosswalk_sha256"] = hashlib.sha256(
+        json.dumps(crosswalk, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    crosswalk_path.write_text(
+        json.dumps(crosswalk, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    goal_path = authority / "GOAL.md"
+    text = goal_path.read_text(encoding="utf-8")
+    match = re.search(
+        r"<!--\s*EMBER_AUTHORITY_V1\s*\r?\n(.*?)\r?\n-->", text, re.DOTALL
+    )
+    assert match is not None
+    policy = json.loads(match.group(1))
+    policy["highest_amendable_authority"] = "docs/authority/GOAL.md"
+    policy["required_governing_surfaces"] = [
+        f"docs/authority/{rel}"
+        if rel in {"GOVERNANCE.md", "CONTINUITY.md"}
+        else rel
+        for rel in policy["required_governing_surfaces"]
+    ]
+    hashes = policy["conservation_hashes"]["governing_surfaces_sha256"]
+    for name in ("GOVERNANCE.md", "CONTINUITY.md"):
+        hashes[f"docs/authority/{name}"] = hashes.pop(name)
+    hashes["docs/ember-authority-matrix.md"] = matrix_digest
+    policy["conservation_hashes"]["authority_matrix_sha256"] = matrix_digest
+    rendered = json.dumps(policy, indent=2, sort_keys=True)
+    goal_path.write_text(
+        text[: match.start(1)] + rendered + text[match.end(1) :],
+        encoding="utf-8",
+        newline="\n",
     )
 
 
@@ -359,6 +509,54 @@ def test_green_clean_fixture():
         rc, out = run_guard(tmp)
         assert rc == 0, f"expected exit 0, got {rc}\n{out}"
         assert "repo-guard: PASS" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_green_migrated_authority_paths():
+    tmp = make_fixture("fix/selftest-migrated-authority")
+    try:
+        migrate_fixture_authority_paths(tmp)
+        commit_fixture(tmp)
+        rc, output = run_guard(tmp)
+        assert rc == 0, output
+        assert "ok   [authority-paths]" in output, output
+        staged_rc, staged_output = run_guard(
+            tmp, extra_env={"REPO_GUARD_SCOPE": "staged"}
+        )
+        assert staged_rc == 0, staged_output
+        assert "ok   [authority-paths]" in staged_output, staged_output
+    finally:
+        cleanup(tmp)
+
+
+def test_red_duplicate_authority_path():
+    tmp = make_fixture("fix/selftest-duplicate-authority")
+    try:
+        authority = tmp / "docs" / "authority"
+        authority.mkdir(parents=True, exist_ok=True)
+        for name in (
+            "GOAL.md",
+            "INVARIANT.md",
+            "GOVERNANCE.md",
+            "CONTINUITY.md",
+            "REDACTIONS.md",
+            "STATE.md",
+        ):
+            shutil.copyfile(tmp / name, authority / name)
+        commit_fixture(tmp)
+        rc, output = run_guard(tmp)
+        assert rc != 0, output
+        assert "FAIL [authority-paths]" in output, output
+        for name in (
+            "GOAL.md",
+            "INVARIANT.md",
+            "GOVERNANCE.md",
+            "CONTINUITY.md",
+            "REDACTIONS.md",
+            "STATE.md",
+        ):
+            assert name in output, output
     finally:
         cleanup(tmp)
 
@@ -1260,6 +1458,8 @@ ALL_TESTS = [
     test_red_invalid_single_byte_utf8,
     test_green_valid_utf8_non_ascii,
     test_green_clean_fixture,
+    test_green_migrated_authority_paths,
+    test_red_duplicate_authority_path,
     test_red_invalid_branch_names_safe_recovery,
     test_green_invalid_branch_is_advisory_for_exact_open_pr_head,
     test_green_hashed_denylist_no_match,

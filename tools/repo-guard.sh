@@ -395,13 +395,39 @@ else
   printf '%s\n' "$EMBERD_CHECK_OUT" | sed 's/^/      /'
 fi
 
-# ---- 4. exactly one root goal document -----------------------------------
-GOALN="$(git ls-files | grep -cE '^GOAL[^/]*\.md$')"
-if [ "$GOALN" -eq 1 ]; then
-  ok "goal-doc" "exactly one (GOAL.md)"
+# ---- 4. exactly one old-or-new authority document ------------------------
+AUTHORITY_PATHS_OK=1
+GOAL_REL=""
+STATE_REL=""
+for AUTHORITY_NAME in GOAL.md INVARIANT.md GOVERNANCE.md CONTINUITY.md REDACTIONS.md STATE.md; do
+  OLD_REL="$AUTHORITY_NAME"
+  NEW_REL="docs/authority/$AUTHORITY_NAME"
+  OLD_PRESENT=0
+  NEW_PRESENT=0
+  git ls-files --error-unmatch "$OLD_REL" >/dev/null 2>&1 && OLD_PRESENT=1
+  git ls-files --error-unmatch "$NEW_REL" >/dev/null 2>&1 && NEW_PRESENT=1
+  AUTHORITY_COUNT=$((OLD_PRESENT + NEW_PRESENT))
+  if [ "$AUTHORITY_COUNT" -ne 1 ]; then
+    fail "authority-paths" "$AUTHORITY_NAME must exist at exactly one of '$OLD_REL' or '$NEW_REL' (found $AUTHORITY_COUNT)"
+    AUTHORITY_PATHS_OK=0
+  elif [ "$OLD_PRESENT" -eq 1 ]; then
+    [ "$AUTHORITY_NAME" = "GOAL.md" ] && GOAL_REL="$OLD_REL"
+    [ "$AUTHORITY_NAME" = "STATE.md" ] && STATE_REL="$OLD_REL"
+  else
+    [ "$AUTHORITY_NAME" = "GOAL.md" ] && GOAL_REL="$NEW_REL"
+    [ "$AUTHORITY_NAME" = "STATE.md" ] && STATE_REL="$NEW_REL"
+  fi
+done
+if [ "$AUTHORITY_PATHS_OK" -eq 1 ]; then
+  ok "authority-paths" "each authority document has exactly one canonical old-or-new path"
+fi
+
+GOALN="$(git ls-files | grep -cE '^(GOAL[^/]*\.md|docs/authority/GOAL[^/]*\.md)$')"
+if [ "$GOALN" -eq 1 ] && [ -n "$GOAL_REL" ]; then
+  ok "goal-doc" "exactly one ($GOAL_REL)"
 else
-  fail "goal-doc" "found $GOALN root GOAL*.md files; exactly one canonical GOAL.md is allowed"
-  git ls-files | grep -E '^GOAL[^/]*\.md$' | sed 's/^/      /'
+  fail "goal-doc" "found $GOALN GOAL*.md files across canonical authority locations; exactly one is allowed"
+  git ls-files | grep -E '^(GOAL[^/]*\.md|docs/authority/GOAL[^/]*\.md)$' | sed 's/^/      /'
 fi
 
 # ---- 5. no duplicate/overlapping top-level directories -------------------
@@ -417,11 +443,11 @@ DUPOK=$?
 [ "$FAIL" -eq 0 ] && ok "dup-dir" "no known duplicate dirs"
 
 # ---- 6. STATE.md is a bounded position ledger, not an append log ---------
-if git ls-files --error-unmatch STATE.md >/dev/null 2>&1; then
-  SL="$(git show ":STATE.md" 2>/dev/null | wc -l | tr -d ' ')"
-  [ -z "$SL" ] && SL="$(wc -l < STATE.md | tr -d ' ')"
+if [ -n "$STATE_REL" ] && git ls-files --error-unmatch "$STATE_REL" >/dev/null 2>&1; then
+  SL="$(git show ":$STATE_REL" 2>/dev/null | wc -l | tr -d ' ')"
+  [ -z "$SL" ] && SL="$(wc -l < "$STATE_REL" | tr -d ' ')"
   if [ "$SL" -le "$MAX_STATE_LINES" ]; then
-    ok "state" "STATE.md $SL lines (<= $MAX_STATE_LINES)"
+    ok "state" "$STATE_REL $SL lines (<= $MAX_STATE_LINES)"
   else
     fail "state" "STATE.md $SL lines exceeds $MAX_STATE_LINES — it is a position ledger, not an append log"
   fi
@@ -505,7 +531,7 @@ if [ -n "$RANGE" ]; then
   BAD=""
   for c in $(git rev-list "$RANGE" 2>/dev/null); do
     files="$(git show --name-only --format= "$c")"
-    if echo "$files" | grep -qE '^GOAL[^/]*\.md$' && echo "$files" | grep -qE '^receipts/'; then
+    if echo "$files" | grep -qE '^(GOAL\.md|docs/authority/GOAL\.md)$' && echo "$files" | grep -qE '^receipts/'; then
       BAD="$BAD $c"
     fi
   done

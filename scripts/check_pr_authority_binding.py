@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# goal_id: EMBER-01
-# workstream_id: EMBER-01A
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Fail closed unless a pull request binds the exact active Ember goal."""
 
@@ -14,6 +14,8 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
+from verify_authority_conservation import authority_path
+
 
 POLICY_RE = re.compile(
     r"<!--\s*EMBER_AUTHORITY_V1\s*\r?\n(.*?)\r?\n-->", re.DOTALL
@@ -24,7 +26,7 @@ WORKSTREAM_LINE_RE = re.compile(r"(?m)^workstream_id:\s*(\S.*?)\s*$")
 
 
 def load_goal_binding(root: Path) -> tuple[str, str, tuple[str, ...]]:
-    text = (root / "GOAL.md").read_text(encoding="utf-8")
+    text = authority_path(root, "GOAL.md").read_text(encoding="utf-8")
     match = POLICY_RE.search(text)
     if not match:
         raise ValueError("GOAL.md EMBER_AUTHORITY_V1 block missing")
