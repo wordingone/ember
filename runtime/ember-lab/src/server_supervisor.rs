@@ -1371,7 +1371,7 @@ impl Daemon {
                         endpoint_matches: contract.endpoint
                             == format!("http://{}:{}", rebound.host, rebound.port),
                         launcher_matches: manifest_matches_contract(manifest, contract),
-                        quantization_matches: contract_quantization_is_bound(&contract),
+                        quantization_matches: contract_quantization_is_bound(contract),
                     },
                     Err(error) => ServingContractAssertions {
                         contract_sha256: serving_contract_sha256.clone(),

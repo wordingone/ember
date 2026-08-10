@@ -1791,13 +1791,12 @@ fn server_live_cycle_rebinds_successful_restore_for_subsequent_ticks() {
         )
         .unwrap();
     assert_eq!(swapped.decision, "RESTORE_FAILED_CONTRACT");
-    assert_eq!(
-        swapped
+    assert!(
+        !swapped
             .serving_contract_assertions
             .as_ref()
             .unwrap()
-            .model_name_matches,
-        false
+            .model_name_matches
     );
     assert_eq!(
         daemon.job_state("swapped-server-job").unwrap(),
