@@ -117,9 +117,14 @@ import {
 import { clampStartParameters, DEFAULT_START_PARAMETERS, type StartParameters } from "../components/start-parameters.ts";
 import {
   createLivenessHeartbeatWriter,
+  isHeadlessCapture,
   readHeartbeatRow,
   type LivenessHeartbeatWriter,
 } from "../services/liveness-heartbeat.ts";
+import { createCockpitMemoryFootprintSupervisor } from "../services/memory-footprint-cockpit.ts";
+import { createLiveServingTopologyService } from "../services/serving-topology-live.ts";
+import { resolveEmberRepoRoot } from "../utils/repo-root.ts";
+import { emberStatePath } from "../utils/ember-state-root.ts";
 import {
   createGoalContinuationEngine,
   type ContinuationEligibilitySignals,
@@ -884,6 +889,62 @@ export function ReplScreen({
         }
       : null,
   );
+
+  // #1282 C1: the native cockpit owns the surviving memory-governor poll loop.
+  // Headless capture must remain side-effect free, and every live mount owns exactly
+  // one supervisor which is stopped during unmount. The external receipt root is
+  // resolved strictly before the first poll; failure leaves the supervisor inert.
+  useEffect(() => {
+    if (isHeadlessCapture()) return;
+    let supervisor: ReturnType<typeof createCockpitMemoryFootprintSupervisor> | null = null;
+    try {
+      const repoRoot = resolveEmberRepoRoot({});
+      supervisor = createCockpitMemoryFootprintSupervisor({
+        repoRoot,
+        receiptPath: emberStatePath(repoRoot, "memory-footprint-trips.jsonl"),
+      });
+      supervisor.start();
+    } catch (error) {
+      console.warn(
+        `[memory-footprint] supervisor is inert: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    return () => supervisor?.stop();
+  }, []);
+
+  // #1282 C2: the native cockpit owns the serving-topology cadence.
+  // Every five seconds the live OS process set is reconciled against the surviving
+  // serving registry. The durable external alarm is appended before this callback
+  // makes the drift operator-visible, and headless capture remains side-effect free.
+  useEffect(() => {
+    if (isHeadlessCapture()) return;
+    let topologyService: ReturnType<typeof createLiveServingTopologyService> | null = null;
+    try {
+      const repoRoot = resolveEmberRepoRoot({});
+      topologyService = createLiveServingTopologyService({
+        repoRoot,
+        alarmPath: emberStatePath(repoRoot, "serving-alarms.jsonl"),
+        notifyOperator: (alarm) => {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: crypto.randomUUID(),
+              type: "error",
+              content:
+                `[serving-topology] unregistered=${alarm.unregistered_live_pids.join(",") || "none"} ` +
+                `dead=${alarm.dead_registry_pids.join(",") || "none"}; alarm receipt preserved`,
+            },
+          ]);
+        },
+      });
+      topologyService.start();
+    } catch (error) {
+      console.warn(
+        `[serving-topology] supervisor is inert: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    return () => topologyService?.stop();
+  }, []);
 
   const [busy,           setBusy]           = useState(false);
   const busyRef                             = useRef(false);
