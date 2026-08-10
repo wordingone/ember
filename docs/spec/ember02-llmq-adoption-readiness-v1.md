@@ -10,14 +10,19 @@ pinned LLMQ dev source/build receipt or one-RTX-4090 3B benchmark receipt.
 
 The checker therefore fails closed with `PRELAUNCH_REJECTED` until a safe
 relative LLMQ source path is reopened and its raw bytes match `source_sha256`,
-the build receipt repeats that source digest and binds a reopened binary path
-to its raw `binary_sha256`, and both the adoption-design and
-mechanism-attribution paths are reopened and rehashed against their digests;
-it also rejects benchmark receipts whose status is not `PASS`, whose model is
-not the exact `Qwen2.5-3B` reference run, whose hardware is not an exact
-`RTX 4090`, or whose measured FP8/BF16 tok/s fields are missing, non-finite,
-or non-positive. A missing receipt remains an explicit external remainder;
-an incomplete or foreign receipt is a prelaunch refusal.
+and a separately reopened, content-addressed source manifest binds that path,
+the exact 40-hex source commit, a 64-hex source-tree identity, and the
+non-empty command lineage. The build receipt and benchmark receipt are never
+accepted as inline dictionaries: each must be a safe relative artifact path,
+match its declared raw SHA-256, carry a self-hash over canonical JSON bytes,
+and bind the source commit/tree and non-empty command lineage. The build
+receipt also reopens the binary path and rehashes its raw bytes; the benchmark
+receipt binds that build-receipt SHA, exact `Qwen2.5-3B`/`RTX 4090` identity,
+`PASS` status, and finite positive FP8/BF16 tok/s fields. Both the
+adoption-design and mechanism-attribution paths are reopened and rehashed
+against their digests. A missing benchmark receipt remains an explicit
+external remainder; an incomplete, inline, foreign, or drifted artifact is a
+prelaunch refusal.
 With those static identities present but no benchmark receipt, it reports
 `READY_FOR_EXTERNAL_EXECUTION` while the actual governed LLMQ build and 4090
 benchmark remain an explicit external remainder. Any eventual execution must

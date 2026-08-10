@@ -24,12 +24,19 @@ READINESS_FIELDS = frozenset(
         "llmq_dev_commit",
         "llmq_source_path",
         "source_sha256",
+        "source_manifest_path",
+        "source_manifest_sha256",
+        "source_manifest",
         "build_receipt",
+        "build_receipt_path",
+        "build_receipt_sha256",
         "adoption_design_path",
         "adoption_design_sha256",
         "mechanism_attribution_path",
         "mechanism_attribution_sha256",
         "benchmark_receipt",
+        "benchmark_receipt_path",
+        "benchmark_receipt_sha256",
     }
 )
 
@@ -71,6 +78,63 @@ def _safe_file(root: Path, relative_value: object) -> Path | None:
     return candidate if candidate.is_file() and candidate.is_relative_to(root) else None
 
 
+def _canonical_json_bytes(value: dict, self_field: str) -> bytes:
+    unsigned = {key: item for key, item in value.items() if key != self_field}
+    return (json.dumps(unsigned, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+
+
+def _load_bound_json(
+    root: Path,
+    path_value: object,
+    digest_value: object,
+    schema: str,
+    prefix: str,
+    self_field: str = "receipt_sha256",
+) -> tuple[dict | None, list[str]]:
+    errors: list[str] = []
+    if path_value is None and digest_value is None:
+        return None, [prefix]
+    bound_path = _safe_file(root, path_value)
+    if bound_path is None:
+        errors.append(f"{prefix}_path")
+    raw: bytes | None = None
+    if not isinstance(digest_value, str) or not _DIGEST.fullmatch(digest_value):
+        errors.append(f"{prefix}_sha256")
+    elif bound_path is not None:
+        try:
+            raw = bound_path.read_bytes()
+        except OSError:
+            errors.append(f"{prefix}_sha256")
+        else:
+            if hashlib.sha256(raw).hexdigest() != digest_value:
+                errors.append(f"{prefix}_sha256")
+    document: dict | None = None
+    if raw is not None:
+        try:
+            decoded = json.loads(raw.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError):
+            errors.append(f"{prefix}.json")
+        else:
+            if not isinstance(decoded, dict):
+                errors.append(f"{prefix}.json")
+            else:
+                document = decoded
+                if document.get("schema") != schema:
+                    errors.append(f"{prefix}.schema")
+                self_digest = document.get(self_field)
+                if not isinstance(self_digest, str) or not _DIGEST.fullmatch(self_digest):
+                    errors.append(f"{prefix}.{self_field}")
+                elif hashlib.sha256(_canonical_json_bytes(document, self_field)).hexdigest() != self_digest:
+                    errors.append(f"{prefix}.{self_field}")
+    return document, errors
+
+
+def _nonempty_command(value: object) -> bool:
+    if isinstance(value, str):
+        return bool(value.strip())
+    return isinstance(value, list) and bool(value) and all(isinstance(item, str) and item for item in value)
+
+
 def assess(source_root: Path, payload: dict) -> dict:
     if not isinstance(payload, dict):
         payload = {}
@@ -94,24 +158,66 @@ def assess(source_root: Path, payload: dict) -> dict:
                 missing.append("source_sha256")
         except OSError:
             missing.append("source_sha256")
-    build = payload.get("build_receipt")
-    if not isinstance(build, dict) or build.get("schema") != "ember-llmq-build-receipt-v1":
-        missing.append("build_receipt")
-    else:
-        if build.get("status") != "PASS":
+
+    source_manifest_inline = payload.get("source_manifest")
+    if source_manifest_inline is not None:
+        missing.append("source_manifest.inline_forbidden")
+    source_manifest, manifest_errors = _load_bound_json(
+        Path(source_root),
+        payload.get("source_manifest_path"),
+        payload.get("source_manifest_sha256"),
+        "ember-llmq-source-manifest-v1",
+        "source_manifest",
+        self_field="manifest_sha256",
+    )
+    missing.extend(manifest_errors)
+    source_tree_sha = None
+    if source_manifest is not None:
+        source_tree_sha = source_manifest.get("tree_sha256")
+        if source_manifest.get("commit") != commit:
+            missing.append("source_manifest.commit")
+        if source_manifest.get("source_path") != payload.get("llmq_source_path"):
+            missing.append("source_manifest.source_path")
+        if source_manifest.get("source_sha256") != source_sha:
+            missing.append("source_manifest.source_sha256")
+        if not isinstance(source_tree_sha, str) or not _DIGEST.fullmatch(source_tree_sha):
+            missing.append("source_manifest.tree_sha256")
+        if not _nonempty_command(source_manifest.get("command")):
+            missing.append("source_manifest.command")
+
+    build_inline = payload.get("build_receipt")
+    if build_inline is not None:
+        missing.append("build_receipt.inline_forbidden")
+    build, build_errors = _load_bound_json(
+        Path(source_root),
+        payload.get("build_receipt_path"),
+        payload.get("build_receipt_sha256"),
+        "ember-llmq-build-receipt-v1",
+        "build_receipt",
+    )
+    missing.extend(build_errors)
+    build_for_checks = build if build is not None else (build_inline if isinstance(build_inline, dict) else None)
+    if build_for_checks is not None:
+        if build_for_checks.get("status") != "PASS":
             missing.append("build_receipt.status")
-        if build.get("source_commit") != commit:
+        if build_for_checks.get("source_commit") != commit:
             missing.append("build_receipt.source_commit")
-        if build.get("source_sha256") != source_sha:
+        if build_for_checks.get("source_tree_sha256") != source_tree_sha:
+            missing.append("build_receipt.source_tree_sha256")
+        if build_for_checks.get("source_sha256") != source_sha:
             missing.append("build_receipt.source_sha256")
-        binary_path = _safe_file(Path(source_root), build.get("binary_path"))
-        if binary_path is None:
+        if not _nonempty_command(build_for_checks.get("command")):
+            missing.append("build_receipt.command")
+        binary_path_value = build_for_checks.get("binary_path")
+        binary_path = _safe_file(Path(source_root), binary_path_value)
+        if binary_path is None or binary_path_value == payload.get("llmq_source_path"):
             missing.append("build_receipt.binary_path")
-        if not isinstance(build.get("binary_sha256"), str) or not _DIGEST.fullmatch(build["binary_sha256"]):
+        binary_sha = build_for_checks.get("binary_sha256")
+        if not isinstance(binary_sha, str) or not _DIGEST.fullmatch(binary_sha):
             missing.append("build_receipt.binary_sha256")
         elif binary_path is not None:
             try:
-                if hashlib.sha256(binary_path.read_bytes()).hexdigest() != build["binary_sha256"]:
+                if hashlib.sha256(binary_path.read_bytes()).hexdigest() != binary_sha:
                     missing.append("build_receipt.binary_sha256")
             except OSError:
                 missing.append("build_receipt.binary_sha256")
@@ -133,18 +239,37 @@ def assess(source_root: Path, payload: dict) -> dict:
             except OSError:
                 missing.append(digest_field)
 
-    benchmark = payload.get("benchmark_receipt")
-    if not isinstance(benchmark, dict) or benchmark.get("schema") != "ember-4090-3b-benchmark-receipt-v1":
-        missing.append("benchmark_receipt")
-    else:
-        if benchmark.get("hardware") != "RTX 4090":
+    benchmark_inline = payload.get("benchmark_receipt")
+    if benchmark_inline is not None:
+        missing.append("benchmark_receipt.inline_forbidden")
+    benchmark, benchmark_errors = _load_bound_json(
+        Path(source_root),
+        payload.get("benchmark_receipt_path"),
+        payload.get("benchmark_receipt_sha256"),
+        "ember-4090-3b-benchmark-receipt-v1",
+        "benchmark_receipt",
+    )
+    missing.extend(benchmark_errors)
+    benchmark_for_checks = benchmark if benchmark is not None else (
+        benchmark_inline if isinstance(benchmark_inline, dict) else None
+    )
+    if benchmark_for_checks is not None:
+        if benchmark_for_checks.get("hardware") != "RTX 4090":
             missing.append("benchmark_receipt.hardware")
-        if benchmark.get("status") != "PASS":
+        if benchmark_for_checks.get("status") != "PASS":
             missing.append("benchmark_receipt.status")
-        if benchmark.get("model") != "Qwen2.5-3B":
+        if benchmark_for_checks.get("model") != "Qwen2.5-3B":
             missing.append("benchmark_receipt.model")
+        if benchmark_for_checks.get("source_commit") != commit:
+            missing.append("benchmark_receipt.source_commit")
+        if benchmark_for_checks.get("source_tree_sha256") != source_tree_sha:
+            missing.append("benchmark_receipt.source_tree_sha256")
+        if benchmark_for_checks.get("build_receipt_sha256") != payload.get("build_receipt_sha256"):
+            missing.append("benchmark_receipt.build_receipt_sha256")
+        if not _nonempty_command(benchmark_for_checks.get("command")):
+            missing.append("benchmark_receipt.command")
         for field in ("fp8_tok_s", "bf16_tok_s"):
-            value = benchmark.get(field)
+            value = benchmark_for_checks.get(field)
             if (
                 isinstance(value, bool)
                 or not isinstance(value, (int, float))
@@ -159,26 +284,29 @@ def assess(source_root: Path, payload: dict) -> dict:
             "llmq_dev_commit",
             "llmq_source_path",
             "source_sha256",
-            "build_receipt",
+            "source_manifest",
             "adoption_design_path",
             "adoption_design_sha256",
             "mechanism_attribution_path",
             "mechanism_attribution_sha256",
         )
-    )
+    ) or any(field.startswith("source_manifest") for field in missing)
     if (
         source_or_design_missing
         or any(field.startswith("build_receipt") for field in missing)
-        or any(field.startswith("benchmark_receipt.") for field in missing)
+        or any(
+            field.startswith("benchmark_receipt.") or field.startswith("benchmark_receipt_")
+            for field in missing
+        )
     ):
         verdict = "PRELAUNCH_REJECTED"
-    elif "benchmark_receipt" in missing:
-        verdict = "READY_FOR_EXTERNAL_EXECUTION"
     else:
         verdict = "READY_FOR_EXTERNAL_EXECUTION"
     external_remainder = []
-    if any(field in missing for field in ("llmq_dev_commit", "llmq_source_path", "source_sha256")):
-        external_remainder.append("pinned LLMQ source commit and source bytes")
+    if any(field in missing for field in ("llmq_dev_commit", "llmq_source_path", "source_sha256", "source_manifest")) or any(
+        field.startswith("source_manifest") for field in missing
+    ):
+        external_remainder.append("pinned LLMQ source commit/tree manifest and source bytes")
     if any(field.startswith("build_receipt") for field in missing):
         external_remainder.append("governed LLMQ build receipt and binary bytes")
     if any(field in missing for field in ("adoption_design_path", "adoption_design_sha256")):
@@ -198,7 +326,7 @@ def assess(source_root: Path, payload: dict) -> dict:
         "rollback": "discard readiness artifact; no product state changed",
         "next_action": (
             "obtain a governed LLMQ build and one-RTX-4090 3B benchmark receipt"
-            if "benchmark_receipt" in missing
+            if any(field.startswith("benchmark_receipt") for field in missing)
             else "dispatch only through Ember CLI -> Ember Lab after external evidence"
         ),
     }
