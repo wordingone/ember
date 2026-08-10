@@ -12,6 +12,7 @@ import { describe, it, expect } from "bun:test";
 import {
   CERTIFIED_LAUNCH_TIMEOUT_MS,
   PREFLIGHT_TIMEOUT_MS,
+  _defaultCertifiedLaunchRunner,
   createTrainCommand,
   type LaunchPacketRunResult,
 } from "./train.ts";
@@ -174,6 +175,71 @@ function assertOnlyPreflightSpawned(spawns: RecordedSpawn[]): void {
 }
 
 describe("train command", () => {
+  it("keeps the event loop live while the certified consumer is running", async () => {
+    let eventLoopTurnRan = false;
+    setTimeout(() => {
+      eventLoopTurnRan = true;
+    }, 0);
+
+    const started = await _defaultCertifiedLaunchRunner(process.execPath, [
+      "-e",
+      "setTimeout(() => process.exit(0), 100)",
+    ]);
+
+    expect("kind" in started && started.kind === "background").toBe(true);
+    if (!("kind" in started) || started.kind !== "background") {
+      throw new Error("certified child did not start");
+    }
+    expect(started.pid).toBeGreaterThan(0);
+    await Bun.sleep(10);
+    expect(eventLoopTurnRan).toBe(true);
+    expect([0, null]).toContain((await started.completion).status);
+  });
+
+  it("returns /train confirm after spawn while the certified consumer continues in background", async () => {
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-async-confirm-"));
+    try {
+      writeCanonicalArtifacts(scratch);
+      let finishCertifiedLaunch: ((result: LaunchPacketRunResult) => void) | undefined;
+      const completion = new Promise<LaunchPacketRunResult>((resolve) => {
+        finishCertifiedLaunch = resolve;
+      });
+      const cmd = createTrainCommand({
+        repoRoot: scratch,
+        runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+        runCertifiedLaunch: () => ({ kind: "background", pid: 4321, completion }),
+      });
+      const dispatchDeps = {
+        getCommands: async () => [cmd],
+        findCommand: (name: string) => (name === "train" ? cmd : undefined),
+      };
+      const offer = await tryDispatchSlashCommand("/train", mockCtx, dispatchDeps);
+      const offerId = offer?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
+      expect(offerId).toBeDefined();
+
+      let childFinished = false;
+      void completion.then(() => { childFinished = true; });
+      const confirmation = await tryDispatchSlashCommand(
+        `/train confirm ${offerId}`,
+        mockCtx,
+        dispatchDeps,
+      );
+      expect(confirmation?.message).toContain("started in background");
+      expect(confirmation?.message).toContain("child pid: 4321");
+      expect(confirmation?.message).toContain("activity feed");
+      expect(childFinished).toBe(false);
+
+      finishCertifiedLaunch?.({
+        status: 0,
+        stdout: JSON.stringify({ execution_receipt: "receipt.json", artifact_root: "artifacts/run" }),
+      });
+      await completion;
+      expect(childFinished).toBe(true);
+    } finally {
+      fs.rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
   it("routes the displayed /train confirm instruction through the production slash dispatcher", async () => {
     const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-dispatch-"));
     try {
