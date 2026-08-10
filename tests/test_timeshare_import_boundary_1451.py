@@ -1,175 +1,275 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Production-shaped import-boundary and blast-radius checks for #1451."""
+"""Stage-1 verifier contract for the historical timeshare import boundary."""
 
 from __future__ import annotations
 
 import ast
 import hashlib
+import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 TIMESHARE = SCRIPTS / "timeshare_pretrain.py"
-MANIFEST = ROOT / "docs" / "ember-restart" / "timeshare-importer-classification-1451-v1.json"
+VERIFIER = SCRIPTS / "verify_authority_conservation.py"
+MANIFEST_REL = Path("docs/ember-restart/timeshare-importer-classification-1451-v1.json")
 
 
-def _is_timeshare_import(node: ast.AST) -> bool:
-    return (
-        isinstance(node, ast.Import)
-        and any(alias.name == "timeshare_pretrain" for alias in node.names)
-    ) or (
-        isinstance(node, ast.ImportFrom)
-        and node.module == "timeshare_pretrain"
+def _first_executable(body: list[ast.stmt]) -> ast.stmt | None:
+    statements = list(body)
+    if (
+        statements
+        and isinstance(statements[0], ast.Expr)
+        and isinstance(statements[0].value, ast.Constant)
+        and isinstance(statements[0].value.value, str)
+    ):
+        statements.pop(0)
+    while (
+        statements
+        and isinstance(statements[0], ast.ImportFrom)
+        and statements[0].module == "__future__"
+    ):
+        statements.pop(0)
+    return statements[0] if statements else None
+
+
+def _load_verifier():
+    spec = importlib.util.spec_from_file_location("_stage1_authority_verifier", VERIFIER)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _fixture_root() -> Path:
+    root = Path(r"B:\tmp\niko-1451-stage1") / str(os.getpid())
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def _write_stage1_fixture(root: Path) -> dict:
+    source = root / "scripts" / "timeshare_pretrain.py"
+    importer = root / "scripts" / "historical_importer.py"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    (root / "docs" / "ember-restart").mkdir(parents=True, exist_ok=True)
+    source.write_bytes(TIMESHARE.read_bytes())
+    importer.write_text(
+        "# EMBER_ARTIFACT_CLASS=historical_only\n"
+        "from timeshare_pretrain import build_v0_model\n",
+        encoding="utf-8",
     )
+    manifest = {
+        "schema": "ember-timeshare-importer-classification-v1",
+        "source": "scripts/timeshare_pretrain.py",
+        "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+        "import_denial": "execution_only",
+        "importers": [
+            {
+                "path": "scripts/historical_importer.py",
+                "classification": "historical_only",
+                "import_outcome": "execution_denied_by_own_guard",
+                "sha256": hashlib.sha256(importer.read_bytes()).hexdigest(),
+                "module_scope": True,
+                "nested_import_count": 0,
+            }
+        ],
+    }
+    (root / MANIFEST_REL).write_text(json.dumps(manifest), encoding="utf-8")
+    return manifest
 
 
-def _import_scope(path: Path) -> tuple[bool, int]:
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    module_imports = [node for node in tree.body if _is_timeshare_import(node)]
-    nested_import_count = sum(
-        1 for node in ast.walk(tree)
-        if _is_timeshare_import(node) and node not in module_imports
+def _write_future_stage_fixture(root: Path, variant: str = "valid") -> dict:
+    source = root / "scripts" / "timeshare_pretrain.py"
+    importer = root / "scripts" / "historical_importer.py"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    (root / "docs" / "ember-restart").mkdir(parents=True, exist_ok=True)
+    source_text = (
+        "# EMBER_ARTIFACT_CLASS=historical_only\n"
+        "from __future__ import annotations\n\n"
+        "def _historical_only_refusal():\n"
+        "    raise SystemExit('historical_only')\n\n"
+        "def main():\n"
     )
-    return bool(module_imports), nested_import_count
+    if variant == "missing-main-call":
+        source_text += "    return None\n\n"
+    else:
+        source_text += "    _historical_only_refusal()\n\n"
+    if variant == "missing-main-route":
+        source_text += "# execution-only import shape without a __main__ route\n"
+    else:
+        source_text += "if __name__ == '__main__':\n    main()\n"
+    source.write_text(source_text, encoding="utf-8", newline="\n")
+    for relative in ("scripts/conv_c03_muon_ns3_live.py", "scripts/train_multimodal_v0.py"):
+        historical = root / relative
+        historical.parent.mkdir(parents=True, exist_ok=True)
+        historical.write_text(
+            "# EMBER_ARTIFACT_CLASS=historical_only\n"
+            "raise SystemExit('historical_only')\n",
+            encoding="utf-8",
+        )
+    importer.write_text(
+        "# EMBER_ARTIFACT_CLASS=historical_only\n"
+        "from timeshare_pretrain import build_v0_model\n",
+        encoding="utf-8",
+    )
+    manifest = {
+        "schema": "ember-timeshare-importer-classification-v1",
+        "source": "scripts/timeshare_pretrain.py",
+        "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+        "import_denial": "execution_only",
+        "execution_boundary": {
+            "helper": "_historical_only_refusal",
+            "main": "main",
+            "entrypoint": "__main__",
+        },
+        "importers": [
+            {
+                "path": "scripts/historical_importer.py",
+                "classification": "historical_only",
+                "import_outcome": "importable",
+                "sha256": hashlib.sha256(importer.read_bytes()).hexdigest(),
+                "module_scope": True,
+                "nested_import_count": 0,
+            }
+        ],
+    }
+    (root / MANIFEST_REL).write_text(json.dumps(manifest), encoding="utf-8")
+    return manifest
 
 
-def _direct_goal_importers() -> list[Path]:
-    rows: list[Path] = []
-    for path in sorted(SCRIPTS.rglob("*.py")):
-        if path == TIMESHARE:
-            continue
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        except SyntaxError:
-            continue
-        direct = any(_is_timeshare_import(node) for node in ast.walk(tree))
-        header = "\n".join(path.read_text(encoding="utf-8").splitlines()[:20])
-        if direct and "goal_id: EMBER-02" in header:
-            rows.append(path)
-    return rows
+def test_stage1_base_kernel_refusal_remains_green():
+    tree = ast.parse(TIMESHARE.read_text(encoding="utf-8"), filename=str(TIMESHARE))
+    first = _first_executable(tree.body)
+    assert isinstance(first, ast.Raise)
+    assert isinstance(first.exc, ast.Call)
+    assert isinstance(first.exc.func, ast.Name)
+    assert first.exc.func.id == "SystemExit"
 
-
-def test_timeshare_import_is_safe_but_script_execution_remains_refused():
     env = os.environ.copy()
     env["PYTHONDONTWRITEBYTECODE"] = "1"
-    import_probe = subprocess.run(
-        [
-            sys.executable,
-            "-B",
-            "-c",
-            "import sys; sys.path.insert(0, 'scripts'); import timeshare_pretrain as mod; assert callable(mod.main)",
-        ],
-        cwd=ROOT,
-        env=env,
-        capture_output=True,
-        text=True,
-    )
-    assert import_probe.returncode == 0, import_probe.stderr or import_probe.stdout
-
-    execution_probe = subprocess.run(
+    result = subprocess.run(
         [sys.executable, "-B", str(TIMESHARE), "--selftest"],
         cwd=ROOT,
         env=env,
         capture_output=True,
         text=True,
     )
-    assert execution_probe.returncode != 0
-    assert "historical_only" in (execution_probe.stdout + execution_probe.stderr)
+    assert result.returncode != 0
+    assert "historical_only" in result.stdout + result.stderr
 
 
-def test_current_goal_importer_blast_radius_is_closed_and_reproducible():
-    importers = _direct_goal_importers()
-    assert importers, "expected current EMBER-02 direct importers"
-    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert manifest["schema"] == "ember-timeshare-importer-classification-v1"
-    assert manifest["import_denial"] == "execution_only"
-    assert manifest["source_sha256"] == hashlib.sha256(TIMESHARE.read_bytes()).hexdigest()
-    expected = [row["path"] for row in manifest["importers"]]
-    actual = [path.relative_to(ROOT).as_posix() for path in importers]
-    assert expected == actual
-    for row, path in zip(manifest["importers"], importers):
-        assert set(row) == {
-            "path", "classification", "import_outcome", "sha256",
-            "module_scope", "nested_import_count",
-        }
-        assert row["classification"] in {"historical_only", "live_surface"}
-        assert row["classification"] == "historical_only"
-        assert row["sha256"] == hashlib.sha256(path.read_bytes()).hexdigest()
-        header = "\n".join(path.read_text(encoding="utf-8").splitlines()[:20])
-        assert "EMBER_ARTIFACT_CLASS=historical_only" in header
-        module_scope, nested_import_count = _import_scope(path)
-        assert row["module_scope"] is module_scope
-        assert row["nested_import_count"] == nested_import_count
-        env = os.environ.copy()
-        env["PYTHONDONTWRITEBYTECODE"] = "1"
-        probe = subprocess.run(
-            [
-                sys.executable, "-B", "-c",
-                "import importlib.util, sys; from pathlib import Path; "
-                "path=sys.argv[1]; sys.path.insert(0, str(Path(path).parent)); "
-                "spec=importlib.util.spec_from_file_location('_ember_import_probe', path); "
-                "module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)",
-                str(path),
-            ],
-            cwd=ROOT,
-            env=env,
-            capture_output=True,
-            text=True,
-        )
-        if row["import_outcome"] == "importable":
-            assert probe.returncode == 0, probe.stderr or probe.stdout
+def test_stage1_verifier_accepts_closed_execution_only_manifest():
+    root = _fixture_root()
+    try:
+        _write_future_stage_fixture(root)
+        errors: list[dict] = []
+        _load_verifier().check_execution_only_import_boundary(root, errors)
+        assert errors == []
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_stage1_verifier_rejects_foreign_path_and_rehashed_source():
+    root = _fixture_root()
+    try:
+        manifest = _write_stage1_fixture(root)
+        manifest["source_sha256"] = "0" * 64
+        manifest["importers"][0]["path"] = "scripts/../foreign.py"
+        (root / MANIFEST_REL).write_text(json.dumps(manifest), encoding="utf-8")
+        errors: list[dict] = []
+        _load_verifier().check_execution_only_import_boundary(root, errors)
+        codes = {item["code"] for item in errors}
+        assert "historical.import_manifest_source_hash" in codes
+        assert "historical.import_manifest_path" in codes
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_future_stage_import_safe_shape_is_accepted_only_with_closed_manifest():
+    root = _fixture_root()
+    try:
+        _write_future_stage_fixture(root)
+        errors: list[dict] = []
+        verifier = _load_verifier()
+        verifier.check_historical_executables(root, errors)
+        verifier.check_execution_only_import_boundary(root, errors)
+        assert errors == []
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_future_stage_missing_main_call_refuses_before_import_boundary():
+    root = _fixture_root()
+    try:
+        _write_future_stage_fixture(root, "missing-main-call")
+        errors: list[dict] = []
+        verifier = _load_verifier()
+        verifier.check_historical_executables(root, errors)
+        verifier.check_execution_only_import_boundary(root, errors)
+        assert "historical.execution_main_call" in {item["code"] for item in errors}
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_future_stage_missing_main_route_refuses():
+    root = _fixture_root()
+    try:
+        _write_future_stage_fixture(root, "missing-main-route")
+        errors: list[dict] = []
+        verifier = _load_verifier()
+        verifier.check_historical_executables(root, errors)
+        verifier.check_execution_only_import_boundary(root, errors)
+        assert "historical.execution_entrypoint" in {item["code"] for item in errors}
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+@pytest.mark.parametrize("mutation", ["malformed", "foreign"])
+def test_future_stage_malformed_or_foreign_manifest_refuses(mutation: str):
+    root = _fixture_root()
+    try:
+        manifest = _write_future_stage_fixture(root)
+        if mutation == "malformed":
+            manifest["execution_boundary"].pop("main")
         else:
-            assert row["import_outcome"] == "execution_denied_by_own_guard"
-            assert probe.returncode != 0
-            assert "historical_only" in (probe.stdout + probe.stderr)
+            manifest["execution_boundary"]["helper"] = "foreign_helper"
+        (root / MANIFEST_REL).write_text(json.dumps(manifest), encoding="utf-8")
+        errors: list[dict] = []
+        verifier = _load_verifier()
+        verifier.check_historical_executables(root, errors)
+        verifier.check_execution_only_import_boundary(root, errors)
+        codes = {item["code"] for item in errors}
+        assert "historical.import_manifest_execution_contract" in codes
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
 
 
-def test_historical_refusal_is_bound_to_main_first_statement_and_module_guard():
-    tree = ast.parse(TIMESHARE.read_text(encoding="utf-8"), filename=str(TIMESHARE))
-
-    def first_executable(body):
-        statements = list(body)
-        if (
-            statements
-            and isinstance(statements[0], ast.Expr)
-            and isinstance(statements[0].value, ast.Constant)
-            and isinstance(statements[0].value.value, str)
-        ):
-            statements.pop(0)
-        return statements[0] if statements else None
-
-    refusal = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "_historical_only_refusal")
-    refusal_first = first_executable(refusal.body)
-    assert isinstance(refusal_first, ast.Raise)
-    assert isinstance(refusal_first.exc, ast.Call)
-    assert isinstance(refusal_first.exc.func, ast.Name)
-    assert refusal_first.exc.func.id == "SystemExit"
-
-    main = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "main")
-    main_first = first_executable(main.body)
-    assert isinstance(main_first, ast.Expr)
-    assert isinstance(main_first.value, ast.Call)
-    assert isinstance(main_first.value.func, ast.Name)
-    assert main_first.value.func.id == "_historical_only_refusal"
-
-    module_guard = next(
-        node for node in tree.body
-        if isinstance(node, ast.If)
-        and isinstance(node.test, ast.Compare)
-        and isinstance(node.test.left, ast.Name)
-        and node.test.left.id == "__name__"
-    )
-    assert any(
-        isinstance(statement, ast.Expr)
-        and isinstance(statement.value, ast.Call)
-        and isinstance(statement.value.func, ast.Name)
-        and statement.value.func.id == "main"
-        for statement in module_guard.body
-    )
+@pytest.mark.parametrize("mutation", ["unknown", "missing"])
+def test_future_stage_top_level_manifest_shape_is_closed(mutation: str):
+    root = _fixture_root()
+    try:
+        manifest = _write_future_stage_fixture(root)
+        if mutation == "unknown":
+            manifest["unreviewed_authority"] = "foreign"
+        else:
+            manifest.pop("importers")
+        (root / MANIFEST_REL).write_text(json.dumps(manifest), encoding="utf-8")
+        errors: list[dict] = []
+        verifier = _load_verifier()
+        verifier.check_historical_executables(root, errors)
+        verifier.check_execution_only_import_boundary(root, errors)
+        codes = {item["code"] for item in errors}
+        assert "historical.import_manifest_keys" in codes
+        assert "historical.execution_guard_missing" in codes
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
