@@ -1966,15 +1966,11 @@ export function ReplScreen({
     React.createElement(
       Box,
       { key: "main-column", flexDirection: "column", width: mainColumnWidth, minWidth: mainColumnWidth, height: terminalRows, flexShrink: 0, overflow: "hidden" },
-      // The palette owns the banner rows while slash composition is active. Outside the
-      // palette, retain #243's shrinkable banner so prompt/status chrome remains visible.
-      dropdownOpen
-        ? null
-        : React.createElement(
-            Box,
-            { key: "banner", flexShrink: 1, minHeight: 0, overflow: "hidden" },
-            React.createElement(Homescreen, homescreenProps),
-          ),
+      React.createElement(
+        Box,
+        { key: "banner", flexShrink: 1, minHeight: 0, overflow: "hidden" },
+        React.createElement(Homescreen, homescreenProps),
+      ),
       React.createElement(
         Box,
         { key: "workspace", flexDirection: "column", flexGrow: 1, minHeight: 0, overflow: "hidden" },
