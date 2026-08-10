@@ -743,18 +743,54 @@ def check_historical_executables(root: Path, errors: list[dict[str, Any]]) -> No
             and first.exc.func.id == "SystemExit"
         )
         if rel == "scripts/timeshare_pretrain.py":
-            guarded = guarded or any(
-                isinstance(node, ast.FunctionDef)
-                and node.name == "_historical_only_refusal"
+            def first_executable(body: list[ast.stmt]) -> ast.stmt | None:
+                executable = list(body)
+                if (
+                    executable
+                    and isinstance(executable[0], ast.Expr)
+                    and isinstance(executable[0].value, ast.Constant)
+                    and isinstance(executable[0].value.value, str)
+                ):
+                    executable.pop(0)
+                return executable[0] if executable else None
+
+            refusal = next(
+                (node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "_historical_only_refusal"),
+                None,
+            )
+            main = next(
+                (node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "main"),
+                None,
+            )
+            refusal_first = first_executable(refusal.body) if refusal is not None else None
+            main_first = first_executable(main.body) if main is not None else None
+            refusal_bound = (
+                isinstance(refusal_first, ast.Raise)
+                and isinstance(refusal_first.exc, ast.Call)
+                and isinstance(refusal_first.exc.func, ast.Name)
+                and refusal_first.exc.func.id == "SystemExit"
+            )
+            main_bound = (
+                isinstance(main_first, ast.Expr)
+                and isinstance(main_first.value, ast.Call)
+                and isinstance(main_first.value.func, ast.Name)
+                and main_first.value.func.id == "_historical_only_refusal"
+            )
+            module_guard_bound = any(
+                isinstance(node, ast.If)
+                and isinstance(node.test, ast.Compare)
+                and isinstance(node.test.left, ast.Name)
+                and node.test.left.id == "__name__"
                 and any(
-                    isinstance(child, ast.Raise)
-                    and isinstance(child.exc, ast.Call)
-                    and isinstance(child.exc.func, ast.Name)
-                    and child.exc.func.id == "SystemExit"
-                    for child in ast.walk(node)
+                    isinstance(statement, ast.Expr)
+                    and isinstance(statement.value, ast.Call)
+                    and isinstance(statement.value.func, ast.Name)
+                    and statement.value.func.id == "main"
+                    for statement in node.body
                 )
                 for node in tree.body
             )
+            guarded = refusal_bound and main_bound and module_guard_bound
         if not guarded:
             errors.append(
                 finding(
