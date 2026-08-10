@@ -1,0 +1,37 @@
+{
+  "schema": "ember-timeshare-importer-classification-v1",
+  "source": "scripts/timeshare_pretrain.py",
+  "source_sha256": "aff4a9d0d8b93ff1a621f04ea9e2862bb298301ad0cd42bc73630575721e8554",
+  "import_denial": "execution_only",
+  "execution_boundary": {
+    "helper": "_historical_only_refusal",
+    "main": "main",
+    "entrypoint": "__main__"
+  },
+  "importers": [
+    {
+      "path": "scripts/cbase_grow_rung.py",
+      "classification": "historical_only",
+      "import_outcome": "execution_denied_by_own_guard",
+      "sha256": "5fd9df2559d814614dc651b7ddcfa0fec41978fb53ea7e467f591c50512fff52",
+      "module_scope": false,
+      "nested_import_count": 2
+    },
+    {
+      "path": "scripts/ember_cbase_mixture.py",
+      "classification": "historical_only",
+      "import_outcome": "execution_denied_by_own_guard",
+      "sha256": "2b74e18b585d50c4b092a21c3bbeb18694bcabd37b1d20a580dd3742221fda36",
+      "module_scope": false,
+      "nested_import_count": 1
+    },
+    {
+      "path": "scripts/train_multimodal_v0.py",
+      "classification": "historical_only",
+      "import_outcome": "execution_denied_by_own_guard",
+      "sha256": "5761bc1e78a1c550909d5f9d217886c163b83d360e821d16a0cf8e4023b6bf4a",
+      "module_scope": true,
+      "nested_import_count": 0
+    }
+  ]
+}
