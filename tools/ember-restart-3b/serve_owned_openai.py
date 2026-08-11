@@ -43,6 +43,8 @@ from ember_restart_eval_raw_forward import (  # noqa: E402
 )
 
 _TRACKED_TOKENIZER_SOURCE = ROOT / "tokenizer" / "tokenizer.json"
+_CHEAP_PROBE_SUITE_SCHEMA = "ember02-r1-r2-cheap-probe-suite/v1"
+_CHEAP_PROBE_SUITE_SHA256 = "b08073b505581bd4cc634f9ca5c3a872755de867db26dd83fe27406f858288a3"
 _TOKENIZER_FREEZE_RECEIPT = (
     ROOT / "receipts" / "tokenizer-freeze-20260611T154111Z.json"
 )
@@ -124,7 +126,14 @@ def resident_vram_bytes(device: torch.device | str) -> int:
 class OwnedChatRuntime(Protocol):
     identity: OwnedIdentity | DevelopmentIdentity
 
-    def chat(self, messages: list[dict[str, object]], *, frozen_row_id: str | None, max_tokens: int) -> tuple[str, str]: ...
+    def chat(
+        self,
+        messages: list[dict[str, object]],
+        *,
+        frozen_row_id: str | None,
+        max_tokens: int,
+        context_limit_tokens: int | None = None,
+    ) -> tuple[str, str]: ...
 
 
 def _contains_target_leak(value: Any) -> bool:
@@ -197,6 +206,42 @@ def resolve_runtime_inputs(mode: str, frozen_split: Path | None) -> Path | None:
             raise ValueError("FROZEN_EVAL mode requires a frozen split")
         return frozen_split
     raise ValueError("owned server mode must be INTERACTIVE or FROZEN_EVAL")
+
+
+def _frozen_prompt_authority(
+    authority_path: Path,
+    row_id: str,
+    tokenizer: FrozenTokenizer,
+    *,
+    expected_suite_sha256: str = _CHEAP_PROBE_SUITE_SHA256,
+) -> tuple[str, dict[str, Any]]:
+    """Load a legacy split or the hash-bound canonical #1498 text suite."""
+
+    try:
+        raw = authority_path.read_bytes()
+        payload = json.loads(raw)
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError("frozen prompt authority is unreadable or malformed") from exc
+    if not isinstance(payload, dict) or payload.get("schema") != _CHEAP_PROBE_SUITE_SCHEMA:
+        return frozen_split_prompt(authority_path, row_id, tokenizer)
+    if hashlib.sha256(raw).hexdigest() != expected_suite_sha256:
+        raise ValueError("canonical #1498 suite hash does not match frozen authority")
+    tasks = payload.get("tasks")
+    if not isinstance(tasks, list):
+        raise ValueError("canonical #1498 suite tasks must be an array")
+    selected = [task for task in tasks if isinstance(task, dict) and task.get("row_id") == row_id]
+    if len(selected) != 1 or not isinstance(selected[0].get("prompt"), str):
+        raise ValueError("canonical #1498 suite must contain exactly one requested row")
+    prompt = selected[0]["prompt"]
+    target_free = {"id": row_id, "prompt": prompt, "active_expert": "shared"}
+    return row_id, {
+        "schema_version": "ember-owned-inference-prompt-v1",
+        **target_free,
+        "token_ids": tokenizer.encode(prompt),
+        "frozen_row_sha256": hashlib.sha256(
+            json.dumps(target_free, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest(),
+    }
 
 
 def parent_process_alive(parent_pid: int) -> bool:
@@ -505,6 +550,16 @@ def create_loopback_server(runtime: OwnedChatRuntime, *, host: str, port: int, m
                 return
             if mode == "INTERACTIVE":
                 frozen_row_id = None
+            context_limit_tokens = request.get("ember_context_limit_tokens")
+            if mode == "FROZEN_EVAL" and (
+                isinstance(context_limit_tokens, bool)
+                or not isinstance(context_limit_tokens, int)
+                or context_limit_tokens < 1
+            ):
+                self._write(400, _error("request requires a positive integer context limit"))
+                return
+            if mode == "INTERACTIVE":
+                context_limit_tokens = None
             messages = request.get("messages")
             if not isinstance(messages, list) or not messages or any(not isinstance(message, dict) for message in messages):
                 self._write(400, _error("messages must be a nonempty array of objects"))
@@ -514,7 +569,16 @@ def create_loopback_server(runtime: OwnedChatRuntime, *, host: str, port: int, m
                 self._write(400, _error(f"max_tokens must be an integer in [1, {_MAX_REQUEST_TOKENS}]"))
                 return
             effective_max_tokens = min(max_tokens, _MAX_RUNTIME_GENERATION_TOKENS)
-            text, finish_reason = runtime.chat(messages, frozen_row_id=frozen_row_id, max_tokens=effective_max_tokens)
+            try:
+                text, finish_reason = runtime.chat(
+                    messages,
+                    frozen_row_id=frozen_row_id,
+                    max_tokens=effective_max_tokens,
+                    context_limit_tokens=context_limit_tokens,
+                )
+            except ValueError as exc:
+                self._write(400, _error(str(exc)))
+                return
             completion = {
                 "id": "chatcmpl-owned-" + runtime.identity.checkpoint_sha256[:12],
                 "object": "chat.completion",
@@ -742,17 +806,30 @@ class LoadedOwnedRuntime:
             raise ValueError("central admission model name does not match loaded checkpoint")
         return cls(model=model, tokenizer=tokenizer, identity=identity, device=torch.device(device), frozen_split=frozen_split)
 
-    def chat(self, messages: list[dict[str, object]], *, frozen_row_id: str | None, max_tokens: int) -> tuple[str, str]:
+    def chat(
+        self,
+        messages: list[dict[str, object]],
+        *,
+        frozen_row_id: str | None,
+        max_tokens: int,
+        context_limit_tokens: int | None = None,
+    ) -> tuple[str, str]:
         if self.frozen_split is None:
             prompt = "\n".join(f"{message.get('role', 'user')}: {message.get('content', '')}" for message in messages)
             prompt_ids = self.tokenizer.encode(prompt)
         else:
             if frozen_row_id is None:
                 raise ValueError("frozen evaluation requires a frozen row identifier")
-            _, record = frozen_split_prompt(self.frozen_split, frozen_row_id, self.tokenizer)
+            _, record = _frozen_prompt_authority(
+                self.frozen_split, frozen_row_id, self.tokenizer
+            )
             if messages != [{"role": "user", "content": record["prompt"]}]:
                 raise ValueError("chat does not match frozen split prompt")
             prompt_ids = record["token_ids"]
+            if context_limit_tokens is None:
+                raise ValueError("frozen evaluation requires a context limit")
+            if len(prompt_ids) + max_tokens > context_limit_tokens:
+                raise ValueError("frozen evaluation prompt plus output exceeds context limit")
         with torch.inference_mode():
             generated, reason = greedy_generate(
                 model=self.model,
