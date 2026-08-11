@@ -3377,6 +3377,86 @@ fn assessment_evidence_is_one_fresh_atomic_daemon_export() {
     assert!(!tampered_manifest.exists());
 }
 
+fn dispatch_completed_assessment_job(root: &Path, job_id: &str) -> (Daemon, PathBuf) {
+    let db = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open(&db).unwrap();
+    let manifest = write_restore_manifest(root, job_id);
+    let mut manifest_payload: Value =
+        serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    manifest_payload["env"]["EMBER_LAB_FIXTURE_LOG_MESSAGE"] = Value::String(job_id.into());
+    manifest_payload["env"]["EMBER_LAB_FIXTURE_SLEEP_MS"] = Value::String("25".into());
+    fs::write(&manifest, serde_json::to_vec(&manifest_payload).unwrap()).unwrap();
+    daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64,
+            |_root| Ok(16 * 1024 * 1024 * 1024),
+            || Ok(2 * 1024 * 1024 * 1024),
+            || Ok(test_host_capacity()),
+        )
+        .unwrap();
+    for _ in 0..200 {
+        if daemon.job_state(job_id).unwrap() == Some(JobState::Exited) {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    (daemon, db)
+}
+
+#[test]
+fn assessment_export_refuses_coherent_preflight_binding_tamper() {
+    let root = sandbox("assessment-coherent-preflight-tamper");
+    let (daemon, db) = dispatch_completed_assessment_job(&root, "assessment-coherent-tamper");
+    let preflight_bytes: Vec<u8> = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT receipt_bytes FROM dispatch_preflight_receipts WHERE job_id=?1",
+            ["assessment-coherent-tamper"],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let mut forged: Value = serde_json::from_slice(&preflight_bytes).unwrap();
+    forged["dispatch_manifest_sha256"] = Value::String("f".repeat(64));
+    let forged_bytes = serde_json::to_vec(&forged).unwrap();
+    let forged_sha = format!("{:x}", Sha256::digest(&forged_bytes));
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute(
+            "UPDATE dispatch_preflight_receipts SET manifest_sha256=?2,receipt_sha256=?3,receipt_bytes=?4 WHERE job_id=?1",
+            rusqlite::params!["assessment-coherent-tamper", "f".repeat(64), forged_sha, forged_bytes],
+        )
+        .unwrap();
+    let output = root.join("coherent-tamper-output");
+    assert!(matches!(
+        daemon.export_assessment_evidence("assessment-coherent-tamper", &output),
+        Err(EmberLabError::InvalidDispatchManifest { .. })
+    ));
+    assert!(!output.exists());
+}
+
+#[test]
+fn assessment_export_refuses_preflight_lease_mismatch() {
+    let root = sandbox("assessment-lease-mismatch");
+    let (daemon, db) = dispatch_completed_assessment_job(&root, "assessment-lease-mismatch");
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute(
+            "UPDATE dispatch_preflight_receipts SET resource_lease=?2 WHERE job_id=?1",
+            rusqlite::params!["assessment-lease-mismatch", "foreign-resource-lease"],
+        )
+        .unwrap();
+    let output = root.join("lease-mismatch-output");
+    assert!(matches!(
+        daemon.export_assessment_evidence("assessment-lease-mismatch", &output),
+        Err(EmberLabError::InvalidDispatchManifest { .. })
+    ));
+    assert!(!output.exists());
+}
+
 #[cfg(windows)]
 #[test]
 fn assessment_evidence_refuses_running_or_unbound_job_without_publication() {

@@ -2197,6 +2197,13 @@ impl Daemon {
                 detail: "daemon preflight receipt hash does not match DB bytes".into(),
             });
         }
+        if self.identity_hash(job_id)?.as_deref() != Some(manifest_sha256.as_str()) {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail:
+                    "daemon preflight manifest binding does not match authenticated job identity"
+                        .into(),
+            });
+        }
         Ok(Some((resource_lease, manifest_sha256, receipt_bytes)))
     }
 
@@ -2967,11 +2974,20 @@ impl Daemon {
                 detail: "operational receipt omitted daemon identity".into(),
             }
         })?;
-        let (_resource_lease, manifest_sha256, preflight_bytes) = self
+        let (resource_lease, manifest_sha256, preflight_bytes) = self
             .daemon_preflight_receipt(job_id)?
             .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
                 detail: "daemon preflight receipt is not present in DB custody".into(),
             })?;
+        if receipt.get("identity_sha256").and_then(Value::as_str) != Some(manifest_sha256.as_str())
+            || receipt.get("resource_lease").and_then(Value::as_str)
+                != Some(resource_lease.as_str())
+        {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "daemon preflight lease and identity are not bound to operational receipt"
+                    .into(),
+            });
+        }
         let preflight: Value = serde_json::from_slice(&preflight_bytes)?;
         let preflight_object =
             preflight
