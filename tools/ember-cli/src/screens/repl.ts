@@ -233,6 +233,8 @@ export type ActiveDialogKind =
 export interface ReplScreenProps {
   config:          ReplConfig;
   cwd:             string;
+  /** Stable identity supplied by the mounted production entrypoint. */
+  sessionId?:      string;
   env?:            NodeJS.ProcessEnv;
   analytics?:      { log: (event: string, props?: Record<string, unknown>) => void };
   ideIntegration?: { context?: string };
@@ -690,6 +692,7 @@ export function adaptSessionMessagesForSuggestion(
 export function ReplScreen({
   config,
   cwd,
+  sessionId,
   env            = process.env,
   analytics,
   ideIntegration,
@@ -841,7 +844,7 @@ export function ReplScreen({
   // Ref to latest messages for use inside async callbacks (avoids stale closure).
   const messagesRef  = useRef<SessionMessage[]>([]);
   // Stable per-session id for the slash-command CommandContext.
-  const sessionIdRef = useRef<string>(crypto.randomUUID());
+  const sessionIdRef = useRef<string>(sessionId?.trim() || crypto.randomUUID());
 
   // Operator input channel (ember #165 / #154) — a local named pipe the operator
   // writes prompts to alongside the keyboard. submitPromptRef always holds the

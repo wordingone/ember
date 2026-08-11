@@ -913,6 +913,34 @@ export function freshInteractiveReplConfig(model: string): {
   };
 }
 
+/**
+ * Build the exact production REPL element used by the interactive entrypoint.
+ * Keeping this boundary named and testable prevents the session identity from
+ * being dropped while the dynamic React/Ink imports remain headless-safe.
+ */
+export function buildInteractiveReplElement<T extends {
+  createElement: (...args: any[]) => unknown;
+}>(
+  ReactRuntime: T,
+  InkApp: unknown,
+  REPLComponent: unknown,
+  props: Record<string, unknown>,
+): ReturnType<T["createElement"]> {
+  const createElement = ReactRuntime.createElement as (
+    type: unknown,
+    props: Record<string, unknown> | null,
+    ...children: unknown[]
+  ) => ReturnType<T["createElement"]>;
+  const repl = createElement(REPLComponent, {
+    config: props["config"],
+    cwd: props["cwd"],
+    sessionId: props["sessionId"],
+    modelSeat: props["modelSeat"],
+    onExit: props["onExit"],
+  });
+  return createElement(InkApp, null, repl);
+}
+
 // ---------------------------------------------------------------------------
 // main — the fully-wired entry point (called by boot in main.ts)
 // ---------------------------------------------------------------------------
@@ -1484,6 +1512,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     import("../ink/components.ts"),
     import("../core/frontend-shell.ts"),
   ]);
+  const { sessionIdForAppRoot } = await import("../components/app-shell.ts");
   const { emitReadySentinel } = await import("../cli/ready-sentinel.ts");
   const root = frontendShell.createRoot({
     onFirstFrameFlushed: () => emitReadySentinel(process.stdout),
@@ -1506,9 +1535,11 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   // resolve the real repo root (env var / cwd-walk / exe-path-walk). If none of those
   // anchors find an Ember checkout, resolveEmberSourceRootOrCwd preserves the typed
   // SourceRootError refusal; the interactive surface never guesses from process.cwd().
+  const interactiveCwd = resolveEmberSourceRootOrCwd({}, "[ember-cli]");
   const replProps = {
     config: freshInteractiveReplConfig(process.env["EMBER_MODEL_NAME"] ?? "ember"),
-    cwd:    resolveEmberSourceRootOrCwd({}, "[ember-cli]"),
+    cwd:    interactiveCwd,
+    sessionId: sessionIdForAppRoot(interactiveCwd),
     modelSeat: seatDecision.ownedIdentity
       ? { phase: "ABSENT" as const, owner: seatDecision.ownedIdentity.modelName }
       : { phase: "ABSENT" as const },
@@ -1537,21 +1568,12 @@ export async function main(opts: MainOptions = {}): Promise<void> {
       //
       // Readiness is emitted by the renderer-owned first-frame callback passed
       // to createRoot above. Unrelated stdout writes cannot satisfy that gate.
-      r.render(
-        React.createElement(
-          InkApp,
-          null,
-          React.createElement(
-            REPLComponent as ComponentType<Record<string, unknown>>,
-            {
-              config: (props as Record<string, unknown>)["config"],
-              cwd:    (props as Record<string, unknown>)["cwd"],
-              modelSeat: (props as Record<string, unknown>)["modelSeat"],
-              onExit: (props as Record<string, unknown>)["onExit"],
-            },
-          ),
-        ),
-      );
+      r.render(buildInteractiveReplElement(
+        React,
+        InkApp,
+        REPLComponent as ComponentType<Record<string, unknown>>,
+        props as Record<string, unknown>,
+      ) as Parameters<typeof r.render>[0]);
     },
   );
 
