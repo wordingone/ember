@@ -232,3 +232,21 @@ def test_large_final_artifact_uses_same_volume_hardlink_without_large_temp(tmp_p
     assert row["bytes"]==9 and target.read_bytes()==b"immutable"
     assert target.stat().st_ino==source.stat().st_ino
     target.unlink(); assert source.read_bytes()==b"immutable"
+
+
+def test_grown_model_can_exceed_generic_tensor_limit_without_weakening_momentum_limit(tmp_path,monkeypatch):
+    sources,target=_sources(tmp_path); root=tmp_path/"custody"
+    monkeypatch.setattr(builder,"_MAX_TEMP",1)
+    monkeypatch.setattr(builder,"_MAX_GROWN_MODEL_TEMP",4096)
+    with pytest.raises(InputBuildRefusal,match="INPUT_TEMP_EXCEEDS_4GIB"):
+        stage_event_inputs(root=root,run_id="r",lineage_run_id="historical",source_commit="a"*40,sources=sources,target_name=target,intermediate_size=8,config=_config())
+    assert (root/"inputs"/"grown_model.pt").is_file()
+    assert not (root/"inputs"/"pre_momentum.pt").exists()
+
+
+def test_grown_model_specific_limit_refuses_and_cleans_oversized_temporary(tmp_path):
+    target=tmp_path/"custody"/"inputs"/"grown_model.pt"
+    with pytest.raises(InputBuildRefusal,match="INPUT_GROWN_MODEL_TEMP_EXCEEDS_4_5GIB"):
+        builder._atomic_torch(torch.tensor([1],dtype=torch.int64),target,max_temp_bytes=1,overflow_code="INPUT_GROWN_MODEL_TEMP_EXCEEDS_4_5GIB")
+    assert not target.exists()
+    assert list(target.parent.glob(".grown_model.pt.*.tmp"))==[]

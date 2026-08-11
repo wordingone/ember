@@ -25,6 +25,7 @@ from q2_momentum_lineage import resolve_seed_momentum
 
 
 _MAX_TEMP = 4 * 1024**3
+_MAX_GROWN_MODEL_TEMP = 9 * 1024**3 // 2
 _CANONICAL_B2_RECEIPT_NAME = "cbase-grow-rung2-event-grow-rung2-20260709-remeasure-b2.json"
 _CANONICAL_B2_PATH_SUFFIX = ("receipts", _CANONICAL_B2_RECEIPT_NAME)
 _CANONICAL_B2_RECEIPT_PATH = Path(__file__).resolve().parents[3] / "receipts" / _CANONICAL_B2_RECEIPT_NAME
@@ -87,13 +88,20 @@ def _atomic_copy(source: Path, target: Path) -> dict[str, object]:
     return {"logical_path": target.relative_to(target.parents[1]).as_posix(), "sha256": _sha(target), "bytes": target.stat().st_size}
 
 
-def _atomic_torch(value: torch.Tensor, target: Path) -> dict[str, object]:
+def _atomic_torch(
+    value: torch.Tensor,
+    target: Path,
+    *,
+    max_temp_bytes: int | None = None,
+    overflow_code: str = "INPUT_TEMP_EXCEEDS_4GIB",
+) -> dict[str, object]:
     if target.exists(): _refuse("INPUT_OUTPUT_ALREADY_EXISTS")
     target.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".tmp", dir=target.parent); os.close(fd)
     try:
         torch.save(value, temporary)
-        if os.path.getsize(temporary) > _MAX_TEMP: _refuse("INPUT_TEMP_EXCEEDS_4GIB")
+        limit = _MAX_TEMP if max_temp_bytes is None else max_temp_bytes
+        if os.path.getsize(temporary) > limit: _refuse(overflow_code)
         with open(temporary, "rb+") as handle: os.fsync(handle.fileno())
         os.replace(temporary, target)
     except Exception:
@@ -203,7 +211,12 @@ def _materialize_replay_inputs(
         raise
     except Exception:
         _refuse("INPUT_B2_REPLAY_INVALID")
-    grown_row = _atomic_torch(grown, root / "inputs" / "grown_model.pt")
+    grown_row = _atomic_torch(
+        grown,
+        root / "inputs" / "grown_model.pt",
+        max_temp_bytes=_MAX_GROWN_MODEL_TEMP,
+        overflow_code="INPUT_GROWN_MODEL_TEMP_EXCEEDS_4_5GIB",
+    )
     momentum = resolve_seed_momentum(
         seed_model_path=sources["seed_model"],
         seed_optimizer_path=sources["seed_optimizer"],
