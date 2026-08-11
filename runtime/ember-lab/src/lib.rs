@@ -6517,6 +6517,20 @@ fn duplicate_inheritable_file_handle(file: &fs::File) -> Result<OwnedHandle> {
 }
 
 #[cfg(windows)]
+fn managed_windows_creation_flags() -> u32 {
+    use windows_sys::Win32::System::Threading::{
+        CREATE_NEW_PROCESS_GROUP, CREATE_NO_WINDOW, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT,
+        EXTENDED_STARTUPINFO_PRESENT,
+    };
+
+    CREATE_SUSPENDED
+        | CREATE_NEW_PROCESS_GROUP
+        | CREATE_NO_WINDOW
+        | CREATE_UNICODE_ENVIRONMENT
+        | EXTENDED_STARTUPINFO_PRESENT
+}
+
+#[cfg(windows)]
 fn spawn_managed(
     spec: &JobSpec,
     job_name: &str,
@@ -6534,9 +6548,8 @@ fn spawn_managed(
         JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     };
     use windows_sys::Win32::System::Threading::{
-        CreateProcessW, GetCurrentProcess, WaitForSingleObject, CREATE_NEW_PROCESS_GROUP,
-        CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, EXTENDED_STARTUPINFO_PRESENT,
-        PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOEXW,
+        CreateProcessW, GetCurrentProcess, WaitForSingleObject, PROCESS_INFORMATION,
+        STARTF_USESTDHANDLES, STARTUPINFOEXW,
     };
 
     let maximum_job_memory = spec
@@ -6668,10 +6681,7 @@ fn spawn_managed(
             std::ptr::null(),
             std::ptr::null(),
             1,
-            CREATE_SUSPENDED
-                | CREATE_NEW_PROCESS_GROUP
-                | CREATE_UNICODE_ENVIRONMENT
-                | EXTENDED_STARTUPINFO_PRESENT,
+            managed_windows_creation_flags(),
             environment.as_ptr().cast(),
             std::ptr::null(),
             &startup.StartupInfo,
@@ -7360,6 +7370,16 @@ fn terminate_process(pid: u32) -> Result<()> {
 #[cfg(test)]
 mod dispatch_binding_snapshot_tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn managed_windows_child_is_created_without_a_console_window() {
+        use windows_sys::Win32::System::Threading::{CREATE_NO_WINDOW, CREATE_SUSPENDED};
+
+        let flags = managed_windows_creation_flags();
+        assert_ne!(flags & CREATE_SUSPENDED, 0);
+        assert_ne!(flags & CREATE_NO_WINDOW, 0);
+    }
 
     #[test]
     fn registry_replacement_between_initial_hash_and_parse_is_rejected() {
