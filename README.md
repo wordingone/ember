@@ -16,7 +16,7 @@ ember-cli body, and a general local AI laboratory. The target is an owned
 30-35B sparse unified text-image-audio decoder with native reasoning and
 structured tool use, created and operated on one 24 GiB GPU.
 
-For a fresh context, start with [docs/START-HERE.md](docs/START-HERE.md).
+For a fresh context, start with [docs/guides/START-HERE.md](docs/guides/START-HERE.md).
 
 ## Install the measured Python environment
 
@@ -103,7 +103,7 @@ The current active work is EMBER-02's R1 (WARM-100) rung-exit evidence. The
 fail-closed R1 exit battery landed 2026-08-05: seven of the eight preregistered
 R1 exits are `EVIDENCE_MISSING` and the eighth holds only a checkpoint
 write-integrity sub-receipt (`receipts/ember-02-r1-exits/`,
-[docs/r1-exit-evidence-inventory-20260805.md](docs/r1-exit-evidence-inventory-20260805.md)).
+[docs/custody/r1-exit-evidence-inventory-20260805.md](docs/custody/r1-exit-evidence-inventory-20260805.md)).
 The newest training-shaped run (2026-08-04) was a four-record governed-vertical
 structural check, not a WARM-100 canary. The step-2 3B candidate above remains
 the only execution-authorized owned checkpoint
@@ -151,8 +151,8 @@ selection.
 - GOAL.md - complete project and machine contract
 - docs/roadmap/README.md - public milestone decomposition and completion certificates
 - STATE.md - compatibility pointer only; exact artifact identities and maturity live in CONTINUITY.md
-- docs/goal-clear-protocol.md - proof required for completion
-- docs/ember-authority-matrix.md - D-001 through D-062 conservation matrix
-- docs/ember-completeness.md - preserved legacy M/C manifest and diagnostic tally input
+- docs/contracts/goal-clear-protocol.md - proof required for completion
+- docs/authority/ember-authority-matrix.md - D-001 through D-062 conservation matrix
+- docs/contracts/ember-completeness.md - preserved legacy M/C manifest and diagnostic tally input
 - CONTINUITY.md - exact current artifact identities, maturity, execution boundary, and resume order
 - GOVERNANCE.md - authority, provenance, and landing rules

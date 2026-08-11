@@ -133,7 +133,7 @@ def _check_launch_interlock(*, live: bool, requested_run: dict | None = None, sh
 
     # Registry gate (issue #271 / sp-7): every ADOPT row must be consumed
     # by the dispatch config or exempted with a valid receipt.
-    # reference: docs/registry-dispatch-gate-spec-v0.md
+    # reference: docs/contracts/registry-dispatch-gate-spec-v0.md
     # Receipt appended to receipts/registry-gate.jsonl by the script.
     import subprocess as _sp
     _rg_script = os.path.join(os.path.dirname(os.path.abspath(__file__)),

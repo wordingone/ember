@@ -4,29 +4,29 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """check_milestone_reconciliation.py — validates the M<->board reconciliation
 table (docs/spec/milestones-v1.md sections A/C/D) against its source-of-truth
-inputs: docs/ember-completeness.md, docs/PROBLEMS.md, docs/ember-floor-contract.md.
+inputs: docs/contracts/ember-completeness.md, docs/roadmap/PROBLEMS.md, docs/contracts/ember-floor-contract.md.
 
 Spec: docs/spec/milestones-v1.md, "Validation hook" section (imports A/C/D).
 
 Checks:
-  (a) every M1..M55 — the 55 legacy rows of docs/ember-completeness.md
+  (a) every M1..M55 — the 55 legacy rows of docs/contracts/ember-completeness.md
       (id column C1..C55, renamed M<n> in §A to avoid the C<n>-numeral
       collision with board conditions) — has a §A entry in milestones-v1.md
       carrying a non-empty target. FATAL if any is unmapped or the manifest
       id-set isn't exactly {1..55}.
-  (b) docs/PROBLEMS.md's per-meta-problem `gates` lists (H0..H4) are diffed
+  (b) docs/roadmap/PROBLEMS.md's per-meta-problem `gates` lists (H0..H4) are diffed
       against §C's dependency-lattice ASCII diagram. Diffs are REPORTED,
       never fatal (spec: "do not fail on diff — report").
   (c) §D's 6 floor-contract rows in milestones-v1.md each carry non-empty
       owner/pilot/trigger/kill-promote cells (FATAL if any is empty);
-      cross-referenced against docs/ember-floor-contract.md's own deferral
+      cross-referenced against docs/contracts/ember-floor-contract.md's own deferral
       table (component not found there is reported as a gap too).
   (d) emits receipts/milestone-reconciliation-<UTCtimestamp>.json.
 
-Input resolution: docs/ember-completeness.md, docs/PROBLEMS.md and
+Input resolution: docs/contracts/ember-completeness.md, docs/roadmap/PROBLEMS.md and
 docs/problems-meta.yaml are read from THIS worktree if present, else
 read-only from <reference-tree> (never written). docs/spec/milestones-v1.md and
-docs/ember-floor-contract.md are goalforge-native (worktree only). Every
+docs/contracts/ember-floor-contract.md are goalforge-native (worktree only). Every
 resolved path is recorded in the receipt's `inputs` map as {relpath: tree}.
 problems-meta.yaml is resolved and recorded for provenance but not deep-
 parsed: PyYAML is not stdlib, and PROBLEMS.md already carries the rendered
@@ -90,7 +90,7 @@ def _resolve(rel_path, inputs, allow_ember_fallback=True):
 _SECTION_A_ROW_RE = re.compile(r"^\|\s*M(\d+)\s*\|(.*)\|(.*)\|\s*$")
 _COMPLETENESS_ROW_RE = re.compile(r"^\|\s*C(\d+)\s*\|")
 
-# The 55 legacy rows share docs/ember-completeness.md with board-CONDITION rows
+# The 55 legacy rows share docs/contracts/ember-completeness.md with board-CONDITION rows
 # (docs/spec/conditions-v1.md's own registry). A condition can use a bare-digit id (e.g.
 # C0) that collides with _COMPLETENESS_ROW_RE's own C<digits> pattern -- discovered live,
 # 2026-07-04: a "C0" row (board condition, not a legacy milestone) made
@@ -394,11 +394,11 @@ def run():
                 f"validated authority crosswalk ({crosswalk['row_count']} rows)"
             )
             return 0
-        completeness_path = _resolve("docs/ember-completeness.md", inputs)
-        problems_path = _resolve("docs/PROBLEMS.md", inputs)
+        completeness_path = _resolve("docs/contracts/ember-completeness.md", inputs)
+        problems_path = _resolve("docs/roadmap/PROBLEMS.md", inputs)
         _resolve("docs/problems-meta.yaml", inputs)  # provenance only, see module docstring
         milestones_path = _resolve("docs/spec/milestones-v1.md", inputs, allow_ember_fallback=False)
-        floor_contract_path = _resolve("docs/ember-floor-contract.md", inputs, allow_ember_fallback=False)
+        floor_contract_path = _resolve("docs/contracts/ember-floor-contract.md", inputs, allow_ember_fallback=False)
 
         completeness_text = _read(completeness_path)
         problems_text = _read(problems_path)

@@ -116,7 +116,7 @@ ROWS = (
                    {"verdict": {"eq": "SURPASS"}}),)},
     # ---- completion-condition #1 (added 2026-06-13, pre-06-20 window). The
     # goal's COMPLETION is TWO conditions: (#1) ember_tally.py reads 100% on
-    # docs/ember-completeness.md AND (#2) the surpass receipt (row 13). Rows
+    # docs/contracts/ember-completeness.md AND (#2) the surpass receipt (row 13). Rows
     # 1-12 audit per-leg WORK; row 13 binds condition #2; NOTHING bound
     # condition #1 — and the 55-row completeness manifest has a DIFFERENT
     # (larger) denominator than these hand-curated rows, so ALL-RECEIPTED here
@@ -130,7 +130,7 @@ ROWS = (
     # ~2000 rows, where 99.95% would round to 100.0.
     {"id": 14, "condition": "ember completeness tally (goal completion-"
                             "condition #1): ember_tally pct_implemented == 100 "
-                            "on docs/ember-completeness.md",
+                            "on docs/contracts/ember-completeness.md",
      "requires": (("receipts/tally-*.json", 1,
                    {"pct_implemented": {"eq": 100}}),)},
 )

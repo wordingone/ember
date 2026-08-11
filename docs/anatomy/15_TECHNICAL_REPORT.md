@@ -20,7 +20,7 @@ map to that receipt, not a replacement for reading it.
 - Evaluation (06): `C1` RED (hash-verify gap), `C2`/`C3`/`C6` GREEN, `C4`/`C5` RED (harness-interface reachability), `C7`/`C8` RED
 - Governance (07, 11): `C-PORT` GREEN
 - Cockpit (12): `C-OBS` RED (receipt-visibility gap over real, existing adapter code), `C-IND` RED (depends on C-OBS)
-- Roll-ups: `C-MANIFEST` GREEN (docs/ember-completeness.md enumerates all 81 rows), `C-TALLY` RED by definition (a 38-way conjunction roll-up — GREEN requires every other STATE-condition GREEN first; see `docs/spec/conditions-v1.md` §4.3)
+- Roll-ups: `C-MANIFEST` GREEN (docs/contracts/ember-completeness.md enumerates all 81 rows), `C-TALLY` RED by definition (a 38-way conjunction roll-up — GREEN requires every other STATE-condition GREEN first; see `docs/spec/conditions-v1.md` §4.3)
 
 ## H4 — verifier-free judgment (honest status)
 

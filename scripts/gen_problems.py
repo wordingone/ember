@@ -2,7 +2,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Generate docs/PROBLEMS.md — the single human-readable Ember problem ledger.
+"""Generate docs/roadmap/PROBLEMS.md — the single human-readable Ember problem ledger.
 
 Hands-off by design: STATUS (OPEN/CLAIMED/SOLVED) is DERIVED from the JSON
 totality board + integrity audit (receipts-only truth); the human layer
@@ -138,7 +138,7 @@ def main():
             "id": cid, "norm": cn, "title": c.get("title", cid),
             "tier": c.get("tier", "frontier"), "sev": sev, "own": own,
             "rank_hint": c.get("rank_hint", 50), "root": c.get("root_cause", []),
-            "deffile": c.get("defining_file", "GOAL.md"), "meaning": fold(c.get("meaning")),
+            "deffile": c.get("defining_file", "docs/authority/GOAL.md"), "meaning": fold(c.get("meaning")),
             "compound": c.get("compound", []), "proof": c.get("proof"),
             "state": state, "state_note": state_note, "breason": breason,
         })

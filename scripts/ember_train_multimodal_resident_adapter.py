@@ -226,7 +226,7 @@ def run_adapter(out_dir: Path, tasks_path: Path) -> dict[str, Any]:
     out_dir.mkdir(parents=True, exist_ok=True)
     root = repo_root()
     train_path = root / "scripts/train_multimodal_v0.py"
-    floor_path = root / "docs/ember-floor-contract.md"
+    floor_path = root / "docs/contracts/ember-floor-contract.md"
     nc2_path = root / "nc2-own-technique-contract.md"
     adapter_path = root / "scripts/ember_train_multimodal_resident_adapter.py"
     action_log_path = out_dir / "train_multimodal_action_log.jsonl"

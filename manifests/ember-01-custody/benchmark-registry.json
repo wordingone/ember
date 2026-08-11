@@ -22,8 +22,8 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:GOAL.md",
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/GOAL.md",
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -49,8 +49,8 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:GOAL.md",
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/GOAL.md",
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -76,8 +76,8 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:GOAL.md",
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/GOAL.md",
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -103,8 +103,8 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:GOAL.md",
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/GOAL.md",
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -130,8 +130,8 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:GOAL.md",
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/GOAL.md",
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -188,8 +188,8 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:GOAL.md",
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/GOAL.md",
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -215,8 +215,8 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:GOAL.md",
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/GOAL.md",
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -304,7 +304,7 @@
                            "completion":  false,
                            "evidence":  [
                                             "repo:scripts/t4_eval.py",
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  "repo:scripts/t4_eval.py",
@@ -334,7 +334,7 @@
                            "completion":  false,
                            "evidence":  [
                                             "repo:scripts/t4_r1_q15_arc2_s14.py",
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  "repo:scripts/t4_r1_q15_arc2_s14.py",
@@ -364,7 +364,7 @@
                            "completion":  false,
                            "evidence":  [
                                             "repo:scripts/arcade.py",
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  "repo:scripts/arcade.py",
@@ -393,8 +393,8 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:GOAL.md",
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/GOAL.md",
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -420,8 +420,8 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:GOAL.md",
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/GOAL.md",
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -447,7 +447,7 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -473,7 +473,7 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -499,7 +499,7 @@
                            "subject_class":  "borrowed_reference",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -525,7 +525,7 @@
                            "subject_class":  "historical_sub_3b",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -551,7 +551,7 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -577,7 +577,7 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -603,7 +603,7 @@
                            "subject_class":  "historical_sub_3b",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -629,7 +629,7 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -655,7 +655,7 @@
                            "subject_class":  "non_model_artifact",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -682,7 +682,7 @@
                            "completion":  false,
                            "evidence":  [
                                             "repo:scripts/ember_research_benchmark_harness.py",
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  "repo:scripts/ember_research_benchmark_harness.py",
@@ -711,7 +711,7 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -737,7 +737,7 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -763,7 +763,7 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -789,7 +789,7 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -815,7 +815,7 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -841,7 +841,7 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -867,7 +867,7 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -893,7 +893,7 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -919,7 +919,7 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -945,7 +945,7 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -971,7 +971,7 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -997,7 +997,7 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -1023,7 +1023,7 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -1049,7 +1049,7 @@
                            "subject_class":  "none",
                            "completion":  false,
                            "evidence":  [
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  null,
@@ -1076,7 +1076,7 @@
                            "completion":  false,
                            "evidence":  [
                                             "repo:scripts/ember_research_benchmark_harness.py",
-                                            "repo:STATE.md"
+                                            "repo:docs/authority/STATE.md"
                                         ],
                            "split":  "unresolved",
                            "harness_path":  "repo:scripts/ember_research_benchmark_harness.py",

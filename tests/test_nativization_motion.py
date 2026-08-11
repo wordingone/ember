@@ -440,8 +440,9 @@ class TestEndToEnd:
             encoding="utf-8",
         )
 
-        # Create INVARIANT.md
-        invariant_file = tmp_path / "INVARIANT.md"
+        # Create docs/authority/INVARIANT.md
+        invariant_file = tmp_path / "docs/authority/INVARIANT.md"
+        invariant_file.parent.mkdir(parents=True, exist_ok=True)
         invariant_file.write_text(
             "invariant_sha256: abc123def456",
             encoding="utf-8",
@@ -548,8 +549,9 @@ RESULT = torch.tensor(1)
             encoding="utf-8",
         )
 
-        # Create INVARIANT.md
-        invariant_file = tmp_path / "INVARIANT.md"
+        # Create docs/authority/INVARIANT.md
+        invariant_file = tmp_path / "docs/authority/INVARIANT.md"
+        invariant_file.parent.mkdir(parents=True, exist_ok=True)
         invariant_file.write_text(
             "invariant_sha256: abc123def456",
             encoding="utf-8",
@@ -625,7 +627,8 @@ RESULT = torch.cuda.is_available()
             "## The inherited stack, bottom \u2192 top, with the blocking line\n\n| layer | what | rel |\n|---|---|---|\n| CUDA kernels (cuBLAS matmul, elementwise) | x | component |\n",
             encoding="utf-8",
         )
-        (tmp_path / "INVARIANT.md").write_text("owned", encoding="utf-8")
+        (tmp_path / "docs/authority").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "docs/authority/INVARIANT.md").write_text("owned", encoding="utf-8")
         tools_dir = tmp_path / "tools"
         tools_dir.mkdir()
         (tools_dir / "cuda.py").write_text("import torch\n", encoding="utf-8")
@@ -731,7 +734,8 @@ RESULT = torch.cuda.is_available()
             "| CUDA kernels (cuBLAS matmul, elementwise) | x | component |\n",
             encoding="utf-8",
         )
-        (tmp_path / "INVARIANT.md").write_text("owned", encoding="utf-8")
+        (tmp_path / "docs/authority").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "docs/authority/INVARIANT.md").write_text("owned", encoding="utf-8")
         tools_dir = tmp_path / "tools"
         tools_dir.mkdir()
         (tools_dir / "cuda.py").write_text("import torch\n", encoding="utf-8")
@@ -775,7 +779,8 @@ RESULT = torch.cuda.is_available()
             "| CUDA kernels (cuBLAS matmul, elementwise) | x | component |\n",
             encoding="utf-8",
         )
-        (tmp_path / "INVARIANT.md").write_text("owned", encoding="utf-8")
+        (tmp_path / "docs/authority").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "docs/authority/INVARIANT.md").write_text("owned", encoding="utf-8")
         tools_dir = tmp_path / "tools"
         tools_dir.mkdir()
         (tools_dir / "cuda.py").write_text("import torch\n", encoding="utf-8")

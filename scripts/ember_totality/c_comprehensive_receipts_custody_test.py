@@ -64,8 +64,8 @@ def test_comprehensive_receipts_custody():
             docs_dst = repo / "docs"
             shutil.copytree(docs_src, docs_dst, ignore=shutil.ignore_patterns("*.pyc", "__pycache__"))
 
-        # Create minimal GOAL.md
-        goal_path = repo / "GOAL.md"
+        # Create minimal docs/authority/GOAL.md
+        goal_path = repo / "docs/authority/GOAL.md"
         if not goal_path.exists():
             goal_path.write_text("# GOAL\n\nMinimal GOAL for testing.\n")
 

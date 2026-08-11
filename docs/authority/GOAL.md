@@ -1,6 +1,6 @@
 # EMBER - Constitution
 
-INVARIANT.md is Ember's sole unamendable identity surface. GOAL.md is the
+docs/authority/INVARIANT.md is Ember's sole unamendable identity surface. docs/authority/GOAL.md is the
 highest amendable authority. Lower-precedence files may implement and test it;
 they cannot reduce, defer, replace, or reinterpret it.
 
@@ -113,19 +113,19 @@ they cannot reduce, defer, replace, or reinterpret it.
     "unrecovered_direct_names_minimum": 2
   },
   "conservation_hashes": {
-    "authority_matrix_sha256": "56B7DFDC2DDA2AFF04C2A48CE5FE7BD7367C81FE6056F9D10B2AFCD03E2C5936",
+    "authority_matrix_sha256": "CACB09B1CD16B3272DBE0EB0D35DC0B5B334B74F791D1ADE4BFC651F93C9F4DB",
     "governing_surfaces_sha256": {
-      "CONTINUITY.md": "BD40FBE79192F009FE2A231BBFBBAE4B933EFC83A7816015DF04FC00E3581E78",
-      "GOVERNANCE.md": "186cdc1e2dcbd34f0dea1421e70cc8f70b7e9b906f3d04b2b2befdc5c69e980c",
-      "README.md": "4E54D768A68C608FE2688BECC70AE06427636A6F5AB583F2ADA77934ED7BDE38",
-      "docs/ember-authority-matrix.md": "56B7DFDC2DDA2AFF04C2A48CE5FE7BD7367C81FE6056F9D10B2AFCD03E2C5936",
-      "docs/ember-floor-contract.md": "83816F1DE862F9DC4BBE90E73474F4E50F0E1AEF7C1A191F31C40683D0493AD1",
-      "docs/goal-clear-protocol.md": "6A0A5D8BF04D22B374B197B2C6A380D80C893748BF38FAB706137EC47C33635C",
-      "docs/goal-mode-mechanism.md": "F3D0A29007DB098FCEAEED650BCAE530A442E99598E8A9A092F47945A1C7D300",
-      "docs/nc2-own-technique-contract.md": "A0A12328B2D96F6DF12BD7D51D029F88279436C9E1073835EDBC12E7C8B85B9C",
-      "docs/registry-dispatch-gate-spec-v0.md": "6AC47945BAA555F159F4DE338D3E3241C9119E5684E5370707C3B3C11E90AF0F",
+      "docs/authority/CONTINUITY.md": "F406058BBE2B935E1FCCB12D02F620B37989CDA63B05CDF0CB74DEF2CF797D85",
+      "docs/authority/GOVERNANCE.md": "186cdc1e2dcbd34f0dea1421e70cc8f70b7e9b906f3d04b2b2befdc5c69e980c",
+      "README.md": "120D8D68C9C3D79E1F1D9D9CFA549EAB31A93B059C40394FA5E5B7A7FC5CA01A",
+      "docs/authority/ember-authority-matrix.md": "CACB09B1CD16B3272DBE0EB0D35DC0B5B334B74F791D1ADE4BFC651F93C9F4DB",
+      "docs/contracts/ember-floor-contract.md": "83816F1DE862F9DC4BBE90E73474F4E50F0E1AEF7C1A191F31C40683D0493AD1",
+      "docs/contracts/goal-clear-protocol.md": "6A0A5D8BF04D22B374B197B2C6A380D80C893748BF38FAB706137EC47C33635C",
+      "docs/contracts/goal-mode-mechanism.md": "F3D0A29007DB098FCEAEED650BCAE530A442E99598E8A9A092F47945A1C7D300",
+      "docs/contracts/nc2-own-technique-contract.md": "A0A12328B2D96F6DF12BD7D51D029F88279436C9E1073835EDBC12E7C8B85B9C",
+      "docs/contracts/registry-dispatch-gate-spec-v0.md": "6AC47945BAA555F159F4DE338D3E3241C9119E5684E5370707C3B3C11E90AF0F",
       "docs/spec/autonomy-relinquishment-ladder-v1.md": "36C23511461DA3AD5E988D4ED0C2193340E0F523D25886461D6026442798E0CB",
-      "docs/spec/conditions-v1.md": "2F29899699EF59548DD8351E9A8417D3272330AAE5D9C728A09A091AA227E117"
+      "docs/spec/conditions-v1.md": "363B1A0E1D952ECA1B1DD70CC2239685EBC02A67816A3697872171E8D8256B37"
     }
   },
   "authority_only_goal": false,
@@ -147,7 +147,7 @@ they cannot reduce, defer, replace, or reinterpret it.
     15000000000,
     27000000001
   ],
-  "highest_amendable_authority": "GOAL.md",
+  "highest_amendable_authority": "docs/authority/GOAL.md",
   "invariant_sha256": "08A0EB7418C09A8088BE4658E10785107ABBB7507FC2DBCDC789936AA54E02A6",
   "lineage": {
     "borrowed_models_role": "frozen_reference_only",
@@ -236,17 +236,17 @@ they cannot reduce, defer, replace, or reinterpret it.
     "next_executed_outcome"
   ],
   "required_governing_surfaces": [
-    "docs/goal-clear-protocol.md",
-    "docs/nc2-own-technique-contract.md",
-    "docs/ember-floor-contract.md",
-    "docs/goal-mode-mechanism.md",
-    "docs/registry-dispatch-gate-spec-v0.md",
+    "docs/contracts/goal-clear-protocol.md",
+    "docs/contracts/nc2-own-technique-contract.md",
+    "docs/contracts/ember-floor-contract.md",
+    "docs/contracts/goal-mode-mechanism.md",
+    "docs/contracts/registry-dispatch-gate-spec-v0.md",
     "docs/spec/autonomy-relinquishment-ladder-v1.md",
     "docs/spec/conditions-v1.md",
-    "docs/ember-authority-matrix.md",
-    "GOVERNANCE.md",
+    "docs/authority/ember-authority-matrix.md",
+    "docs/authority/GOVERNANCE.md",
     "README.md",
-    "CONTINUITY.md"
+    "docs/authority/CONTINUITY.md"
   ],
   "schema": "ember-authority-v1",
   "totality": [
@@ -265,7 +265,7 @@ they cannot reduce, defer, replace, or reinterpret it.
 ## Public roadmap hierarchy
 
 The complete milestone decomposition is published at
-[`docs/roadmap/README.md`](docs/roadmap/README.md). It has exactly four
+[`docs/roadmap/README.md`](../roadmap/README.md). It has exactly four
 surfaces: this constitutional goal, twelve version-controlled milestone
 contracts, one non-authoritative execution graph, and concrete GitHub
 issues/pull requests. The decomposition and tracking surfaces cannot reduce,
@@ -484,14 +484,14 @@ machinery are not progress without that link.
 
 ## 12. Completion and precedence
 
-docs/goal-clear-protocol.md defines the executable completion audit without
-changing this goal. docs/ember-authority-matrix.md maps D-001 through D-062 to
-enforcement, historical evidence, and explicit open research. STATE.md resolves
+docs/contracts/goal-clear-protocol.md defines the executable completion audit without
+changing this goal. docs/authority/ember-authority-matrix.md maps D-001 through D-062 to
+enforcement, historical evidence, and explicit open research. docs/authority/STATE.md resolves
 every current model, checkpoint, backend, and benchmark class.
 
 Evidence and historical artifacts never become authority. Subordinate contracts
 carry the machine-checked conservation header and fail closed on contradiction.
-Precedence is INVARIANT.md, then GOAL.md, then named subordinate contracts,
+Precedence is docs/authority/INVARIANT.md, then docs/authority/GOAL.md, then named subordinate contracts,
 then implementation and evidence, then history.
 
 No completion claim is valid unless the primitive, model, organism, body, and

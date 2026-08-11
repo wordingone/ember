@@ -497,11 +497,11 @@ cutting away inherited execution clutter.
 
 ### Lost Ideas, Stubs, And Deferred Work To Reattach Deliberately
 
-- **Completeness manifest/tally.** `docs/ember-completeness.md` and
+- **Completeness manifest/tally.** `docs/contracts/ember-completeness.md` and
   `scripts/ember_tally.py` remain the larger completion authority. MVP should
   add a tally row after the first loop proof, not wait for the whole tally
   system before executing the loop.
-- **Floor-contract rows.** `docs/ember-floor-contract.md` preserves launch
+- **Floor-contract rows.** `docs/contracts/ember-floor-contract.md` preserves launch
   vehicle deferrals such as diffusion/dLLM and external research intake. These
   are watch rows, not first MVP blockers.
 - **Multimodal placeholders.** `docs/ember-restart/ember-multimodal-v0-config-spec.md`
@@ -1650,7 +1650,7 @@ DIRECTLY contribute to the main goal on completion Ã¢â‚¬â€ no subgoal
   token-detrimental and unuseful to ember. S7 tally rows are
   GATED:retrieval-substrate until that receipt exists.
 
-**COMPLETENESS MANIFEST:** `docs/ember-completeness.md` enumerates every
+**COMPLETENESS MANIFEST:** `docs/contracts/ember-completeness.md` enumerates every
 planned/known piece (id, subgoal, AC, test, receipt pointer, status). A
 planned piece absent from the manifest is itself a gate violation Ã¢â‚¬â€ planning
 and manifest-entry are the same act from now on.

@@ -2,7 +2,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Production-shaped assertion on the CONTINUITY.md identity resolver's
+"""Production-shaped assertion on the docs/authority/CONTINUITY.md identity resolver's
 `ember-cli-body` row (EMBER-01 R8 Part-B).
 
 The row must NOT carry the bare `qwen_reference_default` backend fallback.
@@ -18,7 +18,7 @@ from __future__ import annotations
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CONTINUITY = REPO_ROOT / "CONTINUITY.md"
+CONTINUITY = REPO_ROOT / "docs/authority/CONTINUITY.md"
 
 EXPECTED_BACKEND = "reference_seat_explicit"
 FORBIDDEN_BACKEND = "qwen_reference_default"
@@ -28,7 +28,7 @@ EXPECTED_EVIDENCE_FRAGMENT = (
 
 
 def _find_resolver_row(row_id: str) -> list[str]:
-    """Parse the 9-column identity resolver table in CONTINUITY.md and return
+    """Parse the 9-column identity resolver table in docs/authority/CONTINUITY.md and return
     the cells for the row whose id == row_id. Raises AssertionError if the
     row is absent so a missing/renamed row fails loudly rather than
     silently passing."""
@@ -42,7 +42,7 @@ def _find_resolver_row(row_id: str) -> list[str]:
         if cells and cells[0] == "id" and "evidence" in cells:
             header_idx = idx
             break
-    assert header_idx is not None, "CONTINUITY.md identity resolver header not found"
+    assert header_idx is not None, "docs/authority/CONTINUITY.md identity resolver header not found"
 
     for raw in lines[header_idx + 1 :]:
         if not raw.strip():
@@ -54,7 +54,7 @@ def _find_resolver_row(row_id: str) -> list[str]:
             continue
         if cells and cells[0] == row_id:
             return cells
-    raise AssertionError(f"CONTINUITY.md resolver row {row_id!r} not found")
+    raise AssertionError(f"docs/authority/CONTINUITY.md resolver row {row_id!r} not found")
 
 
 def test_ember_cli_body_backend_is_explicit_reference_seat() -> None:

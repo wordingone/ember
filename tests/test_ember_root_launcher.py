@@ -25,7 +25,7 @@ def canonical(path: str | Path) -> str:
 PUBLIC_LAUNCHER = REPOSITORY / "Ember.cmd"
 LAUNCH_IMPL = REPOSITORY / "scripts" / "launch-ember-cli.ps1"
 LAUNCH_STAGING = REPOSITORY / "scripts" / "ember-launch-staging.ps1"
-START_HERE = REPOSITORY / "docs" / "START-HERE.md"
+START_HERE = REPOSITORY / "docs" / "guides" / "START-HERE.md"
 
 
 class EmberRootLauncherTests(unittest.TestCase):

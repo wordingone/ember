@@ -19,7 +19,7 @@ def main() -> int:
         root = Path(td)
         repo = root / "repo"
         inv = repo / "receipts" / "ember-preloop-resident-gate" / "inventory.json"
-        goal = repo / "GOAL.md"
+        goal = repo / "docs/authority/GOAL.md"
         shim = repo / "tools" / "reference-goal-mode" / "launch.ps1"
 
         _write(

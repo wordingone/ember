@@ -36,13 +36,13 @@ def canonical_sha256(payload: dict) -> str:
 
 
 def write_authority(root: Path) -> tuple[str, str]:
-    matrix = root / "docs" / "ember-authority-matrix.md"
+    matrix = root / "docs" / "authority" / "ember-authority-matrix.md"
     matrix.parent.mkdir(parents=True, exist_ok=True)
     matrix.write_text(
         "| discrepancy | disposition | enforced by | evidence/open question |\n"
         "|---|---|---|---|\n"
-        "| D-001 | ENFORCED | GOAL.md | identity |\n"
-        "| D-002 | HISTORICAL_ONLY | STATE.md | history |\n",
+        "| D-001 | ENFORCED | docs/authority/GOAL.md | identity |\n"
+        "| D-002 | HISTORICAL_ONLY | docs/authority/STATE.md | history |\n",
         encoding="utf-8",
     )
     milestone = root / "docs" / "roadmap" / "milestones" / "EMBER-00.md"
@@ -63,7 +63,7 @@ def valid_payload(root: Path) -> dict:
         "repository": "wordingone/ember",
         "source_commit": "a" * 40,
         "current_authority": {
-            "matrix_path": "docs/ember-authority-matrix.md",
+            "matrix_path": "docs/authority/ember-authority-matrix.md",
             "matrix_sha256": matrix_sha,
             "discrepancy_ids": ["D-001", "D-002"],
             "milestone_ids": ["EMBER-00"],

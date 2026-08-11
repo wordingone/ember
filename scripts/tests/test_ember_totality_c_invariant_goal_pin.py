@@ -13,7 +13,7 @@ from scripts.ember_totality import test_c_invariant as target
 class GoalInvariantPinTests(unittest.TestCase):
     def check_text(self, text: str) -> tuple[bool, str]:
         with tempfile.TemporaryDirectory() as tmp:
-            goal = Path(tmp) / "GOAL.md"
+            goal = Path(tmp) / "docs/authority/GOAL.md"
             goal.write_text(text, encoding="utf-8")
             with patch.object(target, "GOAL_FILE", goal):
                 return target.check_goal_pin()

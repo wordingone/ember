@@ -106,7 +106,7 @@ def build_receipt(
             extracted_files_sample = [str(p.relative_to(extract_dir)) for p in sorted(extract_dir.rglob("*")) if p.is_file()][:25]
 
     verdict = "SCIENCEAGENTBENCH_ARTIFACT_INTAKE_READY" if not blocked_reasons else "SCIENCEAGENTBENCH_ARTIFACT_INTAKE_BLOCKED"
-    goal_path = repo / "GOAL.md"
+    goal_path = repo / "docs/authority/GOAL.md"
     receipt = {
         "ticket": TICKET,
         "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),

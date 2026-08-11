@@ -28,7 +28,7 @@
   "files": {
     "nodes": [
       {
-        "path": "docs/README.md",
+        "path": "docs/DOCS-README.md",
         "changeType": "MODIFIED"
       }
     ],

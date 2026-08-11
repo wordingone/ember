@@ -56,7 +56,7 @@ function makeBenchmarkRegistryJson(overrides: {
     execution_status: i < executedCount ? "executed" : "not_executed",
     subject_class: "none",
     completion: false,
-    evidence: ["repo:GOAL.md"],
+    evidence: ["repo:docs/authority/GOAL.md"],
     split: "unresolved",
     harness_path: null,
     harness_identity: null,
@@ -737,7 +737,7 @@ describe("assembleBenchmarkElement (element 5) -- out-of-vocabulary execution_st
     license_status: "unresolved",
     subject_class: "none",
     completion: false,
-    evidence: ["repo:GOAL.md"],
+    evidence: ["repo:docs/authority/GOAL.md"],
     split: "unresolved",
     harness_path: null,
     harness_identity: null,
@@ -939,7 +939,7 @@ describe("assembleFailureClassElement (element 6) -- real committed ledger (T2.2
 function makeWorldState(overrides: Partial<{ monitorCount: number; understandCount: number }> = {}): EmberWorldState {
   const monitorCount = overrides.monitorCount ?? 2;
   const understandCount = overrides.understandCount ?? 1;
-  const evidence = { path: "GOAL.md", sha256: "x".repeat(64) };
+  const evidence = { path: "docs/authority/GOAL.md", sha256: "x".repeat(64) };
   return {
     ts: "2026-01-01T00:00:00.000Z",
     monitor: {

@@ -8,7 +8,7 @@ The gap (two frozen artifacts, one un-receipted clause):
   cannot clear a K1-equivalent verify floor in the fp-22 world EVEN WITH
   CURRICULUM SYNTHESIS (the NC2-own rung-level kill), DEMOTE to
   fallback (a)". The clause descends verbatim from the NC2-own
-  pre-registration (STATE.md ladder section).
+  pre-registration (docs/authority/STATE.md ladder section).
 - fp-23 decide() (frozen pre-step-0): KILL = 2B fail + 4B fail, with
   the RETRY-AT-4B leg PASSIVE — nothing in the protocol requires a
   curriculum-synthesis attempt before the kill fires.

@@ -75,17 +75,17 @@ def test_orphaned_pin_is_detected() -> None:
             "# comment line",
             "* text=auto eol=lf",
             "receipts/** -text",
-            "GOAL.md -text",
+            "docs/authority/GOAL.md -text",
             "config/v0-pretrain-config.json -text",  # the #219 orphan, pre-rename
             "",
         ]
     )
-    tracked = {"GOAL.md", "configs/v0-pretrain-config.json"}
+    tracked = {"docs/authority/GOAL.md", "configs/v0-pretrain-config.json"}
 
     pins = exact_path_pins(fixture)
     orphans = orphaned_pins(pins, lambda pin: pin in tracked)
 
-    assert pins == ["GOAL.md", "config/v0-pretrain-config.json"]
+    assert pins == ["docs/authority/GOAL.md", "config/v0-pretrain-config.json"]
     assert orphans == ["config/v0-pretrain-config.json"]
 
 

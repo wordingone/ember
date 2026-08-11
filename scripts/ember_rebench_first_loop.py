@@ -147,8 +147,8 @@ def build_receipt(*, repo: Path, task_family: str, task_dir: Path, out: Path, pr
         "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
         "sha_convention": SHA_CONVENTION,
         "repo": str(repo),
-        "goal_path": str(repo / "GOAL.md"),
-        "goal_source_sha256": sha256_file(repo / "GOAL.md") if (repo / "GOAL.md").exists() else None,
+        "goal_path": str(repo / "docs/authority/GOAL.md"),
+        "goal_source_sha256": sha256_file(repo / "docs/authority/GOAL.md") if (repo / "docs/authority/GOAL.md").exists() else None,
         "task_family": task_family,
         "task_dir": str(task_dir),
         "source_hashes": {

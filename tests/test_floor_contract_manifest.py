@@ -29,7 +29,7 @@ def test_parse_floor_contract_manifest_valid():
 
     # Check structure of a deferred row entry
     bitnet_row = manifest["BitNet 1.58-bit"]
-    assert bitnet_row["source_file"] == "docs/ember-floor-contract.md"
+    assert bitnet_row["source_file"] == "docs/contracts/ember-floor-contract.md"
     assert bitnet_row["disposition"] in {"used_now", "preserved_trigger_gated", "blocked_with_exact_adapter_surface"}
     assert bitnet_row["trigger"] == "hardware escalation"
     assert bitnet_row["pilot"] == "ternary pilot"

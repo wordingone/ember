@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for compute_working_set() (GOVERNANCE.md §9 / issue #488).
+"""Unit tests for compute_working_set() (docs/authority/GOVERNANCE.md §9 / issue #488).
 
 Covers:
 - The field appears on a real repo root with plausible (internally

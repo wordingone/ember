@@ -1,6 +1,6 @@
 """proxy_speedrun.py — proxy-speedrun harness for registry-gate technique evaluation (#271).
 
-Implements the proxy-speedrun contract from docs/registry-dispatch-gate-spec-v0.md:
+Implements the proxy-speedrun contract from docs/contracts/registry-dispatch-gate-spec-v0.md:
 
   Frozen proxy: ~65M params (LLaMA-config, hidden=512, 12 layers, 8 heads,
   vocab=32000, seq=512, tied embeddings, grad checkpointing).

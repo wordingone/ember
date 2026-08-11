@@ -46,7 +46,7 @@ def _base_config(tmp: str) -> dict:
             "margin_gib_floor": 1.0,
             "pace_s_per_step": 0.05,
         },
-        "goal_file": os.path.join(tmp, "GOAL.md"),
+        "goal_file": os.path.join(tmp, "docs/authority/GOAL.md"),
         "heartbeat_file": os.path.join(tmp, "nck-heartbeat.txt"),
         "journal_path": os.path.join(tmp, "nck-journal.jsonl"),
         "gate_notes_dir": os.path.join(tmp, "gate-notes"),

@@ -353,14 +353,14 @@ def test_disconfirmation_custody():
         scripts_dst = repo / "scripts"
         shutil.copytree(scripts_src, scripts_dst, ignore=shutil.ignore_patterns("*.pyc", "__pycache__"))
 
-        # Copy docs (for GOAL.md and spec files)
+        # Copy docs (for docs/authority/GOAL.md and spec files)
         docs_src = REPO_ROOT / "docs"
         if docs_src.exists():
             docs_dst = repo / "docs"
             shutil.copytree(docs_src, docs_dst, ignore=shutil.ignore_patterns("*.pyc", "__pycache__"))
 
-        # Create minimal GOAL.md if missing
-        goal_path = repo / "GOAL.md"
+        # Create minimal docs/authority/GOAL.md if missing
+        goal_path = repo / "docs/authority/GOAL.md"
         if not goal_path.exists():
             goal_path.write_text("# GOAL\n\nMinimal GOAL for testing disconfirmation.\n")
 

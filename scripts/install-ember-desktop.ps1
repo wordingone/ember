@@ -109,7 +109,8 @@ function Install-StableFiles([string]$Root) {
     ) | Set-Content -LiteralPath (Join-Path $Root "Ember.cmd") -Encoding ASCII
     # A compiled deployment is intentionally git-less. These marker bytes let the existing
     # strict runtime resolver bind state to the installation itself instead of a checkout.
-    "# Installed Ember application root`n" | Set-Content -LiteralPath (Join-Path $Root "GOAL.md") -Encoding UTF8
+    New-Item -ItemType Directory -Force -Path (Join-Path $Root "docs\authority") | Out-Null
+    "# Installed Ember application root`n" | Set-Content -LiteralPath (Join-Path $Root "docs/authority/GOAL.md") -Encoding UTF8
     New-Item -ItemType Directory -Force -Path (Join-Path $Root "tools\ember-cli") | Out-Null
 }
 

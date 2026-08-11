@@ -781,7 +781,7 @@ References are grouped by identifier rather than citation style. Ember documents
 
 **[E2]** Ember repository. GOAL.md (Ember Constitution) at commit 3d48d3870919bd04cec735f68d0fad45fcfae0b2. github.com/wordingone/ember/blob/3d48d3870919bd04cec735f68d0fad45fcfae0b2/GOAL.md
 
-**[E3]** Ember repository. docs/START-HERE.md at commit 3d48d3870919bd04cec735f68d0fad45fcfae0b2. github.com/wordingone/ember/blob/3d48d3870919bd04cec735f68d0fad45fcfae0b2/docs/START-HERE.md
+**[E3]** Ember repository. docs/guides/START-HERE.md at commit 3d48d3870919bd04cec735f68d0fad45fcfae0b2. github.com/wordingone/ember/blob/3d48d3870919bd04cec735f68d0fad45fcfae0b2/docs/guides/START-HERE.md
 
 **[E4]** Ember repository. INVARIANT.md at commit 3d48d3870919bd04cec735f68d0fad45fcfae0b2. github.com/wordingone/ember/blob/3d48d3870919bd04cec735f68d0fad45fcfae0b2/INVARIANT.md
 

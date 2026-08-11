@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """
 Mechanical merge gate for ember PRs.
 
@@ -63,8 +66,8 @@ def get_pr_data(pr_number: int) -> Dict[str, Any]:
 def has_coordinator_paths(file_paths: List[str]) -> bool:
     """Check if any file path matches coordinator-class patterns."""
     coordinator_patterns = [
-        r"^GOAL\.md$",
-        r"^INVARIANT\.md$",
+        r"^(?:GOAL\.md|docs/authority/GOAL\.md)$",
+        r"^(?:INVARIANT\.md|docs/authority/INVARIANT\.md)$",
         r"^docs/spec/.*",
         r"^scripts/cbase_.*",
         r"^scripts/ember_totality/.*\.py$",  # All .py files in ember_totality EXCEPT receipts-*/**
@@ -93,11 +96,11 @@ def verify_paths_match_class(file_paths: List[str], pr_class: str) -> bool:
             r"^scripts/ember_totality/receipts-.*"
         ]
     elif pr_class == "docs":
-        # Allow: docs/**, README.md, GOVERNANCE.md, .github/**
+        # Allow: docs/**, README.md, docs/authority/GOVERNANCE.md, .github/**
         allowed_patterns = [
             r"^docs/.*",
             r"^README\.md$",
-            r"^GOVERNANCE\.md$",
+            r"^(?:GOVERNANCE\.md|docs/authority/GOVERNANCE\.md)$",
             r"^\.github/.*"
         ]
     elif pr_class == "code":
@@ -190,7 +193,7 @@ def check_merge_gate(pr_data: Dict[str, Any], pr_class: str) -> ChecklistResult:
     # This refuses BEFORE checking class paths
     if has_coordinator_paths(file_paths):
         coordinator_files = [p for p in file_paths if re.match(
-            r"(^GOAL\.md$|^INVARIANT\.md$|^docs/spec/.*|^scripts/cbase_.*|^scripts/ember_totality/(?!receipts-).*\.py$|^tools/repo-guard\.sh$|^\.claude/.*)",
+            r"(^GOAL\.md$|^docs/authority/GOAL\.md$|^INVARIANT\.md$|^docs/authority/INVARIANT\.md$|^docs/spec/.*|^scripts/cbase_.*|^scripts/ember_totality/(?!receipts-).*\.py$|^tools/repo-guard\.sh$|^\.claude/.*)",
             p
         )]
         result.checklist.append({

@@ -25,7 +25,7 @@ compute) without breaking the two invariants the rest of the repo already enforc
    governs `state/ember01-completion-receipt-20260801.json` and every `receipts/**` artifact
    in this tree).
 
-No prior document in this repo names this design. `docs/ember-completeness.md`'s C-FED row
+No prior document in this repo names this design. `docs/contracts/ember-completeness.md`'s C-FED row
 (M-row "Federation surface (inter-founder coordination)") describes a *different* meaning of
 "federation" — mailbox routing between founders on this one machine, not external-compute
 substrates. This document is new content, written from the repo's real existing mechanisms,
@@ -52,7 +52,7 @@ of an untrusted checkpoint: verify identity before crediting it.
 ### 2. Work-sharding
 
 Ember already has a real, landed sharding primitive: shard corpora, defined at freeze time
-and byte-scanned at launch (`TOKEN-SHARDS-V0`, `docs/ember-completeness.md` M33/M34, the
+and byte-scanned at launch (`TOKEN-SHARDS-V0`, `docs/contracts/ember-completeness.md` M33/M34, the
 launch-rail's "shards byte-scan + live interlock"). Federated work-sharding is the same
 primitive applied to *training work units* instead of *corpus bytes*: a shard is a bounded,
 named unit of work (a fixed token range, a fixed cycle count, a fixed budget —

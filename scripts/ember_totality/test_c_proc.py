@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test_c_proc.py — STATUS PROBE for Ember goal condition C-PROC.
 
-Registry text: docs/spec/conditions-v1.md §4.2 C-PROC (GOAL.md §13). R: the
+Registry text: docs/spec/conditions-v1.md §4.2 C-PROC (docs/authority/GOAL.md §13). R: the
 delegation/review record the OPERATOR can see (public-repo issues, milestones,
 PRs) is CURRENT with the work record — work never runs ahead of its visible
 process reflection.
@@ -123,7 +123,7 @@ def main():
     if not candidates:
         emit("RED", "C-PROC: no process-visibility receipt under receipts/process-visibility/ -> "
                     "the operator-visible process record is genuinely BEHIND the work record "
-                    "(GOAL.md sec 13: work without its visible reflection). The cure is not a "
+                    "(docs/authority/GOAL.md sec 13: work without its visible reflection). The cure is not a "
                     "receipt alone -- it is the public issues/milestones/PRs the receipt cites.")
 
     # Newest receipt by filename sort (receipts embed UTC ts in the name).
@@ -253,7 +253,7 @@ def main():
                else f"{len(open_prs)} open PR(s) all within review grace")
     emit("GREEN", f"C-PROC CHK satisfied by {name}: {len(urls)} public issue URL(s) cited, {pr_note}, "
                   f"covered commits verified in {len(covered)} tree(s), work-vs-coverage lag "
-                  f"{max(lag_h, 0.0):.1f}h <= {GRACE_HOURS}h grace (GOAL.md sec 13: the board, "
+                  f"{max(lag_h, 0.0):.1f}h <= {GRACE_HOURS}h grace (docs/authority/GOAL.md sec 13: the board, "
                   f"not the operator, detects process drift)")
 
 

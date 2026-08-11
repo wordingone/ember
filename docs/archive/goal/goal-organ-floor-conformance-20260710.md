@@ -3,7 +3,7 @@
 Issue #642 (refs #211). Audit only — this audit fixes nothing, and no clause verdict below was
 softened to make a row read green.
 
-- **Floor (the contract):** `docs/goal-mode-mechanism.md`, restated as the six frozen clauses
+- **Floor (the contract):** `docs/contracts/goal-mode-mechanism.md`, restated as the six frozen clauses
   enumerated in issue #642's body. That restatement is the audit's frozen scope; no clause here
   was invented, and no floor clause was dropped (see "Floor coverage" below).
 - **Audited tree:** `wordingone/ember` at `ebae9f3aef1f497302c956ca534dc38f10e7e852`
@@ -88,7 +88,7 @@ Tracked by **#663** (OPEN). No fix is attempted here; the audit is read + test o
 
 ## Floor coverage — what the frozen six do and do not cover
 
-The six clauses cover `docs/goal-mode-mechanism.md`'s "Selection and persistence" (clauses 1–2) and
+The six clauses cover `docs/contracts/goal-mode-mechanism.md`'s "Selection and persistence" (clauses 1–2) and
 "Continuation loop" (clauses 3–6). Two of the spec's four sections are outside the frozen scope and
 are therefore **unaudited, not passed**:
 
@@ -107,7 +107,7 @@ The draft was treated as a draft, not as truth. Three corrections, all of which 
 suite claims rather than what it tests:
 
 1. **Retired the `GOAL.md §6` floor citation.** On current master, GOAL.md §6 is "Clean genesis and
-   frozen-reference boundary" — unrelated to goal mode. `docs/goal-mode-mechanism.md` is the sole
+   frozen-reference boundary" — unrelated to goal mode. `docs/contracts/goal-mode-mechanism.md` is the sole
    document floor. (The `spec §N` references scattered through the organ's own source comments are
    likewise stale against the current 52-line spec; that is a comment-accuracy issue in the organ,
    noted here, not fixed by this audit.)
@@ -140,7 +140,7 @@ This ruling is re-bound to current public master
 `4b5868370c4472152313894ccf4a389e81fa3525`: `goal-continuation-wiring.ts`
 blob `0b141c37e25ff7f439d170f64ea9fede38d91e7e`, `screens/repl.ts` blob
 `cbed052374d1a2be2673a4fcf46f27ac473c739a`, and the current floor document
-`docs/goal-mode-mechanism.md` blob `69484c1f6904630b611162c9dda7f6898d0b886a`.
+`docs/contracts/goal-mode-mechanism.md` blob `69484c1f6904630b611162c9dda7f6898d0b886a`.
 The merged #1158 implementation and its closed #279 rationale remain
 historical provenance for the exception, not a new authority.
 

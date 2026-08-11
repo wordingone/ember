@@ -4,7 +4,7 @@
 // services/activity-feed.ts — issue #485 rung 1: the real-event engine behind the cockpit's
 // activity feed. The operator's verbatim complaint (3+ weeks up, zero activity ever seen) and
 // the board (C-PROC/C-OBS/C13 all RED) agree this is a genuine gap, not a perception problem —
-// GOAL.md's own P-C text: "a keyframed flame is a fabricated receipt in visual form." So every
+// docs/authority/GOAL.md's own P-C text: "a keyframed flame is a fabricated receipt in visual form." So every
 // line this engine renders traces to one real, observable event:
 //
 //   - a NEW receipt file landing anywhere under receipts/** (recursive fs watch)
@@ -381,7 +381,7 @@ function truncateForActivityLine(value: string, maxLen = 60): string {
  *  - `continuation_skipped` -- fires on nearly every ordinary turn once a goal exists (any turn
  *    ending while the user has already typed something skips with `queued_user_input`); the
  *    autonomy-visible signal the current "Operator relationship" section of
- *    docs/goal-mode-mechanism.md cares about
+ *    docs/contracts/goal-mode-mechanism.md cares about
  *    "autonomy must be VISIBLE") is a continuation that FIRED, never the routine skip -- surfacing
  *    skips would flood the feed with exactly the noise issue #485/#576 fought to eliminate.
  *

@@ -2219,7 +2219,7 @@ describe("process-entry — dispatchFastPath('--watch') execution binding", () =
     await mkdir(boardDir, { recursive: true });
     await mkdir(join(root, "docs", "ledgers"), { recursive: true });
     await mkdir(join(root, "receipts"), { recursive: true });
-    await writeFile(join(root, "GOAL.md"), "# Watch Fixture Goal\n\n## Topology\n\nbody\n");
+    await writeFile(join(root, "docs/authority/GOAL.md"), "# Watch Fixture Goal\n\n## Topology\n\nbody\n");
     await writeFile(
       join(root, "docs", "ledgers", "ember-debt-ledger.md"),
       "## Current Blocker Packet\n\n(none)\n\n## Active Rows\n\n| ID | Class | Debt | X | Y | Status |\n| --- | --- | --- | --- | --- | --- |\n",

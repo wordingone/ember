@@ -43,7 +43,7 @@ Binding consequences:
    (Receipt of need: RLM/iGRPO were declared non-killable below and were
    still self-killed on 2026-07-05. The clause failed as prose; this section
    plus ledger row-state is the mechanism.)
-3. `docs/ember-floor-contract.md` is re-designated from deferral ledger to
+3. `docs/contracts/ember-floor-contract.md` is re-designated from deferral ledger to
    REVIVAL QUEUE: its rows (BitNet/1.58-bit, MLA/KV compression, FP8, MoE,
    MTP, iGRPO/GRPO verifier RL, sleep consolidation, encoder-free multimodal,
    external research intake) map onto ledger walls and queue behind live
@@ -112,12 +112,12 @@ money-costing API key before exhausting these routes is invalid, and a receipt
 that scores itself higher because it used a paid judge is invalid evidence.
 
 Binding floor-contract surfaces imported into this goal:
-- `docs/ember-floor-contract.md` is the launch-vehicle deferral ledger and carries floor rows for BitNet/1.58-bit, encoder-free multimodal training, SDEK/GDN sleep consolidation, MLA/KV compression, MTP, iGRPO/GRPO-adjacent verifier RL, FP8, MoE, DiffusionGemma, external research intake, and all trigger-gated kill/promote rows.
+- `docs/contracts/ember-floor-contract.md` is the launch-vehicle deferral ledger and carries floor rows for BitNet/1.58-bit, encoder-free multimodal training, SDEK/GDN sleep consolidation, MLA/KV compression, MTP, iGRPO/GRPO-adjacent verifier RL, FP8, MoE, DiffusionGemma, external research intake, and all trigger-gated kill/promote rows.
 - `nc2-own-technique-contract.md` is the binding owned-core component contract. Silent pivots off QAT, turboquant, BitNet/1.58, SubQ/sparse attention, MTP, SDEK, the Chinese-lab stack, or Gemma-4-style unified multimodal architecture are gate violations unless the user changes the contract by name.
 - `scripts/train_multimodal_v0.py` is the current real neural/multimodal launch vehicle. Its §6 primitive action-log seam (`emit-token`, `emit-scalar`, `emit-pointer`, `commit`, `stop`) is the world-model compiler seam and must be used or explicitly blocked by receipt when building the resident-training adapter.
 - The existing launch-vehicle floor already includes QAT, Muon hidden-layer optimization with AdamW fallbacks, QK-norm, multimodal reserved IDs/soft-token splice/bidirectional span/2D RoPE locks, and the residency governor. These are not optional background facts; the resident-training gate must preserve or explicitly account for them.
 These imported surfaces do not replace the Current Blocker Packet and do not authorize benchmark/readiness/D3 work before the resident-training gate. They constrain how the gate is built: use actual neural parameter updates, preserve the floor machinery, and never clear via symbolic-template-policy substitution.
-The resident-training gate receipt must include a machine-checkable `floor_contract_manifest` keyed by every row in `docs/ember-floor-contract.md` and every binding component in `nc2-own-technique-contract.md`. For each row/component it must record: source file, source hash, disposition (`used_now`, `preserved_trigger_gated`, or `blocked_with_exact_adapter_surface`), launch-vehicle impact, trigger, pilot, kill/promote condition, and evidence path. `archival`, `killed`, `irrelevant`, `later`, `covered by fp16`, or any free-text equivalent is invalid unless the receipt proves a physics-level contradiction with Ember's self-growing target and cites the exact user-approved contract change. A gate receipt missing this manifest is `invalid_floor_contract_unaccounted`, even if its neural update, A/B/C rows, and deletion tests otherwise pass.
+The resident-training gate receipt must include a machine-checkable `floor_contract_manifest` keyed by every row in `docs/contracts/ember-floor-contract.md` and every binding component in `nc2-own-technique-contract.md`. For each row/component it must record: source file, source hash, disposition (`used_now`, `preserved_trigger_gated`, or `blocked_with_exact_adapter_surface`), launch-vehicle impact, trigger, pilot, kill/promote condition, and evidence path. `archival`, `killed`, `irrelevant`, `later`, `covered by fp16`, or any free-text equivalent is invalid unless the receipt proves a physics-level contradiction with Ember's self-growing target and cites the exact user-approved contract change. A gate receipt missing this manifest is `invalid_floor_contract_unaccounted`, even if its neural update, A/B/C rows, and deletion tests otherwise pass.
 
 First-principles reconciliation of these surfaces: the core function is not
 to preserve a checklist of fashionable techniques; it is to make Ember's
@@ -126,7 +126,7 @@ under external held-out pressure. Therefore the floor contract is binding
 only where it is load-bearing for that function, and every preserved or
 trigger-gated row must state the mechanism by which it can become
 load-bearing. The resident-training gate must explicitly restore and test:
-the full `docs/ember-floor-contract.md` ledger including every trigger-gated
+the full `docs/contracts/ember-floor-contract.md` ledger including every trigger-gated
 row; the full `nc2-own-technique-contract.md` binding component list; the
 `scripts/train_multimodal_v0.py` neural/multimodal launch vehicle; the
 section-6 action-log/world-model compiler seam; and the existing QAT, Muon,
@@ -185,7 +185,7 @@ actual neural parameter updates, before/after A/B/C/deleted evidence,
 deletion-sensitive neural-parameter ablation, paper-source preflight,
 clean-room `the predecessor CLI` harness accounting, `scripts/train_multimodal_v0.py`
 inspection/adaptation decision, and a row-by-row `floor_contract_manifest`
-covering `docs/ember-floor-contract.md` plus `nc2-own-technique-contract.md`.
+covering `docs/contracts/ember-floor-contract.md` plus `nc2-own-technique-contract.md`.
 These requirements are conjunctive, not menu items. A neural-update receipt,
 even one with before/after and deletion evidence, is still only
 `RUNNER_OR_PARTIAL_NEURAL_PROGRESS_NOT_RESIDENT_ORGAN_CLEARANCE` if the full

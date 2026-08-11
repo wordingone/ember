@@ -22,7 +22,7 @@
 // that call fired — so a single external kick (the end of a real human/
 // operator turn) is enough to sustain an arbitrarily long autonomous chain,
 // bounded only by budget/blocked/complete/user-preemption, exactly as spec
-// (docs/goal-mode-mechanism.md "Continuation loop") requires.
+// (docs/contracts/goal-mode-mechanism.md "Continuation loop") requires.
 
 import type {
   GoalContinuationEngine,

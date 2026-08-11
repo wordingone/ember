@@ -32,7 +32,7 @@ export function compactUtcStamp(now: Date = new Date()): string {
  *  import.meta.url, which resolves to a virtual bunfs path under `bun build --compile`
  *  and walks to the drive root instead of the repo (issue #172: this is exactly how the
  *  2026-07-05 operator-session receipt landed at B:/receipts instead of the real repo,
- *  and GOAL.md lookups failed for the same reason). Fails OPEN here (never throws) per
+ *  and docs/authority/GOAL.md lookups failed for the same reason). Fails OPEN here (never throws) per
  *  this module's own contract below — resolution failure degrades to process.cwd() with
  *  a loud warning, it never crashes the CLI and never silently returns a wrong root. */
 export function defaultRepoRoot(): string {

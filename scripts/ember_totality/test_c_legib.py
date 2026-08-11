@@ -267,7 +267,7 @@ def main():
 
     emit("GREEN", "C-LEGIB CHK satisfied: entry map covers every top-level directory with a "
                   "one-line purpose, a non-synthetic cold-read-reprobe receipt exists, and "
-                  "scripts/check_goal_citations.py exits 0 (GOAL.md: the repo is legible to a "
+                  "scripts/check_goal_citations.py exits 0 (docs/authority/GOAL.md: the repo is legible to a "
                   "fresh reader with no prior session context)")
 
 

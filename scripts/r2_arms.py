@@ -16,7 +16,7 @@ Solve-rate definition (documented here, single source):
   both modes (rate = 0 excluded by the open interval (0, theta]).
   Tasks in neither file are not in scope.
 
-Frontier filter (STATE.md branch-registry row 9):
+Frontier filter (docs/authority/STATE.md branch-registry row 9):
   - frontier_filter(episodes, rates, theta): selects episodes from tasks
     whose solve rate is in (0, theta] — easy-mass self-distillation guard.
   - all_verified mode (theta=None): passes all episodes regardless of rate.

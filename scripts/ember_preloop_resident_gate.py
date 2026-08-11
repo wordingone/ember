@@ -106,7 +106,7 @@ def extract_abstract(abs_html_path: Path) -> str:
 
 
 def inspect_goal(repo: Path) -> dict[str, Any]:
-    path = repo / "GOAL.md"
+    path = repo / "docs/authority/GOAL.md"
     text = read_text(path)
     markers = {
         "current_blocker_packet": "Current Blocker Packet" in text,
@@ -153,7 +153,7 @@ def inspect_floor_contract(repo: Path) -> tuple[dict[str, dict[str, Any]], dict[
     for name, needles in FLOOR_ROWS.items():
         present = has_any(floor_text, needles)
         manifest[name] = {
-            "source_file": "docs/ember-floor-contract.md",
+            "source_file": "docs/contracts/ember-floor-contract.md",
             "source_hash": floor_sha,
             "status": "preserved_trigger_gated" if present else "blocked_with_exact_adapter_surface",
             "present": present,

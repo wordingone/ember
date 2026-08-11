@@ -97,7 +97,7 @@ def test_readme_and_continuity_are_generated_from_current_subject() -> None:
 
     assert "optimizer state (custody-only, public bytes absent)" in block
     assert block in (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    assert block in (REPO_ROOT / "CONTINUITY.md").read_text(encoding="utf-8")
+    assert block in (REPO_ROOT / "docs/authority/CONTINUITY.md").read_text(encoding="utf-8")
 
 
 def test_readme_human_summary_agrees_with_current_subject() -> None:
@@ -112,10 +112,11 @@ def test_subject_surface_mismatches_fail_closed(tmp_path: Path) -> None:
     module = load_generator()
     payload = module.load_current_subject(CURRENT_SUBJECT)
     readme = tmp_path / "README.md"
-    continuity = tmp_path / "CONTINUITY.md"
+    continuity = tmp_path / "docs/authority/CONTINUITY.md"
+    continuity.parent.mkdir(parents=True, exist_ok=True)
     readme.write_text((REPO_ROOT / "README.md").read_text(encoding="utf-8"), encoding="utf-8")
     continuity.write_text(
-        (REPO_ROOT / "CONTINUITY.md").read_text(encoding="utf-8"),
+        (REPO_ROOT / "docs/authority/CONTINUITY.md").read_text(encoding="utf-8"),
         encoding="utf-8",
     )
 

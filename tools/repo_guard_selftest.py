@@ -51,26 +51,28 @@ GUARD_SUPPORT_FILES = [
     "scripts/oldest_issue_disposition.py",
     "scripts/receipt_check.py",
     "tools/frozen-receipt-exceptions.json",
-    "INVARIANT.md",
-    "GOAL.md",
-    "STATE.md",
-    "GOVERNANCE.md",
+    "docs/authority/INVARIANT.md",
+    "docs/authority/GOAL.md",
+    "docs/authority/STATE.md",
+    "docs/authority/GOVERNANCE.md",
     "README.md",
-    "CONTINUITY.md",
-    "REDACTIONS.md",
-    "docs/ember-completeness.md",
-    "docs/ember-authority-matrix.md",
-    "docs/ember-floor-contract.md",
-    "docs/goal-clear-protocol.md",
-    "docs/goal-mode-mechanism.md",
-    "docs/nc2-own-technique-contract.md",
-    "docs/registry-dispatch-gate-spec-v0.md",
+    "docs/authority/CONTINUITY.md",
+    "docs/authority/REDACTIONS.md",
+    "docs/contracts/ember-completeness.md",
+    "docs/authority/ember-authority-matrix.md",
+    "docs/contracts/ember-floor-contract.md",
+    "docs/contracts/goal-clear-protocol.md",
+    "docs/contracts/goal-mode-mechanism.md",
+    "docs/contracts/nc2-own-technique-contract.md",
+    "docs/contracts/registry-dispatch-gate-spec-v0.md",
     "docs/spec/autonomy-relinquishment-ladder-v1.md",
     "docs/spec/conditions-v1.md",
     "docs/ledgers/technique-registry.jsonl",
     "configs/nck-baseline/nck-invariants.json",
+    "configs/nck-baseline/nck-invariants.authority.json",
     "configs/nck-c10.json",
     "configs/nck-invariants.json",
+    "configs/nck-invariants.authority.json",
     "configs/nck-schedule.json",
     "configs/owned-core-widen-config.json",
     "configs/v0-multimodal-config.json",
@@ -87,7 +89,7 @@ def sha256_lower(word: str) -> str:
 
 
 def make_fixture(branch: str = "fix/selftest") -> Path:
-    """A minimal fixture repo: one GOAL.md, the real guard support files, on a
+    """A minimal fixture repo: one docs/authority/GOAL.md, the real guard support files, on a
     guard-legal branch name, with nothing else tracked. Callers add more files
     before calling commit_fixture()."""
     tmp = Path(tempfile.mkdtemp(prefix="repo_guard_selftest_"))
@@ -112,7 +114,7 @@ def make_fixture(branch: str = "fix/selftest") -> Path:
 
 
 def write_fixture_crosswalk(root: Path) -> None:
-    matrix = root / "docs" / "ember-authority-matrix.md"
+    matrix = root / "docs" / "authority" / "ember-authority-matrix.md"
     matrix_sha = hashlib.sha256(matrix.read_bytes()).hexdigest()
     discrepancy_ids = sorted(
         set(re.findall(r"\|\s*(D-\d{3})\s*\|", matrix.read_text(encoding="utf-8")))
@@ -120,13 +122,13 @@ def write_fixture_crosswalk(root: Path) -> None:
     milestone = root / "docs" / "roadmap" / "milestones" / "EMBER-02.md"
     milestone.parent.mkdir(parents=True, exist_ok=True)
     milestone.write_text("# EMBER-02\n\nFixture milestone.\n", encoding="utf-8", newline="\n")
-    evidence = [{"path": "docs/ember-authority-matrix.md", "sha256": matrix_sha}]
+    evidence = [{"path": "docs/authority/ember-authority-matrix.md", "sha256": matrix_sha}]
     payload = {
         "schema_version": "ember-authority-supersession-crosswalk-v1",
         "repository": "wordingone/ember",
         "source_commit": "0" * 40,
         "current_authority": {
-            "matrix_path": "docs/ember-authority-matrix.md",
+            "matrix_path": "docs/authority/ember-authority-matrix.md",
             "matrix_sha256": matrix_sha,
             "discrepancy_ids": discrepancy_ids,
             "milestone_ids": ["EMBER-02"],
@@ -166,86 +168,6 @@ def commit_fixture(tmp: Path) -> None:
         ["git", "-C", str(tmp), "-c", "user.email=selftest@example.invalid",
          "-c", "user.name=selftest", "commit", "-q", "-m", "fixture init"],
         check=True,
-    )
-
-
-def migrate_fixture_authority_paths(tmp: Path) -> None:
-    authority = tmp / "docs" / "authority"
-    authority.mkdir(parents=True, exist_ok=True)
-    for name in (
-        "GOAL.md",
-        "INVARIANT.md",
-        "GOVERNANCE.md",
-        "CONTINUITY.md",
-        "REDACTIONS.md",
-        "STATE.md",
-    ):
-        (tmp / name).replace(authority / name)
-
-    matrix_path = tmp / "docs" / "ember-authority-matrix.md"
-    matrix_text = matrix_path.read_text(encoding="utf-8")
-    for name in (
-        "GOAL.md",
-        "INVARIANT.md",
-        "GOVERNANCE.md",
-        "CONTINUITY.md",
-        "REDACTIONS.md",
-        "STATE.md",
-    ):
-        matrix_text = matrix_text.replace(name, f"docs/authority/{name}")
-    matrix_path.write_text(
-        matrix_text,
-        encoding="utf-8",
-        newline="\n",
-    )
-    matrix_digest = hashlib.sha256(matrix_path.read_bytes()).hexdigest().upper()
-    crosswalk_path = (
-        tmp
-        / "manifests"
-        / "authority"
-        / "issue-35-authority-supersession-crosswalk-v1.json"
-    )
-    crosswalk = json.loads(crosswalk_path.read_text(encoding="utf-8"))
-    crosswalk["current_authority"]["matrix_sha256"] = matrix_digest.lower()
-    for registry in crosswalk["source_registries"]:
-        for evidence in registry["evidence"]:
-            evidence["sha256"] = matrix_digest.lower()
-    for row in crosswalk["rows"]:
-        for evidence in row["evidence"]:
-            evidence["sha256"] = matrix_digest.lower()
-    crosswalk.pop("crosswalk_sha256")
-    crosswalk["crosswalk_sha256"] = hashlib.sha256(
-        json.dumps(crosswalk, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    ).hexdigest()
-    crosswalk_path.write_text(
-        json.dumps(crosswalk, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-        newline="\n",
-    )
-    goal_path = authority / "GOAL.md"
-    text = goal_path.read_text(encoding="utf-8")
-    match = re.search(
-        r"<!--\s*EMBER_AUTHORITY_V1\s*\r?\n(.*?)\r?\n-->", text, re.DOTALL
-    )
-    assert match is not None
-    policy = json.loads(match.group(1))
-    policy["highest_amendable_authority"] = "docs/authority/GOAL.md"
-    policy["required_governing_surfaces"] = [
-        f"docs/authority/{rel}"
-        if rel in {"GOVERNANCE.md", "CONTINUITY.md"}
-        else rel
-        for rel in policy["required_governing_surfaces"]
-    ]
-    hashes = policy["conservation_hashes"]["governing_surfaces_sha256"]
-    for name in ("GOVERNANCE.md", "CONTINUITY.md"):
-        hashes[f"docs/authority/{name}"] = hashes.pop(name)
-    hashes["docs/ember-authority-matrix.md"] = matrix_digest
-    policy["conservation_hashes"]["authority_matrix_sha256"] = matrix_digest
-    rendered = json.dumps(policy, indent=2, sort_keys=True)
-    goal_path.write_text(
-        text[: match.start(1)] + rendered + text[match.end(1) :],
-        encoding="utf-8",
-        newline="\n",
     )
 
 
@@ -515,10 +437,12 @@ def test_green_clean_fixture():
         cleanup(tmp)
 
 
-def test_green_migrated_authority_paths():
+def test_green_canonical_authority_paths():
     tmp = make_fixture("fix/selftest-migrated-authority")
     try:
-        migrate_fixture_authority_paths(tmp)
+        for name in ("GOAL.md", "INVARIANT.md", "GOVERNANCE.md", "CONTINUITY.md", "REDACTIONS.md", "STATE.md"):
+            assert not (tmp / name).exists()
+            assert (tmp / "docs" / "authority" / name).is_file()
         commit_fixture(tmp)
         rc, output = run_guard(tmp)
         assert rc == 0, output
@@ -545,19 +469,12 @@ def test_red_duplicate_authority_path():
             "REDACTIONS.md",
             "STATE.md",
         ):
-            shutil.copyfile(tmp / name, authority / name)
+            shutil.copyfile(authority / name, tmp / name)
         commit_fixture(tmp)
         rc, output = run_guard(tmp)
         assert rc != 0, output
         assert "FAIL [authority-paths]" in output, output
-        for name in (
-            "GOAL.md",
-            "INVARIANT.md",
-            "GOVERNANCE.md",
-            "CONTINUITY.md",
-            "REDACTIONS.md",
-            "STATE.md",
-        ):
+        for name in ("GOAL.md", "INVARIANT.md", "GOVERNANCE.md", "CONTINUITY.md", "REDACTIONS.md", "STATE.md"):
             assert name in output, output
     finally:
         cleanup(tmp)
@@ -810,7 +727,7 @@ def test_trusted_kernel_ignores_subject_guard_and_helpers():
             encoding="utf-8",
             newline="\n",
         )
-        (tmp / "INVARIANT.md").unlink()
+        (tmp / "docs/authority/INVARIANT.md").unlink()
         commit_fixture(tmp)
 
         rc, out = run_guard_from_trusted_kernel(
@@ -1390,13 +1307,13 @@ def test_green_pr_merge_excludes_live_base_squash_commit():
         commit("safe branch change")
 
         git("checkout", "-q", "master")
-        (tmp / "GOAL.md").write_bytes(b"live-base authority update\n")
+        (tmp / "docs/authority/GOAL.md").write_bytes(b"live-base authority update\n")
         (tmp / "receipts").mkdir(exist_ok=True)
         (tmp / "receipts" / "live-base-note.md").write_bytes(
             b"already reviewed before squash\n"
         )
         commit("squashed live-base goal and evidence")
-        git("checkout", stale_event_base, "--", "GOAL.md")
+        git("checkout", stale_event_base, "--", "docs/authority/GOAL.md")
         commit("restore frozen goal authority")
         git("-c", "user.email=selftest@example.invalid", "-c",
             "user.name=selftest", "merge", "-q", "--no-ff", "fix/pr-safe",
@@ -1431,7 +1348,7 @@ def test_red_pr_merge_still_rejects_branch_goal_evidence_commit():
         commit_fixture(tmp)
         stale_event_base = git("rev-parse", "HEAD")
         git("checkout", "-q", "-b", "fix/pr-bad")
-        (tmp / "GOAL.md").write_bytes(b"branch authority update\n")
+        (tmp / "docs/authority/GOAL.md").write_bytes(b"branch authority update\n")
         (tmp / "receipts").mkdir(exist_ok=True)
         (tmp / "receipts" / "branch-note.md").write_bytes(
             b"branch evidence update\n"
@@ -1467,7 +1384,7 @@ ALL_TESTS = [
     test_red_invalid_single_byte_utf8,
     test_green_valid_utf8_non_ascii,
     test_green_clean_fixture,
-    test_green_migrated_authority_paths,
+    test_green_canonical_authority_paths,
     test_red_duplicate_authority_path,
     test_red_invalid_branch_names_safe_recovery,
     test_green_invalid_branch_is_advisory_for_exact_open_pr_head,

@@ -1,7 +1,7 @@
 // core/ember-world-state.ts — real GOAL/ledger/receipts -> EmberWorldState adapter (gh issue #10,
 // condition C-OBS, clause (a)).
 //
-// This is the ADAPTER: it binds the live goalforge contract tree's GOAL.md, its technical/
+// This is the ADAPTER: it binds the live goalforge contract tree's docs/authority/GOAL.md, its technical/
 // cognitive debt ledger, and the newest totality-board receipt into one typed EmberWorldState
 // snapshot. Nothing here is a hand-maintained mirror -- buildEmberWorldState() re-reads and
 // re-parses the three real source files fresh on every call; every Claim it produces carries an
@@ -10,8 +10,8 @@
 // contract, clause (b), lives one layer up in the REPL/command surfaces that render this state).
 //
 // Cross-tree read: this module reads from a separate CONTRACT tree (the goalforge repo whose
-// GOAL.md is the authoritative goal surface -- "the GOVERNING CONTRACT is the goalforge contract
-// repo's GOAL.md ... on any conflict, the contract wins"), never the tree this module itself
+// docs/authority/GOAL.md is the authoritative goal surface -- "the GOVERNING CONTRACT is the goalforge contract
+// repo's docs/authority/GOAL.md ... on any conflict, the contract wins"), never the tree this module itself
 // executes from. Read-only; never writes into that tree. The contract tree's location is
 // deployment-specific and is never hardcoded here -- see the EMBER_GOALFORGE_ROOT contract below.
 
@@ -34,7 +34,7 @@ import path from "path";
 // than attempting a read against it.
 export const GOALFORGE_ROOT = process.env.EMBER_GOALFORGE_ROOT || "";
 
-const GOAL_PATH = "GOAL.md";
+const GOAL_PATH = "docs/authority/GOAL.md";
 const LEDGER_PATH = "docs/ledgers/ember-debt-ledger.md";
 const BOARD_DIR = "scripts/ember_totality/receipts-totality";
 
@@ -67,7 +67,7 @@ export interface EmberWorldState {
   };
   understand: {
     goalTitle: string;
-    topology: Claim[]; // one per "## " heading in GOAL.md -- organ anatomy + loop topology
+    topology: Claim[]; // one per "## " heading in docs/authority/GOAL.md -- organ anatomy + loop topology
   };
   interact: {
     ledgerRows: Claim[]; // one per active debt-ledger row -- query receipts/ledger
@@ -87,7 +87,7 @@ export function sha256OfBytes(buf: Buffer): string {
   return createHash("sha256").update(buf).digest("hex");
 }
 
-/** Extracts the H1 title (first "# " line) from GOAL.md text. */
+/** Extracts the H1 title (first "# " line) from docs/authority/GOAL.md text. */
 export function parseGoalTitle(text: string): string {
   const m = text.match(/^#\s+(.+)$/m);
   return m ? m[1]!.trim() : "(no title found)";
@@ -404,7 +404,7 @@ async function readWithSha(
 }
 
 /**
- * Builds a fresh EmberWorldState by binding the real goalforge GOAL.md, docs/ledgers/ember-debt-ledger.md,
+ * Builds a fresh EmberWorldState by binding the real goalforge docs/authority/GOAL.md, docs/ledgers/ember-debt-ledger.md,
  * and the newest scripts/ember_totality/receipts-totality board receipt. No caching, no mirror --
  * every call re-reads the three source files as they exist on disk right now.
  */

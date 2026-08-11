@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_c_pin.py — Pin-freshness probe (issue #96).
 
-Asserts that the exec-tree GOAL.md AUTHORITY header's pinned contract-sha
-matches the contract tree's GOAL.md sha256 on disk.
+Asserts that the exec-tree docs/authority/GOAL.md AUTHORITY header's pinned contract-sha
+matches the contract tree's docs/authority/GOAL.md sha256 on disk.
 
 Test scenarios:
 1. Parse AUTHORITY comment: strict regex, fail RED on parse failure
@@ -22,13 +25,13 @@ from typing import Optional, Tuple
 
 
 def parse_authority_comment(goal_path: Path) -> Optional[str]:
-    """Parse AUTHORITY comment in GOAL.md for pinned contract-sha.
+    """Parse AUTHORITY comment in docs/authority/GOAL.md for pinned contract-sha.
 
     Expected format (regex):
         <!-- AUTHORITY: contract-sha256=<64-char hex> -->
 
     Args:
-        goal_path: Path to GOAL.md file
+        goal_path: Path to docs/authority/GOAL.md file
 
     Returns:
         Pinned sha256 hex string, or None if parse fails
@@ -37,7 +40,7 @@ def parse_authority_comment(goal_path: Path) -> Optional[str]:
         ValueError: If AUTHORITY comment exists but is malformed
     """
     if not goal_path.exists():
-        raise FileNotFoundError(f"GOAL.md not found: {goal_path}")
+        raise FileNotFoundError(f"docs/authority/GOAL.md not found: {goal_path}")
 
     content = goal_path.read_text(encoding='utf-8')
 
@@ -85,8 +88,8 @@ def probe_pin_freshness(
     """Run pin-freshness probe.
 
     Args:
-        exec_goal_path: Path to execution-tree GOAL.md
-        contract_goal_path: Path to contract-tree GOAL.md
+        exec_goal_path: Path to execution-tree docs/authority/GOAL.md
+        contract_goal_path: Path to contract-tree docs/authority/GOAL.md
 
     Returns:
         (verdict: bool, receipt: dict)
@@ -112,7 +115,7 @@ def probe_pin_freshness(
 
         receipt["pinned_sha"] = pinned_sha
 
-        # Step 2: Compute actual sha256 of contract tree GOAL.md
+        # Step 2: Compute actual sha256 of contract tree docs/authority/GOAL.md
         actual_sha = compute_sha256(contract_goal_path)
         receipt["actual_sha"] = actual_sha
 
@@ -141,13 +144,13 @@ def setup_fixture_stale() -> Tuple[Path, Path]:
     stale_dir = fixture_dir / "stale"
     stale_dir.mkdir(exist_ok=True)
 
-    # Create a contract GOAL.md with known content
+    # Create a contract docs/authority/GOAL.md with known content
     contract_path = stale_dir / "contract_GOAL.md"
-    contract_content = "# Contract Goal\n\nThis is the contract tree GOAL.md.\n"
+    contract_content = "# Contract Goal\n\nThis is the contract tree docs/authority/GOAL.md.\n"
     contract_path.write_text(contract_content, encoding='utf-8')
     actual_sha = compute_sha256(contract_path)
 
-    # Create exec GOAL.md with STALE pin (different sha)
+    # Create exec docs/authority/GOAL.md with STALE pin (different sha)
     exec_path = stale_dir / "exec_GOAL.md"
     stale_sha = "0" * 64  # Obviously stale
     exec_content = (
@@ -168,13 +171,13 @@ def setup_fixture_matched() -> Tuple[Path, Path]:
     matched_dir = fixture_dir / "matched"
     matched_dir.mkdir(exist_ok=True)
 
-    # Create a contract GOAL.md with known content
+    # Create a contract docs/authority/GOAL.md with known content
     contract_path = matched_dir / "contract_GOAL.md"
     contract_content = "# Contract Goal (matched case)\n\nMatched contract content.\n"
     contract_path.write_text(contract_content, encoding='utf-8')
     actual_sha = compute_sha256(contract_path)
 
-    # Create exec GOAL.md with MATCHING pin
+    # Create exec docs/authority/GOAL.md with MATCHING pin
     exec_path = matched_dir / "exec_GOAL.md"
     exec_content = (
         f"# Exec Goal\n\n"
@@ -243,11 +246,11 @@ def test_parse_error_red() -> int:
     error_dir = fixture_dir / "malformed"
     error_dir.mkdir(exist_ok=True)
 
-    # Create a contract GOAL.md
+    # Create a contract docs/authority/GOAL.md
     contract_path = error_dir / "contract_GOAL.md"
     contract_path.write_text("# Contract\n", encoding='utf-8')
 
-    # Create exec GOAL.md with MALFORMED AUTHORITY (not strict hex)
+    # Create exec docs/authority/GOAL.md with MALFORMED AUTHORITY (not strict hex)
     exec_path = error_dir / "exec_GOAL.md"
     exec_content = (
         "# Exec Goal\n\n"
@@ -278,11 +281,11 @@ def test_missing_authority_red() -> int:
     missing_dir = fixture_dir / "missing"
     missing_dir.mkdir(exist_ok=True)
 
-    # Create a contract GOAL.md
+    # Create a contract docs/authority/GOAL.md
     contract_path = missing_dir / "contract_GOAL.md"
     contract_path.write_text("# Contract\n", encoding='utf-8')
 
-    # Create exec GOAL.md WITHOUT AUTHORITY comment
+    # Create exec docs/authority/GOAL.md WITHOUT AUTHORITY comment
     exec_path = missing_dir / "exec_GOAL.md"
     exec_path.write_text("# Exec Goal\n\nNo AUTHORITY comment here.\n", encoding='utf-8')
 

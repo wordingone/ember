@@ -162,13 +162,13 @@ PATHPAT='([A-Za-z]:[/\\]+(Users|M|Downloads))|([A-Za-z]:[/\\]+[Ww][Ii][Nn][Dd][O
 # Files that intentionally embed a leaked-path-shaped literal as adversarial
 # test input (proving the app's own sanitization/redaction/clipping logic
 # strips exactly this shape) -- these are the fixture, not a leak, and must
-# keep the literal string to stay meaningful. See REDACTIONS.md (issue #456).
+# keep the literal string to stay meaningful. See docs/authority/REDACTIONS.md (issue #456).
 #
 # Class 2 (issue #537, C2-restore ruling 2026-07-09): HASH-PINNED FROZEN
 # ARTIFACTS. Byte-exact sha256 is load-bearing (C2 CHK frozen-rows hash-match
 # + frozen-before law): redaction breaks the pin, re-pinning breaks
 # frozen-before. Enumerated individually -- NEVER directory globs. Each entry
-# has a REDACTIONS.md row. The operator-name checks still cover these files
+# has a docs/authority/REDACTIONS.md row. The operator-name checks still cover these files
 # in full (this exclusion applies ONLY to the paths grep).
 #
 # Class 3 (issue #1401, 2026-08-04): the EMBER-02 LAUNCH-AUTHORITY DECLARATION
@@ -178,7 +178,7 @@ PATHPAT='([A-Za-z]:[/\\]+(Users|M|Downloads))|([A-Za-z]:[/\\]+[Ww][Ii][Nn][Dd][O
 # document that is not the certificate that was declared. The run-spec's
 # requested_scope is compared literally against the certificate's
 # execution_scope, so redacting one and not the other would make a consistent
-# pair read as a mismatch. Landed standalone (this file + REDACTIONS.md only)
+# pair read as a mismatch. Landed standalone (this file + docs/authority/REDACTIONS.md only)
 # so the entries exist at the PR BASE the #1401 evidence-pack PR is judged
 # against -- CI pins repo-guard.sh at the base kernel, and a PR that both
 # introduces class-3 receipts AND edits this file to exempt them can never
@@ -442,14 +442,14 @@ check_dup receipts ledger
 DUPOK=$?
 [ "$FAIL" -eq 0 ] && ok "dup-dir" "no known duplicate dirs"
 
-# ---- 6. STATE.md is a bounded position ledger, not an append log ---------
+# ---- 6. docs/authority/STATE.md is a bounded position ledger, not an append log ---------
 if [ -n "$STATE_REL" ] && git ls-files --error-unmatch "$STATE_REL" >/dev/null 2>&1; then
   SL="$(git show ":$STATE_REL" 2>/dev/null | wc -l | tr -d ' ')"
   [ -z "$SL" ] && SL="$(wc -l < "$STATE_REL" | tr -d ' ')"
   if [ "$SL" -le "$MAX_STATE_LINES" ]; then
     ok "state" "$STATE_REL $SL lines (<= $MAX_STATE_LINES)"
   else
-    fail "state" "STATE.md $SL lines exceeds $MAX_STATE_LINES — it is a position ledger, not an append log"
+    fail "state" "docs/authority/STATE.md $SL lines exceeds $MAX_STATE_LINES — it is a position ledger, not an append log"
   fi
 fi
 
@@ -536,7 +536,7 @@ if [ -n "$RANGE" ]; then
     fi
   done
   if [ -n "$BAD" ]; then
-    fail "goal/evidence" "commit(s) edit both GOAL.md and receipts/ in one change:$BAD"
+    fail "goal/evidence" "commit(s) edit both docs/authority/GOAL.md and receipts/ in one change:$BAD"
   else
     ok "goal/evidence" "no goal+evidence co-commits in $RANGE"
   fi

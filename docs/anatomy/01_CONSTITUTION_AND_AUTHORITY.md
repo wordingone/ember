@@ -38,7 +38,7 @@ uniqueness per artifact, policy invariants (`policy.authority_only` must be
 `False` — EMBER-02 must retain model-execution authority — and
 `policy.new_network` must be `True`, both asserted at
 `scripts/verify_authority_conservation.py` around line 551-552), plus a
-conservation matrix documented in `docs/ember-authority-matrix.md`. It exits
+conservation matrix documented in `docs/authority/ember-authority-matrix.md`. It exits
 `EMBER_AUTHORITY_CONSERVATION PASS` or `FAIL <leg> <finding>` and is invoked
 both standalone (`python scripts/verify_authority_conservation.py --root .`)
 and as part of the repo-guard pre-commit/pre-push hooks.

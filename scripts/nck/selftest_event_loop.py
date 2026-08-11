@@ -56,13 +56,13 @@ def _base_config(tmp: str) -> dict:
             "margin_gib_floor": 1.0,
             "pace_s_per_step": 0.05,
         },
-        "goal_file": os.path.join(tmp, "GOAL.md"),
+        "goal_file": os.path.join(tmp, "docs/authority/GOAL.md"),
         "heartbeat_file": os.path.join(tmp, "nck-heartbeat.txt"),
         "journal_path": os.path.join(tmp, "nck-journal.jsonl"),
         "gate_notes_dir": os.path.join(tmp, "gate-notes"),
         "poll_interval_s": 0,  # no sleep in tests
         # Skip the invariant boot-checksum in the event-loop selftest: tests run
-        # in temp dirs where protected paths (GOAL.md, formalization-v0.md, etc.)
+        # in temp dirs where protected paths (docs/authority/GOAL.md, formalization-v0.md, etc.)
         # are not present.  The invariant boot-checksum is tested separately in
         # selftest_invariants.py (issue #261).
         "_skip_invariant_check": True,
@@ -85,7 +85,7 @@ def _journal_lines(path: str) -> list[dict]:
 
 
 def _touch_goal(tmp: str) -> None:
-    with open(os.path.join(tmp, "GOAL.md"), "w") as f:
+    with open(os.path.join(tmp, "docs/authority/GOAL.md"), "w") as f:
         f.write("GOAL placeholder\n")
 
 
@@ -364,7 +364,7 @@ def case_f_missing_invariant(tmp: str) -> tuple[bool, str]:
 
     # Case f1: no governor
     config_no_gov = {
-        "goal_file": os.path.join(tmp, "GOAL.md"),
+        "goal_file": os.path.join(tmp, "docs/authority/GOAL.md"),
         "heartbeat_file": os.path.join(tmp, "hb-f.txt"),
         "journal_path": os.path.join(tmp, "journal_f1.jsonl"),
         "gate_notes_dir": os.path.join(tmp, "gate-notes-f"),
@@ -393,7 +393,7 @@ def case_f_missing_invariant(tmp: str) -> tuple[bool, str]:
     # Case f3: governor missing required field
     config_partial_gov = {
         "governor": {"vram_fraction": 0.7},
-        "goal_file": os.path.join(tmp, "GOAL.md"),
+        "goal_file": os.path.join(tmp, "docs/authority/GOAL.md"),
         "heartbeat_file": os.path.join(tmp, "hb-f3.txt"),
         "journal_path": os.path.join(tmp, "journal_f3.jsonl"),
         "gate_notes_dir": os.path.join(tmp, "gate-notes-f3"),
