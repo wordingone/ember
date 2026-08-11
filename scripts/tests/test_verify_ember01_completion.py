@@ -1088,6 +1088,9 @@ def test_identity_legs_remeasure_real_manifest_and_execute_tamper(
     }
     surface_source = tmp_path / "surface.py"
     surface_source.write_text("def exercised():\n    return 1\n", encoding="utf-8")
+    validator = tmp_path / cond4_surface.VALIDATOR_REL
+    validator.parent.mkdir(parents=True)
+    validator.write_bytes((REPO_ROOT / cond4_surface.VALIDATOR_REL).read_bytes())
     surface_manifest = cond4_surface.build_surface_manifest(
         tmp_path, {"surface.py": ["exercised"]}
     )
@@ -1104,8 +1107,9 @@ def test_identity_legs_remeasure_real_manifest_and_execute_tamper(
         lambda **_: receipt,
     )
 
-    def fake_verify(*_: object, checkpoint_manifest: Path, **__: object) -> None:
+    def fake_verify(*_: object, checkpoint_manifest: Path, **__: object) -> int:
         verified_paths.append(checkpoint_manifest)
+        return 1
 
     monkeypatch.setattr(completion, "verify_parameter_identity_binding", fake_verify)
     monkeypatch.setattr(
@@ -1126,7 +1130,7 @@ def test_identity_legs_remeasure_real_manifest_and_execute_tamper(
             "all_rejected": True,
         },
     )
-    monkeypatch.setattr(completion, "_cond4_surface_manifest", lambda _root: surface_manifest)
+    monkeypatch.setattr(completion, "_load_cond4_surface_manifest", lambda _root: surface_manifest)
 
     result = completion.identity_legs(
         tmp_path,
@@ -1145,6 +1149,90 @@ def test_identity_legs_remeasure_real_manifest_and_execute_tamper(
     )
     assert len(verified_paths) == 1
     assert verified_paths[0] == checkpoint_manifest
+
+
+def test_cond4_surface_mutation_refuses_before_any_axis_runs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "verifier.py"
+    source.write_text("def exercised():\n    return 1\n", encoding="utf-8")
+    manifest = cond4_surface.build_surface_manifest(
+        tmp_path, {"verifier.py": ["exercised"]}
+    )
+    manifest_rel = "manifests/cond4-surface.json"
+    manifest_path = tmp_path / manifest_rel
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    monkeypatch.setattr(completion, "COND4_SURFACE_MANIFEST_REL", manifest_rel)
+    monkeypatch.setattr(completion, "_cond4_surface_manifest", lambda _root: manifest)
+    axis_calls: list[str] = []
+    monkeypatch.setattr(
+        completion,
+        "_run_identity_tamper_battery",
+        lambda **_kwargs: axis_calls.append("ran"),
+    )
+
+    source.write_text("def exercised():\n    return 2\n", encoding="utf-8")
+    with pytest.raises(
+        completion.Cond4SurfaceRefusal,
+        match="COND4_SURFACE_MISMATCH",
+    ):
+        completion._run_bound_cond4_battery(
+            root=tmp_path,
+            payload={},
+            receipt={},
+            checkpoint_bytes=b"{}",
+            model_config=tmp_path / "config.json",
+            scratch_root=tmp_path / "scratch",
+        )
+
+    assert axis_calls == []
+
+
+def test_cond4_surface_reduced_manifest_refuses_before_any_axis_runs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = tmp_path / "first.py"
+    second = tmp_path / "second.py"
+    first.write_text("def exercised():\n    return 1\n", encoding="utf-8")
+    second.write_text("def required():\n    return 2\n", encoding="utf-8")
+    expected = cond4_surface.build_surface_manifest(
+        tmp_path,
+        {"first.py": ["exercised"], "second.py": ["required"]},
+    )
+    reduced = cond4_surface.build_surface_manifest(
+        tmp_path,
+        {"first.py": ["exercised"]},
+    )
+    manifest_rel = "manifests/cond4-surface.json"
+    manifest_path = tmp_path / manifest_rel
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text(json.dumps(reduced), encoding="utf-8")
+    monkeypatch.setattr(completion, "COND4_SURFACE_MANIFEST_REL", manifest_rel)
+    monkeypatch.setattr(completion, "_cond4_surface_manifest", lambda _root: expected)
+    axis_calls: list[str] = []
+    monkeypatch.setattr(
+        completion,
+        "_run_identity_tamper_battery",
+        lambda **_kwargs: axis_calls.append("ran"),
+    )
+
+    with pytest.raises(
+        completion.Cond4SurfaceRefusal,
+        match="COND4_SURFACE_SPEC_MISMATCH",
+    ):
+        completion._run_bound_cond4_battery(
+            root=tmp_path,
+            payload={},
+            receipt={},
+            checkpoint_bytes=b"{}",
+            model_config=tmp_path / "config.json",
+            scratch_root=tmp_path / "scratch",
+        )
+
+    assert axis_calls == []
 
 
 def _historical_identity_payload() -> dict[str, object]:
@@ -1252,6 +1340,9 @@ def test_cond4_execution_evidence_binds_surface_checkpoint_loads_and_axis_timing
 ) -> None:
     source = tmp_path / "surface.py"
     source.write_text("def exercised():\n    return 1\n", encoding="utf-8")
+    validator = tmp_path / cond4_surface.VALIDATOR_REL
+    validator.parent.mkdir(parents=True)
+    validator.write_bytes((REPO_ROOT / cond4_surface.VALIDATOR_REL).read_bytes())
     manifest = cond4_surface.build_surface_manifest(
         tmp_path, {"surface.py": ["exercised"]}
     )
@@ -1276,6 +1367,9 @@ def test_cond4_execution_evidence_binds_surface_checkpoint_loads_and_axis_timing
 
     cond4_surface.validate_execution_packet(tmp_path, manifest, evidence)
     assert evidence["subject"] == {
+        "behavior_surface_validator_sha256": hashlib.sha256(
+            (REPO_ROOT / "scripts" / "cond4_behavior_surface.py").read_bytes()
+        ).hexdigest(),
         "checkpoint_manifest_sha256": hashlib.sha256(checkpoint_bytes).hexdigest(),
         "surface_aggregate_sha256": manifest["aggregate_sha256"],
         "checkpoint_bytes_loaded": 36,
@@ -1340,14 +1434,17 @@ def test_committed_cond4_receipt_binds_shipping_verifiers_and_all_axes(
             REPO_ROOT
             / "receipts"
             / "ember-01-completion"
-            / "cond4-tamper-battery-bf20f050-v2.json"
+            / "cond4-tamper-battery-bf20f050-v7.json"
         ).read_text(encoding="utf-8")
     )
     assert receipt["invariant_sha256"] == (
         "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
     )
-    assert receipt["schema"] == "ember-cond4-tamper-battery-receipt-v2"
+    assert receipt["schema"] == "ember-cond4-tamper-battery-receipt-v7"
     assert receipt["result"] == "PASS"
+    assert receipt["migration"]["command"] == (
+        "scripts/verify_ember01_completion.py::identity_legs"
+    )
     implementation = receipt["implementation"]["behavior_surface_validator"]
     assert hashlib.sha256((REPO_ROOT / implementation["path"]).read_bytes()).hexdigest() == implementation["sha256"]
     config = receipt["migration"]["historical_config"]

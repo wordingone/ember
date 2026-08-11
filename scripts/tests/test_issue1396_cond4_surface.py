@@ -36,7 +36,7 @@ RECEIPT = (
     Path(os.environ.get("EMBER_ISSUE1396_RECEIPT_ROOT", REPO_ROOT))
     / "receipts"
     / "ember-01-completion"
-    / "cond4-tamper-battery-bf20f050-v2.json"
+    / "cond4-tamper-battery-bf20f050-v7.json"
 )
 WORKFLOW = (
     Path(os.environ.get("EMBER_ISSUE1396_WORKFLOW_ROOT", REPO_ROOT))

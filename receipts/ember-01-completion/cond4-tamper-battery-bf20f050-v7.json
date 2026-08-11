@@ -1,0 +1,1079 @@
+{
+  "claim_boundary": {
+    "counts_as_capability_evidence": false,
+    "counts_as_full_ember_completion": false,
+    "counts_as_owned_checkpoint": false,
+    "counts_as_sufficient_pretraining": false,
+    "supports_completion_condition": 4
+  },
+  "generated_at": "2026-08-11T05:38:21.045282+00:00",
+  "goal_id": "EMBER-02",
+  "implementation": {
+    "behavior_surface_validator": {
+      "path": "scripts/cond4_behavior_surface.py",
+      "sha256": "68c2042720e7b89870410e2831a0bd4ec07890f154a94f8aa46d743532fb7090"
+    }
+  },
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "leg3": {
+    "evidence": {
+      "checkpoint_sha256": "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b",
+      "disposition": "HISTORICAL_ONLY",
+      "ownership": "EXCLUDED_CONTAMINATED",
+      "parameter_receipt_sha256": "9bcf1b36a4e8d68623c048fe769aef62fe8f61213c014803f92d08487fdbfd7f",
+      "tool": "scripts/ember_01_identity/parameter_identity_binding.py"
+    },
+    "reason": "real checkpoint identity re-derived",
+    "state": "resolved-true",
+    "title": "identity round-trip on real checkpoint"
+  },
+  "leg4": {
+    "evidence": {
+      "all_rejected": true,
+      "axes": {
+        "backend": {
+          "duration_ms": 191,
+          "expected_finding": "binding.backend_mismatch",
+          "finding_codes": [
+            "binding.backend.executable_sha256_mismatch",
+            "binding.backend_mismatch",
+            "unresolved.index_mismatch"
+          ],
+          "rejected": true,
+          "returncode": 1,
+          "timed_out": false
+        },
+        "benchmark_id": {
+          "duration_ms": 191,
+          "expected_finding": "binding.evaluation.benchmark_id_mismatch",
+          "finding_codes": [
+            "binding.evaluation.benchmark_id_mismatch"
+          ],
+          "rejected": true,
+          "returncode": 1,
+          "timed_out": false
+        },
+        "checkpoint_bytes": {
+          "detail": "receipt claims subject_checkpoint_sha256='bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b' but the checkpoint manifest bytes on disk hash to '3119b8341957d2c850270b6d8fb75bb0b6ef93781cb395e7729bcec9f24d1f79'",
+          "duration_ms": 2,
+          "finding": "parameter_identity_mismatch",
+          "rejected": true
+        },
+        "comparator": {
+          "duration_ms": 191,
+          "expected_finding": "binding.evaluation.comparator_identity_mismatch",
+          "finding_codes": [
+            "binding.evaluation.comparator_identity_mismatch",
+            "unresolved.index_mismatch"
+          ],
+          "rejected": true,
+          "returncode": 1,
+          "timed_out": false
+        },
+        "data_learned_signal": {
+          "duration_ms": 189,
+          "expected_finding": "provenance.forbidden_learned_signal",
+          "finding_codes": [
+            "historical.contamination_unclassified",
+            "provenance.forbidden_learned_signal"
+          ],
+          "rejected": true,
+          "returncode": 1,
+          "timed_out": false
+        },
+        "mechanism": {
+          "duration_ms": 191,
+          "expected_finding": "binding.mechanisms_mismatch",
+          "finding_codes": [
+            "binding.mechanisms.router_mismatch",
+            "binding.mechanisms_mismatch"
+          ],
+          "rejected": true,
+          "returncode": 1,
+          "timed_out": false
+        },
+        "param_count": {
+          "duration_ms": 192,
+          "expected_finding": "binding.parameters_mismatch",
+          "finding_codes": [
+            "binding.parameters_mismatch"
+          ],
+          "rejected": true,
+          "returncode": 1,
+          "timed_out": false
+        },
+        "tokenizer": {
+          "duration_ms": 191,
+          "expected_finding": "binding.tokenizer_mismatch",
+          "finding_codes": [
+            "binding.tokenizer.sha256_mismatch",
+            "binding.tokenizer_mismatch"
+          ],
+          "rejected": true,
+          "returncode": 1,
+          "timed_out": false
+        }
+      },
+      "axis_count": 8,
+      "behavior_surface": {
+        "aggregate_sha256": "05c119b2ab1f9eab742314435260c5d8a3261460fc35763f7f06c5663c1ee482",
+        "files": [
+          {
+            "dynamic_call_bindings": [
+              "checkpoint.get",
+              "manifest.get",
+              "parameters.get",
+              "receipt.get",
+              "remeasured.get"
+            ],
+            "external_calls": [
+              "AXIS_MAP.items",
+              "Path",
+              "_hash_file",
+              "execute_counter",
+              "explicit:checkpoint.get",
+              "explicit:manifest.get",
+              "explicit:parameters.get",
+              "explicit:receipt.get",
+              "explicit:remeasured.get",
+              "isinstance",
+              "type"
+            ],
+            "module_bindings": [
+              {
+                "names": [
+                  "Path"
+                ],
+                "sha256": "3cb9ffccba5146b2dd177a30c3057a4395ebd5c745d0789d2ed95d0cf4afe271",
+                "size_bytes": 25
+              },
+              {
+                "names": [
+                  "Any",
+                  "Mapping"
+                ],
+                "sha256": "2f1f76a50065a201433318c3c80dbf0dda6cbd622c81283b7b13adf1508ea508",
+                "size_bytes": 32
+              },
+              {
+                "names": [
+                  "execute_counter"
+                ],
+                "sha256": "17a57d1af89c038e7860f862dc0d31f6c72e380c4560e76a17bee0ea84522a1a",
+                "size_bytes": 79
+              },
+              {
+                "names": [
+                  "_hash_file"
+                ],
+                "sha256": "8430b336201ca7409d0e573b2048cfca74ed256c5e25186b9b431c64c88e10ee",
+                "size_bytes": 108
+              },
+              {
+                "names": [
+                  "AXIS_MAP"
+                ],
+                "sha256": "d4461496e527f1b9fc7816186648abaf63a9f72983c6f191c2dabd574be51c99",
+                "size_bytes": 277
+              }
+            ],
+            "path": "scripts/ember_01_identity/parameter_identity_binding.py",
+            "roots": [
+              "measure_live_checkpoint",
+              "verify_parameter_identity_binding"
+            ],
+            "sha256": "bae0615305ac1b053b26e5b6d288218950e2a7a96334d8312ef49d080d8467e3",
+            "symbols": [
+              {
+                "name": "ParameterIdentityMismatch",
+                "sha256": "f6c903fdc418585ce6f7ecfb50f5b450dbc784179e7d92732f0987b329eacc77",
+                "size_bytes": 128
+              },
+              {
+                "name": "measure_live_checkpoint",
+                "sha256": "f91540523aa0a4d52f9d38c5abf8de8dd7bd6b76d1669568e8cd235d58c94b02",
+                "size_bytes": 374
+              },
+              {
+                "name": "verify_parameter_identity_binding",
+                "sha256": "67dafae1581ee8b495cbed575a0237955d29b25901386121fde9174f13bde01d",
+                "size_bytes": 6493
+              }
+            ]
+          },
+          {
+            "dynamic_call_bindings": [
+              "accepted_input.get",
+              "admitted_counts.get",
+              "admitted_mixture.get",
+              "admitted_modalities.get",
+              "args.artifact_bundle.read_text",
+              "args.checkpoint.read_bytes",
+              "args.expected.read_text",
+              "args.manifest.read_text",
+              "args.receipt_bundle.read_text",
+              "args.tensor_hashes.read_text",
+              "args.tensor_manifest.read_text",
+              "args.trusted_verifier_registry.read_text",
+              "args.verifier.read_bytes",
+              "artifact_bundle.get",
+              "backend.get",
+              "capability.get",
+              "checkpoint_bytes.decode",
+              "counts.get",
+              "data.get",
+              "declared.get",
+              "dependency.get",
+              "entry.get",
+              "envelope.get",
+              "evaluation.get",
+              "expected_claims.items",
+              "findings.append",
+              "found.update",
+              "item.get",
+              "mixture.values",
+              "native.get",
+              "optimizer_contract.get",
+              "parameter_receipts.get",
+              "parameters.get",
+              "parsed_checkpoint_tensors.append",
+              "parser.add_argument",
+              "parser.parse_args",
+              "path.split",
+              "payload.get",
+              "process_identity.get",
+              "provenance.get",
+              "reason.casefold",
+              "reason.strip",
+              "receipt.get",
+              "receipt_bundle.get",
+              "registry.get",
+              "registry['active'].get",
+              "required.add",
+              "required.update",
+              "required_artifacts.items",
+              "row.get",
+              "seen.add",
+              "seen_checkpoint_names.add",
+              "source.casefold",
+              "stopping_rule.get",
+              "supplied_artifacts.get",
+              "tensor.get",
+              "tensor_hashes.get",
+              "tensor_manifest.get",
+              "tokenizer.get",
+              "trusted_verifier_registry.get",
+              "unresolved.values",
+              "unsigned.pop",
+              "validated.get",
+              "value.get",
+              "value.items",
+              "verifier_bytes.decode"
+            ],
+            "external_calls": [
+              "ACCEPTED_TRAINING_INPUT_AUTHORITIES_PATH.read_text",
+              "BENCHMARK_REGISTRY_PATH.read_text",
+              "CLOSED_OBJECT_KEYS.items",
+              "Draft202012Validator",
+              "Draft202012Validator.check_schema",
+              "Ed25519PublicKey.from_public_bytes",
+              "Ed25519PublicKey.from_public_bytes.verify",
+              "RuntimeError",
+              "SCHEMA_PATH.read_text",
+              "SHA256_RE.fullmatch",
+              "TRUSTED_VERIFIER_REGISTRY_PATH.read_text",
+              "ValueError",
+              "_pinned_verifier_entries.get",
+              "_schema_validator.iter_errors",
+              "abs",
+              "all",
+              "any",
+              "argparse.ArgumentParser",
+              "bool",
+              "bytes.fromhex",
+              "copy.deepcopy",
+              "dict",
+              "enumerate",
+              "explicit:accepted_input.get",
+              "explicit:admitted_counts.get",
+              "explicit:admitted_mixture.get",
+              "explicit:admitted_modalities.get",
+              "explicit:args.artifact_bundle.read_text",
+              "explicit:args.checkpoint.read_bytes",
+              "explicit:args.expected.read_text",
+              "explicit:args.manifest.read_text",
+              "explicit:args.receipt_bundle.read_text",
+              "explicit:args.tensor_hashes.read_text",
+              "explicit:args.tensor_manifest.read_text",
+              "explicit:args.trusted_verifier_registry.read_text",
+              "explicit:args.verifier.read_bytes",
+              "explicit:artifact_bundle.get",
+              "explicit:backend.get",
+              "explicit:capability.get",
+              "explicit:checkpoint_bytes.decode",
+              "explicit:counts.get",
+              "explicit:data.get",
+              "explicit:declared.get",
+              "explicit:dependency.get",
+              "explicit:entry.get",
+              "explicit:envelope.get",
+              "explicit:evaluation.get",
+              "explicit:expected_claims.items",
+              "explicit:findings.append",
+              "explicit:found.update",
+              "explicit:item.get",
+              "explicit:mixture.values",
+              "explicit:native.get",
+              "explicit:optimizer_contract.get",
+              "explicit:parameter_receipts.get",
+              "explicit:parameters.get",
+              "explicit:parsed_checkpoint_tensors.append",
+              "explicit:parser.add_argument",
+              "explicit:parser.parse_args",
+              "explicit:path.split",
+              "explicit:payload.get",
+              "explicit:process_identity.get",
+              "explicit:provenance.get",
+              "explicit:reason.casefold",
+              "explicit:reason.strip",
+              "explicit:receipt.get",
+              "explicit:receipt_bundle.get",
+              "explicit:registry.get",
+              "explicit:registry['active'].get",
+              "explicit:required.add",
+              "explicit:required.update",
+              "explicit:required_artifacts.items",
+              "explicit:row.get",
+              "explicit:seen.add",
+              "explicit:seen_checkpoint_names.add",
+              "explicit:source.casefold",
+              "explicit:stopping_rule.get",
+              "explicit:supplied_artifacts.get",
+              "explicit:tensor.get",
+              "explicit:tensor_hashes.get",
+              "explicit:tensor_manifest.get",
+              "explicit:tokenizer.get",
+              "explicit:trusted_verifier_registry.get",
+              "explicit:unresolved.values",
+              "explicit:unsigned.pop",
+              "explicit:validated.get",
+              "explicit:value.get",
+              "explicit:value.items",
+              "explicit:verifier_bytes.decode",
+              "float",
+              "frozenset",
+              "functools.lru_cache",
+              "hashlib.sha256",
+              "hashlib.sha256.hexdigest",
+              "isinstance",
+              "json.dumps",
+              "json.dumps.encode",
+              "json.loads",
+              "len",
+              "list",
+              "map",
+              "math.prod",
+              "print",
+              "re.fullmatch",
+              "set",
+              "sorted",
+              "str",
+              "str.join",
+              "sum",
+              "super",
+              "super.__init__",
+              "sys.stdout.write",
+              "tuple",
+              "type"
+            ],
+            "module_bindings": [
+              {
+                "names": [
+                  "__doc__"
+                ],
+                "sha256": "5a021aae188e73b4bae85ba1930ded101121aa90dfcbbdb997c9578a6afe8224",
+                "size_bytes": 82
+              },
+              {
+                "names": [
+                  "argparse"
+                ],
+                "sha256": "b53e5a5286172fb0a4772843ba3ed62331687bcb9939ec9c49e9066d4ee4272d",
+                "size_bytes": 16
+              },
+              {
+                "names": [
+                  "copy"
+                ],
+                "sha256": "01185d20d26568a358ea5c862ad992fbed2b4c0a68684d42477f0920b7be3e7f",
+                "size_bytes": 12
+              },
+              {
+                "names": [
+                  "functools"
+                ],
+                "sha256": "82847998d6bcdb183ec85088ef9b096ea226c8441699684c71ca64a9d42a35a9",
+                "size_bytes": 17
+              },
+              {
+                "names": [
+                  "hashlib"
+                ],
+                "sha256": "3b3ea3cdc7068a9e97cfcddbcd9d8e0c54fe4d068347b80b158fdd8b14676e3b",
+                "size_bytes": 15
+              },
+              {
+                "names": [
+                  "json"
+                ],
+                "sha256": "261a9112a2918e2aba03e19a2f221a027ab4b6f9e946a6c39814f54e18e07dfc",
+                "size_bytes": 12
+              },
+              {
+                "names": [
+                  "math"
+                ],
+                "sha256": "085ea91d7cfeb4f5695793f882c7463cbfdf7be9f98e6c5133847a245bbea366",
+                "size_bytes": 12
+              },
+              {
+                "names": [
+                  "re"
+                ],
+                "sha256": "a830333312c4c9c2233bb02762bd498203b1c3bf0527614735693b4b79f6d167",
+                "size_bytes": 10
+              },
+              {
+                "names": [
+                  "sys"
+                ],
+                "sha256": "c517577851c489e45abae2591256c40404a05c6d19cd4d5ae7fd22b0084cec6c",
+                "size_bytes": 11
+              },
+              {
+                "names": [
+                  "Path"
+                ],
+                "sha256": "3cb9ffccba5146b2dd177a30c3057a4395ebd5c745d0789d2ed95d0cf4afe271",
+                "size_bytes": 25
+              },
+              {
+                "names": [
+                  "Any",
+                  "Mapping"
+                ],
+                "sha256": "2f1f76a50065a201433318c3c80dbf0dda6cbd622c81283b7b13adf1508ea508",
+                "size_bytes": 32
+              },
+              {
+                "names": [
+                  "InvalidSignature"
+                ],
+                "sha256": "26740a0ac42045d692cb90f49349dc0bf7abef491e001750388d48e914099a56",
+                "size_bytes": 53
+              },
+              {
+                "names": [
+                  "Ed25519PublicKey"
+                ],
+                "sha256": "16a6e3f3f06e2324f36da0dfeea45fa4203d02cae0e14e9c0ad1709f92c9d218",
+                "size_bytes": 79
+              },
+              {
+                "names": [
+                  "Draft202012Validator"
+                ],
+                "sha256": "0989a9dd90393c8cbbad8948fb13afedc43bbbfd46aaf2aafa10f6ab63e6a637",
+                "size_bytes": 190
+              },
+              {
+                "names": [
+                  "SCHEMA"
+                ],
+                "sha256": "245cc9681a24ed0356322f7920678a455337e10c76836bce715b4a9905a02302",
+                "size_bytes": 46
+              },
+              {
+                "names": [
+                  "SHA256_RE"
+                ],
+                "sha256": "a42f53eabe688b6178ea514b604ae114887c4f683fafdfdc686d1656851af1ee",
+                "size_bytes": 42
+              },
+              {
+                "names": [
+                  "SCHEMA_PATH"
+                ],
+                "sha256": "2bb55850ae5280199e1d1579169a50912e5bb5e75403e55ecac79154317283c2",
+                "size_bytes": 125
+              },
+              {
+                "names": [
+                  "TRUSTED_VERIFIER_REGISTRY_PATH"
+                ],
+                "sha256": "a3d89115d4a29d4818bb80730b265a9e933c2b69f42ed4d849de2b1d9b78945d",
+                "size_bytes": 155
+              },
+              {
+                "names": [
+                  "ACCEPTED_TRAINING_INPUT_AUTHORITIES_PATH"
+                ],
+                "sha256": "8003244c9bef29ad9ba0525ed26d9d0fadfabda13969ccf95decd4771eced16e",
+                "size_bytes": 183
+              },
+              {
+                "names": [
+                  "BENCHMARK_REGISTRY_PATH"
+                ],
+                "sha256": "baebd38dce01c8af6dc5f4ce97e8bff98593974d0c05efe77b6d2e49a609d215",
+                "size_bytes": 145
+              },
+              {
+                "names": [
+                  "OWNED_ADMISSION_PARAMETER_FLOOR"
+                ],
+                "sha256": "cb8849ce86db253f36fe245542389a6fb76a03d9106ae70790b9ca512fdd5f06",
+                "size_bytes": 48
+              },
+              {
+                "names": [
+                  "EVIDENCE_RECEIPT_SCHEMA"
+                ],
+                "sha256": "81d84ed47c9a73eda9c6b02fc8a85eead12be97e98711fd59e361bf9e4553021",
+                "size_bytes": 63
+              },
+              {
+                "names": [
+                  "SUFFICIENT_PRETRAINING_CRITERION"
+                ],
+                "sha256": "f23955f5be8df6d29a6a7b1c59eea6e80a4b22f3c7eb836d7aff08acbb056261",
+                "size_bytes": 69
+              },
+              {
+                "names": [
+                  "OWNED_LEARNED_SIGNAL_SOURCES"
+                ],
+                "sha256": "a74c5667d1e8dfb1d2a8ab96a2d5fee24d6ba0863abd7dfe98b2242a79f9425c",
+                "size_bytes": 97
+              },
+              {
+                "names": [
+                  "OWNED_CAPABILITY_CREDIT_SOURCES"
+                ],
+                "sha256": "f764b09c5f51aa07f7ee9ad4b5d58135409474ffe029fae5f25cfc88326ad7ac",
+                "size_bytes": 102
+              },
+              {
+                "names": [
+                  "REQUIRED_PATHS"
+                ],
+                "sha256": "6ea14c3f452c0879aebbfdf982ce66348b197d293e01da303829eb294f17ca5b",
+                "size_bytes": 2422
+              },
+              {
+                "names": [
+                  "HASH_PATHS"
+                ],
+                "sha256": "90ac3a3c9027374e9ade6394df4a28bb06a88f5b58d00a1f12f538a8e3de7778",
+                "size_bytes": 814
+              },
+              {
+                "names": [
+                  "BINDING_PATHS"
+                ],
+                "sha256": "812303bab3a753bd70ece89ebd7434652210d19b1689826ea3cfe6ccfe82c723",
+                "size_bytes": 661
+              },
+              {
+                "names": [
+                  "INVALID_CAPABILITY_CREDIT_SOURCES"
+                ],
+                "sha256": "68eda391f82b5623d07fd1489ceba380f73167148efc4792aabaf9bdae8a7f11",
+                "size_bytes": 175
+              },
+              {
+                "names": [
+                  "FORBIDDEN_LEARNED_SIGNAL_SOURCES"
+                ],
+                "sha256": "fbd37d51cbb55d2350c38286910e279df28e13a37bb9749939ad390f5ca8abbb",
+                "size_bytes": 366
+              },
+              {
+                "names": [
+                  "CLOSED_OBJECT_KEYS"
+                ],
+                "sha256": "b28516faf7b95dad175696a937aae0f8a4fa9a18c3ce13e2e19161ada102e94d",
+                "size_bytes": 3111
+              }
+            ],
+            "path": "scripts/ember_01_identity/validate_identity.py",
+            "roots": [
+              "main"
+            ],
+            "sha256": "cf738763d322ff10e2a898935b1520524b6330ad5a015038c9b28df92b0f2e60",
+            "symbols": [
+              {
+                "name": "IdentityValidationError",
+                "sha256": "22ab3d5d8d0d8179c207c735fcd1c08c12d7186a403ee8f489bcdebbbae8f1f6",
+                "size_bytes": 223
+              },
+              {
+                "name": "_apply_schema",
+                "sha256": "00076d50ef675d4b277da1680889c83f3ffc5e6d853d5674bc6febb5b1fadf98",
+                "size_bytes": 722
+              },
+              {
+                "name": "_benchmark_registry_allowed_ids",
+                "sha256": "35b41d9011e029adb8786022085d37adc7f521aea7eab9cee461455e2babaa78",
+                "size_bytes": 893
+              },
+              {
+                "name": "_check_closed_objects",
+                "sha256": "fb51af8b3875d14ef045658a55b5ccd169221ad4df7989a8331e927675c4cc44",
+                "size_bytes": 531
+              },
+              {
+                "name": "_finding",
+                "sha256": "3b3fccc8fbdc6025400a68ed56daf935ee207a50660e16ddd7760d4c637a04a2",
+                "size_bytes": 100
+              },
+              {
+                "name": "_get",
+                "sha256": "e9a2e8e95c06130060b9b224f64a912938975bd0f2c4c3d039039d74b73610bc",
+                "size_bytes": 285
+              },
+              {
+                "name": "_is_unresolved",
+                "sha256": "170c753e6a06f42a0327bb4df8367f938d10da41ecbf6a5037a74cb3f0522975",
+                "size_bytes": 118
+              },
+              {
+                "name": "_pinned_accepted_training_input",
+                "sha256": "bfc5d540f778d6e3f7b22021e392951a40f96469466eab371ddbade7937b1976",
+                "size_bytes": 2013
+              },
+              {
+                "name": "_pinned_verifier_entries",
+                "sha256": "1bc863412f2ba4e060848f3c42bd75dab0428be1dd5c3c3dee83204e53a18327",
+                "size_bytes": 1103
+              },
+              {
+                "name": "_receipt_sha256",
+                "sha256": "c4e1a83ac35576f1fa215ea528b1634325c63db9331d1d1ba60db86b2bd51eb4",
+                "size_bytes": 226
+              },
+              {
+                "name": "_resolve_admission_receipt",
+                "sha256": "07b89186732e2d799921d3e43cc36ab21000a352861ddb6cff32f91c0efc4ce6",
+                "size_bytes": 3524
+              },
+              {
+                "name": "_schema_validator",
+                "sha256": "a0830dc6346ffc73d68ca9ed7f108aeff604af49375a021277b67218a72a8af9",
+                "size_bytes": 329
+              },
+              {
+                "name": "_string_list_subset",
+                "sha256": "4d6c2f08c4c7889e33257a2129249dbbfc1672a82501384659e627d7203c3b3e",
+                "size_bytes": 230
+              },
+              {
+                "name": "_unresolved_paths",
+                "sha256": "54ee6900e37d57361dc7824d1dd7c4f5e8c74649b5331c071790a3023e48fe70",
+                "size_bytes": 739
+              },
+              {
+                "name": "_verified_receipt_evidence",
+                "sha256": "bab08e0723b529d1ac199ad9553f57bc7cf4a52b67dc53ed21aa69370b841329",
+                "size_bytes": 442
+              },
+              {
+                "name": "canonical_json",
+                "sha256": "92690007d3cc692fbab4ac8cefcadfb7ff99bd1960add199e4b24beb62b133ed",
+                "size_bytes": 216
+              },
+              {
+                "name": "main",
+                "sha256": "12fe7e8315ef6fa8a7a780a2985991bf46dcdc3fa3436675321a297b5085ceb2",
+                "size_bytes": 4347
+              },
+              {
+                "name": "validate_manifest",
+                "sha256": "32515308eecfd63267e6bd98aed366e93dd8fe306956d8fc24422c9d80241064",
+                "size_bytes": 56381
+              }
+            ]
+          },
+          {
+            "dynamic_call_bindings": [
+              "backend['backend'].get",
+              "checkpoint_bytes.decode",
+              "completed.stderr.strip",
+              "completed.stdout.strip",
+              "created.append",
+              "evidence.items",
+              "handle.write",
+              "manifest_candidate.resolve",
+              "manifest_parent_candidate.resolve",
+              "mutants.append",
+              "parsed.get",
+              "path.read_text",
+              "path.unlink",
+              "routers[0].get",
+              "row.get",
+              "rows.append",
+              "scratch_root.mkdir",
+              "sources.append",
+              "tokenizer['tokenizer'].get"
+            ],
+            "external_calls": [
+              "COND4_SURFACE_VALIDATOR_PATH.read_bytes",
+              "Cond4SurfaceRefusal",
+              "Path",
+              "TypeError",
+              "ValueError",
+              "any",
+              "build_surface_manifest",
+              "copy.deepcopy",
+              "explicit:backend['backend'].get",
+              "explicit:checkpoint_bytes.decode",
+              "explicit:completed.stderr.strip",
+              "explicit:completed.stdout.strip",
+              "explicit:created.append",
+              "explicit:evidence.items",
+              "explicit:handle.write",
+              "explicit:manifest_candidate.resolve",
+              "explicit:manifest_parent_candidate.resolve",
+              "explicit:mutants.append",
+              "explicit:parsed.get",
+              "explicit:path.read_text",
+              "explicit:path.unlink",
+              "explicit:routers[0].get",
+              "explicit:row.get",
+              "explicit:rows.append",
+              "explicit:scratch_root.mkdir",
+              "explicit:sources.append",
+              "explicit:tokenizer['tokenizer'].get",
+              "hashlib.sha256",
+              "hashlib.sha256.hexdigest",
+              "isinstance",
+              "json.dump",
+              "json.loads",
+              "len",
+              "list",
+              "max",
+              "os.environ.copy",
+              "reversed",
+              "sorted",
+              "str",
+              "subprocess.run",
+              "sum",
+              "tempfile.NamedTemporaryFile",
+              "time.perf_counter_ns",
+              "validate_execution_evidence",
+              "validate_surface_manifest",
+              "verify_parameter_identity_binding"
+            ],
+            "module_bindings": [
+              {
+                "names": [
+                  "copy"
+                ],
+                "sha256": "01185d20d26568a358ea5c862ad992fbed2b4c0a68684d42477f0920b7be3e7f",
+                "size_bytes": 12
+              },
+              {
+                "names": [
+                  "hashlib"
+                ],
+                "sha256": "3b3ea3cdc7068a9e97cfcddbcd9d8e0c54fe4d068347b80b158fdd8b14676e3b",
+                "size_bytes": 15
+              },
+              {
+                "names": [
+                  "json"
+                ],
+                "sha256": "261a9112a2918e2aba03e19a2f221a027ab4b6f9e946a6c39814f54e18e07dfc",
+                "size_bytes": 12
+              },
+              {
+                "names": [
+                  "os"
+                ],
+                "sha256": "3727adff524e0616022eadd8f4af21a0778b29fc4c77bdfefd1afce2cbf5e4b7",
+                "size_bytes": 10
+              },
+              {
+                "names": [
+                  "subprocess"
+                ],
+                "sha256": "17ea74bb79ba96edc39a8382a97f22993b80cc4088b3e2717a98917c60c1dd5a",
+                "size_bytes": 18
+              },
+              {
+                "names": [
+                  "sys"
+                ],
+                "sha256": "c517577851c489e45abae2591256c40404a05c6d19cd4d5ae7fd22b0084cec6c",
+                "size_bytes": 11
+              },
+              {
+                "names": [
+                  "tempfile"
+                ],
+                "sha256": "0578139baa8835231355e06f7fc51643ad48d2c6333bd0777e80b84a93b8aad7",
+                "size_bytes": 16
+              },
+              {
+                "names": [
+                  "time"
+                ],
+                "sha256": "7b2ddb8a2e64c6166feedaf30ee50ac62165fe149fdd8b0d7b777ebee21ca34d",
+                "size_bytes": 12
+              },
+              {
+                "names": [
+                  "Path"
+                ],
+                "sha256": "3cb9ffccba5146b2dd177a30c3057a4395ebd5c745d0789d2ed95d0cf4afe271",
+                "size_bytes": 25
+              },
+              {
+                "names": [
+                  "Any",
+                  "Callable",
+                  "Sequence"
+                ],
+                "sha256": "78bf724e5712ef47ca4a08040a22b9481744a6d1084331f29aff31d5d295a251",
+                "size_bytes": 43
+              },
+              {
+                "names": [
+                  "ParameterIdentityMismatch",
+                  "measure_live_checkpoint",
+                  "verify_parameter_identity_binding"
+                ],
+                "sha256": "d9385fc2c2cc4d67ea021a8a0b764d1b5d3c85e10037f47180e5534f86dd4210",
+                "size_bytes": 160
+              },
+              {
+                "names": [
+                  "COND4_AXES",
+                  "COND4_EXECUTION_SCHEMA",
+                  "Cond4SurfaceRefusal",
+                  "build_surface_manifest",
+                  "validate_execution_evidence",
+                  "validate_execution_packet",
+                  "validate_surface_manifest"
+                ],
+                "sha256": "eaf8fc4e60154e6c95ea7833494765d77fa2cff31c7456038222353a380d5896",
+                "size_bytes": 269
+              },
+              {
+                "names": [
+                  "VALIDATE_IDENTITY_REL"
+                ],
+                "sha256": "b5605875ab32c98150e09aa2dfbb8a9d95eb3847c24f10aea202affd68fa08af",
+                "size_bytes": 73
+              },
+              {
+                "names": [
+                  "COND4_SURFACE_VALIDATOR_PATH"
+                ],
+                "sha256": "e3aa0330d275eb03e3c965681ad1ad6aafe36689667178ee272c54c5b9a8aaea",
+                "size_bytes": 85
+              },
+              {
+                "names": [
+                  "COND4_SURFACE_MANIFEST_REL"
+                ],
+                "sha256": "55532f5542631df9904bffe553d5aed30fedc4ec50cd20045cba27498a73e2f4",
+                "size_bytes": 98
+              }
+            ],
+            "path": "scripts/verify_ember01_completion.py",
+            "roots": [
+              "_cond4_execution_evidence",
+              "_cond4_surface_manifest",
+              "_load_cond4_surface_manifest",
+              "_run_bound_cond4_battery",
+              "_run_identity_tamper_battery"
+            ],
+            "sha256": "05c7a47077108136fce30a84321ee3ee1a18df0f0a2406a2b84ad102c6330fce",
+            "symbols": [
+              {
+                "name": "_cond4_execution_evidence",
+                "sha256": "e65e266f6e90727f5473a84dac5e2858656349d5b7760b4e625fca1cd47f0a6d",
+                "size_bytes": 2156
+              },
+              {
+                "name": "_cond4_surface_manifest",
+                "sha256": "1efd3af507d01053a2509a52342ee350c8415c502e0ff073eeff4432bbbe798b",
+                "size_bytes": 4734
+              },
+              {
+                "name": "_flipped_sha256",
+                "sha256": "30571e43af0ef023a68b20fd05e044c7e3f0eacd61226362117e0223534938c8",
+                "size_bytes": 95
+              },
+              {
+                "name": "_identity_tamper_mutants",
+                "sha256": "231878eed25fb5cb031c9c342fcdfc322f158a5c65f07cd7af37d19bdfb7d57d",
+                "size_bytes": 2256
+              },
+              {
+                "name": "_load_cond4_surface_manifest",
+                "sha256": "4fe16e93dc55e7adc8f4941807721669e8b092ec888784e500312c8cda614bf5",
+                "size_bytes": 776
+              },
+              {
+                "name": "_run_bound_cond4_battery",
+                "sha256": "7b7027e326c7de330eb6b7b940b957c3d5f53eb1d3fc09f578c42a1ef65d74eb",
+                "size_bytes": 559
+              },
+              {
+                "name": "_run_identity_tamper_battery",
+                "sha256": "724e7515835ecb1fb40a140bf48bb7d923e56731bdb8f1495ac6aaec10905fe3",
+                "size_bytes": 5045
+              },
+              {
+                "name": "run",
+                "sha256": "5a3f3182301a2552618b98bd238029503cd2bda7b84cbeb7b465e181eb45be9f",
+                "size_bytes": 1382
+              }
+            ]
+          }
+        ],
+        "schema": "ember-cond4-behavior-surface-v1"
+      },
+      "execution_evidence": {
+        "axes": [
+          {
+            "axis": "checkpoint_bytes",
+            "duration_ms": 2,
+            "finding_codes": [
+              "parameter_identity_mismatch"
+            ],
+            "rejected": true
+          },
+          {
+            "axis": "param_count",
+            "duration_ms": 192,
+            "finding_codes": [
+              "binding.parameters_mismatch"
+            ],
+            "rejected": true
+          },
+          {
+            "axis": "tokenizer",
+            "duration_ms": 191,
+            "finding_codes": [
+              "binding.tokenizer.sha256_mismatch",
+              "binding.tokenizer_mismatch"
+            ],
+            "rejected": true
+          },
+          {
+            "axis": "data_learned_signal",
+            "duration_ms": 189,
+            "finding_codes": [
+              "historical.contamination_unclassified",
+              "provenance.forbidden_learned_signal"
+            ],
+            "rejected": true
+          },
+          {
+            "axis": "mechanism",
+            "duration_ms": 191,
+            "finding_codes": [
+              "binding.mechanisms.router_mismatch",
+              "binding.mechanisms_mismatch"
+            ],
+            "rejected": true
+          },
+          {
+            "axis": "backend",
+            "duration_ms": 191,
+            "finding_codes": [
+              "binding.backend.executable_sha256_mismatch",
+              "binding.backend_mismatch",
+              "unresolved.index_mismatch"
+            ],
+            "rejected": true
+          },
+          {
+            "axis": "benchmark_id",
+            "duration_ms": 191,
+            "finding_codes": [
+              "binding.evaluation.benchmark_id_mismatch"
+            ],
+            "rejected": true
+          },
+          {
+            "axis": "comparator",
+            "duration_ms": 191,
+            "finding_codes": [
+              "binding.evaluation.comparator_identity_mismatch",
+              "unresolved.index_mismatch"
+            ],
+            "rejected": true
+          }
+        ],
+        "schema": "ember-cond4-execution-evidence-v1",
+        "subject": {
+          "behavior_surface_validator_sha256": "68c2042720e7b89870410e2831a0bd4ec07890f154a94f8aa46d743532fb7090",
+          "checkpoint_bytes_loaded": 19703517388,
+          "checkpoint_manifest_sha256": "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b",
+          "load_count": 2,
+          "surface_aggregate_sha256": "05c119b2ab1f9eab742314435260c5d8a3261460fc35763f7f06c5663c1ee482"
+        }
+      },
+      "failures": [],
+      "tool": "scripts/verify_ember01_completion.py::cond4_tamper_battery"
+    },
+    "reason": "all eight isolated identity tamper axes rejected",
+    "state": "resolved-true",
+    "title": "identity fail-closed on tampered checkpoint"
+  },
+  "migration": {
+    "command": "scripts/verify_ember01_completion.py::identity_legs",
+    "historical_config": {
+      "repository_path": "configs/ember-restart-3b.json",
+      "sha256": "559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0",
+      "source_commit": "54c071f2087295a90a9526ea3bb50640e15cadb3"
+    },
+    "source_receipt_path": "receipts/ember-01-completion/cond4-tamper-battery-bf20f050-v2.json",
+    "source_receipt_schema": "ember-cond4-tamper-battery-receipt-v2",
+    "source_receipt_sha256": "5935527d3bb1c3cb7b99b56b9aa07ba2c5468fca4a657b7b16aaf7bd2dd9bd74"
+  },
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "result": "PASS",
+  "schema": "ember-cond4-tamper-battery-receipt-v7",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "subject": {
+    "checkpoint_id": "checkpoint-semantic-seed-83-step-2",
+    "checkpoint_manifest_sha256": "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b",
+    "disposition": "HISTORICAL_ONLY",
+    "identity_manifest": {
+      "path": "manifests/ember-01-identity/historical-checkpoint-semantic-seed83-step2-v1.json",
+      "sha256": "aa80aa260b6fc3e4e9051a39525eceb6234eb6b1b1318c93dfb519ba241b53a3"
+    },
+    "model_config_sha256": "559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0",
+    "ownership": "EXCLUDED_CONTAMINATED",
+    "selected_as_owned_ember": false
+  },
+  "ticket": "ISSUE-1342-COND4-BEHAVIOR-SURFACE-MIGRATION",
+  "ts": "2026-08-11T01:08:31.901341+00:00",
+  "verification": {
+    "behavior_surface_migration": {
+      "behavior_surface_validator_sha256": "68c2042720e7b89870410e2831a0bd4ec07890f154a94f8aa46d743532fb7090",
+      "checkpoint_bytes_loaded": 19703517388,
+      "checkpoint_manifest_sha256": "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b",
+      "executed_at": "2026-08-11T05:38:21.045282+00:00",
+      "historical_model_config_sha256": "559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0",
+      "load_count": 2,
+      "result": "PASS"
+    }
+  },
+  "workstream_id": "EMBER-02A"
+}

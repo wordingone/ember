@@ -23,6 +23,7 @@ from typing import Any, Mapping, Sequence
 
 SURFACE_SCHEMA = "ember-cond4-behavior-surface-v1"
 EXECUTION_SCHEMA = "ember-cond4-execution-evidence-v1"
+VALIDATOR_REL = "scripts/cond4_behavior_surface.py"
 COND4_AXES = (
     "checkpoint_bytes",
     "param_count",
@@ -747,11 +748,14 @@ def validate_execution_evidence(evidence: Mapping[str, Any]) -> None:
         raise SurfaceRefusal("COND4_EXECUTION_EVIDENCE_INVALID")
     subject = evidence.get("subject")
     if not isinstance(subject, Mapping) or set(subject) != {
+        "behavior_surface_validator_sha256",
         "checkpoint_manifest_sha256",
         "surface_aggregate_sha256",
         "checkpoint_bytes_loaded",
         "load_count",
     }:
+        raise SurfaceRefusal("COND4_EXECUTION_EVIDENCE_INVALID")
+    if not _SHA256.fullmatch(str(subject.get("behavior_surface_validator_sha256"))):
         raise SurfaceRefusal("COND4_EXECUTION_EVIDENCE_INVALID")
     if not _SHA256.fullmatch(str(subject.get("checkpoint_manifest_sha256"))):
         raise SurfaceRefusal("COND4_EXECUTION_EVIDENCE_INVALID")
@@ -796,6 +800,18 @@ def validate_execution_packet(
     manifest: Mapping[str, Any],
     evidence: Mapping[str, Any],
 ) -> None:
+    validator_candidate = root / VALIDATOR_REL
+    validator_path = validator_candidate.resolve(strict=True)
+    validator_parent_candidate = root / "scripts"
+    if validator_path.parent != validator_parent_candidate.resolve():
+        raise SurfaceRefusal("COND4_EXECUTION_VALIDATOR_MISMATCH")
+    validator_sha256 = hashlib.sha256(validator_path.read_bytes()).hexdigest()
+    subject = evidence.get("subject") if isinstance(evidence, Mapping) else None
+    if (
+        not isinstance(subject, Mapping)
+        or subject.get("behavior_surface_validator_sha256") != validator_sha256
+    ):
+        raise SurfaceRefusal("COND4_EXECUTION_VALIDATOR_MISMATCH")
     validate_surface_manifest(root, manifest)
     validate_execution_evidence(evidence)
     subject = evidence["subject"]

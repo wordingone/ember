@@ -154,11 +154,11 @@ class VerifyRobustnessTests(unittest.TestCase):
             root = Path(directory)
             bound, receipt, config_path, manifest_path = self._bound_fixture(root, seed=707)
             self.assertIn("model_config_sha256", receipt)
-            # Should not raise.
-            verify_parameter_identity_binding(
+            completed_loads = verify_parameter_identity_binding(
                 bound, receipt,
                 checkpoint_manifest=manifest_path, model_config=config_path,
             )
+            self.assertEqual(completed_loads, 1)
 
     def test_tampered_model_config_sha256_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

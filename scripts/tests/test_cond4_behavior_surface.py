@@ -416,6 +416,9 @@ def test_execution_evidence_requires_all_axes_timing_and_load_stats() -> None:
     evidence = {
         "schema": "ember-cond4-execution-evidence-v1",
         "subject": {
+            "behavior_surface_validator_sha256": hashlib.sha256(
+                Path(surface.__file__).read_bytes()
+            ).hexdigest(),
             "checkpoint_manifest_sha256": "a" * 64,
             "surface_aggregate_sha256": "b" * 64,
             "checkpoint_bytes_loaded": 123,
@@ -447,10 +450,16 @@ def test_execution_evidence_requires_all_axes_timing_and_load_stats() -> None:
 def test_execution_packet_binds_evidence_to_revalidated_surface(tmp_path: Path) -> None:
     module = tmp_path / "verifier.py"
     _write_module(module)
+    validator = tmp_path / surface.VALIDATOR_REL
+    validator.parent.mkdir(parents=True)
+    validator.write_bytes(Path(surface.__file__).read_bytes())
     manifest = surface.build_surface_manifest(tmp_path, {"verifier.py": ["exercised"]})
     evidence = {
         "schema": "ember-cond4-execution-evidence-v1",
         "subject": {
+            "behavior_surface_validator_sha256": hashlib.sha256(
+                Path(surface.__file__).read_bytes()
+            ).hexdigest(),
             "checkpoint_manifest_sha256": "a" * 64,
             "surface_aggregate_sha256": manifest["aggregate_sha256"],
             "checkpoint_bytes_loaded": 123,
@@ -475,6 +484,13 @@ def test_execution_packet_binds_evidence_to_revalidated_surface(tmp_path: Path) 
         surface.SurfaceRefusal, match="COND4_EXECUTION_SURFACE_MISMATCH"
     ):
         surface.validate_execution_packet(tmp_path, manifest, tampered)
+
+    stale_validator = json.loads(json.dumps(evidence))
+    stale_validator["subject"]["behavior_surface_validator_sha256"] = "0" * 64
+    with pytest.raises(
+        surface.SurfaceRefusal, match="COND4_EXECUTION_VALIDATOR_MISMATCH"
+    ):
+        surface.validate_execution_packet(tmp_path, manifest, stale_validator)
 
 
 def test_manifest_aggregate_binds_ordered_symbol_rows(tmp_path: Path) -> None:

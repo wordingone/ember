@@ -71,6 +71,7 @@ from cond4_behavior_surface import (
     build_surface_manifest,
     validate_execution_evidence,
     validate_execution_packet,
+    validate_surface_manifest,
 )
 
 RESOLVED_TRUE = "resolved-true"
@@ -82,6 +83,10 @@ LAUNCH_PACKET_REL = "tools/ember-restart-3b/launch_packet.py"
 CENSUS_REL = "scripts/ember_01_custody/census.py"
 VALIDATE_IDENTITY_REL = "scripts/ember_01_identity/validate_identity.py"
 SEAT_TEST_REL = "tools/ember-cli/src/entrypoints/model-seat.test.ts"
+COND4_SURFACE_VALIDATOR_PATH = Path(__file__).with_name("cond4_behavior_surface.py")
+COND4_SURFACE_MANIFEST_REL = (
+    "manifests/ember-01-identity/cond4-behavior-surface-v1.json"
+)
 
 # The nine EMBER-01 conditions and which tool certifies each.
 LEG_TITLES = {
@@ -1104,12 +1109,17 @@ def _cond4_surface_manifest(root: Path) -> dict[str, Any]:
                 "roots": [
                     "_cond4_execution_evidence",
                     "_cond4_surface_manifest",
+                    "_load_cond4_surface_manifest",
+                    "_run_bound_cond4_battery",
                     "_run_identity_tamper_battery",
                 ],
                 "dynamic_call_bindings": [
                     "backend['backend'].get",
                     "completed.stderr.strip",
                     "completed.stdout.strip",
+                    "manifest_candidate.resolve",
+                    "manifest_parent_candidate.resolve",
+                    "path.read_text",
                     "checkpoint_bytes.decode",
                     "created.append",
                     "evidence.items",
@@ -1213,6 +1223,43 @@ def _cond4_surface_manifest(root: Path) -> dict[str, Any]:
     )
 
 
+def _load_cond4_surface_manifest(root: Path) -> dict[str, Any]:
+    manifest_candidate = root / COND4_SURFACE_MANIFEST_REL
+    path = manifest_candidate.resolve(strict=True)
+    manifest_parent_candidate = root / Path(COND4_SURFACE_MANIFEST_REL).parent
+    if path.parent != manifest_parent_candidate.resolve():
+        raise Cond4SurfaceRefusal("COND4_SURFACE_PATH_INVALID")
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise Cond4SurfaceRefusal("COND4_SURFACE_SCHEMA_INVALID") from exc
+    validate_surface_manifest(root, manifest)
+    if manifest != _cond4_surface_manifest(root):
+        raise Cond4SurfaceRefusal("COND4_SURFACE_SPEC_MISMATCH")
+    return manifest
+
+
+def _run_bound_cond4_battery(
+    *,
+    root: Path,
+    payload: dict[str, Any],
+    receipt: dict[str, Any],
+    checkpoint_bytes: bytes,
+    model_config: Path,
+    scratch_root: Path,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    surface_manifest = _load_cond4_surface_manifest(root)
+    battery = _run_identity_tamper_battery(
+        root=root,
+        payload=payload,
+        receipt=receipt,
+        checkpoint_bytes=checkpoint_bytes,
+        model_config=model_config,
+        scratch_root=scratch_root,
+    )
+    return battery, surface_manifest
+
+
 def _cond4_execution_evidence(
     *,
     checkpoint_bytes: bytes,
@@ -1251,6 +1298,9 @@ def _cond4_execution_evidence(
         evidence = {
             "schema": COND4_EXECUTION_SCHEMA,
             "subject": {
+                "behavior_surface_validator_sha256": hashlib.sha256(
+                    COND4_SURFACE_VALIDATOR_PATH.read_bytes()
+                ).hexdigest(),
                 "checkpoint_manifest_sha256": hashlib.sha256(checkpoint_bytes).hexdigest(),
                 "surface_aggregate_sha256": surface_manifest["aggregate_sha256"],
                 "checkpoint_bytes_loaded": sum(shard_bytes) * load_count,
@@ -1303,7 +1353,8 @@ def identity_legs(
             checkpoint_manifest=checkpoint_manifest,
             active_expert="shared",
         )
-        verify_parameter_identity_binding(
+        load_count = 1
+        load_count += verify_parameter_identity_binding(
             payload,
             receipt,
             checkpoint_manifest=checkpoint_manifest,
@@ -1334,7 +1385,7 @@ def identity_legs(
     }
 
     try:
-        tamper_evidence = _run_identity_tamper_battery(
+        tamper_evidence, surface_manifest = _run_bound_cond4_battery(
             root=root,
             payload=payload,
             receipt=receipt,
@@ -1342,12 +1393,11 @@ def identity_legs(
             model_config=model_config,
             scratch_root=scratch_root,
         )
-        surface_manifest = _cond4_surface_manifest(root)
         execution_evidence = _cond4_execution_evidence(
             checkpoint_bytes=checkpoint_bytes,
             surface_manifest=surface_manifest,
             battery=tamper_evidence,
-            load_count=2,
+            load_count=load_count,
         )
         validate_execution_packet(root, surface_manifest, execution_evidence)
         tamper_evidence["behavior_surface"] = surface_manifest
