@@ -14,7 +14,7 @@ import pytest
 
 class Tiny(torch.nn.Module):
     def __init__(self):
-        super().__init__(); self.target=torch.nn.Parameter(torch.ones((2,2))); self.other=torch.nn.Parameter(torch.ones(1))
+        super().__init__(); self.target=torch.nn.Parameter(torch.ones((2,2))); self.other=torch.nn.Parameter(torch.ones(1)); self.proj=torch.nn.Linear(2,3,bias=False)
 
 
 class Probe:
@@ -51,3 +51,13 @@ def test_measured_dry_run_refuses_config_path_escape_before_probe(tmp_path,monke
     bp=root/"batch.json"; bp.write_text("batch"); producer=root/"producer.py"; producer.write_text("producer")
     with pytest.raises(runner.MeasuredDryRunRefusal,match="DRY_RUN_CONFIG_BINDING_INVALID"):
         runner.run_measured_dry_run(run_id="r",source_commit="a"*40,custody_root=root,checkpoint_manifest_path=cp,batch_manifest_path=bp,producer_path=producer,trace_path=root/"trace.json",receipt_path=root/"receipt.json")
+
+
+def test_measured_dry_run_prices_cpu_integrity_and_qat_snapshots_together():
+    model=Tiny()
+    baseline,qat=runner._runtime_host_snapshots(model)
+    assert set(baseline)==set(model.state_dict())
+    assert len(qat)==1
+    assert all(value.device.type=="cpu" and value.is_contiguous() for value in baseline.values())
+    assert all(value.device.type=="cpu" and value.is_contiguous() for value in qat)
+    assert torch.equal(qat[0],model.proj.weight.detach())

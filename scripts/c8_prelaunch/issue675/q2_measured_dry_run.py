@@ -49,6 +49,21 @@ def _atomic_json(path: Path, value: object) -> None:
         raise
 
 
+def _runtime_host_snapshots(
+    model: torch.nn.Module,
+) -> tuple[dict[str, torch.Tensor], list[torch.Tensor]]:
+    baseline = {
+        key: value.detach().to(device="cpu").contiguous().clone()
+        for key, value in model.state_dict().items()
+    }
+    qat = [
+        module.weight.detach().to(device="cpu").contiguous().clone()
+        for module in model.modules()
+        if isinstance(module, torch.nn.Linear)
+    ]
+    return baseline, qat
+
+
 def _bound_config_path(root: Path, checkpoint_manifest_path: Path) -> Path:
     try:
         manifest=json.loads(checkpoint_manifest_path.read_text(encoding="utf-8"))
@@ -104,6 +119,8 @@ def run_measured_dry_run(
         held.append(frozen); probe.sample(); probe.end_phase()
 
         probe.begin_phase("capture_staging")
+        runtime_integrity_baseline,runtime_qat_saved_weights=_runtime_host_snapshots(model)
+        held.extend([runtime_integrity_baseline,runtime_qat_saved_weights]); probe.sample()
         target=model.get_parameter(inputs["target_name"])
         capture_staging=[target.detach().cpu().float().clone() for _ in range(6)]
         non_target={name:value.detach().cpu().clone() for name,value in model.state_dict().items() if name!=inputs["target_name"]}

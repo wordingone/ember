@@ -35,9 +35,9 @@ class TinyEventModel(torch.nn.Module):
         return torch.tanh(self.gate_proj(self.embed(ids)))
 
 
-def _cfg() -> dict[str, object]:
+def _cfg(*, qat: bool = False) -> dict[str, object]:
     return {
-        "precision": {"qat": {"enabled": False}},
+        "precision": {"qat": {"enabled": qat}},
         "objective": {"mtp_aux_heads": {"enabled": True, "weight": 0.1, "n_heads": 1}},
     }
 
@@ -135,3 +135,119 @@ def test_runtime_refuses_non_target_drift_or_malformed_batch():
             target_name="gate_proj.weight",
             device="cpu",
         )
+
+
+def test_runtime_cpu_snapshot_and_qat_restore_preserve_parameter_storage():
+    module = _load()
+
+    class TrackingTensor:
+        def __init__(self) -> None:
+            self.detached = False
+            self.destination = None
+
+        def detach(self):
+            self.detached = True
+            return self
+
+        def to(self, *, device):
+            self.destination = device
+            return torch.tensor([1.0])
+
+    tracked = TrackingTensor()
+    snapshot = module._cpu_contiguous_clone(tracked)
+    assert tracked.detached is True
+    assert tracked.destination == "cpu"
+    assert snapshot.device.type == "cpu" and snapshot.is_contiguous()
+
+    torch.manual_seed(11)
+    model = TinyEventModel()
+    original = {
+        name: (parameter, parameter.data_ptr(), parameter.detach().clone())
+        for name, parameter in model.named_parameters()
+    }
+    saved = module._apply_fake_quant(model)
+    assert saved and all(value.device.type == "cpu" for _layer, value in saved)
+    for name, parameter in model.named_parameters():
+        expected, pointer, _bytes = original[name]
+        assert parameter is expected and parameter.data_ptr() == pointer
+    module._restore_weights(saved)
+    for name, parameter in model.named_parameters():
+        expected, pointer, before = original[name]
+        assert parameter is expected and parameter.data_ptr() == pointer
+        assert torch.equal(parameter.detach(), before)
+
+
+def test_runtime_restores_exact_storage_when_gradient_and_replay_raise():
+    module = _load()
+
+    class ExplodingEventModel(TinyEventModel):
+        def backbone(self, ids: torch.Tensor) -> torch.Tensor:
+            super().backbone(ids)
+            raise RuntimeError("injected-runtime-failure")
+
+    for operation in ("gradient", "replay"):
+        torch.manual_seed(13)
+        model = ExplodingEventModel()
+        baseline = _state(model)
+        identity = {
+            name: (parameter, parameter.data_ptr())
+            for name, parameter in model.named_parameters()
+        }
+        with pytest.raises(RuntimeError, match="injected-runtime-failure"):
+            if operation == "gradient":
+                module.compute_frozen_batch_gradient(
+                    model=model,
+                    microsteps=_batch(),
+                    config=_cfg(qat=True),
+                    target_name="gate_proj.weight",
+                    device="cpu",
+                )
+            else:
+                module.replay_target_only_loss(
+                    model=model,
+                    microsteps=_batch(),
+                    config=_cfg(qat=True),
+                    target_name="gate_proj.weight",
+                    target=baseline["gate_proj.weight"].float() + 0.01,
+                    expected_non_target_state={
+                        key: value for key, value in baseline.items()
+                        if key != "gate_proj.weight"
+                    },
+                    device="cpu",
+                )
+        after = _state(model)
+        assert all(torch.equal(after[key], baseline[key]) for key in baseline)
+        for name, parameter in model.named_parameters():
+            expected, pointer = identity[name]
+            assert parameter is expected and parameter.data_ptr() == pointer
+
+
+def test_fake_quant_restores_prior_layers_when_snapshot_fails_mid_apply(monkeypatch):
+    module = _load()
+    torch.manual_seed(17)
+    model = TinyEventModel()
+    baseline = _state(model)
+    identity = {
+        name: (parameter, parameter.data_ptr())
+        for name, parameter in model.named_parameters()
+    }
+    original_clone = module._cpu_contiguous_clone
+    calls = 0
+
+    def fail_on_second_linear(value):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("injected-snapshot-failure")
+        return original_clone(value)
+
+    monkeypatch.setattr(module, "_cpu_contiguous_clone", fail_on_second_linear)
+    with pytest.raises(RuntimeError, match="injected-snapshot-failure"):
+        module._apply_fake_quant(model)
+
+    assert calls == 2
+    after = _state(model)
+    assert all(torch.equal(after[key], baseline[key]) for key in baseline)
+    for name, parameter in model.named_parameters():
+        expected, pointer = identity[name]
+        assert parameter is expected and parameter.data_ptr() == pointer
