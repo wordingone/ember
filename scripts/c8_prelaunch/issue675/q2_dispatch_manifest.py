@@ -45,6 +45,16 @@ _HOST_COMMIT_RECEIPT_FIELDS = {
     "no_new_parallel_authority",
     "receipt_sha256",
 }
+_CUDA_RECEIPT_FIELDS = {
+    "schema", "job_id", "source_commit", "config_sha256",
+    "measurement_tool_sha256", "checkpoint_manifest_sha256",
+    "intermediate_size", "observed_at_ms", "expires_at_ms",
+    "device_index", "device_name", "model_bytes", "required_scratch_bytes",
+    "chunk_bytes", "free_before_bytes", "free_after_bytes", "total_bytes",
+    "result", "event_credit", "scientific_credit",
+    "no_new_parallel_authority", "receipt_sha256",
+}
+_CUDA_CHUNK_BYTES = 64 * 1024**2
 _CACHE_ENV = {
     "TEMP": "temp",
     "TMP": "tmp",
@@ -118,6 +128,106 @@ def _host_commit_receipt(
     return receipt_path
 
 
+def _cuda_allocability_receipt(
+    path: Path,
+    *,
+    job_id: str,
+    source_commit: str,
+    config_sha256: str,
+    measurement_tool_sha256: str,
+    checkpoint_manifest_sha256: str,
+    intermediate_size: int,
+    expected_model_bytes: int,
+    expected_scratch_bytes: int,
+    not_before_ms: int,
+    expires_at_ms: int,
+) -> Path:
+    receipt_path = _file(path, "DISPATCH_CUDA_ALLOCABILITY_RECEIPT_UNAVAILABLE")
+    try:
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        _refuse("DISPATCH_CUDA_ALLOCABILITY_RECEIPT_MALFORMED")
+    if not isinstance(receipt, dict) or set(receipt) != _CUDA_RECEIPT_FIELDS:
+        _refuse("DISPATCH_CUDA_ALLOCABILITY_RECEIPT_SCHEMA_INVALID")
+    supplied = receipt.get("receipt_sha256")
+    unsigned = dict(receipt)
+    unsigned.pop("receipt_sha256", None)
+    expected = hashlib.sha256(
+        json.dumps(unsigned, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    if supplied != expected:
+        _refuse("DISPATCH_CUDA_ALLOCABILITY_RECEIPT_TAMPERED")
+    numeric = tuple(
+        receipt.get(key)
+        for key in (
+            "intermediate_size", "observed_at_ms", "expires_at_ms",
+            "model_bytes", "required_scratch_bytes", "chunk_bytes",
+            "free_before_bytes", "free_after_bytes", "total_bytes",
+        )
+    )
+    if (
+        receipt.get("schema") != "q2-cuda-allocability-receipt-v1"
+        or receipt.get("job_id") != job_id
+        or receipt.get("source_commit") != source_commit
+        or receipt.get("config_sha256") != config_sha256
+        or receipt.get("measurement_tool_sha256") != measurement_tool_sha256
+        or receipt.get("checkpoint_manifest_sha256") != checkpoint_manifest_sha256
+        or receipt.get("intermediate_size") != intermediate_size
+        or receipt.get("model_bytes") != expected_model_bytes
+        or receipt.get("required_scratch_bytes") != expected_scratch_bytes
+        or receipt.get("chunk_bytes") != _CUDA_CHUNK_BYTES
+        or receipt.get("observed_at_ms") > not_before_ms
+        or receipt.get("expires_at_ms") < expires_at_ms
+        or receipt.get("device_index") != 0
+        or not isinstance(receipt.get("device_name"), str)
+        or not receipt.get("device_name")
+        or receipt.get("free_after_bytes") > receipt.get("free_before_bytes")
+        or receipt.get("free_before_bytes") > receipt.get("total_bytes")
+        or any(not isinstance(value, int) or isinstance(value, bool) or value <= 0 for value in numeric)
+        or receipt.get("result") != "ALLOCATABLE"
+        or receipt.get("event_credit") is not False
+        or receipt.get("scientific_credit") is not False
+        or receipt.get("no_new_parallel_authority") is not True
+    ):
+        _refuse("DISPATCH_CUDA_ALLOCABILITY_RECEIPT_MISMATCH")
+    return receipt_path
+
+
+def _expected_cuda_bounds(config_path: Path, checkpoint_path: Path) -> tuple[int, int, int]:
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+        model = config["model"]
+        mtp = config["objective"]["mtp_aux_heads"]
+        if not isinstance(model, dict) or not isinstance(mtp, dict):
+            raise TypeError
+        vocab, hidden, layers, heads, seq = (
+            int(model[key]) for key in ("vocab", "hidden", "layers", "heads", "seq")
+        )
+        tied = model["tied_embeddings"]
+        n_mtp = int(mtp["n_heads"])
+        intermediate = int(checkpoint["intermediate_size"])
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+        _refuse("DISPATCH_CUDA_BOUND_INPUT_INVALID")
+    if (
+        any(value <= 0 for value in (vocab, hidden, layers, heads, seq, intermediate))
+        or tied not in (True, False)
+        or n_mtp < 0
+    ):
+        _refuse("DISPATCH_CUDA_BOUND_INPUT_INVALID")
+    elements = (
+        vocab * hidden
+        + layers * (4 * hidden * hidden + 3 * hidden * intermediate + 2 * hidden)
+        + hidden
+        + (0 if tied else vocab * hidden)
+        + n_mtp * vocab * hidden
+    )
+    model_bytes = 2 * elements
+    per_layer = 2 * seq * (16 * hidden + 6 * intermediate + 2 * heads * seq)
+    scratch_bytes = per_layer + 4 * hidden * intermediate + 512 * 1024**2
+    return intermediate, model_bytes, scratch_bytes
+
+
 def _has_historical_module_refusal(path: Path) -> bool:
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -154,6 +264,7 @@ def build_dispatch_manifest(
     threshold_path: Path,
     verifier_path: Path,
     host_commit_receipt_path: Path,
+    cuda_allocability_receipt_path: Path,
     producer_contract_path: Path,
     producer_component_paths: Mapping[str, Path],
     minimum_free_vram_bytes: int,
@@ -255,17 +366,38 @@ def build_dispatch_manifest(
         maximum_job_memory_bytes=maximum_job_memory_bytes,
         producer_budgets=producer_budgets,
     )
+    if "measured_dry_run" not in producer_components:
+        _refuse("DISPATCH_PRODUCER_COMPONENT_UNAVAILABLE")
+    config = _file(config_path, "DISPATCH_CONFIG_UNAVAILABLE")
+    checkpoint = _file(checkpoint_manifest_path, "DISPATCH_CHECKPOINT_UNAVAILABLE")
+    intermediate_size, expected_model_bytes, expected_scratch_bytes = _expected_cuda_bounds(
+        config, checkpoint
+    )
+    cuda_allocability_receipt = _cuda_allocability_receipt(
+        cuda_allocability_receipt_path,
+        job_id=job_id,
+        source_commit=source_commit,
+        config_sha256=_sha(config),
+        measurement_tool_sha256=_sha(producer_components["measured_dry_run"]),
+        checkpoint_manifest_sha256=_sha(checkpoint),
+        intermediate_size=intermediate_size,
+        expected_model_bytes=expected_model_bytes,
+        expected_scratch_bytes=expected_scratch_bytes,
+        not_before_ms=not_before_ms,
+        expires_at_ms=expires_at_ms,
+    )
 
     binding_rows: list[dict[str, str]] = []
     binding_specs = [
-        ("config", _file(config_path, "DISPATCH_CONFIG_UNAVAILABLE")),
+        ("config", config),
         ("manifest", _file(threshold_path, "DISPATCH_THRESHOLD_UNAVAILABLE")),
-        ("input", _file(checkpoint_manifest_path, "DISPATCH_CHECKPOINT_UNAVAILABLE")),
+        ("input", checkpoint),
         ("input", _file(batch_manifest_path, "DISPATCH_BATCH_UNAVAILABLE")),
         ("manifest", producer_contract),
         *[("input", path) for path in producer_components.values()],
         ("verifier", _file(verifier_path, "DISPATCH_VERIFIER_UNAVAILABLE")),
         ("input", host_commit_receipt),
+        ("input", cuda_allocability_receipt),
         *[("input", path) for path in dependencies],
     ]
     if len({path for _, path in binding_specs}) != len(binding_specs):

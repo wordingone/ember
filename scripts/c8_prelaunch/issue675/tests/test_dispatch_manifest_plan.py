@@ -41,6 +41,7 @@ def _files(root: Path) -> dict[str, Path]:
         "threshold": root / "threshold.json",
         "verifier": root / "verifier.py",
         "host_commit_receipt": root / "host-commit-receipt.json",
+        "cuda_allocability_receipt": root / "cuda-allocability-receipt.json",
         "gradient": root / "q2-gradient.pt",
         "b3_receipt": root / "b3.json",
         "producer_contract": root / "producer-contract.json",
@@ -49,6 +50,14 @@ def _files(root: Path) -> dict[str, Path]:
         if key in {"gradient", "b3_receipt", "producer_contract"}:
             continue
         path.write_text(f"{key}\n", encoding="utf-8")
+    files["config"].write_text(json.dumps({
+        "model": {"vocab": 16, "hidden": 4, "layers": 2, "heads": 1,
+                  "seq": 8, "tied_embeddings": True},
+        "objective": {"mtp_aux_heads": {"n_heads": 0}},
+    }), encoding="utf-8")
+    files["checkpoint"].write_text(
+        json.dumps({"intermediate_size": 8}), encoding="utf-8"
+    )
     files["producer"].write_text(
         'GOVERNED_VERTICAL_MODE = "governed-vertical"\n'
         "def run_governed_vertical(args):\n    return 0\n"
@@ -103,6 +112,39 @@ def _files(root: Path) -> dict[str, Path]:
         json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
     files["host_commit_receipt"].write_text(json.dumps(receipt), encoding="utf-8")
+    cuda_receipt = {
+        "schema": "q2-cuda-allocability-receipt-v1",
+        "job_id": "q2-actual-update-001",
+        "source_commit": "f3c92ba984711ee34e91c6bea90713e6c89b4b4d",
+        "config_sha256": hashlib.sha256(files["config"].read_bytes()).hexdigest(),
+        "measurement_tool_sha256": hashlib.sha256(
+            files["component_measured_dry_run"].read_bytes()
+        ).hexdigest(),
+        "checkpoint_manifest_sha256": hashlib.sha256(
+            files["checkpoint"].read_bytes()
+        ).hexdigest(),
+        "intermediate_size": 8,
+        "observed_at_ms": 900,
+        "expires_at_ms": 120_000,
+        "device_index": 0,
+        "device_name": "fixture-gpu",
+        "model_bytes": 808,
+        "required_scratch_bytes": 536_873_088,
+        "chunk_bytes": 64 * 1024**2,
+        "free_before_bytes": 3 * 1024**3,
+        "free_after_bytes": 2 * 1024**3,
+        "total_bytes": 4 * 1024**3,
+        "result": "ALLOCATABLE",
+        "event_credit": False,
+        "scientific_credit": False,
+        "no_new_parallel_authority": True,
+    }
+    cuda_receipt["receipt_sha256"] = hashlib.sha256(
+        json.dumps(cuda_receipt, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    files["cuda_allocability_receipt"].write_text(
+        json.dumps(cuda_receipt), encoding="utf-8"
+    )
     target_name = "backbone_model.layers.0.mlp.gate_proj.weight"
     batch_sha = "9" * 64
     torch.save(torch.ones((4, 2), dtype=torch.float32), files["gradient"])
@@ -232,6 +274,10 @@ def test_dispatch_plan_builds_closed_governed_vertical_manifest(tmp_path: Path):
         row["sha256"] == module._sha(files["host_commit_receipt"])
         for row in manifest["bindings"]
     )
+    assert any(
+        row["sha256"] == module._sha(files["cuda_allocability_receipt"])
+        for row in manifest["bindings"]
+    )
     assert not any(row["sha256"] == module._sha(files["b3_receipt"]) for row in manifest["bindings"])
     assert not any(row["sha256"] == module._sha(files["gradient"]) for row in manifest["bindings"])
     assert any(row["sha256"] == module._sha(files["producer_contract"]) for row in manifest["bindings"])
@@ -263,6 +309,50 @@ def test_dispatch_plan_refuses_tampered_host_commit_receipt(tmp_path: Path):
         )
 
 
+def test_dispatch_plan_refuses_tampered_or_mismatched_cuda_allocability_receipt(tmp_path: Path):
+    module = _load()
+    files = _files(tmp_path / "inputs")
+    receipt = json.loads(files["cuda_allocability_receipt"].read_text())
+    receipt["required_scratch_bytes"] += 1
+    files["cuda_allocability_receipt"].write_text(json.dumps(receipt))
+    with pytest.raises(module.DispatchPlanRefusal, match="DISPATCH_CUDA_ALLOCABILITY_RECEIPT_TAMPERED"):
+        module.build_dispatch_manifest(
+            **_kwargs(tmp_path, files), source_dependencies=[files["producer"]]
+        )
+
+    case2 = tmp_path / "case2"
+    files = _files(case2 / "inputs")
+    receipt = json.loads(files["cuda_allocability_receipt"].read_text())
+    receipt["result"] = "REFUSED"
+    unsigned = dict(receipt); unsigned.pop("receipt_sha256")
+    receipt["receipt_sha256"] = hashlib.sha256(
+        json.dumps(unsigned, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    files["cuda_allocability_receipt"].write_text(json.dumps(receipt))
+    with pytest.raises(module.DispatchPlanRefusal, match="DISPATCH_CUDA_ALLOCABILITY_RECEIPT_MISMATCH"):
+        module.build_dispatch_manifest(
+            **_kwargs(case2, files), source_dependencies=[files["producer"]]
+        )
+
+    for name, field, value in (
+        ("tiny", "required_scratch_bytes", 1),
+        ("stale", "expires_at_ms", 999),
+    ):
+        case = tmp_path / name
+        files = _files(case / "inputs")
+        receipt = json.loads(files["cuda_allocability_receipt"].read_text())
+        receipt[field] = value
+        unsigned = dict(receipt); unsigned.pop("receipt_sha256")
+        receipt["receipt_sha256"] = hashlib.sha256(
+            json.dumps(unsigned, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        files["cuda_allocability_receipt"].write_text(json.dumps(receipt))
+        with pytest.raises(module.DispatchPlanRefusal, match="DISPATCH_CUDA_ALLOCABILITY_RECEIPT_MISMATCH"):
+            module.build_dispatch_manifest(
+                **_kwargs(case, files), source_dependencies=[files["producer"]]
+            )
+
+
 def _kwargs(tmp_path: Path, files: dict[str, Path]) -> dict[str, object]:
     custody = tmp_path / "custody"
     custody.mkdir()
@@ -283,6 +373,7 @@ def _kwargs(tmp_path: Path, files: dict[str, Path]) -> dict[str, object]:
         "threshold_path": files["threshold"],
         "verifier_path": files["verifier"],
         "host_commit_receipt_path": files["host_commit_receipt"],
+        "cuda_allocability_receipt_path": files["cuda_allocability_receipt"],
         "producer_contract_path": files["producer_contract"],
         "producer_component_paths": _producer_components(files),
         "minimum_free_vram_bytes": 21_746_679_808,
