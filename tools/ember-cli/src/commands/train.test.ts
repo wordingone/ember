@@ -164,8 +164,8 @@ function makeExecuteCmd(
 }
 
 /** Assert the only subprocess ever spawned was the launch_packet.py preflight. */
-function assertOnlyPreflightSpawned(spawns: RecordedSpawn[]): void {
-  expect(spawns.length).toBe(1);
+function assertOnlyPreflightSpawned(spawns: RecordedSpawn[], expectedCount = 1): void {
+  expect(spawns.length).toBe(expectedCount);
   const joined = spawns[0]!.args.join(" ");
   expect(joined).toContain("launch_packet.py");
   // Load-bearing: the training/GPU launch entrypoint is NEVER spawned.
@@ -550,7 +550,7 @@ describe("train command", () => {
     it("nonzero exit -> fail closed, non-zero exitCode, NO launch command, reasons surfaced", async () => {
       const { cmd, spawns } = makeCmd(() => ({ status: 1, stdout: failingStdout() }));
 
-      const result = await cmd.execute("", mockCtx);
+      const result = await cmd.execute("", { ...mockCtx, sessionId: "legacy-null-failure-session" });
 
       expect(result?.type).toBe("message");
       expect(result?.exitCode).toBe(1);
@@ -642,7 +642,8 @@ describe("train command", () => {
       expect(result?.exitCode).toBe(1);
       expect(result?.message).toContain("BLOCKED");
       expect(result?.message).not.toContain("run_vertical_slice.py");
-      assertOnlyPreflightSpawned(spawns);
+      expect(spawns).toHaveLength(2);
+      expect(spawns[1]).toEqual(spawns[0]);
     });
 
     it("a runner that THROWS is caught and fails closed (never crashes the command)", async () => {
@@ -660,6 +661,159 @@ describe("train command", () => {
       expect(result?.exitCode).toBe(1);
       expect(result?.message).toContain("BLOCKED");
       expect(result?.message).not.toContain("run_vertical_slice.py");
+    });
+
+    it("fresh-session status:null retries once with identical spawn identity and then mints an OFFER when green", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-null-retry-green-"));
+      try {
+        writeCanonicalArtifacts(scratch);
+        const spawns: RecordedSpawn[] = [];
+        const cmd = createTrainCommand({
+          pythonBin: "python",
+          repoRoot: scratch,
+          runLaunchPacket: (executable, args) => {
+            spawns.push({ executable, args });
+            return spawns.length === 1
+              ? { status: null, stdout: "" }
+              : { status: 0, stdout: allGreenStdout() };
+          },
+        });
+
+        const result = await cmd.execute("", { ...mockCtx, sessionId: "null-retry-green-session" });
+
+        expect(result?.exitCode).toBeUndefined();
+        expect(result?.message).toContain("OFFER");
+        expect(spawns).toHaveLength(2);
+        expect(spawns[1]).toEqual(spawns[0]);
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+
+    it("fresh-session status:null then status:null refuses after exactly one attributed retry", async () => {
+      const spawns: RecordedSpawn[] = [];
+      const cmd = createTrainCommand({
+        pythonBin: "python",
+        repoRoot: "/fake/ember",
+        runLaunchPacket: (executable, args) => {
+          spawns.push({ executable, args });
+          return { status: null, stdout: "" };
+        },
+      });
+
+      const result = await cmd.execute("", { ...mockCtx, sessionId: "null-retry-null-session" });
+
+      expect(result?.exitCode).toBe(1);
+      expect(result?.message).toContain("attempt 1");
+      expect(result?.message).toContain("attempt 2");
+      expect(result?.message).toContain("No launch command surfaced.");
+      expect(spawns).toHaveLength(2);
+      expect(spawns[1]).toEqual(spawns[0]);
+    });
+
+    it("shares the one-null-retry budget across command instances in one session", async () => {
+      const spawns: RecordedSpawn[] = [];
+      const makeSessionCommand = () =>
+        createTrainCommand({
+          pythonBin: "python",
+          repoRoot: "/fake/ember",
+          runLaunchPacket: (executable, args) => {
+            spawns.push({ executable, args });
+            return { status: null, stdout: "" };
+          },
+        });
+      const first = makeSessionCommand();
+      const second = makeSessionCommand();
+      const sessionCtx = { ...mockCtx, sessionId: "shared-null-retry-budget-session" };
+
+      const firstResult = await first.execute("", sessionCtx);
+      const secondResult = await second.execute("", sessionCtx);
+
+      expect(firstResult?.message).toContain("attempt 2");
+      expect(secondResult?.message).not.toContain("attempt 2");
+      expect(spawns).toHaveLength(3);
+    });
+
+    it("does not consume the null-retry budget after an earlier green preflight", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-green-then-null-"));
+      try {
+        writeCanonicalArtifacts(scratch);
+        const spawns: RecordedSpawn[] = [];
+        const results: LaunchPacketRunResult[] = [
+          { status: 0, stdout: allGreenStdout() },
+          { status: null, stdout: "" },
+          { status: 0, stdout: allGreenStdout() },
+        ];
+        const cmd = createTrainCommand({
+          pythonBin: "python",
+          repoRoot: scratch,
+          runLaunchPacket: (executable, args) => {
+            spawns.push({ executable, args });
+            return results.shift()!;
+          },
+        });
+
+        const session = { ...mockCtx, sessionId: "green-then-null-session" };
+        await cmd.execute("", session);
+        const second = await cmd.execute("", session);
+
+        expect(second?.message).toContain("OFFER");
+        expect(spawns).toHaveLength(3);
+        expect(spawns[2]).toEqual(spawns[1]);
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+
+    it("does not retry or invoke the certified consumer for a null execute preflight", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-execute-null-"));
+      try {
+        writeCanonicalArtifacts(scratch);
+        const preflightSpawns: RecordedSpawn[] = [];
+        const certifiedSpawns: RecordedSpawn[] = [];
+        const cmd = createTrainCommand({
+          pythonBin: "python",
+          repoRoot: scratch,
+          runLaunchPacket: (executable, args) => {
+            preflightSpawns.push({ executable, args });
+            return { status: null, stdout: "" };
+          },
+          runCertifiedLaunch: (executable, args) => {
+            certifiedSpawns.push({ executable, args });
+            return { kind: "terminal", status: 0, stdout: "{}" };
+          },
+        });
+
+        const result = await cmd.execute(
+          "--execute --certificate cert.json --declaration-ledger ledger.json --run-spec spec.json",
+          { ...mockCtx, sessionId: "execute-null-session" },
+        );
+
+        expect(result?.exitCode).toBe(1);
+        expect(result?.message).toContain("BLOCKED");
+        expect(preflightSpawns).toHaveLength(1);
+        expect(certifiedSpawns).toHaveLength(0);
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+
+    it("nonzero preflight never consumes the null retry or invokes a second spawn", async () => {
+      const spawns: RecordedSpawn[] = [];
+      const cmd = createTrainCommand({
+        pythonBin: "python",
+        repoRoot: "/fake/ember",
+        runLaunchPacket: (executable, args) => {
+          spawns.push({ executable, args });
+          return { status: 1, stdout: failingStdout() };
+        },
+      });
+
+      const result = await cmd.execute("", { ...mockCtx, sessionId: "nonzero-no-retry-session" });
+
+      expect(result?.exitCode).toBe(1);
+      expect(result?.message).toContain("preflight FAILED");
+      expect(spawns).toHaveLength(1);
     });
   });
 
@@ -1382,10 +1536,12 @@ describe("/train source-byte authority", () => {
         recursive: true,
       });
       fs.mkdirSync(path.join(mainRoot, "tools", "ember-cli"), { recursive: true });
+      fs.mkdirSync(path.join(mainRoot, "docs", "authority"), { recursive: true });
       fs.writeFileSync(path.join(mainRoot, "docs/authority/GOAL.md"), "# main\n");
       fs.mkdirSync(path.join(worktreeRoot, "tools", "ember-cli"), {
         recursive: true,
       });
+      fs.mkdirSync(path.join(worktreeRoot, "docs", "authority"), { recursive: true });
       fs.writeFileSync(path.join(worktreeRoot, "docs/authority/GOAL.md"), "# worktree\n");
       fs.writeFileSync(
         path.join(worktreeRoot, ".git"),
