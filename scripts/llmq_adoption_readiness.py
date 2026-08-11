@@ -12,6 +12,7 @@ import os
 import re
 import secrets
 import subprocess
+import sys
 import time
 import tempfile
 from pathlib import Path
@@ -47,7 +48,7 @@ def _configured_ember_lab_pipe() -> str | None:
     return pipe_name
 
 
-def _rpc_export_assessment(pipe_name: str, job_id: str, directory: Path) -> tuple[dict, str]:
+def _rpc_export_assessment_direct(pipe_name: str, job_id: str, directory: Path) -> tuple[dict, str, Path]:
     """Call one resident daemon over one server-authenticated pipe handle."""
     if os.name != "nt":
         raise OSError("Ember Lab named-pipe assessment is Windows-only")
@@ -136,9 +137,63 @@ def _rpc_export_assessment(pipe_name: str, job_id: str, directory: Path) -> tupl
             or not isinstance(response.get("result"), dict)
         ):
             raise OSError("Ember Lab RPC response is not the requested result")
-        return response["result"], server_binary_sha
+        return response["result"], server_binary_sha, Path(image.value)
     finally:
         close_handle(handle)
+
+
+def _rpc_export_assessment(pipe_name: str, job_id: str, directory: Path) -> tuple[dict, str, Path]:
+    """Run blocking Win32 pipe I/O in an owned, deadline-bounded worker."""
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+    try:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-B",
+                str(Path(__file__).resolve()),
+                "--private-ember-lab-assessment-rpc",
+                pipe_name,
+                job_id,
+                str(directory),
+            ],
+            capture_output=True,
+            check=False,
+            shell=False,
+            creationflags=creationflags,
+            timeout=10,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise OSError("Ember Lab RPC exceeded its end-to-end deadline") from error
+    if completed.returncode != 0 or completed.stderr or len(completed.stdout) > _MAX_RPC_FRAME_BYTES:
+        raise OSError("bounded Ember Lab RPC worker failed")
+    value = json.loads(completed.stdout.decode("utf-8", errors="strict"))
+    if not isinstance(value, dict) or set(value) != {"result", "server_binary_sha256", "server_binary_path"}:
+        raise OSError("bounded Ember Lab RPC worker returned an invalid envelope")
+    digest = value.get("server_binary_sha256")
+    path = value.get("server_binary_path")
+    if not isinstance(digest, str) or not _DIGEST.fullmatch(digest) or not isinstance(path, str):
+        raise OSError("bounded Ember Lab RPC worker returned an invalid identity")
+    return value["result"], digest, Path(path)
+
+
+def _canonical_ember_lab_binary(repository_root: Path) -> Path | None:
+    """Resolve the one repository-governed daemon binary, never a packet/env path."""
+    exe_name = "ember-lab.exe" if os.name == "nt" else "ember-lab"
+    root = repository_root.resolve(strict=True)
+    candidates = (
+        root / "runtime" / "ember-lab" / "target" / "release" / exe_name,
+        root / "runtime" / "ember-lab" / "target" / "debug" / exe_name,
+    )
+    for candidate in candidates:
+        try:
+            if _has_reparse_component(candidate, root):
+                continue
+            resolved = candidate.resolve(strict=True)
+            if resolved.is_file() and resolved.is_relative_to(root):
+                return resolved
+        except OSError:
+            continue
+    return None
 
 
 def _acquire_live_daemon_assessment(repository_root: Path, job_id: object) -> dict | None:
@@ -151,7 +206,15 @@ def _acquire_live_daemon_assessment(repository_root: Path, job_id: object) -> di
         canonical_source_sha = hashlib.sha256(canonical_source.read_bytes()).hexdigest()
         with tempfile.TemporaryDirectory(prefix="ember-llmq-assessment-") as temporary:
             directory = Path(temporary) / "daemon-export"
-            result, server_binary_sha = _rpc_export_assessment(pipe_name, job_id, directory)
+            result, server_binary_sha, server_binary_path = _rpc_export_assessment(pipe_name, job_id, directory)
+            canonical_binary = _canonical_ember_lab_binary(repository_root)
+            if canonical_binary is None:
+                return None
+            if (
+                server_binary_path.resolve(strict=True) != canonical_binary
+                or hashlib.sha256(canonical_binary.read_bytes()).hexdigest() != server_binary_sha
+            ):
+                return None
             expected_fields = {
                 "schema", "ember_lab_identity", "operational_receipt",
                 "stdout_log", "stderr_log", "schedule_alarm_state",
@@ -976,3 +1039,32 @@ def assess(source_root: Path, payload: dict) -> dict:
             else "dispatch only through Ember CLI -> Ember Lab after external evidence"
         ),
     }
+
+
+def _private_rpc_worker_main(argv: list[str]) -> int:
+    if len(argv) != 4 or argv[0] != "--private-ember-lab-assessment-rpc":
+        return 2
+    pipe_name, job_id, directory_value = argv[1:]
+    if _configured_ember_lab_pipe() != pipe_name:
+        return 2
+    directory = Path(directory_value)
+    if not directory.is_absolute() or directory.exists():
+        return 2
+    try:
+        result, binary_sha, binary_path = _rpc_export_assessment_direct(pipe_name, job_id, directory)
+        envelope = {
+            "result": result,
+            "server_binary_sha256": binary_sha,
+            "server_binary_path": str(binary_path),
+        }
+        raw = json.dumps(envelope, separators=(",", ":")).encode("utf-8")
+        if len(raw) > _MAX_RPC_FRAME_BYTES:
+            return 2
+        sys.stdout.buffer.write(raw)
+        return 0
+    except (OSError, ValueError, UnicodeError):
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(_private_rpc_worker_main(sys.argv[1:]))

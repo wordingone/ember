@@ -27,6 +27,12 @@ def test_live_daemon_assessment_requires_authenticated_pipe_and_exact_export(mon
 
     source_sha = hashlib.sha256((REPO_ROOT / "runtime/ember-lab/src/lib.rs").read_bytes()).hexdigest()
     binary_sha = hashlib.sha256(b"resident-ember-lab-binary").hexdigest()
+    canonical_binary = tmp_path / "canonical" / "ember-lab.exe"
+    canonical_binary.parent.mkdir()
+    canonical_binary.write_bytes(b"resident-ember-lab-binary")
+    foreign_binary = tmp_path / "foreign" / "ember-lab.exe"
+    foreign_binary.parent.mkdir()
+    foreign_binary.write_bytes(b"foreign-self-consistent-server")
     identity = {"binary_sha256": binary_sha, "source_sha256": source_sha}
     receipt = {
         "schema": "ember-lab-operational-receipt-v1",
@@ -73,9 +79,10 @@ def test_live_daemon_assessment_requires_authenticated_pipe_and_exact_export(mon
             path = directory / f"{digest}{suffix}"
             path.write_bytes(raw)
             result[field] = {"path": str(path), "sha256": digest}
-        return result, binary_sha
+        return result, binary_sha, canonical_binary
 
     monkeypatch.setenv("EMBER_LAB_PIPE", r"\\.\pipe\ember-lab-test")
+    monkeypatch.setattr(readiness, "_canonical_ember_lab_binary", lambda _: canonical_binary)
     monkeypatch.setattr(readiness, "_rpc_export_assessment", fake_rpc)
     live = readiness._acquire_live_daemon_assessment(REPO_ROOT, "job-1")
     assert live is not None
@@ -90,43 +97,72 @@ def test_live_daemon_assessment_requires_authenticated_pipe_and_exact_export(mon
     assert readiness._acquire_live_daemon_assessment(REPO_ROOT, "job-1") is None
 
     def wrong_server(*args):
-        result, _ = fake_rpc(*args)
-        return result, "f" * 64
+        result, _, _ = fake_rpc(*args)
+        return result, "f" * 64, canonical_binary
 
     monkeypatch.setattr(readiness, "_rpc_export_assessment", wrong_server)
     assert readiness._acquire_live_daemon_assessment(REPO_ROOT, "job-1") is None
 
+    def foreign_self_consistent_server(*args):
+        result, _, _ = fake_rpc(*args)
+        foreign_sha = hashlib.sha256(foreign_binary.read_bytes()).hexdigest()
+        result["ember_lab_identity"]["binary_sha256"] = foreign_sha
+        return result, foreign_sha, foreign_binary
+
+    monkeypatch.setattr(readiness, "_rpc_export_assessment", foreign_self_consistent_server)
+    assert readiness._acquire_live_daemon_assessment(REPO_ROOT, "job-1") is None
+
     def forged_file(*args):
-        result, server_sha = fake_rpc(*args)
+        result, server_sha, server_path = fake_rpc(*args)
         Path(result["stdout_log"]["path"]).write_bytes(b"forged after export")
-        return result, server_sha
+        return result, server_sha, server_path
 
     monkeypatch.setattr(readiness, "_rpc_export_assessment", forged_file)
     assert readiness._acquire_live_daemon_assessment(REPO_ROOT, "job-1") is None
 
     def copied_outside_export(*args):
-        result, server_sha = fake_rpc(*args)
+        result, server_sha, server_path = fake_rpc(*args)
         source = Path(result["stdout_log"]["path"])
         copied = tmp_path / source.name
         copied.write_bytes(source.read_bytes())
         result["stdout_log"]["path"] = str(copied)
-        return result, server_sha
+        return result, server_sha, server_path
 
     monkeypatch.setattr(readiness, "_rpc_export_assessment", copied_outside_export)
     assert readiness._acquire_live_daemon_assessment(REPO_ROOT, "job-1") is None
 
     def surrogate(*args):
-        result, server_sha = fake_rpc(*args)
+        result, server_sha, server_path = fake_rpc(*args)
         path = Path(result["operational_receipt"]["path"])
         raw = json.dumps({"schema": "caller-operational-json"}, sort_keys=True).encode()
         digest = hashlib.sha256(raw).hexdigest()
         replacement = path.with_name(f"{digest}.operational.json")
         replacement.write_bytes(raw)
         result["operational_receipt"] = {"path": str(replacement), "sha256": digest}
-        return result, server_sha
+        return result, server_sha, server_path
 
     monkeypatch.setattr(readiness, "_rpc_export_assessment", surrogate)
     assert readiness._acquire_live_daemon_assessment(REPO_ROOT, "job-1") is None
+
+
+def test_live_daemon_rpc_worker_is_hidden_and_deadline_bounded(monkeypatch, tmp_path):
+    from scripts import llmq_adoption_readiness as readiness
+
+    def timeout(*argv, **kwargs):
+        assert kwargs["timeout"] == 10
+        assert kwargs["shell"] is False
+        assert kwargs["creationflags"] == getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        raise subprocess.TimeoutExpired(argv[0], kwargs["timeout"])
+
+    monkeypatch.setattr(subprocess, "run", timeout)
+    try:
+        readiness._rpc_export_assessment(
+            r"\\.\pipe\ember-lab-test", "job-1", tmp_path / "fresh-export"
+        )
+    except OSError as error:
+        assert "end-to-end deadline" in str(error)
+    else:
+        raise AssertionError("hung pipe worker did not fail closed")
 
 
 def test_missing_pinned_llmq_and_4090_evidence_is_fail_closed():
@@ -859,9 +895,10 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
             path = directory / f"{digest}{suffix}"
             path.write_bytes(raw)
             result[field] = {"path": str(path), "sha256": digest}
-        return result, canonical_binary_sha
+        return result, canonical_binary_sha, canonical_binary
 
     monkeypatch.setattr(readiness, "_rpc_export_assessment", live_daemon_rpc)
+    monkeypatch.setattr(readiness, "_canonical_ember_lab_binary", lambda _: canonical_binary)
     daemon_assessment_evidence = {
         "schema": "ember-lab-assessment-evidence-v1",
         "authority": "ember-cli->ember-lab",

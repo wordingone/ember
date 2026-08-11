@@ -32,8 +32,13 @@ content-addressed `ember-lab-operational-receipt-v1` from an authenticated
 Ember Lab named-pipe `export_assessment_evidence` response. The response is the
 sole locator authority; `EMBER_STATE_ROOT` and packet-provided state roots are
 ignored, and artifacts are reopened from the newly created export directory,
-never from the mutable source checkout or caller's packet root. That daemon export must
-bind the exact `runtime/ember-lab/src/lib.rs` and daemon binary bytes, the
+never from the mutable source checkout or caller's packet root. The opened
+pipe's server PID must resolve to the independently selected repository build
+at `runtime/ember-lab/target/release/ember-lab.exe` (or the debug build only
+when release is absent), with exact normalized path and reopened-byte hash;
+packet, response, and environment binary locators are ignored. Blocking pipe
+I/O runs in a hidden owned worker with a ten-second end-to-end deadline. That
+daemon export must bind the exact `runtime/ember-lab/src/lib.rs` and daemon binary bytes, the
 terminal job/identity/resource lease, exit zero, and daemon-sealed stdout and
 stderr; the invented caller-side producer/status shape is refused. A benchmark
 receipt must reuse that exact daemon export and job, equate its hardware UUID
