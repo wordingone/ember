@@ -11,6 +11,7 @@ import {
   isStrictContainedRelative,
   parseGovernedDispatchArgs,
   runGovernedDispatch,
+  sameCanonicalPath,
 } from "./governed-dispatch.ts";
 
 const SOURCE = "a".repeat(40);
@@ -64,6 +65,15 @@ function fixture(): {
 }
 
 describe("governed Ember Lab dispatch", () => {
+  it("equates only ordinary and extended Win32 drive or UNC spellings", () => {
+    expect(sameCanonicalPath("C:\\custody\\receipt.json", "\\\\?\\C:\\custody\\receipt.json", "win32")).toBe(true);
+    expect(sameCanonicalPath("\\\\server\\share\\receipt.json", "\\\\?\\UNC\\server\\share\\receipt.json", "win32")).toBe(true);
+    expect(sameCanonicalPath("C:\\custody\\receipt.json", "D:\\custody\\receipt.json", "win32")).toBe(false);
+    expect(sameCanonicalPath("\\\\server\\share\\receipt.json", "\\\\other\\share\\receipt.json", "win32")).toBe(false);
+    expect(sameCanonicalPath("C:\\custody\\receipt.json", "\\\\.\\C:\\custody\\receipt.json", "win32")).toBe(false);
+    expect(sameCanonicalPath("C:\\custody\\receipt.json", "\\\\?\\C:\\custody\\receipt.json", "linux")).toBe(false);
+  });
+
   it("refuses different Windows drive and UNC roots while accepting a same-root descendant", () => {
     expect(isStrictContainedRelative(win32.relative("C:\\custody", "C:\\custody\\receipts\\ok.json"))).toBe(true);
     expect(isStrictContainedRelative(win32.relative("C:\\custody", "D:\\foreign\\receipt.json"))).toBe(false);

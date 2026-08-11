@@ -126,9 +126,23 @@ function validateManifest(manifest: Record<string, unknown>, expectedSourceCommi
   return resolve(custodyRoot);
 }
 
-function sameCanonicalPath(left: string, right: string): boolean {
-  return process.platform === "win32"
-    ? left.toLowerCase() === right.toLowerCase()
+function canonicalWin32Spelling(value: string): string {
+  let spelling = value;
+  if (/^\\\\\?\\[A-Za-z]:[\\/]/.test(spelling)) {
+    spelling = spelling.slice(4);
+  } else if (/^\\\\\?\\UNC\\/i.test(spelling)) {
+    spelling = "\\\\" + spelling.slice(8);
+  }
+  return win32.normalize(spelling).toLowerCase();
+}
+
+export function sameCanonicalPath(
+  left: string,
+  right: string,
+  platform = process.platform,
+): boolean {
+  return platform === "win32"
+    ? canonicalWin32Spelling(left) === canonicalWin32Spelling(right)
     : left === right;
 }
 
