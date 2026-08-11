@@ -148,7 +148,7 @@ class TestMergeGateAssertion6:
     """Test assertion 6: coordinator-class paths cause REFUSE."""
 
     def test_refuse_goal_md(self):
-        """Refuse: GOAL.md touched."""
+        """Refuse: docs/authority/GOAL.md touched."""
         fixture_path = Path(__file__).parent / "fixtures/merge_gate/pr_refuse_goal_md.json"
         with open(fixture_path) as f:
             fixture = json.load(f)
@@ -159,7 +159,7 @@ class TestMergeGateAssertion6:
 
         assert not result.passed
         assert result.refuse_reason == "COORDINATOR-REQUIRED"
-        assert any("GOAL.md" in str(item.get("details", "")) for item in result.checklist)
+        assert any("docs/authority/GOAL.md" in str(item.get("details", "")) for item in result.checklist)
 
     def test_refuse_docs_spec(self):
         """Refuse: docs/spec/* touched."""
@@ -267,13 +267,13 @@ class TestMergeGatePathClassification:
         assert not verify_paths_match_class(paths, "receipts")
 
     def test_docs_class_allows_doc_paths(self):
-        """docs class allows docs/**, README.md, GOVERNANCE.md, .github/**."""
+        """docs class allows docs/**, README.md, docs/authority/GOVERNANCE.md, .github/**."""
         from merge_gate import verify_paths_match_class
 
         paths = [
             "docs/api/reference.md",
             "README.md",
-            "GOVERNANCE.md",
+            "docs/authority/GOVERNANCE.md",
             ".github/workflows/test.yml"
         ]
 
@@ -307,8 +307,8 @@ class TestMergeGatePathClassification:
         from merge_gate import has_coordinator_paths
 
         coordinator_paths = [
-            "GOAL.md",
-            "INVARIANT.md",
+            "docs/authority/GOAL.md",
+            "docs/authority/INVARIANT.md",
             "docs/spec/inference.md",
             "scripts/cbase_bootstrap.py",
             "scripts/ember_totality/some_runner.py",

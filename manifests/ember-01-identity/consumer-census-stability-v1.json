@@ -85,7 +85,7 @@
     ],
     "metadata_sha256": {
       "manifests/ember-01-identity/consumer-adjudication-v1.json": "acc2f028dc923f33ad1f084921e9da637209a46dc71c8049aaaa7926348ef76d",
-      "manifests/ember-01-identity/consumer-census-roots-v1.json": "1ba35d3dd16568b4005bd5d403d920851b20bf75391a74a701cc5fa010b386ef",
+      "manifests/ember-01-identity/consumer-census-roots-v1.json": "ef9a13eb497854a0f6440deda57bf352f4a34ca329abd0d17d6f4a8506ea6b59",
       "manifests/ember-01-identity/consumer-scope-v1.json": "22b1e32e9e567937954faad7ede3efc53f2e0aa2640d2cdef531b300f656fe44"
     }
   },

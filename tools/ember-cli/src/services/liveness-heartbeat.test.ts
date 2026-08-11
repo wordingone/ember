@@ -316,12 +316,12 @@ describe("issue #666 — writer launched from a worktree cwd", () => {
     try {
       const mainRoot = path.join(scratch, "main-checkout");
       fs.mkdirSync(path.join(mainRoot, ".git", "worktrees", "lane"), { recursive: true });
-      fs.writeFileSync(path.join(mainRoot, "GOAL.md"), "# fixture\n");
+      fs.writeFileSync(path.join(mainRoot, "docs/authority/GOAL.md"), "# fixture\n");
       fs.mkdirSync(path.join(mainRoot, "tools", "ember-cli"), { recursive: true });
 
       const worktreeRoot = path.join(scratch, "wt", "lane");
       fs.mkdirSync(path.join(worktreeRoot, "tools", "ember-cli"), { recursive: true });
-      fs.writeFileSync(path.join(worktreeRoot, "GOAL.md"), "# fixture\n");
+      fs.writeFileSync(path.join(worktreeRoot, "docs/authority/GOAL.md"), "# fixture\n");
       fs.writeFileSync(
         path.join(worktreeRoot, ".git"),
         `gitdir: ${path.join(mainRoot, ".git", "worktrees", "lane")}\n`,
@@ -449,12 +449,12 @@ describe("PR954 round 4 — writer-level coverage: relative gitdir + genuinely u
     try {
       const mainRoot = path.join(scratch, "relative-main");
       fs.mkdirSync(path.join(mainRoot, ".git", "worktrees", "lane"), { recursive: true });
-      fs.writeFileSync(path.join(mainRoot, "GOAL.md"), "# fixture\n");
+      fs.writeFileSync(path.join(mainRoot, "docs/authority/GOAL.md"), "# fixture\n");
       fs.mkdirSync(path.join(mainRoot, "tools", "ember-cli"), { recursive: true });
 
       const worktreeRoot = path.join(scratch, "relative-wt");
       fs.mkdirSync(path.join(worktreeRoot, "tools", "ember-cli"), { recursive: true });
-      fs.writeFileSync(path.join(worktreeRoot, "GOAL.md"), "# fixture\n");
+      fs.writeFileSync(path.join(worktreeRoot, "docs/authority/GOAL.md"), "# fixture\n");
       // Relative to the directory CONTAINING the .git file (the worktree root itself) --
       // the real on-disk shape when the main checkout and worktree share a common parent.
       fs.writeFileSync(path.join(worktreeRoot, ".git"), "gitdir: ../relative-main/.git/worktrees/lane\n");
@@ -497,12 +497,12 @@ describe("PR954 round 4 — writer-level coverage: relative gitdir + genuinely u
       try {
         const mainRoot = path.join(scratch, "main");
         fs.mkdirSync(path.join(mainRoot, ".git", "worktrees", "lane"), { recursive: true });
-        fs.writeFileSync(path.join(mainRoot, "GOAL.md"), "# fixture\n");
+        fs.writeFileSync(path.join(mainRoot, "docs/authority/GOAL.md"), "# fixture\n");
         fs.mkdirSync(path.join(mainRoot, "tools", "ember-cli"), { recursive: true });
 
         const worktreeRoot = path.join(scratch, "worktree");
         fs.mkdirSync(path.join(worktreeRoot, "tools", "ember-cli"), { recursive: true });
-        fs.writeFileSync(path.join(worktreeRoot, "GOAL.md"), "# fixture\n");
+        fs.writeFileSync(path.join(worktreeRoot, "docs/authority/GOAL.md"), "# fixture\n");
         // VALID worktree-shape pointer -- this WOULD resolve successfully (to mainRoot)
         // if the deny below did not take effect, so an inert result can only be
         // attributed to the read denial, never an invalid-pointer red herring.
@@ -568,12 +568,12 @@ describe("PR954 round 4 — writer-level coverage: relative gitdir + genuinely u
     try {
       const mainRoot = path.join(scratch, "main");
       fs.mkdirSync(path.join(mainRoot, ".git", "worktrees", "lane"), { recursive: true });
-      fs.writeFileSync(path.join(mainRoot, "GOAL.md"), "# fixture\n");
+      fs.writeFileSync(path.join(mainRoot, "docs/authority/GOAL.md"), "# fixture\n");
       fs.mkdirSync(path.join(mainRoot, "tools", "ember-cli"), { recursive: true });
 
       const worktreeRoot = path.join(scratch, "worktree");
       fs.mkdirSync(path.join(worktreeRoot, "tools", "ember-cli"), { recursive: true });
-      fs.writeFileSync(path.join(worktreeRoot, "GOAL.md"), "# fixture\n");
+      fs.writeFileSync(path.join(worktreeRoot, "docs/authority/GOAL.md"), "# fixture\n");
       const dotGit = path.join(worktreeRoot, ".git");
       // Same VALID worktree-shape-pointer discipline as the real-ACL leg above -- this
       // fixture would ALSO resolve successfully absent the monkeypatch.
@@ -631,7 +631,7 @@ describe("PR954 round 4 — writer-level coverage: relative gitdir + genuinely u
     try {
       const mainRoot = path.join(scratch, "main");
       fs.mkdirSync(mainRoot, { recursive: true });
-      fs.writeFileSync(path.join(mainRoot, "GOAL.md"), "# fixture\n");
+      fs.writeFileSync(path.join(mainRoot, "docs/authority/GOAL.md"), "# fixture\n");
       fs.mkdirSync(path.join(mainRoot, "tools", "ember-cli"), { recursive: true });
       // Deliberately do NOT create <mainRoot>/.git/worktrees/lane -- the pointer target
       // must not exist for this test.
@@ -640,7 +640,7 @@ describe("PR954 round 4 — writer-level coverage: relative gitdir + genuinely u
 
       const worktreeRoot = path.join(scratch, "worktree");
       fs.mkdirSync(path.join(worktreeRoot, "tools", "ember-cli"), { recursive: true });
-      fs.writeFileSync(path.join(worktreeRoot, "GOAL.md"), "# fixture\n");
+      fs.writeFileSync(path.join(worktreeRoot, "docs/authority/GOAL.md"), "# fixture\n");
       fs.writeFileSync(path.join(worktreeRoot, ".git"), `gitdir: ${danglingTarget}\n`);
 
       delete process.env["EMBER_REPO_ROOT"];

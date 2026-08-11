@@ -22,7 +22,7 @@ MANDATORY: a candidate can only satisfy the CHK's hash requirement by
 re-deriving a claimed hash from a file that both (a) is actually reachable
 UNDER this probe's resolved ROOT (the execution tree -- a path that exists
 elsewhere on the machine but outside ROOT is an import owed from the live
-tree, GOAL.md Execution-surface row / anti-gaming S10, never trusted as
+tree, docs/authority/GOAL.md Execution-surface row / anti-gaming S10, never trusted as
 in-tree evidence) and (b) hashes to the claimed value. The old pass-through
 is removed; a receipt with only off-tree/unreachable hash paths now FAILS
 this candidate and the probe keeps searching, RED if none verify.
@@ -176,7 +176,7 @@ def main():
                     f"hash_verified=False (hash-verify is MANDATORY, lane-14 "
                     f"hardening) -- claimed artifact path(s) "
                     f"{hash_verify_paths_tried[:2]} resolve off-tree/missing "
-                    f"under ROOT={ROOT}, converging with GOAL.md's "
+                    f"under ROOT={ROOT}, converging with docs/authority/GOAL.md's "
                     "Execution-surface 'Imports owed FROM the live tree' row "
                     "(anti-gaming S10 import debt) -> cannot verify in-tree")
             else:

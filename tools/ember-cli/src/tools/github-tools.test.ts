@@ -247,37 +247,37 @@ describe("gh_pr_checks", () => {
 
 describe("gh_repo_content_read", () => {
   test("decodes base64 file content", async () => {
-    const encoded = Buffer.from("hello from GOAL.md", "utf8").toString("base64");
+    const encoded = Buffer.from("hello from docs/authority/GOAL.md", "utf8").toString("base64");
     const fetchMock = mockFetch(async (_m, apiPath) => {
-      expect(apiPath).toBe("/repos/wordingone/ember/contents/GOAL.md");
+      expect(apiPath).toBe("/repos/wordingone/ember/contents/docs/authority/GOAL.md");
       return { status: 200, json: { type: "file", encoding: "base64", content: encoded } };
     });
     setGithubToolsDeps({ getInstallationToken: async () => OK_TOKEN, githubFetch: fetchMock });
 
-    const result = (await GhRepoContentReadTool.call({ path: "GOAL.md" }, {} as never)).data as { ok: boolean; content: string };
+    const result = (await GhRepoContentReadTool.call({ path: "docs/authority/GOAL.md" }, {} as never)).data as { ok: boolean; content: string };
     expect(result.ok).toBe(true);
-    expect(result.content).toBe("hello from GOAL.md");
+    expect(result.content).toBe("hello from docs/authority/GOAL.md");
   });
 
   test("passes ref through as a query param", async () => {
     const fetchMock = mockFetch(async (_m, apiPath) => {
-      expect(apiPath).toBe("/repos/wordingone/ember/contents/GOAL.md?ref=feat%2F507-gh-identity");
+      expect(apiPath).toBe("/repos/wordingone/ember/contents/docs/authority/GOAL.md?ref=feat%2F507-gh-identity");
       return { status: 200, json: { type: "file", encoding: "base64", content: Buffer.from("x").toString("base64") } };
     });
     setGithubToolsDeps({ getInstallationToken: async () => OK_TOKEN, githubFetch: fetchMock });
 
-    await GhRepoContentReadTool.call({ path: "GOAL.md", ref: "feat/507-gh-identity" }, {} as never);
+    await GhRepoContentReadTool.call({ path: "docs/authority/GOAL.md", ref: "feat/507-gh-identity" }, {} as never);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   test("returns the raw entry for a directory listing instead of guessing a decode", async () => {
     setGithubToolsDeps({
       getInstallationToken: async () => OK_TOKEN,
-      githubFetch: mockFetch(async () => ({ status: 200, json: [{ name: "GOAL.md", type: "file" }] })),
+      githubFetch: mockFetch(async () => ({ status: 200, json: [{ name: "docs/authority/GOAL.md", type: "file" }] })),
     });
     const result = (await GhRepoContentReadTool.call({ path: "" }, {} as never)).data as { ok: boolean; raw: unknown };
     expect(result.ok).toBe(true);
-    expect(result.raw).toEqual([{ name: "GOAL.md", type: "file" }]);
+    expect(result.raw).toEqual([{ name: "docs/authority/GOAL.md", type: "file" }]);
   });
 });
 

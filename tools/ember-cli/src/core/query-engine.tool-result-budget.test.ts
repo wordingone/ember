@@ -3,7 +3,7 @@
 // push the follow-up model call's prefill past n_ctx; depending on the server that either
 // errors (already handled by the callModel try/catch) or silently wedges the connection
 // with no tokens generating (receipt: receipts/operator-sessions/
-// session-20260705T234943Z.jsonl -- 46,634-byte GOAL.md read vs an 8192-token n_ctx slot,
+// session-20260705T234943Z.jsonl -- 46,634-byte docs/authority/GOAL.md read vs an 8192-token n_ctx slot,
 // GPU idle, spinner alive >4min). query() must truncate every tool_result content string
 // to a bounded budget, head+tail with an explicit marker, applied uniformly at the single
 // assembly seam so every tool is covered -- not per-tool patches.

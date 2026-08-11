@@ -22,7 +22,7 @@ receipts/ledger/** -text
 probes/** -text
 # nck-protected paths: sha256 hashes in nck-invariants.json are load-bearing;
 # git must not rewrite line endings at checkout (same class as eng-47 research/**).
-GOAL.md -text
+docs/authority/GOAL.md -text
 docs/archive/pre-restart/formalization-v0.md -text
 # Updated 2026-07-06 (#230): #219 renamed config/ -> configs/ but missed these
 # three exact-path pins, silently exposing configs/v0-pretrain-config.json (the
@@ -40,7 +40,7 @@ baseline/**/*.sh text eol=lf
 baseline/**/*.md text eol=lf
 baseline/**/*.json text eol=lf
 baseline/**/*.jsonl text eol=lf
-INVARIANT.md -text
+docs/authority/INVARIANT.md -text
 tests/fixtures/ember-cli/issue-243/live-resize-v1/** -text -diff
 # Binary fixtures/captures: explicit byte-pinned opt-out from strict text gates.
 tests/ember_restart/__fixtures__/cond3-artifact-b/checkpoint -text

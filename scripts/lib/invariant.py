@@ -3,7 +3,7 @@ Ember constitutional invariant stamping and verification.
 
 The invariant is the sole unamendable surface of the ember project.
 This module provides the mechanism to stamp invariant hashes into artifacts
-and verify them against the canonical INVARIANT.md file.
+and verify them against the canonical docs/authority/INVARIANT.md file.
 """
 
 import hashlib
@@ -12,25 +12,25 @@ import os
 from pathlib import Path
 from typing import Any, Dict
 
-# The canonical hash of INVARIANT.md as of genesis
+# The canonical hash of docs/authority/INVARIANT.md as of genesis
 INVARIANT_SHA256 = "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
 
 
 def _read_invariant_bytes(repo_root: str) -> bytes:
-    """Read INVARIANT.md bytes from repo root.
+    """Read docs/authority/INVARIANT.md bytes from repo root.
 
     Args:
         repo_root: Absolute path to ember repo root
 
     Returns:
-        Raw bytes of INVARIANT.md
+        Raw bytes of docs/authority/INVARIANT.md
 
     Raises:
-        FileNotFoundError: If INVARIANT.md does not exist
+        FileNotFoundError: If docs/authority/INVARIANT.md does not exist
     """
-    invariant_path = Path(repo_root) / "INVARIANT.md"
+    invariant_path = Path(repo_root) / "docs/authority/INVARIANT.md"
     if not invariant_path.exists():
-        raise FileNotFoundError(f"INVARIANT.md not found at {invariant_path}")
+        raise FileNotFoundError(f"docs/authority/INVARIANT.md not found at {invariant_path}")
     return invariant_path.read_bytes()
 
 
@@ -47,7 +47,7 @@ def _compute_hash(data: bytes) -> str:
 
 
 def verify(repo_root: str) -> str:
-    """Verify that INVARIANT.md in repo_root matches the canonical hash.
+    """Verify that docs/authority/INVARIANT.md in repo_root matches the canonical hash.
 
     Args:
         repo_root: Absolute path to ember repo root
@@ -56,15 +56,15 @@ def verify(repo_root: str) -> str:
         The verified hash string
 
     Raises:
-        FileNotFoundError: If INVARIANT.md does not exist
-        ValueError: If INVARIANT.md hash does not match INVARIANT_SHA256
+        FileNotFoundError: If docs/authority/INVARIANT.md does not exist
+        ValueError: If docs/authority/INVARIANT.md hash does not match INVARIANT_SHA256
     """
     invariant_bytes = _read_invariant_bytes(repo_root)
     computed_hash = _compute_hash(invariant_bytes)
 
     if computed_hash != INVARIANT_SHA256:
         raise ValueError(
-            f"INVARIANT.md hash mismatch: expected {INVARIANT_SHA256}, "
+            f"docs/authority/INVARIANT.md hash mismatch: expected {INVARIANT_SHA256}, "
             f"got {computed_hash}"
         )
 
@@ -74,7 +74,7 @@ def verify(repo_root: str) -> str:
 def stamp(artifact: Dict[str, Any], repo_root: str = None) -> Dict[str, Any]:
     """Stamp an artifact dict with the invariant hash.
 
-    Reads INVARIANT.md from repo root (or cwd if not specified),
+    Reads docs/authority/INVARIANT.md from repo root (or cwd if not specified),
     verifies its hash against the canonical value, and adds the hash
     to the artifact. The artifact is not written if the hash is invalid.
 
@@ -86,8 +86,8 @@ def stamp(artifact: Dict[str, Any], repo_root: str = None) -> Dict[str, Any]:
         The stamped artifact dict
 
     Raises:
-        FileNotFoundError: If INVARIANT.md does not exist
-        ValueError: If INVARIANT.md hash does not match INVARIANT_SHA256
+        FileNotFoundError: If docs/authority/INVARIANT.md does not exist
+        ValueError: If docs/authority/INVARIANT.md hash does not match INVARIANT_SHA256
     """
     if repo_root is None:
         repo_root = os.getcwd()
@@ -105,7 +105,7 @@ def _selftest():
     """Self-test for invariant module.
 
     This test runs in the current working directory and verifies:
-    1. The INVARIANT.md file exists and has the correct hash
+    1. The docs/authority/INVARIANT.md file exists and has the correct hash
     2. stamp() correctly adds the hash to a dict
     3. Verification succeeds when hashes match
     4. Verification fails with wrong hash
@@ -114,11 +114,11 @@ def _selftest():
 
     print("Running invariant.py selftest...")
 
-    # Test 1: Verify current INVARIANT.md matches canonical hash
+    # Test 1: Verify current docs/authority/INVARIANT.md matches canonical hash
     try:
         cwd = os.getcwd()
         computed = verify(cwd)
-        print("[PASS] Test 1: INVARIANT.md hash verified")
+        print("[PASS] Test 1: docs/authority/INVARIANT.md hash verified")
         print(f"  Hash: {computed}")
         assert computed == INVARIANT_SHA256, f"Hash mismatch: {computed} != {INVARIANT_SHA256}"
     except Exception as e:
@@ -150,12 +150,12 @@ def _selftest():
     # Test 4: verify() with missing file raises FileNotFoundError
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
-            # tmpdir has no INVARIANT.md
+            # tmpdir has no docs/authority/INVARIANT.md
             verify(tmpdir)
             print("[FAIL] Test 4: Expected FileNotFoundError")
-            raise AssertionError("Should have raised FileNotFoundError for missing INVARIANT.md")
+            raise AssertionError("Should have raised FileNotFoundError for missing docs/authority/INVARIANT.md")
     except FileNotFoundError:
-        print("[PASS] Test 4: Correctly raises FileNotFoundError for missing INVARIANT.md")
+        print("[PASS] Test 4: Correctly raises FileNotFoundError for missing docs/authority/INVARIANT.md")
     except Exception as e:
         print(f"[FAIL] Test 4: Wrong exception: {e}")
         raise
@@ -163,8 +163,8 @@ def _selftest():
     # Test 5: stamp() fails if hash doesn't match
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Create a fake INVARIANT.md with different content
-            fake_path = Path(tmpdir) / "INVARIANT.md"
+            # Create a fake docs/authority/INVARIANT.md with different content
+            fake_path = Path(tmpdir) / "docs/authority/INVARIANT.md"
             fake_path.write_text("wrong content")
 
             try:

@@ -1,7 +1,7 @@
 {
   "schema": "ember-timeshare-importer-classification-v1",
   "source": "scripts/timeshare_pretrain.py",
-  "source_sha256": "aff4a9d0d8b93ff1a621f04ea9e2862bb298301ad0cd42bc73630575721e8554",
+  "source_sha256": "f085e56ff751b51859d0e139e055c9a96279a1caf4da5524c50ce1fae69dd77d",
   "import_denial": "execution_only",
   "execution_boundary": {
     "helper": "_historical_only_refusal",

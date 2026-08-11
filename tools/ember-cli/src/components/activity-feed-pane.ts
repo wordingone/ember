@@ -4,7 +4,7 @@
 // components/activity-feed-pane.ts — issue #485 rung 1 / #518: the operator-visible half of the
 // activity feed. Renders REAL observed events (receipt landings, outage windows, watchdog
 // transitions, board runs) that the services/activity-feed.ts engine has actually rendered —
-// never a fabricated/synthetic tick (GOAL.md P-C). Each line carries its artifact path so the
+// never a fabricated/synthetic tick (docs/authority/GOAL.md P-C). Each line carries its artifact path so the
 // feed doubles as an audit surface, per L2.
 //
 // #518 (operator category correction, second receipt): the ActivityFeedPane ticker below used

@@ -51,7 +51,7 @@ requirements, ARTIFACT REACHABILITY:
   (i) every "<field>_path"/"<field>_sha256" pair present on the candidate
       block must resolve to an in-tree file (resolve_in_tree) whose sha256
       matches the claimed value -- an off-tree/unreachable path FAILS the
-      receipt outright (named per the GOAL.md Execution-surface imports-owed
+      receipt outright (named per the docs/authority/GOAL.md Execution-surface imports-owed
       row, anti-gaming S10 import debt), no more trust-the-string pass.
   (ii) when the trace artifact resolves, its OWN recorded
       pre_neural_parameter_hash/post_neural_parameter_hash fields (if

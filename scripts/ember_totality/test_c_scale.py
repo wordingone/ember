@@ -29,7 +29,7 @@ wants to satisfy C-SCALE lands on it).
 
 DISCIPLINE: status probe — always exits 0, prints exactly ONE line, decides
 every branch by reading real bytes on disk, hardcodes no verdict. Three-valued
-per GOAL.md §4.1: RED / GREEN / UNEVALUABLE(env). Receipt-absent is RED
+per docs/authority/GOAL.md §4.1: RED / GREEN / UNEVALUABLE(env). Receipt-absent is RED
 (satisfying artifact genuinely ABSENT — the probe looked and the answer is
 no), never UNEVALUABLE; UNEVALUABLE is reserved for the probe being unable to
 look at all.

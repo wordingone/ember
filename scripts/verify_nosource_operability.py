@@ -189,7 +189,7 @@ bytes the artifact does not control):
       `resolved-false`, with evidence naming the mismatch: the entry's bytes
       executed, but not from where the CLI actually lives, so the launcher
       did not invoke it in place.
-  L2  Launcher is documented: README.md or docs/START-HERE.md names a
+  L2  Launcher is documented: README.md or docs/guides/START-HERE.md names a
       launcher that itself resolved-true, so a no-source reader can find a
       real one (documenting a decoy does not count).
   L3  Spine-function surface: each gate-named function (custody+identity,
@@ -276,7 +276,7 @@ from pathlib import Path
 
 LAUNCHER_CANDIDATE_SUFFIXES = {".cmd", ".bat", ".ps1", ".exe", ".sh"}
 LAUNCHER_NAME_HINT = re.compile(r"^(ember|launch|start|run)", re.IGNORECASE)
-DOC_FILES = ("README.md", "docs/START-HERE.md")
+DOC_FILES = ("README.md", "docs/guides/START-HERE.md")
 COMMANDS_DIR = "tools/ember-cli/src/commands"
 PACKAGE_JSON = "tools/ember-cli/src/package.json"
 COMMAND_REGISTRY = "tools/ember-cli/src/command-registry.ts"
@@ -402,7 +402,7 @@ DESC_TEXT_RE = re.compile(r'description:\s*(?:\n\s*)?"((?:[^"\\]|\\.)*)"')
 # directory and reported three unrelated PowerShell scripts as "ember's root
 # launchers", which would have passed L1. Absence of every marker is a harness
 # error, not a verdict about ember.
-ROOT_MARKERS = ("INVARIANT.md", "GOAL.md", COMMANDS_DIR, PACKAGE_JSON)
+ROOT_MARKERS = ("docs/authority/INVARIANT.md", "docs/authority/GOAL.md", COMMANDS_DIR, PACKAGE_JSON)
 
 # --- L1 static invocation resolution -----------------------------------
 

@@ -130,9 +130,9 @@ def test_missing_or_duplicate_fields_fail() -> None:
 
 def test_wrong_goal_or_outcome_fails() -> None:
     body = f"goal_id: EMBER-00\nnext_executed_outcome: {OUTCOME}\n"
-    assert "goal_id does not match GOAL.md" in validate_pr_body(body, GOAL, OUTCOME)
+    assert "goal_id does not match docs/authority/GOAL.md" in validate_pr_body(body, GOAL, OUTCOME)
     body = f"goal_id: {GOAL}\nnext_executed_outcome: TBD\n"
-    assert "next_executed_outcome does not match GOAL.md" in validate_pr_body(
+    assert "next_executed_outcome does not match docs/authority/GOAL.md" in validate_pr_body(
         body, GOAL, OUTCOME
     )
 
@@ -152,7 +152,7 @@ def test_unknown_or_duplicate_child_workstream_fails() -> None:
         "workstream_id: EMBER-99Z\n"
         f"next_executed_outcome: {OUTCOME}\n"
     )
-    assert "workstream_id is not allowed by GOAL.md" in validate_pr_body(
+    assert "workstream_id is not allowed by docs/authority/GOAL.md" in validate_pr_body(
         unknown, GOAL, OUTCOME, WORKSTREAMS
     )
     duplicate = (

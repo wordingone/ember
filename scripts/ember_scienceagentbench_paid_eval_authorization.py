@@ -72,7 +72,7 @@ def build_receipt(
         blocked_reasons.append("paid_visual_judge_budget_note_missing")
 
     ready = not blocked_reasons
-    goal_path = repo / "GOAL.md"
+    goal_path = repo / "docs/authority/GOAL.md"
     receipt = {
         "ticket": TICKET,
         "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),

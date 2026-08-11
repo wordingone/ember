@@ -40,7 +40,7 @@ _BUILTIN_DEFAULTS: dict = {
         "margin_gib_floor": 1.0,
         "pace_s_per_step": 0.05,
     },
-    "goal_file": os.path.join(_REPO, "GOAL.md"),
+    "goal_file": os.path.join(_REPO, "docs/authority/GOAL.md"),
     "heartbeat_file": os.path.join(_REPO, "state", "nck-heartbeat.txt"),
     "journal_path": os.path.join(_REPO, "state", "nck-journal.jsonl"),
     "gate_notes_dir": os.path.join(_REPO, "state", "nck-gate-notes"),

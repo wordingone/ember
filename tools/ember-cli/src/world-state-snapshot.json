@@ -262,7 +262,7 @@
    {
     "id": "board.C-PROC",
     "label": "[28] C-PROC",
-    "detail": "GREEN: GREEN C-PROC CHK satisfied by process-visibility-20260704T025905Z.json: 7 public issue URL(s) cited, 1 open PR(s) all within review grace, covered commits verified in 2 tree(s), work-vs-coverage lag 11.4h <= 48h grace (GOAL.md sec 13: the board, not the operator, detects process drift)",
+    "detail": "GREEN: GREEN C-PROC CHK satisfied by process-visibility-20260704T025905Z.json: 7 public issue URL(s) cited, 1 open PR(s) all within review grace, covered commits verified in 2 tree(s), work-vs-coverage lag 11.4h <= 48h grace (docs/authority/GOAL.md sec 13: the board, not the operator, detects process drift)",
     "evidence": {
      "path": "scripts/ember_totality/receipts-totality/ember-totality-20260704T140249Z.json",
      "sha256": "617ca1663bfaa28dbed955f669ef4ddea9285ea59303cd4ca3ec7982696afead"
@@ -271,7 +271,7 @@
    {
     "id": "board.C-LEGIB",
     "label": "[29] C-LEGIB",
-    "detail": "GREEN: GREEN C-LEGIB CHK satisfied: entry map covers every top-level directory with a one-line purpose, a non-synthetic cold-read-reprobe receipt exists, and scripts/check_goal_citations.py exits 0 (GOAL.md: the repo is legible to a fresh reader with no prior session context)",
+    "detail": "GREEN: GREEN C-LEGIB CHK satisfied: entry map covers every top-level directory with a one-line purpose, a non-synthetic cold-read-reprobe receipt exists, and scripts/check_goal_citations.py exits 0 (docs/authority/GOAL.md: the repo is legible to a fresh reader with no prior session context)",
     "evidence": {
      "path": "scripts/ember_totality/receipts-totality/ember-totality-20260704T140249Z.json",
      "sha256": "617ca1663bfaa28dbed955f669ef4ddea9285ea59303cd4ca3ec7982696afead"
@@ -298,7 +298,7 @@
    {
     "id": "board.C-MANIFEST",
     "label": "[32] C-MANIFEST",
-    "detail": "GREEN: GREEN C-MANIFEST CHK satisfied: docs/ember-completeness.md enumerates all 72 rows with complete fields (id+subgoal[S1-S7]+AC+receipt+status), every §4 planned condition (32) is manifested, and no invalid_unmanifested_piece marker present",
+    "detail": "GREEN: GREEN C-MANIFEST CHK satisfied: docs/contracts/ember-completeness.md enumerates all 72 rows with complete fields (id+subgoal[S1-S7]+AC+receipt+status), every §4 planned condition (32) is manifested, and no invalid_unmanifested_piece marker present",
     "evidence": {
      "path": "scripts/ember_totality/receipts-totality/ember-totality-20260704T140249Z.json",
      "sha256": "617ca1663bfaa28dbed955f669ef4ddea9285ea59303cd4ca3ec7982696afead"
@@ -323,7 +323,7 @@
     "label": "[0] 1. THE END-STATE",
     "detail": "1. THE END-STATE",
     "evidence": {
-     "path": "GOAL.md",
+     "path": "docs/authority/GOAL.md",
      "sha256": "2d730206a91240d4fa6530d899d9becd0cdc4631a1044c6ab2dcd655d91ef332"
     }
    },
@@ -332,7 +332,7 @@
     "label": "[1] 1b. THE TWO RESEARCH PROBLEMS (the research identity; operator frame 2026-07-02, formalized same day; hardened same day by adversarial round R11 — ledger)",
     "detail": "1b. THE TWO RESEARCH PROBLEMS (the research identity; operator frame 2026-07-02, formalized same day; hardened same day by adversarial round R11 — ledger)",
     "evidence": {
-     "path": "GOAL.md",
+     "path": "docs/authority/GOAL.md",
      "sha256": "2d730206a91240d4fa6530d899d9becd0cdc4631a1044c6ab2dcd655d91ef332"
     }
    },
@@ -341,7 +341,7 @@
     "label": "[2] 2. THE FIELD-LEVEL CONTRIBUTION (beyond existing work)",
     "detail": "2. THE FIELD-LEVEL CONTRIBUTION (beyond existing work)",
     "evidence": {
-     "path": "GOAL.md",
+     "path": "docs/authority/GOAL.md",
      "sha256": "2d730206a91240d4fa6530d899d9becd0cdc4631a1044c6ab2dcd655d91ef332"
     }
    },
@@ -350,7 +350,7 @@
     "label": "[3] 2b. WORKING GLOSSARY (ten terms an outside reader meets before their definitions; one line each)",
     "detail": "2b. WORKING GLOSSARY (ten terms an outside reader meets before their definitions; one line each)",
     "evidence": {
-     "path": "GOAL.md",
+     "path": "docs/authority/GOAL.md",
      "sha256": "2d730206a91240d4fa6530d899d9becd0cdc4631a1044c6ab2dcd655d91ef332"
     }
    },
@@ -359,7 +359,7 @@
     "label": "[4] 3. THE ORGANISM (components and their relationships)",
     "detail": "3. THE ORGANISM (components and their relationships)",
     "evidence": {
-     "path": "GOAL.md",
+     "path": "docs/authority/GOAL.md",
      "sha256": "2d730206a91240d4fa6530d899d9becd0cdc4631a1044c6ab2dcd655d91ef332"
     }
    },
@@ -368,7 +368,7 @@
     "label": "[5] 4. MACHINE-CHECKABLE CONDITIONS (the completion bar — conjunctive)",
     "detail": "4. MACHINE-CHECKABLE CONDITIONS (the completion bar — conjunctive)",
     "evidence": {
-     "path": "GOAL.md",
+     "path": "docs/authority/GOAL.md",
      "sha256": "2d730206a91240d4fa6530d899d9becd0cdc4631a1044c6ab2dcd655d91ef332"
     }
    },
@@ -377,7 +377,7 @@
     "label": "[6] 5. NON-NEGOTIABLE CONSTRAINTS (held outside Ember's write surface)",
     "detail": "5. NON-NEGOTIABLE CONSTRAINTS (held outside Ember's write surface)",
     "evidence": {
-     "path": "GOAL.md",
+     "path": "docs/authority/GOAL.md",
      "sha256": "2d730206a91240d4fa6530d899d9becd0cdc4631a1044c6ab2dcd655d91ef332"
     }
    },
@@ -386,7 +386,7 @@
     "label": "[7] 6. COMPLETION TIERS (all six stages defined; each a conjunction of receipts)",
     "detail": "6. COMPLETION TIERS (all six stages defined; each a conjunction of receipts)",
     "evidence": {
-     "path": "GOAL.md",
+     "path": "docs/authority/GOAL.md",
      "sha256": "2d730206a91240d4fa6530d899d9becd0cdc4631a1044c6ab2dcd655d91ef332"
     }
    },
@@ -395,7 +395,7 @@
     "label": "[8] 7. MILESTONE LATTICE (dependency-aware; full lattice @docs/spec/milestones-v1.md §C)",
     "detail": "7. MILESTONE LATTICE (dependency-aware; full lattice @docs/spec/milestones-v1.md §C)",
     "evidence": {
-     "path": "GOAL.md",
+     "path": "docs/authority/GOAL.md",
      "sha256": "2d730206a91240d4fa6530d899d9becd0cdc4631a1044c6ab2dcd655d91ef332"
     }
    },
@@ -404,7 +404,7 @@
     "label": "[9] 8. OBJECTIVE GATES (fake-completion prevention; each with enforcement path)",
     "detail": "8. OBJECTIVE GATES (fake-completion prevention; each with enforcement path)",
     "evidence": {
-     "path": "GOAL.md",
+     "path": "docs/authority/GOAL.md",
      "sha256": "2d730206a91240d4fa6530d899d9becd0cdc4631a1044c6ab2dcd655d91ef332"
     }
    },
@@ -413,7 +413,7 @@
     "label": "[10] 9. REQUIRED RECEIPT & ARTIFACT CLASSES",
     "detail": "9. REQUIRED RECEIPT & ARTIFACT CLASSES",
     "evidence": {
-     "path": "GOAL.md",
+     "path": "docs/authority/GOAL.md",
      "sha256": "2d730206a91240d4fa6530d899d9becd0cdc4631a1044c6ab2dcd655d91ef332"
     }
    },
@@ -422,7 +422,7 @@
     "label": "[11] 10. ARTIFACT MAP (exact paths; existence enforced by the citation gate)",
     "detail": "10. ARTIFACT MAP (exact paths; existence enforced by the citation gate)",
     "evidence": {
-     "path": "GOAL.md",
+     "path": "docs/authority/GOAL.md",
      "sha256": "2d730206a91240d4fa6530d899d9becd0cdc4631a1044c6ab2dcd655d91ef332"
     }
    },
@@ -431,7 +431,7 @@
     "label": "[12] 11. PROVENANCE & VALIDATION RECORD",
     "detail": "11. PROVENANCE & VALIDATION RECORD",
     "evidence": {
-     "path": "GOAL.md",
+     "path": "docs/authority/GOAL.md",
      "sha256": "2d730206a91240d4fa6530d899d9becd0cdc4631a1044c6ab2dcd655d91ef332"
     }
    },
@@ -440,7 +440,7 @@
     "label": "[13] 12. AMENDMENT PROTOCOL (this document and the invariant set I)",
     "detail": "12. AMENDMENT PROTOCOL (this document and the invariant set I)",
     "evidence": {
-     "path": "GOAL.md",
+     "path": "docs/authority/GOAL.md",
      "sha256": "2d730206a91240d4fa6530d899d9becd0cdc4631a1044c6ab2dcd655d91ef332"
     }
    },
@@ -449,7 +449,7 @@
     "label": "[14] 13. OPERATOR-VISIBLE PROCESS CONTRACT (added 2026-07-02; additive requirement, operator directive)",
     "detail": "13. OPERATOR-VISIBLE PROCESS CONTRACT (added 2026-07-02; additive requirement, operator directive)",
     "evidence": {
-     "path": "GOAL.md",
+     "path": "docs/authority/GOAL.md",
      "sha256": "2d730206a91240d4fa6530d899d9becd0cdc4631a1044c6ab2dcd655d91ef332"
     }
    },
@@ -458,7 +458,7 @@
     "label": "[15] 14. SESSION-MODEL ECONOMY CONTRACT (added 2026-07-02; operator directive, verbatim below)",
     "detail": "14. SESSION-MODEL ECONOMY CONTRACT (added 2026-07-02; operator directive, verbatim below)",
     "evidence": {
-     "path": "GOAL.md",
+     "path": "docs/authority/GOAL.md",
      "sha256": "2d730206a91240d4fa6530d899d9becd0cdc4631a1044c6ab2dcd655d91ef332"
     }
    },
@@ -474,7 +474,7 @@
    {
     "id": "goal.blocker.1",
     "label": "[blocker:1] Current executable command",
-    "detail": "execute the resident-training gate attempt defined in `GOAL.md`. The attempt must read the stored RLM/iGRPO paper receipts, extract a mechanism-to-implementation map, inspect `scripts/train_multimodal_v0.py` as existing neural/multimodal training infrastructure, and create or run the adapter/gate runner. If the adapter is missing, implement the adapter and selftest as the first artifact; do not switch to benchmark/readiness work or write a parallel tiny neural runner before the train-multimodal decision receipt.",
+    "detail": "execute the resident-training gate attempt defined in `docs/authority/GOAL.md`. The attempt must read the stored RLM/iGRPO paper receipts, extract a mechanism-to-implementation map, inspect `scripts/train_multimodal_v0.py` as existing neural/multimodal training infrastructure, and create or run the adapter/gate runner. If the adapter is missing, implement the adapter and selftest as the first artifact; do not switch to benchmark/readiness work or write a parallel tiny neural runner before the train-multimodal decision receipt.",
     "evidence": {
      "path": "docs/ember-debt-ledger.md",
      "sha256": "b386b56123d8015e9dad0ff3a22a763e031b18e8fc6b873ff92d29c6761f5732"
@@ -501,7 +501,7 @@
    {
     "id": "goal.blocker.4",
     "label": "[blocker:4] Next blocker if pass",
-    "detail": "the immediate tiny BitNet/1.58-bit comparison required by `GOAL.md`, then benchmark discovery, past-Ember technique mining, and the first external heldout A/B/C loop using the resident-trained organ.",
+    "detail": "the immediate tiny BitNet/1.58-bit comparison required by `docs/authority/GOAL.md`, then benchmark discovery, past-Ember technique mining, and the first external heldout A/B/C loop using the resident-trained organ.",
     "evidence": {
      "path": "docs/ember-debt-ledger.md",
      "sha256": "b386b56123d8015e9dad0ff3a22a763e031b18e8fc6b873ff92d29c6761f5732"
@@ -550,7 +550,7 @@
    {
     "id": "ledger.DEBT-004",
     "label": "[3] DEBT-004 (RESOLVED, DONE: receipts/debt-004-goal-source-split-resolved-20260702T184424Z.json)",
-    "detail": "Goal source split between local goal file and repo `GOAL.md`",
+    "detail": "Goal source split between local goal file and repo `docs/authority/GOAL.md`",
     "evidence": {
      "path": "docs/ember-debt-ledger.md",
      "sha256": "b386b56123d8015e9dad0ff3a22a763e031b18e8fc6b873ff92d29c6761f5732"
@@ -614,7 +614,7 @@
  },
  "sources": {
   "goal": {
-   "path": "GOAL.md",
+   "path": "docs/authority/GOAL.md",
    "sha256": "2d730206a91240d4fa6530d899d9becd0cdc4631a1044c6ab2dcd655d91ef332"
   },
   "ledger": {

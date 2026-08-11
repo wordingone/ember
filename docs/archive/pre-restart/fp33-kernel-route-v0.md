@@ -106,7 +106,7 @@ Custom autograd.Function wrapping nn.Linear forward/backward at the c03
 shapes (0.37B: hidden/MLP dims per v0 config); checkpoint-recompute path
 included. Numerics-changing → A/B segment receipt required before adopting
 into live v0 (WSD segment-boundary rule). Proxy: speedrun arm per
-docs/registry-dispatch-gate-spec-v0.md — one technique per arm, seeds
+docs/contracts/registry-dispatch-gate-spec-v0.md — one technique per arm, seeds
 {16,17,18}, wall-clock + tokens-to-target.
 
 ## Registry state (this commit)

@@ -138,7 +138,7 @@ function synthesizeFinalMessage(
 // silently wedges: the connection stays open, no tokens generate, and the
 // loop sits in the caller's spinner indefinitely (receipt:
 // receipts/operator-sessions/session-20260705T234943Z.jsonl -- a 46,634-byte
-// GOAL.md read into an 8192-token n_ctx slot, GPU idle, spinner alive >4min).
+// docs/authority/GOAL.md read into an 8192-token n_ctx slot, GPU idle, spinner alive >4min).
 // This truncates every tool_result content string to a bounded budget BEFORE
 // it enters the conversation -- the single seam all tools funnel through, so
 // Read/Bash/PowerShell/Grep/Glob (and any future tool) are covered uniformly

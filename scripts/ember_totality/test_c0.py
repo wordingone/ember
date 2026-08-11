@@ -15,7 +15,7 @@ Gloss (task): no additional Ember loops before resident-training preconditions:
 Receipt hint: C14 receipt timestamp vs loop receipt timestamps.
 
 This is a STATUS PROBE. It always exits 0 and prints exactly one line. C0 is a
-STANDING PROCESS-INVARIANT (GOAL.md §4.0(9)), not a STATE-condition: it never
+STANDING PROCESS-INVARIANT (docs/authority/GOAL.md §4.0(9)), not a STATE-condition: it never
 prints RED/GREEN/UNEVALUABLE. It renders one of AUDIT-OK / AUDIT-INCIDENT (a
 cadence audit from the goalforge-clear epoch) or, pre-epoch (no operator-
 acceptance object exists yet), AUDIT-PENDING-EPOCH — never RED. Pre-epoch
@@ -110,7 +110,7 @@ def _effective_ts(path, data):
     pre-existing artifact -- "Original receipt was NOT edited" -- not a new
     gate event. Per the C14 spec's supersession clause (docs/spec/
     c14-owned-core-resident-run-v1.md: only a new executed run counts) and
-    GOAL.md's process-invariant framing, a copy cannot manufacture a fresh
+    docs/authority/GOAL.md's process-invariant framing, a copy cannot manufacture a fresh
     in-window PASS out of pre-epoch substance merely by being written to
     disk under a later filename. When present, import_edition_of_ts is
     therefore the receipt's true date for window purposes; the filename
@@ -126,7 +126,7 @@ def find_epoch():
     acceptance object (docs/spec/operator-acceptance-v1.md schema
     acceptance/v1, scope goalforge-clear, stored at
     receipts/acceptance/goalforge-clear-<date>.json), or (None, None) if no
-    epoch has been recorded yet. GOAL.md §4.0(9): the epoch is the operator
+    epoch has been recorded yet. docs/authority/GOAL.md §4.0(9): the epoch is the operator
     acceptance of this goal; C0 is a process-invariant with no meaning before
     it exists. epoch_ts is normalized (see _norm_ts) for stable comparison.
     """
@@ -646,7 +646,7 @@ def scan(min_ts):
 def main():
     """Resolve the epoch, run scan() in the appropriate window, and relabel
     the raw RED/GREEN finding against the AUDIT-OK/AUDIT-INCIDENT/
-    AUDIT-PENDING-EPOCH contract (GOAL.md §4.0(9)) before printing.
+    AUDIT-PENDING-EPOCH contract (docs/authority/GOAL.md §4.0(9)) before printing.
     """
     epoch_ts, epoch_path = find_epoch()
     try:
@@ -661,7 +661,7 @@ def main():
             "goalforge-clear operator-acceptance object exists yet at "
             "receipts/acceptance/goalforge-clear-*.json (schema "
             "acceptance/v1); this is NOT an audit verdict, pre-epoch "
-            "history is OUT OF AUDIT SCOPE per GOAL.md §4.0(9), the actual "
+            "history is OUT OF AUDIT SCOPE per docs/authority/GOAL.md §4.0(9), the actual "
             "status is never RED/GREEN/UNEVALUABLE for this row]"
         )
         return

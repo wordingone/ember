@@ -458,7 +458,7 @@ def stage_cu_console() -> dict:
                 "margin_gib_floor": 1.0,
                 "pace_s_per_step": 0.05,
             },
-            "goal_file": os.path.join(tmp, "GOAL.md"),
+            "goal_file": os.path.join(tmp, "docs/authority/GOAL.md"),
             "heartbeat_file": os.path.join(tmp, "nck-heartbeat.txt"),
             "journal_path": os.path.join(tmp, "nck-journal.jsonl"),
             "gate_notes_dir": os.path.join(tmp, "gate-notes"),
@@ -554,7 +554,7 @@ def run_selftest() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         config = {
             "governor": {"vram_fraction": 0.7, "margin_gib_floor": 1.0, "pace_s_per_step": 0.05},
-            "goal_file": os.path.join(tmp, "GOAL.md"),
+            "goal_file": os.path.join(tmp, "docs/authority/GOAL.md"),
             "heartbeat_file": os.path.join(tmp, "hb.txt"),
             "journal_path": os.path.join(tmp, "j.jsonl"),
             "gate_notes_dir": os.path.join(tmp, "gn"),

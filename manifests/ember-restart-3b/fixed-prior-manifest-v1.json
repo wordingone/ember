@@ -2,7 +2,7 @@
   "schema_version": "ember-fixed-prior-manifest-v1",
   "manifest_version": 1,
   "ticket": "R1-ENTRY-FIXED-PRIOR-MANIFEST",
-  "ts": "2026-08-04T15:21:50+00:00",
+  "ts": "2026-08-11T05:53:09+00:00",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
@@ -12,10 +12,10 @@
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "tree_digest_convention": "combined_sha256 = sha256 over sorted '<name>\\t<sha256>\\t<size_bytes>\\n' lines (scripts/manifest_sha.py convention); git-tracked files only",
   "repo": {
-    "commit": "115cf0050304e13f87cf8a404eef60796540067e",
-    "branch": "fix/1402-fixed-prior-remint"
+    "commit": "1c4f304d305c2781a4ed98839cbdef66db84d633",
+    "branch": "fix/issue-1476-repo-layout-clean"
   },
-  "learned_import_attestation": "Every item in this manifest is a NON-LEARNED prior. Zero imported learned weights, embeddings, learned-parameter tokenizers, teacher outputs, learned filters or judges, or hidden accelerator services (INVARIANT.md clause 3, fail-closed on unknown provenance).",
+  "learned_import_attestation": "Every item in this manifest is a NON-LEARNED prior. Zero imported learned weights, embeddings, learned-parameter tokenizers, teacher outputs, learned filters or judges, or hidden accelerator services (docs/authority/INVARIANT.md clause 3, fail-closed on unknown provenance).",
   "energy_method": {
     "energy_boundary": "DEGRADED_PROXY",
     "boundary_status": "PERMANENT declared boundary by operator ruling; the upgrade to AC wall metering is UNPLANNED and no rung, claim, or publication conditions on it. A proxy point is never presented as a wall-metered point.",
@@ -34,7 +34,7 @@
       {
         "leg": "windows_pdh_rapl_package",
         "available": true,
-        "detail": "\\Energy Meter(rapl_package0_pkg)\\Energy readable (cumulative picowatt-hours; live read 7845463821620830)",
+        "detail": "\\Energy Meter(rapl_package0_pkg)\\Energy readable (cumulative picowatt-hours; live read 1986849618195830)",
         "reader_wired": true
       },
       {
@@ -91,16 +91,16 @@
       "kind": "file",
       "provenance": "Owned pretraining loop body; authored in-repo.",
       "path": "tools/ember-restart-3b/pretrain.py",
-      "sha256": "9e152c82948b4f2a23707c625c012068fa68b3506ca651ecbd53ae403d72d2a6",
-      "size_bytes": 18136
+      "sha256": "8d93940387ca46fb3af3bd767f3ba8ed1c0101bc16cc387a55acd25dae11b5c0",
+      "size_bytes": 21875
     },
     {
       "category": "training_loop",
       "kind": "file",
       "provenance": "The ONLY consumer ember-cli /train --execute may invoke; fixed certified launch path.",
       "path": "tools/ember-restart-3b/certified_train_launch.py",
-      "sha256": "c53337cbe59314eb7659d0ff9566573af18edadf9404ef3d081ecd10a52f060e",
-      "size_bytes": 25481
+      "sha256": "c20f7c6e86a139a0d97aae437b265a6cfa7a6d276e0d74e0a2fdf71f9a963b7b",
+      "size_bytes": 111362
     },
     {
       "category": "training_loop",
@@ -115,8 +115,8 @@
       "kind": "file",
       "provenance": "Vertical-slice runner named by launch-packet output; never executed as a command string by ember-cli.",
       "path": "tools/ember-restart-3b/run_vertical_slice.py",
-      "sha256": "10614a93bd6974069ab796821ac12ca02ab6e74886dfe1f42cfbbeb6aac4e369",
-      "size_bytes": 185390
+      "sha256": "79bb8ec5523ee9c3446e39cba5febf2ebcbfc6d940efdc98ccc66c2bf0e59ffd",
+      "size_bytes": 208874
     },
     {
       "category": "training_loop",
@@ -155,8 +155,8 @@
       "kind": "file",
       "provenance": "Checkpoint writer producing the hash-chained sequence R1-E3 round-trips.",
       "path": "tools/ember-restart-3b/checkpoint_artifacts.py",
-      "sha256": "66f25c54e1ddab989a0ab0d2a7f5c0e1138816c73622af24cc8c75df827bf8bd",
-      "size_bytes": 106136
+      "sha256": "f28ce9e6877801af0b54e2388c77a9c1d47ecedc6c57b03aff0bf03660c3ae0f",
+      "size_bytes": 161431
     },
     {
       "category": "kernels_backend",
@@ -241,10 +241,10 @@
     {
       "category": "ember_cli",
       "kind": "tree",
-      "provenance": "ember-cli execution surface (GOAL.md sec10): every executed job runs through it. Version is this tree digest plus the repo commit recorded in `repo`.",
+      "provenance": "ember-cli execution surface (docs/authority/GOAL.md sec10): every executed job runs through it. Version is this tree digest plus the repo commit recorded in `repo`.",
       "path": "tools/ember-cli/src",
-      "file_count": 555,
-      "combined_sha256": "ac12152f1cea820d9bc8377a02e7388c56d0f8efcfb9912bc7b1602a0a9b1b91",
+      "file_count": 595,
+      "combined_sha256": "9d5f4026662150ceec557bd3ecb59ee671ae303597320a8b31c6a9f005cd1ad6",
       "files": [
         {
           "name": "tools/ember-cli/src/admit-registry.test.ts",
@@ -328,23 +328,28 @@
         },
         {
           "name": "tools/ember-cli/src/build-tools/build-cockpit.test.ts",
-          "sha256": "6e0fc6f7f634528cc4bef4f6de16fd9646cf088eaaa5554f3df08a68e28feeda",
-          "size_bytes": 1643
+          "sha256": "f0c13c786dcb4a0a520ab8e3bfb191e12a4ecfad7fd41357e4c36ae1e4d65788",
+          "size_bytes": 1929
         },
         {
           "name": "tools/ember-cli/src/build-tools/build-cockpit.ts",
-          "sha256": "5a035f5a84e29bc95d521b7bf51094ad7cc919ea8a6f92d6288cbae39030343f",
-          "size_bytes": 2866
+          "sha256": "2960366219c361606887de2d9b843a04a04e4a34a605b87993ff06f913914af6",
+          "size_bytes": 3045
+        },
+        {
+          "name": "tools/ember-cli/src/build-tools/capture-command-buttons-frame.ts",
+          "sha256": "4ae1e09fc87438cca6182437fcc5d054a73d485e9de5f9c65c3455725969be98",
+          "size_bytes": 4809
         },
         {
           "name": "tools/ember-cli/src/build-tools/capture-prompt-input-243.test.ts",
-          "sha256": "ec0d964fe1632326cfc183bc7e63a754ac32e081e4de006e8bff97ecc3e63fc4",
-          "size_bytes": 9026
+          "sha256": "4469c4b4b1daf20c1e39978774bca5dc6d303f565f93c9786b460ec7a1590014",
+          "size_bytes": 9586
         },
         {
           "name": "tools/ember-cli/src/build-tools/capture-prompt-input-243.ts",
-          "sha256": "bbc285d7892f41d9f12b49360413fe1bcd86ae4babcc25b266c8635284102ef1",
-          "size_bytes": 21302
+          "sha256": "e780505cb19d7822ff4a1b69c1d920ae44fcd524428af186bb9d90b40d934065",
+          "size_bytes": 21619
         },
         {
           "name": "tools/ember-cli/src/build-tools/capture-text-wrap-1043.ts",
@@ -362,9 +367,34 @@
           "size_bytes": 11656
         },
         {
+          "name": "tools/ember-cli/src/build-tools/conpty-nul-smoke.ts",
+          "sha256": "f723cf9649f579c091ad9396fbcd382da3e9ddd4206e4391fc8bbff81b7b4ca5",
+          "size_bytes": 3308
+        },
+        {
+          "name": "tools/ember-cli/src/build-tools/conpty-output-integrity.test.ts",
+          "sha256": "25bb1755d3e94af628e5a8e0c92416e32eca02be0c14fe6d9c6f36b5275bfdac",
+          "size_bytes": 881
+        },
+        {
+          "name": "tools/ember-cli/src/build-tools/conpty-output-integrity.ts",
+          "sha256": "7786e3e2bcf3d416086d2d066846f46d3a8bbffcd7139f56dd42b767de772552",
+          "size_bytes": 806
+        },
+        {
           "name": "tools/ember-cli/src/build-tools/drive-train-frame.ts",
           "sha256": "e4c787cd46a8041ac1d08e86c871c31bba62d5c2871570839c6e1047311e4795",
           "size_bytes": 6811
+        },
+        {
+          "name": "tools/ember-cli/src/build-tools/fireball-frame-capture.test.ts",
+          "sha256": "cac21d237d82f8480286d7d8363520c2eb53fdddec62cd8807f721b73e329fbe",
+          "size_bytes": 5910
+        },
+        {
+          "name": "tools/ember-cli/src/build-tools/fireball-frame-capture.ts",
+          "sha256": "41ff771bb073b8c067c6825c2bc1455cf2e713a44560ebeacf46a710a03bc5c2",
+          "size_bytes": 19995
         },
         {
           "name": "tools/ember-cli/src/build-tools/generate-version.test.ts",
@@ -403,13 +433,23 @@
         },
         {
           "name": "tools/ember-cli/src/build-tools/pointer-conpty-smoke.ts",
-          "sha256": "9aa71729d434927e36a3d34c684c26f9b075a8c364f9e58010fc510de8aceacd",
-          "size_bytes": 10803
+          "sha256": "d278234bc770fb99f36798dae0542ce0085592850ded45fc4f67cf994ad20911",
+          "size_bytes": 10992
         },
         {
           "name": "tools/ember-cli/src/build-tools/verify-burst-submit-251.ts",
           "sha256": "8036205966e194129c689ed93dff38bfcacf6a1b6afb3b44d85f245f3d77f837",
           "size_bytes": 26449
+        },
+        {
+          "name": "tools/ember-cli/src/build-tools/verify-issue-303-layout.test.ts",
+          "sha256": "a779ae543a501b3786e027875f053299c1da35f527fc4bc336e141982648921f",
+          "size_bytes": 2954
+        },
+        {
+          "name": "tools/ember-cli/src/build-tools/verify-issue-303-layout.ts",
+          "sha256": "5f54996bf38da9387d8276ccfd580a579f3676921cbd8ee58e8fd69815a7535c",
+          "size_bytes": 11047
         },
         {
           "name": "tools/ember-cli/src/build-tools/wait-ready-proof.ts",
@@ -498,8 +538,8 @@
         },
         {
           "name": "tools/ember-cli/src/command-registry.ts",
-          "sha256": "f93c3cbe3bad96682b10adc211db9f026d3bc7d1ed8d750662e8affe7a3118d7",
-          "size_bytes": 8628
+          "sha256": "46917ba2a4c868c64e16beaaddf2cd0a54ae41da7d63e41f251ad5422c95baff",
+          "size_bytes": 8740
         },
         {
           "name": "tools/ember-cli/src/commands/__fixtures__/model-identity/checkpoint",
@@ -558,8 +598,8 @@
         },
         {
           "name": "tools/ember-cli/src/commands/benchmark.test.ts",
-          "sha256": "4e0b0b053200400d21856d913bfd01b600f07cd07d1018b9c7c14e0cb80f7e5c",
-          "size_bytes": 10445
+          "sha256": "d4e499167a99c5444e7cba71fc939110a310b0c00ca68618ae9a6dca8a5d29d6",
+          "size_bytes": 10460
         },
         {
           "name": "tools/ember-cli/src/commands/benchmark.ts",
@@ -633,13 +673,13 @@
         },
         {
           "name": "tools/ember-cli/src/commands/goal.ts",
-          "sha256": "247834854cdfb90dc1a636f0aad8f149cb3b8131f519904d6f40b25a9e39f6df",
-          "size_bytes": 7789
+          "sha256": "da66136c884b8ebe65b5330d8838a81fe5f019a489b5486224fc8b3ef693d646",
+          "size_bytes": 8112
         },
         {
           "name": "tools/ember-cli/src/commands/model.test.ts",
-          "sha256": "24b7c1b648249b0bcd1c627c9cb1b19cb0c12e4e248ab0c853957546034d9df2",
-          "size_bytes": 47766
+          "sha256": "c18d5cccdda389603569258b27f92c081a29d43723de421d56a176cdaf6dbc80",
+          "size_bytes": 47756
         },
         {
           "name": "tools/ember-cli/src/commands/model.ts",
@@ -678,13 +718,13 @@
         },
         {
           "name": "tools/ember-cli/src/commands/train.test.ts",
-          "sha256": "0e747832fc063c2fe0022bfcb0d51a9381d472d97929845aad9532ac962edeca",
-          "size_bytes": 48687
+          "sha256": "d999a3aa65e732b352dd50554e521a818a62255d37491291c798706d04cd0374",
+          "size_bytes": 58594
         },
         {
           "name": "tools/ember-cli/src/commands/train.ts",
-          "sha256": "efebd42a416da7fe47fed50bdb5d433077ef24b69b177f2153a0bd3d79c3c416",
-          "size_bytes": 28730
+          "sha256": "f5d932d7d91baf72c534ab81c6a3e4ce1bb47b602815336ff41f3adfdb710287",
+          "size_bytes": 35223
         },
         {
           "name": "tools/ember-cli/src/commands/ultraplan.test.ts",
@@ -705,6 +745,16 @@
           "name": "tools/ember-cli/src/commands/ultrareview.ts",
           "sha256": "22133cb04cb80d8aad0a0346b9c6dbad72ea44ef9df1cea34a9961828202f2c5",
           "size_bytes": 7727
+        },
+        {
+          "name": "tools/ember-cli/src/commands/verify-training.test.ts",
+          "sha256": "72169a8628baa4b34981fc880cea9c9f14b8b26b2ea158d51613cd451961f97f",
+          "size_bytes": 11614
+        },
+        {
+          "name": "tools/ember-cli/src/commands/verify-training.ts",
+          "sha256": "7cf0ee254632b1a1ae6a95df1f741356adec3756a0cb1518c76a920b57d7b638",
+          "size_bytes": 9747
         },
         {
           "name": "tools/ember-cli/src/commands/verify.test.ts",
@@ -728,13 +778,13 @@
         },
         {
           "name": "tools/ember-cli/src/commands/world-state.test.ts",
-          "sha256": "90deb0475ce38f04dc3d825f9d1e49919a93d565c96a1e7e5bcb70d404bb3fcf",
-          "size_bytes": 12418
+          "sha256": "2b76382cf36f5190dcdf8a03f679c23d8451ba1d9dac61ddf7339921e83ffb02",
+          "size_bytes": 12455
         },
         {
           "name": "tools/ember-cli/src/commands/world-state.ts",
-          "sha256": "bd21fd853afab2132176b1e918775abaef5a462f641c5081a6130db1f1d3e5c5",
-          "size_bytes": 10739
+          "sha256": "c454ce6986a86cdfa15fb128f36e6c513ab9efa1e8867401db5ac26abc67ecdf",
+          "size_bytes": 10754
         },
         {
           "name": "tools/ember-cli/src/commit-push-pr.test.ts",
@@ -753,8 +803,8 @@
         },
         {
           "name": "tools/ember-cli/src/components/activity-feed-pane.ts",
-          "sha256": "ed135f9b46407ed493f7bdb317a471c00eeb3c2dd2f396d1f181bae83cdbed44",
-          "size_bytes": 11465
+          "sha256": "c0eb7ad4cbcc5dd7d82e8a0a071470c26c3e7ba71fa9adce6bd66d5bf1deeb7e",
+          "size_bytes": 11480
         },
         {
           "name": "tools/ember-cli/src/components/app-shell-scroll.test.ts",
@@ -773,13 +823,13 @@
         },
         {
           "name": "tools/ember-cli/src/components/command-bar-pane.test.ts",
-          "sha256": "1cff02a3b4097fc98cb180e18da8502bb38363566396ba103b767a06f1e492c8",
-          "size_bytes": 13697
+          "sha256": "40bf789c7cc895384a40e61bfe7f9df7771541585660d0a132993919bc126dfb",
+          "size_bytes": 14146
         },
         {
           "name": "tools/ember-cli/src/components/command-bar-pane.ts",
-          "sha256": "dce41f385bfdd57ac2290871e00fb333460dd3bdd94d486a7aa5d199e1703497",
-          "size_bytes": 6867
+          "sha256": "d89515eeb7be1d5279ec7ecd863b68cbebe81acdc44125b4f8c1f2440cf5bc39",
+          "size_bytes": 8209
         },
         {
           "name": "tools/ember-cli/src/components/d5-chat-turn-render.test.ts",
@@ -828,8 +878,8 @@
         },
         {
           "name": "tools/ember-cli/src/components/homescreen-fireball-live-tick.test.ts",
-          "sha256": "cd90930c729a7528d64435586d6b23ad3b98384161ef0ec8f809e92c750635fe",
-          "size_bytes": 3596
+          "sha256": "9ff03baf9fd5b11cd1fdcdf6b7ef4aac4d1dfa3902d360e31a3f01e98d9aaa1c",
+          "size_bytes": 3862
         },
         {
           "name": "tools/ember-cli/src/components/homescreen-live-resize.test.ts",
@@ -887,6 +937,11 @@
           "size_bytes": 10325
         },
         {
+          "name": "tools/ember-cli/src/components/operator-surface-pane-process-select.test.ts",
+          "sha256": "e1af6ae8c379e094ce7505e0ffa1db70416e8568b8658e46dbe0159073b384ce",
+          "size_bytes": 13433
+        },
+        {
           "name": "tools/ember-cli/src/components/operator-surface-pane-responsive-cards.test.ts",
           "sha256": "d9f1326f459a58022ad0c0b6058a12e93f51a0c68440e4effa4b0a2e83acf706",
           "size_bytes": 6859
@@ -898,8 +953,8 @@
         },
         {
           "name": "tools/ember-cli/src/components/operator-surface-pane.ts",
-          "sha256": "9b54dfbb1d6ed43289310086eba0ae2bb405ac82fd8f577f7fc2c67b5b15ef96",
-          "size_bytes": 57897
+          "sha256": "4b59178ba702e6fea2938712d187e25f726bc8f6b982e1a380cfe53082a8f976",
+          "size_bytes": 72752
         },
         {
           "name": "tools/ember-cli/src/components/permission-framework-border-check.test.ts",
@@ -928,13 +983,13 @@
         },
         {
           "name": "tools/ember-cli/src/components/prompt-input.test.ts",
-          "sha256": "ca718de18095da8b41c824d7cf7e32b75dfc6674d3f85676525917baff52d51c",
-          "size_bytes": 11188
+          "sha256": "1bfe7086011431d9c25af57810aaaf76ed39d3353e58d6b186db42e1ee2f447b",
+          "size_bytes": 12076
         },
         {
           "name": "tools/ember-cli/src/components/prompt-input.ts",
-          "sha256": "52a949fd0eaf63858ff4c39f773dfda618a7c133de9aeb8084886a0aa0604528",
-          "size_bytes": 23562
+          "sha256": "84479c17ee546eaef3db887562d4027f7cd1ffe818d967677bcca999bc909507",
+          "size_bytes": 23319
         },
         {
           "name": "tools/ember-cli/src/components/prompt-region-row-count.test.ts",
@@ -963,8 +1018,8 @@
         },
         {
           "name": "tools/ember-cli/src/components/spine-panel.test.ts",
-          "sha256": "6b8312dcd7d32ad5bbd6f5970afdc6ee6b02de4cd9391ed9419068ee2c9be3b8",
-          "size_bytes": 49596
+          "sha256": "b58412ebb4b0dcd188e8d09dc571eec38ecba408212101e142435910d6803641",
+          "size_bytes": 49641
         },
         {
           "name": "tools/ember-cli/src/components/spine-panel.ts",
@@ -977,19 +1032,29 @@
           "size_bytes": 5866
         },
         {
+          "name": "tools/ember-cli/src/components/start-parameters.test.ts",
+          "sha256": "971830eeae58b38d21180b7cfafb5bc2aa506783f3dc6eaf31c7d58669e2b366",
+          "size_bytes": 2294
+        },
+        {
+          "name": "tools/ember-cli/src/components/start-parameters.ts",
+          "sha256": "b3749094748e2842b8e8f9cf68a80bb22b550f1a1f657c8e34955a4c7322fa8e",
+          "size_bytes": 3715
+        },
+        {
           "name": "tools/ember-cli/src/components/status-bar-hint-absence.test.ts",
           "sha256": "fe58904519777b2c82ecb003fe5444fb487e7f36a2205cb182866e158402a395",
           "size_bytes": 1687
         },
         {
           "name": "tools/ember-cli/src/components/status-bar.test.ts",
-          "sha256": "f95eb4f0b0f4d7792d10817df6319610ad6705482ec9852d4f6a2a0b473a9bc6",
-          "size_bytes": 20582
+          "sha256": "b93fb9ccc5c0c14f3ac1e50184cc2eab8c6063a1433fbd29b17fcf3666d141b8",
+          "size_bytes": 21194
         },
         {
           "name": "tools/ember-cli/src/components/status-bar.ts",
-          "sha256": "f0ab67d2f970e29752cfc9cc442492f47f3463ec03e254066b151579bacc4da6",
-          "size_bytes": 25984
+          "sha256": "02ad0ca6acfe10801bc7377e7719f46b48c8f7e977449600211a580fe496bfaf",
+          "size_bytes": 27169
         },
         {
           "name": "tools/ember-cli/src/components/tool-result-renderers.test.ts",
@@ -1033,13 +1098,13 @@
         },
         {
           "name": "tools/ember-cli/src/core/ember-world-state.test.ts",
-          "sha256": "325c1fc68f40df7d4d05b541c467915be961c8dee17818bf1a1b2df442949d80",
-          "size_bytes": 14017
+          "sha256": "e27dfc018a2a3e2d1289b153ab2d5eef2b9a09e0959d436f977b9cb2d80da68a",
+          "size_bytes": 14138
         },
         {
           "name": "tools/ember-cli/src/core/ember-world-state.ts",
-          "sha256": "045c3be7cb1cd57761b4cfd658012fca716ee3d34c0dfe3e64104428a9047bb8",
-          "size_bytes": 19714
+          "sha256": "d739167baaba4caa99bc8bc7cd520b1bc353da84b1cc0b5bd60ff0c9dd440d96",
+          "size_bytes": 19835
         },
         {
           "name": "tools/ember-cli/src/core/encounter-membrane.ts",
@@ -1053,43 +1118,48 @@
         },
         {
           "name": "tools/ember-cli/src/core/frontend-shell.ts",
-          "sha256": "50492d0f6499a4b1e704cbd83dc7cbafe02ddf0a1c1b9dfa2c8592de9a7221d5",
-          "size_bytes": 17348
+          "sha256": "33f4b8154a3ed97c00928b123f40e1f13f0eee3c8cc1f2edaed2dbb774efbc0a",
+          "size_bytes": 17830
         },
         {
           "name": "tools/ember-cli/src/core/goal-continuation-prompt.test.ts",
-          "sha256": "e8f0c8204d663866e9df029a04408c0c78bb7da8b926b9e01da8419f1025c1cb",
-          "size_bytes": 5007
+          "sha256": "f43c255fa3d8fa020b32d2ac31f0cfa1bd75ae72f573abffdeb6b7484ef2ea0f",
+          "size_bytes": 5175
         },
         {
           "name": "tools/ember-cli/src/core/goal-continuation-prompt.ts",
-          "sha256": "f3215c8cb16f7b7ca2471b8919524418878eb8c4310dd34d63cdd77ec9b14730",
-          "size_bytes": 6097
+          "sha256": "3dd85e565159067ee7d04f8d6d1577f6e6f8f5084e7a8ff3b971771853e8347c",
+          "size_bytes": 6440
         },
         {
           "name": "tools/ember-cli/src/core/goal-continuation-wiring.test.ts",
-          "sha256": "56539bed794c6f66bd858be65c3a2d90575f0da5d419b4d8890297a7cd8abbd8",
-          "size_bytes": 12492
+          "sha256": "626152e566d7c315b8f0060bcd8719c123e807cc16a1c2098122c62805dfd331",
+          "size_bytes": 12621
         },
         {
           "name": "tools/ember-cli/src/core/goal-continuation-wiring.ts",
-          "sha256": "424566c8f984df4d25fdea561060ea5bbbf433858e59969783a0b7b6182d3766",
-          "size_bytes": 6156
+          "sha256": "e80102601448dc765135b612e67e702e8d00a418c158a4cb15c5154cc8b36219",
+          "size_bytes": 6224
         },
         {
           "name": "tools/ember-cli/src/core/goal-continuation.test.ts",
-          "sha256": "75c7c05b187d6f5479a6e8b7c622e8dbcf4538f8f0fc805dcd881658120f5616",
-          "size_bytes": 12901
+          "sha256": "787036546093d44bf82842c4a7aedaaa321b8116aba06725b1ef2b3a628875da",
+          "size_bytes": 13059
         },
         {
           "name": "tools/ember-cli/src/core/goal-continuation.ts",
-          "sha256": "7d1a6382b30f1e86cf3571cb0151bdb35c0f30982878b025583ff5617e3ae219",
-          "size_bytes": 5522
+          "sha256": "f90fae824666288546b99ea9b08e09e4236537d879e42a8c1d11eafa5b589738",
+          "size_bytes": 5791
+        },
+        {
+          "name": "tools/ember-cli/src/core/goal-organ-floor-conformance-1348.test.ts",
+          "sha256": "85febe49559506bbdbff883fe8e7a472cdecddf50d83eb5d96e258513f580641",
+          "size_bytes": 1465
         },
         {
           "name": "tools/ember-cli/src/core/goal-organ-floor-conformance-642.test.ts",
-          "sha256": "61a18adff92a082a1bd6b559c6a6b5e7558a89191af07c3762120b78c8d4537d",
-          "size_bytes": 25280
+          "sha256": "4611a672ead821a75f4e78b18dc5986179d5e04ff7e3b393d105b2b48d1dbdaa",
+          "size_bytes": 25295
         },
         {
           "name": "tools/ember-cli/src/core/goal-runtime.test.ts",
@@ -1098,23 +1168,23 @@
         },
         {
           "name": "tools/ember-cli/src/core/goal-runtime.ts",
-          "sha256": "f88dfef1f1451186e97bd290383c8dd0d4346c1de75902fac06180d2c7bb28c5",
-          "size_bytes": 4010
+          "sha256": "a465dc11a71aef22d58a9e268451944eacaa3b3977b2d2233d6517ac8067a16e",
+          "size_bytes": 4222
         },
         {
           "name": "tools/ember-cli/src/core/goal-store.test.ts",
-          "sha256": "0efd6915a39414d72f31d0adfe1f84520081add54fc163d65e6429af0e896986",
-          "size_bytes": 15292
+          "sha256": "0b57565c9b06ee84fced729615de726c361d7c8670ee08561306b43e5031c523",
+          "size_bytes": 16716
         },
         {
           "name": "tools/ember-cli/src/core/goal-store.ts",
-          "sha256": "f48b75456f797cbffc6607045cbb70010f5ba50a49ccb823abaa165506e12a07",
-          "size_bytes": 12211
+          "sha256": "bdc2c12840d3a0f433659cedbd6c5fd6b637e0d203323184b5a94ec8e4813e1c",
+          "size_bytes": 15224
         },
         {
           "name": "tools/ember-cli/src/core/monitor-render.test.ts",
-          "sha256": "9c438179f43b66894330f862ca5361b9aa1af433f83ac0e9d99aba3bfb471b1f",
-          "size_bytes": 27979
+          "sha256": "14e958b82db86d4c5f1f75a2d16244d1e69c27fb7584ab9ff7882f570089825d",
+          "size_bytes": 28140
         },
         {
           "name": "tools/ember-cli/src/core/monitor-render.ts",
@@ -1158,13 +1228,13 @@
         },
         {
           "name": "tools/ember-cli/src/core/query-engine.tool-result-budget.test.ts",
-          "sha256": "dc3b72af4fef86f19e208f2187c05d4218057fe61dbb983d6b34e188a1cf578a",
-          "size_bytes": 7042
+          "sha256": "071bab0e11955298275a6e2f9eb9df2f22334d1ef03561c4d13d0f1d842d4bf6",
+          "size_bytes": 7057
         },
         {
           "name": "tools/ember-cli/src/core/query-engine.ts",
-          "sha256": "9485725b82b0ae89812628fa4951088c58d882857010515215f78b810d4bf9af",
-          "size_bytes": 39293
+          "sha256": "84b229e0ee08cb645406a6a3b3f7edfcfc1d14e58f665c925ba90a03e2a694fe",
+          "size_bytes": 39308
         },
         {
           "name": "tools/ember-cli/src/core/receipt-age.test.ts",
@@ -1193,8 +1263,8 @@
         },
         {
           "name": "tools/ember-cli/src/core/watch-loop.test.ts",
-          "sha256": "92561fa66e87702424eb33d63856daef90561aef7c6d3386c3af7accd3ffc530",
-          "size_bytes": 13831
+          "sha256": "ab79a16ecd8092015d839fc9603f4da3d77439efb46e83b355d71b32dbb4bb5b",
+          "size_bytes": 13854
         },
         {
           "name": "tools/ember-cli/src/core/watch-loop.ts",
@@ -1268,8 +1338,8 @@
         },
         {
           "name": "tools/ember-cli/src/entrypoints/README-model-command-identity.md",
-          "sha256": "e1fc459074d68415fdbd34eafd278b13adcfdeb39641ac43ffc593f8fc06ad1c",
-          "size_bytes": 3925
+          "sha256": "1c30480cf3a4e3ea9776516bc9b5b45ec5512abd2aa3cedc6a82efc3e4eca419",
+          "size_bytes": 4050
         },
         {
           "name": "tools/ember-cli/src/entrypoints/borrowed-reference-identity-roundtrip.test.ts",
@@ -1280,6 +1350,11 @@
           "name": "tools/ember-cli/src/entrypoints/cond3-artifact-b.test.ts",
           "sha256": "b194f4db92539b1a537c151e901fd2a53313cc61f1fbee45a9c239f80880e66a",
           "size_bytes": 4921
+        },
+        {
+          "name": "tools/ember-cli/src/entrypoints/issue1361-lazy-seat.test.ts",
+          "sha256": "8a74e68e0938e13047f5e974073cab1c753fbb2de55ff2fc9b544480357279a2",
+          "size_bytes": 12239
         },
         {
           "name": "tools/ember-cli/src/entrypoints/main.ts",
@@ -1308,8 +1383,8 @@
         },
         {
           "name": "tools/ember-cli/src/entrypoints/model-seat.ts",
-          "sha256": "f1649c08ac23f6f2b831c65a950212f3fa4d503e0d1ec7743b94e4aa61dd6c98",
-          "size_bytes": 10683
+          "sha256": "c1918d1fc2de91d50342362d4f39b412081bf0d5dd911e56079c98a7896e263e",
+          "size_bytes": 11952
         },
         {
           "name": "tools/ember-cli/src/entrypoints/owned-seat-identity-roundtrip.test.ts",
@@ -1318,38 +1393,38 @@
         },
         {
           "name": "tools/ember-cli/src/entrypoints/owned-seat-loader.test.ts",
-          "sha256": "c9b243ce7eab07cd2f5e1b7624f36e48065319298d71101e20f88e7fa61530aa",
-          "size_bytes": 49177
+          "sha256": "45b7d92333ab9170071f6d87468b8be70a1a57175e067d81b7c4ad0dea3bbb54",
+          "size_bytes": 50319
         },
         {
           "name": "tools/ember-cli/src/entrypoints/owned-seat-loader.ts",
-          "sha256": "ac048a06f1a251e925e56929a2effc4dc2094a00717a9fda6aed89ab166d4361",
-          "size_bytes": 32891
+          "sha256": "002224d3ad4f5160b52d662a48b378a66caad4efad381e628bebb6f19a00a482",
+          "size_bytes": 33197
         },
         {
           "name": "tools/ember-cli/src/entrypoints/owned-server-supervisor.test.ts",
-          "sha256": "9e401f4cbedfab2bffbb87df0b6d5c936bf68c606a2e935ecf8a1dbefe83191d",
-          "size_bytes": 27842
+          "sha256": "cd145e878128c26ba18085aaf5177aef6c382da55050ace1d255e76e63c7ddd5",
+          "size_bytes": 28918
         },
         {
           "name": "tools/ember-cli/src/entrypoints/owned-server-supervisor.ts",
-          "sha256": "0c5508d3835fa2d471310403128ab0bcd0478d31082b77023c043c3d4ea9ff85",
-          "size_bytes": 20764
+          "sha256": "1f8db929cb71c60bc6c4f59ef2dd9e7578a03aaf585f98139b155e7d95216926",
+          "size_bytes": 22791
         },
         {
           "name": "tools/ember-cli/src/entrypoints/process-entry-permission-default.test.ts",
-          "sha256": "4f39491ffaca615156460be55be6f961d0a9dacc2db425d048d5157f381c4be3",
-          "size_bytes": 554
+          "sha256": "ba2754498e4fb064a62a2fff571594b6e7ab5d1486aa30eb8e6d65dc810720c4",
+          "size_bytes": 550
         },
         {
           "name": "tools/ember-cli/src/entrypoints/process-entry.test.ts",
-          "sha256": "5bb33d96c42c932f7cdfb5176e3cb1a066a3b8d76a1074c4bbcd49f005c444aa",
-          "size_bytes": 99203
+          "sha256": "0bcb0c63b377d968d0575005acf5fb24771d46e29e7ba25281b20c7fa1ed1d7c",
+          "size_bytes": 105365
         },
         {
           "name": "tools/ember-cli/src/entrypoints/process-entry.ts",
-          "sha256": "3869abcf743f458c65b0c211fde168c9d4cdf084431d982728a2a934d8ef1623",
-          "size_bytes": 58998
+          "sha256": "7e5c7b2cbb9ca97efac0166ac3027ee3021ef19d797177e56362586eef9b54db",
+          "size_bytes": 67423
         },
         {
           "name": "tools/ember-cli/src/entrypoints/process-entry.version-binding.test.ts",
@@ -1358,13 +1433,13 @@
         },
         {
           "name": "tools/ember-cli/src/entrypoints/session-init.test.ts",
-          "sha256": "154051d45508ae428017ee816afe2fabddc53584037c968a95e9b70f3dacb397",
-          "size_bytes": 23498
+          "sha256": "29eddfe6fae241d280c027395c77f177c20962886b1e13f7c50cb8aa7c19a810",
+          "size_bytes": 23513
         },
         {
           "name": "tools/ember-cli/src/entrypoints/session-init.ts",
-          "sha256": "c6361c21973806751831ea036693a5e6462237e80dd50bc4cd4c2d311f83384e",
-          "size_bytes": 31742
+          "sha256": "2de5a9f30a0f6a81370b3db280b19b899bbfa4da191325967262b9361f699d84",
+          "size_bytes": 35774
         },
         {
           "name": "tools/ember-cli/src/entrypoints/source-binding-verifier.test.ts",
@@ -1392,6 +1467,11 @@
           "size_bytes": 2691
         },
         {
+          "name": "tools/ember-cli/src/fixtures/goal-live-session-receipt-v1.json",
+          "sha256": "d975ca83095e9005f96c7d06f4381c580b9a9bd2c0ddafa28ed429c0774c7324",
+          "size_bytes": 8950
+        },
+        {
           "name": "tools/ember-cli/src/generated/version.ts",
           "sha256": "c9f751c03591064221459dee0fc79d175772b477121b51848f6879a18861f5fd",
           "size_bytes": 210
@@ -1415,6 +1495,11 @@
           "name": "tools/ember-cli/src/github-doctor.ts",
           "sha256": "66e9ec49ffa17806363891b013ae0890d6bc491f4f2bc5485035fc74adb8d633",
           "size_bytes": 3769
+        },
+        {
+          "name": "tools/ember-cli/src/goal-live-session-compiled.test.ts",
+          "sha256": "63a81181226479d262d020c5ca0dbd4a7905aa07ea01ecd0a110406df666cbd7",
+          "size_bytes": 8990
         },
         {
           "name": "tools/ember-cli/src/hardening/hardening-receipts.test.ts",
@@ -1513,8 +1598,8 @@
         },
         {
           "name": "tools/ember-cli/src/ink/components.ts",
-          "sha256": "2ff473b7740c3f15fd93fec9988abe529fca668516991fa36150173101af9bba",
-          "size_bytes": 23157
+          "sha256": "e26fd80a7764692b79c95c7571c9144e2c56264af2eeb1f8bfb511dd07c87e65",
+          "size_bytes": 23024
         },
         {
           "name": "tools/ember-cli/src/ink/event-system.ts",
@@ -1618,8 +1703,8 @@
         },
         {
           "name": "tools/ember-cli/src/ink/terminal-session.test.ts",
-          "sha256": "0afa4751e163bbcc7c73aa7e630687cdc793cf94b19ecf2cec3abade0512ab25",
-          "size_bytes": 2528
+          "sha256": "b90b87630ab6061b2c069fc07f5b5c2afe7097326d89f13a86f334f3f35da509",
+          "size_bytes": 3854
         },
         {
           "name": "tools/ember-cli/src/ink/terminal-session.ts",
@@ -1813,8 +1898,8 @@
         },
         {
           "name": "tools/ember-cli/src/package.json",
-          "sha256": "71502a30129de5cf5298b511755bca495dcea331ca59fa77edb69b81c2d9e4a8",
-          "size_bytes": 961
+          "sha256": "3d448b703f578cd77e7df89c318196ccf88478dd73748ae0cf91e3c40546303d",
+          "size_bytes": 1027
         },
         {
           "name": "tools/ember-cli/src/permission-plan-mode.test.ts",
@@ -1918,8 +2003,13 @@
         },
         {
           "name": "tools/ember-cli/src/screens/palette-resize-cycle.test.ts",
-          "sha256": "4c0c6f31d366d361a1aa13711e9ade2119e68f4a41f03ec9be1bb1b65426b5eb",
-          "size_bytes": 9760
+          "sha256": "734614c810007cd5402109e4b3b22a2eae09baa0cb4aac6551ee46ba7a2cba3b",
+          "size_bytes": 10427
+        },
+        {
+          "name": "tools/ember-cli/src/screens/repl-autocomplete-banner.test.ts",
+          "sha256": "5151d542637039802106267ea0dce231ce1d4b04eb0d0599c47dc58a2577e768",
+          "size_bytes": 6464
         },
         {
           "name": "tools/ember-cli/src/screens/repl-banner-border.test.ts",
@@ -1928,8 +2018,8 @@
         },
         {
           "name": "tools/ember-cli/src/screens/repl-command-button-wiring.test.ts",
-          "sha256": "81618588504b910a7e135fa9332d32e12b8541dc4290d5952740c863da7317dc",
-          "size_bytes": 16461
+          "sha256": "8aff0c2c0e0c25ba6ee062cd977cbc65ca106031bf132b9f7fab3667dccf8e07",
+          "size_bytes": 17903
         },
         {
           "name": "tools/ember-cli/src/screens/repl-enter-preempt-while-busy.test.ts",
@@ -1943,8 +2033,8 @@
         },
         {
           "name": "tools/ember-cli/src/screens/repl-homescreen-fireball-production.test.ts",
-          "sha256": "b87886e92cc5200c29a53010fcb865e547ca8ed52185b68355de8ae8af01afb4",
-          "size_bytes": 5007
+          "sha256": "7c16efc533a7a131c48724d0f84174bbfabad58fade72a321af7d967229ea5f6",
+          "size_bytes": 5374
         },
         {
           "name": "tools/ember-cli/src/screens/repl-host-telemetry-wiring.test.ts",
@@ -1958,23 +2048,28 @@
         },
         {
           "name": "tools/ember-cli/src/screens/repl-keyboard-operator-controls.test.ts",
-          "sha256": "f4e65f7d2c76f0143a17d1b4005539f9b79e6fdc926d3834c3fde33813aeae46",
-          "size_bytes": 46286
+          "sha256": "ea5db661b36197981558f8d3af038c3ad76ecda7460b351a46629f8501997e66",
+          "size_bytes": 46260
         },
         {
           "name": "tools/ember-cli/src/screens/repl-operator-control-wiring.test.ts",
-          "sha256": "d5d92fa885aea7b3b0a586624b5a77b5bf8509c002be9920f8eda9a1350a6985",
-          "size_bytes": 10484
+          "sha256": "376f663577237f3724bbc3aa6a0ad7eb2136fac04fd75e213c096a038993555a",
+          "size_bytes": 12988
         },
         {
           "name": "tools/ember-cli/src/screens/repl-operator-surface.test.ts",
-          "sha256": "1869a2ef2c27eeefa4caee3cab39e5fd052a8a598451983809da51d59693e0c1",
-          "size_bytes": 8664
+          "sha256": "949d4aa9b20fb7287009698aeae22dc91be1ad391704900c2638f3c30236c1ff",
+          "size_bytes": 11053
         },
         {
           "name": "tools/ember-cli/src/screens/repl-permission-default.test.ts",
-          "sha256": "0349d3c0bae533ef395685f83c2c1a2101cf88fb76346aaa9fd9c0df3ee4660c",
-          "size_bytes": 2640
+          "sha256": "5b8f22e383c05b6fba79dfbcd809bc579fd4dc8b29e88cdced0e3f4476a31417",
+          "size_bytes": 2600
+        },
+        {
+          "name": "tools/ember-cli/src/screens/repl-process-select-membrane.test.ts",
+          "sha256": "1104d9b2f8f93ca1aef849bb60bbc9787a4b5c01c964afe268802e5555257f03",
+          "size_bytes": 17706
         },
         {
           "name": "tools/ember-cli/src/screens/repl-response-rendered-timing.test.ts",
@@ -2043,18 +2138,18 @@
         },
         {
           "name": "tools/ember-cli/src/screens/repl.ts",
-          "sha256": "25b2294a8020506322fc8f0d16c4cf2739da671714c994bcd2c90c34098e5c8e",
-          "size_bytes": 91642
+          "sha256": "5a4d233b91f2dd382f58cf5af3fb7b06d30d357eac8829aaf685f1ffe92e063d",
+          "size_bytes": 100619
         },
         {
           "name": "tools/ember-cli/src/screens/width-sweep-probe.test.ts",
-          "sha256": "55fd48ec3053109cd8b21eb52f8c1a6121a65a48b9a5cbc1830c068b1f8d5e7b",
-          "size_bytes": 6913
+          "sha256": "5c31dd790420f02dccfb45c36c9c5f7fcc97e0343b0cc7fca528b00da9c2a988",
+          "size_bytes": 7083
         },
         {
           "name": "tools/ember-cli/src/scripts/cobs-proof-pack-run.ts",
-          "sha256": "f31eef39541c89cd207c0932dc0656a07bbe56e179f5008a6a7cafb7b49819db",
-          "size_bytes": 3393
+          "sha256": "a113ad505c2b74f89faa0e668d05fbe588775f08270cfd1d89fc2c6eafb32be4",
+          "size_bytes": 3416
         },
         {
           "name": "tools/ember-cli/src/scripts/drain-stream.ts",
@@ -2087,19 +2182,14 @@
           "size_bytes": 7149
         },
         {
-          "name": "tools/ember-cli/src/services/__fixtures__/fake-brain-server.ts",
-          "sha256": "6d14e2ca499d59c09d33b4d441d764af2139fe30435292777ae1edc17278dc9f",
-          "size_bytes": 2190
-        },
-        {
           "name": "tools/ember-cli/src/services/activity-feed.test.ts",
-          "sha256": "5bee1d83962e38d249e2aef30186c8bd6afe57d91c22616c61a75ae738888e44",
-          "size_bytes": 52753
+          "sha256": "aa9b88b47433c8cb960b76597e313ccff2d45f0d875bed19adf24b38d1986295",
+          "size_bytes": 53390
         },
         {
           "name": "tools/ember-cli/src/services/activity-feed.ts",
-          "sha256": "0d2a4bf56a82781215f399412c80964d07b332361f67c4680be20d6b1a2b4ff7",
-          "size_bytes": 48502
+          "sha256": "d109b56e7f050572d380ae761964786f1e618714860fb07063bca8284f66afb4",
+          "size_bytes": 49320
         },
         {
           "name": "tools/ember-cli/src/services/activity-transcript-window.test.ts",
@@ -2130,16 +2220,6 @@
           "name": "tools/ember-cli/src/services/board-ts-poller.ts",
           "sha256": "b894e0ae5159e2d222d1d231c44fb0a4c7ea39978486dff6aa1800234f0a55e6",
           "size_bytes": 6692
-        },
-        {
-          "name": "tools/ember-cli/src/services/brain-server-supervisor.test.ts",
-          "sha256": "4f5a1dafda13410161d57b8c27936eb998c88ba90e315e43c3f5f530449f2f73",
-          "size_bytes": 31471
-        },
-        {
-          "name": "tools/ember-cli/src/services/brain-server-supervisor.ts",
-          "sha256": "11716c59950526c76d84d8cff27719a7842668987277dbf8f8b9f2af0b949203",
-          "size_bytes": 28744
         },
         {
           "name": "tools/ember-cli/src/services/checkpoint-load.test.ts",
@@ -2173,13 +2253,13 @@
         },
         {
           "name": "tools/ember-cli/src/services/command-buttons.test.ts",
-          "sha256": "d6629a357fd3a9b71e21c26af786a3e9b2b2d3477d55331b0b999da972252b75",
-          "size_bytes": 12122
+          "sha256": "77f62795e0e526b0931d9eba8d94b99c60d96284448b74a084cf063fcd0d0686",
+          "size_bytes": 17006
         },
         {
           "name": "tools/ember-cli/src/services/command-buttons.ts",
-          "sha256": "df12c1bd3fe9e334d8837d47806864dc863490e8fa88937c0e7525698fd55d70",
-          "size_bytes": 12930
+          "sha256": "3361b8c2c77dddf861348948d24479063346e709666cfaa16690c39b8c20e9bc",
+          "size_bytes": 20686
         },
         {
           "name": "tools/ember-cli/src/services/compaction.edge.test.ts",
@@ -2238,18 +2318,18 @@
         },
         {
           "name": "tools/ember-cli/src/services/ember-lab-rpc-query-shim.d.ts",
-          "sha256": "84f7d273c3b84210bba3990f84bcfb8c7585fc71cfaacbd44f6ac802deb8227a",
-          "size_bytes": 1671
+          "sha256": "319d0404c3e6c4f7affa9d93b82fcda6bce592b85056eef39a1163dcc2280093",
+          "size_bytes": 1740
         },
         {
           "name": "tools/ember-cli/src/services/ember-lab-rpc.test.ts",
-          "sha256": "f15a721710b6f7146d3e66f68c8f101c6e66e09e4c42481c2f7ae6f1d427a775",
-          "size_bytes": 12466
+          "sha256": "8d91a520ec5a17669b52cb6e50ede1ed3103b67e039ebadbf61aea0a7a1445bc",
+          "size_bytes": 14554
         },
         {
           "name": "tools/ember-cli/src/services/ember-lab-rpc.ts",
-          "sha256": "b06b9abb6de0a403572d6681423478b008b5dffab205ec0a603b34269250a77b",
-          "size_bytes": 8028
+          "sha256": "6a2571a3e2aaa1aeda249d16e8644dc832851a1c60f2562fa64442ce329954d6",
+          "size_bytes": 8806
         },
         {
           "name": "tools/ember-cli/src/services/finetune-control.test.ts",
@@ -2272,24 +2352,44 @@
           "size_bytes": 3371
         },
         {
+          "name": "tools/ember-cli/src/services/goal-live-session-frames.ts",
+          "sha256": "d3d310dccf466e24b4340c7154b9278240cd69fc94cce632b4db18ccd739ee9c",
+          "size_bytes": 11751
+        },
+        {
+          "name": "tools/ember-cli/src/services/goal-live-session.ts",
+          "sha256": "d80227081bdbff7687390650ca1df9c4755b83a567f7c6ecee918d9fb3c2571a",
+          "size_bytes": 15429
+        },
+        {
           "name": "tools/ember-cli/src/services/goal-persistence.test.ts",
           "sha256": "6541eb0a8e35aa1213f81c85ccc9ad97416cddcdff83f988ad089628d067cf98",
           "size_bytes": 4466
         },
         {
           "name": "tools/ember-cli/src/services/goal-persistence.ts",
-          "sha256": "aa34d9fe7cd029569aff95bec882cedbe4c03c1f27c42260b8a5c1e527700341",
-          "size_bytes": 2575
+          "sha256": "ce9031be54db42ebd3b252cbebf6359bb00dfedcd2632ccb9070c9534c297014",
+          "size_bytes": 2617
         },
         {
           "name": "tools/ember-cli/src/services/goal-receipts.test.ts",
-          "sha256": "f1e81ef2237ab36ba9e2c2bdd014cfcb14bf30f5f4d6b878d52ff5890832b431",
-          "size_bytes": 6179
+          "sha256": "9dc1fea70edaa61296fb83addc2bc6e7e72ff3e954ab37aadd035f27b07d7c21",
+          "size_bytes": 7907
         },
         {
           "name": "tools/ember-cli/src/services/goal-receipts.ts",
-          "sha256": "1bc2571b8f1ab3df9e075f2963be97b564eebd814848fd07d9620e62a88f066b",
-          "size_bytes": 4472
+          "sha256": "bf9c917bd80f04fa6e521b3086d47a4e9e352f5b280b8ec4df2d82a9aaec6667",
+          "size_bytes": 4886
+        },
+        {
+          "name": "tools/ember-cli/src/services/governed-dispatch.test.ts",
+          "sha256": "dab08435ceabbb9313cf70c0228853d8bac75fd7cd3e7bbdab273342f97c5c34",
+          "size_bytes": 8688
+        },
+        {
+          "name": "tools/ember-cli/src/services/governed-dispatch.ts",
+          "sha256": "7f96c402bb98cab4f3c8d21e646ca499b1ded58ef7fbcca4301103cf5020c428",
+          "size_bytes": 8179
         },
         {
           "name": "tools/ember-cli/src/services/gpu-state-poller.test.ts",
@@ -2323,13 +2423,58 @@
         },
         {
           "name": "tools/ember-cli/src/services/liveness-heartbeat.test.ts",
-          "sha256": "00fd86fcb54a86df42dc3ed67e8fbceab4fa68580145cade64d55f325286dabf",
-          "size_bytes": 36704
+          "sha256": "994cd955944bd9ab32404f9eb7b6a448fe8cd070396eb04730aab556b450f6f0",
+          "size_bytes": 36854
         },
         {
           "name": "tools/ember-cli/src/services/liveness-heartbeat.ts",
           "sha256": "1cdd9cf9a16cc5d0020b83759288203f9ae5072a36754cc465e9221a0dabff89",
           "size_bytes": 11575
+        },
+        {
+          "name": "tools/ember-cli/src/services/memory-footprint-cockpit.test.ts",
+          "sha256": "882fec5514b3a54206577fdc3b6257bba267a01e956a22cef113b9a52d5a98fe",
+          "size_bytes": 3846
+        },
+        {
+          "name": "tools/ember-cli/src/services/memory-footprint-cockpit.ts",
+          "sha256": "9309270e5f2e9cd692e829a4fcbb368b5716836f78f2ee60a838cc8477daf97d",
+          "size_bytes": 2316
+        },
+        {
+          "name": "tools/ember-cli/src/services/memory-footprint-governor.test.ts",
+          "sha256": "49b4ffd8596838a23bc655a826f7b82ba11136ac7a79d9d67bd3f64fdddf657e",
+          "size_bytes": 5544
+        },
+        {
+          "name": "tools/ember-cli/src/services/memory-footprint-governor.ts",
+          "sha256": "196f6b8c78ae696fea4cfcf585577e300507efde83672c855f2d525a3ddb68f4",
+          "size_bytes": 5729
+        },
+        {
+          "name": "tools/ember-cli/src/services/memory-footprint-live.test.ts",
+          "sha256": "e521e1e0630849eed0ca2a7cb8db889fceeb9148ee9ca2b56c976698662c445f",
+          "size_bytes": 5342
+        },
+        {
+          "name": "tools/ember-cli/src/services/memory-footprint-live.ts",
+          "sha256": "0a2988aab15e0c8d0d4b45e4c3f22775d52606fc87aaead263e96d43329a1186",
+          "size_bytes": 4092
+        },
+        {
+          "name": "tools/ember-cli/src/services/memory-footprint-repl-wiring.test.ts",
+          "sha256": "956ed837b3b820a57e29bf02d0594e11d226c89ddd6f98a2bb72b1324a3e236b",
+          "size_bytes": 1835
+        },
+        {
+          "name": "tools/ember-cli/src/services/memory-footprint-service.test.ts",
+          "sha256": "d31738494b3d267151a3d6792d4ab95a75591ca6bb7f0f102ba10d32ac3ec785",
+          "size_bytes": 4811
+        },
+        {
+          "name": "tools/ember-cli/src/services/memory-footprint-service.ts",
+          "sha256": "7cd42dd289d2847d80bf5e37c7504299f191ab3bc40f1b7010ffa8e1d48d6dc3",
+          "size_bytes": 3605
         },
         {
           "name": "tools/ember-cli/src/services/model-circuit-breaker-client.ts",
@@ -2408,13 +2553,13 @@
         },
         {
           "name": "tools/ember-cli/src/services/operator-receipts.test.ts",
-          "sha256": "f15bd6ff83b10619e78440af4e54ea36aad76a863ad6c1e5e805afdcd5f1729b",
-          "size_bytes": 3175
+          "sha256": "624785523526148816a8d7b06939a32a19dab8f23f61184e4326ced32235f513",
+          "size_bytes": 3205
         },
         {
           "name": "tools/ember-cli/src/services/operator-receipts.ts",
-          "sha256": "e04a226fb1d392f7951e497687f42c796b7c1eefe53364cd60e60235465ccc6f",
-          "size_bytes": 3662
+          "sha256": "0b147be17f3bb768842dabea72680fda1586b491bc03da865a885060c55fe5d7",
+          "size_bytes": 3708
         },
         {
           "name": "tools/ember-cli/src/services/outage-banner-poller.test.ts",
@@ -2425,6 +2570,26 @@
           "name": "tools/ember-cli/src/services/outage-banner-poller.ts",
           "sha256": "959f917d5f347506750ff79eedaf9a5d89c97233f43a10452b93d2c0a0425824",
           "size_bytes": 4532
+        },
+        {
+          "name": "tools/ember-cli/src/services/process-memory-census.test.ts",
+          "sha256": "27ef41b09f2eb758940cf02f4ec72e53c18301dda420b7e8a8d205d542d9ba59",
+          "size_bytes": 6160
+        },
+        {
+          "name": "tools/ember-cli/src/services/process-memory-census.ts",
+          "sha256": "8699cedd3a12513519743ca9ae6c5eff66d1be38000d8cf3ae020fad794098a7",
+          "size_bytes": 4601
+        },
+        {
+          "name": "tools/ember-cli/src/services/process-select.test.ts",
+          "sha256": "f306a751dfd193bf57ae764d047ba0e935949b33c72c21dde73fdf80daebd61c",
+          "size_bytes": 8957
+        },
+        {
+          "name": "tools/ember-cli/src/services/process-select.ts",
+          "sha256": "441fd2002e099bcf9bf354b7bf7b4cc2f53de5181155714de4e1b11fe7ff10f2",
+          "size_bytes": 9905
         },
         {
           "name": "tools/ember-cli/src/services/prompt-suggestion.test.ts",
@@ -2462,14 +2627,49 @@
           "size_bytes": 2654
         },
         {
+          "name": "tools/ember-cli/src/services/serving-topology-census.test.ts",
+          "sha256": "efc64f4ae15c09ae5c29374e7236ddd1c73262f8b6ae3de28ec6cfd1829fd9b5",
+          "size_bytes": 1840
+        },
+        {
+          "name": "tools/ember-cli/src/services/serving-topology-census.ts",
+          "sha256": "55f3cfa838ddd190fe69225cf35a4f74a409a17d6b881d76cac9b2054e0441a8",
+          "size_bytes": 2318
+        },
+        {
+          "name": "tools/ember-cli/src/services/serving-topology-drift.test.ts",
+          "sha256": "74e0baa55a929673043bf26ceb07c02177691fe6f18b0355181071bbead5bc8a",
+          "size_bytes": 2594
+        },
+        {
+          "name": "tools/ember-cli/src/services/serving-topology-drift.ts",
+          "sha256": "d83a6e6d4dedfbd20d704b532fdc5b2c0e6435ff79607a18aed43deb0b6da295",
+          "size_bytes": 3874
+        },
+        {
+          "name": "tools/ember-cli/src/services/serving-topology-live.test.ts",
+          "sha256": "ef393c8754b8417df451a3836f81fd865d8e60719c9c14c487a751a884771d91",
+          "size_bytes": 6623
+        },
+        {
+          "name": "tools/ember-cli/src/services/serving-topology-live.ts",
+          "sha256": "92c2ebc27ba2971dfa2523f45222387cab799ee8679ba783aec8cd8154e41078",
+          "size_bytes": 4485
+        },
+        {
+          "name": "tools/ember-cli/src/services/serving-topology-repl-wiring.test.ts",
+          "sha256": "fbd81843c5ade7704124605b85e625588540237256d5213bdfc4ad5077896997",
+          "size_bytes": 1798
+        },
+        {
           "name": "tools/ember-cli/src/services/slash-dispatch.test.ts",
-          "sha256": "9c6d5e937501d9c3179c3573a543873c1d2dc188d37754679e78a87669d10894",
-          "size_bytes": 4472
+          "sha256": "14165d2d82c56318893ecc1abd37ed9f80ee6cf27c03ac81ce645da408015b87",
+          "size_bytes": 5178
         },
         {
           "name": "tools/ember-cli/src/services/slash-dispatch.ts",
-          "sha256": "97dd2ea0f11b98ca3460a9015aabf1f97b4864e4cadc51aca47bd330eecd83b4",
-          "size_bytes": 2897
+          "sha256": "42535d4a48800987c0b90eb4cb4575193fcbc7a5ed0c7a01b9ec4e6afc756a49",
+          "size_bytes": 3719
         },
         {
           "name": "tools/ember-cli/src/services/slash-dropdown-row-accounting.test.ts",
@@ -2783,8 +2983,8 @@
         },
         {
           "name": "tools/ember-cli/src/tools/github-tools.test.ts",
-          "sha256": "df806588bc78e97396069e6ccb0fe8a945e7dbf2416d5f0127e64dbc840f7a8e",
-          "size_bytes": 13733
+          "sha256": "07e4105633643abc0060d9928146a790d7548900d3562e2f72b9b65f8ad4cd6c",
+          "size_bytes": 13853
         },
         {
           "name": "tools/ember-cli/src/tools/github-tools.ts",
@@ -2793,13 +2993,13 @@
         },
         {
           "name": "tools/ember-cli/src/tools/goal-tools.test.ts",
-          "sha256": "f59aad34c3bfa986023716c3bfa7fdc15646c41a9a8b5d40307a97f92547e7dc",
-          "size_bytes": 9990
+          "sha256": "20bbcf773f87b43acae45fd8541203a6e693e0e1abce3a98229c143ea6f94bb3",
+          "size_bytes": 12032
         },
         {
           "name": "tools/ember-cli/src/tools/goal-tools.ts",
-          "sha256": "3ce955f2e15a41fa60265aea4b3c86528f4ca50e1f6d3cb2330df6c64acf20d3",
-          "size_bytes": 8760
+          "sha256": "1aae0e28fc0db156fbd2adbaba97cb1d2d6192a8cab34da6107865b607e3e404",
+          "size_bytes": 11221
         },
         {
           "name": "tools/ember-cli/src/tools/notebook-edit.ts",
@@ -2968,13 +3168,13 @@
         },
         {
           "name": "tools/ember-cli/src/utils/repo-root.test.ts",
-          "sha256": "6957d5d86f8f9a6551206f96edee70c813d5043d6ca9aeb5f6b609dcf798db70",
-          "size_bytes": 21335
+          "sha256": "9160bcda0c50b6463ccdb8413f288f5a94cafe5c05bdf82223b696457ee52034",
+          "size_bytes": 25949
         },
         {
           "name": "tools/ember-cli/src/utils/repo-root.ts",
-          "sha256": "055e463f8f476fb063d56ac6c8cb17ce7976f3d17b75de6fcb4793d49e4d2ac1",
-          "size_bytes": 12937
+          "sha256": "2490651114e92d53453a376a6a1422af5377533bb9d62ef11f7f7333fe2bb483",
+          "size_bytes": 15036
         },
         {
           "name": "tools/ember-cli/src/version.test.ts",
@@ -3018,8 +3218,8 @@
         },
         {
           "name": "tools/ember-cli/src/world-state-snapshot.json",
-          "sha256": "d0961f51742a2a92e2ac96d12014a0b80eade9735f59821e231c1a5349793eeb",
-          "size_bytes": 40190
+          "sha256": "fa309dfe1145f78efe8a5848ae3b29bf38ccc87a1771cb297a33a502182b963a",
+          "size_bytes": 40530
         }
       ]
     },
@@ -3075,8 +3275,8 @@
       "kind": "file",
       "provenance": "The sec5.3 DEGRADED_PROXY energy logger; smoke-tested as an R1 entry-gate item. Criterion receipted before first use.",
       "path": "scripts/energy_proxy_logger.py",
-      "sha256": "10fb0d1e8f9808b527f180ffb055db91e90702aef0220a7a7a54b0d769c4e97d",
-      "size_bytes": 29473
+      "sha256": "458f4bdadcb91e520622f15e08e16dd3eba75fe15e507ba8830a2283b786964d",
+      "size_bytes": 37882
     },
     {
       "category": "deterministic_tools",
@@ -3091,16 +3291,16 @@
       "kind": "file",
       "provenance": "ember-owned-rung-v1 admission contract; the fail-closed prerequisite of sec1.",
       "path": "scripts/ember_restart/contract.py",
-      "sha256": "fa23a6f2844829606ad887b336bfa1b04921281d61ad8aa5149deec94bbab6bf",
-      "size_bytes": 89996
+      "sha256": "0fd9df731928beac355a417a7b1050af3f737d5c892b102637ef3d444d339a51",
+      "size_bytes": 103913
     },
     {
       "category": "deterministic_tools",
       "kind": "file",
       "provenance": "This builder. Self-included so the manifest's own producer is a pinned prior and cannot change unnoticed.",
       "path": "scripts/build_fixed_prior_manifest.py",
-      "sha256": "e335a4e8c1c42e1f6eacd180cf4193306789eaf713f700df54ff17ed810cccd9",
-      "size_bytes": 30573
+      "sha256": "6d4bef2e558dd4156e114a217ba13c359f925995f7748b7d3fcc6ad36cb41bef",
+      "size_bytes": 30663
     },
     {
       "category": "corpora",
@@ -3184,10 +3384,10 @@
     {
       "category": "benchmark_payloads",
       "kind": "file",
-      "provenance": "Conserved mandate-set registry (GOAL.md sec11 / CONTINUITY resolver), including the two permanently-open UNRECOVERED_PLACEHOLDER slots.",
+      "provenance": "Conserved mandate-set registry (docs/authority/GOAL.md sec11 / CONTINUITY resolver), including the two permanently-open UNRECOVERED_PLACEHOLDER slots.",
       "path": "manifests/ember-01-custody/benchmark-registry.json",
-      "sha256": "2743c1ec126f2646820980420ef64f8f7f262c23cd7ba2434e1ef3b7fb822d0e",
-      "size_bytes": 69524
+      "sha256": "40d01a75595cbd38762f11cbe351002a0c670be5f25b6181259e1020c930b153",
+      "size_bytes": 70214
     },
     {
       "category": "benchmark_payloads",
@@ -3280,8 +3480,8 @@
       "kind": "file",
       "provenance": "The pre-registration this run is hash-pinned to (`--prereg <sha256>`).",
       "path": "docs/spec/ember02-preregistration-v1.md",
-      "sha256": "00fe44e673c95b484849cc59d81adc13e6eb685fedfe75e5eff7d6ef5d77b6d7",
-      "size_bytes": 41211
+      "sha256": "a671f81b02755178e67d0bcca5b0ec9c4d41650b6a1fd868f5e597b1aa3b3c51",
+      "size_bytes": 41218
     },
     {
       "category": "configuration",
@@ -3303,15 +3503,15 @@
       "category": "configuration",
       "kind": "file",
       "provenance": "Goal authority: the 3B floor and required native capabilities.",
-      "path": "GOAL.md",
-      "sha256": "74bba95cab22eae225cbd3f3225e3906246d8d90ac5a13457b39731ea9ef1979",
-      "size_bytes": 21080
+      "path": "docs/authority/GOAL.md",
+      "sha256": "ba1c19237990be77da8a1e62a94ae0781348e8f2fd38223bcd41888838567653",
+      "size_bytes": 21368
     },
     {
       "category": "configuration",
       "kind": "file",
       "provenance": "Invariant authority; F3 stamps every receipt with its hash.",
-      "path": "INVARIANT.md",
+      "path": "docs/authority/INVARIANT.md",
       "sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
       "size_bytes": 5658
     }

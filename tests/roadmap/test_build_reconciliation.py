@@ -82,7 +82,7 @@ def test_oldest_historical_contracts_are_preserved_as_mixed() -> None:
             [
                 issue(3, "C14 resident-training gate"),
                 issue(29, "C-SCALE apex owned >3e9"),
-                issue(35, "GOAL.md contract-integrity audit"),
+                issue(35, "docs/authority/GOAL.md contract-integrity audit"),
             ]
         )
     )

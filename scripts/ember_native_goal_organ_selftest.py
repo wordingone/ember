@@ -23,7 +23,7 @@ def main() -> int:
         out = root / "native-goal.json"
 
         _write(
-            repo / "GOAL.md",
+            repo / "docs/authority/GOAL.md",
             """
 # Ember Goal
 ## Current Blocker Packet

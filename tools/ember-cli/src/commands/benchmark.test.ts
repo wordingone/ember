@@ -42,7 +42,7 @@ const VALID_REGISTRY: BenchmarkRegistry = {
       execution_status: "not_executed",
       subject_class: "none",
       completion: false,
-      evidence: ["repo:GOAL.md"],
+      evidence: ["repo:docs/authority/GOAL.md"],
       split: "unresolved",
       harness_path: null,
       harness_identity: null,

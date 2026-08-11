@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """floor_contract_manifest.py — Phase-3 C14 floor-contract manifest.
 
-Row-by-row manifest keyed to every row in docs/ember-floor-contract.md and
+Row-by-row manifest keyed to every row in docs/contracts/ember-floor-contract.md and
 every component in nc2-own-technique-contract.md.  Extends and replaces
 ember_resident_training_gate.build_floor_contract_manifest() with phase3-specific
 surfaces: RLM, iGRPO, LoRA adapter, fp16 C arm.
@@ -161,7 +161,7 @@ def _make_floor_rows(floor_sha: str, native_engine_sha: str) -> List["FloorRow"]
          FP8, MoE, DiffusionGemma
       3. Standing pipeline (preserved_trigger_gated): external-research-intake
     """
-    src = "docs/ember-floor-contract.md"
+    src = "docs/contracts/ember-floor-contract.md"
     sha = floor_sha
 
     return [

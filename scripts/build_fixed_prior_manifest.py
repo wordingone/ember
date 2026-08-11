@@ -133,7 +133,7 @@ INVENTORY: tuple[dict, ...] = (
 
     # --- ember-cli ---------------------------------------------------------
     dict(category="ember_cli", kind="tree", path="tools/ember-cli/src",
-         provenance="ember-cli execution surface (GOAL.md sec10): every executed "
+         provenance="ember-cli execution surface (docs/authority/GOAL.md sec10): every executed "
                     "job runs through it. Version is this tree digest plus the "
                     "repo commit recorded in `repo`."),
     dict(category="ember_cli", kind="version", name="node",
@@ -212,7 +212,7 @@ INVENTORY: tuple[dict, ...] = (
     # --- benchmark payloads ------------------------------------------------
     dict(category="benchmark_payloads", kind="file",
          path="manifests/ember-01-custody/benchmark-registry.json",
-         provenance="Conserved mandate-set registry (GOAL.md sec11 / CONTINUITY "
+         provenance="Conserved mandate-set registry (docs/authority/GOAL.md sec11 / CONTINUITY "
                     "resolver), including the two permanently-open "
                     "UNRECOVERED_PLACEHOLDER slots."),
     dict(category="benchmark_payloads", kind="file",
@@ -262,10 +262,10 @@ INVENTORY: tuple[dict, ...] = (
          provenance="Pinned Python environment (distributions + versions) for the "
                     "declared host."),
     dict(category="configuration", kind="file",
-         path="GOAL.md",
+         path="docs/authority/GOAL.md",
          provenance="Goal authority: the 3B floor and required native capabilities."),
     dict(category="configuration", kind="file",
-         path="INVARIANT.md",
+         path="docs/authority/INVARIANT.md",
          provenance="Invariant authority; F3 stamps every receipt with its hash."),
 )
 
@@ -435,7 +435,7 @@ def build_manifest() -> dict:
             "Every item in this manifest is a NON-LEARNED prior. Zero imported "
             "learned weights, embeddings, learned-parameter tokenizers, teacher "
             "outputs, learned filters or judges, or hidden accelerator services "
-            "(INVARIANT.md clause 3, fail-closed on unknown provenance)."),
+            "(docs/authority/INVARIANT.md clause 3, fail-closed on unknown provenance)."),
         "energy_method": energy_method_block(),
         "host_governor": host_governor_block(),
         "items": build_items(),
@@ -550,7 +550,7 @@ def _selftest() -> int:
     with tempfile.TemporaryDirectory(dir=scratch) as td:
         fake = Path(td) / "m.json"
         fake.write_text(json.dumps({"items": [
-            {"kind": "file", "path": "GOAL.md", "sha256": "0" * 64}]}),
+            {"kind": "file", "path": "docs/authority/GOAL.md", "sha256": "0" * 64}]}),
             encoding="utf-8")
         ok, findings = verify(fake)
         if ok or not any("DRIFT" in f for f in findings):
