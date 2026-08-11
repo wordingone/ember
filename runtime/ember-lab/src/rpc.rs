@@ -17,6 +17,8 @@ use std::sync::{
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+const MAX_ASSESSMENT_DIRECTORY_UTF8_BYTES: usize = 4096;
+
 #[derive(Debug, Deserialize)]
 struct WireRequest {
     jsonrpc: String,
@@ -80,7 +82,15 @@ struct ExportReceiptParams {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ContentAddressedReceiptParams {
+    job_id: String,
+    directory: PathBuf,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AssessmentEvidenceParams {
     job_id: String,
     directory: PathBuf,
 }
@@ -323,6 +333,25 @@ fn dispatch(daemon: &Daemon, request: WireRequest) -> (Value, bool) {
                     success(id, json!({"path":artifact.path,"sha256":artifact.sha256})),
                     false,
                 ),
+                Err(error) => (operation_error(id, error), false),
+            }
+        }
+        "export_assessment_evidence" => {
+            let params: AssessmentEvidenceParams = match decode(&id, request.params) {
+                Ok(value) => value,
+                Err(response) => return (response, false),
+            };
+            if params.directory.to_string_lossy().len() > MAX_ASSESSMENT_DIRECTORY_UTF8_BYTES {
+                return (
+                    invalid_params(id, "assessment evidence directory exceeds 4096 UTF-8 bytes"),
+                    false,
+                );
+            }
+            match daemon.export_assessment_evidence(&params.job_id, &params.directory) {
+                Ok(artifact) => match serde_json::to_value(artifact) {
+                    Ok(value) => (success(id, value), false),
+                    Err(error) => (operation_error(id, error), false),
+                },
                 Err(error) => (operation_error(id, error), false),
             }
         }

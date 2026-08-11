@@ -3251,6 +3251,152 @@ fn process_stdout_and_stderr_are_append_only_and_receipt_bound() {
 
 #[cfg(windows)]
 #[test]
+fn assessment_evidence_is_one_fresh_atomic_daemon_export() {
+    let root = sandbox("assessment-evidence");
+    let db = root.join("ember-lab.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("assessment-job", &identity, &identity_hash)
+        .unwrap();
+    daemon
+        .acquire_lease("cpu-fixture", "assessment-job")
+        .unwrap();
+    daemon
+        .start_job(
+            JobSpec::new(
+                "assessment-job",
+                std::env::current_exe().unwrap().to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "cpu-fixture",
+            )
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_LOG_MESSAGE", "assessment-evidence")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "25"),
+        )
+        .unwrap();
+    for _ in 0..200 {
+        if daemon.job_state("assessment-job").unwrap() == Some(JobState::Exited) {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+
+    let output = root.join("fresh-assessment-export");
+    let evidence = daemon
+        .export_assessment_evidence("assessment-job", &output)
+        .unwrap();
+    assert_eq!(evidence.schema, "ember-lab-assessment-evidence-v1");
+    for artifact in [
+        &evidence.operational_receipt,
+        &evidence.stdout_log,
+        &evidence.stderr_log,
+        &evidence.schedule_alarm_state,
+    ] {
+        assert!(artifact.path.is_file());
+        assert!(artifact.path.starts_with(&output));
+        assert_eq!(sha256(&artifact.path), artifact.sha256);
+        assert!(artifact
+            .path
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with(&artifact.sha256));
+    }
+    let receipt: Value =
+        serde_json::from_slice(&fs::read(&evidence.operational_receipt.path).unwrap()).unwrap();
+    assert_eq!(receipt["job_id"], "assessment-job");
+    assert_eq!(
+        receipt["logs"]["stdout"]["sha256"],
+        evidence.stdout_log.sha256
+    );
+    assert_eq!(
+        receipt["logs"]["stderr"]["sha256"],
+        evidence.stderr_log.sha256
+    );
+    let schedule: Value =
+        serde_json::from_slice(&fs::read(&evidence.schedule_alarm_state.path).unwrap()).unwrap();
+    assert_eq!(
+        schedule["ember_lab_identity"],
+        receipt["ember_lab_identity"]
+    );
+
+    let occupied = root.join("occupied-export");
+    fs::create_dir(&occupied).unwrap();
+    fs::write(occupied.join("sentinel"), b"preserve").unwrap();
+    assert!(daemon
+        .export_assessment_evidence("assessment-job", &occupied)
+        .is_err());
+    assert_eq!(fs::read(occupied.join("sentinel")).unwrap(), b"preserve");
+    assert_eq!(fs::read_dir(&occupied).unwrap().count(), 1);
+}
+
+#[cfg(windows)]
+#[test]
+fn assessment_evidence_refuses_running_or_tampered_log_state_without_publication() {
+    let root = sandbox("assessment-evidence-refusal");
+    let db = root.join("ember-lab.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("assessment-running", &identity, &identity_hash)
+        .unwrap();
+    daemon
+        .acquire_lease("cpu-fixture", "assessment-running")
+        .unwrap();
+    daemon
+        .start_job(
+            JobSpec::new(
+                "assessment-running",
+                std::env::current_exe().unwrap().to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "cpu-fixture",
+            )
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000"),
+        )
+        .unwrap();
+    let running_output = root.join("running-output");
+    assert!(matches!(
+        daemon.export_assessment_evidence("assessment-running", &running_output),
+        Err(EmberLabError::NonTerminalReceipt { .. })
+    ));
+    assert!(!running_output.exists());
+    daemon.stop_job("assessment-running").unwrap();
+
+    let (stdout, _) = daemon.job_log_paths("assessment-running").unwrap();
+    let stdout_sha = sha256(&stdout);
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute(
+            "UPDATE jobs SET stdout_log_sha256=?2 WHERE job_id=?1",
+            rusqlite::params!["assessment-running", "0".repeat(64)],
+        )
+        .unwrap();
+    let db_tampered_output = root.join("db-tampered-output");
+    assert!(matches!(
+        daemon.export_assessment_evidence("assessment-running", &db_tampered_output),
+        Err(EmberLabError::LogEvidenceMismatch { stream, .. }) if stream == "stdout"
+    ));
+    assert!(!db_tampered_output.exists());
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute(
+            "UPDATE jobs SET stdout_log_sha256=?2 WHERE job_id=?1",
+            rusqlite::params!["assessment-running", stdout_sha],
+        )
+        .unwrap();
+    fs::write(&stdout, b"tampered-after-daemon-seal").unwrap();
+    let tampered_output = root.join("tampered-output");
+    assert!(matches!(
+        daemon.export_assessment_evidence("assessment-running", &tampered_output),
+        Err(EmberLabError::LogEvidenceMismatch { stream, .. }) if stream == "stdout"
+    ));
+    assert!(!tampered_output.exists());
+}
+
+#[cfg(windows)]
+#[test]
 fn nonterminal_job_cannot_publish_a_content_addressed_receipt() {
     let root = sandbox("nonterminal-receipt");
     let db = root.join("ember-lab.sqlite3");
