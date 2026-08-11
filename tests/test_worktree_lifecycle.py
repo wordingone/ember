@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import runpy
 import shutil
 import subprocess
 import sys
@@ -39,7 +40,36 @@ def git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProce
 
 
 def lifecycle(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    prepared = list(args)
+    if os.name == "nt" and prepared and prepared[0] == "create" and "--allow-c-drive" not in prepared:
+        prepared.append("--allow-c-drive")
+    return run(sys.executable, str(SCRIPT), "--repo", str(repo), *prepared, cwd=repo, check=check)
+
+
+def lifecycle_raw(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     return run(sys.executable, str(SCRIPT), "--repo", str(repo), *args, cwd=repo, check=check)
+
+
+def lifecycle_with_env(
+    repo: Path,
+    *args: str,
+    env: dict[str, str],
+    check: bool = True,
+) -> subprocess.CompletedProcess[str]:
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--repo", str(repo), *args],
+        cwd=repo,
+        text=True,
+        capture_output=True,
+        encoding="utf-8",
+        env={**os.environ, **env},
+    )
+    if check and result.returncode:
+        raise AssertionError(
+            f"command failed ({result.returncode}): {' '.join(args)}\n"
+            f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        )
+    return result
 
 
 def make_repo(tmp_path: Path) -> Path:
@@ -146,6 +176,92 @@ def test_create_registers_custody_and_refuses_growth_at_ceiling(tmp_path: Path) 
     assert refused.returncode == 2
     assert "WORKTREE_CEILING" in refused.stderr
     assert not (tmp_path / "overflow").exists()
+
+
+def test_create_bare_name_uses_configured_worktree_root(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "2")
+    root = tmp_path / "managed-root"
+
+    result = lifecycle_with_env(
+        repo,
+        "create",
+        "--path",
+        "issue-1317",
+        "--branch",
+        "issue-1317",
+        "--owner",
+        "founder-one",
+        "--purpose",
+        "bare-name-default-root",
+        "--expires",
+        "2099-01-01",
+        "--allow-c-drive",
+        env={"EMBER_WORKTREE_ROOT": str(root)},
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (root / "issue-1317").is_dir()
+    assert not (repo / "issue-1317").exists()
+
+
+def test_create_bare_name_defaults_to_governed_b_drive_root(monkeypatch) -> None:
+    if os.name != "nt":
+        return
+    monkeypatch.delenv("EMBER_WORKTREE_ROOT", raising=False)
+    api = runpy.run_path(str(SCRIPT))
+
+    destination = api["resolve_create_destination"](
+        "issue-1317-default",
+        allow_c_drive=False,
+    )
+
+    assert str(destination).replace("\\", "/").casefold() == (
+        "b:/m/ember-wt/issue-1317-default"
+    )
+
+
+def test_create_refuses_explicit_c_drive_without_override(tmp_path: Path) -> None:
+    if os.name != "nt":
+        return
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "2")
+    candidate = tmp_path / "c-drive-refused"
+
+    result = lifecycle_raw(
+        repo,
+        "create",
+        "--path",
+        str(candidate),
+        "--branch",
+        "c-drive-refused",
+        "--owner",
+        "founder-one",
+        "--purpose",
+        "c-drive-policy",
+        "--expires",
+        "2099-01-01",
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "C_DRIVE_WORKTREE_REFUSED" in result.stderr
+    assert not candidate.exists()
+
+
+def test_create_refuses_extended_c_drive_before_filesystem_mutation() -> None:
+    api = runpy.run_path(str(SCRIPT))
+    resolve = api["resolve_create_destination"]
+    lifecycle_error = api["LifecycleError"]
+
+    for candidate in (r"\\?\C:\ember-wt\issue-1317", r"\\.\C:\ember-wt\issue-1317"):
+        try:
+            resolve(candidate, allow_c_drive=False)
+        except lifecycle_error as exc:
+            assert exc.code == "C_DRIVE_WORKTREE_REFUSED"
+        else:
+            raise AssertionError(f"extended C: path was admitted: {candidate}")
 
 
 def test_create_uses_ceiling_headroom_above_target(tmp_path: Path) -> None:
