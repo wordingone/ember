@@ -343,10 +343,20 @@ impl RestartPolicy {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct ReceiptArtifact {
     pub path: PathBuf,
     pub sha256: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct AssessmentEvidenceArtifact {
+    pub schema: String,
+    pub operational_receipt: ReceiptArtifact,
+    pub stdout_log: ReceiptArtifact,
+    pub stderr_log: ReceiptArtifact,
+    pub schedule_alarm_state: ReceiptArtifact,
+    pub ember_lab_identity: Value,
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SchedulePrediction {
@@ -2853,6 +2863,146 @@ impl Daemon {
             });
         }
         write_content_addressed_receipt(directory, &self.receipt_bytes(job_id)?)
+    }
+
+    /// Publish one daemon-derived assessment snapshot into an absent directory.
+    ///
+    /// All bytes are reopened and verified before a private staging directory is
+    /// renamed into view, so callers never receive a partial or caller-authored
+    /// receipt/log/schedule chain.
+    pub fn export_assessment_evidence(
+        &self,
+        job_id: &str,
+        directory: &Path,
+    ) -> Result<AssessmentEvidenceArtifact> {
+        let state = self
+            .job_state(job_id)?
+            .ok_or_else(|| EmberLabError::JobNotFound {
+                job_id: job_id.into(),
+            })?;
+        if !matches!(
+            state,
+            JobState::Stopped | JobState::Exited | JobState::Failed
+        ) {
+            return Err(EmberLabError::NonTerminalReceipt {
+                job_id: job_id.into(),
+                state: state.as_str().into(),
+            });
+        }
+        if directory.exists() {
+            return Err(EmberLabError::ReceiptAlreadyExists {
+                path: directory.to_path_buf(),
+            });
+        }
+        let parent = directory
+            .parent()
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                detail: "assessment evidence directory must have a parent".into(),
+            })?;
+        if !parent.is_dir() {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "assessment evidence parent must already exist".into(),
+            });
+        }
+
+        let receipt_bytes = self.receipt_bytes(job_id)?;
+        let receipt: Value = serde_json::from_slice(&receipt_bytes)?;
+        let identity = receipt.get("ember_lab_identity").cloned().ok_or_else(|| {
+            EmberLabError::InvalidDispatchManifest {
+                detail: "operational receipt omitted daemon identity".into(),
+            }
+        })?;
+        let logs = receipt
+            .get("logs")
+            .and_then(Value::as_object)
+            .ok_or_else(|| EmberLabError::LogEvidenceUnsealed {
+                job_id: job_id.into(),
+            })?;
+        let (stdout_path, stderr_path) = self.job_log_paths(job_id)?;
+        let stdout_bytes = fs::read(&stdout_path)?;
+        let stderr_bytes = fs::read(&stderr_path)?;
+        let stdout_sha256 = hash_bytes(&stdout_bytes);
+        let stderr_sha256 = hash_bytes(&stderr_bytes);
+        for (stream, path, actual) in [
+            ("stdout", &stdout_path, &stdout_sha256),
+            ("stderr", &stderr_path, &stderr_sha256),
+        ] {
+            let evidence = logs.get(stream).and_then(Value::as_object);
+            let expected = evidence
+                .and_then(|value| value.get("sha256"))
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            let file_name = path.file_name().map(|value| value.to_string_lossy());
+            if evidence
+                .and_then(|value| value.get("sealed"))
+                .and_then(Value::as_bool)
+                != Some(true)
+                || evidence
+                    .and_then(|value| value.get("file_name"))
+                    .and_then(Value::as_str)
+                    != file_name.as_deref()
+                || expected != actual
+            {
+                return Err(EmberLabError::LogEvidenceMismatch {
+                    job_id: job_id.into(),
+                    stream: stream.into(),
+                    expected: expected.into(),
+                    actual: actual.clone(),
+                });
+            }
+        }
+        let schedule_bytes = serde_json::to_vec_pretty(&self.schedule_alarm_state_at(now_ms())?)?;
+        let receipt_sha256 = hash_bytes(&receipt_bytes);
+        let schedule_sha256 = hash_bytes(&schedule_bytes);
+        let staging = parent.join(format!(
+            ".assessment-evidence-{}-{}-{}",
+            directory.file_name().unwrap_or_default().to_string_lossy(),
+            std::process::id(),
+            now_ms()
+        ));
+        fs::create_dir(&staging)?;
+        let publish = (|| -> Result<()> {
+            atomic_create(
+                &staging.join(format!("{receipt_sha256}.operational.json")),
+                &receipt_bytes,
+            )?;
+            atomic_create(
+                &staging.join(format!("{stdout_sha256}.stdout.log")),
+                &stdout_bytes,
+            )?;
+            atomic_create(
+                &staging.join(format!("{stderr_sha256}.stderr.log")),
+                &stderr_bytes,
+            )?;
+            atomic_create(
+                &staging.join(format!("{schedule_sha256}.schedule.json")),
+                &schedule_bytes,
+            )?;
+            publish_staging_directory(&staging, directory)?;
+            Ok(())
+        })();
+        if let Err(error) = publish {
+            let _ = fs::remove_dir_all(&staging);
+            return Err(error);
+        }
+        let artifact = |name: String, sha256: String| ReceiptArtifact {
+            path: directory.join(name),
+            sha256,
+        };
+        Ok(AssessmentEvidenceArtifact {
+            schema: "ember-lab-assessment-evidence-v1".into(),
+            operational_receipt: artifact(
+                format!("{receipt_sha256}.operational.json"),
+                receipt_sha256,
+            ),
+            stdout_log: artifact(format!("{stdout_sha256}.stdout.log"), stdout_sha256),
+            stderr_log: artifact(format!("{stderr_sha256}.stderr.log"), stderr_sha256),
+            schedule_alarm_state: artifact(
+                format!("{schedule_sha256}.schedule.json"),
+                schedule_sha256,
+            ),
+            ember_lab_identity: identity,
+        })
     }
 
     /// Export the daemon-owned terminal receipt with one observation nested in
@@ -5843,6 +5993,135 @@ fn write_content_addressed_receipt(directory: &Path, bytes: &[u8]) -> Result<Rec
         }
         Err(error) => Err(error),
     }
+}
+
+fn publish_staging_directory(staging: &Path, directory: &Path) -> Result<()> {
+    match rename_directory_no_replace(staging, directory) {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            let _ = fs::remove_dir_all(staging);
+            Err(error.into())
+        }
+    }
+}
+
+#[cfg(test)]
+mod assessment_evidence_publish_tests {
+    use super::*;
+    use std::sync::{Arc, Barrier};
+
+    #[test]
+    fn raced_empty_destination_is_preserved_and_private_staging_is_removed() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "ember-lab-assessment-publish-race-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir(&root).unwrap();
+        let staging = root.join("private-staging");
+        let destination = root.join("fresh-output");
+        fs::create_dir(&staging).unwrap();
+        fs::write(staging.join("artifact"), b"daemon evidence").unwrap();
+        assert!(!destination.exists());
+
+        let barrier = Arc::new(Barrier::new(2));
+        let racer_barrier = Arc::clone(&barrier);
+        let raced_destination = destination.clone();
+        let racer = std::thread::spawn(move || {
+            racer_barrier.wait();
+            fs::create_dir(&raced_destination).unwrap();
+        });
+        barrier.wait();
+        racer.join().unwrap();
+
+        assert!(publish_staging_directory(&staging, &destination).is_err());
+        assert!(destination.is_dir());
+        assert_eq!(fs::read_dir(&destination).unwrap().count(), 0);
+        assert!(!staging.exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[cfg(windows)]
+fn rename_directory_no_replace(from: &Path, to: &Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_WRITE_THROUGH};
+    let from: Vec<u16> = from.as_os_str().encode_wide().chain(Some(0)).collect();
+    let to: Vec<u16> = to.as_os_str().encode_wide().chain(Some(0)).collect();
+    if unsafe { MoveFileExW(from.as_ptr(), to.as_ptr(), MOVEFILE_WRITE_THROUGH) } == 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn rename_directory_no_replace(from: &Path, to: &Path) -> std::io::Result<()> {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+    const AT_FDCWD: i32 = -100;
+    const RENAME_NOREPLACE: u32 = 1;
+    unsafe extern "C" {
+        fn renameat2(
+            olddirfd: i32,
+            oldpath: *const std::os::raw::c_char,
+            newdirfd: i32,
+            newpath: *const std::os::raw::c_char,
+            flags: u32,
+        ) -> i32;
+    }
+    let from = CString::new(from.as_os_str().as_bytes())
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "NUL in source path"))?;
+    let to = CString::new(to.as_os_str().as_bytes())
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "NUL in target path"))?;
+    if unsafe {
+        renameat2(
+            AT_FDCWD,
+            from.as_ptr(),
+            AT_FDCWD,
+            to.as_ptr(),
+            RENAME_NOREPLACE,
+        )
+    } == 0
+    {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn rename_directory_no_replace(from: &Path, to: &Path) -> std::io::Result<()> {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+    const RENAME_EXCL: u32 = 0x0000_0004;
+    unsafe extern "C" {
+        fn renamex_np(
+            from: *const std::os::raw::c_char,
+            to: *const std::os::raw::c_char,
+            flags: u32,
+        ) -> i32;
+    }
+    let from = CString::new(from.as_os_str().as_bytes())
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "NUL in source path"))?;
+    let to = CString::new(to.as_os_str().as_bytes())
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "NUL in target path"))?;
+    if unsafe { renamex_np(from.as_ptr(), to.as_ptr(), RENAME_EXCL) } == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+fn rename_directory_no_replace(_from: &Path, _to: &Path) -> std::io::Result<()> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "atomic no-replace directory publication is unavailable on this platform",
+    ))
 }
 
 fn atomic_create(path: &Path, bytes: &[u8]) -> Result<()> {

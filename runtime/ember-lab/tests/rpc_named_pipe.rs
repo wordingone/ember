@@ -570,6 +570,76 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
         format!("{}.json", artifact["sha256"].as_str().unwrap())
     );
 
+    let assessment_directory = root.join("assessment-evidence");
+    let assessment = rpc(
+        &pipe,
+        140,
+        "export_assessment_evidence",
+        json!({"job_id": "rpc-job", "directory": assessment_directory}),
+    );
+    assert_eq!(assessment["schema"], "ember-lab-assessment-evidence-v1");
+    let assessment_keys: std::collections::BTreeSet<_> = assessment
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    assert_eq!(
+        assessment_keys,
+        [
+            "ember_lab_identity",
+            "operational_receipt",
+            "schedule_alarm_state",
+            "schema",
+            "stderr_log",
+            "stdout_log",
+        ]
+        .into_iter()
+        .collect()
+    );
+    for field in [
+        "operational_receipt",
+        "stdout_log",
+        "stderr_log",
+        "schedule_alarm_state",
+    ] {
+        let artifact = &assessment[field];
+        assert_eq!(
+            artifact
+                .as_object()
+                .unwrap()
+                .keys()
+                .map(String::as_str)
+                .collect::<std::collections::BTreeSet<_>>(),
+            ["path", "sha256"].into_iter().collect()
+        );
+        let path = PathBuf::from(artifact["path"].as_str().unwrap());
+        assert!(path.starts_with(&assessment_directory));
+        assert_eq!(sha256(&path), artifact["sha256"]);
+    }
+    let duplicate = rpc_response(
+        &pipe,
+        141,
+        "export_assessment_evidence",
+        json!({"job_id": "rpc-job", "directory": assessment_directory}),
+    );
+    assert!(duplicate.get("error").is_some());
+    let unknown = rpc_response(
+        &pipe,
+        142,
+        "export_assessment_evidence",
+        json!({"job_id": "rpc-job", "directory": root.join("unknown-field"), "extra": true}),
+    );
+    assert!(unknown.get("error").is_some());
+    assert!(!root.join("unknown-field").exists());
+    let oversized = rpc_response(
+        &pipe,
+        143,
+        "export_assessment_evidence",
+        json!({"job_id": "rpc-job", "directory": "x".repeat(4097)}),
+    );
+    assert!(oversized.get("error").is_some());
+
     rpc(
         &pipe,
         15,
@@ -600,6 +670,27 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
             "outcome": "COMPLETED",
             "receipt_sha256": "b".repeat(64),
         }),
+    );
+    let measured_assessment = rpc(
+        &pipe,
+        144,
+        "export_assessment_evidence",
+        json!({"job_id": "rpc-job", "directory": root.join("assessment-evidence-measured")}),
+    );
+    let measured_schedule: Value = serde_json::from_slice(
+        &fs::read(
+            measured_assessment["schedule_alarm_state"]["path"]
+                .as_str()
+                .unwrap(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(measured_schedule["runs"][0]["job_id"], "rpc-job");
+    assert_eq!(measured_schedule["runs"][0]["measured_duration_ms"], 55_000);
+    assert_eq!(
+        measured_schedule["runs"][0]["measurement_daemon_identity"],
+        measured_assessment["ember_lab_identity"]
     );
     rpc(
         &pipe,
