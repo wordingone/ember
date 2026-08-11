@@ -28,6 +28,7 @@ from ember_01_identity.cond4_battery_surface import (  # noqa: E402
     cond4_battery_output_sha256,
     cond4_receipt_transition_valid,
 )
+import cond4_behavior_surface  # noqa: E402
 
 
 VERIFIER = REPO_ROOT / "scripts" / "verify_ember01_completion.py"
@@ -35,7 +36,7 @@ RECEIPT = (
     Path(os.environ.get("EMBER_ISSUE1396_RECEIPT_ROOT", REPO_ROOT))
     / "receipts"
     / "ember-01-completion"
-    / "cond4-tamper-battery-bf20f050-v1.json"
+    / "cond4-tamper-battery-bf20f050-v7.json"
 )
 WORKFLOW = (
     Path(os.environ.get("EMBER_ISSUE1396_WORKFLOW_ROOT", REPO_ROOT))
@@ -99,10 +100,12 @@ def test_referenced_import_binding_change_invalidates_surface() -> None:
 
 def test_committed_receipt_binds_current_cond4_surface() -> None:
     receipt = json.loads(RECEIPT.read_text(encoding="utf-8"))
-    surface = receipt["implementation"]["completion_verifier"]["battery_surface"]
-    assert surface["schema"] == SURFACE_SCHEMA
-    assert tuple(surface["symbols"]) == COMPLETION_VERIFIER_SYMBOLS
-    assert surface["sha256"] == completion_verifier_surface_sha256(VERIFIER)
+    evidence = receipt["leg4"]["evidence"]
+    cond4_behavior_surface.validate_execution_packet(
+        REPO_ROOT,
+        evidence["behavior_surface"],
+        evidence["execution_evidence"],
+    )
 
 
 @pytest.mark.parametrize(

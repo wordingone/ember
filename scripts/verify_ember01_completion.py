@@ -64,6 +64,15 @@ from ember_01_identity.parameter_identity_binding import (
     measure_live_checkpoint,
     verify_parameter_identity_binding,
 )
+from cond4_behavior_surface import (
+    COND4_AXES,
+    EXECUTION_SCHEMA as COND4_EXECUTION_SCHEMA,
+    SurfaceRefusal as Cond4SurfaceRefusal,
+    build_surface_manifest,
+    validate_execution_evidence,
+    validate_execution_packet,
+    validate_surface_manifest,
+)
 
 RESOLVED_TRUE = "resolved-true"
 RESOLVED_FALSE = "resolved-false"
@@ -74,6 +83,10 @@ LAUNCH_PACKET_REL = "tools/ember-restart-3b/launch_packet.py"
 CENSUS_REL = "scripts/ember_01_custody/census.py"
 VALIDATE_IDENTITY_REL = "scripts/ember_01_identity/validate_identity.py"
 SEAT_TEST_REL = "tools/ember-cli/src/entrypoints/model-seat.test.ts"
+COND4_SURFACE_VALIDATOR_PATH = Path(__file__).with_name("cond4_behavior_surface.py")
+COND4_SURFACE_MANIFEST_REL = (
+    "manifests/ember-01-identity/cond4-behavior-surface-v1.json"
+)
 
 # The nine EMBER-01 conditions and which tool certifies each.
 LEG_TITLES = {
@@ -977,6 +990,7 @@ def _run_identity_tamper_battery(
             handle.write(checkpoint_bytes + b"\n")
             checkpoint_tamper = Path(handle.name)
             created.append(checkpoint_tamper)
+        started_ns = time.perf_counter_ns()
         try:
             verify_parameter_identity_binding(
                 payload,
@@ -996,6 +1010,9 @@ def _run_identity_tamper_battery(
                 "finding": None,
                 "detail": "tampered checkpoint manifest was accepted",
             }
+        evidence["checkpoint_bytes"]["duration_ms"] = max(
+            1, (time.perf_counter_ns() - started_ns + 999_999) // 1_000_000
+        )
 
         with tempfile.NamedTemporaryFile(
             mode="w",
@@ -1025,6 +1042,7 @@ def _run_identity_tamper_battery(
                 handle.write("\n")
                 mutant_path = Path(handle.name)
                 created.append(mutant_path)
+            started_ns = time.perf_counter_ns()
             result = run(
                 [
                     sys.executable,
@@ -1061,6 +1079,9 @@ def _run_identity_tamper_battery(
                 "finding_codes": finding_codes,
                 "returncode": result["returncode"],
                 "timed_out": result["timed_out"],
+                "duration_ms": max(
+                    1, (time.perf_counter_ns() - started_ns + 999_999) // 1_000_000
+                ),
             }
     finally:
         for path in reversed(created):
@@ -1078,6 +1099,219 @@ def _run_identity_tamper_battery(
         "failures": failures,
         "all_rejected": not failures and len(evidence) == 8,
     }
+
+
+def _cond4_surface_manifest(root: Path) -> dict[str, Any]:
+    return build_surface_manifest(
+        root,
+        {
+            "scripts/verify_ember01_completion.py": {
+                "roots": [
+                    "_cond4_execution_evidence",
+                    "_cond4_surface_manifest",
+                    "_load_cond4_surface_manifest",
+                    "_run_bound_cond4_battery",
+                    "_run_identity_tamper_battery",
+                ],
+                "dynamic_call_bindings": [
+                    "backend['backend'].get",
+                    "completed.stderr.strip",
+                    "completed.stdout.strip",
+                    "manifest_candidate.resolve",
+                    "manifest_parent_candidate.resolve",
+                    "path.read_text",
+                    "checkpoint_bytes.decode",
+                    "created.append",
+                    "evidence.items",
+                    "handle.write",
+                    "mutants.append",
+                    "parsed.get",
+                    "path.unlink",
+                    "row.get",
+                    "rows.append",
+                    "routers[0].get",
+                    "scratch_root.mkdir",
+                    "sources.append",
+                    "tokenizer['tokenizer'].get",
+                ],
+            },
+            "scripts/ember_01_identity/parameter_identity_binding.py": {
+                "roots": [
+                    "measure_live_checkpoint",
+                    "verify_parameter_identity_binding",
+                ],
+                "dynamic_call_bindings": [
+                    "checkpoint.get",
+                    "manifest.get",
+                    "parameters.get",
+                    "receipt.get",
+                    "remeasured.get",
+                ],
+            },
+            "scripts/ember_01_identity/validate_identity.py": {
+                "roots": ["main"],
+                "dynamic_call_bindings": [
+                    "accepted_input.get",
+                    "admitted_counts.get",
+                    "admitted_mixture.get",
+                    "admitted_modalities.get",
+                    "args.artifact_bundle.read_text",
+                    "args.checkpoint.read_bytes",
+                    "args.expected.read_text",
+                    "args.manifest.read_text",
+                    "args.receipt_bundle.read_text",
+                    "args.tensor_hashes.read_text",
+                    "args.tensor_manifest.read_text",
+                    "args.trusted_verifier_registry.read_text",
+                    "args.verifier.read_bytes",
+                    "artifact_bundle.get",
+                    "backend.get",
+                    "capability.get",
+                    "checkpoint_bytes.decode",
+                    "counts.get",
+                    "data.get",
+                    "declared.get",
+                    "dependency.get",
+                    "entry.get",
+                    "envelope.get",
+                    "evaluation.get",
+                    "expected_claims.items",
+                    "findings.append",
+                    "found.update",
+                    "item.get",
+                    "mixture.values",
+                    "native.get",
+                    "optimizer_contract.get",
+                    "parameter_receipts.get",
+                    "parameters.get",
+                    "parsed_checkpoint_tensors.append",
+                    "parser.add_argument",
+                    "parser.parse_args",
+                    "path.split",
+                    "payload.get",
+                    "process_identity.get",
+                    "provenance.get",
+                    "reason.casefold",
+                    "reason.strip",
+                    "receipt.get",
+                    "receipt_bundle.get",
+                    "registry.get",
+                    "registry['active'].get",
+                    "required.add",
+                    "required.update",
+                    "required_artifacts.items",
+                    "row.get",
+                    "seen.add",
+                    "seen_checkpoint_names.add",
+                    "source.casefold",
+                    "stopping_rule.get",
+                    "supplied_artifacts.get",
+                    "tensor.get",
+                    "tensor_hashes.get",
+                    "tensor_manifest.get",
+                    "tokenizer.get",
+                    "trusted_verifier_registry.get",
+                    "unresolved.values",
+                    "unsigned.pop",
+                    "validated.get",
+                    "value.get",
+                    "value.items",
+                    "verifier_bytes.decode",
+                ],
+            },
+        },
+    )
+
+
+def _load_cond4_surface_manifest(root: Path) -> dict[str, Any]:
+    manifest_candidate = root / COND4_SURFACE_MANIFEST_REL
+    path = manifest_candidate.resolve(strict=True)
+    manifest_parent_candidate = root / Path(COND4_SURFACE_MANIFEST_REL).parent
+    if path.parent != manifest_parent_candidate.resolve():
+        raise Cond4SurfaceRefusal("COND4_SURFACE_PATH_INVALID")
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise Cond4SurfaceRefusal("COND4_SURFACE_SCHEMA_INVALID") from exc
+    validate_surface_manifest(root, manifest)
+    if manifest != _cond4_surface_manifest(root):
+        raise Cond4SurfaceRefusal("COND4_SURFACE_SPEC_MISMATCH")
+    return manifest
+
+
+def _run_bound_cond4_battery(
+    *,
+    root: Path,
+    payload: dict[str, Any],
+    receipt: dict[str, Any],
+    checkpoint_bytes: bytes,
+    model_config: Path,
+    scratch_root: Path,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    surface_manifest = _load_cond4_surface_manifest(root)
+    battery = _run_identity_tamper_battery(
+        root=root,
+        payload=payload,
+        receipt=receipt,
+        checkpoint_bytes=checkpoint_bytes,
+        model_config=model_config,
+        scratch_root=scratch_root,
+    )
+    return battery, surface_manifest
+
+
+def _cond4_execution_evidence(
+    *,
+    checkpoint_bytes: bytes,
+    surface_manifest: dict[str, Any],
+    battery: dict[str, Any],
+    load_count: int,
+) -> dict[str, Any]:
+    try:
+        checkpoint_payload = json.loads(checkpoint_bytes.decode("utf-8"))
+        shards = checkpoint_payload["shards"]
+        if not isinstance(shards, list) or not shards:
+            raise TypeError("shards")
+        shard_bytes = [row["bytes"] for row in shards]
+        if any(
+            not isinstance(value, int) or isinstance(value, bool) or value <= 0
+            for value in shard_bytes
+        ):
+            raise TypeError("shard bytes")
+        if not isinstance(load_count, int) or isinstance(load_count, bool) or load_count <= 0:
+            raise TypeError("load count")
+        axes = battery["axes"]
+        rows = []
+        for axis in COND4_AXES:
+            row = axes[axis]
+            findings = row.get("finding_codes")
+            if findings is None and isinstance(row.get("finding"), str):
+                findings = [row["finding"]]
+            rows.append(
+                {
+                    "axis": axis,
+                    "duration_ms": row["duration_ms"],
+                    "rejected": row["rejected"],
+                    "finding_codes": findings,
+                }
+            )
+        evidence = {
+            "schema": COND4_EXECUTION_SCHEMA,
+            "subject": {
+                "behavior_surface_validator_sha256": hashlib.sha256(
+                    COND4_SURFACE_VALIDATOR_PATH.read_bytes()
+                ).hexdigest(),
+                "checkpoint_manifest_sha256": hashlib.sha256(checkpoint_bytes).hexdigest(),
+                "surface_aggregate_sha256": surface_manifest["aggregate_sha256"],
+                "checkpoint_bytes_loaded": sum(shard_bytes) * load_count,
+                "load_count": load_count,
+            },
+            "axes": rows,
+        }
+        validate_execution_evidence(evidence)
+    except (KeyError, TypeError, UnicodeDecodeError, json.JSONDecodeError, Cond4SurfaceRefusal) as exc:
+        raise Cond4SurfaceRefusal("COND4_EXECUTION_EVIDENCE_INVALID") from exc
+    return evidence
 
 
 def identity_legs(
@@ -1119,7 +1353,8 @@ def identity_legs(
             checkpoint_manifest=checkpoint_manifest,
             active_expert="shared",
         )
-        verify_parameter_identity_binding(
+        load_count = 1
+        load_count += verify_parameter_identity_binding(
             payload,
             receipt,
             checkpoint_manifest=checkpoint_manifest,
@@ -1150,7 +1385,7 @@ def identity_legs(
     }
 
     try:
-        tamper_evidence = _run_identity_tamper_battery(
+        tamper_evidence, surface_manifest = _run_bound_cond4_battery(
             root=root,
             payload=payload,
             receipt=receipt,
@@ -1158,6 +1393,15 @@ def identity_legs(
             model_config=model_config,
             scratch_root=scratch_root,
         )
+        execution_evidence = _cond4_execution_evidence(
+            checkpoint_bytes=checkpoint_bytes,
+            surface_manifest=surface_manifest,
+            battery=tamper_evidence,
+            load_count=load_count,
+        )
+        validate_execution_packet(root, surface_manifest, execution_evidence)
+        tamper_evidence["behavior_surface"] = surface_manifest
+        tamper_evidence["execution_evidence"] = execution_evidence
     except Exception as error:  # noqa: BLE001 - battery itself fails closed
         tamper_evidence = {
             "tool": "scripts/verify_ember01_completion.py::cond4_tamper_battery",
