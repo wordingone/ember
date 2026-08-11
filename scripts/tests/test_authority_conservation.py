@@ -23,14 +23,14 @@ VERIFIER = REPO_ROOT / "scripts" / "verify_authority_conservation.py"
 INVARIANT_SHA256 = "08A0EB7418C09A8088BE4658E10785107ABBB7507FC2DBCDC789936AA54E02A6"
 
 GOVERNING_SURFACES = [
-    "docs/goal-clear-protocol.md",
-    "docs/nc2-own-technique-contract.md",
-    "docs/ember-floor-contract.md",
-    "docs/goal-mode-mechanism.md",
-    "docs/registry-dispatch-gate-spec-v0.md",
+    "docs/contracts/goal-clear-protocol.md",
+    "docs/contracts/nc2-own-technique-contract.md",
+    "docs/contracts/ember-floor-contract.md",
+    "docs/contracts/goal-mode-mechanism.md",
+    "docs/contracts/registry-dispatch-gate-spec-v0.md",
     "docs/spec/autonomy-relinquishment-ladder-v1.md",
     "docs/spec/conditions-v1.md",
-    "docs/ember-authority-matrix.md",
+    "docs/authority/ember-authority-matrix.md",
     "GOVERNANCE.md",
     "README.md",
     "CONTINUITY.md",
@@ -298,7 +298,7 @@ def write_valid_crosswalk(root: Path, matrix_path: Path) -> None:
     """Give the fixture the authority supersession packet leg 4 demands.
 
     A valid minimal authority repo is not just the D-matrix. Once
-    docs/ember-authority-matrix.md exists, authority_supersession_gate treats the
+    docs/authority/ember-authority-matrix.md exists, authority_supersession_gate treats the
     tree as a current-authority tree and requires, fail-closed, all three of:
 
       1. manifests/authority/issue-35-authority-supersession-crosswalk-v1.json,
@@ -403,13 +403,21 @@ def write_valid_crosswalk(root: Path, matrix_path: Path) -> None:
 
 
 def write_valid_fixture(root: Path) -> None:
-    invariant = (REPO_ROOT / "INVARIANT.md").read_bytes()
+    invariant_source = next(
+        path
+        for path in (
+            REPO_ROOT / "docs" / "authority" / "INVARIANT.md",
+            REPO_ROOT / "INVARIANT.md",
+        )
+        if path.is_file()
+    )
+    invariant = invariant_source.read_bytes()
     assert hashlib.sha256(invariant).hexdigest().upper() == INVARIANT_SHA256
     (root / "INVARIANT.md").write_bytes(invariant)
     (root / "REDACTIONS.md").write_text("# Fixture redactions policy\n", encoding="utf-8")
 
     for rel in GOVERNING_SURFACES:
-        if rel == "docs/ember-authority-matrix.md":
+        if rel == "docs/authority/ember-authority-matrix.md":
             continue
         path = root / rel
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -425,7 +433,7 @@ def write_valid_fixture(root: Path) -> None:
         manifest.append(
             f"| D-{number:03d} | ENFORCED | GOAL.md | ledger D-{number:03d} |"
         )
-    manifest_path = root / "docs" / "ember-authority-matrix.md"
+    manifest_path = root / "docs" / "authority" / "ember-authority-matrix.md"
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(
         CONSERVATION_HEADER + "\n" + "\n".join(manifest) + "\n",
@@ -440,7 +448,7 @@ def write_valid_fixture(root: Path) -> None:
 |---|---|---|---|---:|---:|---|---|---|
 | owned-rung2 | checkpoint | sha256:owned-rung2 | historical_only | 2195000000 | 12550144 | disconnected_owned_server | none | historical receipt |
 | qwen-reference | backend | model:qwen-reference | borrowed_reference | 27000000000 | unknown | qwen | none | explicit reference seat |
-| ember-target | model_target | uninstantiated:ember-target | target | 30000000001 | 0 | owned | none | GOAL.md |
+| ember-target | model_target | uninstantiated:ember-target | target | 30000000001 | 0 | owned | none | docs/authority/GOAL.md |
 """
     (root / "STATE.md").write_text(
         "Current artifact identity and maturity state: [CONTINUITY.md](CONTINUITY.md), "
@@ -562,6 +570,23 @@ def test_valid_authority_fixture_passes(tmp_path: Path) -> None:
     assert payload["certificate_legs"] == {str(i): True for i in range(1, 8)}
 
 
+def test_repository_old_or_new_authority_layout_passes() -> None:
+    result = run_verifier(REPO_ROOT)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is True
+
+
+def test_duplicate_governing_surface_migration_is_rejected(tmp_path: Path) -> None:
+    write_valid_fixture(tmp_path)
+    new_matrix = tmp_path / "docs" / "authority" / "ember-authority-matrix.md"
+    old_matrix = tmp_path / "docs" / "ember-authority-matrix.md"
+    old_matrix.write_bytes(new_matrix.read_bytes())
+
+    assert_rejected(tmp_path, "surface.path_duplicate")
+
+
 def migrate_authority_fixture(root: Path) -> None:
     authority = root / "docs" / "authority"
     authority.mkdir(parents=True, exist_ok=True)
@@ -575,7 +600,7 @@ def migrate_authority_fixture(root: Path) -> None:
     ):
         (root / name).replace(authority / name)
 
-    matrix_path = root / "docs" / "ember-authority-matrix.md"
+    matrix_path = root / "docs" / "authority" / "ember-authority-matrix.md"
     matrix_path.write_text(
         matrix_path.read_text(encoding="utf-8").replace(
             "| ENFORCED | GOAL.md |", "| ENFORCED | docs/authority/GOAL.md |"
@@ -622,7 +647,7 @@ def migrate_authority_fixture(root: Path) -> None:
     hashes = policy["conservation_hashes"]["governing_surfaces_sha256"]
     for name in ("GOVERNANCE.md", "CONTINUITY.md"):
         hashes[f"docs/authority/{name}"] = hashes.pop(name)
-    hashes["docs/ember-authority-matrix.md"] = matrix_digest.upper()
+    hashes["docs/authority/ember-authority-matrix.md"] = matrix_digest.upper()
     policy["conservation_hashes"]["authority_matrix_sha256"] = matrix_digest.upper()
     goal_path.write_text(render_goal(policy), encoding="utf-8")
 
@@ -647,7 +672,7 @@ def test_migrated_authority_fixture_passes(tmp_path: Path) -> None:
 def test_duplicate_authority_path_is_rejected(tmp_path: Path, name: str) -> None:
     write_valid_fixture(tmp_path)
     migrated = tmp_path / "docs" / "authority" / name
-    migrated.parent.mkdir(parents=True)
+    migrated.parent.mkdir(parents=True, exist_ok=True)
     migrated.write_bytes((tmp_path / name).read_bytes())
 
     result = run_verifier(tmp_path)
@@ -816,7 +841,7 @@ def test_executable_cannot_relegalize_terminal_registry_status(tmp_path: Path) -
 
 def test_enforced_matrix_row_must_name_a_real_surface(tmp_path: Path) -> None:
     write_valid_fixture(tmp_path)
-    manifest = tmp_path / "docs" / "ember-authority-matrix.md"
+    manifest = tmp_path / "docs" / "authority" / "ember-authority-matrix.md"
     text = manifest.read_text(encoding="utf-8")
     text = text.replace(
         "| D-062 | ENFORCED | GOAL.md |",
@@ -1170,7 +1195,7 @@ def test_invariant_tamper_is_rejected(tmp_path: Path) -> None:
 
 def test_missing_discrepancy_is_rejected(tmp_path: Path) -> None:
     write_valid_fixture(tmp_path)
-    manifest = tmp_path / "docs" / "ember-authority-matrix.md"
+    manifest = tmp_path / "docs" / "authority" / "ember-authority-matrix.md"
     lines = manifest.read_text(encoding="utf-8").splitlines()
     manifest.write_text(
         "\n".join(line for line in lines if "| D-062 |" not in line) + "\n",
@@ -1285,6 +1310,41 @@ def test_missing_goal_binding_is_rejected(tmp_path: Path) -> None:
     assert_rejected(tmp_path, "config.goal_id_missing")
 
 
+def test_content_addressed_authority_sidecar_is_validated_without_model_semantics(
+    tmp_path: Path,
+) -> None:
+    write_valid_fixture(tmp_path)
+    artifact = tmp_path / "configs" / "historical.json"
+    sidecar = tmp_path / "configs" / "historical.authority.json"
+    sidecar.write_text(
+        json.dumps(
+            {
+                "schema_version": "ember-content-addressed-authority-binding/v1",
+                "artifact_path": "configs/historical.json",
+                "artifact_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                "authority": {
+                    "goal_id": "EMBER-02",
+                    "workstream_id": "EMBER-02A",
+                    "next_executed_outcome": (
+                        "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+                    ),
+                    "artifact_class": "historical_only",
+                    "execution_authority": "denied",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = run_verifier(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    payload = json.loads(sidecar.read_text(encoding="utf-8"))
+    payload["artifact_sha256"] = "0" * 64
+    sidecar.write_text(json.dumps(payload), encoding="utf-8")
+    assert_rejected(tmp_path, "config.authority_sidecar_invalid")
+
+
 def test_any_declared_model_mediated_signal_is_rejected(tmp_path: Path) -> None:
     write_valid_fixture(tmp_path)
     config = tmp_path / "configs" / "candidate.json"
@@ -1340,7 +1400,7 @@ def test_borrowed_reference_requires_frozen_non_ingress_seat(tmp_path: Path) -> 
 
 def test_governing_surface_semantic_mutation_breaks_hash(tmp_path: Path) -> None:
     write_valid_fixture(tmp_path)
-    surface = tmp_path / "docs" / "goal-clear-protocol.md"
+    surface = tmp_path / "docs" / "contracts" / "goal-clear-protocol.md"
     surface.write_text(
         surface.read_text(encoding="utf-8") + "\nAudio may be deferred.\n",
         encoding="utf-8",
@@ -1350,7 +1410,7 @@ def test_governing_surface_semantic_mutation_breaks_hash(tmp_path: Path) -> None
 
 def test_matrix_semantic_mutation_breaks_hash(tmp_path: Path) -> None:
     write_valid_fixture(tmp_path)
-    matrix = tmp_path / "docs" / "ember-authority-matrix.md"
+    matrix = tmp_path / "docs" / "authority" / "ember-authority-matrix.md"
     matrix.write_text(
         matrix.read_text(encoding="utf-8").replace(
             "ledger D-045", "requirement meaning erased"
@@ -1554,13 +1614,13 @@ def test_staged_verification_reads_governing_bytes_from_index(tmp_path: Path) ->
     git_fixture(tmp_path, "init")
     git_fixture(tmp_path, "add", ".")
 
-    matrix = tmp_path / "docs" / "ember-authority-matrix.md"
+    matrix = tmp_path / "docs" / "authority" / "ember-authority-matrix.md"
     valid_working_copy = matrix.read_text(encoding="utf-8")
     matrix.write_text(
         valid_working_copy.replace("ledger D-045", "staged semantic drift"),
         encoding="utf-8",
     )
-    git_fixture(tmp_path, "add", "docs/ember-authority-matrix.md")
+    git_fixture(tmp_path, "add", "docs/authority/ember-authority-matrix.md")
     matrix.write_text(valid_working_copy, encoding="utf-8")
 
     result = run_verifier(tmp_path, extra_args=("--staged",))
@@ -1611,6 +1671,163 @@ def test_staged_binding_covers_scripts_and_python_experiments(tmp_path: Path) ->
     )
     result = run_verifier(tmp_path, extra_args=("--staged",))
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_staged_exact_authority_path_migration_does_not_mint_new_authority(
+    tmp_path: Path,
+) -> None:
+    write_valid_fixture(tmp_path)
+    git_fixture(tmp_path, "init")
+    git_fixture(tmp_path, "config", "user.email", "fixture@example.invalid")
+    git_fixture(tmp_path, "config", "user.name", "fixture")
+    control = tmp_path / "scripts" / "legacy_path_consumer.py"
+    control.write_text('GOAL_PATH = "GOAL.md"\n', encoding="utf-8")
+    git_fixture(tmp_path, "add", ".")
+    git_fixture(tmp_path, "commit", "-m", "fixture")
+
+    control.write_text(
+        'GOAL_PATH = "docs/authority/GOAL.md"\n', encoding="utf-8"
+    )
+    git_fixture(tmp_path, "add", "scripts/legacy_path_consumer.py")
+    result = run_verifier(tmp_path, extra_args=("--staged",))
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_staged_authority_path_migration_rejects_mixed_behavior_change(
+    tmp_path: Path,
+) -> None:
+    write_valid_fixture(tmp_path)
+    git_fixture(tmp_path, "init")
+    git_fixture(tmp_path, "config", "user.email", "fixture@example.invalid")
+    git_fixture(tmp_path, "config", "user.name", "fixture")
+    control = tmp_path / "scripts" / "legacy_path_consumer.py"
+    control.write_text('GOAL_PATH = "GOAL.md"\n', encoding="utf-8")
+    git_fixture(tmp_path, "add", ".")
+    git_fixture(tmp_path, "commit", "-m", "fixture")
+
+    control.write_text(
+        'GOAL_PATH = "docs/authority/GOAL.md"\nprint("new behavior")\n',
+        encoding="utf-8",
+    )
+    git_fixture(tmp_path, "add", "scripts/legacy_path_consumer.py")
+    result = run_verifier(tmp_path, extra_args=("--staged",))
+    assert result.returncode == 1, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert "artifact.goal_binding" in {
+        item["code"] for item in payload["errors"]
+    }, payload
+
+
+def test_changed_range_exact_path_migration_preserves_historical_authority(
+    tmp_path: Path,
+) -> None:
+    write_valid_fixture(tmp_path)
+    git_fixture(tmp_path, "init")
+    git_fixture(tmp_path, "config", "user.email", "fixture@example.invalid")
+    git_fixture(tmp_path, "config", "user.name", "fixture")
+    control = tmp_path / "scripts" / "historical_control.py"
+    control.write_text(
+        "# goal_id: EMBER-00\n"
+        "# workstream_id: EMBER-02A\n"
+        "# next_executed_outcome: EMBER-01 clean 3B custody and identity spine\n"
+        'INVARIANT_PATH = "INVARIANT.md"\n',
+        encoding="utf-8",
+    )
+    git_fixture(tmp_path, "add", ".")
+    git_fixture(tmp_path, "commit", "-m", "historical fixture")
+
+    control.write_text(
+        control.read_text(encoding="utf-8").replace(
+            '"INVARIANT.md"', '"docs/authority/INVARIANT.md"'
+        ),
+        encoding="utf-8",
+    )
+    git_fixture(tmp_path, "add", "scripts/historical_control.py")
+    git_fixture(tmp_path, "commit", "-m", "move authority path")
+    result = run_verifier(
+        tmp_path, extra_args=("--changed-range", "HEAD^..HEAD")
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_changed_range_path_migration_rejects_mixed_behavior_change(
+    tmp_path: Path,
+) -> None:
+    write_valid_fixture(tmp_path)
+    git_fixture(tmp_path, "init")
+    git_fixture(tmp_path, "config", "user.email", "fixture@example.invalid")
+    git_fixture(tmp_path, "config", "user.name", "fixture")
+    control = tmp_path / "scripts" / "historical_control.py"
+    control.write_text(
+        "# goal_id: EMBER-00\n"
+        "# workstream_id: EMBER-02A\n"
+        "# next_executed_outcome: EMBER-01 clean 3B custody and identity spine\n"
+        'INVARIANT_PATH = "INVARIANT.md"\n',
+        encoding="utf-8",
+    )
+    git_fixture(tmp_path, "add", ".")
+    git_fixture(tmp_path, "commit", "-m", "historical fixture")
+
+    control.write_text(
+        control.read_text(encoding="utf-8").replace(
+            '"INVARIANT.md"', '"docs/authority/INVARIANT.md"'
+        )
+        + 'print("new behavior")\n',
+        encoding="utf-8",
+    )
+    git_fixture(tmp_path, "add", "scripts/historical_control.py")
+    git_fixture(tmp_path, "commit", "-m", "mixed migration")
+    result = run_verifier(
+        tmp_path, extra_args=("--changed-range", "HEAD^..HEAD")
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert "artifact.goal_binding" in {
+        item["code"] for item in payload["errors"]
+    }, payload
+
+
+def test_changed_range_uses_committed_endpoint_not_dirty_worktree(
+    tmp_path: Path,
+) -> None:
+    write_valid_fixture(tmp_path)
+    git_fixture(tmp_path, "init")
+    git_fixture(tmp_path, "config", "user.email", "fixture@example.invalid")
+    git_fixture(tmp_path, "config", "user.name", "fixture")
+    control = tmp_path / "scripts" / "historical_control.py"
+    historical = (
+        "# goal_id: EMBER-00\n"
+        "# workstream_id: EMBER-02A\n"
+        "# next_executed_outcome: EMBER-01 clean 3B custody and identity spine\n"
+        'INVARIANT_PATH = "INVARIANT.md"\n'
+    )
+    control.write_text(historical, encoding="utf-8")
+    git_fixture(tmp_path, "add", ".")
+    git_fixture(tmp_path, "commit", "-m", "historical fixture")
+
+    migrated = historical.replace(
+        '"INVARIANT.md"', '"docs/authority/INVARIANT.md"'
+    )
+    control.write_text(migrated + 'print("committed behavior")\n', encoding="utf-8")
+    git_fixture(tmp_path, "add", "scripts/historical_control.py")
+    git_fixture(tmp_path, "commit", "-m", "mixed migration")
+
+    # A dirty worktree must not hide the semantic edit already committed at
+    # the right endpoint of the range.
+    control.write_text(migrated, encoding="utf-8")
+    _write_sidecar(
+        tmp_path,
+        "scripts/historical_control.py",
+        control.read_bytes(),
+    )
+    result = run_verifier(
+        tmp_path, extra_args=("--changed-range", "HEAD^..HEAD")
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert "artifact.goal_binding" in {
+        item["code"] for item in payload["errors"]
+    }, payload
 
 
 def test_renamed_control_cannot_drop_binding_or_escape_by_path(tmp_path: Path) -> None:
@@ -1884,7 +2101,7 @@ def _crosswalk_fixture(
         "repository": "wordingone/ember",
         "source_commit": source_commit,
         "current_authority": {
-            "matrix_path": "docs/ember-authority-matrix.md",
+            "matrix_path": "docs/authority/ember-authority-matrix.md",
             "matrix_sha256": matrix_sha,
         },
         "source_registries": [
