@@ -129,7 +129,7 @@ def verify_parameter_identity_binding(
     checkpoint_manifest: Path,
     model_config: Path,
     active_expert: str | None = None,
-) -> None:
+) -> int:
     """Fail closed the instant claimed identity diverges from bytes on disk.
 
     ``checkpoint_manifest`` and ``model_config`` are the live paths the receipt
@@ -150,8 +150,10 @@ def verify_parameter_identity_binding(
     the manifest-vs-receipt field comparison (which still catches a manifest that
     diverges from an otherwise-honest receipt). Raises
     ``ParameterIdentityMismatch`` naming the exact axis (or the checkpoint
-    identity) that fails to independently re-derive. Silent (returns None) when
-    every bound value matches the freshly measured evidence.
+    identity) that fails to independently re-derive. On success, the
+    return value is the number of completed full-checkpoint measurement passes
+    performed by this verifier. Callers persisting byte-load evidence must use
+    this value rather than assuming a fixed number of passes.
     """
     checkpoint_manifest = Path(checkpoint_manifest)
     model_config = Path(model_config)
@@ -252,3 +254,4 @@ def verify_parameter_identity_binding(
         raise ParameterIdentityMismatch(
             "checkpoint.byte_sha256 does not match the counter's subject_checkpoint_sha256"
         )
+    return 1
