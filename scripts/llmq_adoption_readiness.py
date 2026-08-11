@@ -5,12 +5,15 @@
 """Scratch-only #1413 launch-readiness gate; not product authority."""
 
 import hashlib
+import ctypes
 import json
 import math
 import os
 import re
-import sqlite3
+import secrets
 import subprocess
+import time
+import tempfile
 from pathlib import Path
 
 
@@ -22,14 +25,218 @@ _SOURCE_MANIFEST_SCHEMA = "llmq-source-manifest-v1"
 _BUILD_RECEIPT_SCHEMA = "ember-lab-build-receipt-v1"
 _BENCHMARK_RECEIPT_SCHEMA = "ember-lab-benchmark-receipt-v1"
 _DAEMON_RECEIPT_SCHEMA = "ember-lab-operational-receipt-v1"
+_ASSESSMENT_EVIDENCE_SCHEMA = "ember-lab-assessment-evidence-v1"
 _SCHEDULE_ALARM_SCHEMA = "ember-lab-schedule-alarm-state-v1"
 _GOVERNED_ORIGIN = "https://github.com/IST-DASLab/llmq.git"
 _EMBER_LAB_SOURCE_PATH = "runtime/ember-lab/src/lib.rs"
-_APPROVED_DAEMON_STATE_ROOT = (
-    Path(os.environ["EMBER_STATE_ROOT"])
-    if os.environ.get("EMBER_STATE_ROOT", "").strip()
-    else None
-)
+_PIPE_PREFIX = r"\\.\pipe\ember-lab-"
+_OPERATOR_PIPE_PREFIX = r"\\.\pipe\ember-operator-"
+_MAX_RPC_FRAME_BYTES = 64 * 1024
+
+
+def _configured_ember_lab_pipe() -> str | None:
+    pipe_name = os.environ.get("EMBER_LAB_PIPE")
+    if (
+        not isinstance(pipe_name, str)
+        or not pipe_name.startswith(_PIPE_PREFIX)
+        or pipe_name.startswith(_OPERATOR_PIPE_PREFIX)
+        or len(pipe_name) > 240
+        or any(value in pipe_name for value in ("\r", "\n", "\0"))
+    ):
+        return None
+    return pipe_name
+
+
+def _rpc_export_assessment(pipe_name: str, job_id: str, directory: Path) -> tuple[dict, str]:
+    """Call one resident daemon over one server-authenticated pipe handle."""
+    if os.name != "nt":
+        raise OSError("Ember Lab named-pipe assessment is Windows-only")
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    create_file = kernel32.CreateFileW
+    create_file.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID, wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+    create_file.restype = wintypes.HANDLE
+    get_server_pid = kernel32.GetNamedPipeServerProcessId
+    get_server_pid.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.ULONG)]
+    get_server_pid.restype = wintypes.BOOL
+    open_process = kernel32.OpenProcess
+    open_process.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    open_process.restype = wintypes.HANDLE
+    query_image = kernel32.QueryFullProcessImageNameW
+    query_image.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
+    query_image.restype = wintypes.BOOL
+    write_file = kernel32.WriteFile
+    write_file.argtypes = [wintypes.HANDLE, wintypes.LPCVOID, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD), wintypes.LPVOID]
+    write_file.restype = wintypes.BOOL
+    read_file = kernel32.ReadFile
+    read_file.argtypes = [wintypes.HANDLE, wintypes.LPVOID, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD), wintypes.LPVOID]
+    read_file.restype = wintypes.BOOL
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = [wintypes.HANDLE]
+    close_handle.restype = wintypes.BOOL
+    handle = create_file(pipe_name, 0xC0000000, 0, None, 3, 0, None)
+    invalid_handle = ctypes.c_void_p(-1).value
+    if handle == invalid_handle:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        server_pid = wintypes.ULONG()
+        if not get_server_pid(handle, ctypes.byref(server_pid)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        process = open_process(0x1000, False, server_pid.value)
+        if not process:
+            raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            capacity = wintypes.DWORD(32768)
+            image = ctypes.create_unicode_buffer(capacity.value)
+            if not query_image(process, 0, image, ctypes.byref(capacity)):
+                raise ctypes.WinError(ctypes.get_last_error())
+            server_binary_sha = hashlib.sha256(Path(image.value).read_bytes()).hexdigest()
+        finally:
+            close_handle(process)
+
+        request_id = f"llmq-readiness-{secrets.token_hex(16)}"
+        request = (
+            json.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "method": "export_assessment_evidence",
+                    "params": {"job_id": job_id, "directory": str(directory)},
+                },
+                separators=(",", ":"),
+            ).encode("utf-8")
+            + b"\n"
+        )
+        if len(request) > _MAX_RPC_FRAME_BYTES:
+            raise OSError("Ember Lab RPC request exceeds frame limit")
+        written = wintypes.DWORD()
+        if not write_file(handle, request, len(request), ctypes.byref(written), None) or written.value != len(request):
+            raise ctypes.WinError(ctypes.get_last_error())
+        raw = bytearray()
+        while b"\n" not in raw:
+            chunk = ctypes.create_string_buffer(4096)
+            read = wintypes.DWORD()
+            ok = read_file(handle, chunk, len(chunk), ctypes.byref(read), None)
+            if read.value:
+                raw.extend(chunk.raw[: read.value])
+            if len(raw) > _MAX_RPC_FRAME_BYTES:
+                raise OSError("Ember Lab RPC response exceeds frame limit")
+            if not ok and ctypes.get_last_error() != 234:
+                raise ctypes.WinError(ctypes.get_last_error())
+        line, trailing = bytes(raw).split(b"\n", 1)
+        if trailing.strip():
+            raise OSError("Ember Lab RPC returned multiple frames")
+        response = json.loads(line.decode("utf-8", errors="strict"))
+        if (
+            not isinstance(response, dict)
+            or set(response) != {"jsonrpc", "id", "result"}
+            or response.get("jsonrpc") != "2.0"
+            or response.get("id") != request_id
+            or not isinstance(response.get("result"), dict)
+        ):
+            raise OSError("Ember Lab RPC response is not the requested result")
+        return response["result"], server_binary_sha
+    finally:
+        close_handle(handle)
+
+
+def _acquire_live_daemon_assessment(repository_root: Path, job_id: object) -> dict | None:
+    """Fetch and reopen a fresh daemon export; never trust packet locators."""
+    pipe_name = _configured_ember_lab_pipe()
+    if pipe_name is None or not isinstance(job_id, str) or not job_id:
+        return None
+    try:
+        canonical_source = repository_root / _EMBER_LAB_SOURCE_PATH
+        canonical_source_sha = hashlib.sha256(canonical_source.read_bytes()).hexdigest()
+        with tempfile.TemporaryDirectory(prefix="ember-llmq-assessment-") as temporary:
+            directory = Path(temporary) / "daemon-export"
+            result, server_binary_sha = _rpc_export_assessment(pipe_name, job_id, directory)
+            expected_fields = {
+                "schema", "ember_lab_identity", "operational_receipt",
+                "stdout_log", "stderr_log", "schedule_alarm_state",
+            }
+            identity = result.get("ember_lab_identity") if isinstance(result, dict) else None
+            if (
+                set(result) != expected_fields
+                or result.get("schema") != _ASSESSMENT_EVIDENCE_SCHEMA
+                or not isinstance(identity, dict)
+                or set(identity) != {"binary_sha256", "source_sha256"}
+                or identity.get("binary_sha256") != server_binary_sha
+                or identity.get("source_sha256") != canonical_source_sha
+            ):
+                return None
+            suffixes = {
+                "operational_receipt": ".operational.json",
+                "stdout_log": ".stdout.log",
+                "stderr_log": ".stderr.log",
+                "schedule_alarm_state": ".schedule.json",
+            }
+            reopened: dict[str, bytes] = {}
+            resolved_directory = directory.resolve(strict=True)
+            for field, suffix in suffixes.items():
+                artifact = result.get(field)
+                if not isinstance(artifact, dict) or set(artifact) != {"path", "sha256"}:
+                    return None
+                digest = artifact.get("sha256")
+                path_value = artifact.get("path")
+                if not isinstance(digest, str) or not _DIGEST.fullmatch(digest) or not isinstance(path_value, str):
+                    return None
+                path = Path(path_value)
+                if not path.is_absolute():
+                    return None
+                path = path.resolve(strict=True)
+                if path.parent != resolved_directory or _has_reparse_component(path, resolved_directory):
+                    return None
+                raw = path.read_bytes()
+                if path.name != f"{digest}{suffix}" or hashlib.sha256(raw).hexdigest() != digest:
+                    return None
+                reopened[field] = raw
+            operational = json.loads(reopened["operational_receipt"].decode("utf-8", errors="strict"))
+            schedule = json.loads(reopened["schedule_alarm_state"].decode("utf-8", errors="strict"))
+            expected_receipt_fields = {
+                "schema", "ember_lab_identity", "job_id", "identity_sha256", "resource_lease",
+                "state", "pid", "executable_identity", "restart_policy", "exit_code", "logs",
+                "events", "outage_events", "scientific_capability_evidence",
+            }
+            logs = operational.get("logs") if isinstance(operational, dict) else None
+            stdout_log = logs.get("stdout") if isinstance(logs, dict) else None
+            stderr_log = logs.get("stderr") if isinstance(logs, dict) else None
+            if (
+                not isinstance(operational, dict)
+                or set(operational) != expected_receipt_fields
+                or operational.get("schema") != _DAEMON_RECEIPT_SCHEMA
+                or operational.get("job_id") != job_id
+                or operational.get("ember_lab_identity") != identity
+                or operational.get("state") not in {"stopped", "exited", "failed"}
+                or operational.get("exit_code") != 0
+                or operational.get("scientific_capability_evidence") is not False
+                or not isinstance(operational.get("pid"), int)
+                or operational.get("pid", 0) <= 0
+                or not isinstance(operational.get("executable_identity"), str)
+                or not operational.get("executable_identity")
+                or not isinstance(stdout_log, dict)
+                or not isinstance(stderr_log, dict)
+                or stdout_log.get("sealed") is not True
+                or stderr_log.get("sealed") is not True
+                or stdout_log.get("sha256") != result["stdout_log"]["sha256"]
+                or stderr_log.get("sha256") != result["stderr_log"]["sha256"]
+                or not isinstance(schedule, dict)
+                or schedule.get("schema_version") != _SCHEDULE_ALARM_SCHEMA
+                or schedule.get("ember_lab_identity") != identity
+            ):
+                return None
+            return {
+                "response": result,
+                "operational_receipt": operational,
+                "schedule_alarm_state": schedule,
+                "stdout_bytes": reopened["stdout_log"],
+                "stderr_bytes": reopened["stderr_log"],
+                "server_binary_sha256": server_binary_sha,
+                "canonical_source_sha256": canonical_source_sha,
+            }
+    except (OSError, ValueError, UnicodeError, json.JSONDecodeError):
+        return None
 
 
 def _has_reparse_component(path: Path, root: Path) -> bool:
@@ -85,7 +292,7 @@ def _safe_dir(root: Path, relative_value: object) -> Path | None:
 
 
 def _authority_file(root: Path | None, path_value: object) -> Path | None:
-    """Reopen a daemon-owned file under the approved external EMBER_STATE_ROOT."""
+    """Reopen a daemon-exported file under its authenticated export root."""
     if root is None or not isinstance(path_value, str) or not path_value:
         return None
     try:
@@ -186,345 +393,46 @@ def _digest_file(root: Path, path_value: object, digest: object) -> bool:
         return False
 
 
-def _read_sqlite_row(path: Path, query: str, params: tuple[object, ...]) -> tuple | None:
-    """Reopen a daemon database read-only; never create or mutate an authority DB."""
-    try:
-        uri = f"{path.resolve(strict=True).as_uri()}?mode=ro"
-        with sqlite3.connect(uri, uri=True) as connection:
-            return connection.execute(query, params).fetchone()
-    except (OSError, sqlite3.Error):
-        return None
-
-
-def _read_sqlite_rows(path: Path, query: str, params: tuple[object, ...]) -> list[tuple] | None:
-    """Reopen daemon rows read-only without creating or mutating its database."""
-    try:
-        uri = f"{path.resolve(strict=True).as_uri()}?mode=ro"
-        with sqlite3.connect(uri, uri=True) as connection:
-            return connection.execute(query, params).fetchall()
-    except (OSError, sqlite3.Error):
-        return None
-
-
-def _canonical_daemon_receipt(
-    state_db_file: Path,
-    job_id: object,
-    daemon_identity: object,
-    authority_root: Path,
-    expected_resource: object,
-    expected_state: object,
-    expected_pid: object,
-    expected_executable: object,
-    expected_restart_policy: object,
-    expected_exit_code: object,
-    expected_identity_sha: object,
-    expected_logs: object,
-) -> dict | None:
-    """Rebuild the receipt shape emitted by Rust ``receipt_bytes`` from DB custody."""
-    if not isinstance(job_id, str) or not isinstance(daemon_identity, dict):
-        return None
-    identity_row = _read_sqlite_row(
-        state_db_file,
-        "SELECT sha256 FROM identities WHERE job_id=?",
-        (job_id,),
-    )
-    job_row = _read_sqlite_row(
-        state_db_file,
-        "SELECT state,resource,pid,executable_identity,restart_policy,exit_code,outage_event_cutoff_seq FROM jobs WHERE job_id=?",
-        (job_id,),
-    )
-    if identity_row is None or job_row is None:
-        return None
-    if identity_row[0] != expected_identity_sha:
-        return None
-    cutoff = job_row[6] if job_row[6] is not None else 2**63 - 1
-    raw_events = _read_sqlite_rows(
-        state_db_file,
-        "SELECT seq,ts_ms,kind,payload_json FROM events WHERE job_id=? ORDER BY seq",
-        (job_id,),
-    )
-    raw_outage = _read_sqlite_rows(
-        state_db_file,
-        "SELECT seq,ts_ms,kind,payload_json FROM outage_events WHERE resource=? AND seq<=? ORDER BY seq",
-        (job_row[1], cutoff),
-    )
-    if raw_events is None or raw_outage is None:
-        return None
-
-    def _event_rows(rows: list[tuple]) -> list[dict] | None:
-        result: list[dict] = []
-        for seq, ts_ms, kind, payload_json in rows:
-            try:
-                payload = json.loads(payload_json)
-            except (TypeError, ValueError):
-                return None
-            result.append({"seq": seq, "ts_ms": ts_ms, "kind": kind, "payload": payload})
-        return result
-
-    events = _event_rows(raw_events)
-    outage_events = _event_rows(raw_outage)
-    if events is None or outage_events is None:
-        return None
-    if (
-        job_row[0] != expected_state
-        or job_row[1] != expected_resource
-        or job_row[2] != expected_pid
-        or job_row[3] != expected_executable
-        or job_row[4] != expected_restart_policy
-        or job_row[5] != expected_exit_code
-        or not isinstance(expected_logs, dict)
-    ):
-        return None
-    logs = expected_logs.get("logs")
-    if not isinstance(logs, dict):
-        return None
-    return {
-        "schema": _DAEMON_RECEIPT_SCHEMA,
-        "ember_lab_identity": daemon_identity,
-        "job_id": job_id,
-        "identity_sha256": identity_row[0],
-        "resource_lease": job_row[1],
-        "state": job_row[0],
-        "pid": job_row[2],
-        "executable_identity": job_row[3],
-        "restart_policy": job_row[4],
-        "exit_code": job_row[5],
-        "logs": logs,
-        "events": events,
-        "outage_events": outage_events,
-        "scientific_capability_evidence": False,
-    }
-
-
-def _approved_daemon_state_root(source_root: Path) -> Path | None:
-    """Resolve the existing Ember state root, never a caller-selected checkout path."""
-    if _APPROVED_DAEMON_STATE_ROOT is None:
-        return None
-    try:
-        authority_root = _APPROVED_DAEMON_STATE_ROOT.resolve(strict=True)
-        checkout_root = source_root.resolve(strict=True)
-        if authority_root == checkout_root or authority_root.is_relative_to(checkout_root):
-            return None
-        return authority_root
-    except OSError:
-        return None
-
-
 def _ember_lab_daemon_authority_missing(
-    root: Path, build_receipt: object, benchmark_receipt: object
+    root: Path, build_receipt: object, benchmark_receipt: object, live_assessment: object = None
 ) -> list[str]:
     """Require daemon-owned job/run state, not a self-consistent receipt bundle."""
-    authority_root = _approved_daemon_state_root(root)
-    missing: list[str] = []
-    if authority_root is None:
-        return ["ember_lab_build_receipt.daemon_authority.locator"]
+    if not isinstance(live_assessment, dict):
+        return ["ember_lab_build_receipt.daemon_authority.live_pipe"]
     if not isinstance(build_receipt, dict):
         return ["ember_lab_build_receipt.daemon_authority"]
-    has_benchmark = isinstance(benchmark_receipt, dict)
-    if not has_benchmark:
-        benchmark_receipt = {}
-    operational_path = build_receipt.get("operational_receipt_path")
-    operational_sha = build_receipt.get("operational_receipt_sha256")
-    state_db_path = build_receipt.get("daemon_state_db_path")
-    state_db_sha = build_receipt.get("daemon_state_db_sha256")
-    alarm_path = benchmark_receipt.get("schedule_alarm_state_path")
-    alarm_sha = benchmark_receipt.get("schedule_alarm_state_sha256")
-    measurement_sha = benchmark_receipt.get("measurement_receipt_sha256")
-    required_paths = [
-        ("operational_receipt_path", operational_path),
-        ("daemon_state_db_path", state_db_path),
-    ]
-    if has_benchmark:
-        required_paths.append(("schedule_alarm_state_path", alarm_path))
-    for field, value in required_paths:
-        if not isinstance(value, str) or not value:
-            missing.append(f"ember_lab_build_receipt.daemon_authority.{field}")
-    required_hashes = [
-        ("operational_receipt_sha256", operational_sha),
-        ("daemon_state_db_sha256", state_db_sha),
-    ]
-    if has_benchmark:
-        required_hashes.extend(
-            [
-                ("schedule_alarm_state_sha256", alarm_sha),
-                ("measurement_receipt_sha256", measurement_sha),
-            ]
-        )
-    for field, value in required_hashes:
-        if not isinstance(value, str) or not _DIGEST.fullmatch(value):
-            missing.append(f"ember_lab_build_receipt.daemon_authority.{field}")
-    if missing:
-        return missing
-    operational_file = _authority_file(authority_root, operational_path)
-    state_db_file = _authority_file(authority_root, state_db_path)
-    alarm_file = _authority_file(authority_root, alarm_path)
-    if operational_file is None or not _digest_file(authority_root, operational_path, operational_sha):
-        missing.append("ember_lab_build_receipt.daemon_authority.operational_receipt")
-    if state_db_file is None or not _digest_file(authority_root, state_db_path, state_db_sha):
-        missing.append("ember_lab_build_receipt.daemon_authority.state_db")
-    if has_benchmark and (alarm_file is None or not _digest_file(authority_root, alarm_path, alarm_sha)):
-        missing.append("ember_lab_build_receipt.daemon_authority.schedule_alarm_state")
-    if operational_file is not None and operational_file.name != f"{operational_sha}.json":
-        missing.append("ember_lab_build_receipt.daemon_authority.content_addressed_receipt")
-    if operational_file is not None and operational_file.parent.name != "content-addressed-receipts":
-        missing.append("ember_lab_build_receipt.daemon_authority.receipt_root")
-    operational = _json_file(authority_root, operational_path)
-    if not isinstance(operational, dict) or operational.get("schema") != _DAEMON_RECEIPT_SCHEMA:
-        missing.append("ember_lab_build_receipt.daemon_authority.operational_schema")
-        operational = None
-    if operational is None or operational.get("test_only") is True:
-        missing.append("ember_lab_build_receipt.daemon_authority.test_only")
-    if operational is not None:
-        expected_keys = {
-            "schema", "ember_lab_identity", "job_id", "identity_sha256",
-            "resource_lease", "state", "pid", "executable_identity",
-            "restart_policy", "exit_code", "logs", "events", "outage_events",
-            "scientific_capability_evidence",
-        }
-        if set(operational) != expected_keys:
-            missing.append("ember_lab_build_receipt.daemon_authority.canonical_schema")
-        if operational.get("job_id") != build_receipt.get("job_id"):
-            missing.append("ember_lab_build_receipt.daemon_authority.job_id")
-        if operational.get("state") not in {"stopped", "exited", "failed"}:
-            missing.append("ember_lab_build_receipt.daemon_authority.terminal_state")
-        if operational.get("exit_code") not in {0, None}:
-            missing.append("ember_lab_build_receipt.daemon_authority.exit_code")
-        identity = operational.get("ember_lab_identity")
+    missing: list[str] = []
+    operational = live_assessment.get("operational_receipt")
+    response = live_assessment.get("response")
+    schedule = live_assessment.get("schedule_alarm_state")
+    if not isinstance(operational, dict) or not isinstance(response, dict):
+        return ["ember_lab_build_receipt.daemon_authority"]
+    identity = operational.get("ember_lab_identity")
+    if (
+        operational.get("job_id") != build_receipt.get("job_id")
+        or build_receipt.get("operational_receipt_sha256") != response.get("operational_receipt", {}).get("sha256")
+        or build_receipt.get("producer_binary_sha256") != live_assessment.get("server_binary_sha256")
+        or build_receipt.get("producer_source_sha256") != live_assessment.get("canonical_source_sha256")
+    ):
+        missing.append("ember_lab_build_receipt.daemon_authority.binding")
+    if isinstance(benchmark_receipt, dict):
+        runs = schedule.get("runs") if isinstance(schedule, dict) else None
+        matching = [
+            run for run in runs
+            if isinstance(run, dict) and run.get("job_id") == build_receipt.get("job_id")
+        ] if isinstance(runs, list) else []
+        run = matching[0] if len(matching) == 1 else None
         if (
-            not isinstance(identity, dict)
-            or identity.get("source_sha256") != build_receipt.get("producer_source_sha256")
-            or identity.get("binary_sha256") != build_receipt.get("producer_binary_sha256")
+            benchmark_receipt.get("raw_log_sha256") != response.get("stdout_log", {}).get("sha256")
+            or benchmark_receipt.get("schedule_alarm_state_sha256") != response.get("schedule_alarm_state", {}).get("sha256")
+            or not isinstance(run, dict)
+            or not isinstance(run.get("measured_at_ms"), int)
+            or run.get("measurement_receipt_sha256") != benchmark_receipt.get("measurement_receipt_sha256")
+            or run.get("prediction_daemon_identity") != identity
+            or run.get("measurement_daemon_identity") != identity
         ):
-            missing.append("ember_lab_build_receipt.daemon_authority.identity")
-    job_id = build_receipt.get("job_id")
-    job = _read_sqlite_row(
-        state_db_file,
-        "SELECT state,exit_code,pid,resource,executable_identity,stdout_log_path,stderr_log_path,stdout_log_sha256,stderr_log_sha256,outage_event_cutoff_seq FROM jobs WHERE job_id=?",
-        (job_id,),
-    ) if state_db_file is not None else None
-    if job is None:
-        missing.append("ember_lab_build_receipt.daemon_authority.job_row")
-    elif operational is not None:
-        if job[0] != operational.get("state"):
-            missing.append("ember_lab_build_receipt.daemon_authority.job_state")
-        if job[1] != operational.get("exit_code"):
-            missing.append("ember_lab_build_receipt.daemon_authority.job_exit_code")
-        if job[2] != operational.get("pid"):
-            missing.append("ember_lab_build_receipt.daemon_authority.job_pid")
-        if job[3] != operational.get("resource_lease"):
-            missing.append("ember_lab_build_receipt.daemon_authority.job_lease")
-        if job[4] != operational.get("executable_identity"):
-            missing.append("ember_lab_build_receipt.daemon_authority.job_executable")
-        receipt_logs = operational.get("logs")
-        for label, path_index, sha_index in (("stdout", 5, 7), ("stderr", 6, 8)):
-            declared = receipt_logs.get(label) if isinstance(receipt_logs, dict) else None
-            log_path = _authority_file(authority_root, job[path_index])
-            try:
-                log_sha = hashlib.sha256(log_path.read_bytes()).hexdigest() if log_path is not None else None
-            except OSError:
-                log_sha = None
-            if (
-                not isinstance(declared, dict)
-                or declared.get("sealed") is not True
-                or log_path is None
-                or declared.get("file_name") != log_path.name
-                or declared.get("sha256") != job[sha_index]
-                or log_sha != job[sha_index]
-            ):
-                missing.append(f"ember_lab_build_receipt.daemon_authority.job_{label}_log")
-        expected_identity = operational.get("ember_lab_identity")
-        expected_logs = {
-            "identity_sha256": operational.get("identity_sha256"),
-            "logs": operational.get("logs"),
-        }
-        rebuilt = _canonical_daemon_receipt(
-            state_db_file,
-            job_id,
-            expected_identity,
-            authority_root,
-            operational.get("resource_lease"),
-            operational.get("state"),
-            operational.get("pid"),
-            operational.get("executable_identity"),
-            operational.get("restart_policy"),
-            operational.get("exit_code"),
-            operational.get("identity_sha256"),
-            expected_logs,
-        ) if state_db_file is not None else None
-        canonical_bytes = (
-            json.dumps(rebuilt, indent=2, ensure_ascii=False).encode("utf-8")
-            if rebuilt is not None
-            else None
-        )
-        try:
-            raw_operational = operational_file.read_bytes() if operational_file is not None else None
-        except OSError:
-            raw_operational = None
-        if rebuilt is None or rebuilt != operational or raw_operational != canonical_bytes:
-            missing.append("ember_lab_build_receipt.daemon_authority.canonical_receipt_replay")
-    schedule = _json_file(authority_root, alarm_path) if has_benchmark else None
-    if has_benchmark and (not isinstance(schedule, dict) or schedule.get("schema_version") != _SCHEDULE_ALARM_SCHEMA):
-        missing.append("ember_lab_build_receipt.daemon_authority.schedule_schema")
-        schedule = None
-    if has_benchmark and schedule is not None and operational is not None:
-        if schedule.get("ember_lab_identity") != operational.get("ember_lab_identity"):
-            missing.append("ember_lab_build_receipt.daemon_authority.schedule_identity")
-    measurement = _read_sqlite_row(
-        state_db_file,
-        "SELECT measured_at_ms,measured_duration_ms,measured_tokens,measurement_outcome,measurement_receipt_sha256,measurement_daemon_binary_sha256,measurement_daemon_source_sha256 FROM schedule_runs WHERE job_id=?",
-        (job_id,),
-    ) if has_benchmark and state_db_file is not None else None
-    if has_benchmark and (measurement is None or measurement[0] is None):
-        missing.append("ember_lab_build_receipt.daemon_authority.measurement_row")
-    elif has_benchmark and measurement[4] != measurement_sha:
-        missing.append("ember_lab_build_receipt.daemon_authority.measurement_receipt")
-    if has_benchmark and measurement is not None and operational is not None:
-        identity = operational.get("ember_lab_identity")
-        if (
-            not isinstance(identity, dict)
-            or measurement[5] != identity.get("binary_sha256")
-            or measurement[6] != identity.get("source_sha256")
-        ):
-            missing.append("ember_lab_build_receipt.daemon_authority.measurement_identity")
-    if has_benchmark and schedule is not None:
-        runs = schedule.get("runs")
-        run = next((row for row in runs if isinstance(row, dict) and row.get("job_id") == job_id), None) if isinstance(runs, list) else None
-        if run is None:
-            missing.append("ember_lab_build_receipt.daemon_authority.schedule_run")
-        elif measurement is not None:
-            for index, field in ((0, "measured_at_ms"), (1, "measured_duration_ms"), (2, "measured_tokens"), (3, "measurement_outcome"), (4, "measurement_receipt_sha256")):
-                if run.get(field) != measurement[index]:
-                    missing.append(f"ember_lab_build_receipt.daemon_authority.schedule_{field}")
-            prediction_identity = run.get("prediction_daemon_identity")
-            measurement_identity = run.get("measurement_daemon_identity")
-            if (
-                not isinstance(prediction_identity, dict)
-                or prediction_identity.get("binary_sha256") != measurement[5]
-                or prediction_identity.get("source_sha256") != measurement[6]
-                or not isinstance(measurement_identity, dict)
-                or measurement_identity.get("binary_sha256") != measurement[5]
-                or measurement_identity.get("source_sha256") != measurement[6]
-            ):
-                missing.append("ember_lab_build_receipt.daemon_authority.schedule_identity")
-    if has_benchmark and benchmark_receipt.get("raw_log_sha256") != measurement_sha:
-        missing.append("ember_lab_build_receipt.daemon_authority.measurement_raw_log")
+            missing.append("ember_lab_build_receipt.daemon_authority.measurement")
     return missing
-
-
-def _content_addressed_json(root: Path, path_value: object, digest: object) -> dict | None:
-    """Open an immutable daemon export whose file name is its exact raw SHA-256."""
-    if not isinstance(digest, str) or not _DIGEST.fullmatch(digest):
-        return None
-    path = _authority_file(root, path_value)
-    if path is None or path.name != f"{digest}.json":
-        return None
-    try:
-        raw = path.read_bytes()
-        value = json.loads(raw)
-    except (OSError, ValueError):
-        return None
-    return value if hashlib.sha256(raw).hexdigest() == digest and isinstance(value, dict) else None
-
 
 def _governed_source_missing(root: Path, payload: dict, commit: object, source_sha: object) -> list[str]:
     """Require an independently replayable source manifest, not caller JSON agreement."""
@@ -650,16 +558,17 @@ def _governed_source_missing(root: Path, payload: dict, commit: object, source_s
     return missing
 
 
-def _ember_lab_build_missing(root: Path, payload: dict, source_receipt: dict, build: object) -> list[str]:
+def _ember_lab_build_missing(
+    root: Path, payload: dict, source_receipt: dict, build: object, live_assessment: object = None
+) -> list[str]:
     """Require the canonical Ember CLI -> Ember Lab build/dispatch custody chain."""
     receipt = payload.get("ember_lab_build_receipt")
     missing: list[str] = []
     if not isinstance(receipt, dict) or receipt.get("schema") != _BUILD_RECEIPT_SCHEMA:
         return ["ember_lab_build_receipt"]
-    authority_root = _approved_daemon_state_root(root)
-    authority_files_root = authority_root or root
-    if authority_root is None:
-        missing.append("ember_lab_build_receipt.daemon_authority.locator")
+    authority_files_root = root
+    if not isinstance(live_assessment, dict):
+        missing.append("ember_lab_build_receipt.daemon_authority.live_pipe")
     if receipt.get("test_only") is True or receipt.get("status") != "PASS":
         missing.append("ember_lab_build_receipt.status")
     if receipt.get("authority") != "ember-cli->ember-lab":
@@ -686,17 +595,22 @@ def _ember_lab_build_missing(root: Path, payload: dict, source_receipt: dict, bu
         missing.append("ember_lab_build_receipt.producer_source_identity")
     if not isinstance(producer_source_sha, str) or not _DIGEST.fullmatch(producer_source_sha):
         missing.append("ember_lab_build_receipt.producer_source_sha256")
-    elif not _digest_file(authority_files_root, producer_source_path, producer_source_sha):
+    elif not isinstance(live_assessment, dict) or live_assessment.get("canonical_source_sha256") != producer_source_sha:
         missing.append("ember_lab_build_receipt.producer_source_sha256")
     producer_binary_path = receipt.get("producer_binary_path")
     producer_binary_sha = receipt.get("producer_binary_sha256")
     if not isinstance(producer_binary_sha, str) or not _DIGEST.fullmatch(producer_binary_sha):
         missing.append("ember_lab_build_receipt.producer_binary_sha256")
-    elif not _digest_file(authority_files_root, producer_binary_path, producer_binary_sha):
+    elif not isinstance(live_assessment, dict) or live_assessment.get("server_binary_sha256") != producer_binary_sha:
         missing.append("ember_lab_build_receipt.producer_binary_sha256")
     operational_path = receipt.get("operational_receipt_path")
     operational_sha = receipt.get("operational_receipt_sha256")
-    operational = _content_addressed_json(authority_files_root, operational_path, operational_sha)
+    operational = live_assessment.get("operational_receipt") if isinstance(live_assessment, dict) else None
+    if (
+        isinstance(live_assessment, dict)
+        and operational_sha != live_assessment.get("response", {}).get("operational_receipt", {}).get("sha256")
+    ):
+        operational = None
     if not isinstance(operational, dict):
         missing.append("ember_lab_build_receipt.daemon_authority")
     else:
@@ -763,16 +677,16 @@ def _ember_lab_build_missing(root: Path, payload: dict, source_receipt: dict, bu
     return missing
 
 
-def _ember_lab_benchmark_missing(root: Path, payload: dict, build_receipt: dict) -> list[str]:
+def _ember_lab_benchmark_missing(
+    root: Path, payload: dict, build_receipt: dict, live_assessment: object = None
+) -> list[str]:
     """Require re-openable multi-step benchmark logs and rederived rates."""
     receipt = payload.get("ember_lab_benchmark_receipt")
     missing: list[str] = []
     if not isinstance(receipt, dict) or receipt.get("schema") != _BENCHMARK_RECEIPT_SCHEMA:
         return ["ember_lab_benchmark_receipt"]
-    authority_root = _approved_daemon_state_root(root)
-    authority_files_root = authority_root or root
-    if authority_root is None:
-        missing.append("ember_lab_benchmark_receipt.daemon_authority.locator")
+    if not isinstance(live_assessment, dict):
+        missing.append("ember_lab_benchmark_receipt.daemon_authority.live_pipe")
     if receipt.get("test_only") is True or receipt.get("status") != "PASS":
         missing.append("ember_lab_benchmark_receipt.status")
     if receipt.get("authority") != "ember-cli->ember-lab":
@@ -793,11 +707,7 @@ def _ember_lab_benchmark_missing(root: Path, payload: dict, build_receipt: dict)
         or receipt.get("operational_receipt_sha256") != build_receipt.get("operational_receipt_sha256")
     ):
         missing.append("ember_lab_benchmark_receipt.operational_receipt_binding")
-    operational = _content_addressed_json(
-        authority_files_root,
-        receipt.get("operational_receipt_path"),
-        receipt.get("operational_receipt_sha256"),
-    )
+    operational = live_assessment.get("operational_receipt") if isinstance(live_assessment, dict) else None
     if not isinstance(operational, dict):
         missing.append("ember_lab_benchmark_receipt.daemon_authority")
     elif (
@@ -805,22 +715,21 @@ def _ember_lab_benchmark_missing(root: Path, payload: dict, build_receipt: dict)
         or receipt.get("hardware_uuid") != operational.get("resource_lease")
     ):
         missing.append("ember_lab_benchmark_receipt.hardware_run_authority")
-    if not _digest_file(authority_files_root, receipt.get("raw_log_path"), receipt.get("raw_log_sha256")):
+    raw_bytes = live_assessment.get("stdout_bytes") if isinstance(live_assessment, dict) else None
+    if not isinstance(raw_bytes, bytes) or hashlib.sha256(raw_bytes).hexdigest() != receipt.get("raw_log_sha256"):
         missing.append("ember_lab_benchmark_receipt.raw_log")
-    raw_path = _authority_file(authority_root, receipt.get("raw_log_path"))
     if isinstance(operational, dict):
         stdout = operational.get("logs", {}).get("stdout") if isinstance(operational.get("logs"), dict) else None
         if (
             not isinstance(stdout, dict)
             or stdout.get("sealed") is not True
-            or stdout.get("file_name") != (raw_path.name if raw_path is not None else None)
             or stdout.get("sha256") != receipt.get("raw_log_sha256")
         ):
             missing.append("ember_lab_benchmark_receipt.sample_log_authority")
     raw_rows: list[dict] = []
-    if raw_path is not None:
+    if isinstance(raw_bytes, bytes):
         try:
-            raw_rows = [json.loads(line) for line in raw_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+            raw_rows = [json.loads(line) for line in raw_bytes.decode("utf-8", errors="strict").splitlines() if line.strip()]
         except (OSError, ValueError):
             missing.append("ember_lab_benchmark_receipt.raw_log_schema")
     if not raw_rows or any(not isinstance(row, dict) for row in raw_rows):
@@ -858,12 +767,12 @@ def _ember_lab_benchmark_missing(root: Path, payload: dict, build_receipt: dict)
                     expected = raw["tokens"] * 1000.0 / raw["elapsed_ms"]
                     if declared.get("tok_s") != expected:
                         missing.append(f"ember_lab_benchmark_receipt.raw_log_rate[{index}]")
-    schedule = _json_file(authority_files_root, receipt.get("schedule_alarm_state_path"))
-    if not _digest_file(
-        authority_files_root,
-        receipt.get("schedule_alarm_state_path"),
-        receipt.get("schedule_alarm_state_sha256"),
-    ) or not isinstance(schedule, dict):
+    schedule = live_assessment.get("schedule_alarm_state") if isinstance(live_assessment, dict) else None
+    response_schedule_sha = (
+        live_assessment.get("response", {}).get("schedule_alarm_state", {}).get("sha256")
+        if isinstance(live_assessment, dict) else None
+    )
+    if receipt.get("schedule_alarm_state_sha256") != response_schedule_sha or not isinstance(schedule, dict):
         missing.append("ember_lab_benchmark_receipt.schedule_authority")
     else:
         identity = operational.get("ember_lab_identity") if isinstance(operational, dict) else None
@@ -904,6 +813,9 @@ def assess(source_root: Path, payload: dict) -> dict:
             "rollback": "discard scratch-only artifact; no product state changed",
             "next_action": "supply a closed readiness payload before any dispatch",
         }
+    # Work on a private copy so the live daemon response cannot mutate caller
+    # custody, while ensuring all downstream validators consume one response.
+    payload = json.loads(json.dumps(payload))
     missing = []
     commit = payload.get("llmq_dev_commit")
     if not isinstance(commit, str) or not _SHA.fullmatch(commit):
@@ -943,18 +855,28 @@ def assess(source_root: Path, payload: dict) -> dict:
                 missing.append("build_receipt.binary_sha256")
 
     source_receipt = payload.get("governed_source_receipt") if isinstance(payload.get("governed_source_receipt"), dict) else {}
+    ember_lab_receipt = payload.get("ember_lab_build_receipt")
+    live_assessment = _acquire_live_daemon_assessment(
+        Path(__file__).resolve().parents[1],
+        ember_lab_receipt.get("job_id") if isinstance(ember_lab_receipt, dict) else None,
+    )
     source_authority_missing = _governed_source_missing(Path(source_root), payload, commit, source_sha)
     missing.extend(source_authority_missing)
-    build_authority_missing = _ember_lab_build_missing(Path(source_root), payload, source_receipt, build)
+    build_authority_missing = _ember_lab_build_missing(
+        Path(source_root), payload, source_receipt, build, live_assessment
+    )
     missing.extend(build_authority_missing)
     daemon_authority_missing = _ember_lab_daemon_authority_missing(
         Path(source_root),
         payload.get("ember_lab_build_receipt"),
         payload.get("ember_lab_benchmark_receipt"),
+        live_assessment,
     )
     missing.extend(daemon_authority_missing)
     benchmark_authority_missing = _ember_lab_benchmark_missing(
-        Path(source_root), payload, payload.get("ember_lab_build_receipt") if isinstance(payload.get("ember_lab_build_receipt"), dict) else {}
+        Path(source_root), payload,
+        payload.get("ember_lab_build_receipt") if isinstance(payload.get("ember_lab_build_receipt"), dict) else {},
+        live_assessment,
     )
     missing.extend(benchmark_authority_missing)
 

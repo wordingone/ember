@@ -22,6 +22,113 @@ MECHANISM_PATH = "docs/spec/llmq/mechanism-attribution-v1.md"
 MECHANISM_SHA = hashlib.sha256((REPO_ROOT / MECHANISM_PATH).read_bytes()).hexdigest()
 
 
+def test_live_daemon_assessment_requires_authenticated_pipe_and_exact_export(monkeypatch, tmp_path):
+    from scripts import llmq_adoption_readiness as readiness
+
+    source_sha = hashlib.sha256((REPO_ROOT / "runtime/ember-lab/src/lib.rs").read_bytes()).hexdigest()
+    binary_sha = hashlib.sha256(b"resident-ember-lab-binary").hexdigest()
+    identity = {"binary_sha256": binary_sha, "source_sha256": source_sha}
+    receipt = {
+        "schema": "ember-lab-operational-receipt-v1",
+        "ember_lab_identity": identity,
+        "job_id": "job-1",
+        "identity_sha256": "a" * 64,
+        "resource_lease": "GPU-1",
+        "state": "exited",
+        "pid": 123,
+        "executable_identity": "llmq.exe",
+        "restart_policy": "never",
+        "exit_code": 0,
+        "logs": {},
+        "events": [{"kind": "job_started"}, {"kind": "job_exited"}],
+        "outage_events": [],
+        "scientific_capability_evidence": False,
+    }
+    stdout = b'{"mode":"fp8","tokens":1000,"elapsed_ms":100}\n'
+    stderr = b""
+    receipt["logs"] = {
+        "stdout": {"file_name": "daemon.stdout.log", "sealed": True, "sha256": hashlib.sha256(stdout).hexdigest()},
+        "stderr": {"file_name": "daemon.stderr.log", "sealed": True, "sha256": hashlib.sha256(stderr).hexdigest()},
+    }
+    schedule = {
+        "schema_version": "ember-lab-schedule-alarm-state-v1",
+        "ember_lab_identity": identity,
+        "runs": [],
+        "alarms": {},
+    }
+
+    def fake_rpc(pipe_name, job_id, directory):
+        assert pipe_name == r"\\.\pipe\ember-lab-test"
+        assert job_id == "job-1"
+        directory.mkdir()
+        values = {
+            "operational_receipt": (json.dumps(receipt, indent=2, sort_keys=True).encode(), ".operational.json"),
+            "stdout_log": (stdout, ".stdout.log"),
+            "stderr_log": (stderr, ".stderr.log"),
+            "schedule_alarm_state": (json.dumps(schedule, indent=2, sort_keys=True).encode(), ".schedule.json"),
+        }
+        result = {"schema": "ember-lab-assessment-evidence-v1", "ember_lab_identity": identity}
+        for field, (raw, suffix) in values.items():
+            digest = hashlib.sha256(raw).hexdigest()
+            path = directory / f"{digest}{suffix}"
+            path.write_bytes(raw)
+            result[field] = {"path": str(path), "sha256": digest}
+        return result, binary_sha
+
+    monkeypatch.setenv("EMBER_LAB_PIPE", r"\\.\pipe\ember-lab-test")
+    monkeypatch.setattr(readiness, "_rpc_export_assessment", fake_rpc)
+    live = readiness._acquire_live_daemon_assessment(REPO_ROOT, "job-1")
+    assert live is not None
+    assert live["operational_receipt"]["job_id"] == "job-1"
+    assert live["stdout_bytes"] == stdout
+    assert live["schedule_alarm_state"]["ember_lab_identity"] == identity
+
+    monkeypatch.delenv("EMBER_LAB_PIPE")
+    assert readiness._acquire_live_daemon_assessment(REPO_ROOT, "job-1") is None
+    monkeypatch.setenv("EMBER_LAB_PIPE", r"\\.\pipe\ember-lab-test")
+    monkeypatch.setattr(readiness, "_rpc_export_assessment", lambda *_: (_ for _ in ()).throw(OSError("unreachable")))
+    assert readiness._acquire_live_daemon_assessment(REPO_ROOT, "job-1") is None
+
+    def wrong_server(*args):
+        result, _ = fake_rpc(*args)
+        return result, "f" * 64
+
+    monkeypatch.setattr(readiness, "_rpc_export_assessment", wrong_server)
+    assert readiness._acquire_live_daemon_assessment(REPO_ROOT, "job-1") is None
+
+    def forged_file(*args):
+        result, server_sha = fake_rpc(*args)
+        Path(result["stdout_log"]["path"]).write_bytes(b"forged after export")
+        return result, server_sha
+
+    monkeypatch.setattr(readiness, "_rpc_export_assessment", forged_file)
+    assert readiness._acquire_live_daemon_assessment(REPO_ROOT, "job-1") is None
+
+    def copied_outside_export(*args):
+        result, server_sha = fake_rpc(*args)
+        source = Path(result["stdout_log"]["path"])
+        copied = tmp_path / source.name
+        copied.write_bytes(source.read_bytes())
+        result["stdout_log"]["path"] = str(copied)
+        return result, server_sha
+
+    monkeypatch.setattr(readiness, "_rpc_export_assessment", copied_outside_export)
+    assert readiness._acquire_live_daemon_assessment(REPO_ROOT, "job-1") is None
+
+    def surrogate(*args):
+        result, server_sha = fake_rpc(*args)
+        path = Path(result["operational_receipt"]["path"])
+        raw = json.dumps({"schema": "caller-operational-json"}, sort_keys=True).encode()
+        digest = hashlib.sha256(raw).hexdigest()
+        replacement = path.with_name(f"{digest}.operational.json")
+        replacement.write_bytes(raw)
+        result["operational_receipt"] = {"path": str(replacement), "sha256": digest}
+        return result, server_sha
+
+    monkeypatch.setattr(readiness, "_rpc_export_assessment", surrogate)
+    assert readiness._acquire_live_daemon_assessment(REPO_ROOT, "job-1") is None
+
+
 def test_missing_pinned_llmq_and_4090_evidence_is_fail_closed():
     result = assess(Path("."), {})
     assert result["verdict"] == "PRELAUNCH_REJECTED"
@@ -58,7 +165,10 @@ def test_malformed_payload_type_is_structured_fail_closed_refusal():
         assert result["external_remainder"] == ["closed readiness payload"]
 
 
-def test_partial_source_and_build_receipt_exposes_external_benchmark_remainder():
+def test_partial_source_and_build_receipt_exposes_external_benchmark_remainder(monkeypatch):
+    # A caller-selected state root is not authority; only a live authenticated
+    # Ember Lab export over EMBER_LAB_PIPE can satisfy daemon custody.
+    monkeypatch.setenv("EMBER_STATE_ROOT", str(REPO_ROOT))
     payload = {
         "schema": "ember-llmq-adoption-readiness-v1",
         "llmq_dev_commit": "0123456789abcdef0123456789abcdef01234567",
@@ -338,7 +448,9 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
     monkeypatch.setattr(readiness, "_GOVERNED_ORIGIN", str(remote))
     authority_root = tmp_path.parent / f"{tmp_path.name}-daemon-state"
     authority_root.mkdir()
-    monkeypatch.setattr(readiness, "_APPROVED_DAEMON_STATE_ROOT", authority_root)
+    # Legacy environment selection is intentionally ignored; the positive
+    # case below supplies the daemon RPC assessment descriptor instead.
+    monkeypatch.setenv("EMBER_STATE_ROOT", str(authority_root))
     repo = tmp_path / "llmq-repo"
     repo.mkdir()
     subprocess.run(["git", "-C", str(repo), "init", "-q"], check=True)
@@ -537,13 +649,17 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
     canonical_binary = authority_root / "runtime" / "ember-lab" / "ember-lab.exe"
     canonical_binary.write_bytes(b"canonical ember-lab daemon binary")
     canonical_binary_sha = hashlib.sha256(canonical_binary.read_bytes()).hexdigest()
-    canonical_log = authority_root / "logs" / "benchmark.stdout.log"
-    canonical_log.parent.mkdir()
-    canonical_log.write_bytes(raw_log.read_bytes())
-    canonical_log_sha = hashlib.sha256(canonical_log.read_bytes()).hexdigest()
-    canonical_stderr = authority_root / "logs" / "benchmark.stderr.log"
-    canonical_stderr.write_bytes(b"")
-    canonical_stderr_sha = hashlib.sha256(canonical_stderr.read_bytes()).hexdigest()
+    canonical_log_unaddressed = authority_root / "logs" / "benchmark.stdout.log"
+    canonical_log_unaddressed.parent.mkdir()
+    canonical_log_unaddressed.write_bytes(raw_log.read_bytes())
+    canonical_log_sha = hashlib.sha256(canonical_log_unaddressed.read_bytes()).hexdigest()
+    canonical_log = authority_root / "logs" / f"{canonical_log_sha}.stdout.log"
+    canonical_log_unaddressed.replace(canonical_log)
+    canonical_stderr_unaddressed = authority_root / "logs" / "benchmark.stderr.log"
+    canonical_stderr_unaddressed.write_bytes(b"")
+    canonical_stderr_sha = hashlib.sha256(canonical_stderr_unaddressed.read_bytes()).hexdigest()
+    canonical_stderr = authority_root / "logs" / f"{canonical_stderr_sha}.stderr.log"
+    canonical_stderr_unaddressed.replace(canonical_stderr)
     daemon_receipt = {
         "schema": "ember-lab-operational-receipt-v1",
         "ember_lab_identity": {
@@ -569,14 +685,18 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
         "outage_events": [],
         "scientific_capability_evidence": False,
     }
-    daemon_bytes = json.dumps(daemon_receipt, indent=2, ensure_ascii=False).encode("utf-8")
+    # Rust serde_json::to_vec_pretty uses the default lexicographically ordered
+    # map representation; the consumer must replay these exact bytes.
+    daemon_bytes = json.dumps(
+        daemon_receipt, indent=2, ensure_ascii=False, sort_keys=True
+    ).encode("utf-8")
     daemon_sha = hashlib.sha256(daemon_bytes).hexdigest()
     daemon_relative = f"runtime/ember-lab/content-addressed-receipts/{daemon_sha}.json"
     daemon_path = authority_root / daemon_relative
     daemon_path.parent.mkdir()
     daemon_path.write_bytes(daemon_bytes)
-    schedule = authority_root / "schedule-state.json"
-    schedule.write_text(
+    schedule_unaddressed = authority_root / "schedule-state.json"
+    schedule_unaddressed.write_text(
         json.dumps(
             {
                 "schema_version": "ember-lab-schedule-alarm-state-v1",
@@ -609,7 +729,9 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
         ),
         encoding="utf-8",
     )
-    schedule_sha = hashlib.sha256(schedule.read_bytes()).hexdigest()
+    schedule_sha = hashlib.sha256(schedule_unaddressed.read_bytes()).hexdigest()
+    schedule = authority_root / "logs" / f"{schedule_sha}.schedule.json"
+    schedule_unaddressed.replace(schedule)
     state_db_relative = "runtime/ember-lab/ember-lab.sqlite3"
     state_db = authority_root / state_db_relative
     state_db.parent.mkdir(parents=True, exist_ok=True)
@@ -705,14 +827,6 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
             ),
         )
     state_db_sha = hashlib.sha256(state_db.read_bytes()).hexdigest()
-    # Dispatch and binary manifests are daemon-owned authority artifacts too;
-    # keep them outside the caller/source checkout alongside the DB/export.
-    authority_dispatch = authority_root / "dispatch.json"
-    authority_dispatch.write_bytes(dispatch.read_bytes())
-    authority_binary_manifest = authority_root / "binary-manifest.json"
-    authority_binary_manifest.write_bytes(binary_manifest.read_bytes())
-    dispatch.unlink()
-    binary_manifest.unlink()
     for build_key in ("build_receipt", "ember_lab_build_receipt"):
         payload[build_key].update(
             dispatch_receipt_path="dispatch.json",
@@ -724,16 +838,90 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
             producer_source_sha256=canonical_source_sha,
             producer_binary_sha256=canonical_binary_sha,
         )
+    monkeypatch.setenv("EMBER_LAB_PIPE", r"\\.\pipe\ember-lab-test")
+
+    def live_daemon_rpc(pipe_name, job_id, directory):
+        assert pipe_name == r"\\.\pipe\ember-lab-test"
+        assert job_id == "job-1"
+        directory.mkdir()
+        exported = {
+            "operational_receipt": (daemon_path.read_bytes(), ".operational.json"),
+            "stdout_log": (canonical_log.read_bytes(), ".stdout.log"),
+            "stderr_log": (canonical_stderr.read_bytes(), ".stderr.log"),
+            "schedule_alarm_state": (schedule.read_bytes(), ".schedule.json"),
+        }
+        result = {
+            "schema": "ember-lab-assessment-evidence-v1",
+            "ember_lab_identity": daemon_receipt["ember_lab_identity"],
+        }
+        for field, (raw, suffix) in exported.items():
+            digest = hashlib.sha256(raw).hexdigest()
+            path = directory / f"{digest}{suffix}"
+            path.write_bytes(raw)
+            result[field] = {"path": str(path), "sha256": digest}
+        return result, canonical_binary_sha
+
+    monkeypatch.setattr(readiness, "_rpc_export_assessment", live_daemon_rpc)
+    daemon_assessment_evidence = {
+        "schema": "ember-lab-assessment-evidence-v1",
+        "authority": "ember-cli->ember-lab",
+        "operational_receipt": {
+            "path": str(daemon_path),
+            "sha256": daemon_sha,
+        },
+        "stdout_log": {
+            "path": str(canonical_log),
+            "sha256": canonical_log_sha,
+        },
+        "stderr_log": {
+            "path": str(canonical_stderr),
+            "sha256": canonical_stderr_sha,
+        },
+        "schedule_alarm_state": {
+            "path": str(schedule),
+            "sha256": schedule_sha,
+        },
+        "state_db": {
+            "path": str(state_db),
+            "sha256": state_db_sha,
+        },
+        "ember_lab_identity": daemon_receipt["ember_lab_identity"],
+    }
+    for build_key in ("build_receipt", "ember_lab_build_receipt"):
+        payload[build_key]["daemon_assessment_evidence"] = daemon_assessment_evidence
+        payload[build_key]["daemon_assessment_rpc"] = {
+            "pipe": r"\\.\pipe\ember-lab-test-authority",
+            "directory": str(authority_root / "assessment-evidence"),
+        }
+        payload[build_key]["_live_daemon_assessment"] = daemon_assessment_evidence
+    live_assessment = readiness._acquire_live_daemon_assessment(REPO_ROOT, "job-1")
+    assert live_assessment is not None
+    daemon_assessment_evidence = live_assessment["response"]
+    for build_key in ("build_receipt", "ember_lab_build_receipt"):
+        payload[build_key]["daemon_assessment_evidence"] = daemon_assessment_evidence
+        payload[build_key]["_live_daemon_assessment"] = daemon_assessment_evidence
     assert readiness._ember_lab_build_missing(
         tmp_path,
         payload,
         payload["governed_source_receipt"],
         payload["build_receipt"],
+        live_assessment,
     ) == []
     trusted_build = assess(tmp_path, payload)
     assert trusted_build["verdict"] == "READY_FOR_EXTERNAL_EXECUTION"
     assert "ember_lab_build_receipt.daemon_authority" not in trusted_build["missing"]
     assert "ember_lab_benchmark_receipt" in trusted_build["missing"]
+
+    # Caller packet descriptors are inert: removing one cannot affect the
+    # authenticated live-pipe result.
+    env_only_payload = json.loads(json.dumps(payload))
+    for build_key in ("build_receipt", "ember_lab_build_receipt"):
+        env_only_payload[build_key].pop("daemon_assessment_evidence", None)
+        env_only_payload[build_key].pop("daemon_assessment_rpc", None)
+    monkeypatch.setenv("EMBER_STATE_ROOT", str(authority_root))
+    env_only_result = assess(tmp_path, env_only_payload)
+    assert env_only_result["verdict"] == "READY_FOR_EXTERNAL_EXECUTION"
+    assert not any("locator" in field for field in env_only_result["missing"])
 
     # A caller-authored operational JSON with the old producer/status/source
     # shape is not a daemon receipt, even when it is content-addressed.
@@ -811,11 +999,11 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
         "command": "llmq 4090x1 3B benchmark",
         "config_sha256": "c" * 64,
         "binary_sha256": source_sha,
-        "raw_log_path": "logs/benchmark.stdout.log",
+            "raw_log_path": f"logs/{canonical_log.name}",
         "raw_log_sha256": canonical_log_sha,
         "operational_receipt_path": daemon_relative,
         "operational_receipt_sha256": daemon_sha,
-        "schedule_alarm_state_path": "schedule-state.json",
+            "schedule_alarm_state_path": f"logs/{schedule.name}",
         "schedule_alarm_state_sha256": schedule_sha,
         "measurement_receipt_sha256": canonical_log_sha,
         "rate_rows": [
@@ -845,9 +1033,9 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
     substituted_log.write_bytes(canonical_log.read_bytes())
     substituted_samples = json.loads(json.dumps(trusted_benchmark))
     substituted_samples["ember_lab_benchmark_receipt"]["raw_log_path"] = "logs/caller-selected.log"
-    refused_samples = assess(tmp_path, substituted_samples)
-    assert refused_samples["verdict"] == "PRELAUNCH_REJECTED"
-    assert "ember_lab_benchmark_receipt.sample_log_authority" in refused_samples["missing"]
+    ignored_samples = assess(tmp_path, substituted_samples)
+    assert ignored_samples["verdict"] == "READY_FOR_EXTERNAL_EXECUTION"
+    assert ignored_samples["missing"] == []
 
     schedule_bytes = schedule.read_bytes()
     altered_schedule = json.loads(schedule_bytes)
@@ -861,14 +1049,6 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
     assert refused_totals["verdict"] == "PRELAUNCH_REJECTED"
     assert "ember_lab_benchmark_receipt.hardware_run_sample_authority" in refused_totals["missing"]
     schedule.write_bytes(schedule_bytes)
-
-    copied_root = tmp_path / "caller-copied-daemon-state"
-    shutil.copytree(authority_root, copied_root)
-    monkeypatch.setattr(readiness, "_APPROVED_DAEMON_STATE_ROOT", copied_root)
-    copied_chain = assess(tmp_path, trusted_benchmark)
-    assert copied_chain["verdict"] == "PRELAUNCH_REJECTED"
-    assert "ember_lab_build_receipt.daemon_authority.locator" in copied_chain["missing"]
-    monkeypatch.setattr(readiness, "_APPROVED_DAEMON_STATE_ROOT", authority_root)
 
     # Multiple origin URLs are ambiguous: single-value config lookup can report
     # the canonical last value while transport selects an attacker-controlled first.
