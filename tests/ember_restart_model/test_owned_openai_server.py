@@ -41,6 +41,7 @@ from serve_owned_openai import (
     _config_snapshot_path,
     _same_root_snapshot,
     _emit_pre_load_validation_receipt,
+    _frozen_prompt_authority,
     main as serve_main,
 )
 
@@ -57,10 +58,19 @@ class _Runtime:
         )
         self.calls: list[tuple[str, list[dict[str, object]]]] = []
         self.max_tokens_seen: list[int] = []
+        self.context_limits_seen: list[int | None] = []
 
-    def chat(self, messages: list[dict[str, object]], *, frozen_row_id: str, max_tokens: int) -> tuple[str, str]:
+    def chat(
+        self,
+        messages: list[dict[str, object]],
+        *,
+        frozen_row_id: str,
+        max_tokens: int,
+        context_limit_tokens: int | None = None,
+    ) -> tuple[str, str]:
         self.calls.append((frozen_row_id, messages))
         self.max_tokens_seen.append(max_tokens)
+        self.context_limits_seen.append(context_limit_tokens)
         return ("owned answer", "stop")
 
 
@@ -163,12 +173,28 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         self.assertEqual(identity["model_name"], expected_name)
         self.assertEqual(identity["data"][0]["id"], expected_name)
         self.assertEqual(identity["mode"], "FROZEN_EVAL")
-        status, completion = self._request("/v1/chat/completions", {"model": expected_name, "ember_frozen_row_id": "row-1", "messages": [{"role": "user", "content": "hello"}], "max_tokens": 3})
+        status, completion = self._request("/v1/chat/completions", {"model": expected_name, "ember_frozen_row_id": "row-1", "ember_context_limit_tokens": 4096, "messages": [{"role": "user", "content": "hello"}], "max_tokens": 3})
         self.assertEqual(status, 200)
         self.assertEqual(completion["model"], expected_name)
         self.assertEqual(completion["choices"][0]["message"]["content"], "owned answer")
         self.assertEqual(len(self.runtime.calls), 1)
         self.assertEqual(self.runtime.calls[0][0], "row-1")
+        self.assertEqual(self.runtime.context_limits_seen, [4096])
+
+    def test_frozen_eval_requires_a_positive_context_limit_before_runtime(self) -> None:
+        base = {
+            "model": self.runtime.identity.model_name,
+            "ember_frozen_row_id": "row-1",
+            "messages": [{"role": "user", "content": "hello"}],
+        }
+        for invalid in (None, 0, -1, True, "4096"):
+            payload = dict(base)
+            if invalid is not None:
+                payload["ember_context_limit_tokens"] = invalid
+            status, response = self._request("/v1/chat/completions", payload)
+            self.assertEqual(status, 400, response)
+            self.assertIn("context limit", response["error"]["message"])
+        self.assertEqual(self.runtime.calls, [])
 
     def test_resident_vram_bytes_uses_the_loaded_cuda_allocator(self) -> None:
         with patch("serve_owned_openai.torch.cuda.memory_allocated", return_value=987_654_321) as measured:
@@ -188,6 +214,7 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         status, response = self._request("/v1/chat/completions", {
             "model": self.runtime.identity.model_name,
             "ember_frozen_row_id": "row-1",
+            "ember_context_limit_tokens": 4096,
             "messages": [{"role": "user", "content": "hello"}],
             "tools": [{"type": "function", "function": {"name": "AskUserQuestion", "parameters": {"type": "object", "properties": {"label": {"type": "string"}}}}}],
         })
@@ -196,6 +223,7 @@ class OwnedOpenAiServerTests(unittest.TestCase):
     def test_chat_requires_a_frozen_row_id_before_runtime(self) -> None:
         status, response = self._request("/v1/chat/completions", {
             "model": self.runtime.identity.model_name,
+            "ember_context_limit_tokens": 4096,
             "messages": [{"role": "user", "content": "hello"}],
         })
         self.assertEqual(status, 400)
@@ -456,10 +484,55 @@ class OwnedOpenAiServerTests(unittest.TestCase):
             split.write_text(json.dumps({"schema_version": "ember-owned-frozen-inference-split-v1", "tokenizer_sha256": "c" * 64, "rows": [{"id": "row-1", "prompt": "hello", "active_expert": "shared"}]}), encoding="utf-8")
             model = Model()
             runtime = LoadedOwnedRuntime(model=model, tokenizer=Tokenizer(), identity=self.runtime.identity, device=torch.device("cpu"), frozen_split=split)
-            answer, reason = runtime.chat([{"role": "user", "content": "hello"}], frozen_row_id="row-1", max_tokens=3)
+            with self.assertRaisesRegex(ValueError, "context limit"):
+                runtime.chat(
+                    [{"role": "user", "content": "hello"}],
+                    frozen_row_id="row-1",
+                    max_tokens=3,
+                    context_limit_tokens=4,
+                )
+            self.assertFalse(hasattr(model, "inputs"))
+            answer, reason = runtime.chat(
+                [{"role": "user", "content": "hello"}],
+                frozen_row_id="row-1",
+                max_tokens=3,
+                context_limit_tokens=5,
+            )
             self.assertEqual((answer, reason, model.inputs), ("eos", "stop", [1, 2]))
             with self.assertRaisesRegex(ValueError, "does not match frozen"):
                 runtime.chat([{"role": "user", "content": "unbound"}], frozen_row_id="row-1", max_tokens=3)
+
+    def test_canonical_suite_authority_is_hash_bound_without_a_second_manifest(self) -> None:
+        suite = {
+            "schema": "ember02-r1-r2-cheap-probe-suite/v1",
+            "tasks": [{"row_id": "row-1", "prompt": "choose A"}],
+        }
+        raw = (json.dumps(suite, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+        class Tokenizer:
+            def encode(self, text: str) -> list[int]:
+                self.encoded = text
+                return [1, 2]
+
+        tokenizer = Tokenizer()
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "suite.json"
+            path.write_bytes(raw)
+            _, record = _frozen_prompt_authority(
+                path,
+                "row-1",
+                tokenizer,
+                expected_suite_sha256=hashlib.sha256(raw).hexdigest(),
+            )
+            self.assertEqual(record["prompt"], "choose A")
+            self.assertEqual(tokenizer.encoded, "choose A")
+            with self.assertRaisesRegex(ValueError, "hash"):
+                _frozen_prompt_authority(
+                    path,
+                    "row-1",
+                    tokenizer,
+                    expected_suite_sha256="0" * 64,
+                )
 
     def test_main_requires_explicit_config_before_any_runtime_loader(self) -> None:
         with (
