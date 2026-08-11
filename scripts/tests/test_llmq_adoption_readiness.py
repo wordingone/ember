@@ -6,6 +6,7 @@ import json
 import hashlib
 import os
 import shutil
+import sqlite3
 import subprocess
 from pathlib import Path
 
@@ -335,6 +336,9 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
     from scripts import llmq_adoption_readiness as readiness
 
     monkeypatch.setattr(readiness, "_GOVERNED_ORIGIN", str(remote))
+    authority_root = tmp_path.parent / f"{tmp_path.name}-daemon-state"
+    authority_root.mkdir()
+    monkeypatch.setattr(readiness, "_APPROVED_DAEMON_STATE_ROOT", authority_root)
     repo = tmp_path / "llmq-repo"
     repo.mkdir()
     subprocess.run(["git", "-C", str(repo), "init", "-q"], check=True)
@@ -485,10 +489,11 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
     forged_build["ember_lab_build_receipt"].pop("operational_receipt_path")
     forged = assess(tmp_path, forged_build)
     assert forged["verdict"] == "PRELAUNCH_REJECTED"
-    assert "ember_lab_build_receipt.operational_receipt" in forged["missing"]
+    assert "ember_lab_build_receipt.operational_receipt_path" in forged["missing"]
+    assert "ember_lab_build_receipt.daemon_authority" in forged["missing"]
     result = assess(tmp_path, payload)
-    assert result["verdict"] == "READY_FOR_EXTERNAL_EXECUTION"
-    assert "ember_lab_benchmark_receipt" in result["missing"]
+    assert result["verdict"] == "PRELAUNCH_REJECTED"
+    assert "ember_lab_build_receipt.daemon_authority" in result["missing"]
     assert result["execution_claim"] is False
     assert result["result_credit"] is False
 
@@ -512,6 +517,8 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
         "binary_sha256": source_sha,
         "raw_log_path": "benchmark.jsonl",
         "raw_log_sha256": hashlib.sha256(raw_log.read_bytes()).hexdigest(),
+        "operational_receipt_path": "ember-lab-operational.json",
+        "operational_receipt_sha256": operational_sha,
         "rate_rows": [
             {"mode": "fp8", "tokens": 1000, "elapsed_ms": 100, "tok_s": 10000.0},
             {"mode": "bf16", "tokens": 2000, "elapsed_ms": 200, "tok_s": 10000.0},
@@ -519,7 +526,244 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
     }
     benchmark_result = assess(tmp_path, forged_benchmark)
     assert benchmark_result["verdict"] == "PRELAUNCH_REJECTED"
-    assert "ember_lab_benchmark_receipt.operational_receipt" in benchmark_result["missing"]
+    assert "ember_lab_build_receipt.daemon_authority" in benchmark_result["missing"]
+
+    # The real authority is outside the caller packet. It mirrors the existing
+    # daemon export: terminal job identity plus daemon-sealed stdout/stderr.
+    canonical_source = authority_root / "runtime" / "ember-lab" / "src" / "lib.rs"
+    canonical_source.parent.mkdir(parents=True)
+    canonical_source.write_bytes((REPO_ROOT / "runtime" / "ember-lab" / "src" / "lib.rs").read_bytes())
+    canonical_source_sha = hashlib.sha256(canonical_source.read_bytes()).hexdigest()
+    canonical_binary = authority_root / "runtime" / "ember-lab" / "ember-lab.exe"
+    canonical_binary.write_bytes(b"canonical ember-lab daemon binary")
+    canonical_binary_sha = hashlib.sha256(canonical_binary.read_bytes()).hexdigest()
+    canonical_log = authority_root / "logs" / "benchmark.stdout.log"
+    canonical_log.parent.mkdir()
+    canonical_log.write_bytes(raw_log.read_bytes())
+    canonical_log_sha = hashlib.sha256(canonical_log.read_bytes()).hexdigest()
+    canonical_stderr = authority_root / "logs" / "benchmark.stderr.log"
+    canonical_stderr.write_bytes(b"")
+    canonical_stderr_sha = hashlib.sha256(canonical_stderr.read_bytes()).hexdigest()
+    daemon_receipt = {
+        "schema": "ember-lab-operational-receipt-v1",
+        "ember_lab_identity": {
+            "binary_sha256": canonical_binary_sha,
+            "source_sha256": canonical_source_sha,
+        },
+        "job_id": "job-1",
+        "identity_sha256": "d" * 64,
+        "resource_lease": "GPU-1",
+        "state": "exited",
+        "pid": 1234,
+        "executable_identity": "llmq-benchmark.exe",
+        "restart_policy": "never",
+        "exit_code": 0,
+        "logs": {
+            "stdout": {"file_name": canonical_log.name, "sealed": True, "sha256": canonical_log_sha},
+            "stderr": {"file_name": canonical_stderr.name, "sealed": True, "sha256": canonical_stderr_sha},
+        },
+        "events": [{"kind": "job_started"}, {"kind": "job_exited"}],
+        "outage_events": [],
+        "scientific_capability_evidence": False,
+    }
+    daemon_bytes = json.dumps(daemon_receipt, sort_keys=True).encode("utf-8")
+    daemon_sha = hashlib.sha256(daemon_bytes).hexdigest()
+    daemon_relative = f"runtime/ember-lab/content-addressed-receipts/{daemon_sha}.json"
+    daemon_path = authority_root / daemon_relative
+    daemon_path.parent.mkdir()
+    daemon_path.write_bytes(daemon_bytes)
+    schedule = authority_root / "schedule-state.json"
+    schedule.write_text(
+        json.dumps(
+            {
+                "schema_version": "ember-lab-schedule-alarm-state-v1",
+                "generated_at_ms": 1,
+                "ember_lab_identity": daemon_receipt["ember_lab_identity"],
+                "alarms": {
+                    "prediction_overrun": False,
+                    "zero_schedule_receipts_7d": False,
+                    "absolute_deadline_drift": False,
+                },
+                "runs": [
+                    {
+                        "job_id": "job-1",
+                        "artifact_class": "llmq-4090x1-3b-benchmark",
+                        "predicted_at_ms": 1,
+                        "predicted_duration_ms": 300,
+                        "predicted_tokens": 3000,
+                        "predicted_program_completion_ms": 301,
+                        "absolute_deadline_ms": 1000,
+                        "prediction_daemon_identity": daemon_receipt["ember_lab_identity"],
+                        "measured_at_ms": 301,
+                        "measured_duration_ms": 300,
+                        "measured_tokens": 3000,
+                        "measurement_outcome": "COMPLETED",
+                        "measurement_receipt_sha256": canonical_log_sha,
+                        "measurement_daemon_identity": daemon_receipt["ember_lab_identity"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    schedule_sha = hashlib.sha256(schedule.read_bytes()).hexdigest()
+    state_db_relative = "runtime/ember-lab/ember-lab.sqlite3"
+    state_db = authority_root / state_db_relative
+    state_db.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(state_db) as connection:
+        connection.executescript(
+            """
+                CREATE TABLE jobs(
+                    job_id TEXT PRIMARY KEY,
+                    state TEXT NOT NULL,
+                    exit_code INTEGER,
+                    pid INTEGER,
+                    resource TEXT,
+                    executable_identity TEXT,
+                    stdout_log_path TEXT,
+                    stderr_log_path TEXT,
+                    stdout_log_sha256 TEXT,
+                    stderr_log_sha256 TEXT
+            );
+            CREATE TABLE schedule_runs(
+                job_id TEXT PRIMARY KEY,
+                measured_at_ms INTEGER,
+                measured_duration_ms INTEGER,
+                measured_tokens INTEGER,
+                measurement_outcome TEXT,
+                measurement_receipt_sha256 TEXT,
+                measurement_daemon_binary_sha256 TEXT,
+                measurement_daemon_source_sha256 TEXT
+            );
+            """
+        )
+        connection.execute(
+                "INSERT INTO jobs(job_id,state,exit_code,pid,resource,executable_identity,stdout_log_path,stderr_log_path,stdout_log_sha256,stderr_log_sha256) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                (
+                    "job-1",
+                    "exited",
+                    0,
+                    1234,
+                    "GPU-1",
+                    "llmq-benchmark.exe",
+                    str(canonical_log),
+                    str(canonical_stderr),
+                    canonical_log_sha,
+                    canonical_stderr_sha,
+                ),
+        )
+        connection.execute(
+            "INSERT INTO schedule_runs(job_id,measured_at_ms,measured_duration_ms,measured_tokens,measurement_outcome,measurement_receipt_sha256,measurement_daemon_binary_sha256,measurement_daemon_source_sha256) VALUES(?,?,?,?,?,?,?,?)",
+            (
+                "job-1",
+                301,
+                300,
+                3000,
+                "COMPLETED",
+                canonical_log_sha,
+                canonical_binary_sha,
+                canonical_source_sha,
+            ),
+        )
+    state_db_sha = hashlib.sha256(state_db.read_bytes()).hexdigest()
+    # Dispatch and binary manifests are daemon-owned authority artifacts too;
+    # keep them outside the caller/source checkout alongside the DB/export.
+    authority_dispatch = authority_root / "dispatch.json"
+    authority_dispatch.write_bytes(dispatch.read_bytes())
+    authority_binary_manifest = authority_root / "binary-manifest.json"
+    authority_binary_manifest.write_bytes(binary_manifest.read_bytes())
+    dispatch.unlink()
+    binary_manifest.unlink()
+    for build_key in ("build_receipt", "ember_lab_build_receipt"):
+        payload[build_key].update(
+            dispatch_receipt_path="dispatch.json",
+            binary_manifest_path="binary-manifest.json",
+            operational_receipt_path=daemon_relative,
+            operational_receipt_sha256=daemon_sha,
+            daemon_state_db_path=state_db_relative,
+            daemon_state_db_sha256=state_db_sha,
+            producer_source_sha256=canonical_source_sha,
+            producer_binary_sha256=canonical_binary_sha,
+        )
+    assert readiness._ember_lab_build_missing(
+        tmp_path,
+        payload,
+        payload["governed_source_receipt"],
+        payload["build_receipt"],
+    ) == []
+    trusted_build = assess(tmp_path, payload)
+    assert trusted_build["verdict"] == "READY_FOR_EXTERNAL_EXECUTION"
+    assert "ember_lab_build_receipt.daemon_authority" not in trusted_build["missing"]
+    assert "ember_lab_benchmark_receipt" in trusted_build["missing"]
+
+    trusted_benchmark = json.loads(json.dumps(payload))
+    trusted_benchmark["ember_lab_benchmark_receipt"] = {
+        "schema": "ember-lab-benchmark-receipt-v1",
+        "status": "PASS",
+        "authority": "ember-cli->ember-lab",
+        "job_id": "job-1",
+        "hardware_uuid": "GPU-1",
+        "command": "llmq 4090x1 3B benchmark",
+        "config_sha256": "c" * 64,
+        "binary_sha256": source_sha,
+        "raw_log_path": "logs/benchmark.stdout.log",
+        "raw_log_sha256": canonical_log_sha,
+        "operational_receipt_path": daemon_relative,
+        "operational_receipt_sha256": daemon_sha,
+        "schedule_alarm_state_path": "schedule-state.json",
+        "schedule_alarm_state_sha256": schedule_sha,
+        "measurement_receipt_sha256": canonical_log_sha,
+        "rate_rows": [
+            {"mode": "fp8", "tokens": 1000, "elapsed_ms": 100, "tok_s": 10000.0},
+            {"mode": "bf16", "tokens": 2000, "elapsed_ms": 200, "tok_s": 10000.0},
+        ],
+    }
+    trusted_benchmark["benchmark_receipt"] = {
+        "schema": "ember-4090-3b-benchmark-receipt-v1",
+        "hardware": "RTX 4090",
+        "status": "PASS",
+        "model": "Qwen2.5-3B",
+        "fp8_tok_s": 10000.0,
+        "bf16_tok_s": 10000.0,
+    }
+    trusted_result = assess(tmp_path, trusted_benchmark)
+    assert trusted_result["verdict"] == "READY_FOR_EXTERNAL_EXECUTION"
+    assert trusted_result["missing"] == []
+
+    foreign_hardware = json.loads(json.dumps(trusted_benchmark))
+    foreign_hardware["ember_lab_benchmark_receipt"]["hardware_uuid"] = "GPU-FOREIGN"
+    refused_hardware = assess(tmp_path, foreign_hardware)
+    assert refused_hardware["verdict"] == "PRELAUNCH_REJECTED"
+    assert "ember_lab_benchmark_receipt.hardware_run_authority" in refused_hardware["missing"]
+
+    substituted_log = authority_root / "logs" / "caller-selected.log"
+    substituted_log.write_bytes(canonical_log.read_bytes())
+    substituted_samples = json.loads(json.dumps(trusted_benchmark))
+    substituted_samples["ember_lab_benchmark_receipt"]["raw_log_path"] = "logs/caller-selected.log"
+    refused_samples = assess(tmp_path, substituted_samples)
+    assert refused_samples["verdict"] == "PRELAUNCH_REJECTED"
+    assert "ember_lab_benchmark_receipt.sample_log_authority" in refused_samples["missing"]
+
+    schedule_bytes = schedule.read_bytes()
+    altered_schedule = json.loads(schedule_bytes)
+    altered_schedule["runs"][0]["measured_tokens"] = 3001
+    schedule.write_text(json.dumps(altered_schedule), encoding="utf-8")
+    altered_totals = json.loads(json.dumps(trusted_benchmark))
+    altered_totals["ember_lab_benchmark_receipt"]["schedule_alarm_state_sha256"] = hashlib.sha256(
+        schedule.read_bytes()
+    ).hexdigest()
+    refused_totals = assess(tmp_path, altered_totals)
+    assert refused_totals["verdict"] == "PRELAUNCH_REJECTED"
+    assert "ember_lab_benchmark_receipt.hardware_run_sample_authority" in refused_totals["missing"]
+    schedule.write_bytes(schedule_bytes)
+
+    copied_root = tmp_path / "caller-copied-daemon-state"
+    shutil.copytree(authority_root, copied_root)
+    monkeypatch.setattr(readiness, "_APPROVED_DAEMON_STATE_ROOT", copied_root)
+    copied_chain = assess(tmp_path, trusted_benchmark)
+    assert copied_chain["verdict"] == "PRELAUNCH_REJECTED"
+    assert "ember_lab_build_receipt.daemon_authority.locator" in copied_chain["missing"]
+    monkeypatch.setattr(readiness, "_APPROVED_DAEMON_STATE_ROOT", authority_root)
 
     # Multiple origin URLs are ambiguous: single-value config lookup can report
     # the canonical last value while transport selects an attacker-controlled first.

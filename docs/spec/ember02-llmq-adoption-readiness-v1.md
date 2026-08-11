@@ -27,12 +27,20 @@ benchmark remain an explicit external remainder. Any eventual execution must
 route through Ember CLI -> Ember Lab.
 
 Build and benchmark receipts are not authority merely because their caller
-fields agree. The build receipt must reopen a non-test-only
-`ember-lab-operational-receipt-v1` for the same job and source-manifest/output
-digests, bind the exact `runtime/ember-lab/src/lib.rs` producer bytes and the
-producer binary bytes, and require daemon identity plus exit-zero terminal
-state. A benchmark receipt must reuse that exact operational receipt and job,
-bind the output binary, hardware UUID, command/config, and raw multi-step log
-bytes, then rederive every FP8/BF16 rate from the raw rows. Missing, forged,
-foreign, or self-authored producer receipts remain `PRELAUNCH_REJECTED` and
-cannot create benchmark, adoption, capability, or result credit.
+fields agree. The build receipt must reopen Ember Lab's existing
+content-addressed `ember-lab-operational-receipt-v1` from the approved external
+Ember state root (`EMBER_STATE_ROOT`, the `ember-lab serve --db` custody root),
+never from the mutable source checkout or caller's packet root. That daemon export must
+bind the exact `runtime/ember-lab/src/lib.rs` and daemon binary bytes, the
+terminal job/identity/resource lease, exit zero, and daemon-sealed stdout and
+stderr; the invented caller-side producer/status shape is refused. A benchmark
+receipt must reuse that exact daemon export and job, equate its hardware UUID
+to the daemon resource lease, and bind its raw FP8/BF16 samples to the sealed
+stdout name and SHA before rederiving every rate. It must also reopen the
+existing Ember Lab schedule-alarm state and read-only `serve --db` jobs and
+`schedule_runs` rows, including the DB-declared stdout/stderr paths and raw
+hashes, measured-at timestamp, total duration/tokens, operational-receipt SHA,
+and prediction/measurement daemon identities. Missing, forged, foreign,
+or self-authored producer, hardware, run, or sample evidence remains
+`PRELAUNCH_REJECTED` and cannot create benchmark, adoption, capability, or
+result credit. No new launcher or receipt authority is introduced here.
