@@ -285,7 +285,11 @@ class OwnedProcessRunner:
         return self._run_posix(argv, float(timeout_s), cwd=cwd, env=env)
 
     def _run_windows(self, argv: list[str], timeout_s: float, *, cwd: str | os.PathLike[str] | None, env: Mapping[str, str] | None) -> OwnedProcessResult:
-        creationflags = 0x00000004 | subprocess.CREATE_NEW_PROCESS_GROUP  # CREATE_SUSPENDED
+        creationflags = (
+            0x00000004  # CREATE_SUSPENDED
+            | subprocess.CREATE_NEW_PROCESS_GROUP
+            | subprocess.CREATE_NO_WINDOW
+        )
         job_factory = self._windows_job_factory or _WindowsJob
         with job_factory() as job:
             proc = subprocess.Popen(
