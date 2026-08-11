@@ -352,6 +352,7 @@ pub struct ReceiptArtifact {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct AssessmentEvidenceArtifact {
     pub schema: String,
+    pub preflight_receipt: ReceiptArtifact,
     pub operational_receipt: ReceiptArtifact,
     pub stdout_log: ReceiptArtifact,
     pub stderr_log: ReceiptArtifact,
@@ -983,6 +984,7 @@ impl Daemon {
             CREATE TABLE IF NOT EXISTS outage_events(seq INTEGER PRIMARY KEY AUTOINCREMENT, resource TEXT NOT NULL, ts_ms INTEGER NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, ts_ms INTEGER NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS dispatch_receipt_recovery(job_id TEXT PRIMARY KEY, resource_lease TEXT NOT NULL, manifest_sha256 TEXT NOT NULL, receipt_path TEXT NOT NULL, receipt_sha256 TEXT NOT NULL, receipt_bytes BLOB NOT NULL, created_at_ms INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS dispatch_preflight_receipts(job_id TEXT PRIMARY KEY, resource_lease TEXT NOT NULL, manifest_sha256 TEXT NOT NULL, receipt_sha256 TEXT NOT NULL, receipt_bytes BLOB NOT NULL, created_at_ms INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS resource_guard_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), admission_state TEXT NOT NULL CHECK(admission_state IN ('open','frozen')), reason TEXT, observed_at_ms INTEGER NOT NULL, oracle_evidence_required INTEGER NOT NULL CHECK(oracle_evidence_required IN (0,1)), observation_json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS resource_guard_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL);
             INSERT OR IGNORE INTO resource_guard_state(singleton,admission_state,reason,observed_at_ms,oracle_evidence_required,observation_json) VALUES(1,'open',NULL,0,0,'{}');")?;
@@ -2121,6 +2123,12 @@ impl Daemon {
                 receipt_path,
             });
         }
+        self.persist_dispatch_preflight_receipt(
+            &job_id,
+            &resource_lease,
+            &manifest_sha256,
+            &receipt_bytes,
+        )?;
         let receipt = ReceiptArtifact {
             path: receipt_path,
             sha256: hash_bytes(&receipt_bytes),
@@ -2151,6 +2159,54 @@ impl Daemon {
         Ok(())
     }
 
+    fn persist_dispatch_preflight_receipt(
+        &self,
+        job_id: &str,
+        resource_lease: &str,
+        manifest_sha256: &str,
+        receipt_bytes: &[u8],
+    ) -> Result<()> {
+        self.conn()?.execute(
+            "INSERT OR REPLACE INTO dispatch_preflight_receipts(job_id,resource_lease,manifest_sha256,receipt_sha256,receipt_bytes,created_at_ms) VALUES(?1,?2,?3,?4,?5,?6)",
+            params![
+                job_id,
+                resource_lease,
+                manifest_sha256,
+                hash_bytes(receipt_bytes),
+                receipt_bytes,
+                now_ms(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    fn daemon_preflight_receipt(&self, job_id: &str) -> Result<Option<(String, String, Vec<u8>)>> {
+        let row: Option<(String, String, String, Vec<u8>)> = self
+            .conn()?
+            .query_row(
+                "SELECT resource_lease,manifest_sha256,receipt_sha256,receipt_bytes FROM dispatch_preflight_receipts WHERE job_id=?1",
+                [job_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .optional()?;
+        let Some((resource_lease, manifest_sha256, receipt_sha256, receipt_bytes)) = row else {
+            return Ok(None);
+        };
+        if receipt_sha256 != hash_bytes(&receipt_bytes) {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "daemon preflight receipt hash does not match DB bytes".into(),
+            });
+        }
+        if self.identity_hash(job_id)?.as_deref() != Some(manifest_sha256.as_str()) {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail:
+                    "daemon preflight manifest binding does not match authenticated job identity"
+                        .into(),
+            });
+        }
+        Ok(Some((resource_lease, manifest_sha256, receipt_bytes)))
+    }
+
     fn recover_pending_dispatch_receipt(
         &self,
         manifest: &DispatchManifest,
@@ -2176,7 +2232,7 @@ impl Daemon {
             || stored_path != receipt_path.to_string_lossy()
             || receipt_sha256 != hash_bytes(receipt_bytes)
             || stored_bytes != receipt_bytes
-            || self.identity_hash(&manifest.job_id)? != Some(manifest_sha256)
+            || self.identity_hash(&manifest.job_id)? != Some(manifest_sha256.clone())
             || self.lease_owner(&manifest.resource_lease)?.as_deref()
                 != Some(manifest.job_id.as_str())
             || self.job_state(&manifest.job_id)? != Some(JobState::Running)
@@ -2186,6 +2242,12 @@ impl Daemon {
             });
         }
         atomic_replace(receipt_path, &stored_bytes)?;
+        self.persist_dispatch_preflight_receipt(
+            &manifest.job_id,
+            &manifest.resource_lease,
+            &manifest_sha256,
+            &stored_bytes,
+        )?;
         self.conn()?.execute(
             "DELETE FROM dispatch_receipt_recovery WHERE job_id=?1",
             [&manifest.job_id],
@@ -2912,6 +2974,66 @@ impl Daemon {
                 detail: "operational receipt omitted daemon identity".into(),
             }
         })?;
+        let (resource_lease, manifest_sha256, preflight_bytes) = self
+            .daemon_preflight_receipt(job_id)?
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                detail: "daemon preflight receipt is not present in DB custody".into(),
+            })?;
+        if receipt.get("identity_sha256").and_then(Value::as_str) != Some(manifest_sha256.as_str())
+            || receipt.get("resource_lease").and_then(Value::as_str)
+                != Some(resource_lease.as_str())
+        {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "daemon preflight lease and identity are not bound to operational receipt"
+                    .into(),
+            });
+        }
+        let preflight: Value = serde_json::from_slice(&preflight_bytes)?;
+        let preflight_object =
+            preflight
+                .as_object()
+                .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                    detail: "daemon preflight receipt is not a JSON object".into(),
+                })?;
+        let preflight_program = preflight_object.get("program").and_then(Value::as_object);
+        if preflight_object.get("schema_version")
+            != Some(&Value::String("ember-lab-dispatch-preflight-v1".into()))
+            || preflight_object.get("result") != Some(&Value::String("PREFLIGHT_PASSED".into()))
+            || preflight_object.get("job_id") != Some(&Value::String(job_id.into()))
+            || preflight_object
+                .get("dispatch_manifest_sha256")
+                .and_then(Value::as_str)
+                != Some(manifest_sha256.as_str())
+            || preflight_object.get("ember_lab_identity") != Some(&identity)
+            || preflight_object
+                .get("source_commit")
+                .and_then(Value::as_str)
+                .map(|value| {
+                    value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+                })
+                != Some(true)
+            || preflight_program
+                .and_then(|value| value.get("path"))
+                .and_then(Value::as_str)
+                .map(|value| !value.is_empty())
+                != Some(true)
+            || preflight_program
+                .and_then(|value| value.get("sha256"))
+                .and_then(Value::as_str)
+                .map(|value| {
+                    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+                })
+                != Some(true)
+            || !preflight_object
+                .get("bindings")
+                .and_then(Value::as_array)
+                .map(|value| !value.is_empty())
+                .unwrap_or(false)
+        {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "daemon preflight receipt failed DB-custody schema validation".into(),
+            });
+        }
         let logs = receipt
             .get("logs")
             .and_then(Value::as_object)
@@ -2953,6 +3075,7 @@ impl Daemon {
         }
         let schedule_bytes = serde_json::to_vec_pretty(&self.schedule_alarm_state_at(now_ms())?)?;
         let receipt_sha256 = hash_bytes(&receipt_bytes);
+        let preflight_sha256 = hash_bytes(&preflight_bytes);
         let schedule_sha256 = hash_bytes(&schedule_bytes);
         let staging = parent.join(format!(
             ".assessment-evidence-{}-{}-{}",
@@ -2962,6 +3085,10 @@ impl Daemon {
         ));
         fs::create_dir(&staging)?;
         let publish = (|| -> Result<()> {
+            atomic_create(
+                &staging.join(format!("{preflight_sha256}.preflight.json")),
+                &preflight_bytes,
+            )?;
             atomic_create(
                 &staging.join(format!("{receipt_sha256}.operational.json")),
                 &receipt_bytes,
@@ -2991,6 +3118,10 @@ impl Daemon {
         };
         Ok(AssessmentEvidenceArtifact {
             schema: "ember-lab-assessment-evidence-v1".into(),
+            preflight_receipt: artifact(
+                format!("{preflight_sha256}.preflight.json"),
+                preflight_sha256,
+            ),
             operational_receipt: artifact(
                 format!("{receipt_sha256}.operational.json"),
                 receipt_sha256,

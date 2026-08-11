@@ -588,6 +588,7 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
         assessment_keys,
         [
             "ember_lab_identity",
+            "preflight_receipt",
             "operational_receipt",
             "schedule_alarm_state",
             "schema",
@@ -598,6 +599,7 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
         .collect()
     );
     for field in [
+        "preflight_receipt",
         "operational_receipt",
         "stdout_log",
         "stderr_log",

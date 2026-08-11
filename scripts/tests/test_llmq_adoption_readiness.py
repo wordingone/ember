@@ -22,10 +22,34 @@ MECHANISM_PATH = "docs/spec/llmq/mechanism-attribution-v1.md"
 MECHANISM_SHA = hashlib.sha256((REPO_ROOT / MECHANISM_PATH).read_bytes()).hexdigest()
 
 
+def _daemon_preflight(job_id, identity, source_commit="b" * 40, program_sha256="d" * 64):
+    return {
+        "schema_version": "ember-lab-dispatch-preflight-v1",
+        "result": "PREFLIGHT_PASSED",
+        "job_id": job_id,
+        "source_commit": source_commit,
+        "observed_at_ms": 1,
+        "not_before_ms": 0,
+        "expires_at_ms": 2,
+        "dispatch_manifest_sha256": "c" * 64,
+        "workload_profile": {"profile_id": "evidence_verifier"},
+        "program": {"path": "C:/governed/llmq-build.exe", "sha256": program_sha256},
+        "bindings": [{"kind": "input", "path": "llmq-source-manifest.json", "sha256": "e" * 64}],
+        "args_sha256": "f" * 64,
+        "env_sha256": "0" * 64,
+        "custody_root": "C:/governed",
+        "storage_reserves": [],
+        "vram_reserve": {"minimum_free_bytes": 1, "available_free_bytes": 1},
+        "maximum_job_memory_bytes": 1,
+        "host_commit": {"basis": "maximum_configured_capacity"},
+        "ember_lab_identity": identity,
+    }
+
+
 def test_live_daemon_assessment_requires_authenticated_pipe_and_exact_export(monkeypatch, tmp_path):
     from scripts import llmq_adoption_readiness as readiness
 
-    source_sha = hashlib.sha256((REPO_ROOT / "runtime/ember-lab/src/lib.rs").read_bytes()).hexdigest()
+    source_sha = readiness._canonical_ember_lab_source_sha256(REPO_ROOT)
     binary_sha = hashlib.sha256(b"resident-ember-lab-binary").hexdigest()
     canonical_binary = tmp_path / "canonical" / "ember-lab.exe"
     canonical_binary.parent.mkdir()
@@ -67,7 +91,16 @@ def test_live_daemon_assessment_requires_authenticated_pipe_and_exact_export(mon
         assert pipe_name == r"\\.\pipe\ember-lab-test"
         assert job_id == "job-1"
         directory.mkdir()
+        preflight = _daemon_preflight(
+            job_id,
+            identity,
+            source_commit=readiness._run_git(REPO_ROOT, "rev-parse", "HEAD"),
+            # The dispatched LLMQ program is not the resident Ember Lab
+            # daemon binary; these identities must be bound separately.
+            program_sha256="d" * 64,
+        )
         values = {
+            "preflight_receipt": (json.dumps(preflight, indent=2, sort_keys=True).encode(), ".preflight.json"),
             "operational_receipt": (json.dumps(receipt, indent=2, sort_keys=True).encode(), ".operational.json"),
             "stdout_log": (stdout, ".stdout.log"),
             "stderr_log": (stderr, ".stderr.log"),
@@ -89,6 +122,40 @@ def test_live_daemon_assessment_requires_authenticated_pipe_and_exact_export(mon
     assert live["operational_receipt"]["job_id"] == "job-1"
     assert live["stdout_bytes"] == stdout
     assert live["schedule_alarm_state"]["ember_lab_identity"] == identity
+
+    def forged_program(*args):
+        result, server_sha, server_path = fake_rpc(*args)
+        artifact = Path(result["preflight_receipt"]["path"])
+        payload = json.loads(artifact.read_text())
+        payload["program"]["sha256"] = "1" * 64
+        raw = json.dumps(payload, indent=2, sort_keys=True).encode()
+        digest = hashlib.sha256(raw).hexdigest()
+        replacement = artifact.with_name(f"{digest}.preflight.json")
+        replacement.write_bytes(raw)
+        result["preflight_receipt"] = {"path": str(replacement), "sha256": digest}
+        return result, server_sha, server_path
+
+    monkeypatch.setattr(readiness, "_rpc_export_assessment", forged_program)
+    # A daemon export may legitimately describe any executed program; the
+    # build assessor binds that program SHA to its requested binary later.
+    forged_live = readiness._acquire_live_daemon_assessment(REPO_ROOT, "job-1")
+    assert forged_live is not None
+    assert forged_live["preflight_receipt"]["program"]["sha256"] == "1" * 64
+
+    def unrelated_job(*args):
+        result, server_sha, server_path = fake_rpc(*args)
+        artifact = Path(result["preflight_receipt"]["path"])
+        payload = json.loads(artifact.read_text())
+        payload["job_id"] = "unrelated-job"
+        raw = json.dumps(payload, indent=2, sort_keys=True).encode()
+        digest = hashlib.sha256(raw).hexdigest()
+        replacement = artifact.with_name(f"{digest}.preflight.json")
+        replacement.write_bytes(raw)
+        result["preflight_receipt"] = {"path": str(replacement), "sha256": digest}
+        return result, server_sha, server_path
+
+    monkeypatch.setattr(readiness, "_rpc_export_assessment", unrelated_job)
+    assert readiness._acquire_live_daemon_assessment(REPO_ROOT, "job-1") is None
 
     monkeypatch.delenv("EMBER_LAB_PIPE")
     assert readiness._acquire_live_daemon_assessment(REPO_ROOT, "job-1") is None
@@ -163,6 +230,235 @@ def test_live_daemon_rpc_worker_is_hidden_and_deadline_bounded(monkeypatch, tmp_
         assert "end-to-end deadline" in str(error)
     else:
         raise AssertionError("hung pipe worker did not fail closed")
+
+
+def test_live_daemon_source_identity_matches_rust_composite_hash(monkeypatch, tmp_path):
+    """The live daemon identity is Rust's length-delimited seven-file digest."""
+    from scripts import llmq_adoption_readiness as readiness
+
+    canonical_binary = tmp_path / "canonical" / "ember-lab.exe"
+    canonical_binary.parent.mkdir()
+    canonical_binary.write_bytes(b"resident-ember-lab-binary")
+    binary_sha = hashlib.sha256(canonical_binary.read_bytes()).hexdigest()
+    source_files = [
+        REPO_ROOT / "runtime/ember-lab/src/lib.rs",
+        REPO_ROOT / "runtime/ember-lab/src/data_catalog.rs",
+        REPO_ROOT / "runtime/ember-lab/src/rpc.rs",
+        REPO_ROOT / "runtime/ember-lab/src/main.rs",
+        REPO_ROOT / "runtime/ember-lab/src/training_verify.rs",
+        REPO_ROOT / "runtime/ember-lab/Cargo.toml",
+        REPO_ROOT / "runtime/ember-lab/Cargo.lock",
+    ]
+    digest = hashlib.sha256()
+    for source in source_files:
+        raw = source.read_bytes()
+        digest.update(len(raw).to_bytes(8, "little"))
+        digest.update(raw)
+    source_sha = digest.hexdigest()
+    identity = {"binary_sha256": binary_sha, "source_sha256": source_sha}
+    stdout = b""
+    stderr = b""
+    receipt = {
+        "schema": "ember-lab-operational-receipt-v1",
+        "ember_lab_identity": identity,
+        "job_id": "job-composite-source",
+        "identity_sha256": "a" * 64,
+        "resource_lease": "CPU-1",
+        "state": "exited",
+        "pid": 321,
+        "executable_identity": str(canonical_binary),
+        "restart_policy": "never",
+        "exit_code": 0,
+        "logs": {
+            "stdout": {"file_name": "stdout.log", "sealed": True, "sha256": hashlib.sha256(stdout).hexdigest()},
+            "stderr": {"file_name": "stderr.log", "sealed": True, "sha256": hashlib.sha256(stderr).hexdigest()},
+        },
+        "events": [{"kind": "job_started"}, {"kind": "job_exited"}],
+        "outage_events": [],
+        "scientific_capability_evidence": False,
+    }
+    schedule = {
+        "schema_version": "ember-lab-schedule-alarm-state-v1",
+        "ember_lab_identity": identity,
+        "runs": [],
+        "alarms": {},
+    }
+
+    def fake_rpc(_pipe_name, _job_id, directory):
+        directory.mkdir()
+        preflight = _daemon_preflight(
+            _job_id,
+            identity,
+            source_commit=readiness._run_git(REPO_ROOT, "rev-parse", "HEAD"),
+            program_sha256=identity["binary_sha256"],
+        )
+        values = {
+            "preflight_receipt": (json.dumps(preflight, indent=2, sort_keys=True).encode(), ".preflight.json"),
+            "operational_receipt": (json.dumps(receipt, indent=2, sort_keys=True).encode(), ".operational.json"),
+            "stdout_log": (stdout, ".stdout.log"),
+            "stderr_log": (stderr, ".stderr.log"),
+            "schedule_alarm_state": (json.dumps(schedule, indent=2, sort_keys=True).encode(), ".schedule.json"),
+        }
+        result = {"schema": "ember-lab-assessment-evidence-v1", "ember_lab_identity": identity}
+        for field, (raw, suffix) in values.items():
+            artifact_sha = hashlib.sha256(raw).hexdigest()
+            path = directory / f"{artifact_sha}{suffix}"
+            path.write_bytes(raw)
+            result[field] = {"path": str(path), "sha256": artifact_sha}
+        return result, binary_sha, canonical_binary
+
+    monkeypatch.setenv("EMBER_LAB_PIPE", r"\\.\pipe\ember-lab-test")
+    monkeypatch.setattr(readiness, "_rpc_export_assessment", fake_rpc)
+    monkeypatch.setattr(readiness, "_canonical_ember_lab_binary", lambda _root: canonical_binary)
+    live = readiness._acquire_live_daemon_assessment(REPO_ROOT, "job-composite-source")
+    assert live is not None
+    assert live["canonical_source_sha256"] == source_sha
+
+
+def test_live_daemon_assessment_requires_daemon_owned_preflight_export(monkeypatch, tmp_path):
+    """Caller-created preflight bytes cannot ride an unrelated daemon token."""
+    from scripts import llmq_adoption_readiness as readiness
+
+    canonical_binary = tmp_path / "ember-lab.exe"
+    canonical_binary.write_bytes(b"daemon-binary")
+    binary_sha = hashlib.sha256(canonical_binary.read_bytes()).hexdigest()
+    identity = {"binary_sha256": binary_sha, "source_sha256": "a" * 64}
+    operational = {
+        "schema": "ember-lab-operational-receipt-v1",
+        "ember_lab_identity": identity,
+        "job_id": "job-preflight",
+        "identity_sha256": "c" * 64,
+        "resource_lease": "CPU-1",
+        "state": "exited",
+        "pid": 42,
+        "executable_identity": str(canonical_binary),
+        "restart_policy": "never",
+        "exit_code": 0,
+        "logs": {
+            "stdout": {"file_name": "stdout.log", "sealed": True, "sha256": hashlib.sha256(b"").hexdigest()},
+            "stderr": {"file_name": "stderr.log", "sealed": True, "sha256": hashlib.sha256(b"").hexdigest()},
+        },
+        "events": [{"kind": "job_started"}, {"kind": "job_exited"}],
+        "outage_events": [],
+        "scientific_capability_evidence": False,
+    }
+    schedule = {"schema_version": "ember-lab-schedule-alarm-state-v1", "ember_lab_identity": identity, "runs": [], "alarms": {}}
+
+    def fake_rpc(_pipe_name, _job_id, directory):
+        directory.mkdir()
+        values = {
+            "operational_receipt": (json.dumps(operational, indent=2, sort_keys=True).encode(), ".operational.json"),
+            "stdout_log": (b"", ".stdout.log"),
+            "stderr_log": (b"", ".stderr.log"),
+            "schedule_alarm_state": (json.dumps(schedule, indent=2, sort_keys=True).encode(), ".schedule.json"),
+        }
+        result = {"schema": "ember-lab-assessment-evidence-v1", "ember_lab_identity": identity}
+        for field, (raw, suffix) in values.items():
+            digest = hashlib.sha256(raw).hexdigest()
+            path = directory / f"{digest}{suffix}"
+            path.write_bytes(raw)
+            result[field] = {"path": str(path), "sha256": digest}
+        return result, binary_sha, canonical_binary
+
+    monkeypatch.setenv("EMBER_LAB_PIPE", r"\\.\pipe\ember-lab-test")
+    monkeypatch.setattr(readiness, "_canonical_ember_lab_source_sha256", lambda _root: "a" * 64)
+    monkeypatch.setattr(readiness, "_run_git", lambda _root, *_args: "b" * 40)
+    monkeypatch.setattr(readiness, "_rpc_export_assessment", fake_rpc)
+    monkeypatch.setattr(readiness, "_canonical_ember_lab_binary", lambda _root: canonical_binary)
+
+    assert readiness._acquire_live_daemon_assessment(tmp_path, "job-preflight") is None
+
+
+def test_git_identity_probes_drop_transient_proxy_overrides(monkeypatch):
+    from scripts import llmq_adoption_readiness as readiness
+
+    for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "GIT_HTTP_PROXY", "GIT_HTTPS_PROXY"):
+        monkeypatch.setenv(name, "http://127.0.0.1:9")
+    env = readiness._git_env()
+    assert all(name not in env for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "GIT_HTTP_PROXY", "GIT_HTTPS_PROXY"))
+
+
+def test_daemon_preflight_and_identity_do_not_require_caller_build_manifests(tmp_path):
+    from scripts import llmq_adoption_readiness as readiness
+
+    dispatch = tmp_path / "dispatch-preflight.json"
+    dispatch.write_text(
+        json.dumps({
+            "schema_version": "ember-lab-dispatch-preflight-v1",
+            "job_id": "job-daemon",
+            "result": "PREFLIGHT_PASSED",
+                "source_commit": "e" * 40,
+                "program": {"sha256": "2" * 64},
+                "bindings": [{"kind": "input", "path": "llmq-source-manifest.json", "sha256": "7" * 64}],
+        }),
+        encoding="utf-8",
+    )
+    source_identity = "1" * 64
+    binary_identity = "2" * 64
+    operational = {
+        "schema": "ember-lab-operational-receipt-v1",
+        "ember_lab_identity": {"source_sha256": source_identity, "binary_sha256": binary_identity},
+        "job_id": "job-daemon",
+        "identity_sha256": "3" * 64,
+        "resource_lease": "CPU-1",
+        "state": "exited",
+        "pid": 1,
+        "executable_identity": "ember-lab.exe",
+        "restart_policy": "never",
+        "exit_code": 0,
+        "logs": {
+            "stdout": {"file_name": "stdout.log", "sealed": True, "sha256": "4" * 64},
+            "stderr": {"file_name": "stderr.log", "sealed": True, "sha256": "5" * 64},
+        },
+        "events": [{"kind": "job_started"}, {"kind": "job_exited"}],
+        "outage_events": [],
+        "scientific_capability_evidence": False,
+    }
+    live = {
+        "_daemon_authority_token": readiness._DAEMON_AUTHORITY_TOKEN,
+        "operational_receipt": operational,
+        "response": {"operational_receipt": {"sha256": "6" * 64}},
+        "server_binary_sha256": binary_identity,
+        "canonical_source_sha256": source_identity,
+        "_daemon_source_commit": "e" * 40,
+    }
+    preflight = _daemon_preflight(
+        "job-daemon",
+        operational["ember_lab_identity"],
+        source_commit="e" * 40,
+        program_sha256=operational["ember_lab_identity"]["binary_sha256"],
+    )
+    preflight["bindings"][0]["sha256"] = "7" * 64
+    live["preflight_receipt"] = preflight
+    live["preflight_receipt_sha256"] = hashlib.sha256(
+        json.dumps(preflight, indent=2, sort_keys=True).encode()
+    ).hexdigest()
+    source_receipt = {"commit": "c" * 40, "source_manifest_sha256": "7" * 64}
+    build = {
+        "schema": "ember-lab-build-receipt-v1",
+        "status": "PASS",
+        "authority": "ember-cli->ember-lab",
+        "job_id": "job-daemon",
+        "host_id": "host-1",
+        "toolchain": "cargo-release-locked",
+        "dispatch_receipt_path": "dispatch-preflight.json",
+        "dispatch_receipt_sha256": live["preflight_receipt_sha256"],
+        "operational_receipt_path": "daemon-operational.json",
+        "operational_receipt_sha256": "6" * 64,
+        "producer_source_path": "runtime/ember-lab/src/lib.rs",
+        "producer_source_sha256": source_identity,
+        "producer_binary_path": "runtime/ember-lab/target/release/ember-lab.exe",
+        "producer_binary_sha256": binary_identity,
+        "source_manifest_sha256": source_receipt["source_manifest_sha256"],
+        "binary_sha256": binary_identity,
+        "exit_code": 0,
+    }
+    missing = readiness._ember_lab_build_missing(
+        tmp_path, {"ember_lab_build_receipt": build}, source_receipt, build, live
+    )
+    assert "ember_lab_build_receipt.binary_manifest" not in missing
+    assert "ember_lab_build_receipt.binary_manifest_schema" not in missing
+    assert "ember_lab_build_receipt.dispatch_schema" not in missing
 
 
 def test_missing_pinned_llmq_and_4090_evidence_is_fail_closed():
@@ -681,7 +977,7 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
     canonical_source = authority_root / "runtime" / "ember-lab" / "src" / "lib.rs"
     canonical_source.parent.mkdir(parents=True)
     canonical_source.write_bytes((REPO_ROOT / "runtime" / "ember-lab" / "src" / "lib.rs").read_bytes())
-    canonical_source_sha = hashlib.sha256(canonical_source.read_bytes()).hexdigest()
+    canonical_source_sha = readiness._canonical_ember_lab_source_sha256(REPO_ROOT)
     canonical_binary = authority_root / "runtime" / "ember-lab" / "ember-lab.exe"
     canonical_binary.write_bytes(b"canonical ember-lab daemon binary")
     canonical_binary_sha = hashlib.sha256(canonical_binary.read_bytes()).hexdigest()
@@ -880,7 +1176,17 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
         assert pipe_name == r"\\.\pipe\ember-lab-test"
         assert job_id == "job-1"
         directory.mkdir()
+        preflight = _daemon_preflight(
+            job_id,
+            daemon_receipt["ember_lab_identity"],
+            source_commit=readiness._run_git(REPO_ROOT, "rev-parse", "HEAD"),
+            # The dispatch program is the governed LLMQ binary, not the
+            # resident Ember Lab daemon binary.
+            program_sha256=source_sha,
+        )
+        preflight["bindings"][0]["sha256"] = manifest_sha
         exported = {
+            "preflight_receipt": (json.dumps(preflight, indent=2, sort_keys=True).encode(), ".preflight.json"),
             "operational_receipt": (daemon_path.read_bytes(), ".operational.json"),
             "stdout_log": (canonical_log.read_bytes(), ".stdout.log"),
             "stderr_log": (canonical_stderr.read_bytes(), ".stderr.log"),
@@ -933,10 +1239,24 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
         payload[build_key]["_live_daemon_assessment"] = daemon_assessment_evidence
     live_assessment = readiness._acquire_live_daemon_assessment(REPO_ROOT, "job-1")
     assert live_assessment is not None
+    for build_key in ("build_receipt", "ember_lab_build_receipt"):
+        payload[build_key]["dispatch_receipt_sha256"] = live_assessment["preflight_receipt_sha256"]
     daemon_assessment_evidence = live_assessment["response"]
     for build_key in ("build_receipt", "ember_lab_build_receipt"):
         payload[build_key]["daemon_assessment_evidence"] = daemon_assessment_evidence
         payload[build_key]["_live_daemon_assessment"] = daemon_assessment_evidence
+    mismatched_payload = json.loads(json.dumps(payload))
+    mismatched_program = mismatched_payload["build_receipt"]
+    mismatched_program["binary_sha256"] = "d" * 64
+    mismatched_payload["ember_lab_build_receipt"]["binary_sha256"] = "d" * 64
+    mismatch_missing = readiness._ember_lab_build_missing(
+        tmp_path,
+        mismatched_payload,
+        payload["governed_source_receipt"],
+        mismatched_program,
+        live_assessment,
+    )
+    assert "ember_lab_build_receipt.dispatch_program_binding" in mismatch_missing
     assert readiness._ember_lab_build_missing(
         tmp_path,
         payload,
