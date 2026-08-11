@@ -33,6 +33,22 @@ FILES = (
     "run-spec.json",
     "sha-binding-map.json",
 )
+SHA_BINDING_KEYS = frozenset(
+    {
+        "benchmark_registry_sha256",
+        "board_receipt_sha256",
+        "checkout_sha256",
+        "cli_binary_sha256",
+        "config_sha256",
+        "failure_class_ledger_sha256",
+        "input_authority_sha256",
+        "launch_packet_sha256",
+        "root_summary_sha256",
+        "seat_sha256",
+        "subject_manifest_sha256",
+        "tokenizer_sha256",
+    }
+)
 RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
@@ -68,6 +84,32 @@ def _regular_source(path: Path, label: str) -> Path:
     if path.is_symlink() or not path.is_file():
         raise PublicationRefusal(f"{label.upper()}_NOT_REGULAR_FILE")
     return path.resolve(strict=True)
+
+
+def _validate_sha_binding_map_bytes(raw: bytes) -> None:
+    """Reopen the required disclosure map as a closed, nonempty schema.
+
+    The certificate carries the authoritative digest values; this sidecar records the
+    source identity from which each digest was derived. Publishing arbitrary bytes under
+    its governed filename would make the four-file packet self-contradictory even though
+    the three-file certified consumer remained green.
+    """
+    def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in payload:
+                raise PublicationRefusal("SHA_BINDING_MAP_DUPLICATE_KEY")
+            payload[key] = value
+        return payload
+
+    try:
+        payload = json.loads(raw.decode("utf-8"), object_pairs_hook=reject_duplicate_keys)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise PublicationRefusal("SHA_BINDING_MAP_INVALID") from error
+    if not isinstance(payload, dict) or set(payload) != SHA_BINDING_KEYS:
+        raise PublicationRefusal("SHA_BINDING_MAP_SCHEMA_MISMATCH")
+    if any(not isinstance(value, str) or not value.strip() for value in payload.values()):
+        raise PublicationRefusal("SHA_BINDING_MAP_SOURCE_IDENTITY_INVALID")
 
 
 def _external_root(repo_root: Path, custody_root: Path) -> tuple[Path, Path]:
@@ -125,7 +167,7 @@ def publish_launch_authority(
     repo, custody = _external_root(repo_root, custody_root)
     if RUN_ID.fullmatch(run_id) is None:
         raise PublicationRefusal("RUN_ID_INVALID")
-    sources = {
+    source_paths = {
         "certificate.json": _regular_source(certificate, "certificate"),
         "declaration-ledger.jsonl": _regular_source(
             declaration_ledger, "declaration_ledger"
@@ -133,6 +175,11 @@ def publish_launch_authority(
         "run-spec.json": _regular_source(run_spec, "run_spec"),
         "sha-binding-map.json": _regular_source(sha_binding_map, "sha_binding_map"),
     }
+    try:
+        source_bytes = {name: path.read_bytes() for name, path in source_paths.items()}
+    except OSError as error:
+        raise PublicationRefusal("SOURCE_READ_FAILED") from error
+    _validate_sha_binding_map_bytes(source_bytes["sha-binding-map.json"])
     destination_parent = custody / run_id
     destination = destination_parent / "launch-authority"
     if destination.exists():
@@ -144,7 +191,7 @@ def publish_launch_authority(
     staging.mkdir(mode=0o700)
     try:
         for name in FILES:
-            shutil.copyfile(sources[name], staging / name)
+            (staging / name).write_bytes(source_bytes[name])
 
         (validator or _canonical_validator(repo))(
             staging / "certificate.json",
