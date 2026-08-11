@@ -78,6 +78,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import r1_frozen_eval_runner as frozen_eval
+
 SCHEMA_VERSION = "ember02-frontier-receipt/v1"
 GENERATOR = "scripts/frontier_receipt.py"
 RUNG = "R1"
@@ -336,42 +338,32 @@ def leg_capability(run_root: Path, manifest_path: Path, manifest: dict[str, Any]
         "the frozen cheap-probe battery has not been run against this checkpoint -- issue #1498",
     )
     doc = _read_json(path, "UNMEASURABLE_CAPABILITY")
-    for key in ("eval_suite_id", "eval_suite_sha256", "checkpoint_manifest_sha256", "results"):
-        if not doc.get(key):
-            raise FrontierRefusal(f"UNMEASURABLE_CAPABILITY: {path} lacks {key}")
-    manifest_sha = _sha256(manifest_path)
-    if doc["checkpoint_manifest_sha256"] != manifest_sha:
-        raise FrontierRefusal(
-            "CHECKPOINT_BYTES_UNBOUND: frozen-eval results bind checkpoint manifest "
-            f"{doc['checkpoint_manifest_sha256'][:12]}..., this run root's manifest is "
-            f"{manifest_sha[:12]}... -- one run's eval must not credit another's checkpoint"
+    suite_path = _find_one(
+        run_root,
+        "frozen-eval-suite.json",
+        "EVAL_SUITE_BYTES_UNBOUND",
+        "the exact frozen suite bytes must accompany their results -- issue #1498",
+    )
+    suite_sha256 = _sha256(suite_path)
+    try:
+        _suite_raw, suite = frozen_eval._load_suite(suite_path, suite_sha256)
+        manifest_sha, checkpoint_hashes = frozen_eval._checkpoint_identity(
+            manifest_path.parent
         )
+        frozen_eval.validate_results_receipt(
+            doc,
+            suite=suite,
+            suite_sha256=suite_sha256,
+            checkpoint_manifest_sha256=manifest_sha,
+            checkpoint_file_sha256s=checkpoint_hashes,
+        )
+    except frozen_eval.FrozenEvalRefusal as exc:
+        raise FrontierRefusal(str(exc)) from exc
     results = doc["results"]
-    if not isinstance(results, dict) or not results:
-        raise FrontierRefusal(f"UNMEASURABLE_CAPABILITY: {path} results is not a non-empty mapping")
-    for metric, entry in results.items():
-        if not isinstance(entry, dict) or not _finite(entry.get("value")):
-            raise FrontierRefusal(
-                f"UNMEASURABLE_CAPABILITY: results[{metric!r}] lacks a finite value -- "
-                "no missing result is converted into completion"
-            )
-    tool_access = doc.get("tool_access")
-    if tool_access != "none":
-        raise FrontierRefusal(
-            f"UNMEASURABLE_CAPABILITY: tool_access is {tool_access!r}, need 'none' at R1 "
-            "(section 5.4 leg 3: no harness/tool substitution)"
-        )
-    checkpoint_hashes = {
-        key: manifest[key]
-        for key in ("shared_model_shard_sha256", "expert_checkpoint_sha256",
-                    "optimizer_state_shard_sha256", "rng_state_sha256")
-        if key in manifest
-    }
-    if not checkpoint_hashes:
-        raise FrontierRefusal("CHECKPOINT_BYTES_UNBOUND: checkpoint manifest carries no shard sha256 fields")
     return {
         "eval_suite_id": doc["eval_suite_id"],
-        "eval_suite_sha256": doc["eval_suite_sha256"],
+        "eval_suite_path": str(suite_path),
+        "eval_suite_sha256": suite_sha256,
         "results_receipt_path": str(path),
         "results_receipt_sha256": _sha256(path),
         "checkpoint_manifest_sha256": manifest_sha,
