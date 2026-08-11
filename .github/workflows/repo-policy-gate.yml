@@ -111,7 +111,7 @@ jobs:
             python "${kernel}/scripts/check_pr_authority_binding.py" \
               --root "${subject}" \
               --body-file "${RUNNER_TEMP}/pr_body.txt" \
-              --changed-range "${range_base}...HEAD"
+              --changed-range "${range_base}..HEAD"
           else
             echo "trusted narrow Dependabot schema accepted; human authority binding is not applicable"
           fi
