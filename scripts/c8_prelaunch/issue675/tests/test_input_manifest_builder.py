@@ -75,6 +75,23 @@ def test_builder_round_trips_closed_inputs_and_historical_batch_identity(tmp_pat
     assert torch.load(result["files"]["pre_momentum"],weights_only=True).equal(torch.ones((2,2)))
 
 
+def test_builder_accepts_canonical_bfloat16_seed_momentum_without_widening_arm_contract(tmp_path):
+    source="a"*40; run="q2-bfloat16-momentum"; root=tmp_path/"custody"
+    sources,target=_sources(tmp_path)
+    canonical=torch.tensor([[0.5,-0.25],[0.125,0.75]],dtype=torch.bfloat16)
+    torch.save({"muon":{"state":{0:{"momentum_buffer":canonical}}}},sources["seed_optimizer"])
+    manifest=json.loads(sources["seed_manifest"].read_text(encoding="utf-8"))
+    manifest["files"]["optimizer.pt"]=hashlib.sha256(sources["seed_optimizer"].read_bytes()).hexdigest()
+    sources["seed_manifest"].write_text(json.dumps(manifest),encoding="utf-8")
+
+    cp,bp=stage_event_inputs(root=root,run_id=run,lineage_run_id="historical",source_commit=source,sources=sources,target_name=target,intermediate_size=8,config=_config())
+    admitted=admit_event_inputs(custody_root=root,checkpoint_manifest_path=cp,batch_manifest_path=bp,expected_source_commit=source,expected_run_id=run)
+    persisted=torch.load(admitted["files"]["pre_momentum"],map_location="cpu",weights_only=True)
+
+    assert persisted.dtype==torch.bfloat16
+    assert torch.equal(persisted,canonical)
+
+
 def test_builder_remints_missing_b2_and_b1m_cache_bytes_under_current_source(tmp_path):
     source="a"*40; root=tmp_path/"custody"; sources,target=_sources(tmp_path)
     cp,bp=stage_event_inputs(root=root,run_id="future-event",lineage_run_id="historical",source_commit=source,sources=sources,target_name=target,intermediate_size=8,config=_config())

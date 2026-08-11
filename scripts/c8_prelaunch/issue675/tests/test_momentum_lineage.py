@@ -126,3 +126,22 @@ def test_refuses_substituted_momentum(tmp_path: Path, target: str, code: str):
             transplant_momentum=transplanted,
             expected_run_id="q2-momentum-test",
         )
+
+
+def test_refuses_bfloat16_arm_buffer_even_when_values_match(tmp_path: Path):
+    module = _load()
+    gate, pre, manifest, model, optimizer, pre_path, receipt = _fixture(tmp_path / "momentum")
+    transplanted = torch.cat([pre, pre], dim=0)
+
+    with pytest.raises(module.MomentumLineageRefusal, match="RESET_MOMENTUM_INVALID"):
+        module.validate_momentum_lineage(
+            seed_manifest_path=manifest,
+            seed_model_path=model,
+            seed_optimizer_path=optimizer,
+            b1m_receipt_path=receipt,
+            persisted_pre_momentum_path=pre_path,
+            target_name=gate,
+            reset_momentum=torch.zeros_like(transplanted, dtype=torch.bfloat16),
+            transplant_momentum=transplanted,
+            expected_run_id="q2-momentum-test",
+        )

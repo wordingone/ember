@@ -49,6 +49,18 @@ def _tensor(value: object, code: str) -> torch.Tensor:
     return value.detach().cpu().contiguous()
 
 
+def _seed_tensor(value: object, code: str) -> torch.Tensor:
+    if (
+        not isinstance(value, torch.Tensor)
+        or value.dtype not in {torch.bfloat16, torch.float32}
+        or value.ndim != 2
+        or value.numel() == 0
+        or not bool(torch.isfinite(value).all())
+    ):
+        _refuse(code)
+    return value.detach().cpu().contiguous()
+
+
 def _muon_name_to_id(model_state: Mapping[str, torch.Tensor]) -> dict[str, int]:
     names: list[str] = []
     seen_storage: set[int] = set()
@@ -87,12 +99,12 @@ def resolve_seed_momentum(
     if not state:
         state = optimizer_state.get("state", {})
     try:
-        resolved = _tensor(
+        resolved = _seed_tensor(
             state[muon_id]["momentum_buffer"], "SEED_GATE_MOMENTUM_INVALID"
         )
     except (KeyError, TypeError):
         _refuse("SEED_GATE_MOMENTUM_UNRESOLVED")
-    if float(resolved.square().mean().sqrt()) < 1e-10:
+    if float(resolved.to(torch.float32).square().mean().sqrt()) < 1e-10:
         _refuse("SEED_GATE_MOMENTUM_NEAR_ZERO")
     return resolved
 
@@ -144,7 +156,7 @@ def validate_momentum_lineage(
         _refuse("B1M_RECEIPT_INVALID")
 
     try:
-        persisted = _tensor(
+        persisted = _seed_tensor(
             torch.load(persisted_pre_momentum_path, map_location="cpu", weights_only=True),
             "B1M_PERSISTED_MOMENTUM_INVALID",
         )
@@ -162,7 +174,8 @@ def validate_momentum_lineage(
     )[target_name]
     if not torch.equal(resolved, persisted):
         _refuse("B1M_PERSISTED_MOMENTUM_MISMATCH")
-    expected_transplant = torch.cat([resolved, resolved], dim=0)
+    resolved_float32 = resolved.to(torch.float32)
+    expected_transplant = torch.cat([resolved_float32, resolved_float32], dim=0)
     reset = _tensor(reset_momentum, "RESET_MOMENTUM_INVALID")
     transplant = _tensor(transplant_momentum, "TRANSPLANT_MOMENTUM_INVALID")
     if reset.shape != expected_transplant.shape or bool(torch.count_nonzero(reset)):
