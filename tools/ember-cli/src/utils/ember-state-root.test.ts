@@ -12,13 +12,14 @@
 // cockpit that silently disagree about where state lives.
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { isAbsolute, join, sep } from "node:path";
+import { isAbsolute, join, sep, win32 } from "node:path";
 import {
   CENSUS_DISCOVERY_NAME_PATTERNS,
   EmberStateRootError,
   IN_TREE_STATE_DIR_NAME,
   SANCTIONED_STATE_DIR_NAME,
   assertStateRootIsWritable,
+  defaultEmberStateParent,
   emberStatePath,
   emberStateRoot,
   isUnderEmberState,
@@ -150,6 +151,24 @@ describe("repoStateKey — cross-language parity", () => {
 });
 
 describe("emberStateRoot", () => {
+  test("implicit Windows state defaults to governed B: while explicit EMBER_HOME still wins", () => {
+    const governedRoot = win32.join("B:" + win32.sep, "M");
+    const cConfigHome = win32.join("C:" + win32.sep, "Users", "Admin", ".ember");
+    expect(defaultEmberStateParent({}, "win32", cConfigHome)).toBe(
+      governedRoot,
+    );
+    expect(
+      defaultEmberStateParent(
+        { EMBER_HOME: "C:\\explicit\\.ember" },
+        "win32",
+        "C:\\ignored",
+      ),
+    ).toBe("C:\\explicit\\.ember");
+    expect(defaultEmberStateParent({}, "linux", "/home/ember/.ember")).toBe(
+      "/home/ember/.ember",
+    );
+  });
+
   test("EMBER_STATE_ROOT is used verbatim — the launcher is the single authority", () => {
     process.env["EMBER_STATE_ROOT"] = join("C:", "cockpit-state");
     expect(emberStateRoot("C:\\fixture\\ember")).toBe(join("C:", "cockpit-state"));

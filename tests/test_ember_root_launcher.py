@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import ntpath
 import re
 import shutil
 import subprocess
@@ -273,13 +274,24 @@ class EmberRootLauncherTests(unittest.TestCase):
             "$env:EMBER_STATE_ROOT='C:\\fixture\\cockpit-state'; "
             "Write-Output (Get-EmberStateRoot 'C:\\fixture\\ember'); "
             "$env:EMBER_STATE_ROOT=''; $env:EMBER_HOME='C:\\fixture\\home'; "
+            "Write-Output (Get-EmberStateRoot 'C:\\fixture\\ember'); "
+            "$env:EMBER_HOME=''; "
             "Write-Output (Get-EmberStateRoot 'C:\\fixture\\ember')"
         )
         self.assertEqual(result.returncode, 0, result.stdout)
-        override, default = [l.strip() for l in result.stdout.splitlines() if l.strip()][:2]
+        override, explicit_home, windows_default = [
+            l.strip() for l in result.stdout.splitlines() if l.strip()
+        ][:3]
         self.assertEqual(override, r"C:\fixture\cockpit-state")
-        self.assertEqual(default, r"C:\fixture\home\cockpit-state\c-fixture-ember")
-        self.assertNotIn(r"C:\fixture\ember\\", default)
+        self.assertEqual(explicit_home, r"C:\fixture\home\cockpit-state\c-fixture-ember")
+        self.assertEqual(
+            windows_default,
+            ntpath.join("B:" + ntpath.sep, "M", "cockpit-state", "c-fixture-ember"),
+        )
+        self.assertNotIn(r"C:\fixture\ember\\", explicit_home)
+        implementation = LAUNCH_IMPL.read_text(encoding="utf-8")
+        self.assertNotIn('$env:OS -eq "Windows_NT"', implementation)
+        self.assertIn("[System.Environment]::OSVersion.Platform", implementation)
 
     def test_launch_migrates_in_tree_state_out_and_leaves_nothing_behind(self) -> None:
         owner, root, runtime = self.make_fixture()

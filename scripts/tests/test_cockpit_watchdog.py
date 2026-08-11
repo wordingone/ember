@@ -14,7 +14,9 @@ Covers the composed liveness predicate over legs 1 (window), 2 (process),
 """
 
 import json
+import ntpath
 import os
+import posixpath
 import sys
 import tempfile
 from pathlib import Path
@@ -779,8 +781,16 @@ def test_resolve_ember_state_root_defaults_to_home_dot_ember_when_ember_home_uns
     fake_home = tmp_path / "home"
     fake_home.mkdir()
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: fake_home))
-    resolved = _resolve_ember_state_root(r"C:\fixture\ember")
-    assert resolved == os.path.join(str(fake_home), ".ember", "cockpit-state", "c-fixture-ember")
+    resolved = _resolve_ember_state_root(r"C:\fixture\ember", platform="posix")
+    assert resolved == posixpath.join(
+        str(fake_home), ".ember", "cockpit-state", "c-fixture-ember"
+    )
+
+
+def test_resolve_ember_state_root_defaults_windows_receipts_and_cache_to_b(clean_state_root_env):
+    assert _resolve_ember_state_root(r"C:\fixture\ember", platform="nt") == (
+        ntpath.join("B:" + ntpath.sep, "M", "cockpit-state", "c-fixture-ember")
+    )
 
 
 def test_ember_config_home_dir_matches_env_detection_ts_contract(clean_state_root_env, tmp_path, monkeypatch):
@@ -792,7 +802,10 @@ def test_ember_config_home_dir_matches_env_detection_ts_contract(clean_state_roo
     fake_home = tmp_path / "home2"
     fake_home.mkdir()
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: fake_home))
-    assert _ember_config_home_dir() == str(fake_home / ".ember")
+    assert _ember_config_home_dir(platform="posix") == posixpath.join(
+        str(fake_home), ".ember"
+    )
+    assert _ember_config_home_dir(platform="nt") == ntpath.join("B:" + ntpath.sep, "M")
 
 
 def test_default_renderer_heartbeat_path_matches_the_writer_when_override_is_set(clean_state_root_env):
