@@ -16,7 +16,7 @@ import { resolveEmberSourceRootOrCwd } from "../utils/repo-root.ts";
 import { publishActivityFeedInfrastructureFailure } from "../services/activity-feed.ts";
 import { spawn, spawnSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { isAbsolute, join, relative, resolve } from "path";
 
 // ---------------------------------------------------------------------------
 // Preflight spawn seam (injectable for testing; mirrors model.ts's runner)
@@ -285,15 +285,12 @@ interface TrainCommandDeps {
   scriptPath?: string;
   /** certified_train_launch.py path override. */
   certifiedLaunchScriptPath?: string;
-  /** Canonical launch-authority certificate path override; defaults to
-   *  <repoRoot>/receipts/ember-02-launch-authority/certificate.json. */
-  certificatePath?: string;
-  /** Canonical launch-authority declaration-ledger path override; defaults to
-   *  <repoRoot>/receipts/ember-02-launch-authority/declaration-ledger.jsonl. */
-  declarationLedgerPath?: string;
-  /** Canonical launch-authority run-spec path override; defaults to
-   *  <repoRoot>/receipts/ember-02-launch-authority/run-spec.json. */
-  runSpecPath?: string;
+  /**
+   * External, run-scoped launch-authority custody root. Defaults to
+   * EMBER_LAUNCH_AUTHORITY_ROOT. The committed receipt tree is historical
+   * evidence and is never a live launch-authority source.
+   */
+  launchAuthorityRoot?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -310,11 +307,25 @@ function _canonicalArtifactPaths(
   repoRoot: string,
   deps: TrainCommandDeps,
 ): CanonicalArtifactPaths {
-  const base = join(repoRoot, "receipts", "ember-02-launch-authority");
+  const configured = deps.launchAuthorityRoot ?? process.env.EMBER_LAUNCH_AUTHORITY_ROOT;
+  if (configured === undefined || configured.trim() === "") {
+    throw new Error(
+      "EMBER_LAUNCH_AUTHORITY_ROOT is required; committed launch-authority receipts are historical only",
+    );
+  }
+  if (!isAbsolute(configured)) {
+    throw new Error("EMBER_LAUNCH_AUTHORITY_ROOT must be an absolute external path");
+  }
+  const base = resolve(configured);
+  const repository = resolve(repoRoot);
+  const fromRepository = relative(repository, base);
+  if (fromRepository === "" || (!fromRepository.startsWith("..") && !isAbsolute(fromRepository))) {
+    throw new Error("EMBER_LAUNCH_AUTHORITY_ROOT must be outside the Ember repository");
+  }
   return {
-    certificate: deps.certificatePath ?? join(base, "certificate.json"),
-    declarationLedger: deps.declarationLedgerPath ?? join(base, "declaration-ledger.jsonl"),
-    runSpec: deps.runSpecPath ?? join(base, "run-spec.json"),
+    certificate: join(base, "certificate.json"),
+    declarationLedger: join(base, "declaration-ledger.jsonl"),
+    runSpec: join(base, "run-spec.json"),
   };
 }
 
@@ -857,7 +868,16 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
       // surfaced as text -- see extracted.command's non-use below): resolve the
       // canonical launch-authority artifacts and offer the launch through the panel's
       // confirm-only membrane rather than handing the operator a command to paste.
-      const canonical = _canonicalArtifactPaths(repoRoot, deps);
+      let canonical: CanonicalArtifactPaths;
+      try {
+        canonical = _canonicalArtifactPaths(repoRoot, deps);
+      } catch (error) {
+        return {
+          type: "message" as const,
+          message: `launch-packet: all preflights GREEN, but live launch-authority custody is invalid -- training is BLOCKED (fail-closed).\n${error instanceof Error ? error.message : "invalid launch-authority custody"}\nNo offer minted.`,
+          exitCode: 1,
+        };
+      }
       const resolvedCertificate = _resolveArtifact(canonical.certificate, "json");
       const resolvedLedger = _resolveArtifact(canonical.declarationLedger, "jsonl");
       const resolvedRunSpec = _resolveArtifact(canonical.runSpec, "json");
