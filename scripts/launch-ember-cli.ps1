@@ -97,18 +97,32 @@ function Get-EmberStateRoot([string]$RepositoryRoot) {
         Assert-EmberStateRootIsWritable $override $RepositoryRoot
         return $override
     }
-    # 2. <EMBER_HOME>/cockpit-state/<key>, EMBER_HOME defaulting to the CLI's own
-    #    user-scoped config home -- always outside any checkout.
+    # 2. <EMBER_HOME>/cockpit-state/<key> when EMBER_HOME is explicit.
+    # 3. the governed B: cockpit-state parent on Windows (#1317), preserving the C: operating
+    #    reserve. Non-Windows direct launches retain the user-scoped config fallback.
     $emberHome = $env:EMBER_HOME
     if ([string]::IsNullOrWhiteSpace($emberHome)) {
-        $profile = $env:USERPROFILE
-        if ([string]::IsNullOrWhiteSpace($profile)) { $profile = $HOME }
-        if ([string]::IsNullOrWhiteSpace($profile)) {
-            throw "Ember could not locate a user profile directory for its state root."
+        if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) {
+            $emberHome = [System.IO.Path]::Combine(
+                ("B:" + [System.IO.Path]::DirectorySeparatorChar),
+                "M"
+            )
+        } else {
+            $profile = $env:USERPROFILE
+            if ([string]::IsNullOrWhiteSpace($profile)) { $profile = $HOME }
+            if ([string]::IsNullOrWhiteSpace($profile)) {
+                throw "Ember could not locate a user profile directory for its state root."
+            }
+            $emberHome = Join-Path $profile $EmberInTreeStateDirectoryName
         }
-        $emberHome = Join-Path $profile $EmberInTreeStateDirectoryName
     }
-    $keyed = Join-Path (Join-Path $emberHome $EmberSanctionedStateDirectoryName) (Get-EmberStateRootKey $RepositoryRoot)
+    # Construct the default lexically: Join-Path consults the PowerShell drive provider and
+    # fails on clean hosts before the governed B: volume is mounted.
+    $keyed = [System.IO.Path]::Combine(
+        $emberHome,
+        $EmberSanctionedStateDirectoryName,
+        (Get-EmberStateRootKey $RepositoryRoot)
+    )
     $resolved = [System.IO.Path]::GetFullPath($keyed)
     Assert-EmberStateRootIsWritable $resolved $RepositoryRoot
     return $resolved

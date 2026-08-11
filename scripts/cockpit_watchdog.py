@@ -43,7 +43,9 @@ import argparse
 import ctypes
 import json
 import math
+import ntpath
 import os
+import posixpath
 import re
 import subprocess
 import sys
@@ -883,28 +885,37 @@ def _repo_state_key(root: str) -> str:
     return key
 
 
-def _ember_config_home_dir() -> str:
-    """Port of getEmberConfigHomeDir() in utils/env-detection.ts: EMBER_HOME verbatim, else
-    ~/.ember."""
+def _ember_config_home_dir(platform: str | None = None) -> str:
+    """State parent shared with the launcher/TypeScript writer.
+
+    Explicit EMBER_HOME remains verbatim. The implicit Windows parent is the governed
+    B: volume (#1317); POSIX retains the user config-home fallback.
+    """
     ember_home = os.environ.get("EMBER_HOME", "").strip()
     if ember_home:
         return ember_home
-    return str(Path.home() / ".ember")
+    if (platform or os.name) == "nt":
+        return ntpath.join("B:" + ntpath.sep, "M")
+    return posixpath.join(str(Path.home()), ".ember")
 
 
-def _resolve_ember_state_root(repo_root: str) -> str:
-    """Port of emberStateRoot()'s resolution order (the read side never needs its
+def _resolve_ember_state_root(repo_root: str, platform: str | None = None) -> str:
+    r"""Port of emberStateRoot()'s resolution order (the read side never needs its
     writer-only assertStateRootIsWritable guard -- this module only reads the heartbeat,
     it never writes there):
       1. EMBER_STATE_ROOT, used verbatim.
-      2. <EMBER_HOME>/cockpit-state/<repoStateKey(repoRoot)>.
+      2. <EMBER_HOME>/cockpit-state/<repoStateKey(repoRoot)> when explicit.
+      3. the governed B: state parent on Windows; user config home on POSIX.
     Never silently falls back to the old in-tree path -- that file is permanently unwritten
     now, and returning it here would manufacture a false "not fresh" read instead of a loud
     resolution failure."""
     override = os.environ.get("EMBER_STATE_ROOT", "").strip()
+    path_api = ntpath if (platform or os.name) == "nt" else posixpath
     if override:
-        return os.path.abspath(override)
-    return os.path.join(_ember_config_home_dir(), "cockpit-state", _repo_state_key(repo_root))
+        return path_api.abspath(override)
+    return path_api.join(
+        _ember_config_home_dir(platform), "cockpit-state", _repo_state_key(repo_root)
+    )
 
 
 def _default_renderer_heartbeat_path() -> str:

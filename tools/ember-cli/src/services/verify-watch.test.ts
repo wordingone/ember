@@ -22,6 +22,7 @@ import {
   _buildTreeKillCommand,
   _parseReapedPids,
   resolveVerifyTimeoutMs,
+  resolveVerifyWorktreeRoot,
   DEFAULT_VERIFY_TIMEOUT_MINUTES,
   DEFAULT_VERIFY_TIMEOUT_MS,
   type EnvBindingReport,
@@ -119,6 +120,43 @@ function mockRunner(opts: {
 
 beforeEach(() => {
   _setVerifyStateForTest(null);
+});
+
+describe("resolveVerifyWorktreeRoot -- #1317 future verifier checkout placement", () => {
+  const governedRoot = path.win32.join("B:" + path.win32.sep, "M");
+  const cHome = path.win32.join("C:" + path.win32.sep, "Users", "Admin");
+
+  it("defaults Windows verifier worktrees to the canonical B: lifecycle root, never homedir C:", () => {
+    expect(resolveVerifyWorktreeRoot({}, "win32", cHome)).toBe(
+      path.win32.join(governedRoot, "ember-wt"),
+    );
+  });
+
+  it("honors the verifier-specific override before the shared lifecycle override", () => {
+    expect(
+      resolveVerifyWorktreeRoot(
+        {
+          EMBER_VERIFY_WORKTREE_ROOT: "B:\\verify-owned",
+          EMBER_WORKTREE_ROOT: "B:\\shared-owned",
+        },
+        "win32",
+        cHome,
+      ),
+    ).toBe("B:\\verify-owned");
+    expect(
+      resolveVerifyWorktreeRoot(
+        { EMBER_WORKTREE_ROOT: "B:\\shared-owned" },
+        "win32",
+        cHome,
+      ),
+    ).toBe("B:\\shared-owned");
+  });
+
+  it("retains the portable home-root convention where a B: volume does not exist", () => {
+    expect(resolveVerifyWorktreeRoot({}, "linux", "/home/ember")).toBe(
+      "/home/ember/ember-verify-worktrees",
+    );
+  });
 });
 
 describe("startVerifyRun", () => {

@@ -409,8 +409,29 @@ const WORKTREE_OWNER = "ember-cli-verify";
  *  is exactly how a worktree leaks. */
 const RELEASE_GRACE_MS = 5 * 60_000;
 
-function defaultWorktreeRoot(): string {
-  return path.join(os.homedir(), "ember-verify-worktrees");
+/** Resolve the parent for FUTURE verifier worktrees.
+ *
+ * #1317 moved the canonical lifecycle bare-name default to the governed B: parent on Windows.
+ * The verifier used to bypass that policy by expanding its own path under homedir,
+ * which put every /verify checkout back on C:. Keep the verifier-specific override for
+ * compatibility, then honor the lifecycle-wide override, then use the same Windows
+ * default as worktree_lifecycle.py. POSIX has no B: volume and retains its home default.
+ */
+export function resolveVerifyWorktreeRoot(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+  homeDir: string = os.homedir(),
+): string {
+  const pathApi = platform === "win32" ? path.win32 : path.posix;
+  const explicit =
+    env["EMBER_VERIFY_WORKTREE_ROOT"]?.trim() || env["EMBER_WORKTREE_ROOT"]?.trim();
+  if (explicit) {
+    return pathApi.resolve(explicit);
+  }
+  if (platform === "win32") {
+    return path.win32.join("B:" + path.win32.sep, "M", "ember-wt");
+  }
+  return path.posix.join(homeDir, "ember-verify-worktrees");
 }
 
 /** One day's headroom past dispatch: this run always retires its own worktree on every
@@ -469,8 +490,9 @@ export interface VerifyPipelineDeps {
    *  (`git rev-parse HEAD`, read-only, run against repoRoot). Defaults to "git". */
   gitBin?: string;
   /** Directory managed verify worktrees are created under, one subdirectory per job id.
-   *  Defaults to `<homedir>/ember-verify-worktrees`. Never under `.claude/` (repo-guard
-   *  #1009) and never inside repoRoot itself. */
+   *  Defaults to the governed B: worktree parent on Windows, matching worktree_lifecycle.py's #1317
+   *  policy; POSIX retains `<homedir>/ember-verify-worktrees`. Never under `.claude/`
+   *  (repo-guard #1009) and never inside repoRoot itself. */
   worktreeRoot?: string;
   /** Environment the run deadline is resolved from (EMBER_VERIFY_TIMEOUT_MINUTES).
    *  Defaults to process.env. */
@@ -499,7 +521,7 @@ export function startVerifyRun(deps: VerifyPipelineDeps): VerifyJobState {
   const mkdir = deps.mkdirSyncFn ?? mkdirSync;
   const gitBin = deps.gitBin ?? "git";
   const timeoutMs = deps.timeoutMs ?? resolveVerifyTimeoutMs(deps.env ?? process.env);
-  const worktreeRoot = deps.worktreeRoot ?? defaultWorktreeRoot();
+  const worktreeRoot = deps.worktreeRoot ?? resolveVerifyWorktreeRoot(deps.env ?? process.env);
   const worktreePath = path.join(worktreeRoot, deps.jobId);
   // #1371 N5: EMBER_VERIFY_TIMEOUT_MINUTES reads as "this run gets N minutes", so it IS
   // that -- one deadline shared by every leg, not N minutes each. Per-leg it would have
