@@ -2,7 +2,7 @@
   "schema_version": "ember-fixed-prior-manifest-v1",
   "manifest_version": 1,
   "ticket": "R1-ENTRY-FIXED-PRIOR-MANIFEST",
-  "ts": "2026-08-11T03:32:41+00:00",
+  "ts": "2026-08-11T05:53:09+00:00",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
@@ -12,7 +12,7 @@
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "tree_digest_convention": "combined_sha256 = sha256 over sorted '<name>\\t<sha256>\\t<size_bytes>\\n' lines (scripts/manifest_sha.py convention); git-tracked files only",
   "repo": {
-    "commit": "c09b2173c3d96343024f90ba405d454fbd0b6c9f",
+    "commit": "1c4f304d305c2781a4ed98839cbdef66db84d633",
     "branch": "fix/issue-1476-repo-layout-clean"
   },
   "learned_import_attestation": "Every item in this manifest is a NON-LEARNED prior. Zero imported learned weights, embeddings, learned-parameter tokenizers, teacher outputs, learned filters or judges, or hidden accelerator services (docs/authority/INVARIANT.md clause 3, fail-closed on unknown provenance).",
@@ -34,7 +34,7 @@
       {
         "leg": "windows_pdh_rapl_package",
         "available": true,
-        "detail": "\\Energy Meter(rapl_package0_pkg)\\Energy readable (cumulative picowatt-hours; live read 1850026676150000)",
+        "detail": "\\Energy Meter(rapl_package0_pkg)\\Energy readable (cumulative picowatt-hours; live read 1986849618195830)",
         "reader_wired": true
       },
       {
@@ -244,7 +244,7 @@
       "provenance": "ember-cli execution surface (docs/authority/GOAL.md sec10): every executed job runs through it. Version is this tree digest plus the repo commit recorded in `repo`.",
       "path": "tools/ember-cli/src",
       "file_count": 595,
-      "combined_sha256": "585cfeb33286f340283d56d759626f6df836ead04378379b53fb38ad12a0d8f6",
+      "combined_sha256": "9d5f4026662150ceec557bd3ecb59ee671ae303597320a8b31c6a9f005cd1ad6",
       "files": [
         {
           "name": "tools/ember-cli/src/admit-registry.test.ts",
@@ -2383,13 +2383,13 @@
         },
         {
           "name": "tools/ember-cli/src/services/governed-dispatch.test.ts",
-          "sha256": "60551804f6abddab441b255478a1957e771d543e68fb12ac389cab384afa99f8",
-          "size_bytes": 7870
+          "sha256": "dab08435ceabbb9313cf70c0228853d8bac75fd7cd3e7bbdab273342f97c5c34",
+          "size_bytes": 8688
         },
         {
           "name": "tools/ember-cli/src/services/governed-dispatch.ts",
-          "sha256": "9b38a382f3756516a0e74d7654e0eb0716dce21d509d3d2e9faac6d57a75616c",
-          "size_bytes": 7808
+          "sha256": "7f96c402bb98cab4f3c8d21e646ca499b1ded58ef7fbcca4301103cf5020c428",
+          "size_bytes": 8179
         },
         {
           "name": "tools/ember-cli/src/services/gpu-state-poller.test.ts",
