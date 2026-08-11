@@ -3,8 +3,8 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 use ember_lab::{
-    rehearsal::produce_minimal_slice, Daemon, EmberLabError, JobSpec, JobState, RestartPolicy,
-    SchedulePrediction,
+    rehearsal::produce_minimal_slice, Daemon, EmberLabError, HostCommitCapacity, JobSpec, JobState,
+    RestartPolicy, SchedulePrediction,
 };
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -35,6 +35,23 @@ fn sandbox(name: &str) -> PathBuf {
 fn sha256(path: &Path) -> String {
     let bytes = fs::read(path).unwrap();
     format!("{:x}", Sha256::digest(bytes))
+}
+
+fn test_host_capacity() -> HostCommitCapacity {
+    HostCommitCapacity {
+        physical_ram_bytes: 64 * 1024 * 1024 * 1024,
+        physical_available_bytes: 32 * 1024 * 1024 * 1024,
+        pagefile_maximum_bytes: 32 * 1024 * 1024 * 1024,
+        pagefile_configuration_source:
+            r"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PagingFiles"
+                .to_string(),
+        pagefile_configuration_sha256: "a".repeat(64),
+        commit_total_bytes: 80 * 1024 * 1024 * 1024,
+        current_commit_limit_bytes: 80 * 1024 * 1024 * 1024,
+        current_commit_remaining_bytes: 32 * 1024 * 1024 * 1024,
+        maximum_commit_capacity_bytes: 96 * 1024 * 1024 * 1024,
+        available_maximum_commit_bytes: 32 * 1024 * 1024 * 1024,
+    }
 }
 
 fn write_contract_citation(root: &Path) -> (PathBuf, String) {
@@ -3254,27 +3271,27 @@ fn process_stdout_and_stderr_are_append_only_and_receipt_bound() {
 fn assessment_evidence_is_one_fresh_atomic_daemon_export() {
     let root = sandbox("assessment-evidence");
     let db = root.join("ember-lab.sqlite3");
-    let (identity, identity_hash) = write_identity(&root);
     let daemon = Daemon::open(&db).unwrap();
-    daemon
-        .bind_identity("assessment-job", &identity, &identity_hash)
-        .unwrap();
-    daemon
-        .acquire_lease("cpu-fixture", "assessment-job")
-        .unwrap();
-    daemon
-        .start_job(
-            JobSpec::new(
-                "assessment-job",
-                std::env::current_exe().unwrap().to_string_lossy(),
-                ["--exact", "fixture_child_process", "--nocapture"],
-                "cpu-fixture",
-            )
-            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
-            .with_env("EMBER_LAB_FIXTURE_LOG_MESSAGE", "assessment-evidence")
-            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "25"),
+    let manifest = write_restore_manifest(&root, "assessment-job");
+    let mut manifest_payload: Value =
+        serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    manifest_payload["env"]["EMBER_LAB_FIXTURE_LOG_MESSAGE"] =
+        Value::String("assessment-evidence".into());
+    manifest_payload["env"]["EMBER_LAB_FIXTURE_SLEEP_MS"] = Value::String("25".into());
+    fs::write(&manifest, serde_json::to_vec(&manifest_payload).unwrap()).unwrap();
+    let outcome = daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64,
+            |_root| Ok(16 * 1024 * 1024 * 1024),
+            || Ok(2 * 1024 * 1024 * 1024),
+            || Ok(test_host_capacity()),
         )
         .unwrap();
+    assert!(outcome.handle.pid > 0);
     for _ in 0..200 {
         if daemon.job_state("assessment-job").unwrap() == Some(JobState::Exited) {
             break;
@@ -3288,6 +3305,7 @@ fn assessment_evidence_is_one_fresh_atomic_daemon_export() {
         .unwrap();
     assert_eq!(evidence.schema, "ember-lab-assessment-evidence-v1");
     for artifact in [
+        &evidence.preflight_receipt,
         &evidence.operational_receipt,
         &evidence.stdout_log,
         &evidence.stderr_log,
@@ -3303,6 +3321,18 @@ fn assessment_evidence_is_one_fresh_atomic_daemon_export() {
             .to_string_lossy()
             .starts_with(&artifact.sha256));
     }
+    let preflight: Value =
+        serde_json::from_slice(&fs::read(&evidence.preflight_receipt.path).unwrap()).unwrap();
+    assert_eq!(
+        preflight["schema_version"],
+        "ember-lab-dispatch-preflight-v1"
+    );
+    assert_eq!(preflight["result"], "PREFLIGHT_PASSED");
+    assert_eq!(preflight["job_id"], "assessment-job");
+    assert_eq!(
+        preflight["program"]["sha256"],
+        sha256(&std::env::current_exe().unwrap())
+    );
     let receipt: Value =
         serde_json::from_slice(&fs::read(&evidence.operational_receipt.path).unwrap()).unwrap();
     assert_eq!(receipt["job_id"], "assessment-job");
@@ -3329,11 +3359,27 @@ fn assessment_evidence_is_one_fresh_atomic_daemon_export() {
         .is_err());
     assert_eq!(fs::read(occupied.join("sentinel")).unwrap(), b"preserve");
     assert_eq!(fs::read_dir(&occupied).unwrap().count(), 1);
+
+    // The daemon must bind the raw preflight bytes to the exact dispatch
+    // manifest stored in its DB; a forged DB binding cannot authorize export.
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute(
+            "UPDATE dispatch_preflight_receipts SET manifest_sha256=?2 WHERE job_id=?1",
+            rusqlite::params!["assessment-job", "0".repeat(64)],
+        )
+        .unwrap();
+    let tampered_manifest = root.join("tampered-preflight-manifest");
+    assert!(matches!(
+        daemon.export_assessment_evidence("assessment-job", &tampered_manifest),
+        Err(EmberLabError::InvalidDispatchManifest { .. })
+    ));
+    assert!(!tampered_manifest.exists());
 }
 
 #[cfg(windows)]
 #[test]
-fn assessment_evidence_refuses_running_or_tampered_log_state_without_publication() {
+fn assessment_evidence_refuses_running_or_unbound_job_without_publication() {
     let root = sandbox("assessment-evidence-refusal");
     let db = root.join("ember-lab.sqlite3");
     let (identity, identity_hash) = write_identity(&root);
@@ -3376,7 +3422,7 @@ fn assessment_evidence_refuses_running_or_tampered_log_state_without_publication
     let db_tampered_output = root.join("db-tampered-output");
     assert!(matches!(
         daemon.export_assessment_evidence("assessment-running", &db_tampered_output),
-        Err(EmberLabError::LogEvidenceMismatch { stream, .. }) if stream == "stdout"
+        Err(EmberLabError::LogEvidenceMismatch { .. })
     ));
     assert!(!db_tampered_output.exists());
     rusqlite::Connection::open(&db)
@@ -3390,7 +3436,7 @@ fn assessment_evidence_refuses_running_or_tampered_log_state_without_publication
     let tampered_output = root.join("tampered-output");
     assert!(matches!(
         daemon.export_assessment_evidence("assessment-running", &tampered_output),
-        Err(EmberLabError::LogEvidenceMismatch { stream, .. }) if stream == "stdout"
+        Err(EmberLabError::LogEvidenceMismatch { .. })
     ));
     assert!(!tampered_output.exists());
 }
