@@ -17,6 +17,65 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import owned_process  # noqa: E402
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows process flags are unavailable")
+def test_windows_runner_forbids_a_console_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    class Completed:
+        pid = 12345
+        returncode = 0
+
+        @staticmethod
+        def poll() -> int:
+            return 0
+
+        @staticmethod
+        def communicate(timeout: float) -> tuple[str, str]:
+            return "done", ""
+
+        @staticmethod
+        def kill() -> None:
+            raise AssertionError("completed process must not be killed")
+
+        @staticmethod
+        def wait(timeout: float) -> int:
+            return 0
+
+    class Job:
+        def __enter__(self) -> "Job":
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            self.close()
+
+        @staticmethod
+        def assign_and_resume(_process: Completed) -> None:
+            return None
+
+        @staticmethod
+        def close() -> None:
+            return None
+
+    def fake_popen(_argv: list[str], **kwargs: object) -> Completed:
+        calls.append(kwargs)
+        return Completed()
+
+    monkeypatch.setattr(owned_process.subprocess, "Popen", fake_popen)
+
+    result = owned_process.OwnedProcessRunner(
+        windows_job_factory=Job
+    )._run_windows(["command"], 1.0, cwd=None, env=None)
+
+    assert result.status == "completed"
+    assert len(calls) == 1
+    flags = int(calls[0]["creationflags"])
+    assert flags & 0x00000004  # CREATE_SUSPENDED
+    assert flags & subprocess.CREATE_NEW_PROCESS_GROUP
+    assert flags & subprocess.CREATE_NO_WINDOW
+
+
 def _pid_alive(pid: int) -> bool:
     if sys.platform == "linux":
         try:
