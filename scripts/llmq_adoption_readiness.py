@@ -20,6 +20,8 @@ _SOURCE_RECEIPT_SCHEMA = "llmq-governed-source-receipt-v1"
 _SOURCE_MANIFEST_SCHEMA = "llmq-source-manifest-v1"
 _BUILD_RECEIPT_SCHEMA = "ember-lab-build-receipt-v1"
 _BENCHMARK_RECEIPT_SCHEMA = "ember-lab-benchmark-receipt-v1"
+_GOVERNED_ORIGIN = "https://github.com/IST-DASLab/llmq.git"
+_EMBER_LAB_SOURCE_PATH = "runtime/ember-lab/src/lib.rs"
 
 
 def _has_reparse_component(path: Path, root: Path) -> bool:
@@ -74,6 +76,11 @@ def _safe_dir(root: Path, relative_value: object) -> Path | None:
     return candidate if candidate.is_dir() and candidate.is_relative_to(root) else None
 
 
+def _git_env() -> dict[str, str]:
+    """Drop caller-controlled Git config/object/worktree transport overrides."""
+    return {key: value for key, value in os.environ.items() if not key.upper().startswith("GIT_")}
+
+
 def _run_git(repo: Path, *args: str) -> str | None:
     """Run one read-only Git identity probe without opening a Windows console."""
     creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
@@ -84,10 +91,43 @@ def _run_git(repo: Path, *args: str) -> str | None:
             text=True,
             check=False,
             creationflags=creationflags,
+            env=_git_env(),
         )
     except OSError:
         return None
     return result.stdout.strip() if result.returncode == 0 else None
+
+
+def _run_git_bytes(repo: Path, *args: str) -> bytes | None:
+    """Read one exact Git object without text decoding or console creation."""
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo), *args],
+            capture_output=True,
+            check=False,
+            creationflags=creationflags,
+            env=_git_env(),
+        )
+    except OSError:
+        return None
+    return result.stdout if result.returncode == 0 else None
+
+
+def _run_git_ok(repo: Path, *args: str) -> bool:
+    """Run a read-only Git predicate without opening a Windows console."""
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo), *args],
+            capture_output=True,
+            check=False,
+            creationflags=creationflags,
+            env=_git_env(),
+        )
+    except OSError:
+        return False
+    return result.returncode == 0
 
 
 def _json_file(root: Path, path_value: object) -> dict | None:
@@ -141,6 +181,7 @@ def _governed_source_missing(root: Path, payload: dict, commit: object, source_s
         "repo": "IST-DASLab/llmq",
         "commit": commit,
         "tree_sha256": tree,
+        "remote_ref": receipt.get("remote_ref"),
         "source_path": receipt.get("source_path"),
         "source_sha256": source_sha,
     }
@@ -156,18 +197,84 @@ def _governed_source_missing(root: Path, payload: dict, commit: object, source_s
     if repo is None:
         missing.append("governed_source_receipt.git_repo_path")
     else:
-        origin = _run_git(repo, "remote", "get-url", "origin")
-        if origin is None or not re.search(r"github\.com[:/]IST-DASLab/llmq(?:\.git)?$", origin, re.IGNORECASE):
+        origins_raw = _run_git(repo, "config", "--get-all", "remote.origin.url")
+        origins = origins_raw.splitlines() if isinstance(origins_raw, str) else []
+        origin = origins[0] if len(origins) == 1 else None
+        if len(origins) != 1 or origin != _GOVERNED_ORIGIN:
             missing.append("governed_source_receipt.git_origin")
+        rewrite_rules = _run_git(repo, "config", "--get-regexp", r"^url\..+\.")
+        if isinstance(origin, str) and rewrite_rules and any(
+            len(parts := line.split(None, 1)) == 2
+            and (
+                parts[0].lower().endswith(".insteadof")
+                or parts[0].lower().endswith(".pushinsteadof")
+            )
+            and origin.startswith(parts[1])
+            for line in rewrite_rules.splitlines()
+        ):
+            missing.append("governed_source_receipt.git_url_rewrite")
         resolved_commit = _run_git(repo, "rev-parse", f"{commit}^{{commit}}") if isinstance(commit, str) else None
         resolved_tree = _run_git(repo, "rev-parse", f"{commit}^{{tree}}") if isinstance(commit, str) else None
         if resolved_commit != commit:
             missing.append("governed_source_receipt.git_commit")
         if resolved_tree != receipt.get("tree_sha256"):
             missing.append("governed_source_receipt.git_tree_sha256")
+        remote_refs = (
+            _run_git(
+                repo,
+                "for-each-ref",
+                "--format=%(refname)",
+                "--contains",
+                commit,
+                "refs/remotes/origin/",
+            )
+            if isinstance(commit, str)
+            else None
+        )
+        if not remote_refs or not any(
+            ref.startswith("refs/remotes/origin/") and ref != "refs/remotes/origin/HEAD"
+            for ref in remote_refs.splitlines()
+        ):
+            missing.append("governed_source_receipt.git_remote_commit")
+        remote_ref = receipt.get("remote_ref")
+        if not isinstance(remote_ref, str) or not re.fullmatch(r"refs/heads/[A-Za-z0-9._/-]+", remote_ref):
+            missing.append("governed_source_receipt.remote_ref")
+        else:
+            origin_path = Path(origin) if origin is not None else None
+            if origin_path is not None and origin_path.is_dir():
+                remote_commit = _run_git(origin_path, "show-ref", "--hash", remote_ref)
+            else:
+                remote_result = _run_git(repo, "ls-remote", "origin", remote_ref)
+                remote_commit = remote_result.split()[0] if remote_result else None
+            tracking_ref = "refs/remotes/origin/" + remote_ref.removeprefix("refs/heads/")
+            fetched_commit = _run_git(repo, "rev-parse", tracking_ref)
+            if remote_commit != commit:
+                missing.append("governed_source_receipt.git_remote_ref")
+            if fetched_commit != remote_commit:
+                missing.append("governed_source_receipt.git_remote_fetch")
+            if isinstance(commit, str) and not _run_git_ok(repo, "merge-base", "--is-ancestor", commit, tracking_ref):
+                missing.append("governed_source_receipt.git_remote_ancestry")
         source_file = _safe_file(root, receipt.get("source_path"))
         if source_file is None or not source_file.is_relative_to(repo):
             missing.append("governed_source_receipt.source_in_repo")
+        else:
+            source_relative = source_file.relative_to(repo).as_posix()
+            committed_source = (
+                _run_git_bytes(repo, "cat-file", "blob", f"{commit}:{source_relative}")
+                if isinstance(commit, str)
+                else None
+            )
+            try:
+                worktree_source = source_file.read_bytes()
+            except OSError:
+                worktree_source = None
+            if (
+                committed_source is None
+                or worktree_source is None
+                or committed_source != worktree_source
+                or hashlib.sha256(committed_source).hexdigest() != source_sha
+            ):
+                missing.append("governed_source_receipt.git_source_blob")
     return missing
 
 
@@ -181,7 +288,10 @@ def _ember_lab_build_missing(root: Path, payload: dict, source_receipt: dict, bu
         missing.append("ember_lab_build_receipt.status")
     if receipt.get("authority") != "ember-cli->ember-lab":
         missing.append("ember_lab_build_receipt.authority")
-    for field in ("job_id", "host_id", "toolchain", "dispatch_receipt_path", "binary_manifest_path"):
+    for field in (
+        "job_id", "host_id", "toolchain", "dispatch_receipt_path", "binary_manifest_path",
+        "operational_receipt_path", "producer_source_path", "producer_binary_path",
+    ):
         if not isinstance(receipt.get(field), str) or not receipt[field]:
             missing.append(f"ember_lab_build_receipt.{field}")
     if receipt.get("exit_code") != 0:
@@ -194,6 +304,46 @@ def _ember_lab_build_missing(root: Path, payload: dict, source_receipt: dict, bu
         missing.append("ember_lab_build_receipt.binary_manifest")
     if not isinstance(build, dict) or build.get("binary_sha256") != receipt.get("binary_sha256"):
         missing.append("ember_lab_build_receipt.binary_sha256")
+    producer_source_path = receipt.get("producer_source_path")
+    producer_source_sha = receipt.get("producer_source_sha256")
+    if producer_source_path != _EMBER_LAB_SOURCE_PATH:
+        missing.append("ember_lab_build_receipt.producer_source_identity")
+    if not isinstance(producer_source_sha, str) or not _DIGEST.fullmatch(producer_source_sha):
+        missing.append("ember_lab_build_receipt.producer_source_sha256")
+    elif not _digest_file(root, producer_source_path, producer_source_sha):
+        missing.append("ember_lab_build_receipt.producer_source_sha256")
+    producer_binary_path = receipt.get("producer_binary_path")
+    producer_binary_sha = receipt.get("producer_binary_sha256")
+    if not isinstance(producer_binary_sha, str) or not _DIGEST.fullmatch(producer_binary_sha):
+        missing.append("ember_lab_build_receipt.producer_binary_sha256")
+    elif not _digest_file(root, producer_binary_path, producer_binary_sha):
+        missing.append("ember_lab_build_receipt.producer_binary_sha256")
+    operational_path = receipt.get("operational_receipt_path")
+    operational_sha = receipt.get("operational_receipt_sha256")
+    if not _digest_file(root, operational_path, operational_sha):
+        missing.append("ember_lab_build_receipt.operational_receipt")
+    operational = _json_file(root, operational_path)
+    if not isinstance(operational, dict):
+        missing.append("ember_lab_build_receipt.operational_receipt_schema")
+    else:
+        if (
+            operational.get("schema") != "ember-lab-operational-receipt-v1"
+            or operational.get("producer") != "ember-lab-daemon"
+            or operational.get("status") != "PASS"
+            or operational.get("test_only") is True
+            or operational.get("job_id") != receipt.get("job_id")
+            or operational.get("exit_code") != 0
+            or operational.get("source_manifest_sha256") != receipt.get("source_manifest_sha256")
+            or operational.get("binary_sha256") != receipt.get("binary_sha256")
+        ):
+            missing.append("ember_lab_build_receipt.operational_receipt_binding")
+        identity = operational.get("ember_lab_identity")
+        if (
+            not isinstance(identity, dict)
+            or identity.get("source_sha256") != producer_source_sha
+            or identity.get("binary_sha256") != producer_binary_sha
+        ):
+            missing.append("ember_lab_build_receipt.operational_producer_identity")
     dispatch = _json_file(root, receipt.get("dispatch_receipt_path"))
     if not isinstance(dispatch, dict) or dispatch.get("schema") != "ember-lab-dispatch-terminal-receipt-v1":
         missing.append("ember_lab_build_receipt.dispatch_schema")
@@ -224,11 +374,21 @@ def _ember_lab_benchmark_missing(root: Path, payload: dict, build_receipt: dict)
         missing.append("ember_lab_benchmark_receipt.authority")
     if receipt.get("job_id") != build_receipt.get("job_id"):
         missing.append("ember_lab_benchmark_receipt.job_id")
-    for field in ("hardware_uuid", "command", "config_sha256", "raw_log_path", "raw_log_sha256"):
+    for field in (
+        "hardware_uuid", "command", "config_sha256", "raw_log_path", "raw_log_sha256",
+        "operational_receipt_path", "operational_receipt_sha256",
+    ):
         if not isinstance(receipt.get(field), str) or not receipt[field]:
             missing.append(f"ember_lab_benchmark_receipt.{field}")
     if receipt.get("binary_sha256") != build_receipt.get("binary_sha256"):
         missing.append("ember_lab_benchmark_receipt.binary_sha256")
+    if (
+        receipt.get("operational_receipt_path") != build_receipt.get("operational_receipt_path")
+        or receipt.get("operational_receipt_sha256") != build_receipt.get("operational_receipt_sha256")
+    ):
+        missing.append("ember_lab_benchmark_receipt.operational_receipt_binding")
+    if not _digest_file(root, receipt.get("operational_receipt_path"), receipt.get("operational_receipt_sha256")):
+        missing.append("ember_lab_benchmark_receipt.operational_receipt")
     if not _digest_file(root, receipt.get("raw_log_path"), receipt.get("raw_log_sha256")):
         missing.append("ember_lab_benchmark_receipt.raw_log")
     raw_path = _safe_file(root, receipt.get("raw_log_path"))

@@ -5,6 +5,7 @@
 import json
 import hashlib
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -196,7 +197,6 @@ def test_same_bytes_through_reparse_path_are_refused_before_readiness(monkeypatc
     assert result["execution_claim"] is False
     assert result["result_credit"] is False
 
-
 def test_foreign_benchmark_hardware_is_refused_before_any_result_claim():
     payload = {
         "llmq_dev_commit": "0123456789abcdef0123456789abcdef01234567",
@@ -328,14 +328,19 @@ def test_self_authored_source_build_and_benchmark_are_not_ready_evidence():
     assert result["execution_claim"] is False
     assert result["result_credit"] is False
 
-def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(tmp_path):
+def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(tmp_path, monkeypatch):
     """A real governed source/build chain may wait for the owned benchmark, but not fake it."""
+    remote = tmp_path / "llmq-remote.git"
+    subprocess.run(["git", "init", "--bare", "-q", str(remote)], check=True)
+    from scripts import llmq_adoption_readiness as readiness
+
+    monkeypatch.setattr(readiness, "_GOVERNED_ORIGIN", str(remote))
     repo = tmp_path / "llmq-repo"
     repo.mkdir()
     subprocess.run(["git", "-C", str(repo), "init", "-q"], check=True)
     subprocess.run(["git", "-C", str(repo), "config", "user.email", "test@example.invalid"], check=True)
     subprocess.run(["git", "-C", str(repo), "config", "user.name", "Test"], check=True)
-    subprocess.run(["git", "-C", str(repo), "remote", "add", "origin", "https://github.com/IST-DASLab/llmq.git"], check=True)
+    subprocess.run(["git", "-C", str(repo), "remote", "add", "origin", str(remote)], check=True)
     source = repo / "llmq.py"
     source.write_bytes(b"governed source bytes")
     source_sha = hashlib.sha256(source.read_bytes()).hexdigest()
@@ -343,6 +348,18 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
     subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "source"], check=True)
     commit = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()
     tree = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD^{tree}"], text=True).strip()
+    def copy_loose_objects(target: Path = remote) -> None:
+        for object_path in (repo / ".git" / "objects").rglob("*"):
+            if not object_path.is_file() or object_path.parent.name in {"info", "pack"}:
+                continue
+            destination = target / "objects" / object_path.relative_to(repo / ".git" / "objects")
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            if not destination.exists():
+                shutil.copy2(object_path, destination)
+
+    copy_loose_objects()
+    subprocess.run(["git", "--git-dir", str(remote), "update-ref", "refs/heads/dev", commit], check=True)
+    subprocess.run(["git", "-C", str(repo), "update-ref", "refs/remotes/origin/dev", commit], check=True)
     manifest = tmp_path / "source-manifest.json"
     manifest.write_text(
         json.dumps(
@@ -351,6 +368,7 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
                 "repo": "IST-DASLab/llmq",
                 "commit": commit,
                 "tree_sha256": tree,
+                "remote_ref": "refs/heads/dev",
                 "source_path": "llmq-repo/llmq.py",
                 "source_sha256": source_sha,
             }
@@ -364,6 +382,34 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
     binary_manifest = tmp_path / "binary-manifest.json"
     binary_manifest.write_text(json.dumps({"schema": "ember-lab-binary-manifest-v1", "status": "PASS", "binary_sha256": source_sha}), encoding="utf-8")
     binary_manifest_sha = hashlib.sha256(binary_manifest.read_bytes()).hexdigest()
+    producer_source = tmp_path / "runtime" / "ember-lab" / "src" / "lib.rs"
+    producer_source.parent.mkdir(parents=True)
+    producer_source.write_bytes((REPO_ROOT / "runtime" / "ember-lab" / "src" / "lib.rs").read_bytes())
+    producer_source_sha = hashlib.sha256(producer_source.read_bytes()).hexdigest()
+    producer_binary = tmp_path / "runtime" / "ember-lab" / "ember-lab.exe"
+    producer_binary.write_bytes(b"governed ember-lab binary")
+    producer_binary_sha = hashlib.sha256(producer_binary.read_bytes()).hexdigest()
+    operational = tmp_path / "ember-lab-operational.json"
+    operational.write_text(
+        json.dumps(
+            {
+                "schema": "ember-lab-operational-receipt-v1",
+                "producer": "ember-lab-daemon",
+                "status": "PASS",
+                "test_only": False,
+                "job_id": "job-1",
+                "exit_code": 0,
+                "source_manifest_sha256": manifest_sha,
+                "binary_sha256": source_sha,
+                "ember_lab_identity": {
+                    "source_sha256": producer_source_sha,
+                    "binary_sha256": producer_binary_sha,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    operational_sha = hashlib.sha256(operational.read_bytes()).hexdigest()
     design_dir = tmp_path / "fixtures"
     design_dir.mkdir()
     design = design_dir / "design.md"
@@ -387,6 +433,12 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
             "source_sha256": source_sha,
             "binary_path": "llmq-repo/llmq.py",
             "binary_sha256": source_sha,
+            "operational_receipt_path": "ember-lab-operational.json",
+            "operational_receipt_sha256": operational_sha,
+            "producer_source_path": "runtime/ember-lab/src/lib.rs",
+            "producer_source_sha256": producer_source_sha,
+            "producer_binary_path": "runtime/ember-lab/ember-lab.exe",
+            "producer_binary_sha256": producer_binary_sha,
         },
         "governed_source_receipt": {
             "schema": "llmq-governed-source-receipt-v1",
@@ -395,6 +447,7 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
             "repo": "IST-DASLab/llmq",
             "commit": commit,
             "tree_sha256": tree,
+            "remote_ref": "refs/heads/dev",
             "source_sha256": source_sha,
             "source_path": "llmq-repo/llmq.py",
             "source_manifest_path": "source-manifest.json",
@@ -416,17 +469,158 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
             "dispatch_receipt_sha256": dispatch_sha,
             "binary_manifest_path": "binary-manifest.json",
             "binary_manifest_sha256": binary_manifest_sha,
+            "operational_receipt_path": "ember-lab-operational.json",
+            "operational_receipt_sha256": operational_sha,
+            "producer_source_path": "runtime/ember-lab/src/lib.rs",
+            "producer_source_sha256": producer_source_sha,
+            "producer_binary_path": "runtime/ember-lab/ember-lab.exe",
+            "producer_binary_sha256": producer_binary_sha,
         },
         "adoption_design_path": "fixtures/design.md",
         "adoption_design_sha256": design_sha,
         "mechanism_attribution_path": "fixtures/attribution.md",
         "mechanism_attribution_sha256": attribution_sha,
     }
+    forged_build = json.loads(json.dumps(payload))
+    forged_build["ember_lab_build_receipt"].pop("operational_receipt_path")
+    forged = assess(tmp_path, forged_build)
+    assert forged["verdict"] == "PRELAUNCH_REJECTED"
+    assert "ember_lab_build_receipt.operational_receipt" in forged["missing"]
     result = assess(tmp_path, payload)
     assert result["verdict"] == "READY_FOR_EXTERNAL_EXECUTION"
     assert "ember_lab_benchmark_receipt" in result["missing"]
     assert result["execution_claim"] is False
     assert result["result_credit"] is False
+
+    raw_log = tmp_path / "benchmark.jsonl"
+    raw_log.write_text(
+        json.dumps({"mode": "fp8", "tokens": 1000, "elapsed_ms": 100})
+        + "\n"
+        + json.dumps({"mode": "bf16", "tokens": 2000, "elapsed_ms": 200})
+        + "\n",
+        encoding="utf-8",
+    )
+    forged_benchmark = json.loads(json.dumps(payload))
+    forged_benchmark["ember_lab_benchmark_receipt"] = {
+        "schema": "ember-lab-benchmark-receipt-v1",
+        "status": "PASS",
+        "authority": "ember-cli->ember-lab",
+        "job_id": "job-1",
+        "hardware_uuid": "GPU-1",
+        "command": "invented-benchmark",
+        "config_sha256": "c" * 64,
+        "binary_sha256": source_sha,
+        "raw_log_path": "benchmark.jsonl",
+        "raw_log_sha256": hashlib.sha256(raw_log.read_bytes()).hexdigest(),
+        "rate_rows": [
+            {"mode": "fp8", "tokens": 1000, "elapsed_ms": 100, "tok_s": 10000.0},
+            {"mode": "bf16", "tokens": 2000, "elapsed_ms": 200, "tok_s": 10000.0},
+        ],
+    }
+    benchmark_result = assess(tmp_path, forged_benchmark)
+    assert benchmark_result["verdict"] == "PRELAUNCH_REJECTED"
+    assert "ember_lab_benchmark_receipt.operational_receipt" in benchmark_result["missing"]
+
+    # Multiple origin URLs are ambiguous: single-value config lookup can report
+    # the canonical last value while transport selects an attacker-controlled first.
+    attacker_remote = tmp_path / "attacker.git"
+    subprocess.run(["git", "init", "--bare", "-q", str(attacker_remote)], check=True)
+    copy_loose_objects(attacker_remote)
+    subprocess.run(["git", "--git-dir", str(attacker_remote), "update-ref", "refs/heads/dev", commit], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "--unset-all", "remote.origin.url"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "--add", "remote.origin.url", str(attacker_remote)], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "--add", "remote.origin.url", str(remote)], check=True)
+    ambiguous_origin = assess(tmp_path, payload)
+    assert ambiguous_origin["verdict"] == "PRELAUNCH_REJECTED"
+    assert "governed_source_receipt.git_origin" in ambiguous_origin["missing"]
+    subprocess.run(["git", "-C", str(repo), "config", "--unset-all", "remote.origin.url"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "--add", "remote.origin.url", str(remote)], check=True)
+
+    # pushInsteadOf is also transport authority drift and must be rejected even
+    # though this read-only probe does not itself push.
+    push_rewrite_key = f"url.{attacker_remote.as_uri()}.pushinsteadof"
+    subprocess.run(["git", "-C", str(repo), "config", push_rewrite_key, str(remote)], check=True)
+    push_redirected = assess(tmp_path, payload)
+    assert push_redirected["verdict"] == "PRELAUNCH_REJECTED"
+    assert "governed_source_receipt.git_url_rewrite" in push_redirected["missing"]
+    subprocess.run(["git", "-C", str(repo), "config", "--unset-all", push_rewrite_key], check=True)
+
+    # Raw remote.origin.url can remain canonical while Git silently redirects
+    # ls-remote through a caller-controlled insteadOf mapping.
+    rewrite_key = f"url.{attacker_remote.as_uri()}.insteadof"
+    subprocess.run(
+        ["git", "-C", str(repo), "config", rewrite_key, str(remote)],
+        check=True,
+    )
+    redirected = assess(tmp_path, payload)
+    assert redirected["verdict"] == "PRELAUNCH_REJECTED"
+    assert "governed_source_receipt.git_url_rewrite" in redirected["missing"]
+    subprocess.run(["git", "-C", str(repo), "config", "--unset-all", rewrite_key], check=True)
+
+    # A local commit in a repository with a spoofable origin URL is not governed
+    # source unless it is reachable from the previously fetched origin object set.
+    source.write_bytes(b"foreign local source bytes")
+    foreign_source_sha = hashlib.sha256(source.read_bytes()).hexdigest()
+    subprocess.run(["git", "-C", str(repo), "add", "llmq.py"], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "foreign"], check=True)
+    foreign_commit = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()
+    foreign_tree = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD^{tree}"], text=True).strip()
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema": "llmq-source-manifest-v1",
+                "repo": "IST-DASLab/llmq",
+                "commit": foreign_commit,
+                "tree_sha256": foreign_tree,
+                "remote_ref": "refs/heads/dev",
+                "source_path": "llmq-repo/llmq.py",
+                "source_sha256": foreign_source_sha,
+            }
+        ),
+        encoding="utf-8",
+    )
+    foreign_manifest_sha = hashlib.sha256(manifest.read_bytes()).hexdigest()
+    dispatch.write_text(json.dumps({"schema": "ember-lab-dispatch-terminal-receipt-v1", "job_id": "job-1", "status": "PASS", "source_manifest_sha256": foreign_manifest_sha}), encoding="utf-8")
+    binary_manifest.write_text(json.dumps({"schema": "ember-lab-binary-manifest-v1", "status": "PASS", "binary_sha256": foreign_source_sha}), encoding="utf-8")
+    payload["llmq_dev_commit"] = foreign_commit
+    payload["source_sha256"] = foreign_source_sha
+    payload["build_receipt"].update(source_commit=foreign_commit, source_sha256=foreign_source_sha, binary_sha256=foreign_source_sha)
+    payload["governed_source_receipt"].update(commit=foreign_commit, tree_sha256=foreign_tree, source_sha256=foreign_source_sha, source_manifest_sha256=foreign_manifest_sha)
+    payload["ember_lab_build_receipt"].update(
+        source_manifest_sha256=foreign_manifest_sha,
+        binary_sha256=foreign_source_sha,
+        dispatch_receipt_sha256=hashlib.sha256(dispatch.read_bytes()).hexdigest(),
+        binary_manifest_sha256=hashlib.sha256(binary_manifest.read_bytes()).hexdigest(),
+    )
+    foreign = assess(tmp_path, payload)
+    assert foreign["verdict"] == "PRELAUNCH_REJECTED"
+    assert "governed_source_receipt.git_remote_commit" in foreign["missing"]
+
+    # Even a governed commit cannot borrow dirty worktree bytes and remint every
+    # local hash; the reopened bytes must equal the exact <commit>:<path> blob.
+    copy_loose_objects()
+    subprocess.run(["git", "--git-dir", str(remote), "update-ref", "refs/heads/dev", foreign_commit], check=True)
+    subprocess.run(["git", "-C", str(repo), "update-ref", "refs/remotes/origin/dev", foreign_commit], check=True)
+    source.write_bytes(b"dirty worktree source bytes")
+    dirty_source_sha = hashlib.sha256(source.read_bytes()).hexdigest()
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    manifest_value["source_sha256"] = dirty_source_sha
+    manifest.write_text(json.dumps(manifest_value), encoding="utf-8")
+    dirty_manifest_sha = hashlib.sha256(manifest.read_bytes()).hexdigest()
+    dispatch.write_text(json.dumps({"schema": "ember-lab-dispatch-terminal-receipt-v1", "job_id": "job-1", "status": "PASS", "source_manifest_sha256": dirty_manifest_sha}), encoding="utf-8")
+    binary_manifest.write_text(json.dumps({"schema": "ember-lab-binary-manifest-v1", "status": "PASS", "binary_sha256": dirty_source_sha}), encoding="utf-8")
+    payload["source_sha256"] = dirty_source_sha
+    payload["build_receipt"].update(source_sha256=dirty_source_sha, binary_sha256=dirty_source_sha)
+    payload["governed_source_receipt"].update(source_sha256=dirty_source_sha, source_manifest_sha256=dirty_manifest_sha)
+    payload["ember_lab_build_receipt"].update(
+        source_manifest_sha256=dirty_manifest_sha,
+        binary_sha256=dirty_source_sha,
+        dispatch_receipt_sha256=hashlib.sha256(dispatch.read_bytes()).hexdigest(),
+        binary_manifest_sha256=hashlib.sha256(binary_manifest.read_bytes()).hexdigest(),
+    )
+    dirty = assess(tmp_path, payload)
+    assert dirty["verdict"] == "PRELAUNCH_REJECTED"
+    assert "governed_source_receipt.git_source_blob" in dirty["missing"]
 
     # Genuine RED: a caller may currently rewrite the manifest bytes and simply
     # recompute every receipt hash while leaving the rest of the packet unchanged.
