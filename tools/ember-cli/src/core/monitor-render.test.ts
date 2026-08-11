@@ -58,7 +58,7 @@ function stateWith(conditions: Claim[], overrides: Partial<EmberWorldState["moni
     understand: { goalTitle: "fixture", topology: [] },
     interact: { ledgerRows: [] },
     sources: {
-      goal: { path: "GOAL.md", sha256: "x" },
+      goal: { path: "docs/authority/GOAL.md", sha256: "x" },
       ledger: { path: "docs/ledgers/ember-debt-ledger.md", sha256: "x" },
       board: { path: "scripts/ember_totality/receipts-totality/fixture.json", sha256: "x" },
     },

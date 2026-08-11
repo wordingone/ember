@@ -57,7 +57,7 @@ from scripts.branch_inventory import check_inventory
 
 DEFAULT_DATA_ROOT = os.path.join(ROOT, "scripts", "ember_totality", "receipts-totality")
 README_PATH = os.path.join(ROOT, "README.md")
-CONTINUITY_PATH = os.path.join(ROOT, "CONTINUITY.md")
+CONTINUITY_PATH = os.path.join(ROOT, "docs/authority/CONTINUITY.md")
 CURRENT_SUBJECT_PATH = os.path.join(ROOT, "manifests", "ember-current-subject-v1.json")
 BRANCH_INVENTORY_PATH = os.path.join(
     ROOT, "receipts", "branch-inventory", "branch-inventory-current.json"
@@ -535,7 +535,7 @@ def subject_surfaces_current(payload, readme_path, continuity_path):
                 SUBJECT_BEGIN_MARKER,
                 SUBJECT_END_MARKER,
                 block,
-                "CONTINUITY.md",
+                "docs/authority/CONTINUITY.md",
             )
             == continuity
         )
@@ -655,7 +655,7 @@ def main():
         SUBJECT_BEGIN_MARKER,
         SUBJECT_END_MARKER,
         subject_block,
-        "CONTINUITY.md",
+        "docs/authority/CONTINUITY.md",
     )
 
     if new_readme == readme and new_continuity == continuity:
@@ -666,7 +666,7 @@ def main():
         return 0
 
     if args.check:
-        print("README.md or CONTINUITY.md generated status is STALE.")
+        print("README.md or docs/authority/CONTINUITY.md generated status is STALE.")
         return 1
 
     with open(args.readme, "w", encoding="utf-8", newline="\n") as f:
@@ -674,7 +674,7 @@ def main():
     with open(args.continuity, "w", encoding="utf-8", newline="\n") as stream:
         stream.write(new_continuity)
     print(
-        "README.md and CONTINUITY.md status surfaces regenerated from "
+        "README.md and docs/authority/CONTINUITY.md status surfaces regenerated from "
         f"{os.path.basename(receipt_path)} and {os.path.basename(args.subject_manifest)}."
     )
     return 0

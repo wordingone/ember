@@ -106,7 +106,7 @@ describe("buildProductionCallModel — proactive prefill overflow guard (issue #
     let thrown: unknown = null;
     try {
       await callModel({
-        messages: [{ role: "user" as const, content: "Read GOAL.md and summarize its first section" }],
+        messages: [{ role: "user" as const, content: "Read docs/authority/GOAL.md and summarize its first section" }],
         systemPrompt: "test",
         tools: [],
         model: "test-model",

@@ -56,7 +56,7 @@ never from a spec's prose or a model's self-report:
                                  `validate_manifest` — otherwise the outer-pass/param/real-world
                                  shape rides in with no validated claim of WHICH model produced
                                  it, and this conjunct stays RED.
-  (e) research_focus_test     — GOAL.md §1b's research-focus test, mechanized (fifth conjunct,
+  (e) research_focus_test     — docs/authority/GOAL.md §1b's research-focus test, mechanized (fifth conjunct,
                                  R11-ordered follow-up): every row of `paper/claims-evidence-map.md`
                                  must carry a non-empty `Law grade` column value in
                                  {P1-law-grade, P2-law-grade, coupling, instrument,
@@ -67,10 +67,10 @@ never from a spec's prose or a model's self-report:
                                  resolved to map rows via the map's own "K<n>=row <m>" legend
                                  anchor) must each be classified P1-law-grade, P2-law-grade, or
                                  (per the R4 ratification below) an accepted `instrument` row —
-                                 else False with reason `primary_class_not_law_grade` (GOAL.md
+                                 else False with reason `primary_class_not_law_grade` (docs/authority/GOAL.md
                                  §1b: "the primary class must itself be a statement about a §1b
                                  formal object"). The pre-registered class is the K2/K4 composite,
-                                 both `instrument`-classed under GOAL.md §1b's instruments clause —
+                                 both `instrument`-classed under docs/authority/GOAL.md §1b's instruments clause —
                                  RATIFIED-INCLUSIVE 2026-07-03 by acting-operator ruling R4
                                  (`receipts/acceptance/acting-operator-ruling-2-20260703.json`,
                                  reversible on one operator word): "statements AND constitutive
@@ -82,16 +82,16 @@ never from a spec's prose or a model's self-report:
                                  for being tagged `instrument`, and a row failing that bar still
                                  fails this conjunct with the reason attached.
 
-                                 `frame-revision` (GOAL.md §1b's launchpad clause: the two formal
+                                 `frame-revision` (docs/authority/GOAL.md §1b's launchpad clause: the two formal
                                  objects are CURRENT formalizations, revisable; a contribution
                                  that improves/replaces/shows-the-incompleteness-of a formal
                                  object — or of the two-law frame itself — is research of the
                                  first rank, not a test failure) is an EARNED exception, never a
                                  loophole: a row so tagged must (a) name, in its Claim or Missing
                                  cell, WHICH formal object it revises — a literal match against
-                                 the object symbols greppable from GOAL.md §1b itself (`C*_A(E)`,
+                                 the object symbols greppable from docs/authority/GOAL.md §1b itself (`C*_A(E)`,
                                  `BOOTSTRAP_PASS`, or the launchpad's own "the two-law frame"
-                                 phrase), never a hardcoded name, so the check tracks GOAL.md if
+                                 phrase), never a hardcoded name, so the check tracks docs/authority/GOAL.md if
                                  the formalization is renamed — and (b) name a `receipts/` path in
                                  its Evidence cell that resolves on disk; missing either is RED
                                  with a one-line reason. Conservative reading of "ride along": a
@@ -104,7 +104,7 @@ Note: publication-v1.md §3's literal text names three conjuncts (kernel fired, 
 real-world, EARNED rung); (c) claims_map_complete was ordered as a fourth check by the build
 task alongside (a)/(b) before (d) was ordered as a follow-up to restore the literal §3 pairing
 against map row 18, and (e) research_focus_test was ordered as a fifth follow-up mechanizing
-GOAL.md §1b's research-focus test — this script now covers all four map rows the spec's own
+docs/authority/GOAL.md §1b's research-focus test — this script now covers all four map rows the spec's own
 Validation-hook paragraph names (18/19/21), the map-completeness check, and the §1b law-grade
 gate.
 
@@ -133,7 +133,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 RECEIPTS_DIR = REPO_ROOT / "scripts" / "ember_totality" / "receipts-publication"
 CLAIMS_MAP_PATH = REPO_ROOT / "paper" / "claims-evidence-map.md"
 OUTLINE_PATH = REPO_ROOT / "paper" / "outline.md"
-GOAL_PATH = REPO_ROOT / "GOAL.md"
+GOAL_PATH = REPO_ROOT / "docs/authority/GOAL.md"
 
 sys.path.insert(0, str(Path(__file__).parent))
 import receipt_fp  # noqa: E402
@@ -695,7 +695,7 @@ def check_claims_map_complete():
 
 
 # ---------------------------------------------------------------------------
-# Conjunct (e): research_focus_test (GOAL.md §1b research-focus test, mechanized;
+# Conjunct (e): research_focus_test (docs/authority/GOAL.md §1b research-focus test, mechanized;
 # fifth conjunct, R11-ordered follow-up)
 # ---------------------------------------------------------------------------
 
@@ -708,7 +708,7 @@ PRIMARY_CLASS_HEADING_RE = re.compile(r"^##\s*Primary claim class", re.MULTILINE
 NEXT_HEADING_RE = re.compile(r"^##\s", re.MULTILINE)
 BOLD_SPAN_RE = re.compile(r"\*\*([^*]+)\*\*")
 K_LABEL_RE = re.compile(r"\bK(\d+)\b")
-# GOAL.md sec1b's own "## 1b." heading, bounding the section this file greps for formal-object
+# docs/authority/GOAL.md sec1b's own "## 1b." heading, bounding the section this file greps for formal-object
 # names (never hardcoded) — see _parse_formal_object_names.
 SECTION_1B_HEADING_RE = re.compile(r"^##\s*1b\.", re.MULTILINE)
 FORMAL_OBJECT_RE = re.compile(r"Formal object:[^`]*`([^`]+)`")
@@ -747,8 +747,8 @@ def _parse_primary_class_k_labels(outline_text):
 
 
 def _parse_formal_object_names(goal_text):
-    """Dynamically greps GOAL.md's '## 1b.' section for the formal-object names the
-    launchpad clause protects — never hardcoded, so this tracks GOAL.md if a formalization
+    """Dynamically greps docs/authority/GOAL.md's '## 1b.' section for the formal-object names the
+    launchpad clause protects — never hardcoded, so this tracks docs/authority/GOAL.md if a formalization
     is renamed. Two sources within the section:
       - the backtick-quoted symbol following each 'Formal object:' label, first
         whitespace-delimited token only (e.g. 'C*_A(E)' out of the full equation
@@ -758,7 +758,7 @@ def _parse_formal_object_names(goal_text):
     Returns (set_of_names, error_or_None); never raises."""
     m = SECTION_1B_HEADING_RE.search(goal_text)
     if not m:
-        return set(), "no '## 1b.' section heading found in GOAL.md"
+        return set(), "no '## 1b.' section heading found in docs/authority/GOAL.md"
     rest = goal_text[m.end():]
     nh = NEXT_HEADING_RE.search(rest)
     section = rest[:nh.start()] if nh else rest
@@ -773,7 +773,7 @@ def _parse_formal_object_names(goal_text):
         names.add(tl.group(1).strip())
 
     if not names:
-        return set(), "no formal-object names extracted from GOAL.md's '## 1b.' section"
+        return set(), "no formal-object names extracted from docs/authority/GOAL.md's '## 1b.' section"
     return names, None
 
 
@@ -797,14 +797,14 @@ def _row_cites_receipt(evidence_text):
 
 
 def _check_frame_revision_row(row, formal_object_names):
-    """Acceptance predicate for a claims-map row tagged 'frame-revision' (GOAL.md sec1b's
+    """Acceptance predicate for a claims-map row tagged 'frame-revision' (docs/authority/GOAL.md sec1b's
     launchpad clause: a contribution that improves/replaces/shows-the-incompleteness-of a
     sec1b formal object — or of the two-law frame itself — is research of the first rank,
     not a test failure). The launchpad is an EARNED exception, not a loophole, so BOTH of
     these must hold or the row is RED with a one-line reason:
       (a) the row names WHICH formal object it revises — a literal match, in the Claim or
           Missing cell (the map's schema has no dedicated column for this), against one of
-          GOAL.md sec1b's own formal-object symbols;
+          docs/authority/GOAL.md sec1b's own formal-object symbols;
       (b) the Evidence cell names a receipts/ path that resolves on disk — a revision
           claim without a load-bearing receipt is a proposal, not a result.
     Returns (ok: bool, reason_or_None); never raises."""
@@ -825,7 +825,7 @@ def _check_frame_revision_row(row, formal_object_names):
     return True, None
 
 
-# GOAL.md sec1b's research-focus test instruments-clause scope call was RATIFIED-INCLUSIVE by
+# docs/authority/GOAL.md sec1b's research-focus test instruments-clause scope call was RATIFIED-INCLUSIVE by
 # acting-operator ruling R4 (receipts/acceptance/acting-operator-ruling-2-20260703.json,
 # 2026-07-03T15:38:33Z, reversible on one operator word): "statements AND constitutive
 # instruments both count, each still owing the field-delta bar." An instrument-classed row is
@@ -898,10 +898,10 @@ def check_research_focus_test():
             + "; ".join(f"row {o['row']} ({o['law_grade']!r})" for o in offending)
         )
 
-    # --- frame-revision acceptance predicate (launchpad clause, GOAL.md sec1b) ---
-    # Only touches GOAL.md when a row actually claims the grade — no new failure mode for
+    # --- frame-revision acceptance predicate (launchpad clause, docs/authority/GOAL.md sec1b) ---
+    # Only touches docs/authority/GOAL.md when a row actually claims the grade — no new failure mode for
     # maps that never use it. Fail-closed like every other check in this file: an
-    # unreadable GOAL.md or an unparseable sec1b section marks every frame-revision row
+    # unreadable docs/authority/GOAL.md or an unparseable sec1b section marks every frame-revision row
     # invalid rather than silently passing them.
     frame_revision_rows = [r for r in rows if r.get("law_grade") == "frame-revision"]
     frame_revision_ok = {}  # row_num -> bool, only for rows actually checked
@@ -915,7 +915,7 @@ def check_research_focus_test():
         if goal_err is not None:
             for r in frame_revision_rows:
                 frame_revision_ok[r["row"]] = False
-            reasons.append(f"GOAL.md unreadable for frame-revision row(s) "
+            reasons.append(f"docs/authority/GOAL.md unreadable for frame-revision row(s) "
                             f"{[r['row'] for r in frame_revision_rows]}: {goal_err}")
         else:
             formal_object_names, fo_err = _parse_formal_object_names(goal_text)
@@ -1009,7 +1009,7 @@ def check_research_focus_test():
                                 + (f", {n['instrument_reason']}" if n.get("instrument_reason")
                                    else "") + ")"
                                 for n in not_law_grade)
-                            + " -- GOAL.md sec1b: 'the primary class must itself be a statement "
+                            + " -- docs/authority/GOAL.md sec1b: 'the primary class must itself be a statement "
                               "about a sec1b formal object'"
                         )
 
@@ -1064,7 +1064,7 @@ def build_receipt(conjuncts, start_ts, start_perf, generator_path):
         "chk_name": "check_publication_gate",
         "spec_ref": "docs/spec/publication-v1.md sec3 (premature-publication gate); "
                     "paper/claims-evidence-map.md rows 18/19/21; "
-                    "GOAL.md sec1b (research-focus test)",
+                    "docs/authority/GOAL.md sec1b (research-focus test)",
         "generator": {
             "path": "scripts/check_publication_gate.py",
             "sha256": generator_sha256,
@@ -1160,7 +1160,7 @@ def _selftest():
         RECEIPTS_DIR = root / "receipts"
         CLAIMS_MAP_PATH = root / "paper" / "claims-evidence-map.md"
         OUTLINE_PATH = root / "paper" / "outline.md"
-        GOAL_PATH = root / "GOAL.md"
+        GOAL_PATH = root / "docs/authority/GOAL.md"
 
         # Identity-manifest fixtures shared by the earned_growth_rung and
         # bootstrap_pass_real_world identity-binding tests below.
@@ -1479,7 +1479,7 @@ def _selftest():
         check("research_focus_test RED (never a crash) when paper/outline.md is missing",
               r_rft4["verdict"] == "RED" and "primary_class_not_law_grade" in r_rft4["reason"])
 
-        # --- research_focus_test: frame-revision grade (launchpad clause, GOAL.md sec1b) ---
+        # --- research_focus_test: frame-revision grade (launchpad clause, docs/authority/GOAL.md sec1b) ---
         goal_fixture = (
             "# GOAL\n\n"
             "## 1b. THE TWO RESEARCH PROBLEMS\n\n"

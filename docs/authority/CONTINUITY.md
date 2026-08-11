@@ -268,9 +268,7 @@ A byte change invalidates the classification.
 
 | path | artifact_class | execution_authority | goal_id | next_executed_outcome | sha256 |
 |---|---|---|---|---|---|
-| configs/nck-baseline/nck-invariants.json | historical_only | denied | EMBER-00 | EMBER-01 clean 3B custody and identity spine | ba192cd69ab53fcf78d6903c097eee2a62d2ece072054eb1b05411eb81021519 |
 | configs/nck-c10.json | historical_only | denied | EMBER-00 | EMBER-01 clean 3B custody and identity spine | a764f1a74e6ca695a584fef37e946f0b283969708821e440a74dc59d42e11b34 |
-| configs/nck-invariants.json | historical_only | denied | EMBER-00 | EMBER-01 clean 3B custody and identity spine | ba192cd69ab53fcf78d6903c097eee2a62d2ece072054eb1b05411eb81021519 |
 | configs/nck-schedule.json | historical_only | denied | EMBER-00 | EMBER-01 clean 3B custody and identity spine | 4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945 |
 
 ## State conclusion

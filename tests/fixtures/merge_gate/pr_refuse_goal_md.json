@@ -28,11 +28,11 @@
   "files": {
     "nodes": [
       {
-        "path": "GOAL.md",
+        "path": "docs/authority/GOAL.md",
         "changeType": "MODIFIED"
       },
       {
-        "path": "docs/README.md",
+        "path": "docs/DOCS-README.md",
         "changeType": "MODIFIED"
       }
     ],

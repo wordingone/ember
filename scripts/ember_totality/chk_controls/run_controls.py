@@ -775,7 +775,7 @@ def build_c_manifest():
 # (lane-14/PR955 round-2 repair, reviewer defect P1: the regression must be
 # executed by the canonical driver itself, not left as a standalone script).
 # Deliberately reuses issue715's own seeding/removal helpers against the
-# REAL docs/spec/conditions-v1.md + docs/ember-completeness.md bytes --
+# REAL docs/spec/conditions-v1.md + docs/contracts/ember-completeness.md bytes --
 # never a re-typed synthetic shape like build_c_manifest() above, because
 # issue #715's own audit finding was specifically about the production
 # file's literal separator characters.

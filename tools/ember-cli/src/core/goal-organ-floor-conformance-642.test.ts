@@ -10,12 +10,12 @@
 // docs/archive/goal/goal-organ-floor-conformance-20260710.md can cite it directly.
 //
 // FLOOR SOURCE: the six frozen clauses enumerated in issue #642's body, which
-// are the audit-scoped restatement of docs/goal-mode-mechanism.md ("Selection
+// are the audit-scoped restatement of docs/contracts/goal-mode-mechanism.md ("Selection
 // and persistence" -> clauses 1-2, "Continuation loop" -> clauses 3-6). The
-// 2026-07-10 draft of this file also cited "GOAL.md §6"; that citation is
-// retired here because GOAL.md §6 on current master is "Clean genesis and
+// 2026-07-10 draft of this file also cited "docs/authority/GOAL.md §6"; that citation is
+// retired here because docs/authority/GOAL.md §6 on current master is "Clean genesis and
 // frozen-reference boundary", which has nothing to do with the goal organ.
-// docs/goal-mode-mechanism.md is the sole document floor.
+// docs/contracts/goal-mode-mechanism.md is the sole document floor.
 //
 // AUDIT DISCIPLINE (per issue #642): this file never fixes anything. Where a
 // clause is NOT enforced by code today, the test demonstrating that gap is
@@ -67,7 +67,7 @@ afterEach(() => {
 
 // ===========================================================================
 // CLAUSE 1 — Persistent objective IMMUTABLE to the executor
-// (docs/goal-mode-mechanism.md "Selection and persistence")
+// (docs/contracts/goal-mode-mechanism.md "Selection and persistence")
 // Code path: core/goal-store.ts (updateStatus signature carries no objective
 // param) + tools/goal-tools.ts (update_goal's zod schema has no objective
 // field; GOAL_TOOLS exposes no model-side objective-editing tool at all).

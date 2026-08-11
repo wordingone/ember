@@ -68,9 +68,9 @@ PRIVATE_TERM_REPLACEMENTS = (
 TRANSLATIONS = {
     (
         "EMBER-00",
-        f"Make Ember's governing surfaces describe one exact project: the sovereign foundation intelligence, the creation primitive, the organism, its body, and the general local AI laboratory. Reconcile the verified discrepancies in `{PRIVATE_ROOT}\\avir\\{PRIMARY_FOUNDER.lower()}\\state\\ember-dissonance-ledger.md` into the highest amendable Ember authority without weakening or rewriting `INVARIANT.md`.",
+        f"Make Ember's governing surfaces describe one exact project: the sovereign foundation intelligence, the creation primitive, the organism, its body, and the general local AI laboratory. Reconcile the verified discrepancies in `{PRIVATE_ROOT}\\avir\\{PRIMARY_FOUNDER.lower()}\\state\\ember-dissonance-ledger.md` into the highest amendable Ember authority without weakening or rewriting `docs/authority/INVARIANT.md`.",
     ): (
-        "Make Ember's governing surfaces describe one exact project: the sovereign foundation intelligence, the creation primitive, the organism, its body, and the general local AI laboratory. Reconcile every verified discrepancy in the preserved discrepancy ledger and its content-addressed evidence into the highest amendable Ember authority without weakening or rewriting `INVARIANT.md`."
+        "Make Ember's governing surfaces describe one exact project: the sovereign foundation intelligence, the creation primitive, the organism, its body, and the general local AI laboratory. Reconcile every verified discrepancy in the preserved discrepancy ledger and its content-addressed evidence into the highest amendable Ember authority without weakening or rewriting `docs/authority/INVARIANT.md`."
     ),
     (
         "EMBER-00",
@@ -94,7 +94,7 @@ TRANSLATIONS = {
 
 PUBLIC_INTRO = """\
 > **Public milestone contract.** This document is the version-controlled,
-> public form of the canonical milestone. `GOAL.md` remains the higher
+> public form of the canonical milestone. `docs/authority/GOAL.md` remains the higher
 > authority. GitHub milestones and issues only track work against this
 > contract.
 >

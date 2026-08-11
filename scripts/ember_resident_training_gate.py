@@ -124,7 +124,7 @@ def code_vs_docs_metric(repo: Path, changed_paths: list[Path]) -> dict[str, Any]
 
 def inspect_goal_authority(repo: Path) -> tuple[dict[str, Any], list[str]]:
     errors: list[str] = []
-    goal_path = repo / "GOAL.md"
+    goal_path = repo / "docs/authority/GOAL.md"
     goal_markers = [
         "Authority And Precedence",
         "Current Blocker Packet",
@@ -151,7 +151,7 @@ def inspect_goal_authority(repo: Path) -> tuple[dict[str, Any], list[str]]:
         head = text[:2000]
         markers_present = {
             "superseded": "SUPERSEDED" in head,
-            "sole_active_goal": "GOAL.md is the sole active goal file" in head,
+            "sole_active_goal": "docs/authority/GOAL.md is the sole active goal file" in head,
             "scope_not_reduced": "no scope is reduced" in head,
             "resident_gate": "resident_training_gate_status=PASS" in head,
         }
@@ -169,11 +169,11 @@ def inspect_goal_authority(repo: Path) -> tuple[dict[str, Any], list[str]]:
 
     return {
         "status": "PASS" if not errors else "BLOCKED",
-        "goal_path": "GOAL.md",
+        "goal_path": "docs/authority/GOAL.md",
         "goal_sha256": _sha256(goal_path) if goal_path.exists() else None,
         "required_goal_markers": goal_markers,
         "superseded_parallel_specs": superseded_rows,
-        "one_goal_file_rule": "GOAL.md is the only active Ember goal/control document; superseded docs are imported history, not clearance surfaces.",
+        "one_goal_file_rule": "docs/authority/GOAL.md is the only active Ember goal/control document; superseded docs are imported history, not clearance surfaces.",
     }, errors
 
 def _extract_abstract(abs_html_path: Path) -> str:
@@ -431,7 +431,7 @@ def _parse_no_deferral_floor_contract(
 ):
     """Parse the current no-deferral contract shape (fail-closed).
 
-    The rewritten docs/ember-floor-contract.md deliberately carries no
+    The rewritten docs/contracts/ember-floor-contract.md deliberately carries no
     deferral ledger ("No modality ... can be deferred out of the foundation
     model"), so a deferral table is not a missing section but a shape the
     doc forbids. What IS required, each with its own error code: the
@@ -468,7 +468,7 @@ def _parse_no_deferral_floor_contract(
         for bullet in bullets:
             slug = re.sub(r"[^a-z0-9]+", "_", bullet.lower()[:48]).strip("_")
             manifest[f"birth_floor.{slug}"] = {
-                "source_file": "docs/ember-floor-contract.md",
+                "source_file": "docs/contracts/ember-floor-contract.md",
                 "source_sha256": _sha256(floor_path),
                 "disposition": "used_now",
                 "launch_vehicle_impact": bullet,
@@ -477,7 +477,7 @@ def _parse_no_deferral_floor_contract(
                 "kill_promote_condition": (
                     "non-deferrable; only a user-approved contract change may alter"
                 ),
-                "evidence_path": "docs/ember-floor-contract.md",
+                "evidence_path": "docs/contracts/ember-floor-contract.md",
             }
     if "## Historical boundary" not in content:
         errors.append("floor_contract.historical_boundary_missing")
@@ -580,14 +580,14 @@ def parse_floor_contract_manifest(
                 evidence = row[evidence_idx].strip() if evidence_idx is not None and evidence_idx < len(row) else "UNDECLARED-IN-DOC"
 
                 manifest[component] = {
-                    "source_file": "docs/ember-floor-contract.md",
+                    "source_file": "docs/contracts/ember-floor-contract.md",
                     "source_sha256": _sha256(floor_path),
                     "disposition": "used_now",  # IN-vehicle components are currently used
                     "launch_vehicle_impact": surface,
                     "trigger": "model construction and launch",
                     "pilot": evidence,
                     "kill_promote_condition": "cannot be silently removed",
-                    "evidence_path": "docs/ember-floor-contract.md",
+                    "evidence_path": "docs/contracts/ember-floor-contract.md",
                 }
 
     # Current contract shape (2026-07 rewrite): the doc explicitly declares
@@ -661,14 +661,14 @@ def parse_floor_contract_manifest(
         disposition = _map_status_to_disposition(status)
 
         manifest[component] = {
-            "source_file": "docs/ember-floor-contract.md",
+            "source_file": "docs/contracts/ember-floor-contract.md",
             "source_sha256": _sha256(floor_path),
             "disposition": disposition,
             "launch_vehicle_impact": why_deferred,
             "trigger": trigger,
             "pilot": pilot,
             "kill_promote_condition": kill_promote,
-            "evidence_path": "docs/ember-floor-contract.md",
+            "evidence_path": "docs/contracts/ember-floor-contract.md",
         }
 
     if not manifest:
@@ -721,8 +721,8 @@ def build_floor_contract_manifest(floor_sha: str | None, nc2_sha: str | None) ->
             "evidence_path": evidence_path,
         }
 
-    floor = "docs/ember-floor-contract.md"
-    nc2 = "docs/nc2-own-technique-contract.md"
+    floor = "docs/contracts/ember-floor-contract.md"
+    nc2 = "docs/contracts/nc2-own-technique-contract.md"
     return {
         "floor_contract.QAT": row(source_file=floor, source_hash=floor_sha, disposition="preserved_trigger_gated", impact="quantization-native launch floor preserved; tiny resident step does not clear it", trigger="launch vehicle QAT/int4 tail or deploy target requiring quantized form", pilot="QAT tail or governed low-bit pilot", kill_promote="only user-approved contract change or receipt-proved contradiction may demote", evidence_path=floor),
         "floor_contract.Muon": row(source_file=floor, source_hash=floor_sha, disposition="preserved_trigger_gated", impact="hidden-layer Muon floor preserved with AdamW fallback", trigger="owned-core training run using hidden 2D params", pilot="Muon hidden-layer optimizer run with AdamW fallback receipt", kill_promote="promote on same-scale efficiency; fallback only on receipt-backed null", evidence_path=floor),
@@ -763,8 +763,8 @@ def _marker_status(text: str, groups: dict[str, list[str]]) -> dict[str, dict[st
 
 def inspect_floor_contracts(repo: Path) -> tuple[dict[str, Any], list[str]]:
     errors: list[str] = []
-    floor_path = repo / "docs/ember-floor-contract.md"
-    nc2_path = repo / "docs/nc2-own-technique-contract.md"
+    floor_path = repo / "docs/contracts/ember-floor-contract.md"
+    nc2_path = repo / "docs/contracts/nc2-own-technique-contract.md"
     train_path = repo / "scripts/train_multimodal_v0.py"
 
     def read_required(path: Path, code: str) -> str:
@@ -839,9 +839,9 @@ def inspect_floor_contracts(repo: Path) -> tuple[dict[str, Any], list[str]]:
 
     return {
         "status": "PASS" if not errors else "BLOCKED",
-        "floor_contract_path": "docs/ember-floor-contract.md",
+        "floor_contract_path": "docs/contracts/ember-floor-contract.md",
         "floor_contract_sha256": _sha256(floor_path) if floor_path.exists() else None,
-        "nc2_component_contract_path": "docs/nc2-own-technique-contract.md",
+        "nc2_component_contract_path": "docs/contracts/nc2-own-technique-contract.md",
         "nc2_component_contract_sha256": _sha256(nc2_path) if nc2_path.exists() else None,
         "train_multimodal_path": "scripts/train_multimodal_v0.py",
         "train_multimodal_sha256": _sha256(train_path) if train_path.exists() else None,
@@ -1108,7 +1108,7 @@ def build_gate_receipt(
     changed_paths: list[Path],
     full_parity_receipt: Path | None = None,
 ) -> dict[str, Any]:
-    goal_path = repo / "GOAL.md"
+    goal_path = repo / "docs/authority/GOAL.md"
     debt_path = repo / "docs/ledgers/ember-debt-ledger.md"
     errors: list[str] = []
     if not goal_path.exists():
@@ -1281,7 +1281,7 @@ def write_gate_receipt(out_path: Path, receipt: dict[str, Any]) -> None:
 
 
 def build_fixture_repo(root: Path) -> tuple[Path, Path, Path]:
-    """Builds the hermetic fixture repo (GOAL.md, floor contracts, clean-room
+    """Builds the hermetic fixture repo (docs/authority/GOAL.md, floor contracts, clean-room
     harness files, papers index, full-parity receipt) under root. Shared by
     selftest() and test_ember_resident_training_gate_econ.py so both exercise
     the real build_gate_receipt() codepath against one fixture definition
@@ -1292,13 +1292,13 @@ def build_fixture_repo(root: Path) -> tuple[Path, Path, Path]:
     (repo / "scripts" / "nck").mkdir(parents=True)
     (repo / "receipts").mkdir()
     for rel, content in {
-        "GOAL.md": (
+        "docs/authority/GOAL.md": (
             "Authority And Precedence\nCurrent Blocker Packet\nresident_training_gate_status\n"
             "RLM, iGRPO, and the clean-room\nBinding floor-contract surfaces imported into this goal\n"
             "Existing neural infrastructure is not missing: `scripts/train_multimodal_v0.py`\n"
         ),
         "docs/ledgers/ember-debt-ledger.md": "ledger\n",
-        "docs/ember-floor-contract.md": (
+        "docs/contracts/ember-floor-contract.md": (
             "<!-- EMBER_CONSERVATION_V1\n"
             "minimum_new_network_parameters=3000000000\n"
             "destination_total_parameters=>27000000000\n"
@@ -1307,7 +1307,7 @@ def build_fixture_repo(root: Path) -> tuple[Path, Path, Path]:
             "mechanism_erasure=forbidden\n"
             "-->\n\n"
             "# Ember model-birth and rung floor (fixture mirror)\n\n"
-            "This file is subordinate to GOAL.md. It contains no deferral ledger and no\n"
+            "This file is subordinate to docs/authority/GOAL.md. It contains no deferral ledger and no\n"
             "smaller launch vehicle.\n\n"
             "## Birth floor\n\n"
             "- at least 3,000,000,000 total unique stored neural parameters;\n"
@@ -1328,12 +1328,12 @@ def build_fixture_repo(root: Path) -> tuple[Path, Path, Path]:
             "No modality, mechanism family, benchmark obligation, or whole-stack requirement\n"
             "can be deferred out of the foundation model.\n"
         ),
-        "docs/archive/pre-restart/ember-mvp-v0.md": "# SUPERSEDED fixture\n\nGOAL.md is the sole active goal file; no scope is reduced; resident_training_gate_status=PASS required.\n",
-        "docs/archive/pre-restart/20260617-maximally-viable-product.md": "# SUPERSEDED fixture\n\nGOAL.md is the sole active goal file; no scope is reduced; resident_training_gate_status=PASS required.\n",
+        "docs/archive/pre-restart/ember-mvp-v0.md": "# SUPERSEDED fixture\n\ndocs/authority/GOAL.md is the sole active goal file; no scope is reduced; resident_training_gate_status=PASS required.\n",
+        "docs/archive/pre-restart/20260617-maximally-viable-product.md": "# SUPERSEDED fixture\n\ndocs/authority/GOAL.md is the sole active goal file; no scope is reduced; resident_training_gate_status=PASS required.\n",
         "docs/archive/pre-restart/sp5-nck-harness-port-spec-v0.md": "clean-room spec\n",
         "docs/archive/pre-restart/nck-event-loop-v0.md": "event loop\n",
         "docs/archive/pre-restart/nck-invariants-v0.md": "invariants\n",
-        "docs/nc2-own-technique-contract.md": (
+        "docs/contracts/nc2-own-technique-contract.md": (
             "# Owned architecture and mechanism research contract (fixture mirror)\n\n"
             "## Unified decoder contract\n\n"
             "Every admissible model rung uses one owned decoder. No published family can\n"
@@ -1511,8 +1511,8 @@ def build_valid_candidate_manifest(root: Path, repo: Path, dt6_fields: dict[str,
                 "source_sha256": _sha256(repo / "scripts/train_multimodal_v0.py"),
             },
             "train_multimodal_adapter_path": str(root / "adapter.py"),
-            "floor_contract_sha256": _sha256(repo / "docs/ember-floor-contract.md"),
-            "nc2_component_contract_sha256": _sha256(repo / "docs/nc2-own-technique-contract.md"),
+            "floor_contract_sha256": _sha256(repo / "docs/contracts/ember-floor-contract.md"),
+            "nc2_component_contract_sha256": _sha256(repo / "docs/contracts/nc2-own-technique-contract.md"),
             "action_log_seam_evidence": {
                 "source_path": "scripts/train_multimodal_v0.py",
                 "required_primitives": ["emit-token", "emit-scalar", "emit-pointer", "commit", "stop"],
@@ -1526,8 +1526,8 @@ def build_valid_candidate_manifest(root: Path, repo: Path, dt6_fields: dict[str,
                 "multimodal_locks": "preserved",
             },
             "floor_contract_manifest": build_floor_contract_manifest(
-                _sha256(repo / "docs/ember-floor-contract.md"),
-                _sha256(repo / "docs/nc2-own-technique-contract.md"),
+                _sha256(repo / "docs/contracts/ember-floor-contract.md"),
+                _sha256(repo / "docs/contracts/nc2-own-technique-contract.md"),
             ),
         }
     )
@@ -1618,7 +1618,7 @@ def main() -> int:
         Path("scripts/ember_resident_training_gate.py"),
         Path("scripts/ember_resident_training_gate_selftest.py"),
         Path("docs/ledgers/ember-debt-ledger.md"),
-        Path("GOAL.md"),
+        Path("docs/authority/GOAL.md"),
     ]
     receipt = build_gate_receipt(
         repo,

@@ -89,7 +89,7 @@ SCOPE BOUNDARIES (disclosed, not silent gaps):
   * check_r1_e5 validates a section-5.4 frontier receipt (schema
     ember02-frontier-receipt/v1, produced by scripts/frontier_receipt.py)
     by independently re-verifying its bindings against the bytes on disk:
-    repo-document pins (prereg, admission config, INVARIANT.md, fixed-prior
+    repo-document pins (prereg, admission config, docs/authority/INVARIANT.md, fixed-prior
     manifest, tokenizer receipt, predecessor receipt, run-attempts
     registry), run-root evidence files by sha256 (frozen evals, runner
     receipt, energy producer receipt, reproduction adjudication,
@@ -1265,7 +1265,7 @@ E5_GOAL_ID = "EMBER-02"
 E5_WORKSTREAM_ID = "EMBER-02A"
 E5_PREREG_PATH = "docs/spec/ember02-preregistration-v1.md"
 E5_ADMISSION_CONFIG_PATH = "configs/ember-restart-3b.json"
-E5_INVARIANT_PATH = "INVARIANT.md"
+E5_INVARIANT_PATH = "docs/authority/INVARIANT.md"
 E5_TOKENIZER_RECEIPT_PATH = "receipts/ember-restart-3b/tokenizer-reconstruction-issue534-v1.json"
 E5_RUN_ATTEMPTS_REGISTRY = "receipts/run-attempts.jsonl"
 # Prereg line 27 t0: R1's predecessor is exactly the candidate's genesis
@@ -1312,7 +1312,7 @@ def _validate_frontier_content(
     load-bearing all apply here:
       * document binding -- every repo-document pin (prereg, admission
         config, fixed-prior manifest, tokenizer receipt, predecessor,
-        registry, INVARIANT.md) must name THE pinned path, resolve inside
+        registry, docs/authority/INVARIANT.md) must name THE pinned path, resolve inside
         repo_root, and hash to the receipt's sha256;
       * value binding -- reproducibility pins must EQUAL the checkpoint
         manifest's values, embedded evidence (energy block, eval results,
@@ -1987,7 +1987,7 @@ def _validate_frontier_content(
         defects.append(f"invariant stamp: no {E5_INVARIANT_PATH} at the repository root")
     elif _sha256_file(invariant_disk) != stamp.get("invariant_md_sha256"):
         defects.append(
-            "invariant_stamp.invariant_md_sha256 does not match the INVARIANT.md in force -- a "
+            "invariant_stamp.invariant_md_sha256 does not match the docs/authority/INVARIANT.md in force -- a "
             "receipt stamped under a different invariant is not this rung's receipt"
         )
     return defects
@@ -3302,7 +3302,7 @@ def run_selftest() -> None:
             (repo / "receipts" / "ember-restart-3b").mkdir(parents=True)
             (repo / "docs" / "spec" / "ember02-preregistration-v1.md").write_bytes(b"SELFTEST_FIXTURE prereg\n")
             (repo / "configs" / "ember-restart-3b.json").write_bytes(json.dumps({"SELFTEST_FIXTURE": True}).encode("utf-8"))
-            (repo / "INVARIANT.md").write_bytes(b"SELFTEST_FIXTURE invariant\n")
+            (repo / "docs/authority/INVARIANT.md").write_bytes(b"SELFTEST_FIXTURE invariant\n")
             (repo / "manifests" / "ember-restart-3b" / "fixed-prior-manifest-v1.json").write_bytes(json.dumps({
                 "learned_import_attestation": "SELFTEST_FIXTURE: no learned imports of any category",
                 "items": [
@@ -3538,7 +3538,7 @@ def run_selftest() -> None:
                     },
                 },
                 "advantage_claims": [],
-                "invariant_stamp": {"invariant_md_sha256": sha_of(repo / "INVARIANT.md")},
+                "invariant_stamp": {"invariant_md_sha256": sha_of(repo / "docs/authority/INVARIANT.md")},
                 "predecessor_receipt": {
                     "path": "receipts/ember-restart-3b/native-cost-calibration-seed83-certificate.json",
                     "sha256": sha_of(repo / "receipts" / "ember-restart-3b" / "native-cost-calibration-seed83-certificate.json"),
@@ -3739,11 +3739,11 @@ def run_selftest() -> None:
         _e5_defect(_e5_case(), "run-attempt registry")
         (e5_repo / "receipts" / "run-attempts.jsonl").write_bytes(registry_bytes)
 
-        # INVARIANT.md drift after receipt assembly -> the stamp no longer names the invariant in force.
-        invariant_bytes = (e5_repo / "INVARIANT.md").read_bytes()
-        (e5_repo / "INVARIANT.md").write_bytes(b"SELFTEST_FIXTURE invariant CHANGED\n")
-        _e5_defect(_e5_case(), "INVARIANT.md in force")
-        (e5_repo / "INVARIANT.md").write_bytes(invariant_bytes)
+        # docs/authority/INVARIANT.md drift after receipt assembly -> the stamp no longer names the invariant in force.
+        invariant_bytes = (e5_repo / "docs/authority/INVARIANT.md").read_bytes()
+        (e5_repo / "docs/authority/INVARIANT.md").write_bytes(b"SELFTEST_FIXTURE invariant CHANGED\n")
+        _e5_defect(_e5_case(), "docs/authority/INVARIANT.md in force")
+        (e5_repo / "docs/authority/INVARIANT.md").write_bytes(invariant_bytes)
 
         # Ambiguity: a second frontier-named file -> NOT_MET, never a pick-one.
         (e5_run / "SELFTEST_FIXTURE-copy-frontier-receipt.json").write_bytes(json.dumps(e5_pristine).encode("utf-8"))

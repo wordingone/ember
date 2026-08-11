@@ -6,7 +6,7 @@ SUPERSEDED two-point marginal-CI grammar) and issue #123 comment 4928342201
 cluster-resampled bootstrap, B=10000, rng_seed=20260709). CPU-only: no model
 loads, no GPU, no torch import.
 
-GOAL.md C5(c): "a receipted scaling trend shows the gap to the dense control
+docs/authority/GOAL.md C5(c): "a receipted scaling trend shows the gap to the dense control
 WIDENING with scale -- a shrinking gap is the toy-model failure state, named."
 
 DEFECT (independent-audit disposition, issue #628, reproduced verbatim below):

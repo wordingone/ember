@@ -25,7 +25,7 @@ def main() -> int:
         out = root / "receipt.json"
 
         _write(
-            repo / "GOAL.md",
+            repo / "docs/authority/GOAL.md",
             """
 # Ember Goal
 ## Current Blocker Packet
@@ -106,7 +106,7 @@ def main() -> int:
             assert by_id[required]["cleanroom_implemented"] is False
             assert by_id[required]["status"] == "BLOCKED"
         native_refs = by_id["native_goal_organ"]["reference_evidence"]
-        assert any(row["source_root"] == "ember_repo" and row["path"] == "GOAL.md" and row["exists"] for row in native_refs)
+        assert any(row["source_root"] == "ember_repo" and row["path"] == "docs/authority/GOAL.md" and row["exists"] for row in native_refs)
         assert receipt["bootstrap_receipt"]["does_not_satisfy_full_the predecessor CLI_parity"] is True
         assert "headless_bootstrap_only" in receipt["blocked_reasons"]
         assert receipt["delete_ablate_required"]["native_goal_organ_deleted_blocks"] is False

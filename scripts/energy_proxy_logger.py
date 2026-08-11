@@ -126,7 +126,7 @@ SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization
 RECEIPT_WORKSTREAM_ID = "EMBER-02B"
 """The workstream this logger's RECEIPTS bind to -- not the one this script binds to.
 
-GOAL.md gives `receipts/ember-restart-3b/` to EMBER-02B exclusively (mode "only"),
+docs/authority/GOAL.md gives `receipts/ember-restart-3b/` to EMBER-02B exclusively (mode "only"),
 while EMBER-02A is "all_except" that prefix. This script lives at
 scripts/energy_proxy_logger.py, outside the exclusive prefixes, so the file header
 is EMBER-02A; the receipts it writes land inside them, and the authority
@@ -149,12 +149,12 @@ def _utc_stamp() -> str:
 
 
 def invariant_sha256() -> str:
-    """sha256 of INVARIANT.md -- the F3 stamp every receipt carries (sec5.1 item 9).
+    """sha256 of docs/authority/INVARIANT.md -- the F3 stamp every receipt carries (sec5.1 item 9).
 
     Computed from the file rather than pinned as a literal: a hardcoded copy
     would keep validating after the invariant it claims to stamp had changed.
     """
-    return hashlib.sha256((REPO_ROOT / "INVARIANT.md").read_bytes()).hexdigest()
+    return hashlib.sha256((REPO_ROOT / "docs/authority/INVARIANT.md").read_bytes()).hexdigest()
 
 
 # ---------------------------------------------------------------------------

@@ -343,8 +343,8 @@ def build_receipt(
         "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
         "sha_convention": SHA_CONVENTION,
         "repo": str(repo),
-        "goal_path": str(repo / "GOAL.md"),
-        "goal_source_sha256": sha256_file(repo / "GOAL.md") if (repo / "GOAL.md").exists() else None,
+        "goal_path": str(repo / "docs/authority/GOAL.md"),
+        "goal_source_sha256": sha256_file(repo / "docs/authority/GOAL.md") if (repo / "docs/authority/GOAL.md").exists() else None,
         "fresh_rows_path": str(fresh_rows_path),
         "fresh_rows_sha256": sha256_file(fresh_rows_path),
         "external_task_source": {
@@ -407,7 +407,7 @@ def build_receipt(
             "task9_pr": 487,
         },
         "floor_contract_preservation_references": [
-            "docs/ember-floor-contract.md",
+            "docs/contracts/ember-floor-contract.md",
             "nc2-own-technique-contract.md",
             "scripts/train_multimodal_v0.py §6 action log",
         ],

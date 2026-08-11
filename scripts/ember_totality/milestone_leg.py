@@ -25,7 +25,7 @@ DISCLOSED, live finding (not a synthetic hypothetical -- reproduced against toda
 tree the same session this module was authored): running
 `python scripts/check_milestone_reconciliation.py` against the live goalforge tree RIGHT
 NOW returns FAIL ("ember-completeness.md: expected exactly ids C1..C55, got missing=[]
-extra=[0]") because docs/ember-completeness.md carries a C0 row (line 79) whose leading
+extra=[0]") because docs/contracts/ember-completeness.md carries a C0 row (line 79) whose leading
 `| C0 |` cell collides with check_milestone_reconciliation.py's own row-id regex
 (_COMPLETENESS_ROW_RE, matching a leading pipe, "C", one or more digits, a pipe) --
 that regex captures "C0" as legacy-milestone-id 0 even though the row is a

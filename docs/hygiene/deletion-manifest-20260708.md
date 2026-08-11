@@ -10,7 +10,7 @@ acceptance criteria).
 > The 2026-08-05 docs consolidation (#1441) later moved many of the listed `docs/`
 > files into `docs/archive/`, `docs/charter/`, `docs/custody/`, `docs/design/`,
 > `docs/ledgers/`, and `docs/ember-restart/` — resolve any listed name against
-> `docs/README.md`'s current layout.
+> `docs/DOCS-README.md`'s current layout.
 
 Scope: `docs/` (205 tracked files) and `scripts/` (601 tracked files),
 reference-scanned repo-wide; the untracked receipts on disk; and `.git`

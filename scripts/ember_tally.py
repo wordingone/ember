@@ -1,4 +1,4 @@
-"""ember_tally.py — completeness tally over docs/ember-completeness.md (#337).
+"""ember_tally.py — completeness tally over docs/contracts/ember-completeness.md (#337).
 
 Parses the manifest table, validates receipt pointers via receipt_check,
 classifies rows, emits receipts/tally-<ts>.json.
@@ -16,7 +16,7 @@ Receipt validation (for rows with a locatable receipt):
   Missing or failing receipt on a DONE row downgrades to 'open'.
 
 --selftest : run on a synthetic manifest; exits nonzero on any failure.
---run      : run on the real docs/ember-completeness.md (dry output).
+--run      : run on the real docs/contracts/ember-completeness.md (dry output).
 --emit     : --run + write tally receipt to receipts/.
 """
 
@@ -309,7 +309,7 @@ def main():
     ap.add_argument("--selftest", action="store_true",
                     help="run on synthetic manifest; exits nonzero on any failure")
     ap.add_argument("--run", action="store_true",
-                    help="tally over real docs/ember-completeness.md (dry)")
+                    help="tally over real docs/contracts/ember-completeness.md (dry)")
     ap.add_argument("--emit", action="store_true",
                     help="--run + write tally receipt to receipts/")
     args = ap.parse_args()

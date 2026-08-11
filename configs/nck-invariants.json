@@ -13,13 +13,13 @@
     },
     {
       "label": "goal-md",
-      "path": "GOAL.md",
-      "sha256": "5671e68c3b91c38737bd46c7c1b61b727af8ab2b4665307664dcc8d19603a4ef"
+      "path": "docs/authority/GOAL.md",
+      "sha256": "ba1c19237990be77da8a1e62a94ae0781348e8f2fd38223bcd41888838567653"
     },
     {
       "label": "receipts-only-truth-statement",
-      "path": "GOAL.md",
-      "sha256": "5671e68c3b91c38737bd46c7c1b61b727af8ab2b4665307664dcc8d19603a4ef"
+      "path": "docs/authority/GOAL.md",
+      "sha256": "ba1c19237990be77da8a1e62a94ae0781348e8f2fd38223bcd41888838567653"
     },
     {
       "label": "invariants-py",

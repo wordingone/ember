@@ -95,10 +95,10 @@ LIVE_ISSUE_JSON_FIELDS = (
 LIVE_ISSUE_LIMIT = 1000
 RECEIPT_WORKSTREAM_ID = "EMBER-02A"
 
-# `goal_id` in this receipt is NOT this receipt's subject. Per GOAL.md
+# `goal_id` in this receipt is NOT this receipt's subject. Per docs/authority/GOAL.md
 # section 11 ("Every future pull request, experiment, receipt, ...artifact
 # names the active goal_id and the next executed model or capability outcome
-# it directly enables") and GOAL.md's `required_future_artifact_fields`
+# it directly enables") and docs/authority/GOAL.md's `required_future_artifact_fields`
 # (["goal_id", "workstream_id", "next_executed_outcome"]), every artifact's
 # `goal_id` field records the CURRENTLY ACTIVE authority goal that artifact
 # was produced under and directly enables -- today that is ACTIVE_GOAL_ID

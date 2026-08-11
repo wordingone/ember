@@ -23,7 +23,7 @@ verifier is `scripts/verify_authority_supersession_crosswalk.py`.
   per-mandate identities were never stored.
 - Seven reported documentation-divergence slots. Four are recoverable from the
   issue body; three remain explicit custody gaps.
-- M1 through M55 from `docs/ember-completeness.md`.
+- M1 through M55 from `docs/contracts/ember-completeness.md`.
 - Every legacy condition parsed from `docs/spec/conditions-v1.md`, including
   C-MANIFEST and C-MILE.
 
@@ -55,7 +55,7 @@ model, capability, milestone, or current authority goal is complete.
 ## Current authority
 
 The only legal current targets are the exact D identifiers in
-`docs/ember-authority-matrix.md`, the twelve version-controlled EMBER milestone
+`docs/authority/ember-authority-matrix.md`, the twelve version-controlled EMBER milestone
 contracts, and `HISTORICAL_ORPHANED`. The verifier checks those target sets
 against the live files, checks every evidence byte hash, requires exact
 closed-world schemas, rejects missing or duplicate source rows, and recomputes
