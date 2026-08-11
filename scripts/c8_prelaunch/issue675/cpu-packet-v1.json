@@ -4,7 +4,7 @@
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "schema_version": "q2-actual-update-cpu-packet-v1",
   "issue": 675,
-  "reviewed_source_master": "a41b085c78d1f7d66c7958cb845d560882c66148",
+  "reviewed_source_master": "8cd024f755563943847ed2aa1824fb625fbef682",
   "artifacts": [
     {"path": "capture-manifest-schema-v1.json", "sha256": "fda8abe28c82b9a9971b7b15a1d2e3252e039b9e883adefa9097ec9585d95b2b", "bytes": 8099},
     {"path": "pre-dispatch-audit-v1.json", "sha256": "546d6fe677fdd3e2a2fca73a9acb3e71b3ce319f9694c1e9a7f6413a589b3de4", "bytes": 2573},
@@ -18,7 +18,7 @@
     {"path": "q2_dispatch_manifest.py", "sha256": "ed544e70b6d162beb4971da4fca5072a2229b3e310cae7aafa5b67ec9025d347", "bytes": 11746},
     {"path": "q2_event_inputs.py", "sha256": "eea476dc11191963665835aca9d075ea9654fb6feb1ea98fb38105e68508493e", "bytes": 10694},
     {"path": "q2_governed_event_producer.py", "sha256": "6a11c57eae5adea3116768fcff4fc4cfa2a6a84435c29d31e191063a637bff92", "bytes": 10496},
-    {"path": "q2_input_manifest_builder.py", "sha256": "8d66cce51982e6bbe11e3d3d60298be9a08761d94013286b078fdb51b3e0309e", "bytes": 17411},
+    {"path": "q2_input_manifest_builder.py", "sha256": "8304b9ffcf2fdfcfc159712f8356afa46aefed1b247c10b08a43ad38127f0eec", "bytes": 17749},
     {"path": "q2_measured_dry_run.py", "sha256": "e99c143f3a819368ebfe68b68761b80d89fb99190c854d0ff997d1195b10a4a6", "bytes": 6363},
     {"path": "q2_host_commit_simulation.py", "sha256": "cc67eadb430bdcc6283cc94c04a37a5af655bb7517736739a946dfb7f065a95f", "bytes": 6954},
     {"path": "q2_host_commit_probe.py", "sha256": "2da8074ee183abc8d906fceb978f38ccc083e893d7ec311aaa3ba9fb7fc99ac0", "bytes": 8645},
@@ -38,7 +38,7 @@
     {"path": "tests/test_dispatch_manifest_plan.py", "sha256": "29be9c8e1ee67337bb309dde306497ac07ace3582296f57fdea252c852a0bc99", "bytes": 11597},
     {"path": "tests/test_event_inputs.py", "sha256": "5c818f44af6781b39668640c7631f0848a1c56db0100a416381b97ffd4782ca5", "bytes": 6712},
     {"path": "tests/test_governed_event_producer.py", "sha256": "8547616d0079f5e14e3074945ba9d31a08c334b7d08cfa4795402e31713d7c7f", "bytes": 6371},
-    {"path": "tests/test_input_manifest_builder.py", "sha256": "50f50e020ad263b17e2807d66ed0c5ca67f799941fdb196ee28ed48d48edb35a", "bytes": 13644},
+    {"path": "tests/test_input_manifest_builder.py", "sha256": "72380e9f62dc48d8e41347a63721abce5c303284add334bc738bd7663b449859", "bytes": 14758},
     {"path": "tests/test_measured_dry_run.py", "sha256": "7d11ea185c6dd5bc6f809dbf2a5194157ecaffa36323c213cd55c49b8b8fa212", "bytes": 4066},
     {"path": "tests/test_host_commit_simulation.py", "sha256": "c8c7014b6518abb86206ebcb26f0f18ec3ea8d02326722ed720168b7857ba5d5", "bytes": 4220},
     {"path": "tests/test_host_commit_probe.py", "sha256": "783f32452ef9dd07365ef72f310a91fb76004c357bd7b76eda4049e6c6d113ac", "bytes": 3733},
@@ -51,13 +51,13 @@
     {"path": "tests/test_terminal_chain.py", "sha256": "e3f75f9c647fd9a0172cc3aa734ce77e40c0136aa293d8884b452130347bf97b", "bytes": 6535}
   ],
   "verification": {
-    "pytest": "128 passed in 6.30s (-p no:cacheprovider)",
+    "pytest": "130 passed in 6.48s (-p no:cacheprovider)",
     "compiled_python_sources": 20,
     "json_schema_parse": true
   },
   "decision": "REFUSE_CURRENT_HEAD",
   "remaining_falsifiers": [
-    "CURRENT_GOVERNED_PRODUCER_NOT_MERGED",
+    "GOVERNED_DISPATCH_EXECUTION_RECEIPT_ABSENT",
     "HOST_COMMIT_MEASUREMENT_RECEIPT_ABSENT",
     "ACTUAL_GPU_EVENT_NOT_EXECUTED",
     "INDEPENDENT_EVENT_REVIEW_ABSENT",
