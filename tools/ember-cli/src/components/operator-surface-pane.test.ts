@@ -470,7 +470,7 @@ describe("OperatorSurfacePane", () => {
     pause.props.onClick();
     expect(calls).toEqual([{ action: "PAUSE", runId: "run-control" }]);
   });
-  test("all four lifecycle actions expose a real click handler exactly when enabled", () => {
+  test("START preflight dispatches directly while state-changing controls open review first", () => {
     const cases = [
       { action: "START", telemetry: telemetry(), nowMs: Date.parse("2026-07-17T17:30:02.000Z"), runId: undefined },
       { action: "PAUSE", telemetry: telemetry({ recentEvents: [train("run-pause", 1, "2026-07-17T17:30:01.000Z", 2)] }), nowMs: Date.parse("2026-07-17T17:30:02.000Z"), runId: "run-pause" },
@@ -478,12 +478,13 @@ describe("OperatorSurfacePane", () => {
       { action: "RESTART", telemetry: telemetry({ recentEvents: [train("run-restart", 1, "2026-07-17T17:30:01.000Z", 2)] }), nowMs: Date.parse("2026-07-17T18:30:02.000Z"), runId: "run-restart" },
     ] as const;
     for (const candidate of cases) {
-      const calls: Array<{ action: string; runId?: string }> = [];
+      const calls: Array<{ kind: "dispatch" | "review"; action: string; runId?: string }> = [];
       const element = OperatorSurfacePane({
         telemetry: candidate.telemetry,
         activityLines: [], width: 80, height: 24, terminalColumns: 80, terminalRows: 24,
         nowMs: candidate.nowMs,
-        onControl: (action, runId) => calls.push({ action, runId }),
+        onControl: (action, runId) => calls.push({ kind: "dispatch", action, runId }),
+        onControlOpen: (action, runId) => calls.push({ kind: "review", action, runId }),
       });
       const controlRow = ((element as any).props.children.props.children as any[])
         .find((child) => child?.key === "controls");
@@ -491,8 +492,60 @@ describe("OperatorSurfacePane", () => {
       const control = controls.find((item) => item.props.children.props.children === `  [${candidate.action}]`);
       expect(typeof control.props.onClick).toBe("function");
       control.props.onClick();
-      expect(calls).toEqual([{ action: candidate.action, runId: candidate.runId }]);
+      expect(calls).toEqual([{
+        kind: candidate.action === "START" ? "dispatch" : "review",
+        action: candidate.action,
+        runId: candidate.runId,
+      }]);
     }
+  });
+
+  test("train preserves its preflight membrane while other selected processes review before dispatch", () => {
+    for (const [selectedProcess, expectedKind] of [["train", "dispatch"], ["benchmark", "review"]] as const) {
+      const calls: string[] = [];
+      const element = OperatorSurfacePane({
+        telemetry: telemetry(),
+        activityLines: [], width: 80, height: 24, terminalColumns: 80, terminalRows: 24,
+        nowMs: Date.parse("2026-07-17T17:30:02.000Z"),
+        selectedProcess,
+        onControl: () => calls.push("dispatch"),
+        onControlOpen: () => calls.push("review"),
+      });
+      const controlRow = ((element as any).props.children.props.children as any[])
+        .find((child) => child?.key === "controls");
+      const start = (controlRow.props.children as any[])
+        .find((item) => item.props.children.props.children === "  [START]");
+      start.props.onClick();
+      expect(calls).toEqual([expectedKind]);
+    }
+  });
+
+  test("renders the same authority-bound review dialog for PAUSE/RESUME/RESTART and confirm-stage START", () => {
+    const parameters = {
+      seed: 83,
+      steps: 200,
+      sequenceLength: 4096,
+      checkpointInterval: 50,
+      writeBudgetBytes: 4096,
+      runId: "run-review",
+    };
+    const element = OperatorSurfacePane({
+      telemetry: telemetry({ recentEvents: [train("run-review", 1, "2026-07-17T17:30:01.000Z", 2)] }),
+      activityLines: [], width: 80, height: 24, terminalColumns: 80, terminalRows: 24,
+      nowMs: Date.parse("2026-07-17T17:30:02.000Z"),
+      controlDialogOpen: true,
+      controlDialogAction: "PAUSE",
+      controlDialogParameters: parameters,
+      controlDialogSourcePath: "B:/authority/run-spec.json",
+      onControlConfirm: () => {},
+      onControlCancel: () => {},
+    });
+    const children = ((element as any).props.children.props.children as any[]);
+    const dialog = children.find((child) => child?.key === "control-dialog");
+    expect(dialog).toBeDefined();
+    expect(dialog.props.action).toBe("PAUSE");
+    expect(dialog.props.parameters).toEqual(parameters);
+    expect(dialog.props.sourcePath).toBe("B:/authority/run-spec.json");
   });
   test("RED->GREEN: a metric with zero samples on an actively RUNNING run reads AWAITING FIRST SAMPLE, not SOURCE UNBOUND", () => {
     // The run IS live (a train_step arrived just now, well inside ACTIVE_RUN_TTL_MS) and IS
