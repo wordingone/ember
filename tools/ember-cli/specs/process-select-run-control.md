@@ -12,6 +12,7 @@ Issue: #1475 (operator directive 2026-08-05)
 
 Consumer: `tools/ember-cli/src/services/process-select.ts`
 Consumer: `tools/ember-cli/src/components/start-parameters.ts`
+Consumer: `tools/ember-cli/src/services/operator-control-notice.ts`
 
 ## Operator mandate this node implements
 
@@ -58,6 +59,12 @@ Menu layout reuses `resolveCommandBarPage` row-budget tiers; the pane counts the
 menu rows in its fixed chrome so chart cards stay truthful; controls wrap and never truncate at
 any supported width.
 
+Live fail-closed control refusals are projected through the existing operator receipt path and
+`operator-control-notice.ts`. Repeated copies of the same refusal collapse into one live line
+that retains its receipt path; a distinct refusal replaces that live line rather than relabeling
+stale scrollback. The notice is presentation-only and cannot dispatch, steer, retry, or create a
+second execution authority.
+
 ## Keyboard path and workaround
 
 The pointer is the primary path, but START is not pointer-only. After selecting a process, press
@@ -85,3 +92,5 @@ and Enter/Space activation are separately pinned by
    proven end-to-end with a probe command and with the real /train membrane (preflight once,
    offer visible, confirm dispatches the exact line, consumer runs once).
 3. Width sweep 26–60 columns: no label truncates; narrow widths wrap whole labels.
+4. Repeated fail-closed refusals collapse into one live receipt-attributed notice while distinct
+   refusals remain distinguishable and stale scrollback is not rewritten.
