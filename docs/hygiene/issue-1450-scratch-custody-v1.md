@@ -19,6 +19,8 @@ run:
 ```text
 python -B tools/scratch_custody.py census --root <repo-root> --output <manifest> --label issue-1450 --max-bytes <bounded-cap> --max-files <bounded-count>
 python -B tools/scratch_custody.py guard --root <repo-root> --manifest <manifest>
+python -B tools/scratch_custody.py disposition --manifest <manifest> --annotations <annotations> --output <disposition>
+python -B tools/scratch_custody.py disposition-guard --manifest <manifest> --disposition <disposition>
 ```
 
 `census` refuses symlinks/reparse points, path aliases, unreadable files,
@@ -38,14 +40,34 @@ cleanup, data movement, acquisition, model, training, GPU, or result claim is
 made.  Any later disposition must cite this manifest and a separately reviewed
 deletion/annex plan.
 
+`disposition` projects every `top_level` row into an exact set-equal custody
+table.  Missing annotations become `producer=UNKNOWN`,
+`issue_or_run=UNKNOWN`, `identical_copy=UNRESOLVED`, and an empty reference
+list.  Supplied annotations have a closed schema and cannot name a path outside
+the census. Manifest and disposition rows are admitted only in lexicographic
+path order, and reference lists are canonical sorted unique arrays. Every
+generated row is `KEEP_UNRESOLVED`; `disposition-guard`
+reopens the manifest and refuses missing, duplicate, foreign, drifted, or
+`MOVE_READY` rows.  The disposition therefore does not grant move or deletion
+authority.  It records the unresolved work required before a separately
+reviewed relocation or deletion proposal could be considered.
+The public disposition also carries the scanned source commit, source-status
+digest, and exact total file/byte counts; its manifest self-hash binds the
+full raw inventory, which may remain in restricted custody when an exact deep
+filename is prohibited by repository policy.
+
 ## Closed manifest fields
 
-The exact top-level fields are `schema_version`, `label`, `target`,
+The exact top-level fields are `schema_version`, `authority`, `label`, `target`,
 `source_commit`, `source_status_sha256`, `policy`, `entries`, `top_level`,
 `summary`, and `manifest_sha256`.  `entries` is an exact relative-file
 inventory; `top_level` is a deterministic per-directory projection; the
 self-hash excludes only `manifest_sha256`.  `policy.read_only` and
 `policy.reparse_refused` must both be true.
+
+Both census and disposition documents bind exactly one `EMBER-02` /
+`EMBER-02A` authority tuple and the live next-executed-outcome string.  A
+missing, foreign, or altered authority tuple is refused before acceptance.
 
 This boundary preserves the existing Ember Lab/repo-guard authority.  It adds
 no cleanup daemon, launcher, receipt family, or parallel deletion authority.

@@ -3,9 +3,19 @@
   "$id": "ember-scratch-custody-v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "label", "target", "source_commit", "source_status_sha256", "policy", "entries", "top_level", "summary", "manifest_sha256"],
+  "required": ["schema_version", "authority", "label", "target", "source_commit", "source_status_sha256", "policy", "entries", "top_level", "summary", "manifest_sha256"],
   "properties": {
     "schema_version": {"const": "ember-scratch-custody-v1"},
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goal_id", "workstream_id", "next_executed_outcome"],
+      "properties": {
+        "goal_id": {"const": "EMBER-02"},
+        "workstream_id": {"const": "EMBER-02A"},
+        "next_executed_outcome": {"const": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"}
+      }
+    },
     "label": {"type": "string", "minLength": 1},
     "target": {"const": "scratch"},
     "source_commit": {"type": "string", "minLength": 1},

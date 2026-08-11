@@ -34,8 +34,9 @@ def test_census_is_closed_deterministic_and_path_free(tmp_path: Path):
     manifest = scratch_custody.build_manifest(root, label="issue-1450", max_bytes=1024)
     assert set(manifest) == {
         "schema_version", "label", "target", "source_commit", "source_status_sha256",
-        "policy", "entries", "top_level", "summary", "manifest_sha256",
+        "authority", "policy", "entries", "top_level", "summary", "manifest_sha256",
     }
+    assert manifest["authority"] == scratch_custody.AUTHORITY
     assert manifest["schema_version"] == scratch_custody.SCHEMA_VERSION
     assert manifest["entries"][0]["path"] == "run-a/result.bin"
     assert manifest["summary"] == {"files": 2, "bytes": 10}
@@ -59,7 +60,7 @@ def test_guard_refuses_file_drift_and_manifest_tamper(tmp_path: Path):
     manifest = scratch_custody.build_manifest(root, label="issue-1450", max_bytes=1024)
     manifest["entries"][0]["sha256"] = "0" * 64
     manifest["manifest_sha256"] = scratch_custody.manifest_sha256(manifest)
-    with pytest.raises(scratch_custody.CensusError, match="entry bytes"):
+    with pytest.raises(scratch_custody.CensusError, match="entry bytes|top-level projection"):
         scratch_custody.validate_manifest(root, manifest)
 
 
@@ -108,3 +109,194 @@ def test_cli_guard_has_no_success_on_tampered_root(tmp_path: Path):
     )
     assert result.returncode != 0
     assert "entry bytes" in result.stderr or "manifest drift" in result.stderr
+
+
+def test_disposition_is_set_equal_to_census_and_defaults_unresolved_rows_to_keep(tmp_path: Path):
+    root = _fixture(tmp_path)
+    manifest = scratch_custody.build_manifest(root, label="issue-1450", max_bytes=1024)
+    disposition = scratch_custody.build_disposition(
+        manifest,
+        {
+            "run-a": {
+                "producer": "scripts/example.py:10",
+                "issue_or_run": "#1450 fixture",
+                "references": ["z-reference", "a-reference", "z-reference"],
+                "identical_copy": "NOT_FOUND",
+            }
+        },
+    )
+
+    assert disposition["schema_version"] == "ember-scratch-disposition-v1"
+    assert disposition["authority"] == scratch_custody.AUTHORITY
+    assert disposition["source_manifest_sha256"] == manifest["manifest_sha256"]
+    assert disposition["source"] == {
+        "commit": manifest["source_commit"],
+        "status_sha256": manifest["source_status_sha256"],
+        "files": manifest["summary"]["files"],
+        "bytes": manifest["summary"]["bytes"],
+    }
+    assert [row["path"] for row in disposition["entries"]] == ["run-a", "run-b"]
+    assert disposition["entries"][0]["producer"] == "scripts/example.py:10"
+    assert disposition["entries"][0]["references"] == ["a-reference", "z-reference"]
+    assert disposition["entries"][0]["disposition"] == "KEEP_UNRESOLVED"
+    assert disposition["entries"][1]["producer"] == "UNKNOWN"
+    assert disposition["entries"][1]["issue_or_run"] == "UNKNOWN"
+    assert disposition["entries"][1]["identical_copy"] == "UNRESOLVED"
+    assert disposition["entries"][1]["disposition"] == "KEEP_UNRESOLVED"
+    assert disposition["summary"] == {
+        "entries": 2,
+        "keep_unresolved": 2,
+        "move_ready": 0,
+    }
+    assert scratch_custody.validate_disposition(manifest, disposition) == disposition
+
+
+def test_disposition_refuses_foreign_annotation_and_tampered_move_credit(tmp_path: Path):
+    root = _fixture(tmp_path)
+    manifest = scratch_custody.build_manifest(root, label="issue-1450", max_bytes=1024)
+    annotation = {
+        "producer": "UNKNOWN",
+        "issue_or_run": "UNKNOWN",
+        "references": [],
+        "identical_copy": "UNRESOLVED",
+    }
+    with pytest.raises(scratch_custody.CensusError, match="annotation path"):
+        scratch_custody.build_disposition(manifest, {"foreign-run": annotation})
+
+    disposition = scratch_custody.build_disposition(manifest, {})
+    disposition["entries"][0]["disposition"] = "MOVE_READY"
+    disposition["disposition_sha256"] = scratch_custody.disposition_sha256(disposition)
+    with pytest.raises(scratch_custody.CensusError, match="move authority"):
+        scratch_custody.validate_disposition(manifest, disposition)
+
+    disposition = scratch_custody.build_disposition(manifest, {})
+    disposition["source"]["files"] += 1
+    disposition["disposition_sha256"] = scratch_custody.disposition_sha256(disposition)
+    with pytest.raises(scratch_custody.CensusError, match="source binding"):
+        scratch_custody.validate_disposition(manifest, disposition)
+
+    for forged_path in (
+        r"C:\host\producer.py",
+        "C:producer.py",
+        "../foreign/producer.py",
+        "./producer.py",
+        "scripts/../foreign.py",
+    ):
+        annotation["producer"] = forged_path
+        with pytest.raises(scratch_custody.CensusError, match="path-free"):
+            scratch_custody.build_disposition(manifest, {"run-a": annotation})
+
+
+def test_disposition_refuses_duplicate_or_malformed_census_rows(tmp_path: Path):
+    root = _fixture(tmp_path)
+    manifest = scratch_custody.build_manifest(root, label="issue-1450", max_bytes=1024)
+    manifest["top_level"].append(dict(manifest["top_level"][0]))
+    manifest["manifest_sha256"] = scratch_custody.manifest_sha256(manifest)
+
+    with pytest.raises(scratch_custody.CensusError, match="top-level path"):
+        scratch_custody.build_disposition(manifest, {})
+
+
+def test_disposition_rederives_manifest_projection_and_summary(tmp_path: Path):
+    root = _fixture(tmp_path)
+    manifest = scratch_custody.build_manifest(root, label="issue-1450", max_bytes=1024)
+    manifest["top_level"][0]["bytes"] += 1
+    manifest["top_level"][0]["sha256"] = "0" * 64
+    manifest["manifest_sha256"] = scratch_custody.manifest_sha256(manifest)
+    with pytest.raises(scratch_custody.CensusError, match="top-level projection"):
+        scratch_custody.build_disposition(manifest, {})
+
+    manifest = scratch_custody.build_manifest(root, label="issue-1450", max_bytes=1024)
+    manifest["summary"]["files"] += 1
+    manifest["summary"]["bytes"] += 1
+    manifest["manifest_sha256"] = scratch_custody.manifest_sha256(manifest)
+    with pytest.raises(scratch_custody.CensusError, match="summary projection"):
+        scratch_custody.build_disposition(manifest, {})
+
+    manifest = scratch_custody.build_manifest(root, label="issue-1450", max_bytes=1024)
+    manifest["entries"].reverse()
+    manifest["top_level"] = scratch_custody._top_level(manifest["entries"])
+    manifest["manifest_sha256"] = scratch_custody.manifest_sha256(manifest)
+    with pytest.raises(scratch_custody.CensusError, match="entry order"):
+        scratch_custody.build_disposition(manifest, {})
+
+    manifest = scratch_custody.build_manifest(root, label="issue-1450", max_bytes=1024)
+    disposition = scratch_custody.build_disposition(manifest, {})
+    disposition["entries"].reverse()
+    disposition["disposition_sha256"] = scratch_custody.disposition_sha256(disposition)
+    with pytest.raises(scratch_custody.CensusError, match="entry order"):
+        scratch_custody.validate_disposition(manifest, disposition)
+
+
+def test_cli_writes_and_guards_closed_disposition_without_move_authority(tmp_path: Path):
+    root = _fixture(tmp_path)
+    manifest_path = tmp_path / "manifest.json"
+    annotations_path = tmp_path / "annotations.json"
+    disposition_path = tmp_path / "disposition.json"
+    scratch_custody.write_manifest(
+        root, manifest_path, label="issue-1450", max_bytes=1024,
+    )
+    annotations_path.write_text("{}", encoding="utf-8")
+    tool = str(Path(__file__).resolve().parents[1] / "tools" / "scratch_custody.py")
+
+    write_result = subprocess.run(
+        [
+            sys.executable, tool, "disposition", "--manifest", str(manifest_path),
+            "--annotations", str(annotations_path), "--output", str(disposition_path),
+        ],
+        text=True,
+        capture_output=True,
+    )
+    assert write_result.returncode == 0, write_result.stderr
+    assert write_result.stdout.strip() == "DISPOSITION_WRITTEN"
+
+    guard_result = subprocess.run(
+        [
+            sys.executable, tool, "disposition-guard", "--manifest", str(manifest_path),
+            "--disposition", str(disposition_path),
+        ],
+        text=True,
+        capture_output=True,
+    )
+    assert guard_result.returncode == 0, guard_result.stderr
+    assert guard_result.stdout.strip() == "DISPOSITION_GUARD_PASS"
+    written = json.loads(disposition_path.read_text(encoding="utf-8"))
+    assert written["summary"] == {"entries": 2, "keep_unresolved": 2, "move_ready": 0}
+
+    written["entries"][0]["disposition"] = "MOVE_READY"
+    written["disposition_sha256"] = scratch_custody.disposition_sha256(written)
+    disposition_path.write_text(json.dumps(written), encoding="utf-8")
+    refused = subprocess.run(
+        [
+            sys.executable, tool, "disposition-guard", "--manifest", str(manifest_path),
+            "--disposition", str(disposition_path),
+        ],
+        text=True,
+        capture_output=True,
+    )
+    assert refused.returncode != 0
+    assert "move authority" in refused.stderr
+
+
+def test_disposition_contract_documents_no_move_authority_and_closed_schema():
+    repo = Path(__file__).resolve().parents[1]
+    contract = (repo / "docs" / "hygiene" / "issue-1450-scratch-custody-v1.md").read_text(
+        encoding="utf-8",
+    )
+    schema = json.loads(
+        (repo / "docs" / "hygiene" / "issue-1450-scratch-disposition-v1.schema.json").read_text(
+            encoding="utf-8",
+        )
+    )
+
+    assert "disposition-guard" in contract
+    assert "KEEP_UNRESOLVED" in contract
+    assert "does not grant move or deletion authority" in " ".join(contract.split())
+    assert schema["additionalProperties"] is False
+    assert set(schema["required"]) == {
+        "schema_version", "authority", "source_manifest_sha256", "source", "entries", "summary",
+        "disposition_sha256",
+    }
+    assert schema["properties"]["entries"]["items"]["properties"]["disposition"] == {
+        "const": "KEEP_UNRESOLVED",
+    }
