@@ -5,13 +5,13 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $installer = Join-Path $PSScriptRoot "install-ember-desktop.ps1"
-$launcher = Join-Path $PSScriptRoot "launch-installed-ember.ps1"
 $temporary = Join-Path ([IO.Path]::GetTempPath()) ("ember-desktop-selftest-" + [Guid]::NewGuid().ToString("N"))
 $install = Join-Path $temporary "install"
 $desktop = Join-Path $temporary "desktop"
 $menu = Join-Path $temporary "menu"
 $fake = Join-Path $temporary "Ember.exe"
 $repository = Join-Path $temporary "repository"
+$placementLog = Join-Path $temporary "window-placement.log"
 
 function Assert-True([bool]$Condition, [string]$Message) { if (-not $Condition) { throw $Message } }
 function Invoke-Deploy([string]$Action) {
@@ -69,6 +69,10 @@ public static class EmberDesktopExitProbe {
     Assert-True (Test-Path (Join-Path $desktop "Ember.lnk")) "Desktop shortcut absent."
     Assert-True (Test-Path (Join-Path $menu "Ember.lnk")) "Start Menu shortcut absent."
     Assert-True (Test-Path (Join-Path $install "versions\$a\version.json")) "Version record absent."
+    $installedLauncher = Join-Path $install "launch-installed-ember.ps1"
+    $installedPlacement = Join-Path $install "ember-window-placement.ps1"
+    Assert-True (Test-Path -LiteralPath $installedLauncher -PathType Leaf) "Installed launcher absent."
+    Assert-True (Test-Path -LiteralPath $installedPlacement -PathType Leaf) "Installed window-placement library absent."
     $shell = New-Object -ComObject WScript.Shell
     try {
         $shortcut = $shell.CreateShortcut((Join-Path $desktop "Ember.lnk"))
@@ -78,11 +82,22 @@ public static class EmberDesktopExitProbe {
     }
     finally { [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell) | Out-Null }
 
+    @"
+function Get-EmberHostWindowHandle {
+    Add-Content -LiteralPath '$($placementLog.Replace("'", "''"))' -Value 'bind'
+    return [IntPtr]1
+}
+function Set-EmberWindowToLeftWorkArea([IntPtr]`$WindowHandle) {
+    Add-Content -LiteralPath '$($placementLog.Replace("'", "''"))' -Value 'place'
+    return [pscustomobject]@{ X = 0; Y = 0; Width = 1; Height = 1 }
+}
+"@ | Set-Content -LiteralPath $installedPlacement -Encoding UTF8
     $launchProcess = Start-Process -FilePath "powershell.exe" -ArgumentList @(
-        "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", $launcher,
+        "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", $installedLauncher,
         "-InstallRoot", $install
     ) -Wait -PassThru -WindowStyle Hidden
     Assert-True ($launchProcess.ExitCode -eq 23) "Installed launcher did not preserve the admitted executable exit code."
+    Assert-True ((Get-Content -LiteralPath $placementLog) -join "," -eq "bind,place") "Installed launcher did not bind and place its host window before application launch."
 
     # Idempotent same-version install.
     Invoke-Deploy "Install"
@@ -112,7 +127,7 @@ public static class EmberDesktopExitProbe {
     $bad | Add-Member -NotePropertyName foreign -NotePropertyValue 1
     $bad | ConvertTo-Json | Set-Content (Join-Path $install "current.json") -Encoding UTF8
     $env:EMBER_INSTALLED_LAUNCH_LIBRARY_ONLY = "1"
-    . $launcher
+    . $installedLauncher
     $closed = $false
     try { Read-EmberInstalledManifest $install } catch { $closed = $true }
     Assert-True $closed "Unknown manifest field was accepted."

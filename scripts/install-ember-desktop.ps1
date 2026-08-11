@@ -180,6 +180,7 @@ function Install-StableFiles([string]$Root) {
     # Complete every other fallible stable-file write while the legacy authority marker
     # is still intact. The marker transition below is the final publication boundary.
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot "launch-installed-ember.ps1") -Destination (Join-Path $Root "launch-installed-ember.ps1") -Force
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot "ember-window-placement.ps1") -Destination (Join-Path $Root "ember-window-placement.ps1") -Force
     @(
         '@echo off'
         'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0launch-installed-ember.ps1"'
