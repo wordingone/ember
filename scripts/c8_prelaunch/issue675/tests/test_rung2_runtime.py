@@ -251,3 +251,73 @@ def test_fake_quant_restores_prior_layers_when_snapshot_fails_mid_apply(monkeypa
     for name, parameter in model.named_parameters():
         expected, pointer = identity[name]
         assert parameter is expected and parameter.data_ptr() == pointer
+
+
+def test_target_only_gradient_matches_full_backward_without_populating_parameter_grads():
+    module = _load()
+    torch.manual_seed(23)
+    reference = TinyEventModel()
+    candidate = TinyEventModel()
+    candidate.load_state_dict(reference.state_dict())
+
+    reference.zero_grad(set_to_none=True)
+    reference_loss, _ = module._losses(
+        model=reference,
+        microsteps=_batch(),
+        config=_cfg(),
+        device="cpu",
+        backward=True,
+    )
+    expected = reference.gate_proj.weight.grad.detach().float().clone()
+
+    entered = []
+
+    class SeenContext:
+        def __enter__(self):
+            entered.append(True)
+        def __exit__(self, *_args):
+            return False
+
+    module._saved_tensor_context = lambda _device: SeenContext()
+    actual, actual_loss, _ = module.compute_frozen_batch_gradient(
+        model=candidate,
+        microsteps=_batch(),
+        config=_cfg(),
+        target_name="gate_proj.weight",
+        device="cpu",
+    )
+
+    assert entered == [True, True]
+    assert torch.allclose(actual, expected, rtol=1e-6, atol=1e-7)
+    assert actual_loss == pytest.approx(float(reference_loss.detach()), rel=1e-6)
+    assert all(parameter.grad is None for parameter in candidate.parameters())
+
+
+def test_target_only_gradient_failure_leaves_no_parameter_grads_and_restores_qat(monkeypatch):
+    module = _load()
+    torch.manual_seed(29)
+    model = TinyEventModel()
+    baseline = _state(model)
+    original_grad = torch.autograd.grad
+    calls = 0
+
+    def fail_second(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("injected-target-grad-failure")
+        return original_grad(*args, **kwargs)
+
+    monkeypatch.setattr(torch.autograd, "grad", fail_second)
+    with pytest.raises(RuntimeError, match="injected-target-grad-failure"):
+        module.compute_frozen_batch_gradient(
+            model=model,
+            microsteps=_batch(),
+            config=_cfg(qat=True),
+            target_name="gate_proj.weight",
+            device="cpu",
+        )
+
+    assert calls == 2
+    assert all(parameter.grad is None for parameter in model.parameters())
+    assert all(torch.equal(_state(model)[key], baseline[key]) for key in baseline)

@@ -11,6 +11,7 @@ and target-only paired-loss replay required by the signed #675 contract.
 from __future__ import annotations
 
 import math
+from contextlib import nullcontext
 from typing import Mapping, Sequence
 
 import torch
@@ -251,6 +252,67 @@ def _losses(
     return torch.stack(losses).mean(), "cut_ce_chunked"
 
 
+def _saved_tensor_context(device: str):
+    """Offload autograd-saved CUDA tensors without changing forward math."""
+
+    return (
+        torch.autograd.graph.save_on_cpu(pin_memory=False)
+        if torch.device(device).type == "cuda"
+        else nullcontext()
+    )
+
+
+def _target_only_gradient(
+    *,
+    model: torch.nn.Module,
+    microsteps: Sequence[Mapping[str, object]],
+    config: Mapping[str, object],
+    target: torch.Tensor,
+    device: str,
+) -> tuple[torch.Tensor, torch.Tensor, str]:
+    """Differentiate one target while keeping saved activations off CUDA."""
+
+    qat, mtp_enabled, mtp_weight, n_mtp = _runtime_config(config)
+    rows = _validated_microsteps(microsteps, n_mtp=n_mtp)
+    if any(isinstance(module, torch.nn.Dropout) and module.p != 0 for module in model.modules()):
+        _refuse("RUNTIME_NONDETERMINISTIC_DROPOUT")
+    gradient = torch.zeros_like(target, device="cpu", dtype=torch.float32)
+    losses = []
+    for x, y0, y_mtp in rows:
+        saved = _apply_fake_quant(model) if qat else []
+        try:
+            with _saved_tensor_context(device):
+                hidden = model.backbone(x.to(device))
+                flat = hidden.reshape(-1, hidden.shape[-1])
+                primary, _ = chunked_cross_entropy(
+                    flat, model.head.weight, y0.to(device).reshape(-1)
+                )
+                mtp_losses = []
+                if mtp_enabled:
+                    if len(model.mtp_heads) != n_mtp:
+                        _refuse("RUNTIME_MTP_HEAD_MISMATCH")
+                    for index, head in enumerate(model.mtp_heads):
+                        value, _ = chunked_cross_entropy(
+                            flat, head.weight, y_mtp[index].to(device).reshape(-1)
+                        )
+                        mtp_losses.append(value)
+                loss = primary
+                if mtp_losses:
+                    loss = primary + mtp_weight * torch.stack(mtp_losses).mean()
+                if not torch.isfinite(loss):
+                    _refuse("RUNTIME_LOSS_NONFINITE")
+                (row_gradient,) = torch.autograd.grad(
+                    loss / len(rows), target, allow_unused=False
+                )
+            gradient.add_(
+                row_gradient.detach().to(device="cpu", dtype=torch.float32)
+            )
+            losses.append(loss.detach().to(device="cpu"))
+        finally:
+            _restore_weights(saved)
+    return gradient, torch.stack(losses).mean(), "cut_ce_chunked"
+
+
 def compute_frozen_batch_gradient(
     *,
     model: torch.nn.Module,
@@ -272,16 +334,14 @@ def compute_frozen_batch_gradient(
     model.eval()
     model.zero_grad(set_to_none=True)
     try:
-        loss, implementation = _losses(
+        gradient, loss, implementation = _target_only_gradient(
             model=model,
             microsteps=microsteps,
             config=config,
+            target=target,
             device=device,
-            backward=True,
         )
-        if target.grad is None:
-            _refuse("RUNTIME_TARGET_GRADIENT_MISSING")
-        gradient = target.grad.detach().to(device="cpu", dtype=torch.float32).contiguous().clone()
+        gradient = gradient.contiguous().clone()
         if not torch.isfinite(gradient).all() or gradient.shape != target.shape:
             _refuse("RUNTIME_TARGET_GRADIENT_INVALID")
         return gradient, float(loss.detach().to(device="cpu")), implementation
