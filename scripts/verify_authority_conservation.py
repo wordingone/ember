@@ -135,14 +135,14 @@ REQUIRED_CAPABILITIES = [
 ]
 REQUIRED_RUNGS = [3_000_000_000, 7_000_000_000, 15_000_000_000, 27_000_000_001]
 REQUIRED_SURFACES = [
-    "docs/goal-clear-protocol.md",
-    "docs/nc2-own-technique-contract.md",
-    "docs/ember-floor-contract.md",
-    "docs/goal-mode-mechanism.md",
-    "docs/registry-dispatch-gate-spec-v0.md",
+    "docs/contracts/goal-clear-protocol.md",
+    "docs/contracts/nc2-own-technique-contract.md",
+    "docs/contracts/ember-floor-contract.md",
+    "docs/contracts/goal-mode-mechanism.md",
+    "docs/contracts/registry-dispatch-gate-spec-v0.md",
     "docs/spec/autonomy-relinquishment-ladder-v1.md",
     "docs/spec/conditions-v1.md",
-    "docs/ember-authority-matrix.md",
+    "docs/authority/ember-authority-matrix.md",
     "GOVERNANCE.md",
     "README.md",
     "CONTINUITY.md",
@@ -212,7 +212,15 @@ MUTATION_CLASSES = [
     "selection_path_substitution",
     "historical_execution_reenable",
 ]
-AUTHORITY_MATRIX = "docs/ember-authority-matrix.md"
+AUTHORITY_MATRIX = "docs/authority/ember-authority-matrix.md"
+GOVERNING_SURFACE_MIGRATIONS = {
+    "docs/contracts/goal-clear-protocol.md": "docs/goal-clear-protocol.md",
+    "docs/contracts/nc2-own-technique-contract.md": "docs/nc2-own-technique-contract.md",
+    "docs/contracts/ember-floor-contract.md": "docs/ember-floor-contract.md",
+    "docs/contracts/goal-mode-mechanism.md": "docs/goal-mode-mechanism.md",
+    "docs/contracts/registry-dispatch-gate-spec-v0.md": "docs/registry-dispatch-gate-spec-v0.md",
+    AUTHORITY_MATRIX: "docs/ember-authority-matrix.md",
+}
 HISTORICAL_EXECUTABLES = [
     "scripts/conv_c03_muon_ns3_live.py",
     "scripts/timeshare_pretrain.py",
@@ -319,12 +327,44 @@ def canonical_authority_reference(root: Path, name: str) -> str:
     return name
 
 
+def governing_surface_relative_path(root: Path, canonical_rel: str) -> str:
+    old_rel = GOVERNING_SURFACE_MIGRATIONS.get(canonical_rel)
+    if old_rel is None:
+        return canonical_rel
+    present = [
+        rel
+        for rel in (old_rel, canonical_rel)
+        if (root / rel).exists() or (root / rel).is_symlink()
+    ]
+    if len(present) > 1:
+        raise ValueError(
+            f"duplicate governing surface {canonical_rel}: {', '.join(present)}"
+        )
+    if not present:
+        raise ValueError(
+            f"governing surface {canonical_rel} is absent from both "
+            f"{old_rel} and {canonical_rel}"
+        )
+    selected = root / present[0]
+    if not selected.is_file() or selected.is_symlink():
+        raise ValueError(
+            f"governing surface {canonical_rel} is not a regular file: {present[0]}"
+        )
+    return present[0]
+
+
 def expected_governing_surfaces(root: Path) -> list[str]:
     authority_names = set(AUTHORITY_DOCUMENT_NAMES)
-    return [
-        canonical_authority_reference(root, rel) if rel in authority_names else rel
-        for rel in REQUIRED_SURFACES
-    ]
+    result: list[str] = []
+    for rel in REQUIRED_SURFACES:
+        if rel in authority_names:
+            result.append(canonical_authority_reference(root, rel))
+            continue
+        try:
+            result.append(governing_surface_relative_path(root, rel))
+        except ValueError:
+            result.append(rel)
+    return result
 
 
 def check_authority_path_layout(root: Path, errors: list[dict[str, Any]]) -> None:
@@ -333,6 +373,16 @@ def check_authority_path_layout(root: Path, errors: list[dict[str, Any]]) -> Non
             authority_relative_path(root, name)
         except ValueError as exc:
             code = "authority.path_duplicate" if "duplicate" in str(exc) else "authority.path_missing"
+            errors.append(finding(3, code, str(exc)))
+    for canonical_rel in GOVERNING_SURFACE_MIGRATIONS:
+        try:
+            governing_surface_relative_path(root, canonical_rel)
+        except ValueError as exc:
+            code = (
+                "surface.path_duplicate"
+                if "duplicate" in str(exc)
+                else "surface.path_invalid"
+            )
             errors.append(finding(3, code, str(exc)))
 
 
@@ -677,7 +727,7 @@ def check_governing_surfaces(root: Path, policy: dict[str, Any] | None, errors: 
             finding(
                 3,
                 "surface.hash_contract_invalid",
-                "GOAL.md must hash-bind every required governing surface",
+                "docs/authority/GOAL.md must hash-bind every required governing surface",
             )
         )
         surface_hashes = {}
@@ -719,9 +769,13 @@ def check_governing_surfaces(root: Path, policy: dict[str, Any] | None, errors: 
 def check_manifest(
     root: Path, policy: dict[str, Any] | None, errors: list[dict[str, Any]]
 ) -> None:
-    path = root / AUTHORITY_MATRIX
+    try:
+        matrix_rel = governing_surface_relative_path(root, AUTHORITY_MATRIX)
+    except ValueError:
+        return
+    path = root / matrix_rel
     if not path.is_file():
-        errors.append(finding(2, "manifest.missing", f"{AUTHORITY_MATRIX} is absent"))
+        errors.append(finding(2, "manifest.missing", f"{matrix_rel} is absent"))
         return
     expected_hash = str(
         ((policy or {}).get("conservation_hashes") or {}).get(
@@ -731,7 +785,7 @@ def check_manifest(
     actual_hash = sha256(path)
     if not re.fullmatch(r"[0-9A-F]{64}", expected_hash):
         errors.append(
-            finding(2, "manifest.hash_missing", "GOAL.md matrix hash is absent")
+            finding(2, "manifest.hash_missing", "docs/authority/GOAL.md matrix hash is absent")
         )
     elif actual_hash != expected_hash:
         errors.append(
@@ -1139,7 +1193,7 @@ def parse_graph_selection(
         valid = False
     if policy is None:
         errors.append(
-            finding(4, "selection.graph_policy_missing", "GOAL.md policy is unavailable")
+            finding(4, "selection.graph_policy_missing", "docs/authority/GOAL.md policy is unavailable")
         )
         return None
     expected_workstreams = policy.get("active_workstream_ids")
@@ -1424,7 +1478,51 @@ def check_configs(root: Path, policy: dict[str, Any] | None, errors: list[dict[s
     if not config_root.is_dir():
         errors.append(finding(4, "configs.missing", "configs directory is absent"))
         return
-    paths = sorted(config_root.rglob("*.json"))
+    paths: list[Path] = []
+    sidecar_authorities: dict[str, dict[str, Any]] = {}
+    for path in sorted(config_root.rglob("*.json")):
+        if not path.name.endswith(".authority.json"):
+            paths.append(path)
+            continue
+        rel = path.relative_to(root).as_posix()
+        artifact_rel = rel[: -len(".authority.json")] + ".json"
+        artifact_path = root / artifact_rel
+        try:
+            sidecar = json.loads(read_text(path))
+            authority = sidecar.get("authority") if isinstance(sidecar, dict) else None
+            valid = bool(
+                isinstance(sidecar, dict)
+                and set(sidecar) == {
+                    "schema_version", "artifact_path", "artifact_sha256", "authority"
+                }
+                and sidecar.get("schema_version")
+                == "ember-content-addressed-authority-binding/v1"
+                and sidecar.get("artifact_path") == artifact_rel
+                and artifact_path.is_file()
+                and sidecar.get("artifact_sha256") == sha256(artifact_path).lower()
+                and isinstance(authority, dict)
+                and set(authority) == {
+                    "goal_id",
+                    "workstream_id",
+                    "next_executed_outcome",
+                    "artifact_class",
+                    "execution_authority",
+                }
+                and authority.get("goal_id")
+                == (active_goal or (policy or {}).get("active_goal_id"))
+                and isinstance(authority.get("workstream_id"), str)
+                and bool(authority.get("workstream_id"))
+                and isinstance(authority.get("next_executed_outcome"), str)
+                and bool(authority.get("next_executed_outcome"))
+                and authority.get("artifact_class") == "historical_only"
+                and authority.get("execution_authority") == "denied"
+            )
+        except Exception:
+            valid = False
+        if not valid:
+            errors.append(finding(4, "config.authority_sidecar_invalid", rel))
+        else:
+            sidecar_authorities[artifact_rel] = authority
     if not paths:
         errors.append(finding(4, "configs.empty", "no classified configs found"))
         return
@@ -1442,20 +1540,27 @@ def check_configs(root: Path, policy: dict[str, Any] | None, errors: list[dict[s
             continue
         authority = payload.get("authority") if isinstance(payload, dict) else None
         if not isinstance(authority, dict):
-            external = classifications.get(rel)
+            sidecar_authority = sidecar_authorities.get(rel)
+            if sidecar_authority is not None:
+                authority = sidecar_authority
+                external = None
+            else:
+                external = classifications.get(rel)
             if external is None:
-                errors.append(finding(4, "config.authority_missing", rel))
-                continue
-            actual_hash = sha256(path)
-            if actual_hash != external["sha256"].upper():
-                errors.append(
-                    finding(
-                        4,
-                        "config.classification_hash_mismatch",
-                        f"{rel}: expected {external['sha256']}, got {actual_hash}",
+                if sidecar_authority is None:
+                    errors.append(finding(4, "config.authority_missing", rel))
+                    continue
+            else:
+                actual_hash = sha256(path)
+                if actual_hash != external["sha256"].upper():
+                    errors.append(
+                        finding(
+                            4,
+                            "config.classification_hash_mismatch",
+                            f"{rel}: expected {external['sha256']}, got {actual_hash}",
+                        )
                     )
-                )
-            authority = external
+                authority = external
         for field in ("goal_id", "next_executed_outcome"):
             if not isinstance(authority.get(field), str) or not authority[field].strip():
                 errors.append(finding(4, f"config.{field}_missing", rel))
@@ -1677,10 +1782,10 @@ def check_state(root: Path, errors: list[dict[str, Any]]) -> None:
         return
     pointer_lines = [line.strip() for line in read_text(pointer_path).splitlines() if line.strip()]
     if len(pointer_lines) != 1 or "CONTINUITY.md" not in pointer_lines[0]:
-        errors.append(finding(6, "state.pointer_invalid", "STATE.md must be a one-line CONTINUITY.md pointer"))
+        errors.append(finding(6, "state.pointer_invalid", "docs/authority/STATE.md must be a one-line docs/authority/CONTINUITY.md pointer"))
     rows = parse_markdown_table(read_text(path), 9)
     if not rows:
-        errors.append(finding(6, "state.identity_rows_missing", "no 9-column identity rows in CONTINUITY.md"))
+        errors.append(finding(6, "state.identity_rows_missing", "no 9-column identity rows in docs/authority/CONTINUITY.md"))
         return
     ids = [row[0] for row in rows]
     identities = [row[2] for row in rows]
@@ -2346,9 +2451,118 @@ def check_changed_artifact_bindings(
     changed_paths = {
         rel.replace("\\", "/") for rel in result.stdout.splitlines()
     }
+    range_base: str | None = None
+    range_endpoint: str | None = None
+    if changed_range:
+        left, separator, right = changed_range.partition("..")
+        if separator != ".." or not left or not right or right.startswith("."):
+            errors.append(
+                finding(4, "artifact.changed_range_invalid", changed_range)
+            )
+            return
+        resolved: list[str] = []
+        for revision in (left, right):
+            commit = subprocess.run(
+                ["git", "rev-parse", "--verify", f"{revision}^{{commit}}"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=False,
+            )
+            if commit.returncode != 0 or not commit.stdout.strip():
+                errors.append(
+                    finding(4, "artifact.changed_range_invalid", changed_range)
+                )
+                return
+            resolved.append(commit.stdout.strip())
+        range_base, range_endpoint = resolved
     verified_derived_paths = verified_derived_receipt_index_paths(
         root, changed_paths, errors
     )
+
+    def read_candidate_text(normalized: str, *, optional: bool = False) -> str | None:
+        if staged:
+            object_name = f":{normalized}"
+        elif range_endpoint is not None:
+            object_name = f"{range_endpoint}:{normalized}"
+        else:
+            try:
+                return read_text(root / normalized)
+            except Exception:
+                if optional:
+                    return None
+                raise
+        shown = subprocess.run(
+            ["git", "show", object_name],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        if shown.returncode != 0:
+            if optional:
+                return None
+            raise OSError(shown.stderr.strip() or f"cannot read {object_name}")
+        return shown.stdout
+
+    migration_pairs = (
+        ("docs/ember-authority-matrix.md", "docs/authority/ember-authority-matrix.md"),
+        ("docs/ember-completeness.md", "docs/contracts/ember-completeness.md"),
+        ("docs/registry-dispatch-gate-spec-v0.md", "docs/contracts/registry-dispatch-gate-spec-v0.md"),
+        ("docs/nc2-own-technique-contract.md", "docs/contracts/nc2-own-technique-contract.md"),
+        ("docs/goal-mode-mechanism.md", "docs/contracts/goal-mode-mechanism.md"),
+        ("docs/goal-clear-protocol.md", "docs/contracts/goal-clear-protocol.md"),
+        ("docs/goal-live-session.md", "docs/guides/goal-live-session.md"),
+        ("docs/ember-floor-contract.md", "docs/contracts/ember-floor-contract.md"),
+        ("docs/custody-disposition-20260708.md", "docs/custody/custody-disposition-20260708.md"),
+        ("docs/r1-exit-evidence-inventory-20260805.md", "docs/custody/r1-exit-evidence-inventory-20260805.md"),
+        ("docs/START-HERE.md", "docs/guides/START-HERE.md"),
+        ("docs/PROBLEMS.md", "docs/roadmap/PROBLEMS.md"),
+        ("docs/README.md", "docs/DOCS-README.md"),
+        ("CONTINUITY.md", "docs/authority/CONTINUITY.md"),
+        ("GOVERNANCE.md", "docs/authority/GOVERNANCE.md"),
+        ("INVARIANT.md", "docs/authority/INVARIANT.md"),
+        ("REDACTIONS.md", "docs/authority/REDACTIONS.md"),
+        ("STATE.md", "docs/authority/STATE.md"),
+        ("GOAL.md", "docs/authority/GOAL.md"),
+    )
+
+    def exact_path_migration_only(normalized: str, staged_text: str) -> bool:
+        if staged:
+            prior_revision = "HEAD"
+        elif range_base is not None:
+            prior_revision = range_base
+        else:
+            return False
+        prior = subprocess.run(
+            ["git", "show", f"{prior_revision}:{normalized}"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        if prior.returncode != 0 or prior.stdout == staged_text:
+            return False
+        transformed = prior.stdout
+        sentinels: dict[str, str] = {}
+        for index, (_, destination) in enumerate(migration_pairs):
+            sentinel = f"__EMBER_AUTHORITY_PATH_{index}__"
+            if sentinel in transformed:
+                return False
+            transformed = transformed.replace(destination, sentinel)
+            sentinels[sentinel] = destination
+        for source, destination in migration_pairs:
+            transformed = transformed.replace(source, destination)
+        for sentinel, destination in sentinels.items():
+            transformed = transformed.replace(sentinel, destination)
+        return transformed == staged_text
+
     for rel in sorted(changed_paths):
         normalized = rel.replace("\\", "/")
         if normalized in verified_derived_paths:
@@ -2414,21 +2628,10 @@ def check_changed_artifact_bindings(
             )
             continue
         try:
-            if staged:
-                shown = subprocess.run(
-                    ["git", "show", f":{normalized}"],
-                    cwd=root,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    check=False,
-                )
-                if shown.returncode != 0:
-                    raise OSError(shown.stderr.strip() or "cannot read staged bytes")
-                text = shown.stdout
-            else:
-                text = read_text(root / normalized)
+            candidate_text = read_candidate_text(normalized)
+            if candidate_text is None:
+                raise OSError("cannot read candidate bytes")
+            text = candidate_text
             # The .jsonl branch below narrows `text` to the added rows. A
             # content-addressed sidecar binds the whole artifact, so keep the
             # full bytes before that narrowing happens.
@@ -2460,6 +2663,8 @@ def check_changed_artifact_bindings(
         except Exception as exc:
             errors.append(finding(4, "artifact.binding_unreadable", f"{normalized}: {exc}"))
             continue
+        if exact_path_migration_only(normalized, artifact_text):
+            continue
         # An artifact that cannot carry the binding inline — a generated file
         # with a fixed schema, or frozen evidence whose sha256 another document
         # cites, so that adding fields to it would break the citation — binds
@@ -2469,9 +2674,13 @@ def check_changed_artifact_bindings(
         # current digest, so it cannot be pointed at a file it does not
         # describe, and it cannot survive the artifact being edited.
         sidecar_rel = str(PurePosixPath(normalized).with_suffix(".authority.json"))
-        if sidecar_rel != normalized and (root / sidecar_rel).is_file():
+        sidecar_text = (
+            read_candidate_text(sidecar_rel, optional=True)
+            if sidecar_rel != normalized
+            else None
+        )
+        if sidecar_text is not None:
             try:
-                sidecar_text = read_text(root / sidecar_rel)
                 sidecar = json.loads(sidecar_text)
                 expected_digest = hashlib.sha256(
                     artifact_text.encode("utf-8")
