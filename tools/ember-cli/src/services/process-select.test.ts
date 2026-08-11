@@ -11,6 +11,7 @@ import type { RegistryCommand } from "../types/command-types.ts";
 import { commandButtonActivation, buildCommandButtons } from "./command-buttons.ts";
 import {
   buildProcessOptions,
+  captureStartReview,
   isProcessCommand,
   processCommands,
   processMenuLayout,
@@ -148,6 +149,36 @@ describe("startActivation — what a START click means", () => {
     expect(startActivation(byName("verify"), { process: "train", offerId: "train-7-abc" })).toMatchObject({
       kind: "prefill",
     });
+  });
+
+  test("captured review cannot be retargeted by a later selection change", () => {
+    let selected = byName("verify");
+    let offer = { process: "train", offerId: "stale-train", runSpecPath: "B:/stale.json" };
+    const captured = captureStartReview(selected, offer, "B:/verify.json");
+    selected = byName("train");
+    offer = { process: "train", offerId: "replacement", runSpecPath: "B:/replacement.json" };
+    expect(captured).toMatchObject({
+      kind: "captured",
+      process: "verify",
+      runSpecPath: "B:/verify.json",
+      activation: { kind: "prefill", text: "/verify " },
+    });
+    expect(selected.name).toBe("train");
+    expect(offer.offerId).toBe("replacement");
+  });
+
+  test("captured train review retains the exact offer and run-spec after replacement", () => {
+    let offer = { process: "train", offerId: "train-old", runSpecPath: "B:/old.json" };
+    const captured = captureStartReview(byName("train"), offer, "B:/fallback.json");
+    offer = { process: "train", offerId: "train-new", runSpecPath: "B:/new.json" };
+    expect(captured).toEqual({
+      kind: "captured",
+      process: "train",
+      offerId: "train-old",
+      runSpecPath: "B:/old.json",
+      activation: { kind: "dispatch", text: "/train confirm train-old" },
+    });
+    expect(offer.offerId).toBe("train-new");
   });
 });
 

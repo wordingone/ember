@@ -182,11 +182,23 @@ describe("operator-surface pane control click drives a real effect on the run", 
     }
   }, 20000);
 
-  test("clicking [PAUSE] via the real mouse-click path appends a real pause command to the control channel", async () => {
+  test("clicking [PAUSE] opens authority review and only CONFIRM appends the real pause command", async () => {
     resetCommandRegistryForTests();
     const telemetryPath = join(tmpdir(), `test-repl-telemetry-${Date.now()}-${Math.random()}.jsonl`);
     const controlPath = join(tmpdir(), `test-repl-control-${Date.now()}-${Math.random()}.jsonl`);
+    const runSpecPath = join(tmpdir(), `test-repl-run-spec-${Date.now()}-${Math.random()}.json`);
     const runId = "run-wiring-e2e";
+    await writeFile(runSpecPath, JSON.stringify({
+      schema_version: "ember-certified-train-run-v1",
+      run_id: runId,
+      seed: 83,
+      requested_scope: {
+        optimizer_steps: 200,
+        sequence_length: 4096,
+        checkpoint_interval: 50,
+        write_budget_bytes: 4096,
+      },
+    }));
     await writeFile(
       telemetryPath,
       `${JSON.stringify({
@@ -213,6 +225,7 @@ describe("operator-surface pane control click drives a real effect on the run", 
           EMBER_DISABLE_TERMINAL_TITLE: "1",
           EMBER_DISABLE_VIRTUAL_SCROLL: "1",
           EMBER_FINETUNE_CONTROL_PATH: controlPath,
+          EMBER_RUN_SPEC_PATH: runSpecPath,
         },
         onExit: () => {},
       }),
@@ -247,7 +260,14 @@ describe("operator-surface pane control click drives a real effect on the run", 
 
       stdin.emit("data", Buffer.from(sgrLeftClick(pauseAt!.col + 1, pauseAt!.row)));
       await flushRepl();
-      // The control channel write is async (fs append); give the microtask/IO queue a moment.
+      await expect(access(controlPath)).rejects.toThrow();
+      lines = renderedLines(raw, columns, rows);
+      expect(lines.some((line) => line.includes("PAUSE PARAMETERS"))).toBe(true);
+      const confirmAt = findGlyph(lines, "CONFIRM PAUSE");
+      expect(confirmAt).toBeDefined();
+
+      stdin.emit("data", Buffer.from(sgrLeftClick(confirmAt!.col + 1, confirmAt!.row)));
+      await flushRepl();
       await new Promise<void>((resolve) => setTimeout(resolve, 50));
 
       const controlRaw = await readFile(controlPath, "utf-8");
@@ -268,6 +288,97 @@ describe("operator-surface pane control click drives a real effect on the run", 
       await Promise.all([
         unlink(telemetryPath).catch(() => {}),
         unlink(controlPath).catch(() => {}),
+        unlink(runSpecPath).catch(() => {}),
+      ]);
+    }
+  }, 15000);
+
+  test("authority refusals stay live and cite their receipt without entering scrollback", async () => {
+    resetCommandRegistryForTests();
+    const telemetryPath = join(tmpdir(), `test-repl-refusal-telemetry-${Date.now()}-${Math.random()}.jsonl`);
+    const runSpecPath = join(tmpdir(), `test-repl-refusal-run-spec-${Date.now()}-${Math.random()}.json`);
+    const receiptPath = "R.jsonl";
+    const receiptEvents: Array<{ event: string; detail?: string }> = [];
+    await writeFile(runSpecPath, JSON.stringify({
+      schema_version: "ember-certified-train-run-v1",
+      run_id: "different-authority-run",
+      seed: 83,
+      requested_scope: {
+        optimizer_steps: 200,
+        sequence_length: 4096,
+        checkpoint_interval: 50,
+        write_budget_bytes: 4096,
+      },
+    }));
+    await writeFile(telemetryPath, `${JSON.stringify({
+      ts: new Date().toISOString(),
+      kind: "train_step",
+      source: "journal",
+      payload: { run_id: "live-run", step: 1, loss: 1.5 },
+    })}\n`);
+    const previousTelemetryEnv = process.env["EMBER_TELEMETRY_PATH"];
+    process.env["EMBER_TELEMETRY_PATH"] = telemetryPath;
+
+    const columns = 100;
+    const rows = 30;
+    let raw = "";
+    const element = React.createElement(
+      TerminalSizeContext.Provider,
+      { value: { columns, rows } },
+      React.createElement(ReplScreen, {
+        config: { model: "ember", permissionMode: "bypass" as const, baseSystemPrompt: "" },
+        cwd: process.cwd(),
+        env: {
+          EMBER_DISABLE_TERMINAL_TITLE: "1",
+          EMBER_DISABLE_VIRTUAL_SCROLL: "1",
+          EMBER_RUN_SPEC_PATH: runSpecPath,
+        },
+        operatorReceiptWriter: {
+          filePath: receiptPath,
+          append(event, detail) { receiptEvents.push({ event, detail }); },
+        },
+        onExit: () => {},
+      }),
+    );
+    const handle = mountInk(element, {
+      stream: { write(chunk: string) { raw += chunk; } },
+      stdout: { columns, rows },
+    });
+    const stdin = new FakeStdin();
+    const stopBridge = startStdinBridge({ stdin: stdin as never, emitKeypressEvents: () => {} });
+
+    try {
+      let lines: string[] = [];
+      let pauseAt: { col: number; row: number } | undefined;
+      for (let attempt = 0; attempt < 30 && !pauseAt; attempt += 1) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 100));
+        await flushRepl();
+        lines = renderedLines(raw, columns, rows);
+        if (lines.some((line) => line.includes("RUNNING"))) pauseAt = findGlyph(lines, "[PAUSE]");
+      }
+      expect(pauseAt).toBeDefined();
+
+      stdin.emit("data", Buffer.from(sgrLeftClick(pauseAt!.col + 1, pauseAt!.row)));
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 25));
+        await flushRepl();
+        lines = renderedLines(raw, columns, rows);
+        if (lines.some((line) => line.includes("LIVE PAUSE REFUSED"))) break;
+      }
+
+      expect(lines.filter((line) => line.includes("LIVE PAUSE REFUSED")).length).toBe(1);
+      expect(lines.some((line) => line.includes(receiptPath))).toBe(true);
+      expect(lines.some((line) => line.includes("PAUSE PARAMETERS"))).toBe(false);
+      expect(receiptEvents.map(({ event }) => event)).toEqual(["control_refused"]);
+    } finally {
+      stopBridge();
+      handle.unmount();
+      startTelemetryWatch().stop();
+      if (previousTelemetryEnv === undefined) delete process.env["EMBER_TELEMETRY_PATH"];
+      else process.env["EMBER_TELEMETRY_PATH"] = previousTelemetryEnv;
+      await Promise.all([
+        unlink(telemetryPath).catch(() => {}),
+        unlink(runSpecPath).catch(() => {}),
       ]);
     }
   }, 15000);
