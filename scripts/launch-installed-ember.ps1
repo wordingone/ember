@@ -8,6 +8,8 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+. (Join-Path $PSScriptRoot "ember-window-placement.ps1")
+
 function Assert-ExactJsonProperties($Value, [string[]]$Expected, [string]$Name) {
     $actual = @($Value.PSObject.Properties.Name | Sort-Object)
     $wanted = @($Expected | Sort-Object)
@@ -64,6 +66,8 @@ try {
     Set-Location -LiteralPath $root
     $env:EMBER_SOURCE_ROOT = $root
     $env:EMBER_REPO_ROOT = $root
+    $windowHandle = Get-EmberHostWindowHandle
+    Set-EmberWindowToLeftWorkArea $windowHandle | Out-Null
     & $application
     exit $LASTEXITCODE
 }

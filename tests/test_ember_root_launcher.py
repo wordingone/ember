@@ -25,6 +25,7 @@ def canonical(path: str | Path) -> str:
 PUBLIC_LAUNCHER = REPOSITORY / "Ember.cmd"
 LAUNCH_IMPL = REPOSITORY / "scripts" / "launch-ember-cli.ps1"
 LAUNCH_STAGING = REPOSITORY / "scripts" / "ember-launch-staging.ps1"
+WINDOW_PLACEMENT = REPOSITORY / "scripts" / "ember-window-placement.ps1"
 START_HERE = REPOSITORY / "docs" / "guides" / "START-HERE.md"
 
 
@@ -40,6 +41,7 @@ class EmberRootLauncherTests(unittest.TestCase):
         # The launcher dot-sources this sibling at startup; the fixture mirrors the
         # deployed scripts/ layout so the copy under test can actually run.
         shutil.copy2(LAUNCH_STAGING, root / "scripts" / "ember-launch-staging.ps1")
+        shutil.copy2(WINDOW_PLACEMENT, root / "scripts" / "ember-window-placement.ps1")
         (source / "entrypoints" / "main.ts").write_text("throw new Error('fixture only');\n", encoding="utf-8")
         (source / "package.json").write_text('{"name":"ember-cli","type":"module"}\n', encoding="utf-8")
         (source / "bun.lock").write_text("fixture-lock\n", encoding="utf-8")
@@ -118,6 +120,7 @@ class EmberRootLauncherTests(unittest.TestCase):
     def test_public_launcher_and_implementation_are_visible(self) -> None:
         self.assertTrue(PUBLIC_LAUNCHER.is_file())
         self.assertTrue(LAUNCH_IMPL.is_file())
+        self.assertTrue(WINDOW_PLACEMENT.is_file())
         documentation = START_HERE.read_text(encoding="utf-8")
         self.assertIn("repository root", documentation)
         self.assertIn("`Ember.cmd`", documentation)
@@ -194,12 +197,12 @@ class EmberRootLauncherTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn('{"X":-1920,"Y":40,"Width":960,"Height":1040}', result.stdout)
-        implementation = LAUNCH_IMPL.read_text(encoding="utf-8")
-        self.assertIn("MonitorFromWindow", implementation)
-        self.assertIn("SetWindowPos", implementation)
-        self.assertIn("GetWindowRect", implementation)
-        self.assertIn("FindVisibleWindowsByTitle", implementation)
-        self.assertNotIn("0x0001", implementation)  # SWP_NOSIZE is forbidden.
+        placement = WINDOW_PLACEMENT.read_text(encoding="utf-8")
+        self.assertIn("MonitorFromWindow", placement)
+        self.assertIn("SetWindowPos", placement)
+        self.assertIn("GetWindowRect", placement)
+        self.assertIn("FindVisibleWindowsByTitle", placement)
+        self.assertNotIn("0x0001", placement)  # SWP_NOSIZE is forbidden.
 
     def test_owned_stale_process_filter_cannot_target_foreign_executables(self) -> None:
         state = r"C:\fixture\cockpit-state"

@@ -75,15 +75,21 @@ function sgrLeftRelease(col: number, row: number): string {
 }
 
 async function main(): Promise<void> {
+  if ("bun" in process.versions) {
+    throw new Error("pointer-conpty-smoke must run under Node: Bun's Windows node-pty input socket closes before pointer delivery");
+  }
   const binary = resolve(process.argv[2] ?? "");
   const outDir = resolve(process.argv[3] ?? "");
   const implementationCommit = process.argv[4] ?? "";
   const targetAction = process.argv[5] === "START" ? "START" : "PAUSE";
-  if (!existsSync(binary) || !/^[0-9a-f]{40}$/u.test(implementationCommit)) {
-    throw new Error("usage: pointer-conpty-smoke.ts <compiled-binary> <out-dir> <implementation-commit> [PAUSE|START]");
+  const repoRoot = resolve(import.meta.dirname, "../../../..");
+  const launchRoot = resolve(process.argv[6] ?? repoRoot);
+  if (!existsSync(binary) || !/^[0-9a-f]{40}$/u.test(implementationCommit) ||
+      !existsSync(join(launchRoot, "docs", "authority", "GOAL.md")) ||
+      !existsSync(join(launchRoot, "tools", "ember-cli"))) {
+    throw new Error("usage: pointer-conpty-smoke.ts <compiled-binary> <out-dir> <implementation-commit> [PAUSE|START] [installed-source-root]");
   }
   mkdirSync(outDir, { recursive: true });
-  const repoRoot = resolve(import.meta.dirname, "../../../..");
   const home = mkdtempSync(join(tmpdir(), "ember-pointer-conpty-"));
   const telemetryPath = join(home, "telemetry.jsonl");
   const controlPath = join(home, "control.jsonl");
@@ -106,12 +112,12 @@ async function main(): Promise<void> {
       name: "xterm-256color",
       cols: COLS,
       rows: ROWS,
-      cwd: repoRoot,
+      cwd: launchRoot,
       env: {
         ...process.env,
         EMBER_HOME: home,
-        EMBER_REPO_ROOT: repoRoot,
-        EMBER_SOURCE_ROOT: repoRoot,
+        EMBER_REPO_ROOT: launchRoot,
+        EMBER_SOURCE_ROOT: launchRoot,
         EMBER_GPU_FREE: "1",
         EMBER_DISABLE_TERMINAL_TITLE: "1",
         EMBER_CLI_HEADLESS_CAPTURE: "1",
@@ -201,6 +207,7 @@ async function main(): Promise<void> {
       implementation_commit: implementationCommit,
       binary: { name: basename(binary), sha256: sha256File(binary) },
       transport: "windows-conpty/node-pty",
+      driver_runtime: { name: process.release.name, version: process.version },
       transport_integrity: transportIntegrity,
       geometry: { columns: COLS, rows: ROWS },
       negotiation: { alternate_screen: true, cursor_hidden: true, sgr_mouse_1003_1006: true },

@@ -100,8 +100,87 @@ function Write-VerifiedShortcut([string]$Path, $Specification) {
     }
 }
 
+function Test-OwnedLegacyInstalledGoalBytes([byte[]]$Bytes) {
+    $actual = [Convert]::ToBase64String($Bytes)
+    $utf8 = New-Object Text.UTF8Encoding($false)
+    $bom = [byte[]]@(0xEF, 0xBB, 0xBF)
+    foreach ($text in @(
+        "# Installed Ember application root`n`r`n",
+        "# Installed Ember application root`n`n",
+        "# Installed Ember application root`r`n",
+        "# Installed Ember application root`n"
+    )) {
+        $body = [byte[]]$utf8.GetBytes($text)
+        foreach ($candidate in @($body, [byte[]]($bom + $body))) {
+            if ([Convert]::ToBase64String([byte[]]$candidate) -eq $actual) { return $true }
+        }
+    }
+    return $false
+}
+
+function Test-PathHasReparseComponent([string]$Path) {
+    $current = [IO.Path]::GetFullPath($Path)
+    while (-not [string]::IsNullOrWhiteSpace($current)) {
+        if (Test-Path -LiteralPath $current) {
+            $item = Get-Item -Force -LiteralPath $current
+            if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                return $true
+            }
+        }
+        $parent = Split-Path -Parent $current
+        if ([string]::IsNullOrWhiteSpace($parent) -or $parent -eq $current) { break }
+        $current = $parent
+    }
+    return $false
+}
+
+function Write-AtomicBytes([string]$Path, [byte[]]$Bytes) {
+    $parent = Split-Path -Parent $Path
+    New-Item -ItemType Directory -Force -Path $parent | Out-Null
+    $temporary = Join-Path $parent ("." + [IO.Path]::GetFileName($Path) + "." + [Guid]::NewGuid().ToString("N") + ".tmp")
+    try {
+        [IO.File]::WriteAllBytes($temporary, $Bytes)
+        Move-Item -LiteralPath $temporary -Destination $Path -Force
+    }
+    finally {
+        if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force }
+    }
+}
+
 function Install-StableFiles([string]$Root) {
+    $legacyGoal = Join-Path $Root "GOAL.md"
+    $legacyGoalPresent = Test-Path -LiteralPath $legacyGoal
+    $legacyGoalBytes = [byte[]]@()
+    if ($legacyGoalPresent) {
+        if (Test-PathHasReparseComponent $legacyGoal) {
+            throw "Legacy installed authority marker crosses a reparse point."
+        }
+        if (-not (Test-Path -LiteralPath $legacyGoal -PathType Leaf)) {
+            throw "Legacy installed authority marker is not a regular file."
+        }
+        $legacyGoalBytes = [IO.File]::ReadAllBytes($legacyGoal)
+        if (-not (Test-OwnedLegacyInstalledGoalBytes $legacyGoalBytes)) {
+            throw "Refusing to replace a foreign root GOAL.md during installed authority migration."
+        }
+    }
+
+    $canonicalGoal = Join-Path $Root "docs\authority\GOAL.md"
+    if (Test-PathHasReparseComponent $canonicalGoal) {
+        throw "Canonical installed authority marker crosses a reparse point."
+    }
+    $canonicalGoalExists = Test-Path -LiteralPath $canonicalGoal
+    if ($canonicalGoalExists -and -not (Test-Path -LiteralPath $canonicalGoal -PathType Leaf)) {
+        throw "Canonical installed authority marker is not a regular file."
+    }
+    $canonicalGoalPresent = $canonicalGoalExists
+    $priorCanonicalGoalBytes = if ($canonicalGoalPresent) { [IO.File]::ReadAllBytes($canonicalGoal) } else { [byte[]]@() }
+    $utf8 = New-Object Text.UTF8Encoding($false)
+    $canonicalGoalBytes = [byte[]]([byte[]]@(0xEF, 0xBB, 0xBF) + [byte[]]$utf8.GetBytes("# Installed Ember application root`n`r`n"))
+
+    # Complete every other fallible stable-file write while the legacy authority marker
+    # is still intact. The marker transition below is the final publication boundary.
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot "launch-installed-ember.ps1") -Destination (Join-Path $Root "launch-installed-ember.ps1") -Force
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot "ember-window-placement.ps1") -Destination (Join-Path $Root "ember-window-placement.ps1") -Force
     @(
         '@echo off'
         'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0launch-installed-ember.ps1"'
@@ -109,9 +188,28 @@ function Install-StableFiles([string]$Root) {
     ) | Set-Content -LiteralPath (Join-Path $Root "Ember.cmd") -Encoding ASCII
     # A compiled deployment is intentionally git-less. These marker bytes let the existing
     # strict runtime resolver bind state to the installation itself instead of a checkout.
-    New-Item -ItemType Directory -Force -Path (Join-Path $Root "docs\authority") | Out-Null
-    "# Installed Ember application root`n" | Set-Content -LiteralPath (Join-Path $Root "docs/authority/GOAL.md") -Encoding UTF8
     New-Item -ItemType Directory -Force -Path (Join-Path $Root "tools\ember-cli") | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $Root "docs\authority") | Out-Null
+    try {
+        Write-AtomicBytes $canonicalGoal $canonicalGoalBytes
+        $canonicalReopened = -not (Test-PathHasReparseComponent $canonicalGoal) -and
+            (Test-Path -LiteralPath $canonicalGoal -PathType Leaf)
+        if ($canonicalReopened) {
+            $canonicalReopened = [Convert]::ToBase64String([IO.File]::ReadAllBytes($canonicalGoal)) -eq
+                [Convert]::ToBase64String($canonicalGoalBytes)
+        }
+        if (-not $canonicalReopened) {
+            throw "Canonical installed authority marker publication did not reopen byte-exact."
+        }
+        if ($legacyGoalPresent) { Remove-Item -LiteralPath $legacyGoal -Force }
+    }
+    catch {
+        if ($legacyGoalPresent) {
+            if ($canonicalGoalPresent) { Write-AtomicBytes $canonicalGoal $priorCanonicalGoalBytes }
+            elseif (Test-Path -LiteralPath $canonicalGoal) { Remove-Item -LiteralPath $canonicalGoal -Force }
+        }
+        throw
+    }
 }
 
 function Read-Current([string]$Root) {
