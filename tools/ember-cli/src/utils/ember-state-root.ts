@@ -21,10 +21,10 @@
 //   1. `EMBER_STATE_ROOT` — used VERBATIM. scripts/launch-ember-cli.ps1 computes the root
 //      and exports it into the cockpit child, so at runtime there is exactly one authority
 //      for the location and every cwd inside a session collapses onto it.
-//   2. `<EMBER_HOME>/cockpit-state/<repoStateKey(root)>` — the fallback for a direct/dev
-//      invocation that did not come through the launcher. `EMBER_HOME` defaults to
-//      `~/.ember` (utils/env-detection.ts), the same user-scoped config home the CLI
-//      already owns; the per-root key keeps two checkouts from sharing one state dir.
+//   2. `<EMBER_HOME>/cockpit-state/<repoStateKey(root)>` when EMBER_HOME is explicit.
+//   3. the governed B: cockpit-state parent on Windows, keeping receipts and the
+//      Bun cache off the C: operating-reserve volume (#1317). POSIX direct/dev launches
+//      retain the user config-home fallback. The per-root key keeps checkouts disjoint.
 //
 // The default's key derivation is mirrored by Get-EmberStateRootKey in
 // scripts/launch-ember-cli.ps1, AND by _repo_state_key in scripts/cockpit_watchdog.py (#413:
@@ -47,7 +47,7 @@
 //       that scan and byte-hashed anyway, so the relocation would buy nothing. Use a
 //       directory name outside those patterns — `cockpit-state` is the sanctioned one.
 
-import { isAbsolute, join, resolve, sep } from "node:path";
+import { isAbsolute, join, posix, resolve, sep, win32 } from "node:path";
 import { getEmberConfigHomeDir } from "./env-detection.ts";
 
 /** The legacy in-tree directory name. Retained ONLY so residue detection and the
@@ -142,6 +142,20 @@ export function repoStateKey(root: string): string {
   return key;
 }
 
+/** Parent for implicit cockpit state. Explicit EMBER_HOME remains authoritative; only
+ * the Windows fallback changes from the C: user profile to the governed B: volume. */
+export function defaultEmberStateParent(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+  configHome?: string,
+): string {
+  const explicitHome = env["EMBER_HOME"]?.trim();
+  const pathApi = platform === "win32" ? win32 : posix;
+  if (explicitHome) return pathApi.resolve(explicitHome);
+  if (platform === "win32") return win32.join("B:" + win32.sep, "M");
+  return configHome ?? getEmberConfigHomeDir();
+}
+
 /** Absolute root of all cockpit-mutable state for `root`. Never inside a censused root —
  *  validated on every call, because this is the last point before a write. */
 export function emberStateRoot(root: string): string {
@@ -149,7 +163,7 @@ export function emberStateRoot(root: string): string {
   const resolved =
     override !== undefined && override.trim().length > 0
       ? resolve(override.trim())
-      : join(getEmberConfigHomeDir(), SANCTIONED_STATE_DIR_NAME, repoStateKey(root));
+      : join(defaultEmberStateParent(), SANCTIONED_STATE_DIR_NAME, repoStateKey(root));
   assertStateRootIsWritable(resolved, root);
   return resolved;
 }
