@@ -79,6 +79,25 @@ def test_valid_shipped_spec_returns_normalized_consumer(tmp_path: Path) -> None:
     )
 
 
+def test_runtime_ember_lab_source_is_a_valid_cross_lane_consumer(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    consumer = root / "runtime" / "ember-lab" / "src" / "fixture.rs"
+    consumer.parent.mkdir(parents=True)
+    consumer.write_text("// governed runtime owner\n", encoding="utf-8")
+    _write_shipped_spec(root, consumer="runtime/ember-lab/src/fixture.rs")
+
+    nodes = load_spec_nodes(root)
+
+    assert nodes[0].consumers == ("runtime/ember-lab/src/fixture.rs",)
+
+    foreign = root / "runtime" / "other" / "fixture.rs"
+    foreign.parent.mkdir(parents=True)
+    foreign.write_text("// not an allowed consumer lane\n", encoding="utf-8")
+    _write_shipped_spec(root, consumer="runtime/other/fixture.rs")
+    with pytest.raises(SpecPolicyError, match="consumer-path-invalid"):
+        load_spec_nodes(root)
+
+
 def test_added_component_requires_changed_spec_with_exact_consumer(
     tmp_path: Path,
 ) -> None:
