@@ -17,6 +17,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import owned_process  # noqa: E402
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows process flags are unavailable")
 def test_windows_runner_forbids_a_console_window(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
