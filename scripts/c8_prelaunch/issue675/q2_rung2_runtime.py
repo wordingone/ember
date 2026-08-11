@@ -114,20 +114,46 @@ def chunked_cross_entropy(
     return total_nll / n_valid, n_valid
 
 
+def _cpu_contiguous_clone(value: torch.Tensor) -> torch.Tensor:
+    return value.detach().to(device="cpu").contiguous().clone()
+
+
+def _cpu_state_snapshot(model: torch.nn.Module) -> dict[str, torch.Tensor]:
+    return {key: _cpu_contiguous_clone(value) for key, value in model.state_dict().items()}
+
+
+def _state_matches_cpu_snapshot(
+    state: Mapping[str, torch.Tensor], baseline: Mapping[str, torch.Tensor]
+) -> bool:
+    return set(state) == set(baseline) and all(
+        state[key].dtype == baseline[key].dtype
+        and state[key].shape == baseline[key].shape
+        and torch.equal(state[key].detach().to(device="cpu").contiguous(), baseline[key])
+        for key in baseline
+    )
+
+
 def _apply_fake_quant(model: torch.nn.Module) -> list[tuple[torch.nn.Module, torch.Tensor]]:
     saved = []
-    for module in model.modules():
-        if isinstance(module, torch.nn.Linear):
-            weight = module.weight.data
-            saved.append((module, weight.clone()))
-            scale = weight.abs().amax(dim=1, keepdim=True).clamp(min=1e-8) / 127.0
-            module.weight.data = (weight / scale).round().clamp(-127, 127) * scale
+    try:
+        for module in model.modules():
+            if isinstance(module, torch.nn.Linear):
+                weight = module.weight.data
+                saved.append((module, _cpu_contiguous_clone(weight)))
+                scale = weight.abs().amax(dim=1, keepdim=True).clamp(min=1e-8) / 127.0
+                quantized = (weight / scale).round().clamp(-127, 127) * scale
+                with torch.no_grad():
+                    module.weight.copy_(quantized)
+    except BaseException:
+        _restore_weights(saved)
+        raise
     return saved
 
 
 def _restore_weights(saved: Sequence[tuple[torch.nn.Module, torch.Tensor]]) -> None:
     for module, weight in saved:
-        module.weight.data = weight
+        with torch.no_grad():
+            module.weight.copy_(weight)
 
 
 def _runtime_config(config: Mapping[str, object]) -> tuple[bool, bool, float, int]:
@@ -241,7 +267,7 @@ def compute_frozen_batch_gradient(
         _refuse("RUNTIME_TARGET_NOT_FOUND")
     if target.ndim != 2:
         _refuse("RUNTIME_TARGET_INVALID")
-    baseline = {key: value.detach().clone() for key, value in model.state_dict().items()}
+    baseline = _cpu_state_snapshot(model)
     training = model.training
     model.eval()
     model.zero_grad(set_to_none=True)
@@ -263,12 +289,7 @@ def compute_frozen_batch_gradient(
         model.zero_grad(set_to_none=True)
         model.train(training)
         after = model.state_dict()
-        if set(after) != set(baseline) or any(
-            after[key].dtype != baseline[key].dtype
-            or after[key].shape != baseline[key].shape
-            or not torch.equal(after[key], baseline[key])
-            for key in baseline
-        ):
+        if not _state_matches_cpu_snapshot(after, baseline):
             _refuse("RUNTIME_GRADIENT_MUTATED_MODEL")
 
 
@@ -284,7 +305,7 @@ def replay_target_only_loss(
 ) -> float:
     """Evaluate L_B(W+v) and restore the exact pre-state before returning."""
 
-    baseline = {key: value.detach().clone() for key, value in model.state_dict().items()}
+    baseline = _cpu_state_snapshot(model)
     if target_name not in baseline:
         _refuse("RUNTIME_TARGET_NOT_FOUND")
     actual_non_target = {key: value for key, value in baseline.items() if key != target_name}
@@ -326,10 +347,5 @@ def replay_target_only_loss(
             parameter.copy_(baseline[target_name].to(parameter.device))
         model.train(training)
         after = model.state_dict()
-        if set(after) != set(baseline) or any(
-            after[key].dtype != baseline[key].dtype
-            or after[key].shape != baseline[key].shape
-            or not torch.equal(after[key], baseline[key])
-            for key in baseline
-        ):
+        if not _state_matches_cpu_snapshot(after, baseline):
             _refuse("RUNTIME_REPLAY_RESTORE_FAILED")
