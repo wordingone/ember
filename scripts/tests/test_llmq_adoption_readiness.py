@@ -562,11 +562,14 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
             "stdout": {"file_name": canonical_log.name, "sealed": True, "sha256": canonical_log_sha},
             "stderr": {"file_name": canonical_stderr.name, "sealed": True, "sha256": canonical_stderr_sha},
         },
-        "events": [{"kind": "job_started"}, {"kind": "job_exited"}],
+        "events": [
+            {"seq": 1, "ts_ms": 100, "kind": "job_started", "payload": {}},
+            {"seq": 2, "ts_ms": 200, "kind": "job_exited", "payload": {}},
+        ],
         "outage_events": [],
         "scientific_capability_evidence": False,
     }
-    daemon_bytes = json.dumps(daemon_receipt, sort_keys=True).encode("utf-8")
+    daemon_bytes = json.dumps(daemon_receipt, indent=2, ensure_ascii=False).encode("utf-8")
     daemon_sha = hashlib.sha256(daemon_bytes).hexdigest()
     daemon_relative = f"runtime/ember-lab/content-addressed-receipts/{daemon_sha}.json"
     daemon_path = authority_root / daemon_relative
@@ -620,10 +623,33 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
                     pid INTEGER,
                     resource TEXT,
                     executable_identity TEXT,
+                    restart_policy TEXT,
                     stdout_log_path TEXT,
                     stderr_log_path TEXT,
                     stdout_log_sha256 TEXT,
-                    stderr_log_sha256 TEXT
+                    stderr_log_sha256 TEXT,
+                    outage_event_cutoff_seq INTEGER
+            );
+            CREATE TABLE identities(
+                job_id TEXT PRIMARY KEY,
+                canonical_path TEXT NOT NULL,
+                sha256 TEXT NOT NULL,
+                identity_blob BLOB NOT NULL,
+                bound_at_ms INTEGER NOT NULL
+            );
+            CREATE TABLE events(
+                seq INTEGER PRIMARY KEY,
+                job_id TEXT NOT NULL,
+                ts_ms INTEGER NOT NULL,
+                kind TEXT NOT NULL,
+                payload_json TEXT NOT NULL
+            );
+            CREATE TABLE outage_events(
+                seq INTEGER PRIMARY KEY,
+                resource TEXT NOT NULL,
+                ts_ms INTEGER NOT NULL,
+                kind TEXT NOT NULL,
+                payload_json TEXT NOT NULL
             );
             CREATE TABLE schedule_runs(
                 job_id TEXT PRIMARY KEY,
@@ -638,19 +664,32 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
             """
         )
         connection.execute(
-                "INSERT INTO jobs(job_id,state,exit_code,pid,resource,executable_identity,stdout_log_path,stderr_log_path,stdout_log_sha256,stderr_log_sha256) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO jobs(job_id,state,exit_code,pid,resource,executable_identity,restart_policy,stdout_log_path,stderr_log_path,stdout_log_sha256,stderr_log_sha256,outage_event_cutoff_seq) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     "job-1",
                     "exited",
                     0,
                     1234,
-                    "GPU-1",
-                    "llmq-benchmark.exe",
+                        "GPU-1",
+                        "llmq-benchmark.exe",
+                        "never",
                     str(canonical_log),
                     str(canonical_stderr),
                     canonical_log_sha,
                     canonical_stderr_sha,
+                    0,
                 ),
+        )
+        connection.execute(
+            "INSERT INTO identities(job_id,canonical_path,sha256,identity_blob,bound_at_ms) VALUES(?,?,?,?,?)",
+            ("job-1", "runtime/ember-lab/ember-lab.exe", "d" * 64, b"identity", 1),
+        )
+        connection.executemany(
+            "INSERT INTO events(seq,job_id,ts_ms,kind,payload_json) VALUES(?,?,?,?,?)",
+            [
+                (1, "job-1", 100, "job_started", "{}"),
+                (2, "job-1", 200, "job_exited", "{}"),
+            ],
         )
         connection.execute(
             "INSERT INTO schedule_runs(job_id,measured_at_ms,measured_duration_ms,measured_tokens,measurement_outcome,measurement_receipt_sha256,measurement_daemon_binary_sha256,measurement_daemon_source_sha256) VALUES(?,?,?,?,?,?,?,?)",
@@ -695,6 +734,72 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
     assert trusted_build["verdict"] == "READY_FOR_EXTERNAL_EXECUTION"
     assert "ember_lab_build_receipt.daemon_authority" not in trusted_build["missing"]
     assert "ember_lab_benchmark_receipt" in trusted_build["missing"]
+
+    # A caller-authored operational JSON with the old producer/status/source
+    # shape is not a daemon receipt, even when it is content-addressed.
+    surrogate_bytes = json.dumps(
+        {
+            "schema": "ember-lab-operational-receipt-v1",
+            "producer": "ember-lab-daemon",
+            "status": "PASS",
+            "source_manifest_sha256": manifest_sha,
+            "binary_sha256": canonical_binary_sha,
+        },
+        indent=2,
+    ).encode("utf-8")
+    surrogate_sha = hashlib.sha256(surrogate_bytes).hexdigest()
+    surrogate_relative = f"runtime/ember-lab/content-addressed-receipts/{surrogate_sha}.json"
+    (authority_root / surrogate_relative).write_bytes(surrogate_bytes)
+    surrogate_payload = json.loads(json.dumps(payload))
+    for build_key in ("build_receipt", "ember_lab_build_receipt"):
+        surrogate_payload[build_key].update(
+            operational_receipt_path=surrogate_relative,
+            operational_receipt_sha256=surrogate_sha,
+        )
+    surrogate_result = assess(tmp_path, surrogate_payload)
+    assert surrogate_result["verdict"] == "PRELAUNCH_REJECTED"
+    assert "ember_lab_build_receipt.daemon_authority" in surrogate_result["missing"]
+
+    # A self-consistent content-addressed rewrite cannot replace the daemon's
+    # canonical schema, identity, or DB/event-derived bytes.
+    forged_receipt = json.loads(json.dumps(daemon_receipt))
+    forged_receipt["ember_lab_identity"]["source_sha256"] = "e" * 64
+    forged_bytes = json.dumps(forged_receipt, indent=2, ensure_ascii=False).encode("utf-8")
+    forged_sha = hashlib.sha256(forged_bytes).hexdigest()
+    forged_relative = f"runtime/ember-lab/content-addressed-receipts/{forged_sha}.json"
+    (authority_root / forged_relative).write_bytes(forged_bytes)
+    forged_identity_payload = json.loads(json.dumps(payload))
+    for build_key in ("build_receipt", "ember_lab_build_receipt"):
+        forged_identity_payload[build_key].update(
+            operational_receipt_path=forged_relative,
+            operational_receipt_sha256=forged_sha,
+        )
+    forged_identity_result = assess(tmp_path, forged_identity_payload)
+    assert forged_identity_result["verdict"] == "PRELAUNCH_REJECTED"
+    assert "ember_lab_build_receipt.daemon_authority" in forged_identity_result["missing"]
+
+    malformed_schema = json.loads(json.dumps(daemon_receipt))
+    malformed_schema["schema"] = "ember-lab-operational-receipt-v0"
+    malformed_bytes = json.dumps(malformed_schema, indent=2, ensure_ascii=False).encode("utf-8")
+    malformed_sha = hashlib.sha256(malformed_bytes).hexdigest()
+    malformed_relative = f"runtime/ember-lab/content-addressed-receipts/{malformed_sha}.json"
+    (authority_root / malformed_relative).write_bytes(malformed_bytes)
+    malformed_payload = json.loads(json.dumps(payload))
+    for build_key in ("build_receipt", "ember_lab_build_receipt"):
+        malformed_payload[build_key].update(
+            operational_receipt_path=malformed_relative,
+            operational_receipt_sha256=malformed_sha,
+        )
+    malformed_result = assess(tmp_path, malformed_payload)
+    assert malformed_result["verdict"] == "PRELAUNCH_REJECTED"
+    assert "ember_lab_build_receipt.daemon_authority" in malformed_result["missing"]
+
+    wrong_address_payload = json.loads(json.dumps(payload))
+    for build_key in ("build_receipt", "ember_lab_build_receipt"):
+        wrong_address_payload[build_key]["operational_receipt_sha256"] = "0" * 64
+    wrong_address_result = assess(tmp_path, wrong_address_payload)
+    assert wrong_address_result["verdict"] == "PRELAUNCH_REJECTED"
+    assert "ember_lab_build_receipt.daemon_authority" in wrong_address_result["missing"]
 
     trusted_benchmark = json.loads(json.dumps(payload))
     trusted_benchmark["ember_lab_benchmark_receipt"] = {

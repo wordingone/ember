@@ -196,6 +196,106 @@ def _read_sqlite_row(path: Path, query: str, params: tuple[object, ...]) -> tupl
         return None
 
 
+def _read_sqlite_rows(path: Path, query: str, params: tuple[object, ...]) -> list[tuple] | None:
+    """Reopen daemon rows read-only without creating or mutating its database."""
+    try:
+        uri = f"{path.resolve(strict=True).as_uri()}?mode=ro"
+        with sqlite3.connect(uri, uri=True) as connection:
+            return connection.execute(query, params).fetchall()
+    except (OSError, sqlite3.Error):
+        return None
+
+
+def _canonical_daemon_receipt(
+    state_db_file: Path,
+    job_id: object,
+    daemon_identity: object,
+    authority_root: Path,
+    expected_resource: object,
+    expected_state: object,
+    expected_pid: object,
+    expected_executable: object,
+    expected_restart_policy: object,
+    expected_exit_code: object,
+    expected_identity_sha: object,
+    expected_logs: object,
+) -> dict | None:
+    """Rebuild the receipt shape emitted by Rust ``receipt_bytes`` from DB custody."""
+    if not isinstance(job_id, str) or not isinstance(daemon_identity, dict):
+        return None
+    identity_row = _read_sqlite_row(
+        state_db_file,
+        "SELECT sha256 FROM identities WHERE job_id=?",
+        (job_id,),
+    )
+    job_row = _read_sqlite_row(
+        state_db_file,
+        "SELECT state,resource,pid,executable_identity,restart_policy,exit_code,outage_event_cutoff_seq FROM jobs WHERE job_id=?",
+        (job_id,),
+    )
+    if identity_row is None or job_row is None:
+        return None
+    if identity_row[0] != expected_identity_sha:
+        return None
+    cutoff = job_row[6] if job_row[6] is not None else 2**63 - 1
+    raw_events = _read_sqlite_rows(
+        state_db_file,
+        "SELECT seq,ts_ms,kind,payload_json FROM events WHERE job_id=? ORDER BY seq",
+        (job_id,),
+    )
+    raw_outage = _read_sqlite_rows(
+        state_db_file,
+        "SELECT seq,ts_ms,kind,payload_json FROM outage_events WHERE resource=? AND seq<=? ORDER BY seq",
+        (job_row[1], cutoff),
+    )
+    if raw_events is None or raw_outage is None:
+        return None
+
+    def _event_rows(rows: list[tuple]) -> list[dict] | None:
+        result: list[dict] = []
+        for seq, ts_ms, kind, payload_json in rows:
+            try:
+                payload = json.loads(payload_json)
+            except (TypeError, ValueError):
+                return None
+            result.append({"seq": seq, "ts_ms": ts_ms, "kind": kind, "payload": payload})
+        return result
+
+    events = _event_rows(raw_events)
+    outage_events = _event_rows(raw_outage)
+    if events is None or outage_events is None:
+        return None
+    if (
+        job_row[0] != expected_state
+        or job_row[1] != expected_resource
+        or job_row[2] != expected_pid
+        or job_row[3] != expected_executable
+        or job_row[4] != expected_restart_policy
+        or job_row[5] != expected_exit_code
+        or not isinstance(expected_logs, dict)
+    ):
+        return None
+    logs = expected_logs.get("logs")
+    if not isinstance(logs, dict):
+        return None
+    return {
+        "schema": _DAEMON_RECEIPT_SCHEMA,
+        "ember_lab_identity": daemon_identity,
+        "job_id": job_id,
+        "identity_sha256": identity_row[0],
+        "resource_lease": job_row[1],
+        "state": job_row[0],
+        "pid": job_row[2],
+        "executable_identity": job_row[3],
+        "restart_policy": job_row[4],
+        "exit_code": job_row[5],
+        "logs": logs,
+        "events": events,
+        "outage_events": outage_events,
+        "scientific_capability_evidence": False,
+    }
+
+
 def _approved_daemon_state_root(source_root: Path) -> Path | None:
     """Resolve the existing Ember state root, never a caller-selected checkout path."""
     if _APPROVED_DAEMON_STATE_ROOT is None:
@@ -275,6 +375,14 @@ def _ember_lab_daemon_authority_missing(
     if operational is None or operational.get("test_only") is True:
         missing.append("ember_lab_build_receipt.daemon_authority.test_only")
     if operational is not None:
+        expected_keys = {
+            "schema", "ember_lab_identity", "job_id", "identity_sha256",
+            "resource_lease", "state", "pid", "executable_identity",
+            "restart_policy", "exit_code", "logs", "events", "outage_events",
+            "scientific_capability_evidence",
+        }
+        if set(operational) != expected_keys:
+            missing.append("ember_lab_build_receipt.daemon_authority.canonical_schema")
         if operational.get("job_id") != build_receipt.get("job_id"):
             missing.append("ember_lab_build_receipt.daemon_authority.job_id")
         if operational.get("state") not in {"stopped", "exited", "failed"}:
@@ -291,7 +399,7 @@ def _ember_lab_daemon_authority_missing(
     job_id = build_receipt.get("job_id")
     job = _read_sqlite_row(
         state_db_file,
-        "SELECT state,exit_code,pid,resource,executable_identity,stdout_log_path,stderr_log_path,stdout_log_sha256,stderr_log_sha256 FROM jobs WHERE job_id=?",
+        "SELECT state,exit_code,pid,resource,executable_identity,stdout_log_path,stderr_log_path,stdout_log_sha256,stderr_log_sha256,outage_event_cutoff_seq FROM jobs WHERE job_id=?",
         (job_id,),
     ) if state_db_file is not None else None
     if job is None:
@@ -324,6 +432,36 @@ def _ember_lab_daemon_authority_missing(
                 or log_sha != job[sha_index]
             ):
                 missing.append(f"ember_lab_build_receipt.daemon_authority.job_{label}_log")
+        expected_identity = operational.get("ember_lab_identity")
+        expected_logs = {
+            "identity_sha256": operational.get("identity_sha256"),
+            "logs": operational.get("logs"),
+        }
+        rebuilt = _canonical_daemon_receipt(
+            state_db_file,
+            job_id,
+            expected_identity,
+            authority_root,
+            operational.get("resource_lease"),
+            operational.get("state"),
+            operational.get("pid"),
+            operational.get("executable_identity"),
+            operational.get("restart_policy"),
+            operational.get("exit_code"),
+            operational.get("identity_sha256"),
+            expected_logs,
+        ) if state_db_file is not None else None
+        canonical_bytes = (
+            json.dumps(rebuilt, indent=2, ensure_ascii=False).encode("utf-8")
+            if rebuilt is not None
+            else None
+        )
+        try:
+            raw_operational = operational_file.read_bytes() if operational_file is not None else None
+        except OSError:
+            raw_operational = None
+        if rebuilt is None or rebuilt != operational or raw_operational != canonical_bytes:
+            missing.append("ember_lab_build_receipt.daemon_authority.canonical_receipt_replay")
     schedule = _json_file(authority_root, alarm_path) if has_benchmark else None
     if has_benchmark and (not isinstance(schedule, dict) or schedule.get("schema_version") != _SCHEDULE_ALARM_SCHEMA):
         missing.append("ember_lab_build_receipt.daemon_authority.schedule_schema")
