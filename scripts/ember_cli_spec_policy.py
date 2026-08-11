@@ -62,7 +62,10 @@ def _normalize_consumer(root: Path, value: str, *, spec_path: str) -> str:
         candidate.is_absolute()
         or any(part in {"", ".", ".."} for part in candidate.parts)
         or not candidate.parts
-        or candidate.parts[0] != "tools"
+        or not (
+            candidate.parts[0] == "tools"
+            or candidate.parts[:3] == ("runtime", "ember-lab", "src")
+        )
     ):
         raise SpecPolicyError(f"{spec_path}:consumer-path-invalid:{value}")
     normalized = candidate.as_posix()
