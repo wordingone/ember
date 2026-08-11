@@ -133,53 +133,36 @@ def test_public_contract():
     assert names.issubset(vars(battery))
 
 
-def test_default_registry_is_empty_and_spec_defect_is_disclosed():
-    # This is the load-bearing fact of the whole module: see module
-    # docstring / SPEC-DEFECT-1435-A. If this ever goes non-empty without
-    # a deliberate change, every downstream BATTERY_UNDEFINED test below
-    # needs re-auditing.
+def test_default_registry_requires_explicit_d04_bindings_and_old_defects_are_settled():
     assert battery.DEFAULT_PROBE_REGISTRY == ()
-    ids = {d["id"] for d in battery.SPEC_DEFECTS}
-    assert "SPEC-DEFECT-1435-A" in ids
-    blocking = next(d for d in battery.SPEC_DEFECTS if d["id"] == "SPEC-DEFECT-1435-A")
-    assert blocking["severity"] == "BLOCKING"
-    assert blocking["authority_status"] == "DEFERRED_BY_D-03"
-    assert blocking["authority_path"] == battery.R2_AUTHORITY_DOC
-    assert set(blocking["exit_criteria_affected"]) == {"R2-E3", "R2-E4", "F-03"}
-    statistic = next(d for d in battery.SPEC_DEFECTS if d["id"] == "SPEC-DEFECT-1435-B")
-    assert statistic["authority_status"] == "RATIFIED_BY_D-03"
+    assert battery.SPEC_DEFECTS == []
+    assert {row["id"] for row in battery.HISTORICAL_SPEC_DEFECTS} == {
+        "SPEC-DEFECT-1435-A", "SPEC-DEFECT-1435-B"
+    }
 
 
-def test_d03_authority_is_append_only_deferred_and_fail_closed():
+def test_d04_authority_supersedes_d03_with_one_hash_pinned_text_manifest():
     authority_path = REPO_ROOT / battery.R2_AUTHORITY_DOC
     record = json.loads(authority_path.read_text(encoding="utf-8"))
 
     assert record["schema"] == battery.R2_AUTHORITY_SCHEMA
-    assert record["issue"] == 1442
-    assert record["extends"] == [
-        "docs/spec/ember02-preregistration-v1.md",
-        "docs/spec/ember02-preregistration-thresholds-v1.json",
-    ]
+    assert record["issue"] == 1498
+    assert record["supersedes"] == {
+        "path": "docs/spec/ember02-r2-cheap-probe-amendment-v1.json",
+        "sha256": "e95de0f81900ef76d8d7a2b81e6147e631234016262d04073913b371dbeccd56",
+    }
 
     decision = record["decision"]
     assert decision["id"] == battery.R2_AUTHORITY_DECISION_ID
-    assert decision["frozen_form"] == "deferred_amendment"
-    assert decision["affected_exit_criteria"] == ["R2-E3", "R2-E4", "F-03"]
-    assert decision["registry_state"] == "EMPTY"
-    assert decision["defined_probes"] == []
-    assert decision["runner_refusal"] == "BATTERY_UNDEFINED"
-    assert decision["advancement_credit"] is False
-    assert decision["r3_funding_allowed"] is False
-
-    settlement = decision["settlement_requirements"]
-    assert settlement["timing"] == "BEFORE_R2_DISPATCH"
-    assert settlement["minimum_probe_count"] > 0
-    assert settlement["requires_executable_scorer"] is True
-    assert settlement["requires_manifest_custody"] is True
-    assert settlement["requires_superseding_accepted_amendment"] is True
+    assert decision["registry_state"] == "HASH_PINNED_TEXT_AUTHORITY"
+    assert decision["source_manifest"]["sha256"] == "b08073b505581bd4cc634f9ca5c3a872755de867db26dd83fe27406f858288a3"
+    assert [(row["id"], row["items"]) for row in decision["defined_probes"]] == [
+        ("mmlu-pro-10choice", 32), ("arc-challenge-4choice", 32)
+    ]
+    assert "no persisted or independently authored token manifest" in decision["r2_adapter"]["law"]
 
 
-def test_d03_ratifies_runner_statistic_without_faking_a_battery():
+def test_d04_retains_t24_wilson_and_no_execution_credit():
     record = json.loads((REPO_ROOT / battery.R2_AUTHORITY_DOC).read_text(encoding="utf-8"))
     assert record["decision"]["proportion_probe_statistic"] == {
         "method": "wilson_one_sided_lower",
@@ -189,13 +172,7 @@ def test_d03_ratifies_runner_statistic_without_faking_a_battery():
         "pass_predicate": "lower_bound > chance_rate",
     }
 
-    narrative = (REPO_ROOT / "docs/spec/ember02-r2-cheap-probe-amendment-v1.md").read_text(encoding="utf-8")
-    for clause in (
-        "R2-E3", "R2-E4", "F-03", "BATTERY_UNDEFINED",
-        "no R2 advancement credit", "no R3 funding", "one-sided Wilson",
-        "before R2 dispatch",
-    ):
-        assert clause in narrative
+    assert "no model, capability, R1/R2 exit" in record["execution_boundary"]
 
 
 # ---------------------------------------------------------------------------
@@ -693,8 +670,8 @@ def test_build_receipt_passes_schema_floor():
     )
     assert receipt_check.validate_receipt(receipt) == []
     assert receipt["invariant_sha256"] == receipt_check.INVARIANT_SHA256
-    assert receipt["spec_defects"][0]["id"] == "SPEC-DEFECT-1435-A"
-    assert receipt["issue_refs"] == ["#1435", "#1442"]
+    assert receipt["spec_defects"] == []
+    assert receipt["issue_refs"] == ["#1435", "#1498"]
     assert receipt["r2_battery_authority"] == {
         "document": battery.R2_AUTHORITY_DOC,
         "schema": battery.R2_AUTHORITY_SCHEMA,
@@ -807,7 +784,7 @@ def test_cli_r2e4_real_checkpoint_battery_undefined_writes_receipt(tmp_path):
     assert receipt_check.validate_receipt(receipt) == []
 
 
-def test_cli_r2e4_nonempty_manifest_refuses_scorer_backend_not_configured(tmp_path):
+def test_cli_r2e4_legacy_token_manifest_is_superseded_by_single_text_authority(tmp_path):
     manifest, config = _valid_checkpoint(tmp_path, "ckpt")
     probe_path, probe_sha = _write_probe_manifest(tmp_path)
     out = tmp_path / "receipt.json"
@@ -821,8 +798,8 @@ def test_cli_r2e4_nonempty_manifest_refuses_scorer_backend_not_configured(tmp_pa
     ])
     assert rc == 3
     receipt = json.loads(out.read_text(encoding="utf-8"))
-    assert "SCORER_BACKEND_NOT_CONFIGURED" in receipt["refusal_reason"]
-    assert receipt["probe_manifest"]["probe_count"] == 1
+    assert "PROBE_AUTHORITY_SUPERSEDED" in receipt["refusal_reason"]
+    assert receipt["probe_manifest"]["probe_count"] == 0
 
 
 def test_cli_r2e4_requires_out(tmp_path):

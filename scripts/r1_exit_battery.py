@@ -137,6 +137,8 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePath
 from typing import Any, Mapping
 
+import r1_frozen_eval_runner as frozen_eval
+
 ISSUE_REF = "#1463"
 PREREG_DOC = "docs/spec/ember02-preregistration-v1.md"
 PREREG_PIN = "3d48d3870919bd04cec735f68d0fad45fcfae0b2"
@@ -199,6 +201,61 @@ def _sha256_file(path: Path) -> str:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _validate_frozen_eval_suite_binding(
+    run_root: Path,
+    capability: Mapping[str, Any],
+    eval_doc: Mapping[str, Any],
+) -> list[str]:
+    """Independently reopen the exact #1498 frozen-suite bytes.
+
+    The frontier producer's receipt is evidence, not a trust root.  R1 must
+    therefore rederive the suite identity instead of accepting the producer's
+    matching strings.
+    """
+    defects: list[str] = []
+    candidates = sorted(
+        path
+        for path in run_root.rglob("frozen-eval-suite.json")
+        if not _evidence_excluded(path, run_root)
+    )
+    if len(candidates) != 1:
+        return [
+            "capability: need exactly one frozen-eval-suite.json under the run root, "
+            f"found {len(candidates)}"
+        ]
+    suite_path = candidates[0]
+    named_suite = capability.get("eval_suite_path")
+    try:
+        named_ok = (
+            isinstance(named_suite, str)
+            and bool(named_suite.strip())
+            and Path(named_suite).resolve() == suite_path.resolve()
+        )
+    except OSError:
+        named_ok = False
+    if not named_ok:
+        defects.append(
+            f"capability.eval_suite_path {named_suite!r} does not name the discovered "
+            f"frozen suite {suite_path}"
+        )
+    suite_sha256 = _sha256_file(suite_path)
+    if capability.get("eval_suite_sha256") != suite_sha256:
+        defects.append("capability.eval_suite_sha256 does not match frozen suite bytes")
+    if eval_doc.get("eval_suite_sha256") != suite_sha256:
+        defects.append("capability: frozen-eval results do not bind frozen suite bytes")
+    try:
+        _suite_raw, suite = frozen_eval._load_suite(suite_path, suite_sha256)
+    except frozen_eval.FrozenEvalRefusal as error:
+        defects.append(f"capability: {error}")
+        return defects
+    if (
+        suite.get("eval_suite_id") != capability.get("eval_suite_id")
+        or suite.get("eval_suite_id") != eval_doc.get("eval_suite_id")
+    ):
+        defects.append("capability: frozen suite identity is inconsistent")
+    return defects
 
 
 def _registry_rows_and_prefix(
@@ -1511,6 +1568,7 @@ def _validate_frontier_content(
             defects.append("learned_import_attestation.basis missing")
 
     # --- run-root evidence: checkpoint manifest (identity spine) --------------
+    manifest_path: Path | None = None
     disk_manifest: dict[str, Any] | None = None
     disk_manifest_sha: str | None = None
     try:
@@ -1601,6 +1659,39 @@ def _validate_frontier_content(
             if not isinstance(eval_doc, dict):
                 defects.append("capability: frozen-eval-results.json top level is not a JSON object")
             else:
+                defects.extend(
+                    _validate_frozen_eval_suite_binding(run_root, capability, eval_doc)
+                )
+                try:
+                    suite_candidates = sorted(
+                        candidate
+                        for candidate in run_root.rglob("frozen-eval-suite.json")
+                        if not _evidence_excluded(candidate, run_root)
+                    )
+                    if len(suite_candidates) != 1 or manifest_path is None:
+                        raise frozen_eval.FrozenEvalRefusal(
+                            "RESULT_RECEIPT_EVIDENCE_UNBOUND"
+                        )
+                    suite_sha = _sha256_file(suite_candidates[0])
+                    _suite_raw, suite = frozen_eval._load_suite(
+                        suite_candidates[0], suite_sha
+                    )
+                    manifest_sha, checkpoint_hashes = frozen_eval._checkpoint_identity(
+                        manifest_path.parent
+                    )
+                    frozen_eval.validate_results_receipt(
+                        eval_doc,
+                        suite=suite,
+                        suite_sha256=suite_sha,
+                        checkpoint_manifest_sha256=manifest_sha,
+                        checkpoint_file_sha256s=checkpoint_hashes,
+                    )
+                    if capability.get("checkpoint_file_sha256s") != checkpoint_hashes:
+                        defects.append(
+                            "capability.checkpoint_file_sha256s does not equal all independently rehashed checkpoint shards"
+                        )
+                except frozen_eval.FrozenEvalRefusal as error:
+                    defects.append(f"capability: {error}")
                 for field_name in ("eval_suite_id", "eval_suite_sha256"):
                     if eval_doc.get(field_name) != capability.get(field_name) or not _nonempty_str(capability.get(field_name)):
                         defects.append(f"capability.{field_name} does not equal the frozen-eval receipt's value")
@@ -3327,8 +3418,12 @@ def run_selftest() -> None:
             # from this, never accepted on the receipt's word (rev-1490 item 1).
             _write_jsonl(run / "telemetry" / "train.jsonl",
                          _synthetic_train_step_events(run_id="SELFTEST_E5_run", n_steps=204))
+            shared_model = ckpt / "shared-model.pt"
+            shared_model.write_bytes(b"SELFTEST_FIXTURE owned checkpoint")
+            shared_model_sha = hashlib.sha256(shared_model.read_bytes()).hexdigest()
             manifest = {
                 "model_config_sha256": "c" * 64,
+                "shared_model_shard_sha256": shared_model_sha,
                 # Per-shard MAPPING, the real v5 shape (cross-check finding:
                 # these pins are not single hex strings).
                 "optimizer_state_shard_sha256": {"shard0": "d" * 64, "shard1": "d" * 63 + "e"},
@@ -3336,16 +3431,62 @@ def run_selftest() -> None:
                 "optimizer_contract": "SELFTEST_FIXTURE-adamw-v1",
                 "launch_seed": 830001,
                 "data_cursor": {"tokens_seen": 417792, "global_step": 204, "resume_authority": "SELFTEST_FIXTURE"},
+                "shards": [
+                    {
+                        "role": "shared_model",
+                        "path": shared_model.name,
+                        "sha256": shared_model_sha,
+                    }
+                ],
             }
             (ckpt / "checkpoint-manifest.json").write_bytes(json.dumps(manifest).encode("utf-8"))
             manifest_sha = hashlib.sha256((ckpt / "checkpoint-manifest.json").read_bytes()).hexdigest()
-            (run / "frozen-eval-results.json").write_bytes(json.dumps({
-                "eval_suite_id": "SELFTEST_FIXTURE-cheap-probe-v1",
-                "eval_suite_sha256": "f" * 64,
+            suite_path = run / "frozen-eval-suite.json"
+            suite_path.write_bytes(
+                (REPO_ROOT / "docs/spec/ember02-r1-r2-cheap-probe-suite-v1.json").read_bytes()
+            )
+            suite_sha = hashlib.sha256(suite_path.read_bytes()).hexdigest()
+            _suite_raw, suite = frozen_eval._load_suite(suite_path, suite_sha)
+            result_rows = [
+                {
+                    "row_id": task["row_id"],
+                    "judge": task["judge"],
+                    "passed": True,
+                    "output": task["expected_output"],
+                    "output_sha256": hashlib.sha256(
+                        task["expected_output"].encode("utf-8")
+                    ).hexdigest(),
+                }
+                for task in suite["tasks"]
+            ]
+            eval_receipt = {
+                "schema": frozen_eval.RESULT_SCHEMA,
+                "eval_suite_id": suite["eval_suite_id"],
+                "eval_suite_sha256": suite_sha,
                 "checkpoint_manifest_sha256": manifest_sha,
-                "results": {"loss_probe": {"value": 0.29}},
+                "checkpoint_file_sha256s": {"shared_model": shared_model_sha},
+                "owned_identity": {
+                    "seat": "OWNED_ADMITTED",
+                    "checkpoint_sha256": manifest_sha,
+                    "model_name": f"ember-owned:{manifest_sha[:12]}",
+                    "model_config_sha256": "b" * 64,
+                    "tokenizer_sha256": "c" * 64,
+                    "server_source_sha256": "d" * 64,
+                },
+                "rows": result_rows,
+                "results": frozen_eval._probe_results(suite, result_rows),
                 "tool_access": "none",
-            }).encode("utf-8"))
+                "retry_count": 0,
+                "execution_claim": True,
+                "result_credit": False,
+                "claim_boundary": frozen_eval._CLAIM_BOUNDARY,
+            }
+            eval_receipt["receipt_sha256"] = hashlib.sha256(
+                frozen_eval._canonical_bytes(eval_receipt, omit="receipt_sha256")
+            ).hexdigest()
+            (run / "frozen-eval-results.json").write_bytes(
+                json.dumps(eval_receipt).encode("utf-8")
+            )
             # The real schema_version-7 runner-receipt shape: unix SECONDS.
             (run / "disk-budget-runner-receipt.json").write_bytes(json.dumps({
                 "schema_version": 7, "started_at_unix": 1786200000.0, "finished_at_unix": 1786200742.0,
@@ -3496,11 +3637,12 @@ def run_selftest() -> None:
                 },
                 "capability": {
                     "eval_suite_id": eval_doc["eval_suite_id"],
+                    "eval_suite_path": str(run / "frozen-eval-suite.json"),
                     "eval_suite_sha256": eval_doc["eval_suite_sha256"],
                     "results_receipt_path": str(run / "frozen-eval-results.json"),
                     "results_receipt_sha256": sha_of(run / "frozen-eval-results.json"),
                     "checkpoint_manifest_sha256": manifest_sha,
-                    "checkpoint_file_sha256s": {"rng_state_sha256": manifest["rng_state_sha256"]},
+                    "checkpoint_file_sha256s": eval_doc["checkpoint_file_sha256s"],
                     "results": eval_doc["results"],
                     "tool_access": "none",
                     "model_only_ablation": None,

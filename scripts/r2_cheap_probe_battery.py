@@ -6,10 +6,13 @@
 battery runner (issue #1435).
 
 ============================================================================
-DEFERRED BATTERY AUTHORITY: the R2 cheap-probe battery has no accepted probe
-manifest. D-03 in docs/spec/ember02-r2-cheap-probe-amendment-v1.json makes
-that absence explicit and forbids R2 advancement/R3 funding while this runner
-returns BATTERY_UNDEFINED.
+CURRENT D-04 AUTHORITY (#1498): the accepted battery is the exact hash-pinned
+text manifest in docs/spec/ember02-r1-r2-cheap-probe-suite-v1.json.  R2 must
+receive it through --source-suite and deterministically compile token IDs from
+the separately hash-bound tokenizer and compiler.  DEFAULT_PROBE_REGISTRY
+remains empty deliberately so omission of those bindings refuses rather than
+silently substituting an implicit or independently authored token authority.
+The D-03 discussion below is retained as historical rationale only.
 ============================================================================
 
 docs/spec/ember02-preregistration-v1.md refers to "the frozen cheap-probe
@@ -165,20 +168,23 @@ Usage:
   python scripts/r2_cheap_probe_battery.py --run-r2e4 \\
       --checkpoint-manifest <path>/manifest.json \\
       --model-config <path>/model_config.json --arm A3 \\
-      [--probe-manifest <path>.json --probe-manifest-sha256 <sha>] \\
+      --source-suite <path>.json --source-suite-sha256 <sha> \\
+      --tokenizer tokenizer/tokenizer.json --tokenizer-sha256 <sha> \\
+      --compiler-sha256 <sha> \\
       --out receipts/r2-cheap-probe-battery/r2e4-<UTCts>.json
   python scripts/r2_cheap_probe_battery.py --run-r2e3 \\
       --checkpoint-manifest-a3 <path>/manifest.json --model-config-a3 <path>/model_config.json \\
       --checkpoint-manifest-control <path>/manifest.json --model-config-control <path>/model_config.json \\
       --control-arm A2 \\
-      [--probe-manifest <path>.json --probe-manifest-sha256 <sha> \\
-       --sigma-seed-receipt <path>.json] \\
+      --source-suite <path>.json --source-suite-sha256 <sha> \\
+      --tokenizer tokenizer/tokenizer.json --tokenizer-sha256 <sha> \\
+      --compiler-sha256 <sha> [--sigma-seed-receipt <path>.json] \\
       --out receipts/r2-cheap-probe-battery/r2e3-<UTCts>.json
 
-Both --run-r2e4/--run-r2e3 refuse (exit 3) with BATTERY_UNDEFINED today,
-by design, and WRITE that refusal as a checkpoint-bound receipt -- this is
-the honest, current, correct output of "run the R2 cheap-probe battery"
-under D-03 while no accepted battery manifest exists.
+Without --source-suite and all three exact hashes, --run-r2e4/--run-r2e3
+continue to refuse BATTERY_UNDEFINED.  With D-04 authority admitted, these CLI
+paths reach the separately disclosed live-scorer boundary; no capability or
+exit claim exists until a named-checkpoint execution receipt is produced.
 """
 
 from __future__ import annotations
@@ -202,12 +208,12 @@ if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
 ISSUE_REF = "#1435"
-AUTHORITY_ISSUE_REF = "#1442"
+AUTHORITY_ISSUE_REF = "#1498"
 PREREG_DOC = "docs/spec/ember02-preregistration-v1.md"
 PREREG_PIN = "3d48d3870919bd04cec735f68d0fad45fcfae0b2"
-R2_AUTHORITY_DOC = "docs/spec/ember02-r2-cheap-probe-amendment-v1.json"
-R2_AUTHORITY_SCHEMA = "ember02-r2-cheap-probe-amendment/v1"
-R2_AUTHORITY_DECISION_ID = "D-03"
+R2_AUTHORITY_DOC = "docs/spec/ember02-r2-cheap-probe-amendment-v2.json"
+R2_AUTHORITY_SCHEMA = "ember02-r2-cheap-probe-amendment/v2"
+R2_AUTHORITY_DECISION_ID = "D-04"
 
 # Frozen threshold table, sec8 -- imported as VALUES here (the formula-freeze
 # rule, sec2: substituting measured/frozen numbers is mechanical, not an
@@ -250,12 +256,12 @@ class R2ProbeBatteryRefusal(Exception):
 # says REFUSED/BATTERY_UNDEFINED).
 # ---------------------------------------------------------------------------
 
-SPEC_DEFECTS = [
+HISTORICAL_SPEC_DEFECTS = [
     {
         "id": "SPEC-DEFECT-1435-A",
         "severity": "BLOCKING",
         "authority_status": "DEFERRED_BY_D-03",
-        "authority_path": R2_AUTHORITY_DOC,
+        "authority_path": "docs/spec/ember02-r2-cheap-probe-amendment-v1.json",
         "exit_criteria_affected": ["R2-E3", "R2-E4", "F-03"],
         "summary": (
             "the frozen cheap-probe battery is referenced as an existing, "
@@ -303,7 +309,7 @@ SPEC_DEFECTS = [
         "id": "SPEC-DEFECT-1435-B",
         "severity": "SECONDARY",
         "authority_status": "RATIFIED_BY_D-03",
-        "authority_path": R2_AUTHORITY_DOC,
+        "authority_path": "docs/spec/ember02-r2-cheap-probe-amendment-v1.json",
         "exit_criteria_affected": ["R2-E4"],
         "summary": (
             "R2-E4's 'one-sided lower confidence bound at level T-24' "
@@ -327,6 +333,10 @@ SPEC_DEFECTS = [
         ),
     },
 ]
+
+# D-04/#1498 settles both D-03 defects.  Receipts created after this source
+# carrier must not misreport those historical defects as active.
+SPEC_DEFECTS: list[dict[str, Any]] = []
 
 
 # ---------------------------------------------------------------------------
@@ -404,10 +414,9 @@ class ProbeSpec:
                 )
 
 
-# The battery, as specified. See module docstring and D-03: this is empty
-# because no accepted amendment names a single probe. Do not
-# populate this with invented content -- load a hash-pinned, spec-derived
-# manifest via --probe-manifest instead, the moment one is frozen.
+# No implicit registry: D-04 requires the exact text authority plus tokenizer
+# and compiler hashes on every R2 admission.  Keeping this empty makes missing
+# bindings refuse BATTERY_UNDEFINED instead of creating a second authority.
 DEFAULT_PROBE_REGISTRY: tuple[ProbeSpec, ...] = ()
 
 _PROBE_MANIFEST_TOP_KEYS = {"schema", "issue", "probes"}
@@ -510,6 +519,65 @@ def load_probe_manifest(path: str | Path, expected_sha256: str) -> tuple[list[Pr
         "probe_count": len(registry),
     }
     return registry, meta
+
+
+def load_compiled_source_suite(
+    source_path: str | Path,
+    expected_source_sha256: str,
+    tokenizer_path: str | Path,
+    expected_tokenizer_sha256: str,
+    expected_compiler_sha256: str,
+) -> tuple[list[ProbeSpec], dict]:
+    """Compile the sole #1498 text authority into R2 token IDs in memory."""
+
+    from tokenizers import Tokenizer
+    from r1_cheap_probe_suite import (
+        SuiteRefusal,
+        compile_r2_registry,
+        load_source_manifest,
+    )
+
+    source_path = Path(source_path)
+    tokenizer_path = Path(tokenizer_path)
+    compiler_path = Path(__file__).with_name("r1_cheap_probe_suite.py")
+    try:
+        if _sha256_file(tokenizer_path) != expected_tokenizer_sha256:
+            raise R2ProbeBatteryRefusal("TOKENIZER_SHA_MISMATCH")
+        compiler_sha256 = _sha256_file(compiler_path)
+        if compiler_sha256 != expected_compiler_sha256:
+            raise R2ProbeBatteryRefusal("COMPILER_SHA_MISMATCH")
+        source = load_source_manifest(source_path, expected_source_sha256)
+        rows, binding = compile_r2_registry(
+            source,
+            source_manifest_sha256=expected_source_sha256,
+            tokenizer=Tokenizer.from_file(str(tokenizer_path)),
+            tokenizer_sha256=expected_tokenizer_sha256,
+            compiler_sha256=expected_compiler_sha256,
+        )
+    except R2ProbeBatteryRefusal:
+        raise
+    except (OSError, SuiteRefusal, ValueError) as exc:
+        raise R2ProbeBatteryRefusal(f"SOURCE_SUITE_COMPILE_FAILED:{exc}") from exc
+    registry = [ProbeSpec(
+        probe_id=row["probe_id"],
+        metric_id=row["metric_id"],
+        metric_type=row["metric_type"],
+        chance_rate=row["chance_rate"],
+        source_note=row["source_note"],
+        items=tuple(ProbeItem(
+            item_id=item["item_id"],
+            context_ids=tuple(item["context_ids"]),
+            choices=tuple(tuple(choice) for choice in item["choices"]),
+            correct_choice_index=item["correct_choice_index"],
+        ) for item in row["items"]),
+    ) for row in rows]
+    return registry, {
+        "path": str(source_path),
+        "schema": "ember02-r1-r2-cheap-probe-suite/v1",
+        "issue": "#1498",
+        "probe_count": len(registry),
+        **binding,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -1396,9 +1464,10 @@ def _selftest_receipt_shape(failures: list, tmp_dir: Path) -> None:
 def _selftest() -> int:
     import tempfile
     print("[r2-cheap-probe-battery-selftest] starting CPU-only synthetic-fixture selftest")
-    print("[r2-cheap-probe-battery-selftest] NOTE: D-03 means the REAL R2-E4/R2-E3 "
-          "CLI paths refuse BATTERY_UNDEFINED today -- this selftest exercises the adjudication "
-          "machinery against synthetic SELFTEST_FIXTURE_* probes only, never real R2 evidence")
+    print("[r2-cheap-probe-battery-selftest] NOTE: the canonical #1498 path requires the exact "
+          "--source-suite/tokenizer/compiler bindings; omitting authority still refuses "
+          "BATTERY_UNDEFINED. This selftest uses synthetic SELFTEST_FIXTURE_* probes only, "
+          "never real R2 evidence")
     failures: list[str] = []
     with tempfile.TemporaryDirectory(prefix="r2-cheap-probe-battery-selftest-") as tmp:
         tmp_dir = Path(tmp)
@@ -1426,12 +1495,32 @@ def _selftest() -> int:
 # ---------------------------------------------------------------------------
 
 def _cli_load_registry(args) -> tuple[list[ProbeSpec], dict | None]:
-    if args.probe_manifest is None:
-        return list(DEFAULT_PROBE_REGISTRY), None
-    if args.probe_manifest_sha256 is None:
-        raise R2ProbeBatteryRefusal("PROBE_MANIFEST_SHA_MISMATCH: --probe-manifest requires --probe-manifest-sha256")
-    registry, meta = load_probe_manifest(args.probe_manifest, args.probe_manifest_sha256)
-    return registry, meta
+    if args.source_suite is not None:
+        if args.probe_manifest is not None:
+            raise R2ProbeBatteryRefusal("PROBE_AUTHORITY_AMBIGUOUS")
+        required = (
+            args.source_suite_sha256,
+            args.tokenizer,
+            args.tokenizer_sha256,
+            args.compiler_sha256,
+        )
+        if not all(required):
+            raise R2ProbeBatteryRefusal(
+                "SOURCE_SUITE_BINDING_INCOMPLETE: --source-suite requires source, tokenizer, and compiler hashes"
+            )
+        return load_compiled_source_suite(
+            args.source_suite,
+            args.source_suite_sha256,
+            args.tokenizer,
+            args.tokenizer_sha256,
+            args.compiler_sha256,
+        )
+    if args.probe_manifest is not None or args.probe_manifest_sha256 is not None:
+        raise R2ProbeBatteryRefusal(
+            "PROBE_AUTHORITY_SUPERSEDED: D-04 forbids persisted token-ID manifests; "
+            "use the exact --source-suite plus tokenizer and compiler hashes"
+        )
+    return list(DEFAULT_PROBE_REGISTRY), None
 
 
 def _cli_run_r2e4(args) -> int:
@@ -1450,8 +1539,8 @@ def _cli_run_r2e4(args) -> int:
         registry, probe_manifest_meta = _cli_load_registry(args)
         if not registry:
             raise R2ProbeBatteryRefusal(
-                "BATTERY_UNDEFINED: the R2 cheap-probe battery has zero probes -- "
-                "see D-03 (docs/spec/ember02-r2-cheap-probe-amendment-v1.json)"
+                "BATTERY_UNDEFINED: D-04 requires --source-suite plus exact source, "
+                "tokenizer, and compiler hashes"
             )
         # A nonempty registry exists but no scorer backend is wired in this PR
         # (see module docstring, scope boundary) -- refuse distinctly rather
@@ -1497,8 +1586,8 @@ def _cli_run_r2e3(args) -> int:
         registry, probe_manifest_meta = _cli_load_registry(args)
         if not registry:
             raise R2ProbeBatteryRefusal(
-                "BATTERY_UNDEFINED: the R2 cheap-probe battery has zero probes -- "
-                "see D-03 (docs/spec/ember02-r2-cheap-probe-amendment-v1.json)"
+                "BATTERY_UNDEFINED: D-04 requires --source-suite plus exact source, "
+                "tokenizer, and compiler hashes"
             )
         raise R2ProbeBatteryRefusal(
             f"SCORER_BACKEND_NOT_CONFIGURED: {len(registry)} probe(s) loaded from "
@@ -1534,8 +1623,13 @@ def main(argv=None) -> int:
     ap.add_argument("--checkpoint-manifest-control", help="R2-E3: control-arm checkpoint manifest.json path")
     ap.add_argument("--model-config-control", help="R2-E3: control-arm checkpoint model_config.json path")
     ap.add_argument("--control-arm", default="A2", help="R2-E3: control-arm label recorded on the receipt (A2 per prereg sec4.4)")
-    ap.add_argument("--probe-manifest", default=None, help="optional external probe-manifest JSON (see PROBE_MANIFEST_SCHEMA)")
-    ap.add_argument("--probe-manifest-sha256", default=None, help="required with --probe-manifest")
+    ap.add_argument("--probe-manifest", default=None, help="legacy persisted token manifest; live CLI refuses under D-04")
+    ap.add_argument("--probe-manifest-sha256", default=None, help="legacy companion hash; live CLI refuses under D-04")
+    ap.add_argument("--source-suite", default=None, help="#1498 sole canonical text suite; compiled to R2 IDs in memory")
+    ap.add_argument("--source-suite-sha256", default=None, help="required whole-file hash for --source-suite")
+    ap.add_argument("--tokenizer", default=None, help="tokenizer.json used for deterministic R2 compilation")
+    ap.add_argument("--tokenizer-sha256", default=None, help="required raw tokenizer hash")
+    ap.add_argument("--compiler-sha256", default=None, help="required raw r1_cheap_probe_suite.py hash")
     ap.add_argument("--sigma-seed-receipt", default=None, help="R2-E3: R1-E7 sigma_seed input (see load_sigma_seed_receipt)")
     ap.add_argument("--seed", type=int, default=DEFAULT_SEED)
     ap.add_argument("--out", default=None, help="receipt output path")
