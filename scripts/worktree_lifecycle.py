@@ -16,7 +16,7 @@ import sys
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, Sequence
 
 
@@ -24,6 +24,7 @@ STATE_NAME = "ember-worktree-lifecycle.json"
 LOCK_NAME = "ember-worktree-lifecycle.lock"
 DEFAULT_TARGET = 12
 RENEWAL_CAP_DAYS = 14
+DEFAULT_WORKTREE_ROOT = str(PureWindowsPath("B:" + chr(92), "M", "ember-wt"))
 
 # The exact commands the custody census runs per registered worktree
 # (`scripts/ember_01_custody/census.py`, `_git_material_paths`). The census's
@@ -64,6 +65,35 @@ def canonical_path(value: str | Path) -> str:
 
 def path_key(value: str | Path) -> str:
     return canonical_path(value).casefold()
+
+
+def _windows_drive(value: str | Path) -> str | None:
+    drive = PureWindowsPath(str(value)).drive
+    match = re.fullmatch(r"(?:\\\\[?.]\\)?([A-Za-z]):", drive)
+    return match.group(1).casefold() if match else None
+
+
+def resolve_create_destination(raw_path: str, *, allow_c_drive: bool) -> Path:
+    """Resolve a create target under the governed B: root and refuse implicit C: growth."""
+    value = raw_path.strip()
+    if not value:
+        raise LifecycleError("INVALID_PATH", "create path is empty")
+    is_bare_name = (
+        _windows_drive(value) is None
+        and "/" not in value
+        and "\\" not in value
+        and value not in {".", ".."}
+    )
+    requested = Path(os.environ.get("EMBER_WORKTREE_ROOT", DEFAULT_WORKTREE_ROOT)) / value \
+        if is_bare_name else Path(value)
+    destination = Path(canonical_path(requested))
+    drive = _windows_drive(value) or _windows_drive(destination)
+    if drive == "c" and not allow_c_drive:
+        raise LifecycleError(
+            "C_DRIVE_WORKTREE_REFUSED",
+            f"{destination}; pass --allow-c-drive only for an explicit operator exception",
+        )
+    return destination
 
 
 def run_git(repo: Path, args: Sequence[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -433,7 +463,10 @@ def create_worktree(repo: Path, state_file: Path, args: argparse.Namespace) -> d
     if expiry < date.today():
         raise LifecycleError("INVALID_EXPIRY", "expiry is already past")
 
-    destination = Path(canonical_path(args.path))
+    destination = resolve_create_destination(
+        args.path,
+        allow_c_drive=bool(getattr(args, "allow_c_drive", False)),
+    )
     if destination.exists():
         raise LifecycleError("PATH_EXISTS", str(destination))
     key = path_key(destination)
@@ -1257,6 +1290,11 @@ def build_parser() -> argparse.ArgumentParser:
     create_parser.add_argument("--purpose", required=True)
     create_parser.add_argument("--expires", required=True)
     create_parser.add_argument("--start-point", default="HEAD")
+    create_parser.add_argument(
+        "--allow-c-drive",
+        action="store_true",
+        help="explicitly allow a new worktree on C:; otherwise C: create is refused",
+    )
 
     retire_parser = subparsers.add_parser("retire")
     retire_parser.add_argument("--path", required=True)
