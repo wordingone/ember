@@ -83,6 +83,7 @@ interface Mounted {
   stopBridge: () => void;
   telemetryPath: string;
   controlPath: string;
+  runSpecPath: string;
   columns: number;
   rows: number;
   getRaw: () => string;
@@ -99,7 +100,14 @@ async function mountRepl(
 ): Promise<Mounted> {
   const telemetryPath = join(tmpdir(), `test-psm-telemetry-${Date.now()}-${Math.random()}.jsonl`);
   const controlPath = join(tmpdir(), `test-psm-control-${Date.now()}-${Math.random()}.jsonl`);
+  const runSpecPath = join(tmpdir(), `test-psm-run-spec-${Date.now()}-${Math.random()}.json`);
   await writeFile(telemetryPath, "");
+  await writeFile(runSpecPath, JSON.stringify({
+    schema_version: "ember-certified-train-run-v1",
+    run_id: "process-review-run",
+    seed: 83,
+    requested_scope: { optimizer_steps: 2, write_budget_bytes: 4096 },
+  }));
   const previousTelemetryEnv = process.env["EMBER_TELEMETRY_PATH"];
   process.env["EMBER_TELEMETRY_PATH"] = telemetryPath;
 
@@ -114,6 +122,7 @@ async function mountRepl(
         EMBER_DISABLE_TERMINAL_TITLE: "1",
         EMBER_DISABLE_VIRTUAL_SCROLL: "1",
         EMBER_FINETUNE_CONTROL_PATH: controlPath,
+        EMBER_RUN_SPEC_PATH: runSpecPath,
       },
       ...(operatorReceiptEvents ? {
         operatorReceiptWriter: {
@@ -132,7 +141,7 @@ async function mountRepl(
   });
   const stdin = new FakeStdin();
   const stopBridge = startStdinBridge({ stdin: stdin as never });
-  return { handle, stdin, stopBridge, telemetryPath, controlPath, columns, rows, getRaw: () => raw, previousTelemetryEnv };
+  return { handle, stdin, stopBridge, telemetryPath, controlPath, runSpecPath, columns, rows, getRaw: () => raw, previousTelemetryEnv };
 }
 
 async function teardown(m: Mounted): Promise<void> {
@@ -145,6 +154,7 @@ async function teardown(m: Mounted): Promise<void> {
   await Promise.all([
     unlink(m.telemetryPath).catch(() => {}),
     unlink(m.controlPath).catch(() => {}),
+    unlink(m.runSpecPath).catch(() => {}),
   ]);
 }
 
@@ -186,6 +196,7 @@ describe("#1475 START dispatch rides the single execution spine", () => {
     resetCommandRegistryForTests();
     startTelemetryWatch().stop();
     const calls: Array<{ args: string; sessionId: string }> = [];
+    const alternateCalls: string[] = [];
     const probe: RegistryCommand = {
       name: "smoketest",
       description: "dispatch-equality probe process",
@@ -195,7 +206,16 @@ describe("#1475 START dispatch rides the single execution spine", () => {
         return { type: "message" as const, message: `PROBE-RAN-${calls.length}` };
       },
     };
-    setCommandRegistryDeps({ getBuiltinCommands: () => [probe] });
+    const alternate: RegistryCommand = {
+      name: "alternate",
+      description: "selection-drift adversary",
+      isEnabled: () => true,
+      execute: async () => {
+        alternateCalls.push("ran");
+        return { type: "message" as const, message: "ALTERNATE-RAN" };
+      },
+    };
+    setCommandRegistryDeps({ getBuiltinCommands: () => [probe, alternate] });
     const m = await mountRepl(100, 40);
     try {
       let lines = await selectProcessByClicks(m, "smoketest");
@@ -203,9 +223,28 @@ describe("#1475 START dispatch rides the single execution spine", () => {
       expect(startAt).toBeDefined();
 
       click(m, { col: startAt!.col + 1, row: startAt!.row });
+      lines = await waitLines(m, (l) => l.some((line) => line.includes("START PARAMETERS")));
+      const titleAt = findGlyph(lines, "START PARAMETERS");
+      expect(titleAt).toBeDefined();
+      // Change the live selection after review opened. Confirmation must still dispatch the
+      // captured smoketest activation, never recompute from this new selection.
+      const selectedAt = findGlyph(lines, "[PROCESS: smoketest");
+      expect(selectedAt).toBeDefined();
+      click(m, { col: selectedAt!.col + 1, row: selectedAt!.row });
+      lines = await waitLines(m, (l) => findGlyphFrom(l, "alternate", selectedAt!.row + 1, 0) !== undefined);
+      const alternateAt = findGlyphFrom(lines, "alternate", selectedAt!.row + 1, 0);
+      expect(alternateAt).toBeDefined();
+      click(m, { col: alternateAt!.col + 1, row: alternateAt!.row });
+      lines = await waitLines(m, (l) => l.some((line) => line.includes("[PROCESS: alternate")));
+      const refreshedTitleAt = findGlyph(lines, "START PARAMETERS");
+      expect(refreshedTitleAt).toBeDefined();
+      const confirmAt = findGlyphFrom(lines, "CONFIRM START", refreshedTitleAt!.row + 1, 0);
+      expect(confirmAt).toBeDefined();
+      click(m, { col: confirmAt!.col + 1, row: confirmAt!.row });
       lines = await waitLines(m, (l) => l.some((line) => line.includes("PROBE-RAN-1")));
       expect(lines.some((line) => line.includes("PROBE-RAN-1"))).toBe(true);
       expect(calls).toHaveLength(1);
+      expect(alternateCalls).toHaveLength(0);
 
       // The typed path, through the same mounted session: identical handler, identical session.
       m.stdin.emit("data", Buffer.from("/smoketest "));
@@ -235,7 +274,12 @@ describe("#1488 the /train confirm-only membrane is preserved through START", ()
     await Promise.all([
       writeFile(certificatePath, `${JSON.stringify({ kind: "certificate" })}\n`),
       writeFile(ledgerPath, `${JSON.stringify({ kind: "declaration" })}\n`),
-      writeFile(runSpecPath, `${JSON.stringify({ kind: "run-spec" })}\n`),
+      writeFile(runSpecPath, `${JSON.stringify({
+        schema_version: "ember-certified-train-run-v1",
+        run_id: "train-membrane-run",
+        seed: 83,
+        requested_scope: { optimizer_steps: 2, write_budget_bytes: 4096 },
+      })}\n`),
     ]);
 
     const preflightCalls: string[][] = [];
@@ -300,6 +344,12 @@ describe("#1488 the /train confirm-only membrane is preserved through START", ()
       // Second START — the explicit confirm act: the consumer runs exactly once, with the
       // offer's own resolved artifact paths, and the preflight is NEVER re-run on confirm.
       click(m, { col: confirmAt!.col + 1, row: confirmAt!.row });
+      lines = await waitLines(m, (l) => l.some((line) => line.includes("START PARAMETERS")));
+      const dialogTitleAt = findGlyph(lines, "START PARAMETERS");
+      expect(dialogTitleAt).toBeDefined();
+      const dialogConfirmAt = findGlyphFrom(lines, "CONFIRM START", dialogTitleAt!.row + 1, 0);
+      expect(dialogConfirmAt).toBeDefined();
+      click(m, { col: dialogConfirmAt!.col + 1, row: dialogConfirmAt!.row });
       lines = await waitLines(m, (l) =>
         l.some((line) => line.includes("certified bounded canary process completed.")));
       expect(lines.some((line) => line.includes("certified bounded canary process completed."))).toBe(true);
@@ -312,7 +362,7 @@ describe("#1488 the /train confirm-only membrane is preserved through START", ()
         "--run-spec", runSpecPath,
       ]);
       expect(preflightCalls).toHaveLength(1);
-      expect(operatorReceiptEvents.filter((row) => row.event === "start_parameters_confirmed")).toHaveLength(0);
+      expect(operatorReceiptEvents.filter((row) => row.event === "control_confirmed")).toHaveLength(1);
 
       // The offer/refusal text remains visible after the confirm, and the spent offer disarms
       // the confirm stage — START is back to its armed label, never a stale confirm button.
@@ -336,7 +386,12 @@ describe("#1488 the /train confirm-only membrane is preserved through START", ()
     await Promise.all([
       writeFile(certificatePath, `${JSON.stringify({ kind: "certificate" })}\n`),
       writeFile(ledgerPath, `${JSON.stringify({ kind: "declaration" })}\n`),
-      writeFile(runSpecPath, `${JSON.stringify({ kind: "run-spec" })}\n`),
+      writeFile(runSpecPath, `${JSON.stringify({
+        schema_version: "ember-certified-train-run-v1",
+        run_id: "train-repeat-run",
+        seed: 83,
+        requested_scope: { optimizer_steps: 2, write_budget_bytes: 4096 },
+      })}\n`),
     ]);
 
     const preflightCalls: string[][] = [];
@@ -376,6 +431,7 @@ describe("#1488 the /train confirm-only membrane is preserved through START", ()
       await trainCmd.execute("", ctx);
       const offer = outstandingTrainOfferForSession(ctx.sessionId);
       expect(offer).toBeDefined();
+      expect(offer!.runSpec).toBe(runSpecPath);
       const selected = buildProcessOptions([trainCmd])[0];
       expect(selected).toBeDefined();
 

@@ -3,7 +3,7 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import React from "react";
 import { Box, Text } from "../ink/components.ts";
-import { StartParametersDialog } from "./start-parameters.ts";
+import { StartParametersDialog, type StartParameters } from "./start-parameters.ts";
 import {
   ACTIVE_RUN_TTL_MS,
   type TelemetryEvent,
@@ -722,13 +722,14 @@ export function buildOperatorSurfaceSnapshot({
 }
 
 export interface OperatorSurfacePaneProps extends OperatorSurfaceInput {
-  startDialogOpen?: boolean;
-  onStartParameters?: (parameters: import("./start-parameters.ts").StartParameters) => void;
-  onStartOpen?: () => void;
-  startDialogParameters?: import("./start-parameters.ts").StartParameters;
-  onStartEdit?: (field: import("./start-parameters.ts").StartParameters extends infer T ? keyof T : never, value: number) => void;
-  onStartCancel?: () => void;
   onControl?: (action: OperatorControlAction, runId?: string) => void;
+  onControlOpen?: (action: OperatorControlAction, runId?: string) => void;
+  controlDialogOpen?: boolean;
+  controlDialogAction?: OperatorControlAction;
+  controlDialogParameters?: StartParameters;
+  controlDialogSourcePath?: string;
+  onControlConfirm?: (parameters: StartParameters) => void;
+  onControlCancel?: () => void;
   width?: number;
   hoveredControl?: OperatorControlAction;
   onControlHover?: (action: OperatorControlAction | undefined) => void;
@@ -1126,12 +1127,13 @@ export function OperatorSurfacePane({
   activityScrollOffset = 0,
   onActivityScroll,
   onControl,
-  onStartParameters,
-  onStartOpen,
-  startDialogParameters,
-  onStartEdit,
-  startDialogOpen = false,
-  onStartCancel,
+  onControlOpen,
+  controlDialogOpen = false,
+  controlDialogAction,
+  controlDialogParameters,
+  controlDialogSourcePath,
+  onControlConfirm,
+  onControlCancel,
   focusedControlIndex,
   disabledActionReason,
   commands,
@@ -1218,11 +1220,18 @@ export function OperatorSurfacePane({
     const startColor = startControlStage === "confirm" ? "yellow" : startControlStage === "armed" ? "green" : "gray";
     const onStartClick = isStart
       ? () => {
-          if (!enabled || startControlStage !== "confirm") {
+          if (!enabled) {
             onControl?.(action, selectedControlRunId);
             return;
           }
-          onStartOpen?.();
+          // Train's first activation is its existing preflight/offer membrane. Every other
+          // launchable process reviews the same authority fields before its first dispatch;
+          // train joins that review at its membrane's confirm stage.
+          if (startControlStage === "armed" && selectedProcess === "train") {
+            onControl?.(action, selectedControlRunId);
+            return;
+          }
+          (onControlOpen ?? onControl)?.(action, selectedControlRunId);
         }
       : undefined;
     return React.createElement(
@@ -1231,7 +1240,9 @@ export function OperatorSurfacePane({
         key: `control-${action}`,
         flexShrink: 0,
         paddingRight: 1,
-        onClick: clickable ? (onStartClick ?? (() => onControl?.(action, selectedControlRunId))) : undefined,
+        onClick: clickable
+          ? (onStartClick ?? (() => (onControlOpen ?? onControl)?.(action, selectedControlRunId)))
+          : undefined,
         onMouseEnter: clickable ? () => onControlHover?.(action) : undefined,
         onMouseLeave: clickable ? () => onControlHover?.(undefined) : undefined,
       },
@@ -1472,12 +1483,14 @@ export function OperatorSurfacePane({
     selectButtonElement,
     menuElement,
     controlsElement,
-    onStartParameters && startDialogOpen ? React.createElement(StartParametersDialog, {
-      key: "start-dialog",
-      initial: startDialogParameters,
-      onEdit: onStartEdit,
-      onConfirm: onStartParameters,
-      onCancel: onStartCancel ?? (() => {}),
+    controlDialogOpen && controlDialogAction && controlDialogParameters &&
+      controlDialogSourcePath && onControlConfirm ? React.createElement(StartParametersDialog, {
+      key: "control-dialog",
+      action: controlDialogAction,
+      parameters: controlDialogParameters,
+      sourcePath: controlDialogSourcePath,
+      onConfirm: onControlConfirm,
+      onCancel: onControlCancel ?? (() => {}),
     }) : null,
     commandBarElement,
     ...disabledReasonLines.map((line) => React.createElement(Box, { key: `disabled-reason-${line}`, height: 1, flexShrink: 0 }, React.createElement(Text, { color: "yellow", wrap: "truncate-end" }, line))),

@@ -75,7 +75,19 @@ export function buildProcessOptions(commands: readonly RegistryCommand[]): Comma
 export interface ProcessOffer {
   readonly process: string;
   readonly offerId: string;
+  /** Exact run-spec path already captured by the process's own offer authority. */
+  readonly runSpecPath?: string;
 }
+
+export type StartReviewCapture =
+  | {
+      readonly kind: "captured";
+      readonly activation: CommandButtonActivation;
+      readonly process: string;
+      readonly offerId?: string;
+      readonly runSpecPath: string;
+    }
+  | { readonly kind: "rejected"; readonly reason: string };
 
 /**
  * The newest outstanding offer minted by THIS session, if any. Today /train is the only command
@@ -85,7 +97,9 @@ export interface ProcessOffer {
  */
 export function outstandingProcessOffer(sessionId: string): ProcessOffer | undefined {
   const trainOffer = outstandingTrainOfferForSession(sessionId);
-  return trainOffer ? { process: "train", offerId: trainOffer.offerId } : undefined;
+  return trainOffer
+    ? { process: "train", offerId: trainOffer.offerId, runSpecPath: trainOffer.runSpec }
+    : undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -136,6 +150,29 @@ export function startActivation(
     return { kind: "dispatch", text: `/${offer.process} confirm ${offer.offerId}` };
   }
   return commandButtonActivation(selected);
+}
+
+/** Freeze the exact activation and run-spec identity the dialog reviews. */
+export function captureStartReview(
+  selected: CommandButton | undefined,
+  offer: ProcessOffer | undefined,
+  fallbackRunSpecPath: string,
+): StartReviewCapture {
+  const activation = startActivation(selected, offer);
+  if (activation.kind === "rejected") return activation;
+  if (!selected) return { kind: "rejected", reason: START_NEEDS_SELECTION_REASON };
+  const matchingOffer = offer !== undefined && offer.process === selected.name ? offer : undefined;
+  const runSpecPath = matchingOffer?.runSpecPath ?? fallbackRunSpecPath;
+  if (runSpecPath.trim() === "") {
+    return { kind: "rejected", reason: "launch review has no authority-bound run-spec path" };
+  }
+  return {
+    kind: "captured",
+    activation,
+    process: selected.name,
+    ...(matchingOffer ? { offerId: matchingOffer.offerId } : {}),
+    runSpecPath,
+  };
 }
 
 // ---------------------------------------------------------------------------

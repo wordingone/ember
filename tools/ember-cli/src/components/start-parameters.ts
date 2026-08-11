@@ -3,81 +3,108 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // authority: current Ember CLI/Lab governed surface; no parallel runtime authority
 // claim_boundary: CPU/source-level START parameter dialog only; no training/result claim
+export type ParameterDialogAction = "START" | "PAUSE" | "RESUME" | "RESTART";
+export const PARAMETER_NOT_DECLARED = "NOT DECLARED BY RUN-SPEC" as const;
+export type AuthorityParameterValue = number | typeof PARAMETER_NOT_DECLARED;
+
 export interface StartParameters {
-  dataSize: number;
+  seed: number;
   steps: number;
-  timeBudgetMinutes: number;
+  sequenceLength: AuthorityParameterValue;
+  checkpointInterval: AuthorityParameterValue;
+  writeBudgetBytes: number;
+  runId: string;
 }
 
-export const DEFAULT_START_PARAMETERS: Readonly<StartParameters> = {
-  dataSize: 1,
-  steps: 100,
-  timeBudgetMinutes: 30,
-};
+export type LaunchAuthorityParametersResult =
+  | { ok: true; parameters: StartParameters }
+  | { ok: false; reason: string };
 
-export const START_PARAMETER_BOUNDS = {
-  dataSize: { min: 1, max: 128 },
-  steps: { min: 1, max: 100_000 },
-  timeBudgetMinutes: { min: 1, max: 1_440 },
-} as const;
+function positiveInteger(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : undefined;
+}
 
-export function clampStartParameters(parameters: StartParameters): StartParameters {
+function optionalPositiveInteger(value: unknown, name: string): AuthorityParameterValue | { reason: string } {
+  if (value === undefined) return PARAMETER_NOT_DECLARED;
+  const parsed = positiveInteger(value);
+  return parsed === undefined ? { reason: `launch-authority run-spec has invalid ${name}` } : parsed;
+}
+
+/** Closed projection: missing authority is a refusal, never guessed steering. */
+export function parseLaunchAuthorityParameters(raw: string): LaunchAuthorityParametersResult {
+  let row: unknown;
+  try {
+    row = JSON.parse(raw);
+  } catch {
+    return { ok: false, reason: "launch-authority run-spec is not valid JSON" };
+  }
+  if (row === null || typeof row !== "object" || Array.isArray(row)) {
+    return { ok: false, reason: "launch-authority run-spec is not an object" };
+  }
+  const record = row as Record<string, unknown>;
+  const scope = record["requested_scope"];
+  if (scope === null || typeof scope !== "object" || Array.isArray(scope)) {
+    return { ok: false, reason: "launch-authority run-spec is missing requested_scope" };
+  }
+  const requested = scope as Record<string, unknown>;
+  const fields = [
+    ["seed", record["seed"], true],
+    ["optimizer_steps", requested["optimizer_steps"], false],
+    ["write_budget_bytes", requested["write_budget_bytes"], false],
+  ] as const;
+  const values = new Map<string, number>();
+  for (const [name, candidate, allowZero] of fields) {
+    const value = allowZero && typeof candidate === "number" && Number.isSafeInteger(candidate) && candidate >= 0
+      ? candidate
+      : positiveInteger(candidate);
+    if (value === undefined) return { ok: false, reason: `launch-authority run-spec is missing ${name}` };
+    values.set(name, value);
+  }
+  const runId = record["run_id"];
+  if (typeof runId !== "string" || runId.trim() === "") {
+    return { ok: false, reason: "launch-authority run-spec is missing run_id" };
+  }
+  const sequenceLength = optionalPositiveInteger(requested["sequence_length"], "sequence_length");
+  if (typeof sequenceLength === "object") return { ok: false, reason: sequenceLength.reason };
+  const checkpointInterval = optionalPositiveInteger(
+    record["training_checkpoint_interval"] ?? requested["checkpoint_interval"],
+    "checkpoint_interval",
+  );
+  if (typeof checkpointInterval === "object") return { ok: false, reason: checkpointInterval.reason };
   return {
-    dataSize: Math.max(1, Math.min(128, Math.trunc(parameters.dataSize))),
-    steps: Math.max(1, Math.min(100_000, Math.trunc(parameters.steps))),
-    timeBudgetMinutes: Math.max(1, Math.min(1_440, Math.trunc(parameters.timeBudgetMinutes))),
+    ok: true,
+    parameters: {
+      seed: values.get("seed")!,
+      steps: values.get("optimizer_steps")!,
+      sequenceLength,
+      checkpointInterval,
+      writeBudgetBytes: values.get("write_budget_bytes")!,
+      runId: runId.trim(),
+    },
   };
 }
 
-export function formatStartTrainCommand(parameters: StartParameters): string {
-  const bounded = clampStartParameters(parameters);
-  return `/train --data-size ${bounded.dataSize} --steps ${bounded.steps} --time-budget-minutes ${bounded.timeBudgetMinutes}`;
-}
-
-export type StartDialogAction =
-  | { type: "open" }
-  | { type: "edit"; field: keyof StartParameters; value: number }
-  | { type: "confirm" }
-  | { type: "cancel" };
-
-export interface StartDialogState {
-  open: boolean;
-  parameters: StartParameters;
-}
-
-export function createStartDialogState(parameters: StartParameters = DEFAULT_START_PARAMETERS): StartDialogState {
-  return { open: false, parameters: clampStartParameters({ ...parameters }) };
-}
-
-export function reduceStartDialog(state: StartDialogState, action: StartDialogAction): { state: StartDialogState; submitted?: StartParameters } {
-  if (action.type === "open") return { state: { ...state, open: true } };
-  if (action.type === "edit") return { state: { ...state, parameters: clampStartParameters({ ...state.parameters, [action.field]: action.value }) } };
-  if (action.type === "confirm") {
-    const parameters = clampStartParameters(state.parameters);
-    return { state: { open: false, parameters }, submitted: parameters };
-  }
-  return { state: { ...state, open: false } };
-}
-
 export interface StartParametersDialogProps {
-  initial?: StartParameters;
+  action: ParameterDialogAction;
+  sourcePath: string;
+  parameters: StartParameters;
   onConfirm: (parameters: StartParameters) => void;
   onCancel: () => void;
-  onEdit?: (field: keyof StartParameters, value: number) => void;
 }
 
-export function StartParametersDialog({ initial = DEFAULT_START_PARAMETERS, onConfirm, onCancel, onEdit }: StartParametersDialogProps): React.ReactElement {
-  const parameters = clampStartParameters(initial);
-  const edit = (field: keyof StartParameters, delta: number) => onEdit?.(field, parameters[field] + delta);
+/** Review-only by construction: the only actions are CONFIRM and CANCEL. */
+export function StartParametersDialog({ action, sourcePath, parameters, onConfirm, onCancel }: StartParametersDialogProps): React.ReactElement {
   return React.createElement(
     Box,
     { borderStyle: "single", flexDirection: "column", flexShrink: 0, paddingX: 1 },
-    React.createElement(Text, null, "START PARAMETERS"),
-    React.createElement(Text, null, `data=${parameters.dataSize} steps=${parameters.steps} budget=${parameters.timeBudgetMinutes}`),
-    React.createElement(Button, { onPress: () => edit("dataSize", 1) }, "DATA+"),
-    React.createElement(Button, { onPress: () => edit("steps", 1) }, "STEPS+"),
-    React.createElement(Button, { onPress: () => edit("timeBudgetMinutes", 1) }, "BUDGET+"),
-    React.createElement(Button, { onPress: () => onConfirm(parameters) }, "CONFIRM"),
+    React.createElement(Text, { bold: true }, `${action} PARAMETERS — REVIEW ONLY`),
+    React.createElement(Text, null, `run id: ${parameters.runId}`),
+    React.createElement(Text, null, `seed: ${parameters.seed}  steps: ${parameters.steps}`),
+    React.createElement(Text, null, `sequence length: ${parameters.sequenceLength}`),
+    React.createElement(Text, null, `checkpoint interval: ${parameters.checkpointInterval}`),
+    React.createElement(Text, null, `write budget: ${parameters.writeBudgetBytes} bytes`),
+    React.createElement(Text, { dimColor: true }, `authority: ${sourcePath}`),
+    React.createElement(Button, { onPress: () => onConfirm(parameters) }, `CONFIRM ${action}`),
     React.createElement(Button, { onPress: onCancel }, "CANCEL"),
   );
 }

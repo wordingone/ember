@@ -415,12 +415,12 @@ let trainOfferCounter = 0;
  */
 export function outstandingTrainOfferForSession(
   sessionId: string,
-): { offerId: string; ts: string } | undefined {
+): { offerId: string; ts: string; runSpec: string } | undefined {
   let newest: TrainOffer | undefined;
   for (const offer of trainOffers.values()) {
     if (offer.sessionId === sessionId) newest = offer;
   }
-  return newest ? { offerId: newest.offerId, ts: newest.ts } : undefined;
+  return newest ? { offerId: newest.offerId, ts: newest.ts, runSpec: newest.runSpec } : undefined;
 }
 
 function _mintOfferId(): string {

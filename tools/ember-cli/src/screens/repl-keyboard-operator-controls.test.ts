@@ -114,6 +114,7 @@ interface Mounted {
   stopBridge: () => void;
   telemetryPath: string;
   controlPath: string;
+  runSpecPath: string;
   columns: number;
   rows: number;
   getRaw: () => string;
@@ -130,7 +131,19 @@ async function mountForKeyboard(
   resetCommandRegistryForTests();
   const telemetryPath = join(tmpdir(), `test-kbd-telemetry-${Date.now()}-${Math.random()}.jsonl`);
   const controlPath = join(tmpdir(), `test-kbd-control-${Date.now()}-${Math.random()}.jsonl`);
+  const runSpecPath = join(tmpdir(), `test-kbd-run-spec-${Date.now()}-${Math.random()}.json`);
   await writeFile(telemetryPath, seedLines.map((line) => JSON.stringify(line)).join("\n") + (seedLines.length > 0 ? "\n" : ""));
+  await writeFile(runSpecPath, JSON.stringify({
+    schema_version: "ember-certified-train-run-v1",
+    run_id: "run-kbd",
+    seed: 83,
+    requested_scope: {
+      optimizer_steps: 200,
+      sequence_length: 4096,
+      checkpoint_interval: 50,
+      write_budget_bytes: 4096,
+    },
+  }));
   const previousTelemetryEnv = process.env["EMBER_TELEMETRY_PATH"];
   process.env["EMBER_TELEMETRY_PATH"] = telemetryPath;
 
@@ -148,6 +161,7 @@ async function mountForKeyboard(
         EMBER_DISABLE_TERMINAL_TITLE: "1",
         EMBER_DISABLE_VIRTUAL_SCROLL: "1",
         EMBER_FINETUNE_CONTROL_PATH: controlPath,
+        EMBER_RUN_SPEC_PATH: runSpecPath,
       },
       onExit: () => {},
     }),
@@ -164,7 +178,7 @@ async function mountForKeyboard(
 
   (handle as unknown as { _previousTelemetryEnv?: string | undefined })._previousTelemetryEnv = previousTelemetryEnv;
 
-  return { handle, stdin, stopBridge, telemetryPath, controlPath, columns, rows, getRaw: () => raw };
+  return { handle, stdin, stopBridge, telemetryPath, controlPath, runSpecPath, columns, rows, getRaw: () => raw };
 }
 
 async function teardown(m: Mounted, previousTelemetryEnv: string | undefined): Promise<void> {
@@ -179,6 +193,7 @@ async function teardown(m: Mounted, previousTelemetryEnv: string | undefined): P
   await Promise.all([
     unlink(m.telemetryPath).catch(() => {}),
     unlink(m.controlPath).catch(() => {}),
+    unlink(m.runSpecPath).catch(() => {}),
   ]);
 }
 
@@ -276,7 +291,7 @@ describe("repl keyboard operator controls (R2b)", () => {
   // -----------------------------------------------------------------------
   // Row 2 -- Enter on a focused control reaches the control stream with the right run id.
   // -----------------------------------------------------------------------
-  test("row2: Enter on the focused control appends the real command to the control channel", async () => {
+  test("row2: Enter on the focused control opens review and does not silently dispatch", async () => {
     const now = new Date().toISOString();
     const m = await mountForKeyboard([trainEvent(RUN_ID, now)]);
     const previous = (m.handle as unknown as { _previousTelemetryEnv?: string })._previousTelemetryEnv;
@@ -291,7 +306,8 @@ describe("repl keyboard operator controls (R2b)", () => {
       await new Promise<void>((resolve) => setTimeout(resolve, 50));
 
       const lines = await readControlLines(m.controlPath);
-      expect(lines).toEqual([{ verb: "pause", runId: RUN_ID, ts: expect.any(String) }]);
+      expect(lines).toEqual([]);
+      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((line) => line.includes("PAUSE PARAMETERS"))).toBe(true);
     } finally {
       await teardown(m, previous);
     }
@@ -300,7 +316,7 @@ describe("repl keyboard operator controls (R2b)", () => {
   // -----------------------------------------------------------------------
   // Row 3 -- Space is identical to Enter.
   // -----------------------------------------------------------------------
-  test("row3: Space on the focused control behaves identically to Enter", async () => {
+  test("row3: Space on the focused control opens the same review without dispatch", async () => {
     const now = new Date().toISOString();
     const m = await mountForKeyboard([trainEvent(RUN_ID, now)]);
     const previous = (m.handle as unknown as { _previousTelemetryEnv?: string })._previousTelemetryEnv;
@@ -315,7 +331,8 @@ describe("repl keyboard operator controls (R2b)", () => {
       await new Promise<void>((resolve) => setTimeout(resolve, 50));
 
       const lines = await readControlLines(m.controlPath);
-      expect(lines).toEqual([{ verb: "pause", runId: RUN_ID, ts: expect.any(String) }]);
+      expect(lines).toEqual([]);
+      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((line) => line.includes("PAUSE PARAMETERS"))).toBe(true);
     } finally {
       await teardown(m, previous);
     }
@@ -439,7 +456,7 @@ describe("repl keyboard operator controls (R2b)", () => {
   // -----------------------------------------------------------------------
   // C1 -- narrowest supported width, all four controls: reachable regardless of wrapped rows.
   // -----------------------------------------------------------------------
-  test("C1: at a narrow pane width the controls reflow across rows but activation still works", async () => {
+  test("C1: at a narrow pane width activation still opens review without dispatch", async () => {
     const now = new Date().toISOString();
     // 60 real terminal columns pushes the operator pane itself well under the ~49-column budget
     // the four decorated labels need on one row, forcing layoutControlRows to wrap -- proving the
@@ -457,7 +474,8 @@ describe("repl keyboard operator controls (R2b)", () => {
       await new Promise<void>((resolve) => setTimeout(resolve, 50));
 
       const controlLines = await readControlLines(m.controlPath);
-      expect(controlLines).toEqual([{ verb: "pause", runId: RUN_ID, ts: expect.any(String) }]);
+      expect(controlLines).toEqual([]);
+      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((line) => line.includes("PAUSE PARAMETERS"))).toBe(true);
     } finally {
       await teardown(m, previous);
     }
@@ -466,7 +484,7 @@ describe("repl keyboard operator controls (R2b)", () => {
   // -----------------------------------------------------------------------
   // C2 -- a live run and RESTART: stop leg then start leg, both observable, in order.
   // -----------------------------------------------------------------------
-  test("C2: RESTART on an OFFLINE run emits stop then start, in order", async () => {
+  test("C2: RESTART on an OFFLINE run opens review before stop/start", async () => {
     const t1 = new Date(Date.now() - 2000).toISOString();
     const t2 = new Date(Date.now() - 1000).toISOString();
     // train_step resolves a run; a NEWER run_status with phase OFFLINE flips channelIsOffline,
@@ -487,10 +505,8 @@ describe("repl keyboard operator controls (R2b)", () => {
       await new Promise<void>((resolve) => setTimeout(resolve, 50));
 
       const controlLines = await readControlLines(m.controlPath);
-      expect(controlLines).toEqual([
-        { verb: "stop", runId: RUN_ID, ts: expect.any(String) },
-        { verb: "start", ts: expect.any(String) },
-      ]);
+      expect(controlLines).toEqual([]);
+      expect(renderedLines(m.getRaw(), m.columns, m.rows).some((line) => line.includes("RESTART PARAMETERS"))).toBe(true);
     } finally {
       await teardown(m, previous);
     }

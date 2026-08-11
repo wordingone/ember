@@ -114,7 +114,14 @@ import {
   createOperatorReceiptWriter,
   type OperatorReceiptWriter,
 } from "../services/operator-receipts.ts";
-import { clampStartParameters, DEFAULT_START_PARAMETERS, type StartParameters } from "../components/start-parameters.ts";
+import {
+  parseLaunchAuthorityParameters,
+  type StartParameters,
+} from "../components/start-parameters.ts";
+import {
+  updateOperatorControlNotice,
+  type OperatorControlNotice,
+} from "../services/operator-control-notice.ts";
 import {
   createLivenessHeartbeatWriter,
   isHeadlessCapture,
@@ -149,11 +156,13 @@ import {
 } from "../services/run-progress-scanner.ts";
 import { useReceiptLandingPoller, formatLastReceiptLine } from "../services/receipt-landing-poller.ts";
 import path from "node:path";
+import fs from "node:fs";
 import { OperatorSurfacePane } from "../components/operator-surface-pane.ts";
 import { commandBarMaxRows } from "../components/command-bar-pane.ts";
 import type { CommandButtonActivation } from "../services/command-buttons.ts";
 import {
   buildProcessOptions,
+  captureStartReview,
   outstandingProcessOffer,
   startActivation,
 } from "../services/process-select.ts";
@@ -758,14 +767,15 @@ export function ReplScreen({
   // assigned every render, below, once the registry state and handleCommandButton exist — so
   // this early-declared, referentially-stable handler never captures stale selection state.
   const activateStartRef = useRef<() => void>(() => {});
+  const openControlDialogRef = useRef<(action: OperatorControlAction, runId?: string) => void>(() => {});
   const operatorControlChannelPath = env["EMBER_FINETUNE_CONTROL_PATH"];
   const handleOperatorControl = useCallback((action: OperatorControlAction, runId?: string) => {
     if (action === "START") {
       activateStartRef.current();
       return;
     }
-    void driveOperatorControl(action, runId, { channelPath: operatorControlChannelPath });
-  }, [operatorControlChannelPath]);
+    openControlDialogRef.current(action, runId);
+  }, []);
 
   // R2b: keyboard-reachable operator controls. `paneFocused` is the single discriminator for
   // both halves of the invariant -- "operator surface focused" and "no text input active" are
@@ -778,8 +788,14 @@ export function ReplScreen({
   const [hoveredControl, setHoveredControl] = useState<OperatorControlAction | undefined>(undefined);
   const [activityScrollOffset, setActivityScrollOffset] = useState(0);
   const [controlDisabledReason, setControlDisabledReason] = useState<string | undefined>(undefined);
-  const [startDialogOpen, setStartDialogOpen] = useState(false);
-  const [startDialogParameters, setStartDialogParameters] = useState<StartParameters>({ ...DEFAULT_START_PARAMETERS });
+  const [controlNotice, setControlNotice] = useState<OperatorControlNotice | undefined>(undefined);
+  const [controlDialog, setControlDialog] = useState<{
+    action: OperatorControlAction;
+    runId?: string;
+    parameters: StartParameters;
+    sourcePath: string;
+    activation?: CommandButtonActivation;
+  } | undefined>(undefined);
 
   // #1475: click-first SELECT PROCESS run control. The selection is the START control's arming
   // state; the open/page/hover values are pure dropdown presentation. Like the command bar, the
@@ -2009,17 +2025,93 @@ export function ReplScreen({
   // disabled command) surfaces its named reason on the controls' own reason row. Assigned every
   // render so the closure always sees the LIVE selection/offer (see activateStartRef's
   // declaration next to handleOperatorControl).
-  const dispatchStartParameters = (parameters: StartParameters): void => {
-    const selected = processOptions.find((option) => option.name === selectedProcess);
-    const activation = startActivation(selected, processOffer);
-    if (activation.kind === "rejected") {
-      setControlDisabledReason(activation.reason);
+  const surfaceControlRefusal = (action: OperatorControlAction, detail: string): void => {
+    const receiptPath = operatorReceiptsRef.current?.filePath ?? "operator receipt unavailable";
+    operatorReceiptsRef.current?.append("control_refused", JSON.stringify({ action, detail }));
+    setControlNotice((current) => updateOperatorControlNotice(current, { action, detail, receiptPath }));
+  };
+
+  const launchAuthorityRunSpecPath = env["EMBER_RUN_SPEC_PATH"] ?? (() => {
+    try {
+      return path.join(
+        resolveEmberRepoRoot({ startDir: cwd, envRepoRoot: env["EMBER_REPO_ROOT"] }),
+        "receipts", "ember-02-launch-authority", "run-spec.json",
+      );
+    } catch {
+      // The read below remains fail-closed and surfaces the exact attempted path.
+      return path.join(cwd, "receipts", "ember-02-launch-authority", "run-spec.json");
+    }
+  })();
+
+  const openControlDialog = (action: OperatorControlAction, runId?: string): void => {
+    const startReview = action === "START"
+      ? captureStartReview(
+          processOptions.find((option) => option.name === selectedProcess),
+          processOffer,
+          launchAuthorityRunSpecPath,
+        )
+      : undefined;
+    if (startReview?.kind === "rejected") {
+      surfaceControlRefusal(action, startReview.reason);
+      return;
+    }
+    const runSpecPath = startReview?.runSpecPath ?? launchAuthorityRunSpecPath;
+    let parsed;
+    try {
+      parsed = parseLaunchAuthorityParameters(fs.readFileSync(runSpecPath, "utf8"));
+    } catch (error) {
+      surfaceControlRefusal(action, `launch-authority run-spec unreadable: ${error instanceof Error ? error.message : String(error)}`);
+      return;
+    }
+    if (!parsed.ok) {
+      surfaceControlRefusal(action, parsed.reason);
+      return;
+    }
+    // START names the prospective authority run, not any historical run still plotted in the
+    // pane. State-changing controls must instead match the exact live run they will mutate.
+    if (action !== "START" && runId !== undefined && parsed.parameters.runId !== runId) {
+      surfaceControlRefusal(action, `run identity mismatch: live=${runId} authority=${parsed.parameters.runId}`);
       return;
     }
     setControlDisabledReason(undefined);
-    operatorReceiptsRef.current?.append("start_parameters_confirmed", JSON.stringify(parameters));
-    setStartDialogOpen(false);
-    handleCommandButton(activation);
+    setControlNotice(undefined);
+    setControlDialog({
+      action,
+      runId: action === "START" ? parsed.parameters.runId : runId,
+      parameters: parsed.parameters,
+      sourcePath: runSpecPath,
+      ...(startReview ? { activation: startReview.activation } : {}),
+    });
+  };
+  openControlDialogRef.current = openControlDialog;
+
+  const confirmControlDialog = async (parameters: StartParameters): Promise<void> => {
+    const pending = controlDialog;
+    if (!pending) return;
+    operatorReceiptsRef.current?.append("control_confirmed", JSON.stringify({
+      action: pending.action,
+      runId: pending.runId ?? parameters.runId,
+      parameters,
+      runSpec: pending.sourcePath,
+      ...(pending.activation ? { activation: pending.activation } : {}),
+    }));
+    setControlDialog(undefined);
+    if (pending.action === "START") {
+      if (!pending.activation) {
+        surfaceControlRefusal("START", "launch review did not capture an activation");
+        return;
+      }
+      handleCommandButton(pending.activation);
+      return;
+    }
+    try {
+      const result = await driveOperatorControl(pending.action, pending.runId, {
+        channelPath: operatorControlChannelPath,
+      });
+      if (!result.ok) surfaceControlRefusal(pending.action, result.error ?? "control command refused");
+    } catch (error) {
+      surfaceControlRefusal(pending.action, error instanceof Error ? error.message : String(error));
+    }
   };
 
   activateStartRef.current = () => {
@@ -2134,17 +2226,15 @@ export function ReplScreen({
       terminalColumns: terminalCols,
       terminalRows,
       onControl: handleOperatorControl,
-      onStartParameters: dispatchStartParameters,
-      onStartOpen: () => {
-        const selected = processOptions.find((option) => option.name === selectedProcess);
-        handleCommandButton(startActivation(selected, processOffer));
-      },
-      startDialogParameters,
-      onStartEdit: (field, value) => setStartDialogParameters((current) => clampStartParameters({ ...current, [field]: value })),
-      startDialogOpen,
-      onStartCancel: () => { setStartDialogOpen(false); setControlDisabledReason(undefined); },
+      onControlOpen: openControlDialog,
+      controlDialogOpen: controlDialog !== undefined,
+      controlDialogAction: controlDialog?.action,
+      controlDialogParameters: controlDialog?.parameters,
+      controlDialogSourcePath: controlDialog?.sourcePath,
+      onControlConfirm: (parameters) => { void confirmControlDialog(parameters); },
+      onControlCancel: () => { setControlDialog(undefined); setControlDisabledReason(undefined); },
       focusedControlIndex: paneFocused ? focusedControlIndex : undefined,
-      disabledActionReason: controlDisabledReason,
+      disabledActionReason: controlNotice?.line ?? controlDisabledReason,
       hoveredControl,
       onControlHover: setHoveredControl,
       activityScrollOffset,
