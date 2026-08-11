@@ -152,6 +152,7 @@ const FAST_PATH_SUBCMDS = new Set<string>([
   "self-hosted-runner",
   "goal-session-smoke",
   "goal-session-live",
+  "dispatch-governed",
   "gh",
   "liveness",
 ]);
@@ -597,6 +598,8 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
       `  ember                          Start the interactive cockpit (default)\n` +
       `  ember -p, --print "<prompt>"   Headless: run one prompt, print result, exit\n` +
       `  ember <subcommand> [args]      Run a subcommand (see below)\n` +
+      `  ember dispatch-governed --manifest <absolute-path>\n` +
+      `                                 Submit one governed_vertical manifest to resident Ember Lab\n` +
       `\n` +
       `Options:\n` +
       `  -h, --help                     Show this help and exit\n` +
@@ -706,6 +709,32 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
       renderPanel: renderMonitorPanel,
       renderTail: renderReceiptsTail,
     });
+    process.exit(0);
+    return true;
+  }
+
+  if (first === "dispatch-governed") {
+    let result: unknown;
+    try {
+      const governed = await import("../services/governed-dispatch.ts");
+      const manifestPath = governed.parseGovernedDispatchArgs(args.slice(1));
+      const version = buildCliVersionRecord();
+      if (version.source_binding !== "BOUND" || version.source_commit === null) {
+        throw new Error("dispatch-governed requires an exact compiled Ember source commit");
+      }
+      result = await governed.runGovernedDispatch({
+        manifestPath,
+        expectedSourceCommit: version.source_commit,
+        pipeName: process.env["EMBER_LAB_PIPE"] ?? "",
+      });
+    } catch (error) {
+      process.stderr.write(
+        "dispatch-governed: " + (error instanceof Error ? error.message : String(error)) + "\n",
+      );
+      process.exit(1);
+      return true;
+    }
+    process.stdout.write(JSON.stringify(result) + "\n");
     process.exit(0);
     return true;
   }
