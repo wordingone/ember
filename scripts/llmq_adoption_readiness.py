@@ -33,6 +33,9 @@ _EMBER_LAB_SOURCE_PATH = "runtime/ember-lab/src/lib.rs"
 _PIPE_PREFIX = r"\\.\pipe\ember-lab-"
 _OPERATOR_PIPE_PREFIX = r"\\.\pipe\ember-operator-"
 _MAX_RPC_FRAME_BYTES = 64 * 1024
+# Private in-process marker: only _acquire_live_daemon_assessment may mint this.
+# JSON packets and caller-authored dictionaries cannot reproduce daemon custody.
+_DAEMON_AUTHORITY_TOKEN = object()
 
 
 def _configured_ember_lab_pipe() -> str | None:
@@ -196,14 +199,42 @@ def _canonical_ember_lab_binary(repository_root: Path) -> Path | None:
     return None
 
 
+def _canonical_ember_lab_source_sha256(repository_root: Path) -> str | None:
+    """Reproduce Rust's length-delimited daemon source identity over canonical files."""
+    root = repository_root.resolve(strict=True)
+    relative_sources = (
+        "runtime/ember-lab/src/lib.rs",
+        "runtime/ember-lab/src/data_catalog.rs",
+        "runtime/ember-lab/src/rpc.rs",
+        "runtime/ember-lab/src/main.rs",
+        "runtime/ember-lab/src/training_verify.rs",
+        "runtime/ember-lab/Cargo.toml",
+        "runtime/ember-lab/Cargo.lock",
+    )
+    digest = hashlib.sha256()
+    try:
+        for relative in relative_sources:
+            path = root / relative
+            if _has_reparse_component(path, root) or not path.is_file():
+                return None
+            raw = path.read_bytes()
+            digest.update(len(raw).to_bytes(8, "little"))
+            digest.update(raw)
+    except OSError:
+        return None
+    return digest.hexdigest()
+
+
 def _acquire_live_daemon_assessment(repository_root: Path, job_id: object) -> dict | None:
     """Fetch and reopen a fresh daemon export; never trust packet locators."""
     pipe_name = _configured_ember_lab_pipe()
     if pipe_name is None or not isinstance(job_id, str) or not job_id:
         return None
     try:
-        canonical_source = repository_root / _EMBER_LAB_SOURCE_PATH
-        canonical_source_sha = hashlib.sha256(canonical_source.read_bytes()).hexdigest()
+        canonical_source_sha = _canonical_ember_lab_source_sha256(repository_root)
+        daemon_source_commit = _run_git(repository_root, "rev-parse", "HEAD")
+        if canonical_source_sha is None or not isinstance(daemon_source_commit, str) or not _SHA.fullmatch(daemon_source_commit):
+            return None
         with tempfile.TemporaryDirectory(prefix="ember-llmq-assessment-") as temporary:
             directory = Path(temporary) / "daemon-export"
             result, server_binary_sha, server_binary_path = _rpc_export_assessment(pipe_name, job_id, directory)
@@ -216,7 +247,7 @@ def _acquire_live_daemon_assessment(repository_root: Path, job_id: object) -> di
             ):
                 return None
             expected_fields = {
-                "schema", "ember_lab_identity", "operational_receipt",
+                "schema", "ember_lab_identity", "preflight_receipt", "operational_receipt",
                 "stdout_log", "stderr_log", "schedule_alarm_state",
             }
             identity = result.get("ember_lab_identity") if isinstance(result, dict) else None
@@ -230,6 +261,7 @@ def _acquire_live_daemon_assessment(repository_root: Path, job_id: object) -> di
             ):
                 return None
             suffixes = {
+                "preflight_receipt": ".preflight.json",
                 "operational_receipt": ".operational.json",
                 "stdout_log": ".stdout.log",
                 "stderr_log": ".stderr.log",
@@ -256,7 +288,36 @@ def _acquire_live_daemon_assessment(repository_root: Path, job_id: object) -> di
                     return None
                 reopened[field] = raw
             operational = json.loads(reopened["operational_receipt"].decode("utf-8", errors="strict"))
+            preflight = json.loads(reopened["preflight_receipt"].decode("utf-8", errors="strict"))
             schedule = json.loads(reopened["schedule_alarm_state"].decode("utf-8", errors="strict"))
+            preflight_program = preflight.get("program") if isinstance(preflight, dict) else None
+            preflight_bindings = preflight.get("bindings") if isinstance(preflight, dict) else None
+            if (
+                not isinstance(preflight, dict)
+                or set(preflight) != {
+                    "schema_version", "result", "job_id", "source_commit", "observed_at_ms",
+                    "not_before_ms", "expires_at_ms", "dispatch_manifest_sha256", "workload_profile",
+                    "program", "bindings", "args_sha256", "env_sha256", "custody_root",
+                    "storage_reserves", "vram_reserve", "maximum_job_memory_bytes", "host_commit",
+                    "ember_lab_identity",
+                }
+                or preflight.get("schema_version") != "ember-lab-dispatch-preflight-v1"
+                or preflight.get("result") != "PREFLIGHT_PASSED"
+                or preflight.get("job_id") != job_id
+                or preflight.get("ember_lab_identity") != identity
+                or not isinstance(preflight.get("source_commit"), str)
+                or not _SHA.fullmatch(preflight["source_commit"])
+                or preflight.get("source_commit") != daemon_source_commit
+                or not isinstance(preflight_program, dict)
+                or set(preflight_program) != {"path", "sha256"}
+                or not isinstance(preflight_program.get("path"), str)
+                or not preflight_program["path"]
+                or not isinstance(preflight_program.get("sha256"), str)
+                or not _DIGEST.fullmatch(preflight_program["sha256"])
+                or not isinstance(preflight_bindings, list)
+                or not preflight_bindings
+            ):
+                return None
             expected_receipt_fields = {
                 "schema", "ember_lab_identity", "job_id", "identity_sha256", "resource_lease",
                 "state", "pid", "executable_identity", "restart_policy", "exit_code", "logs",
@@ -292,11 +353,16 @@ def _acquire_live_daemon_assessment(repository_root: Path, job_id: object) -> di
             return {
                 "response": result,
                 "operational_receipt": operational,
+                "preflight_receipt": preflight,
+                "preflight_receipt_bytes": reopened["preflight_receipt"],
+                "preflight_receipt_sha256": hashlib.sha256(reopened["preflight_receipt"]).hexdigest(),
                 "schedule_alarm_state": schedule,
                 "stdout_bytes": reopened["stdout_log"],
                 "stderr_bytes": reopened["stderr_log"],
                 "server_binary_sha256": server_binary_sha,
                 "canonical_source_sha256": canonical_source_sha,
+                "_daemon_source_commit": daemon_source_commit,
+                "_daemon_authority_token": _DAEMON_AUTHORITY_TOKEN,
             }
     except (OSError, ValueError, UnicodeError, json.JSONDecodeError):
         return None
@@ -380,7 +446,18 @@ def _authority_file(root: Path | None, path_value: object) -> Path | None:
 
 def _git_env() -> dict[str, str]:
     """Drop caller-controlled Git config/object/worktree transport overrides."""
-    return {key: value for key, value in os.environ.items() if not key.upper().startswith("GIT_")}
+    blocked = {
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "GIT_HTTP_PROXY",
+        "GIT_HTTPS_PROXY",
+    }
+    return {
+        key: value
+        for key, value in os.environ.items()
+        if not key.upper().startswith("GIT_") and key.upper() not in blocked
+    }
 
 
 def _run_git(repo: Path, *args: str) -> str | None:
@@ -636,19 +713,41 @@ def _ember_lab_build_missing(
         missing.append("ember_lab_build_receipt.status")
     if receipt.get("authority") != "ember-cli->ember-lab":
         missing.append("ember_lab_build_receipt.authority")
+    daemon_custody = (
+        isinstance(live_assessment, dict)
+        and live_assessment.get("_daemon_authority_token") is _DAEMON_AUTHORITY_TOKEN
+    )
     for field in (
-        "job_id", "host_id", "toolchain", "dispatch_receipt_path", "binary_manifest_path",
+        "job_id", "host_id", "toolchain", "dispatch_receipt_path",
         "operational_receipt_path", "producer_source_path", "producer_binary_path",
     ):
         if not isinstance(receipt.get(field), str) or not receipt[field]:
             missing.append(f"ember_lab_build_receipt.{field}")
+    if not daemon_custody and not isinstance(receipt.get("binary_manifest_path"), str):
+        missing.append("ember_lab_build_receipt.binary_manifest_path")
     if receipt.get("exit_code") != 0:
         missing.append("ember_lab_build_receipt.exit_code")
+    if (
+        not isinstance(source_receipt, dict)
+        or not isinstance(source_receipt.get("commit"), str)
+        or not _SHA.fullmatch(source_receipt["commit"])
+        or not isinstance(source_receipt.get("source_manifest_sha256"), str)
+        or not _DIGEST.fullmatch(source_receipt["source_manifest_sha256"])
+    ):
+        missing.append("governed_source_receipt.commit")
     if receipt.get("source_manifest_sha256") != source_receipt.get("source_manifest_sha256"):
         missing.append("ember_lab_build_receipt.source_manifest_sha256")
-    if not _digest_file(authority_files_root, receipt.get("dispatch_receipt_path"), receipt.get("dispatch_receipt_sha256")):
+    if daemon_custody:
+        daemon_preflight_sha = live_assessment.get("preflight_receipt_sha256")
+        if receipt.get("dispatch_receipt_sha256") != daemon_preflight_sha:
+            missing.append("ember_lab_build_receipt.daemon_preflight_sha256")
+    elif not _digest_file(authority_files_root, receipt.get("dispatch_receipt_path"), receipt.get("dispatch_receipt_sha256")):
         missing.append("ember_lab_build_receipt.dispatch_receipt")
-    if not _digest_file(authority_files_root, receipt.get("binary_manifest_path"), receipt.get("binary_manifest_sha256")):
+    binary_manifest_path = receipt.get("binary_manifest_path")
+    if isinstance(binary_manifest_path, str):
+        if not _digest_file(authority_files_root, binary_manifest_path, receipt.get("binary_manifest_sha256")):
+            missing.append("ember_lab_build_receipt.binary_manifest")
+    elif not daemon_custody:
         missing.append("ember_lab_build_receipt.binary_manifest")
     if not isinstance(build, dict) or build.get("binary_sha256") != receipt.get("binary_sha256"):
         missing.append("ember_lab_build_receipt.binary_sha256")
@@ -722,21 +821,64 @@ def _ember_lab_build_missing(
             or identity.get("binary_sha256") != producer_binary_sha
         ):
             missing.append("ember_lab_build_receipt.daemon_authority")
-    dispatch = _json_file(authority_files_root, receipt.get("dispatch_receipt_path"))
-    if not isinstance(dispatch, dict) or dispatch.get("schema") != "ember-lab-dispatch-terminal-receipt-v1":
+    dispatch = (
+        live_assessment.get("preflight_receipt")
+        if daemon_custody and isinstance(live_assessment, dict)
+        else _json_file(authority_files_root, receipt.get("dispatch_receipt_path"))
+    )
+    dispatch_schema = dispatch.get("schema") if isinstance(dispatch, dict) else None
+    if isinstance(dispatch, dict) and dispatch_schema is None:
+        dispatch_schema = dispatch.get("schema_version")
+    accepted_dispatch_schemas = {"ember-lab-dispatch-terminal-receipt-v1"}
+    if daemon_custody:
+        accepted_dispatch_schemas.add("ember-lab-dispatch-preflight-v1")
+    if not isinstance(dispatch, dict) or dispatch_schema not in accepted_dispatch_schemas:
         missing.append("ember_lab_build_receipt.dispatch_schema")
     else:
-        if dispatch.get("status") != "PASS" or dispatch.get("test_only") is True:
+        if dispatch_schema == "ember-lab-dispatch-preflight-v1":
+            if dispatch.get("result") != "PREFLIGHT_PASSED":
+                missing.append("ember_lab_build_receipt.dispatch_status")
+        elif dispatch.get("status") != "PASS" or dispatch.get("test_only") is True:
             missing.append("ember_lab_build_receipt.dispatch_status")
         if dispatch.get("job_id") != receipt.get("job_id"):
             missing.append("ember_lab_build_receipt.dispatch_job_id")
-        if dispatch.get("source_manifest_sha256") != receipt.get("source_manifest_sha256"):
+        if dispatch_schema == "ember-lab-dispatch-preflight-v1":
+            if dispatch.get("source_commit") != live_assessment.get("_daemon_source_commit"):
+                missing.append("ember_lab_build_receipt.dispatch_source_commit")
+            program = dispatch.get("program")
+            if (
+                not isinstance(program, dict)
+                or set(program) != {"path", "sha256"}
+                or not isinstance(program.get("path"), str)
+                or not program["path"]
+                or not isinstance(program.get("sha256"), str)
+                or not _DIGEST.fullmatch(program["sha256"])
+            ):
+                missing.append("ember_lab_build_receipt.dispatch_program_identity")
+            elif program["sha256"] != receipt.get("binary_sha256"):
+                missing.append("ember_lab_build_receipt.dispatch_program_binding")
+            bindings = dispatch.get("bindings")
+            source_manifest_sha = source_receipt.get("source_manifest_sha256") if isinstance(source_receipt, dict) else None
+            if (
+                not isinstance(bindings, list)
+                or not any(
+                    isinstance(binding, dict)
+                    and binding.get("kind") in {"llmq-source-manifest", "input"}
+                    and isinstance(binding.get("path"), str)
+                    and Path(binding["path"]).name == "llmq-source-manifest.json"
+                    and binding.get("sha256") == source_manifest_sha
+                    for binding in bindings
+                )
+            ):
+                missing.append("ember_lab_build_receipt.dispatch_source_manifest_binding")
+        elif dispatch.get("source_manifest_sha256") != receipt.get("source_manifest_sha256"):
             missing.append("ember_lab_build_receipt.dispatch_source_manifest_sha256")
-    binary = _json_file(authority_files_root, receipt.get("binary_manifest_path"))
-    if not isinstance(binary, dict) or binary.get("schema") != "ember-lab-binary-manifest-v1":
-        missing.append("ember_lab_build_receipt.binary_manifest_schema")
-    elif binary.get("status") != "PASS" or binary.get("test_only") is True or binary.get("binary_sha256") != receipt.get("binary_sha256"):
-        missing.append("ember_lab_build_receipt.binary_manifest_binding")
+    if isinstance(binary_manifest_path, str):
+        binary = _json_file(authority_files_root, binary_manifest_path)
+        if not isinstance(binary, dict) or binary.get("schema") != "ember-lab-binary-manifest-v1":
+            missing.append("ember_lab_build_receipt.binary_manifest_schema")
+        elif binary.get("status") != "PASS" or binary.get("test_only") is True or binary.get("binary_sha256") != receipt.get("binary_sha256"):
+            missing.append("ember_lab_build_receipt.binary_manifest_binding")
     return missing
 
 
