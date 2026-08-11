@@ -1448,6 +1448,14 @@ def test_committed_cond4_receipt_binds_shipping_verifiers_and_all_axes(
     implementation = receipt["implementation"]["behavior_surface_validator"]
     assert hashlib.sha256((REPO_ROOT / implementation["path"]).read_bytes()).hexdigest() == implementation["sha256"]
     config = receipt["migration"]["historical_config"]
+    assert subprocess.run(
+        ["git", "merge-base", "--is-ancestor", config["source_commit"], "HEAD"],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        shell=False,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    ).returncode == 0
     config_bytes = subprocess.run(
         ["git", "show", f"{config['source_commit']}:{config['repository_path']}"],
         cwd=REPO_ROOT,
