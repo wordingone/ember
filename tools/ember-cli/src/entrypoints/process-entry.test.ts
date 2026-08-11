@@ -6,10 +6,11 @@
 // Spec: specs/entrypoints/process-entry.md
 
 import { describe, it, expect, beforeEach, afterEach, spyOn } from "bun:test";
-import { writeFile, mkdir, rm } from "node:fs/promises";
+import { writeFile, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { openSync, closeSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { createServer } from "node:net";
 
 import {
   applyModelsJsonToEnv,
@@ -698,11 +699,118 @@ describe("process-entry — isFastPath", () => {
     expect(isFastPath(["node", "ember", "daemon"])).toBe(true);
     expect(isFastPath(["node", "ember", "remote-control"])).toBe(true);
     expect(isFastPath(["node", "ember", "ps"])).toBe(true);
+    expect(isFastPath(["node", "ember", "dispatch-governed"])).toBe(true);
   });
 
   it("detects the gh subcommand (issue #507: ember gh doctor)", () => {
     expect(isFastPath(["node", "ember", "gh"])).toBe(true);
     expect(isFastPath(["node", "ember", "gh", "doctor"])).toBe(true);
+  });
+
+  it("fails closed before startup when dispatch-governed arguments are incomplete", async () => {
+    const exitMock = mockProcessExit();
+    try {
+      await dispatchFastPath(["node", "ember", "dispatch-governed"]);
+    } catch (error) {
+      if (!(error instanceof Error && "code" in error)) throw error;
+    } finally {
+      exitMock.restore();
+    }
+    expect(exitMock.captured()).toBe(1);
+  });
+
+  it("dispatches a source-bound governed manifest through the real service and prints its receipt", async () => {
+    const root = await mkdtemp(join(tmpdir(), "ember-process-governed-"));
+    const pipe = `\\\\.\\pipe\\ember-lab-process-governed-${process.pid}-${Math.random().toString(16).slice(2)}`;
+    const sourceCommit = "d".repeat(40);
+    const receiptPath = join(root, "dispatch-preflight.json");
+    const receiptBytes = Buffer.from("daemon-governed-preflight\n");
+    const receiptSha256 = new Bun.CryptoHasher("sha256").update(receiptBytes).digest("hex");
+    await writeFile(receiptPath, receiptBytes);
+    const manifest = {
+      schema_version: "ember-lab-dispatch-manifest-v3",
+      job_id: "q2-actual-update",
+      source_commit: sourceCommit,
+      not_before_ms: 1,
+      expires_at_ms: 2,
+      resource_lease: "gpu-q2-actual-update",
+      program: { path: join(root, "python.exe"), sha256: "b".repeat(64) },
+      args: [join(root, "producer.py"), "governed-vertical"],
+      workload_profile: {
+        profile_id: "governed_vertical",
+        pinned_host_producers: [{ kind: "model_reconstruction", maximum_bytes: 1 }],
+        requires_ui_responsiveness: false,
+        cpu_rate_percent: 80,
+      },
+      env: {},
+      bindings: [],
+      custody_root: root,
+      storage_reserves: [{ root, minimum_free_bytes: 1 }],
+      minimum_free_vram_bytes: 1,
+      required_available_maximum_commit_bytes: 1,
+      maximum_job_memory_bytes: 1,
+      simulated_peak_commit_bytes: 1,
+      preflight_receipt: receiptPath,
+    };
+    const manifestBytes = Buffer.from(JSON.stringify(manifest) + "\n");
+    const manifestPath = join(root, "dispatch-manifest.json");
+    await writeFile(manifestPath, manifestBytes);
+    let receivedParams: unknown;
+    const server = createServer((socket) => {
+      socket.once("data", (buffer) => {
+        const request = JSON.parse(buffer.toString("utf8")) as {
+          id: string;
+          method: string;
+          params: Record<string, unknown>;
+        };
+        receivedParams = request.params;
+        socket.end(JSON.stringify({
+          jsonrpc: "2.0",
+          id: request.id,
+          result: {
+            pid: 4242,
+            preflight_receipt_path: receiptPath,
+            preflight_receipt_sha256: receiptSha256,
+          },
+        }) + "\n");
+      });
+    });
+    await new Promise<void>((resolvePromise, reject) => {
+      server.once("error", reject);
+      server.listen({ path: pipe }, resolvePromise);
+    });
+    const previousPipe = process.env["EMBER_LAB_PIPE"];
+    const buildGlobal = globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown };
+    const previousCommit = buildGlobal.__EMBER_BUILD_COMMIT__;
+    const stdout = captureStdout();
+    const exitMock = mockProcessExit();
+    process.env["EMBER_LAB_PIPE"] = pipe;
+    buildGlobal.__EMBER_BUILD_COMMIT__ = sourceCommit;
+    try {
+      await dispatchFastPath(["node", "ember", "dispatch-governed", "--manifest", manifestPath]);
+    } catch (error) {
+      if (!(error instanceof Error && "code" in error)) throw error;
+    } finally {
+      exitMock.restore();
+      stdout.restore();
+      await new Promise<void>((resolvePromise) => server.close(() => resolvePromise()));
+      if (previousPipe === undefined) delete process.env["EMBER_LAB_PIPE"];
+      else process.env["EMBER_LAB_PIPE"] = previousPipe;
+      if (previousCommit === undefined) delete buildGlobal.__EMBER_BUILD_COMMIT__;
+      else buildGlobal.__EMBER_BUILD_COMMIT__ = previousCommit;
+      await rm(root, { recursive: true, force: true });
+    }
+    expect(exitMock.captured()).toBe(0);
+    expect(receivedParams).toEqual({
+      manifest_utf8: manifestBytes.toString("utf8"),
+      manifest_sha256: new Bun.CryptoHasher("sha256").update(manifestBytes).digest("hex"),
+    });
+    expect(JSON.parse(stdout.output())).toEqual({
+      pid: 4242,
+      preflight_receipt_path: receiptPath,
+      preflight_receipt_sha256: receiptSha256,
+      manifest_sha256: new Bun.CryptoHasher("sha256").update(manifestBytes).digest("hex"),
+    });
   });
 
   it("returns false for unknown args", () => {
