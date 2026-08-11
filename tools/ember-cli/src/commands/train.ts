@@ -401,6 +401,8 @@ interface TrainOffer {
 }
 
 const trainOffers = new Map<string, TrainOffer>();
+/** Session ids whose first /train preflight has already been attempted. */
+const trainPreflightSessions = new Set<string>();
 let trainOfferCounter = 0;
 
 /**
@@ -739,6 +741,8 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
 
       // (1) Run the preflight first. It is the only subprocess in default mode;
       // certified execute mode may invoke only the fixed consumer below.
+      const firstPreflightForSession = !trainPreflightSessions.has(ctx.sessionId);
+      const preflightAttempts: Array<number | null> = [];
       let result: LaunchPacketRunResult;
       try {
         result = runLaunchPacket(pythonBin, [scriptPath, "--config", configPath]);
@@ -751,6 +755,27 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
             "error: launch-packet preflight could not be started -- training is BLOCKED (fail-closed). No launch command surfaced.",
           exitCode: 1,
         };
+      }
+
+      preflightAttempts.push(result.status);
+
+      // A relaunch can transiently return no process status before the runner is
+      // ready. Attribute exactly one retry to the same session and exact argv;
+      // every other failure remains fail-closed with no retry.
+      let retryNotice: string | null = null;
+      if (firstPreflightForSession && !trainArgs.execute && result.status === null) {
+        // Consume the per-session retry budget only when this command actually
+        // takes the one permitted null-status retry. Green/nonzero/throw paths
+        // remain eligible for a later first null observation.
+        trainPreflightSessions.add(ctx.sessionId);
+        try {
+          result = runLaunchPacket(pythonBin, [scriptPath, "--config", configPath]);
+        } catch {
+          result = { status: null, stdout: "" };
+        }
+        preflightAttempts.push(result.status);
+        retryNotice =
+          "launch-packet: first attempt returned status=null; one attributed retry used the identical executable and argv.";
       }
 
       const parsed = _parseLaunchPacketOutput(result.stdout);
@@ -771,6 +796,13 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
             `  (no parseable preflight rows; launch_packet exit=${result.status ?? "null"} -- config missing/malformed or the runner never produced output)`,
           );
         }
+        if (retryNotice !== null) lines.splice(1, 0, retryNotice);
+        if (preflightAttempts.length > 1) {
+          lines.push("preflight attempts:");
+          preflightAttempts.forEach((status, index) => {
+            lines.push(`  attempt ${index + 1}: launch_packet exit=${status ?? "null"}`);
+          });
+        }
         lines.push("No launch command surfaced.");
         return {
           type: "message" as const,
@@ -785,10 +817,11 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
       // these hold, but never surface a command we could not validate).
       const extracted = _extractLaunchCommand(parsed.summary);
       if (extracted === null) {
+        const retryLine = retryNotice === null ? "" : `${retryNotice}\n`;
         return {
           type: "message" as const,
           message:
-            "error: launch-packet exited 0 but its readiness summary was missing/unparseable or named no launch command -- training is BLOCKED (fail-closed). No launch command surfaced.",
+            `${retryLine}error: launch-packet exited 0 but its readiness summary was missing/unparseable or named no launch command -- training is BLOCKED (fail-closed). No launch command surfaced.`,
           exitCode: 1,
         };
       }
@@ -864,6 +897,7 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
       return {
         type: "message" as const,
         message: [
+          ...(retryNotice === null ? [] : [retryNotice]),
           "launch-packet: all preflights GREEN -- EMBER-02 is launch-ready.",
           "launch-authority artifacts resolved:",
           `  certificate: ${canonical.certificate}`,

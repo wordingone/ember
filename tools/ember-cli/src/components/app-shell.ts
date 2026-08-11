@@ -313,6 +313,8 @@ export function FullscreenLayout({
 
 export interface AppRootProps {
   cwd:          string;
+  /** Stable identity supplied by the live REPL when available. */
+  sessionId?:   string;
   themeMode?:   "dark" | "light" | "auto";
   flags?:       Record<string, boolean | undefined>;
   trustCtx?:    TrustCtx;
@@ -321,8 +323,21 @@ export interface AppRootProps {
   onExit?:      () => void;
 }
 
+/**
+ * Derive the session identity used by AppRoot's command context.
+ *
+ * A checkout path is not a session identity: two live roots can share it.
+ * Callers with an existing REPL identity pass it through; isolated AppRoot
+ * mounts mint a process-local identity instead of collapsing onto cwd.
+ */
+export function sessionIdForAppRoot(cwd: string, sessionId?: string): string {
+  const supplied = sessionId?.trim();
+  return supplied && supplied.length > 0 ? supplied : crypto.randomUUID();
+}
+
 export function AppRoot({
   cwd,
+  sessionId,
   themeMode = "dark",
   flags     = {},
   trustCtx  = {
@@ -337,10 +352,11 @@ export function AppRoot({
 }: AppRootProps): React.ReactElement {
   const [trustAccepted, setTrustAccepted] = useState(!needsTrustDialog(trustCtx));
   const [messages, setMessages]           = useState<SessionMessage[]>([]);
+  const [appSessionId]                    = useState(() => sessionIdForAppRoot(cwd, sessionId));
   const { columns, rows }                 = useContext(TerminalSizeContext);
 
   const sessionCtx: SessionContextValue = {
-    sessionId:  cwd,
+    sessionId:  appSessionId,
     cwd,
     jsonlKey:   encodeCwdKey(cwd),
     messages,
