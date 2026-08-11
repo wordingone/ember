@@ -972,6 +972,13 @@ def test_required_workflow_uses_base_pinned_kernel():
     assert "python -m scripts.github.live_pr_policy" in text
     assert "--event-base-sha" in text
     assert "--event-head-sha" in text
+    assert '--changed-range "${range_base}..HEAD"' in text, (
+        "the workflow already resolves range_base, so authority verification must use "
+        "the verifier-supported two-dot range"
+    )
+    assert '--changed-range "${range_base}...HEAD"' not in text, (
+        "a triple-dot range is invalid after range_base has already been resolved"
+    )
 
 
 def _legacy_zero_hit_fixture(branch: str) -> Path:
