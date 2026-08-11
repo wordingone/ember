@@ -23,6 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import verify_ember01_completion as completion  # noqa: E402
+import cond4_behavior_surface as cond4_surface  # noqa: E402
 from ember_01_identity.cond4_battery_surface import (  # noqa: E402
     COMPLETION_VERIFIER_SYMBOLS,
     behavior_surface_sha256,
@@ -1085,6 +1086,11 @@ def test_identity_legs_remeasure_real_manifest_and_execute_tamper(
         "active_parameters": 1_020_589_568,
         "episode_trainable_parameters": 1_020_589_568,
     }
+    surface_source = tmp_path / "surface.py"
+    surface_source.write_text("def exercised():\n    return 1\n", encoding="utf-8")
+    surface_manifest = cond4_surface.build_surface_manifest(
+        tmp_path, {"surface.py": ["exercised"]}
+    )
     verified_paths: list[Path] = []
 
     monkeypatch.setattr(
@@ -1108,11 +1114,19 @@ def test_identity_legs_remeasure_real_manifest_and_execute_tamper(
         lambda **_: {
             "tool": "test",
             "axis_count": 8,
-            "axes": {f"axis-{index}": {"rejected": True} for index in range(8)},
+            "axes": {
+                axis: {
+                    "rejected": True,
+                    "finding_codes": [f"binding.{axis}"],
+                    "duration_ms": index + 1,
+                }
+                for index, axis in enumerate(cond4_surface.COND4_AXES)
+            },
             "failures": [],
             "all_rejected": True,
         },
     )
+    monkeypatch.setattr(completion, "_cond4_surface_manifest", lambda _root: surface_manifest)
 
     result = completion.identity_legs(
         tmp_path,
@@ -1124,6 +1138,11 @@ def test_identity_legs_remeasure_real_manifest_and_execute_tamper(
 
     assert result["3"]["state"] == completion.RESOLVED_TRUE
     assert result["4"]["state"] == completion.RESOLVED_TRUE
+    cond4_surface.validate_execution_packet(
+        tmp_path,
+        result["4"]["evidence"]["behavior_surface"],
+        result["4"]["evidence"]["execution_evidence"],
+    )
     assert len(verified_paths) == 1
     assert verified_paths[0] == checkpoint_manifest
 
@@ -1185,18 +1204,8 @@ def test_cond4_tamper_battery_runs_all_eight_axes_through_real_validator(
         "comparator",
     }
     assert all(row["rejected"] is True for row in result["axes"].values())
+    assert all(row["duration_ms"] > 0 for row in result["axes"].values())
     assert list(tmp_path.glob(".ember01-cond4-*")) == []
-    receipt = json.loads(
-        (
-            REPO_ROOT
-            / "receipts"
-            / "ember-01-completion"
-            / "cond4-tamper-battery-bf20f050-v1.json"
-        ).read_text(encoding="utf-8")
-    )
-    assert cond4_battery_output_sha256(result) == receipt["verification"][
-        "cond4_battery_execution"
-    ]["output_sha256"]
 
 
 def test_tamper_battery_names_one_seeded_fail_open(
@@ -1238,6 +1247,73 @@ def test_tamper_battery_names_one_seeded_fail_open(
     assert result["axes"]["tokenizer"]["rejected"] is False
 
 
+def test_cond4_execution_evidence_binds_surface_checkpoint_loads_and_axis_timings(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "surface.py"
+    source.write_text("def exercised():\n    return 1\n", encoding="utf-8")
+    manifest = cond4_surface.build_surface_manifest(
+        tmp_path, {"surface.py": ["exercised"]}
+    )
+    checkpoint_bytes = b'{"shards":[{"bytes":7},{"bytes":11}]}'
+    battery = {
+        "axes": {
+            axis: {
+                "rejected": True,
+                "finding_codes": [f"binding.{axis}"],
+                "duration_ms": index + 1,
+            }
+            for index, axis in enumerate(cond4_surface.COND4_AXES)
+        }
+    }
+
+    evidence = completion._cond4_execution_evidence(
+        checkpoint_bytes=checkpoint_bytes,
+        surface_manifest=manifest,
+        battery=battery,
+        load_count=2,
+    )
+
+    cond4_surface.validate_execution_packet(tmp_path, manifest, evidence)
+    assert evidence["subject"] == {
+        "checkpoint_manifest_sha256": hashlib.sha256(checkpoint_bytes).hexdigest(),
+        "surface_aggregate_sha256": manifest["aggregate_sha256"],
+        "checkpoint_bytes_loaded": 36,
+        "load_count": 2,
+    }
+    assert [row["axis"] for row in evidence["axes"]] == list(
+        cond4_surface.COND4_AXES
+    )
+
+
+def test_cond4_execution_evidence_refuses_missing_or_false_axis(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "surface.py"
+    source.write_text("def exercised():\n    return 1\n", encoding="utf-8")
+    manifest = cond4_surface.build_surface_manifest(
+        tmp_path, {"surface.py": ["exercised"]}
+    )
+    battery = {
+        "axes": {
+            axis: {
+                "rejected": axis != "backend",
+                "finding_codes": [f"binding.{axis}"],
+                "duration_ms": 1,
+            }
+            for axis in cond4_surface.COND4_AXES
+        }
+    }
+
+    with pytest.raises(ValueError, match="COND4_EXECUTION_EVIDENCE_INVALID"):
+        completion._cond4_execution_evidence(
+            checkpoint_bytes=b'{"shards":[{"bytes":1}]}',
+            surface_manifest=manifest,
+            battery=battery,
+            load_count=2,
+        )
+
+
 def test_identity_legs_are_unresolved_without_real_checkpoint(
     tmp_path: Path,
 ) -> None:
@@ -1264,68 +1340,41 @@ def test_committed_cond4_receipt_binds_shipping_verifiers_and_all_axes(
             REPO_ROOT
             / "receipts"
             / "ember-01-completion"
-            / "cond4-tamper-battery-bf20f050-v1.json"
+            / "cond4-tamper-battery-bf20f050-v2.json"
         ).read_text(encoding="utf-8")
     )
-    marker = receipt["verification"]["cond4_battery_execution"]
-    current_source = (REPO_ROOT / "scripts" / "verify_ember01_completion.py").read_bytes()
-    assert marker["completion_verifier_surface_sha256"] == receipt["implementation"][
-        "completion_verifier"
-    ]["battery_surface"]["sha256"]
-    assert marker["result"] == "PASS"
-    assert marker["output_sha256"] == cond4_battery_output_sha256(receipt["leg4"])
-
-    base_ref = os.environ.get("EMBER_COND4_BASE_SHA", "HEAD^1")
-    base_source = subprocess.run(
-        ["git", "show", f"{base_ref}:scripts/verify_ember01_completion.py"],
+    assert receipt["invariant_sha256"] == (
+        "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
+    )
+    assert receipt["schema"] == "ember-cond4-tamper-battery-receipt-v2"
+    assert receipt["result"] == "PASS"
+    implementation = receipt["implementation"]["behavior_surface_validator"]
+    assert hashlib.sha256((REPO_ROOT / implementation["path"]).read_bytes()).hexdigest() == implementation["sha256"]
+    config = receipt["migration"]["historical_config"]
+    config_bytes = subprocess.run(
+        ["git", "show", f"{config['source_commit']}:{config['repository_path']}"],
         cwd=REPO_ROOT,
         check=True,
         capture_output=True,
     ).stdout
-    base_receipt = json.loads(
-        subprocess.run(
-            [
-                "git",
-                "show",
-                f"{base_ref}:receipts/ember-01-completion/cond4-tamper-battery-bf20f050-v1.json",
-            ],
-            cwd=REPO_ROOT,
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout
+    assert hashlib.sha256(config_bytes).hexdigest() == config["sha256"]
+    evidence = receipt["leg4"]["evidence"]
+    cond4_surface.validate_execution_packet(
+        REPO_ROOT,
+        evidence["behavior_surface"],
+        evidence["execution_evidence"],
     )
-    observed_output_sha256 = None
-    if behavior_surface_sha256(
-        base_source, COMPLETION_VERIFIER_SYMBOLS
-    ) != behavior_surface_sha256(current_source, COMPLETION_VERIFIER_SYMBOLS):
-        observed_output_sha256 = cond4_battery_output_sha256(
-            _rederive_cond4_battery(tmp_path)
-        )
-    assert cond4_receipt_transition_valid(
-        base_source,
-        current_source,
-        base_receipt,
-        receipt,
-        observed_output_sha256=observed_output_sha256,
-    )
-
-    for name, binding in receipt["implementation"].items():
-        path = REPO_ROOT / binding["path"]
-        source = path.read_bytes()
-        if name == "completion_verifier":
-            assert completion_verifier_binding_valid(source, binding)
-        else:
-            assert hashlib.sha256(source).hexdigest() == binding["sha256"]
+    assert receipt["leg3"]["state"] == completion.RESOLVED_TRUE
+    assert receipt["leg4"]["state"] == completion.RESOLVED_TRUE
     identity_binding = receipt["subject"]["identity_manifest"]
     assert (
         hashlib.sha256((REPO_ROOT / identity_binding["path"]).read_bytes()).hexdigest()
         == identity_binding["sha256"]
     )
-    assert receipt["leg4"]["axis_count"] == 8
-    assert receipt["leg4"]["all_rejected"] is True
-    assert receipt["leg4"]["failures"] == []
-    assert set(receipt["leg4"]["axes"]) == {
+    assert evidence["axis_count"] == 8
+    assert evidence["all_rejected"] is True
+    assert evidence["failures"] == []
+    assert set(evidence["axes"]) == {
         "checkpoint_bytes",
         "param_count",
         "tokenizer",
@@ -1335,7 +1384,7 @@ def test_committed_cond4_receipt_binds_shipping_verifiers_and_all_axes(
         "benchmark_id",
         "comparator",
     }
-    assert all(axis["rejected"] is True for axis in receipt["leg4"]["axes"].values())
+    assert all(axis["rejected"] is True for axis in evidence["axes"].values())
     assert receipt["claim_boundary"] == {
         "supports_completion_condition": 4,
         "counts_as_owned_checkpoint": False,
