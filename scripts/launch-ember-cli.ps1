@@ -116,7 +116,13 @@ function Get-EmberStateRoot([string]$RepositoryRoot) {
             $emberHome = Join-Path $profile $EmberInTreeStateDirectoryName
         }
     }
-    $keyed = Join-Path (Join-Path $emberHome $EmberSanctionedStateDirectoryName) (Get-EmberStateRootKey $RepositoryRoot)
+    # Construct the default lexically: Join-Path consults the PowerShell drive provider and
+    # fails on clean hosts before the governed B: volume is mounted.
+    $keyed = [System.IO.Path]::Combine(
+        $emberHome,
+        $EmberSanctionedStateDirectoryName,
+        (Get-EmberStateRootKey $RepositoryRoot)
+    )
     $resolved = [System.IO.Path]::GetFullPath($keyed)
     Assert-EmberStateRootIsWritable $resolved $RepositoryRoot
     return $resolved
