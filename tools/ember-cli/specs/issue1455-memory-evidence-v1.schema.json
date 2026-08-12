@@ -4,7 +4,7 @@
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "title": "Issue 1455 incident-bound memory evidence",
+  "title": "Issue 1455 incident-bound memory evidence candidate",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -19,7 +19,7 @@
   "properties": {
     "schema_version": { "const": "ember-issue1455-memory-evidence-v1" },
     "evidence_kind": { "enum": ["idle_soak", "injected_growth"] },
-    "verdict": { "const": "PASS" },
+    "verdict": { "const": "NEEDS_EXECUTION" },
     "incident": {
       "type": "object",
       "additionalProperties": false,

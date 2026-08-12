@@ -84,7 +84,7 @@ export type Issue1455MemoryReceiptInput =
 export type Issue1455MemoryEvidenceReceipt = Record<string, unknown> & {
   schema_version: "ember-issue1455-memory-evidence-v1";
   evidence_kind: "idle_soak" | "injected_growth";
-  verdict: "PASS";
+  verdict: "NEEDS_EXECUTION";
   receipt_sha256: string;
 };
 
@@ -216,7 +216,7 @@ function buildIdleReceipt(input: Issue1455IdleSoakInput): Issue1455MemoryEvidenc
   return finalize({
     schema_version: "ember-issue1455-memory-evidence-v1",
     evidence_kind: "idle_soak",
-    verdict: "PASS",
+    verdict: "NEEDS_EXECUTION",
     incident: input.incident,
     source: input.source,
     cockpit_pid: input.cockpit_pid,
@@ -272,7 +272,7 @@ function buildInjectedReceipt(input: Issue1455InjectedGrowthInput): Issue1455Mem
   return finalize({
     schema_version: "ember-issue1455-memory-evidence-v1",
     evidence_kind: "injected_growth",
-    verdict: "PASS",
+    verdict: "NEEDS_EXECUTION",
     incident: input.incident,
     source: input.source,
     cockpit_pid: input.cockpit_pid,

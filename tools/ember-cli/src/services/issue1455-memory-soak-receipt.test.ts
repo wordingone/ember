@@ -69,7 +69,7 @@ function exitObservation(overrides: Record<string, unknown> = {}) {
 }
 
 describe("issue #1455 memory evidence receipt", () => {
-  test("writes a self-hashed incident-bound passing idle soak exactly once", () => {
+  test("writes a self-hashed incident-bound idle candidate without execution credit", () => {
     const root = mkdtempSync(join(tmpdir(), "issue1455-receipt-"));
     roots.push(root);
     const output = join(root, "idle-soak.json");
@@ -78,7 +78,7 @@ describe("issue #1455 memory evidence receipt", () => {
     expect(receipt).toMatchObject({
       schema_version: "ember-issue1455-memory-evidence-v1",
       evidence_kind: "idle_soak",
-      verdict: "PASS",
+      verdict: "NEEDS_EXECUTION",
       duration_seconds: 7200,
       sample_count: 121,
       max_commit_growth_bytes: 120 * MIB,
@@ -87,6 +87,7 @@ describe("issue #1455 memory evidence receipt", () => {
       incident: incident(),
     });
     expect(receipt.receipt_sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(JSON.stringify(receipt)).not.toContain('"verdict":"PASS"');
     expect(JSON.parse(readFileSync(output, "utf8"))).toEqual(receipt);
     expect(verifyIssue1455MemoryReceipt(readFileSync(output, "utf8"))).toEqual(receipt);
     expect(() => writeIssue1455MemoryReceipt(output, idleInput())).toThrow(
@@ -161,12 +162,13 @@ describe("issue #1455 memory evidence receipt", () => {
     });
     expect(receipt).toMatchObject({
       evidence_kind: "injected_growth",
-      verdict: "PASS",
+      verdict: "NEEDS_EXECUTION",
       observed_exit_code: 75,
       trip_precedes_exit_observation: true,
       process_start_time: "2026-08-12T06:00:00.000Z",
       incident: incident(),
     });
+    expect(JSON.stringify(receipt)).not.toContain('"verdict":"PASS"');
   });
 
   test("refuses a forged injected trip, wrong pid, or non-clean exit", () => {
