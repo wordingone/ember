@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import Ajv2020 from "ajv/dist/2020";
 
 // goal_id: EMBER-02
 // workstream_id: EMBER-02A
@@ -12,6 +13,7 @@ import {
   writeIssue1455MemoryReceipt,
   type Issue1455MemoryReceiptInput,
 } from "./issue1455-memory-soak-receipt.ts";
+import receiptSchema from "../../specs/issue1455-memory-evidence-v1.schema.json";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -169,6 +171,9 @@ describe("issue #1455 memory evidence receipt", () => {
       incident: incident(),
     });
     expect(JSON.stringify(receipt)).not.toContain('"verdict":"PASS"');
+    const validate = new Ajv2020({ strict: false }).compile(receiptSchema);
+    expect(validate(receipt)).toBe(true);
+    expect(validate({ ...receipt, min_commit_bytes: 0 })).toBe(false);
   });
 
   test("refuses a forged injected trip, wrong pid, or non-clean exit", () => {
