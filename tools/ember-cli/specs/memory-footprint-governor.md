@@ -20,6 +20,8 @@ Consumer: `tools/ember-cli/src/services/memory-footprint-live.ts`
 
 Consumer: `tools/ember-cli/src/services/memory-footprint-cockpit.ts`
 
+Consumer: `tools/ember-cli/src/services/issue1455-memory-soak-receipt.ts`
+
 ## Authority and custody
 
 The native Ember CLI cockpit is the sole live poll-loop owner. It loads the
@@ -70,3 +72,13 @@ legacy JSON threshold spec would again have no live consumer.
 This carrier grants no GPU, training, checkpoint, model-quality, availability,
 #756 closure, or whole-issue #1282 closure credit. C2-C4 remain separate live
 obligations.
+
+## Issue #1455 evidence-candidate boundary
+
+The issue #1455 consumer may validate, self-hash, persist, and reopen a closed
+idle-soak or injected-growth candidate, but caller-supplied observations can
+only produce `NEEDS_EXECUTION`. They cannot mint `PASS`, flatness, self-limit,
+incident-cure, or issue-closure credit. A later current-source Ember CLI
+producer must authenticate the installed binary, process lifetime, raw samples,
+durable trip row, and terminal observation before any execution verdict can be
+adjudicated.
