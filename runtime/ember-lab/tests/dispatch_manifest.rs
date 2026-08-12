@@ -380,6 +380,7 @@ fn dispatch_token_identity_race_loses_atomic_fence_without_consumption_or_event(
         blocker_tx.commit().unwrap();
         consumer.join().unwrap()
     });
+    drop(blocker);
 
     let conn = Connection::open(&database).unwrap();
     let consumed: bool = conn
@@ -419,6 +420,7 @@ fn dispatch_token_identity_race_loses_atomic_fence_without_consumption_or_event(
     assert_eq!(consumed_events, 0, "identity race emitted an event");
 
     daemon.stop_job(job_id).unwrap();
+    drop(outcome);
     drop(daemon);
     remove_sandbox_when_unlocked(&root);
 }

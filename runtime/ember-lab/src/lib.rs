@@ -3092,8 +3092,7 @@ impl Daemon {
             .collect::<std::result::Result<_, _>>()?;
         drop(outage_stmt);
         tx.commit()?;
-        let telemetry = self
-            .conn()?
+        let telemetry = conn
             .query_row(
                 "SELECT sha256,metadata_json FROM a1_e8_telemetry WHERE job_id=?1",
                 [job_id],
@@ -5115,7 +5114,7 @@ struct LiveIdentityObservation {
 fn observe_live_process_identity(row: &JobProcessRow) -> Option<LiveIdentityObservation> {
     #[cfg(windows)]
     {
-        return match open_live_status(row) {
+        match open_live_status(row) {
             LiveStatus::Verified(live) => Some(LiveIdentityObservation {
                 identity: ProcessIdentity {
                     start_token: row.start_token.clone(),
@@ -5124,7 +5123,7 @@ fn observe_live_process_identity(row: &JobProcessRow) -> Option<LiveIdentityObse
                 _live: live,
             }),
             LiveStatus::Dead | LiveStatus::Orphaned(_) | LiveStatus::IdentityConflict(_) => None,
-        };
+        }
     }
     #[cfg(not(windows))]
     {
@@ -5345,8 +5344,8 @@ fn validate_a1_e8_metadata(value: &Value) -> Result<()> {
     if object["run_id"].as_str().is_none_or(str::is_empty)
         || !valid_source_commit
         || !valid_source_blobs
-        || object["seed"] != Value::from(83)
-        || object["row_count"] != Value::from(200)
+        || object["seed"] != 83
+        || object["row_count"] != 200
     {
         return Err(EmberLabError::InvalidDispatchManifest {
             detail: "A1-E8 telemetry metadata identity is invalid".into(),
@@ -7765,6 +7764,7 @@ fn inspect_process(pid: u32) -> Result<ProcessIdentity> {
     })
 }
 
+#[cfg(any(not(windows), test))]
 fn linux_process_start_token(stat: &str, pid: u32) -> Result<String> {
     // `/proc/<pid>/stat` field 2 (`comm`) is parenthesized and may contain
     // spaces or `)` characters. Fields after the final `) ` begin at field 3;
