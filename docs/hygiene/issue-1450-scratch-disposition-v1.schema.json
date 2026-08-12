@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ember-scratch-disposition-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "ticket", "ts", "sha_convention", "invariant_sha256", "authority", "source_manifest_sha256", "source", "entries", "summary", "disposition_sha256"],
+  "properties": {
+    "schema_version": {"const": "ember-scratch-disposition-v1"},
+    "ticket": {"const": "ISSUE-1450-SCRATCH-DISPOSITION"},
+    "ts": {"type": "string", "format": "date-time"},
+    "sha_convention": {"const": "bytes on disk as-is (binary read, no line-ending normalization)"},
+    "invariant_sha256": {"const": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"},
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goal_id", "workstream_id", "next_executed_outcome"],
+      "properties": {
+        "goal_id": {"const": "EMBER-02"},
+        "workstream_id": {"const": "EMBER-02A"},
+        "next_executed_outcome": {"const": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"}
+      }
+    },
+    "source_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "status_sha256", "files", "bytes"],
+      "properties": {
+        "commit": {"type": "string", "minLength": 1},
+        "status_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "files": {"type": "integer", "minimum": 0},
+        "bytes": {"type": "integer", "minimum": 0}
+      }
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "files", "bytes", "tree_sha256", "producer", "issue_or_run", "references", "identical_copy", "disposition"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "files": {"type": "integer", "minimum": 1},
+          "bytes": {"type": "integer", "minimum": 0},
+          "tree_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "producer": {"type": "string", "minLength": 1},
+          "issue_or_run": {"type": "string", "minLength": 1},
+          "references": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "identical_copy": {
+            "enum": ["PROVEN_DIFFERENT", "NOT_FOUND", "UNRESOLVED"]
+          },
+          "disposition": {"const": "KEEP_UNRESOLVED"}
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entries", "keep_unresolved", "move_ready"],
+      "properties": {
+        "entries": {"type": "integer", "minimum": 0},
+        "keep_unresolved": {"type": "integer", "minimum": 0},
+        "move_ready": {"const": 0}
+      }
+    },
+    "disposition_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}
