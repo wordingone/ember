@@ -213,6 +213,7 @@ describe("train command", () => {
       const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
       const cmd = createTrainCommand({
         repoRoot: scratch,
+        launchAuthorityRoot: canonicalDir(scratch),
         pythonBin: process.execPath,
         env: { EMBER_LAB_PIPE: String.raw`\\.\pipe\ember-lab-test` },
         sourceCommit: "a".repeat(40),
@@ -242,6 +243,18 @@ describe("train command", () => {
       const manifest = JSON.parse(calls[0]?.params["manifest_utf8"] as string);
       expect(manifest.workload_profile.profile_id).toBe("certified_training");
       expect(manifest.args[0]).toEndWith("certified_train_launch.py");
+      expect(manifest.args.slice(-2)).toEqual([
+        "--custody-receipt-sha256",
+        createHash("sha256")
+          .update(fs.readFileSync(path.join(canonicalDir(scratch), "launch-authority-custody.json")))
+          .digest("hex"),
+      ]);
+      expect(
+        manifest.bindings.some(
+          (binding: { kind: string; path: string }) =>
+            binding.kind === "manifest" && binding.path.endsWith("launch-authority-custody.json"),
+        ),
+      ).toBe(true);
       const helperBinding = manifest.bindings.find(
         (binding: { kind: string; path: string }) =>
           binding.kind === "verifier" && binding.path.endsWith("scripts\\ember_dispatch_token.py"),
@@ -263,6 +276,7 @@ describe("train command", () => {
       const calls: string[] = [];
       const cmd = createTrainCommand({
         repoRoot: scratch,
+        launchAuthorityRoot: canonicalDir(scratch),
         pythonBin: "python",
         env: { EMBER_LAB_PIPE: String.raw`\\.\pipe\ember-lab-test` },
         sourceCommit: "a".repeat(40),
@@ -299,6 +313,7 @@ describe("train command", () => {
       });
       const cmd = createTrainCommand({
         repoRoot: scratch,
+        launchAuthorityRoot: canonicalDir(scratch),
         pythonBin: process.execPath,
         env: { EMBER_LAB_PIPE: String.raw`\\.\pipe\ember-lab-test` },
         sourceCommit: "a".repeat(40),
@@ -345,6 +360,7 @@ describe("train command", () => {
       const calls: string[] = [];
       const cmd = createTrainCommand({
         repoRoot: scratch,
+        launchAuthorityRoot: canonicalDir(scratch),
         pythonBin: process.execPath,
         env: { EMBER_LAB_PIPE: String.raw`\\.\pipe\ember-lab-test` },
         sourceCommit: "a".repeat(40),

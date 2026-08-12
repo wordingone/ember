@@ -10,6 +10,7 @@ import ctypes
 import hashlib
 import json
 import os
+import time
 from pathlib import Path
 
 
@@ -28,6 +29,18 @@ _SOURCE_FILES = (
 
 class DispatchRefused(RuntimeError):
     pass
+
+
+def _open_pipe(pipe_name: str):
+    """Open the next server instance, tolerating only its bounded handoff gap."""
+    deadline = time.monotonic() + 2.0
+    while True:
+        try:
+            return open(pipe_name, "r+b", buffering=0)
+        except OSError as error:
+            if getattr(error, "winerror", None) not in (2, 231) or time.monotonic() >= deadline:
+                raise DispatchRefused("EMBER_LAB_DISPATCH_REFUSED: daemon pipe unavailable") from error
+            time.sleep(0.02)
 
 
 def _required(name: str) -> str:
@@ -75,7 +88,7 @@ def _call(
     import msvcrt
 
     try:
-        with open(pipe_name, "r+b", buffering=0) as stream:
+        with _open_pipe(pipe_name) as stream:
             handle = wintypes.HANDLE(msvcrt.get_osfhandle(stream.fileno()))
             kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
             get_server_pid = kernel32.GetNamedPipeServerProcessId

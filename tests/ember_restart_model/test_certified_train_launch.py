@@ -1767,6 +1767,8 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                     str(paths["ledger"]),
                     "--run-spec",
                     str(paths["run_spec"]),
+                    "--custody-receipt-sha256",
+                    hashlib.sha256(paths["custody_receipt"].read_bytes()).hexdigest(),
                 ],
                 check=False,
                 capture_output=True,
@@ -4610,6 +4612,7 @@ class DispatchAuthorityTests(unittest.TestCase):
             "--certificate", "missing-certificate.json",
             "--declaration-ledger", "missing-ledger.json",
             "--run-spec", "missing-run-spec.json",
+            "--custody-receipt-sha256", "a" * 64,
         ]
 
     def _invoke_before_validation(

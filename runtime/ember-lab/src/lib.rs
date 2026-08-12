@@ -5907,11 +5907,12 @@ fn validate_certified_training_binding_closure(
     certified_launcher: Option<&CertifiedProgramIdentity>,
     certified_dispatch_helper: Option<&CertifiedProgramIdentity>,
 ) -> Result<()> {
-    const FLAGS: [&str; 4] = [
+    const FLAGS: [&str; 5] = [
         "--root",
         "--certificate",
         "--declaration-ledger",
         "--run-spec",
+        "--custody-receipt-sha256",
     ];
     let names_certified_launcher = |raw: &str| {
         Path::new(raw).file_name().and_then(|name| name.to_str())
@@ -5946,7 +5947,7 @@ fn validate_certified_training_binding_closure(
         certified_dispatch_helper.ok_or_else(|| EmberLabError::InvalidDispatchManifest {
             detail: "certified training requires a daemon-preregistered dispatch helper".into(),
         })?;
-    if args.len() != 9
+    if args.len() != 11
         || !names_certified_launcher(&args[0])
         || FLAGS
             .iter()
@@ -5961,10 +5962,12 @@ fn validate_certified_training_binding_closure(
             .iter()
             .skip(2)
             .step_by(2)
+            .take(4)
             .any(|value| !Path::new(value).is_absolute())
+        || validate_hash(&args[10]).is_err()
     {
         return Err(EmberLabError::InvalidDispatchManifest {
-            detail: "certified training requires the exact launcher/root/certificate/declaration-ledger/run-spec argv grammar".into(),
+            detail: "certified training requires the exact launcher/root/certificate/declaration-ledger/run-spec/custody-receipt-sha256 argv grammar".into(),
         });
     }
     let launcher =
@@ -6000,6 +6003,34 @@ fn validate_certified_training_binding_closure(
     if fs::canonicalize(&args[2]).ok().as_deref() != Some(source_root) {
         return Err(EmberLabError::InvalidDispatchManifest {
             detail: "certified training --root does not match the bound repository root".into(),
+        });
+    }
+    let certificate =
+        fs::canonicalize(&args[4]).map_err(|error| EmberLabError::InvalidDispatchManifest {
+            detail: format!("certified training certificate is unavailable: {error}"),
+        })?;
+    let custody_receipt = fs::canonicalize(
+        certificate
+            .parent()
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                detail: "certified training certificate lacks a packet directory".into(),
+            })?
+            .join("launch-authority-custody.json"),
+    )
+    .map_err(|error| EmberLabError::InvalidDispatchManifest {
+        detail: format!("certified training custody receipt is unavailable: {error}"),
+    })?;
+    if hash_file(&custody_receipt).ok().as_deref() != Some(args[10].as_str())
+        || !bindings.iter().any(|(path, sha256, kind)| {
+            *kind == DispatchBindingKind::Manifest
+                && *path == custody_receipt
+                && sha256 == &args[10]
+                && matches!(verify_dispatch_file(path, sha256), Ok(verified) if verified == custody_receipt)
+        })
+    {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "certified training custody receipt hash lacks its exact manifest binding"
+                .into(),
         });
     }
     let dispatch_helper = fs::canonicalize(source_root.join("scripts/ember_dispatch_token.py"))

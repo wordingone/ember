@@ -43,6 +43,46 @@ def identity(binary_sha: str, source_sha: str) -> dict[str, object]:
     }
 
 
+def test_open_pipe_retries_only_the_bounded_server_instance_handoff() -> None:
+    module = load_module()
+    transient = OSError("pipe busy")
+    transient.winerror = 231
+    opened = mock.MagicMock()
+    attempts = [transient, opened]
+
+    def open_attempt(*_args, **_kwargs):
+        outcome = attempts.pop(0)
+        if isinstance(outcome, OSError):
+            raise outcome
+        return outcome
+
+    with (
+        mock.patch("builtins.open", side_effect=open_attempt),
+        mock.patch.object(module.time, "sleep", return_value=None) as sleep,
+    ):
+        assert module._open_pipe(r"\\.\pipe\ember-lab-owned") is opened
+    assert attempts == []
+    sleep.assert_called_once_with(0.02)
+
+
+def test_open_pipe_does_not_retry_a_nontransient_error() -> None:
+    module = load_module()
+    refused = OSError("access denied")
+    refused.winerror = 5
+    with (
+        mock.patch("builtins.open", side_effect=refused) as opened,
+        mock.patch.object(module.time, "sleep", return_value=None) as sleep,
+    ):
+        try:
+            module._open_pipe(r"\\.\pipe\ember-lab-owned")
+        except module.DispatchRefused as error:
+            assert "daemon pipe unavailable" in str(error)
+        else:
+            raise AssertionError("nontransient pipe failure was accepted")
+    assert opened.call_count == 1
+    sleep.assert_not_called()
+
+
 def test_consumes_once_and_clears_daemon_secret_before_runner_effects(tmp_path: Path) -> None:
     module = load_module()
     binary = tmp_path / "ember-lab.exe"

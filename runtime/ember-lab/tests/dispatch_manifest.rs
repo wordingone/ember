@@ -539,6 +539,8 @@ print(os.environ["EMBER_A1_E8_METADATA"], flush=True)
     let frontier_source = root.join("scripts").join("frontier_receipt.py");
     fs::write(&battery_source, b"# governed A1 exit battery fixture\n").unwrap();
     fs::write(&frontier_source, b"# governed frontier receipt fixture\n").unwrap();
+    let custody_receipt = root.join("launch-authority-custody.json");
+    fs::write(&custody_receipt, b"{\"schema_version\":\"test-custody\"}\n").unwrap();
     let telemetry_metadata = json!({
         "run_id": "certified-training-token-job",
         "source_commit": payload["source_commit"],
@@ -559,6 +561,7 @@ print(os.environ["EMBER_A1_E8_METADATA"], flush=True)
         json!({"kind":"verifier","path":dispatch_helper,"sha256":sha256(&dispatch_helper)}),
         json!({"kind":"verifier","path":battery_source,"sha256":sha256(&battery_source)}),
         json!({"kind":"verifier","path":frontier_source,"sha256":sha256(&frontier_source)}),
+        json!({"kind":"manifest","path":custody_receipt,"sha256":sha256(&custody_receipt)}),
     ]);
     payload["workload_profile"] = json!({
         "profile_id": "certified_training",
@@ -579,7 +582,9 @@ print(os.environ["EMBER_A1_E8_METADATA"], flush=True)
         "--declaration-ledger",
         root.join("data-manifest.json"),
         "--run-spec",
-        root.join("data-manifest.json")
+        root.join("data-manifest.json"),
+        "--custody-receipt-sha256",
+        sha256(&custody_receipt)
     ]);
     payload["minimum_free_vram_bytes"] = json!(1);
     let pipe = format!(
@@ -767,9 +772,11 @@ fn certified_training_real_launcher_and_helper_consume_before_validation_effects
     let certificate = source_root.join("certificate.json");
     let declaration_ledger = source_root.join("declaration-ledger.jsonl");
     let run_spec = source_root.join("run-spec.json");
+    let custody_receipt = source_root.join("launch-authority-custody.json");
     fs::write(&certificate, b"{\"invalid\":true}").unwrap();
     fs::write(&declaration_ledger, b"{\"invalid\":true}\n").unwrap();
     fs::write(&run_spec, b"{\"invalid\":true}").unwrap();
+    fs::write(&custody_receipt, b"{\"schema_version\":\"test-custody\"}\n").unwrap();
     payload["program"] = json!({"path":python,"sha256":sha256(&python)});
     payload["args"] = json!([
         launcher,
@@ -780,7 +787,9 @@ fn certified_training_real_launcher_and_helper_consume_before_validation_effects
         "--declaration-ledger",
         declaration_ledger,
         "--run-spec",
-        run_spec
+        run_spec,
+        "--custody-receipt-sha256",
+        sha256(&custody_receipt)
     ]);
     payload["workload_profile"] = json!({
         "profile_id": "certified_training",
@@ -800,6 +809,7 @@ fn certified_training_real_launcher_and_helper_consume_before_validation_effects
         {"kind":"manifest","path":certificate,"sha256":sha256(&certificate)},
         {"kind":"manifest","path":declaration_ledger,"sha256":sha256(&declaration_ledger)},
         {"kind":"manifest","path":run_spec,"sha256":sha256(&run_spec)}
+        ,{"kind":"manifest","path":custody_receipt,"sha256":sha256(&custody_receipt)}
     ]);
     payload["minimum_free_vram_bytes"] = json!(1);
     let manifest_utf8 = serde_json::to_string(&payload).unwrap();
@@ -832,16 +842,24 @@ fn certified_training_real_launcher_and_helper_consume_before_validation_effects
         2
     );
     let connection = Connection::open(&db).unwrap();
-    assert_eq!(
-        connection
+    let consumed_deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        let consumed = connection
             .query_row(
                 "SELECT COUNT(*) FROM dispatch_tokens WHERE job_id=?1 AND consumed_at_ms IS NOT NULL",
                 [job_id],
                 |row| row.get::<_, i64>(0),
             )
-            .unwrap(),
-        1
-    );
+            .unwrap();
+        if consumed == 1 {
+            break;
+        }
+        assert!(
+            Instant::now() < consumed_deadline,
+            "production launcher exited before its consumed token became observable"
+        );
+        thread::sleep(Duration::from_millis(20));
+    }
     drop(connection);
     rpc(&pipe, 24, "shutdown", json!({}));
     server.0.wait().unwrap();
@@ -1090,6 +1108,8 @@ fn certified_training_profile_refuses_decoy_misordered_and_unbound_launchers() {
         "extra",
         "missing-verifier",
         "mismatched-verifier",
+        "mismatched-custody-receipt",
+        "missing-custody-binding",
     ];
     for (index, case) in cases.into_iter().enumerate() {
         let root = sandbox(&format!("certified-training-{case}"));
@@ -1115,6 +1135,8 @@ fn certified_training_profile_refuses_decoy_misordered_and_unbound_launchers() {
         fs::create_dir_all(dispatch_helper.parent().unwrap()).unwrap();
         fs::write(&dispatch_helper, b"# daemon-bound dispatch helper\n").unwrap();
         let python = governed_python_executable();
+        let custody_receipt = root.join("launch-authority-custody.json");
+        fs::write(&custody_receipt, b"{\"schema_version\":\"test-custody\"}\n").unwrap();
         payload["program"] = json!({"path":python,"sha256":sha256(&python)});
         let foreign = root.join("foreign-launcher.py");
         fs::write(&foreign, b"# foreign\n").unwrap();
@@ -1135,6 +1157,11 @@ fn certified_training_profile_refuses_decoy_misordered_and_unbound_launchers() {
                 .as_array_mut()
                 .unwrap()
                 .push(json!({"kind":"verifier","path":bound,"sha256":sha256(bound)}));
+        }
+        if case != "missing-custody-binding" {
+            payload["bindings"].as_array_mut().unwrap().push(
+                json!({"kind":"manifest","path":custody_receipt,"sha256":sha256(&custody_receipt)}),
+            );
         }
         payload["workload_profile"] = json!({
             "profile_id": "certified_training",
@@ -1160,6 +1187,12 @@ fn certified_training_profile_refuses_decoy_misordered_and_unbound_launchers() {
             root.join("data-manifest.json")
                 .to_string_lossy()
                 .into_owned(),
+            "--custody-receipt-sha256".into(),
+            if case == "mismatched-custody-receipt" {
+                "f".repeat(64)
+            } else {
+                sha256(&custody_receipt)
+            },
         ];
         payload["args"] = json!(match case {
             "decoy" => {
@@ -1202,10 +1235,19 @@ fn certified_training_profile_refuses_decoy_misordered_and_unbound_launchers() {
                 || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
             )
             .unwrap_err();
-        assert!(
-            matches!(error, EmberLabError::InvalidDispatchManifest { .. }),
-            "{case}: {error}"
-        );
+        let detail = match &error {
+            EmberLabError::InvalidDispatchManifest { detail } => detail,
+            _ => panic!("{case}: {error}"),
+        };
+        if matches!(
+            case,
+            "mismatched-custody-receipt" | "missing-custody-binding"
+        ) {
+            assert!(
+                detail.contains("custody receipt hash lacks its exact manifest binding"),
+                "{case}: {detail}"
+            );
+        }
         let connection = Connection::open(root.join("ember-lab.sqlite3")).unwrap();
         let rows: i64 = connection
             .query_row("SELECT COUNT(*) FROM dispatch_tokens", [], |row| row.get(0))

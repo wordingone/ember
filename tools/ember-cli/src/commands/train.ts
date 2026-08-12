@@ -336,9 +336,20 @@ async function _dispatchCertifiedTraining(
     throw new Error("certified training requires an absolute EMBER_PYTHON_BIN executable");
   }
   const program = resolve(executable);
+  const custodyReceiptPath = join(dirname(args[4]!), "launch-authority-custody.json");
+  if (
+    args[9] !== "--custody-receipt-sha256" ||
+    !/^[0-9a-f]{64}$/.test(args[10] ?? "") ||
+    !existsSync(custodyReceiptPath) ||
+    !statSync(custodyReceiptPath).isFile() ||
+    sha256File(custodyReceiptPath) !== args[10]
+  ) {
+    throw new Error("certified training custody receipt does not match its declared SHA-256");
+  }
   const boundPaths = args.filter(
     (value) => isAbsolute(value) && existsSync(value) && statSync(value).isFile(),
   );
+  boundPaths.push(custodyReceiptPath);
   const dispatchHelperPath = join(repoRoot, "scripts", "ember_dispatch_token.py");
   if (!existsSync(dispatchHelperPath) || !statSync(dispatchHelperPath).isFile()) {
     throw new Error("certified training dispatch helper is unavailable");
