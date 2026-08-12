@@ -1,0 +1,23 @@
+{
+  "a": {
+    "files": 1932,
+    "path": "screen792-quality-rerun-20260714T202752",
+    "tree_sha256": "ccdb6bf127381a05ae0ee4908634e2764b31f54a97db980d8faa09a060362e5a"
+  },
+  "authority": {
+    "goal_id": "EMBER-02",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "workstream_id": "EMBER-02A"
+  },
+  "b": {
+    "files": 1931,
+    "path": "screen792-live-20260714T2220Z",
+    "tree_sha256": "5651fecdbaed1afe8f6157801462a2173175c7578f066bb325ee69a75410f822"
+  },
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "result": "PROVEN_DIFFERENT",
+  "schema_version": "ember-scratch-reference-scan-v1",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "ticket": "ISSUE-1450-SCRATCH-DUPLICATE-CHECK",
+  "ts": "2026-08-12T19:25:09.329460Z"
+}

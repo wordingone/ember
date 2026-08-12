@@ -1,0 +1,1445 @@
+{
+  "authority": {
+    "goal_id": "EMBER-02",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "workstream_id": "EMBER-02A"
+  },
+  "entries": {
+    "annex-refresh-ts.txt": {
+      "name_hits": [],
+      "path": "annex-refresh-ts.txt",
+      "path_hits": [],
+      "references": []
+    },
+    "b13-matrix-independent-rerun.json": {
+      "name_hits": [],
+      "path": "b13-matrix-independent-rerun.json",
+      "path_hits": [],
+      "references": []
+    },
+    "boardrun6.log": {
+      "name_hits": [],
+      "path": "boardrun6.log",
+      "path_hits": [],
+      "references": []
+    },
+    "c-e2b-founder-likeness": {
+      "name_hits": [],
+      "path": "c-e2b-founder-likeness",
+      "path_hits": [],
+      "references": []
+    },
+    "c-e2b-gpu-arms-plan-20260703T221941Z.md": {
+      "name_hits": [],
+      "path": "c-e2b-gpu-arms-plan-20260703T221941Z.md",
+      "path_hits": [],
+      "references": []
+    },
+    "c-e2b-merge": {
+      "name_hits": [
+        "docs/spec/e2b-paired-protocol-v1.md",
+        "scripts/ember_c_e2b_e2b_arm.py",
+        "scripts/ember_c_e2b_paired_run.py",
+        "scripts/ember_e2b_surpass_run.py"
+      ],
+      "path": "c-e2b-merge",
+      "path_hits": [
+        "docs/spec/e2b-paired-protocol-v1.md",
+        "scripts/ember_c_e2b_e2b_arm.py",
+        "scripts/ember_c_e2b_paired_run.py",
+        "scripts/ember_e2b_surpass_run.py"
+      ],
+      "references": [
+        "docs/spec/e2b-paired-protocol-v1.md",
+        "scripts/ember_c_e2b_e2b_arm.py",
+        "scripts/ember_c_e2b_paired_run.py",
+        "scripts/ember_e2b_surpass_run.py"
+      ]
+    },
+    "c-e2b-recon-dryrun-20260703T221941Z.json": {
+      "name_hits": [],
+      "path": "c-e2b-recon-dryrun-20260703T221941Z.json",
+      "path_hits": [],
+      "references": []
+    },
+    "c-scale-instrumentation": {
+      "name_hits": [],
+      "path": "c-scale-instrumentation",
+      "path_hits": [],
+      "references": []
+    },
+    "c0-incident-evidence-20260703T203542Z.json": {
+      "name_hits": [],
+      "path": "c0-incident-evidence-20260703T203542Z.json",
+      "path_hits": [],
+      "references": []
+    },
+    "c10-disposition-evidence-20260703T202258Z.json": {
+      "name_hits": [],
+      "path": "c10-disposition-evidence-20260703T202258Z.json",
+      "path_hits": [],
+      "references": []
+    },
+    "c10-disposition-evidence-support": {
+      "name_hits": [],
+      "path": "c10-disposition-evidence-support",
+      "path_hits": [],
+      "references": []
+    },
+    "c14-mechanism-dossier-receipt.json": {
+      "name_hits": [],
+      "path": "c14-mechanism-dossier-receipt.json",
+      "path_hits": [],
+      "references": []
+    },
+    "c14-mechanism-dossier.md": {
+      "name_hits": [],
+      "path": "c14-mechanism-dossier.md",
+      "path_hits": [],
+      "references": []
+    },
+    "c42-pubvis": {
+      "name_hits": [],
+      "path": "c42-pubvis",
+      "path_hits": [],
+      "references": []
+    },
+    "c8-citation-grounding-20260707.json": {
+      "name_hits": [],
+      "path": "c8-citation-grounding-20260707.json",
+      "path_hits": [],
+      "references": []
+    },
+    "cbase-grow-rung-dryrun": {
+      "name_hits": [
+        "scripts/cbase_grow_rung.py"
+      ],
+      "path": "cbase-grow-rung-dryrun",
+      "path_hits": [
+        "scripts/cbase_grow_rung.py"
+      ],
+      "references": [
+        "scripts/cbase_grow_rung.py"
+      ]
+    },
+    "clirebuild": {
+      "name_hits": [],
+      "path": "clirebuild",
+      "path_hits": [],
+      "references": []
+    },
+    "cobs": {
+      "name_hits": [
+        "docs/anatomy/00_INDEX.md",
+        "docs/anatomy/12_COCKPIT_OBSERVATORY.md",
+        "docs/custody-disposition-20260708.md",
+        "docs/operator/commands.md",
+        "manifests/ember-01-identity/consumer-adjudication-v1.json",
+        "manifests/ember-01-identity/consumer-census-v1.json",
+        "manifests/ember-restart-3b/fixed-prior-manifest-v1.json",
+        "receipts/ember-anatomy/c-anat-anatomy-set-completion-20260801T224931Z.json",
+        "receipts/ember-anatomy/c-anat-anatomy-set-completion-20260801T224944Z.json",
+        "receipts/ember-c-obs-proof-pack/20260801T235000Z/receipt.json",
+        "receipts/ember-c-scale/land210f-capture-probe-surfaces-receipt.json",
+        "receipts/ember-operator-independence/ind5-comprehend-v2-20260710T004146Z.json",
+        "receipts/ember-operator-independence/ind5-comprehend-v2-20260710T174245Z.json",
+        "receipts/ledger/control_pool.jsonl",
+        "receipts/ledger/episodes.jsonl",
+        "receipts/ledger/views/wcode-r1-control.jsonl",
+        "receipts/ledger/views/wcode-r1.jsonl",
+        "receipts/ledger/views/wcode-r1.jsonl.r2-backup",
+        "receipts/ledger/views/wcode-r2-control.jsonl",
+        "receipts/ledger/views/wcode-r2-sft.jsonl",
+        "receipts/ledger/views/wcode-r2.jsonl",
+        "receipts/w1-floor-q15-20260610T202511Z-samples.jsonl",
+        "receipts/w1-floor-q3-20260610T203401Z-samples.jsonl",
+        "receipts/w1-floor-q3-focus-20260610T210228Z-samples.jsonl",
+        "receipts/w1-floor-q3-r2mtp-20260611T030332Z-samples.jsonl",
+        "receipts/w4-eval-fp25-recall-20260611T054801Z-samples.jsonl",
+        "receipts/w4-eval-fp25b-cov-20260611T060930Z-samples.jsonl",
+        "scripts/ember_cobs_capture.py",
+        "scripts/ember_cobs_proof_pack_receipt.py",
+        "scripts/ember_ind1_context_carry_capture.py",
+        "scripts/ember_ind3_operate_capture.py",
+        "scripts/ember_tally_checks.py",
+        "tools/ember-cli/src/commands/world-state.test.ts",
+        "tools/ember-cli/src/commands/world-state.ts",
+        "tools/ember-cli/src/scripts/cobs-proof-pack-run.ts"
+      ],
+      "path": "cobs",
+      "path_hits": [],
+      "references": [
+        "docs/anatomy/00_INDEX.md",
+        "docs/anatomy/12_COCKPIT_OBSERVATORY.md",
+        "docs/custody-disposition-20260708.md",
+        "docs/operator/commands.md",
+        "manifests/ember-01-identity/consumer-adjudication-v1.json",
+        "manifests/ember-01-identity/consumer-census-v1.json",
+        "manifests/ember-restart-3b/fixed-prior-manifest-v1.json",
+        "receipts/ember-anatomy/c-anat-anatomy-set-completion-20260801T224931Z.json",
+        "receipts/ember-anatomy/c-anat-anatomy-set-completion-20260801T224944Z.json",
+        "receipts/ember-c-obs-proof-pack/20260801T235000Z/receipt.json",
+        "receipts/ember-c-scale/land210f-capture-probe-surfaces-receipt.json",
+        "receipts/ember-operator-independence/ind5-comprehend-v2-20260710T004146Z.json",
+        "receipts/ember-operator-independence/ind5-comprehend-v2-20260710T174245Z.json",
+        "receipts/ledger/control_pool.jsonl",
+        "receipts/ledger/episodes.jsonl",
+        "receipts/ledger/views/wcode-r1-control.jsonl",
+        "receipts/ledger/views/wcode-r1.jsonl",
+        "receipts/ledger/views/wcode-r1.jsonl.r2-backup",
+        "receipts/ledger/views/wcode-r2-control.jsonl",
+        "receipts/ledger/views/wcode-r2-sft.jsonl",
+        "receipts/ledger/views/wcode-r2.jsonl",
+        "receipts/w1-floor-q15-20260610T202511Z-samples.jsonl",
+        "receipts/w1-floor-q3-20260610T203401Z-samples.jsonl",
+        "receipts/w1-floor-q3-focus-20260610T210228Z-samples.jsonl",
+        "receipts/w1-floor-q3-r2mtp-20260611T030332Z-samples.jsonl",
+        "receipts/w4-eval-fp25-recall-20260611T054801Z-samples.jsonl",
+        "receipts/w4-eval-fp25b-cov-20260611T060930Z-samples.jsonl",
+        "scripts/ember_cobs_capture.py",
+        "scripts/ember_cobs_proof_pack_receipt.py",
+        "scripts/ember_ind1_context_carry_capture.py",
+        "scripts/ember_ind3_operate_capture.py",
+        "scripts/ember_tally_checks.py",
+        "tools/ember-cli/src/commands/world-state.test.ts",
+        "tools/ember-cli/src/commands/world-state.ts",
+        "tools/ember-cli/src/scripts/cobs-proof-pack-run.ts"
+      ]
+    },
+    "corpus-cache": {
+      "name_hits": [
+        "docs/custody/hf-sync.md",
+        "manifests/ember-01-identity/consumer-adjudication-v1.json",
+        "receipts/cbase-grow-rung2-gpu-offload-probe-20260708T160854Z.json",
+        "receipts/cbase-grow-rung2-gpu-offload-probe-20260708T171259Z.json",
+        "receipts/cbase-grow-rung2-gpu-offload-probe-20260708T172949Z.json",
+        "receipts/cbase-grow-rung2-gpu-offload-probe-20260709T092042Z.json",
+        "receipts/p1-envelope-sweep/20260708T144213Z-point3.json",
+        "receipts/w558-orch/fcalib-gutenberg-ledger-v2.json",
+        "scripts/cbase_grow_rung2_gpu_offload_probe.py",
+        "scripts/heldout_v21_fcalib.py",
+        "scripts/p1_envelope_sweep.py",
+        "scripts/screen792_bf16_momentum.py"
+      ],
+      "path": "corpus-cache",
+      "path_hits": [
+        "receipts/w558-orch/fcalib-gutenberg-ledger-v2.json",
+        "scripts/heldout_v21_fcalib.py"
+      ],
+      "references": [
+        "docs/custody/hf-sync.md",
+        "manifests/ember-01-identity/consumer-adjudication-v1.json",
+        "receipts/cbase-grow-rung2-gpu-offload-probe-20260708T160854Z.json",
+        "receipts/cbase-grow-rung2-gpu-offload-probe-20260708T171259Z.json",
+        "receipts/cbase-grow-rung2-gpu-offload-probe-20260708T172949Z.json",
+        "receipts/cbase-grow-rung2-gpu-offload-probe-20260709T092042Z.json",
+        "receipts/p1-envelope-sweep/20260708T144213Z-point3.json",
+        "receipts/w558-orch/fcalib-gutenberg-ledger-v2.json",
+        "scripts/cbase_grow_rung2_gpu_offload_probe.py",
+        "scripts/heldout_v21_fcalib.py",
+        "scripts/p1_envelope_sweep.py",
+        "scripts/screen792_bf16_momentum.py"
+      ]
+    },
+    "d3-sandbox-evidence": {
+      "name_hits": [],
+      "path": "d3-sandbox-evidence",
+      "path_hits": [],
+      "references": []
+    },
+    "d4-permuted-corpus": {
+      "name_hits": [],
+      "path": "d4-permuted-corpus",
+      "path_hits": [],
+      "references": []
+    },
+    "ember-c-e2b-smoke": {
+      "name_hits": [
+        "scripts/ember_c_e2b_paired_run.py"
+      ],
+      "path": "ember-c-e2b-smoke",
+      "path_hits": [
+        "scripts/ember_c_e2b_paired_run.py"
+      ],
+      "references": [
+        "scripts/ember_c_e2b_paired_run.py"
+      ]
+    },
+    "ember-ceff-closure-confirmation-dryrun": {
+      "name_hits": [
+        "scripts/ember_ceff_closure_confirmation.py"
+      ],
+      "path": "ember-ceff-closure-confirmation-dryrun",
+      "path_hits": [
+        "scripts/ember_ceff_closure_confirmation.py"
+      ],
+      "references": [
+        "scripts/ember_ceff_closure_confirmation.py"
+      ]
+    },
+    "ember-ceff-composition-ab-dryrun": {
+      "name_hits": [
+        "scripts/ember_ceff_composition_ab.py"
+      ],
+      "path": "ember-ceff-composition-ab-dryrun",
+      "path_hits": [
+        "scripts/ember_ceff_composition_ab.py"
+      ],
+      "references": [
+        "scripts/ember_ceff_composition_ab.py"
+      ]
+    },
+    "ember-cli-visual-check": {
+      "name_hits": [],
+      "path": "ember-cli-visual-check",
+      "path_hits": [],
+      "references": []
+    },
+    "ember-d6-bf16-momentum-ab-dryrun": {
+      "name_hits": [
+        "scripts/ember_d6_bf16_momentum_ab.py"
+      ],
+      "path": "ember-d6-bf16-momentum-ab-dryrun",
+      "path_hits": [
+        "scripts/ember_d6_bf16_momentum_ab.py"
+      ],
+      "references": [
+        "scripts/ember_d6_bf16_momentum_ab.py"
+      ]
+    },
+    "ember-e2b-surpass-dryrun": {
+      "name_hits": [
+        "scripts/ember_e2b_surpass_run.py"
+      ],
+      "path": "ember-e2b-surpass-dryrun",
+      "path_hits": [],
+      "references": [
+        "scripts/ember_e2b_surpass_run.py"
+      ]
+    },
+    "ember_totality": {
+      "name_hits": [
+        "baseline/fragments/external-refs-public-summary-v0.json",
+        "docs/anatomy/00_INDEX.md",
+        "docs/anatomy/02_REPO_TOPOLOGY.md",
+        "docs/anatomy/10_RECEIPTS_PROVENANCE.md",
+        "docs/anatomy/11_TOTALITY_BOARD_CONDITIONS.md",
+        "docs/anatomy/12_COCKPIT_OBSERVATORY.md",
+        "docs/anatomy/13_RUNBOOK.md",
+        "docs/anatomy/15_TECHNICAL_REPORT.md",
+        "docs/archive/pre-restart/c-scale-execution-graph.md",
+        "docs/audit/class2-unwatched-mandates-recon-20260704.md",
+        "docs/charter/probe-authoring-contract.md",
+        "docs/custody-disposition-20260708.md",
+        "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "docs/design/c11-experience-horizon-spec.md",
+        "docs/ember-completeness.md",
+        "docs/hygiene/deletion-manifest-20260708.md",
+        "docs/ledgers/ember-debt-ledger.md",
+        "docs/operator/README.md",
+        "docs/operator/commands.md",
+        "docs/operator/operate.md",
+        "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+        "docs/spec/c-scale-s3-compute-protocol-v1.md",
+        "docs/spec/conditions-v1.md",
+        "docs/spec/credibility-battery-v1.md",
+        "manifests/authority/issue-35-authority-supersession-crosswalk-v1.json",
+        "manifests/ember-01-custody/c0-failure-class-ledger.json",
+        "manifests/ember-01-custody/public-issue-census.json",
+        "manifests/ember-01-identity/consumer-adjudication-v1.json",
+        "manifests/ember-01-identity/consumer-census-v1.json",
+        "receipts/CLAIMS.md",
+        "receipts/INDEX.jsonl",
+        "receipts/cbase-clause-a-checkpoint-citation-repair-20260709T234558Z.json",
+        "receipts/cbase-gpu-verify-hardened-20260707T053613Z.json",
+        "receipts/cbase-grow-rung/c-grow-before-after-probe-20260710T172700Z.json",
+        "receipts/cbase-grow-rung/c-grow-candidate-audit-20260710T172304Z.json",
+        "receipts/cbase-grow-rung/c-grow-candidate-audit-20260729T104531Z.json",
+        "receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json",
+        "receipts/cbase-grow-rung/cbase-grow-rung2-completion-20260710T172500Z.json",
+        "receipts/cbase-grow-rung/cbase-grow-rung2-completion-20260729T102106Z.json",
+        "receipts/citation-check-20260702T174352Z.json",
+        "receipts/citation-check-20260704T203557Z.json",
+        "receipts/citation-check-20260705T081952Z.json",
+        "receipts/ember-01-custody/freeze-artifact-integrity-issue531-v1.json",
+        "receipts/ember-02-launch-authority/sha-binding-map.json",
+        "receipts/ember-anatomy/c-anat-anatomy-set-completion-20260801T224931Z.json",
+        "receipts/ember-anatomy/c-anat-anatomy-set-completion-20260801T224944Z.json",
+        "receipts/ember-c-obs-proof-pack/20260801T235000Z/receipt.json",
+        "receipts/ember-c-scale/land210a-resident-igrpo-receipt.json",
+        "receipts/ember-c-scale/land210b-growth-runners-receipt.json",
+        "receipts/ember-c-scale/land210k-e2b-pair-receipt.json",
+        "receipts/ember-c8-execution-binding/field-level-contribution-proof-20260703T081125Z.json",
+        "receipts/ember-mvp/c12-cognitive-mode-ablation-20260710T000217Z.json",
+        "receipts/ember-resident-training-gate/resident-training-gate-20260704T062951Z-issue69-cured-redacted-edition.json",
+        "receipts/ember-resident-training-gate/resident-training-gate-20260704T065507Z-intree-issue70-redacted-edition.json",
+        "receipts/ember-totality-20260711T103912Z.json",
+        "receipts/ember-totality-audit/audit-20260709T084500Z.json",
+        "receipts/ember-totality-audit/audit-20260709T102500Z.json",
+        "receipts/ember-totality-audit/audit-20260710T001800Z.json",
+        "receipts/ember-totality-audit/audit-20260710T203826Z.json",
+        "receipts/ember-totality-audit/audit-20260710T223333Z.json",
+        "receipts/ember-totality-audit/audit-20260711T012500Z.json",
+        "receipts/ember-totality-audit/audit-20260711T083809Z.json",
+        "receipts/ember-totality-audit/audit-20260711T104500Z.json",
+        "receipts/genesis/genesis-audit-20260706.md",
+        "receipts/issue-378-atomic-receipt-publication-v1.json",
+        "receipts/process-visibility/process-visibility-20260711T102300Z.json",
+        "receipts/publication-gate-20260705T071930Z.json",
+        "receipts/publication-gate-20260705T072134Z.json",
+        "receipts/publication-gate-20260705T081939Z.json",
+        "receipts/registry-gate.jsonl",
+        "receipts/spend-annex/attestations/cold-read-reprobe-2026-07-06T01Z.json",
+        "receipts/spend-annex/spend-annex-20260707T112800Z.json",
+        "receipts/spend-annex/spend-annex-20260707T113500Z.json",
+        "receipts/spend-annex/spend-annex-20260707T152230Z.json",
+        "receipts/spend-annex/spend-annex-20260707T153000Z.json",
+        "receipts/spend-annex/spend-annex-20260708T045553Z.json",
+        "receipts/spend-annex/spend-annex-20260708T072000Z.json",
+        "receipts/spend-annex/spend-annex-20260708T111845Z.json",
+        "receipts/spend-annex/spend-annex-20260709T133843Z.json",
+        "receipts/spend-annex/spend-annex-20260709T232435Z.json",
+        "receipts/spend-annex/spend-annex-20260710T011551Z.json",
+        "receipts/spend-annex/spend-annex-20260731T171420Z.json",
+        "scripts/README.md",
+        "scripts/c_inv_batch_supersession_20260801.py",
+        "scripts/c_port_simulated_device_receipt.py",
+        "scripts/cbase_grow_before_after_replay.py",
+        "scripts/cbase_grow_live.py",
+        "scripts/cbase_grow_measured_flops.py",
+        "scripts/cbase_grow_rung2_completion_audit.py",
+        "scripts/check_disconfirmation_triggers.py",
+        "scripts/check_milestone_reconciliation.py",
+        "scripts/check_publication_gate.py",
+        "scripts/ember_c14_owned_run.py",
+        "scripts/ember_c_e2b_paired_run.py",
+        "scripts/ember_c_scale_s3_producer.py",
+        "scripts/ember_ceff_closure_confirmation.py",
+        "scripts/ember_cobs_capture.py",
+        "scripts/ember_cobs_proof_pack_receipt.py",
+        "scripts/ember_cognitive_mode_ablation.py",
+        "scripts/ember_e2b_surpass_run.py",
+        "scripts/ember_surface2_capture.py",
+        "scripts/ember_totality/_lane14_common.py",
+        "scripts/ember_totality/c_comprehensive_receipts_custody_test.py",
+        "scripts/ember_totality/c_custody_canonical_growth_citation_test.py",
+        "scripts/ember_totality/c_custody_dictkey_citations_test.py",
+        "scripts/ember_totality/c_custody_embedded_runtime_subject_test.py",
+        "scripts/ember_totality/c_custody_extraction_cures_test.py",
+        "scripts/ember_totality/c_custody_pattern_citation_test.py",
+        "scripts/ember_totality/c_custody_sidecar_agewindow_test.py",
+        "scripts/ember_totality/c_custody_twin_resolution_test.py",
+        "scripts/ember_totality/c_disconfirmation_custody_test.py",
+        "scripts/ember_totality/c_neg1_394_cited_missing_test.py",
+        "scripts/ember_totality/check_registry_sync.py",
+        "scripts/ember_totality/chk_controls/run_controls.py",
+        "scripts/ember_totality/chk_controls/test_issue788_quarantine_sweep.py",
+        "scripts/ember_totality/chk_controls/test_issue804_evidence_scan_hygiene.py",
+        "scripts/ember_totality/chk_controls/test_issue_715_denominator_regression.py",
+        "scripts/ember_totality/chk_controls/test_run_controls_receipt_test.py",
+        "scripts/ember_totality/disconfirmation_leg.py",
+        "scripts/ember_totality/disconfirmation_leg_test.py",
+        "scripts/ember_totality/ember_totality_spec.py",
+        "scripts/ember_totality/enforcement_leg.py",
+        "scripts/ember_totality/enforcement_leg_test.py",
+        "scripts/ember_totality/evidence_scan_hygiene.py",
+        "scripts/ember_totality/ind3_operate_producer.py",
+        "scripts/ember_totality/ind4_customize_experiment_producer.py",
+        "scripts/ember_totality/ind5_comprehend_producer.py",
+        "scripts/ember_totality/milestone_leg.py",
+        "scripts/ember_totality/milestone_leg_test.py",
+        "scripts/ember_totality/receipt_chain_verify_test.py",
+        "scripts/ember_totality/receipt_surface_integrity.py",
+        "scripts/ember_totality/receipt_surface_integrity_test.py",
+        "scripts/ember_totality/receipts-debt-ledger/BLOCKER-REVERIFICATION-20260802T032156Z.json",
+        "scripts/ember_totality/receipts-disconfirmation/disconfirmation-leg-20260709T045218Z.json",
+        "scripts/ember_totality/receipts-disconfirmation/disconfirmation-leg-20260709T102252Z.json",
+        "scripts/ember_totality/receipts-parity/ember-totality-20260705T150719Z.json",
+        "scripts/ember_totality/receipts-parity/ember-totality-20260705T150743Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260624T142553Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260704T203132Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260705T081932Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260706T173800Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260708T033700Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260708T034014Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260709T030007Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260709T044844Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260709T065411Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260709T081147Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260709T101919Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T000016Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T011437Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T042902Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T054013Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T055933Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T135059Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T150632Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T220944Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T230837Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260711T102112Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260801T052815Z.json",
+        "scripts/ember_totality/root_placeholder_test.py",
+        "scripts/ember_totality/spend_annex_scan.py",
+        "scripts/ember_totality/test_c0.py",
+        "scripts/ember_totality/test_c1.py",
+        "scripts/ember_totality/test_c10.py",
+        "scripts/ember_totality/test_c10_status_column_regression.py",
+        "scripts/ember_totality/test_c12.py",
+        "scripts/ember_totality/test_c13.py",
+        "scripts/ember_totality/test_c14.py",
+        "scripts/ember_totality/test_c15.py",
+        "scripts/ember_totality/test_c2.py",
+        "scripts/ember_totality/test_c3.py",
+        "scripts/ember_totality/test_c4.py",
+        "scripts/ember_totality/test_c5.py",
+        "scripts/ember_totality/test_c6.py",
+        "scripts/ember_totality/test_c7.py",
+        "scripts/ember_totality/test_c8.py",
+        "scripts/ember_totality/test_c9.py",
+        "scripts/ember_totality/test_c_anat.py",
+        "scripts/ember_totality/test_c_base.py",
+        "scripts/ember_totality/test_c_custody.py",
+        "scripts/ember_totality/test_c_disc.py",
+        "scripts/ember_totality/test_c_eff.py",
+        "scripts/ember_totality/test_c_enf.py",
+        "scripts/ember_totality/test_c_fed.py",
+        "scripts/ember_totality/test_c_grow.py",
+        "scripts/ember_totality/test_c_ind.py",
+        "scripts/ember_totality/test_c_invariant.py",
+        "scripts/ember_totality/test_c_manifest.py",
+        "scripts/ember_totality/test_c_mile.py",
+        "scripts/ember_totality/test_c_obs.py",
+        "scripts/ember_totality/test_c_organism.py",
+        "scripts/ember_totality/test_c_port.py",
+        "scripts/ember_totality/test_c_tally.py",
+        "scripts/ember_totality/tree_provenance_test.py",
+        "scripts/ember_totality/working_set_test.py",
+        "scripts/ember_totality/writers_custody_two_run_test.py",
+        "scripts/gen_readme_status.py",
+        "scripts/lib/writers_integration_example.md",
+        "scripts/merge_gate.py",
+        "scripts/r0_claim_executor.py",
+        "scripts/redact_for_landing.py",
+        "scripts/test_cbase_grow_rung2_completion_audit.py",
+        "scripts/test_r0_claim_machinery.py",
+        "scripts/tests/test_c_base_supersession_index.py",
+        "scripts/tests/test_c_custody_probe.py",
+        "scripts/tests/test_cneg1_annex_bom_fallback.py",
+        "scripts/tests/test_cneg1_void_supersession.py",
+        "scripts/tests/test_ember_totality_c9_adversarial.py",
+        "scripts/tests/test_ember_totality_c_base_verification_hardening.py",
+        "scripts/tests/test_ember_totality_c_invariant_goal_pin.py",
+        "scripts/tests/test_ember_totality_ind3_operate_producer.py",
+        "scripts/tests/test_issue158_native_engine_trigger.py",
+        "scripts/tests/test_prev_receipt_selection.py",
+        "scripts/tests/test_probe_timeout_and_elapsed.py",
+        "scripts/tests/test_redact_local_paths.py",
+        "scripts/tests/test_redaction_receipt_contract.py",
+        "scripts/tests/test_registry_order_sync.py",
+        "scripts/tests/test_spend_annex_round4_current_receipts.py",
+        "scripts/tests/test_spend_annex_void_and_attestation.py",
+        "scripts/tests/test_void_supersession_prefix.py",
+        "scripts/tests/test_writers_custody_two_run.py",
+        "scripts/verify_authority_conservation.py",
+        "scripts/verify_ember00_completion.py",
+        "tests/fixtures/merge_gate/pr_pass_receipts.json",
+        "tests/test_c_auto_claim_contract.py",
+        "tests/test_c_auto_claim_integrity.py",
+        "tests/test_merge_gate.py",
+        "tools/docs_consolidate.py",
+        "tools/ember-cli/src/commands/world-state.test.ts",
+        "tools/ember-cli/src/components/spine-panel.test.ts",
+        "tools/ember-cli/src/core/ember-world-state.test.ts",
+        "tools/ember-cli/src/core/ember-world-state.ts",
+        "tools/ember-cli/src/core/monitor-render.test.ts",
+        "tools/ember-cli/src/entrypoints/process-entry.test.ts",
+        "tools/ember-cli/src/services/activity-feed.ts",
+        "tools/ember-cli/src/world-state-snapshot.json",
+        "tools/no_temp_allowlist"
+      ],
+      "path": "ember_totality",
+      "path_hits": [
+        "docs/spec/conditions-v1.md"
+      ],
+      "references": [
+        "baseline/fragments/external-refs-public-summary-v0.json",
+        "docs/anatomy/00_INDEX.md",
+        "docs/anatomy/02_REPO_TOPOLOGY.md",
+        "docs/anatomy/10_RECEIPTS_PROVENANCE.md",
+        "docs/anatomy/11_TOTALITY_BOARD_CONDITIONS.md",
+        "docs/anatomy/12_COCKPIT_OBSERVATORY.md",
+        "docs/anatomy/13_RUNBOOK.md",
+        "docs/anatomy/15_TECHNICAL_REPORT.md",
+        "docs/archive/pre-restart/c-scale-execution-graph.md",
+        "docs/audit/class2-unwatched-mandates-recon-20260704.md",
+        "docs/charter/probe-authoring-contract.md",
+        "docs/custody-disposition-20260708.md",
+        "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "docs/design/c11-experience-horizon-spec.md",
+        "docs/ember-completeness.md",
+        "docs/hygiene/deletion-manifest-20260708.md",
+        "docs/ledgers/ember-debt-ledger.md",
+        "docs/operator/README.md",
+        "docs/operator/commands.md",
+        "docs/operator/operate.md",
+        "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+        "docs/spec/c-scale-s3-compute-protocol-v1.md",
+        "docs/spec/conditions-v1.md",
+        "docs/spec/credibility-battery-v1.md",
+        "manifests/authority/issue-35-authority-supersession-crosswalk-v1.json",
+        "manifests/ember-01-custody/c0-failure-class-ledger.json",
+        "manifests/ember-01-custody/public-issue-census.json",
+        "manifests/ember-01-identity/consumer-adjudication-v1.json",
+        "manifests/ember-01-identity/consumer-census-v1.json",
+        "receipts/CLAIMS.md",
+        "receipts/INDEX.jsonl",
+        "receipts/cbase-clause-a-checkpoint-citation-repair-20260709T234558Z.json",
+        "receipts/cbase-gpu-verify-hardened-20260707T053613Z.json",
+        "receipts/cbase-grow-rung/c-grow-before-after-probe-20260710T172700Z.json",
+        "receipts/cbase-grow-rung/c-grow-candidate-audit-20260710T172304Z.json",
+        "receipts/cbase-grow-rung/c-grow-candidate-audit-20260729T104531Z.json",
+        "receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json",
+        "receipts/cbase-grow-rung/cbase-grow-rung2-completion-20260710T172500Z.json",
+        "receipts/cbase-grow-rung/cbase-grow-rung2-completion-20260729T102106Z.json",
+        "receipts/citation-check-20260702T174352Z.json",
+        "receipts/citation-check-20260704T203557Z.json",
+        "receipts/citation-check-20260705T081952Z.json",
+        "receipts/ember-01-custody/freeze-artifact-integrity-issue531-v1.json",
+        "receipts/ember-02-launch-authority/sha-binding-map.json",
+        "receipts/ember-anatomy/c-anat-anatomy-set-completion-20260801T224931Z.json",
+        "receipts/ember-anatomy/c-anat-anatomy-set-completion-20260801T224944Z.json",
+        "receipts/ember-c-obs-proof-pack/20260801T235000Z/receipt.json",
+        "receipts/ember-c-scale/land210a-resident-igrpo-receipt.json",
+        "receipts/ember-c-scale/land210b-growth-runners-receipt.json",
+        "receipts/ember-c-scale/land210k-e2b-pair-receipt.json",
+        "receipts/ember-c8-execution-binding/field-level-contribution-proof-20260703T081125Z.json",
+        "receipts/ember-mvp/c12-cognitive-mode-ablation-20260710T000217Z.json",
+        "receipts/ember-resident-training-gate/resident-training-gate-20260704T062951Z-issue69-cured-redacted-edition.json",
+        "receipts/ember-resident-training-gate/resident-training-gate-20260704T065507Z-intree-issue70-redacted-edition.json",
+        "receipts/ember-totality-20260711T103912Z.json",
+        "receipts/ember-totality-audit/audit-20260709T084500Z.json",
+        "receipts/ember-totality-audit/audit-20260709T102500Z.json",
+        "receipts/ember-totality-audit/audit-20260710T001800Z.json",
+        "receipts/ember-totality-audit/audit-20260710T203826Z.json",
+        "receipts/ember-totality-audit/audit-20260710T223333Z.json",
+        "receipts/ember-totality-audit/audit-20260711T012500Z.json",
+        "receipts/ember-totality-audit/audit-20260711T083809Z.json",
+        "receipts/ember-totality-audit/audit-20260711T104500Z.json",
+        "receipts/genesis/genesis-audit-20260706.md",
+        "receipts/issue-378-atomic-receipt-publication-v1.json",
+        "receipts/process-visibility/process-visibility-20260711T102300Z.json",
+        "receipts/publication-gate-20260705T071930Z.json",
+        "receipts/publication-gate-20260705T072134Z.json",
+        "receipts/publication-gate-20260705T081939Z.json",
+        "receipts/registry-gate.jsonl",
+        "receipts/spend-annex/attestations/cold-read-reprobe-2026-07-06T01Z.json",
+        "receipts/spend-annex/spend-annex-20260707T112800Z.json",
+        "receipts/spend-annex/spend-annex-20260707T113500Z.json",
+        "receipts/spend-annex/spend-annex-20260707T152230Z.json",
+        "receipts/spend-annex/spend-annex-20260707T153000Z.json",
+        "receipts/spend-annex/spend-annex-20260708T045553Z.json",
+        "receipts/spend-annex/spend-annex-20260708T072000Z.json",
+        "receipts/spend-annex/spend-annex-20260708T111845Z.json",
+        "receipts/spend-annex/spend-annex-20260709T133843Z.json",
+        "receipts/spend-annex/spend-annex-20260709T232435Z.json",
+        "receipts/spend-annex/spend-annex-20260710T011551Z.json",
+        "receipts/spend-annex/spend-annex-20260731T171420Z.json",
+        "scripts/README.md",
+        "scripts/c_inv_batch_supersession_20260801.py",
+        "scripts/c_port_simulated_device_receipt.py",
+        "scripts/cbase_grow_before_after_replay.py",
+        "scripts/cbase_grow_live.py",
+        "scripts/cbase_grow_measured_flops.py",
+        "scripts/cbase_grow_rung2_completion_audit.py",
+        "scripts/check_disconfirmation_triggers.py",
+        "scripts/check_milestone_reconciliation.py",
+        "scripts/check_publication_gate.py",
+        "scripts/ember_c14_owned_run.py",
+        "scripts/ember_c_e2b_paired_run.py",
+        "scripts/ember_c_scale_s3_producer.py",
+        "scripts/ember_ceff_closure_confirmation.py",
+        "scripts/ember_cobs_capture.py",
+        "scripts/ember_cobs_proof_pack_receipt.py",
+        "scripts/ember_cognitive_mode_ablation.py",
+        "scripts/ember_e2b_surpass_run.py",
+        "scripts/ember_surface2_capture.py",
+        "scripts/ember_totality/_lane14_common.py",
+        "scripts/ember_totality/c_comprehensive_receipts_custody_test.py",
+        "scripts/ember_totality/c_custody_canonical_growth_citation_test.py",
+        "scripts/ember_totality/c_custody_dictkey_citations_test.py",
+        "scripts/ember_totality/c_custody_embedded_runtime_subject_test.py",
+        "scripts/ember_totality/c_custody_extraction_cures_test.py",
+        "scripts/ember_totality/c_custody_pattern_citation_test.py",
+        "scripts/ember_totality/c_custody_sidecar_agewindow_test.py",
+        "scripts/ember_totality/c_custody_twin_resolution_test.py",
+        "scripts/ember_totality/c_disconfirmation_custody_test.py",
+        "scripts/ember_totality/c_neg1_394_cited_missing_test.py",
+        "scripts/ember_totality/check_registry_sync.py",
+        "scripts/ember_totality/chk_controls/run_controls.py",
+        "scripts/ember_totality/chk_controls/test_issue788_quarantine_sweep.py",
+        "scripts/ember_totality/chk_controls/test_issue804_evidence_scan_hygiene.py",
+        "scripts/ember_totality/chk_controls/test_issue_715_denominator_regression.py",
+        "scripts/ember_totality/chk_controls/test_run_controls_receipt_test.py",
+        "scripts/ember_totality/disconfirmation_leg.py",
+        "scripts/ember_totality/disconfirmation_leg_test.py",
+        "scripts/ember_totality/ember_totality_spec.py",
+        "scripts/ember_totality/enforcement_leg.py",
+        "scripts/ember_totality/enforcement_leg_test.py",
+        "scripts/ember_totality/evidence_scan_hygiene.py",
+        "scripts/ember_totality/ind3_operate_producer.py",
+        "scripts/ember_totality/ind4_customize_experiment_producer.py",
+        "scripts/ember_totality/ind5_comprehend_producer.py",
+        "scripts/ember_totality/milestone_leg.py",
+        "scripts/ember_totality/milestone_leg_test.py",
+        "scripts/ember_totality/receipt_chain_verify_test.py",
+        "scripts/ember_totality/receipt_surface_integrity.py",
+        "scripts/ember_totality/receipt_surface_integrity_test.py",
+        "scripts/ember_totality/receipts-debt-ledger/BLOCKER-REVERIFICATION-20260802T032156Z.json",
+        "scripts/ember_totality/receipts-disconfirmation/disconfirmation-leg-20260709T045218Z.json",
+        "scripts/ember_totality/receipts-disconfirmation/disconfirmation-leg-20260709T102252Z.json",
+        "scripts/ember_totality/receipts-parity/ember-totality-20260705T150719Z.json",
+        "scripts/ember_totality/receipts-parity/ember-totality-20260705T150743Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260624T142553Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260704T203132Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260705T081932Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260706T173800Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260708T033700Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260708T034014Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260709T030007Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260709T044844Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260709T065411Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260709T081147Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260709T101919Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T000016Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T011437Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T042902Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T054013Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T055933Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T135059Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T150632Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T220944Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T230837Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260711T102112Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260801T052815Z.json",
+        "scripts/ember_totality/root_placeholder_test.py",
+        "scripts/ember_totality/spend_annex_scan.py",
+        "scripts/ember_totality/test_c0.py",
+        "scripts/ember_totality/test_c1.py",
+        "scripts/ember_totality/test_c10.py",
+        "scripts/ember_totality/test_c10_status_column_regression.py",
+        "scripts/ember_totality/test_c12.py",
+        "scripts/ember_totality/test_c13.py",
+        "scripts/ember_totality/test_c14.py",
+        "scripts/ember_totality/test_c15.py",
+        "scripts/ember_totality/test_c2.py",
+        "scripts/ember_totality/test_c3.py",
+        "scripts/ember_totality/test_c4.py",
+        "scripts/ember_totality/test_c5.py",
+        "scripts/ember_totality/test_c6.py",
+        "scripts/ember_totality/test_c7.py",
+        "scripts/ember_totality/test_c8.py",
+        "scripts/ember_totality/test_c9.py",
+        "scripts/ember_totality/test_c_anat.py",
+        "scripts/ember_totality/test_c_base.py",
+        "scripts/ember_totality/test_c_custody.py",
+        "scripts/ember_totality/test_c_disc.py",
+        "scripts/ember_totality/test_c_eff.py",
+        "scripts/ember_totality/test_c_enf.py",
+        "scripts/ember_totality/test_c_fed.py",
+        "scripts/ember_totality/test_c_grow.py",
+        "scripts/ember_totality/test_c_ind.py",
+        "scripts/ember_totality/test_c_invariant.py",
+        "scripts/ember_totality/test_c_manifest.py",
+        "scripts/ember_totality/test_c_mile.py",
+        "scripts/ember_totality/test_c_obs.py",
+        "scripts/ember_totality/test_c_organism.py",
+        "scripts/ember_totality/test_c_port.py",
+        "scripts/ember_totality/test_c_tally.py",
+        "scripts/ember_totality/tree_provenance_test.py",
+        "scripts/ember_totality/working_set_test.py",
+        "scripts/ember_totality/writers_custody_two_run_test.py",
+        "scripts/gen_readme_status.py",
+        "scripts/lib/writers_integration_example.md",
+        "scripts/merge_gate.py",
+        "scripts/r0_claim_executor.py",
+        "scripts/redact_for_landing.py",
+        "scripts/test_cbase_grow_rung2_completion_audit.py",
+        "scripts/test_r0_claim_machinery.py",
+        "scripts/tests/test_c_base_supersession_index.py",
+        "scripts/tests/test_c_custody_probe.py",
+        "scripts/tests/test_cneg1_annex_bom_fallback.py",
+        "scripts/tests/test_cneg1_void_supersession.py",
+        "scripts/tests/test_ember_totality_c9_adversarial.py",
+        "scripts/tests/test_ember_totality_c_base_verification_hardening.py",
+        "scripts/tests/test_ember_totality_c_invariant_goal_pin.py",
+        "scripts/tests/test_ember_totality_ind3_operate_producer.py",
+        "scripts/tests/test_issue158_native_engine_trigger.py",
+        "scripts/tests/test_prev_receipt_selection.py",
+        "scripts/tests/test_probe_timeout_and_elapsed.py",
+        "scripts/tests/test_redact_local_paths.py",
+        "scripts/tests/test_redaction_receipt_contract.py",
+        "scripts/tests/test_registry_order_sync.py",
+        "scripts/tests/test_spend_annex_round4_current_receipts.py",
+        "scripts/tests/test_spend_annex_void_and_attestation.py",
+        "scripts/tests/test_void_supersession_prefix.py",
+        "scripts/tests/test_writers_custody_two_run.py",
+        "scripts/verify_authority_conservation.py",
+        "scripts/verify_ember00_completion.py",
+        "tests/fixtures/merge_gate/pr_pass_receipts.json",
+        "tests/test_c_auto_claim_contract.py",
+        "tests/test_c_auto_claim_integrity.py",
+        "tests/test_merge_gate.py",
+        "tools/docs_consolidate.py",
+        "tools/ember-cli/src/commands/world-state.test.ts",
+        "tools/ember-cli/src/components/spine-panel.test.ts",
+        "tools/ember-cli/src/core/ember-world-state.test.ts",
+        "tools/ember-cli/src/core/ember-world-state.ts",
+        "tools/ember-cli/src/core/monitor-render.test.ts",
+        "tools/ember-cli/src/entrypoints/process-entry.test.ts",
+        "tools/ember-cli/src/services/activity-feed.ts",
+        "tools/ember-cli/src/world-state-snapshot.json",
+        "tools/no_temp_allowlist"
+      ]
+    },
+    "evalref": {
+      "name_hits": [
+        "receipts/eval-reference/math500-proof/Qwen3.6-27B-Q4_K_M.gguf/results_2026-07-09T23-03-49.194110.json",
+        "receipts/eval-reference/math500-retry2-receipt-20260710.md",
+        "receipts/eval-reference/scoring-window-20260710/arc-challenge-one-task-proof-log.txt",
+        "receipts/eval-reference/scoring-window-20260710/direct-llamacpp-load-attempt-log.txt"
+      ],
+      "path": "evalref",
+      "path_hits": [],
+      "references": [
+        "receipts/eval-reference/math500-proof/Qwen3.6-27B-Q4_K_M.gguf/results_2026-07-09T23-03-49.194110.json",
+        "receipts/eval-reference/math500-retry2-receipt-20260710.md",
+        "receipts/eval-reference/scoring-window-20260710/arc-challenge-one-task-proof-log.txt",
+        "receipts/eval-reference/scoring-window-20260710/direct-llamacpp-load-attempt-log.txt"
+      ]
+    },
+    "gate0-live-20260704b.log": {
+      "name_hits": [
+        "scripts/ember_c_e2b_e2b_arm.py"
+      ],
+      "path": "gate0-live-20260704b.log",
+      "path_hits": [
+        "scripts/ember_c_e2b_e2b_arm.py"
+      ],
+      "references": [
+        "scripts/ember_c_e2b_e2b_arm.py"
+      ]
+    },
+    "gate0-live-20260704c.err.log": {
+      "name_hits": [],
+      "path": "gate0-live-20260704c.err.log",
+      "path_hits": [],
+      "references": []
+    },
+    "gate0-live-20260704c.log": {
+      "name_hits": [],
+      "path": "gate0-live-20260704c.log",
+      "path_hits": [],
+      "references": []
+    },
+    "gate0-refire-20260704d.err.log": {
+      "name_hits": [],
+      "path": "gate0-refire-20260704d.err.log",
+      "path_hits": [],
+      "references": []
+    },
+    "gate0-refire-20260704d.log": {
+      "name_hits": [],
+      "path": "gate0-refire-20260704d.log",
+      "path_hits": [],
+      "references": []
+    },
+    "gate0-refire-20260704e.err.log": {
+      "name_hits": [],
+      "path": "gate0-refire-20260704e.err.log",
+      "path_hits": [],
+      "references": []
+    },
+    "gate0-refire-20260704e.log": {
+      "name_hits": [],
+      "path": "gate0-refire-20260704e.log",
+      "path_hits": [],
+      "references": []
+    },
+    "gate0-refire-20260704f.err.log": {
+      "name_hits": [],
+      "path": "gate0-refire-20260704f.err.log",
+      "path_hits": [],
+      "references": []
+    },
+    "gate0-refire-20260704f.log": {
+      "name_hits": [],
+      "path": "gate0-refire-20260704f.log",
+      "path_hits": [],
+      "references": []
+    },
+    "gate0-refire-20260704g.err.log": {
+      "name_hits": [],
+      "path": "gate0-refire-20260704g.err.log",
+      "path_hits": [],
+      "references": []
+    },
+    "gate0-refire-20260704g.log": {
+      "name_hits": [],
+      "path": "gate0-refire-20260704g.log",
+      "path_hits": [],
+      "references": []
+    },
+    "gate325c.log": {
+      "name_hits": [],
+      "path": "gate325c.log",
+      "path_hits": [],
+      "references": []
+    },
+    "gate330b.log": {
+      "name_hits": [],
+      "path": "gate330b.log",
+      "path_hits": [],
+      "references": []
+    },
+    "gate337-decoded.txt": {
+      "name_hits": [],
+      "path": "gate337-decoded.txt",
+      "path_hits": [],
+      "references": []
+    },
+    "gate337.log": {
+      "name_hits": [],
+      "path": "gate337.log",
+      "path_hits": [],
+      "references": []
+    },
+    "gpu-window-preflight": {
+      "name_hits": [],
+      "path": "gpu-window-preflight",
+      "path_hits": [],
+      "references": []
+    },
+    "hookprobe.txt": {
+      "name_hits": [],
+      "path": "hookprobe.txt",
+      "path_hits": [],
+      "references": []
+    },
+    "ind1ctx": {
+      "name_hits": [
+        "scripts/ember_ind1_context_carry_capture.py"
+      ],
+      "path": "ind1ctx",
+      "path_hits": [
+        "scripts/ember_ind1_context_carry_capture.py"
+      ],
+      "references": [
+        "scripts/ember_ind1_context_carry_capture.py"
+      ]
+    },
+    "ind3": {
+      "name_hits": [
+        "docs/ledgers/receipt-supersessions.jsonl",
+        "docs/operator/operate.md",
+        "manifests/ember-01-identity/consumer-adjudication-v1.json",
+        "manifests/ember-01-identity/consumer-census-v1.json",
+        "receipts/ember-01-custody/freeze-artifact-integrity-issue531-v1.json",
+        "receipts/ember-c-scale/land210f-capture-probe-surfaces-receipt.json",
+        "receipts/ember-totality-20260711T103912Z.json",
+        "receipts/ind3-operate/ind3-interrupted-resume-20260710T004023Z.json",
+        "receipts/ind3-operate/ind3-interrupted-resume-20260729T094448Z.json",
+        "receipts/ind3-operate/ind3-launch-20260710T004022Z.json",
+        "receipts/ind3-operate/ind3-launch-20260729T094447Z.json",
+        "receipts/ind3-operate/ind3-teardown-20260710T004022Z.json",
+        "receipts/ind3-operate/ind3-teardown-20260729T094447Z.json",
+        "scripts/c_inv_batch_supersession_20260801.py",
+        "scripts/ember_ind3_operate_capture.py",
+        "scripts/ember_totality/chk_controls/run_controls.py",
+        "scripts/ember_totality/ind3_operate_producer.py",
+        "scripts/ember_totality/receipts-c-invariant/c-invariant-probe-20260710T011235Z.json",
+        "scripts/ember_totality/receipts-c-invariant/c-invariant-probe-20260710T174334Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260704T203132Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260705T081932Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T011437Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T042902Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T054013Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T055933Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T135059Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T150632Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T220944Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T230837Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260711T102112Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260801T052815Z.json",
+        "scripts/ember_totality/test_c_ind.py",
+        "scripts/tests/test_ember_totality_ind3_operate_producer.py",
+        "tools/ember-cli/src/world-state-snapshot.json"
+      ],
+      "path": "ind3",
+      "path_hits": [
+        "docs/operator/operate.md",
+        "manifests/ember-01-identity/consumer-adjudication-v1.json",
+        "manifests/ember-01-identity/consumer-census-v1.json",
+        "receipts/ind3-operate/ind3-launch-20260710T004022Z.json",
+        "receipts/ind3-operate/ind3-launch-20260729T094447Z.json",
+        "scripts/ember_totality/ind3_operate_producer.py"
+      ],
+      "references": [
+        "docs/ledgers/receipt-supersessions.jsonl",
+        "docs/operator/operate.md",
+        "manifests/ember-01-identity/consumer-adjudication-v1.json",
+        "manifests/ember-01-identity/consumer-census-v1.json",
+        "receipts/ember-01-custody/freeze-artifact-integrity-issue531-v1.json",
+        "receipts/ember-c-scale/land210f-capture-probe-surfaces-receipt.json",
+        "receipts/ember-totality-20260711T103912Z.json",
+        "receipts/ind3-operate/ind3-interrupted-resume-20260710T004023Z.json",
+        "receipts/ind3-operate/ind3-interrupted-resume-20260729T094448Z.json",
+        "receipts/ind3-operate/ind3-launch-20260710T004022Z.json",
+        "receipts/ind3-operate/ind3-launch-20260729T094447Z.json",
+        "receipts/ind3-operate/ind3-teardown-20260710T004022Z.json",
+        "receipts/ind3-operate/ind3-teardown-20260729T094447Z.json",
+        "scripts/c_inv_batch_supersession_20260801.py",
+        "scripts/ember_ind3_operate_capture.py",
+        "scripts/ember_totality/chk_controls/run_controls.py",
+        "scripts/ember_totality/ind3_operate_producer.py",
+        "scripts/ember_totality/receipts-c-invariant/c-invariant-probe-20260710T011235Z.json",
+        "scripts/ember_totality/receipts-c-invariant/c-invariant-probe-20260710T174334Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260704T203132Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260705T081932Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T011437Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T042902Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T054013Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T055933Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T135059Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T150632Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T220944Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260710T230837Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260711T102112Z.json",
+        "scripts/ember_totality/receipts-totality/ember-totality-20260801T052815Z.json",
+        "scripts/ember_totality/test_c_ind.py",
+        "scripts/tests/test_ember_totality_ind3_operate_producer.py",
+        "tools/ember-cli/src/world-state-snapshot.json"
+      ]
+    },
+    "ind3-operate-worker": {
+      "name_hits": [
+        "docs/operator/operate.md",
+        "manifests/ember-01-identity/consumer-adjudication-v1.json",
+        "manifests/ember-01-identity/consumer-census-v1.json",
+        "receipts/ind3-operate/ind3-launch-20260710T004022Z.json",
+        "receipts/ind3-operate/ind3-launch-20260729T094447Z.json",
+        "scripts/ember_totality/ind3_operate_producer.py"
+      ],
+      "path": "ind3-operate-worker",
+      "path_hits": [
+        "docs/operator/operate.md",
+        "manifests/ember-01-identity/consumer-adjudication-v1.json",
+        "manifests/ember-01-identity/consumer-census-v1.json",
+        "receipts/ind3-operate/ind3-launch-20260710T004022Z.json",
+        "receipts/ind3-operate/ind3-launch-20260729T094447Z.json",
+        "scripts/ember_totality/ind3_operate_producer.py"
+      ],
+      "references": [
+        "docs/operator/operate.md",
+        "manifests/ember-01-identity/consumer-adjudication-v1.json",
+        "manifests/ember-01-identity/consumer-census-v1.json",
+        "receipts/ind3-operate/ind3-launch-20260710T004022Z.json",
+        "receipts/ind3-operate/ind3-launch-20260729T094447Z.json",
+        "scripts/ember_totality/ind3_operate_producer.py"
+      ]
+    },
+    "ind5-registry-dump": {
+      "name_hits": [
+        "manifests/ember-01-identity/consumer-adjudication-v1.json",
+        "scripts/ember_totality/ind5_comprehend_producer.py"
+      ],
+      "path": "ind5-registry-dump",
+      "path_hits": [
+        "manifests/ember-01-identity/consumer-adjudication-v1.json"
+      ],
+      "references": [
+        "manifests/ember-01-identity/consumer-adjudication-v1.json",
+        "scripts/ember_totality/ind5_comprehend_producer.py"
+      ]
+    },
+    "nf4-segv": {
+      "name_hits": [
+        "scripts/governor.py"
+      ],
+      "path": "nf4-segv",
+      "path_hits": [
+        "scripts/governor.py"
+      ],
+      "references": [
+        "scripts/governor.py"
+      ]
+    },
+    "owned-model-cli-probe.ndjson": {
+      "name_hits": [],
+      "path": "owned-model-cli-probe.ndjson",
+      "path_hits": [],
+      "references": []
+    },
+    "owned-model-cli-probe.stderr.log": {
+      "name_hits": [],
+      "path": "owned-model-cli-probe.stderr.log",
+      "path_hits": [],
+      "references": []
+    },
+    "owned-model-server-launch.err.log": {
+      "name_hits": [],
+      "path": "owned-model-server-launch.err.log",
+      "path_hits": [],
+      "references": []
+    },
+    "owned-model-server-launch.log": {
+      "name_hits": [],
+      "path": "owned-model-server-launch.log",
+      "path_hits": [],
+      "references": []
+    },
+    "p1-repr-probe": {
+      "name_hits": [],
+      "path": "p1-repr-probe",
+      "path_hits": [],
+      "references": []
+    },
+    "p2-sft-warmstart": {
+      "name_hits": [],
+      "path": "p2-sft-warmstart",
+      "path_hits": [],
+      "references": []
+    },
+    "parity-audit": {
+      "name_hits": [
+        "receipts/ember-01-custody/freeze-artifact-integrity-issue531-v1.json",
+        "receipts/ember-preloop-resident-gate/cleanroom-inventory-20260621T153049Z.json",
+        "receipts/ember-preloop-resident-gate/cleanroom-legal-boundary-20260622T003000Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T190451Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T195516Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T221610Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T222716Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T224019Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T224840Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T225455Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T231200Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T232000Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T232700Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T000300Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T001100Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T001200Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T002100Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T003100Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T141500Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T152000Z-final.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T154500Z-blocked.json",
+        "scripts/ember_gate_backend_coordinator_agents_selftest.py",
+        "scripts/ember_gate_cleanroom_legal_boundary.py",
+        "scripts/ember_gate_full_parity_harness.py",
+        "scripts/ember_gate_full_parity_harness_selftest.py",
+        "scripts/ember_gate_function_slash_commands_selftest.py"
+      ],
+      "path": "parity-audit",
+      "path_hits": [],
+      "references": [
+        "receipts/ember-01-custody/freeze-artifact-integrity-issue531-v1.json",
+        "receipts/ember-preloop-resident-gate/cleanroom-inventory-20260621T153049Z.json",
+        "receipts/ember-preloop-resident-gate/cleanroom-legal-boundary-20260622T003000Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T190451Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T195516Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T221610Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T222716Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T224019Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T224840Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T225455Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T231200Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T232000Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260621T232700Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T000300Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T001100Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T001200Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T002100Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T003100Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T141500Z.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T152000Z-final.json",
+        "receipts/ember-preloop-resident-gate/full-parity-harness-gate-20260622T154500Z-blocked.json",
+        "scripts/ember_gate_backend_coordinator_agents_selftest.py",
+        "scripts/ember_gate_cleanroom_legal_boundary.py",
+        "scripts/ember_gate_full_parity_harness.py",
+        "scripts/ember_gate_full_parity_harness_selftest.py",
+        "scripts/ember_gate_function_slash_commands_selftest.py"
+      ]
+    },
+    "preserve-custodycure2-wip": {
+      "name_hits": [],
+      "path": "preserve-custodycure2-wip",
+      "path_hits": [],
+      "references": []
+    },
+    "preserve-pre-379": {
+      "name_hits": [],
+      "path": "preserve-pre-379",
+      "path_hits": [],
+      "references": []
+    },
+    "pubgate-enforce": {
+      "name_hits": [
+        "scripts/ember_totality/enforcement_leg_test.py"
+      ],
+      "path": "pubgate-enforce",
+      "path_hits": [
+        "scripts/ember_totality/enforcement_leg_test.py"
+      ],
+      "references": [
+        "scripts/ember_totality/enforcement_leg_test.py"
+      ]
+    },
+    "r3-feasibility": {
+      "name_hits": [
+        "docs/archive/pre-restart/c-scale-execution-graph.md",
+        "scripts/r3_feasibility_probe.py"
+      ],
+      "path": "r3-feasibility",
+      "path_hits": [],
+      "references": [
+        "docs/archive/pre-restart/c-scale-execution-graph.md",
+        "scripts/r3_feasibility_probe.py"
+      ]
+    },
+    "r3-feasibility-download": {
+      "name_hits": [],
+      "path": "r3-feasibility-download",
+      "path_hits": [],
+      "references": []
+    },
+    "r3-feasibility-dryrun": {
+      "name_hits": [
+        "scripts/r3_feasibility_probe.py"
+      ],
+      "path": "r3-feasibility-dryrun",
+      "path_hits": [],
+      "references": [
+        "scripts/r3_feasibility_probe.py"
+      ]
+    },
+    "r3-phaseB-20260704b.log": {
+      "name_hits": [],
+      "path": "r3-phaseB-20260704b.log",
+      "path_hits": [],
+      "references": []
+    },
+    "r3-phaseB-20260704c.log": {
+      "name_hits": [],
+      "path": "r3-phaseB-20260704c.log",
+      "path_hits": [],
+      "references": []
+    },
+    "r3-phaseB-20260704d.log": {
+      "name_hits": [],
+      "path": "r3-phaseB-20260704d.log",
+      "path_hits": [],
+      "references": []
+    },
+    "r3-phaseB-20260704e.err.log": {
+      "name_hits": [],
+      "path": "r3-phaseB-20260704e.err.log",
+      "path_hits": [],
+      "references": []
+    },
+    "r3-phaseB-20260704e.log": {
+      "name_hits": [],
+      "path": "r3-phaseB-20260704e.log",
+      "path_hits": [],
+      "references": []
+    },
+    "r3-prequant-detect": {
+      "name_hits": [],
+      "path": "r3-prequant-detect",
+      "path_hits": [],
+      "references": []
+    },
+    "renderfix.log": {
+      "name_hits": [],
+      "path": "renderfix.log",
+      "path_hits": [],
+      "references": []
+    },
+    "riders591": {
+      "name_hits": [
+        "receipts/cbase-grow-rung2-real-nullmodel-20260710T004908Z.json",
+        "receipts/cbase-grow-rung2-real-nullmodel-disclosure-addendum-20260710T041500Z.json",
+        "scripts/cbase_grow_rung2_real_nullmodel_run.py"
+      ],
+      "path": "riders591",
+      "path_hits": [
+        "receipts/cbase-grow-rung2-real-nullmodel-20260710T004908Z.json",
+        "receipts/cbase-grow-rung2-real-nullmodel-disclosure-addendum-20260710T041500Z.json",
+        "scripts/cbase_grow_rung2_real_nullmodel_run.py"
+      ],
+      "references": [
+        "receipts/cbase-grow-rung2-real-nullmodel-20260710T004908Z.json",
+        "receipts/cbase-grow-rung2-real-nullmodel-disclosure-addendum-20260710T041500Z.json",
+        "scripts/cbase_grow_rung2_real_nullmodel_run.py"
+      ]
+    },
+    "rung2-optstate": {
+      "name_hits": [
+        "scripts/cpu_offload_adamw.py"
+      ],
+      "path": "rung2-optstate",
+      "path_hits": [],
+      "references": [
+        "scripts/cpu_offload_adamw.py"
+      ]
+    },
+    "s2cap": {
+      "name_hits": [
+        "scripts/ember_surface2_capture.py"
+      ],
+      "path": "s2cap",
+      "path_hits": [],
+      "references": [
+        "scripts/ember_surface2_capture.py"
+      ]
+    },
+    "screen792-live-20260714T2220Z": {
+      "name_hits": [],
+      "path": "screen792-live-20260714T2220Z",
+      "path_hits": [],
+      "references": []
+    },
+    "screen792-quality-rerun-20260714T202752": {
+      "name_hits": [],
+      "path": "screen792-quality-rerun-20260714T202752",
+      "path_hits": [],
+      "references": []
+    },
+    "seed-export-v5": {
+      "name_hits": [
+        "receipts/ember-c-scale/land210g-experiment-runners-receipt.json",
+        "receipts/ember-c-scale/land210h-ops-tools-receipt.json",
+        "receipts/ember-c-scale/land210i-harness-entry-receipt.json",
+        "receipts/ember-c-scale/land210j-family3-stragglers-receipt.json",
+        "receipts/ember-c-scale/land210k-e2b-pair-receipt.json",
+        "receipts/genesis/genesis-audit-20260706.md"
+      ],
+      "path": "seed-export-v5",
+      "path_hits": [
+        "receipts/ember-c-scale/land210g-experiment-runners-receipt.json",
+        "receipts/ember-c-scale/land210h-ops-tools-receipt.json",
+        "receipts/ember-c-scale/land210i-harness-entry-receipt.json",
+        "receipts/ember-c-scale/land210j-family3-stragglers-receipt.json",
+        "receipts/ember-c-scale/land210k-e2b-pair-receipt.json",
+        "receipts/genesis/genesis-audit-20260706.md"
+      ],
+      "references": [
+        "receipts/ember-c-scale/land210g-experiment-runners-receipt.json",
+        "receipts/ember-c-scale/land210h-ops-tools-receipt.json",
+        "receipts/ember-c-scale/land210i-harness-entry-receipt.json",
+        "receipts/ember-c-scale/land210j-family3-stragglers-receipt.json",
+        "receipts/ember-c-scale/land210k-e2b-pair-receipt.json",
+        "receipts/genesis/genesis-audit-20260706.md"
+      ]
+    },
+    "stray-outputs-20260706": {
+      "name_hits": [],
+      "path": "stray-outputs-20260706",
+      "path_hits": [],
+      "references": []
+    },
+    "t1-probes": {
+      "name_hits": [],
+      "path": "t1-probes",
+      "path_hits": [],
+      "references": []
+    },
+    "verify_cbase_hashes.py": {
+      "name_hits": [],
+      "path": "verify_cbase_hashes.py",
+      "path_hits": [],
+      "references": []
+    },
+    "w1-control": {
+      "name_hits": [
+        "docs/spec/c-scale-s3-compute-protocol-v1.md",
+        "receipts/ember-01-custody/freeze-artifact-integrity-issue531-v1.json",
+        "receipts/ember-c-scale/w1-baseline-replay-closure-20260711T025650Z-redacted-edition.json",
+        "receipts/ember-c-scale/w1-certification-check-20260707T114707Z.json",
+        "receipts/ember-c-scale/w1-collapse-control-20260707T110256Z.json",
+        "receipts/ember-c-scale/w1-collapse-control-20260707T135344Z.json",
+        "receipts/ember-c-scale/w1-fp32-check-20260707T114517Z.json",
+        "receipts/ember-c-scale/w1-fullstate-resume-verify-20260711T054130Z-redacted-edition.json",
+        "receipts/ember-c-scale/w1-fullstate-resume-verify-20260711T060432Z-redacted-edition.json",
+        "receipts/ember-c-scale/w1-fullstate-resume-verify-20260711T062151Z-redacted-edition.json",
+        "receipts/ember-c-scale/w1-launch-receipt-20260707T110231Z.json",
+        "receipts/ember-c-scale/w1-live-leg-a-run-20260711T025650Z-redacted-edition.log",
+        "scripts/ember_c_scale_s3_producer.py",
+        "scripts/p1_envelope_sweep.py",
+        "scripts/test_redact_for_landing.py",
+        "scripts/test_w1_live_gates.py",
+        "scripts/test_w1b_continuation.py",
+        "scripts/w1_baseline_replay_closure.py",
+        "scripts/w1_collapse_control_run.py",
+        "scripts/w1_recheck_cache.py",
+        "scripts/w1b_fp32_check.py"
+      ],
+      "path": "w1-control",
+      "path_hits": [
+        "docs/spec/c-scale-s3-compute-protocol-v1.md",
+        "receipts/ember-01-custody/freeze-artifact-integrity-issue531-v1.json",
+        "receipts/ember-c-scale/w1-baseline-replay-closure-20260711T025650Z-redacted-edition.json",
+        "receipts/ember-c-scale/w1-certification-check-20260707T114707Z.json",
+        "receipts/ember-c-scale/w1-collapse-control-20260707T110256Z.json",
+        "receipts/ember-c-scale/w1-collapse-control-20260707T135344Z.json",
+        "receipts/ember-c-scale/w1-fp32-check-20260707T114517Z.json",
+        "receipts/ember-c-scale/w1-fullstate-resume-verify-20260711T054130Z-redacted-edition.json",
+        "receipts/ember-c-scale/w1-fullstate-resume-verify-20260711T060432Z-redacted-edition.json",
+        "receipts/ember-c-scale/w1-fullstate-resume-verify-20260711T062151Z-redacted-edition.json",
+        "receipts/ember-c-scale/w1-launch-receipt-20260707T110231Z.json",
+        "receipts/ember-c-scale/w1-live-leg-a-run-20260711T025650Z-redacted-edition.log",
+        "scripts/test_w1_live_gates.py",
+        "scripts/w1_baseline_replay_closure.py",
+        "scripts/w1_collapse_control_run.py",
+        "scripts/w1_recheck_cache.py",
+        "scripts/w1b_fp32_check.py"
+      ],
+      "references": [
+        "docs/spec/c-scale-s3-compute-protocol-v1.md",
+        "receipts/ember-01-custody/freeze-artifact-integrity-issue531-v1.json",
+        "receipts/ember-c-scale/w1-baseline-replay-closure-20260711T025650Z-redacted-edition.json",
+        "receipts/ember-c-scale/w1-certification-check-20260707T114707Z.json",
+        "receipts/ember-c-scale/w1-collapse-control-20260707T110256Z.json",
+        "receipts/ember-c-scale/w1-collapse-control-20260707T135344Z.json",
+        "receipts/ember-c-scale/w1-fp32-check-20260707T114517Z.json",
+        "receipts/ember-c-scale/w1-fullstate-resume-verify-20260711T054130Z-redacted-edition.json",
+        "receipts/ember-c-scale/w1-fullstate-resume-verify-20260711T060432Z-redacted-edition.json",
+        "receipts/ember-c-scale/w1-fullstate-resume-verify-20260711T062151Z-redacted-edition.json",
+        "receipts/ember-c-scale/w1-launch-receipt-20260707T110231Z.json",
+        "receipts/ember-c-scale/w1-live-leg-a-run-20260711T025650Z-redacted-edition.log",
+        "scripts/ember_c_scale_s3_producer.py",
+        "scripts/p1_envelope_sweep.py",
+        "scripts/test_redact_for_landing.py",
+        "scripts/test_w1_live_gates.py",
+        "scripts/test_w1b_continuation.py",
+        "scripts/w1_baseline_replay_closure.py",
+        "scripts/w1_collapse_control_run.py",
+        "scripts/w1_recheck_cache.py",
+        "scripts/w1b_fp32_check.py"
+      ]
+    },
+    "w2-heldout-run": {
+      "name_hits": [
+        "scripts/w2_heldout/build_decontam_batch_mp.py"
+      ],
+      "path": "w2-heldout-run",
+      "path_hits": [],
+      "references": [
+        "scripts/w2_heldout/build_decontam_batch_mp.py"
+      ]
+    }
+  },
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "schema_version": "ember-scratch-reference-scan-v1",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "ticket": "ISSUE-1450-SCRATCH-REFERENCE-SCAN",
+  "ts": "2026-08-12T19:24:46.829855Z"
+}
