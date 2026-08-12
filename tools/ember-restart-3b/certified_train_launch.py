@@ -506,6 +506,16 @@ def read_live_closure_sha256(repo_root: pathlib.Path) -> str:
     )
 
 
+def _hidden_subprocess_kwargs() -> dict[str, int]:
+    """Keep every nested Windows console child invisible."""
+
+    if os.name != "nt":
+        return {}
+    return {
+        "creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
+    }
+
+
 def read_pin_is_ancestor(repo_root: pathlib.Path, pin: str) -> bool:
     """Whether the certificate's verified-at commit is an ancestor of live HEAD.
 
@@ -527,6 +537,7 @@ def read_pin_is_ancestor(repo_root: pathlib.Path, pin: str) -> bool:
         capture_output=True,
         text=True,
         shell=False,
+        **_hidden_subprocess_kwargs(),
     )
     return result.returncode == 0
 
@@ -558,6 +569,7 @@ def read_commit_is_ancestor(
             text=True,
             shell=False,
             env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
+            **_hidden_subprocess_kwargs(),
         )
     except OSError as error:
         raise ValueError(
@@ -580,6 +592,7 @@ def read_current_master(repo_root: pathlib.Path) -> str:
         capture_output=True,
         text=True,
         shell=False,
+        **_hidden_subprocess_kwargs(),
     )
     if result.returncode != 0:
         raise ValueError("current public master is unreadable")
@@ -1439,10 +1452,13 @@ def _require_regular_custody_file(path: pathlib.Path, label: str) -> bytes:
         raise ValueError(f"launch-authority custody {label} unreadable") from error
 
 
-def _reject_custody_reparse_components(path: pathlib.Path, label: str) -> None:
-    raw = pathlib.Path(path)
-    if any(part in {".", ".."} for part in raw.parts):
+def _reject_custody_reparse_components(
+    path: str | os.PathLike[str], label: str
+) -> None:
+    raw_text = os.fspath(path)
+    if any(part in {".", ".."} for part in re.split(r"[\\\\/]", raw_text)):
         raise ValueError(f"launch-authority custody {label} has a dot segment")
+    raw = pathlib.Path(raw_text)
     if not raw.is_absolute():
         raw = pathlib.Path.cwd() / raw
     current = pathlib.Path(raw.anchor)
@@ -1467,15 +1483,16 @@ def _validate_run_scoped_custody_packet(
     run_spec_path: pathlib.Path,
     certificate: dict[str, Any],
     run_spec: dict[str, Any],
-    authorized_custody_root: pathlib.Path,
+    authorized_custody_root: str | os.PathLike[str],
     expected_receipt_sha256: str | None,
     expected_packet_directory: pathlib.Path | None = None,
 ) -> None:
     """Reopen the five-file offer owned by the canonical packet directory."""
     packet_directory = certificate_path.parent
+    _reject_custody_reparse_components(authorized_custody_root, "custody root")
+    authorized_custody_root = pathlib.Path(authorized_custody_root)
     if not authorized_custody_root.is_absolute():
         raise ValueError("launch-authority custody root must be absolute")
-    _reject_custody_reparse_components(authorized_custody_root, "custody root")
     canonical_packet_directory = packet_directory.resolve(strict=False)
     canonical_custody_root = authorized_custody_root.resolve(strict=False)
     canonical_repo_root = pathlib.Path(repo_root).resolve(strict=False)
@@ -1817,7 +1834,7 @@ def validate_certified_request(
         run_spec_path,
         certificate,
         run_spec,
-        pathlib.Path(requested_scope["custody_root"]),
+        requested_scope["custody_root"],
         expected_custody_receipt_sha256,
         expected_launch_authority_packet_directory,
     )
@@ -2419,6 +2436,7 @@ def _record_run_attempt(
             capture_output=True,
             text=True,
             timeout=RUN_ATTEMPT_REGISTRY_TIMEOUT_SECONDS,
+            **_hidden_subprocess_kwargs(),
         )
         returncode = int(completed.returncode)
         stdout = completed.stdout or ""
@@ -2598,6 +2616,7 @@ def _start_energy_sidecar(
                 env=child_env,
                 stdout=sidecar_log_handle,
                 stderr=subprocess.STDOUT,
+                **_hidden_subprocess_kwargs(),
             )
     except Exception as error:
         disclosure["note"] = f"sidecar spawn failed: {error!r}"
@@ -2743,6 +2762,7 @@ def execute_validated_launch(
                 env=child_env,
                 stdout=child_log,
                 stderr=subprocess.STDOUT,
+                **_hidden_subprocess_kwargs(),
             )
         exit_code = int(result.returncode)
     except Exception as error:
