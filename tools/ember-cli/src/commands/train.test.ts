@@ -13,6 +13,7 @@ import {
   CERTIFIED_LAUNCH_TIMEOUT_MS,
   PREFLIGHT_TIMEOUT_MS,
   _defaultCertifiedLaunchRunner,
+  _defaultLaunchPacketRunner,
   createTrainCommand,
   type LaunchPacketRunResult,
 } from "./train.ts";
@@ -220,6 +221,32 @@ describe("train command", () => {
     await Bun.sleep(10);
     expect(eventLoopTurnRan).toBe(true);
     expect((await started.completion).status).toBe(0);
+  });
+
+  it("keeps the render loop ticking while the launch-packet preflight evaluates (regression #1487: the EARLIER preflight+custody leg, ahead of the confirm dispatch #1649 already fixed, still ran synchronously on the UI thread)", async () => {
+    // screens/repl.ts drives both the busy spinner and the #413 liveness heartbeat off the
+    // same primitive: a setInterval-based render tick (useInterval). A synchronous spawnSync
+    // preflight call freezes the whole single JS thread for its entire duration, so that tick
+    // cannot fire even once until the child process exits -- which is exactly the frozen
+    // clock/heartbeat a live-run probe reproduced (2026-08-12, cold ~8.5s / warm ~2.2s,
+    // recovery coinciding with the post-preflight custody banner). An off-thread preflight
+    // lets the render tick keep firing throughout.
+    let frameTicks = 0;
+    const frameCadence = setInterval(() => {
+      frameTicks += 1;
+    }, 100);
+    try {
+      const result = await _defaultLaunchPacketRunner(process.execPath, [
+        "-e",
+        "setTimeout(() => process.exit(0), 2200)",
+      ]);
+      expect(result.status).toBe(0);
+      // ~22 ticks are possible in the 2.2s window; a wide floor tolerates scheduler jitter
+      // while staying far above the ~0 a blocking spawnSync call would leave this at.
+      expect(frameTicks).toBeGreaterThanOrEqual(10);
+    } finally {
+      clearInterval(frameCadence);
+    }
   });
 
   it("returns /train confirm after spawn while the certified consumer continues in background", async () => {

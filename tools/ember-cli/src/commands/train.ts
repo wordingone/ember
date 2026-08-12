@@ -14,7 +14,7 @@
 import type { CommandContext, RegistryCommand } from "../types/command-types.ts";
 import { resolveEmberSourceRootOrCwd } from "../utils/repo-root.ts";
 import { publishActivityFeedInfrastructureFailure } from "../services/activity-feed.ts";
-import { spawn, spawnSync } from "child_process";
+import { spawn } from "child_process";
 import { createHash } from "crypto";
 import { existsSync, readFileSync } from "fs";
 import { dirname, isAbsolute, join, relative, resolve } from "path";
@@ -53,22 +53,59 @@ export const PREFLIGHT_TIMEOUT_MS = 600_000;
 // interpreter startup, final receipt emission, and orderly process exit.
 export const CERTIFIED_LAUNCH_TIMEOUT_MS = 16 * 60_000;
 
-function _runPythonProcess(
+/**
+ * Runs a child process off the render thread and resolves only once it exits.
+ *
+ * #1487 (earlier leg than #1649's confirm-dispatch fix): the launch-packet preflight
+ * used to run via spawnSync, which blocks the whole single JS thread -- including the
+ * cockpit's own render tick and #413 liveness heartbeat -- for the entire subprocess
+ * duration (a live-run probe measured 2-9s, exactly matching a spawnSync-blocked
+ * preflight that "instantiates a tiny CPU model and round-trips a checkpoint"). spawn
+ * plus an awaited completion Promise keeps the event loop free to service timers (render tick, spinner,
+ * heartbeat) while the caller still awaits the full result, unlike
+ * _runPythonProcessInBackground below, which intentionally resolves at spawn instead of
+ * at exit for the certified consumer's fire-and-forget dispatch.
+ */
+function _runPythonProcessAsync(
   executable: string,
   args: string[],
   timeout: number,
-): LaunchPacketRunResult {
-  try {
-    const result = spawnSync(executable, args, {
-      encoding: "utf8",
-      windowsHide: true,
-      timeout,
-      maxBuffer: 16 * 1024 * 1024,
-    });
-    return { status: result.status, stdout: result.stdout ?? "" };
-  } catch {
-    return { status: null, stdout: "" };
-  }
+): Promise<LaunchPacketRunResult> {
+  return new Promise((resolve) => {
+    let stdout = "";
+    let settled = false;
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+
+    const finish = (result: LaunchPacketRunResult): void => {
+      if (settled) return;
+      settled = true;
+      if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+      resolve(result);
+    };
+
+    try {
+      const child = spawn(executable, args, {
+        windowsHide: true,
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+      child.stdout.setEncoding("utf8");
+      child.stdout.on("data", (chunk: string) => {
+        stdout += chunk;
+        if (Buffer.byteLength(stdout, "utf8") > 16 * 1024 * 1024) {
+          child.kill();
+          finish({ status: null, stdout: "" });
+        }
+      });
+      child.once("error", () => finish({ status: null, stdout: "" }));
+      child.once("close", (status) => finish({ status, stdout }));
+      timeoutHandle = setTimeout(() => {
+        child.kill();
+        finish({ status: null, stdout: "" });
+      }, timeout);
+    } catch {
+      finish({ status: null, stdout: "" });
+    }
+  });
 }
 
 function _runPythonProcessInBackground(
@@ -149,10 +186,10 @@ function _runPythonProcessInBackground(
 export function _defaultLaunchPacketRunner(
   executable: string,
   args: string[],
-): LaunchPacketRunResult {
+): Promise<LaunchPacketRunResult> {
   // The clean-genesis + recovery preflights instantiate a tiny CPU model and
   // round-trip a checkpoint, so allow generous headroom; still CPU-only.
-  return _runPythonProcess(executable, args, PREFLIGHT_TIMEOUT_MS);
+  return _runPythonProcessAsync(executable, args, PREFLIGHT_TIMEOUT_MS);
 }
 
 /** Fixed certified-consumer runner with headroom above the 15-minute canary. */
@@ -268,7 +305,10 @@ interface TrainCommandDeps {
    * subprocess (and therefore no torch/CPU work, and never any GPU/training
    * launch) is ever invoked. Defaults to _defaultLaunchPacketRunner.
    */
-  runLaunchPacket?: (executable: string, args: string[]) => LaunchPacketRunResult;
+  runLaunchPacket?: (
+    executable: string,
+    args: string[],
+  ) => LaunchPacketRunResult | Promise<LaunchPacketRunResult>;
   /** Certified B7 consumer with a timeout separate from the CPU preflight. */
   runCertifiedLaunch?: (
     executable: string,
@@ -766,7 +806,7 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
       const preflightAttempts: Array<number | null> = [];
       let result: LaunchPacketRunResult;
       try {
-        result = runLaunchPacket(pythonBin, [scriptPath, "--config", configPath]);
+        result = await runLaunchPacket(pythonBin, [scriptPath, "--config", configPath]);
       } catch {
         // A runner that throws (crash/ENOENT/timeout raised as an exception)
         // fails closed rather than crashing the command.
@@ -790,7 +830,7 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
         // remain eligible for a later first null observation.
         trainPreflightSessions.add(ctx.sessionId);
         try {
-          result = runLaunchPacket(pythonBin, [scriptPath, "--config", configPath]);
+          result = await runLaunchPacket(pythonBin, [scriptPath, "--config", configPath]);
         } catch {
           result = { status: null, stdout: "" };
         }
