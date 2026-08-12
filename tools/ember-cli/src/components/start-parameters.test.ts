@@ -2,40 +2,108 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import { describe, expect, test } from "bun:test";
-import { createStartDialogState, reduceStartDialog, formatStartTrainCommand, StartParametersDialog } from "./start-parameters.ts";
+import {
+  PARAMETER_NOT_DECLARED,
+  StartParametersDialog,
+  parseLaunchAuthorityParameters,
+} from "./start-parameters.ts";
 
-describe("START parameter dialog contract", () => {
-  test("bounds edits and emits exact governed command on confirm", () => {
-    let state = createStartDialogState();
-    state = reduceStartDialog(state, { type: "open" }).state;
-    state = reduceStartDialog(state, { type: "edit", field: "steps", value: 999999 }).state;
-    state = reduceStartDialog(state, { type: "edit", field: "dataSize", value: 0 }).state;
-    state = reduceStartDialog(state, { type: "edit", field: "timeBudgetMinutes", value: 999999 }).state;
-    const result = reduceStartDialog(state, { type: "confirm" });
-    expect(result.submitted).toEqual({ dataSize: 1, steps: 100000, timeBudgetMinutes: 1440 });
-    expect(formatStartTrainCommand(result.submitted!)).toBe("/train --data-size 1 --steps 100000 --time-budget-minutes 1440");
+describe("operator parameter review contract", () => {
+  test("parses the six closed launch-authority fields without inventing defaults", () => {
+    expect(parseLaunchAuthorityParameters(JSON.stringify({
+      schema_version: "ember-certified-train-run-v1",
+      run_id: "run-1314",
+      seed: 830001,
+      requested_scope: {
+        optimizer_steps: 200,
+        sequence_length: 4096,
+        checkpoint_interval: 50,
+        write_budget_bytes: 36507222016,
+      },
+    }))).toEqual({
+      ok: true,
+      parameters: {
+        seed: 830001,
+        steps: 200,
+        sequenceLength: 4096,
+        checkpointInterval: 50,
+        writeBudgetBytes: 36507222016,
+        runId: "run-1314",
+      },
+    });
   });
 
-  test("cancel closes without submission", () => {
-    const result = reduceStartDialog({ open: true, parameters: { dataSize: 2, steps: 3, timeBudgetMinutes: 4 } }, { type: "cancel" });
-    expect(result.submitted).toBeUndefined();
-    expect(result.state.open).toBe(false);
+  test("fails closed when a required authority value is absent or malformed", () => {
+    expect(parseLaunchAuthorityParameters(JSON.stringify({
+      schema_version: "ember-certified-train-run-v1",
+      run_id: "run-1314",
+      seed: 830001,
+      requested_scope: { sequence_length: 4096, checkpoint_interval: 50, write_budget_bytes: 1 },
+    }))).toEqual({ ok: false, reason: "launch-authority run-spec is missing optimizer_steps" });
+    expect(parseLaunchAuthorityParameters("{not-json")).toEqual({
+      ok: false,
+      reason: "launch-authority run-spec is not valid JSON",
+    });
   });
 
-  test("rendered dialog exposes governed confirm and cancel actions", () => {
+  test("the public governed-vertical shape reports undeclared display fields without guessing", () => {
+    expect(parseLaunchAuthorityParameters(JSON.stringify({
+      schema_version: "ember-certified-train-run-v1",
+      run_id: "r-public",
+      seed: 830001,
+      requested_scope: { optimizer_steps: 100, write_budget_bytes: 36507222016 },
+    }))).toEqual({
+      ok: true,
+      parameters: {
+        seed: 830001,
+        steps: 100,
+        sequenceLength: PARAMETER_NOT_DECLARED,
+        checkpointInterval: PARAMETER_NOT_DECLARED,
+        writeBudgetBytes: 36507222016,
+        runId: "r-public",
+      },
+    });
+  });
+
+  test("seed zero is preserved as declared authority, not mistaken for missing", () => {
+    const parsed = parseLaunchAuthorityParameters(JSON.stringify({
+      run_id: "seed-zero",
+      seed: 0,
+      requested_scope: { optimizer_steps: 1, write_budget_bytes: 1 },
+    }));
+    expect(parsed.ok && parsed.parameters.seed).toBe(0);
+  });
+
+  test("rendered dialog is review-only and exposes one explicit confirm plus cancel", () => {
     const confirmed: unknown[] = [];
     let cancelled = 0;
     const tree = StartParametersDialog({
-      initial: { dataSize: 0, steps: 100_001, timeBudgetMinutes: 0 },
+      action: "RESTART",
+      sourcePath: "B:/authority/run-spec.json",
+      parameters: {
+        seed: 83,
+        steps: 200,
+        sequenceLength: 4096,
+        checkpointInterval: 50,
+        writeBudgetBytes: 4096,
+        runId: "run-1314",
+      },
       onConfirm: (parameters) => confirmed.push(parameters),
       onCancel: () => { cancelled += 1; },
     }) as unknown as { props?: { children?: unknown[] }; children?: unknown[] };
     const children = (tree.props?.children ?? tree.children ?? []) as Array<{ props?: { onPress?: () => void } }>;
     const buttons = children.filter((child) => typeof child?.props?.onPress === "function");
-    expect(buttons).toHaveLength(5);
-    buttons[3]!.props!.onPress!();
-    buttons[4]!.props!.onPress!();
-    expect(confirmed).toEqual([{ dataSize: 1, steps: 100000, timeBudgetMinutes: 1 }]);
+    expect(buttons).toHaveLength(2);
+    buttons[0]!.props!.onPress!();
+    buttons[1]!.props!.onPress!();
+    expect(confirmed).toEqual([{
+      seed: 83,
+      steps: 200,
+      sequenceLength: 4096,
+      checkpointInterval: 50,
+      writeBudgetBytes: 4096,
+      runId: "run-1314",
+    }]);
     expect(cancelled).toBe(1);
   });
 });
