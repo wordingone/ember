@@ -51,6 +51,11 @@ reopens the manifest and refuses missing, duplicate, foreign, drifted, or
 `MOVE_READY` rows.  The disposition therefore does not grant move or deletion
 authority.  It records the unresolved work required before a separately
 reviewed relocation or deletion proposal could be considered.
+Every disposition also carries the repository receipt-floor fields:
+`ticket=ISSUE-1450-SCRATCH-DISPOSITION`, a timezone-aware `ts`, the canonical
+binary `sha_convention`, and the constitutional `invariant_sha256`.  These
+fields are inside `disposition_sha256`; removing or altering one is therefore
+both a receipt-floor failure and a disposition self-hash failure.
 The public disposition also carries the scanned source commit, source-status
 digest, and exact total file/byte counts; its manifest self-hash binds the
 full raw inventory, which may remain in restricted custody when an exact deep

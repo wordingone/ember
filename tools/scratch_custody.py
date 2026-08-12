@@ -17,11 +17,15 @@ import json
 import os
 import re
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable
 
 
 SCHEMA_VERSION = "ember-scratch-custody-v1"
+DISPOSITION_TICKET = "ISSUE-1450-SCRATCH-DISPOSITION"
+SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
+INVARIANT_SHA256 = "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
 AUTHORITY = {
     "goal_id": "EMBER-02",
     "workstream_id": "EMBER-02A",
@@ -47,8 +51,8 @@ _ENTRY_KEYS = {"path", "kind", "bytes", "sha256", "tracked"}
 _TOP_LEVEL_KEYS = {"path", "files", "bytes", "sha256"}
 _POLICY_KEYS = {"max_bytes", "max_files", "read_only", "reparse_refused"}
 _DISPOSITION_KEYS = {
-    "schema_version", "authority", "source_manifest_sha256", "source", "entries", "summary",
-    "disposition_sha256",
+    "schema_version", "ticket", "ts", "sha_convention", "invariant_sha256", "authority",
+    "source_manifest_sha256", "source", "entries", "summary", "disposition_sha256",
 }
 _DISPOSITION_SOURCE_KEYS = {"commit", "status_sha256", "files", "bytes"}
 _DISPOSITION_ENTRY_KEYS = {
@@ -149,9 +153,14 @@ def _git(root: Path, *args: str) -> str | None:
 
 
 def _source_binding(root: Path) -> tuple[str, str, set[str]]:
-    commit = _git(root, "rev-parse", "HEAD") or "UNBOUND"
-    status = _git(root, "status", "--porcelain", "--untracked-files=all") or ""
-    tracked_text = _git(root, "ls-files", "--", "scratch") or ""
+    top_level = _git(root, "rev-parse", "--show-toplevel")
+    commit = _git(root, "rev-parse", "HEAD")
+    status = _git(root, "status", "--porcelain", "--untracked-files=all")
+    tracked_text = _git(root, "ls-files", "--", "scratch")
+    if top_level is None or commit is None or status is None or tracked_text is None:
+        raise CensusError("Git source binding cannot be read")
+    if Path(top_level).resolve(strict=True) != root.resolve(strict=True):
+        raise CensusError("census root must be the Git repository root")
     tracked = {line.replace("\\", "/") for line in tracked_text.splitlines() if line}
     return commit, _sha256(status.encode("utf-8")), tracked
 
@@ -250,7 +259,9 @@ def _validate_shape(manifest: Any) -> None:
         raise CensusError("manifest label is invalid")
     if manifest["target"] != "scratch":
         raise CensusError("manifest target is invalid")
-    if not isinstance(manifest["source_commit"], str):
+    if not isinstance(manifest["source_commit"], str) or not _HEX40.fullmatch(
+        manifest["source_commit"]
+    ):
         raise CensusError("source commit is invalid")
     if not isinstance(manifest["policy"], dict) or set(manifest["policy"]) != _POLICY_KEYS:
         raise CensusError("manifest policy schema is not closed")
@@ -278,6 +289,8 @@ def _validate_shape(manifest: Any) -> None:
         ):
             raise CensusError("manifest entry path is invalid")
         seen_paths.add(entry["path"])
+        if entry["kind"] != "file":
+            raise CensusError("manifest entry kind is invalid")
         if type(entry["bytes"]) is not int or entry["bytes"] < 0:
             raise CensusError("manifest entry bytes are invalid")
         if not isinstance(entry["tracked"], bool) or not _HEX64.fullmatch(entry["sha256"]):
@@ -368,7 +381,7 @@ def _validate_annotation(annotation: Any, *, require_canonical: bool = False) ->
 
 
 def build_disposition(
-    manifest: dict[str, Any], annotations: dict[str, dict[str, Any]],
+    manifest: dict[str, Any], annotations: dict[str, dict[str, Any]], *, ts: str | None = None,
 ) -> dict[str, Any]:
     _validate_shape(manifest)
     if not isinstance(annotations, dict):
@@ -406,6 +419,10 @@ def build_disposition(
         )
     disposition: dict[str, Any] = {
         "schema_version": "ember-scratch-disposition-v1",
+        "ticket": DISPOSITION_TICKET,
+        "ts": ts or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "sha_convention": SHA_CONVENTION,
+        "invariant_sha256": INVARIANT_SHA256,
         "authority": dict(AUTHORITY),
         "source_manifest_sha256": manifest["manifest_sha256"],
         "source": {
@@ -434,6 +451,18 @@ def validate_disposition(
         raise CensusError("disposition schema is not closed")
     if disposition["schema_version"] != "ember-scratch-disposition-v1":
         raise CensusError("disposition schema version mismatch")
+    if disposition["ticket"] != DISPOSITION_TICKET:
+        raise CensusError("disposition ticket mismatch")
+    if disposition["sha_convention"] != SHA_CONVENTION:
+        raise CensusError("disposition sha convention mismatch")
+    if disposition["invariant_sha256"] != INVARIANT_SHA256:
+        raise CensusError("disposition invariant mismatch")
+    try:
+        parsed_ts = datetime.fromisoformat(disposition["ts"].replace("Z", "+00:00"))
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise CensusError("disposition timestamp is invalid") from exc
+    if parsed_ts.tzinfo is None:
+        raise CensusError("disposition timestamp is invalid")
     _validate_authority(disposition["authority"])
     if disposition["source_manifest_sha256"] != manifest["manifest_sha256"]:
         raise CensusError("disposition source manifest mismatch")
@@ -515,29 +544,39 @@ def validate_manifest(root: Path, manifest: dict[str, Any], *, require_git: bool
 
 
 def write_manifest(root: Path, output: Path, *, label: str, target: str = "scratch", max_bytes: int, max_files: int = 100_000) -> Path:
-    output = Path(output)
-    if output.exists():
-        raise CensusError("manifest destination already exists")
     manifest = build_manifest(root, label=label, target=target, max_bytes=max_bytes, max_files=max_files)
+    return _write_new_document(Path(output), _canonical_json(manifest), "manifest")
+
+
+def _write_new_document(output: Path, payload: bytes, kind: str) -> Path:
+    if output.exists():
+        raise CensusError(f"{kind} destination already exists")
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_name(output.name + ".tmp")
-    temporary.write_bytes(_canonical_json(manifest))
-    os.replace(temporary, output)
+    try:
+        with temporary.open("xb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except FileExistsError as exc:
+        raise CensusError(f"{kind} temporary already exists") from exc
+    try:
+        os.link(temporary, output)
+    except FileExistsError as exc:
+        temporary.unlink()
+        raise CensusError(f"{kind} destination already exists") from exc
+    except OSError:
+        temporary.unlink()
+        raise
+    temporary.unlink()
     return output
 
 
 def write_disposition(
     manifest: dict[str, Any], annotations: dict[str, dict[str, Any]], output: Path,
 ) -> Path:
-    output = Path(output)
-    if output.exists():
-        raise CensusError("disposition destination already exists")
     disposition = build_disposition(manifest, annotations)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    temporary = output.with_name(output.name + ".tmp")
-    temporary.write_bytes(_canonical_json(disposition))
-    os.replace(temporary, output)
-    return output
+    return _write_new_document(Path(output), _canonical_json(disposition), "disposition")
 
 
 def _cli(argv: Iterable[str]) -> int:

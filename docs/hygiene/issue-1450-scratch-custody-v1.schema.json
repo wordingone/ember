@@ -18,7 +18,7 @@
     },
     "label": {"type": "string", "minLength": 1},
     "target": {"const": "scratch"},
-    "source_commit": {"type": "string", "minLength": 1},
+    "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
     "source_status_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "policy": {
       "type": "object",
@@ -46,7 +46,20 @@
         }
       }
     },
-    "top_level": {"type": "array"},
+    "top_level": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "files", "bytes", "sha256"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1, "pattern": "^[^/\\\\]+$"},
+          "files": {"type": "integer", "minimum": 1},
+          "bytes": {"type": "integer", "minimum": 0},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
     "summary": {
       "type": "object",
       "additionalProperties": false,

@@ -3,9 +3,13 @@
   "$id": "ember-scratch-disposition-v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "authority", "source_manifest_sha256", "source", "entries", "summary", "disposition_sha256"],
+  "required": ["schema_version", "ticket", "ts", "sha_convention", "invariant_sha256", "authority", "source_manifest_sha256", "source", "entries", "summary", "disposition_sha256"],
   "properties": {
     "schema_version": {"const": "ember-scratch-disposition-v1"},
+    "ticket": {"const": "ISSUE-1450-SCRATCH-DISPOSITION"},
+    "ts": {"type": "string", "format": "date-time"},
+    "sha_convention": {"const": "bytes on disk as-is (binary read, no line-ending normalization)"},
+    "invariant_sha256": {"const": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"},
     "authority": {
       "type": "object",
       "additionalProperties": false,
