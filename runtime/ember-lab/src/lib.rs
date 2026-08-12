@@ -1019,6 +1019,7 @@ impl Daemon {
             CREATE TABLE IF NOT EXISTS dispatch_receipt_recovery(job_id TEXT PRIMARY KEY, resource_lease TEXT NOT NULL, manifest_sha256 TEXT NOT NULL, receipt_path TEXT NOT NULL, receipt_sha256 TEXT NOT NULL, receipt_bytes BLOB NOT NULL, created_at_ms INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS dispatch_preflight_receipts(job_id TEXT PRIMARY KEY, resource_lease TEXT NOT NULL, manifest_sha256 TEXT NOT NULL, receipt_sha256 TEXT NOT NULL, receipt_bytes BLOB NOT NULL, created_at_ms INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS dispatch_tokens(token_sha256 TEXT PRIMARY KEY, job_id TEXT NOT NULL UNIQUE, pid INTEGER NOT NULL, program TEXT NOT NULL, argv_sha256 TEXT NOT NULL, expires_at_ms INTEGER NOT NULL, consumed_at_ms INTEGER, FOREIGN KEY(job_id) REFERENCES jobs(job_id));
+            CREATE TABLE IF NOT EXISTS a1_e8_telemetry(job_id TEXT PRIMARY KEY, sha256 TEXT NOT NULL, bytes BLOB NOT NULL, metadata_json TEXT NOT NULL, bound_at_ms INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS resource_guard_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), admission_state TEXT NOT NULL CHECK(admission_state IN ('open','frozen')), reason TEXT, observed_at_ms INTEGER NOT NULL, oracle_evidence_required INTEGER NOT NULL CHECK(oracle_evidence_required IN (0,1)), observation_json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS resource_guard_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL);
             INSERT OR IGNORE INTO resource_guard_state(singleton,admission_state,reason,observed_at_ms,oracle_evidence_required,observation_json) VALUES(1,'open',NULL,0,0,'{}');")?;
@@ -2634,6 +2635,21 @@ impl Daemon {
             });
         }
         let token_sha256 = hash_bytes(token.as_bytes());
+        let row =
+            self.job_process_row(job_id)
+                .map_err(|_| EmberLabError::DispatchTokenRefused {
+                    job_id: job_id.into(),
+                })?;
+        if row.pid != client_pid {
+            return Err(EmberLabError::DispatchTokenRefused {
+                job_id: job_id.into(),
+            });
+        }
+        let live_identity = observe_live_process_identity(&row).ok_or_else(|| {
+            EmberLabError::DispatchTokenRefused {
+                job_id: job_id.into(),
+            }
+        })?;
         let consumed_at_ms = now_ms();
         let mut conn = self.conn()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -2645,9 +2661,17 @@ impl Daemon {
                  SELECT 1 FROM jobs j
                  WHERE j.job_id=t.job_id AND j.pid=t.pid
                    AND j.program=t.program AND j.argv_sha256=t.argv_sha256
+                   AND j.process_start_token=?5 AND j.executable_identity=?6
                    AND j.state IN ('prepared','running')
                )",
-            params![token_sha256, job_id, client_pid, consumed_at_ms],
+            params![
+                token_sha256,
+                job_id,
+                client_pid,
+                consumed_at_ms,
+                live_identity.identity.start_token,
+                live_identity.identity.executable
+            ],
         )?;
         if changed != 1 {
             return Err(EmberLabError::DispatchTokenRefused {
@@ -2886,6 +2910,129 @@ impl Daemon {
         .protective_owned_stop(job_id, checkpoint_grace)
     }
 
+    /// Bind one daemon-sealed A1-E8 telemetry artifact to an identified job.
+    ///
+    /// The caller supplies only the exact stdout locator. The daemon requires
+    /// that locator to equal the job's own sealed stdout path, reopens the
+    /// sealed bytes, and derives the content address locally. Raw bytes never
+    /// cross the RPC boundary and cannot be caller-authored evidence.
+    pub fn bind_a1_e8_telemetry(
+        &self,
+        job_id: &str,
+        artifact_path: &Path,
+        metadata: &Value,
+    ) -> Result<String> {
+        self.verify_identity(job_id)?;
+        let row = self.job_process_row(job_id)?;
+        if !matches!(
+            row.state,
+            JobState::Stopped | JobState::Exited | JobState::Failed
+        ) {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "A1-E8 telemetry must bind from a terminal sealed stdout".into(),
+            });
+        }
+        if artifact_path != row.stdout_log_path {
+            return Err(EmberLabError::DispatchBindingMismatch {
+                path: artifact_path.to_path_buf(),
+                expected: row.stdout_log_path.to_string_lossy().into_owned(),
+                actual: "non-job-owned-artifact-path".into(),
+            });
+        }
+        let sealed_sha: Option<String> = self.conn()?.query_row(
+            "SELECT stdout_log_sha256 FROM jobs WHERE job_id=?1",
+            [job_id],
+            |record| record.get(0),
+        )?;
+        let sealed_sha = sealed_sha.ok_or_else(|| EmberLabError::InvalidTransition {
+            job_id: job_id.into(),
+            detail: "A1-E8 telemetry stdout has no daemon seal".into(),
+        })?;
+        let bytes = fs::read(&row.stdout_log_path)?;
+        let actual_sha = hash_bytes(&bytes);
+        if actual_sha != sealed_sha {
+            return Err(EmberLabError::DispatchBindingMismatch {
+                path: row.stdout_log_path.clone(),
+                expected: sealed_sha,
+                actual: actual_sha,
+            });
+        }
+        validate_a1_e8_metadata(metadata)?;
+        if bytes.is_empty() || !bytes.ends_with(b"\n") {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "A1-E8 telemetry must be nonempty manifest-last UTF-8 JSONL".into(),
+            });
+        }
+        if std::str::from_utf8(&bytes).is_err() {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "A1-E8 telemetry must be valid UTF-8 JSONL".into(),
+            });
+        }
+        let sha256 = hash_bytes(&bytes);
+        let metadata_json = serde_json::to_string(metadata)?;
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let existing: Option<(String, Vec<u8>, String)> = tx
+            .query_row(
+                "SELECT sha256,bytes,metadata_json FROM a1_e8_telemetry WHERE job_id=?1",
+                [job_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .optional()?;
+        if let Some((old_sha, old_bytes, old_metadata)) = existing {
+            if old_sha == sha256 && old_bytes == bytes && old_metadata == metadata_json {
+                tx.commit()?;
+                return Ok(sha256);
+            }
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "A1-E8 telemetry is already bound and immutable".into(),
+            });
+        }
+        tx.execute(
+            "INSERT INTO a1_e8_telemetry(job_id,sha256,bytes,metadata_json,bound_at_ms) VALUES(?1,?2,?3,?4,?5)",
+            params![job_id, sha256, bytes, metadata_json, now_ms()],
+        )?;
+        tx.commit()?;
+        Ok(sha256)
+    }
+
+    /// Reopen daemon-owned raw telemetry by job and content address.
+    pub fn read_content_addressed_bytes(
+        &self,
+        job_id: &str,
+        sha256: &str,
+    ) -> Result<(Value, Vec<u8>)> {
+        self.verify_identity(job_id)?;
+        validate_hash(sha256)?;
+        let row: Option<(String, Vec<u8>, String)> = self
+            .conn()?
+            .query_row(
+                "SELECT sha256,bytes,metadata_json FROM a1_e8_telemetry WHERE job_id=?1",
+                [job_id],
+                |record| Ok((record.get(0)?, record.get(1)?, record.get(2)?)),
+            )
+            .optional()?;
+        let Some((stored_sha, bytes, metadata_json)) = row else {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "A1-E8 telemetry artifact is not daemon-bound".into(),
+            });
+        };
+        let actual = hash_bytes(&bytes);
+        if stored_sha != sha256 || actual != stored_sha {
+            return Err(EmberLabError::DispatchBindingMismatch {
+                path: PathBuf::from("daemon:a1_e8_telemetry"),
+                expected: sha256.into(),
+                actual,
+            });
+        }
+        let metadata: Value = serde_json::from_str(&metadata_json)?;
+        validate_a1_e8_metadata(&metadata)?;
+        Ok((metadata, bytes))
+    }
+
     fn receipt_bytes(&self, job_id: &str) -> Result<Vec<u8>> {
         self.verify_identity(job_id)?;
         let mut conn = self.conn()?;
@@ -2945,6 +3092,30 @@ impl Daemon {
             .collect::<std::result::Result<_, _>>()?;
         drop(outage_stmt);
         tx.commit()?;
+        let telemetry = self
+            .conn()?
+            .query_row(
+                "SELECT sha256,metadata_json FROM a1_e8_telemetry WHERE job_id=?1",
+                [job_id],
+                |record| Ok((record.get::<_, String>(0)?, record.get::<_, String>(1)?)),
+            )
+            .optional()?;
+        let a1_e8_telemetry = match telemetry {
+            Some((sha256, metadata_json)) => {
+                validate_hash(&sha256)?;
+                let mut object = serde_json::from_str::<Value>(&metadata_json)?
+                    .as_object()
+                    .cloned()
+                    .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                        detail: "A1-E8 telemetry metadata is not an object".into(),
+                    })?;
+                validate_a1_e8_metadata(&Value::Object(object.clone()))?;
+                object.insert("job_id".into(), Value::String(job_id.into()));
+                object.insert("sha256".into(), Value::String(sha256));
+                Value::Object(object)
+            }
+            None => Value::Null,
+        };
         let events: Vec<Value> = raw_events
             .into_iter()
             .map(|(seq, ts, kind, payload)| {
@@ -3018,7 +3189,8 @@ impl Daemon {
             },
             "events":events,
             "outage_events":outage_events,
-            "scientific_capability_evidence":false
+            "scientific_capability_evidence":false,
+            "a1_e8_telemetry":a1_e8_telemetry
         });
         Ok(serde_json::to_vec_pretty(&receipt)?)
     }
@@ -4934,6 +5106,36 @@ fn finalize_stopped_in_connection(
     Ok(())
 }
 
+struct LiveIdentityObservation {
+    identity: ProcessIdentity,
+    #[cfg(windows)]
+    _live: LiveProcess,
+}
+
+fn observe_live_process_identity(row: &JobProcessRow) -> Option<LiveIdentityObservation> {
+    #[cfg(windows)]
+    {
+        return match open_live_status(row) {
+            LiveStatus::Verified(live) => Some(LiveIdentityObservation {
+                identity: ProcessIdentity {
+                    start_token: row.start_token.clone(),
+                    executable: row.executable.clone(),
+                },
+                _live: live,
+            }),
+            LiveStatus::Dead | LiveStatus::Orphaned(_) | LiveStatus::IdentityConflict(_) => None,
+        };
+    }
+    #[cfg(not(windows))]
+    {
+        return inspect_process(row.pid).ok().and_then(|current| {
+            (current.start_token == row.start_token
+                && same_executable(&current.executable, &row.executable))
+            .then_some(LiveIdentityObservation { identity: current })
+        });
+    }
+}
+
 fn job_process_row_from_connection(conn: &Connection, job_id: &str) -> Result<JobProcessRow> {
     conn.query_row(
         "SELECT pid,process_start_token,executable_identity,resource,state,job_object_name,main_thread_id,lease_epoch,stdout_log_path,stderr_log_path,stdout_child_handle,stderr_child_handle,started_at_ms FROM jobs WHERE job_id=?1",
@@ -5106,6 +5308,66 @@ fn validate_hash(value: &str) -> Result<()> {
             value: value.into(),
         })
     }
+}
+
+fn validate_a1_e8_metadata(value: &Value) -> Result<()> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+            detail: "A1-E8 telemetry metadata must be an object".into(),
+        })?;
+    let expected = [
+        "run_id",
+        "source_commit",
+        "source_blobs",
+        "seed",
+        "checkpoint_sha256",
+        "thresholds_sha256",
+        "row_count",
+    ];
+    if object.len() != expected.len() || expected.iter().any(|key| !object.contains_key(*key)) {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "A1-E8 telemetry metadata key set is not closed".into(),
+        });
+    }
+    let valid_source_commit = object["source_commit"].as_str().is_some_and(|value| {
+        value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+    });
+    let valid_source_blobs = object["source_blobs"].as_object().is_some_and(|blobs| {
+        !blobs.is_empty()
+            && blobs.iter().all(|(path, sha)| {
+                !path.trim().is_empty()
+                    && sha.as_str().is_some_and(|value| {
+                        value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+                    })
+            })
+    });
+    if object["run_id"].as_str().is_none_or(str::is_empty)
+        || !valid_source_commit
+        || !valid_source_blobs
+        || object["seed"] != Value::from(83)
+        || object["row_count"] != Value::from(200)
+    {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "A1-E8 telemetry metadata identity is invalid".into(),
+        });
+    }
+    for key in ["checkpoint_sha256", "thresholds_sha256"] {
+        let Some(hash) = object.get(key).and_then(Value::as_str) else {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: format!("A1-E8 telemetry metadata {key} must be a string hash"),
+            });
+        };
+        validate_hash(hash).map_err(|error| match error {
+            EmberLabError::InvalidIdentityHash { value } => {
+                EmberLabError::InvalidDispatchManifest {
+                    detail: format!("A1-E8 telemetry metadata {key} has invalid hash {value}"),
+                }
+            }
+            other => other,
+        })?;
+    }
+    Ok(())
 }
 /// `pub`: also the self-identity hash `main.rs`'s `verify-training` subcommand reuses for a
 /// one-shot command's `ember_lab_binary_sha256`, the same provenance discipline `Daemon::open`
@@ -7497,17 +7759,31 @@ fn spawn_managed(
 fn inspect_process(pid: u32) -> Result<ProcessIdentity> {
     let exe = fs::read_link(format!("/proc/{pid}/exe"))?;
     let stat = fs::read_to_string(format!("/proc/{pid}/stat"))?;
-    let token =
-        stat.split_whitespace()
-            .nth(21)
-            .ok_or_else(|| EmberLabError::ProcessUnavailable {
-                job_id: String::new(),
-                pid,
-            })?;
     Ok(ProcessIdentity {
-        start_token: token.into(),
+        start_token: linux_process_start_token(&stat, pid)?,
         executable: exe.to_string_lossy().into_owned(),
     })
+}
+
+fn linux_process_start_token(stat: &str, pid: u32) -> Result<String> {
+    // `/proc/<pid>/stat` field 2 (`comm`) is parenthesized and may contain
+    // spaces or `)` characters. Fields after the final `) ` begin at field 3;
+    // starttime is field 22, therefore index 19 in this suffix.
+    let suffix = stat
+        .rfind(") ")
+        .and_then(|close| stat.get(close + 2..))
+        .ok_or_else(|| EmberLabError::ProcessUnavailable {
+            job_id: String::new(),
+            pid,
+        })?;
+    suffix
+        .split_whitespace()
+        .nth(19)
+        .map(str::to_owned)
+        .ok_or_else(|| EmberLabError::ProcessUnavailable {
+            job_id: String::new(),
+            pid,
+        })
 }
 #[cfg(not(windows))]
 fn terminate_process(pid: u32) -> Result<()> {
@@ -7527,6 +7803,12 @@ fn terminate_process(pid: u32) -> Result<()> {
 #[cfg(test)]
 mod dispatch_binding_snapshot_tests {
     use super::*;
+
+    #[test]
+    fn linux_stat_start_token_ignores_spaces_and_closing_parentheses_in_comm() {
+        let stat = "123 (worker name ) with spaces) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 424242 99";
+        assert_eq!(linux_process_start_token(stat, 123).unwrap(), "424242");
+    }
 
     #[cfg(windows)]
     #[test]
@@ -7676,6 +7958,151 @@ mod dispatch_binding_snapshot_tests {
             .unwrap()
             .contains("probe unavailable"));
     }
+
+    #[test]
+    fn a1_e8_metadata_rejects_noncanonical_source_identity() {
+        let metadata = json!({
+            "run_id": "a1-e8-invalid-source",
+            "source_commit": "not-a-git-commit",
+            "source_blobs": {"scripts/r1_exit_battery.py": "not-a-blob"},
+            "seed": 83,
+            "checkpoint_sha256": "a".repeat(64),
+            "thresholds_sha256": "b".repeat(64),
+            "row_count": 200
+        });
+        assert!(validate_a1_e8_metadata(&metadata).is_err());
+    }
+
+    #[test]
+    fn a1_e8_metadata_rejects_non_string_hash_types_without_panicking() {
+        for key in ["checkpoint_sha256", "thresholds_sha256"] {
+            let mut metadata = json!({
+                "run_id": "a1-e8-invalid-hash-type",
+                "source_commit": "f1f3d3b456fd22383faaa601304effeb4729b6d5",
+                "source_blobs": {
+                    "scripts/r1_exit_battery.py":
+                        "c1bfc3dbcb994056b14513cdbb9771048cd7296f"
+                },
+                "seed": 83,
+                "checkpoint_sha256": "a".repeat(64),
+                "thresholds_sha256": "b".repeat(64),
+                "row_count": 200
+            });
+            metadata[key] = Value::from(17);
+
+            let result = std::panic::catch_unwind(|| validate_a1_e8_metadata(&metadata));
+            assert!(
+                result.is_ok(),
+                "metadata validator panicked for non-string {key}"
+            );
+            let error = result.unwrap().expect_err("non-string hash must refuse");
+            match error {
+                EmberLabError::InvalidDispatchManifest { detail } => {
+                    assert!(detail.contains("hash"), "unexpected refusal: {detail}");
+                }
+                other => panic!("unexpected refusal for {key}: {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn a1_e8_binding_reopens_only_the_daemon_sealed_job_stdout() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("ember-lab-a1-e8-sealed-{nonce}"));
+        fs::create_dir_all(&root).unwrap();
+        let db = root.join("ember-lab.sqlite3");
+        let stdout = root.join("sealed.stdout.log");
+        let stderr = root.join("sealed.stderr.log");
+        let bytes = br#"{"arm":"mechanism","step":1}
+"#;
+        fs::write(&stdout, bytes).unwrap();
+        fs::write(&stderr, b"").unwrap();
+        let daemon = Daemon::open(&db).unwrap();
+        let identity_blob = br#"{"schema":"ember-identity-v1"}"#;
+        let identity_path = root.join("identity.json");
+        fs::write(&identity_path, identity_blob).unwrap();
+        let identity_sha = hash_bytes(identity_blob);
+        daemon
+            .conn()
+            .unwrap()
+            .execute(
+                "INSERT INTO identities(job_id,canonical_path,sha256,identity_blob,bound_at_ms) VALUES(?1,?2,?3,?4,?5)",
+                params!["sealed-job", identity_path.to_string_lossy(), identity_sha, identity_blob, 1],
+            )
+            .unwrap();
+        let stdout_sha = hash_bytes(bytes);
+        daemon
+            .conn()
+            .unwrap()
+            .execute(
+                "INSERT INTO jobs(job_id,program,args_json,env_json,resource,lease_epoch,job_object_name,argv_sha256,state,restart_policy,stdout_log_path,stderr_log_path,stdout_log_sha256,stderr_log_sha256,started_at_ms,updated_at_ms) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,'stopped',?9,?10,?11,?12,?13,?14,?14)",
+                params![
+                    "sealed-job",
+                    "fixture",
+                    "[]",
+                    "{}",
+                    "cpu",
+                    1_i64,
+                    "job-object",
+                    "a".repeat(64),
+                    "never",
+                    stdout.to_string_lossy(),
+                    stderr.to_string_lossy(),
+                    stdout_sha,
+                    hash_bytes(b""),
+                    1_i64,
+                ],
+            )
+            .unwrap();
+        let metadata = json!({
+            "run_id": "a1-e8-sealed-test",
+            "source_commit": "f1f3d3b456fd22383faaa601304effeb4729b6d5",
+            "source_blobs": {"scripts/r1_exit_battery.py": "c1bfc3dbcb994056b14513cdbb9771048cd7296f"},
+            "seed": 83,
+            "checkpoint_sha256": "a".repeat(64),
+            "thresholds_sha256": "b".repeat(64),
+            "row_count": 200
+        });
+        let sha = daemon
+            .bind_a1_e8_telemetry("sealed-job", &stdout, &metadata)
+            .unwrap();
+        assert_eq!(sha, stdout_sha);
+        let foreign = root.join("foreign.jsonl");
+        fs::write(&foreign, bytes).unwrap();
+        assert!(daemon
+            .bind_a1_e8_telemetry("sealed-job", &foreign, &metadata)
+            .is_err());
+        fs::write(
+            &stdout,
+            br#"{"arm":"changed"}
+"#,
+        )
+        .unwrap();
+        assert!(daemon
+            .bind_a1_e8_telemetry("sealed-job", &stdout, &metadata)
+            .is_err());
+        let (_, reopened) = daemon
+            .read_content_addressed_bytes("sealed-job", &sha)
+            .unwrap();
+        assert_eq!(reopened, bytes);
+        let metadata_json = serde_json::to_string(&metadata).unwrap();
+        daemon
+            .conn()
+            .unwrap()
+            .execute(
+                "INSERT INTO a1_e8_telemetry(job_id,sha256,bytes,metadata_json,bound_at_ms) VALUES(?1,?2,?3,?4,?5)",
+                params!["unbound-job", sha, bytes, metadata_json, 2_i64],
+            )
+            .unwrap();
+        assert!(daemon
+            .read_content_addressed_bytes("unbound-job", &sha)
+            .is_err());
+        let _ = fs::remove_dir_all(root);
+    }
+
     #[cfg(windows)]
     #[test]
     fn protective_checkpoint_grace_has_one_daemon_wide_finite_budget() {

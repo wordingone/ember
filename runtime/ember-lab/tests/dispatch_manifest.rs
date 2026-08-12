@@ -5,7 +5,7 @@
 #![cfg(windows)]
 
 use ember_lab::{Daemon, EmberLabError, HostCommitCapacity, JobState};
-use rusqlite::Connection;
+use rusqlite::{Connection, TransactionBehavior};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -212,6 +212,211 @@ fn evidence_verifier_dispatch_token_is_bound_to_owned_child_and_consumed_once() 
         .consume_dispatch_token(job_id, token, outcome.handle.pid)
         .unwrap_err();
     assert!(matches!(replay, EmberLabError::DispatchTokenRefused { .. }));
+
+    daemon.stop_job(job_id).unwrap();
+    drop(daemon);
+    remove_sandbox_when_unlocked(&root);
+}
+
+fn assert_live_identity_drift_refuses_dispatch_token(
+    name: &str,
+    mutate_identity: impl FnOnce(&Connection),
+) {
+    let root = sandbox(name);
+    let dispatch_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    let job_id = format!("{name}-job");
+    let manifest = write_manifest(&root, &job_id, dispatch_at);
+    let capture = root.join("custody").join("dispatch-token.txt");
+    let database = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open(&database).unwrap();
+    let outcome = daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            dispatch_at + 1,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap();
+    for _ in 0..100 {
+        if capture.is_file() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    let captured = fs::read_to_string(&capture).unwrap();
+    let mut lines = captured.lines();
+    assert_eq!(lines.next(), Some(job_id.as_str()));
+    let token = lines.next().unwrap();
+
+    let conn = Connection::open(&database).unwrap();
+    let persisted_identity: (String, String) = conn
+        .query_row(
+            "SELECT process_start_token,executable_identity FROM jobs WHERE job_id=?1",
+            [&job_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    mutate_identity(&conn);
+    drop(conn);
+
+    let result = daemon.consume_dispatch_token(&job_id, token, outcome.handle.pid);
+    let conn = Connection::open(&database).unwrap();
+    let consumed: bool = conn
+        .query_row(
+            "SELECT consumed_at_ms IS NOT NULL FROM dispatch_tokens WHERE job_id=?1",
+            [&job_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let consumed_events: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM events WHERE job_id=?1 AND kind='dispatch_token_consumed'",
+            [&job_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    conn.execute(
+        "UPDATE jobs SET process_start_token=?2,executable_identity=?3 WHERE job_id=?1",
+        rusqlite::params![job_id, persisted_identity.0, persisted_identity.1],
+    )
+    .unwrap();
+    drop(conn);
+    daemon.stop_job(&job_id).unwrap();
+    drop(daemon);
+    remove_sandbox_when_unlocked(&root);
+
+    assert!(matches!(
+        result,
+        Err(EmberLabError::DispatchTokenRefused { .. })
+    ));
+    assert!(!consumed, "identity drift consumed the one-use token");
+    assert_eq!(consumed_events, 0, "identity drift emitted an event");
+}
+
+#[test]
+fn dispatch_token_refuses_same_pid_with_stale_process_start_without_consumption_or_event() {
+    assert_live_identity_drift_refuses_dispatch_token("dispatch-token-stale-start", |conn| {
+        conn.execute(
+            "UPDATE jobs SET process_start_token='stale-start-token' WHERE job_id='dispatch-token-stale-start-job'",
+            [],
+        )
+        .unwrap();
+    });
+}
+
+#[test]
+fn dispatch_token_refuses_same_pid_with_foreign_executable_without_consumption_or_event() {
+    assert_live_identity_drift_refuses_dispatch_token(
+        "dispatch-token-foreign-executable",
+        |conn| {
+            conn.execute(
+                "UPDATE jobs SET executable_identity='B:/foreign/runner.exe' WHERE job_id='dispatch-token-foreign-executable-job'",
+                [],
+            )
+            .unwrap();
+        },
+    );
+}
+
+#[test]
+fn dispatch_token_identity_race_loses_atomic_fence_without_consumption_or_event() {
+    let root = sandbox("dispatch-token-identity-race");
+    let dispatch_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    let job_id = "dispatch-token-identity-race-job";
+    let manifest = write_manifest(&root, job_id, dispatch_at);
+    let capture = root.join("custody").join("dispatch-token.txt");
+    let database = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open(&database).unwrap();
+    let outcome = daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            dispatch_at + 1,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap();
+    for _ in 0..100 {
+        if capture.is_file() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    let captured = fs::read_to_string(&capture).unwrap();
+    let token = captured.lines().nth(1).unwrap().to_owned();
+    let mut blocker = Connection::open(&database).unwrap();
+    blocker.busy_timeout(Duration::from_secs(10)).unwrap();
+    let original_start: String = blocker
+        .query_row(
+            "SELECT process_start_token FROM jobs WHERE job_id=?1",
+            [job_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let blocker_tx = blocker
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .unwrap();
+
+    let result = thread::scope(|scope| {
+        let consumer =
+            scope.spawn(|| daemon.consume_dispatch_token(job_id, &token, outcome.handle.pid));
+        // BEGIN IMMEDIATE above leaves reads/live inspection available but
+        // blocks the consumer's mutation transaction. Change the persisted
+        // identity in that window; the UPDATE fence must then lose.
+        thread::sleep(Duration::from_millis(250));
+        blocker_tx
+            .execute(
+                "UPDATE jobs SET process_start_token='raced-start-token' WHERE job_id=?1",
+                [job_id],
+            )
+            .unwrap();
+        blocker_tx.commit().unwrap();
+        consumer.join().unwrap()
+    });
+
+    let conn = Connection::open(&database).unwrap();
+    let consumed: bool = conn
+        .query_row(
+            "SELECT consumed_at_ms IS NOT NULL FROM dispatch_tokens WHERE job_id=?1",
+            [job_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let consumed_events: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM events WHERE job_id=?1 AND kind='dispatch_token_consumed'",
+            [job_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let raced_start: String = conn
+        .query_row(
+            "SELECT process_start_token FROM jobs WHERE job_id=?1",
+            [job_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(raced_start, "raced-start-token");
+    conn.execute(
+        "UPDATE jobs SET process_start_token=?2 WHERE job_id=?1",
+        rusqlite::params![job_id, original_start],
+    )
+    .unwrap();
+    drop(conn);
+
+    assert!(matches!(
+        result,
+        Err(EmberLabError::DispatchTokenRefused { .. })
+    ));
+    assert!(!consumed, "identity race consumed the one-use token");
+    assert_eq!(consumed_events, 0, "identity race emitted an event");
 
     daemon.stop_job(job_id).unwrap();
     drop(daemon);

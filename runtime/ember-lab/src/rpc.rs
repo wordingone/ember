@@ -20,6 +20,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 const MAX_ASSESSMENT_DIRECTORY_UTF8_BYTES: usize = 4096;
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct WireRequest {
     jsonrpc: String,
     id: Value,
@@ -103,6 +104,21 @@ struct AssessmentEvidenceParams {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BindA1E8TelemetryParams {
+    job_id: String,
+    artifact_path: PathBuf,
+    metadata: Value,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ReadContentAddressedBytesParams {
+    job_id: String,
+    sha256: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct PlanOutageParams {
     resource: String,
     starts_at_ms: i64,
@@ -166,6 +182,10 @@ fn success(id: Value, result: Value) -> Value {
 
 fn decode<T: for<'de> Deserialize<'de>>(id: &Value, params: Value) -> Result<T, Value> {
     serde_json::from_value(params).map_err(|error| invalid_params(id.clone(), error.to_string()))
+}
+
+fn encode_hex(value: &[u8]) -> String {
+    value.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 fn dispatch(daemon: &Daemon, request: WireRequest, client_pid: Option<u32>) -> (Value, bool) {
@@ -395,6 +415,44 @@ fn dispatch(daemon: &Daemon, request: WireRequest, client_pid: Option<u32>) -> (
                 Err(error) => (operation_error(id, error), false),
             }
         }
+        "bind_a1_e8_telemetry" => {
+            let params: BindA1E8TelemetryParams = match decode(&id, request.params) {
+                Ok(value) => value,
+                Err(response) => return (response, false),
+            };
+            match daemon.bind_a1_e8_telemetry(
+                &params.job_id,
+                &params.artifact_path,
+                &params.metadata,
+            ) {
+                Ok(sha256) => (
+                    success(id, json!({"sha256":sha256,"job_id":params.job_id})),
+                    false,
+                ),
+                Err(error) => (operation_error(id, error), false),
+            }
+        }
+        "read_content_addressed_bytes" => {
+            let params: ReadContentAddressedBytesParams = match decode(&id, request.params) {
+                Ok(value) => value,
+                Err(response) => return (response, false),
+            };
+            match daemon.read_content_addressed_bytes(&params.job_id, &params.sha256) {
+                Ok((metadata, bytes)) => (
+                    success(
+                        id,
+                        json!({
+                            "job_id":params.job_id,
+                            "sha256":params.sha256,
+                            "metadata":metadata,
+                            "bytes_hex":encode_hex(&bytes)
+                        }),
+                    ),
+                    false,
+                ),
+                Err(error) => (operation_error(id, error), false),
+            }
+        }
         "plan_outage" => {
             let params: PlanOutageParams = match decode(&id, request.params) {
                 Ok(value) => value,
@@ -450,6 +508,48 @@ fn parse_and_dispatch_for_client(
             }),
             false,
         ),
+    }
+}
+
+#[cfg(test)]
+mod a1_e8_rpc_contract_tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn widened_raw_telemetry_request_refuses_before_daemon_lookup() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let db = std::env::temp_dir().join(format!("ember-lab-rpc-contract-{nonce}.sqlite3"));
+        let daemon = Daemon::open(&db).unwrap();
+        let (response, shutdown) = parse_and_dispatch_for_client(
+            &daemon,
+            r#"{"jsonrpc":"2.0","id":1,"method":"read_content_addressed_bytes","params":{"job_id":"missing","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","extra":"widened"}}"#,
+            None,
+        );
+        assert!(!shutdown);
+        assert_eq!(response["error"]["code"], -32602);
+        let _ = std::fs::remove_file(db);
+    }
+
+    #[test]
+    fn caller_owned_raw_telemetry_bytes_are_not_an_rpc_authority() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let db = std::env::temp_dir().join(format!("ember-lab-rpc-bytes-{nonce}.sqlite3"));
+        let daemon = Daemon::open(&db).unwrap();
+        let (response, shutdown) = parse_and_dispatch_for_client(
+            &daemon,
+            r#"{"jsonrpc":"2.0","id":2,"method":"bind_a1_e8_telemetry","params":{"job_id":"missing","bytes_hex":"7b7d0a","metadata":{}}}"#,
+            None,
+        );
+        assert!(!shutdown);
+        assert_eq!(response["error"]["code"], -32602);
+        let _ = std::fs::remove_file(db);
     }
 }
 

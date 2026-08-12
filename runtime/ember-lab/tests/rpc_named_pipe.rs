@@ -10,10 +10,14 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+const FIXTURE_TELEMETRY: &str = "{\"arm\":\"mechanism\",\"step\":1}\n";
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 fn sandbox(name: &str) -> PathBuf {
     let nonce = SystemTime::now()
@@ -30,6 +34,19 @@ fn sandbox(name: &str) -> PathBuf {
 
 fn sha256(path: &Path) -> String {
     format!("{:x}", Sha256::digest(fs::read(path).unwrap()))
+}
+
+fn bytes_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn daemon_stdout_path(db: &Path, job_id: &str) -> PathBuf {
+    let key = format!("{:x}", Sha256::digest(job_id.as_bytes()));
+    let log_dir = db.with_file_name(format!(
+        "{}.logs",
+        db.file_name().unwrap().to_string_lossy()
+    ));
+    log_dir.join(format!("{key}.stdout.log"))
 }
 
 fn bun_binary() -> PathBuf {
@@ -133,6 +150,10 @@ fn write_dispatch_manifest(root: &Path, job_id: &str) -> PathBuf {
     fs::create_dir_all(&custody).unwrap();
     let mut env = BTreeMap::new();
     env.insert("EMBER_LAB_RPC_FIXTURE_CHILD".to_string(), "1".to_string());
+    env.insert(
+        "EMBER_LAB_RPC_FIXTURE_RAW_TELEMETRY".to_string(),
+        FIXTURE_TELEMETRY.to_string(),
+    );
     for key in [
         "TEMP",
         "TMP",
@@ -200,6 +221,53 @@ fn write_dispatch_manifest(root: &Path, job_id: &str) -> PathBuf {
     manifest
 }
 
+fn write_exact_telemetry_manifest(root: &Path, job_id: &str) -> PathBuf {
+    let manifest = write_dispatch_manifest(root, job_id);
+    let telemetry_path = root.join("custody").join("fixture-telemetry.jsonl");
+    fs::write(&telemetry_path, FIXTURE_TELEMETRY.as_bytes()).unwrap();
+    let fixture_source = root.join("fixture.rs");
+    fs::write(
+        &fixture_source,
+        br#"use std::{env, fs, io::{self, Write}, thread, time::Duration};
+fn main() {
+    let path = env::var("EMBER_LAB_RPC_FIXTURE_RAW_TELEMETRY_PATH").unwrap();
+    let bytes = fs::read(path).unwrap();
+    let mut stdout = io::stdout();
+    stdout.write_all(&bytes).unwrap();
+    stdout.flush().unwrap();
+    thread::sleep(Duration::from_secs(30));
+}
+"#,
+    )
+    .unwrap();
+    let command_shell = root.join("fixture.exe");
+    let compile = Command::new("rustc")
+        .creation_flags(CREATE_NO_WINDOW)
+        .args([
+            "--edition=2021",
+            &fixture_source.to_string_lossy(),
+            "-o",
+            &command_shell.to_string_lossy(),
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        compile.status.success(),
+        "exact telemetry fixture compile failed: {}",
+        String::from_utf8_lossy(&compile.stderr)
+    );
+    let mut value: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    value["program"] = json!({
+        "path": command_shell,
+        "sha256": sha256(&command_shell),
+    });
+    value["args"] = json!([]);
+    value["env"]["EMBER_LAB_RPC_FIXTURE_RAW_TELEMETRY_PATH"] =
+        Value::String(telemetry_path.to_string_lossy().into_owned());
+    fs::write(&manifest, serde_json::to_vec(&value).unwrap()).unwrap();
+    manifest
+}
+
 fn pad_dispatch_manifest_to_exact_bytes(path: &Path, target_bytes: usize) {
     let mut manifest: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
     manifest["env"].as_object_mut().unwrap().insert(
@@ -225,8 +293,54 @@ fn pad_dispatch_manifest_to_exact_bytes(path: &Path, target_bytes: usize) {
 #[test]
 fn fixture_rpc_child_process() {
     if std::env::var("EMBER_LAB_RPC_FIXTURE_CHILD").as_deref() == Ok("1") {
+        if let Ok(raw) = std::env::var("EMBER_LAB_RPC_FIXTURE_RAW_TELEMETRY") {
+            print!("{raw}");
+            std::io::stdout().flush().unwrap();
+        }
         thread::sleep(Duration::from_secs(30));
     }
+}
+
+#[test]
+fn named_pipe_fixture_stdout_contains_only_bound_telemetry_bytes() {
+    let root = sandbox("exact-telemetry-fixture");
+    let db = root.join("ember-lab.sqlite3");
+    let pipe = format!(
+        r#"\\.\pipe\ember-lab-exact-telemetry-{}-{}"#,
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
+    let binary = ember_lab_binary();
+    let manifest = write_exact_telemetry_manifest(&root, "exact-telemetry-fixture-job");
+    let mut server = start_server(&binary, &db, &pipe);
+    let started = rpc(
+        &pipe,
+        240,
+        "dispatch_manifest",
+        json!({
+            "manifest_utf8": String::from_utf8(fs::read(&manifest).unwrap()).unwrap(),
+            "manifest_sha256": sha256(&manifest),
+        }),
+    );
+    assert!(started["pid"].as_u64().unwrap() > 0);
+    let stdout = daemon_stdout_path(&db, "exact-telemetry-fixture-job");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while (!stdout.is_file() || fs::read(&stdout).unwrap().is_empty()) && Instant::now() < deadline
+    {
+        thread::sleep(Duration::from_millis(20));
+    }
+    rpc(
+        &pipe,
+        241,
+        "stop_job",
+        json!({"job_id": "exact-telemetry-fixture-job"}),
+    );
+    assert_eq!(fs::read(&stdout).unwrap(), FIXTURE_TELEMETRY.as_bytes());
+    rpc(&pipe, 242, "shutdown", json!({}));
+    wait_for_exit(&mut server);
 }
 
 #[test]
@@ -468,7 +582,7 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
     let receipt = root.join("receipt.json");
     let alarm_path = root.join("schedule-alarms.json");
     let content_addressed_receipts = root.join("content-addressed-receipts");
-    let manifest = write_dispatch_manifest(&root, "rpc-job");
+    let manifest = write_exact_telemetry_manifest(&root, "rpc-job");
     let manifest_bytes = fs::read(&manifest).unwrap();
     let manifest_sha256 = format!("{:x}", Sha256::digest(&manifest_bytes));
     let manifest_utf8 = String::from_utf8(manifest_bytes).unwrap();
@@ -502,7 +616,19 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
         rpc(&pipe, 5, "job_state", json!({"job_id": "rpc-job"}))["state"],
         "running"
     );
-
+    let telemetry = FIXTURE_TELEMETRY.as_bytes();
+    let metadata = json!({
+        "run_id": "a1-e8-rpc-test",
+        "source_commit": "f1f3d3b456fd22383faaa601304effeb4729b6d5",
+        "source_blobs": {
+            "scripts/r1_exit_battery.py": "c1bfc3dbcb994056b14513cdbb9771048cd7296f",
+            "scripts/frontier_receipt.py": "61a7842d379641a147387bc76b492e754d519529"
+        },
+        "seed": 83,
+        "checkpoint_sha256": "a".repeat(64),
+        "thresholds_sha256": "b".repeat(64),
+        "row_count": 200
+    });
     rpc(&pipe, 6, "shutdown", json!({}));
     wait_for_exit(&mut first);
 
@@ -513,6 +639,25 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
         "running"
     );
     rpc(&pipe, 9, "stop_job", json!({"job_id": "rpc-job"}));
+    let bind = rpc(
+        &pipe,
+        9_1,
+        "bind_a1_e8_telemetry",
+        json!({
+            "job_id":"rpc-job",
+            "artifact_path":daemon_stdout_path(&db, "rpc-job"),
+            "metadata":metadata
+        }),
+    );
+    let telemetry_sha = bind["sha256"].as_str().unwrap().to_owned();
+    let reopened = rpc(
+        &pipe,
+        9_2,
+        "read_content_addressed_bytes",
+        json!({"job_id":"rpc-job","sha256":telemetry_sha}),
+    );
+    assert_eq!(reopened["sha256"], telemetry_sha);
+    assert_eq!(reopened["bytes_hex"], bytes_hex(telemetry));
     assert!(rpc(&pipe, 10, "job_exit_code", json!({"job_id": "rpc-job"}))["exit_code"].is_null());
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)

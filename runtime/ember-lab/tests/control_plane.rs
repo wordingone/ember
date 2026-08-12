@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::Write;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -67,6 +68,12 @@ fn readiness_deadline_after_ms(delta_ms: u64) -> i64 {
         .unwrap()
         .as_millis() as i64
         + delta_ms as i64
+}
+
+fn daemon_stdout_path(root: &Path, job_id: &str) -> PathBuf {
+    let key = format!("{:x}", Sha256::digest(job_id.as_bytes()));
+    root.join("ember-lab.sqlite3.logs")
+        .join(format!("{key}.stdout.log"))
 }
 
 fn write_identity(root: &Path) -> (PathBuf, String) {
@@ -635,6 +642,10 @@ fn fixture_child_process() {
         println!("stdout:{message}");
         eprintln!("stderr:{message}");
     }
+    if let Ok(raw) = std::env::var("EMBER_LAB_FIXTURE_RAW_TELEMETRY") {
+        print!("{raw}");
+        std::io::stdout().flush().unwrap();
+    }
     thread::sleep(Duration::from_millis(sleep_ms));
 }
 
@@ -777,6 +788,112 @@ fn detached_job_is_adopted_stopped_and_exported_after_daemon_reopen() {
     assert!(events.iter().any(|row| row["kind"] == "job_started"));
     assert!(events.iter().any(|row| row["kind"] == "job_adopted"));
     assert!(events.iter().any(|row| row["kind"] == "job_stopped"));
+}
+
+#[test]
+fn daemon_binds_reopens_and_receipts_a1_e8_telemetry_by_job_and_hash() {
+    let root = sandbox("a1-e8-telemetry");
+    let db = root.join("ember-lab.sqlite3");
+    let receipt = root.join("receipt.json");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("a1-e8-job", &identity, &identity_hash)
+        .unwrap();
+    daemon.acquire_lease("cpu-fixture", "a1-e8-job").unwrap();
+    let fixture = std::env::current_exe().unwrap();
+    daemon
+        .start_job(
+            JobSpec::new(
+                "a1-e8-job",
+                fixture.to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "cpu-fixture",
+            )
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env(
+                "EMBER_LAB_FIXTURE_RAW_TELEMETRY",
+                "{\"arm\":\"mechanism\",\"step\":1}\n",
+            )
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "1000"),
+        )
+        .unwrap();
+    // The non-Windows daemon detaches its reaper after launch, so the child
+    // may not have flushed its inherited stdout handle by the time the test
+    // asks for a stop.  Wait on the daemon-owned log (not an arbitrary sleep
+    // alone) before sealing it, keeping the runtime assertion about actual
+    // captured bytes rather than weakening the producer contract.
+    let telemetry_path = daemon_stdout_path(&root, "a1-e8-job");
+    let mut captured = false;
+    for _ in 0..40 {
+        if fs::read(&telemetry_path)
+            .map(|bytes| !bytes.is_empty())
+            .unwrap_or(false)
+        {
+            captured = true;
+            break;
+        }
+        thread::sleep(Duration::from_millis(25));
+    }
+    assert!(
+        captured,
+        "daemon-owned stdout log never captured fixture telemetry"
+    );
+    let metadata = json!({
+        "run_id": "a1-e8-rust-test",
+        "source_commit": "f1f3d3b456fd22383faaa601304effeb4729b6d5",
+        "source_blobs": {
+            "scripts/r1_exit_battery.py": "c1bfc3dbcb994056b14513cdbb9771048cd7296f",
+            "scripts/frontier_receipt.py": "61a7842d379641a147387bc76b492e754d519529"
+        },
+        "seed": 83,
+        "checkpoint_sha256": "a".repeat(64),
+        "thresholds_sha256": "b".repeat(64),
+        "row_count": 200
+    });
+    // On Windows the daemon's authenticated exit monitor seals a naturally
+    // exited child; using that path avoids racing TerminateJobObject with the
+    // test harness.  POSIX keeps the explicit owned-stop path.
+    #[cfg(windows)]
+    {
+        let mut exited = false;
+        for _ in 0..80 {
+            if matches!(
+                daemon.job_state("a1-e8-job").unwrap(),
+                Some(JobState::Exited)
+            ) {
+                exited = true;
+                break;
+            }
+            thread::sleep(Duration::from_millis(25));
+        }
+        assert!(exited, "daemon exit monitor never sealed fixture child");
+    }
+    #[cfg(not(windows))]
+    daemon.stop_job("a1-e8-job").unwrap();
+    let telemetry_sha = daemon
+        .bind_a1_e8_telemetry("a1-e8-job", &telemetry_path, &metadata)
+        .unwrap();
+    assert_eq!(
+        daemon
+            .bind_a1_e8_telemetry("a1-e8-job", &telemetry_path, &metadata)
+            .unwrap(),
+        telemetry_sha
+    );
+    let (reopened_metadata, reopened_bytes) = daemon
+        .read_content_addressed_bytes("a1-e8-job", &telemetry_sha)
+        .unwrap();
+    assert_eq!(reopened_metadata, metadata);
+    assert!(reopened_bytes
+        .windows(b"{\"arm\":\"mechanism\",\"step\":1}\n".len())
+        .any(|window| window == b"{\"arm\":\"mechanism\",\"step\":1}\n"));
+    assert!(daemon
+        .read_content_addressed_bytes("foreign-job", &telemetry_sha)
+        .is_err());
+    daemon.export_receipt("a1-e8-job", &receipt).unwrap();
+    let payload: Value = serde_json::from_slice(&fs::read(receipt).unwrap()).unwrap();
+    assert_eq!(payload["a1_e8_telemetry"]["job_id"], "a1-e8-job");
+    assert_eq!(payload["a1_e8_telemetry"]["sha256"], telemetry_sha);
 }
 
 #[test]
