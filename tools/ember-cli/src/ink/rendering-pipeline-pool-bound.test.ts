@@ -138,6 +138,66 @@ describe("createRenderer cap: real mountInk path resets pools and keeps renderin
     expect(buf).toContain(`${r};${g};${b}`);
   });
 
+  test("a SINGLE render() call that paints more distinct styles than STYLE_POOL_CAP + singleFrameSlack in one frame cannot be capped mid-frame (intentional -- mid-frame eviction would invalidate refs the frame currently being painted still needs, see StylePool.reset()'s comment); growth still stays bounded to exactly what that one frame demanded, and the very next frame's cap-check catches the breach, resets both pools, and forces a full repaint", () => {
+    // Simulates the actual pathological case #1455 exists for: a full-grid gradient painted in
+    // ONE frame (e.g. a syntax-highlighted board redraw), one distinct true-color style per
+    // cell -- not many frames each adding a few styles (that's the test above). cols*rows is
+    // deliberately > STYLE_POOL_CAP + singleFrameSlack so this single mountInk() render already
+    // breaches the cap before createRenderer ever gets a chance to check; the check only ever
+    // runs at the TOP of the NEXT render(), never mid-frame.
+    const singleFrameSlack = 8;
+    const cols = 65;
+    const rows = 64;
+    const totalCells = cols * rows; // 4160
+    expect(totalCells).toBeGreaterThan(STYLE_POOL_CAP + singleFrameSlack);
+
+    let buf = "";
+    const stream = { write(s: string) { buf += s; } };
+    const stylePool = new StylePool();
+    const hyperlinkPool = new HyperlinkPool();
+
+    const rowEls: React.ReactElement[] = [];
+    let i = 0;
+    for (let r = 0; r < rows; r++) {
+      const cellEls: React.ReactElement[] = [];
+      for (let c = 0; c < cols; c++) {
+        // Every one of the totalCells cells gets a genuinely distinct (r,g,b) triple -- same
+        // distinct-color-per-index scheme as distinctColorUpdate() above, just laid out as a
+        // full grid instead of driven across successive single-cell updates.
+        const hex = `#${(i % 0xffffff).toString(16).padStart(6, "0")}`;
+        cellEls.push(React.createElement(Text, { key: c, color: hex }, "#"));
+        i++;
+      }
+      rowEls.push(React.createElement(Box, { key: r, flexDirection: "row" }, ...cellEls));
+    }
+    const grid = React.createElement(Box, { flexDirection: "column" }, ...rowEls);
+
+    // mountInk performs its first render() synchronously -- this IS the single pathological
+    // frame under test. Nothing seeds the pool beforehand, so every distinct color the grid
+    // paints is interned during this one pass.
+    const handle = mountInk(grid, {
+      stream, stdout: { columns: cols, rows }, stylePool, hyperlinkPool,
+    });
+
+    // (a) Overshoot is bounded: exactly totalCells distinct grid colors plus the permanent
+    // default slot were interned this frame -- not some multiple of it and not unbounded runaway
+    // growth. The cap could not fire mid-frame (by design), but size() still tracks exactly the
+    // number of distinct styles this one frame actually demanded.
+    expect(stylePool.size()).toBe(totalCells + 1);
+    expect(stylePool.size()).toBeGreaterThan(STYLE_POOL_CAP + singleFrameSlack);
+
+    // (b) The NEXT render() call -- even a trivial one-line, single-style update -- catches the
+    // breach at its own top-of-render cap-check, resets BOTH pools, and forces
+    // geometryChanged=true (the same bypass-the-diff full-repaint path a resize takes). Confirmed
+    // two ways: the clear-screen+home escape createRenderer only ever emits on a geometry change
+    // / cap reset, and the pool size dropping back to just this new frame's own style count.
+    buf = "";
+    handle.update(React.createElement(Text, null, "post-cap-frame"));
+    expect(buf.startsWith("\x1b[2J\x1b[H")).toBe(true);
+    expect(stylePool.size()).toBeLessThanOrEqual(2); // default slot + this frame's one new style
+    handle.unmount();
+  });
+
   test("HyperlinkPool.reset() is reachable through the same cap path and never corrupts a subsequent render (defensive bound -- HyperlinkPool.intern() has no production caller today, but the pool must not silently grow unbounded the day one is wired)", () => {
     const stream = { write(_s: string) {} };
     const hyperlinkPool = new HyperlinkPool();
