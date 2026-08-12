@@ -10,8 +10,8 @@
 // detached worktree, tens of minutes, gh + custody-census legs, its own job-state singleton
 // (services/verify-watch.ts). /verify-training is a synchronous, single-shot check of
 // EXACTLY the training dependency closure (#1332's closure_hash set): no gh, no network, no
-// worktree pinning, no async job state -- a bounded child_process.execFile of the ember-lab
-// binary that returns in low seconds. Entangling the two into one command's state machine
+// worktree pinning. The resident Ember Lab daemon owns the bounded async job and its custody.
+// Entangling the two into one command's state machine
 // would reintroduce the "unbounded verified surface" complaint #1400 opens with. Scope split
 // mirrors #1400's own framing: the full census stays the completion/audit gate; this is the
 // training-launch preflight.
@@ -19,14 +19,17 @@
 // No process bypasses ember-cli here either: this command is the only caller of the
 // `ember-lab verify-training` subcommand in the cockpit.
 
-import { execFile } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { promisify } from "node:util";
+import { createHash, randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import type { CommandContext, RegistryCommand } from "../types/command-types.ts";
+import {
+  callEmberLab as callResidentEmberLab,
+  configuredEmberLabPipe,
+  type EmberLabRequestOptions,
+} from "../services/ember-lab-rpc.ts";
+import { emberStatePath } from "../utils/ember-state-root.ts";
 import { resolveEmberSourceRootOrCwd } from "../utils/repo-root.ts";
-
-const execFileAsync = promisify(execFile);
 
 // Seconds-scale by design (#1400 target: "seconds to low minutes"); bounded so a hang here
 // is itself a signal, never something worth waiting the way /verify's 180-minute census
@@ -101,28 +104,89 @@ export function renderVerifyTrainingResult(receipt: TrainingVerifyReceipt, recei
 // Deps (injectable for testing -- no real subprocess ever runs under test)
 // ---------------------------------------------------------------------------
 
-export interface VerifyTrainingRunner {
-  (binary: string, args: string[], timeoutMs: number): Promise<{ stdout: string; stderr: string }>;
-}
-
 interface VerifyTrainingCommandDeps {
   repoRoot?: string;
   env?: NodeJS.ProcessEnv;
   emberLabBinary?: string;
   timeoutMs?: number;
-  runProcess?: VerifyTrainingRunner;
   readReceipt?: (path: string) => TrainingVerifyReceipt;
+  callLab?: (options: EmberLabRequestOptions) => Promise<Record<string, unknown>>;
+  sourceCommit?: string;
+  nowMs?: () => number;
+  sleep?: (milliseconds: number) => Promise<void>;
 }
-
-const defaultRunProcess: VerifyTrainingRunner = async (binary, args, timeoutMs) => {
-  const { stdout, stderr } = await execFileAsync(binary, args, { timeout: timeoutMs });
-  return { stdout, stderr };
-};
 
 function defaultReadReceipt(path: string): TrainingVerifyReceipt {
   return JSON.parse(readFileSync(path, "utf8")) as TrainingVerifyReceipt;
 }
 
+
+function sha256File(path: string): string {
+  return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
+
+function embeddedSourceCommit(): string {
+  const value = (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__;
+  if (typeof value !== "string" || !/^[0-9a-f]{40}$/.test(value)) {
+    throw new Error("the Ember CLI build lacks one exact source commit identity");
+  }
+  return value;
+}
+
+function buildEvidenceVerifierManifest(options: {
+  repoRoot: string;
+  binary: string;
+  args: string[];
+  env: NodeJS.ProcessEnv;
+  sourceCommit: string;
+  nowMs: number;
+  jobId: string;
+  custodyRoot: string;
+}): Record<string, unknown> {
+  const cargoPath = join(options.repoRoot, "runtime", "ember-lab", "Cargo.toml");
+  const closurePath = join(options.repoRoot, "manifests", "training-dependency-closure.json");
+  const rootBindingPath = join(options.repoRoot, "README.md");
+  const cacheRoot = join(options.custodyRoot, "cache");
+  mkdirSync(cacheRoot, { recursive: true });
+  const cacheEnv = Object.fromEntries(
+    ["TEMP", "TMP", "TORCH_HOME", "TRITON_CACHE_DIR", "CUDA_CACHE_PATH", "HF_HOME", "XDG_CACHE_HOME"]
+      .map((key) => {
+        const path = join(cacheRoot, key.toLowerCase());
+        mkdirSync(path, { recursive: true });
+        return [key, path];
+      }),
+  );
+  const maximumJobMemoryBytes = 512 * 1024 * 1024;
+  return {
+    schema_version: "ember-lab-dispatch-manifest-v3",
+    job_id: options.jobId,
+    source_commit: options.sourceCommit,
+    not_before_ms: options.nowMs,
+    expires_at_ms: options.nowMs + 60_000,
+    resource_lease: `evidence-verifier:${options.jobId}`,
+    program: { path: options.binary, sha256: sha256File(options.binary) },
+    args: options.args,
+    workload_profile: {
+      profile_id: "evidence_verifier",
+      pinned_host_producers: [{ kind: "receipt_verifier", maximum_bytes: 1024 * 1024 }],
+      requires_ui_responsiveness: false,
+      cpu_rate_percent: 50,
+    },
+    env: { ...cacheEnv, EMBER_LAB_PIPE: configuredEmberLabPipe(options.env) },
+    bindings: [
+      { kind: "config", path: rootBindingPath, sha256: sha256File(rootBindingPath) },
+      { kind: "config", path: cargoPath, sha256: sha256File(cargoPath) },
+      { kind: "manifest", path: closurePath, sha256: sha256File(closurePath) },
+    ],
+    custody_root: options.custodyRoot,
+    storage_reserves: [{ root: options.custodyRoot, minimum_free_bytes: 1 }],
+    minimum_free_vram_bytes: 0,
+    required_available_maximum_commit_bytes: maximumJobMemoryBytes + 10 * 1024 * 1024 * 1024,
+    maximum_job_memory_bytes: maximumJobMemoryBytes,
+    simulated_peak_commit_bytes: 1024 * 1024,
+    preflight_receipt: join(options.custodyRoot, "dispatch-preflight.json"),
+  };
+}
 // ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
@@ -130,8 +194,10 @@ function defaultReadReceipt(path: string): TrainingVerifyReceipt {
 export function createVerifyTrainingCommand(deps: VerifyTrainingCommandDeps = {}): RegistryCommand {
   const env = deps.env ?? process.env;
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const runProcess = deps.runProcess ?? defaultRunProcess;
   const readReceipt = deps.readReceipt ?? defaultReadReceipt;
+  const callLab = deps.callLab ?? callResidentEmberLab;
+  const nowMs = deps.nowMs ?? Date.now;
+  const sleep = deps.sleep ?? ((milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
 
   return {
     name: "verify-training",
@@ -155,40 +221,144 @@ export function createVerifyTrainingCommand(deps: VerifyTrainingCommandDeps = {}
         certificatePath = match[1];
       }
 
+      if (!env["EMBER_LAB_PIPE"] && !deps.callLab) {
+        return {
+          type: "message" as const,
+          message: "error: EMBER_LAB_PIPE is required; direct verify-training launch is forbidden",
+          exitCode: 1,
+        };
+      }
+
       const repoRoot = deps.repoRoot ?? resolveEmberSourceRootOrCwd({ startDir: ctx.cwd }, "[ember] /verify-training");
       const emberLabBinary = deps.emberLabBinary ?? resolveEmberLabBinary(repoRoot, env);
-      const receiptPath = join(repoRoot, ".ember", "verify-training-receipt.json");
+      const dispatchNow = nowMs();
+      const jobId = `verify-training-${dispatchNow}-${randomUUID()}`;
+      const custodyBase = env["EMBER_STATE_ROOT"]
+        ? resolve(env["EMBER_STATE_ROOT"]!, "verify-training")
+        : emberStatePath(repoRoot, "verify-training");
+      const custodyRoot = join(custodyBase, jobId);
+      mkdirSync(custodyRoot, { recursive: true });
+      const receiptPath = join(custodyRoot, "verify-training-receipt.json");
 
       const runArgs = ["verify-training", "--root", repoRoot, "--receipt", receiptPath];
       if (certificatePath) runArgs.push("--certificate", certificatePath);
 
+      let dispatchSucceeded = false;
+      let terminalObserved = false;
       try {
-        await runProcess(emberLabBinary, runArgs, timeoutMs);
-      } catch (err) {
-        // Exit code 1 from ember-lab means a COMPLETED-but-red run (see main.rs) -- the
-        // receipt still exists and is the thing to render, never swallowed as a bare
-        // subprocess failure. Any other failure (ENOENT, timeout, crash) has no receipt to
-        // read and is reported as an infra error.
-        //
-        // `code` here is the NUMERIC exit code Node's child_process attaches to the
-        // rejected error object -- never a string to pattern-match. Node's real message for
-        // a nonzero exit is just "Command failed: <cmd>\n"; it never contains the literal
-        // text "code: 1" or "exit code 1", so a message-regex classifier here silently
-        // never matches and every genuine FAIL used to render as an infra crash instead of
-        // showing the receipt (rev-1400 finding, reproduced by driving the real compiled
-        // binary -- see verify-training.test.ts).
-        const code = typeof err === "object" && err !== null && "code" in err
-          ? (err as { code?: unknown }).code
-          : undefined;
-        const looksLikeCompletedRedRun = code === 1;
-        if (!looksLikeCompletedRedRun) {
-          const message = err instanceof Error ? err.message : String(err);
-          return {
-            type: "message" as const,
-            message: `error: ember-lab verify-training could not run: ${message}`,
-            exitCode: 1,
-          };
+        const sourceCommit = deps.sourceCommit ?? embeddedSourceCommit();
+        const manifest = buildEvidenceVerifierManifest({
+          repoRoot,
+          binary: emberLabBinary,
+          args: runArgs,
+          env,
+          sourceCommit,
+          nowMs: dispatchNow,
+          jobId,
+          custodyRoot,
+        });
+        if (certificatePath) {
+          (manifest["bindings"] as Array<Record<string, unknown>>).push({
+            kind: "verifier",
+            path: certificatePath,
+            sha256: sha256File(certificatePath),
+          });
         }
+        const manifestUtf8 = JSON.stringify(manifest);
+        const dispatch = await callLab({
+          pipeName: configuredEmberLabPipe(env),
+          method: "dispatch_manifest",
+          params: {
+            manifest_utf8: manifestUtf8,
+            manifest_sha256: createHash("sha256").update(manifestUtf8).digest("hex"),
+          },
+          timeoutMs: 5_000,
+        });
+        dispatchSucceeded = true;
+        const expectedPreflightPath = manifest["preflight_receipt"] as string;
+        const preflightSha256 = dispatch["preflight_receipt_sha256"];
+        if (!Number.isSafeInteger(dispatch["pid"]) || (dispatch["pid"] as number) < 1) {
+          throw new Error("ember-lab dispatch result lacks a positive pid");
+        }
+        if (dispatch["preflight_receipt_path"] !== expectedPreflightPath) {
+          throw new Error("ember-lab dispatch returned the wrong preflight receipt path");
+        }
+        if (
+          typeof preflightSha256 !== "string"
+          || !/^[0-9a-f]{64}$/.test(preflightSha256)
+          || sha256File(expectedPreflightPath) !== preflightSha256
+        ) {
+          throw new Error("ember-lab dispatch preflight receipt hash does not match custody bytes");
+        }
+        const deadline = nowMs() + timeoutMs;
+        while (true) {
+          const state = await callLab({
+            pipeName: configuredEmberLabPipe(env),
+            method: "job_state",
+            params: { job_id: jobId },
+            timeoutMs: 5_000,
+          });
+          const jobState = state["state"];
+          if (jobState === "exited") {
+            terminalObserved = true;
+            break;
+          }
+          if (jobState !== "prepared" && jobState !== "running") {
+            throw new Error(`ember-lab verify-training entered terminal state ${String(jobState)}`);
+          }
+          if (nowMs() >= deadline) throw new Error("ember-lab verify-training job timed out");
+          await sleep(20);
+        }
+        const terminal = await callLab({
+          pipeName: configuredEmberLabPipe(env),
+          method: "job_exit_code",
+          params: { job_id: jobId },
+          timeoutMs: 5_000,
+        });
+        const exitCode = terminal["exit_code"];
+        if (exitCode !== 0 && exitCode !== 1) {
+          throw new Error(`ember-lab verify-training exited with code ${String(exitCode)}`);
+        }
+      } catch (err) {
+        let message = err instanceof Error ? err.message : String(err);
+        if (dispatchSucceeded && !terminalObserved) {
+          let cleanupError: string | undefined;
+          try {
+            const stopped = await callLab({
+              pipeName: configuredEmberLabPipe(env),
+              method: "stop_job",
+              params: { job_id: jobId },
+              timeoutMs: 5_000,
+            });
+            if (stopped["stopped"] !== true) {
+              throw new Error("stop_job did not confirm ownership cleanup");
+            }
+          } catch (stopError) {
+            cleanupError = stopError instanceof Error ? stopError.message : String(stopError);
+          }
+          try {
+            const settled = await callLab({
+              pipeName: configuredEmberLabPipe(env),
+              method: "job_state",
+              params: { job_id: jobId },
+              timeoutMs: 5_000,
+            });
+            if (!["stopped", "failed", "exited"].includes(String(settled["state"]))) {
+              throw new Error(`job remained nonterminal in state ${String(settled["state"])}`);
+            }
+          } catch (settlementError) {
+            const detail = settlementError instanceof Error
+              ? settlementError.message
+              : String(settlementError);
+            cleanupError = cleanupError ? `${cleanupError}; ${detail}` : detail;
+          }
+          if (cleanupError) message += `; cleanup failed: ${cleanupError}`;
+        }
+        return {
+          type: "message" as const,
+          message: `error: ember-lab verify-training could not run: ${message}`,
+          exitCode: 1,
+        };
       }
 
       let receipt: TrainingVerifyReceipt;
