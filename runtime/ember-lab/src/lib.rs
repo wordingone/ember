@@ -597,6 +597,7 @@ struct LiveProcess {
     _stdout_log_guard: OwnedHandle,
     _stderr_log_guard: OwnedHandle,
     pid: u32,
+    identity: ProcessIdentity,
 }
 
 #[cfg(windows)]
@@ -2633,6 +2634,32 @@ impl Daemon {
                 job_id: job_id.into(),
             });
         }
+        let row =
+            self.job_process_row(job_id)
+                .map_err(|_| EmberLabError::DispatchTokenRefused {
+                    job_id: job_id.into(),
+                })?;
+        if row.pid != client_pid || !matches!(row.state, JobState::Prepared | JobState::Running) {
+            return Err(EmberLabError::DispatchTokenRefused {
+                job_id: job_id.into(),
+            });
+        }
+        #[cfg(windows)]
+        let live = match open_live_status(&row) {
+            LiveStatus::Verified(live) => live,
+            LiveStatus::Dead | LiveStatus::Orphaned(_) | LiveStatus::IdentityConflict(_) => {
+                return Err(EmberLabError::DispatchTokenRefused {
+                    job_id: job_id.into(),
+                })
+            }
+        };
+        #[cfg(windows)]
+        let observed_identity = live.identity.clone();
+        #[cfg(not(windows))]
+        let observed_identity =
+            inspect_process(client_pid).map_err(|_| EmberLabError::DispatchTokenRefused {
+                job_id: job_id.into(),
+            })?;
         let token_sha256 = hash_bytes(token.as_bytes());
         let consumed_at_ms = now_ms();
         let mut conn = self.conn()?;
@@ -2645,11 +2672,42 @@ impl Daemon {
                  SELECT 1 FROM jobs j
                  WHERE j.job_id=t.job_id AND j.pid=t.pid
                    AND j.program=t.program AND j.argv_sha256=t.argv_sha256
+                   AND j.process_start_token=?5
+                   AND j.executable_identity=?6
                    AND j.state IN ('prepared','running')
                )",
-            params![token_sha256, job_id, client_pid, consumed_at_ms],
+            params![
+                token_sha256,
+                job_id,
+                client_pid,
+                consumed_at_ms,
+                observed_identity.start_token,
+                observed_identity.executable,
+            ],
         )?;
         if changed != 1 {
+            return Err(EmberLabError::DispatchTokenRefused {
+                job_id: job_id.into(),
+            });
+        }
+        let persisted_identity: (String, String) = tx
+            .query_row(
+                "SELECT process_start_token,executable_identity FROM jobs WHERE job_id=?1 AND pid=?2",
+                params![job_id, client_pid],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .map_err(|_| EmberLabError::DispatchTokenRefused {
+                job_id: job_id.into(),
+            })?;
+        if persisted_identity.0 != observed_identity.start_token
+            || !same_executable(&persisted_identity.1, &observed_identity.executable)
+        {
+            return Err(EmberLabError::DispatchTokenRefused {
+                job_id: job_id.into(),
+            });
+        }
+        #[cfg(windows)]
+        if !live_process_is_running(&live) {
             return Err(EmberLabError::DispatchTokenRefused {
                 job_id: job_id.into(),
             });
@@ -6509,6 +6567,7 @@ impl SpawnedProcess {
             _stdout_log_guard: self.stdout_log_guard,
             _stderr_log_guard: self.stderr_log_guard,
             pid: self.pid,
+            identity: self.identity,
         }
     }
 }
@@ -7217,6 +7276,7 @@ fn open_live_status(row: &JobProcessRow) -> LiveStatus {
         _stdout_log_guard: stdout_log_guard,
         _stderr_log_guard: stderr_log_guard,
         pid: row.pid,
+        identity: current,
     })
 }
 
@@ -7296,6 +7356,13 @@ fn inspect_handle(
 #[cfg(windows)]
 fn terminate_live(live: &LiveProcess) -> Result<()> {
     terminate_handles(live.job.0, live.process.0, live.pid)
+}
+
+#[cfg(windows)]
+fn live_process_is_running(live: &LiveProcess) -> bool {
+    use windows_sys::Win32::Foundation::WAIT_TIMEOUT;
+    use windows_sys::Win32::System::Threading::WaitForSingleObject;
+    unsafe { WaitForSingleObject(live.process.raw(), 0) == WAIT_TIMEOUT }
 }
 
 #[cfg(windows)]
@@ -7494,18 +7561,34 @@ fn spawn_managed(
 }
 
 #[cfg(not(windows))]
+fn proc_stat_start_token(stat: &str) -> Result<String> {
+    let suffix = stat
+        .rsplit_once(") ")
+        .map(|(_, suffix)| suffix)
+        .ok_or_else(|| EmberLabError::ProcessUnavailable {
+            job_id: String::new(),
+            pid: 0,
+        })?;
+    suffix
+        .split_whitespace()
+        .nth(19)
+        .map(str::to_owned)
+        .ok_or_else(|| EmberLabError::ProcessUnavailable {
+            job_id: String::new(),
+            pid: 0,
+        })
+}
+
+#[cfg(not(windows))]
 fn inspect_process(pid: u32) -> Result<ProcessIdentity> {
     let exe = fs::read_link(format!("/proc/{pid}/exe"))?;
     let stat = fs::read_to_string(format!("/proc/{pid}/stat"))?;
-    let token =
-        stat.split_whitespace()
-            .nth(21)
-            .ok_or_else(|| EmberLabError::ProcessUnavailable {
-                job_id: String::new(),
-                pid,
-            })?;
+    let token = proc_stat_start_token(&stat).map_err(|_| EmberLabError::ProcessUnavailable {
+        job_id: String::new(),
+        pid,
+    })?;
     Ok(ProcessIdentity {
-        start_token: token.into(),
+        start_token: token,
         executable: exe.to_string_lossy().into_owned(),
     })
 }
@@ -7527,6 +7610,21 @@ fn terminate_process(pid: u32) -> Result<()> {
 #[cfg(test)]
 mod dispatch_binding_snapshot_tests {
     use super::*;
+
+    #[cfg(not(windows))]
+    #[test]
+    fn proc_stat_start_token_uses_suffix_after_final_comm_paren() {
+        let mut suffix = vec!["S".to_string()];
+        suffix.extend((1..=19).map(|index| {
+            if index == 19 {
+                "987654".to_string()
+            } else {
+                "0".to_string()
+            }
+        }));
+        let stat = format!("42 (worker name with ) chars) {}", suffix.join(" "));
+        assert_eq!(proc_stat_start_token(&stat).unwrap(), "987654");
+    }
 
     #[cfg(windows)]
     #[test]
