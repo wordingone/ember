@@ -723,6 +723,89 @@ fn dispatch_manifest_applies_the_declared_windows_cpu_hard_cap() {
 }
 
 #[test]
+fn dispatch_manifest_walls_the_declared_windows_ui_surface_for_non_cockpit_profiles() {
+    use std::mem::{size_of, zeroed};
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::JobObjects::{
+        JobObjectBasicUIRestrictions, OpenJobObjectW, QueryInformationJobObject,
+        JOBOBJECT_BASIC_UI_RESTRICTIONS, JOB_OBJECT_UILIMIT_DESKTOP,
+        JOB_OBJECT_UILIMIT_DISPLAYSETTINGS, JOB_OBJECT_UILIMIT_EXITWINDOWS,
+        JOB_OBJECT_UILIMIT_GLOBALATOMS, JOB_OBJECT_UILIMIT_HANDLES,
+        JOB_OBJECT_UILIMIT_READCLIPBOARD, JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS,
+        JOB_OBJECT_UILIMIT_WRITECLIPBOARD,
+    };
+
+    // write_manifest's fixture declares the evidence_verifier profile with
+    // requires_ui_responsiveness: false — the closed schema requires that
+    // pairing for every profile except Cockpit (validate_dispatch_workload_profile).
+    let root = sandbox("ui-wall");
+    let manifest = write_manifest(&root, "dispatch-ui-wall", 10_000);
+    let db = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap();
+    let connection = Connection::open(&db).unwrap();
+    let job_object_name: String = connection
+        .query_row(
+            "SELECT job_object_name FROM jobs WHERE job_id='dispatch-ui-wall'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let wide: Vec<u16> = std::ffi::OsStr::new(&job_object_name)
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    let job = unsafe { OpenJobObjectW(0x0004, 0, wide.as_ptr()) };
+    assert!(!job.is_null());
+    let mut info: JOBOBJECT_BASIC_UI_RESTRICTIONS = unsafe { zeroed() };
+    let ok = unsafe {
+        QueryInformationJobObject(
+            job,
+            JobObjectBasicUIRestrictions,
+            (&mut info as *mut JOBOBJECT_BASIC_UI_RESTRICTIONS).cast(),
+            size_of::<JOBOBJECT_BASIC_UI_RESTRICTIONS>() as u32,
+            std::ptr::null_mut(),
+        )
+    };
+    unsafe { CloseHandle(job) };
+    assert_ne!(ok, 0);
+    let expected = JOB_OBJECT_UILIMIT_HANDLES
+        | JOB_OBJECT_UILIMIT_READCLIPBOARD
+        | JOB_OBJECT_UILIMIT_WRITECLIPBOARD
+        | JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS
+        | JOB_OBJECT_UILIMIT_DISPLAYSETTINGS
+        | JOB_OBJECT_UILIMIT_GLOBALATOMS
+        | JOB_OBJECT_UILIMIT_DESKTOP
+        | JOB_OBJECT_UILIMIT_EXITWINDOWS;
+    assert_eq!(info.UIRestrictionsClass, expected);
+
+    // The declaration is receipted alongside the job-object identity so the
+    // wall is provable from custody evidence, not just live kernel state.
+    let events: Vec<String> = connection
+        .prepare("SELECT payload_json FROM events WHERE job_id='dispatch-ui-wall' AND kind IN ('job_start_reserved','job_prepared') ORDER BY seq")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .unwrap();
+    assert!(!events.is_empty());
+    for payload in events {
+        let value: Value = serde_json::from_str(&payload).unwrap();
+        assert_eq!(value["requires_ui_responsiveness"], false);
+    }
+    daemon.stop_job("dispatch-ui-wall").unwrap();
+}
+
+#[test]
 fn identical_dispatch_retry_reconstructs_the_existing_job_and_receipt() {
     let root = sandbox("idempotent-retry");
     let manifest = write_manifest(&root, "dispatch-idempotent-retry", 10_000);
