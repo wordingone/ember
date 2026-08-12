@@ -8,7 +8,7 @@
 // or training launch occurs. Default-mode tests prove only launch_packet.py is
 // requested; certified-mode tests separately prove the one fixed consumer argv.
 
-import { describe, it, expect } from "bun:test";
+import { afterEach, describe, it, expect } from "bun:test";
 import {
   CERTIFIED_LAUNCH_TIMEOUT_MS,
   PREFLIGHT_TIMEOUT_MS,
@@ -103,6 +103,7 @@ function makeCmd(
   const cmd = createTrainCommand({
     pythonBin: "python",
     repoRoot,
+    launchAuthorityRoot: canonicalDir(repoRoot),
     runLaunchPacket: (executable, args) => {
       spawns.push({ executable, args });
       return runner(spawns);
@@ -111,13 +112,24 @@ function makeCmd(
   return { cmd, spawns };
 }
 
-/** The canonical launch-authority directory under a given repo root. */
+const authorityTestDirs = new Set<string>();
+
+afterEach(() => {
+  for (const dir of authorityTestDirs) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+  authorityTestDirs.clear();
+});
+
+/** Test-only external launch-authority custody adjacent to a synthetic repo root. */
 function canonicalDir(repoRoot: string): string {
-  return path.join(repoRoot, "receipts", "ember-02-launch-authority");
+  const dir = `${repoRoot}-live-launch-authority`;
+  authorityTestDirs.add(dir);
+  return dir;
 }
 
-/** Writes a valid certificate.json / declaration-ledger.jsonl / run-spec.json triple at the
- *  canonical launch-authority location under repoRoot. Content is minimal-but-well-formed --
+/** Writes a valid launch-authority candidate packet at the
+ *  test-only external launch-authority location. Content is minimal-but-well-formed --
  *  the CLI-level check is existence + parseability, not the certified consumer's own deep
  *  schema validation (that lives in certified_train_launch.py and is exercised separately). */
 function writeCanonicalArtifacts(repoRoot: string): void {
@@ -138,6 +150,10 @@ function writeCanonicalArtifacts(repoRoot: string): void {
     path.join(dir, "run-spec.json"),
     JSON.stringify({ mode: "bounded-canary", steps: 1 }),
   );
+  fs.writeFileSync(
+    path.join(dir, "launch-authority-custody.json"),
+    JSON.stringify({ schema_version: "ember-launch-authority-external-custody-v1" }) + "\n",
+  );
 }
 
 function makeExecuteCmd(
@@ -146,9 +162,15 @@ function makeExecuteCmd(
 ) {
   const preflightSpawns: RecordedSpawn[] = [];
   const certifiedSpawns: RecordedSpawn[] = [];
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-execute-"));
+  authorityTestDirs.add(repoRoot);
+  fs.writeFileSync(
+    path.join(repoRoot, "launch-authority-custody.json"),
+    JSON.stringify({ schema_version: "ember-launch-authority-external-custody-v1" }) + "\n",
+  );
   const cmd = createTrainCommand({
     pythonBin: "python",
-    repoRoot: "/fake/ember",
+    repoRoot,
     certifiedLaunchScriptPath:
       "/fake/ember/tools/ember-restart-3b/certified_train_launch.py",
     runLaunchPacket: (executable, args) => {
@@ -160,7 +182,7 @@ function makeExecuteCmd(
       return certified;
     },
   });
-  return { cmd, preflightSpawns, certifiedSpawns };
+  return { cmd, preflightSpawns, certifiedSpawns, repoRoot };
 }
 
 /** Assert the only subprocess ever spawned was the launch_packet.py preflight. */
@@ -210,6 +232,7 @@ describe("train command", () => {
       });
       const cmd = createTrainCommand({
         repoRoot: scratch,
+        launchAuthorityRoot: canonicalDir(scratch),
         runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
         runCertifiedLaunch: () => ({ kind: "background", pid: 4321, completion }),
       });
@@ -258,6 +281,7 @@ describe("train command", () => {
         const failures: Array<{ pid: number; status: number | null; message: string }> = [];
         const cmd = createTrainCommand({
           repoRoot: scratch,
+          launchAuthorityRoot: canonicalDir(scratch),
           runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
           runCertifiedLaunch: () => ({ kind: "background", pid: 4321, completion }),
           reportCertifiedLaunchFailure: (failure) => failures.push(failure),
@@ -303,6 +327,7 @@ describe("train command", () => {
       });
       const cmd = createTrainCommand({
         repoRoot: scratch,
+        launchAuthorityRoot: canonicalDir(scratch),
         runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
         runCertifiedLaunch: () => ({ kind: "background", pid: 2468, completion }),
       });
@@ -341,6 +366,7 @@ describe("train command", () => {
       const failures: Array<{ pid: number; status: number | null; message: string }> = [];
       const cmd = createTrainCommand({
         repoRoot: scratch,
+        launchAuthorityRoot: canonicalDir(scratch),
         runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
         runCertifiedLaunch: () => ({ kind: "background", pid: 9876, completion }),
         reportCertifiedLaunchFailure: (failure) => failures.push(failure),
@@ -375,6 +401,7 @@ describe("train command", () => {
       const cmd = createTrainCommand({
         pythonBin: "python",
         repoRoot: scratch,
+        launchAuthorityRoot: canonicalDir(scratch),
         certifiedLaunchScriptPath: path.join(
           scratch,
           "tools",
@@ -429,6 +456,7 @@ describe("train command", () => {
       const cmd = createTrainCommand({
         pythonBin: "python",
         repoRoot: scratch,
+        launchAuthorityRoot: canonicalDir(scratch),
         certifiedLaunchScriptPath: path.join(
           scratch,
           "tools",
@@ -505,6 +533,75 @@ describe("train command", () => {
   // POSITIVE: all preflights green (exit 0) -> surface the launch command
   // =========================================================================
   describe("POSITIVE: all-green packet + resolved artifacts offers the launch", () => {
+    it("resolves the default launch authority only from explicit external custody", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-external-authority-"));
+      try {
+        const externalRoot = canonicalDir(scratch);
+        writeCanonicalArtifacts(scratch);
+
+        const cmd = createTrainCommand({
+          repoRoot: scratch,
+          launchAuthorityRoot: externalRoot,
+          runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+        });
+
+        const result = await cmd.execute("", mockCtx);
+
+        expect(result?.exitCode).toBeUndefined();
+        expect(result?.message).toContain(path.join(externalRoot, "certificate.json"));
+        expect(result?.message).not.toContain(
+          path.join(scratch, "receipts", "ember-02-launch-authority"),
+        );
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+
+    it("refuses the committed historical record when external custody is absent", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-no-live-authority-"));
+      try {
+        const historical = path.join(scratch, "receipts", "ember-02-launch-authority");
+        fs.mkdirSync(historical, { recursive: true });
+        fs.writeFileSync(path.join(historical, "certificate.json"), "{}\n");
+        fs.writeFileSync(path.join(historical, "declaration-ledger.jsonl"), "{}\n");
+        fs.writeFileSync(path.join(historical, "run-spec.json"), "{}\n");
+        const cmd = createTrainCommand({
+          repoRoot: scratch,
+          runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+        });
+
+        const result = await cmd.execute("", mockCtx);
+
+        expect(result?.exitCode).toBe(1);
+        expect(result?.message).toContain("EMBER_LAUNCH_AUTHORITY_ROOT is required");
+        expect(result?.message).toContain("historical only");
+        expect(result?.message).toContain("No offer minted");
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+
+    it("refuses a live launch-authority root contained by the repository", async () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-contained-authority-"));
+      try {
+        const contained = path.join(scratch, "live", "run-1506", "launch-authority");
+        fs.mkdirSync(contained, { recursive: true });
+        const cmd = createTrainCommand({
+          repoRoot: scratch,
+          launchAuthorityRoot: contained,
+          runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+        });
+
+        const result = await cmd.execute("", mockCtx);
+
+        expect(result?.exitCode).toBe(1);
+        expect(result?.message).toContain("must be outside the Ember repository");
+        expect(result?.message).toContain("No offer minted");
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
+
     it("exit 0 + valid summary + canonical artifacts present -> mints an OFFER instead of a paste-able command, no GPU spawn", async () => {
       const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-offer-"));
       try {
@@ -671,6 +768,7 @@ describe("train command", () => {
         const cmd = createTrainCommand({
           pythonBin: "python",
           repoRoot: scratch,
+          launchAuthorityRoot: canonicalDir(scratch),
           runLaunchPacket: (executable, args) => {
             spawns.push({ executable, args });
             return spawns.length === 1
@@ -747,6 +845,7 @@ describe("train command", () => {
         const cmd = createTrainCommand({
           pythonBin: "python",
           repoRoot: scratch,
+          launchAuthorityRoot: canonicalDir(scratch),
           runLaunchPacket: (executable, args) => {
             spawns.push({ executable, args });
             return results.shift()!;
@@ -838,7 +937,7 @@ describe("train command", () => {
 
   describe("certified execution mode", () => {
     it("requires all three explicit authority paths before any spawn", async () => {
-      const { cmd, preflightSpawns, certifiedSpawns } = makeExecuteCmd(
+      const { cmd, preflightSpawns, certifiedSpawns, repoRoot } = makeExecuteCmd(
         { status: 0, stdout: allGreenStdout() },
         { status: 0, stdout: "{}" },
       );
@@ -855,7 +954,7 @@ describe("train command", () => {
     });
 
     it("green preflight invokes exactly one certified consumer with fixed argv", async () => {
-      const { cmd, preflightSpawns, certifiedSpawns } = makeExecuteCmd(
+      const { cmd, preflightSpawns, certifiedSpawns, repoRoot } = makeExecuteCmd(
         { status: 0, stdout: allGreenStdout() },
         {
           status: 0,
@@ -879,13 +978,15 @@ describe("train command", () => {
       expect(certifiedSpawns[0]!.args).toEqual([
         "/fake/ember/tools/ember-restart-3b/certified_train_launch.py",
         "--root",
-        "/fake/ember",
+        repoRoot,
         "--certificate",
         "c.json",
         "--declaration-ledger",
         "d.jsonl",
         "--run-spec",
         "r.json",
+        "--custody-receipt-sha256",
+        expect.stringMatching(/^[0-9a-f]{64}$/),
       ]);
       expect(certifiedSpawns[0]!.args.join(" ")).not.toContain(
         REAL_LAUNCH_COMMAND,
@@ -998,6 +1099,7 @@ describe("acceptance map: train-launch-operability v1", () => {
         const cmd = createTrainCommand({
           pythonBin: "python",
           repoRoot: scratch,
+          launchAuthorityRoot: canonicalDir(scratch),
           runLaunchPacket: () => {
             writeCanonicalArtifacts(scratch);
             return { status: 0, stdout: allGreenStdout() };
@@ -1071,11 +1173,13 @@ describe("acceptance map: train-launch-operability v1", () => {
         const mintingInstance = createTrainCommand({
           pythonBin: "python",
           repoRoot: scratch,
+          launchAuthorityRoot: canonicalDir(scratch),
           runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
         });
         const confirmingInstance = createTrainCommand({
           pythonBin: "python",
           repoRoot: scratch,
+          launchAuthorityRoot: canonicalDir(scratch),
           runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
           runCertifiedLaunch: (executable, args) => {
             certifiedSpawns.push({ executable, args });
@@ -1107,11 +1211,13 @@ describe("acceptance map: train-launch-operability v1", () => {
         const instanceA = createTrainCommand({
           pythonBin: "python",
           repoRoot: scratch,
+          launchAuthorityRoot: canonicalDir(scratch),
           runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
         });
         const instanceB = createTrainCommand({
           pythonBin: "python",
           repoRoot: scratch,
+          launchAuthorityRoot: canonicalDir(scratch),
           runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
         });
 
@@ -1239,6 +1345,7 @@ describe("acceptance map: train-launch-operability v1", () => {
         const cmd = createTrainCommand({
           pythonBin: "python",
           repoRoot: scratch,
+          launchAuthorityRoot: canonicalDir(scratch),
           runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
           runCertifiedLaunch: (executable, args) => {
             certifiedSpawns.push({ executable, args });
@@ -1266,8 +1373,8 @@ describe("acceptance map: train-launch-operability v1", () => {
     it("C8: --execute with explicit paths + preflight green -> consumer invoked with the explicit paths, canonical resolution not consulted", async () => {
       // repoRoot does not exist on disk at all -- canonical resolution (fs reads under
       // repoRoot/receipts/ember-02-launch-authority) would throw/fail if it were consulted.
-      // The explicit --execute path must never touch it.
-      const { cmd, preflightSpawns, certifiedSpawns } = makeExecuteCmd(
+      // The explicit --execute path must never touch the default custody root.
+      const { cmd, preflightSpawns, certifiedSpawns, repoRoot } = makeExecuteCmd(
         { status: 0, stdout: allGreenStdout() },
         {
           status: 0,
@@ -1285,13 +1392,15 @@ describe("acceptance map: train-launch-operability v1", () => {
       expect(certifiedSpawns[0]!.args).toEqual([
         "/fake/ember/tools/ember-restart-3b/certified_train_launch.py",
         "--root",
-        "/fake/ember",
+        repoRoot,
         "--certificate",
         "c.json",
         "--declaration-ledger",
         "d.jsonl",
         "--run-spec",
         "r.json",
+        "--custody-receipt-sha256",
+        expect.stringMatching(/^[0-9a-f]{64}$/),
       ]);
     });
   });
@@ -1318,6 +1427,7 @@ describe("acceptance map: train-launch-operability v1", () => {
         const cmd = createTrainCommand({
           pythonBin: "python",
           repoRoot: scratch,
+          launchAuthorityRoot: canonicalDir(scratch),
           runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
           runCertifiedLaunch: (executable, args) => {
             certifiedSpawns.push({ executable, args });
@@ -1465,6 +1575,10 @@ describe("acceptance map: train-launch-operability v1", () => {
           path.join(dir, "run-spec.json"),
           JSON.stringify({ mode: "bounded-canary", steps: 10, sequence_length: 4096 }, null, 2),
         );
+        fs.writeFileSync(
+          path.join(dir, "launch-authority-custody.json"),
+          JSON.stringify({ schema_version: "ember-launch-authority-external-custody-v1" }) + "\n",
+        );
 
         const { cmd } = makeCmd(() => ({ status: 0, stdout: allGreenStdout() }), scratch);
         const result = await cmd.execute("", mockCtx);
@@ -1486,6 +1600,7 @@ describe("acceptance map: train-launch-operability v1", () => {
         const cmd = createTrainCommand({
           pythonBin: "python",
           repoRoot: scratch,
+          launchAuthorityRoot: canonicalDir(scratch),
           certifiedLaunchScriptPath: path.join(scratch, "tools", "ember-restart-3b", "certified_train_launch.py"),
           runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
           runCertifiedLaunch: (executable, args) => {
@@ -1516,6 +1631,8 @@ describe("acceptance map: train-launch-operability v1", () => {
           path.join(canonicalDir(scratch), "declaration-ledger.jsonl"),
           "--run-spec",
           path.join(canonicalDir(scratch), "run-spec.json"),
+          "--custody-receipt-sha256",
+          expect.stringMatching(/^[0-9a-f]{64}$/),
         ]);
         // The raw named launch command string is never present in argv or the response.
         expect(certifiedSpawns[0]!.args.join(" ")).not.toContain(REAL_LAUNCH_COMMAND);
@@ -1555,6 +1672,7 @@ describe("/train source-byte authority", () => {
       const spawns: RecordedSpawn[] = [];
       const cmd = createTrainCommand({
         pythonBin: "python",
+        launchAuthorityRoot: canonicalDir(worktreeRoot),
         runLaunchPacket: (executable, args) => {
           spawns.push({ executable, args });
           return { status: 0, stdout: allGreenStdout() };
