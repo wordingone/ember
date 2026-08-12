@@ -21,13 +21,16 @@ const DISPATCH_DAEMON_PID_ENV: &str = "EMBER_LAB_DISPATCH_DAEMON_PID";
 const DISPATCH_PIPE_ENV: &str = "EMBER_LAB_PIPE";
 
 fn usage() -> &'static str {
-    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab data-catalog-status --db <path>\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
+    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name> [--certified-python <absolute-path> --certified-launcher <absolute-path> --certified-dispatch-helper <absolute-path>]\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab data-catalog-status --db <path>\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
 }
 
 enum Command {
     Serve {
         db: PathBuf,
         pipe: String,
+        certified_python: Option<PathBuf>,
+        certified_launcher: Option<PathBuf>,
+        certified_dispatch_helper: Option<PathBuf>,
     },
     Dispatch {
         pipe: String,
@@ -252,6 +255,9 @@ fn parse_args() -> Result<Command, String> {
     let mut db = None;
     let mut pipe = None;
     let mut manifest = None;
+    let mut certified_python = None;
+    let mut certified_launcher = None;
+    let mut certified_dispatch_helper = None;
     while let Some(flag) = args.next() {
         let value = args
             .next()
@@ -260,6 +266,9 @@ fn parse_args() -> Result<Command, String> {
             "--db" => db = Some(PathBuf::from(value)),
             "--pipe" => pipe = Some(value),
             "--manifest" => manifest = Some(PathBuf::from(value)),
+            "--certified-python" => certified_python = Some(PathBuf::from(value)),
+            "--certified-launcher" => certified_launcher = Some(PathBuf::from(value)),
+            "--certified-dispatch-helper" => certified_dispatch_helper = Some(PathBuf::from(value)),
             _ => return Err(format!("unknown argument {flag}\n{}", usage())),
         }
     }
@@ -268,11 +277,21 @@ fn parse_args() -> Result<Command, String> {
         "serve" if manifest.is_none() => Ok(Command::Serve {
             db: db.ok_or_else(|| format!("missing --db\n{}", usage()))?,
             pipe,
+            certified_python,
+            certified_launcher,
+            certified_dispatch_helper,
         }),
-        "dispatch" if db.is_none() => Ok(Command::Dispatch {
-            pipe,
-            manifest: manifest.ok_or_else(|| format!("missing --manifest\n{}", usage()))?,
-        }),
+        "dispatch"
+            if db.is_none()
+                && certified_python.is_none()
+                && certified_launcher.is_none()
+                && certified_dispatch_helper.is_none() =>
+        {
+            Ok(Command::Dispatch {
+                pipe,
+                manifest: manifest.ok_or_else(|| format!("missing --manifest\n{}", usage()))?,
+            })
+        }
         "serve" | "dispatch" => Err(format!("arguments do not match {command}\n{}", usage())),
         _ => Err(format!("unknown command {command}\n{}", usage())),
     }
@@ -393,7 +412,7 @@ fn authenticate_pipe_server(
     Err(std::io::Error::other("VERIFIER_DISPATCH_DAEMON_IDENTITY_UNSUPPORTED").into())
 }
 
-fn consume_verifier_dispatch_token() -> Result<(), Box<dyn std::error::Error>> {
+fn consume_dispatch_token() -> Result<(), Box<dyn std::error::Error>> {
     let required = |name: &str| {
         std::env::var(name).map_err(|_| {
             std::io::Error::other(format!("VERIFIER_DISPATCH_TOKEN_REQUIRED: missing {name}"))
@@ -416,7 +435,7 @@ fn consume_verifier_dispatch_token() -> Result<(), Box<dyn std::error::Error>> {
         .ok()
         .filter(|pid| *pid > 0)
         .ok_or_else(|| std::io::Error::other("VERIFIER_DISPATCH_DAEMON_IDENTITY_REFUSED"))?;
-    let request = json!({"jsonrpc":"2.0","id":1,"method":"consume_verifier_dispatch_token","params":{"job_id":job_id,"token":token}});
+    let request = json!({"jsonrpc":"2.0","id":1,"method":"consume_dispatch_token","params":{"job_id":job_id,"token":token}});
     let result = call_rpc_with_server(
         &pipe,
         &request,
@@ -649,8 +668,33 @@ fn dispatch(pipe: &str, manifest: &Path) -> Result<Value, Box<dyn std::error::Er
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     match parse_args().map_err(std::io::Error::other)? {
-        Command::Serve { db, pipe } => {
-            let daemon = Arc::new(Daemon::open(&db)?);
+        Command::Serve {
+            db,
+            pipe,
+            certified_python,
+            certified_launcher,
+            certified_dispatch_helper,
+        } => {
+            let daemon = Arc::new(match (
+                certified_python,
+                certified_launcher,
+                certified_dispatch_helper,
+            ) {
+                (Some(python), Some(launcher), Some(dispatch_helper)) => {
+                    Daemon::open_with_certified_training(
+                        &db,
+                        &python,
+                        &launcher,
+                        &dispatch_helper,
+                    )?
+                }
+                (None, None, None) => Daemon::open(&db)?,
+                _ => {
+                    return Err(
+                        "--certified-python, --certified-launcher, and --certified-dispatch-helper must be supplied together".into(),
+                    )
+                }
+            });
             daemon.reconcile()?;
             serve_named_pipe(daemon, &pipe)?;
         }
@@ -671,7 +715,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             receipt,
             certificate,
         } => {
-            consume_verifier_dispatch_token()?;
+            consume_dispatch_token()?;
             let ok = run_verify_training(&root, &receipt, certificate.as_deref())?;
             println!(
                 "verify-training: {} -- receipt written to {}",

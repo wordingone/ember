@@ -2882,6 +2882,16 @@ def certify_and_execute(
     return execute_validated_launch(repo_root, launch, run_process=run_process)
 
 
+def consume_ember_lab_dispatch(repo_root: pathlib.Path) -> None:
+    module_path = repo_root / "scripts" / "ember_dispatch_token.py"
+    spec = importlib.util.spec_from_file_location("ember_dispatch_token", module_path)
+    if spec is None or spec.loader is None:
+        raise ValueError("EMBER_LAB_DISPATCH_REFUSED: shared dispatch consumer is unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    module.consume_dispatch(repo_root)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Validate a declared Ember canary certificate and execute its fixed runner."
@@ -2895,6 +2905,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--custody-receipt-sha256", required=True)
     arguments = parser.parse_args(argv)
     try:
+        consume_ember_lab_dispatch(arguments.root)
         launch = validate_certified_request(
             arguments.root,
             arguments.certificate,
@@ -2903,7 +2914,7 @@ def main(argv: list[str] | None = None) -> int:
             arguments.custody_receipt_sha256,
         )
         exit_code = execute_validated_launch(arguments.root, launch)
-    except ValueError as error:
+    except (ValueError, RuntimeError, OSError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
 

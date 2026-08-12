@@ -4,15 +4,19 @@
 
 #![cfg(windows)]
 
-use ember_lab::{Daemon, EmberLabError, HostCommitCapacity, JobState};
+use ember_lab::{rpc::serve_named_pipe, Daemon, EmberLabError, HostCommitCapacity, JobState};
 use rusqlite::{Connection, TransactionBehavior};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::{BufRead, BufReader, Write};
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
+use std::process::{Child, Command, Stdio};
+use std::sync::Arc;
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const GIB: u64 = 1024 * 1024 * 1024;
 const HOST_COMMIT_RESERVE_BYTES: u64 = 10 * GIB;
@@ -70,6 +74,63 @@ fn remove_sandbox_when_unlocked(path: &Path) {
 
 fn sha256(path: &Path) -> String {
     format!("{:x}", Sha256::digest(fs::read(path).unwrap()))
+}
+
+fn rpc(pipe: &str, id: u64, method: &str, params: Value) -> Value {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        match OpenOptions::new().read(true).write(true).open(pipe) {
+            Ok(mut stream) => {
+                let request = json!({
+                    "jsonrpc": "2.0",
+                    "id": id,
+                    "method": method,
+                    "params": params,
+                });
+                writeln!(stream, "{}", serde_json::to_string(&request).unwrap()).unwrap();
+                stream.flush().unwrap();
+                let mut response = String::new();
+                BufReader::new(stream).read_line(&mut response).unwrap();
+                let response: Value = serde_json::from_str(&response).unwrap();
+                assert_eq!(response["jsonrpc"], "2.0");
+                assert_eq!(response["id"], id);
+                assert!(
+                    response.get("error").is_none(),
+                    "RPC {method} failed: {response}"
+                );
+                return response["result"].clone();
+            }
+            Err(_) if Instant::now() < deadline => thread::sleep(Duration::from_millis(20)),
+            Err(error) => panic!("timed out connecting to {pipe}: {error}"),
+        }
+    }
+}
+
+struct ServerGuard(Child);
+
+impl Drop for ServerGuard {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+fn governed_python_executable() -> PathBuf {
+    if let Some(path) = std::env::var_os("EMBER_PYTHON_BIN").map(PathBuf::from) {
+        if path.is_file() {
+            return fs::canonicalize(path).unwrap();
+        }
+    }
+    let path = std::env::var_os("PATH").expect("PATH is required for the Python test fixture");
+    for directory in std::env::split_paths(&path) {
+        for name in ["python.exe", "python3.exe"] {
+            let candidate = directory.join(name);
+            if candidate.is_file() {
+                return fs::canonicalize(candidate).unwrap();
+            }
+        }
+    }
+    panic!("the certified-training integration fixture requires a Python interpreter");
 }
 
 #[test]
@@ -423,6 +484,686 @@ fn dispatch_token_identity_race_loses_atomic_fence_without_consumption_or_event(
     drop(outcome);
     drop(daemon);
     remove_sandbox_when_unlocked(&root);
+}
+
+#[test]
+fn certified_training_dispatch_receives_the_same_one_use_daemon_token() {
+    let root = sandbox("certified-training-token");
+    let dispatch_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    let manifest = write_manifest(&root, "certified-training-token-job", dispatch_at);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    let readme = root.join("README.md");
+    fs::write(&readme, b"# certified training fixture\n").unwrap();
+    let launcher = root
+        .join("tools")
+        .join("ember-restart-3b")
+        .join("certified_train_launch.py");
+    fs::create_dir_all(launcher.parent().unwrap()).unwrap();
+    fs::write(
+        &launcher,
+        br#"import json
+import os
+import sys
+from pathlib import Path
+
+request = {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "consume_dispatch_token",
+    "params": {
+        "job_id": os.environ["EMBER_LAB_DISPATCH_JOB_ID"],
+        "token": os.environ["EMBER_LAB_DISPATCH_TOKEN"],
+    },
+}
+with open(os.environ["EMBER_LAB_PIPE"], "r+b", buffering=0) as stream:
+    stream.write((json.dumps(request, separators=(",", ":")) + "\n").encode("utf-8"))
+    response = json.loads(stream.readline().decode("utf-8"))
+if response.get("result", {}).get("consumed") is not True:
+    raise RuntimeError("dispatch token was not consumed")
+Path(sys.argv[2], "python-chain-ran").write_text("ok", encoding="utf-8")
+"#,
+    )
+    .unwrap();
+    let dispatch_helper = root.join("scripts").join("ember_dispatch_token.py");
+    fs::create_dir_all(dispatch_helper.parent().unwrap()).unwrap();
+    fs::write(
+        &dispatch_helper,
+        b"# daemon-bound dispatch helper fixture\n",
+    )
+    .unwrap();
+    let python = governed_python_executable();
+    payload["program"] = json!({"path":python,"sha256":sha256(&python)});
+    payload["bindings"].as_array_mut().unwrap().extend([
+        json!({"kind":"config","path":readme,"sha256":sha256(&readme)}),
+        json!({"kind":"verifier","path":launcher,"sha256":sha256(&launcher)}),
+        json!({"kind":"verifier","path":dispatch_helper,"sha256":sha256(&dispatch_helper)}),
+    ]);
+    payload["workload_profile"] = json!({
+        "profile_id": "certified_training",
+        "pinned_host_producers": [
+            {"kind":"training_data_loader","maximum_bytes":SIMULATED_PEAK_COMMIT_BYTES / 2},
+            {"kind":"checkpoint_writer","maximum_bytes":SIMULATED_PEAK_COMMIT_BYTES / 4},
+            {"kind":"telemetry_buffer","maximum_bytes":SIMULATED_PEAK_COMMIT_BYTES / 4}
+        ],
+        "requires_ui_responsiveness": false,
+        "cpu_rate_percent": CPU_RATE_PERCENT
+    });
+    payload["args"] = json!([
+        launcher,
+        "--root",
+        root,
+        "--certificate",
+        root.join("config.json"),
+        "--declaration-ledger",
+        root.join("data-manifest.json"),
+        "--run-spec",
+        root.join("data-manifest.json")
+    ]);
+    payload["minimum_free_vram_bytes"] = json!(1);
+    let pipe = format!(
+        r"\\.\pipe\ember-lab-certified-training-{}-{}",
+        std::process::id(),
+        dispatch_at
+    );
+    payload["env"]["EMBER_LAB_PIPE"] = json!(pipe);
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let daemon = Arc::new(
+        Daemon::open_with_certified_training(
+            &root.join("ember-lab.sqlite3"),
+            &python,
+            &launcher,
+            &dispatch_helper,
+        )
+        .unwrap(),
+    );
+    let server_daemon = Arc::clone(&daemon);
+    let server_pipe = pipe.clone();
+    let server = thread::spawn(move || serve_named_pipe(server_daemon, &server_pipe).unwrap());
+    assert_eq!(rpc(&pipe, 10, "ping", json!({}))["status"], "ok");
+    let outcome = daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            dispatch_at + 1,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap();
+    let marker = root.join("python-chain-ran");
+    for _ in 0..100 {
+        if marker.is_file() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    assert_eq!(fs::read_to_string(&marker).unwrap(), "ok");
+    let connection = Connection::open(root.join("ember-lab.sqlite3")).unwrap();
+    let token_rows: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM dispatch_tokens WHERE job_id=?1 AND pid=?2 AND consumed_at_ms IS NOT NULL",
+            rusqlite::params!["certified-training-token-job", outcome.handle.pid],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(token_rows, 1);
+    drop(connection);
+    if matches!(
+        daemon.job_state("certified-training-token-job").unwrap(),
+        Some(JobState::Running | JobState::Stopping)
+    ) {
+        daemon.stop_job("certified-training-token-job").unwrap();
+    }
+    rpc(&pipe, 11, "shutdown", json!({}));
+    server.join().unwrap();
+    drop(daemon);
+    remove_sandbox_when_unlocked(&root);
+}
+
+#[test]
+fn certified_training_real_launcher_and_helper_consume_before_validation_effects() {
+    const SOURCE_FILES: [&str; 7] = [
+        "runtime/ember-lab/src/lib.rs",
+        "runtime/ember-lab/src/data_catalog.rs",
+        "runtime/ember-lab/src/rpc.rs",
+        "runtime/ember-lab/src/main.rs",
+        "runtime/ember-lab/src/training_verify.rs",
+        "runtime/ember-lab/Cargo.toml",
+        "runtime/ember-lab/Cargo.lock",
+    ];
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+    let root = sandbox("certified-training-production-chain");
+    let source_root = root.join("source");
+    let repository = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+    for relative in SOURCE_FILES {
+        let source = repository.join(relative);
+        let destination = source_root.join(relative);
+        fs::create_dir_all(destination.parent().unwrap()).unwrap();
+        fs::copy(source, destination).unwrap();
+    }
+    let launcher_relative = Path::new("tools/ember-restart-3b/certified_train_launch.py");
+    let helper_relative = Path::new("scripts/ember_dispatch_token.py");
+    for relative in [launcher_relative, helper_relative] {
+        let destination = source_root.join(relative);
+        fs::create_dir_all(destination.parent().unwrap()).unwrap();
+        fs::copy(repository.join(relative), destination).unwrap();
+    }
+    let launcher = source_root.join(launcher_relative);
+    let dispatch_helper = source_root.join(helper_relative);
+    let readme = source_root.join("README.md");
+    fs::write(&readme, b"# daemon-governed production-chain fixture\n").unwrap();
+
+    let compiled_binary = PathBuf::from(
+        option_env!("CARGO_BIN_EXE_ember-lab").expect("compiled ember-lab binary is required"),
+    );
+    let server_binary = source_root
+        .join("runtime")
+        .join("ember-lab")
+        .join("target")
+        .join("debug")
+        .join("ember-lab.exe");
+    fs::create_dir_all(server_binary.parent().unwrap()).unwrap();
+    fs::copy(&compiled_binary, &server_binary).unwrap();
+
+    let python = governed_python_executable();
+    let db = root.join("ember-lab.sqlite3");
+    let pipe = format!(
+        r"\\.\pipe\ember-lab-certified-production-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
+    let mut server = ServerGuard(
+        Command::new(&server_binary)
+            .args([
+                "serve",
+                "--db",
+                &db.to_string_lossy(),
+                "--pipe",
+                &pipe,
+                "--certified-python",
+                &python.to_string_lossy(),
+                "--certified-launcher",
+                &launcher.to_string_lossy(),
+                "--certified-dispatch-helper",
+                &dispatch_helper.to_string_lossy(),
+            ])
+            .creation_flags(CREATE_NO_WINDOW)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap(),
+    );
+    assert_eq!(rpc(&pipe, 20, "ping", json!({}))["status"], "ok");
+
+    let dispatch_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    let job_id = "certified-training-production-chain-job";
+    let manifest = write_manifest(&root, job_id, dispatch_at);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    let certificate = source_root.join("certificate.json");
+    let declaration_ledger = source_root.join("declaration-ledger.jsonl");
+    let run_spec = source_root.join("run-spec.json");
+    fs::write(&certificate, b"{\"invalid\":true}").unwrap();
+    fs::write(&declaration_ledger, b"{\"invalid\":true}\n").unwrap();
+    fs::write(&run_spec, b"{\"invalid\":true}").unwrap();
+    payload["program"] = json!({"path":python,"sha256":sha256(&python)});
+    payload["args"] = json!([
+        launcher,
+        "--root",
+        source_root,
+        "--certificate",
+        certificate,
+        "--declaration-ledger",
+        declaration_ledger,
+        "--run-spec",
+        run_spec
+    ]);
+    payload["workload_profile"] = json!({
+        "profile_id": "certified_training",
+        "pinned_host_producers": [
+            {"kind":"training_data_loader","maximum_bytes":SIMULATED_PEAK_COMMIT_BYTES / 2},
+            {"kind":"checkpoint_writer","maximum_bytes":SIMULATED_PEAK_COMMIT_BYTES / 4},
+            {"kind":"telemetry_buffer","maximum_bytes":SIMULATED_PEAK_COMMIT_BYTES / 4}
+        ],
+        "requires_ui_responsiveness": false,
+        "cpu_rate_percent": CPU_RATE_PERCENT
+    });
+    payload["env"]["EMBER_LAB_PIPE"] = json!(pipe);
+    payload["bindings"] = json!([
+        {"kind":"config","path":readme,"sha256":sha256(&readme)},
+        {"kind":"verifier","path":launcher,"sha256":sha256(&launcher)},
+        {"kind":"verifier","path":dispatch_helper,"sha256":sha256(&dispatch_helper)},
+        {"kind":"manifest","path":certificate,"sha256":sha256(&certificate)},
+        {"kind":"manifest","path":declaration_ledger,"sha256":sha256(&declaration_ledger)},
+        {"kind":"manifest","path":run_spec,"sha256":sha256(&run_spec)}
+    ]);
+    payload["minimum_free_vram_bytes"] = json!(1);
+    let manifest_utf8 = serde_json::to_string(&payload).unwrap();
+    fs::write(&manifest, manifest_utf8.as_bytes()).unwrap();
+    let dispatched = rpc(
+        &pipe,
+        21,
+        "dispatch_manifest",
+        json!({
+            "manifest_utf8": manifest_utf8,
+            "manifest_sha256": sha256(&manifest),
+        }),
+    );
+    assert!(dispatched["pid"].as_u64().unwrap() > 0);
+
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let state = rpc(&pipe, 22, "job_state", json!({"job_id":job_id}));
+        if state["state"] == "exited" {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "production launcher did not settle"
+        );
+        thread::sleep(Duration::from_millis(20));
+    }
+    assert_eq!(
+        rpc(&pipe, 23, "job_exit_code", json!({"job_id":job_id}))["exit_code"],
+        2
+    );
+    let connection = Connection::open(&db).unwrap();
+    assert_eq!(
+        connection
+            .query_row(
+                "SELECT COUNT(*) FROM dispatch_tokens WHERE job_id=?1 AND consumed_at_ms IS NOT NULL",
+                [job_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap(),
+        1
+    );
+    drop(connection);
+    rpc(&pipe, 24, "shutdown", json!({}));
+    server.0.wait().unwrap();
+    drop(server);
+    remove_sandbox_when_unlocked(&root);
+}
+
+#[test]
+fn certified_training_profile_refuses_self_authored_root_and_launcher() {
+    let root = sandbox("certified-training-unregistered-program");
+    let dispatch_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    let manifest = write_manifest(
+        &root,
+        "certified-training-unregistered-program-job",
+        dispatch_at,
+    );
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    let readme = root.join("README.md");
+    fs::write(&readme, b"# certified training fixture\n").unwrap();
+    let launcher = root
+        .join("tools")
+        .join("ember-restart-3b")
+        .join("certified_train_launch.py");
+    fs::create_dir_all(launcher.parent().unwrap()).unwrap();
+    fs::write(&launcher, b"# daemon-bound fixture launcher\n").unwrap();
+    let dispatch_helper = root.join("scripts").join("ember_dispatch_token.py");
+    fs::create_dir_all(dispatch_helper.parent().unwrap()).unwrap();
+    fs::write(&dispatch_helper, b"# caller-authored dispatch helper\n").unwrap();
+    let python = governed_python_executable();
+    payload["program"] = json!({"path":python,"sha256":sha256(&python)});
+    payload["bindings"].as_array_mut().unwrap().extend([
+        json!({"kind":"config","path":readme,"sha256":sha256(&readme)}),
+        json!({"kind":"verifier","path":launcher,"sha256":sha256(&launcher)}),
+        json!({"kind":"verifier","path":dispatch_helper,"sha256":sha256(&dispatch_helper)}),
+    ]);
+    payload["workload_profile"] = json!({
+        "profile_id": "certified_training",
+        "pinned_host_producers": [
+            {"kind":"training_data_loader","maximum_bytes":SIMULATED_PEAK_COMMIT_BYTES / 2},
+            {"kind":"checkpoint_writer","maximum_bytes":SIMULATED_PEAK_COMMIT_BYTES / 4},
+            {"kind":"telemetry_buffer","maximum_bytes":SIMULATED_PEAK_COMMIT_BYTES / 4}
+        ],
+        "requires_ui_responsiveness": false,
+        "cpu_rate_percent": CPU_RATE_PERCENT
+    });
+    payload["args"] = json!([
+        launcher,
+        "--root",
+        root,
+        "--certificate",
+        root.join("config.json"),
+        "--declaration-ledger",
+        root.join("data-manifest.json"),
+        "--run-spec",
+        root.join("data-manifest.json")
+    ]);
+    payload["minimum_free_vram_bytes"] = json!(1);
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+
+    let governed_root = sandbox("certified-training-governed-launcher");
+    let governed_launcher = governed_root
+        .join("tools")
+        .join("ember-restart-3b")
+        .join("certified_train_launch.py");
+    fs::create_dir_all(governed_launcher.parent().unwrap()).unwrap();
+    fs::write(
+        &governed_launcher,
+        b"# daemon-governed certified launcher\n",
+    )
+    .unwrap();
+    let governed_dispatch_helper = governed_root
+        .join("scripts")
+        .join("ember_dispatch_token.py");
+    fs::create_dir_all(governed_dispatch_helper.parent().unwrap()).unwrap();
+    fs::write(
+        &governed_dispatch_helper,
+        b"# daemon-governed dispatch helper\n",
+    )
+    .unwrap();
+    let daemon = Daemon::open_with_certified_training(
+        &root.join("ember-lab.sqlite3"),
+        &python,
+        &governed_launcher,
+        &governed_dispatch_helper,
+    )
+    .unwrap();
+    let error = daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            dispatch_at + 1,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        EmberLabError::InvalidDispatchManifest { .. }
+    ));
+    let connection = Connection::open(root.join("ember-lab.sqlite3")).unwrap();
+    let token_rows: i64 = connection
+        .query_row("SELECT COUNT(*) FROM dispatch_tokens", [], |row| row.get(0))
+        .unwrap();
+    let job_rows: i64 = connection
+        .query_row("SELECT COUNT(*) FROM jobs", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(token_rows, 0);
+    assert_eq!(job_rows, 0);
+    drop(connection);
+    drop(daemon);
+    remove_sandbox_when_unlocked(&root);
+    remove_sandbox_when_unlocked(&governed_root);
+}
+
+#[test]
+fn certified_training_profile_refuses_unregistered_dispatch_helper_before_import_effects() {
+    let root = sandbox("certified-training-unregistered-helper");
+    let dispatch_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    let job_id = "certified-training-unregistered-helper-job";
+    let manifest = write_manifest(&root, job_id, dispatch_at);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    let readme = root.join("README.md");
+    fs::write(&readme, b"# certified training fixture\n").unwrap();
+    let launcher = root
+        .join("tools")
+        .join("ember-restart-3b")
+        .join("certified_train_launch.py");
+    fs::create_dir_all(launcher.parent().unwrap()).unwrap();
+    fs::write(
+        &launcher,
+        br#"import importlib.util
+import sys
+from pathlib import Path
+
+helper = Path(sys.argv[2]) / "scripts" / "ember_dispatch_token.py"
+spec = importlib.util.spec_from_file_location("ember_dispatch_token", helper)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+"#,
+    )
+    .unwrap();
+    let helper = root.join("scripts").join("ember_dispatch_token.py");
+    fs::create_dir_all(helper.parent().unwrap()).unwrap();
+    fs::write(&helper, b"# daemon-governed dispatch helper\n").unwrap();
+    let python = governed_python_executable();
+    let daemon = Daemon::open_with_certified_training(
+        &root.join("ember-lab.sqlite3"),
+        &python,
+        &launcher,
+        &helper,
+    )
+    .unwrap();
+    fs::write(
+        &helper,
+        b"from pathlib import Path\nPath(__file__).with_name('helper-import-effect').write_text('bad', encoding='utf-8')\n",
+    )
+    .unwrap();
+    payload["program"] = json!({"path":python,"sha256":sha256(&python)});
+    payload["bindings"].as_array_mut().unwrap().extend([
+        json!({"kind":"config","path":readme,"sha256":sha256(&readme)}),
+        json!({"kind":"verifier","path":launcher,"sha256":sha256(&launcher)}),
+        json!({"kind":"verifier","path":helper,"sha256":sha256(&helper)}),
+    ]);
+    payload["workload_profile"] = json!({
+        "profile_id": "certified_training",
+        "pinned_host_producers": [
+            {"kind":"training_data_loader","maximum_bytes":SIMULATED_PEAK_COMMIT_BYTES / 2},
+            {"kind":"checkpoint_writer","maximum_bytes":SIMULATED_PEAK_COMMIT_BYTES / 4},
+            {"kind":"telemetry_buffer","maximum_bytes":SIMULATED_PEAK_COMMIT_BYTES / 4}
+        ],
+        "requires_ui_responsiveness": false,
+        "cpu_rate_percent": CPU_RATE_PERCENT
+    });
+    payload["args"] = json!([
+        launcher,
+        "--root",
+        root,
+        "--certificate",
+        root.join("config.json"),
+        "--declaration-ledger",
+        root.join("data-manifest.json"),
+        "--run-spec",
+        root.join("data-manifest.json")
+    ]);
+    payload["minimum_free_vram_bytes"] = json!(1);
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+
+    let outcome = daemon.dispatch_manifest_at_with_probes_and_host(
+        &manifest,
+        dispatch_at + 1,
+        |_root| Ok(1024),
+        || Ok(2048),
+        || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+    );
+    if outcome.is_ok() {
+        let marker = helper.with_file_name("helper-import-effect");
+        for _ in 0..100 {
+            if marker.is_file() {
+                break;
+            }
+            thread::sleep(Duration::from_millis(20));
+        }
+        if matches!(
+            daemon.job_state(job_id).unwrap(),
+            Some(JobState::Running | JobState::Stopping)
+        ) {
+            daemon.stop_job(job_id).unwrap();
+        }
+    }
+    assert!(matches!(
+        outcome,
+        Err(EmberLabError::InvalidDispatchManifest { .. })
+    ));
+    assert!(!helper.with_file_name("helper-import-effect").exists());
+    let connection = Connection::open(root.join("ember-lab.sqlite3")).unwrap();
+    assert_eq!(
+        connection
+            .query_row("SELECT COUNT(*) FROM dispatch_tokens", [], |row| row
+                .get::<_, i64>(0))
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        connection
+            .query_row("SELECT COUNT(*) FROM jobs", [], |row| row.get::<_, i64>(0))
+            .unwrap(),
+        0
+    );
+    drop(connection);
+    drop(daemon);
+    remove_sandbox_when_unlocked(&root);
+}
+
+#[test]
+fn certified_training_profile_refuses_decoy_misordered_and_unbound_launchers() {
+    let cases = [
+        "decoy",
+        "relative",
+        "misordered",
+        "extra",
+        "missing-verifier",
+        "mismatched-verifier",
+    ];
+    for (index, case) in cases.into_iter().enumerate() {
+        let root = sandbox(&format!("certified-training-{case}"));
+        let dispatch_at = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+        let manifest = write_manifest(
+            &root,
+            &format!("certified-training-refuse-{index}"),
+            dispatch_at,
+        );
+        let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+        let readme = root.join("README.md");
+        fs::write(&readme, b"# certified training fixture\n").unwrap();
+        let launcher = root
+            .join("tools")
+            .join("ember-restart-3b")
+            .join("certified_train_launch.py");
+        fs::create_dir_all(launcher.parent().unwrap()).unwrap();
+        fs::write(&launcher, b"# daemon-bound fixture launcher\n").unwrap();
+        let dispatch_helper = root.join("scripts").join("ember_dispatch_token.py");
+        fs::create_dir_all(dispatch_helper.parent().unwrap()).unwrap();
+        fs::write(&dispatch_helper, b"# daemon-bound dispatch helper\n").unwrap();
+        let python = governed_python_executable();
+        payload["program"] = json!({"path":python,"sha256":sha256(&python)});
+        let foreign = root.join("foreign-launcher.py");
+        fs::write(&foreign, b"# foreign\n").unwrap();
+        payload["bindings"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"kind":"config","path":readme,"sha256":sha256(&readme)}));
+        payload["bindings"].as_array_mut().unwrap().push(
+            json!({"kind":"verifier","path":dispatch_helper,"sha256":sha256(&dispatch_helper)}),
+        );
+        if case != "missing-verifier" {
+            let bound = if case == "mismatched-verifier" {
+                &foreign
+            } else {
+                &launcher
+            };
+            payload["bindings"]
+                .as_array_mut()
+                .unwrap()
+                .push(json!({"kind":"verifier","path":bound,"sha256":sha256(bound)}));
+        }
+        payload["workload_profile"] = json!({
+            "profile_id": "certified_training",
+            "pinned_host_producers": [
+                {"kind":"training_data_loader","maximum_bytes":SIMULATED_PEAK_COMMIT_BYTES / 2},
+                {"kind":"checkpoint_writer","maximum_bytes":SIMULATED_PEAK_COMMIT_BYTES / 4},
+                {"kind":"telemetry_buffer","maximum_bytes":SIMULATED_PEAK_COMMIT_BYTES / 4}
+            ],
+            "requires_ui_responsiveness": false,
+            "cpu_rate_percent": CPU_RATE_PERCENT
+        });
+        let valid = vec![
+            launcher.to_string_lossy().into_owned(),
+            "--root".into(),
+            root.to_string_lossy().into_owned(),
+            "--certificate".into(),
+            root.join("config.json").to_string_lossy().into_owned(),
+            "--declaration-ledger".into(),
+            root.join("data-manifest.json")
+                .to_string_lossy()
+                .into_owned(),
+            "--run-spec".into(),
+            root.join("data-manifest.json")
+                .to_string_lossy()
+                .into_owned(),
+        ];
+        payload["args"] = json!(match case {
+            "decoy" => {
+                let mut args = vec!["--exact".into(), "fixture_dispatch_child".into()];
+                args.extend(valid);
+                args
+            }
+            "relative" => {
+                let mut args = valid.clone();
+                args[0] = "certified_train_launch.py".into();
+                args
+            }
+            "misordered" => {
+                let mut args = valid.clone();
+                args.swap(0, 2);
+                args
+            }
+            "extra" => {
+                let mut args = valid.clone();
+                args.extend(["--execute".into(), "true".into()]);
+                args
+            }
+            _ => valid,
+        });
+        payload["minimum_free_vram_bytes"] = json!(1);
+        fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+        let daemon = Daemon::open_with_certified_training(
+            &root.join("ember-lab.sqlite3"),
+            &python,
+            &launcher,
+            &dispatch_helper,
+        )
+        .unwrap();
+        let error = daemon
+            .dispatch_manifest_at_with_probes_and_host(
+                &manifest,
+                dispatch_at + 1,
+                |_root| Ok(1024),
+                || Ok(2048),
+                || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            )
+            .unwrap_err();
+        assert!(
+            matches!(error, EmberLabError::InvalidDispatchManifest { .. }),
+            "{case}: {error}"
+        );
+        let connection = Connection::open(root.join("ember-lab.sqlite3")).unwrap();
+        let rows: i64 = connection
+            .query_row("SELECT COUNT(*) FROM dispatch_tokens", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(rows, 0, "{case} minted a dispatch token");
+        drop(connection);
+        drop(daemon);
+        remove_sandbox_when_unlocked(&root);
+    }
 }
 
 #[test]

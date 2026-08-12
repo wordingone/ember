@@ -9,6 +9,7 @@
 // requested; certified-mode tests separately prove the one fixed consumer argv.
 
 import { afterEach, describe, it, expect } from "bun:test";
+import { createHash } from "node:crypto";
 import {
   CERTIFIED_LAUNCH_TIMEOUT_MS,
   PREFLIGHT_TIMEOUT_MS,
@@ -154,6 +155,9 @@ function writeCanonicalArtifacts(repoRoot: string): void {
     path.join(dir, "launch-authority-custody.json"),
     JSON.stringify({ schema_version: "ember-launch-authority-external-custody-v1" }) + "\n",
   );
+  const dispatchHelper = path.join(repoRoot, "scripts", "ember_dispatch_token.py");
+  fs.mkdirSync(path.dirname(dispatchHelper), { recursive: true });
+  fs.writeFileSync(dispatchHelper, "# daemon-bound dispatch helper fixture\n");
 }
 
 function makeExecuteCmd(
@@ -201,6 +205,177 @@ function assertOnlyPreflightSpawned(spawns: RecordedSpawn[], expectedCount = 1):
 }
 
 describe("train command", () => {
+  it("dispatches confirmed certified training through Ember Lab without a direct consumer spawn", async () => {
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-daemon-dispatch-"));
+    try {
+      fs.writeFileSync(path.join(scratch, "README.md"), "# fixture\n");
+      writeCanonicalArtifacts(scratch);
+      const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
+      const cmd = createTrainCommand({
+        repoRoot: scratch,
+        pythonBin: process.execPath,
+        env: { EMBER_LAB_PIPE: String.raw`\\.\pipe\ember-lab-test` },
+        sourceCommit: "a".repeat(40),
+        runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+        callLab: async ({ method, params }) => {
+          calls.push({ method, params });
+          if (method === "dispatch_manifest") {
+            const manifest = JSON.parse(params["manifest_utf8"] as string);
+            fs.mkdirSync(path.dirname(manifest.preflight_receipt), { recursive: true });
+            fs.writeFileSync(manifest.preflight_receipt, "preflight");
+            return {
+              pid: 4321,
+              preflight_receipt_path: manifest.preflight_receipt,
+              preflight_receipt_sha256: createHash("sha256").update("preflight").digest("hex"),
+            };
+          }
+          if (method === "job_state") return { state: "running" };
+          throw new Error(`unexpected method ${method}`);
+        },
+      });
+      const first = await cmd.execute("", mockCtx);
+      const offerId = first.message.match(/OFFER (\S+) action=train-launch/)?.[1];
+      expect(offerId).toBeDefined();
+      const confirmed = await cmd.execute(`confirm ${offerId}`, mockCtx);
+      expect(confirmed.exitCode, confirmed.message).toBeUndefined();
+      expect(calls[0]?.method).toBe("dispatch_manifest");
+      const manifest = JSON.parse(calls[0]?.params["manifest_utf8"] as string);
+      expect(manifest.workload_profile.profile_id).toBe("certified_training");
+      expect(manifest.args[0]).toEndWith("certified_train_launch.py");
+      const helperBinding = manifest.bindings.find(
+        (binding: { kind: string; path: string }) =>
+          binding.kind === "verifier" && binding.path.endsWith("scripts\\ember_dispatch_token.py"),
+      );
+      expect(helperBinding).toBeDefined();
+      expect(helperBinding.sha256).toBe(
+        createHash("sha256").update("# daemon-bound dispatch helper fixture\n").digest("hex"),
+      );
+    } finally {
+      fs.rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses an ambient relative Python executable before daemon dispatch", async () => {
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-relative-python-"));
+    try {
+      fs.writeFileSync(path.join(scratch, "README.md"), "# fixture\n");
+      writeCanonicalArtifacts(scratch);
+      const calls: string[] = [];
+      const cmd = createTrainCommand({
+        repoRoot: scratch,
+        pythonBin: "python",
+        env: { EMBER_LAB_PIPE: String.raw`\\.\pipe\ember-lab-test` },
+        sourceCommit: "a".repeat(40),
+        runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+        callLab: async ({ method }) => {
+          calls.push(method);
+          throw new Error("dispatch must not be reached");
+        },
+      });
+
+      const offer = await cmd.execute("", mockCtx);
+      const offerId = offer.message.match(/OFFER (\S+) action=train-launch/)?.[1];
+      expect(offerId).toBeDefined();
+      const confirmed = await cmd.execute(`confirm ${offerId}`, mockCtx);
+
+      expect(confirmed.exitCode).toBe(1);
+      expect(confirmed.message).toContain("absolute EMBER_PYTHON_BIN");
+      expect(calls).toEqual([]);
+    } finally {
+      fs.rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  it("stops and terminally rechecks a daemon job when its completion deadline expires", async () => {
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-daemon-timeout-"));
+    try {
+      fs.writeFileSync(path.join(scratch, "README.md"), "# fixture\n");
+      writeCanonicalArtifacts(scratch);
+      const calls: string[] = [];
+      let clockReads = 0;
+      let reportFailure!: (failure: CertifiedLaunchFailure) => void;
+      const reported = new Promise<CertifiedLaunchFailure>((resolve) => {
+        reportFailure = resolve;
+      });
+      const cmd = createTrainCommand({
+        repoRoot: scratch,
+        pythonBin: process.execPath,
+        env: { EMBER_LAB_PIPE: String.raw`\\.\pipe\ember-lab-test` },
+        sourceCommit: "a".repeat(40),
+        nowMs: () => clockReads++ === 0 ? 1_000 : Number.MAX_SAFE_INTEGER,
+        runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+        reportCertifiedLaunchFailure: reportFailure,
+        callLab: async ({ method, params }) => {
+          calls.push(method);
+          if (method === "dispatch_manifest") {
+            const manifest = JSON.parse(params["manifest_utf8"] as string);
+            fs.mkdirSync(path.dirname(manifest.preflight_receipt), { recursive: true });
+            fs.writeFileSync(manifest.preflight_receipt, "preflight");
+            return {
+              pid: 4321,
+              preflight_receipt_path: manifest.preflight_receipt,
+              preflight_receipt_sha256: createHash("sha256").update("preflight").digest("hex"),
+            };
+          }
+          if (method === "stop_job") return { stopped: true };
+          if (method === "job_state") return { state: "stopped" };
+          throw new Error(`unexpected method ${method}`);
+        },
+      });
+
+      const offer = await cmd.execute("", mockCtx);
+      const offerId = offer.message.match(/OFFER (\S+) action=train-launch/)?.[1];
+      const confirmed = await cmd.execute(`confirm ${offerId}`, mockCtx);
+      expect(confirmed.exitCode).toBeUndefined();
+      await reported;
+
+      expect(calls.filter((method) => method === "stop_job")).toHaveLength(1);
+      expect(calls.slice(-2)).toEqual(["stop_job", "job_state"]);
+      expect(calls).not.toContain("job_exit_code");
+    } finally {
+      fs.rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  it("cleans up a dispatched job before refusing a forged preflight response", async () => {
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-preflight-cleanup-"));
+    try {
+      fs.writeFileSync(path.join(scratch, "README.md"), "# fixture\n");
+      writeCanonicalArtifacts(scratch);
+      const calls: string[] = [];
+      const cmd = createTrainCommand({
+        repoRoot: scratch,
+        pythonBin: process.execPath,
+        env: { EMBER_LAB_PIPE: String.raw`\\.\pipe\ember-lab-test` },
+        sourceCommit: "a".repeat(40),
+        runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
+        callLab: async ({ method }) => {
+          calls.push(method);
+          if (method === "dispatch_manifest") {
+            return {
+              pid: 4321,
+              preflight_receipt_path: path.join(scratch, "foreign-preflight.json"),
+              preflight_receipt_sha256: "f".repeat(64),
+            };
+          }
+          if (method === "stop_job") return { stopped: true };
+          if (method === "job_state") return { state: "stopped" };
+          throw new Error(`unexpected method ${method}`);
+        },
+      });
+
+      const offer = await cmd.execute("", mockCtx);
+      const offerId = offer.message.match(/OFFER (\S+) action=train-launch/)?.[1];
+      const confirmed = await cmd.execute(`confirm ${offerId}`, mockCtx);
+
+      expect(confirmed.exitCode).toBe(1);
+      expect(confirmed.message).toContain("wrong preflight receipt path");
+      expect(calls).toEqual(["dispatch_manifest", "stop_job", "job_state"]);
+    } finally {
+      fs.rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
   it("keeps the event loop live while the certified consumer is running", async () => {
     let eventLoopTurnRan = false;
     setTimeout(() => {

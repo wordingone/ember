@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 
@@ -1728,7 +1729,7 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                     )
         self.assertEqual(calls, [])
 
-    def test_cli_scope_escalation_exits_before_runner_receipt(self) -> None:
+    def test_direct_cli_scope_escalation_is_refused_at_dispatch_before_runner_receipt(self) -> None:
         current_master = subprocess.run(
             ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
             check=True,
@@ -1774,10 +1775,7 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 2)
-            self.assertIn(
-                "scope exceeds certificate: active_expert_families",
-                result.stdout + result.stderr,
-            )
+            self.assertIn("EMBER_LAB_DISPATCH_REQUIRED", result.stdout + result.stderr)
             self.assertFalse(
                 (paths["custody_root"] / "runner-receipt.json").exists()
             )
@@ -4602,6 +4600,105 @@ class ResumeRelocationCustodyTests(_ResumeBundleMixin, unittest.TestCase):
                     paths,
                     f"resume_relocation_custody_root {pattern}",
                 )
+
+
+class DispatchAuthorityTests(unittest.TestCase):
+    @staticmethod
+    def _argv() -> list[str]:
+        return [
+            "--root", str(ROOT),
+            "--certificate", "missing-certificate.json",
+            "--declaration-ledger", "missing-ledger.json",
+            "--run-spec", "missing-run-spec.json",
+        ]
+
+    def _invoke_before_validation(
+        self,
+        module: object,
+        environment: dict[str, str],
+    ) -> tuple[int, str, mock.Mock]:
+        stderr = io.StringIO()
+        with (
+            mock.patch.dict(os.environ, environment, clear=True),
+            mock.patch.object(
+                module,
+                "validate_certified_request",
+                return_value=SimpleNamespace(artifact_root=pathlib.Path("artifacts")),
+            ) as validate,
+            mock.patch.object(module, "execute_validated_launch", return_value=0),
+            mock.patch.object(
+                module,
+                "_execution_receipt_path",
+                return_value=pathlib.Path("receipt.json"),
+            ),
+            contextlib.redirect_stderr(stderr),
+        ):
+            exit_code = module.main(self._argv())
+        return exit_code, stderr.getvalue(), validate
+
+    def test_direct_main_without_daemon_dispatch_refuses_before_certificate_access(self) -> None:
+        """Removing the pre-effect dispatch gate must make this test fail: a shell
+        caller must never reach certificate validation, even with syntactically
+        complete arguments."""
+
+        module = load_module()
+        exit_code, stderr, validate = self._invoke_before_validation(module, {})
+
+        self.assertEqual(exit_code, 2)
+        self.assertIn("EMBER_LAB_DISPATCH_REQUIRED", stderr)
+        validate.assert_not_called()
+
+    def test_self_consistent_fake_pipe_and_token_refuse_before_certificate_access(self) -> None:
+        """An env-only token check is a bypass: a direct caller can supply every
+        variable. The gate must authenticate and consume through the real daemon
+        before touching certificate inputs."""
+
+        module = load_module()
+        environment = {
+            "EMBER_LAB_PIPE": r"\\.\pipe\ember-lab-forged",
+            "EMBER_LAB_DISPATCH_JOB_ID": "forged-job",
+            "EMBER_LAB_DISPATCH_TOKEN": "a" * 64,
+            "EMBER_LAB_DISPATCH_DAEMON_PID": "1234",
+        }
+        exit_code, stderr, validate = self._invoke_before_validation(module, environment)
+
+        self.assertEqual(exit_code, 2)
+        self.assertIn("EMBER_LAB_DISPATCH_REFUSED", stderr)
+        validate.assert_not_called()
+
+    def test_authenticated_daemon_dispatch_consumes_before_certificate_validation(self) -> None:
+        """The admitted path consumes once before validation; moving consumption
+        after validation or omitting it must fail this ordered effect assertion."""
+
+        module = load_module()
+        effects: list[str] = []
+        with (
+            mock.patch.dict(os.environ, {}, clear=True),
+            mock.patch.object(
+                module,
+                "consume_ember_lab_dispatch",
+                side_effect=lambda root: effects.append(f"consume:{root}"),
+                create=True,
+            ),
+            mock.patch.object(
+                module,
+                "validate_certified_request",
+                side_effect=lambda *args: (
+                    effects.append("validate"),
+                    SimpleNamespace(artifact_root=pathlib.Path("artifacts")),
+                )[1],
+            ),
+            mock.patch.object(module, "execute_validated_launch", return_value=0),
+            mock.patch.object(
+                module,
+                "_execution_receipt_path",
+                return_value=pathlib.Path("receipt.json"),
+            ),
+        ):
+            exit_code = module.main(self._argv())
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(effects, [f"consume:{ROOT}", "validate"])
 
 
 if __name__ == "__main__":

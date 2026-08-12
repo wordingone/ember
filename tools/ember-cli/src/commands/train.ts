@@ -14,9 +14,15 @@
 import type { CommandContext, RegistryCommand } from "../types/command-types.ts";
 import { resolveEmberSourceRootOrCwd } from "../utils/repo-root.ts";
 import { publishActivityFeedInfrastructureFailure } from "../services/activity-feed.ts";
+import {
+  callEmberLab as callResidentEmberLab,
+  configuredEmberLabPipe,
+  type EmberLabRequestOptions,
+} from "../services/ember-lab-rpc.ts";
+import { emberStatePath } from "../utils/ember-state-root.ts";
+import { createHash, randomUUID } from "node:crypto";
 import { spawn, spawnSync } from "child_process";
-import { createHash } from "crypto";
-import { existsSync, readFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, statSync } from "fs";
 import { dirname, isAbsolute, join, relative, resolve } from "path";
 
 // ---------------------------------------------------------------------------
@@ -274,9 +280,13 @@ interface TrainCommandDeps {
     executable: string,
     args: string[],
   ) => CertifiedLaunchRunnerResult | Promise<CertifiedLaunchRunnerResult>;
+  callLab?: (options: EmberLabRequestOptions) => Promise<Record<string, unknown>>;
+  env?: NodeJS.ProcessEnv;
+  sourceCommit?: string;
+  nowMs?: () => number;
   /** Existing cockpit monitor-owned surface for receipt-less child failures. */
   reportCertifiedLaunchFailure?: (failure: CertifiedLaunchFailure) => void;
-  /** Python executable; defaults to EMBER_PYTHON_BIN env, else "python". */
+  /** Exact Python executable. Production daemon dispatch refuses ambient lookup. */
   pythonBin?: string;
   /** Ember repo root override; defaults to _defaultRepoRoot(ctx.cwd). */
   repoRoot?: string;
@@ -292,6 +302,173 @@ interface TrainCommandDeps {
    * evidence and is never a live launch-authority source.
    */
   launchAuthorityRoot?: string;
+}
+
+function sha256File(path: string): string {
+  return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
+
+function embeddedSourceCommit(): string {
+  const value = (globalThis as typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown }).__EMBER_BUILD_COMMIT__;
+  if (typeof value !== "string" || !/^[0-9a-f]{40}$/.test(value)) {
+    throw new Error("the Ember CLI build lacks one exact source commit identity");
+  }
+  return value;
+}
+
+async function _dispatchCertifiedTraining(
+  executable: string,
+  args: string[],
+  repoRoot: string,
+  deps: TrainCommandDeps,
+): Promise<CertifiedLaunchRunnerResult> {
+  const env = deps.env ?? process.env;
+  const callLab = deps.callLab ?? callResidentEmberLab;
+  const pipeName = configuredEmberLabPipe(env);
+  const sourceCommit = deps.sourceCommit ?? embeddedSourceCommit();
+  const clockNow = deps.nowMs ?? (() => Date.now());
+  const now = clockNow();
+  const jobId = `certified-training-${now}-${randomUUID()}`;
+  const custodyRoot = join(emberStatePath(repoRoot, "certified-training"), jobId);
+  const cacheRoot = join(custodyRoot, "cache");
+  mkdirSync(cacheRoot, { recursive: true });
+  if (!isAbsolute(executable)) {
+    throw new Error("certified training requires an absolute EMBER_PYTHON_BIN executable");
+  }
+  const program = resolve(executable);
+  const boundPaths = args.filter(
+    (value) => isAbsolute(value) && existsSync(value) && statSync(value).isFile(),
+  );
+  const dispatchHelperPath = join(repoRoot, "scripts", "ember_dispatch_token.py");
+  if (!existsSync(dispatchHelperPath) || !statSync(dispatchHelperPath).isFile()) {
+    throw new Error("certified training dispatch helper is unavailable");
+  }
+  const rootBindingPath = join(repoRoot, "README.md");
+  const maximumJobMemoryBytes = 64 * 1024 ** 3;
+  const simulatedPeakCommitBytes = 54 * 1024 ** 3;
+  const envBindings = Object.fromEntries(
+    ["TEMP", "TMP", "TORCH_HOME", "TRITON_CACHE_DIR", "CUDA_CACHE_PATH", "HF_HOME", "XDG_CACHE_HOME"].map((name) => {
+      const path = join(cacheRoot, name.toLowerCase());
+      mkdirSync(path, { recursive: true });
+      return [name, path];
+    }),
+  );
+  const manifest = {
+    schema_version: "ember-lab-dispatch-manifest-v3",
+    job_id: jobId,
+    source_commit: sourceCommit,
+    not_before_ms: now,
+    expires_at_ms: now + 60_000,
+    resource_lease: `certified-training:${jobId}`,
+    program: { path: program, sha256: sha256File(program) },
+    args,
+    workload_profile: {
+      profile_id: "certified_training",
+      pinned_host_producers: [
+        { kind: "training_data_loader", maximum_bytes: simulatedPeakCommitBytes / 2 },
+        { kind: "checkpoint_writer", maximum_bytes: simulatedPeakCommitBytes / 4 },
+        { kind: "telemetry_buffer", maximum_bytes: simulatedPeakCommitBytes / 4 },
+      ],
+      requires_ui_responsiveness: false,
+      cpu_rate_percent: 75,
+    },
+    env: { ...envBindings, EMBER_LAB_PIPE: pipeName },
+    bindings: [
+      { kind: "config", path: rootBindingPath, sha256: sha256File(rootBindingPath) },
+      { kind: "verifier", path: dispatchHelperPath, sha256: sha256File(dispatchHelperPath) },
+      ...boundPaths.map((path, index) => ({
+        kind: index === 0 ? "verifier" : "manifest",
+        path,
+        sha256: sha256File(path),
+      })),
+    ],
+    custody_root: custodyRoot,
+    storage_reserves: [{ root: custodyRoot, minimum_free_bytes: 1 }],
+    minimum_free_vram_bytes: 1,
+    required_available_maximum_commit_bytes: maximumJobMemoryBytes + 10 * 1024 ** 3,
+    maximum_job_memory_bytes: maximumJobMemoryBytes,
+    simulated_peak_commit_bytes: simulatedPeakCommitBytes,
+    preflight_receipt: join(custodyRoot, "dispatch-preflight.json"),
+  };
+  const manifestUtf8 = JSON.stringify(manifest);
+  const dispatched = await callLab({
+    pipeName,
+    method: "dispatch_manifest",
+    params: {
+      manifest_utf8: manifestUtf8,
+      manifest_sha256: createHash("sha256").update(manifestUtf8).digest("hex"),
+    },
+    timeoutMs: 5_000,
+  });
+  const pid = dispatched["pid"];
+  if (!Number.isSafeInteger(pid) || (pid as number) < 1) throw new Error("daemon dispatch lacks a positive pid");
+  const cleanupDispatchedJob = async (): Promise<void> => {
+    const stopped = await callLab({
+      pipeName,
+      method: "stop_job",
+      params: { job_id: jobId },
+      timeoutMs: 5_000,
+    });
+    if (stopped["stopped"] !== true) {
+      throw new Error("stop_job did not confirm certified training cleanup");
+    }
+    const settled = await callLab({
+      pipeName,
+      method: "job_state",
+      params: { job_id: jobId },
+      timeoutMs: 5_000,
+    });
+    if (!["stopped", "failed", "exited"].includes(String(settled["state"]))) {
+      throw new Error(`certified training job remained nonterminal in state ${String(settled["state"])}`);
+    }
+  };
+  try {
+    if (dispatched["preflight_receipt_path"] !== manifest.preflight_receipt) {
+      throw new Error("daemon dispatch returned the wrong preflight receipt path");
+    }
+    const preflightSha = dispatched["preflight_receipt_sha256"];
+    if (typeof preflightSha !== "string" || !/^[0-9a-f]{64}$/.test(preflightSha) || sha256File(manifest.preflight_receipt) !== preflightSha) {
+      throw new Error("daemon dispatch preflight receipt hash mismatch");
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    try {
+      await cleanupDispatchedJob();
+    } catch (cleanupError) {
+      const detail = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+      throw new Error(`${message}; cleanup failed: ${detail}`);
+    }
+    throw error;
+  }
+  const completion = (async (): Promise<LaunchPacketRunResult> => {
+    const deadline = now + CERTIFIED_LAUNCH_TIMEOUT_MS;
+    try {
+      while (clockNow() < deadline) {
+        const state = await callLab({ pipeName, method: "job_state", params: { job_id: jobId }, timeoutMs: 5_000 });
+        if (state["state"] === "exited") {
+          const terminal = await callLab({ pipeName, method: "job_exit_code", params: { job_id: jobId }, timeoutMs: 5_000 });
+          const status = terminal["exit_code"];
+          return { status: Number.isInteger(status) ? status as number : null, stdout: "" };
+        }
+        if (["failed", "stopped"].includes(String(state["state"]))) return { status: null, stdout: "" };
+        if (!["prepared", "running"].includes(String(state["state"]))) {
+          throw new Error(`certified training entered unknown state ${String(state["state"])}`);
+        }
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
+      }
+      throw new Error("certified training job timed out");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      try {
+        await cleanupDispatchedJob();
+      } catch (cleanupError) {
+        const detail = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+        throw new Error(`${message}; cleanup failed: ${detail}`);
+      }
+      return { status: null, stdout: "" };
+    }
+  })();
+  return { kind: "background", pid: pid as number, completion };
 }
 
 // ---------------------------------------------------------------------------
@@ -638,8 +815,7 @@ function _interpretCertifiedDispatch(
  */
 export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand {
   const runLaunchPacket = deps.runLaunchPacket ?? _defaultLaunchPacketRunner;
-  const runCertifiedLaunch =
-    deps.runCertifiedLaunch ?? _defaultCertifiedLaunchRunner;
+  const runCertifiedLaunch = deps.runCertifiedLaunch;
   const reportCertifiedLaunchFailure =
     deps.reportCertifiedLaunchFailure ?? ((failure: CertifiedLaunchFailure) => {
       publishActivityFeedInfrastructureFailure(
@@ -710,7 +886,7 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
 
         let certifiedResult: CertifiedLaunchRunnerResult;
         try {
-          certifiedResult = await runCertifiedLaunch(pythonBin, [
+          const certifiedArgs = [
             certifiedLaunchScriptPath,
             "--root",
             repoRoot,
@@ -722,12 +898,15 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
             offer.runSpec,
             "--custody-receipt-sha256",
             offer.custodyReceiptSha256,
-          ]);
-        } catch {
+          ];
+          certifiedResult = runCertifiedLaunch
+            ? await runCertifiedLaunch(pythonBin, certifiedArgs)
+            : await _dispatchCertifiedTraining(pythonBin, certifiedArgs, repoRoot, deps);
+        } catch (error) {
           return {
             type: "message" as const,
             message:
-              "error: certified train consumer could not be started; no training process was authorized.",
+              `error: certified train consumer could not be started; no training process was authorized: ${error instanceof Error ? error.message : String(error)}`,
             exitCode: 1,
           };
         }
@@ -861,7 +1040,7 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
           if (resolvedCustodyReceipt.status !== "ok") {
             throw new Error(_artifactFailureLine("custody receipt", resolvedCustodyReceipt));
           }
-          certifiedResult = await runCertifiedLaunch(pythonBin, [
+          const certifiedArgs = [
             certifiedLaunchScriptPath,
             "--root",
             repoRoot,
@@ -873,12 +1052,15 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
             trainArgs.runSpec!,
             "--custody-receipt-sha256",
             _sha256File(custodyReceipt),
-          ]);
-        } catch {
+          ];
+          certifiedResult = runCertifiedLaunch
+            ? await runCertifiedLaunch(pythonBin, certifiedArgs)
+            : await _dispatchCertifiedTraining(pythonBin, certifiedArgs, repoRoot, deps);
+        } catch (error) {
           return {
             type: "message" as const,
             message:
-              "error: certified train consumer could not be started; no training process was authorized.",
+              `error: certified train consumer could not be started; no training process was authorized: ${error instanceof Error ? error.message : String(error)}`,
             exitCode: 1,
           };
         }

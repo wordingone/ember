@@ -296,7 +296,7 @@ fn dispatch(daemon: &Daemon, request: WireRequest, client_pid: Option<u32>) -> (
                 Err(error) => (operation_error(id, error), false),
             }
         }
-        "consume_verifier_dispatch_token" => {
+        "consume_dispatch_token" => {
             let params: ConsumeDispatchTokenParams = match decode(&id, request.params) {
                 Ok(value) => value,
                 Err(response) => return (response, false),

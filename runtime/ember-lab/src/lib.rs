@@ -434,6 +434,7 @@ pub enum DispatchWorkloadProfileId {
     GovernedVertical,
     OwnedServing,
     EvidenceVerifier,
+    CertifiedTraining,
     Cockpit,
 }
 
@@ -611,12 +612,21 @@ pub struct Daemon {
     db: Arc<Mutex<Connection>>,
     ember_lab_binary_sha256: String,
     ember_lab_source_sha256: String,
+    certified_python: Option<CertifiedProgramIdentity>,
+    certified_launcher: Option<CertifiedProgramIdentity>,
+    certified_dispatch_helper: Option<CertifiedProgramIdentity>,
     #[cfg(windows)]
     live: Arc<Mutex<HashMap<String, RetainedProcess>>>,
     #[cfg(windows)]
     monitor_shutdown: OwnedHandle,
     #[cfg(windows)]
     monitor_ownership: Arc<RwLock<bool>>,
+}
+
+#[derive(Clone, Debug)]
+struct CertifiedProgramIdentity {
+    canonical_path: PathBuf,
+    sha256: String,
 }
 
 #[cfg(windows)]
@@ -988,6 +998,88 @@ type ScheduleRunRow = (
 
 impl Daemon {
     pub fn open(path: &Path) -> Result<Self> {
+        Self::open_inner(path, None, None, None)
+    }
+
+    pub fn open_with_certified_python(path: &Path, python: &Path) -> Result<Self> {
+        let canonical_path = fs::canonicalize(python)?;
+        if !canonical_path.is_file() {
+            return Err(EmberLabError::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "certified Python interpreter is not a regular file",
+            )));
+        }
+        let sha256 = hash_file(&canonical_path)?;
+        Self::open_inner(
+            path,
+            Some(CertifiedProgramIdentity {
+                canonical_path,
+                sha256,
+            }),
+            None,
+            None,
+        )
+    }
+
+    pub fn open_with_certified_training(
+        path: &Path,
+        python: &Path,
+        launcher: &Path,
+        dispatch_helper: &Path,
+    ) -> Result<Self> {
+        let python_path = fs::canonicalize(python)?;
+        let launcher_path = fs::canonicalize(launcher)?;
+        let dispatch_helper_path = fs::canonicalize(dispatch_helper)?;
+        if !python_path.is_file() || !launcher_path.is_file() || !dispatch_helper_path.is_file() {
+            return Err(EmberLabError::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "certified training interpreter, launcher, and dispatch helper must be regular files",
+            )));
+        }
+        if launcher_path.file_name().and_then(|name| name.to_str())
+            != Some("certified_train_launch.py")
+        {
+            return Err(EmberLabError::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "certified training launcher has the wrong canonical filename",
+            )));
+        }
+        if dispatch_helper_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            != Some("ember_dispatch_token.py")
+        {
+            return Err(EmberLabError::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "certified training dispatch helper has the wrong canonical filename",
+            )));
+        }
+        let python_sha256 = hash_file(&python_path)?;
+        let launcher_sha256 = hash_file(&launcher_path)?;
+        let dispatch_helper_sha256 = hash_file(&dispatch_helper_path)?;
+        Self::open_inner(
+            path,
+            Some(CertifiedProgramIdentity {
+                canonical_path: python_path,
+                sha256: python_sha256,
+            }),
+            Some(CertifiedProgramIdentity {
+                canonical_path: launcher_path,
+                sha256: launcher_sha256,
+            }),
+            Some(CertifiedProgramIdentity {
+                canonical_path: dispatch_helper_path,
+                sha256: dispatch_helper_sha256,
+            }),
+        )
+    }
+
+    fn open_inner(
+        path: &Path,
+        certified_python: Option<CertifiedProgramIdentity>,
+        certified_launcher: Option<CertifiedProgramIdentity>,
+        certified_dispatch_helper: Option<CertifiedProgramIdentity>,
+    ) -> Result<Self> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -1034,6 +1126,9 @@ impl Daemon {
             db: Arc::new(Mutex::new(conn)),
             ember_lab_binary_sha256,
             ember_lab_source_sha256,
+            certified_python,
+            certified_launcher,
+            certified_dispatch_helper,
             #[cfg(windows)]
             live: Arc::new(Mutex::new(HashMap::new())),
             #[cfg(windows)]
@@ -1777,6 +1872,15 @@ impl Daemon {
                     .into(),
             });
         }
+        validate_certified_training_binding_closure(
+            manifest.workload_profile.profile_id,
+            &program,
+            &manifest.args,
+            &verified_bindings,
+            self.certified_python.as_ref(),
+            self.certified_launcher.as_ref(),
+            self.certified_dispatch_helper.as_ref(),
+        )?;
         validate_resume_registry_binding_closure(&manifest.args, &verified_bindings)?;
         for key in [
             "TEMP",
@@ -1984,6 +2088,15 @@ impl Daemon {
                     .into(),
             });
         }
+        validate_certified_training_binding_closure(
+            manifest.workload_profile.profile_id,
+            &program,
+            &manifest.args,
+            &verified_bindings,
+            self.certified_python.as_ref(),
+            self.certified_launcher.as_ref(),
+            self.certified_dispatch_helper.as_ref(),
+        )?;
         validate_resume_registry_binding_closure(&manifest.args, &verified_bindings)?;
 
         const CACHE_KEYS: [&str; 7] = [
@@ -2165,7 +2278,11 @@ impl Daemon {
         for (key, value) in manifest.env {
             spec = spec.with_env(key, value);
         }
-        if profile_id == DispatchWorkloadProfileId::EvidenceVerifier {
+        if matches!(
+            profile_id,
+            DispatchWorkloadProfileId::EvidenceVerifier
+                | DispatchWorkloadProfileId::CertifiedTraining
+        ) {
             spec = spec.with_dispatch_token(dispatch_expires_at_ms)?;
         }
         let handle = match self.start_job(spec) {
@@ -5474,6 +5591,13 @@ fn validate_dispatch_workload_profile(
                 .into_iter()
                 .collect()
         }
+        DispatchWorkloadProfileId::CertifiedTraining => [
+            DispatchPinnedHostProducerKind::TrainingDataLoader,
+            DispatchPinnedHostProducerKind::CheckpointWriter,
+            DispatchPinnedHostProducerKind::TelemetryBuffer,
+        ]
+        .into_iter()
+        .collect(),
         DispatchWorkloadProfileId::Cockpit => [DispatchPinnedHostProducerKind::TelemetryBuffer]
             .into_iter()
             .collect(),
@@ -5496,6 +5620,147 @@ fn validate_dispatch_workload_profile(
     if governed_vertical != (profile.profile_id == DispatchWorkloadProfileId::GovernedVertical) {
         return Err(EmberLabError::InvalidDispatchManifest {
             detail: "dispatch workload profile does not match the governed-vertical argv".into(),
+        });
+    }
+    Ok(())
+}
+
+fn validate_certified_training_binding_closure(
+    profile_id: DispatchWorkloadProfileId,
+    program: &Path,
+    args: &[String],
+    bindings: &[(PathBuf, String, DispatchBindingKind)],
+    certified_python: Option<&CertifiedProgramIdentity>,
+    certified_launcher: Option<&CertifiedProgramIdentity>,
+    certified_dispatch_helper: Option<&CertifiedProgramIdentity>,
+) -> Result<()> {
+    const FLAGS: [&str; 4] = [
+        "--root",
+        "--certificate",
+        "--declaration-ledger",
+        "--run-spec",
+    ];
+    let names_certified_launcher = |raw: &str| {
+        Path::new(raw).file_name().and_then(|name| name.to_str())
+            == Some("certified_train_launch.py")
+    };
+    if profile_id != DispatchWorkloadProfileId::CertifiedTraining {
+        if args.iter().any(|arg| names_certified_launcher(arg)) {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "certified training launcher requires the certified_training profile"
+                    .into(),
+            });
+        }
+        return Ok(());
+    }
+    let certified_python =
+        certified_python.ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+            detail: "certified training requires a daemon-preregistered Python interpreter".into(),
+        })?;
+    if program != certified_python.canonical_path
+        || hash_file(program).ok().as_deref() != Some(certified_python.sha256.as_str())
+    {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "certified training program does not match the daemon-preregistered Python path and bytes"
+                .into(),
+        });
+    }
+    let certified_launcher =
+        certified_launcher.ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+            detail: "certified training requires a daemon-preregistered launcher".into(),
+        })?;
+    let certified_dispatch_helper =
+        certified_dispatch_helper.ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+            detail: "certified training requires a daemon-preregistered dispatch helper".into(),
+        })?;
+    if args.len() != 9
+        || !names_certified_launcher(&args[0])
+        || FLAGS
+            .iter()
+            .enumerate()
+            .any(|(index, flag)| args[1 + index * 2] != *flag)
+        || args
+            .iter()
+            .skip(1)
+            .step_by(2)
+            .any(|flag| !FLAGS.contains(&flag.as_str()))
+        || args
+            .iter()
+            .skip(2)
+            .step_by(2)
+            .any(|value| !Path::new(value).is_absolute())
+    {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "certified training requires the exact launcher/root/certificate/declaration-ledger/run-spec argv grammar".into(),
+        });
+    }
+    let launcher =
+        fs::canonicalize(&args[0]).map_err(|error| EmberLabError::InvalidDispatchManifest {
+            detail: format!("certified training launcher is unavailable: {error}"),
+        })?;
+    if !launcher.is_file() {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "certified training launcher is not a regular file".into(),
+        });
+    }
+    if launcher != certified_launcher.canonical_path
+        || hash_file(&launcher).ok().as_deref() != Some(certified_launcher.sha256.as_str())
+    {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail:
+                "certified training launcher does not match the daemon-preregistered path and bytes"
+                    .into(),
+        });
+    }
+    let source_root = bindings
+        .iter()
+        .filter(|(path, _, kind)| {
+            *kind == DispatchBindingKind::Config
+                && path.file_name().and_then(|name| name.to_str()) == Some("README.md")
+        })
+        .filter_map(|(path, _, _)| path.parent())
+        .find(|root| root.join("tools/ember-restart-3b/certified_train_launch.py") == launcher)
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+            detail: "certified training launcher is not rooted by the bound repository README"
+                .into(),
+        })?;
+    if fs::canonicalize(&args[2]).ok().as_deref() != Some(source_root) {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "certified training --root does not match the bound repository root".into(),
+        });
+    }
+    let dispatch_helper = fs::canonicalize(source_root.join("scripts/ember_dispatch_token.py"))
+        .map_err(|error| EmberLabError::InvalidDispatchManifest {
+            detail: format!("certified training dispatch helper is unavailable: {error}"),
+        })?;
+    if !dispatch_helper.is_file()
+        || dispatch_helper != certified_dispatch_helper.canonical_path
+        || hash_file(&dispatch_helper).ok().as_deref()
+            != Some(certified_dispatch_helper.sha256.as_str())
+    {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "certified training dispatch helper does not match the daemon-preregistered path and bytes"
+                .into(),
+        });
+    }
+    let verifier_matches = bindings.iter().any(|(path, sha256, kind)| {
+        *kind == DispatchBindingKind::Verifier
+            && *path == launcher
+            && matches!(verify_dispatch_file(path, sha256), Ok(verified) if verified == launcher)
+    });
+    if !verifier_matches {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "certified training launcher lacks its exact verifier binding".into(),
+        });
+    }
+    let helper_matches = bindings.iter().any(|(path, sha256, kind)| {
+        *kind == DispatchBindingKind::Verifier
+            && *path == dispatch_helper
+            && matches!(verify_dispatch_file(path, sha256), Ok(verified) if verified == dispatch_helper)
+    });
+    if !helper_matches {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "certified training dispatch helper lacks its exact verifier binding".into(),
         });
     }
     Ok(())
