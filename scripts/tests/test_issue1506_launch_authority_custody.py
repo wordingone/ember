@@ -13,6 +13,20 @@ import subprocess
 import pytest
 
 
+NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+
+def _git(*args: str, capture_output: bool = False) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        check=True,
+        capture_output=capture_output,
+        text=True,
+        shell=False,
+        creationflags=NO_WINDOW,
+    )
+
+
 MODULE_PATH = Path(__file__).parents[1] / "mint_launch_authority.py"
 SPEC = importlib.util.spec_from_file_location("mint_launch_authority", MODULE_PATH)
 assert SPEC is not None and SPEC.loader is not None
@@ -257,13 +271,44 @@ def test_existing_destination_is_never_overwritten(tmp_path: Path) -> None:
     assert sentinel.read_bytes() == b"keep"
 
 
+def test_concurrent_empty_destination_is_not_replaced(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _repo(tmp_path)
+    custody = tmp_path / "live-receipts"
+    custody.mkdir()
+    packet = _packet(tmp_path / "candidate")
+    destination = custody / "run-1506" / "launch-authority"
+    sentinel = destination / "foreign-owner"
+    atomic_publish = mint._atomic_publish_no_replace
+
+    def create_foreign_destination_at_publish(source: Path, target: Path) -> None:
+        assert target == destination
+        destination.mkdir(parents=True)
+        sentinel.write_bytes(b"foreign")
+        atomic_publish(source, target)
+
+    monkeypatch.setattr(mint, "_atomic_publish_no_replace", create_foreign_destination_at_publish)
+    with pytest.raises(mint.PublicationRefusal, match="DESTINATION_ALREADY_EXISTS"):
+        mint.publish_launch_authority(
+            repo_root=repo,
+            custody_root=custody,
+            run_id="run-1506",
+            validator=lambda *_: None,
+            **packet,
+        )
+
+    assert sentinel.read_bytes() == b"foreign"
+    assert set(destination.iterdir()) == {sentinel}
+    assert not list(custody.glob(".issue1506-*.staging"))
+
+
 def test_fresh_execute_leaves_the_repository_clean(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
-    subprocess.run(["git", "init", "-q", str(repo)], check=True)
-    subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
-    subprocess.run(
-        [
-            "git",
+    _git("init", "-q", str(repo))
+    _git("-C", str(repo), "add", ".")
+    _git(
             "-C",
             str(repo),
             "-c",
@@ -274,8 +319,6 @@ def test_fresh_execute_leaves_the_repository_clean(tmp_path: Path) -> None:
             "-q",
             "-m",
             "historical authority record",
-        ],
-        check=True,
     )
     custody = tmp_path / "live-receipts"
     custody.mkdir()
@@ -289,10 +332,5 @@ def test_fresh_execute_leaves_the_repository_clean(tmp_path: Path) -> None:
         **packet,
     )
 
-    status = subprocess.run(
-        ["git", "-C", str(repo), "status", "--porcelain"],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    status = _git("-C", str(repo), "status", "--porcelain", capture_output=True)
     assert status.stdout == ""

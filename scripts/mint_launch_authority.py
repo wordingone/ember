@@ -13,6 +13,8 @@ run-scoped external custody directory.  It does not execute training.
 from __future__ import annotations
 
 import argparse
+import ctypes
+import errno
 import hashlib
 import importlib.util
 import json
@@ -54,6 +56,54 @@ RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 class PublicationRefusal(ValueError):
     """A fail-closed refusal raised before live custody is changed."""
+
+
+def _atomic_publish_no_replace(source: Path, destination: Path) -> None:
+    """Atomically rename one directory while refusing an existing destination."""
+
+    if os.name == "nt":
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        move_file = kernel32.MoveFileExW
+        move_file.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32]
+        move_file.restype = ctypes.c_int
+        if move_file(str(source), str(destination), 0) != 0:
+            return
+        error = ctypes.get_last_error()
+        if error in {80, 183}:  # ERROR_FILE_EXISTS / ERROR_ALREADY_EXISTS
+            raise PublicationRefusal("DESTINATION_ALREADY_EXISTS")
+        raise OSError(error, os.strerror(error), str(destination))
+
+    libc = ctypes.CDLL(None, use_errno=True)
+    source_raw = os.fsencode(source)
+    destination_raw = os.fsencode(destination)
+    if sys.platform.startswith("linux"):
+        rename = getattr(libc, "renameat2", None)
+        if rename is None:
+            raise PublicationRefusal("ATOMIC_NO_REPLACE_UNSUPPORTED")
+        rename.argtypes = [
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_uint,
+        ]
+        rename.restype = ctypes.c_int
+        result = rename(-100, source_raw, -100, destination_raw, 1)
+    elif sys.platform == "darwin":
+        rename = getattr(libc, "renamex_np", None)
+        if rename is None:
+            raise PublicationRefusal("ATOMIC_NO_REPLACE_UNSUPPORTED")
+        rename.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+        rename.restype = ctypes.c_int
+        result = rename(source_raw, destination_raw, 4)
+    else:
+        raise PublicationRefusal("ATOMIC_NO_REPLACE_UNSUPPORTED")
+    if result == 0:
+        return
+    error = ctypes.get_errno()
+    if error in {errno.EEXIST, errno.ENOTEMPTY}:
+        raise PublicationRefusal("DESTINATION_ALREADY_EXISTS")
+    raise OSError(error, os.strerror(error), str(destination))
 
 
 def _sha256(path: Path) -> str:
@@ -182,12 +232,11 @@ def publish_launch_authority(
     _validate_sha_binding_map_bytes(source_bytes["sha-binding-map.json"])
     destination_parent = custody / run_id
     destination = destination_parent / "launch-authority"
-    if destination.exists():
-        raise PublicationRefusal("DESTINATION_ALREADY_EXISTS")
 
     historical_before = _historical_hashes(repo)
     staging = custody / f".issue1506-{run_id}-{uuid.uuid4().hex}.staging"
     published = False
+    destination_parent_claimed = False
     staging.mkdir(mode=0o700)
     try:
         for name in FILES:
@@ -211,8 +260,15 @@ def publish_launch_authority(
         ).encode("utf-8")
         (staging / "launch-authority-custody.json").write_bytes(receipt_bytes)
 
-        destination_parent.mkdir(mode=0o700)
-        os.replace(staging, destination)
+        # Claim the run-id namespace atomically.  This is the no-replace
+        # publication boundary: a pre-existing or concurrently created path
+        # makes mkdir fail, and we never remove a path we did not create.
+        try:
+            destination_parent.mkdir(mode=0o700)
+        except FileExistsError as error:
+            raise PublicationRefusal("DESTINATION_ALREADY_EXISTS") from error
+        destination_parent_claimed = True
+        _atomic_publish_no_replace(staging, destination)
         published = True
         reopened = {name: _sha256(destination / name) for name in FILES}
         if reopened != source_hashes:
@@ -228,7 +284,11 @@ def publish_launch_authority(
         shutil.rmtree(staging, ignore_errors=True)
         if published:
             shutil.rmtree(destination, ignore_errors=True)
-        if destination_parent.is_dir() and not any(destination_parent.iterdir()):
+        if (
+            destination_parent_claimed
+            and destination_parent.is_dir()
+            and not any(destination_parent.iterdir())
+        ):
             destination_parent.rmdir()
         raise
 
