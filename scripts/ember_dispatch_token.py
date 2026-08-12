@@ -38,10 +38,20 @@ byte of its RPC response is trusted, and the daemon's own self-reported
 identity in that response is cross-checked against the same canonical
 binary/source hashes -- a forged or unrelated pipe cannot pass either check.
 
-All blocking Win32 I/O runs in a short-lived, deadline-bounded subprocess
-(`_worker_main`, invoked as `--private-ember-lab-dispatch-rpc`) so a wedged
-daemon or a pipe that never responds cannot hang the caller. Windows-only,
-matching the daemon itself (`ember-lab.exe` is a Windows named-pipe server).
+The blocking Win32 pipe I/O runs in-process, on a deadline-bounded watchdog
+thread of the calling interpreter (see `_call_consume_rpc`) -- NOT in a
+spawned subprocess. This is load-bearing, not a style choice: the daemon
+authenticates dispatch-token consumption by comparing the named pipe's real
+client PID (`GetNamedPipeClientProcessId`, `runtime/ember-lab/src/rpc.rs`)
+against the PID it recorded when it spawned this job
+(`runtime/ember-lab/src/lib.rs::consume_dispatch_token`, `row.pid`). A
+helper subprocess connecting to the pipe on this process's behalf would
+present the subprocess's own PID, which is never the PID the daemon
+recorded -- every real dispatched call would refuse unconditionally. The
+watchdog thread bounds the blocking call with the same deadline a
+subprocess timeout would, without changing which OS process opens the
+pipe. Windows-only, matching the daemon itself (`ember-lab.exe` is a
+Windows named-pipe server).
 """
 
 from __future__ import annotations
@@ -49,8 +59,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import subprocess
-import sys
+import threading
 from pathlib import Path
 
 _REQUIRED_ENV: tuple[str, ...] = (
@@ -64,7 +73,6 @@ _PIPE_PREFIX = r"\\.\pipe\ember-lab-"
 _OPERATOR_PIPE_PREFIX = r"\\.\pipe\ember-operator-"
 _MAX_RPC_FRAME_BYTES = 64 * 1024
 _RPC_DEADLINE_SECONDS = 10
-_WORKER_FLAG = "--private-ember-lab-dispatch-rpc"
 
 # Mirrors `ember_lab_source_hash()` in runtime/ember-lab/src/lib.rs byte-for-byte:
 # same 7 relative files, same order, same length-prefixed sha256 digest.
@@ -158,7 +166,8 @@ def _validate_env_shape(values: dict[str, str]) -> tuple[str, str, str, int]:
 
 
 def _open_and_consume_direct(pipe_name: str, job_id: str, token: str, expected_server_pid: int) -> dict:
-    """Blocking Win32 pipe I/O. Only ever runs inside the bounded worker subprocess."""
+    """Blocking Win32 pipe I/O. Runs on the watchdog thread started by `_call_consume_rpc`,
+    inside this process -- never a subprocess (see module docstring for why)."""
     if os.name != "nt":
         raise OSError("ember-lab dispatch consumption is Windows-only")
     import ctypes
@@ -259,48 +268,36 @@ def _open_and_consume_direct(pipe_name: str, job_id: str, token: str, expected_s
     }
 
 
-def _worker_main(argv: list[str]) -> int:
-    if len(argv) != 4 or argv[0] != _WORKER_FLAG:
-        return 2
-    _, pipe_name, job_id, daemon_pid_raw = argv
-    token = os.environ.get("EMBER_LAB_DISPATCH_TOKEN", "")
-    try:
-        daemon_pid = int(daemon_pid_raw)
-        if daemon_pid <= 0 or not token:
-            return 2
-        envelope = _open_and_consume_direct(pipe_name, job_id, token, daemon_pid)
-        raw = json.dumps(envelope, separators=(",", ":")).encode("utf-8")
-        if len(raw) > _MAX_RPC_FRAME_BYTES:
-            return 2
-        sys.stdout.buffer.write(raw)
-        return 0
-    except (OSError, ValueError, UnicodeError):
-        return 2
-
-
 def _call_consume_rpc(pipe_name: str, job_id: str, token: str, daemon_pid: int) -> dict:
-    """Run the blocking pipe RPC in a bounded, deadline-limited worker subprocess."""
-    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
-    env = dict(os.environ)
-    env["EMBER_LAB_DISPATCH_TOKEN"] = token
-    try:
-        completed = subprocess.run(
-            [sys.executable, "-B", str(Path(__file__).resolve()), _WORKER_FLAG, pipe_name, job_id, str(daemon_pid)],
-            capture_output=True,
-            check=False,
-            shell=False,
-            env=env,
-            creationflags=creationflags,
-            timeout=_RPC_DEADLINE_SECONDS,
-        )
-    except subprocess.TimeoutExpired as error:
-        raise _refuse("EMBER_LAB_DISPATCH_REFUSED", "dispatch daemon did not respond before the deadline") from error
-    if completed.returncode != 0 or len(completed.stdout) > _MAX_RPC_FRAME_BYTES:
-        raise _refuse("EMBER_LAB_DISPATCH_REFUSED", "dispatch daemon pipe is unreachable or refused the request")
-    try:
-        envelope = json.loads(completed.stdout.decode("utf-8", errors="strict"))
-    except (json.JSONDecodeError, UnicodeError) as error:
-        raise _refuse("EMBER_LAB_DISPATCH_REFUSED", "dispatch daemon RPC returned a malformed envelope") from error
+    """Run the blocking pipe RPC in-process, on a deadline-bounded watchdog thread.
+
+    This must run as THIS process, not a helper it spawns: see the module docstring.
+    `_open_and_consume_direct` performs blocking Win32 `CreateFileW`/`ReadFile` calls
+    that can wedge if the daemon never responds, so it runs on a background thread that
+    this function bounds with `join(_RPC_DEADLINE_SECONDS)` -- the same deadline the
+    former subprocess-timeout design enforced, without moving the pipe connect to a
+    different OS process. If the thread is still alive after the deadline it is
+    abandoned (it is a daemon thread, so it cannot block interpreter exit) and this
+    call raises a timeout refusal.
+    """
+    outcome: dict[str, object] = {}
+
+    def _run() -> None:
+        try:
+            outcome["envelope"] = _open_and_consume_direct(pipe_name, job_id, token, daemon_pid)
+        except (OSError, ValueError, UnicodeError) as error:
+            outcome["error"] = error
+
+    worker = threading.Thread(target=_run, name="ember-lab-dispatch-rpc", daemon=True)
+    worker.start()
+    worker.join(_RPC_DEADLINE_SECONDS)
+    if worker.is_alive():
+        raise _refuse("EMBER_LAB_DISPATCH_REFUSED", "dispatch daemon did not respond before the deadline")
+    if "error" in outcome:
+        raise _refuse(
+            "EMBER_LAB_DISPATCH_REFUSED", "dispatch daemon pipe is unreachable or refused the request"
+        ) from outcome["error"]
+    envelope = outcome.get("envelope")
     if not isinstance(envelope, dict) or set(envelope) != {"result", "server_pid", "server_binary_sha256", "server_binary_path"}:
         raise _refuse("EMBER_LAB_DISPATCH_REFUSED", "dispatch daemon RPC returned an invalid envelope")
     return envelope
@@ -349,7 +346,3 @@ def consume_dispatch(repo_root: Path) -> None:
 
     for name in _REQUIRED_ENV:
         os.environ.pop(name, None)
-
-
-if __name__ == "__main__":
-    raise SystemExit(_worker_main(sys.argv[1:]))

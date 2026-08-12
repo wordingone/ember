@@ -5,18 +5,36 @@
 """Fail-closed tests for scripts/ember_dispatch_token.py (#1344).
 
 These pin the refusal-without-token / pass-with-token contract every
-inventoried Ember entry point relies on. The named-pipe RPC boundary
-(`_call_consume_rpc`) is mocked rather than driven against a live
+inventoried Ember entry point relies on. Most cases here mock the
+named-pipe RPC boundary (`_call_consume_rpc`) rather than driving a live
 `ember-lab serve` daemon -- exactly the boundary the pre-existing
 `tests/ember_restart_model/test_certified_train_launch.py::DispatchAuthorityTests`
 suite mocks for the same reason (a real dispatch daemon is not resident
 during unit tests). Everything on this side of that boundary --
 environment validation, canonical binary/source resolution, and daemon
 identity cross-checks -- runs for real.
+
+The one exception is
+`test_live_named_pipe_fixture_consumption_uses_true_client_pid`, which
+does NOT mock `_call_consume_rpc` / `_open_and_consume_direct`: it stands
+up a real Windows named pipe server (a fixture standing in for
+`ember-lab serve`) and drives `consume_dispatch()` through the actual
+`CreateFileW`/`ReadFile`/`WriteFile` pipe connect. That boundary is the
+one #1690's redo (issue #1344) fixes -- the prior implementation spawned
+a helper subprocess to do this connect, so the daemon's
+`GetNamedPipeClientProcessId` observed the helper's PID, never the PID
+the daemon recorded at spawn time, and every real dispatch refused
+unconditionally. Mocking `_call_consume_rpc` cannot catch that class of
+bug because it mocks away the exact boundary the bug lives on.
 """
 
 import hashlib
+import json
 import os
+import sys
+import threading
+import uuid
+from pathlib import Path
 
 import pytest
 
@@ -201,13 +219,168 @@ def test_daemon_did_not_confirm_consumption_refuses(monkeypatch, tmp_path):
         token.consume_dispatch(tmp_path)
 
 
-def test_worker_main_rejects_malformed_invocation():
-    assert token._worker_main([]) == 2
-    assert token._worker_main(["--wrong-flag", "a", "b", "c"]) == 2
-    assert token._worker_main([token._WORKER_FLAG, "pipe", "job"]) == 2
+class _FakeDaemonPipe:
+    """A real Windows named pipe server standing in for `ember-lab serve` for exactly
+    one request/response exchange.
+
+    Used only by `test_live_named_pipe_fixture_consumption_uses_true_client_pid` to
+    drive `consume_dispatch()` through the REAL, unmocked pipe-connect boundary
+    (`_call_consume_rpc` / `_open_and_consume_direct`) -- the boundary every other test
+    in this file mocks. Captures the OS-level PID Windows reports as the connecting
+    client via `GetNamedPipeClientProcessId`: exactly what
+    `runtime/ember-lab/src/rpc.rs::named_pipe_client_pid` reads on the real daemon, and
+    what `Daemon::consume_dispatch_token` (`runtime/ember-lab/src/lib.rs`) compares
+    against the PID it recorded when it spawned the job. If the RPC connect is ever
+    again routed through a spawned helper process instead of running in this process,
+    the observed PID diverges from `os.getpid()` and this test fails.
+    """
+
+    def __init__(self, pipe_name: str, response_result: dict):
+        self.pipe_name = pipe_name
+        self.response_result = response_result
+        self.observed_client_pid: int | None = None
+        self.error: BaseException | None = None
+        self._ready = threading.Event()
+        self._thread = threading.Thread(
+            target=self._serve_once, name="fake-ember-lab-daemon", daemon=True
+        )
+
+    def __enter__(self) -> "_FakeDaemonPipe":
+        self._thread.start()
+        if not self._ready.wait(timeout=5):
+            raise TimeoutError("fake daemon pipe fixture did not start listening in time")
+        return self
+
+    def __exit__(self, *_exc_info) -> None:
+        self._thread.join(timeout=5)
+
+    def _serve_once(self) -> None:
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        pipe_access_duplex = 0x00000003
+        pipe_type_byte = 0x00000000
+        pipe_wait = 0x00000000
+        error_pipe_connected = 535
+
+        create_named_pipe = kernel32.CreateNamedPipeW
+        create_named_pipe.argtypes = [
+            wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD,
+            wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
+        ]
+        create_named_pipe.restype = wintypes.HANDLE
+        connect_named_pipe = kernel32.ConnectNamedPipe
+        connect_named_pipe.argtypes = [wintypes.HANDLE, wintypes.LPVOID]
+        connect_named_pipe.restype = wintypes.BOOL
+        get_client_pid = kernel32.GetNamedPipeClientProcessId
+        get_client_pid.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.ULONG)]
+        get_client_pid.restype = wintypes.BOOL
+        read_file = kernel32.ReadFile
+        read_file.argtypes = [wintypes.HANDLE, wintypes.LPVOID, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD), wintypes.LPVOID]
+        read_file.restype = wintypes.BOOL
+        write_file = kernel32.WriteFile
+        write_file.argtypes = [wintypes.HANDLE, wintypes.LPCVOID, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD), wintypes.LPVOID]
+        write_file.restype = wintypes.BOOL
+        close_handle = kernel32.CloseHandle
+        close_handle.argtypes = [wintypes.HANDLE]
+        close_handle.restype = wintypes.BOOL
+
+        handle = create_named_pipe(
+            self.pipe_name, pipe_access_duplex, pipe_type_byte | pipe_wait,
+            1, 65536, 65536, 0, None,
+        )
+        invalid_handle = ctypes.c_void_p(-1).value
+        if handle == invalid_handle:
+            self.error = ctypes.WinError(ctypes.get_last_error())
+            self._ready.set()
+            return
+        self._ready.set()
+        try:
+            ok = connect_named_pipe(handle, None)
+            if not ok and ctypes.get_last_error() != error_pipe_connected:
+                raise ctypes.WinError(ctypes.get_last_error())
+
+            client_pid = wintypes.ULONG()
+            if not get_client_pid(handle, ctypes.byref(client_pid)):
+                raise ctypes.WinError(ctypes.get_last_error())
+            self.observed_client_pid = client_pid.value
+
+            raw = bytearray()
+            while b"\n" not in raw:
+                chunk = ctypes.create_string_buffer(4096)
+                read = wintypes.DWORD()
+                if not read_file(handle, chunk, len(chunk), ctypes.byref(read), None):
+                    raise ctypes.WinError(ctypes.get_last_error())
+                raw.extend(chunk.raw[: read.value])
+            request = json.loads(bytes(raw).split(b"\n", 1)[0].decode("utf-8"))
+
+            response = {
+                "jsonrpc": "2.0",
+                "id": request.get("id", 1),
+                "result": self.response_result,
+            }
+            payload = (json.dumps(response, separators=(",", ":")) + "\n").encode("utf-8")
+            written = wintypes.DWORD()
+            if not write_file(handle, payload, len(payload), ctypes.byref(written), None):
+                raise ctypes.WinError(ctypes.get_last_error())
+        except BaseException as error:  # surfaced to the test thread via self.error
+            self.error = error
+        finally:
+            close_handle(handle)
 
 
-def test_worker_main_rejects_missing_token_or_pid(monkeypatch):
-    monkeypatch.delenv("EMBER_LAB_DISPATCH_TOKEN", raising=False)
-    assert token._worker_main([token._WORKER_FLAG, VALID_PIPE, VALID_JOB_ID, "0"]) == 2
-    assert token._worker_main([token._WORKER_FLAG, VALID_PIPE, VALID_JOB_ID, "not-an-int"]) == 2
+@pytest.mark.skipif(sys.platform != "win32", reason="named-pipe RPC is Windows-only")
+def test_live_named_pipe_fixture_consumption_uses_true_client_pid(monkeypatch, tmp_path):
+    """Unmocked regression test for the #1344 redo (PR #1690).
+
+    Drives `consume_dispatch()` through the real pipe-connect boundary against a real
+    named pipe server fixture -- `_call_consume_rpc` and `_open_and_consume_direct` run
+    for real, nothing is monkeypatched past them. Only the canonical-binary/source
+    resolution is stubbed (an orthogonal concern: which build this test trusts, not how
+    it talks to the pipe) so a live `ember-lab.exe` build is not required to run this
+    suite.
+
+    Before the fix, `_call_consume_rpc` spawned a helper subprocess to perform this
+    exact connect, so the fixture would have observed the helper's PID here, never this
+    test process's own PID -- the same reason the real daemon always refused. This test
+    fails exactly the way the real daemon would have.
+    """
+    own_pid = os.getpid()
+    own_binary = Path(sys.executable).resolve(strict=True)
+    own_binary_sha256 = hashlib.sha256(own_binary.read_bytes()).hexdigest()
+    fixture_source_sha256 = "b" * 64
+
+    monkeypatch.setattr(token, "_canonical_ember_lab_binary", lambda repo_root: own_binary)
+    monkeypatch.setattr(
+        token, "_canonical_ember_lab_source_sha256", lambda repo_root: fixture_source_sha256
+    )
+
+    pipe_name = rf"\\.\pipe\ember-lab-test-live-{uuid.uuid4().hex}"
+    monkeypatch.setattr(
+        os,
+        "environ",
+        _env(EMBER_LAB_PIPE=pipe_name, EMBER_LAB_DISPATCH_DAEMON_PID=str(own_pid)),
+    )
+
+    response_result = {
+        "consumed": True,
+        "daemon_identity": {
+            "schema_version": token._RUNTIME_IDENTITY_SCHEMA,
+            "pid": own_pid,
+            "binary_sha256": own_binary_sha256,
+            "source_sha256": fixture_source_sha256,
+        },
+    }
+
+    with _FakeDaemonPipe(pipe_name, response_result) as daemon:
+        token.consume_dispatch(tmp_path)
+
+    assert daemon.error is None, f"fake daemon pipe fixture failed: {daemon.error!r}"
+    assert daemon.observed_client_pid == own_pid, (
+        "the named pipe's real OS client PID must be THIS process's PID; if it is not, "
+        "the pipe connect happened in a spawned helper process again and the real "
+        "dispatch daemon would refuse every consumption"
+    )
+    for name in token._REQUIRED_ENV:
+        assert name not in os.environ
