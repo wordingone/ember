@@ -848,6 +848,58 @@ describe("startActivityFeed — engine (real fs)", () => {
     10000,
   );
 
+  // #1455 REDO (self-check defect): the unterminated-line test above only exercises the
+  // trailing-partial size guard. A single COMPLETE (already self-terminated) oversized line
+  // landing in one tick took a different code path -- straight through the
+  // `for (const line of trimmedLines) onLine(line)` loop, which had no per-line size check at
+  // all. An unrecognized-shape row (no "event"/"pids" fields) hits formatWatchdogFallbackLine's
+  // verbatim renderer with no truncation, so the oversized content leaked unbounded into both
+  // recentLines and the on-disk ledger -- the exact "moved the leak downstream" failure the
+  // unterminated-line test guards against, just for this untested trigger.
+  it(
+    "drops a single complete oversized line that lands self-terminated in one tick, never rendering it verbatim",
+    async () => {
+      const deps = baseDeps();
+      handle = startActivityFeed(deps);
+
+      // Well past MAX_LINE_BUFFER_BYTES, unrecognized shape (no "event"/"pids") so a naive fix
+      // would fall through to the verbatim fallback renderer.
+      const oversizedNote = "Z".repeat(MAX_LINE_BUFFER_BYTES * 3);
+      const oversizedRow = JSON.stringify({ note: oversizedNote });
+      fs.writeFileSync(deps.restartLogPath, `${oversizedRow}\n`);
+      await sleep(1300);
+
+      const state = getActivityFeedState();
+      const watchdogLines = state.recentLines.filter((l) => l.source === "watchdog");
+
+      // Must never surface -- not verbatim, not truncated, not as a fallback render. Nothing was
+      // rendered at all this tick, so the ledger file itself may not exist yet -- that absence is
+      // itself proof of no leak, stronger than a content check on a file that was never written.
+      expect(watchdogLines.some((l) => l.text.includes("Z".repeat(100)))).toBe(false);
+      expect(fs.existsSync(deps.ledgerPath)).toBe(false);
+
+      // A single complete oversized line is an instant per-line drop, not the sticky
+      // discard-until-newline recovery -- the very next well-formed row must render immediately,
+      // proving the stream never got stuck waiting to resync.
+      const followUpRow = JSON.stringify({
+        ts: new Date().toISOString(),
+        target: "cockpit",
+        event: "relaunch",
+        relaunchPid: 2000,
+      });
+      fs.appendFileSync(deps.restartLogPath, `${followUpRow}\n`);
+      await sleep(1300);
+
+      // Now that the ledger exists (from the follow-up render), confirm it never picked up the
+      // dropped oversized content either.
+      expect(fs.readFileSync(deps.ledgerPath, "utf-8")).not.toContain("Z".repeat(100));
+      expect(
+        getActivityFeedState().recentLines.some((l) => l.source === "watchdog" && l.text.includes("2000")),
+      ).toBe(true);
+    },
+    10000,
+  );
+
   it(
     "baselines the restart log at boot and never replays completed rows after a cockpit restart",
     async () => {

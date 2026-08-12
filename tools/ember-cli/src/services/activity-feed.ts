@@ -576,6 +576,10 @@ export interface PollTailResult {
   byteOffsetAfter: number;
   lineCount: number;
   capped: boolean;
+  /** #1455 REDO: complete lines dropped this tick for exceeding MAX_LINE_BUFFER_BYTES (mirrors
+   *  telemetry-watch.ts's oversizedPartialLinesDropped diagnostic). Distinct from the trailing
+   *  partial's own oversize-drop, which flips state.discardUntilNewline instead. */
+  oversizedLinesDropped: number;
 }
 
 /**
@@ -643,6 +647,7 @@ async function pollTail(
         byteOffsetAfter: state.byteOffset,
         lineCount: 0,
         capped: false,
+        oversizedLinesDropped: 0,
       };
     }
     text = text.slice(newline + 1);
@@ -653,7 +658,24 @@ async function pollTail(
   state.lineBuffer = "";
   const rawLines = text.split("\n");
   const partial = rawLines.pop() ?? "";
-  const trimmedLines = rawLines.map((l) => l.trim()).filter((l) => l.length > 0);
+
+  // #1455 REDO: the trailing partial above was already capped at MAX_LINE_BUFFER_BYTES, but this
+  // loop over COMPLETE lines had no size guard at all -- a single already-terminated oversized
+  // line (e.g. one huge JSON row landing in one tick) sailed straight through to onLine and on to
+  // the ledger/recentLines unbounded, the same leak class this file's discard-until-newline
+  // recovery exists to prevent for the partial case. Mirrors telemetry-watch.ts's
+  // consumeNewBytes: check each complete line's byte length BEFORE trimming, drop (never
+  // process) any line over the cap.
+  let oversizedLinesDropped = 0;
+  const trimmedLines: string[] = [];
+  for (const line of rawLines) {
+    if (Buffer.byteLength(line, "utf-8") > MAX_LINE_BUFFER_BYTES) {
+      oversizedLinesDropped += 1;
+      continue;
+    }
+    const trimmed = line.trim();
+    if (trimmed.length > 0) trimmedLines.push(trimmed);
+  }
 
   if (Buffer.byteLength(partial, "utf-8") > MAX_LINE_BUFFER_BYTES) {
     state.discardUntilNewline = true;
@@ -674,6 +696,7 @@ async function pollTail(
     byteOffsetAfter: state.byteOffset,
     lineCount: trimmedLines.length,
     capped,
+    oversizedLinesDropped,
   };
 }
 
