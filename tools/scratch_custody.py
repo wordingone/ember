@@ -146,6 +146,8 @@ def _git(root: Path, *args: str) -> str | None:
             check=True,
             capture_output=True,
             text=True,
+            shell=False,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
     except (OSError, subprocess.CalledProcessError):
         return None

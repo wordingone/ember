@@ -13,6 +13,27 @@ import pytest
 from tools import scratch_custody
 
 
+def _run_hidden(*args, **kwargs):
+    kwargs.setdefault("shell", False)
+    kwargs.setdefault("creationflags", getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    return subprocess.run(*args, **kwargs)
+
+
+def test_git_child_is_explicitly_shell_free_and_hidden(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
+    observed: dict[str, object] = {}
+
+    def capture_run(*args, **kwargs):
+        observed.update(kwargs)
+        return subprocess.CompletedProcess(args[0], 0, stdout="ok\n", stderr="")
+
+    monkeypatch.setattr(scratch_custody.subprocess, "run", capture_run)
+    assert scratch_custody._git(tmp_path, "rev-parse", "HEAD") == "ok"
+    assert observed["shell"] is False
+    assert observed["creationflags"] == getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+
 def _fixture(tmp_path: Path) -> Path:
     root = tmp_path / "repo"
     (root / ".git").mkdir(parents=True)
@@ -21,11 +42,11 @@ def _fixture(tmp_path: Path) -> Path:
     (scratch / "run-a" / "result.bin").write_bytes(b"abc")
     (scratch / "run-b").mkdir()
     (scratch / "run-b" / "notes.txt").write_text("owned\n", encoding="utf-8")
-    subprocess.run(["git", "-C", str(root), "init", "-q"], check=True, capture_output=True)
-    subprocess.run(["git", "-C", str(root), "config", "user.email", "test@example.invalid"], check=True)
-    subprocess.run(["git", "-C", str(root), "config", "user.name", "Issue 1450 Test"], check=True)
-    subprocess.run(["git", "-C", str(root), "add", "scratch"], check=True)
-    subprocess.run(["git", "-C", str(root), "commit", "-qm", "fixture"], check=True)
+    _run_hidden(["git", "-C", str(root), "init", "-q"], check=True, capture_output=True)
+    _run_hidden(["git", "-C", str(root), "config", "user.email", "test@example.invalid"], check=True)
+    _run_hidden(["git", "-C", str(root), "config", "user.name", "Issue 1450 Test"], check=True)
+    _run_hidden(["git", "-C", str(root), "add", "scratch"], check=True)
+    _run_hidden(["git", "-C", str(root), "commit", "-qm", "fixture"], check=True)
     return root
 
 
@@ -143,7 +164,7 @@ def test_cli_disposition_refuses_malformed_manifest_without_writing_output(
     annotations_path.write_text("{}", encoding="utf-8")
     output = tmp_path / "disposition.json"
 
-    result = subprocess.run(
+    result = _run_hidden(
         [
             sys.executable,
             str(Path(__file__).resolve().parents[1] / "tools" / "scratch_custody.py"),
@@ -182,7 +203,7 @@ def test_cli_guard_has_no_success_on_tampered_root(tmp_path: Path):
     manifest_path = tmp_path / "manifest.json"
     assert scratch_custody.write_manifest(root, manifest_path, label="issue-1450", max_bytes=1024) == manifest_path
     (root / "scratch" / "run-b" / "notes.txt").write_text("drift\n", encoding="utf-8")
-    result = subprocess.run(
+    result = _run_hidden(
         [
             sys.executable,
             str(Path(__file__).resolve().parents[1] / "tools" / "scratch_custody.py"),
@@ -205,7 +226,7 @@ def test_cli_census_refuses_nested_root_without_writing_output(tmp_path: Path):
     (nested / "scratch" / "decoy").mkdir(parents=True)
     (nested / "scratch" / "decoy" / "result.bin").write_bytes(b"decoy")
     output = tmp_path / "nested-manifest.json"
-    result = subprocess.run(
+    result = _run_hidden(
         [
             sys.executable,
             str(Path(__file__).resolve().parents[1] / "tools" / "scratch_custody.py"),
@@ -373,7 +394,7 @@ def test_cli_writes_and_guards_closed_disposition_without_move_authority(tmp_pat
     annotations_path.write_text("{}", encoding="utf-8")
     tool = str(Path(__file__).resolve().parents[1] / "tools" / "scratch_custody.py")
 
-    write_result = subprocess.run(
+    write_result = _run_hidden(
         [
             sys.executable, tool, "disposition", "--manifest", str(manifest_path),
             "--annotations", str(annotations_path), "--output", str(disposition_path),
@@ -384,7 +405,7 @@ def test_cli_writes_and_guards_closed_disposition_without_move_authority(tmp_pat
     assert write_result.returncode == 0, write_result.stderr
     assert write_result.stdout.strip() == "DISPOSITION_WRITTEN"
 
-    guard_result = subprocess.run(
+    guard_result = _run_hidden(
         [
             sys.executable, tool, "disposition-guard", "--manifest", str(manifest_path),
             "--disposition", str(disposition_path),
@@ -400,7 +421,7 @@ def test_cli_writes_and_guards_closed_disposition_without_move_authority(tmp_pat
     written["entries"][0]["disposition"] = "MOVE_READY"
     written["disposition_sha256"] = scratch_custody.disposition_sha256(written)
     disposition_path.write_text(json.dumps(written), encoding="utf-8")
-    refused = subprocess.run(
+    refused = _run_hidden(
         [
             sys.executable, tool, "disposition-guard", "--manifest", str(manifest_path),
             "--disposition", str(disposition_path),
@@ -455,7 +476,7 @@ def test_disposition_contract_documents_no_move_authority_and_closed_schema():
 def test_public_disposition_satisfies_repository_receipt_floor():
     repo = Path(__file__).resolve().parents[1]
     receipt = repo / "receipts" / "issue-1450" / "live-scratch-disposition-v1.json"
-    result = subprocess.run(
+    result = _run_hidden(
         [sys.executable, str(repo / "scripts" / "receipt_check.py"), "--file", str(receipt)],
         cwd=repo,
         text=True,
