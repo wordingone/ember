@@ -55,6 +55,19 @@ fn sandbox(name: &str) -> PathBuf {
     path
 }
 
+fn remove_sandbox_when_unlocked(path: &Path) {
+    for _ in 0..50 {
+        match fs::remove_dir_all(path) {
+            Ok(()) => break,
+            Err(error) if error.raw_os_error() == Some(32) => {
+                thread::sleep(Duration::from_millis(20));
+            }
+            Err(error) => panic!("failed to remove dispatch sandbox: {error}"),
+        }
+    }
+    assert!(!path.exists(), "dispatch sandbox remained locked");
+}
+
 fn sha256(path: &Path) -> String {
     format!("{:x}", Sha256::digest(fs::read(path).unwrap()))
 }
@@ -62,6 +75,11 @@ fn sha256(path: &Path) -> String {
 #[test]
 fn fixture_dispatch_child() {
     if std::env::var("EMBER_LAB_DISPATCH_FIXTURE_CHILD").as_deref() == Ok("1") {
+        if let Ok(path) = std::env::var("EMBER_LAB_DISPATCH_TOKEN_CAPTURE") {
+            let job_id = std::env::var("EMBER_LAB_DISPATCH_JOB_ID").unwrap();
+            let token = std::env::var("EMBER_LAB_DISPATCH_TOKEN").unwrap();
+            fs::write(path, format!("{job_id}\n{token}\n")).unwrap();
+        }
         if let Ok(raw) = std::env::var("EMBER_LAB_DISPATCH_ALLOCATE_BYTES") {
             let bytes: usize = raw.parse().unwrap();
             let mut allocation = vec![0u8; bytes];
@@ -79,6 +97,13 @@ fn write_manifest(root: &Path, job_id: &str, not_before_ms: i64) -> PathBuf {
     fs::create_dir_all(&custody).unwrap();
     let mut env = BTreeMap::new();
     env.insert("EMBER_LAB_DISPATCH_FIXTURE_CHILD", "1".to_string());
+    env.insert(
+        "EMBER_LAB_DISPATCH_TOKEN_CAPTURE",
+        custody
+            .join("dispatch-token.txt")
+            .to_string_lossy()
+            .into_owned(),
+    );
     for name in [
         "TEMP",
         "TMP",
@@ -125,7 +150,7 @@ fn write_manifest(root: &Path, job_id: &str, not_before_ms: i64) -> PathBuf {
         ],
             "custody_root": custody,
             "storage_reserves": [{"root": root, "minimum_free_bytes": 1}],
-        "minimum_free_vram_bytes": 1,
+        "minimum_free_vram_bytes": 0,
         "required_available_maximum_commit_bytes": DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES,
         "maximum_job_memory_bytes": MAXIMUM_JOB_MEMORY_BYTES,
         "simulated_peak_commit_bytes": SIMULATED_PEAK_COMMIT_BYTES,
@@ -135,6 +160,116 @@ fn write_manifest(root: &Path, job_id: &str, not_before_ms: i64) -> PathBuf {
     )
     .unwrap();
     manifest
+}
+
+#[test]
+fn evidence_verifier_dispatch_token_is_bound_to_owned_child_and_consumed_once() {
+    let root = sandbox("dispatch-token");
+    let dispatch_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    let manifest = write_manifest(&root, "dispatch-token-job", dispatch_at);
+    let capture = root.join("custody").join("dispatch-token.txt");
+    let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
+    let outcome = daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            dispatch_at + 1,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap();
+    for _ in 0..100 {
+        if capture.is_file() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    let captured = fs::read_to_string(&capture).unwrap();
+    let mut lines = captured.lines();
+    let job_id = lines.next().unwrap();
+    let token = lines.next().unwrap();
+    assert_eq!(job_id, "dispatch-token-job");
+    assert_eq!(token.len(), 64);
+
+    let wrong_pid = daemon
+        .consume_dispatch_token(job_id, token, outcome.handle.pid.saturating_add(1))
+        .unwrap_err();
+    assert!(matches!(
+        wrong_pid,
+        EmberLabError::DispatchTokenRefused { .. }
+    ));
+    let forged = daemon
+        .consume_dispatch_token(job_id, &"0".repeat(64), outcome.handle.pid)
+        .unwrap_err();
+    assert!(matches!(forged, EmberLabError::DispatchTokenRefused { .. }));
+    daemon
+        .consume_dispatch_token(job_id, token, outcome.handle.pid)
+        .unwrap();
+    let replay = daemon
+        .consume_dispatch_token(job_id, token, outcome.handle.pid)
+        .unwrap_err();
+    assert!(matches!(replay, EmberLabError::DispatchTokenRefused { .. }));
+
+    daemon.stop_job(job_id).unwrap();
+    drop(daemon);
+    remove_sandbox_when_unlocked(&root);
+}
+
+#[test]
+fn evidence_verifier_dispatch_is_cpu_only_and_rejects_caller_token_authority() {
+    let root = sandbox("dispatch-token-cpu-only");
+    let dispatch_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    let manifest = write_manifest(&root, "dispatch-token-cpu-only-job", dispatch_at);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["minimum_free_vram_bytes"] = json!(0);
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
+    let _outcome = daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            dispatch_at + 1,
+            |_root| Ok(1024),
+            || panic!("evidence verification must not probe GPU state"),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap();
+    daemon.stop_job("dispatch-token-cpu-only-job").unwrap();
+
+    let caller_root = sandbox("dispatch-token-caller-authority");
+    let caller_manifest = write_manifest(&caller_root, "dispatch-token-caller-job", dispatch_at);
+    let mut caller: Value = serde_json::from_slice(&fs::read(&caller_manifest).unwrap()).unwrap();
+    caller["env"]["EMBER_LAB_DISPATCH_TOKEN"] = json!("0".repeat(64));
+    fs::write(&caller_manifest, serde_json::to_vec(&caller).unwrap()).unwrap();
+    let caller_daemon = Daemon::open(&caller_root.join("ember-lab.sqlite3")).unwrap();
+    let error = caller_daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &caller_manifest,
+            dispatch_at + 1,
+            |_root| Ok(1024),
+            || panic!("caller token must refuse before probes"),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        EmberLabError::InvalidDispatchManifest { .. }
+    ));
+    assert_eq!(
+        caller_daemon
+            .job_state("dispatch-token-caller-job")
+            .unwrap(),
+        None
+    );
+    drop(caller_daemon);
+    drop(daemon);
+    remove_sandbox_when_unlocked(&root);
+    remove_sandbox_when_unlocked(&caller_root);
 }
 
 #[test]
@@ -189,8 +324,8 @@ fn dispatch_manifest_hashes_preflights_and_governs_spawn() {
         receipt["workload_profile"]["cpu_rate_percent"],
         CPU_RATE_PERCENT
     );
-    assert_eq!(receipt["vram_reserve"]["minimum_free_bytes"], 1);
-    assert_eq!(receipt["vram_reserve"]["available_free_bytes"], 2048);
+    assert_eq!(receipt["vram_reserve"]["minimum_free_bytes"], 0);
+    assert_eq!(receipt["vram_reserve"]["available_free_bytes"], 0);
     assert_eq!(
         receipt["host_commit"]["required_available_maximum_commit_bytes"],
         DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES
@@ -376,11 +511,11 @@ fn receipt_publication_failure_is_typed_and_an_identical_retry_recovers_without_
     let first = daemon.dispatch_manifest_at_with_probes_and_host(
         &manifest,
         10_001,
-        |_root| Ok(1024),
-        || {
+        |_root| {
             fs::create_dir(&receipt_path).unwrap();
-            Ok(2048)
+            Ok(1024)
         },
+        || Ok(2048),
         || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
     );
     assert!(matches!(
@@ -868,6 +1003,15 @@ fn dispatch_manifest_fails_closed_before_spawn_on_time_hash_and_storage() {
     ] {
         let root = sandbox(name);
         let manifest = write_manifest(&root, &format!("dispatch-{name}"), 10_000);
+        if name == "vram" {
+            let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+            payload["workload_profile"]["profile_id"] = json!("cockpit");
+            payload["workload_profile"]["pinned_host_producers"][0]["kind"] =
+                json!("telemetry_buffer");
+            payload["workload_profile"]["requires_ui_responsiveness"] = json!(true);
+            payload["minimum_free_vram_bytes"] = json!(1);
+            fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+        }
         if corrupt_binding {
             fs::write(root.join("config.json"), b"changed").unwrap();
         }

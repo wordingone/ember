@@ -4,25 +4,13 @@
 
 // commands/verify-training.test.ts — unit tests for the /verify-training command.
 //
-// runProcess/readReceipt are injected so most of these tests never spawn the real ember-lab
-// binary or touch the filesystem; the Rust implementation itself is covered separately in
-// runtime/ember-lab's own test suite (cargo test), including the byte-parity golden fixture.
-//
-// ONE exception, load-bearing (rev-1400 finding): "still reads and renders the receipt on a
-// genuine completed-red run" drives the REAL compiled ember-lab.exe through a REAL FAIL case
-// (a certificate with a deliberately wrong closure_sha256/public_master_sha) instead of
-// fabricating an error object by hand. The original version of this test hand-built an Error
-// whose .message matched a regex the production code used to classify a completed-red run --
-// but Node's real child_process rejection carries the exit code as a NUMBER on `.code`, and
-// its real .message is just "Command failed: <cmd>\n", which never matched that regex. The
-// hand-fabricated test therefore passed while every genuine FAIL in production rendered as an
-// infra crash. Driving the real binary is the only way this shape of bug cannot recur here:
-// the test's error object is whatever Node's child_process module actually produces, not a
-// guess at its shape.
+// The command's daemon RPC and receipt reader are injected. No test-only direct process seam
+// exists: every successful path must cross the same dispatch_manifest boundary as production.
 
 import { describe, it, expect } from "bun:test";
-import { join, resolve } from "node:path";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { dirname, join } from "node:path";
+import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import {
   createVerifyTrainingCommand,
@@ -30,9 +18,6 @@ import {
   renderVerifyTrainingResult,
 } from "./verify-training.ts";
 import type { CommandContext } from "../types/command-types.ts";
-
-// tools/ember-cli/src/commands/ -> tools/ember-cli/src -> tools/ember-cli -> tools -> repo root
-const REPO_ROOT = resolve(import.meta.dir, "..", "..", "..", "..");
 
 const mockCtx: CommandContext = { sessionId: "test-session", mode: "test", cwd: "/repo" };
 
@@ -120,127 +105,177 @@ describe("renderVerifyTrainingResult", () => {
 // ---------------------------------------------------------------------------
 
 describe("createVerifyTrainingCommand", () => {
-  it("invokes ember-lab with exactly --root/--receipt and no --certificate when none is given", async () => {
-    let capturedArgs: string[] | undefined;
-    const command = createVerifyTrainingCommand({
-      repoRoot: "/repo",
-      emberLabBinary: "/repo/runtime/ember-lab/target/release/ember-lab.exe",
-      runProcess: async (binary, args) => {
-        capturedArgs = args;
-        return { stdout: "", stderr: "" };
-      },
-      readReceipt: () => PASS_RECEIPT as any,
-    });
-    const result = await command.execute("", mockCtx);
-    expect(capturedArgs).toEqual([
-      "verify-training",
-      "--root",
-      "/repo",
-      "--receipt",
-      join("/repo", ".ember", "verify-training-receipt.json"),
-    ]);
-    expect(result && "message" in result ? result.message : "").toContain("verify-training: PASS");
-    expect(result && "exitCode" in result ? result.exitCode : undefined).toBeUndefined();
+  it("dispatches one CPU-only EvidenceVerifier job through the resident daemon without a direct process", async () => {
+    const root = mkdtempSync(join(tmpdir(), "verify-training-dispatch-"));
+    try {
+      const binary = join(root, "runtime", "ember-lab", "target", "release", "ember-lab.exe");
+      const cargo = join(root, "runtime", "ember-lab", "Cargo.toml");
+      const closure = join(root, "manifests", "training-dependency-closure.json");
+      mkdirSync(join(root, "runtime", "ember-lab", "target", "release"), { recursive: true });
+      mkdirSync(join(root, "manifests"), { recursive: true });
+      writeFileSync(binary, "binary");
+      writeFileSync(cargo, "[package]\nname='ember-lab'\n");
+      writeFileSync(closure, "{}\n");
+      writeFileSync(join(root, "README.md"), "# fixture\n");
+      const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
+      const command = createVerifyTrainingCommand({
+        repoRoot: root,
+        emberLabBinary: binary,
+        env: { EMBER_LAB_PIPE: "\\\\.\\pipe\\ember-lab-test" },
+        sourceCommit: "a".repeat(40),
+        nowMs: () => 1_000,
+        sleep: async () => {},
+        callLab: async ({ method, params }) => {
+          calls.push({ method, params });
+          if (method === "dispatch_manifest") {
+            const manifest = JSON.parse(params["manifest_utf8"] as string);
+            const preflight = manifest.preflight_receipt as string;
+            mkdirSync(dirname(preflight), { recursive: true });
+            writeFileSync(preflight, "preflight\n");
+            return {
+              pid: 123,
+              preflight_receipt_path: preflight,
+              preflight_receipt_sha256: createHash("sha256").update("preflight\n").digest("hex"),
+            };
+          }
+          if (method === "job_state") return { state: "exited" };
+          if (method === "job_exit_code") return { exit_code: 0 };
+          throw new Error(`unexpected method ${method}`);
+        },
+        readReceipt: () => PASS_RECEIPT as any,
+      });
+
+      const result = await command.execute("", { ...mockCtx, cwd: root });
+
+      expect(calls.map((call) => call.method)).toEqual(["dispatch_manifest", "job_state", "job_exit_code"]);
+      const manifest = JSON.parse((calls[0]!.params["manifest_utf8"] as string));
+      expect(manifest.workload_profile.profile_id).toBe("evidence_verifier");
+      expect(manifest.minimum_free_vram_bytes).toBe(0);
+      expect(manifest.program.path).toBe(binary);
+      expect(manifest.args.slice(0, 3)).toEqual(["verify-training", "--root", root]);
+      expect(manifest.env["EMBER_LAB_PIPE"]).toBe("\\\\.\\pipe\\ember-lab-test");
+      expect(manifest.env["EMBER_LAB_DISPATCH_TOKEN"]).toBeUndefined();
+      expect(manifest.custody_root).toContain(manifest.job_id);
+      expect(result && "message" in result ? result.message : "").toContain("verify-training: PASS");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
-  it("forwards --certificate only when the flag is passed", async () => {
-    let capturedArgs: string[] | undefined;
+  it("rejects malformed arguments before any daemon call", async () => {
+    let called = false;
     const command = createVerifyTrainingCommand({
       repoRoot: "/repo",
-      emberLabBinary: "/repo/ember-lab.exe",
-      runProcess: async (binary, args) => {
-        capturedArgs = args;
-        return { stdout: "", stderr: "" };
+      callLab: async () => {
+        called = true;
+        return {};
       },
-      readReceipt: () => PASS_RECEIPT as any,
-    });
-    await command.execute("--certificate /repo/receipts/cert.json", mockCtx);
-    expect(capturedArgs).toContain("--certificate");
-    expect(capturedArgs).toContain("/repo/receipts/cert.json");
-  });
-
-  it("rejects malformed arguments before ever spawning a process", async () => {
-    let spawned = false;
-    const command = createVerifyTrainingCommand({
-      repoRoot: "/repo",
-      runProcess: async () => {
-        spawned = true;
-        return { stdout: "", stderr: "" };
-      },
-      readReceipt: () => PASS_RECEIPT as any,
     });
     const result = await command.execute("--bogus", mockCtx);
-    expect(spawned).toBe(false);
+    expect(called).toBe(false);
     expect(result && "exitCode" in result ? result.exitCode : undefined).toBe(1);
   });
 
-  it("classifies a completed-red run by the NUMERIC .code Node's child_process actually attaches, never by message text", async () => {
-    // Node's real rejection for a nonzero exit carries `code` as a number and a message of
-    // just "Command failed: <cmd>\n" -- never the strings "code: 1" or "exit code 1" the
-    // pre-fix classifier regex looked for. This mock is honest about that shape (numeric
-    // .code, unrelated message text) specifically so it cannot pass the way the old
-    // message-regex classifier's own hand-fabricated test used to.
-    const redReceipt = {
-      ...PASS_RECEIPT,
-      ok: false,
-      checks: [{ name: "closure_members_present", ok: false, detail: "missing: tools/x.py" }],
-    };
-    const command = createVerifyTrainingCommand({
-      repoRoot: "/repo",
-      runProcess: async () => {
-        throw Object.assign(new Error("Command failed: ember-lab verify-training ...\n"), { code: 1 });
-      },
-      readReceipt: () => redReceipt as any,
-    });
+  it("refuses when no resident daemon pipe is configured", async () => {
+    const command = createVerifyTrainingCommand({ repoRoot: "/repo", env: {} });
     const result = await command.execute("", mockCtx);
-    expect(result && "message" in result ? result.message : "").toContain("verify-training: FAIL");
+    expect(result && "message" in result ? result.message : "").toContain("direct verify-training launch is forbidden");
     expect(result && "exitCode" in result ? result.exitCode : undefined).toBe(1);
   });
 
-  it("drives the REAL compiled ember-lab.exe through a genuine completed-red run (rev-1400 regression test)", async () => {
-    // No mocks at all below this line except readReceipt's path is whatever the command
-    // computes -- this is the actual binary, the actual repo tree, an actual subprocess exit.
-    const scratchDir = mkdtempSync(join(tmpdir(), "verify-training-red-run-"));
-    const wrongCertificatePath = join(scratchDir, "wrong-certificate.json");
-    writeFileSync(
-      wrongCertificatePath,
-      JSON.stringify({
-        // Deliberately wrong on both fields the certificate check binds: neither will match
-        // the live closure hash nor be an ancestor of HEAD, so ember-lab genuinely completes
-        // with ok=false and exits 1 -- not a crash, a real red verdict.
-        closure_sha256: "0".repeat(64),
-        public_master_sha: "0".repeat(40),
-      }),
-    );
+  it("stops and verifies terminal settlement exactly once when a dispatched verifier times out", async () => {
+    const root = mkdtempSync(join(tmpdir(), "verify-training-timeout-cleanup-"));
+    try {
+      const binary = join(root, "runtime", "ember-lab", "target", "release", "ember-lab.exe");
+      mkdirSync(dirname(binary), { recursive: true });
+      mkdirSync(join(root, "manifests"), { recursive: true });
+      writeFileSync(binary, "binary");
+      writeFileSync(join(root, "runtime", "ember-lab", "Cargo.toml"), "[package]\nname='ember-lab'\n");
+      writeFileSync(join(root, "manifests", "training-dependency-closure.json"), "{}\n");
+      writeFileSync(join(root, "README.md"), "# fixture\n");
+      const methods: string[] = [];
+      let clock = 999;
+      let receiptReads = 0;
+      let terminal = false;
+      const command = createVerifyTrainingCommand({
+        repoRoot: root,
+        emberLabBinary: binary,
+        env: { EMBER_LAB_PIPE: "\\\\.\\pipe\\ember-lab-test" },
+        sourceCommit: "a".repeat(40),
+        nowMs: () => ++clock,
+        timeoutMs: 0,
+        sleep: async () => {},
+        callLab: async ({ method, params }) => {
+          methods.push(method);
+          if (method === "dispatch_manifest") {
+            const manifest = JSON.parse(params["manifest_utf8"] as string);
+            const preflight = manifest.preflight_receipt as string;
+            mkdirSync(dirname(preflight), { recursive: true });
+            writeFileSync(preflight, "preflight\n");
+            return {
+              pid: 123,
+              preflight_receipt_path: preflight,
+              preflight_receipt_sha256: createHash("sha256").update("preflight\n").digest("hex"),
+            };
+          }
+          if (method === "stop_job") {
+            terminal = true;
+            return { stopped: true };
+          }
+          if (method === "job_state") return { state: terminal ? "stopped" : "running" };
+          throw new Error(`unexpected method ${method}`);
+        },
+        readReceipt: () => {
+          receiptReads += 1;
+          return PASS_RECEIPT as any;
+        },
+      });
+      const result = await command.execute("", { ...mockCtx, cwd: root });
+      expect(methods).toEqual(["dispatch_manifest", "job_state", "stop_job", "job_state"]);
+      expect(receiptReads).toBe(0);
+      expect(result && "message" in result ? result.message : "").toContain("job timed out");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 
-    const command = createVerifyTrainingCommand({ repoRoot: REPO_ROOT });
-    const result = await command.execute(`--certificate ${wrongCertificatePath}`, {
-      sessionId: "real-binary-test",
-      mode: "test",
-      cwd: REPO_ROOT,
-    });
-
-    rmSync(scratchDir, { recursive: true, force: true });
-
-    const message = result && "message" in result ? result.message : "";
-    expect(message).toContain("verify-training: FAIL");
-    expect(message).toContain("closure_sha256_matches=false");
-    expect(message).toContain("pin_is_ancestor=false");
-    expect(result && "exitCode" in result ? result.exitCode : undefined).toBe(1);
-  }, 30_000);
-
-  it("reports an infra error (never a fabricated receipt) when the process cannot start at all", async () => {
-    const command = createVerifyTrainingCommand({
-      repoRoot: "/repo",
-      runProcess: async () => {
-        throw new Error("ENOENT: spawn ember-lab.exe");
-      },
-      readReceipt: () => {
-        throw new Error("should never be called");
-      },
-    });
-    const result = await command.execute("", mockCtx);
-    expect(result && "message" in result ? result.message : "").toContain("could not run");
-    expect(result && "exitCode" in result ? result.exitCode : undefined).toBe(1);
+  it("refuses a forged daemon preflight response before polling or reading a result", async () => {
+    const root = mkdtempSync(join(tmpdir(), "verify-training-preflight-refusal-"));
+    try {
+      const binary = join(root, "runtime", "ember-lab", "target", "release", "ember-lab.exe");
+      mkdirSync(dirname(binary), { recursive: true });
+      mkdirSync(join(root, "manifests"), { recursive: true });
+      writeFileSync(binary, "binary");
+      writeFileSync(join(root, "runtime", "ember-lab", "Cargo.toml"), "[package]\nname='ember-lab'\n");
+      writeFileSync(join(root, "manifests", "training-dependency-closure.json"), "{}\n");
+      writeFileSync(join(root, "README.md"), "# fixture\n");
+      const methods: string[] = [];
+      let terminal = false;
+      const command = createVerifyTrainingCommand({
+        repoRoot: root,
+        emberLabBinary: binary,
+        env: { EMBER_LAB_PIPE: "\\\\.\\pipe\\ember-lab-test" },
+        sourceCommit: "a".repeat(40),
+        nowMs: () => 1_000,
+        callLab: async ({ method }) => {
+          methods.push(method);
+          if (method === "dispatch_manifest") {
+            return { pid: 123, preflight_receipt_path: join(root, "foreign.json"), preflight_receipt_sha256: "b".repeat(64) };
+          }
+          if (method === "stop_job") {
+            terminal = true;
+            return { stopped: true };
+          }
+          if (method === "job_state") return { state: terminal ? "stopped" : "running" };
+          throw new Error(`unexpected method ${method}`);
+        },
+        readReceipt: () => { throw new Error("must not read result receipt"); },
+      });
+      const result = await command.execute("", { ...mockCtx, cwd: root });
+      expect(methods).toEqual(["dispatch_manifest", "stop_job", "job_state"]);
+      expect(result && "message" in result ? result.message : "").toContain("preflight receipt path");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
