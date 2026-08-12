@@ -388,6 +388,7 @@ pub struct JobSpec {
     restart_policy: RestartPolicy,
     maximum_job_memory_bytes: Option<u64>,
     cpu_rate_percent: Option<u32>,
+    requires_ui_responsiveness: bool,
     dispatch_token: Option<DispatchToken>,
 }
 
@@ -521,6 +522,7 @@ impl JobSpec {
             restart_policy: RestartPolicy::Never,
             maximum_job_memory_bytes: None,
             cpu_rate_percent: None,
+            requires_ui_responsiveness: false,
             dispatch_token: None,
         }
     }
@@ -541,6 +543,18 @@ impl JobSpec {
 
     pub fn with_cpu_rate_percent(mut self, cpu_rate_percent: u32) -> Self {
         self.cpu_rate_percent = Some(cpu_rate_percent);
+        self
+    }
+
+    /// Declares whether the spawned process is allowed to interact with the
+    /// interactive desktop (clipboard, display settings, global atoms,
+    /// cross-job USER handles, ExitWindows). Defaults to `false` (restricted)
+    /// so an undeclared job is walled off, not left open by omission. Only
+    /// the closed `Cockpit` workload profile is permitted to request `true`
+    /// (`validate_dispatch_workload_profile` enforces the pairing before this
+    /// spec is ever built from a manifest).
+    pub fn with_requires_ui_responsiveness(mut self, requires_ui_responsiveness: bool) -> Self {
+        self.requires_ui_responsiveness = requires_ui_responsiveness;
         self
     }
 
@@ -2161,7 +2175,8 @@ impl Daemon {
             resource_lease.clone(),
         )
         .with_maximum_job_memory_bytes(manifest.maximum_job_memory_bytes)
-        .with_cpu_rate_percent(manifest.workload_profile.cpu_rate_percent);
+        .with_cpu_rate_percent(manifest.workload_profile.cpu_rate_percent)
+        .with_requires_ui_responsiveness(manifest.workload_profile.requires_ui_responsiveness);
         for (key, value) in manifest.env {
             spec = spec.with_env(key, value);
         }
@@ -2491,7 +2506,7 @@ impl Daemon {
             )?;
             tx.execute(
                 "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_start_reserved',?3)",
-                params![spec.job_id, now_ms(), json!({"job_object_name":job_object_name,"cpu_rate_percent":spec.cpu_rate_percent}).to_string()],
+                params![spec.job_id, now_ms(), json!({"job_object_name":job_object_name,"cpu_rate_percent":spec.cpu_rate_percent,"requires_ui_responsiveness":spec.requires_ui_responsiveness}).to_string()],
             )?;
             tx.commit()?;
         }
@@ -2520,7 +2535,7 @@ impl Daemon {
             }
             tx.execute(
                 "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_prepared',?3)",
-                params![spec.job_id, now_ms(), json!({"pid":pid,"job_object_name":job_object_name,"cpu_rate_percent":spec.cpu_rate_percent}).to_string()],
+                params![spec.job_id, now_ms(), json!({"pid":pid,"job_object_name":job_object_name,"cpu_rate_percent":spec.cpu_rate_percent,"requires_ui_responsiveness":spec.requires_ui_responsiveness}).to_string()],
             )?;
             if let Some(token) = &spec.dispatch_token {
                 tx.execute(
@@ -6746,6 +6761,30 @@ fn managed_windows_creation_flags() -> u32 {
         | EXTENDED_STARTUPINFO_PRESENT
 }
 
+/// The full Windows/UI job-object restriction set (issue #898) applied to
+/// every spawned job that has not declared `requires_ui_responsiveness`.
+/// Bars cross-desktop UI surfaces: USER handles owned outside the job, the
+/// shared clipboard (read and write), global system parameters, display
+/// settings, global atoms, desktop creation/switching, and ExitWindows.
+#[cfg(windows)]
+fn managed_windows_ui_restrictions_all() -> u32 {
+    use windows_sys::Win32::System::JobObjects::{
+        JOB_OBJECT_UILIMIT_DESKTOP, JOB_OBJECT_UILIMIT_DISPLAYSETTINGS,
+        JOB_OBJECT_UILIMIT_EXITWINDOWS, JOB_OBJECT_UILIMIT_GLOBALATOMS, JOB_OBJECT_UILIMIT_HANDLES,
+        JOB_OBJECT_UILIMIT_READCLIPBOARD, JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS,
+        JOB_OBJECT_UILIMIT_WRITECLIPBOARD,
+    };
+
+    JOB_OBJECT_UILIMIT_HANDLES
+        | JOB_OBJECT_UILIMIT_READCLIPBOARD
+        | JOB_OBJECT_UILIMIT_WRITECLIPBOARD
+        | JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS
+        | JOB_OBJECT_UILIMIT_DISPLAYSETTINGS
+        | JOB_OBJECT_UILIMIT_GLOBALATOMS
+        | JOB_OBJECT_UILIMIT_DESKTOP
+        | JOB_OBJECT_UILIMIT_EXITWINDOWS
+}
+
 #[cfg(windows)]
 fn spawn_managed(
     spec: &JobSpec,
@@ -6757,8 +6796,9 @@ fn spawn_managed(
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Foundation::{DuplicateHandle, DUPLICATE_SAME_ACCESS};
     use windows_sys::Win32::System::JobObjects::{
-        CreateJobObjectW, JobObjectCpuRateControlInformation, JobObjectExtendedLimitInformation,
-        SetInformationJobObject, TerminateJobObject, JOBOBJECT_CPU_RATE_CONTROL_INFORMATION,
+        CreateJobObjectW, JobObjectBasicUIRestrictions, JobObjectCpuRateControlInformation,
+        JobObjectExtendedLimitInformation, SetInformationJobObject, TerminateJobObject,
+        JOBOBJECT_BASIC_UI_RESTRICTIONS, JOBOBJECT_CPU_RATE_CONTROL_INFORMATION,
         JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_CPU_RATE_CONTROL_ENABLE,
         JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP, JOB_OBJECT_LIMIT_JOB_MEMORY,
         JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
@@ -6824,6 +6864,32 @@ fn spawn_managed(
                 JobObjectCpuRateControlInformation,
                 (&cpu as *const JOBOBJECT_CPU_RATE_CONTROL_INFORMATION).cast(),
                 size_of::<JOBOBJECT_CPU_RATE_CONTROL_INFORMATION>() as u32,
+            )
+        } == 0
+        {
+            let error = std::io::Error::last_os_error();
+            unsafe { windows_sys::Win32::Foundation::CloseHandle(job) };
+            return Err(error.into());
+        }
+    }
+
+    // Windows/UI surface wall (issue #898): a job that has not declared
+    // `requires_ui_responsiveness` (only the closed Cockpit workload profile
+    // may declare it — enforced in `validate_dispatch_workload_profile`) is
+    // barred from every cross-desktop UI surface: the shared clipboard,
+    // global atoms, display settings, desktop creation/switching, and
+    // ExitWindows, plus USER handles owned by processes outside this job.
+    // This is an OS-enforced ceiling applied at spawn, not a best-effort
+    // convention — an undeclared job is walled off by construction.
+    if !spec.requires_ui_responsiveness {
+        let mut ui: JOBOBJECT_BASIC_UI_RESTRICTIONS = unsafe { zeroed() };
+        ui.UIRestrictionsClass = managed_windows_ui_restrictions_all();
+        if unsafe {
+            SetInformationJobObject(
+                job,
+                JobObjectBasicUIRestrictions,
+                (&ui as *const JOBOBJECT_BASIC_UI_RESTRICTIONS).cast(),
+                size_of::<JOBOBJECT_BASIC_UI_RESTRICTIONS>() as u32,
             )
         } == 0
         {
@@ -7634,6 +7700,40 @@ mod dispatch_binding_snapshot_tests {
         let flags = managed_windows_creation_flags();
         assert_ne!(flags & CREATE_SUSPENDED, 0);
         assert_ne!(flags & CREATE_NO_WINDOW, 0);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn managed_windows_ui_restrictions_cover_every_cross_desktop_surface() {
+        use windows_sys::Win32::System::JobObjects::{
+            JOB_OBJECT_UILIMIT_DESKTOP, JOB_OBJECT_UILIMIT_DISPLAYSETTINGS,
+            JOB_OBJECT_UILIMIT_EXITWINDOWS, JOB_OBJECT_UILIMIT_GLOBALATOMS,
+            JOB_OBJECT_UILIMIT_HANDLES, JOB_OBJECT_UILIMIT_READCLIPBOARD,
+            JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS, JOB_OBJECT_UILIMIT_WRITECLIPBOARD,
+        };
+
+        let restrictions = managed_windows_ui_restrictions_all();
+        for flag in [
+            JOB_OBJECT_UILIMIT_HANDLES,
+            JOB_OBJECT_UILIMIT_READCLIPBOARD,
+            JOB_OBJECT_UILIMIT_WRITECLIPBOARD,
+            JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS,
+            JOB_OBJECT_UILIMIT_DISPLAYSETTINGS,
+            JOB_OBJECT_UILIMIT_GLOBALATOMS,
+            JOB_OBJECT_UILIMIT_DESKTOP,
+            JOB_OBJECT_UILIMIT_EXITWINDOWS,
+        ] {
+            assert_ne!(
+                restrictions & flag,
+                0,
+                "expected UI restriction flag {flag:#x} to be set"
+            );
+        }
+        // Windows' own JOB_OBJECT_UILIMIT_ALL constant (winnt.h) is 0x000000FF —
+        // every currently defined UI-limit bit. Pin the exact value so a future
+        // windows-sys bump that adds a new bit is caught here, not silently
+        // left unrestricted.
+        assert_eq!(restrictions, 0x0000_00FF);
     }
 
     #[test]
