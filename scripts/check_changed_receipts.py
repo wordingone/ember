@@ -35,7 +35,7 @@ FROZEN_EXCEPTIONS_PATH = ("tools", "frozen-receipt-exceptions.json")
 FROZEN_EXCEPTIONS_SCHEMA = "frozen-receipt-exceptions-v1"
 
 
-def _candidate(root: Path, raw: str) -> Path | None:
+def _candidate(root: Path, raw: str, frozen: dict[str, str]) -> Path | None:
     relative = raw.replace("\\", "/")
     if not relative:
         return None
@@ -45,9 +45,19 @@ def _candidate(root: Path, raw: str) -> Path | None:
         or ".." in posix.parts
         or len(posix.parts) < 2
         or posix.parts[0] != "receipts"
-        or posix.suffix.lower() != ".json"
         or relative in NON_RECEIPT_PATHS
     ):
+        return None
+    # issue #1506: a path enumerated in the frozen-receipt exceptions policy is
+    # checked against its recorded digest regardless of extension. The frozen
+    # list is an explicit per-path opt-in (never a directory glob), so this
+    # cannot widen admission for any other growing .jsonl ledger under
+    # receipts/ (e.g. receipts/ledger/episodes.jsonl) -- those stay excluded
+    # by the .json-only gate below exactly as before. Without this, a frozen
+    # non-.json evidence file -- receipts/ember-02-launch-authority/
+    # declaration-ledger.jsonl is the motivating case -- would never reach
+    # _is_frozen and a silent rewrite of it would pass this gate uninspected.
+    if posix.suffix.lower() != ".json" and relative not in frozen:
         return None
     path = root.joinpath(*posix.parts)
     if not path.is_file():
@@ -143,7 +153,7 @@ def check_paths(root: Path, paths: list[str]) -> int:
     exempt = 0
     failed = 0
     for raw in paths:
-        path = _candidate(root, raw)
+        path = _candidate(root, raw, frozen)
         if path is None:
             continue
         verdict = _is_frozen(root, path, frozen)

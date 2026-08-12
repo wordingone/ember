@@ -35,6 +35,11 @@
       "reason": "documentation sidecar naming the source each certificate sha256 was read from, redacted per REDACTIONS.md. It carries no claim of its own and has no ticket."
     },
     {
+      "path": "receipts/ember-02-launch-authority/declaration-ledger.jsonl",
+      "sha256": "d487c96ae88d06e57ba076ae5687bc049e78e0c005cb37f18f47cc833def1740",
+      "reason": "issue #1506: the fourth committed evidence-pack file, previously unenumerated here and unreachable by check_changed_receipts.py's .json-only candidate gate -- a silent rewrite of it (e.g. a stray mint appending a new declaration row into the live tree) would have landed past the changed-receipts check uninspected. Its one row cites certificate_sha256 10696f76, the same identity run-spec.json and certificate.json are pinned to above."
+    },
+    {
       "path": "receipts/ns-chain-roofline-4090-20260623T165615Z.json",
       "sha256": "a766b3b2d07d90a4ce12353c30accf82a574d43e730743b3d251e3def90f056b",
       "reason": "frozen empirical RTX 4090 roofline receipt restored verbatim from commit 4e1f325 for issue #1385. Its historical bytes predate the current receipt floor and are the exact evidence cited by the OQ-2 attribution chain; editing them would replace rather than restore that evidence."

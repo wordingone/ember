@@ -244,6 +244,97 @@ class ChangedReceiptGateTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1, self.output(result))
             self.assertIn("MISSING_REQUIRED", self.output(result))
 
+    def frozen_jsonl_fixture(self, root: Path) -> tuple[str, str]:
+        """Write a frozen non-.json ledger and return its path and digest.
+
+        Mirrors receipts/ember-02-launch-authority/declaration-ledger.jsonl
+        (issue #1506): a frozen evidence file whose extension is not .json.
+        """
+        relative = "receipts/frozen/declaration-ledger.jsonl"
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b'{"row":1}\n')
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        return relative, digest
+
+    def test_exempts_frozen_non_json_evidence_matching_its_recorded_digest(
+        self,
+    ) -> None:
+        """issue #1506: a frozen .jsonl path is admitted and hash-checked.
+
+        Before this fix, _candidate's .json-only suffix gate dropped every
+        .jsonl path before it ever reached the frozen-exceptions lookup, so a
+        frozen ledger like declaration-ledger.jsonl was never inspected at
+        all -- silently rewriting it would have passed this gate uninspected.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            root = self.seed(td)
+            relative, digest = self.frozen_jsonl_fixture(root)
+            self.write_json(
+                root,
+                "tools/frozen-receipt-exceptions.json",
+                {
+                    "schema": "frozen-receipt-exceptions-v1",
+                    "entries": [
+                        {
+                            "path": relative,
+                            "sha256": digest,
+                            "reason": "frozen declaration ledger copied in verbatim",
+                        }
+                    ],
+                },
+            )
+
+            result = self.run_checker(root, relative)
+
+            self.assertEqual(result.returncode, 0, self.output(result))
+            self.assertIn("frozen=1", self.output(result))
+
+    def test_rejects_frozen_non_json_entry_whose_content_drifted(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = self.seed(td)
+            relative, _ = self.frozen_jsonl_fixture(root)
+            self.write_json(
+                root,
+                "tools/frozen-receipt-exceptions.json",
+                {
+                    "schema": "frozen-receipt-exceptions-v1",
+                    "entries": [
+                        {
+                            "path": relative,
+                            "sha256": "0" * 64,
+                            "reason": "digest deliberately does not match",
+                        }
+                    ],
+                },
+            )
+
+            result = self.run_checker(root, relative)
+
+            self.assertEqual(result.returncode, 1, self.output(result))
+            self.assertIn("does not match its recorded digest", self.output(result))
+
+    def test_ignores_unenumerated_jsonl_ledger_outside_the_frozen_policy(
+        self,
+    ) -> None:
+        """A growing .jsonl ledger not named in the frozen policy is still
+
+        skipped entirely, exactly as before this fix -- the .jsonl admission
+        path added for issue #1506 is scoped strictly to paths the frozen
+        policy enumerates, never to the extension on its own.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            root = self.seed(td)
+            relative = "receipts/ledger/episodes.jsonl"
+            path = root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'{"episode":1}\n')
+
+            result = self.run_checker(root, relative)
+
+            self.assertEqual(result.returncode, 0, self.output(result))
+            self.assertIn("CHANGED_RECEIPTS_PASS count=0", self.output(result))
+
     def test_unusable_exceptions_policy_fails_closed_on_a_clean_run(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -256,6 +347,26 @@ class ChangedReceiptGateTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 1, self.output(result))
             self.assertIn("exceptions policy unusable", self.output(result))
+
+    def test_real_declaration_ledger_is_enumerated_and_matches_its_frozen_digest(
+        self,
+    ) -> None:
+        """issue #1506, against the real tree (not a fixture).
+
+        receipts/ember-02-launch-authority/declaration-ledger.jsonl is a real
+        committed evidence-pack file. This proves the production
+        frozen-receipt-exceptions.json entry this fix adds actually covers
+        it, using the real checker against the real repo root -- the same
+        invocation shape tools/repo-guard.sh uses on a changed path.
+        """
+        relative = "receipts/ember-02-launch-authority/declaration-ledger.jsonl"
+        real_path = REPO / relative
+        self.assertTrue(real_path.is_file(), real_path)
+
+        result = self.run_checker(REPO, relative)
+
+        self.assertEqual(result.returncode, 0, self.output(result))
+        self.assertIn("frozen=1", self.output(result))
 
     def test_absent_exceptions_policy_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as td:
