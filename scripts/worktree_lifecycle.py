@@ -502,6 +502,13 @@ def create_worktree(repo: Path, state_file: Path, args: argparse.Namespace) -> d
             "expires": args.expires,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "head": live[key].head,
+            # Recorded, not merely implied: resolve_create_destination() would have
+            # raised C_DRIVE_WORKTREE_REFUSED already if this landed on C: without
+            # --allow-c-drive, so a True here IS the explicit exception. strict_report's
+            # c_drive_registration check reads it back to tell a deliberate, acknowledged
+            # C: placement apart from a stale pre-#1669 managed row that reached C: before
+            # this field -- or this refusal -- existed.
+            "c_drive_override": _windows_drive(canonical_path(destination)) == "c",
         }
         state["updated_at"] = datetime.now(timezone.utc).isoformat()
         write_state(state_file, state)
@@ -989,7 +996,9 @@ def strict_report(
     which would pre-empt the listing this mode exists to produce. So this scan is separate,
     read-only, and total.
 
-    Four contradiction classes, matching what the custody census reports:
+    Five contradiction classes. Four match what the custody census reports; the fifth
+    (`c_drive_registration`) is this tool's own, added for issue #1317's drive-policy
+    migration and not mirrored by the census:
 
     * ``stale_registration`` -- Git lists a worktree whose directory is missing, empty, or
       which Git itself marks prunable. This is the census's ``registered_worktree_missing``.
@@ -1005,6 +1014,17 @@ def strict_report(
       linked worktree looks like, and on this host the un-scoped test reported ~70 of them
       -- other repositories' live trees -- each with destructive advice attached.
     * ``interrupted_removal`` -- a removal intent that was never cleared. See `begin_removal`.
+    * ``c_drive_registration`` -- the registered worktree resolves onto the C: volume.
+      `create_worktree()` already refuses this for new managed rows unless the caller
+      passes `--allow-c-drive`, and records that choice on the row (`c_drive_override`)
+      when it does. A managed row on C: WITHOUT the recorded override reached C: before
+      the refusal existed (or some other irregular path) and is reported at the same
+      severity as every other managed-row finding; legacy/unregistered rows Git still
+      lists on C: are the inherited migration debt the issue's inventory-drain waves
+      work down, reported as backlog rather than failing the default gate. An
+      EXPLICITLY overridden managed row is not reported at all: `--allow-c-drive` is
+      itself the operator's auditable declaration, and re-flagging a choice already made
+      on purpose would only be noise.
 
     SEVERITY. Contradictions carry `severity`: `error` for records this tool is responsible
     for (managed rows, its own removal intents, orphans under our own common dir) and
@@ -1052,6 +1072,39 @@ def strict_report(
         path = Path(row.path)
         if row.key == main_key:
             continue
+        # Issue #1317: C-drive saturation from worktrees landing on the OS volume by
+        # caller convention rather than governed choice. create_worktree() now refuses a
+        # new managed row on C: unless the caller passes --allow-c-drive, and records that
+        # override on the row (c_drive_override) when it does -- so a managed row here
+        # WITHOUT the recorded override is a pre-#1669 (or otherwise irregular) row that
+        # reached C: before the refusal existed, not a deliberate exception. That case is
+        # this tool's own responsibility (error, like every other managed-row finding); an
+        # explicitly overridden managed row and inherited legacy/unregistered debt are not
+        # promoted to error by this check alone -- draining THOSE stays the province of the
+        # inventory waves the issue tracks, not a default-mode audit failure. Orthogonal to
+        # every check below: a row can be both stale AND C:-rooted, and both facts matter.
+        drive_origin, drive_severity = provenance(row.key)
+        if _windows_drive(row.path) == "c" and not (
+            drive_origin == "managed" and bool(managed.get(row.key, {}).get("c_drive_override"))
+        ):
+            contradictions.append(
+                {
+                    "code": "c_drive_registration",
+                    "severity": drive_severity,
+                    "origin": drive_origin,
+                    "reason": (
+                        "registered worktree is rooted on the C: volume; B: is the "
+                        "governed default for worktrees, work products, and caches, and "
+                        "C: is reserved for the OS and the runner's operating-reserve floor"
+                    ),
+                    "path": row.path,
+                    "branch": row.branch,
+                    "cure": (
+                        f"python scripts/worktree_lifecycle.py retire --path {row.path}"
+                        ", then recreate under the governed B:/A: root"
+                    ),
+                }
+            )
         if not path.exists():
             contradictions.append(
                 contradiction(
