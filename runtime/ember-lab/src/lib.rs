@@ -2677,6 +2677,7 @@ impl Daemon {
             };
         let pid = spawned.pid();
         let identity = spawned.identity();
+        let applied_cpu_rate = spawned.applied_cpu_rate();
         let prepared = (|| -> Result<()> {
             let mut conn = self.conn()?;
             let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -2692,7 +2693,7 @@ impl Daemon {
             }
             tx.execute(
                 "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_prepared',?3)",
-                params![spec.job_id, now_ms(), json!({"pid":pid,"job_object_name":job_object_name,"cpu_rate_percent":spec.cpu_rate_percent,"requires_ui_responsiveness":spec.requires_ui_responsiveness}).to_string()],
+                params![spec.job_id, now_ms(), json!({"pid":pid,"job_object_name":job_object_name,"cpu_rate_percent":spec.cpu_rate_percent,"requires_ui_responsiveness":spec.requires_ui_responsiveness,"cpu_rate_control_verified":applied_cpu_rate.is_some(),"applied_cpu_rate":applied_cpu_rate}).to_string()],
             )?;
             if let Some(token) = &spec.dispatch_token {
                 tx.execute(
@@ -6703,6 +6704,7 @@ struct SpawnedProcess {
     pid: u32,
     main_thread_id: u32,
     identity: ProcessIdentity,
+    applied_cpu_rate: Option<u32>,
 }
 
 #[cfg(windows)]
@@ -6715,6 +6717,9 @@ impl SpawnedProcess {
     }
     fn identity(&self) -> ProcessIdentity {
         self.identity.clone()
+    }
+    fn applied_cpu_rate(&self) -> Option<u32> {
+        self.applied_cpu_rate
     }
     fn stdout_child_handle(&self) -> i64 {
         self.stdout_log_guard.raw() as isize as i64
@@ -6943,6 +6948,63 @@ fn managed_windows_ui_restrictions_all() -> u32 {
 }
 
 #[cfg(windows)]
+fn configure_and_verify_windows_cpu_rate(
+    job: windows_sys::Win32::Foundation::HANDLE,
+    percent: u32,
+) -> Result<u32> {
+    use std::mem::{size_of, zeroed};
+    use windows_sys::Win32::System::JobObjects::{
+        JobObjectCpuRateControlInformation, QueryInformationJobObject, SetInformationJobObject,
+        JOBOBJECT_CPU_RATE_CONTROL_INFORMATION, JOB_OBJECT_CPU_RATE_CONTROL_ENABLE,
+        JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP,
+    };
+
+    if !(1..=100).contains(&percent) {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "cpu_rate_percent must be between 1 and 100".into(),
+        });
+    }
+    let expected_rate = percent * 100;
+    let expected_flags = JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP;
+    let mut configured: JOBOBJECT_CPU_RATE_CONTROL_INFORMATION = unsafe { zeroed() };
+    configured.ControlFlags = expected_flags;
+    configured.Anonymous.CpuRate = expected_rate;
+    if unsafe {
+        SetInformationJobObject(
+            job,
+            JobObjectCpuRateControlInformation,
+            (&configured as *const JOBOBJECT_CPU_RATE_CONTROL_INFORMATION).cast(),
+            size_of::<JOBOBJECT_CPU_RATE_CONTROL_INFORMATION>() as u32,
+        )
+    } == 0
+    {
+        return Err(std::io::Error::last_os_error().into());
+    }
+
+    let mut reopened: JOBOBJECT_CPU_RATE_CONTROL_INFORMATION = unsafe { zeroed() };
+    if unsafe {
+        QueryInformationJobObject(
+            job,
+            JobObjectCpuRateControlInformation,
+            (&mut reopened as *mut JOBOBJECT_CPU_RATE_CONTROL_INFORMATION).cast(),
+            size_of::<JOBOBJECT_CPU_RATE_CONTROL_INFORMATION>() as u32,
+            std::ptr::null_mut(),
+        )
+    } == 0
+    {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    let reopened_rate = unsafe { reopened.Anonymous.CpuRate };
+    if reopened.ControlFlags != expected_flags || reopened_rate != expected_rate {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "Windows job object CPU hard cap did not reopen with the requested value"
+                .into(),
+        });
+    }
+    Ok(reopened_rate)
+}
+
+#[cfg(windows)]
 fn spawn_managed(
     spec: &JobSpec,
     job_name: &str,
@@ -6953,11 +7015,9 @@ fn spawn_managed(
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Foundation::{DuplicateHandle, DUPLICATE_SAME_ACCESS};
     use windows_sys::Win32::System::JobObjects::{
-        CreateJobObjectW, JobObjectBasicUIRestrictions, JobObjectCpuRateControlInformation,
-        JobObjectExtendedLimitInformation, SetInformationJobObject, TerminateJobObject,
-        JOBOBJECT_BASIC_UI_RESTRICTIONS, JOBOBJECT_CPU_RATE_CONTROL_INFORMATION,
-        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_CPU_RATE_CONTROL_ENABLE,
-        JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP, JOB_OBJECT_LIMIT_JOB_MEMORY,
+        CreateJobObjectW, JobObjectBasicUIRestrictions, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, TerminateJobObject, JOBOBJECT_BASIC_UI_RESTRICTIONS,
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_JOB_MEMORY,
         JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     };
     use windows_sys::Win32::System::Threading::{
@@ -6972,10 +7032,6 @@ fn spawn_managed(
         .map_err(|_| EmberLabError::InvalidDispatchManifest {
             detail: "maximum job memory does not fit the current Windows address space".into(),
         })?;
-    let cpu_rate = spec
-        .cpu_rate_percent
-        .map(|percent| percent.saturating_mul(100));
-
     unsafe { windows_sys::Win32::Foundation::SetLastError(0) };
     let name = wide(job_name);
     let job = unsafe { CreateJobObjectW(std::ptr::null(), name.as_ptr()) };
@@ -7010,25 +7066,18 @@ fn spawn_managed(
         return Err(error.into());
     }
 
-    if let Some(cpu_rate) = cpu_rate {
-        let mut cpu: JOBOBJECT_CPU_RATE_CONTROL_INFORMATION = unsafe { zeroed() };
-        cpu.ControlFlags =
-            JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP;
-        cpu.Anonymous.CpuRate = cpu_rate;
-        if unsafe {
-            SetInformationJobObject(
-                job,
-                JobObjectCpuRateControlInformation,
-                (&cpu as *const JOBOBJECT_CPU_RATE_CONTROL_INFORMATION).cast(),
-                size_of::<JOBOBJECT_CPU_RATE_CONTROL_INFORMATION>() as u32,
-            )
-        } == 0
-        {
-            let error = std::io::Error::last_os_error();
-            unsafe { windows_sys::Win32::Foundation::CloseHandle(job) };
-            return Err(error.into());
+    let applied_cpu_rate = match spec.cpu_rate_percent {
+        Some(cpu_rate_percent) => {
+            match configure_and_verify_windows_cpu_rate(job, cpu_rate_percent) {
+                Ok(applied) => Some(applied),
+                Err(error) => {
+                    unsafe { windows_sys::Win32::Foundation::CloseHandle(job) };
+                    return Err(error);
+                }
+            }
         }
-    }
+        None => None,
+    };
 
     // Windows/UI surface wall (issue #898): a job that has not declared
     // `requires_ui_responsiveness` (only the closed Cockpit workload profile
@@ -7180,6 +7229,7 @@ fn spawn_managed(
         pid: info.dwProcessId,
         main_thread_id: info.dwThreadId,
         identity,
+        applied_cpu_rate,
     })
 }
 #[cfg(windows)]
@@ -7724,6 +7774,9 @@ impl SpawnedProcess {
     fn identity(&self) -> ProcessIdentity {
         self.identity.clone()
     }
+    fn applied_cpu_rate(&self) -> Option<u32> {
+        None
+    }
     fn stdout_child_handle(&self) -> i64 {
         0
     }
@@ -7891,6 +7944,19 @@ mod dispatch_binding_snapshot_tests {
         // windows-sys bump that adds a new bit is caught here, not silently
         // left unrestricted.
         assert_eq!(restrictions, 0x0000_00FF);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn managed_windows_cpu_rate_is_reopened_from_job_object() {
+        use windows_sys::Win32::Foundation::CloseHandle;
+        use windows_sys::Win32::System::JobObjects::CreateJobObjectW;
+
+        let job = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
+        assert!(!job.is_null());
+        let applied = configure_and_verify_windows_cpu_rate(job, 25).unwrap();
+        assert_eq!(applied, 2_500);
+        unsafe { CloseHandle(job) };
     }
 
     #[test]
