@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wordingone.github.io/ember/schemas/issue1455-memory-evidence-v1.schema.json",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "title": "Issue 1455 incident-bound memory evidence candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_kind",
+    "verdict",
+    "incident",
+    "source",
+    "cockpit_pid",
+    "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": { "const": "ember-issue1455-memory-evidence-v1" },
+    "evidence_kind": { "enum": ["idle_soak", "injected_growth"] },
+    "verdict": { "const": "NEEDS_EXECUTION" },
+    "incident": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "event_id", "observed_local", "process_name", "pid", "commit_bytes"],
+      "properties": {
+        "provider": { "const": "Microsoft-Windows-Resource-Exhaustion-Detector" },
+        "event_id": { "const": 2004 },
+        "observed_local": { "const": "2026-08-05T02:01:10-07:00" },
+        "process_name": { "const": "Ember.exe" },
+        "pid": { "const": 48660 },
+        "commit_bytes": { "const": 69208911872 }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_commit", "cockpit_binary_sha256", "memory_spec_path", "memory_spec_sha256"],
+      "properties": {
+        "source_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "cockpit_binary_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "memory_spec_path": { "const": "tools/ember-cli/specs/liveness-watchdog-memory-v1.json" },
+        "memory_spec_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "cockpit_pid": { "type": "integer", "minimum": 1 },
+    "receipt_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "started_at": { "type": "string", "format": "date-time" },
+    "ended_at": { "type": "string", "format": "date-time" },
+    "duration_seconds": { "type": "integer", "minimum": 7200 },
+    "sample_interval_seconds": { "const": 60 },
+    "sample_count": { "type": "integer", "minimum": 121 },
+    "min_commit_bytes": { "type": "integer", "minimum": 0 },
+    "max_commit_bytes": { "type": "integer", "minimum": 0 },
+    "max_commit_growth_bytes": { "type": "integer", "minimum": 0, "maximum": 268435456 },
+    "min_working_set_bytes": { "type": "integer", "minimum": 0 },
+    "max_working_set_bytes": { "type": "integer", "minimum": 0 },
+    "max_working_set_growth_bytes": { "type": "integer", "minimum": 0, "maximum": 268435456 },
+    "growth_ceiling_bytes": { "const": 268435456 },
+    "samples": {
+      "type": "array",
+      "minItems": 121,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ts", "commit_bytes", "working_set_bytes"],
+        "properties": {
+          "ts": { "type": "string", "format": "date-time" },
+          "commit_bytes": { "type": "integer", "minimum": 0 },
+          "working_set_bytes": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "injected_commit_bytes": { "type": "integer", "minimum": 4294967296 },
+    "expected_exit_code": { "const": 75 },
+    "observed_exit_code": { "const": 75 },
+    "process_start_time": { "type": "string", "format": "date-time" },
+    "exit_observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "observer", "pid", "process_start_time", "observed_at", "exit_code", "receipt_sha256"],
+      "properties": {
+        "schema_version": { "const": "ember-process-terminal-observation-v1" },
+        "observer": { "const": "wait_for_single_object+get_exit_code_process" },
+        "pid": { "type": "integer", "minimum": 1 },
+        "process_start_time": { "type": "string", "format": "date-time" },
+        "observed_at": { "type": "string", "format": "date-time" },
+        "exit_code": { "const": 75 },
+        "receipt_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "trip_precedes_exit_observation": { "const": true },
+    "trip_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "ts", "pid", "process_class", "commit_gb", "threshold", "action", "spec_path", "spec_sha256"],
+      "properties": {
+        "schema_version": { "const": "ember-memory-footprint-trip-v1" },
+        "ts": { "type": "string", "format": "date-time" },
+        "pid": { "type": "integer", "minimum": 1 },
+        "process_class": { "const": "cockpit" },
+        "commit_gb": { "type": "number", "minimum": 4 },
+        "threshold": { "const": 4 },
+        "action": { "const": "exit_cockpit_for_task_scheduler" },
+        "spec_path": { "const": "tools/ember-cli/specs/liveness-watchdog-memory-v1.json" },
+        "spec_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "evidence_kind": { "const": "idle_soak" } } },
+      "then": {
+        "required": ["started_at", "ended_at", "duration_seconds", "sample_interval_seconds", "sample_count", "min_commit_bytes", "max_commit_bytes", "max_commit_growth_bytes", "min_working_set_bytes", "max_working_set_bytes", "max_working_set_growth_bytes", "growth_ceiling_bytes", "samples"],
+        "not": { "anyOf": [
+          { "required": ["injected_commit_bytes"] },
+          { "required": ["expected_exit_code"] },
+          { "required": ["observed_exit_code"] },
+          { "required": ["process_start_time"] },
+          { "required": ["exit_observation"] },
+          { "required": ["trip_precedes_exit_observation"] },
+          { "required": ["trip_receipt"] }
+        ] }
+      }
+    },
+    {
+      "if": { "properties": { "evidence_kind": { "const": "injected_growth" } } },
+      "then": {
+        "required": ["injected_commit_bytes", "expected_exit_code", "observed_exit_code", "process_start_time", "exit_observation", "trip_precedes_exit_observation", "trip_receipt"],
+        "not": { "anyOf": [
+          { "required": ["started_at"] },
+          { "required": ["ended_at"] },
+          { "required": ["duration_seconds"] },
+          { "required": ["sample_interval_seconds"] },
+          { "required": ["sample_count"] },
+          { "required": ["samples"] }
+        ] }
+      }
+    }
+  ]
+}
