@@ -134,7 +134,14 @@
           { "required": ["duration_seconds"] },
           { "required": ["sample_interval_seconds"] },
           { "required": ["sample_count"] },
-          { "required": ["samples"] }
+          { "required": ["samples"] },
+          { "required": ["min_commit_bytes"] },
+          { "required": ["max_commit_bytes"] },
+          { "required": ["max_commit_growth_bytes"] },
+          { "required": ["min_working_set_bytes"] },
+          { "required": ["max_working_set_bytes"] },
+          { "required": ["max_working_set_growth_bytes"] },
+          { "required": ["growth_ceiling_bytes"] }
         ] }
       }
     }
