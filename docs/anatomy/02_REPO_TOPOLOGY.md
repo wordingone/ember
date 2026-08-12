@@ -27,7 +27,13 @@ bare name is rooted on the governed B: volume under `M/ember-wt` (or
 `EMBER_WORKTREE_ROOT`); an explicit C:-volume destination fails closed unless the operator supplies
 `--allow-c-drive`. B: is the default work-product, worktree, and tool-cache
 volume. C: is reserved for the operating system and the runner's 150 GiB
-admission floor.
+admission floor. `audit --strict` mechanically reports every registered
+worktree still resolving onto C: (`c_drive_registration`): a managed row
+reached C: without a recorded `--allow-c-drive` override is an error (it
+predates the refusal, or bypassed it some other way); a legacy/unregistered
+row is backlog, drained by the issue's inventory waves rather than failing
+the default gate; an explicitly overridden managed row is the one shape the
+operator already declared on purpose and is not re-reported.
 
 The tool maintains a state file (`ember-worktree-lifecycle.json`) and lock
 (`ember-worktree-lifecycle.lock`) tracking every managed worktree; `audit`

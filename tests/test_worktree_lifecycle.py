@@ -1637,6 +1637,110 @@ def test_strict_probe_is_the_census_probe(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# C-drive saturation (#1317): `audit --strict` mechanizes the inventory-drain
+# waves' own ad-hoc "which registrations sit on C:" classification instead of
+# leaving it to a one-off script re-derived every wave.
+# ---------------------------------------------------------------------------
+
+
+def test_create_records_the_explicit_c_drive_override_on_the_managed_row(tmp_path: Path) -> None:
+    """The override is recorded, not merely honoured in the moment -- strict_report's
+    c_drive_registration check reads it back to tell a deliberate exception apart from a
+    row that reached C: before the refusal (and this field) existed.
+    """
+    if os.name != "nt":
+        return
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    destination = tmp_path / "explicit-c-drive"
+
+    lifecycle(
+        repo, "create",
+        "--path", str(destination),
+        "--branch", "explicit-c-drive",
+        "--owner", "founder-one",
+        "--purpose", "records-override",
+        "--expires", "2099-01-01",
+        "--allow-c-drive",
+    )
+
+    state = read_state(repo)
+    assert state["managed"][path_key_of(destination)]["c_drive_override"] is True
+
+
+def test_strict_audit_reports_a_managed_c_drive_row_without_recorded_override_as_error(
+    tmp_path: Path,
+) -> None:
+    """The defect this check exists for: a managed row that reached C: before the
+    create-time refusal (and its c_drive_override bookkeeping) existed. Simulated by
+    stripping the field a pre-#1669 state file would never have carried.
+    """
+    if os.name != "nt":
+        return
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    pre_existing = _managed(repo, tmp_path, "pre-1669")
+
+    state = read_state(repo)
+    del state["managed"][path_key_of(pre_existing)]["c_drive_override"]
+    state_path(repo).write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
+
+    result = strict(repo)
+    found = [item for item in contradictions_of(result) if item["code"] == "c_drive_registration"]
+    assert [item["path"] for item in found] == [str(pre_existing)]
+    assert found[0]["severity"] == "error"
+    assert found[0]["origin"] == "managed"
+    assert "retire --path" in found[0]["cure"]
+    assert result.returncode == 2
+    assert "REGISTRY_CONTRADICTION" in result.stderr
+
+
+def test_strict_audit_does_not_report_an_explicitly_overridden_c_drive_managed_row(
+    tmp_path: Path,
+) -> None:
+    """The declared-exception path stays quiet, including under --all: --allow-c-drive
+    IS the operator's auditable choice, so re-flagging it every run would be noise, not
+    signal -- and it must not regress the many existing fixtures that rely on `_managed`
+    landing on C: in this sandbox.
+    """
+    if os.name != "nt":
+        return
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    _managed(repo, tmp_path, "acknowledged")
+
+    result = strict(repo)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert [c for c in contradictions_of(result) if c["code"] == "c_drive_registration"] == []
+
+    deep = lifecycle(repo, "audit", "--strict", "--all", check=False)
+    assert [
+        c for c in contradictions_of(deep) if c["code"] == "c_drive_registration"
+    ] == [], "an explicit override is not backlog debt -- it was already decided"
+
+
+def test_strict_audit_reports_a_legacy_c_drive_row_as_backlog_not_error(tmp_path: Path) -> None:
+    """A pre-existing (legacy, unmanaged) worktree on C: is exactly the inherited debt the
+    issue's inventory-drain waves work down wave by wave -- reported so it stays visible,
+    but not promoted to a default-gate failure the way a managed row's own mistake is.
+    """
+    if os.name != "nt":
+        return
+    repo = make_repo(tmp_path)
+    legacy = tmp_path / "legacy-on-c"
+    git(repo, "worktree", "add", "-b", "legacy-on-c", str(legacy))
+    lifecycle(repo, "install", "--target", "3")
+
+    result = strict(repo)
+    found = [item for item in contradictions_of(result) if item["code"] == "c_drive_registration"]
+    assert [item["path"] for item in found] == [str(legacy)]
+    assert found[0]["severity"] == "backlog"
+    assert found[0]["origin"] == "legacy"
+    assert result.returncode == 0, "backlog alone must not fail the default gate"
+    assert lifecycle(repo, "audit", "--strict", "--all", check=False).returncode == 2
+
+
+# ---------------------------------------------------------------------------
 # --detach (#1371) meets the strict registry inventory (#1366)
 # ---------------------------------------------------------------------------
 
