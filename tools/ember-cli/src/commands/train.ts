@@ -5,9 +5,10 @@
 // commands/train.ts — /train: the phase-gated pre-training spine surface.
 //
 // HARD PRE-TRAINING GATE (load-bearing): the default command is preflight-only.
-// Explicit `--execute` mode is available only with all three certificate paths,
-// after the same cond7 launch-packet readiness preflight succeeds, and invokes only
-// the fixed certified_train_launch.py consumer. The named run_vertical_slice.py
+// Explicit `--execute` mode selects execution but never supplies authority paths:
+// after the same cond7 launch-packet readiness preflight succeeds, it reopens the
+// governed external custody root/run id and invokes only the fixed
+// certified_train_launch.py consumer. The named run_vertical_slice.py
 // command from launch_packet output is never executed as a command string. On any
 // preflight, certificate-consumer, or response failure, execution fails closed.
 
@@ -15,8 +16,15 @@ import type { CommandContext, RegistryCommand } from "../types/command-types.ts"
 import { resolveEmberSourceRootOrCwd } from "../utils/repo-root.ts";
 import { publishActivityFeedInfrastructureFailure } from "../services/activity-feed.ts";
 import { spawn, spawnSync } from "child_process";
-import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { createHash } from "crypto";
+import {
+  existsSync,
+  lstatSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+} from "fs";
+import { isAbsolute, join, parse, relative, resolve, sep } from "path";
 
 // ---------------------------------------------------------------------------
 // Preflight spawn seam (injectable for testing; mirrors model.ts's runner)
@@ -285,15 +293,10 @@ interface TrainCommandDeps {
   scriptPath?: string;
   /** certified_train_launch.py path override. */
   certifiedLaunchScriptPath?: string;
-  /** Canonical launch-authority certificate path override; defaults to
-   *  <repoRoot>/receipts/ember-02-launch-authority/certificate.json. */
-  certificatePath?: string;
-  /** Canonical launch-authority declaration-ledger path override; defaults to
-   *  <repoRoot>/receipts/ember-02-launch-authority/declaration-ledger.jsonl. */
-  declarationLedgerPath?: string;
-  /** Canonical launch-authority run-spec path override; defaults to
-   *  <repoRoot>/receipts/ember-02-launch-authority/run-spec.json. */
-  runSpecPath?: string;
+  /** Canonical external custody root; the leaf is always derived from run id. */
+  launchAuthorityCustodyRoot?: string;
+  /** Validated producer run id used to derive <root>/<run-id>/launch-authority. */
+  launchAuthorityRunId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -304,17 +307,242 @@ interface CanonicalArtifactPaths {
   certificate: string;
   declarationLedger: string;
   runSpec: string;
+  shaBindingMap: string;
+  custodyReceipt: string;
+  custodyRoot: string;
+  runId: string;
+  receiptSha256: string;
+  bytes: Record<(typeof LAUNCH_AUTHORITY_LEAF_FILES)[number], Buffer>;
+}
+
+const LAUNCH_AUTHORITY_FILES = [
+  "certificate.json",
+  "declaration-ledger.jsonl",
+  "run-spec.json",
+  "sha-binding-map.json",
+] as const;
+const LAUNCH_AUTHORITY_LEAF_FILES = [
+  ...LAUNCH_AUTHORITY_FILES,
+  "launch-authority-custody.json",
+] as const;
+const LAUNCH_AUTHORITY_RUN_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+const SHA256 = /^[0-9a-f]{64}$/;
+const SOURCE_IDENTITY = /^sha256:([0-9a-f]{64});path:(\S.*)$/;
+const SHA_BINDING_KEYS = [
+  "benchmark_registry_sha256",
+  "board_receipt_sha256",
+  "checkout_sha256",
+  "cli_binary_sha256",
+  "config_sha256",
+  "failure_class_ledger_sha256",
+  "input_authority_sha256",
+  "launch_packet_sha256",
+  "root_summary_sha256",
+  "seat_sha256",
+  "subject_manifest_sha256",
+  "tokenizer_sha256",
+] as const;
+
+function _artifactLabel(name: string): string {
+  if (name === "declaration-ledger.jsonl") return "declaration ledger";
+  if (name === "run-spec.json") return "run spec";
+  if (name === "sha-binding-map.json") return "SHA binding map";
+  if (name === "launch-authority-custody.json") return "launch-authority custody receipt";
+  if (name === "certificate.json") return "certificate";
+  return name;
+}
+
+function _sha256(bytes: Buffer): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+function _samePath(left: string, right: string): boolean {
+  return process.platform === "win32"
+    ? resolve(left).toLowerCase() === resolve(right).toLowerCase()
+    : resolve(left) === resolve(right);
+}
+
+function _assertNoAliasComponents(path: string, label: string): string {
+  const absolute = resolve(path);
+  const root = parse(absolute).root;
+  let current = root;
+  const suffix = relative(root, absolute);
+  for (const part of suffix === "" ? [] : suffix.split(sep)) {
+    current = join(current, part);
+    if (!existsSync(current)) {
+      throw new Error(`${label} is missing`);
+    }
+    if (lstatSync(current).isSymbolicLink()) {
+      throw new Error(`${label} contains a symlink or reparse alias`);
+    }
+    if (!_samePath(realpathSync.native(current), current)) {
+      throw new Error(`${label} contains a symlink or reparse alias`);
+    }
+  }
+  return realpathSync.native(absolute);
+}
+
+function _outsideRepository(repoRoot: string, candidate: string): boolean {
+  const fromRepository = relative(resolve(repoRoot), resolve(candidate));
+  return fromRepository !== "" && (fromRepository.startsWith("..") || isAbsolute(fromRepository));
+}
+
+function _closedKeys(value: unknown, expected: readonly string[]): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const actual = Object.keys(value).sort();
+  return actual.length === expected.length && actual.every((key, index) => key === [...expected].sort()[index]);
+}
+
+function _validateJson(bytes: Buffer, label: string): void {
+  try {
+    JSON.parse(bytes.toString("utf8"));
+  } catch {
+    throw new Error(`${label} is not valid JSON`);
+  }
+}
+
+function _validateJsonl(bytes: Buffer, label: string): void {
+  const lines = bytes.toString("utf8").split(/\r?\n/).filter((line) => line.trim() !== "");
+  if (lines.length === 0) throw new Error(`${label} is empty`);
+  for (const line of lines) {
+    try {
+      JSON.parse(line);
+    } catch {
+      throw new Error(`${label} contains invalid JSONL`);
+    }
+  }
+}
+
+function _validateShaBindingMap(mapBytes: Buffer, certificateBytes: Buffer): void {
+  let bindingMap: unknown;
+  let certificate: unknown;
+  try {
+    bindingMap = JSON.parse(mapBytes.toString("utf8"));
+    certificate = JSON.parse(certificateBytes.toString("utf8"));
+  } catch {
+    throw new Error("SHA binding map or certificate is not valid JSON");
+  }
+  if (!_closedKeys(bindingMap, SHA_BINDING_KEYS)) {
+    throw new Error("SHA binding map schema is not closed");
+  }
+  if (typeof certificate !== "object" || certificate === null || Array.isArray(certificate)) {
+    throw new Error("certificate is not a JSON object");
+  }
+  const certificateObject = certificate as Record<string, unknown>;
+  for (const key of SHA_BINDING_KEYS) {
+    const value = bindingMap[key];
+    const identity = typeof value === "string" ? SOURCE_IDENTITY.exec(value) : null;
+    if (identity === null) {
+      throw new Error(`SHA binding map ${key} source identity is invalid`);
+    }
+    if (certificateObject[key] !== identity[1]) {
+      throw new Error(`SHA binding map ${key} digest does not match certificate`);
+    }
+  }
 }
 
 function _canonicalArtifactPaths(
   repoRoot: string,
   deps: TrainCommandDeps,
 ): CanonicalArtifactPaths {
-  const base = join(repoRoot, "receipts", "ember-02-launch-authority");
+  const configured =
+    deps.launchAuthorityCustodyRoot ?? process.env.EMBER_LAUNCH_AUTHORITY_CUSTODY_ROOT;
+  const runId = deps.launchAuthorityRunId ?? process.env.EMBER_LAUNCH_AUTHORITY_RUN_ID;
+  if (configured === undefined || configured.trim() === "") {
+    throw new Error(
+      "EMBER_LAUNCH_AUTHORITY_CUSTODY_ROOT is required; committed launch-authority receipts are historical only",
+    );
+  }
+  if (runId === undefined || !LAUNCH_AUTHORITY_RUN_ID.test(runId)) {
+    throw new Error("EMBER_LAUNCH_AUTHORITY_RUN_ID is missing or malformed");
+  }
+  if (!isAbsolute(configured)) {
+    throw new Error("EMBER_LAUNCH_AUTHORITY_CUSTODY_ROOT must be an absolute external path");
+  }
+  const rawSegments = configured.replace(/\\/g, "/").split("/");
+  if (rawSegments.includes(".") || rawSegments.includes("..")) {
+    throw new Error("EMBER_LAUNCH_AUTHORITY_CUSTODY_ROOT must be lexically canonical");
+  }
+  const custodyRoot = _assertNoAliasComponents(configured, "launch-authority custody root");
+  if (!_outsideRepository(repoRoot, custodyRoot)) {
+    throw new Error("EMBER_LAUNCH_AUTHORITY_CUSTODY_ROOT must be outside the Ember repository");
+  }
+  const base = resolve(custodyRoot, runId, "launch-authority");
+  const fromCustody = relative(custodyRoot, base);
+  if (fromCustody.startsWith("..") || isAbsolute(fromCustody)) {
+    throw new Error("derived launch-authority leaf escapes custody root");
+  }
+  _assertNoAliasComponents(base, "launch-authority leaf");
+  const names = readdirSync(base).sort();
+  const expectedNames = [...LAUNCH_AUTHORITY_LEAF_FILES].sort();
+  if (names.length !== expectedNames.length || names.some((name, index) => name !== expectedNames[index])) {
+    const expectedNameSet = new Set<string>(expectedNames);
+    const missing = expectedNames.filter((name) => !names.includes(name)).map(_artifactLabel);
+    const unexpected = names.filter((name) => !expectedNameSet.has(name));
+    const details = [
+      missing.length > 0 ? `missing ${missing.join(", ")}` : "",
+      unexpected.length > 0 ? `unexpected ${unexpected.join(", ")}` : "",
+    ].filter(Boolean);
+    throw new Error(`launch-authority leaf schema is not closed${details.length > 0 ? `: ${details.join("; ")}` : ""}`);
+  }
+  const paths = Object.fromEntries(
+    LAUNCH_AUTHORITY_LEAF_FILES.map((name) => {
+      const path = join(base, name);
+      _assertNoAliasComponents(path, `launch-authority ${name}`);
+      if (!lstatSync(path).isFile()) throw new Error(`launch-authority ${name} is not a regular file`);
+      return [name, path];
+    }),
+  ) as Record<(typeof LAUNCH_AUTHORITY_LEAF_FILES)[number], string>;
+  const receiptBytes = readFileSync(paths["launch-authority-custody.json"]);
+  let receipt: unknown;
+  try {
+    receipt = JSON.parse(receiptBytes.toString("utf8"));
+  } catch {
+    throw new Error("launch-authority custody receipt is invalid JSON");
+  }
+  if (
+    !_closedKeys(receipt, ["custody_kind", "files", "run_id", "schema_version", "training_executed"]) ||
+    receipt.schema_version !== "ember-launch-authority-external-custody-v1" ||
+    receipt.run_id !== runId ||
+    receipt.custody_kind !== "external-run-scoped" ||
+    receipt.training_executed !== false ||
+    !_closedKeys(receipt.files, LAUNCH_AUTHORITY_FILES)
+  ) {
+    throw new Error("launch-authority custody receipt schema or run identity is invalid");
+  }
+  const canonicalReceipt = Buffer.from(`${JSON.stringify(receipt)}\n`, "utf8");
+  if (!canonicalReceipt.equals(receiptBytes)) {
+    throw new Error("launch-authority custody receipt bytes are noncanonical");
+  }
+  const artifactBytes = Object.fromEntries(
+    LAUNCH_AUTHORITY_FILES.map((name) => [name, readFileSync(paths[name])]),
+  ) as Record<(typeof LAUNCH_AUTHORITY_FILES)[number], Buffer>;
+  for (const name of LAUNCH_AUTHORITY_FILES) {
+    const expected = receipt.files[name];
+    if (typeof expected !== "string" || !SHA256.test(expected) || _sha256(artifactBytes[name]) !== expected) {
+      throw new Error(`launch-authority ${_artifactLabel(name)} hash does not match custody receipt`);
+    }
+  }
+  _validateJson(artifactBytes["certificate.json"], "certificate");
+  _validateJsonl(artifactBytes["declaration-ledger.jsonl"], "declaration ledger");
+  _validateJson(artifactBytes["run-spec.json"], "run spec");
+  _validateShaBindingMap(
+    artifactBytes["sha-binding-map.json"],
+    artifactBytes["certificate.json"],
+  );
   return {
-    certificate: deps.certificatePath ?? join(base, "certificate.json"),
-    declarationLedger: deps.declarationLedgerPath ?? join(base, "declaration-ledger.jsonl"),
-    runSpec: deps.runSpecPath ?? join(base, "run-spec.json"),
+    certificate: paths["certificate.json"],
+    declarationLedger: paths["declaration-ledger.jsonl"],
+    runSpec: paths["run-spec.json"],
+    shaBindingMap: paths["sha-binding-map.json"],
+    custodyReceipt: paths["launch-authority-custody.json"],
+    custodyRoot,
+    runId,
+    receiptSha256: _sha256(receiptBytes),
+    bytes: {
+      ...artifactBytes,
+      "launch-authority-custody.json": receiptBytes,
+    },
   };
 }
 
@@ -398,6 +626,9 @@ interface TrainOffer {
   certificate: string;
   declarationLedger: string;
   runSpec: string;
+  custodyRoot: string;
+  runId: string;
+  receiptSha256: string;
 }
 
 const trainOffers = new Map<string, TrainOffer>();
@@ -431,60 +662,15 @@ function _mintOfferId(): string {
 
 interface TrainArgs {
   execute: boolean;
-  certificate?: string;
-  declarationLedger?: string;
-  runSpec?: string;
 }
 
 function _parseTrainArgs(raw: string): TrainArgs {
   const tokens = raw.trim() === "" ? [] : raw.trim().split(/\s+/);
-  const parsed: TrainArgs = { execute: false };
-  const seen = new Set<string>();
-  const valued = new Map<string, "certificate" | "declarationLedger" | "runSpec">([
-    ["--certificate", "certificate"],
-    ["--declaration-ledger", "declarationLedger"],
-    ["--run-spec", "runSpec"],
-  ]);
-  for (let index = 0; index < tokens.length; index += 1) {
-    const option = tokens[index]!;
-    if (seen.has(option)) {
-      throw new Error(`duplicate train option: ${option}`);
-    }
-    seen.add(option);
-    if (option === "--execute") {
-      parsed.execute = true;
-      continue;
-    }
-    const field = valued.get(option);
-    if (field === undefined) {
-      throw new Error(`unknown train option: ${option}`);
-    }
-    const value = tokens[index + 1];
-    if (value === undefined || value.startsWith("--")) {
-      throw new Error(`missing value for ${option}`);
-    }
-    parsed[field] = value;
-    index += 1;
-  }
-  if (
-    !parsed.execute &&
-    (parsed.certificate !== undefined ||
-      parsed.declarationLedger !== undefined ||
-      parsed.runSpec !== undefined)
-  ) {
-    throw new Error("authority paths require --execute");
-  }
-  if (
-    parsed.execute &&
-    (parsed.certificate === undefined ||
-      parsed.declarationLedger === undefined ||
-      parsed.runSpec === undefined)
-  ) {
-    throw new Error(
-      "usage: /train --execute --certificate <path> --declaration-ledger <path> --run-spec <path>",
-    );
-  }
-  return parsed;
+  if (tokens.length === 0) return { execute: false };
+  if (tokens.length === 1 && tokens[0] === "--execute") return { execute: true };
+  throw new Error(
+    "usage: /train [--execute]; authority paths are resolved only from the governed external custody root and run id",
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -684,6 +870,31 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
         trainOffers.delete(suppliedId);
 
         const repoRoot = deps.repoRoot ?? _defaultRepoRoot(ctx.cwd);
+        let reopened: CanonicalArtifactPaths;
+        try {
+          reopened = _canonicalArtifactPaths(repoRoot, deps);
+        } catch (error) {
+          return {
+            type: "message" as const,
+            message: `error: launch-authority custody changed or became invalid before confirmation; no training process was authorized.\n${error instanceof Error ? error.message : "invalid launch-authority custody"}`,
+            exitCode: 1,
+          };
+        }
+        if (
+          !_samePath(reopened.custodyRoot, offer.custodyRoot) ||
+          reopened.runId !== offer.runId ||
+          reopened.receiptSha256 !== offer.receiptSha256 ||
+          !_samePath(reopened.certificate, offer.certificate) ||
+          !_samePath(reopened.declarationLedger, offer.declarationLedger) ||
+          !_samePath(reopened.runSpec, offer.runSpec)
+        ) {
+          return {
+            type: "message" as const,
+            message:
+              "error: launch-authority custody binding changed after the offer; no training process was authorized.",
+            exitCode: 1,
+          };
+        }
         const pythonBin = deps.pythonBin ?? process.env["EMBER_PYTHON_BIN"] ?? "python";
         const certifiedLaunchScriptPath =
           deps.certifiedLaunchScriptPath ??
@@ -692,16 +903,18 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
         let certifiedResult: CertifiedLaunchRunnerResult;
         try {
           certifiedResult = await runCertifiedLaunch(pythonBin, [
-            certifiedLaunchScriptPath,
-            "--root",
-            repoRoot,
-            "--certificate",
-            offer.certificate,
-            "--declaration-ledger",
-            offer.declarationLedger,
-            "--run-spec",
-            offer.runSpec,
-          ]);
+              certifiedLaunchScriptPath,
+              "--root",
+              repoRoot,
+              "--certificate",
+              reopened.certificate,
+              "--declaration-ledger",
+              reopened.declarationLedger,
+              "--run-spec",
+              reopened.runSpec,
+              "--custody-receipt-sha256",
+              reopened.receiptSha256,
+            ]);
         } catch {
           return {
             type: "message" as const,
@@ -827,21 +1040,34 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
       }
 
       if (trainArgs.execute) {
-        // Explicit flags always beat canonical resolution (C8): the canonical
-        // launch-authority tree under repoRoot is never consulted on this path.
+        // Explicit execution selects the operation, never its authority.
+        // Reopen the same external run-scoped custody used by OFFER/confirm,
+        // then seal its exact bytes and independently admitted receipt hash.
+        let canonical: CanonicalArtifactPaths;
+        try {
+          canonical = _canonicalArtifactPaths(repoRoot, deps);
+        } catch (error) {
+          return {
+            type: "message" as const,
+            message: `error: launch-authority custody could not be resolved for explicit execution; no training process was authorized.\n${error instanceof Error ? error.message : "authority resolution failed"}`,
+            exitCode: 1,
+          };
+        }
         let certifiedResult: CertifiedLaunchRunnerResult;
         try {
           certifiedResult = await runCertifiedLaunch(pythonBin, [
-            certifiedLaunchScriptPath,
-            "--root",
-            repoRoot,
-            "--certificate",
-            trainArgs.certificate!,
-            "--declaration-ledger",
-            trainArgs.declarationLedger!,
-            "--run-spec",
-            trainArgs.runSpec!,
-          ]);
+              certifiedLaunchScriptPath,
+              "--root",
+              repoRoot,
+              "--certificate",
+              canonical.certificate,
+              "--declaration-ledger",
+              canonical.declarationLedger,
+              "--run-spec",
+              canonical.runSpec,
+              "--custody-receipt-sha256",
+              canonical.receiptSha256,
+            ]);
         } catch {
           return {
             type: "message" as const,
@@ -857,7 +1083,16 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
       // surfaced as text -- see extracted.command's non-use below): resolve the
       // canonical launch-authority artifacts and offer the launch through the panel's
       // confirm-only membrane rather than handing the operator a command to paste.
-      const canonical = _canonicalArtifactPaths(repoRoot, deps);
+      let canonical: CanonicalArtifactPaths;
+      try {
+        canonical = _canonicalArtifactPaths(repoRoot, deps);
+      } catch (error) {
+        return {
+          type: "message" as const,
+          message: `launch-packet: all preflights GREEN, but live launch-authority custody is invalid -- training is BLOCKED (fail-closed).\n${error instanceof Error ? error.message : "invalid launch-authority custody"}\nNo offer minted.`,
+          exitCode: 1,
+        };
+      }
       const resolvedCertificate = _resolveArtifact(canonical.certificate, "json");
       const resolvedLedger = _resolveArtifact(canonical.declarationLedger, "jsonl");
       const resolvedRunSpec = _resolveArtifact(canonical.runSpec, "json");
@@ -893,6 +1128,9 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
         certificate: canonical.certificate,
         declarationLedger: canonical.declarationLedger,
         runSpec: canonical.runSpec,
+        custodyRoot: canonical.custodyRoot,
+        runId: canonical.runId,
+        receiptSha256: canonical.receiptSha256,
       });
       return {
         type: "message" as const,
@@ -903,6 +1141,8 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
           `  certificate: ${canonical.certificate}`,
           `  declaration ledger: ${canonical.declarationLedger}`,
           `  run spec: ${canonical.runSpec}`,
+          `  custody receipt: ${canonical.custodyReceipt}`,
+          `  run id: ${canonical.runId}`,
           "",
           `OFFER ${offerId} action=train-launch -- type "/train confirm ${offerId}" to proceed. Declining, a typo, or anything else takes no action; the confirm-only membrane never silently steers.`,
         ].join("\n"),

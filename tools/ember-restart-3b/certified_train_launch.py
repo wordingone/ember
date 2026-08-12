@@ -164,7 +164,7 @@ TRAINING_CAPABILITIES = {"image", "audio", "reasoning", "tool"}
 # this same tree without the certificate ever noticing.
 SPECIALIST_TOKENIZER_RELATIVE_PATH = "tokenizer/tokenizer.json"
 OPTIONAL_RUN_SPEC_KEYS = (
-    {"training_verify_receipt_path"}
+    {"training_verify_receipt_path", "training_verify_receipt_sha256"}
     | RESUME_RUN_SPEC_KEYS
     | SPECIALIST_RUN_SPEC_KEYS
     | SPECIALIST_LAUNCH_RUN_SPEC_KEYS
@@ -408,9 +408,21 @@ def _require_git_sha(value: object, label: str) -> str:
     return value
 
 
+def _reject_duplicate_json_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in payload:
+            raise ValueError(f"{key} duplicate key")
+        payload[key] = value
+    return payload
+
+
 def _load_json(path: pathlib.Path, label: str) -> dict[str, Any]:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
+        value = json.loads(
+            path.read_text(encoding="utf-8"),
+            object_pairs_hook=_reject_duplicate_json_keys,
+        )
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise ValueError(f"{label} is unreadable or invalid JSON") from error
     return _require_object(value, label)
@@ -427,7 +439,8 @@ def _load_ledger(path: pathlib.Path) -> list[dict[str, Any]]:
             continue
         try:
             row = _require_object(
-                json.loads(line), f"declaration ledger row {index}"
+                json.loads(line, object_pairs_hook=_reject_duplicate_json_keys),
+                f"declaration ledger row {index}",
             )
         except json.JSONDecodeError as error:
             raise ValueError(
@@ -1369,11 +1382,243 @@ def _require_scope_subset(
             )
 
 
+_RUN_SCOPED_CUSTODY_SCHEMA = "ember-launch-authority-external-custody-v1"
+_RUN_SCOPED_PACKET_FILENAMES = {
+    "certificate": "certificate.json",
+    "declaration-ledger": "declaration-ledger.jsonl",
+    "run-spec": "run-spec.json",
+}
+_RUN_SCOPED_CUSTODY_RECEIPT_KEYS = frozenset(
+    {"schema_version", "run_id", "custody_kind", "training_executed", "files"}
+)
+_RUN_SCOPED_SHA_BINDING_KEYS = frozenset(
+    {
+        "benchmark_registry_sha256",
+        "board_receipt_sha256",
+        "checkout_sha256",
+        "cli_binary_sha256",
+        "config_sha256",
+        "failure_class_ledger_sha256",
+        "input_authority_sha256",
+        "launch_packet_sha256",
+        "root_summary_sha256",
+        "seat_sha256",
+        "subject_manifest_sha256",
+        "tokenizer_sha256",
+    }
+)
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_SOURCE_IDENTITY_RE = re.compile(r"^sha256:([0-9a-f]{64});path:(\S.*)$")
+_RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+def _load_closed_object(raw: bytes, label: str) -> dict[str, Any]:
+    def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in payload:
+                raise ValueError(f"launch-authority custody {label} duplicate key")
+            payload[key] = value
+        return payload
+
+    try:
+        payload = json.loads(raw.decode("utf-8"), object_pairs_hook=reject_duplicate_keys)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"launch-authority custody {label} invalid") from error
+    if not isinstance(payload, dict):
+        raise ValueError(f"launch-authority custody {label} schema mismatch")
+    return payload
+
+
+def _require_regular_custody_file(path: pathlib.Path, label: str) -> bytes:
+    try:
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(f"launch-authority custody {label} is not a regular file")
+        return path.read_bytes()
+    except OSError as error:
+        raise ValueError(f"launch-authority custody {label} unreadable") from error
+
+
+def _reject_custody_reparse_components(path: pathlib.Path, label: str) -> None:
+    raw = pathlib.Path(path)
+    if any(part in {".", ".."} for part in raw.parts):
+        raise ValueError(f"launch-authority custody {label} has a dot segment")
+    if not raw.is_absolute():
+        raw = pathlib.Path.cwd() / raw
+    current = pathlib.Path(raw.anchor)
+    for part in raw.parts[1:]:
+        current /= part
+        try:
+            stat = current.lstat()
+        except OSError:
+            continue
+        if current.is_symlink() or bool(
+            getattr(stat, "st_file_attributes", 0) & 0x400
+        ):
+            raise ValueError(
+                f"launch-authority custody {label} has a reparse component"
+            )
+
+
+def _validate_run_scoped_custody_packet(
+    repo_root: pathlib.Path,
+    certificate_path: pathlib.Path,
+    declaration_ledger_path: pathlib.Path,
+    run_spec_path: pathlib.Path,
+    certificate: dict[str, Any],
+    run_spec: dict[str, Any],
+    authorized_custody_root: pathlib.Path,
+    expected_receipt_sha256: str | None,
+    expected_packet_directory: pathlib.Path | None = None,
+) -> None:
+    """Reopen the five-file offer owned by the canonical packet directory."""
+    packet_directory = certificate_path.parent
+    if not authorized_custody_root.is_absolute():
+        raise ValueError("launch-authority custody root must be absolute")
+    _reject_custody_reparse_components(authorized_custody_root, "custody root")
+    canonical_packet_directory = packet_directory.resolve(strict=False)
+    canonical_custody_root = authorized_custody_root.resolve(strict=False)
+    canonical_repo_root = pathlib.Path(repo_root).resolve(strict=False)
+    if (
+        canonical_custody_root == canonical_repo_root
+        or canonical_custody_root.is_relative_to(canonical_repo_root)
+    ):
+        raise ValueError(
+            "launch-authority custody root is inside the source repository"
+        )
+    if not canonical_packet_directory.is_relative_to(canonical_custody_root):
+        raise ValueError(
+            "launch-authority custody packet is outside the authorized custody root"
+        )
+    run_id = run_spec.get("run_id")
+    if not isinstance(run_id, str) or _RUN_ID_RE.fullmatch(run_id) is None:
+        raise ValueError("launch-authority custody run_id is invalid")
+    canonical_destination = (
+        canonical_custody_root / run_id / "launch-authority"
+    ).resolve(strict=False)
+    claimed_packet_directory = (
+        canonical_packet_directory
+        if expected_packet_directory is None
+        else pathlib.Path(expected_packet_directory).resolve(strict=False)
+    )
+    if claimed_packet_directory != canonical_destination:
+        raise ValueError(
+            "launch-authority custody packet is not the canonical packet destination"
+        )
+    if expected_packet_directory is not None:
+        staging_name = re.compile(
+            rf"^\.issue1506-{re.escape(run_id)}-[0-9a-f]{{32}}\.staging$"
+        )
+        if (
+            canonical_packet_directory.name != "launch-authority"
+            or canonical_packet_directory.parent.parent != canonical_custody_root
+            or staging_name.fullmatch(canonical_packet_directory.parent.name) is None
+        ):
+            raise ValueError(
+                "launch-authority prepublication packet is not a canonical staging directory"
+            )
+    for label, path in (
+        ("certificate", certificate_path),
+        ("declaration-ledger", declaration_ledger_path),
+        ("run-spec", run_spec_path),
+    ):
+        if path.name != _RUN_SCOPED_PACKET_FILENAMES[label]:
+            raise ValueError(
+                f"launch-authority custody {label} has no canonical packet filename"
+            )
+        if path.parent.resolve(strict=False) != canonical_packet_directory:
+            raise ValueError(
+                f"launch-authority custody {label} must share the canonical packet directory"
+            )
+    map_path = packet_directory / "sha-binding-map.json"
+    receipt_path = packet_directory / "launch-authority-custody.json"
+    for label, path in (
+        ("certificate", certificate_path),
+        ("declaration-ledger", declaration_ledger_path),
+        ("run-spec", run_spec_path),
+        ("sha-binding-map", map_path),
+        ("launch-authority-custody", receipt_path),
+    ):
+        _reject_custody_reparse_components(path, label)
+    expected_packet_names = {
+        *_RUN_SCOPED_PACKET_FILENAMES.values(),
+        "sha-binding-map.json",
+        "launch-authority-custody.json",
+    }
+    try:
+        actual_packet_names = {
+            entry.name for entry in canonical_packet_directory.iterdir()
+        }
+    except OSError as error:
+        raise ValueError(
+            "launch-authority custody packet directory is unreadable"
+        ) from error
+    if actual_packet_names != expected_packet_names:
+        raise ValueError("launch-authority custody packet file set mismatch")
+    paths = {
+        certificate_path.name: certificate_path,
+        declaration_ledger_path.name: declaration_ledger_path,
+        run_spec_path.name: run_spec_path,
+        map_path.name: map_path,
+    }
+    raw_by_name = {
+        name: _require_regular_custody_file(path, name)
+        for name, path in paths.items()
+    }
+    binding_map = _load_closed_object(raw_by_name[map_path.name], "sha-binding-map")
+    if set(binding_map) != _RUN_SCOPED_SHA_BINDING_KEYS:
+        raise ValueError("launch-authority custody sha-binding-map schema mismatch")
+    for key in sorted(_RUN_SCOPED_SHA_BINDING_KEYS):
+        value = binding_map[key]
+        identity = _SOURCE_IDENTITY_RE.fullmatch(value) if isinstance(value, str) else None
+        if identity is None:
+            raise ValueError("launch-authority custody sha-binding-map source identity invalid")
+        if certificate.get(key) != identity.group(1):
+            raise ValueError(
+                "launch-authority custody sha-binding-map certificate hash mismatch"
+            )
+    receipt_raw = _require_regular_custody_file(
+        receipt_path, "launch-authority-custody"
+    )
+    if expected_receipt_sha256 is not None:
+        _require_sha256(
+            expected_receipt_sha256,
+            "launch-authority custody receipt expected SHA-256",
+        )
+        if hashlib.sha256(receipt_raw).hexdigest() != expected_receipt_sha256:
+            raise ValueError("launch-authority custody receipt SHA-256 mismatch")
+    receipt = _load_closed_object(
+        receipt_raw,
+        "launch-authority-custody",
+    )
+    if set(receipt) != _RUN_SCOPED_CUSTODY_RECEIPT_KEYS:
+        raise ValueError("launch-authority custody receipt schema mismatch")
+    if (
+        receipt["schema_version"] != _RUN_SCOPED_CUSTODY_SCHEMA
+        or receipt["custody_kind"] != "external-run-scoped"
+        or receipt["training_executed"] is not False
+        or receipt["run_id"] != run_spec.get("run_id")
+    ):
+        raise ValueError("launch-authority custody receipt identity mismatch")
+    files = receipt["files"]
+    if not isinstance(files, dict) or set(files) != set(paths):
+        raise ValueError("launch-authority custody receipt file map mismatch")
+    for name, raw in raw_by_name.items():
+        expected = files[name]
+        if not isinstance(expected, str) or _SHA256_RE.fullmatch(expected) is None:
+            raise ValueError("launch-authority custody receipt digest invalid")
+        if hashlib.sha256(raw).hexdigest() != expected:
+            raise ValueError("launch-authority custody receipt file hash mismatch")
+
+
 def validate_certified_request(
     repo_root: pathlib.Path,
     certificate_path: pathlib.Path,
     declaration_ledger_path: pathlib.Path,
     run_spec_path: pathlib.Path,
+    expected_custody_receipt_sha256: str | None = None,
+    *,
+    expected_launch_authority_packet_directory: pathlib.Path | None = None,
 ) -> ValidatedLaunch:
     repo_root = pathlib.Path(repo_root)
     certificate_path = pathlib.Path(certificate_path)
@@ -1508,6 +1753,13 @@ def validate_certified_request(
     # training-scoped verify receipt supplies it. An equal-head launch keeps the
     # pre-#1419 shape exactly: the census already ran at this very commit.
     training_verify_receipt_path = run_spec.get("training_verify_receipt_path")
+    training_verify_receipt_sha256 = run_spec.get("training_verify_receipt_sha256")
+    if (training_verify_receipt_path is None) != (
+        training_verify_receipt_sha256 is None
+    ):
+        raise ValueError(
+            "run spec training verify receipt path/SHA-256 must be declared together"
+        )
     training_verify_path: pathlib.Path | None = None
     if training_verify_receipt_path is not None:
         if (
@@ -1525,6 +1777,18 @@ def validate_certified_request(
         if not training_path.is_absolute():
             training_path = run_spec_path.parent / training_path
         training_verify_path = training_path
+        expected_training_receipt_sha256 = _require_sha256(
+            training_verify_receipt_sha256,
+            "run spec training_verify_receipt_sha256",
+        )
+        try:
+            actual_training_receipt_sha256 = hashlib.sha256(
+                training_path.read_bytes()
+            ).hexdigest()
+        except OSError as error:
+            raise ValueError("training verify receipt is unreadable") from error
+        if actual_training_receipt_sha256 != expected_training_receipt_sha256:
+            raise ValueError("training verify receipt raw SHA-256 mismatch")
         _validate_training_verify_receipt(
             training_path, repo_root, certificate_closure_sha256
         )
@@ -1545,6 +1809,18 @@ def validate_certified_request(
     # certificate's authority must be established and shape-checked before
     # anything is measured against it.
     _require_scope_subset(requested_scope, authorized_scope)
+
+    _validate_run_scoped_custody_packet(
+        repo_root,
+        certificate_path,
+        declaration_ledger_path,
+        run_spec_path,
+        certificate,
+        run_spec,
+        pathlib.Path(requested_scope["custody_root"]),
+        expected_custody_receipt_sha256,
+        expected_launch_authority_packet_directory,
+    )
 
     resume = _validate_resume_request(
         run_spec,
@@ -2593,6 +2869,7 @@ def certify_and_execute(
     certificate_path: pathlib.Path,
     declaration_ledger_path: pathlib.Path,
     run_spec_path: pathlib.Path,
+    expected_custody_receipt_sha256: str,
     run_process=subprocess.run,
 ) -> int:
     launch = validate_certified_request(
@@ -2600,6 +2877,7 @@ def certify_and_execute(
         certificate_path,
         declaration_ledger_path,
         run_spec_path,
+        expected_custody_receipt_sha256,
     )
     return execute_validated_launch(repo_root, launch, run_process=run_process)
 
@@ -2614,6 +2892,7 @@ def main(argv: list[str] | None = None) -> int:
         "--declaration-ledger", required=True, type=pathlib.Path
     )
     parser.add_argument("--run-spec", required=True, type=pathlib.Path)
+    parser.add_argument("--custody-receipt-sha256", required=True)
     arguments = parser.parse_args(argv)
     try:
         launch = validate_certified_request(
@@ -2621,6 +2900,7 @@ def main(argv: list[str] | None = None) -> int:
             arguments.certificate,
             arguments.declaration_ledger,
             arguments.run_spec,
+            arguments.custody_receipt_sha256,
         )
         exit_code = execute_validated_launch(arguments.root, launch)
     except ValueError as error:

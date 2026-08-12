@@ -10,7 +10,7 @@
 import { describe, it, expect } from "bun:test";
 import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
-import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import {
   createVerifyTrainingCommand,
@@ -129,12 +129,14 @@ describe("createVerifyTrainingCommand", () => {
           calls.push({ method, params });
           if (method === "dispatch_manifest") {
             const manifest = JSON.parse(params["manifest_utf8"] as string);
+            const receiptArgument = manifest.args[manifest.args.indexOf("--receipt") + 1] as string;
+            expect(existsSync(receiptArgument)).toBe(true);
             const preflight = manifest.preflight_receipt as string;
             mkdirSync(dirname(preflight), { recursive: true });
             writeFileSync(preflight, "preflight\n");
             return {
               pid: 123,
-              preflight_receipt_path: preflight,
+              preflight_receipt_path: process.platform === "win32" ? `\\\\?\\${preflight}` : realpathSync.native(preflight),
               preflight_receipt_sha256: createHash("sha256").update("preflight\n").digest("hex"),
             };
           }

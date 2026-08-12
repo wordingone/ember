@@ -20,7 +20,7 @@
 // `ember-lab verify-training` subcommand in the cockpit.
 
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { CommandContext, RegistryCommand } from "../types/command-types.ts";
 import {
@@ -123,6 +123,17 @@ function defaultReadReceipt(path: string): TrainingVerifyReceipt {
 
 function sha256File(path: string): string {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
+
+function canonicalPathIdentity(path: string): string | undefined {
+  try {
+    const canonical = realpathSync.native(path);
+    return process.platform === "win32"
+      ? canonical.replace(/^\\\\\?\\/, "").toLowerCase()
+      : canonical;
+  } catch {
+    return undefined;
+  }
 }
 
 function embeddedSourceCommit(): string {
@@ -239,6 +250,11 @@ export function createVerifyTrainingCommand(deps: VerifyTrainingCommandDeps = {}
       const custodyRoot = join(custodyBase, jobId);
       mkdirSync(custodyRoot, { recursive: true });
       const receiptPath = join(custodyRoot, "verify-training-receipt.json");
+      // The daemon canonicalizes existing absolute arguments before checking
+      // custody.  Pre-establish this unique run-scoped output so Windows path
+      // normalization cannot compare a lexical drive path with a canonical
+      // device-prefixed custody root and falsely classify it as foreign.
+      writeFileSync(receiptPath, "", { flag: "wx" });
 
       const runArgs = ["verify-training", "--root", repoRoot, "--receipt", receiptPath];
       if (certificatePath) runArgs.push("--certificate", certificatePath);
@@ -280,13 +296,22 @@ export function createVerifyTrainingCommand(deps: VerifyTrainingCommandDeps = {}
         if (!Number.isSafeInteger(dispatch["pid"]) || (dispatch["pid"] as number) < 1) {
           throw new Error("ember-lab dispatch result lacks a positive pid");
         }
-        if (dispatch["preflight_receipt_path"] !== expectedPreflightPath) {
+        const observedPreflightPath = dispatch["preflight_receipt_path"];
+        const observedPreflightIdentity = typeof observedPreflightPath === "string"
+          ? canonicalPathIdentity(observedPreflightPath)
+          : undefined;
+        const expectedPreflightIdentity = canonicalPathIdentity(expectedPreflightPath);
+        if (
+          typeof observedPreflightPath !== "string"
+          || observedPreflightIdentity === undefined
+          || observedPreflightIdentity !== expectedPreflightIdentity
+        ) {
           throw new Error("ember-lab dispatch returned the wrong preflight receipt path");
         }
         if (
           typeof preflightSha256 !== "string"
           || !/^[0-9a-f]{64}$/.test(preflightSha256)
-          || sha256File(expectedPreflightPath) !== preflightSha256
+          || sha256File(observedPreflightPath) !== preflightSha256
         ) {
           throw new Error("ember-lab dispatch preflight receipt hash does not match custody bytes");
         }
@@ -321,6 +346,7 @@ export function createVerifyTrainingCommand(deps: VerifyTrainingCommandDeps = {}
         }
       } catch (err) {
         let message = err instanceof Error ? err.message : String(err);
+        if (!dispatchSucceeded) rmSync(receiptPath, { force: true });
         if (dispatchSucceeded && !terminalObserved) {
           let cleanupError: string | undefined;
           try {

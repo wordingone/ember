@@ -46,7 +46,7 @@ import { EventEmitter } from "node:events";
 import React, { useState } from "react";
 import { tmpdir } from "os";
 import { join } from "path";
-import { writeFile, readFile, unlink } from "fs/promises";
+import { mkdir, writeFile, readFile, unlink } from "fs/promises";
 import { mountInk } from "../ink/reconciler.ts";
 import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
 import { TerminalSizeContext, Text } from "../ink/components.ts";
@@ -131,7 +131,10 @@ async function mountForKeyboard(
   resetCommandRegistryForTests();
   const telemetryPath = join(tmpdir(), `test-kbd-telemetry-${Date.now()}-${Math.random()}.jsonl`);
   const controlPath = join(tmpdir(), `test-kbd-control-${Date.now()}-${Math.random()}.jsonl`);
-  const runSpecPath = join(tmpdir(), `test-kbd-run-spec-${Date.now()}-${Math.random()}.json`);
+  const authorityRoot = join(tmpdir(), `test-kbd-authority-${Date.now()}-${Math.random()}`);
+  const authorityRunId = "run-kbd";
+  const runSpecPath = join(authorityRoot, authorityRunId, "launch-authority", "run-spec.json");
+  await mkdir(join(authorityRoot, authorityRunId, "launch-authority"), { recursive: true });
   await writeFile(telemetryPath, seedLines.map((line) => JSON.stringify(line)).join("\n") + (seedLines.length > 0 ? "\n" : ""));
   await writeFile(runSpecPath, JSON.stringify({
     schema_version: "ember-certified-train-run-v1",
@@ -161,7 +164,8 @@ async function mountForKeyboard(
         EMBER_DISABLE_TERMINAL_TITLE: "1",
         EMBER_DISABLE_VIRTUAL_SCROLL: "1",
         EMBER_FINETUNE_CONTROL_PATH: controlPath,
-        EMBER_RUN_SPEC_PATH: runSpecPath,
+        EMBER_LAUNCH_AUTHORITY_CUSTODY_ROOT: authorityRoot,
+        EMBER_LAUNCH_AUTHORITY_RUN_ID: authorityRunId,
       },
       onExit: () => {},
     }),

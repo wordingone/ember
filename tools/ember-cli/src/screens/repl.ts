@@ -2031,19 +2031,29 @@ export function ReplScreen({
     setControlNotice((current) => updateOperatorControlNotice(current, { action, detail, receiptPath }));
   };
 
-  const launchAuthorityRunSpecPath = env["EMBER_RUN_SPEC_PATH"] ?? (() => {
-    try {
-      return path.join(
-        resolveEmberRepoRoot({ startDir: cwd, envRepoRoot: env["EMBER_REPO_ROOT"] }),
-        "receipts", "ember-02-launch-authority", "run-spec.json",
-      );
-    } catch {
-      // The read below remains fail-closed and surfaces the exact attempted path.
-      return path.join(cwd, "receipts", "ember-02-launch-authority", "run-spec.json");
-    }
-  })();
+  const launchAuthorityRunId = env["EMBER_LAUNCH_AUTHORITY_RUN_ID"];
+  const launchAuthorityCustodyRoot = env["EMBER_LAUNCH_AUTHORITY_CUSTODY_ROOT"];
+  const launchAuthorityRunSpecPath =
+    launchAuthorityRunId !== undefined &&
+    /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(launchAuthorityRunId) &&
+    launchAuthorityCustodyRoot !== undefined &&
+    path.isAbsolute(launchAuthorityCustodyRoot)
+      ? path.join(
+          launchAuthorityCustodyRoot,
+          launchAuthorityRunId,
+          "launch-authority",
+          "run-spec.json",
+        )
+      : undefined;
 
   const openControlDialog = (action: OperatorControlAction, runId?: string): void => {
+    if (launchAuthorityRunSpecPath === undefined) {
+      surfaceControlRefusal(
+        action,
+        "external run-scoped launch-authority custody root and run id are required",
+      );
+      return;
+    }
     const startReview = action === "START"
       ? captureStartReview(
           processOptions.find((option) => option.name === selectedProcess),
