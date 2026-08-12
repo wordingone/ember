@@ -9,6 +9,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 import pathlib
 import shutil
 import subprocess
@@ -171,6 +172,8 @@ def write_valid_bundle(root: pathlib.Path) -> dict[str, pathlib.Path]:
     artifact_root = custody_root / "artifacts"
     artifact_root.mkdir(parents=True)
 
+    packet_root = custody_root / "owned-3b-canary-test" / "launch-authority"
+    packet_root.mkdir(parents=True)
     completion_path = custody_root / "ember-01-completion.json"
     write_json(completion_path, valid_completion_receipt())
     completion_sha256 = sha256_bytes(completion_path.read_bytes())
@@ -203,11 +206,11 @@ def write_valid_bundle(root: pathlib.Path) -> dict[str, pathlib.Path]:
         },
         "execution_scope": valid_scope(artifact_root, custody_root),
     }
-    certificate_path = custody_root / "spine-certified.json"
+    certificate_path = packet_root / "certificate.json"
     write_json(certificate_path, certificate)
     certificate_sha256 = sha256_bytes(certificate_path.read_bytes())
 
-    ledger_path = custody_root / "declaration-ledger.jsonl"
+    ledger_path = packet_root / "declaration-ledger.jsonl"
     ledger_path.write_bytes(
         canonical_bytes(
             {
@@ -219,12 +222,12 @@ def write_valid_bundle(root: pathlib.Path) -> dict[str, pathlib.Path]:
         )
     )
 
-    run_spec_path = custody_root / "run-spec.json"
+    run_spec_path = packet_root / "run-spec.json"
     write_json(
         run_spec_path,
         valid_run_spec(certificate_sha256, artifact_root, custody_root),
     )
-    return {
+    paths = {
         "repo": repo,
         "certificate": certificate_path,
         "ledger": ledger_path,
@@ -233,6 +236,53 @@ def write_valid_bundle(root: pathlib.Path) -> dict[str, pathlib.Path]:
         "artifact_root": artifact_root,
         "custody_root": custody_root,
     }
+    _write_custody_sidecars(paths)
+    return paths
+
+
+def _write_custody_sidecars(paths: dict[str, pathlib.Path]) -> None:
+    certificate = json.loads(paths["certificate"].read_text(encoding="utf-8"))
+    binding_keys = (
+        "benchmark_registry_sha256",
+        "board_receipt_sha256",
+        "checkout_sha256",
+        "cli_binary_sha256",
+        "config_sha256",
+        "failure_class_ledger_sha256",
+        "input_authority_sha256",
+        "launch_packet_sha256",
+        "root_summary_sha256",
+        "seat_sha256",
+        "subject_manifest_sha256",
+        "tokenizer_sha256",
+    )
+    binding_path = paths["certificate"].parent / "sha-binding-map.json"
+    write_json(
+        binding_path,
+        {
+            key: f"sha256:{certificate[key]};path:governed-source:{key}"
+            for key in binding_keys
+        },
+    )
+    receipt_path = paths["certificate"].parent / "launch-authority-custody.json"
+    files = {
+        paths["certificate"].name: sha256_bytes(paths["certificate"].read_bytes()),
+        paths["ledger"].name: sha256_bytes(paths["ledger"].read_bytes()),
+        paths["run_spec"].name: sha256_bytes(paths["run_spec"].read_bytes()),
+        binding_path.name: sha256_bytes(binding_path.read_bytes()),
+    }
+    write_json(
+        receipt_path,
+        {
+            "schema_version": "ember-launch-authority-external-custody-v1",
+            "run_id": json.loads(paths["run_spec"].read_text(encoding="utf-8"))["run_id"],
+            "custody_kind": "external-run-scoped",
+            "training_executed": False,
+            "files": files,
+        },
+    )
+    paths["binding_map"] = binding_path
+    paths["custody_receipt"] = receipt_path
 
 
 def rewrite_certificate(
@@ -255,6 +305,7 @@ def rewrite_certificate(
     run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
     run_spec["certificate_sha256"] = certificate_sha256
     write_json(paths["run_spec"], run_spec)
+    _write_custody_sidecars(paths)
     return certificate
 
 
@@ -274,6 +325,240 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
             self.assertEqual(launch.max_records, 1)
             self.assertEqual(launch.artifact_root, paths["artifact_root"])
 
+    def test_publisher_can_validate_complete_staging_bytes_for_canonical_destination(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            canonical_packet = paths["certificate"].parent
+            staging_packet = (
+                paths["custody_root"]
+                / ".issue1506-owned-3b-canary-test-00000000000000000000000000000000.staging"
+                / "launch-authority"
+            )
+            shutil.copytree(canonical_packet, staging_packet)
+            for key in ("certificate", "ledger", "run_spec", "binding_map", "custody_receipt"):
+                paths[key] = staging_packet / paths[key].name
+
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                    sha256_bytes(paths["custody_receipt"].read_bytes()),
+                    expected_launch_authority_packet_directory=canonical_packet,
+                )
+
+            self.assertEqual(launch.run_id, "owned-3b-canary-test")
+            self.assertTrue(canonical_packet.exists())
+
+            foreign_staging = paths["custody_root"] / "caller-selected-staging"
+            staging_packet.rename(foreign_staging)
+            for key in ("certificate", "ledger", "run_spec", "binding_map", "custody_receipt"):
+                paths[key] = foreign_staging / paths[key].name
+            with (
+                mock.patch.object(module, "read_current_master", return_value=SHA),
+                self.assertRaisesRegex(ValueError, "not a canonical staging directory"),
+            ):
+                module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                    sha256_bytes(paths["custody_receipt"].read_bytes()),
+                    expected_launch_authority_packet_directory=canonical_packet,
+                )
+
+    def test_default_consumer_refuses_substituted_custody_receipt_or_binding_map(self) -> None:
+        module = load_module()
+        for field in ("custody_receipt", "binding_map"):
+            with self.subTest(field=field):
+                with tempfile.TemporaryDirectory() as directory:
+                    paths = write_valid_bundle(pathlib.Path(directory))
+                    target = paths[field]
+                    payload = json.loads(target.read_text(encoding="utf-8"))
+                    if field == "custody_receipt":
+                        payload["files"][paths["ledger"].name] = "f" * 64
+                    else:
+                        payload["config_sha256"] = ""
+                    write_json(target, payload)
+                    with mock.patch.object(module, "read_current_master", return_value=SHA):
+                        with self.assertRaisesRegex(ValueError, "launch-authority custody"):
+                            module.validate_certified_request(
+                                paths["repo"],
+                                paths["certificate"],
+                                paths["ledger"],
+                                paths["run_spec"],
+                            )
+
+    def test_default_consumer_refuses_path_only_sha_binding_identity(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            binding = json.loads(paths["binding_map"].read_text(encoding="utf-8"))
+            binding["config_sha256"] = "governed-source:config_sha256"
+            write_json(paths["binding_map"], binding)
+            receipt = json.loads(paths["custody_receipt"].read_text(encoding="utf-8"))
+            receipt["files"][paths["binding_map"].name] = sha256_bytes(
+                paths["binding_map"].read_bytes()
+            )
+            write_json(paths["custody_receipt"], receipt)
+
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "source identity invalid"):
+                    module.validate_certified_request(
+                        paths["repo"], paths["certificate"], paths["ledger"], paths["run_spec"]
+                    )
+
+    def test_default_consumer_refuses_sha_binding_digest_not_in_certificate(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            binding = json.loads(paths["binding_map"].read_text(encoding="utf-8"))
+            binding["config_sha256"] = (
+                f"sha256:{'f' * 64};path:governed-source:config_sha256"
+            )
+            write_json(paths["binding_map"], binding)
+            receipt = json.loads(paths["custody_receipt"].read_text(encoding="utf-8"))
+            receipt["files"][paths["binding_map"].name] = sha256_bytes(
+                paths["binding_map"].read_bytes()
+            )
+            write_json(paths["custody_receipt"], receipt)
+
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "certificate hash mismatch"):
+                    module.validate_certified_request(
+                        paths["repo"], paths["certificate"], paths["ledger"], paths["run_spec"]
+                    )
+
+    def test_default_consumer_refuses_extra_packet_file(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            (paths["certificate"].parent / "unexpected.bin").write_bytes(b"foreign")
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "packet file set"):
+                    module.validate_certified_request(
+                        paths["repo"], paths["certificate"], paths["ledger"], paths["run_spec"]
+                    )
+
+    def test_default_consumer_refuses_custody_root_inside_repository(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "custody root.*repository"):
+                    module.validate_certified_request(
+                        paths["custody_root"].parent,
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_default_consumer_refuses_duplicate_certificate_key(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            raw = paths["certificate"].read_text(encoding="utf-8")
+            duplicate = (
+                raw.rstrip().removesuffix("}")
+                + ', "schema_version": "ember-spine-certified-declaration-v1"}\n'
+            )
+            paths["certificate"].write_text(duplicate, encoding="utf-8")
+            certificate_sha256 = sha256_bytes(canonical_bytes(json.loads(duplicate)))
+            write_json(
+                paths["ledger"],
+                {
+                    "schema_version": "ember-spine-declaration-ledger-row-v1",
+                    "event_kind": "SPINE_CERTIFIED",
+                    "declared_by_role": "EMBER_CERTIFICATE_AUTHORITY",
+                    "certificate_sha256": certificate_sha256,
+                },
+            )
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["certificate_sha256"] = certificate_sha256
+            write_json(paths["run_spec"], run_spec)
+            _write_custody_sidecars(paths)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "duplicate key"):
+                    module.validate_certified_request(
+                        paths["repo"], paths["certificate"], paths["ledger"], paths["run_spec"]
+                    )
+
+    def test_default_consumer_binds_raw_receipt_against_self_consistent_map_tamper(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            expected_receipt_sha256 = sha256_bytes(paths["custody_receipt"].read_bytes())
+            binding = json.loads(paths["binding_map"].read_text(encoding="utf-8"))
+            config_digest = json.loads(
+                paths["certificate"].read_text(encoding="utf-8")
+            )["config_sha256"]
+            binding["config_sha256"] = (
+                f"sha256:{config_digest};path:governed-source:substituted-config"
+            )
+            write_json(paths["binding_map"], binding)
+            receipt = json.loads(paths["custody_receipt"].read_text(encoding="utf-8"))
+            receipt["files"][paths["binding_map"].name] = sha256_bytes(
+                paths["binding_map"].read_bytes()
+            )
+            write_json(paths["custody_receipt"], receipt)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "receipt SHA-256 mismatch"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                        expected_receipt_sha256,
+                    )
+
+    def test_default_main_refuses_foreign_receipt_before_execute(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            payload = json.loads(paths["custody_receipt"].read_text(encoding="utf-8"))
+            payload["files"][paths["run_spec"].name] = "e" * 64
+            write_json(paths["custody_receipt"], payload)
+            calls: list[object] = []
+            with (
+                mock.patch.object(module, "read_current_master", return_value=SHA),
+                mock.patch.object(module, "execute_validated_launch", side_effect=lambda *a, **k: calls.append(a)),
+            ):
+                code = module.main(
+                    [
+                        "--root",
+                        str(paths["repo"]),
+                        "--certificate",
+                        str(paths["certificate"]),
+                        "--declaration-ledger",
+                        str(paths["ledger"]),
+                        "--run-spec",
+                        str(paths["run_spec"]),
+                        "--custody-receipt-sha256",
+                        sha256_bytes(paths["custody_receipt"].read_bytes()),
+                    ]
+                )
+            self.assertEqual(code, 2)
+            self.assertEqual(calls, [])
+
+    def test_default_consumer_refuses_same_bytes_ledger_from_foreign_directory(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            foreign = pathlib.Path(directory) / "foreign-packet"
+            foreign.mkdir()
+            foreign_ledger = foreign / paths["ledger"].name
+            shutil.copyfile(paths["ledger"], foreign_ledger)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "canonical packet directory"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        foreign_ledger,
+                        paths["run_spec"],
+                    )
+
     def test_schema_valid_certificate_absent_from_declaration_ledger_fails(self) -> None:
         module = load_module()
         with tempfile.TemporaryDirectory() as directory:
@@ -286,6 +571,158 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                         paths["certificate"],
                         paths["ledger"],
                         paths["run_spec"],
+                    )
+
+    def test_default_consumer_refuses_renamed_packet_files(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            renamed = {}
+            for key, new_name in (
+                ("certificate", "foreign-certificate.json"),
+                ("ledger", "foreign-ledger.jsonl"),
+                ("run_spec", "foreign-run.json"),
+            ):
+                target = paths[key].with_name(new_name)
+                paths[key].replace(target)
+                paths[key] = target
+                renamed[key] = target.name
+            receipt = json.loads(paths["custody_receipt"].read_text(encoding="utf-8"))
+            receipt["files"] = {
+                paths["certificate"].name: sha256_bytes(paths["certificate"].read_bytes()),
+                paths["ledger"].name: sha256_bytes(paths["ledger"].read_bytes()),
+                paths["run_spec"].name: sha256_bytes(paths["run_spec"].read_bytes()),
+                paths["binding_map"].name: sha256_bytes(paths["binding_map"].read_bytes()),
+            }
+            write_json(paths["custody_receipt"], receipt)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "canonical packet filename"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_default_consumer_refuses_packet_directory_reparse_alias(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            alias = pathlib.Path(directory) / "packet-alias"
+            try:
+                alias.symlink_to(paths["certificate"].parent, target_is_directory=True)
+            except (OSError, NotImplementedError):
+                self.skipTest("directory symlink unavailable on this host")
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "reparse"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        alias / paths["certificate"].name,
+                        alias / paths["ledger"].name,
+                        alias / paths["run_spec"].name,
+                    )
+
+    def test_default_consumer_refuses_packet_outside_authorized_custody_root(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            foreign = pathlib.Path(directory) / "foreign-custody"
+            foreign.mkdir()
+            copied = {}
+            for key in ("certificate", "ledger", "run_spec", "binding_map", "custody_receipt"):
+                target = foreign / paths[key].name
+                shutil.copyfile(paths[key], target)
+                copied[key] = target
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "custody root"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        copied["certificate"],
+                        copied["ledger"],
+                        copied["run_spec"],
+                    )
+
+    def test_default_consumer_refuses_packet_in_wrong_run_scoped_destination(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            wrong = paths["custody_root"] / "wrong-run" / "launch-authority"
+            wrong.mkdir(parents=True)
+            copied = {}
+            for key in ("certificate", "ledger", "run_spec", "binding_map", "custody_receipt"):
+                target = wrong / paths[key].name
+                shutil.copyfile(paths[key], target)
+                copied[key] = target
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "canonical packet destination"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        copied["certificate"],
+                        copied["ledger"],
+                        copied["run_spec"],
+                    )
+
+    def test_default_consumer_refuses_path_unsafe_run_id(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["run_id"] = "../escape"
+            write_json(paths["run_spec"], run_spec)
+            receipt = json.loads(paths["custody_receipt"].read_text(encoding="utf-8"))
+            receipt["run_id"] = "../escape"
+            receipt["files"][paths["run_spec"].name] = sha256_bytes(paths["run_spec"].read_bytes())
+            write_json(paths["custody_receipt"], receipt)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "run_id"):
+                    module.validate_certified_request(
+                        paths["repo"], paths["certificate"], paths["ledger"], paths["run_spec"]
+                    )
+
+    def test_default_consumer_refuses_dot_segment_authorized_custody_root(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            dot_root = str(paths["custody_root"] / ".." / paths["custody_root"].name)
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate["execution_scope"].__setitem__(
+                    "allowed_custody_roots", [dot_root]
+                ),
+            )
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["requested_scope"]["custody_root"] = dot_root
+            write_json(paths["run_spec"], run_spec)
+            _write_custody_sidecars(paths)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "custody root.*dot segment"):
+                    module.validate_certified_request(
+                        paths["repo"], paths["certificate"], paths["ledger"], paths["run_spec"]
+                    )
+
+    def test_default_consumer_refuses_relative_authorized_custody_root(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            # The refusal is lexical and must occur before any filesystem access.
+            # Construct a relative identity directly so this negative remains
+            # portable when the checkout and the test temp root are on different
+            # Windows drives.
+            relative_root = "relative-custody"
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate["execution_scope"].__setitem__(
+                    "allowed_custody_roots", [relative_root]
+                ),
+            )
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["requested_scope"]["custody_root"] = relative_root
+            write_json(paths["run_spec"], run_spec)
+            _write_custody_sidecars(paths)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "custody root must be absolute"):
+                    module.validate_certified_request(
+                        paths["repo"], paths["certificate"], paths["ledger"], paths["run_spec"]
                     )
 
     def test_certificate_and_linked_receipt_negative_matrix(self) -> None:
@@ -593,6 +1030,7 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                         paths["certificate"],
                         paths["ledger"],
                         paths["run_spec"],
+                        sha256_bytes(paths["custody_receipt"].read_bytes()),
                         run_process=lambda *args, **kwargs: calls.append(
                             (args, kwargs)
                         ),
@@ -615,6 +1053,7 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                     paths["certificate"],
                     paths["ledger"],
                     paths["run_spec"],
+                    sha256_bytes(paths["custody_receipt"].read_bytes()),
                     run_process=fake_run,
                 )
             self.assertEqual(exit_code, 0)
@@ -813,6 +1252,7 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                         paths["certificate"],
                         paths["ledger"],
                         paths["run_spec"],
+                        sha256_bytes(paths["custody_receipt"].read_bytes()),
                         run_process=noisy_run,
                     )
             self.assertEqual(exit_code, 0)
@@ -848,6 +1288,7 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                     paths["certificate"],
                     paths["ledger"],
                     paths["run_spec"],
+                    sha256_bytes(paths["custody_receipt"].read_bytes()),
                     run_process=fail,
                 )
             self.assertEqual(exit_code, 17)
@@ -1266,6 +1707,11 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                 pathlib.Path(directory) / "outside" / "receipt.json"
             )
             write_json(paths["run_spec"], run_spec)
+            receipt = json.loads(paths["custody_receipt"].read_text(encoding="utf-8"))
+            receipt["files"][paths["run_spec"].name] = sha256_bytes(
+                paths["run_spec"].read_bytes()
+            )
+            write_json(paths["custody_receipt"], receipt)
             with mock.patch.object(module, "read_current_master", return_value=SHA):
                 with self.assertRaisesRegex(
                     ValueError, "scope exceeds certificate: runner_receipt"
@@ -1275,6 +1721,7 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                         paths["certificate"],
                         paths["ledger"],
                         paths["run_spec"],
+                        sha256_bytes(paths["custody_receipt"].read_bytes()),
                         run_process=lambda *args, **kwargs: calls.append(
                             (args, kwargs)
                         ),
@@ -1942,9 +2389,13 @@ class CompletionHeadAncestorTests(unittest.TestCase):
 
         run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
         run_spec["training_verify_receipt_path"] = str(receipt_path)
+        run_spec["training_verify_receipt_sha256"] = sha256_bytes(
+            receipt_path.read_bytes()
+        )
         if mutate_run_spec is not None:
             mutate_run_spec(run_spec)
         write_json(paths["run_spec"], run_spec)
+        _write_custody_sidecars(paths)
         return paths, closure_sha256
 
     @contextlib.contextmanager
@@ -1972,6 +2423,23 @@ class CompletionHeadAncestorTests(unittest.TestCase):
             self.assertEqual(launch.closure_sha256, closure_sha256)
             self.assertEqual(launch.public_master_sha, SHA)
 
+    def test_training_receipt_raw_sha_binding_refuses_semantic_byte_drift(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths, _ = self._ancestor_bundle(directory)
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            receipt_path = pathlib.Path(run_spec["training_verify_receipt_path"])
+            receipt_path.write_bytes(receipt_path.read_bytes() + b" \n")
+
+            with self._patched(module):
+                with self.assertRaisesRegex(ValueError, "raw SHA-256 mismatch"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
     def test_stale_ember_lab_source_hash_is_refused(self) -> None:
         module = load_module()
         with tempfile.TemporaryDirectory() as directory:
@@ -1980,6 +2448,12 @@ class CompletionHeadAncestorTests(unittest.TestCase):
             receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
             receipt["ember_lab_source_sha256"] = EVIDENCE_SHA256
             write_json(receipt_path, receipt)
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["training_verify_receipt_sha256"] = sha256_bytes(
+                receipt_path.read_bytes()
+            )
+            write_json(paths["run_spec"], run_spec)
+            _write_custody_sidecars(paths)
             with self._patched(module):
                 with self.assertRaisesRegex(
                     ValueError, "Ember Lab source identity does not match"
@@ -2034,7 +2508,10 @@ class CompletionHeadAncestorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             paths, _ = self._ancestor_bundle(
                 directory,
-                mutate_run_spec=lambda spec: spec.pop("training_verify_receipt_path"),
+                mutate_run_spec=lambda spec: (
+                    spec.pop("training_verify_receipt_path"),
+                    spec.pop("training_verify_receipt_sha256"),
+                ),
             )
             with self._patched(module):
                 with self.assertRaisesRegex(
@@ -2143,7 +2620,7 @@ class CompletionHeadAncestorTests(unittest.TestCase):
             paths, _ = self._ancestor_bundle(
                 directory,
                 mutate_run_spec=lambda spec: spec.__setitem__(
-                    "training_verify_receipt_path", "training-verify.json"
+                    "training_verify_receipt_path", "../../training-verify.json"
                 ),
             )
             with self._patched(module):
@@ -2180,6 +2657,7 @@ class CompletionHeadAncestorTests(unittest.TestCase):
             module.OPTIONAL_RUN_SPEC_KEYS,
             {
                 "training_verify_receipt_path",
+                "training_verify_receipt_sha256",
                 "resume_checkpoint",
                 "resume_counter_receipt",
                 "resume_realization_registry",
