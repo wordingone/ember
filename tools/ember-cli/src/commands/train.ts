@@ -15,8 +15,9 @@ import type { CommandContext, RegistryCommand } from "../types/command-types.ts"
 import { resolveEmberSourceRootOrCwd } from "../utils/repo-root.ts";
 import { publishActivityFeedInfrastructureFailure } from "../services/activity-feed.ts";
 import { spawn, spawnSync } from "child_process";
+import { createHash } from "crypto";
 import { existsSync, readFileSync } from "fs";
-import { isAbsolute, join, relative, resolve } from "path";
+import { dirname, isAbsolute, join, relative, resolve } from "path";
 
 // ---------------------------------------------------------------------------
 // Preflight spawn seam (injectable for testing; mirrors model.ts's runner)
@@ -301,6 +302,7 @@ interface CanonicalArtifactPaths {
   certificate: string;
   declarationLedger: string;
   runSpec: string;
+  custodyReceipt: string;
 }
 
 function _canonicalArtifactPaths(
@@ -326,6 +328,7 @@ function _canonicalArtifactPaths(
     certificate: join(base, "certificate.json"),
     declarationLedger: join(base, "declaration-ledger.jsonl"),
     runSpec: join(base, "run-spec.json"),
+    custodyReceipt: join(base, "launch-authority-custody.json"),
   };
 }
 
@@ -409,6 +412,11 @@ interface TrainOffer {
   certificate: string;
   declarationLedger: string;
   runSpec: string;
+  custodyReceiptSha256: string;
+}
+
+function _sha256File(path: string): string {
+  return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
 
 const trainOffers = new Map<string, TrainOffer>();
@@ -712,6 +720,8 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
             offer.declarationLedger,
             "--run-spec",
             offer.runSpec,
+            "--custody-receipt-sha256",
+            offer.custodyReceiptSha256,
           ]);
         } catch {
           return {
@@ -842,6 +852,15 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
         // launch-authority tree under repoRoot is never consulted on this path.
         let certifiedResult: CertifiedLaunchRunnerResult;
         try {
+          const custodyReceipt = resolve(
+            repoRoot,
+            dirname(trainArgs.certificate!),
+            "launch-authority-custody.json",
+          );
+          const resolvedCustodyReceipt = _resolveArtifact(custodyReceipt, "json");
+          if (resolvedCustodyReceipt.status !== "ok") {
+            throw new Error(_artifactFailureLine("custody receipt", resolvedCustodyReceipt));
+          }
           certifiedResult = await runCertifiedLaunch(pythonBin, [
             certifiedLaunchScriptPath,
             "--root",
@@ -852,6 +871,8 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
             trainArgs.declarationLedger!,
             "--run-spec",
             trainArgs.runSpec!,
+            "--custody-receipt-sha256",
+            _sha256File(custodyReceipt),
           ]);
         } catch {
           return {
@@ -881,6 +902,7 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
       const resolvedCertificate = _resolveArtifact(canonical.certificate, "json");
       const resolvedLedger = _resolveArtifact(canonical.declarationLedger, "jsonl");
       const resolvedRunSpec = _resolveArtifact(canonical.runSpec, "json");
+      const resolvedCustodyReceipt = _resolveArtifact(canonical.custodyReceipt, "json");
 
       const failures: string[] = [];
       if (resolvedCertificate.status !== "ok") {
@@ -891,6 +913,9 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
       }
       if (resolvedRunSpec.status !== "ok") {
         failures.push(_artifactFailureLine("run spec", resolvedRunSpec));
+      }
+      if (resolvedCustodyReceipt.status !== "ok") {
+        failures.push(_artifactFailureLine("custody receipt", resolvedCustodyReceipt));
       }
       if (failures.length > 0) {
         return {
@@ -913,6 +938,7 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
         certificate: canonical.certificate,
         declarationLedger: canonical.declarationLedger,
         runSpec: canonical.runSpec,
+        custodyReceiptSha256: _sha256File(canonical.custodyReceipt),
       });
       return {
         type: "message" as const,
@@ -923,6 +949,7 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
           `  certificate: ${canonical.certificate}`,
           `  declaration ledger: ${canonical.declarationLedger}`,
           `  run spec: ${canonical.runSpec}`,
+          `  custody receipt: ${canonical.custodyReceipt}`,
           "",
           `OFFER ${offerId} action=train-launch -- type "/train confirm ${offerId}" to proceed. Declining, a typo, or anything else takes no action; the confirm-only membrane never silently steers.`,
         ].join("\n"),

@@ -128,7 +128,7 @@ function canonicalDir(repoRoot: string): string {
   return dir;
 }
 
-/** Writes a valid certificate.json / declaration-ledger.jsonl / run-spec.json triple at the
+/** Writes a valid launch-authority candidate packet at the
  *  test-only external launch-authority location. Content is minimal-but-well-formed --
  *  the CLI-level check is existence + parseability, not the certified consumer's own deep
  *  schema validation (that lives in certified_train_launch.py and is exercised separately). */
@@ -150,6 +150,10 @@ function writeCanonicalArtifacts(repoRoot: string): void {
     path.join(dir, "run-spec.json"),
     JSON.stringify({ mode: "bounded-canary", steps: 1 }),
   );
+  fs.writeFileSync(
+    path.join(dir, "launch-authority-custody.json"),
+    JSON.stringify({ schema_version: "ember-launch-authority-external-custody-v1" }) + "\n",
+  );
 }
 
 function makeExecuteCmd(
@@ -158,9 +162,15 @@ function makeExecuteCmd(
 ) {
   const preflightSpawns: RecordedSpawn[] = [];
   const certifiedSpawns: RecordedSpawn[] = [];
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-execute-"));
+  authorityTestDirs.add(repoRoot);
+  fs.writeFileSync(
+    path.join(repoRoot, "launch-authority-custody.json"),
+    JSON.stringify({ schema_version: "ember-launch-authority-external-custody-v1" }) + "\n",
+  );
   const cmd = createTrainCommand({
     pythonBin: "python",
-    repoRoot: "/fake/ember",
+    repoRoot,
     certifiedLaunchScriptPath:
       "/fake/ember/tools/ember-restart-3b/certified_train_launch.py",
     runLaunchPacket: (executable, args) => {
@@ -172,7 +182,7 @@ function makeExecuteCmd(
       return certified;
     },
   });
-  return { cmd, preflightSpawns, certifiedSpawns };
+  return { cmd, preflightSpawns, certifiedSpawns, repoRoot };
 }
 
 /** Assert the only subprocess ever spawned was the launch_packet.py preflight. */
@@ -927,7 +937,7 @@ describe("train command", () => {
 
   describe("certified execution mode", () => {
     it("requires all three explicit authority paths before any spawn", async () => {
-      const { cmd, preflightSpawns, certifiedSpawns } = makeExecuteCmd(
+      const { cmd, preflightSpawns, certifiedSpawns, repoRoot } = makeExecuteCmd(
         { status: 0, stdout: allGreenStdout() },
         { status: 0, stdout: "{}" },
       );
@@ -944,7 +954,7 @@ describe("train command", () => {
     });
 
     it("green preflight invokes exactly one certified consumer with fixed argv", async () => {
-      const { cmd, preflightSpawns, certifiedSpawns } = makeExecuteCmd(
+      const { cmd, preflightSpawns, certifiedSpawns, repoRoot } = makeExecuteCmd(
         { status: 0, stdout: allGreenStdout() },
         {
           status: 0,
@@ -968,13 +978,15 @@ describe("train command", () => {
       expect(certifiedSpawns[0]!.args).toEqual([
         "/fake/ember/tools/ember-restart-3b/certified_train_launch.py",
         "--root",
-        "/fake/ember",
+        repoRoot,
         "--certificate",
         "c.json",
         "--declaration-ledger",
         "d.jsonl",
         "--run-spec",
         "r.json",
+        "--custody-receipt-sha256",
+        expect.stringMatching(/^[0-9a-f]{64}$/),
       ]);
       expect(certifiedSpawns[0]!.args.join(" ")).not.toContain(
         REAL_LAUNCH_COMMAND,
@@ -1361,8 +1373,8 @@ describe("acceptance map: train-launch-operability v1", () => {
     it("C8: --execute with explicit paths + preflight green -> consumer invoked with the explicit paths, canonical resolution not consulted", async () => {
       // repoRoot does not exist on disk at all -- canonical resolution (fs reads under
       // repoRoot/receipts/ember-02-launch-authority) would throw/fail if it were consulted.
-      // The explicit --execute path must never touch it.
-      const { cmd, preflightSpawns, certifiedSpawns } = makeExecuteCmd(
+      // The explicit --execute path must never touch the default custody root.
+      const { cmd, preflightSpawns, certifiedSpawns, repoRoot } = makeExecuteCmd(
         { status: 0, stdout: allGreenStdout() },
         {
           status: 0,
@@ -1380,13 +1392,15 @@ describe("acceptance map: train-launch-operability v1", () => {
       expect(certifiedSpawns[0]!.args).toEqual([
         "/fake/ember/tools/ember-restart-3b/certified_train_launch.py",
         "--root",
-        "/fake/ember",
+        repoRoot,
         "--certificate",
         "c.json",
         "--declaration-ledger",
         "d.jsonl",
         "--run-spec",
         "r.json",
+        "--custody-receipt-sha256",
+        expect.stringMatching(/^[0-9a-f]{64}$/),
       ]);
     });
   });
@@ -1561,6 +1575,10 @@ describe("acceptance map: train-launch-operability v1", () => {
           path.join(dir, "run-spec.json"),
           JSON.stringify({ mode: "bounded-canary", steps: 10, sequence_length: 4096 }, null, 2),
         );
+        fs.writeFileSync(
+          path.join(dir, "launch-authority-custody.json"),
+          JSON.stringify({ schema_version: "ember-launch-authority-external-custody-v1" }) + "\n",
+        );
 
         const { cmd } = makeCmd(() => ({ status: 0, stdout: allGreenStdout() }), scratch);
         const result = await cmd.execute("", mockCtx);
@@ -1613,6 +1631,8 @@ describe("acceptance map: train-launch-operability v1", () => {
           path.join(canonicalDir(scratch), "declaration-ledger.jsonl"),
           "--run-spec",
           path.join(canonicalDir(scratch), "run-spec.json"),
+          "--custody-receipt-sha256",
+          expect.stringMatching(/^[0-9a-f]{64}$/),
         ]);
         // The raw named launch command string is never present in argv or the response.
         expect(certifiedSpawns[0]!.args.join(" ")).not.toContain(REAL_LAUNCH_COMMAND);

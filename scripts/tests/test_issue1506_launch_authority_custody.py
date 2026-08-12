@@ -77,10 +77,18 @@ def test_external_publication_validates_before_atomic_publish_and_preserves_hist
     before = _sha(historical)
     validation_observations: list[tuple[bool, bool, bool]] = []
 
-    def validate(certificate: Path, ledger: Path, run_spec: Path) -> None:
+    def validate(
+        certificate: Path,
+        ledger: Path,
+        run_spec: Path,
+        receipt_sha256: str,
+        destination: Path,
+    ) -> None:
         validation_observations.append(
             (certificate.is_file(), ledger.is_file(), run_spec.is_file())
         )
+        assert _sha(certificate.parent / "launch-authority-custody.json") == receipt_sha256
+        assert destination == custody / "run-1506" / "launch-authority"
         assert not (custody / "run-1506" / "launch-authority").exists()
 
     receipt = mint.publish_launch_authority(
@@ -301,6 +309,36 @@ def test_concurrent_empty_destination_is_not_replaced(
 
     assert sentinel.read_bytes() == b"foreign"
     assert set(destination.iterdir()) == {sentinel}
+    assert not list(custody.glob(".issue1506-*.staging"))
+
+
+def test_receipt_drift_at_publish_is_rejected_and_rolled_back(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _repo(tmp_path)
+    custody = tmp_path / "live-receipts"
+    custody.mkdir()
+    packet = _packet(tmp_path / "candidate")
+    destination = custody / "run-1506" / "launch-authority"
+    atomic_publish = mint._atomic_publish_no_replace
+
+    def drift_receipt_after_publish(source: Path, target: Path) -> None:
+        atomic_publish(source, target)
+        (target / "launch-authority-custody.json").write_bytes(b"{}\n")
+
+    monkeypatch.setattr(mint, "_atomic_publish_no_replace", drift_receipt_after_publish)
+    with pytest.raises(mint.PublicationRefusal, match="PUBLISHED_RECEIPT_CHANGED"):
+        mint.publish_launch_authority(
+            repo_root=repo,
+            custody_root=custody,
+            run_id="run-1506",
+            validator=lambda *_: None,
+            **packet,
+        )
+
+    assert not destination.exists()
+    assert not (custody / "run-1506").exists()
     assert not list(custody.glob(".issue1506-*.staging"))
 
 

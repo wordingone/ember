@@ -186,7 +186,7 @@ def _historical_hashes(repo: Path) -> dict[str, str]:
     }
 
 
-def _canonical_validator(repo: Path) -> Callable[[Path, Path, Path], Any]:
+def _canonical_validator(repo: Path) -> Callable[[Path, Path, Path, str, Path], Any]:
     module_path = repo / "tools" / "ember-restart-3b" / "certified_train_launch.py"
     spec = importlib.util.spec_from_file_location("ember_certified_train_launch", module_path)
     if spec is None or spec.loader is None:
@@ -195,8 +195,21 @@ def _canonical_validator(repo: Path) -> Callable[[Path, Path, Path], Any]:
     sys.dont_write_bytecode = True
     spec.loader.exec_module(module)
 
-    def validate(certificate: Path, ledger: Path, run_spec: Path) -> Any:
-        return module.validate_certified_request(repo, certificate, ledger, run_spec)
+    def validate(
+        certificate: Path,
+        ledger: Path,
+        run_spec: Path,
+        receipt_sha256: str,
+        destination: Path,
+    ) -> Any:
+        return module.validate_certified_request(
+            repo,
+            certificate,
+            ledger,
+            run_spec,
+            receipt_sha256,
+            expected_launch_authority_packet_directory=destination,
+        )
 
     return validate
 
@@ -210,7 +223,7 @@ def publish_launch_authority(
     declaration_ledger: Path,
     run_spec: Path,
     sha_binding_map: Path,
-    validator: Callable[[Path, Path, Path], Any] | None = None,
+    validator: Callable[[Path, Path, Path, str, Path], Any] | None = None,
 ) -> dict[str, Any]:
     """Validate, atomically publish, reopen, and receipt one authority packet."""
 
@@ -235,19 +248,15 @@ def publish_launch_authority(
 
     historical_before = _historical_hashes(repo)
     staging = custody / f".issue1506-{run_id}-{uuid.uuid4().hex}.staging"
+    packet_staging = staging / "launch-authority"
     published = False
     destination_parent_claimed = False
-    staging.mkdir(mode=0o700)
+    packet_staging.mkdir(mode=0o700, parents=True)
     try:
         for name in FILES:
-            (staging / name).write_bytes(source_bytes[name])
+            (packet_staging / name).write_bytes(source_bytes[name])
 
-        (validator or _canonical_validator(repo))(
-            staging / "certificate.json",
-            staging / "declaration-ledger.jsonl",
-            staging / "run-spec.json",
-        )
-        source_hashes = {name: _sha256(staging / name) for name in FILES}
+        source_hashes = {name: _sha256(packet_staging / name) for name in FILES}
         receipt = {
             "schema_version": SCHEMA,
             "run_id": run_id,
@@ -258,7 +267,15 @@ def publish_launch_authority(
         receipt_bytes = (
             json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n"
         ).encode("utf-8")
-        (staging / "launch-authority-custody.json").write_bytes(receipt_bytes)
+        (packet_staging / "launch-authority-custody.json").write_bytes(receipt_bytes)
+        receipt_sha256 = hashlib.sha256(receipt_bytes).hexdigest()
+        (validator or _canonical_validator(repo))(
+            packet_staging / "certificate.json",
+            packet_staging / "declaration-ledger.jsonl",
+            packet_staging / "run-spec.json",
+            receipt_sha256,
+            destination,
+        )
 
         # Claim the run-id namespace atomically.  This is the no-replace
         # publication boundary: a pre-existing or concurrently created path
@@ -268,17 +285,20 @@ def publish_launch_authority(
         except FileExistsError as error:
             raise PublicationRefusal("DESTINATION_ALREADY_EXISTS") from error
         destination_parent_claimed = True
-        _atomic_publish_no_replace(staging, destination)
+        _atomic_publish_no_replace(packet_staging, destination)
         published = True
         reopened = {name: _sha256(destination / name) for name in FILES}
         if reopened != source_hashes:
             raise PublicationRefusal("PUBLISHED_BYTES_CHANGED")
+        if _sha256(destination / "launch-authority-custody.json") != receipt_sha256:
+            raise PublicationRefusal("PUBLISHED_RECEIPT_CHANGED")
         if _historical_hashes(repo) != historical_before:
             raise PublicationRefusal("HISTORICAL_RECORD_CHANGED")
+        staging.rmdir()
         return {
             **receipt,
             "custody_root": str(destination),
-            "receipt_sha256": hashlib.sha256(receipt_bytes).hexdigest(),
+            "receipt_sha256": receipt_sha256,
         }
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)
