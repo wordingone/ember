@@ -700,6 +700,151 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
                         paths["repo"], paths["certificate"], paths["ledger"], paths["run_spec"]
                     )
 
+    def test_default_consumer_refuses_raw_current_directory_custody_segment(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            dot_root = (
+                str(paths["custody_root"].parent)
+                + os.sep
+                + "."
+                + os.sep
+                + paths["custody_root"].name
+            )
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate["execution_scope"].__setitem__(
+                    "allowed_custody_roots", [dot_root]
+                ),
+            )
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["requested_scope"]["custody_root"] = dot_root
+            runner_receipt = pathlib.Path(run_spec["runner_receipt"])
+            write_json(paths["run_spec"], run_spec)
+            _write_custody_sidecars(paths)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "custody root.*dot segment"):
+                    module.validate_certified_request(
+                        paths["repo"], paths["certificate"], paths["ledger"], paths["run_spec"]
+                    )
+            self.assertFalse(runner_receipt.exists())
+
+    def test_all_nested_windows_subprocesses_are_hidden(self) -> None:
+        module = load_module()
+        no_window = 0x08000000
+        run_calls: list[dict[str, object]] = []
+        popen_calls: list[dict[str, object]] = []
+
+        def fake_run(argv, **kwargs):
+            run_calls.append(kwargs)
+            stdout = f"{SHA}\n" if "rev-parse" in argv else ""
+            return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
+
+        process = mock.Mock()
+        process.poll.return_value = None
+
+        def fake_popen(argv, **kwargs):
+            popen_calls.append(kwargs)
+            return process
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            repo = root / "repo"
+            repo.mkdir()
+            logger = repo / "scripts" / "energy_proxy_logger.py"
+            logger.parent.mkdir(parents=True)
+            logger.write_text("# fixture\n", encoding="utf-8")
+            custody = root / "custody"
+            artifact = root / "artifacts"
+            launch = mock.Mock(
+                run_id="owned-3b-canary-test",
+                custody_root=custody,
+                artifact_root=artifact,
+                runner_receipt=custody / "runner-receipt.json",
+            )
+            with (
+                mock.patch.object(module.os, "name", "nt"),
+                mock.patch.object(
+                    module.subprocess,
+                    "CREATE_NO_WINDOW",
+                    no_window,
+                    create=True,
+                ),
+                mock.patch.object(module.subprocess, "run", side_effect=fake_run),
+                mock.patch.object(module.subprocess, "Popen", side_effect=fake_popen),
+                mock.patch.object(
+                    module,
+                    "_custody_evidence_ref",
+                    return_value=(
+                        "runner-receipt.json",
+                        b'{"schema_version":7,"runner_exit_code":0}',
+                    ),
+                ),
+                mock.patch.object(module, "ENERGY_SIDECAR_BASELINE_WAIT_S", 0.0),
+            ):
+                self.assertTrue(module.read_pin_is_ancestor(repo, SHA))
+                self.assertTrue(module.read_commit_is_ancestor(repo, SHA, SHA))
+                self.assertEqual(module.read_current_master(repo), SHA)
+                module._record_run_attempt(
+                    repo,
+                    launch,
+                    attempt_id="attempt-test",
+                    outcome="completed",
+                    start_utc="2026-08-12T00:00:00Z",
+                    end_utc="2026-08-12T00:00:01Z",
+                    outcome_basis="test",
+                    evidence_path=root / "runner-receipt.json",
+                    expected_runner_exit_code=0,
+                )
+                actual, _pidfile, disclosure = module._start_energy_sidecar(
+                    repo, launch, {}
+                )
+
+            self.assertIs(actual, process)
+            self.assertTrue(disclosure["spawned"])
+            self.assertEqual(len(run_calls), 4)
+            self.assertEqual(len(popen_calls), 1)
+            for kwargs in [*run_calls, *popen_calls]:
+                self.assertEqual(kwargs.get("creationflags"), no_window)
+
+            paths = write_valid_bundle(root / "certified-child")
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                certified_launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            child_calls: list[dict[str, object]] = []
+
+            def certified_child(argv, **kwargs):
+                child_calls.append(kwargs)
+                self._write_runner_receipt(certified_launch, 0)
+                return subprocess.CompletedProcess(argv, 0)
+
+            with (
+                mock.patch.object(module.os, "name", "nt"),
+                mock.patch.object(
+                    module.subprocess,
+                    "CREATE_NO_WINDOW",
+                    no_window,
+                    create=True,
+                ),
+                mock.patch.object(
+                    module,
+                    "_record_run_attempt",
+                    return_value={"accepted": True},
+                ),
+            ):
+                self.assertEqual(
+                    module.execute_validated_launch(
+                        paths["repo"], certified_launch, run_process=certified_child
+                    ),
+                    0,
+                )
+            self.assertEqual(len(child_calls), 1)
+            self.assertEqual(child_calls[0].get("creationflags"), no_window)
+
     def test_default_consumer_refuses_relative_authorized_custody_root(self) -> None:
         module = load_module()
         with tempfile.TemporaryDirectory() as directory:
