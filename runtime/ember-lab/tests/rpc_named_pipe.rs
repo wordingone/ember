@@ -16,7 +16,10 @@ use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-const FIXTURE_TELEMETRY: &str = "{\"arm\":\"mechanism\",\"step\":1}\n";
+const FIXTURE_TELEMETRY: &str = concat!(
+    "{\"arm\":\"mechanism\",\"step\":1}\n",
+    "{\"checkpoint_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"row_count\":200,\"run_id\":\"rpc-job\",\"seed\":83,\"source_blobs\":{\"scripts/frontier_receipt.py\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"scripts/r1_exit_battery.py\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"},\"source_commit\":\"5326043c344227c1b145a4ddbb3519cfa62d4943\",\"thresholds_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}\n"
+);
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 fn sandbox(name: &str) -> PathBuf {
@@ -34,10 +37,6 @@ fn sandbox(name: &str) -> PathBuf {
 
 fn sha256(path: &Path) -> String {
     format!("{:x}", Sha256::digest(fs::read(path).unwrap()))
-}
-
-fn bytes_hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 fn daemon_stdout_path(db: &Path, job_id: &str) -> PathBuf {
@@ -616,13 +615,12 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
         rpc(&pipe, 5, "job_state", json!({"job_id": "rpc-job"}))["state"],
         "running"
     );
-    let telemetry = FIXTURE_TELEMETRY.as_bytes();
     let metadata = json!({
-        "run_id": "a1-e8-rpc-test",
-        "source_commit": "f1f3d3b456fd22383faaa601304effeb4729b6d5",
+        "run_id": "rpc-job",
+        "source_commit": "5326043c344227c1b145a4ddbb3519cfa62d4943",
         "source_blobs": {
-            "scripts/r1_exit_battery.py": "c1bfc3dbcb994056b14513cdbb9771048cd7296f",
-            "scripts/frontier_receipt.py": "61a7842d379641a147387bc76b492e754d519529"
+            "scripts/r1_exit_battery.py": "c".repeat(64),
+            "scripts/frontier_receipt.py": "d".repeat(64)
         },
         "seed": 83,
         "checkpoint_sha256": "a".repeat(64),
@@ -639,7 +637,20 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
         "running"
     );
     rpc(&pipe, 9, "stop_job", json!({"job_id": "rpc-job"}));
-    let bind = rpc(
+    let mut forged_metadata = metadata.clone();
+    forged_metadata["run_id"] = json!("caller-grafted-run");
+    let refused = rpc_response(
+        &pipe,
+        9_0,
+        "bind_a1_e8_telemetry",
+        json!({
+            "job_id":"rpc-job",
+            "artifact_path":daemon_stdout_path(&db, "rpc-job"),
+            "metadata":forged_metadata
+        }),
+    );
+    assert!(refused.get("error").is_some());
+    let profile_refused = rpc_response(
         &pipe,
         9_1,
         "bind_a1_e8_telemetry",
@@ -649,15 +660,10 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
             "metadata":metadata
         }),
     );
-    let telemetry_sha = bind["sha256"].as_str().unwrap().to_owned();
-    let reopened = rpc(
-        &pipe,
-        9_2,
-        "read_content_addressed_bytes",
-        json!({"job_id":"rpc-job","sha256":telemetry_sha}),
+    assert!(
+        profile_refused.get("error").is_some(),
+        "arbitrary EvidenceVerifier dispatch must not publish A1-E8 telemetry"
     );
-    assert_eq!(reopened["sha256"], telemetry_sha);
-    assert_eq!(reopened["bytes_hex"], bytes_hex(telemetry));
     assert!(rpc(&pipe, 10, "job_exit_code", json!({"job_id": "rpc-job"}))["exit_code"].is_null());
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)

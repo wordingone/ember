@@ -524,6 +524,7 @@ with open(os.environ["EMBER_LAB_PIPE"], "r+b", buffering=0) as stream:
 if response.get("result", {}).get("consumed") is not True:
     raise RuntimeError("dispatch token was not consumed")
 Path(sys.argv[2], "python-chain-ran").write_text("ok", encoding="utf-8")
+print(os.environ["EMBER_A1_E8_METADATA"], flush=True)
 "#,
     )
     .unwrap();
@@ -534,12 +535,30 @@ Path(sys.argv[2], "python-chain-ran").write_text("ok", encoding="utf-8")
         b"# daemon-bound dispatch helper fixture\n",
     )
     .unwrap();
+    let battery_source = root.join("scripts").join("r1_exit_battery.py");
+    let frontier_source = root.join("scripts").join("frontier_receipt.py");
+    fs::write(&battery_source, b"# governed A1 exit battery fixture\n").unwrap();
+    fs::write(&frontier_source, b"# governed frontier receipt fixture\n").unwrap();
+    let telemetry_metadata = json!({
+        "run_id": "certified-training-token-job",
+        "source_commit": payload["source_commit"],
+        "source_blobs": {
+            "scripts/r1_exit_battery.py": sha256(&battery_source),
+            "scripts/frontier_receipt.py": sha256(&frontier_source)
+        },
+        "seed": 83,
+        "checkpoint_sha256": "a".repeat(64),
+        "thresholds_sha256": "b".repeat(64),
+        "row_count": 200
+    });
     let python = governed_python_executable();
     payload["program"] = json!({"path":python,"sha256":sha256(&python)});
     payload["bindings"].as_array_mut().unwrap().extend([
         json!({"kind":"config","path":readme,"sha256":sha256(&readme)}),
         json!({"kind":"verifier","path":launcher,"sha256":sha256(&launcher)}),
         json!({"kind":"verifier","path":dispatch_helper,"sha256":sha256(&dispatch_helper)}),
+        json!({"kind":"verifier","path":battery_source,"sha256":sha256(&battery_source)}),
+        json!({"kind":"verifier","path":frontier_source,"sha256":sha256(&frontier_source)}),
     ]);
     payload["workload_profile"] = json!({
         "profile_id": "certified_training",
@@ -569,6 +588,8 @@ Path(sys.argv[2], "python-chain-ran").write_text("ok", encoding="utf-8")
         dispatch_at
     );
     payload["env"]["EMBER_LAB_PIPE"] = json!(pipe);
+    payload["env"]["EMBER_A1_E8_METADATA"] =
+        json!(serde_json::to_string(&telemetry_metadata).unwrap());
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
     let daemon = Arc::new(
         Daemon::open_with_certified_training(
@@ -610,6 +631,38 @@ Path(sys.argv[2], "python-chain-ran").write_text("ok", encoding="utf-8")
         .unwrap();
     assert_eq!(token_rows, 1);
     drop(connection);
+    for _ in 0..100 {
+        if matches!(
+            daemon.job_state("certified-training-token-job").unwrap(),
+            Some(JobState::Exited)
+        ) {
+            break;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    assert!(matches!(
+        daemon.job_state("certified-training-token-job").unwrap(),
+        Some(JobState::Exited)
+    ));
+    let stdout_path: String = Connection::open(root.join("ember-lab.sqlite3"))
+        .unwrap()
+        .query_row(
+            "SELECT stdout_log_path FROM jobs WHERE job_id=?1",
+            ["certified-training-token-job"],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let telemetry_sha = daemon
+        .bind_a1_e8_telemetry(
+            "certified-training-token-job",
+            Path::new(&stdout_path),
+            &telemetry_metadata,
+        )
+        .unwrap();
+    let (_, reopened) = daemon
+        .read_content_addressed_bytes("certified-training-token-job", &telemetry_sha)
+        .unwrap();
+    assert_eq!(reopened, fs::read(&stdout_path).unwrap());
     if matches!(
         daemon.job_state("certified-training-token-job").unwrap(),
         Some(JobState::Running | JobState::Stopping)
@@ -660,9 +713,7 @@ fn certified_training_real_launcher_and_helper_consume_before_validation_effects
     let readme = source_root.join("README.md");
     fs::write(&readme, b"# daemon-governed production-chain fixture\n").unwrap();
 
-    let compiled_binary = PathBuf::from(
-        option_env!("CARGO_BIN_EXE_ember-lab").expect("compiled ember-lab binary is required"),
-    );
+    let compiled_binary = PathBuf::from(env!("CARGO_BIN_EXE_ember-lab"));
     let server_binary = source_root
         .join("runtime")
         .join("ember-lab")

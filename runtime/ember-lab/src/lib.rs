@@ -3075,19 +3075,78 @@ impl Daemon {
                 actual: actual_sha,
             });
         }
-        validate_a1_e8_metadata(metadata)?;
-        if bytes.is_empty() || !bytes.ends_with(b"\n") {
+        let derived_metadata = derive_a1_e8_metadata(&bytes)?;
+        if metadata != &derived_metadata {
             return Err(EmberLabError::InvalidDispatchManifest {
-                detail: "A1-E8 telemetry must be nonempty manifest-last UTF-8 JSONL".into(),
+                detail: "A1-E8 telemetry metadata does not match the daemon-sealed stdout manifest"
+                    .into(),
             });
         }
-        if std::str::from_utf8(&bytes).is_err() {
+        if derived_metadata.get("run_id").and_then(Value::as_str) != Some(job_id) {
             return Err(EmberLabError::InvalidDispatchManifest {
-                detail: "A1-E8 telemetry must be valid UTF-8 JSONL".into(),
+                detail: "A1-E8 telemetry run_id does not match the daemon job".into(),
+            });
+        }
+        let Some((preflight_resource, manifest_sha256, preflight_bytes)) =
+            self.daemon_preflight_receipt(job_id)?
+        else {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "A1-E8 telemetry requires a daemon dispatch preflight receipt".into(),
+            });
+        };
+        if preflight_resource != row.resource {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "A1-E8 telemetry preflight resource lease does not match the daemon job"
+                    .into(),
+            });
+        }
+        let preflight_receipt: Value = serde_json::from_slice(&preflight_bytes)?;
+        let manifest_bytes: Vec<u8> = self.conn()?.query_row(
+            "SELECT identity_blob FROM identities WHERE job_id=?1",
+            [job_id],
+            |record| record.get(0),
+        )?;
+        if hash_bytes(&manifest_bytes) != manifest_sha256 {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "A1-E8 telemetry manifest bytes do not match authenticated job identity"
+                    .into(),
+            });
+        }
+        let manifest: DispatchManifest = serde_json::from_slice(&manifest_bytes)?;
+        {
+            let conn = self.conn()?;
+            validate_a1_e8_dispatch_authority(
+                &preflight_receipt,
+                job_id,
+                &manifest_sha256,
+                &manifest,
+                &row,
+                &derived_metadata,
+                self.certified_python.as_ref(),
+                self.certified_launcher.as_ref(),
+                self.certified_dispatch_helper.as_ref(),
+                &self.ember_lab_binary_sha256,
+                &self.ember_lab_source_sha256,
+                &conn,
+            )
+            .map_err(|_| EmberLabError::InvalidDispatchManifest {
+                detail:
+                    "A1-E8 telemetry metadata does not match certified daemon dispatch authority"
+                        .into(),
+            })?;
+        }
+        if manifest.source_commit
+            != derived_metadata
+                .get("source_commit")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+        {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "A1-E8 telemetry metadata does not match daemon dispatch identity".into(),
             });
         }
         let sha256 = hash_bytes(&bytes);
-        let metadata_json = serde_json::to_string(metadata)?;
+        let metadata_json = serde_json::to_string(&derived_metadata)?;
         let mut conn = self.conn()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let existing: Option<(String, Vec<u8>, String)> = tx
@@ -5454,7 +5513,10 @@ fn validate_a1_e8_metadata(value: &Value) -> Result<()> {
             && blobs.iter().all(|(path, sha)| {
                 !path.trim().is_empty()
                     && sha.as_str().is_some_and(|value| {
-                        value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+                        value.len() == 64
+                            && value
+                                .bytes()
+                                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
                     })
             })
     });
@@ -5484,6 +5546,217 @@ fn validate_a1_e8_metadata(value: &Value) -> Result<()> {
         })?;
     }
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn validate_a1_e8_dispatch_authority(
+    preflight: &Value,
+    job_id: &str,
+    manifest_sha256: &str,
+    manifest: &DispatchManifest,
+    row: &JobProcessRow,
+    metadata: &Value,
+    certified_python: Option<&CertifiedProgramIdentity>,
+    certified_launcher: Option<&CertifiedProgramIdentity>,
+    certified_dispatch_helper: Option<&CertifiedProgramIdentity>,
+    daemon_binary_sha256: &str,
+    daemon_source_sha256: &str,
+    conn: &Connection,
+) -> Result<()> {
+    const PREFLIGHT_KEYS: [&str; 19] = [
+        "schema_version",
+        "result",
+        "job_id",
+        "source_commit",
+        "observed_at_ms",
+        "not_before_ms",
+        "expires_at_ms",
+        "dispatch_manifest_sha256",
+        "workload_profile",
+        "program",
+        "bindings",
+        "args_sha256",
+        "env_sha256",
+        "custody_root",
+        "storage_reserves",
+        "vram_reserve",
+        "maximum_job_memory_bytes",
+        "host_commit",
+        "ember_lab_identity",
+    ];
+    let object = preflight
+        .as_object()
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+            detail: "A1-E8 preflight receipt must be an object".into(),
+        })?;
+    if object.len() != PREFLIGHT_KEYS.len()
+        || PREFLIGHT_KEYS.iter().any(|key| !object.contains_key(*key))
+        || object.get("schema_version").and_then(Value::as_str)
+            != Some("ember-lab-dispatch-preflight-v1")
+        || object.get("result").and_then(Value::as_str) != Some("PREFLIGHT_PASSED")
+        || object.get("job_id").and_then(Value::as_str) != Some(job_id)
+        || object.get("source_commit").and_then(Value::as_str)
+            != Some(manifest.source_commit.as_str())
+        || object
+            .get("dispatch_manifest_sha256")
+            .and_then(Value::as_str)
+            != Some(manifest_sha256)
+        || object.get("not_before_ms") != Some(&json!(manifest.not_before_ms))
+        || object.get("expires_at_ms") != Some(&json!(manifest.expires_at_ms))
+        || object.get("workload_profile")
+            != Some(&serde_json::to_value(&manifest.workload_profile)?)
+        || object.get("args_sha256")
+            != Some(&json!(hash_bytes(&serde_json::to_vec(&manifest.args)?)))
+        || object.get("env_sha256") != Some(&json!(hash_bytes(&serde_json::to_vec(&manifest.env)?)))
+        || object.get("maximum_job_memory_bytes") != Some(&json!(manifest.maximum_job_memory_bytes))
+        || object.get("ember_lab_identity")
+            != Some(&json!({
+                "binary_sha256": daemon_binary_sha256,
+                "source_sha256": daemon_source_sha256,
+            }))
+    {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "A1-E8 preflight receipt is not the complete authenticated dispatch receipt"
+                .into(),
+        });
+    }
+    if manifest.job_id != job_id
+        || manifest.resource_lease != row.resource
+        || manifest.workload_profile.profile_id != DispatchWorkloadProfileId::CertifiedTraining
+    {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail:
+                "A1-E8 telemetry requires the certified training workload and matching job lease"
+                    .into(),
+        });
+    }
+
+    let program = verify_dispatch_file(&manifest.program.path, &manifest.program.sha256)?;
+    let verified_bindings = manifest
+        .bindings
+        .iter()
+        .map(|binding| {
+            Ok((
+                verify_dispatch_binding(binding)?,
+                binding.sha256.clone(),
+                binding.kind,
+            ))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    validate_certified_training_binding_closure(
+        manifest.workload_profile.profile_id,
+        &program,
+        &manifest.args,
+        &verified_bindings,
+        certified_python,
+        certified_launcher,
+        certified_dispatch_helper,
+    )?;
+    let preflight_program = object.get("program").and_then(Value::as_object);
+    if preflight_program.and_then(|value| value.get("path")).and_then(Value::as_str)
+        != Some(program.to_string_lossy().as_ref())
+        || preflight_program
+            .and_then(|value| value.get("sha256"))
+            .and_then(Value::as_str)
+            != Some(manifest.program.sha256.as_str())
+        || object.get("bindings")
+            != Some(&Value::Array(
+                verified_bindings
+                    .iter()
+                    .map(|(path, sha256, kind)| {
+                        json!({"kind": kind, "path": path, "sha256": sha256})
+                    })
+                    .collect(),
+            ))
+    {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "A1-E8 preflight program or verified bindings do not match the manifest"
+                .into(),
+        });
+    }
+
+    let (stored_program, stored_args_json, stored_resource): (String, String, String) = conn
+        .query_row(
+            "SELECT program,args_json,resource FROM jobs WHERE job_id=?1",
+            [job_id],
+            |record| Ok((record.get(0)?, record.get(1)?, record.get(2)?)),
+        )?;
+    if Path::new(&stored_program) != program
+        || serde_json::from_str::<Vec<String>>(&stored_args_json)? != manifest.args
+        || stored_resource != manifest.resource_lease
+    {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "A1-E8 daemon job execution does not match the certified manifest".into(),
+        });
+    }
+
+    const SOURCE_PATHS: [&str; 2] = ["scripts/frontier_receipt.py", "scripts/r1_exit_battery.py"];
+    let source_blobs = metadata
+        .get("source_blobs")
+        .and_then(Value::as_object)
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+            detail: "A1-E8 source blobs are missing".into(),
+        })?;
+    if source_blobs.len() != SOURCE_PATHS.len()
+        || SOURCE_PATHS
+            .iter()
+            .any(|path| !source_blobs.contains_key(*path))
+    {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "A1-E8 source blob path set is not closed".into(),
+        });
+    }
+    let source_root = Path::new(&manifest.args[2]);
+    for relative in SOURCE_PATHS {
+        let canonical = fs::canonicalize(source_root.join(relative)).map_err(|error| {
+            EmberLabError::InvalidDispatchManifest {
+                detail: format!("A1-E8 source binding {relative} is unavailable: {error}"),
+            }
+        })?;
+        let expected = source_blobs[relative].as_str().unwrap_or_default();
+        let matches = verified_bindings
+            .iter()
+            .filter(|(path, sha256, kind)| {
+                *kind == DispatchBindingKind::Verifier
+                    && *path == canonical
+                    && sha256 == expected
+                    && hash_file(path).ok().as_deref() == Some(expected)
+            })
+            .count();
+        if matches != 1 {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: format!(
+                    "A1-E8 source blob {relative} is not uniquely bound to reopened verifier bytes"
+                ),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn derive_a1_e8_metadata(bytes: &[u8]) -> Result<Value> {
+    if bytes.is_empty() || !bytes.ends_with(b"\n") {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "A1-E8 telemetry must be nonempty manifest-last UTF-8 JSONL".into(),
+        });
+    }
+    let text = std::str::from_utf8(bytes).map_err(|_| EmberLabError::InvalidDispatchManifest {
+        detail: "A1-E8 telemetry must be valid UTF-8 JSONL".into(),
+    })?;
+    let final_line = text
+        .lines()
+        .rev()
+        .find(|line| !line.trim().is_empty())
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+            detail: "A1-E8 telemetry must end with a metadata manifest".into(),
+        })?;
+    let metadata = serde_json::from_str::<Value>(final_line).map_err(|_| {
+        EmberLabError::InvalidDispatchManifest {
+            detail: "A1-E8 telemetry must end with a valid JSON metadata manifest".into(),
+        }
+    })?;
+    validate_a1_e8_metadata(&metadata)?;
+    Ok(metadata)
 }
 /// `pub`: also the self-identity hash `main.rs`'s `verify-training` subcommand reuses for a
 /// one-shot command's `ember_lab_binary_sha256`, the same provenance discipline `Daemon::open`
@@ -8236,6 +8509,16 @@ mod dispatch_binding_snapshot_tests {
             "row_count": 200
         });
         assert!(validate_a1_e8_metadata(&metadata).is_err());
+        let legacy_git_blob_metadata = json!({
+            "run_id": "a1-e8-legacy-source-blob",
+            "source_commit": "f1f3d3b456fd22383faaa601304effeb4729b6d5",
+            "source_blobs": {"scripts/r1_exit_battery.py": "c1bfc3dbcb994056b14513cdbb9771048cd7296f"},
+            "seed": 83,
+            "checkpoint_sha256": "a".repeat(64),
+            "thresholds_sha256": "b".repeat(64),
+            "row_count": 200
+        });
+        assert!(validate_a1_e8_metadata(&legacy_git_blob_metadata).is_err());
     }
 
     #[test]
@@ -8245,8 +8528,8 @@ mod dispatch_binding_snapshot_tests {
                 "run_id": "a1-e8-invalid-hash-type",
                 "source_commit": "f1f3d3b456fd22383faaa601304effeb4729b6d5",
                 "source_blobs": {
-                    "scripts/r1_exit_battery.py":
-                        "c1bfc3dbcb994056b14513cdbb9771048cd7296f"
+                    "scripts/r1_exit_battery.py": "c".repeat(64),
+                    "scripts/frontier_receipt.py": "d".repeat(64)
                 },
                 "seed": 83,
                 "checkpoint_sha256": "a".repeat(64),
@@ -8281,9 +8564,24 @@ mod dispatch_binding_snapshot_tests {
         let db = root.join("ember-lab.sqlite3");
         let stdout = root.join("sealed.stdout.log");
         let stderr = root.join("sealed.stderr.log");
-        let bytes = br#"{"arm":"mechanism","step":1}
-"#;
-        fs::write(&stdout, bytes).unwrap();
+        let metadata = json!({
+            "run_id": "sealed-job",
+            "source_commit": "f1f3d3b456fd22383faaa601304effeb4729b6d5",
+            "source_blobs": {
+                "scripts/r1_exit_battery.py": "c".repeat(64),
+                "scripts/frontier_receipt.py": "d".repeat(64)
+            },
+            "seed": 83,
+            "checkpoint_sha256": "a".repeat(64),
+            "thresholds_sha256": "b".repeat(64),
+            "row_count": 200
+        });
+        let bytes = format!(
+            "{{\"arm\":\"mechanism\",\"step\":1}}\n{}\n",
+            serde_json::to_string(&metadata).unwrap()
+        )
+        .into_bytes();
+        fs::write(&stdout, &bytes).unwrap();
         fs::write(&stderr, b"").unwrap();
         let daemon = Daemon::open(&db).unwrap();
         let identity_blob = br#"{"schema":"ember-identity-v1"}"#;
@@ -8298,7 +8596,29 @@ mod dispatch_binding_snapshot_tests {
                 params!["sealed-job", identity_path.to_string_lossy(), identity_sha, identity_blob, 1],
             )
             .unwrap();
-        let stdout_sha = hash_bytes(bytes);
+        let foreign_preflight = serde_json::to_vec(&json!({
+            "schema_version": "ember-lab-dispatch-preflight-v1",
+            "result": "PREFLIGHT_PASSED",
+            "job_id": "sealed-job",
+            "source_commit": "0".repeat(40)
+        }))
+        .unwrap();
+        daemon
+            .conn()
+            .unwrap()
+            .execute(
+                "INSERT INTO dispatch_preflight_receipts(job_id,resource_lease,manifest_sha256,receipt_sha256,receipt_bytes,created_at_ms) VALUES(?1,?2,?3,?4,?5,?6)",
+                params![
+                    "sealed-job",
+                    "cpu",
+                    "c".repeat(64),
+                    hash_bytes(&foreign_preflight),
+                    foreign_preflight,
+                    1_i64
+                ],
+            )
+            .unwrap();
+        let stdout_sha = hash_bytes(&bytes);
         daemon
             .conn()
             .unwrap()
@@ -8322,49 +8642,38 @@ mod dispatch_binding_snapshot_tests {
                 ],
             )
             .unwrap();
-        let metadata = json!({
-            "run_id": "a1-e8-sealed-test",
-            "source_commit": "f1f3d3b456fd22383faaa601304effeb4729b6d5",
-            "source_blobs": {"scripts/r1_exit_battery.py": "c1bfc3dbcb994056b14513cdbb9771048cd7296f"},
-            "seed": 83,
-            "checkpoint_sha256": "a".repeat(64),
-            "thresholds_sha256": "b".repeat(64),
-            "row_count": 200
-        });
-        let sha = daemon
-            .bind_a1_e8_telemetry("sealed-job", &stdout, &metadata)
-            .unwrap();
-        assert_eq!(sha, stdout_sha);
-        let foreign = root.join("foreign.jsonl");
-        fs::write(&foreign, bytes).unwrap();
+        let mut forged_metadata = metadata.clone();
+        forged_metadata["run_id"] = json!("caller-grafted-run");
         assert!(daemon
-            .bind_a1_e8_telemetry("sealed-job", &foreign, &metadata)
+            .bind_a1_e8_telemetry("sealed-job", &stdout, &forged_metadata)
             .is_err());
-        fs::write(
-            &stdout,
-            br#"{"arm":"changed"}
-"#,
-        )
+        assert!(daemon
+            .bind_a1_e8_telemetry("sealed-job", &stdout, &metadata)
+            .is_err());
+        let matching_preflight = serde_json::to_vec(&json!({
+            "schema_version": "ember-lab-dispatch-preflight-v1",
+            "result": "PREFLIGHT_PASSED",
+            "job_id": "sealed-job",
+            "source_commit": metadata["source_commit"]
+        }))
         .unwrap();
-        assert!(daemon
-            .bind_a1_e8_telemetry("sealed-job", &stdout, &metadata)
-            .is_err());
-        let (_, reopened) = daemon
-            .read_content_addressed_bytes("sealed-job", &sha)
-            .unwrap();
-        assert_eq!(reopened, bytes);
-        let metadata_json = serde_json::to_string(&metadata).unwrap();
         daemon
             .conn()
             .unwrap()
             .execute(
-                "INSERT INTO a1_e8_telemetry(job_id,sha256,bytes,metadata_json,bound_at_ms) VALUES(?1,?2,?3,?4,?5)",
-                params!["unbound-job", sha, bytes, metadata_json, 2_i64],
+                "UPDATE dispatch_preflight_receipts SET receipt_sha256=?1,receipt_bytes=?2 WHERE job_id=?3",
+                params![hash_bytes(&matching_preflight), matching_preflight, "sealed-job"],
             )
             .unwrap();
         assert!(daemon
-            .read_content_addressed_bytes("unbound-job", &sha)
+            .bind_a1_e8_telemetry("sealed-job", &stdout, &metadata)
             .is_err());
+        let stored: i64 = daemon
+            .conn()
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM a1_e8_telemetry", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(stored, 0, "refused preflight must not publish telemetry");
         let _ = fs::remove_dir_all(root);
     }
 

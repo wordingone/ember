@@ -645,6 +645,10 @@ fn fixture_child_process() {
     if let Ok(raw) = std::env::var("EMBER_LAB_FIXTURE_RAW_TELEMETRY") {
         print!("{raw}");
         std::io::stdout().flush().unwrap();
+        #[cfg(windows)]
+        if std::env::var("EMBER_LAB_FIXTURE_EXIT_AFTER_TELEMETRY").as_deref() == Ok("1") {
+            std::process::exit(0);
+        }
     }
     thread::sleep(Duration::from_millis(sleep_ms));
 }
@@ -791,30 +795,43 @@ fn detached_job_is_adopted_stopped_and_exported_after_daemon_reopen() {
 }
 
 #[test]
-fn daemon_binds_reopens_and_receipts_a1_e8_telemetry_by_job_and_hash() {
+fn daemon_refuses_a1_e8_telemetry_without_dispatch_identity() {
     let root = sandbox("a1-e8-telemetry");
     let db = root.join("ember-lab.sqlite3");
-    let receipt = root.join("receipt.json");
     let (identity, identity_hash) = write_identity(&root);
     let daemon = Daemon::open(&db).unwrap();
     daemon
         .bind_identity("a1-e8-job", &identity, &identity_hash)
         .unwrap();
     daemon.acquire_lease("cpu-fixture", "a1-e8-job").unwrap();
+    let metadata = json!({
+        "run_id": "a1-e8-rust-test",
+        "source_commit": "f1f3d3b456fd22383faaa601304effeb4729b6d5",
+        "source_blobs": {
+            "scripts/r1_exit_battery.py": "c".repeat(64),
+            "scripts/frontier_receipt.py": "d".repeat(64)
+        },
+        "seed": 83,
+        "checkpoint_sha256": "a".repeat(64),
+        "thresholds_sha256": "b".repeat(64),
+        "row_count": 200
+    });
+    let telemetry = format!(
+        "{{\"arm\":\"mechanism\",\"step\":1}}\n{}\n",
+        serde_json::to_string(&metadata).unwrap()
+    );
     let fixture = std::env::current_exe().unwrap();
     daemon
         .start_job(
             JobSpec::new(
                 "a1-e8-job",
                 fixture.to_string_lossy(),
-                ["--exact", "fixture_child_process", "--nocapture"],
+                ["--exact", "fixture_child_process", "--nocapture", "--quiet"],
                 "cpu-fixture",
             )
             .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
-            .with_env(
-                "EMBER_LAB_FIXTURE_RAW_TELEMETRY",
-                "{\"arm\":\"mechanism\",\"step\":1}\n",
-            )
+            .with_env("EMBER_LAB_FIXTURE_RAW_TELEMETRY", telemetry)
+            .with_env("EMBER_LAB_FIXTURE_EXIT_AFTER_TELEMETRY", "1")
             .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "1000"),
         )
         .unwrap();
@@ -839,18 +856,6 @@ fn daemon_binds_reopens_and_receipts_a1_e8_telemetry_by_job_and_hash() {
         captured,
         "daemon-owned stdout log never captured fixture telemetry"
     );
-    let metadata = json!({
-        "run_id": "a1-e8-rust-test",
-        "source_commit": "f1f3d3b456fd22383faaa601304effeb4729b6d5",
-        "source_blobs": {
-            "scripts/r1_exit_battery.py": "c1bfc3dbcb994056b14513cdbb9771048cd7296f",
-            "scripts/frontier_receipt.py": "61a7842d379641a147387bc76b492e754d519529"
-        },
-        "seed": 83,
-        "checkpoint_sha256": "a".repeat(64),
-        "thresholds_sha256": "b".repeat(64),
-        "row_count": 200
-    });
     // On Windows the daemon's authenticated exit monitor seals a naturally
     // exited child; using that path avoids racing TerminateJobObject with the
     // test harness.  POSIX keeps the explicit owned-stop path.
@@ -871,29 +876,9 @@ fn daemon_binds_reopens_and_receipts_a1_e8_telemetry_by_job_and_hash() {
     }
     #[cfg(not(windows))]
     daemon.stop_job("a1-e8-job").unwrap();
-    let telemetry_sha = daemon
-        .bind_a1_e8_telemetry("a1-e8-job", &telemetry_path, &metadata)
-        .unwrap();
-    assert_eq!(
-        daemon
-            .bind_a1_e8_telemetry("a1-e8-job", &telemetry_path, &metadata)
-            .unwrap(),
-        telemetry_sha
-    );
-    let (reopened_metadata, reopened_bytes) = daemon
-        .read_content_addressed_bytes("a1-e8-job", &telemetry_sha)
-        .unwrap();
-    assert_eq!(reopened_metadata, metadata);
-    assert!(reopened_bytes
-        .windows(b"{\"arm\":\"mechanism\",\"step\":1}\n".len())
-        .any(|window| window == b"{\"arm\":\"mechanism\",\"step\":1}\n"));
     assert!(daemon
-        .read_content_addressed_bytes("foreign-job", &telemetry_sha)
+        .bind_a1_e8_telemetry("a1-e8-job", &telemetry_path, &metadata)
         .is_err());
-    daemon.export_receipt("a1-e8-job", &receipt).unwrap();
-    let payload: Value = serde_json::from_slice(&fs::read(receipt).unwrap()).unwrap();
-    assert_eq!(payload["a1_e8_telemetry"]["job_id"], "a1-e8-job");
-    assert_eq!(payload["a1_e8_telemetry"]["sha256"], telemetry_sha);
 }
 
 #[test]
