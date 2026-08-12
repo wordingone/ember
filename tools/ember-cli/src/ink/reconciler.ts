@@ -14,6 +14,8 @@ import {
   type RenderNodeKind,
   type Renderer,
   type TextWrapMode,
+  type StylePool,
+  type HyperlinkPool,
 } from "./rendering-pipeline.ts";
 import { createLayoutNode } from "./layout-engine.ts";
 import type { Style } from "./termio.ts";
@@ -690,6 +692,10 @@ export interface MountOptions {
   onFirstFrameFlushed?: () => void;
   /** Fatal render/reconciliation error. Callers owning terminal modes must tear them down here. */
   onError?: (error: Error) => void;
+  /** Test-only: forwarded verbatim to createRenderer -- see RendererOptions' own comment.
+   *  Production callers never pass these. */
+  stylePool?: StylePool;
+  hyperlinkPool?: HyperlinkPool;
 }
 
 /**
@@ -711,6 +717,8 @@ export function mountInk(element: ReactElement, options: MountOptions): MountHan
     stdout: options.stdout,
     debug:  options.debug,
     onFirstFrameFlushed: options.onFirstFrameFlushed,
+    stylePool: options.stylePool,
+    hyperlinkPool: options.hyperlinkPool,
   });
 
   const container: InkContainer = {

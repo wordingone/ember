@@ -72,6 +72,24 @@ export class StylePool {
   lookup(ref: StyleRef): Style {
     return this._styles[ref] ?? {};
   }
+
+  /** Number of interned slots, including the permanent default at handle 0. */
+  size(): number {
+    return this._styles.length;
+  }
+
+  /** issue #1455: this pool is intern-only for the renderer's entire process lifetime -- every
+   *  distinct style identity ever painted (down to the RGB channel) is retained forever with no
+   *  eviction. A bounded terminal palette stabilizes at a handful of slots and never calls this;
+   *  a caller that paints continuously-unique styles (a numeric-driven gradient, a per-tick
+   *  computed color) would otherwise grow this array without bound for as long as the cockpit
+   *  stays up. Drops every interned style except the default. Every StyleRef issued before this
+   *  call is invalidated -- the caller MUST force a full repaint (bypass any diff against a frame
+   *  painted before the reset) so a stale ref is never looked up against the new index space. */
+  reset(): void {
+    this._styles = [{}];
+    this._keys = [this._key({})];
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -93,6 +111,18 @@ export class HyperlinkPool {
 
   lookup(handle: number): HyperlinkEntry {
     return this._entries[handle] ?? { id: null, uri: "" };
+  }
+
+  /** Number of interned slots. */
+  size(): number {
+    return this._entries.length;
+  }
+
+  /** issue #1455: same intern-only, never-evicted shape as StylePool (see its reset() for the
+   *  full rationale) -- distinct (id, uri) pairs accumulate for the renderer's entire lifetime.
+   *  Every handle issued before this call is invalidated; the caller MUST force a full repaint. */
+  reset(): void {
+    this._entries = [];
   }
 }
 
@@ -952,6 +982,12 @@ export interface RendererOptions {
   debug?: boolean;
   /** Called exactly once, after this renderer writes its first non-empty frame. */
   onFirstFrameFlushed?: () => void;
+  /** Test-only injection point: supply the same pool instance a test already holds a reference
+   *  to, so it can observe .size()/call .reset() directly instead of inferring pool state from
+   *  rendered bytes. Production callers never pass these -- omitting them preserves the exact
+   *  prior behavior (a fresh, renderer-owned pool). */
+  stylePool?: StylePool;
+  hyperlinkPool?: HyperlinkPool;
 }
 
 export interface Renderer {
@@ -960,11 +996,19 @@ export interface Renderer {
   clear(): void;
 }
 
+/** issue #1455 self-limit: hard ceiling on distinct interned styles/hyperlinks a renderer
+ *  retains before StylePool.reset()/HyperlinkPool.reset() sheds it and forces a full repaint.
+ *  4096 is generous headroom above any bounded terminal palette this cockpit actually paints
+ *  (a handful of named colors + a handful of true-color values) -- normal operation never
+ *  approaches it, so this never fires in the common case and only bounds the pathological one. */
+export const STYLE_POOL_CAP = 4096;
+export const HYPERLINK_POOL_CAP = 4096;
+
 /** Creates a stateful double-buffered renderer. */
 export function createRenderer(options: RendererOptions): Renderer {
   const { stream, stdout } = options;
-  const stylePool    = new StylePool();
-  const hyperlinkPool = new HyperlinkPool();
+  const stylePool    = options.stylePool    ?? new StylePool();
+  const hyperlinkPool = options.hyperlinkPool ?? new HyperlinkPool();
 
   let prevFrame: Frame | null = null;
   let spareFrame: Frame | null = null;
@@ -985,9 +1029,25 @@ export function createRenderer(options: RendererOptions): Renderer {
     render(rootNode: RenderNode): void {
       const w = stdout.columns;
       const h = stdout.rows;
-      const geometryChanged = w !== prevW || h !== prevH;
+      let geometryChanged = w !== prevW || h !== prevH;
       prevW = w;
       prevH = h;
+
+      // issue #1455: StylePool/HyperlinkPool are intern-only for this renderer's entire process
+      // lifetime (see StylePool.reset()'s comment for why that is otherwise unbounded). A cap
+      // breach resets both pools and is treated EXACTLY like a geometry change -- prevFrame's
+      // cells hold styleRef/hyperlinkId indices into the pool about to be cleared, and diffFrames
+      // compares those as raw index equality (never dereferenced), so diffing against them after
+      // a reset could silently skip a cell whose visual style actually changed just because its
+      // stale index happens to collide with a freshly-reused one. Forcing the same bypass-the-diff
+      // full-repaint path already proven correct for resizes is the only reset that can't produce
+      // that bug. This never fires for a bounded terminal palette -- it exists for the caller that
+      // isn't one.
+      if (stylePool.size() > STYLE_POOL_CAP || hyperlinkPool.size() > HYPERLINK_POOL_CAP) {
+        stylePool.reset();
+        hyperlinkPool.reset();
+        geometryChanged = true;
+      }
 
       // Build output for the whole frame
       const output = new Output(stylePool, hyperlinkPool);
