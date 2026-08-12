@@ -532,10 +532,15 @@ export function publishActivityFeedInfrastructureFailure(text: string): boolean 
 interface TailState {
   byteOffset: number;
   lineBuffer: string;
+  /** #1455: set once lineBuffer has been dropped for exceeding MAX_LINE_BUFFER_BYTES without a
+   *  newline in sight. While true, incoming bytes are discarded (never buffered) until the next
+   *  "\n" is observed, so a hung writer that never terminates its line cannot resume unbounded
+   *  accumulation on the very next tick. */
+  discardUntilNewline: boolean;
 }
 
 function freshTailState(): TailState {
-  return { byteOffset: 0, lineBuffer: "" };
+  return { byteOffset: 0, lineBuffer: "", discardUntilNewline: false };
 }
 
 /** Watchdog logs are historical event streams. On a fresh cockpit boot, begin at the current
@@ -543,7 +548,7 @@ function freshTailState(): TailState {
  *  If the file does not exist yet, offset zero correctly observes its future creation. */
 function tailStateAtCurrentEnd(filePath: string): TailState {
   try {
-    return { byteOffset: statSync(filePath).size, lineBuffer: "" };
+    return { byteOffset: statSync(filePath).size, lineBuffer: "", discardUntilNewline: false };
   } catch {
     return freshTailState();
   }
@@ -555,6 +560,15 @@ function tailStateAtCurrentEnd(filePath: string): TailState {
  *  MAX_TAIL_LINES_PER_TICK lines, render ONE collapsed summary line instead of N individual
  *  ones (mirrors the receipts-side burst-coalescing in P0-B/#574). */
 export const MAX_TAIL_LINES_PER_TICK = 20;
+
+/** #1455 (idle cockpit leaked 64.5 GiB of commit over ~10h, 6.4 GiB/h): pollTail's lineBuffer
+ *  carries an in-progress line across ticks so a split write is never mis-parsed. Unlike
+ *  telemetry-watch.ts's MAX_PARTIAL_LINE_BYTES, this buffer had no cap -- a watchdog/goal-session
+ *  line that never terminates (a hung write, or one pathological entry) accumulates the file's
+ *  entire unbounded tail growth into this buffer forever, for the life of the cockpit process.
+ *  Mirrors telemetry-watch.ts's discard-until-newline recovery: an oversized partial is dropped,
+ *  not retained, and subsequent bytes are discarded until the next "\n" resyncs the stream. */
+export const MAX_LINE_BUFFER_BYTES = 64 * 1024;
 
 export interface PollTailResult {
   bytesRead: number;
@@ -595,6 +609,7 @@ async function pollTail(
   if (size < state.byteOffset) {
     state.byteOffset = 0;
     state.lineBuffer = "";
+    state.discardUntilNewline = false;
   }
   if (size <= state.byteOffset) return null;
 
@@ -614,10 +629,37 @@ async function pollTail(
   }
   state.byteOffset += newBytes.length;
 
-  const text = state.lineBuffer + newBytes.toString("utf-8");
+  let text = newBytes.toString("utf-8");
+
+  // #1455: while recovering from a previously-dropped oversized partial, discard bytes (never
+  // buffer them) until the next line terminator is seen -- bytesRead is still reported below so
+  // pollTail diagnostics stay honest about what was actually consumed from disk this tick.
+  if (state.discardUntilNewline) {
+    const newline = text.indexOf("\n");
+    if (newline < 0) {
+      return {
+        bytesRead: newBytes.length,
+        byteOffsetBefore,
+        byteOffsetAfter: state.byteOffset,
+        lineCount: 0,
+        capped: false,
+      };
+    }
+    text = text.slice(newline + 1);
+    state.discardUntilNewline = false;
+  }
+
+  text = state.lineBuffer + text;
+  state.lineBuffer = "";
   const rawLines = text.split("\n");
-  state.lineBuffer = rawLines.pop() ?? "";
+  const partial = rawLines.pop() ?? "";
   const trimmedLines = rawLines.map((l) => l.trim()).filter((l) => l.length > 0);
+
+  if (Buffer.byteLength(partial, "utf-8") > MAX_LINE_BUFFER_BYTES) {
+    state.discardUntilNewline = true;
+  } else {
+    state.lineBuffer = partial;
+  }
 
   const capped = trimmedLines.length > MAX_TAIL_LINES_PER_TICK;
   if (capped) {

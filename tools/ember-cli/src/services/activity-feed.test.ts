@@ -31,6 +31,7 @@ import {
   publishActivityFeedInfrastructureFailure,
   RECEIPT_RETRY_DELAY_MS,
   MAX_TAIL_LINES_PER_TICK,
+  MAX_LINE_BUFFER_BYTES,
   BoundedSet,
   MAX_TRACKED_PATHS,
   MAX_GOAL_TAIL_STATES,
@@ -781,6 +782,70 @@ describe("startActivityFeed — engine (real fs)", () => {
       expect(watchdogLines.some((l) => l.text.includes("collapsed"))).toBe(false);
     },
     8000,
+  );
+
+  // #1455 (idle cockpit leaked 64.5 GiB of commit over ~10h): a line that never terminates must
+  // never grow pollTail's lineBuffer without bound across ticks -- it must be dropped, and the
+  // stream must resync cleanly at the next newline rather than staying stuck or silently leaking
+  // the dropped content downstream.
+  it(
+    "drops an unterminated line once it exceeds the line-buffer cap instead of retaining it forever, and resyncs cleanly at the next newline",
+    async () => {
+      const deps = baseDeps();
+      handle = startActivityFeed(deps);
+
+      // Tick 1: an unterminated chunk under the cap -- must be retained (normal split-write
+      // behavior, not yet oversized).
+      const underCap = Math.floor(MAX_LINE_BUFFER_BYTES * 0.6);
+      fs.writeFileSync(deps.restartLogPath, "X".repeat(underCap));
+      await sleep(1300);
+
+      // Tick 2: appending more with still no "\n" pushes the cumulative unterminated line past
+      // MAX_LINE_BUFFER_BYTES. This must be dropped, not retained and grown further.
+      const pushesOverCap = MAX_LINE_BUFFER_BYTES - underCap + 1_000;
+      fs.appendFileSync(deps.restartLogPath, "Y".repeat(pushesOverCap));
+      await sleep(1300);
+
+      // Tick 3: the line finally terminates, immediately followed by one well-formed row. The
+      // engine must discard everything up to and including that "\n" (the oversized line it
+      // belongs to) and then process the well-formed row normally -- proving recovery, not a
+      // permanently stuck stream.
+      const recoveryRow = JSON.stringify({
+        ts: new Date().toISOString(),
+        target: "cockpit",
+        event: "relaunch",
+        relaunchPid: 999,
+      });
+      fs.appendFileSync(deps.restartLogPath, `\n${recoveryRow}\n`);
+      await sleep(1300);
+
+      const state = getActivityFeedState();
+      const watchdogLines = state.recentLines.filter((l) => l.source === "watchdog");
+
+      // The dropped oversized line must never surface -- not verbatim, not truncated, not as a
+      // fallback render. If it did, the "bounded" fix would just be moving the leak downstream.
+      expect(watchdogLines.some((l) => l.text.includes("X".repeat(100)))).toBe(false);
+      expect(watchdogLines.some((l) => l.text.includes("Y".repeat(100)))).toBe(false);
+      expect(fs.readFileSync(deps.ledgerPath, "utf-8")).not.toContain("X".repeat(100));
+
+      // The stream resynced: the row immediately after the dropped line's terminator renders
+      // normally.
+      expect(watchdogLines.some((l) => l.text.includes("999"))).toBe(true);
+
+      // And the engine keeps working normally afterward -- no lingering discard state.
+      const followUpRow = JSON.stringify({
+        ts: new Date().toISOString(),
+        target: "cockpit",
+        event: "relaunch",
+        relaunchPid: 1000,
+      });
+      fs.appendFileSync(deps.restartLogPath, `${followUpRow}\n`);
+      await sleep(1300);
+      expect(
+        getActivityFeedState().recentLines.some((l) => l.source === "watchdog" && l.text.includes("1000")),
+      ).toBe(true);
+    },
+    10000,
   );
 
   it(
