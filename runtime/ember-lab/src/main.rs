@@ -15,6 +15,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+const DISPATCH_TOKEN_ENV: &str = "EMBER_LAB_DISPATCH_TOKEN";
+const DISPATCH_JOB_ID_ENV: &str = "EMBER_LAB_DISPATCH_JOB_ID";
+const DISPATCH_DAEMON_PID_ENV: &str = "EMBER_LAB_DISPATCH_DAEMON_PID";
+const DISPATCH_PIPE_ENV: &str = "EMBER_LAB_PIPE";
+
 fn usage() -> &'static str {
     "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab data-catalog-status --db <path>\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
 }
@@ -293,6 +298,158 @@ fn run_verify_training(
     Ok(outcome.ok)
 }
 
+fn call_rpc(
+    pipe: &str,
+    request: &Value,
+    operation: &str,
+) -> Result<Value, Box<dyn std::error::Error>> {
+    call_rpc_with_server(pipe, request, operation, None)
+}
+
+fn call_rpc_with_server(
+    pipe: &str,
+    request: &Value,
+    operation: &str,
+    expected_server_pid: Option<u32>,
+) -> Result<Value, Box<dyn std::error::Error>> {
+    let encoded = serde_json::to_string(request)?;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut stream = loop {
+        match OpenOptions::new().read(true).write(true).open(pipe) {
+            Ok(stream) => break stream,
+            Err(error) if Instant::now() < deadline => {
+                let _ = error;
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            Err(error) => return Err(error.into()),
+        }
+    };
+    if let Some(expected_server_pid) = expected_server_pid {
+        authenticate_pipe_server(&stream, expected_server_pid)?;
+    }
+    writeln!(stream, "{encoded}")?;
+    stream.flush()?;
+    let mut line = String::new();
+    BufReader::new(stream).read_line(&mut line)?;
+    let response: Value = serde_json::from_str(&line)?;
+    if let Some(error) = response.get("error") {
+        return Err(std::io::Error::other(format!("ember-lab {operation} failed: {error}")).into());
+    }
+    response.get("result").cloned().ok_or_else(|| {
+        std::io::Error::other(format!("ember-lab {operation} response lacks result")).into()
+    })
+}
+
+#[cfg(windows)]
+fn authenticate_pipe_server(
+    stream: &std::fs::File,
+    expected_server_pid: u32,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Pipes::GetNamedPipeServerProcessId;
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+
+    let pipe = stream.as_raw_handle().cast();
+    let mut server_pid = 0u32;
+    if unsafe { GetNamedPipeServerProcessId(pipe, &mut server_pid) } == 0
+        || server_pid == 0
+        || server_pid != expected_server_pid
+    {
+        return Err(std::io::Error::other("VERIFIER_DISPATCH_DAEMON_IDENTITY_REFUSED").into());
+    }
+    let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, server_pid) };
+    if process.is_null() {
+        return Err(std::io::Error::other("VERIFIER_DISPATCH_DAEMON_IDENTITY_REFUSED").into());
+    }
+    let mut path = vec![0u16; 32768];
+    let mut size = path.len() as u32;
+    let queried = unsafe { QueryFullProcessImageNameW(process, 0, path.as_mut_ptr(), &mut size) };
+    unsafe { CloseHandle(process) };
+    if queried == 0 {
+        return Err(std::io::Error::other("VERIFIER_DISPATCH_DAEMON_IDENTITY_REFUSED").into());
+    }
+    let server_path = std::fs::canonicalize(PathBuf::from(String::from_utf16_lossy(
+        &path[..size as usize],
+    )))?;
+    let current_path = std::fs::canonicalize(std::env::current_exe()?)?;
+    if !server_path
+        .to_string_lossy()
+        .eq_ignore_ascii_case(&current_path.to_string_lossy())
+        || hash_file(&server_path)? != hash_file(&current_path)?
+    {
+        return Err(std::io::Error::other("VERIFIER_DISPATCH_DAEMON_IDENTITY_REFUSED").into());
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn authenticate_pipe_server(
+    _stream: &std::fs::File,
+    _expected_server_pid: u32,
+) -> Result<(), Box<dyn std::error::Error>> {
+    Err(std::io::Error::other("VERIFIER_DISPATCH_DAEMON_IDENTITY_UNSUPPORTED").into())
+}
+
+fn consume_verifier_dispatch_token() -> Result<(), Box<dyn std::error::Error>> {
+    let required = |name: &str| {
+        std::env::var(name).map_err(|_| {
+            std::io::Error::other(format!("VERIFIER_DISPATCH_TOKEN_REQUIRED: missing {name}"))
+        })
+    };
+    let pipe = required(DISPATCH_PIPE_ENV)?;
+    let job_id = required(DISPATCH_JOB_ID_ENV)?;
+    let token = required(DISPATCH_TOKEN_ENV)?;
+    if job_id.trim().is_empty()
+        || token.len() != 64
+        || !token
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
+        return Err(std::io::Error::other("VERIFIER_DISPATCH_TOKEN_INVALID").into());
+    }
+    let daemon_pid = required(DISPATCH_DAEMON_PID_ENV)?;
+    let daemon_pid = daemon_pid
+        .parse::<u32>()
+        .ok()
+        .filter(|pid| *pid > 0)
+        .ok_or_else(|| std::io::Error::other("VERIFIER_DISPATCH_DAEMON_IDENTITY_REFUSED"))?;
+    let request = json!({"jsonrpc":"2.0","id":1,"method":"consume_verifier_dispatch_token","params":{"job_id":job_id,"token":token}});
+    let result = call_rpc_with_server(
+        &pipe,
+        &request,
+        "dispatch-token consumption",
+        Some(daemon_pid),
+    )?;
+    let expected_binary_sha256 = hash_file(&std::env::current_exe()?)?;
+    let expected_source_sha256 = ember_lab_source_hash();
+    let identity = result.get("daemon_identity");
+    if result.get("consumed") != Some(&Value::Bool(true))
+        || identity.and_then(|value| value.get("schema_version"))
+            != Some(&Value::String("ember-lab-runtime-identity-v1".into()))
+        || identity
+            .and_then(|value| value.get("pid"))
+            .and_then(Value::as_u64)
+            != Some(daemon_pid as u64)
+        || identity
+            .and_then(|value| value.get("binary_sha256"))
+            .and_then(Value::as_str)
+            != Some(expected_binary_sha256.as_str())
+        || identity
+            .and_then(|value| value.get("source_sha256"))
+            .and_then(Value::as_str)
+            != Some(expected_source_sha256.as_str())
+    {
+        return Err(std::io::Error::other("VERIFIER_DISPATCH_TOKEN_REFUSED").into());
+    }
+    std::env::remove_var(DISPATCH_TOKEN_ENV);
+    std::env::remove_var(DISPATCH_JOB_ID_ENV);
+    std::env::remove_var(DISPATCH_DAEMON_PID_ENV);
+    Ok(())
+}
+
 fn run_rehearsal(
     capability: &str,
     db_path: &Path,
@@ -487,30 +644,7 @@ fn dispatch(pipe: &str, manifest: &Path) -> Result<Value, Box<dyn std::error::Er
         "method": "dispatch_manifest",
         "params": {"manifest_utf8": manifest_utf8, "manifest_sha256": manifest_sha256},
     });
-    let encoded = serde_json::to_string(&request)?;
-    let deadline = Instant::now() + Duration::from_secs(10);
-    let mut stream = loop {
-        match OpenOptions::new().read(true).write(true).open(pipe) {
-            Ok(stream) => break stream,
-            Err(error) if Instant::now() < deadline => {
-                let _ = error;
-                std::thread::sleep(Duration::from_millis(20));
-            }
-            Err(error) => return Err(error.into()),
-        }
-    };
-    writeln!(stream, "{encoded}")?;
-    stream.flush()?;
-    let mut line = String::new();
-    BufReader::new(stream).read_line(&mut line)?;
-    let response: Value = serde_json::from_str(&line)?;
-    if let Some(error) = response.get("error") {
-        return Err(std::io::Error::other(format!("ember-lab dispatch failed: {error}")).into());
-    }
-    response
-        .get("result")
-        .cloned()
-        .ok_or_else(|| std::io::Error::other("ember-lab dispatch response lacks result").into())
+    call_rpc(pipe, &request, "dispatch")
 }
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
@@ -537,6 +671,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             receipt,
             certificate,
         } => {
+            consume_verifier_dispatch_token()?;
             let ok = run_verify_training(&root, &receipt, certificate.as_deref())?;
             println!(
                 "verify-training: {} -- receipt written to {}",

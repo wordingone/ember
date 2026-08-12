@@ -9,6 +9,8 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::fs::{self, OpenOptions};
+#[cfg(not(windows))]
+use std::io::Read;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 #[cfg(not(windows))]
@@ -30,6 +32,10 @@ pub type Result<T> = std::result::Result<T, EmberLabError>;
 /// Largest UTF-8 dispatch-manifest payload that fits the 64 KiB JSON-RPC line envelope even when JSON string escaping doubles every source byte.
 pub const MAX_DISPATCH_MANIFEST_BYTES: usize = 30_000;
 const CURRENT_DATABASE_SCHEMA_VERSION: u32 = 5;
+const DISPATCH_TOKEN_ENV: &str = "EMBER_LAB_DISPATCH_TOKEN";
+const DISPATCH_JOB_ID_ENV: &str = "EMBER_LAB_DISPATCH_JOB_ID";
+const DISPATCH_DAEMON_PID_ENV: &str = "EMBER_LAB_DISPATCH_DAEMON_PID";
+const DISPATCH_TOKEN_BYTES: usize = 32;
 
 pub fn read_data_catalog_status(path: &Path) -> Result<Value> {
     let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
@@ -229,6 +235,9 @@ pub enum EmberLabError {
         reason: String,
         receipt_path: PathBuf,
     },
+    DispatchTokenRefused {
+        job_id: String,
+    },
     InvalidDataCatalog {
         detail: String,
     },
@@ -379,6 +388,13 @@ pub struct JobSpec {
     restart_policy: RestartPolicy,
     maximum_job_memory_bytes: Option<u64>,
     cpu_rate_percent: Option<u32>,
+    dispatch_token: Option<DispatchToken>,
+}
+
+#[derive(Clone, Debug)]
+struct DispatchToken {
+    sha256: String,
+    expires_at_ms: i64,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -505,6 +521,7 @@ impl JobSpec {
             restart_policy: RestartPolicy::Never,
             maximum_job_memory_bytes: None,
             cpu_rate_percent: None,
+            dispatch_token: None,
         }
     }
     pub fn with_env<K: Into<String>, V: Into<String>>(mut self, key: K, value: V) -> Self {
@@ -525,6 +542,22 @@ impl JobSpec {
     pub fn with_cpu_rate_percent(mut self, cpu_rate_percent: u32) -> Self {
         self.cpu_rate_percent = Some(cpu_rate_percent);
         self
+    }
+
+    fn with_dispatch_token(mut self, expires_at_ms: i64) -> Result<Self> {
+        let raw = generate_dispatch_token()?;
+        self.env.insert(DISPATCH_TOKEN_ENV.into(), raw.clone());
+        self.env
+            .insert(DISPATCH_JOB_ID_ENV.into(), self.job_id.clone());
+        self.env.insert(
+            DISPATCH_DAEMON_PID_ENV.into(),
+            std::process::id().to_string(),
+        );
+        self.dispatch_token = Some(DispatchToken {
+            sha256: hash_bytes(raw.as_bytes()),
+            expires_at_ms,
+        });
+        Ok(self)
     }
 }
 
@@ -985,6 +1018,7 @@ impl Daemon {
             CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, ts_ms INTEGER NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS dispatch_receipt_recovery(job_id TEXT PRIMARY KEY, resource_lease TEXT NOT NULL, manifest_sha256 TEXT NOT NULL, receipt_path TEXT NOT NULL, receipt_sha256 TEXT NOT NULL, receipt_bytes BLOB NOT NULL, created_at_ms INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS dispatch_preflight_receipts(job_id TEXT PRIMARY KEY, resource_lease TEXT NOT NULL, manifest_sha256 TEXT NOT NULL, receipt_sha256 TEXT NOT NULL, receipt_bytes BLOB NOT NULL, created_at_ms INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS dispatch_tokens(token_sha256 TEXT PRIMARY KEY, job_id TEXT NOT NULL UNIQUE, pid INTEGER NOT NULL, program TEXT NOT NULL, argv_sha256 TEXT NOT NULL, expires_at_ms INTEGER NOT NULL, consumed_at_ms INTEGER, FOREIGN KEY(job_id) REFERENCES jobs(job_id));
             CREATE TABLE IF NOT EXISTS resource_guard_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), admission_state TEXT NOT NULL CHECK(admission_state IN ('open','frozen')), reason TEXT, observed_at_ms INTEGER NOT NULL, oracle_evidence_required INTEGER NOT NULL CHECK(oracle_evidence_required IN (0,1)), observation_json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS resource_guard_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL);
             INSERT OR IGNORE INTO resource_guard_state(singleton,admission_state,reason,observed_at_ms,oracle_evidence_required,observation_json) VALUES(1,'open',NULL,0,0,'{}');")?;
@@ -1685,13 +1719,22 @@ impl Daemon {
             || manifest.expires_at_ms <= manifest.not_before_ms
             || manifest.bindings.is_empty()
             || manifest.storage_reserves.is_empty()
-            || manifest.minimum_free_vram_bytes == 0
+            || (manifest.workload_profile.profile_id != DispatchWorkloadProfileId::EvidenceVerifier
+                && manifest.minimum_free_vram_bytes == 0)
             || manifest.required_available_maximum_commit_bytes == 0
             || manifest.maximum_job_memory_bytes == 0
             || manifest.simulated_peak_commit_bytes == 0
         {
             return Err(EmberLabError::InvalidDispatchManifest {
                 detail: "dispatch manifest requires the closed v3 schema, workload profile, identities, window, bindings, and reserves".into(),
+            });
+        }
+        if manifest.env.contains_key(DISPATCH_TOKEN_ENV)
+            || manifest.env.contains_key(DISPATCH_JOB_ID_ENV)
+            || manifest.env.contains_key(DISPATCH_DAEMON_PID_ENV)
+        {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "dispatch token environment is daemon-owned".into(),
             });
         }
         validate_dispatch_workload_profile(
@@ -1817,13 +1860,22 @@ impl Daemon {
             || manifest.expires_at_ms <= manifest.not_before_ms
             || manifest.bindings.is_empty()
             || manifest.storage_reserves.is_empty()
-            || manifest.minimum_free_vram_bytes == 0
+            || (manifest.workload_profile.profile_id != DispatchWorkloadProfileId::EvidenceVerifier
+                && manifest.minimum_free_vram_bytes == 0)
             || manifest.required_available_maximum_commit_bytes == 0
             || manifest.maximum_job_memory_bytes == 0
             || manifest.simulated_peak_commit_bytes == 0
         {
             return Err(EmberLabError::InvalidDispatchManifest {
                 detail: "dispatch manifest requires the closed v3 schema, workload profile, identities, window, bindings, and reserves".into(),
+            });
+        }
+        if manifest.env.contains_key(DISPATCH_TOKEN_ENV)
+            || manifest.env.contains_key(DISPATCH_JOB_ID_ENV)
+            || manifest.env.contains_key(DISPATCH_DAEMON_PID_ENV)
+        {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "dispatch token environment is daemon-owned".into(),
             });
         }
         validate_dispatch_workload_profile(
@@ -1994,7 +2046,14 @@ impl Daemon {
             }));
         }
 
-        let available_vram = free_vram()?;
+        let available_vram = if manifest.workload_profile.profile_id
+            == DispatchWorkloadProfileId::EvidenceVerifier
+            && manifest.minimum_free_vram_bytes == 0
+        {
+            0
+        } else {
+            free_vram()?
+        };
         if available_vram < manifest.minimum_free_vram_bytes {
             return Err(EmberLabError::DispatchVramReserve {
                 minimum_free_bytes: manifest.minimum_free_vram_bytes,
@@ -2092,6 +2151,8 @@ impl Daemon {
             let _ = self.rollback_dispatch_attempt(&job_id, &resource_lease, created_identity);
             return Err(error);
         }
+        let profile_id = manifest.workload_profile.profile_id;
+        let dispatch_expires_at_ms = manifest.expires_at_ms;
         let mut spec = JobSpec::new(
             job_id.clone(),
             program.to_string_lossy().into_owned(),
@@ -2102,6 +2163,9 @@ impl Daemon {
         .with_cpu_rate_percent(manifest.workload_profile.cpu_rate_percent);
         for (key, value) in manifest.env {
             spec = spec.with_env(key, value);
+        }
+        if profile_id == DispatchWorkloadProfileId::EvidenceVerifier {
+            spec = spec.with_dispatch_token(dispatch_expires_at_ms)?;
         }
         let handle = match self.start_job(spec) {
             Ok(handle) => handle,
@@ -2319,6 +2383,7 @@ impl Daemon {
                     detail: "dispatch rollback refuses a nonterminal job".into(),
                 });
             }
+            tx.execute("DELETE FROM dispatch_tokens WHERE job_id=?1", [job_id])?;
             tx.execute("DELETE FROM events WHERE job_id=?1", [job_id])?;
             tx.execute("DELETE FROM jobs WHERE job_id=?1", [job_id])?;
         }
@@ -2360,7 +2425,13 @@ impl Daemon {
             );
         }
         let argv_json = serde_json::to_string(&spec.args)?;
-        let env_json = serde_json::to_string(&spec.env)?;
+        let persisted_env = spec
+            .env
+            .iter()
+            .filter(|(key, _)| key.as_str() != DISPATCH_TOKEN_ENV)
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect::<BTreeMap<_, _>>();
+        let env_json = serde_json::to_string(&persisted_env)?;
         let argv_sha = hash_bytes(argv_json.as_bytes());
         let job_object_name = job_object_name(&spec.job_id);
         let log_key = hash_bytes(spec.job_id.as_bytes());
@@ -2450,6 +2521,12 @@ impl Daemon {
                 "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_prepared',?3)",
                 params![spec.job_id, now_ms(), json!({"pid":pid,"job_object_name":job_object_name,"cpu_rate_percent":spec.cpu_rate_percent}).to_string()],
             )?;
+            if let Some(token) = &spec.dispatch_token {
+                tx.execute(
+                    "INSERT INTO dispatch_tokens(token_sha256,job_id,pid,program,argv_sha256,expires_at_ms,consumed_at_ms) VALUES(?1,?2,?3,?4,?5,?6,NULL)",
+                    params![token.sha256, spec.job_id, pid, spec.program, argv_sha, token.expires_at_ms],
+                )?;
+            }
             tx.commit()?;
             Ok(())
         })();
@@ -2538,6 +2615,51 @@ impl Daemon {
             })
             .optional()?
             .and_then(|pid| u32::try_from(pid).ok()))
+    }
+
+    pub(crate) fn runtime_identity_hashes(&self) -> (&str, &str) {
+        (&self.ember_lab_binary_sha256, &self.ember_lab_source_sha256)
+    }
+
+    pub fn consume_dispatch_token(&self, job_id: &str, token: &str, client_pid: u32) -> Result<()> {
+        if job_id.trim().is_empty()
+            || token.len() != DISPATCH_TOKEN_BYTES * 2
+            || !token
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+            || client_pid == 0
+        {
+            return Err(EmberLabError::DispatchTokenRefused {
+                job_id: job_id.into(),
+            });
+        }
+        let token_sha256 = hash_bytes(token.as_bytes());
+        let consumed_at_ms = now_ms();
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let changed = tx.execute(
+            "UPDATE dispatch_tokens AS t SET consumed_at_ms=?4
+             WHERE t.token_sha256=?1 AND t.job_id=?2 AND t.pid=?3
+               AND t.consumed_at_ms IS NULL AND t.expires_at_ms>?4
+               AND EXISTS(
+                 SELECT 1 FROM jobs j
+                 WHERE j.job_id=t.job_id AND j.pid=t.pid
+                   AND j.program=t.program AND j.argv_sha256=t.argv_sha256
+                   AND j.state IN ('prepared','running')
+               )",
+            params![token_sha256, job_id, client_pid, consumed_at_ms],
+        )?;
+        if changed != 1 {
+            return Err(EmberLabError::DispatchTokenRefused {
+                job_id: job_id.into(),
+            });
+        }
+        tx.execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'dispatch_token_consumed',?3)",
+            params![job_id, consumed_at_ms, json!({"client_pid":client_pid}).to_string()],
+        )?;
+        tx.commit()?;
+        Ok(())
     }
 
     pub fn job_exit_code(&self, job_id: &str) -> Result<Option<i64>> {
@@ -4993,6 +5115,41 @@ pub fn hash_file(path: &Path) -> Result<String> {
 }
 pub fn hash_bytes(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
+}
+
+fn generate_dispatch_token() -> Result<String> {
+    let mut bytes = [0u8; DISPATCH_TOKEN_BYTES];
+    fill_dispatch_random(&mut bytes)?;
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut token = String::with_capacity(DISPATCH_TOKEN_BYTES * 2);
+    for byte in bytes {
+        token.push(HEX[(byte >> 4) as usize] as char);
+        token.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    Ok(token)
+}
+
+#[cfg(windows)]
+fn fill_dispatch_random(bytes: &mut [u8]) -> Result<()> {
+    #[link(name = "advapi32")]
+    extern "system" {
+        #[link_name = "SystemFunction036"]
+        fn rtl_gen_random(buffer: *mut std::ffi::c_void, length: u32) -> u8;
+    }
+    let length =
+        u32::try_from(bytes.len()).map_err(|_| EmberLabError::InvalidDispatchManifest {
+            detail: "dispatch token entropy request is too large".into(),
+        })?;
+    if unsafe { rtl_gen_random(bytes.as_mut_ptr().cast(), length) } == 0 {
+        return Err(EmberLabError::Io(std::io::Error::last_os_error()));
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn fill_dispatch_random(bytes: &mut [u8]) -> Result<()> {
+    std::fs::File::open("/dev/urandom")?.read_exact(bytes)?;
+    Ok(())
 }
 
 fn is_sha256(value: &str) -> bool {

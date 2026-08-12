@@ -76,6 +76,13 @@ struct DispatchManifestParams {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ConsumeDispatchTokenParams {
+    job_id: String,
+    token: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct ExportReceiptParams {
     job_id: String,
     path: PathBuf,
@@ -161,7 +168,7 @@ fn decode<T: for<'de> Deserialize<'de>>(id: &Value, params: Value) -> Result<T, 
     serde_json::from_value(params).map_err(|error| invalid_params(id.clone(), error.to_string()))
 }
 
-fn dispatch(daemon: &Daemon, request: WireRequest) -> (Value, bool) {
+fn dispatch(daemon: &Daemon, request: WireRequest, client_pid: Option<u32>) -> (Value, bool) {
     let id = request.id;
     if request.jsonrpc != "2.0" {
         return (invalid_request(id, "jsonrpc must be exactly 2.0"), false);
@@ -266,6 +273,39 @@ fn dispatch(daemon: &Daemon, request: WireRequest) -> (Value, bool) {
                     ),
                     false,
                 ),
+                Err(error) => (operation_error(id, error), false),
+            }
+        }
+        "consume_verifier_dispatch_token" => {
+            let params: ConsumeDispatchTokenParams = match decode(&id, request.params) {
+                Ok(value) => value,
+                Err(response) => return (response, false),
+            };
+            let Some(client_pid) = client_pid else {
+                return (
+                    operation_error(id, "named-pipe client PID is unavailable"),
+                    false,
+                );
+            };
+            match daemon.consume_dispatch_token(&params.job_id, &params.token, client_pid) {
+                Ok(()) => {
+                    let (binary_sha256, source_sha256) = daemon.runtime_identity_hashes();
+                    (
+                        success(
+                            id,
+                            json!({
+                                "consumed": true,
+                                "daemon_identity": {
+                                    "schema_version": "ember-lab-runtime-identity-v1",
+                                    "pid": std::process::id(),
+                                    "binary_sha256": binary_sha256,
+                                    "source_sha256": source_sha256,
+                                }
+                            }),
+                        ),
+                        false,
+                    )
+                }
                 Err(error) => (operation_error(id, error), false),
             }
         }
@@ -395,9 +435,13 @@ fn dispatch(daemon: &Daemon, request: WireRequest) -> (Value, bool) {
     }
 }
 
-fn parse_and_dispatch(daemon: &Daemon, line: &str) -> (Value, bool) {
+fn parse_and_dispatch_for_client(
+    daemon: &Daemon,
+    line: &str,
+    client_pid: Option<u32>,
+) -> (Value, bool) {
     match serde_json::from_str::<WireRequest>(line) {
-        Ok(request) => dispatch(daemon, request),
+        Ok(request) => dispatch(daemon, request, client_pid),
         Err(error) => (
             json!({
                 "jsonrpc": "2.0",
@@ -407,6 +451,17 @@ fn parse_and_dispatch(daemon: &Daemon, line: &str) -> (Value, bool) {
             false,
         ),
     }
+}
+
+#[cfg(windows)]
+fn named_pipe_client_pid(pipe: windows_sys::Win32::Foundation::HANDLE) -> io::Result<u32> {
+    use windows_sys::Win32::System::Pipes::GetNamedPipeClientProcessId;
+
+    let mut pid = 0u32;
+    if unsafe { GetNamedPipeClientProcessId(pipe, &mut pid) } == 0 || pid == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(pid)
 }
 
 #[cfg(windows)]
@@ -702,7 +757,8 @@ fn handle_connection(
         write_response(&mut stream, &response)?;
         return Ok(false);
     }
-    let (response, shutdown) = parse_and_dispatch(daemon, &request);
+    let client_pid = named_pipe_client_pid(pipe)?;
+    let (response, shutdown) = parse_and_dispatch_for_client(daemon, &request, Some(client_pid));
     write_response(&mut stream, &response)?;
     Ok(shutdown)
 }
