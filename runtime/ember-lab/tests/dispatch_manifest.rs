@@ -806,6 +806,96 @@ fn dispatch_manifest_walls_the_declared_windows_ui_surface_for_non_cockpit_profi
 }
 
 #[test]
+fn dispatch_manifest_does_not_wall_the_windows_ui_surface_for_cockpit_profiles() {
+    use std::mem::{size_of, zeroed};
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::JobObjects::{
+        JobObjectBasicUIRestrictions, OpenJobObjectW, QueryInformationJobObject,
+        JOBOBJECT_BASIC_UI_RESTRICTIONS,
+    };
+
+    // The closed Cockpit workload profile is the only profile permitted to
+    // declare requires_ui_responsiveness: true (validate_dispatch_workload_profile
+    // rejects the pairing for every other profile). Cockpit also requires a
+    // TelemetryBuffer pinned-host producer instead of evidence_verifier's
+    // ReceiptVerifier; the producer budget must still exactly cover
+    // SIMULATED_PEAK_COMMIT_BYTES, so only profile_id, producer kind, and the
+    // UI-responsiveness flag change from write_manifest's default fixture —
+    // mirroring the mutation dispatch_manifest_fails_closed_before_spawn_on_time_hash_and_storage
+    // already uses to build a Cockpit manifest for its "vram" case.
+    let root = sandbox("ui-cockpit-escape");
+    let manifest = write_manifest(&root, "dispatch-ui-cockpit-escape", 10_000);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["workload_profile"]["profile_id"] = json!("cockpit");
+    payload["workload_profile"]["pinned_host_producers"][0]["kind"] = json!("telemetry_buffer");
+    payload["workload_profile"]["requires_ui_responsiveness"] = json!(true);
+    // Every non-EvidenceVerifier profile must declare a positive VRAM floor
+    // (validate_dispatch_manifest_snapshot_preconditions) — write_manifest's
+    // default fixture leaves it at 0 because evidence_verifier is exempt.
+    payload["minimum_free_vram_bytes"] = json!(1);
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+
+    let db = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap();
+    let connection = Connection::open(&db).unwrap();
+    let job_object_name: String = connection
+        .query_row(
+            "SELECT job_object_name FROM jobs WHERE job_id='dispatch-ui-cockpit-escape'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let wide: Vec<u16> = std::ffi::OsStr::new(&job_object_name)
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    let job = unsafe { OpenJobObjectW(0x0004, 0, wide.as_ptr()) };
+    assert!(!job.is_null());
+    let mut info: JOBOBJECT_BASIC_UI_RESTRICTIONS = unsafe { zeroed() };
+    let ok = unsafe {
+        QueryInformationJobObject(
+            job,
+            JobObjectBasicUIRestrictions,
+            (&mut info as *mut JOBOBJECT_BASIC_UI_RESTRICTIONS).cast(),
+            size_of::<JOBOBJECT_BASIC_UI_RESTRICTIONS>() as u32,
+            std::ptr::null_mut(),
+        )
+    };
+    unsafe { CloseHandle(job) };
+    assert_ne!(ok, 0);
+    assert_eq!(
+        info.UIRestrictionsClass, 0,
+        "Cockpit-profile job must not carry the non-Cockpit UI-restriction wall"
+    );
+
+    // The escape hatch is receipted alongside the job-object identity so it
+    // is provable from custody evidence, not just live kernel state.
+    let events: Vec<String> = connection
+        .prepare("SELECT payload_json FROM events WHERE job_id='dispatch-ui-cockpit-escape' AND kind IN ('job_start_reserved','job_prepared') ORDER BY seq")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .unwrap();
+    assert!(!events.is_empty());
+    for payload in events {
+        let value: Value = serde_json::from_str(&payload).unwrap();
+        assert_eq!(value["requires_ui_responsiveness"], true);
+    }
+    daemon.stop_job("dispatch-ui-cockpit-escape").unwrap();
+}
+
+#[test]
 fn identical_dispatch_retry_reconstructs_the_existing_job_and_receipt() {
     let root = sandbox("idempotent-retry");
     let manifest = write_manifest(&root, "dispatch-idempotent-retry", 10_000);
