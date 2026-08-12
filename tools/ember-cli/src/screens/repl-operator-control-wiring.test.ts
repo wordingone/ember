@@ -20,7 +20,7 @@ import { EventEmitter } from "node:events";
 import React from "react";
 import { tmpdir } from "os";
 import { join } from "path";
-import { access, mkdir, writeFile, readFile, unlink } from "fs/promises";
+import { access, writeFile, readFile, unlink } from "fs/promises";
 import { mountInk } from "../ink/reconciler.ts";
 import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
 import { TerminalSizeContext } from "../ink/components.ts";
@@ -186,10 +186,8 @@ describe("operator-surface pane control click drives a real effect on the run", 
     resetCommandRegistryForTests();
     const telemetryPath = join(tmpdir(), `test-repl-telemetry-${Date.now()}-${Math.random()}.jsonl`);
     const controlPath = join(tmpdir(), `test-repl-control-${Date.now()}-${Math.random()}.jsonl`);
+    const runSpecPath = join(tmpdir(), `test-repl-run-spec-${Date.now()}-${Math.random()}.json`);
     const runId = "run-wiring-e2e";
-    const authorityRoot = join(tmpdir(), `test-repl-authority-${Date.now()}-${Math.random()}`);
-    const runSpecPath = join(authorityRoot, runId, "launch-authority", "run-spec.json");
-    await mkdir(join(authorityRoot, runId, "launch-authority"), { recursive: true });
     await writeFile(runSpecPath, JSON.stringify({
       schema_version: "ember-certified-train-run-v1",
       run_id: runId,
@@ -227,8 +225,7 @@ describe("operator-surface pane control click drives a real effect on the run", 
           EMBER_DISABLE_TERMINAL_TITLE: "1",
           EMBER_DISABLE_VIRTUAL_SCROLL: "1",
           EMBER_FINETUNE_CONTROL_PATH: controlPath,
-          EMBER_LAUNCH_AUTHORITY_CUSTODY_ROOT: authorityRoot,
-          EMBER_LAUNCH_AUTHORITY_RUN_ID: runId,
+          EMBER_RUN_SPEC_PATH: runSpecPath,
         },
         onExit: () => {},
       }),
@@ -299,10 +296,7 @@ describe("operator-surface pane control click drives a real effect on the run", 
   test("authority refusals stay live and cite their receipt without entering scrollback", async () => {
     resetCommandRegistryForTests();
     const telemetryPath = join(tmpdir(), `test-repl-refusal-telemetry-${Date.now()}-${Math.random()}.jsonl`);
-    const authorityRoot = join(tmpdir(), `test-repl-refusal-authority-${Date.now()}-${Math.random()}`);
-    const authorityRunId = "different-authority-run";
-    const runSpecPath = join(authorityRoot, authorityRunId, "launch-authority", "run-spec.json");
-    await mkdir(join(authorityRoot, authorityRunId, "launch-authority"), { recursive: true });
+    const runSpecPath = join(tmpdir(), `test-repl-refusal-run-spec-${Date.now()}-${Math.random()}.json`);
     const receiptPath = "R.jsonl";
     const receiptEvents: Array<{ event: string; detail?: string }> = [];
     await writeFile(runSpecPath, JSON.stringify({
@@ -337,8 +331,7 @@ describe("operator-surface pane control click drives a real effect on the run", 
         env: {
           EMBER_DISABLE_TERMINAL_TITLE: "1",
           EMBER_DISABLE_VIRTUAL_SCROLL: "1",
-          EMBER_LAUNCH_AUTHORITY_CUSTODY_ROOT: authorityRoot,
-          EMBER_LAUNCH_AUTHORITY_RUN_ID: authorityRunId,
+          EMBER_RUN_SPEC_PATH: runSpecPath,
         },
         operatorReceiptWriter: {
           filePath: receiptPath,

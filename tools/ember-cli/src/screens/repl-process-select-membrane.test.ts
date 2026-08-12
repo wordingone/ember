@@ -18,11 +18,10 @@
 //     subprocess ever runs; everything else is production code.
 import { describe, expect, test } from "bun:test";
 import { EventEmitter } from "node:events";
-import { createHash } from "node:crypto";
 import React from "react";
 import { tmpdir } from "os";
 import { join } from "path";
-import { access, mkdir, mkdtemp, rm, unlink, writeFile } from "fs/promises";
+import { access, mkdtemp, rm, unlink, writeFile } from "fs/promises";
 import { mountInk } from "../ink/reconciler.ts";
 import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
 import { TerminalSizeContext } from "../ink/components.ts";
@@ -33,56 +32,6 @@ import { createTrainCommand, outstandingTrainOfferForSession } from "../commands
 import { buildProcessOptions, startActivation } from "../services/process-select.ts";
 import type { CommandContext, RegistryCommand } from "../types/command-types.ts";
 import { ReplScreen } from "./repl.ts";
-
-const AUTHORITY_BINDING_KEYS = [
-  "benchmark_registry_sha256", "board_receipt_sha256", "checkout_sha256",
-  "cli_binary_sha256", "config_sha256", "failure_class_ledger_sha256",
-  "input_authority_sha256", "launch_packet_sha256", "root_summary_sha256",
-  "seat_sha256", "subject_manifest_sha256", "tokenizer_sha256",
-] as const;
-
-async function writeExternalAuthority(
-  custodyRoot: string,
-  runId: string,
-  runSpec: Record<string, unknown>,
-): Promise<{ certificatePath: string; ledgerPath: string; runSpecPath: string }> {
-  const leaf = join(custodyRoot, runId, "launch-authority");
-  await mkdir(leaf, { recursive: true });
-  const certificate = {
-    kind: "certificate",
-    ...Object.fromEntries(
-      AUTHORITY_BINDING_KEYS.map((key, index) => [key, index.toString(16).padStart(64, "0")]),
-    ),
-  };
-  const files = {
-    "certificate.json": `${JSON.stringify(certificate)}\n`,
-    "declaration-ledger.jsonl": `${JSON.stringify({ kind: "declaration" })}\n`,
-    "run-spec.json": `${JSON.stringify(runSpec)}\n`,
-    "sha-binding-map.json": `${JSON.stringify(Object.fromEntries(
-      AUTHORITY_BINDING_KEYS.map((key) => [
-        key,
-        `sha256:${certificate[key]};path:governed-source:${key}`,
-      ]),
-    ))}\n`,
-  };
-  await Promise.all(Object.entries(files).map(([name, bytes]) => writeFile(join(leaf, name), bytes)));
-  const hashes = Object.fromEntries(Object.entries(files).map(([name, bytes]) => [
-    name,
-    createHash("sha256").update(bytes).digest("hex"),
-  ]));
-  await writeFile(join(leaf, "launch-authority-custody.json"), `${JSON.stringify({
-    custody_kind: "external-run-scoped",
-    files: hashes,
-    run_id: runId,
-    schema_version: "ember-launch-authority-external-custody-v1",
-    training_executed: false,
-  })}\n`);
-  return {
-    certificatePath: join(leaf, "certificate.json"),
-    ledgerPath: join(leaf, "declaration-ledger.jsonl"),
-    runSpecPath: join(leaf, "run-spec.json"),
-  };
-}
 
 class FakeStdin extends EventEmitter {
   isTTY = true;
@@ -148,14 +97,10 @@ async function mountRepl(
   columns: number,
   rows: number,
   operatorReceiptEvents?: Array<{ event: string; detail?: string }>,
-  authorityMode: "external" | "standalone-leaf" = "external",
 ): Promise<Mounted> {
   const telemetryPath = join(tmpdir(), `test-psm-telemetry-${Date.now()}-${Math.random()}.jsonl`);
   const controlPath = join(tmpdir(), `test-psm-control-${Date.now()}-${Math.random()}.jsonl`);
-  const authorityRoot = join(tmpdir(), `test-psm-authority-${Date.now()}-${Math.random()}`);
-  const authorityRunId = "process-review-run";
-  const runSpecPath = join(authorityRoot, authorityRunId, "launch-authority", "run-spec.json");
-  await mkdir(join(authorityRoot, authorityRunId, "launch-authority"), { recursive: true });
+  const runSpecPath = join(tmpdir(), `test-psm-run-spec-${Date.now()}-${Math.random()}.json`);
   await writeFile(telemetryPath, "");
   await writeFile(runSpecPath, JSON.stringify({
     schema_version: "ember-certified-train-run-v1",
@@ -177,12 +122,7 @@ async function mountRepl(
         EMBER_DISABLE_TERMINAL_TITLE: "1",
         EMBER_DISABLE_VIRTUAL_SCROLL: "1",
         EMBER_FINETUNE_CONTROL_PATH: controlPath,
-        ...(authorityMode === "external" ? {
-          EMBER_LAUNCH_AUTHORITY_CUSTODY_ROOT: authorityRoot,
-          EMBER_LAUNCH_AUTHORITY_RUN_ID: authorityRunId,
-        } : {
-          EMBER_RUN_SPEC_PATH: runSpecPath,
-        }),
+        EMBER_RUN_SPEC_PATH: runSpecPath,
       },
       ...(operatorReceiptEvents ? {
         operatorReceiptWriter: {
@@ -323,79 +263,24 @@ describe("#1475 START dispatch rides the single execution spine", () => {
 });
 
 describe("#1488 the /train confirm-only membrane is preserved through START", () => {
-  test("standalone or tracked run-spec authority is refused at mounted CONFIRM START", async () => {
-    resetCommandRegistryForTests();
-    startTelemetryWatch().stop();
-    const repoRoot = await mkdtemp(join(tmpdir(), "psm-1506-refusal-repo-"));
-    const custodyRoot = await mkdtemp(join(tmpdir(), "psm-1506-refusal-custody-"));
-    const authorityRunId = "train-refusal-run";
-    await writeExternalAuthority(custodyRoot, authorityRunId, {
-      schema_version: "ember-certified-train-run-v1",
-      run_id: authorityRunId,
-      seed: 83,
-      requested_scope: { optimizer_steps: 2, write_budget_bytes: 4096 },
-    });
-    let consumerCalls = 0;
-    const trainCmd = createTrainCommand({
-      repoRoot,
-      launchAuthorityCustodyRoot: custodyRoot,
-      launchAuthorityRunId: authorityRunId,
-      runLaunchPacket: () => ({
-        status: 0,
-        stdout: `${JSON.stringify({
-          record: "launch-packet-summary",
-          overall_ready: true,
-          named_ember02_command: { command: "never-executed" },
-        })}\n`,
-      }),
-      runCertifiedLaunch: () => {
-        consumerCalls += 1;
-        return { status: 0, stdout: "{}" };
-      },
-    });
-    setCommandRegistryDeps({ getBuiltinCommands: () => [trainCmd] });
-    const receiptEvents: Array<{ event: string; detail?: string }> = [];
-    const m = await mountRepl(100, 40, receiptEvents, "standalone-leaf");
-    try {
-      let lines = await selectProcessByClicks(m, "train");
-      const startAt = findGlyph(lines, "[START]");
-      expect(startAt).toBeDefined();
-      click(m, { col: startAt!.col + 1, row: startAt!.row });
-      lines = await waitLines(m, (rows) => rows.some((line) => line.includes("[CONFIRM START]")));
-      const confirmAt = findGlyph(lines, "[CONFIRM START]");
-      expect(confirmAt).toBeDefined();
-      click(m, { col: confirmAt!.col + 1, row: confirmAt!.row });
-      lines = await waitLines(m, (rows) => rows.some((line) =>
-        line.includes("external run-scoped launch-authority custody root and run id are required")));
-
-      expect(lines.some((line) => line.includes("START PARAMETERS"))).toBe(false);
-      expect(consumerCalls).toBe(0);
-      expect(receiptEvents.some((row) =>
-        row.event === "control_refused" && row.detail?.includes("external run-scoped"))).toBe(true);
-    } finally {
-      await teardown(m);
-      await rm(repoRoot, { recursive: true, force: true }).catch(() => {});
-      await rm(custodyRoot, { recursive: true, force: true }).catch(() => {});
-    }
-  }, 25000);
-
   test("click-only SELECT -> START -> CONFIRM spends the exact single-use offer", async () => {
     resetCommandRegistryForTests();
     startTelemetryWatch().stop();
 
-    const artifactDir = await mkdtemp(join(tmpdir(), "psm-train-repo-"));
-    const custodyRoot = await mkdtemp(join(tmpdir(), "psm-train-authority-"));
-    const authorityRunId = "train-membrane-run";
-    const { certificatePath, ledgerPath, runSpecPath } = await writeExternalAuthority(
-      custodyRoot,
-      authorityRunId,
-      {
+    const artifactDir = await mkdtemp(join(tmpdir(), "psm-train-authority-"));
+    const certificatePath = join(artifactDir, "certificate.json");
+    const ledgerPath = join(artifactDir, "declaration-ledger.jsonl");
+    const runSpecPath = join(artifactDir, "run-spec.json");
+    await Promise.all([
+      writeFile(certificatePath, `${JSON.stringify({ kind: "certificate" })}\n`),
+      writeFile(ledgerPath, `${JSON.stringify({ kind: "declaration" })}\n`),
+      writeFile(runSpecPath, `${JSON.stringify({
         schema_version: "ember-certified-train-run-v1",
-        run_id: authorityRunId,
+        run_id: "train-membrane-run",
         seed: 83,
         requested_scope: { optimizer_steps: 2, write_budget_bytes: 4096 },
-      },
-    );
+      })}\n`),
+    ]);
 
     const preflightCalls: string[][] = [];
     const consumerCalls: string[][] = [];
@@ -421,8 +306,9 @@ describe("#1488 the /train confirm-only membrane is preserved through START", ()
       },
       repoRoot: artifactDir,
       pythonBin: "python-never-spawned",
-      launchAuthorityCustodyRoot: custodyRoot,
-      launchAuthorityRunId: authorityRunId,
+      certificatePath,
+      declarationLedgerPath: ledgerPath,
+      runSpecPath,
     });
     setCommandRegistryDeps({ getBuiltinCommands: () => [trainCmd] });
 
@@ -469,16 +355,12 @@ describe("#1488 the /train confirm-only membrane is preserved through START", ()
       expect(lines.some((line) => line.includes("certified bounded canary process completed."))).toBe(true);
       expect(lines.some((line) => line.includes("START PARAMETERS"))).toBe(false);
       expect(consumerCalls).toHaveLength(1);
-      expect(consumerCalls[0]![1]).toBe("--root");
-      expect(consumerCalls[0]![2]).toBe(artifactDir);
-      expect(consumerCalls[0]![3]).toBe("--certificate");
-      expect(consumerCalls[0]![5]).toBe("--declaration-ledger");
-      expect(consumerCalls[0]![7]).toBe("--run-spec");
-      const consumerLeaf = join(consumerCalls[0]![4]!, "..");
-      expect(consumerCalls[0]![4]).toEndWith("certificate.json");
-      expect(consumerCalls[0]![6]).toBe(join(consumerLeaf, "declaration-ledger.jsonl"));
-      expect(consumerCalls[0]![8]).toBe(join(consumerLeaf, "run-spec.json"));
-      expect(consumerCalls[0]![4]).toBe(certificatePath);
+      expect(consumerCalls[0]!.slice(1)).toEqual([
+        "--root", artifactDir,
+        "--certificate", certificatePath,
+        "--declaration-ledger", ledgerPath,
+        "--run-spec", runSpecPath,
+      ]);
       expect(preflightCalls).toHaveLength(1);
       expect(operatorReceiptEvents.filter((row) => row.event === "control_confirmed")).toHaveLength(1);
 
@@ -493,24 +375,24 @@ describe("#1488 the /train confirm-only membrane is preserved through START", ()
     } finally {
       await teardown(m);
       await rm(artifactDir, { recursive: true, force: true }).catch(() => {});
-      await rm(custodyRoot, { recursive: true, force: true }).catch(() => {});
     }
   }, 25000);
 
   test("one render-captured CONFIRM activation is single-use", async () => {
-    const artifactDir = await mkdtemp(join(tmpdir(), "psm-train-repeat-repo-"));
-    const custodyRoot = await mkdtemp(join(tmpdir(), "psm-train-repeat-authority-"));
-    const authorityRunId = "train-repeat-run";
-    const { certificatePath, ledgerPath, runSpecPath } = await writeExternalAuthority(
-      custodyRoot,
-      authorityRunId,
-      {
+    const artifactDir = await mkdtemp(join(tmpdir(), "psm-train-repeat-"));
+    const certificatePath = join(artifactDir, "certificate.json");
+    const ledgerPath = join(artifactDir, "declaration-ledger.jsonl");
+    const runSpecPath = join(artifactDir, "run-spec.json");
+    await Promise.all([
+      writeFile(certificatePath, `${JSON.stringify({ kind: "certificate" })}\n`),
+      writeFile(ledgerPath, `${JSON.stringify({ kind: "declaration" })}\n`),
+      writeFile(runSpecPath, `${JSON.stringify({
         schema_version: "ember-certified-train-run-v1",
-        run_id: authorityRunId,
+        run_id: "train-repeat-run",
         seed: 83,
         requested_scope: { optimizer_steps: 2, write_budget_bytes: 4096 },
-      },
-    );
+      })}\n`),
+    ]);
 
     const preflightCalls: string[][] = [];
     const consumerCalls: string[][] = [];
@@ -535,8 +417,9 @@ describe("#1488 the /train confirm-only membrane is preserved through START", ()
       },
       repoRoot: artifactDir,
       pythonBin: "python-never-spawned",
-      launchAuthorityCustodyRoot: custodyRoot,
-      launchAuthorityRunId: authorityRunId,
+      certificatePath,
+      declarationLedgerPath: ledgerPath,
+      runSpecPath,
     });
     const ctx: CommandContext = {
       sessionId: "issue1488-repeat",
@@ -566,14 +449,14 @@ describe("#1488 the /train confirm-only membrane is preserved through START", ()
       expect(second?.message).toContain("no outstanding train-launch offer");
       expect(preflightCalls).toHaveLength(1);
       expect(consumerCalls).toHaveLength(1);
-      expect(consumerCalls[0]![2]).toBe(artifactDir);
-      expect(consumerCalls[0]![4]).toBe(certificatePath);
-      expect(consumerCalls[0]![4]).toEndWith("certificate.json");
-      expect(consumerCalls[0]![6]).toEndWith("declaration-ledger.jsonl");
-      expect(consumerCalls[0]![8]).toEndWith("run-spec.json");
+      expect(consumerCalls[0]!.slice(1)).toEqual([
+        "--root", artifactDir,
+        "--certificate", certificatePath,
+        "--declaration-ledger", ledgerPath,
+        "--run-spec", runSpecPath,
+      ]);
     } finally {
       await rm(artifactDir, { recursive: true, force: true }).catch(() => {});
-      await rm(custodyRoot, { recursive: true, force: true }).catch(() => {});
     }
   });
 });

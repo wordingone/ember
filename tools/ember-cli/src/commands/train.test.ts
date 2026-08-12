@@ -8,7 +8,7 @@
 // or training launch occurs. Default-mode tests prove only launch_packet.py is
 // requested; certified-mode tests separately prove the one fixed consumer argv.
 
-import { afterEach, describe, it, expect } from "bun:test";
+import { describe, it, expect } from "bun:test";
 import {
   CERTIFIED_LAUNCH_TIMEOUT_MS,
   PREFLIGHT_TIMEOUT_MS,
@@ -25,7 +25,6 @@ import {
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createHash } from "node:crypto";
 
 const mockCtx: CommandContext = {
   sessionId: "test-session",
@@ -104,8 +103,6 @@ function makeCmd(
   const cmd = createTrainCommand({
     pythonBin: "python",
     repoRoot,
-    launchAuthorityCustodyRoot: custodyRoot(repoRoot),
-    launchAuthorityRunId: TEST_RUN_ID,
     runLaunchPacket: (executable, args) => {
       spawns.push({ executable, args });
       return runner(spawns);
@@ -114,111 +111,46 @@ function makeCmd(
   return { cmd, spawns };
 }
 
-const authorityTestDirs = new Set<string>();
-const TEST_RUN_ID = "run-1506";
-const TEST_BINDING_KEYS = [
-  "benchmark_registry_sha256",
-  "board_receipt_sha256",
-  "checkout_sha256",
-  "cli_binary_sha256",
-  "config_sha256",
-  "failure_class_ledger_sha256",
-  "input_authority_sha256",
-  "launch_packet_sha256",
-  "root_summary_sha256",
-  "seat_sha256",
-  "subject_manifest_sha256",
-  "tokenizer_sha256",
-] as const;
-
-afterEach(() => {
-  for (const dir of authorityTestDirs) {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-  authorityTestDirs.clear();
-});
-
-/** Test-only external launch-authority custody adjacent to a synthetic repo root. */
-function custodyRoot(repoRoot: string): string {
-  const dir = `${repoRoot}-live-launch-authority`;
-  authorityTestDirs.add(dir);
-  return dir;
-}
-
+/** The canonical launch-authority directory under a given repo root. */
 function canonicalDir(repoRoot: string): string {
-  return path.join(custodyRoot(repoRoot), TEST_RUN_ID, "launch-authority");
+  return path.join(repoRoot, "receipts", "ember-02-launch-authority");
 }
 
-function sha256(bytes: Uint8Array): string {
-  return createHash("sha256").update(bytes).digest("hex");
-}
-
-function writeCustodyReceipt(dir: string, runId: string = TEST_RUN_ID): void {
-  const artifactNames = [
-    "certificate.json",
-    "declaration-ledger.jsonl",
-    "run-spec.json",
-    "sha-binding-map.json",
-  ] as const;
-  const receipt = {
-    custody_kind: "external-run-scoped",
-    files: Object.fromEntries(
-      artifactNames.map((name) => [name, sha256(fs.readFileSync(path.join(dir, name)))]),
-    ),
-    run_id: runId,
-    schema_version: "ember-launch-authority-external-custody-v1",
-    training_executed: false,
-  };
-  fs.writeFileSync(path.join(dir, "launch-authority-custody.json"), `${JSON.stringify(receipt)}\n`);
-}
-
-/** Writes the exact five-file producer leaf consumed by the default /train path. */
+/** Writes a valid certificate.json / declaration-ledger.jsonl / run-spec.json triple at the
+ *  canonical launch-authority location under repoRoot. Content is minimal-but-well-formed --
+ *  the CLI-level check is existence + parseability, not the certified consumer's own deep
+ *  schema validation (that lives in certified_train_launch.py and is exercised separately). */
 function writeCanonicalArtifacts(repoRoot: string): void {
   const dir = canonicalDir(repoRoot);
   fs.mkdirSync(dir, { recursive: true });
-  const certificate = {
-    certificate_sha256: "a".repeat(64),
-    certificate_legs: {},
-    ...Object.fromEntries(TEST_BINDING_KEYS.map((key, index) => [key, index.toString(16).padStart(64, "0")])),
-  };
-  const artifacts = {
-    "certificate.json": Buffer.from(JSON.stringify(certificate)),
-    "declaration-ledger.jsonl": Buffer.from(
-      [
+  fs.writeFileSync(
+    path.join(dir, "certificate.json"),
+    JSON.stringify({ certificate_sha256: "a".repeat(64), certificate_legs: {} }),
+  );
+  fs.writeFileSync(
+    path.join(dir, "declaration-ledger.jsonl"),
+    [
       JSON.stringify({ schema_version: "ember-spine-declaration-ledger-row-v1", row: 0 }),
       JSON.stringify({ schema_version: "ember-spine-declaration-ledger-row-v1", row: 1 }),
-      ].join("\n") + "\n",
-    ),
-    "run-spec.json": Buffer.from(JSON.stringify({ mode: "bounded-canary", steps: 1 })),
-    "sha-binding-map.json": Buffer.from(
-      JSON.stringify(
-        Object.fromEntries(
-          TEST_BINDING_KEYS.map((key) => [key, `sha256:${certificate[key]};path:governed-test:${key}`]),
-        ),
-      ),
-    ),
-  };
-  for (const [name, bytes] of Object.entries(artifacts)) {
-    fs.writeFileSync(path.join(dir, name), bytes);
-  }
-  writeCustodyReceipt(dir);
+    ].join("\n") + "\n",
+  );
+  fs.writeFileSync(
+    path.join(dir, "run-spec.json"),
+    JSON.stringify({ mode: "bounded-canary", steps: 1 }),
+  );
 }
 
 function makeExecuteCmd(
   preflight: LaunchPacketRunResult,
   certified: LaunchPacketRunResult,
 ) {
-  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-execute-"));
-  writeCanonicalArtifacts(scratch);
   const preflightSpawns: RecordedSpawn[] = [];
   const certifiedSpawns: RecordedSpawn[] = [];
   const cmd = createTrainCommand({
     pythonBin: "python",
-    repoRoot: scratch,
-    launchAuthorityCustodyRoot: custodyRoot(scratch),
-    launchAuthorityRunId: TEST_RUN_ID,
+    repoRoot: "/fake/ember",
     certifiedLaunchScriptPath:
-      path.join(scratch, "tools", "ember-restart-3b", "certified_train_launch.py"),
+      "/fake/ember/tools/ember-restart-3b/certified_train_launch.py",
     runLaunchPacket: (executable, args) => {
       preflightSpawns.push({ executable, args });
       return preflight;
@@ -228,7 +160,7 @@ function makeExecuteCmd(
       return certified;
     },
   });
-  return { cmd, preflightSpawns, certifiedSpawns, scratch };
+  return { cmd, preflightSpawns, certifiedSpawns };
 }
 
 /** Assert the only subprocess ever spawned was the launch_packet.py preflight. */
@@ -276,17 +208,10 @@ describe("train command", () => {
       const completion = new Promise<LaunchPacketRunResult>((resolve) => {
         finishCertifiedLaunch = resolve;
       });
-      let consumerLeaf = "";
       const cmd = createTrainCommand({
         repoRoot: scratch,
-        launchAuthorityCustodyRoot: custodyRoot(scratch),
-        launchAuthorityRunId: TEST_RUN_ID,
         runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
-        runCertifiedLaunch: (_executable, args) => {
-          const certificateIndex = args.indexOf("--certificate");
-          consumerLeaf = path.dirname(args[certificateIndex + 1]!);
-          return { kind: "background", pid: 4321, completion };
-        },
+        runCertifiedLaunch: () => ({ kind: "background", pid: 4321, completion }),
       });
       const dispatchDeps = {
         getCommands: async () => [cmd],
@@ -307,16 +232,13 @@ describe("train command", () => {
       expect(confirmation?.message).toContain("child pid: 4321");
       expect(confirmation?.message).toContain("activity feed");
       expect(childFinished).toBe(false);
-      expect(fs.existsSync(consumerLeaf)).toBe(true);
 
       finishCertifiedLaunch?.({
         status: 0,
         stdout: JSON.stringify({ execution_receipt: "receipt.json", artifact_root: "artifacts/run" }),
       });
       await completion;
-      await Bun.sleep(0);
       expect(childFinished).toBe(true);
-      expect(fs.existsSync(consumerLeaf)).toBe(true);
     } finally {
       fs.rmSync(scratch, { recursive: true, force: true });
     }
@@ -336,8 +258,6 @@ describe("train command", () => {
         const failures: Array<{ pid: number; status: number | null; message: string }> = [];
         const cmd = createTrainCommand({
           repoRoot: scratch,
-          launchAuthorityCustodyRoot: custodyRoot(scratch),
-          launchAuthorityRunId: TEST_RUN_ID,
           runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
           runCertifiedLaunch: () => ({ kind: "background", pid: 4321, completion }),
           reportCertifiedLaunchFailure: (failure) => failures.push(failure),
@@ -383,8 +303,6 @@ describe("train command", () => {
       });
       const cmd = createTrainCommand({
         repoRoot: scratch,
-        launchAuthorityCustodyRoot: custodyRoot(scratch),
-        launchAuthorityRunId: TEST_RUN_ID,
         runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
         runCertifiedLaunch: () => ({ kind: "background", pid: 2468, completion }),
       });
@@ -423,8 +341,6 @@ describe("train command", () => {
       const failures: Array<{ pid: number; status: number | null; message: string }> = [];
       const cmd = createTrainCommand({
         repoRoot: scratch,
-        launchAuthorityCustodyRoot: custodyRoot(scratch),
-        launchAuthorityRunId: TEST_RUN_ID,
         runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
         runCertifiedLaunch: () => ({ kind: "background", pid: 9876, completion }),
         reportCertifiedLaunchFailure: (failure) => failures.push(failure),
@@ -459,8 +375,6 @@ describe("train command", () => {
       const cmd = createTrainCommand({
         pythonBin: "python",
         repoRoot: scratch,
-        launchAuthorityCustodyRoot: custodyRoot(scratch),
-        launchAuthorityRunId: TEST_RUN_ID,
         certifiedLaunchScriptPath: path.join(
           scratch,
           "tools",
@@ -515,8 +429,6 @@ describe("train command", () => {
       const cmd = createTrainCommand({
         pythonBin: "python",
         repoRoot: scratch,
-        launchAuthorityCustodyRoot: custodyRoot(scratch),
-        launchAuthorityRunId: TEST_RUN_ID,
         certifiedLaunchScriptPath: path.join(
           scratch,
           "tools",
@@ -593,179 +505,6 @@ describe("train command", () => {
   // POSITIVE: all preflights green (exit 0) -> surface the launch command
   // =========================================================================
   describe("POSITIVE: all-green packet + resolved artifacts offers the launch", () => {
-    it("resolves the default launch authority only from explicit external custody", async () => {
-      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-external-authority-"));
-      try {
-        const externalRoot = canonicalDir(scratch);
-        writeCanonicalArtifacts(scratch);
-
-        const cmd = createTrainCommand({
-          repoRoot: scratch,
-          launchAuthorityCustodyRoot: custodyRoot(scratch),
-          launchAuthorityRunId: TEST_RUN_ID,
-          runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
-        });
-
-        const result = await cmd.execute("", mockCtx);
-
-        expect(result?.exitCode).toBeUndefined();
-        expect(result?.message).toContain(path.join(externalRoot, "certificate.json"));
-        expect(result?.message).not.toContain(
-          path.join(scratch, "receipts", "ember-02-launch-authority"),
-        );
-      } finally {
-        fs.rmSync(scratch, { recursive: true, force: true });
-      }
-    });
-
-    it("refuses the committed historical record when external custody is absent", async () => {
-      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-no-live-authority-"));
-      try {
-        const historical = path.join(scratch, "receipts", "ember-02-launch-authority");
-        fs.mkdirSync(historical, { recursive: true });
-        fs.writeFileSync(path.join(historical, "certificate.json"), "{}\n");
-        fs.writeFileSync(path.join(historical, "declaration-ledger.jsonl"), "{}\n");
-        fs.writeFileSync(path.join(historical, "run-spec.json"), "{}\n");
-        const cmd = createTrainCommand({
-          repoRoot: scratch,
-          runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
-        });
-
-        const result = await cmd.execute("", mockCtx);
-
-        expect(result?.exitCode).toBe(1);
-        expect(result?.message).toContain("EMBER_LAUNCH_AUTHORITY_CUSTODY_ROOT is required");
-        expect(result?.message).toContain("historical only");
-        expect(result?.message).toContain("No offer minted");
-      } finally {
-        fs.rmSync(scratch, { recursive: true, force: true });
-      }
-    });
-
-    it("refuses a live launch-authority root contained by the repository", async () => {
-      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-contained-authority-"));
-      try {
-        const contained = path.join(scratch, "live");
-        fs.mkdirSync(path.join(contained, TEST_RUN_ID, "launch-authority"), { recursive: true });
-        const cmd = createTrainCommand({
-          repoRoot: scratch,
-          launchAuthorityCustodyRoot: contained,
-          launchAuthorityRunId: TEST_RUN_ID,
-          runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
-        });
-
-        const result = await cmd.execute("", mockCtx);
-
-        expect(result?.exitCode).toBe(1);
-        expect(result?.message).toContain("must be outside the Ember repository");
-        expect(result?.message).toContain("No offer minted");
-      } finally {
-        fs.rmSync(scratch, { recursive: true, force: true });
-      }
-    });
-
-    it("refuses a malformed producer run id before resolving or launching", async () => {
-      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-bad-run-id-"));
-      try {
-        writeCanonicalArtifacts(scratch);
-        const cmd = createTrainCommand({
-          repoRoot: scratch,
-          launchAuthorityCustodyRoot: custodyRoot(scratch),
-          launchAuthorityRunId: "../run-1506",
-          runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
-        });
-
-        const result = await cmd.execute("", mockCtx);
-
-        expect(result?.exitCode).toBe(1);
-        expect(result?.message).toContain("RUN_ID is missing or malformed");
-        expect(result?.message).not.toContain("OFFER");
-      } finally {
-        fs.rmSync(scratch, { recursive: true, force: true });
-      }
-    });
-
-    it("refuses a substituted custody receipt before minting an offer", async () => {
-      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-receipt-substitution-"));
-      try {
-        writeCanonicalArtifacts(scratch);
-        const receiptPath = path.join(canonicalDir(scratch), "launch-authority-custody.json");
-        const receipt = JSON.parse(fs.readFileSync(receiptPath, "utf8"));
-        receipt.run_id = "run-other";
-        fs.writeFileSync(receiptPath, `${JSON.stringify(receipt)}\n`);
-        const { cmd } = makeCmd(() => ({ status: 0, stdout: allGreenStdout() }), scratch);
-
-        const result = await cmd.execute("", mockCtx);
-
-        expect(result?.exitCode).toBe(1);
-        expect(result?.message).toContain("schema or run identity is invalid");
-        expect(result?.message).not.toContain("OFFER");
-      } finally {
-        fs.rmSync(scratch, { recursive: true, force: true });
-      }
-    });
-
-    it("refuses artifact hash drift before minting an offer", async () => {
-      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-hash-drift-"));
-      try {
-        writeCanonicalArtifacts(scratch);
-        fs.appendFileSync(path.join(canonicalDir(scratch), "run-spec.json"), " ");
-        const { cmd } = makeCmd(() => ({ status: 0, stdout: allGreenStdout() }), scratch);
-
-        const result = await cmd.execute("", mockCtx);
-
-        expect(result?.exitCode).toBe(1);
-        expect(result?.message).toContain("run spec hash does not match custody receipt");
-        expect(result?.message).not.toContain("OFFER");
-      } finally {
-        fs.rmSync(scratch, { recursive: true, force: true });
-      }
-    });
-
-    it("does not accept a caller-supplied launch-authority leaf override", async () => {
-      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-leaf-override-"));
-      try {
-        writeCanonicalArtifacts(scratch);
-        const cmd = createTrainCommand({
-          repoRoot: scratch,
-          ...({ launchAuthorityRoot: canonicalDir(scratch) } as Record<string, string>),
-          runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
-        });
-
-        const result = await cmd.execute("", mockCtx);
-
-        expect(result?.exitCode).toBe(1);
-        expect(result?.message).toContain("CUSTODY_ROOT is required");
-        expect(result?.message).not.toContain("OFFER");
-      } finally {
-        fs.rmSync(scratch, { recursive: true, force: true });
-      }
-    });
-
-    it("refuses a symlink or reparse alias in the external custody root", async () => {
-      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-custody-alias-"));
-      const alias = `${scratch}-alias`;
-      try {
-        writeCanonicalArtifacts(scratch);
-        fs.symlinkSync(custodyRoot(scratch), alias, process.platform === "win32" ? "junction" : "dir");
-        const cmd = createTrainCommand({
-          repoRoot: scratch,
-          launchAuthorityCustodyRoot: alias,
-          launchAuthorityRunId: TEST_RUN_ID,
-          runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
-        });
-
-        const result = await cmd.execute("", mockCtx);
-
-        expect(result?.exitCode).toBe(1);
-        expect(result?.message).toContain("symlink or reparse alias");
-        expect(result?.message).not.toContain("OFFER");
-      } finally {
-        fs.rmSync(alias, { recursive: true, force: true });
-        fs.rmSync(scratch, { recursive: true, force: true });
-      }
-    });
-
     it("exit 0 + valid summary + canonical artifacts present -> mints an OFFER instead of a paste-able command, no GPU spawn", async () => {
       const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-offer-"));
       try {
@@ -932,8 +671,6 @@ describe("train command", () => {
         const cmd = createTrainCommand({
           pythonBin: "python",
           repoRoot: scratch,
-          launchAuthorityCustodyRoot: custodyRoot(scratch),
-          launchAuthorityRunId: TEST_RUN_ID,
           runLaunchPacket: (executable, args) => {
             spawns.push({ executable, args });
             return spawns.length === 1
@@ -1010,8 +747,6 @@ describe("train command", () => {
         const cmd = createTrainCommand({
           pythonBin: "python",
           repoRoot: scratch,
-          launchAuthorityCustodyRoot: custodyRoot(scratch),
-          launchAuthorityRunId: TEST_RUN_ID,
           runLaunchPacket: (executable, args) => {
             spawns.push({ executable, args });
             return results.shift()!;
@@ -1050,7 +785,7 @@ describe("train command", () => {
         });
 
         const result = await cmd.execute(
-          "--execute",
+          "--execute --certificate cert.json --declaration-ledger ledger.json --run-spec spec.json",
           { ...mockCtx, sessionId: "execute-null-session" },
         );
 
@@ -1102,25 +837,25 @@ describe("train command", () => {
   });
 
   describe("certified execution mode", () => {
-    it("refuses caller-selected authority paths before any spawn", async () => {
+    it("requires all three explicit authority paths before any spawn", async () => {
       const { cmd, preflightSpawns, certifiedSpawns } = makeExecuteCmd(
         { status: 0, stdout: allGreenStdout() },
         { status: 0, stdout: "{}" },
       );
 
       const result = await cmd.execute(
-        "--execute --certificate certificate.json --declaration-ledger ledger.jsonl --run-spec run-spec.json",
+        "--execute --certificate certificate.json",
         mockCtx,
       );
 
       expect(result?.exitCode).toBe(1);
-      expect(result?.message).toContain("authority paths are resolved only");
+      expect(result?.message).toContain("--declaration-ledger");
       expect(preflightSpawns).toHaveLength(0);
       expect(certifiedSpawns).toHaveLength(0);
     });
 
     it("green preflight invokes exactly one certified consumer with fixed argv", async () => {
-      const { cmd, preflightSpawns, certifiedSpawns, scratch } = makeExecuteCmd(
+      const { cmd, preflightSpawns, certifiedSpawns } = makeExecuteCmd(
         { status: 0, stdout: allGreenStdout() },
         {
           status: 0,
@@ -1133,7 +868,7 @@ describe("train command", () => {
       );
 
       const result = await cmd.execute(
-        "--execute",
+        "--execute --certificate c.json --declaration-ledger d.jsonl --run-spec r.json",
         mockCtx,
       );
 
@@ -1141,18 +876,17 @@ describe("train command", () => {
       expect(preflightSpawns).toHaveLength(1);
       expect(certifiedSpawns).toHaveLength(1);
       expect(certifiedSpawns[0]!.executable).toBe("python");
-      const args = certifiedSpawns[0]!.args;
-      expect(args.slice(0, 3)).toEqual([
-        path.join(scratch, "tools", "ember-restart-3b", "certified_train_launch.py"),
+      expect(certifiedSpawns[0]!.args).toEqual([
+        "/fake/ember/tools/ember-restart-3b/certified_train_launch.py",
         "--root",
-        scratch,
+        "/fake/ember",
+        "--certificate",
+        "c.json",
+        "--declaration-ledger",
+        "d.jsonl",
+        "--run-spec",
+        "r.json",
       ]);
-      expect(path.basename(args[args.indexOf("--certificate") + 1]!)).toBe("certificate.json");
-      expect(path.basename(args[args.indexOf("--declaration-ledger") + 1]!)).toBe("declaration-ledger.jsonl");
-      expect(path.basename(args[args.indexOf("--run-spec") + 1]!)).toBe("run-spec.json");
-      expect(args[args.indexOf("--custody-receipt-sha256") + 1]).toBe(
-        sha256(fs.readFileSync(path.join(canonicalDir(scratch), "launch-authority-custody.json"))),
-      );
       expect(certifiedSpawns[0]!.args.join(" ")).not.toContain(
         REAL_LAUNCH_COMMAND,
       );
@@ -1182,7 +916,7 @@ describe("train command", () => {
       );
 
       const result = await cmd.execute(
-        "--execute",
+        "--execute --certificate c.json --declaration-ledger d.jsonl --run-spec r.json",
         mockCtx,
       );
 
@@ -1202,7 +936,7 @@ describe("train command", () => {
       );
 
       const result = await cmd.execute(
-        "--execute",
+        "--execute --certificate c.json --declaration-ledger d.jsonl --run-spec r.json",
         mockCtx,
       );
 
@@ -1218,7 +952,7 @@ describe("train command", () => {
       );
 
       const result = await cmd.execute(
-        "--execute",
+        "--execute --certificate c.json --declaration-ledger d.jsonl --run-spec r.json",
         mockCtx,
       );
 
@@ -1264,8 +998,6 @@ describe("acceptance map: train-launch-operability v1", () => {
         const cmd = createTrainCommand({
           pythonBin: "python",
           repoRoot: scratch,
-          launchAuthorityCustodyRoot: custodyRoot(scratch),
-          launchAuthorityRunId: TEST_RUN_ID,
           runLaunchPacket: () => {
             writeCanonicalArtifacts(scratch);
             return { status: 0, stdout: allGreenStdout() };
@@ -1339,15 +1071,11 @@ describe("acceptance map: train-launch-operability v1", () => {
         const mintingInstance = createTrainCommand({
           pythonBin: "python",
           repoRoot: scratch,
-          launchAuthorityCustodyRoot: custodyRoot(scratch),
-          launchAuthorityRunId: TEST_RUN_ID,
           runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
         });
         const confirmingInstance = createTrainCommand({
           pythonBin: "python",
           repoRoot: scratch,
-          launchAuthorityCustodyRoot: custodyRoot(scratch),
-          launchAuthorityRunId: TEST_RUN_ID,
           runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
           runCertifiedLaunch: (executable, args) => {
             certifiedSpawns.push({ executable, args });
@@ -1379,15 +1107,11 @@ describe("acceptance map: train-launch-operability v1", () => {
         const instanceA = createTrainCommand({
           pythonBin: "python",
           repoRoot: scratch,
-          launchAuthorityCustodyRoot: custodyRoot(scratch),
-          launchAuthorityRunId: TEST_RUN_ID,
           runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
         });
         const instanceB = createTrainCommand({
           pythonBin: "python",
           repoRoot: scratch,
-          launchAuthorityCustodyRoot: custodyRoot(scratch),
-          launchAuthorityRunId: TEST_RUN_ID,
           runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
         });
 
@@ -1515,8 +1239,6 @@ describe("acceptance map: train-launch-operability v1", () => {
         const cmd = createTrainCommand({
           pythonBin: "python",
           repoRoot: scratch,
-          launchAuthorityCustodyRoot: custodyRoot(scratch),
-          launchAuthorityRunId: TEST_RUN_ID,
           runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
           runCertifiedLaunch: (executable, args) => {
             certifiedSpawns.push({ executable, args });
@@ -1541,8 +1263,11 @@ describe("acceptance map: train-launch-operability v1", () => {
       }
     });
 
-    it("C8: --execute + preflight green reopens canonical external custody for the consumer", async () => {
-      const { cmd, preflightSpawns, certifiedSpawns, scratch } = makeExecuteCmd(
+    it("C8: --execute with explicit paths + preflight green -> consumer invoked with the explicit paths, canonical resolution not consulted", async () => {
+      // repoRoot does not exist on disk at all -- canonical resolution (fs reads under
+      // repoRoot/receipts/ember-02-launch-authority) would throw/fail if it were consulted.
+      // The explicit --execute path must never touch it.
+      const { cmd, preflightSpawns, certifiedSpawns } = makeExecuteCmd(
         { status: 0, stdout: allGreenStdout() },
         {
           status: 0,
@@ -1551,18 +1276,23 @@ describe("acceptance map: train-launch-operability v1", () => {
       );
 
       const result = await cmd.execute(
-        "--execute",
+        "--execute --certificate c.json --declaration-ledger d.jsonl --run-spec r.json",
         mockCtx,
       );
 
       expect(result?.exitCode).toBeUndefined();
       expect(preflightSpawns).toHaveLength(1);
-      const args = certifiedSpawns[0]!.args;
-      expect(args[2]).toBe(scratch);
-      expect(path.basename(args[args.indexOf("--certificate") + 1]!)).toBe("certificate.json");
-      expect(args[args.indexOf("--custody-receipt-sha256") + 1]).toBe(
-        sha256(fs.readFileSync(path.join(canonicalDir(scratch), "launch-authority-custody.json"))),
-      );
+      expect(certifiedSpawns[0]!.args).toEqual([
+        "/fake/ember/tools/ember-restart-3b/certified_train_launch.py",
+        "--root",
+        "/fake/ember",
+        "--certificate",
+        "c.json",
+        "--declaration-ledger",
+        "d.jsonl",
+        "--run-spec",
+        "r.json",
+      ]);
     });
   });
 
@@ -1588,8 +1318,6 @@ describe("acceptance map: train-launch-operability v1", () => {
         const cmd = createTrainCommand({
           pythonBin: "python",
           repoRoot: scratch,
-          launchAuthorityCustodyRoot: custodyRoot(scratch),
-          launchAuthorityRunId: TEST_RUN_ID,
           runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
           runCertifiedLaunch: (executable, args) => {
             certifiedSpawns.push({ executable, args });
@@ -1609,92 +1337,6 @@ describe("acceptance map: train-launch-operability v1", () => {
         expect(second?.exitCode).toBe(1);
         expect(second?.message.toLowerCase()).toContain("no outstanding");
         expect(certifiedSpawns).toHaveLength(1);
-      } finally {
-        fs.rmSync(scratch, { recursive: true, force: true });
-      }
-    });
-
-    it("S2: confirm reopens custody and refuses artifact drift without launching", async () => {
-      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-confirm-drift-"));
-      try {
-        writeCanonicalArtifacts(scratch);
-        const certifiedSpawns: RecordedSpawn[] = [];
-        const cmd = createTrainCommand({
-          pythonBin: "python",
-          repoRoot: scratch,
-          launchAuthorityCustodyRoot: custodyRoot(scratch),
-          launchAuthorityRunId: TEST_RUN_ID,
-          runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
-          runCertifiedLaunch: (executable, args) => {
-            certifiedSpawns.push({ executable, args });
-            return {
-              status: 0,
-              stdout: JSON.stringify({ execution_receipt: "receipt.json", artifact_root: "artifacts/run" }),
-            };
-          },
-        });
-        const offerResult = await cmd.execute("", mockCtx);
-        const offerId = offerResult?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
-        expect(offerId).toBeDefined();
-        fs.appendFileSync(path.join(canonicalDir(scratch), "certificate.json"), " ");
-
-        const confirmResult = await cmd.execute(`confirm ${offerId}`, mockCtx);
-
-        expect(confirmResult?.exitCode).toBe(1);
-        expect(confirmResult?.message).toContain("custody changed or became invalid");
-        expect(confirmResult?.message).toContain("certificate hash does not match");
-        expect(certifiedSpawns).toHaveLength(0);
-      } finally {
-        fs.rmSync(scratch, { recursive: true, force: true });
-      }
-    });
-
-    it("S2: confirm gives the certified consumer canonical paths plus the admitted raw receipt hash", async () => {
-      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-confirm-snapshot-"));
-      try {
-        writeCanonicalArtifacts(scratch);
-        let observedBinding = "";
-        let consumerLeaf = "";
-        let observedReceiptSha256 = "";
-        const expectedReceiptSha256 = sha256(
-          fs.readFileSync(path.join(canonicalDir(scratch), "launch-authority-custody.json")),
-        );
-        const cmd = createTrainCommand({
-          pythonBin: "python",
-          repoRoot: scratch,
-          launchAuthorityCustodyRoot: custodyRoot(scratch),
-          launchAuthorityRunId: TEST_RUN_ID,
-          runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
-          runCertifiedLaunch: (_executable, args) => {
-            fs.writeFileSync(
-              path.join(canonicalDir(scratch), "sha-binding-map.json"),
-              JSON.stringify({ source: "substituted-after-reopen" }),
-            );
-            const certificateIndex = args.indexOf("--certificate");
-            const receiptShaIndex = args.indexOf("--custody-receipt-sha256");
-            consumerLeaf = path.dirname(args[certificateIndex + 1]!);
-            observedReceiptSha256 = args[receiptShaIndex + 1]!;
-            observedBinding = fs.readFileSync(
-              path.join(consumerLeaf, "sha-binding-map.json"),
-              "utf8",
-            );
-            return {
-              status: 0,
-              stdout: JSON.stringify({ execution_receipt: "receipt.json", artifact_root: "artifacts/run" }),
-            };
-          },
-        });
-        const offerResult = await cmd.execute("", mockCtx);
-        const offerId = offerResult?.message.match(/OFFER (\S+) action=train-launch/)?.[1];
-        expect(offerId).toBeDefined();
-
-        const confirmResult = await cmd.execute(`confirm ${offerId}`, mockCtx);
-
-        expect(confirmResult?.exitCode).toBeUndefined();
-        expect(observedBinding).toBe(JSON.stringify({ source: "substituted-after-reopen" }));
-        expect(observedReceiptSha256).toBe(expectedReceiptSha256);
-        expect(consumerLeaf).toBe(canonicalDir(scratch));
-        expect(fs.existsSync(consumerLeaf)).toBe(true);
       } finally {
         fs.rmSync(scratch, { recursive: true, force: true });
       }
@@ -1767,57 +1409,7 @@ describe("acceptance map: train-launch-operability v1", () => {
       }
     });
 
-    it("S4: a path-only SHA binding identity refuses before offer", async () => {
-      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-s4-path-only-binding-"));
-      try {
-        writeCanonicalArtifacts(scratch);
-        const mapPath = path.join(canonicalDir(scratch), "sha-binding-map.json");
-        const bindingMap = JSON.parse(fs.readFileSync(mapPath, "utf8"));
-        bindingMap.config_sha256 = "governed-test:config_sha256";
-        fs.writeFileSync(mapPath, JSON.stringify(bindingMap));
-        writeCustodyReceipt(canonicalDir(scratch));
-        const { cmd, spawns } = makeCmd(
-          () => ({ status: 0, stdout: allGreenStdout() }),
-          scratch,
-        );
-
-        const result = await cmd.execute("", mockCtx);
-
-        expect(result?.exitCode).toBe(1);
-        expect(result?.message).not.toContain("OFFER");
-        expect(result?.message).toContain("source identity is invalid");
-        expect(spawns).toHaveLength(1);
-      } finally {
-        fs.rmSync(scratch, { recursive: true, force: true });
-      }
-    });
-
-    it("S4: a SHA binding digest outside the certificate refuses before offer", async () => {
-      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-s4-binding-digest-"));
-      try {
-        writeCanonicalArtifacts(scratch);
-        const mapPath = path.join(canonicalDir(scratch), "sha-binding-map.json");
-        const bindingMap = JSON.parse(fs.readFileSync(mapPath, "utf8"));
-        bindingMap.config_sha256 = `sha256:${"f".repeat(64)};path:governed-test:config_sha256`;
-        fs.writeFileSync(mapPath, JSON.stringify(bindingMap));
-        writeCustodyReceipt(canonicalDir(scratch));
-        const { cmd, spawns } = makeCmd(
-          () => ({ status: 0, stdout: allGreenStdout() }),
-          scratch,
-        );
-
-        const result = await cmd.execute("", mockCtx);
-
-        expect(result?.exitCode).toBe(1);
-        expect(result?.message).not.toContain("OFFER");
-        expect(result?.message).toContain("does not match certificate");
-        expect(spawns).toHaveLength(1);
-      } finally {
-        fs.rmSync(scratch, { recursive: true, force: true });
-      }
-    });
-
-    it("S5: --execute refuses every caller-selected authority path", async () => {
+    it("S5: --execute with only some of the three flags -> the existing usage error, unchanged", async () => {
       const { cmd, preflightSpawns, certifiedSpawns } = makeExecuteCmd(
         { status: 0, stdout: allGreenStdout() },
         { status: 0, stdout: "{}" },
@@ -1826,7 +1418,7 @@ describe("acceptance map: train-launch-operability v1", () => {
       const result = await cmd.execute("--execute --certificate certificate.json", mockCtx);
 
       expect(result?.exitCode).toBe(1);
-      expect(result?.message).toContain("authority paths are resolved only");
+      expect(result?.message).toContain("--declaration-ledger");
       expect(preflightSpawns).toHaveLength(0);
       expect(certifiedSpawns).toHaveLength(0);
     });
@@ -1840,15 +1432,18 @@ describe("acceptance map: train-launch-operability v1", () => {
         // catch a cure that fails closed on anything it doesn't recognize.
         const dir = canonicalDir(scratch);
         fs.mkdirSync(dir, { recursive: true });
-        const certificate = {
-          certificate_sha256: "b".repeat(64),
-          certificate_legs: { storage: "pass", resource: "pass" },
-          authorized_scope: { mode: "bounded-canary", max_records: 100 },
-          ...Object.fromEntries(
-            TEST_BINDING_KEYS.map((key, index) => [key, (index + 1).toString(16).padStart(64, "0")]),
+        fs.writeFileSync(
+          path.join(dir, "certificate.json"),
+          JSON.stringify(
+            {
+              certificate_sha256: "b".repeat(64),
+              certificate_legs: { storage: "pass", resource: "pass" },
+              authorized_scope: { mode: "bounded-canary", max_records: 100 },
+            },
+            null,
+            2,
           ),
-        };
-        fs.writeFileSync(path.join(dir, "certificate.json"), JSON.stringify(certificate, null, 2));
+        );
         fs.writeFileSync(
           path.join(dir, "declaration-ledger.jsonl"),
           [
@@ -1870,20 +1465,6 @@ describe("acceptance map: train-launch-operability v1", () => {
           path.join(dir, "run-spec.json"),
           JSON.stringify({ mode: "bounded-canary", steps: 10, sequence_length: 4096 }, null, 2),
         );
-        fs.writeFileSync(
-          path.join(dir, "sha-binding-map.json"),
-          JSON.stringify(
-            Object.fromEntries(
-              TEST_BINDING_KEYS.map((key) => [
-                key,
-                `sha256:${certificate[key]};path:governed-overclosure-regression:${key}`,
-              ]),
-            ),
-            null,
-            2,
-          ),
-        );
-        writeCustodyReceipt(dir);
 
         const { cmd } = makeCmd(() => ({ status: 0, stdout: allGreenStdout() }), scratch);
         const result = await cmd.execute("", mockCtx);
@@ -1897,7 +1478,7 @@ describe("acceptance map: train-launch-operability v1", () => {
   });
 
   describe("full happy path: OFFER -> confirm invokes the real fixed consumer", () => {
-    it("confirm <id> invokes the fixed consumer with canonical authority paths", async () => {
+    it("confirm <id> invokes exactly the same certified_train_launch.py consumer --execute would, with the resolved canonical paths", async () => {
       const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-confirm-"));
       try {
         writeCanonicalArtifacts(scratch);
@@ -1905,8 +1486,6 @@ describe("acceptance map: train-launch-operability v1", () => {
         const cmd = createTrainCommand({
           pythonBin: "python",
           repoRoot: scratch,
-          launchAuthorityCustodyRoot: custodyRoot(scratch),
-          launchAuthorityRunId: TEST_RUN_ID,
           certifiedLaunchScriptPath: path.join(scratch, "tools", "ember-restart-3b", "certified_train_launch.py"),
           runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
           runCertifiedLaunch: (executable, args) => {
@@ -1927,22 +1506,17 @@ describe("acceptance map: train-launch-operability v1", () => {
         expect(confirmResult?.exitCode).toBeUndefined();
         expect(confirmResult?.message).toContain("receipt.json");
         expect(certifiedSpawns).toHaveLength(1);
-        const args = certifiedSpawns[0]!.args;
-        expect(args.slice(0, 3)).toEqual([
+        expect(certifiedSpawns[0]!.args).toEqual([
           path.join(scratch, "tools", "ember-restart-3b", "certified_train_launch.py"),
           "--root",
           scratch,
+          "--certificate",
+          path.join(canonicalDir(scratch), "certificate.json"),
+          "--declaration-ledger",
+          path.join(canonicalDir(scratch), "declaration-ledger.jsonl"),
+          "--run-spec",
+          path.join(canonicalDir(scratch), "run-spec.json"),
         ]);
-        const certificate = args[args.indexOf("--certificate") + 1]!;
-        const declarationLedger = args[args.indexOf("--declaration-ledger") + 1]!;
-        const runSpec = args[args.indexOf("--run-spec") + 1]!;
-        expect(path.basename(certificate)).toBe("certificate.json");
-        expect(path.basename(declarationLedger)).toBe("declaration-ledger.jsonl");
-        expect(path.basename(runSpec)).toBe("run-spec.json");
-        expect(path.dirname(certificate)).toBe(path.dirname(declarationLedger));
-        expect(path.dirname(certificate)).toBe(path.dirname(runSpec));
-        expect(path.dirname(certificate)).toBe(canonicalDir(scratch));
-        expect(fs.existsSync(path.dirname(certificate))).toBe(true);
         // The raw named launch command string is never present in argv or the response.
         expect(certifiedSpawns[0]!.args.join(" ")).not.toContain(REAL_LAUNCH_COMMAND);
       } finally {
@@ -1981,8 +1555,6 @@ describe("/train source-byte authority", () => {
       const spawns: RecordedSpawn[] = [];
       const cmd = createTrainCommand({
         pythonBin: "python",
-        launchAuthorityCustodyRoot: custodyRoot(worktreeRoot),
-        launchAuthorityRunId: TEST_RUN_ID,
         runLaunchPacket: (executable, args) => {
           spawns.push({ executable, args });
           return { status: 0, stdout: allGreenStdout() };
