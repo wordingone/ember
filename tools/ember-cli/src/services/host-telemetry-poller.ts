@@ -51,6 +51,15 @@ export interface HostTelemetryPollerOptions {
   readers?: HostTelemetryReaders;
   setIntervalFn?: typeof setInterval;
   clearIntervalFn?: typeof clearInterval;
+  /** #1455: called with the fresh snapshot immediately after each poll tick AND after each
+   *  pushGpuSample -- the single publish point a consumer subscribes to instead of running its
+   *  own decoupled timer over snapshot(). Two independent 1s timers (this poller's internal tick
+   *  and a caller's separate republish interval) can interleave out of phase, so a consumer
+   *  reading snapshot() from its own timer can observe a snapshot up to one tick stale relative
+   *  to the poll that just landed -- and, being decoupled, that consumer has to re-derive "did
+   *  anything change" on ITS OWN independent cadence rather than being told the moment new data
+   *  is ready. onUpdate removes the second timer entirely: one interval, one publish point. */
+  onUpdate?: (snapshot: HostTelemetrySnapshot) => void;
 }
 
 export const DEFAULT_HOST_TELEMETRY_INTERVAL_MS = 1000;
@@ -165,6 +174,14 @@ export function createHostTelemetryPoller(options: HostTelemetryPollerOptions = 
     }
   }
 
+  function buildSnapshot(): HostTelemetrySnapshot {
+    const out = {} as HostTelemetrySnapshot;
+    for (const id of HOST_METRIC_IDS) {
+      out[id] = { values: [...series[id].values], unit: series[id].unit, unavailableReason: series[id].unavailableReason };
+    }
+    return out;
+  }
+
   return {
     start(): void {
       if (timer !== null) return;
@@ -182,24 +199,22 @@ export function createHostTelemetryPoller(options: HostTelemetryPollerOptions = 
       readInto("ram");
       readInto("cpu");
       readInto("disk");
+      options.onUpdate?.(buildSnapshot());
     },
     pushGpuSample(gpu: GpuStateSnapshot | null): void {
       if (gpu === null) {
         push("vram", null, "nvidia-smi unavailable");
         push("gpu", null, "nvidia-smi unavailable");
-        return;
+      } else {
+        const used = gpu.memory.vramUsedGib;
+        const util = gpu.memory.utilPct;
+        push("vram", Number.isFinite(used) ? used : null, "non-finite reading");
+        push("gpu", Number.isFinite(util) ? util : null, "non-finite reading");
       }
-      const used = gpu.memory.vramUsedGib;
-      const util = gpu.memory.utilPct;
-      push("vram", Number.isFinite(used) ? used : null, "non-finite reading");
-      push("gpu", Number.isFinite(util) ? util : null, "non-finite reading");
+      options.onUpdate?.(buildSnapshot());
     },
     snapshot(): HostTelemetrySnapshot {
-      const out = {} as HostTelemetrySnapshot;
-      for (const id of HOST_METRIC_IDS) {
-        out[id] = { values: [...series[id].values], unit: series[id].unit, unavailableReason: series[id].unavailableReason };
-      }
-      return out;
+      return buildSnapshot();
     },
     isRunning(): boolean {
       return timer !== null;
@@ -212,6 +227,11 @@ export function createHostTelemetryPoller(options: HostTelemetryPollerOptions = 
  * useGpuStatePoller's snapshot into vram/gpu, republishes the snapshot each tick, and stops the
  * poller on unmount (acceptance row 7: no interval alive after unmount; no child process was
  * ever spawned here).
+ *
+ * #1455: republishing used to run on a SECOND, independent setInterval(intervalMs) layered on
+ * top of the poller's own internal tick -- two decoupled 1s timers computing and cloning the
+ * same 6-series snapshot out of phase with each other. onUpdate collapses this to the poller's
+ * single tick: one interval, one publish, called exactly when new data actually lands.
  */
 export function useHostTelemetryPoller(
   gpuState: GpuStateSnapshot | null,
@@ -219,23 +239,26 @@ export function useHostTelemetryPoller(
   options: HostTelemetryPollerOptions = {},
 ): HostTelemetrySnapshot {
   const pollerRef = useRef<HostTelemetryPoller | null>(null);
-  if (pollerRef.current === null) pollerRef.current = createHostTelemetryPoller({ ...options, intervalMs });
+  const setSnapshotRef = useRef<((snapshot: HostTelemetrySnapshot) => void) | null>(null);
+  if (pollerRef.current === null) {
+    pollerRef.current = createHostTelemetryPoller({
+      ...options,
+      intervalMs,
+      onUpdate: (snapshot) => setSnapshotRef.current?.(snapshot),
+    });
+  }
   const [snapshot, setSnapshot] = useState<HostTelemetrySnapshot>(() => pollerRef.current!.snapshot());
+  setSnapshotRef.current = setSnapshot;
 
   useEffect(() => {
     const poller = pollerRef.current!;
     poller.start();
-    const id = setInterval(() => setSnapshot(poller.snapshot()), intervalMs);
-    return () => {
-      clearInterval(id);
-      poller.stop();
-    };
+    return () => poller.stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intervalMs]);
 
   useEffect(() => {
     pollerRef.current!.pushGpuSample(gpuState);
-    setSnapshot(pollerRef.current!.snapshot());
   }, [gpuState]);
 
   return snapshot;
