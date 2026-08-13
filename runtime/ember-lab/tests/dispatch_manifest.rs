@@ -105,6 +105,36 @@ fn fixture_dispatch_child() {
     }
 }
 
+/// Window-contract fixture (issue #898 L6): when
+/// `EMBER_LAB_DISPATCH_FIXTURE_CHILD_WINDOW=1`, paints a real, visible
+/// top-level `MessageBoxW` window on the current desktop. This is the
+/// exact gap PR #1691 left open (its own "Unverified areas" section: the
+/// UILIMIT job-object wall "does not, by themselves, prevent the job's own
+/// process from creating a window on the existing interactive desktop") --
+/// a plain `CREATE_NO_WINDOW`/`JOB_OBJECT_UILIMIT_*`-restricted child can
+/// still call a real user32 window API and have it render. The fallback
+/// sleep keeps the fixture from exiting cleanly on its own if the parent's
+/// census/kill is ever slower than expected, so a probe miss shows up as a
+/// hang the test's own deadline catches, not a silent false negative.
+fn to_wide_null(text: &str) -> Vec<u16> {
+    text.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+#[test]
+fn fixture_dispatch_child_presents_a_visible_window() {
+    if std::env::var("EMBER_LAB_DISPATCH_FIXTURE_CHILD_WINDOW").as_deref() == Ok("1") {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_OK};
+        let title = to_wide_null("l6-window-contract-fixture");
+        let text = to_wide_null(
+            "this window proves the window-contract census probe detects a headless_no_windows violation",
+        );
+        unsafe {
+            MessageBoxW(std::ptr::null_mut(), text.as_ptr(), title.as_ptr(), MB_OK);
+        }
+        thread::sleep(Duration::from_secs(30));
+    }
+}
+
 fn write_manifest(root: &Path, job_id: &str, not_before_ms: i64) -> PathBuf {
     let custody = root.join("custody");
     fs::create_dir_all(&custody).unwrap();
@@ -1147,6 +1177,89 @@ fn dispatch_manifest_does_not_wall_the_windows_ui_surface_for_cockpit_profiles()
         assert_eq!(value["requires_ui_responsiveness"], true);
     }
     daemon.stop_job("dispatch-ui-cockpit-escape").unwrap();
+}
+
+#[test]
+fn dispatch_manifest_refuses_a_headless_no_windows_spawn_that_presents_a_visible_window() {
+    // write_manifest's fixture already declares window_contract:
+    // "headless_no_windows" (the required-field default for every non-Cockpit
+    // profile). Swap only the spawned program's args/env to point at
+    // fixture_dispatch_child_presents_a_visible_window, which paints a real
+    // MessageBoxW instead of the default fixture's plain 30s sleep.
+    let root = sandbox("window-contract-violation");
+    let manifest = write_manifest(&root, "dispatch-window-violation", 10_000);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["args"] = json!([
+        "--exact",
+        "fixture_dispatch_child_presents_a_visible_window",
+        "--nocapture"
+    ]);
+    payload["env"]["EMBER_LAB_DISPATCH_FIXTURE_CHILD_WINDOW"] = json!("1");
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+
+    let db = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open(&db).unwrap();
+    let outcome = daemon.dispatch_manifest_at_with_probes_and_host(
+        &manifest,
+        10_001,
+        |_root| Ok(1024),
+        || Ok(2048),
+        || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+    );
+    let error = outcome.unwrap_err();
+    match &error {
+        EmberLabError::WindowContractViolation { job_id, detail } => {
+            assert_eq!(job_id, "dispatch-window-violation");
+            assert!(
+                detail.contains("headless_no_windows"),
+                "refusal message must self-describe the violated contract: {detail}"
+            );
+            // The refusal carries real per-window debugging detail (HWND,
+            // owning PID, and the fixture's own MessageBoxW caption text),
+            // not just a bare count -- prove the enrichment actually ran
+            // against the real window, not merely that the code compiles.
+            assert!(
+                detail.contains("hwnd=0x") && detail.contains("pid="),
+                "refusal message must carry per-window hwnd/pid detail: {detail}"
+            );
+            assert!(
+                detail.contains("l6-window-contract-fixture"),
+                "refusal message must carry the offending window's own title text: {detail}"
+            );
+        }
+        other => panic!("expected WindowContractViolation, got {other:?}"),
+    }
+
+    // Fail-closed cleanup: dispatch_manifest_at_with_probes_and_host's outer
+    // rollback_dispatch_attempt purges the job/events/lease rows for any
+    // start_job failure that reaches a terminal state (mirrors every other
+    // start_job failure kind -- job_spawn_failed, job_prepare_commit_failed,
+    // job_launch_commit_failed -- see e.g.
+    // dispatch_manifest_rejects_a_missing_job_memory_ceiling's identical
+    // job_state==None assertion). The synchronous returned
+    // WindowContractViolation error, asserted above, is the receipt a
+    // caller actually sees; a caller retrying the same resource is not
+    // blocked by the refused spawn.
+    assert_eq!(daemon.job_state("dispatch-window-violation").unwrap(), None);
+    assert_eq!(daemon.lease_owner("gpu-smoke").unwrap(), None);
+
+    // mark_failed still records the distinct "job_window_contract_violation"
+    // kind (not the generic job_launch_commit_failed every other running-
+    // closure failure shares) in the same commit that transitions the job
+    // to 'failed' -- it is visible for the instant between that commit and
+    // rollback_dispatch_attempt's purge, and would remain durable if this
+    // codebase's purge-on-terminal-failure convention ever changes. Confirm
+    // the purge actually ran (rather than merely never having written
+    // anything) by checking the jobs table is empty for this job_id too.
+    let connection = Connection::open(&db).unwrap();
+    let remaining_job_rows: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM jobs WHERE job_id='dispatch-window-violation'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(remaining_job_rows, 0);
 }
 
 #[test]
