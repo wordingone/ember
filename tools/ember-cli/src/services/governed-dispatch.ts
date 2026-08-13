@@ -14,12 +14,41 @@ import {
 } from "./ember-lab-rpc.ts";
 
 const MANIFEST_FIELDS = [
-  "args", "bindings", "custody_root", "env", "expires_at_ms", "job_id",
+  "args", "bindings", "custody_root", "cpu_pacing_class", "env", "expires_at_ms", "job_id",
   "maximum_job_memory_bytes", "minimum_free_vram_bytes", "not_before_ms",
   "preflight_receipt", "program", "required_available_maximum_commit_bytes",
   "resource_lease", "schema_version", "simulated_peak_commit_bytes", "source_commit",
-  "storage_reserves", "workload_profile",
+  "storage_reserves", "window_contract", "workload_profile",
 ].sort();
+
+// Legal snake_case spellings for the two required closed-choice dispatch-manifest fields
+// (runtime/ember-lab/src/lib.rs DispatchCpuPacingClass / DispatchWindowContract). Kept here
+// rather than imported so this transport has no compile-time dependency on the Rust crate;
+// keep in sync by hand if the enums ever grow a variant.
+const CPU_PACING_CLASS_LEGAL_VALUES = ["unpaced", "governed"] as const;
+const WINDOW_CONTRACT_LEGAL_VALUES = ["headless_no_windows", "cockpit_hosted"] as const;
+
+/**
+ * Require `field` to be present on `manifest` and hold one of `legalValues`, throwing a
+ * refusal that names the specific missing/invalid field and enumerates its legal values
+ * (e.g. "governed dispatch cpu_pacing_class: missing required field (legal values: unpaced,
+ * governed)") rather than a bare "fields are not closed" error. Returns the validated value.
+ */
+function requireClosedChoiceField(
+  manifest: Record<string, unknown>, field: string, legalValues: readonly string[],
+): string {
+  const legal = legalValues.join(", ");
+  if (!(field in manifest)) {
+    throw new Error(`governed dispatch ${field}: missing required field (legal values: ${legal})`);
+  }
+  const actual = manifest[field];
+  if (typeof actual !== "string" || !legalValues.includes(actual)) {
+    throw new Error(
+      `governed dispatch ${field}: invalid value ${JSON.stringify(actual)} (legal values: ${legal})`,
+    );
+  }
+  return actual;
+}
 
 const PROFILE_FIELDS = [
   "cpu_rate_percent", "pinned_host_producers", "profile_id",
@@ -94,6 +123,11 @@ function validateManifest(manifest: Record<string, unknown>, expectedSourceCommi
   if (!/^[0-9a-f]{40}$/.test(expectedSourceCommit)) {
     throw new Error("governed dispatch source commit trust root is invalid");
   }
+  // Named-field checks for the two closed-choice fields run before the generic closed-field
+  // check so a missing/invalid value gets a self-describing refusal instead of the generic
+  // "fields are not closed" message.
+  const cpuPacingClass = requireClosedChoiceField(manifest, "cpu_pacing_class", CPU_PACING_CLASS_LEGAL_VALUES);
+  const windowContract = requireClosedChoiceField(manifest, "window_contract", WINDOW_CONTRACT_LEGAL_VALUES);
   closedFields(manifest, MANIFEST_FIELDS, "manifest");
   if (manifest["schema_version"] !== "ember-lab-dispatch-manifest-v3") {
     throw new Error("governed dispatch manifest schema is invalid");
@@ -103,6 +137,14 @@ function validateManifest(manifest: Record<string, unknown>, expectedSourceCommi
   }
   if (manifest["resource_lease"] !== "gpu-q2-actual-update") {
     throw new Error("governed dispatch resource lease is invalid");
+  }
+  // governed_vertical is not CPU-paced and presents no window today (truth-declared, not
+  // aspirational -- see runtime/ember-lab/scripts/c8_prelaunch/issue675/q2_dispatch_manifest.py).
+  if (cpuPacingClass !== "unpaced") {
+    throw new Error("governed dispatch cpu_pacing_class does not match the governed_vertical authority");
+  }
+  if (windowContract !== "headless_no_windows") {
+    throw new Error("governed dispatch window_contract does not match the governed_vertical authority");
   }
   const profile = object(manifest["workload_profile"], "workload profile");
   closedFields(profile, PROFILE_FIELDS, "workload profile");

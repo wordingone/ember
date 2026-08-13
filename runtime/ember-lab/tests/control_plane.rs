@@ -131,6 +131,8 @@ fn write_restore_manifest(root: &Path, job_id: &str) -> PathBuf {
                 "requires_ui_responsiveness": false,
                 "cpu_rate_percent": 100
             },
+            "cpu_pacing_class": "unpaced",
+            "window_contract": "headless_no_windows",
             "env": env,
             "bindings": [
                 {"kind": "config", "path": config, "sha256": sha256(&config)},

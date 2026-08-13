@@ -464,6 +464,43 @@ pub struct DispatchWorkloadProfile {
     pub cpu_rate_percent: u32,
 }
 
+/// Declares whether a dispatched job's CPU usage is paced.
+///
+/// This is a required, closed-choice declaration: no `Option`, no
+/// `#[serde(default)]`, and an unknown/missing value is refused rather than
+/// silently defaulted (serde's ordinary enum/required-field deserialization
+/// already enforces this -- there is deliberately no catch-all/other variant).
+/// Later lanes may ADD variants to this enum (additive -- old manifests stay
+/// valid); they must never add a default variant.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DispatchCpuPacingClass {
+    /// Explicit, visible declaration that this spawn has no CPU pacing. This
+    /// is the truth-telling value until a later CPU-enforcement lane lands;
+    /// it is never used as a silent/implicit default.
+    Unpaced,
+    /// Paced by the daemon's governor. At L1 this only carries the
+    /// declaration -- a later lane gives it enforcement teeth.
+    Governed,
+}
+
+/// Declares the window-visibility contract of a dispatched job.
+///
+/// This is a required, closed-choice declaration: no `Option`, no
+/// `#[serde(default)]`, and an unknown/missing value is refused rather than
+/// silently defaulted (serde's ordinary enum/required-field deserialization
+/// already enforces this -- there is deliberately no catch-all/other variant).
+/// Later lanes may ADD variants to this enum (additive -- old manifests stay
+/// valid); they must never add a default variant.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DispatchWindowContract {
+    /// The spawn presents zero visible windows.
+    HeadlessNoWindows,
+    /// Visible surface exists only through the cockpit contract.
+    CockpitHosted,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct DispatchManifest {
@@ -476,6 +513,8 @@ pub struct DispatchManifest {
     pub program: DispatchFileHash,
     pub args: Vec<String>,
     pub workload_profile: DispatchWorkloadProfile,
+    pub cpu_pacing_class: DispatchCpuPacingClass,
+    pub window_contract: DispatchWindowContract,
     #[serde(default)]
     pub env: BTreeMap<String, String>,
     pub bindings: Vec<DispatchFileBinding>,
@@ -486,6 +525,118 @@ pub struct DispatchManifest {
     pub maximum_job_memory_bytes: u64,
     pub simulated_peak_commit_bytes: u64,
     pub preflight_receipt: PathBuf,
+}
+
+/// Field name and legal snake_case spellings for `DispatchManifest`'s
+/// closed-choice fields, shared between the parse-error describer below and
+/// its tests.
+const CPU_PACING_CLASS_FIELD: &str = "cpu_pacing_class";
+const CPU_PACING_CLASS_LEGAL_VALUES: &[&str] = &["unpaced", "governed"];
+const WINDOW_CONTRACT_FIELD: &str = "window_contract";
+const WINDOW_CONTRACT_LEGAL_VALUES: &[&str] = &["headless_no_windows", "cockpit_hosted"];
+
+/// Rewrite a `DispatchManifest` JSON parse failure into a refusal message
+/// that names the specific missing/invalid closed-choice field and
+/// enumerates its legal values, e.g. `"cpu_pacing_class: missing required
+/// field (legal values: unpaced, governed)"`. Falls back to the underlying
+/// serde message for every other failure shape (a different missing field,
+/// malformed JSON, or a bad value on a field this function does not know
+/// about). This never weakens fail-closed behavior --
+/// `serde_json::from_slice::<DispatchManifest>` has already performed the
+/// real rejection by the time this runs; it only rewrites the text the
+/// caller sees.
+pub fn describe_dispatch_manifest_parse_error(bytes: &[u8], error: &serde_json::Error) -> String {
+    for (field, legal_values) in [
+        (CPU_PACING_CLASS_FIELD, CPU_PACING_CLASS_LEGAL_VALUES),
+        (WINDOW_CONTRACT_FIELD, WINDOW_CONTRACT_LEGAL_VALUES),
+    ] {
+        if let Some(detail) = describe_closed_choice_field_error(bytes, field, legal_values) {
+            return detail;
+        }
+    }
+    error.to_string()
+}
+
+fn describe_closed_choice_field_error(
+    bytes: &[u8],
+    field: &str,
+    legal_values: &[&str],
+) -> Option<String> {
+    let value: Value = serde_json::from_slice(bytes).ok()?;
+    let object = value.as_object()?;
+    let legal = legal_values.join(", ");
+    match object.get(field) {
+        None => Some(format!(
+            "{field}: missing required field (legal values: {legal})"
+        )),
+        Some(Value::String(actual)) if !legal_values.contains(&actual.as_str()) => Some(format!(
+            "{field}: invalid value \"{actual}\" (legal values: {legal})"
+        )),
+        Some(Value::String(_)) => None,
+        Some(other) => Some(format!(
+            "{field}: invalid value {other} (legal values: {legal})"
+        )),
+    }
+}
+
+#[cfg(test)]
+mod dispatch_manifest_refusal_message_tests {
+    use super::*;
+
+    fn parse_failure(bytes: &[u8]) -> serde_json::Error {
+        serde_json::from_slice::<DispatchManifest>(bytes).unwrap_err()
+    }
+
+    #[test]
+    fn names_missing_cpu_pacing_class_and_its_legal_values() {
+        let bytes = br#"{"window_contract":"headless_no_windows"}"#;
+        let error = parse_failure(bytes);
+        assert_eq!(
+            describe_dispatch_manifest_parse_error(bytes, &error),
+            "cpu_pacing_class: missing required field (legal values: unpaced, governed)"
+        );
+    }
+
+    #[test]
+    fn names_invalid_cpu_pacing_class_value_and_its_legal_values() {
+        let bytes = br#"{"cpu_pacing_class":"throttled","window_contract":"headless_no_windows"}"#;
+        let error = parse_failure(bytes);
+        assert_eq!(
+            describe_dispatch_manifest_parse_error(bytes, &error),
+            "cpu_pacing_class: invalid value \"throttled\" (legal values: unpaced, governed)"
+        );
+    }
+
+    #[test]
+    fn names_missing_window_contract_and_its_legal_values() {
+        let bytes = br#"{"cpu_pacing_class":"unpaced"}"#;
+        let error = parse_failure(bytes);
+        assert_eq!(
+            describe_dispatch_manifest_parse_error(bytes, &error),
+            "window_contract: missing required field (legal values: headless_no_windows, cockpit_hosted)"
+        );
+    }
+
+    #[test]
+    fn names_invalid_window_contract_value_and_its_legal_values() {
+        let bytes = br#"{"cpu_pacing_class":"unpaced","window_contract":"floating"}"#;
+        let error = parse_failure(bytes);
+        assert_eq!(
+            describe_dispatch_manifest_parse_error(bytes, &error),
+            "window_contract: invalid value \"floating\" (legal values: headless_no_windows, cockpit_hosted)"
+        );
+    }
+
+    #[test]
+    fn falls_back_to_the_raw_serde_message_for_unrelated_failures() {
+        // Both closed-choice fields are present and legal here; the actual
+        // failure (malformed top-level JSON) has nothing to do with either,
+        // so the describer must not fabricate a field-specific message.
+        let bytes = b"not json";
+        let error = serde_json::from_slice::<DispatchManifest>(bytes).unwrap_err();
+        let detail = describe_dispatch_manifest_parse_error(bytes, &error);
+        assert_eq!(detail, error.to_string());
+    }
 }
 
 const DISPATCH_HOST_COMMIT_RESERVE_BYTES: u64 = 10 * 1024 * 1024 * 1024;
@@ -1646,7 +1797,10 @@ impl Daemon {
         let manifest: DispatchManifest =
             serde_json::from_slice(manifest_bytes).map_err(|error| {
                 EmberLabError::InvalidDispatchManifest {
-                    detail: format!("dispatch manifest schema is invalid: {error}"),
+                    detail: format!(
+                        "dispatch manifest schema is invalid: {}",
+                        describe_dispatch_manifest_parse_error(manifest_bytes, &error)
+                    ),
                 }
             })?;
         if manifest_bytes.len() > MAX_DISPATCH_MANIFEST_BYTES {
@@ -1860,7 +2014,10 @@ impl Daemon {
         let manifest: DispatchManifest =
             serde_json::from_slice(manifest_bytes).map_err(|error| {
                 EmberLabError::InvalidDispatchManifest {
-                    detail: format!("dispatch manifest schema is invalid: {error}"),
+                    detail: format!(
+                        "dispatch manifest schema is invalid: {}",
+                        describe_dispatch_manifest_parse_error(manifest_bytes, &error)
+                    ),
                 }
             })?;
         if manifest.schema_version != "ember-lab-dispatch-manifest-v3"

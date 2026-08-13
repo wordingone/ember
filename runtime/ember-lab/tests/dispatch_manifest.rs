@@ -143,6 +143,8 @@ fn write_manifest(root: &Path, job_id: &str, not_before_ms: i64) -> PathBuf {
                 "requires_ui_responsiveness": false,
                 "cpu_rate_percent": CPU_RATE_PERCENT
             },
+            "cpu_pacing_class": "unpaced",
+            "window_contract": "headless_no_windows",
             "env": env,
         "bindings": [
             {"kind": "config", "path": binding, "sha256": sha256(&binding)},
@@ -528,6 +530,49 @@ fn evidence_verifier_dispatch_is_cpu_only_and_rejects_caller_token_authority() {
     drop(daemon);
     remove_sandbox_when_unlocked(&root);
     remove_sandbox_when_unlocked(&caller_root);
+}
+
+#[test]
+fn dispatch_refuses_manifest_missing_window_contract_with_named_refusal() {
+    // Proves the refusal-message-quality requirement through the real
+    // dispatch path (Daemon::dispatch_manifest_at_with_probes_and_host):
+    // a manifest missing a required closed-choice field must fail closed
+    // with a message naming the field and its legal values, not a bare
+    // serde parse error.
+    let root = sandbox("dispatch-refusal-window-contract");
+    let dispatch_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    let manifest = write_manifest(
+        &root,
+        "dispatch-refusal-window-contract-job",
+        dispatch_at,
+    );
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload.as_object_mut().unwrap().remove("window_contract");
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
+    let error = daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            dispatch_at + 1,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap_err();
+    let EmberLabError::InvalidDispatchManifest { detail } = error else {
+        panic!("expected InvalidDispatchManifest, got {error:?}");
+    };
+    assert!(
+        detail.contains(
+            "window_contract: missing required field (legal values: headless_no_windows, cockpit_hosted)"
+        ),
+        "refusal did not name the missing field and its legal values: {detail}"
+    );
+    drop(daemon);
+    remove_sandbox_when_unlocked(&root);
 }
 
 #[test]
