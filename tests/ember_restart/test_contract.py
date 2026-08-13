@@ -20,6 +20,24 @@ def _current_source_commit() -> str:
     ).strip()
 
 
+def _current_source_ref() -> str:
+    """Fully-qualified ref for hermetic self-referential ls-remote binding.
+
+    Bare "HEAD" is ambiguous against this checkout's own git ls-remote: a
+    dev machine can carry a remote (e.g. "public") whose tracked
+    refs/remotes/<name>/HEAD also suffix-matches the pattern "HEAD", making
+    resolve_governed_master see two rows and fail closed. refs/heads/<branch>
+    is a full ref path with no such suffix collision. Falls back to "HEAD"
+    only when detached, which is the scenario the bare form was originally
+    chosen for and is not exercised on this repo's local branch.
+    """
+    symbolic = subprocess.run(
+        ["git", "rev-parse", "--symbolic-full-name", "HEAD"],
+        cwd=REPO_ROOT, text=True, capture_output=True, check=False,
+    ).stdout.strip()
+    return symbolic if symbolic else "HEAD"
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -569,18 +587,19 @@ def test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary(tmp_pa
         trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
         # Hermetic, no-network source-identity binding (issue #1296 P1): point
         # the governed-remote leg at this same checkout via file transport and
-        # ask for HEAD rather than refs/heads/master, since a CI checkout may
-        # not materialize a local master branch ref. canonical_root is left at
-        # its default (self-anchor), which also resolves to this checkout.
+        # ask for the checkout's own fully-qualified ref rather than a fixed
+        # refs/heads/master, since a CI checkout may not materialize a local
+        # master branch ref. canonical_root is left at its default
+        # (self-anchor), which also resolves to this checkout.
         governed_remote=str(REPO_ROOT),
-        governed_ref="HEAD",
+        governed_ref=_current_source_ref(),
     )
     assert validate_r1_warm100_entry(
         payload,
         source_root=REPO_ROOT,
         manifest_path=manifest_path,
         governed_remote=str(REPO_ROOT),
-        governed_ref="HEAD",
+        governed_ref=_current_source_ref(),
     )
     assert payload["entry"] == "WARM-100"
     assert payload["result"] == "PREP_ONLY"
@@ -611,7 +630,7 @@ def test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary(tmp_pa
                 source_root=REPO_ROOT,
                 manifest_path=manifest_path,
                 governed_remote=str(REPO_ROOT),
-                governed_ref="HEAD",
+                governed_ref=_current_source_ref(),
             )
         except ValueError:
             continue
