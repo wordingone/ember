@@ -22,7 +22,7 @@ Consumer: `tools/ember-cli/src/services/memory-footprint-cockpit.ts`
 
 Consumer: `tools/ember-cli/src/services/issue1455-memory-soak-receipt.ts`
 
-Consumer: `tools/ember-cli/src/services/poll-failure-dedup.ts`
+Consumer: `tools/ember-cli/src/services/poll-failure-status.ts`
 
 ## Authority and custody
 
@@ -68,12 +68,20 @@ unfulfilled operator action rather than a false restart claim.
 Mount starts exactly one supervisor; unmount stops it. Slow polls never overlap,
 and scheduled census failures are contained and reported without an unhandled
 rejection. Poll-cadence and construction-failure diagnostics route through the
-shared, dedup-only `poll-failure-dedup.ts` helper into the cockpit activity
-feed rather than raw `console.warn` (#1698); the helper carries no custody,
-threshold, or corrective-action authority of its own. Removal of the six
-consumers, their focused tests, the REPL wiring, and this spec is the complete
-rollback. Rollback reopens #1282 C1 because the legacy JSON threshold spec
-would again have no live consumer.
+shared `poll-failure-status.ts` tracker into the cockpit activity feed rather
+than raw `console.warn` (#1698); the tracker carries no custody, threshold, or
+corrective-action authority of its own. It publishes a transition line only on
+a failure class's first-seen, message-changed, or recovered edge -- never one
+per poll tick or per elapsed window -- and exposes the steady-state per-class
+status (running count, since-timestamp) the sticky status region renders (#1701).
+The original `poll-failure-dedup.ts` window-republish helper (#1698/#1700)
+remains in the tree, unmodified and independently tested, but is no longer
+wired to any producer: its fixed-window republish could not express a running
+count/since-timestamp without repeating a transcript entry every window, which
+is the exact defect #1701 removes. Removal of the six consumers, their focused
+tests, the REPL wiring, and this spec is the complete rollback. Rollback
+reopens #1282 C1 because the legacy JSON threshold spec would again have no
+live consumer.
 
 This carrier grants no GPU, training, checkpoint, model-quality, availability,
 #756 closure, or whole-issue #1282 closure credit. C2-C4 remain separate live

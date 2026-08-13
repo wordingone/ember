@@ -21,6 +21,7 @@ import { modeGlyph as cognitiveGlyph } from "../cognitive-mode.ts";
 import { telemetryMemoKey } from "../services/telemetry-label.ts";
 import type { TelemetryState } from "../services/telemetry-watch.ts";
 import { normalizeModelSeatState, type ModelSeatState } from "../entrypoints/model-seat.ts";
+import type { PollFailureStatusEntry } from "../services/poll-failure-status.ts";
 
 // ---------------------------------------------------------------------------
 // Public constants (preserve exactly)
@@ -344,6 +345,46 @@ export function OutageBanner({ outage }: OutageBannerProps): React.ReactElement 
 }
 
 // ---------------------------------------------------------------------------
+// PollFailureStatusPane — issue #1701: sticky per-class watcher-poller failure status.
+// services/poll-failure-status.ts tracks one running entry per failure class (memory-footprint,
+// serving-topology, ...) and publishes a transcript TRANSITION only on first-seen/message-
+// change/recovered; the steady state in between is this pane's job -- ONE updating line per
+// active class (class, message, running count, since-timestamp), never a repeated ticker row.
+// Follows DegradedBanner/OutageBanner's hook-free, hidden-when-empty convention.
+// ---------------------------------------------------------------------------
+
+/** "<glyph> [<classKey>] <message> — <count>x since <age> ago". */
+export function formatPollFailureStatusLine(entry: PollFailureStatusEntry, now: number): string {
+  const age = formatRoundtripAgeDuration(Math.max(0, now - entry.since));
+  return `⚠ [${entry.classKey}] ${entry.message} — ${entry.count}x since ${age} ago`;
+}
+
+export interface PollFailureStatusPaneProps {
+  entries: PollFailureStatusEntry[];
+  /** Current time (epoch ms); injectable for tests, defaults to Date.now(). */
+  now?: number;
+}
+
+export function PollFailureStatusPane({
+  entries,
+  now,
+}: PollFailureStatusPaneProps): React.ReactElement | null {
+  if (entries.length === 0) return null;
+  const resolvedNow = now ?? Date.now();
+  return React.createElement(
+    Box,
+    { flexDirection: "column" },
+    ...entries.map((entry) =>
+      React.createElement(
+        Text,
+        { key: entry.classKey, color: "yellow" },
+        formatPollFailureStatusLine(entry, resolvedNow),
+      ),
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
 // CoordinatorAgentStatus — multi-agent coordinator indicator (hook-free)
 // ---------------------------------------------------------------------------
 
@@ -492,6 +533,8 @@ export interface StatusLineProps {
    *  ABOVE the degraded banner — it explains WHY the model may be unreachable, so the
    *  operator reads the "planned" context before the "degraded" symptom. */
   outage?: OutageBannerState;
+  /** issue #1701: sticky per-class watcher-poller failure status; absent/empty → pane hidden. */
+  pollFailures?: PollFailureStatusEntry[];
   /** issue #239 final acceptance clause: last-successful-model-roundtrip age.
    *  Absent → indicator hidden (no guarded client wired yet); present → always rendered,
    *  healthy or degraded alike, so a wedge is visible even without a tripped circuit. */
@@ -515,6 +558,7 @@ export function StatusLine({
   modelSeat,
   degraded,
   outage,
+  pollFailures,
   roundtripAge,
   compact = false,
   width,
@@ -555,6 +599,9 @@ export function StatusLine({
       : null,
     !compact && degraded != null
       ? React.createElement(DegradedBanner, { key: "degraded", degraded })
+      : null,
+    !compact && pollFailures != null && pollFailures.length > 0
+      ? React.createElement(PollFailureStatusPane, { key: "poll-failures", entries: pollFailures })
       : null,
     !compact && effort != null
       ? React.createElement(EffortCallout, { key: "effort", effort })

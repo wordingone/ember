@@ -18,7 +18,7 @@ Consumer: `tools/ember-cli/src/services/serving-topology-census.ts`
 
 Consumer: `tools/ember-cli/src/services/serving-topology-live.ts`
 
-Consumer: `tools/ember-cli/src/services/poll-failure-dedup.ts`
+Consumer: `tools/ember-cli/src/services/poll-failure-status.ts`
 
 ## Contract
 
@@ -43,10 +43,16 @@ This is CPU/file-only topology observation. It grants no serving availability,
 restore, GPU, model, training, checkpoint, scientific-result, C3/C4, or issue
 completion credit. `NO_NEW_PARALLEL_AUTHORITY`.
 
-Poll-cadence failure diagnostics route through the shared, dedup-only
-`poll-failure-dedup.ts` helper into the cockpit activity feed rather than raw
-`console.warn` (#1698); the helper carries no drift-detection, alarm-write, or
-reconciliation authority of its own.
+Poll-cadence failure diagnostics route through the shared `poll-failure-status.ts`
+tracker into the cockpit activity feed rather than raw `console.warn` (#1698);
+the tracker carries no drift-detection, alarm-write, or reconciliation
+authority of its own. It publishes a transition line only on a failure class's
+first-seen, message-changed, or recovered edge -- never one per poll tick or
+per elapsed window -- and exposes the steady-state per-class status (running
+count, since-timestamp) the sticky status region renders (#1701). The original
+`poll-failure-dedup.ts` window-republish helper (#1698/#1700) remains in the
+tree, unmodified and independently tested, but is no longer wired to any
+producer.
 
 ## Rollback
 
