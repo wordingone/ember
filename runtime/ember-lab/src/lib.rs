@@ -388,6 +388,7 @@ pub struct JobSpec {
     restart_policy: RestartPolicy,
     maximum_job_memory_bytes: Option<u64>,
     cpu_rate_percent: Option<u32>,
+    cpu_pacing_class: DispatchCpuPacingClass,
     requires_ui_responsiveness: bool,
     dispatch_token: Option<DispatchToken>,
 }
@@ -673,6 +674,7 @@ impl JobSpec {
             restart_policy: RestartPolicy::Never,
             maximum_job_memory_bytes: None,
             cpu_rate_percent: None,
+            cpu_pacing_class: DispatchCpuPacingClass::Unpaced,
             requires_ui_responsiveness: false,
             dispatch_token: None,
         }
@@ -694,6 +696,21 @@ impl JobSpec {
 
     pub fn with_cpu_rate_percent(mut self, cpu_rate_percent: u32) -> Self {
         self.cpu_rate_percent = Some(cpu_rate_percent);
+        self
+    }
+
+    /// Declares the job's CPU *pacing contract*, which is not the same thing
+    /// as whether the host caps it. The `cpu_rate_percent` hard cap above is
+    /// host-side defense-in-depth and is applied to every managed spawn
+    /// regardless of this value -- it never comes off. This declaration only
+    /// decides whether the spawn additionally proves the cap took: `Governed`
+    /// re-reads the job object after setting it and refuses the spawn if the
+    /// kernel did not accept the requested rate, and records that proof in
+    /// the `job_prepared` receipt. `Unpaced` (the default, so an undeclared
+    /// spec claims nothing) means no pacing contract was declared and no such
+    /// proof is produced.
+    pub fn with_cpu_pacing_class(mut self, cpu_pacing_class: DispatchCpuPacingClass) -> Self {
+        self.cpu_pacing_class = cpu_pacing_class;
         self
     }
 
@@ -1908,6 +1925,7 @@ impl Daemon {
         }
         validate_dispatch_workload_profile(
             &manifest.workload_profile,
+            manifest.cpu_pacing_class,
             &manifest.args,
             manifest.maximum_job_memory_bytes,
             manifest.simulated_peak_commit_bytes,
@@ -2052,6 +2070,7 @@ impl Daemon {
         }
         validate_dispatch_workload_profile(
             &manifest.workload_profile,
+            manifest.cpu_pacing_class,
             &manifest.args,
             manifest.maximum_job_memory_bytes,
             manifest.simulated_peak_commit_bytes,
@@ -2333,6 +2352,7 @@ impl Daemon {
         )
         .with_maximum_job_memory_bytes(manifest.maximum_job_memory_bytes)
         .with_cpu_rate_percent(manifest.workload_profile.cpu_rate_percent)
+        .with_cpu_pacing_class(manifest.cpu_pacing_class)
         .with_requires_ui_responsiveness(manifest.workload_profile.requires_ui_responsiveness);
         for (key, value) in manifest.env {
             spec = spec.with_env(key, value);
@@ -2677,6 +2697,7 @@ impl Daemon {
             };
         let pid = spawned.pid();
         let identity = spawned.identity();
+        let applied_cpu_rate = spawned.applied_cpu_rate();
         let prepared = (|| -> Result<()> {
             let mut conn = self.conn()?;
             let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -2692,7 +2713,7 @@ impl Daemon {
             }
             tx.execute(
                 "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_prepared',?3)",
-                params![spec.job_id, now_ms(), json!({"pid":pid,"job_object_name":job_object_name,"cpu_rate_percent":spec.cpu_rate_percent,"requires_ui_responsiveness":spec.requires_ui_responsiveness}).to_string()],
+                params![spec.job_id, now_ms(), json!({"pid":pid,"job_object_name":job_object_name,"cpu_rate_percent":spec.cpu_rate_percent,"requires_ui_responsiveness":spec.requires_ui_responsiveness,"cpu_pacing_class":spec.cpu_pacing_class,"cpu_rate_control_verified":applied_cpu_rate.is_some(),"applied_cpu_rate":applied_cpu_rate}).to_string()],
             )?;
             if let Some(token) = &spec.dispatch_token {
                 tx.execute(
@@ -5391,6 +5412,7 @@ fn is_sha256(value: &str) -> bool {
 
 fn validate_dispatch_workload_profile(
     profile: &DispatchWorkloadProfile,
+    cpu_pacing_class: DispatchCpuPacingClass,
     args: &[String],
     maximum_job_memory_bytes: u64,
     simulated_peak_commit_bytes: u64,
@@ -5398,6 +5420,17 @@ fn validate_dispatch_workload_profile(
     if !(1..=100).contains(&profile.cpu_rate_percent) {
         return Err(EmberLabError::InvalidDispatchManifest {
             detail: "dispatch workload CPU rate must be between 1 and 100 percent".into(),
+        });
+    }
+    // A `Governed` declaration asserts a pacing contract exists. At 100 percent
+    // the hard cap admits the whole machine, so such a contract would pace
+    // nothing while still earning a `cpu_rate_control_verified` receipt --
+    // exactly the decorative-declaration problem this class was added to end.
+    // `Unpaced` keeps the full 1..=100 range: it promises nothing, and the
+    // host's blanket cap applies to it either way.
+    if cpu_pacing_class == DispatchCpuPacingClass::Governed && profile.cpu_rate_percent == 100 {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "governed CPU pacing requires a cpu_rate_percent below 100".into(),
         });
     }
     if profile.pinned_host_producers.is_empty() {
@@ -6703,6 +6736,7 @@ struct SpawnedProcess {
     pid: u32,
     main_thread_id: u32,
     identity: ProcessIdentity,
+    applied_cpu_rate: Option<u32>,
 }
 
 #[cfg(windows)]
@@ -6715,6 +6749,9 @@ impl SpawnedProcess {
     }
     fn identity(&self) -> ProcessIdentity {
         self.identity.clone()
+    }
+    fn applied_cpu_rate(&self) -> Option<u32> {
+        self.applied_cpu_rate
     }
     fn stdout_child_handle(&self) -> i64 {
         self.stdout_log_guard.raw() as isize as i64
@@ -6942,6 +6979,83 @@ fn managed_windows_ui_restrictions_all() -> u32 {
         | JOB_OBJECT_UILIMIT_EXITWINDOWS
 }
 
+/// Applies the Windows job-object CPU hard cap. This is the host's blanket
+/// defense-in-depth cap: it runs for every managed spawn, whatever pacing
+/// class was declared, and a failure here fails the spawn.
+#[cfg(windows)]
+fn set_windows_cpu_rate(job: windows_sys::Win32::Foundation::HANDLE, percent: u32) -> Result<u32> {
+    use std::mem::{size_of, zeroed};
+    use windows_sys::Win32::System::JobObjects::{
+        JobObjectCpuRateControlInformation, SetInformationJobObject,
+        JOBOBJECT_CPU_RATE_CONTROL_INFORMATION, JOB_OBJECT_CPU_RATE_CONTROL_ENABLE,
+        JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP,
+    };
+
+    if !(1..=100).contains(&percent) {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "cpu_rate_percent must be between 1 and 100".into(),
+        });
+    }
+    let expected_rate = percent * 100;
+    let mut configured: JOBOBJECT_CPU_RATE_CONTROL_INFORMATION = unsafe { zeroed() };
+    configured.ControlFlags =
+        JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP;
+    configured.Anonymous.CpuRate = expected_rate;
+    if unsafe {
+        SetInformationJobObject(
+            job,
+            JobObjectCpuRateControlInformation,
+            (&configured as *const JOBOBJECT_CPU_RATE_CONTROL_INFORMATION).cast(),
+            size_of::<JOBOBJECT_CPU_RATE_CONTROL_INFORMATION>() as u32,
+        )
+    } == 0
+    {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    Ok(expected_rate)
+}
+
+/// Applies the cap, then re-reads it back off the job object and refuses the
+/// spawn unless the kernel reports exactly what was requested. This is the
+/// extra proof a `Governed` pacing contract earns; `Unpaced` spawns get the
+/// cap from [`set_windows_cpu_rate`] without this reopen.
+#[cfg(windows)]
+fn configure_and_verify_windows_cpu_rate(
+    job: windows_sys::Win32::Foundation::HANDLE,
+    percent: u32,
+) -> Result<u32> {
+    use std::mem::{size_of, zeroed};
+    use windows_sys::Win32::System::JobObjects::{
+        JobObjectCpuRateControlInformation, QueryInformationJobObject,
+        JOBOBJECT_CPU_RATE_CONTROL_INFORMATION, JOB_OBJECT_CPU_RATE_CONTROL_ENABLE,
+        JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP,
+    };
+
+    let expected_rate = set_windows_cpu_rate(job, percent)?;
+    let expected_flags = JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP;
+    let mut reopened: JOBOBJECT_CPU_RATE_CONTROL_INFORMATION = unsafe { zeroed() };
+    if unsafe {
+        QueryInformationJobObject(
+            job,
+            JobObjectCpuRateControlInformation,
+            (&mut reopened as *mut JOBOBJECT_CPU_RATE_CONTROL_INFORMATION).cast(),
+            size_of::<JOBOBJECT_CPU_RATE_CONTROL_INFORMATION>() as u32,
+            std::ptr::null_mut(),
+        )
+    } == 0
+    {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    let reopened_rate = unsafe { reopened.Anonymous.CpuRate };
+    if reopened.ControlFlags != expected_flags || reopened_rate != expected_rate {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "Windows job object CPU hard cap did not reopen with the requested value"
+                .into(),
+        });
+    }
+    Ok(reopened_rate)
+}
+
 #[cfg(windows)]
 fn spawn_managed(
     spec: &JobSpec,
@@ -6953,11 +7067,9 @@ fn spawn_managed(
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Foundation::{DuplicateHandle, DUPLICATE_SAME_ACCESS};
     use windows_sys::Win32::System::JobObjects::{
-        CreateJobObjectW, JobObjectBasicUIRestrictions, JobObjectCpuRateControlInformation,
-        JobObjectExtendedLimitInformation, SetInformationJobObject, TerminateJobObject,
-        JOBOBJECT_BASIC_UI_RESTRICTIONS, JOBOBJECT_CPU_RATE_CONTROL_INFORMATION,
-        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_CPU_RATE_CONTROL_ENABLE,
-        JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP, JOB_OBJECT_LIMIT_JOB_MEMORY,
+        CreateJobObjectW, JobObjectBasicUIRestrictions, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, TerminateJobObject, JOBOBJECT_BASIC_UI_RESTRICTIONS,
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_JOB_MEMORY,
         JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     };
     use windows_sys::Win32::System::Threading::{
@@ -6972,10 +7084,6 @@ fn spawn_managed(
         .map_err(|_| EmberLabError::InvalidDispatchManifest {
             detail: "maximum job memory does not fit the current Windows address space".into(),
         })?;
-    let cpu_rate = spec
-        .cpu_rate_percent
-        .map(|percent| percent.saturating_mul(100));
-
     unsafe { windows_sys::Win32::Foundation::SetLastError(0) };
     let name = wide(job_name);
     let job = unsafe { CreateJobObjectW(std::ptr::null(), name.as_ptr()) };
@@ -7010,25 +7118,33 @@ fn spawn_managed(
         return Err(error.into());
     }
 
-    if let Some(cpu_rate) = cpu_rate {
-        let mut cpu: JOBOBJECT_CPU_RATE_CONTROL_INFORMATION = unsafe { zeroed() };
-        cpu.ControlFlags =
-            JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP;
-        cpu.Anonymous.CpuRate = cpu_rate;
-        if unsafe {
-            SetInformationJobObject(
-                job,
-                JobObjectCpuRateControlInformation,
-                (&cpu as *const JOBOBJECT_CPU_RATE_CONTROL_INFORMATION).cast(),
-                size_of::<JOBOBJECT_CPU_RATE_CONTROL_INFORMATION>() as u32,
-            )
-        } == 0
-        {
-            let error = std::io::Error::last_os_error();
-            unsafe { windows_sys::Win32::Foundation::CloseHandle(job) };
-            return Err(error.into());
+    // The hard cap itself is unconditional -- it is the host's own floor and
+    // does not depend on what the manifest declared. The pacing class only
+    // decides whether the spawn additionally proves the cap took: `Governed`
+    // re-reads it off the job object and refuses to spawn on a mismatch,
+    // yielding the rate the kernel actually reported. `Unpaced` declared no
+    // contract, so no proof is produced and `applied_cpu_rate` stays `None`
+    // rather than asserting a value that was never read back.
+    let applied_cpu_rate = match spec.cpu_rate_percent {
+        Some(cpu_rate_percent) => {
+            let outcome = match spec.cpu_pacing_class {
+                DispatchCpuPacingClass::Governed => {
+                    configure_and_verify_windows_cpu_rate(job, cpu_rate_percent).map(Some)
+                }
+                DispatchCpuPacingClass::Unpaced => {
+                    set_windows_cpu_rate(job, cpu_rate_percent).map(|_| None)
+                }
+            };
+            match outcome {
+                Ok(applied) => applied,
+                Err(error) => {
+                    unsafe { windows_sys::Win32::Foundation::CloseHandle(job) };
+                    return Err(error);
+                }
+            }
         }
-    }
+        None => None,
+    };
 
     // Windows/UI surface wall (issue #898): a job that has not declared
     // `requires_ui_responsiveness` (only the closed Cockpit workload profile
@@ -7180,6 +7296,7 @@ fn spawn_managed(
         pid: info.dwProcessId,
         main_thread_id: info.dwThreadId,
         identity,
+        applied_cpu_rate,
     })
 }
 #[cfg(windows)]
@@ -7724,6 +7841,9 @@ impl SpawnedProcess {
     fn identity(&self) -> ProcessIdentity {
         self.identity.clone()
     }
+    fn applied_cpu_rate(&self) -> Option<u32> {
+        None
+    }
     fn stdout_child_handle(&self) -> i64 {
         0
     }
@@ -7891,6 +8011,19 @@ mod dispatch_binding_snapshot_tests {
         // windows-sys bump that adds a new bit is caught here, not silently
         // left unrestricted.
         assert_eq!(restrictions, 0x0000_00FF);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn managed_windows_cpu_rate_is_reopened_from_job_object() {
+        use windows_sys::Win32::Foundation::CloseHandle;
+        use windows_sys::Win32::System::JobObjects::CreateJobObjectW;
+
+        let job = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
+        assert!(!job.is_null());
+        let applied = configure_and_verify_windows_cpu_rate(job, 25).unwrap();
+        assert_eq!(applied, 2_500);
+        unsafe { CloseHandle(job) };
     }
 
     #[test]
