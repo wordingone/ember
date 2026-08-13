@@ -9,7 +9,10 @@ ROOT="$(git rev-parse --show-toplevel)"
 REMOTE="${1:-origin}"
 PUSH_REMOTE_URL="$(git config --get remote.$REMOTE.url 2>/dev/null || echo '')"
 
-bash "$ROOT/tools/run-python-hidden.sh" "$ROOT/scripts/worktree_lifecycle.py" audit --strict --quiet || exit $?
+# --allow-modified-self (#1696): see .githooks/pre-commit for why this hook's own
+# invocation is exempted -- it validates what is about to leave the machine, which for
+# a commit that itself edited this file is a legitimate, intended state.
+bash "$ROOT/tools/run-python-hidden.sh" "$ROOT/scripts/worktree_lifecycle.py" --allow-modified-self audit --strict --quiet || exit $?
 
 REMOTE_MASTER="$REMOTE/master"
 if git rev-parse --verify -q "$REMOTE_MASTER" >/dev/null; then
