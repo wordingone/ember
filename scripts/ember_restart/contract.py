@@ -221,6 +221,11 @@ def validate_r1_warm100_entry(
     always binds against the real canonical checkout and the real governed
     remote.
 
+    ``source_binding`` attests content identity only -- this exact source
+    tree, at this exact commit, from a canonical-or-managed root -- not
+    minting-authority identity; it says nothing about which validator
+    instance produced the receipt.
+
     WARNING: ``source_binding`` is compared by exact-dict equality against a
     binding re-derived fresh at THIS call (a live ``ls-remote`` against
     ``governed_remote``, not a copy of what the receipt was minted with).

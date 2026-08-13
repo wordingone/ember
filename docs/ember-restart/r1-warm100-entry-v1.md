@@ -57,6 +57,11 @@ The result is recorded in a closed `source_binding` block:
 }
 ```
 
+This block attests content identity only -- that this exact source tree, at
+this exact commit, came from a canonical-or-managed root -- not
+minting-authority identity: it says nothing about which validator instance
+produced the receipt.
+
 `canonical_root`, `governed_remote`, and `governed_ref` are library-only
 parameters on `build_r1_warm100_entry`/`validate_r1_warm100_entry`, used by
 tests to bind against a synthetic canonical checkout or a hermetic,
