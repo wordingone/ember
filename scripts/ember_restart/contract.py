@@ -221,6 +221,18 @@ def validate_r1_warm100_entry(
     always binds against the real canonical checkout and the real governed
     remote.
 
+    MUTATING (issue #1708): despite the name and its read-only call sites
+    (re-validation after mint), this is not read-only. It reaches
+    ``source_authority.require_published_ancestry`` (via
+    ``source_authority.bind_source_identity``), which runs ``git fetch``
+    into ``source_root``'s object store whenever the governed master commit
+    is not already present locally -- a "just validate this receipt" call
+    can perform a real network-and-object-store write. See
+    ``require_published_ancestry`` for the census-window refusal
+    (``EMBER_CENSUS_WINDOW`` env var, or a ``census-window.lock`` marker at
+    ``source_root``'s git common directory) that holds this write closed
+    while a census window is declared.
+
     ``source_binding`` attests content identity only -- this exact source
     tree, at this exact commit, from a canonical-or-managed root -- not
     minting-authority identity; it says nothing about which validator
