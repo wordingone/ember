@@ -722,3 +722,210 @@ def test_identity_before_network_ordering_locked_by_sentinel_remote(tmp_path: Pa
             governed_remote=sentinel_remote,
             **_source_paths(foreign),
         )
+
+
+@pytest.fixture
+def attacker_remote(tmp_path: Path) -> Path:
+    """A second, genuinely independent bare remote: the spoof target.
+
+    Divergent history from governed_remote (its own init, its own seed
+    commit) -- a real config rewrite that redirects governed_remote's URL
+    here would resolve to THIS remote's tip, not governed_remote's, which is
+    exactly the fabricated-history spoof issue #1706 (F2) describes.
+    """
+    remote = tmp_path / "attacker.git"
+    seed = tmp_path / "attacker-seed"
+    subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True)
+    subprocess.run(["git", "init", "-b", "master", str(seed)], check=True, capture_output=True)
+    _seed_governed_files(seed, variant="attacker-spoofed")
+    _git(seed, "add", "-A")
+    _git(seed, "commit", "-m", "attacker seed")
+    _git(seed, "remote", "add", "origin", str(remote))
+    _git(seed, "push", "-u", "origin", "master")
+    return remote
+
+
+def test_local_config_insteadof_rewrite_is_defeated_by_resolve_governed_master(
+    tmp_path: Path, canonical: Path, governed_remote: Path, attacker_remote: Path
+):
+    """Issue #1706 (F2), local `.git/config` vector.
+
+    RED companion first: canonical's OWN local git config, rewritten with a
+    real `url.*.insteadOf` pointing governed_remote's URL at attacker_remote,
+    is proven to actually redirect a plain, unhardened `git ls-remote -C
+    canonical <governed_remote>` call to the attacker's history -- the exact
+    pre-#1706 call shape `_run_git`/`resolve_governed_master` used. This is
+    not asserted against a mock; it is the real vulnerability, reproduced.
+
+    GREEN: the real, current `resolve_governed_master` -- called against the
+    SAME canonical repo, with the SAME rewrite still in canonical's config --
+    resolves to governed_remote's real tip, not attacker_remote's, because it
+    runs with no repository context at all and therefore never reads
+    canonical's local config.
+    """
+    from scripts.ember_restart import source_authority
+
+    real_master = _git(governed_remote, "rev-parse", "refs/heads/master")
+    attacker_master = _git(attacker_remote, "rev-parse", "refs/heads/master")
+    assert real_master != attacker_master
+
+    _git(canonical, "config", f"url.{attacker_remote}.insteadOf", str(governed_remote))
+
+    red = subprocess.run(
+        ["git", "-C", str(canonical), "ls-remote", "--exit-code", str(governed_remote), "refs/heads/master"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    red_sha = red.stdout.split("\t", 1)[0].strip()
+    assert red_sha == attacker_master, (
+        "the local insteadOf rewrite should have redirected the unhardened call "
+        "to attacker_remote -- if this fails, the vulnerability setup itself is wrong"
+    )
+
+    resolved = source_authority.resolve_governed_master(canonical, str(governed_remote))
+    assert resolved == real_master
+    assert resolved != attacker_master
+
+
+def test_env_injected_config_insteadof_rewrite_is_defeated_by_resolve_governed_master(
+    tmp_path: Path,
+    canonical: Path,
+    governed_remote: Path,
+    attacker_remote: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Issue #1706 (F2), inherited GIT_CONFIG_COUNT/KEY_*/VALUE_* vector.
+
+    RED companion: the SAME insteadOf rewrite, injected via inherited
+    GIT_CONFIG_COUNT/GIT_CONFIG_KEY_0/GIT_CONFIG_VALUE_0 rather than local
+    `.git/config`, is proven to redirect an unhardened call too -- this is a
+    genuinely different mechanism from the local-config vector above (no
+    repository, no `-C`, is needed for this one to work at all), so it is
+    exercised on its own rather than assumed to be covered by the first test.
+
+    GREEN: `resolve_governed_master`, called with these same variables still
+    present in the process environment (monkeypatch.setenv, not a mock),
+    resolves to the real tip -- because `hardened_git_env` strips exactly
+    these variables before the subprocess is spawned.
+    """
+    from scripts.ember_restart import source_authority
+
+    real_master = _git(governed_remote, "rev-parse", "refs/heads/master")
+    attacker_master = _git(attacker_remote, "rev-parse", "refs/heads/master")
+    assert real_master != attacker_master
+
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", f"url.{attacker_remote}.insteadOf")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", str(governed_remote))
+
+    red = subprocess.run(
+        ["git", "ls-remote", "--exit-code", str(governed_remote), "refs/heads/master"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    red_sha = red.stdout.split("\t", 1)[0].strip()
+    assert red_sha == attacker_master, (
+        "the env-injected insteadOf rewrite should have redirected the unhardened "
+        "call -- if this fails, the vulnerability setup itself is wrong"
+    )
+
+    resolved = source_authority.resolve_governed_master(canonical, str(governed_remote))
+    assert resolved == real_master
+    assert resolved != attacker_master
+
+
+def test_inherited_git_config_global_rewrite_is_defeated_by_resolve_governed_master(
+    tmp_path: Path,
+    canonical: Path,
+    governed_remote: Path,
+    attacker_remote: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Issue #1706 (F2), inherited GIT_CONFIG_GLOBAL vector.
+
+    RED companion: pointing GIT_CONFIG_GLOBAL at a real, on-disk global
+    config file carrying the same insteadOf rewrite is proven to redirect an
+    unhardened call. GREEN: resolve_governed_master, with the SAME
+    GIT_CONFIG_GLOBAL still set in the environment, resolves to the real
+    tip -- hardened_git_env overrides GIT_CONFIG_GLOBAL to the null device
+    unconditionally.
+    """
+    from scripts.ember_restart import source_authority
+
+    real_master = _git(governed_remote, "rev-parse", "refs/heads/master")
+    attacker_master = _git(attacker_remote, "rev-parse", "refs/heads/master")
+    assert real_master != attacker_master
+
+    malicious_global = tmp_path / "malicious-global-gitconfig"
+    subprocess.run(
+        [
+            "git",
+            "config",
+            "--file",
+            str(malicious_global),
+            f"url.{attacker_remote}.insteadOf",
+            str(governed_remote),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(malicious_global))
+
+    red = subprocess.run(
+        ["git", "ls-remote", "--exit-code", str(governed_remote), "refs/heads/master"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    red_sha = red.stdout.split("\t", 1)[0].strip()
+    assert red_sha == attacker_master, (
+        "the inherited GIT_CONFIG_GLOBAL rewrite should have redirected the "
+        "unhardened call -- if this fails, the vulnerability setup itself is wrong"
+    )
+
+    resolved = source_authority.resolve_governed_master(canonical, str(governed_remote))
+    assert resolved == real_master
+    assert resolved != attacker_master
+
+
+def test_local_config_insteadof_rewrite_on_fetch_fails_closed_not_silently_wrong(
+    tmp_path: Path, canonical: Path, governed_remote: Path, attacker_remote: Path
+):
+    """Issue #1706 (F2), fetch leg (require_published_ancestry), content-addressing.
+
+    canonical's local config redirects governed_remote's URL to
+    attacker_remote for THIS test too. Unlike resolve_governed_master, the
+    fetch inside require_published_ancestry still binds to canonical (it
+    writes into canonical's object store), so this rewrite is not excluded
+    the same way -- proven here by first showing the rewrite really is live
+    for a plain fetch. What keeps the SYSTEM safe regardless is content
+    addressing: attacker_remote does not (cannot, short of a SHA-1
+    preimage) hold an object matching new_master's exact hash, since that
+    hash was minted on governed_remote's real, independent history. So the
+    redirected fetch fails to find the object, and require_published_ancestry
+    fails closed -- it does not silently accept attacker history under the
+    real sha.
+    """
+    from scripts.ember_restart import source_authority
+
+    new_master = _advance_governed_master(tmp_path, governed_remote)
+    canonical_head = _git(canonical, "rev-parse", "HEAD")
+
+    _git(canonical, "config", f"url.{attacker_remote}.insteadOf", str(governed_remote))
+
+    red = subprocess.run(
+        ["git", "-C", str(canonical), "fetch", "--no-tags", "--quiet", str(governed_remote), new_master],
+        capture_output=True,
+        text=True,
+    )
+    assert red.returncode != 0, (
+        "the redirected fetch should fail (attacker_remote does not have "
+        "new_master's object) -- if this fails, the rewrite setup itself is wrong"
+    )
+
+    with pytest.raises(ValueError, match="unavailable"):
+        source_authority.require_published_ancestry(
+            canonical, canonical_head, new_master, governed_remote=str(governed_remote)
+        )
