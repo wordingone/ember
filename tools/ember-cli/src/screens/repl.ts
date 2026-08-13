@@ -90,8 +90,10 @@ import {
 } from "../components/operator-surface-pane.ts";
 import {
   getActivityFeedState,
+  publishActivityFeedInfrastructureFailure,
   startActivityFeed,
 }                                        from "../services/activity-feed.ts";
+import { createPollFailureDeduper, type PollFailureDeduper } from "../services/poll-failure-dedup.ts";
 import { advanceActivityTranscript }      from "../services/activity-transcript-window.ts";
 import { useModelMetricsPoller }         from "../services/model-metrics-poller.ts";
 import { useCircuitBreakerBanner, useRoundtripAge } from "../services/circuit-breaker-banner-poller.ts";
@@ -188,6 +190,9 @@ export const COMPACTION_TOKEN_THRESHOLD = 180_000;
 export const COMPACTION_INDICATOR_TEXT  = "Razzle-dazzling...";
 export const ANALYTICS_SESSION_START    = "ember_repl_session_start";
 export const ANALYTICS_SESSION_END      = "ember_repl_session_end";
+
+/** #1698: window a repeated watcher-poller failure class collapses into one activity-feed line. */
+export const POLL_FAILURE_DEDUP_INTERVAL_MS = 15_000;
 
 /** Width budget for the in-window provenance/agent pane. */
 export function operatorSurfaceWidth(terminalColumns: number): number {
@@ -881,6 +886,23 @@ export function ReplScreen({
     });
   }
 
+  // #1698: the memory-footprint and serving-topology watcher pollers below default to a
+  // raw console.warn on every failed tick when no error handler is supplied -- that write
+  // bypasses Ink's own render stream entirely (Ink only ever writes through the stream this
+  // component is mounted with, never the process's raw stdout/stderr), so at 1s/5s poll
+  // cadence a persistently-failing poller (e.g. OFFLINE, no EMBER_LAB_PIPE) bled dozens of
+  // interleaved raw fragments into the terminal within minutes, overwriting arbitrary panel
+  // cells. Route every poller failure through this deduper into the activity feed instead --
+  // at most one line per failure class per POLL_FAILURE_DEDUP_INTERVAL_MS, carrying the
+  // suppressed count forward, same channel notifyOperator below already uses correctly.
+  const pollFailureDeduperRef = useRef<PollFailureDeduper | null>(null);
+  if (!pollFailureDeduperRef.current) {
+    pollFailureDeduperRef.current = createPollFailureDeduper({
+      intervalMs: POLL_FAILURE_DEDUP_INTERVAL_MS,
+      publish: (text) => { publishActivityFeedInfrastructureFailure(text); },
+    });
+  }
+
   // #447: cockpit self-restart event -- read the PREVIOUS session's heartbeat row (if any)
   // exactly once, before this session's own first write (the per-second tick below) overwrites
   // it. A lazy useState initializer runs on mount only, and runs AFTER the ref assignment above
@@ -921,10 +943,31 @@ export function ReplScreen({
       supervisor = createCockpitMemoryFootprintSupervisor({
         repoRoot,
         receiptPath: emberStatePath(repoRoot, "memory-footprint-trips.jsonl"),
+        // #1698: route every poll-cadence failure through the deduped activity feed
+        // instead of the library defaults' raw console.warn (see the deduper's own
+        // comment above for why a raw write here corrupts the TUI framebuffer).
+        onOwnershipError: (error) => {
+          pollFailureDeduperRef.current?.report(
+            "memory-footprint:ownership",
+            `[memory-footprint] Ember Lab process identity unavailable: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        },
+        onPollError: (error) => {
+          pollFailureDeduperRef.current?.report(
+            "memory-footprint:poll",
+            `[memory-footprint] poll failed: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        },
+        warn: (message) => {
+          pollFailureDeduperRef.current?.report("memory-footprint:trip", message);
+        },
       });
       supervisor.start();
     } catch (error) {
-      console.warn(
+      pollFailureDeduperRef.current?.report(
+        "memory-footprint:inert",
         `[memory-footprint] supervisor is inert: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
@@ -955,10 +998,19 @@ export function ReplScreen({
             },
           ]);
         },
+        // #1698: route poll-cadence failures through the deduped activity feed
+        // instead of the library default's raw console.warn.
+        onPollError: (error) => {
+          pollFailureDeduperRef.current?.report(
+            "serving-topology:poll",
+            `[serving-topology] poll failed: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        },
       });
       topologyService.start();
     } catch (error) {
-      console.warn(
+      pollFailureDeduperRef.current?.report(
+        "serving-topology:inert",
         `[serving-topology] supervisor is inert: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
