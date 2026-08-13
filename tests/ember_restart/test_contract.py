@@ -567,8 +567,21 @@ def test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary(tmp_pa
         config_path=REPO_ROOT / "configs/ember-restart-3b.json",
         fixed_prior_path=REPO_ROOT / "manifests/ember-restart-3b/fixed-prior-manifest-v1.json",
         trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
+        # Hermetic, no-network source-identity binding (issue #1296 P1): point
+        # the governed-remote leg at this same checkout via file transport and
+        # ask for HEAD rather than refs/heads/master, since a CI checkout may
+        # not materialize a local master branch ref. canonical_root is left at
+        # its default (self-anchor), which also resolves to this checkout.
+        governed_remote=str(REPO_ROOT),
+        governed_ref="HEAD",
     )
-    assert validate_r1_warm100_entry(payload, source_root=REPO_ROOT, manifest_path=manifest_path)
+    assert validate_r1_warm100_entry(
+        payload,
+        source_root=REPO_ROOT,
+        manifest_path=manifest_path,
+        governed_remote=str(REPO_ROOT),
+        governed_ref="HEAD",
+    )
     assert payload["entry"] == "WARM-100"
     assert payload["result"] == "PREP_ONLY"
     assert payload["claim_boundary"] == {
@@ -578,6 +591,11 @@ def test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary(tmp_pa
         "capability": False,
         "benchmark": False,
     }
+    assert payload["source_binding"]["canonical_common_dir_bound"] is True
+    assert payload["source_binding"]["worktree_identity"] in {"MAIN", "MANAGED", "LEGACY"}
+    assert payload["source_binding"]["governed_remote"] == str(REPO_ROOT)
+    assert payload["source_binding"]["remote_master_sha"] == manifest["source_commit"]
+    assert payload["source_binding"]["ancestry"] == "EQUAL"
 
     for mutate in (
         lambda candidate: candidate["dispatch"].update({"authority": "standalone-launcher"}),
@@ -588,7 +606,13 @@ def test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary(tmp_pa
         tampered = json.loads(json.dumps(payload))
         mutate(tampered)
         try:
-            validate_r1_warm100_entry(tampered, source_root=REPO_ROOT, manifest_path=manifest_path)
+            validate_r1_warm100_entry(
+                tampered,
+                source_root=REPO_ROOT,
+                manifest_path=manifest_path,
+                governed_remote=str(REPO_ROOT),
+                governed_ref="HEAD",
+            )
         except ValueError:
             continue
         raise AssertionError("tampered R1 entry was accepted")
@@ -649,6 +673,15 @@ def test_r1_warm100_entry_rejects_dirty_source_tree(tmp_path: Path):
 
 
 def test_r1_warm100_entry_cli_emits_path_free_receipt(tmp_path: Path):
+    """Pure CLI invocation, no injection: the CLI exposes no
+    --canonical-root/--governed-remote override (issue #1296 P1 deliberately
+    keeps the binding un-overridable from the command line), so this test's
+    green mint depends on the executing checkout's HEAD actually being
+    published (ancestor-or-equal) on the real governed remote. That is the
+    production shape: on a checked-out master (ci-nightly) HEAD IS the
+    published tip; on a feature branch it holds as long as the branch point
+    itself is published history, which is true for a normal, unmerged PR.
+    """
     manifest_path = _candidate_manifest(tmp_path)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["source_commit"] = _current_source_commit()
@@ -679,9 +712,12 @@ def test_r1_warm100_entry_cli_emits_path_free_receipt(tmp_path: Path):
     )
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
-    assert payload["schema"] == "ember-r1-warm100-entry-v1"
+    assert payload["schema"] == "ember-r1-warm100-entry-v2"
     assert payload["result"] == "PREP_ONLY"
     assert all("\\" not in row["path"] and ":" not in row["path"] for row in payload["source_files"].values())
+    assert payload["source_binding"]["canonical_common_dir_bound"] is True
+    assert payload["source_binding"]["worktree_identity"] in {"MAIN", "MANAGED", "LEGACY"}
+    assert payload["source_binding"]["ancestry"] in {"EQUAL", "ANCESTOR"}
 
 
 def test_r1_warm100_entry_cli_refusal_is_content_addressed(tmp_path: Path):
