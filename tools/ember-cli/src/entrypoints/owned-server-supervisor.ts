@@ -358,10 +358,13 @@ export function validateOwnedDispatchManifest(identity: OwnedModelIdentity, valu
     throw new Error("dispatch manifest fields are not closed");
   }
   if (manifest["schema_version"] !== "ember-lab-dispatch-manifest-v3") throw new Error("dispatch manifest schema is not ember-lab-dispatch-manifest-v3");
-  // owned_serving's visible surface exists only through the cockpit contract, and nothing
-  // enforces CPU pacing for it yet (truth-declared, not aspirational).
-  if (windowContract !== "cockpit_hosted") {
-    throw new Error("owned server dispatch requires the cockpit_hosted window contract");
+  // The owned_serving spawn itself is headless (matches the pre-existing
+  // requires_ui_responsiveness === false invariant enforced below) -- the cockpit is a
+  // separate process (MemoryProcessClass "cockpit" vs "brain_server") that watches an owned
+  // seat, it is not the owned seat's own window. Only DispatchWorkloadProfileId::Cockpit
+  // spawns declare cockpit_hosted; nothing today produces that profile.
+  if (windowContract !== "headless_no_windows") {
+    throw new Error("owned server dispatch requires the headless_no_windows window contract");
   }
   if (cpuPacingClass !== "unpaced") {
     throw new Error("owned server dispatch does not declare CPU pacing enforcement yet");

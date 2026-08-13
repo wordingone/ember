@@ -384,7 +384,7 @@ describe("owned server supervisor", () => {
       program: { path: command.executable, sha256: "f".repeat(64) },
       args: command.args,
       cpu_pacing_class: "unpaced",
-      window_contract: "cockpit_hosted",
+      window_contract: "headless_no_windows",
       env: {},
       bindings: [
         { kind: "config", path: launch.modelConfigPath, sha256: owned.modelConfigSha256 },
@@ -539,7 +539,7 @@ describe("owned server supervisor", () => {
       program: { path: command.executable, sha256: "f".repeat(64) },
       args: command.args,
       cpu_pacing_class: "unpaced",
-      window_contract: "cockpit_hosted",
+      window_contract: "headless_no_windows",
       env: {},
       bindings: [
         { kind: "config", path: launch.modelConfigPath, sha256: owned.modelConfigSha256 },
@@ -600,7 +600,7 @@ describe("owned server supervisor", () => {
       program: { path: command.executable, sha256: "f".repeat(64) },
       args: command.args,
       cpu_pacing_class: "unpaced",
-      window_contract: "cockpit_hosted",
+      window_contract: "headless_no_windows",
       env: {},
       bindings: [
         { kind: "config", path: launch.modelConfigPath, sha256: owned.modelConfigSha256 },
@@ -627,10 +627,12 @@ describe("owned server supervisor", () => {
     )).toThrow("window_contract: invalid value \"floating\" (legal values: headless_no_windows, cockpit_hosted)");
 
     // A legal enum member that is simply the wrong value for this owned_serving authority
-    // gets the narrower business-rule refusal, not a fabricated "invalid value" claim.
+    // gets the narrower business-rule refusal, not a fabricated "invalid value" claim. The
+    // owned_serving spawn is headless (requires_ui_responsiveness === false, enforced below) --
+    // cockpit_hosted is reserved for DispatchWorkloadProfileId::Cockpit, a distinct profile.
     expect(() => validateOwnedDispatchManifest(
-      owned, { ...base, window_contract: "headless_no_windows" }, "e".repeat(40),
-    )).toThrow("owned server dispatch requires the cockpit_hosted window contract");
+      owned, { ...base, window_contract: "cockpit_hosted" }, "e".repeat(40),
+    )).toThrow("owned server dispatch requires the headless_no_windows window contract");
   });
   it("surfaces a real asynchronous spawn error for a missing executable", async () => {
     const missingExecutable = identity();
