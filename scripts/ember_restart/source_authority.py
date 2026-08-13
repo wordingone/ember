@@ -132,13 +132,30 @@ def require_canonical_source_root(source_root: Path, *, canonical_root: Path) ->
 
     lifecycle = _load_worktree_lifecycle()
 
-    # Self-identity short-circuit: source_root literally IS canonical_root.
-    # This must work with no worktree-lifecycle registry installed at all
-    # (e.g. a fresh CI clone that has never run `worktree_lifecycle.py
-    # install`) -- the self-anchor is canonical by construction, not by
-    # registry membership.
-    if lifecycle.path_key(source_toplevel) == lifecycle.path_key(canonical_toplevel):
-        return {"worktree_identity": "MAIN"}
+    # MAIN determination: source_root owns its own common dir directly. A
+    # genuine main checkout's (or a fresh, non-worktree clone's) `.git` is a
+    # real directory that IS the common dir; `git worktree add` -- ad-hoc or
+    # lifecycle-managed alike -- produces a `.git` FILE that points
+    # elsewhere. This must work with no worktree-lifecycle registry
+    # installed at all (e.g. a fresh CI clone that has never run
+    # `worktree_lifecycle.py install`) -- a genuine main checkout is
+    # canonical by construction, not by registry membership.
+    #
+    # The prior check instead compared source_toplevel to canonical_toplevel
+    # (source_root literally IS canonical_root). That is trivially true when
+    # an ad-hoc `git worktree add` invokes ITS OWN copy of this validator --
+    # canonical_root self-anchors to wherever the executing bytes live,
+    # which is the ad-hoc worktree itself -- and short-circuited straight to
+    # MAIN without ever consulting the registry: exactly the "ad-hoc
+    # worktree refused" guarantee this module claims to enforce (found in
+    # review, issue #1296).
+    own_git_entry = Path(source_toplevel) / ".git"
+    if own_git_entry.is_dir():
+        try:
+            if own_git_entry.resolve(strict=True) == source_common:
+                return {"worktree_identity": "MAIN"}
+        except OSError:
+            pass
 
     state_path = canonical_common / lifecycle.STATE_NAME
     try:

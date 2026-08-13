@@ -441,6 +441,93 @@ def test_positive_control_main_and_managed_worktree_mint_green(
     )
 
 
+def test_self_invocation_from_ad_hoc_worktree_is_refused(
+    tmp_path: Path, canonical: Path, managed_worktree: Path
+):
+    """Variant 9 (Q1 finding, 2026-08-12 review): the exact geometry the
+    CLI's production shape produces when an operator stands inside an
+    ad-hoc `git worktree add` and runs ITS OWN copy of the validator --
+    canonical_root self-anchors to wherever the executing bytes live (the
+    CLI never exposes --canonical-root), which is the ad-hoc worktree
+    itself, so canonical_root == source_root trivially. The prior MAIN
+    check compared source_toplevel to canonical_toplevel and returned MAIN
+    on that equality alone, skipping the registry entirely -- exactly the
+    "ad-hoc worktree refused" guarantee this module claims to enforce.
+    Depends on managed_worktree only to guarantee canonical's registry file
+    exists (precedent: test_unmanaged_worktree_is_refused).
+    """
+    from scripts.ember_restart.contract import build_r1_warm100_entry
+
+    ad_hoc = tmp_path / "ad-hoc-self-invoke"
+    _git(canonical, "worktree", "add", "-b", "ad-hoc-self-invoke-branch", str(ad_hoc), "HEAD")
+    ad_hoc_head = _git(ad_hoc, "rev-parse", "HEAD")
+    manifest_path = _manifest_at(tmp_path, ad_hoc_head)
+
+    with pytest.raises(ValueError, match="managed-worktree"):
+        build_r1_warm100_entry(
+            manifest_path,
+            source_commit=ad_hoc_head,
+            source_root=ad_hoc,
+            trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
+            canonical_root=ad_hoc,
+            **_source_paths(ad_hoc),
+        )
+
+
+def test_canonical_on_feature_branch_or_detached_head_binds_correctly(
+    tmp_path: Path, canonical: Path, governed_remote: Path
+):
+    """Variant 11 (review requirement, prompted by a real incident: the
+    canonical checkout sat on an unrelated feature branch for several days).
+    The canonical checkout's own local branch state must never produce a
+    wrong or silently-accepted binding.
+    Detached at the published tip mints correctly -- B1's git-shape check
+    and B2's remote-contact check are both indifferent to local branch
+    state. A named feature branch carrying a genuinely new, unpublished
+    commit fails closed on ancestry: spurious refusal is acceptable, silent
+    acceptance or binding to the wrong ref is not.
+    """
+    from scripts.ember_restart.contract import build_r1_warm100_entry
+
+    published_tip = _git(canonical, "rev-parse", "HEAD")
+    _git(canonical, "checkout", "--detach", published_tip)
+    detached_head = _git(canonical, "rev-parse", "HEAD")
+    assert detached_head == published_tip
+
+    manifest_path = _manifest_at(tmp_path / "detached-manifest", detached_head)
+    payload = build_r1_warm100_entry(
+        manifest_path,
+        source_commit=detached_head,
+        source_root=canonical,
+        trusted_verifier_registry=manifest_path.parent / "trusted-verifiers.json",
+        canonical_root=canonical,
+        governed_remote=str(governed_remote),
+        **_source_paths(canonical),
+    )
+    assert payload["source_binding"]["worktree_identity"] == "MAIN"
+    assert payload["source_binding"]["ancestry"] == "EQUAL"
+    assert payload["source_binding"]["remote_master_sha"] == published_tip
+
+    _git(canonical, "checkout", "-b", "feature/six-day-codex-branch")
+    (canonical / "local-only.txt").write_text("unpublished feature work\n", encoding="utf-8")
+    _git(canonical, "add", "-A")
+    _git(canonical, "commit", "-m", "unpublished feature-branch commit")
+    feature_head = _git(canonical, "rev-parse", "HEAD")
+    assert feature_head != published_tip
+    manifest_path_2 = _manifest_at(tmp_path / "feature-manifest", feature_head)
+
+    with pytest.raises(ValueError, match="publish"):
+        build_r1_warm100_entry(
+            manifest_path_2,
+            source_commit=feature_head,
+            source_root=canonical,
+            trusted_verifier_registry=manifest_path_2.parent / "trusted-verifiers.json",
+            canonical_root=canonical,
+            governed_remote=str(governed_remote),
+            **_source_paths(canonical),
+        )
+
+
 def test_foreign_repo_cli_refusal_is_content_addressed(tmp_path: Path, foreign: Path):
     """CLI twin (production shape, no injection): the CLI's self-anchor is
     whatever checkout is actually executing contract.py, so a foreign

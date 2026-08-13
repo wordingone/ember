@@ -220,6 +220,21 @@ def validate_r1_warm100_entry(
     injection seam for tests (issue #1296 P1); the CLI never exposes them and
     always binds against the real canonical checkout and the real governed
     remote.
+
+    WARNING: ``source_binding`` is compared by exact-dict equality against a
+    binding re-derived fresh at THIS call (a live ``ls-remote`` against
+    ``governed_remote``, not a copy of what the receipt was minted with).
+    That is safe for this function's only current caller -- the in-process
+    validate immediately after ``build_r1_warm100_entry`` mints, same
+    process, same moment, so ``remote_master_sha``/``ancestry`` cannot have
+    moved. It is NOT safe to point this function at a STORED receipt at some
+    later time: any governed-remote master advance between mint and
+    re-validation changes ``remote_master_sha`` (and can flip
+    ``EQUAL`` -> ``ANCESTOR``), so a stored receipt would spuriously fail
+    re-validation through no fault of the receipt itself. A future consumer
+    that needs to re-validate stored receipts must compare against
+    identity-stable fields instead of the live-derived binding, not call
+    this function unmodified on old data.
     """
     if not isinstance(payload, dict) or set(payload) != R1_ENTRY_KEYS:
         raise ValueError("R1 WARM-100 entry: closed schema keys required")
