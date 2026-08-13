@@ -691,24 +691,41 @@ def test_r1_warm100_entry_rejects_dirty_source_tree(tmp_path: Path):
         dirty_path.write_bytes(original)
 
 
-def test_r1_warm100_entry_cli_emits_path_free_receipt(tmp_path: Path):
-    """Pure CLI invocation, no injection: the CLI exposes no
-    --canonical-root/--governed-remote override (issue #1296 P1 deliberately
-    keeps the binding un-overridable from the command line), so this test's
-    green mint depends on the executing checkout's HEAD actually being
-    published (ancestor-or-equal) on the real governed remote. That is the
-    production shape: on a checked-out master (ci-nightly) HEAD IS the
-    published tip; on a feature branch it holds as long as the branch point
-    itself is published history, which is true for a normal, unmerged PR.
+def test_r1_warm100_entry_cli_emits_path_free_receipt(tmp_path: Path, monkeypatch, capsys):
+    """The real CLI entry point (argparse main(), in-process), no argv override:
+    issue #1296 P1 deliberately exposes no --canonical-root/--governed-remote
+    flag, so this test cannot point the CLI at a hermetic remote via argv.
+
+    F1 fix (review-1702-adversarial.md): the prior version instead let this
+    test bind the real network GOVERNED_REMOTE and assert rc==0, which is
+    only true when THIS checkout's HEAD is itself published-or-ancestor on
+    github master -- false on the PR branch itself, on any unpushed branch,
+    and offline (require_published_ancestry binds the branch TIP via
+    _current_source_commit(), not "the branch point" the old docstring
+    claimed). That made the test's own green/red state a function of which
+    branch happened to be checked out, not of the code under test.
+
+    Hermetic fix: main()'s r1-entry path always calls build_r1_warm100_entry
+    with governed_remote=None (there is no argv flag for it), which falls
+    back to reading the module-level GOVERNED_REMOTE/GOVERNED_REMOTE_REF
+    globals at call time. Monkeypatching those two globals to this same
+    checkout via file transport -- same technique
+    test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary
+    already uses at the library level -- exercises the identical CLI code
+    path a real subprocess invocation takes (argv parsing, no override
+    flags, same build_r1_warm100_entry call), with zero new CLI surface.
     """
+    from scripts.ember_restart import contract as contract_module
+
+    monkeypatch.setattr(contract_module, "GOVERNED_REMOTE", str(REPO_ROOT))
+    monkeypatch.setattr(contract_module, "GOVERNED_REMOTE_REF", _current_source_ref())
+
     manifest_path = _candidate_manifest(tmp_path)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["source_commit"] = _current_source_commit()
     _write_json(manifest_path, manifest)
-    result = subprocess.run(
+    exit_code = contract_module.main(
         [
-            sys.executable,
-            str(VALIDATOR),
             "r1-entry",
             str(manifest_path),
             "--source-commit",
@@ -723,20 +740,19 @@ def test_r1_warm100_entry_cli_emits_path_free_receipt(tmp_path: Path):
             str(REPO_ROOT / "manifests/ember-restart-3b/fixed-prior-manifest-v1.json"),
             "--trusted-verifier-registry",
             str(tmp_path / "trusted-verifiers.json"),
-        ],
-        cwd=REPO_ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
+        ]
     )
-    assert result.returncode == 0, result.stdout + result.stderr
-    payload = json.loads(result.stdout)
+    captured = capsys.readouterr()
+    assert exit_code == 0, captured.out + captured.err
+    payload = json.loads(captured.out)
     assert payload["schema"] == "ember-r1-warm100-entry-v2"
     assert payload["result"] == "PREP_ONLY"
     assert all("\\" not in row["path"] and ":" not in row["path"] for row in payload["source_files"].values())
     assert payload["source_binding"]["canonical_common_dir_bound"] is True
     assert payload["source_binding"]["worktree_identity"] in {"MAIN", "MANAGED", "LEGACY"}
-    assert payload["source_binding"]["ancestry"] in {"EQUAL", "ANCESTOR"}
+    assert payload["source_binding"]["governed_remote"] == str(REPO_ROOT)
+    assert payload["source_binding"]["remote_master_sha"] == manifest["source_commit"]
+    assert payload["source_binding"]["ancestry"] == "EQUAL"
 
 
 def test_r1_warm100_entry_cli_refusal_is_content_addressed(tmp_path: Path):

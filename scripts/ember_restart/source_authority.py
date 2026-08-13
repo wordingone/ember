@@ -10,9 +10,16 @@ Two bindings, both fail-closed:
   ``worktree_lifecycle.py``-managed worktrees (never a clone, fork, or ad-hoc
   ``git worktree add``).
 * ``source_commit`` -> published governed-remote history, proven by contacting
-  the remote (``git ls-remote``) and walking real ancestry
+  the pinned remote URL (``git ls-remote``) and walking real ancestry
   (``git merge-base --is-ancestor``) -- never an ``origin`` URL string
-  comparison, which is spoofable in one config write.
+  comparison, which is spoofable in one config write. This still trusts the
+  executing environment's git configuration to resolve that pinned URL
+  honestly: neither the ls-remote nor the fetch call sanitizes the
+  environment, so a candidate repo's local ``url.*.insteadOf`` rewrite (or an
+  inherited ``GIT_CONFIG_GLOBAL``/``GIT_CONFIG_COUNT``/``GIT_CONFIG_KEY_*``)
+  can redirect the contact to an attacker-controlled remote serving a spoofed
+  master, "proving" ancestry against fabricated history. Env-hardening
+  against this is tracked as issue #1706, not yet implemented.
 
 No component here trusts a copied constant: the canonical root, the
 worktree-lifecycle registry, and the governed remote's tip are all read fresh,

@@ -38,10 +38,12 @@ first then commit:
   is resolved by contact (`git ls-remote`, never a locally configured
   `origin` -- an `origin` URL is a one-line, spoofable config write, not an
   identity), and `source_commit` must be that ref's tip or a real ancestor of
-  it (`git merge-base --is-ancestor`), proven against real Git history rather
-  than trusted from any string comparison. Minting fails closed if the
-  governed remote is unreachable; there is no offline/degraded fallback for
-  this rung-entry gate.
+  it (`git merge-base --is-ancestor`), proven against real Git history as
+  resolved by the executing environment's git configuration -- the contact
+  itself does not yet sanitize `url.*.insteadOf` rewriting or inherited
+  `GIT_CONFIG_*` variables that could redirect it (tracked as issue #1706).
+  Minting fails closed if the governed remote is unreachable; there is no
+  offline/degraded fallback for this rung-entry gate.
 
 The result is recorded in a closed `source_binding` block:
 
