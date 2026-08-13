@@ -2874,6 +2874,80 @@ class CompletionHeadAncestorTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unprovable"):
                 module.read_commit_is_ancestor(repo, "d" * 40, second)
 
+    def test_read_commit_is_ancestor_strips_env_injected_config_vectors(self) -> None:
+        """Issue #1706: real ancestry answer, plus the actual subprocess env
+        used is captured (subprocess.run wrapped, not mocked-away -- the real
+        git call still executes and the real True/False answer is still
+        asserted) and shown to exclude the GIT_CONFIG_COUNT/KEY_*/VALUE_*
+        keys that were genuinely present in the inherited environment.
+
+        This call takes no remote URL, so there is no directly observable
+        `url.*.insteadOf` redirection to reproduce here the way there is for
+        source_authority.resolve_governed_master -- verified empirically
+        that git also refuses to let an alias definition shadow a real
+        subcommand name, closing that would-be observable route too. What
+        is directly provable, and asserted here, is that the hardening is
+        genuinely applied rather than merely claimed: an inherited
+        environment-injected config entry (which CAN define arbitrary keys,
+        not just insteadOf) never reaches the subprocess this function
+        spawns.
+        """
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            repo = pathlib.Path(directory) / "repo"
+            repo.mkdir()
+
+            def git(*arguments: str) -> str:
+                return subprocess.run(
+                    ["git", "-C", str(repo), *arguments],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+
+            git("init", "-q")
+            git("config", "user.email", "test@example.invalid")
+            git("config", "user.name", "ancestor test")
+            (repo / "first.txt").write_text("first\n", encoding="utf-8")
+            git("add", "first.txt")
+            git("commit", "-qm", "first")
+            first = git("rev-parse", "HEAD")
+            (repo / "second.txt").write_text("second\n", encoding="utf-8")
+            git("add", "second.txt")
+            git("commit", "-qm", "second")
+            second = git("rev-parse", "HEAD")
+
+            captured_envs: list[dict] = []
+            real_run = subprocess.run
+
+            def spying_run(*args, **kwargs):
+                captured_envs.append(dict(kwargs.get("env") or {}))
+                return real_run(*args, **kwargs)
+
+            poisoned_env = dict(os.environ)
+            poisoned_env.update(
+                {
+                    "GIT_CONFIG_COUNT": "1",
+                    "GIT_CONFIG_KEY_0": "core.bogusInjectedKey",
+                    "GIT_CONFIG_VALUE_0": "injected-by-test",
+                    "GIT_CONFIG_GLOBAL": str(pathlib.Path(directory) / "poisoned-global-gitconfig"),
+                }
+            )
+            with (
+                mock.patch.dict(os.environ, poisoned_env, clear=True),
+                mock.patch.object(subprocess, "run", side_effect=spying_run),
+            ):
+                self.assertTrue(module.read_commit_is_ancestor(repo, first, second))
+                self.assertFalse(module.read_commit_is_ancestor(repo, second, first))
+
+            self.assertTrue(captured_envs, "the wrapped subprocess.run was never called")
+            for env in captured_envs:
+                self.assertNotIn("GIT_CONFIG_COUNT", env)
+                self.assertNotIn("GIT_CONFIG_KEY_0", env)
+                self.assertNotIn("GIT_CONFIG_VALUE_0", env)
+                self.assertEqual(env.get("GIT_CONFIG_GLOBAL"), os.devnull)
+                self.assertEqual(env.get("GIT_CONFIG_NOSYSTEM"), "1")
+
 
 ARCHITECTURE_REVISION = "ember-sparse-3b-v2"
 REGISTRY_SHA256 = "c" * 64
