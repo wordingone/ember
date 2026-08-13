@@ -192,6 +192,67 @@ class TreeProvenanceTests(unittest.TestCase):
                 {"run_tree_provenance": forged}
             )
 
+    def test_env_injected_config_vectors_do_not_redirect_origin_contact(self) -> None:
+        """Issue #1706 (F2): GIT_CONFIG_GLOBAL and GIT_CONFIG_COUNT/KEY_*/VALUE_*
+        vectors, applied to the URL "origin" resolves to (self.remote's real
+        path -- resolving that still needs self.run's local config, which
+        this fix does not attempt to close; only the two env-injected
+        vectors are asserted here).
+
+        RED companion first: a real second bare remote with divergent
+        history stands in as the attacker target. Injecting the rewrite via
+        GIT_CONFIG_COUNT/KEY_0/VALUE_0 is proven to actually redirect an
+        unhardened `git -C self.run ls-remote origin refs/heads/master` to
+        the attacker's tip -- the real vulnerability, reproduced, not
+        asserted against a mock.
+
+        GREEN: `tree_provenance.inspect_and_enforce`, called with the SAME
+        variables still present in the process environment, resolves
+        remote_master_sha to self.remote's real tip -- hardened_git_env
+        strips them before the subprocess is spawned.
+        """
+        attacker_remote = Path(self.temp.name) / "attacker.git"
+        attacker_seed = Path(self.temp.name) / "attacker-seed"
+        subprocess.run(["git", "init", "--bare", str(attacker_remote)], check=True, capture_output=True)
+        subprocess.run(["git", "init", "-b", "master", str(attacker_seed)], check=True, capture_output=True)
+        (attacker_seed / "tracked.txt").write_text("attacker\n", encoding="utf-8", newline="\n")
+        _git(attacker_seed, "add", "tracked.txt")
+        _git(attacker_seed, "commit", "-m", "attacker seed")
+        _git(attacker_seed, "remote", "add", "origin", str(attacker_remote))
+        _git(attacker_seed, "push", "-u", "origin", "master")
+
+        real_master = _git(self.remote, "rev-parse", "refs/heads/master")
+        attacker_master = _git(attacker_remote, "rev-parse", "refs/heads/master")
+        self.assertNotEqual(real_master, attacker_master)
+
+        injected_env = dict(os.environ)
+        injected_env.update(
+            {
+                "GIT_CONFIG_COUNT": "1",
+                "GIT_CONFIG_KEY_0": f"url.{attacker_remote}.insteadOf",
+                "GIT_CONFIG_VALUE_0": str(self.remote),
+            }
+        )
+        red = subprocess.run(
+            ["git", "-C", str(self.run), "ls-remote", "--exit-code", "origin", "refs/heads/master"],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=injected_env,
+        )
+        red_sha = red.stdout.split("\t", 1)[0].strip()
+        self.assertEqual(
+            red_sha,
+            attacker_master,
+            "the env-injected insteadOf rewrite should have redirected the "
+            "unhardened call -- if this fails, the vulnerability setup itself is wrong",
+        )
+
+        with mock.patch.dict(os.environ, injected_env, clear=True):
+            state = tree_provenance.inspect_run_tree(self.run)
+        self.assertEqual(state["remote_master_sha"], real_master)
+        self.assertNotEqual(state["remote_master_sha"], attacker_master)
+
     def test_consumer_refuses_receipt_older_than_required_merge(self) -> None:
         initial_sha = _git(self.run, "rev-parse", "HEAD")
         state = tree_provenance.inspect_and_enforce(self.run)
