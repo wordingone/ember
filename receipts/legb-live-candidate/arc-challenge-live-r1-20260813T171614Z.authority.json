@@ -1,0 +1,15 @@
+{
+  "artifact_path": "receipts/legb-live-candidate/arc-challenge-live-r1-20260813T171614Z.jsonl",
+  "artifact_sha256": "7d3839067c5c8bb41138d70cb69b990cf1508a9a5dab36b6ac08d8ef5bd356ac",
+  "authority": {
+    "goal_id": "EMBER-02",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "workstream_id": "EMBER-02A"
+  },
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "reason": "generated raw-prediction JSONL with a fixed per-row schema; the inline .jsonl binding rule would require stamping the authority triple onto every scored row",
+  "schema_version": "ember-content-addressed-authority-binding/v1",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization) for checkpoint/tokenizer files",
+  "ticket": "1433",
+  "ts": "20260813T174013Z"
+}

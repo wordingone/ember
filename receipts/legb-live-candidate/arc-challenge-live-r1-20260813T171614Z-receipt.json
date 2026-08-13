@@ -1,0 +1,123 @@
+{
+  "ticket": "legb-live-candidate-v5-evaluator-run",
+  "ts": "20260813T172720Z",
+  "schema": "legb-live-candidate-v5/v1",
+  "issue_refs": [
+    "#1433",
+    "#757"
+  ],
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization) for checkpoint/tokenizer files",
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "claim_boundary": "IDENTITY_BINDING_ONLY; the subject checkpoint records data_cursor.tokens_seen=36 at global_step=4, so scores near chance are expected -- no capability, parity, acceleration, or issue-closure credit",
+  "result_credit": false,
+  "capability_credit": false,
+  "api_spend_usd": 0,
+  "paid_api_surface_used": false,
+  "mode": "evaluator-run",
+  "binding": {
+    "checkpoint": {
+      "dir": "<external custody, path redacted -- basename='checkpoint-vertical-slice-seed-830001'>",
+      "schema_version": "ember-sparse-checkpoint-v5",
+      "manifest_sha256": "4655a76b7e5b40396be8637f9aa0898ae94fc2321f2e75630d8f4ab83b555c0b",
+      "measured_shard_sha256": {
+        "shared-model.pt": "4fc54afb85f1f3a512d63d4b9faf4e79ea9286fcb4e78caff011c0ad108b6ad7",
+        "optimizer-state.pt": "c31b51b8a7d502fe000ea2a951d7cbb450aea995c2442dda460d48b289590e3c",
+        "replay-state.pt": "425a20b1adfc3246dcd4ac742d074a426c194a95abe09160fd5c32bb76483354",
+        "expert-vision.pt": "07cff223f23a2ccfbe507b85206763b3fb009b8e753548938704dac54a4f6f94",
+        "expert-audio.pt": "8801b7f95f69cae3d268dda0a30adbdf9c54fdc6c1f6517acca009a9b9e5ab0b",
+        "expert-reasoning.pt": "992923c2abc11e8d226fb0c809e8f12f83c4640deb12d535f727295412c8376e",
+        "expert-tool.pt": "550f50733ea3d78d9efc42afb946ea9d1e0b6f3e2f9bde712b8ebb68e5de1e5c"
+      },
+      "architecture_revision": "ember-sparse-3b-v2",
+      "contract_version": 5,
+      "launch_seed": 830001,
+      "global_step": 4,
+      "tokens_seen": 36
+    },
+    "model_config": {
+      "path": "configs/ember-restart-3b.json",
+      "sha256": "33a82113cfa42fcd62d70688fea39c62b3793630c7ea48fdb5b884681a8e1781",
+      "hidden_size": 2048,
+      "layers": 14,
+      "attention_heads": 16,
+      "vocab_size": 32000
+    },
+    "route": {
+      "selected": "tool",
+      "selection_policy": "explicit_required_argument_no_default",
+      "config_default_active_expert": "reasoning",
+      "manifest_declared_active_expert_ids": [
+        "tool"
+      ],
+      "selected_matches_manifest_declared": true
+    },
+    "tied_embeddings_reasserted": true,
+    "tokenizer": {
+      "path": "<external custody, path redacted -- basename='tokenizer.json'>",
+      "sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97",
+      "n_dropped_orphan_merges": 0,
+      "n_merges_before": 31755,
+      "decoder_wiring": {
+        "attached": true,
+        "reason": "attached ByteLevel decoder in memory"
+      }
+    },
+    "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization) for checkpoint/tokenizer files",
+    "requested_device": "cpu",
+    "realized_device": "cpu",
+    "realized_dtype": "torch.bfloat16",
+    "max_position_embeddings": 1024,
+    "scoring_core_source": "legb_inprocess_scorer.LegBLM + score_ids_single/score_ids_batch, imported verbatim (#757 external-review-CLEAR core, unmodified)"
+  },
+  "tasks": [
+    "arc_challenge"
+  ],
+  "limit": null,
+  "bounded": false,
+  "task_versions": {
+    "arc_challenge": 1.0
+  },
+  "frozen_suite": {
+    "spec": "docs/spec/eval-suite-freeze-v1.md (freeze v1) + docs/spec/c8-f3-instrument-list-v1.md (full test_split_sha256 values)",
+    "split_binding": {
+      "arc_challenge": {
+        "dataset": "allenai/ai2_arc",
+        "subset": "ARC-Challenge",
+        "frozen_pinned_split": "test",
+        "frozen_pinned_rows": 1172,
+        "frozen_test_split_sha256": "c0e7635ee91b9ca47bf388f1f6cd5140fda083a71dccda44de72c364645df3f3",
+        "harness_scored_split": "test",
+        "frozen_pin_matches_scored_split": true
+      }
+    },
+    "unbound_tasks": []
+  },
+  "n_samples": {
+    "arc_challenge": {
+      "original": 1172,
+      "effective": 1172
+    }
+  },
+  "raw_predictions": {
+    "path": "receipts/legb-live-candidate/arc-challenge-live-r1-20260813T171614Z.jsonl",
+    "rows": 1172,
+    "sha256": "7d3839067c5c8bb41138d70cb69b990cf1508a9a5dab36b6ac08d8ef5bd356ac",
+    "format": "jsonl; one row per scored eval item"
+  },
+  "results": {
+    "arc_challenge": {
+      "name": "arc_challenge",
+      "alias": "arc_challenge",
+      "sample_len": 1172,
+      "acc,none": 0.22098976109215018,
+      "acc_stderr,none": "N/A",
+      "acc_norm,none": 0.2901023890784983,
+      "acc_norm_stderr,none": "N/A"
+    }
+  }
+}
