@@ -23,6 +23,11 @@ try:
 except ImportError:  # Direct execution: python scripts/ember_restart/contract.py
     from prediction_contract import ContractError, load_predictions
 
+try:
+    from . import source_authority
+except ImportError:  # Direct execution: python scripts/ember_restart/contract.py
+    import source_authority
+
 
 SCHEMA_VERSION = "ember-owned-rung-v1"
 PARAMETER_FLOOR = 3_000_000_000
@@ -88,7 +93,14 @@ COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 # closed, PREP_ONLY receipt can be emitted.  The runtime/CLI path remains the
 # only execution authority, and the receipt's execution=false boundary keeps a
 # source-only entry from being mistaken for a run result.
-R1_ENTRY_SCHEMA = "ember-r1-warm100-entry-v1"
+R1_ENTRY_SCHEMA = "ember-r1-warm100-entry-v2"
+# The governed remote source_commit ancestry is proven against (issue #1296 P1).
+# Pinned here, not read from the candidate's own `origin` config: an `origin`
+# URL is a spoofable address (`git remote set-url` is a one-line config write),
+# never an identity. No CLI flag exists for this -- only the library
+# `governed_remote`/`governed_ref` parameters (test-only injection seam).
+GOVERNED_REMOTE = "https://github.com/wordingone/ember"
+GOVERNED_REMOTE_REF = "refs/heads/master"
 R1_ENTRY_SOURCE_FILES = {
     "contract": "scripts/ember_restart/contract.py",
     "cli_train": "tools/ember-cli/src/commands/train.ts",
@@ -119,6 +131,7 @@ R1_ENTRY_KEYS = {
     "config_sha256",
     "fixed_prior_manifest_sha256",
     "source_files",
+    "source_binding",
     "dispatch",
     "energy",
     "closed_boundary",
@@ -192,6 +205,9 @@ def validate_r1_warm100_entry(
     *,
     source_root: Path,
     manifest_path: Path,
+    canonical_root: Path | None = None,
+    governed_remote: str | None = None,
+    governed_ref: str | None = None,
 ) -> dict[str, Any]:
     """Validate the closed WARM-100 *entry* receipt, not a run result.
 
@@ -199,6 +215,26 @@ def validate_r1_warm100_entry(
     This consumer only checks the source/dispatch/claim envelope produced after
     that authority returned green, and therefore cannot unlock a launcher or
     grant execution credit on its own.
+
+    ``canonical_root``/``governed_remote``/``governed_ref`` are a library-only
+    injection seam for tests (issue #1296 P1); the CLI never exposes them and
+    always binds against the real canonical checkout and the real governed
+    remote.
+
+    WARNING: ``source_binding`` is compared by exact-dict equality against a
+    binding re-derived fresh at THIS call (a live ``ls-remote`` against
+    ``governed_remote``, not a copy of what the receipt was minted with).
+    That is safe for this function's only current caller -- the in-process
+    validate immediately after ``build_r1_warm100_entry`` mints, same
+    process, same moment, so ``remote_master_sha``/``ancestry`` cannot have
+    moved. It is NOT safe to point this function at a STORED receipt at some
+    later time: any governed-remote master advance between mint and
+    re-validation changes ``remote_master_sha`` (and can flip
+    ``EQUAL`` -> ``ANCESTOR``), so a stored receipt would spuriously fail
+    re-validation through no fault of the receipt itself. A future consumer
+    that needs to re-validate stored receipts must compare against
+    identity-stable fields instead of the live-derived binding, not call
+    this function unmodified on old data.
     """
     if not isinstance(payload, dict) or set(payload) != R1_ENTRY_KEYS:
         raise ValueError("R1 WARM-100 entry: closed schema keys required")
@@ -208,6 +244,15 @@ def validate_r1_warm100_entry(
     if source_commit != _current_source_commit(source_root):
         raise ValueError("R1 WARM-100 entry: source_commit is not the current source commit")
     _require_clean_source_tree(source_root)
+    expected_source_binding = source_authority.bind_source_identity(
+        source_root,
+        source_commit,
+        canonical_root=canonical_root,
+        governed_remote=governed_remote if governed_remote is not None else GOVERNED_REMOTE,
+        governed_ref=governed_ref if governed_ref is not None else GOVERNED_REMOTE_REF,
+    )
+    if payload.get("source_binding") != expected_source_binding:
+        raise ValueError("R1 WARM-100 entry: source_binding drifted or is not canonical")
     if payload.get("schema") != R1_ENTRY_SCHEMA:
         raise ValueError("R1 WARM-100 entry: schema mismatch")
     if payload.get("entry") != "WARM-100" or payload.get("steps") != 100:
@@ -283,8 +328,15 @@ def build_r1_warm100_entry(
     fixed_prior_path: Path,
     trusted_verifier_registry: Path | None = None,
     expected_trusted_verifier_registry_sha256: str | None = None,
+    canonical_root: Path | None = None,
+    governed_remote: str | None = None,
+    governed_ref: str | None = None,
 ) -> dict[str, Any]:
-    """Build a source-bound PREP_ONLY WARM-100 entry around the canonical validator."""
+    """Build a source-bound PREP_ONLY WARM-100 entry around the canonical validator.
+
+    ``canonical_root``/``governed_remote``/``governed_ref`` are a library-only
+    injection seam for tests (issue #1296 P1); see :func:`validate_r1_warm100_entry`.
+    """
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
@@ -304,6 +356,13 @@ def build_r1_warm100_entry(
     if source_commit != _current_source_commit(source_root):
         raise ValueError("R1 WARM-100 entry: source_commit is not the current source commit")
     _require_clean_source_tree(source_root)
+    source_binding = source_authority.bind_source_identity(
+        source_root,
+        source_commit,
+        canonical_root=canonical_root,
+        governed_remote=governed_remote if governed_remote is not None else GOVERNED_REMOTE,
+        governed_ref=governed_ref if governed_ref is not None else GOVERNED_REMOTE_REF,
+    )
     source_rows = {
         name: {"path": path, "sha256": _git_blob_sha256(source_root, source_commit, path)}
         for name, path in R1_ENTRY_SOURCE_FILES.items()
@@ -320,6 +379,7 @@ def build_r1_warm100_entry(
         "config_sha256": _git_blob_sha256(source_root, source_commit, str(config_path.relative_to(source_root)).replace("\\", "/")),
         "fixed_prior_manifest_sha256": _git_blob_sha256(source_root, source_commit, str(fixed_prior_path.relative_to(source_root)).replace("\\", "/")),
         "source_files": source_rows,
+        "source_binding": source_binding,
         "dispatch": {
             "surface": "ember-cli",
             "authority": "ember-lab",
@@ -338,7 +398,14 @@ def build_r1_warm100_entry(
     }
     payload["closed_boundary"]["fixed_prior_bound"] = payload["fixed_prior_manifest_sha256"]
     payload["receipt_sha256"] = hashlib.sha256(_r1_entry_canonical(payload)).hexdigest()
-    return validate_r1_warm100_entry(payload, source_root=source_root, manifest_path=manifest_path)
+    return validate_r1_warm100_entry(
+        payload,
+        source_root=source_root,
+        manifest_path=manifest_path,
+        canonical_root=canonical_root,
+        governed_remote=governed_remote,
+        governed_ref=governed_ref,
+    )
 
 
 def _artifact(root: Path, value: Any, field: str, errors: list[str]) -> Path | None:
