@@ -20,22 +20,43 @@ def _current_source_commit() -> str:
     ).strip()
 
 
-def _current_source_ref() -> str:
-    """Fully-qualified ref for hermetic self-referential ls-remote binding.
+@pytest.fixture
+def hermetic_governed_remote(tmp_path: Path) -> tuple[str, str]:
+    """A real clone of this checkout's own object store, ref forced to HEAD.
 
-    Bare "HEAD" is ambiguous against this checkout's own git ls-remote: a
-    dev machine can carry a remote (e.g. "public") whose tracked
-    refs/remotes/<name>/HEAD also suffix-matches the pattern "HEAD", making
-    resolve_governed_master see two rows and fail closed. refs/heads/<branch>
-    is a full ref path with no such suffix collision. Falls back to "HEAD"
-    only when detached, which is the scenario the bare form was originally
-    chosen for and is not exercised on this repo's local branch.
+    Round-3 fix (review-1702-adversarial.md, round 3): the prior approach
+    derived the governed ref from this checkout's OWN branch state
+    (``git rev-parse --symbolic-full-name HEAD``, falling back to bare
+    "HEAD" when detached). That fallback was never exercised until a
+    lifecycle-managed ``--detach`` worktree -- the exact shape
+    worktree_lifecycle certification requires -- hit it: bare "HEAD"
+    ambiguous-suffix-matches both this repo's own ``HEAD`` and
+    ``refs/remotes/origin/HEAD`` on ``git ls-remote``, so
+    ``resolve_governed_master`` sees two rows and fails closed regardless of
+    which commit is actually checked out. Test outcome was still a function
+    of checkout shape, not of the code under test.
+
+    Cloning a fresh bare remote from this checkout and forcing
+    ``refs/heads/master`` to this checkout's real HEAD sha resolves to
+    exactly one row on every checkout shape (attached branch, detached HEAD,
+    orphan detach reachable only via the branch this checkout's HEAD sits
+    on) and drops the self-referential dependency on this checkout's own
+    branch state entirely.
     """
-    symbolic = subprocess.run(
-        ["git", "rev-parse", "--symbolic-full-name", "HEAD"],
-        cwd=REPO_ROOT, text=True, capture_output=True, check=False,
-    ).stdout.strip()
-    return symbolic if symbolic else "HEAD"
+    remote_dir = tmp_path / "governed-remote.git"
+    subprocess.run(
+        # --no-hardlinks: pytest's tmp_path and this checkout can sit on
+        # different Windows volumes/drives, where a hardlinking --local
+        # clone fails outright ("Improper link") rather than falling back.
+        ["git", "clone", "--local", "--no-hardlinks", "--bare", str(REPO_ROOT), str(remote_dir)],
+        check=True, capture_output=True, text=True,
+    )
+    head_sha = _current_source_commit()
+    subprocess.run(
+        ["git", "-C", str(remote_dir), "update-ref", "refs/heads/master", head_sha],
+        check=True, capture_output=True, text=True,
+    )
+    return str(remote_dir), "refs/heads/master"
 
 
 def _sha256(path: Path) -> str:
@@ -564,7 +585,9 @@ def test_git_authority_probe_hides_windows_console(monkeypatch: pytest.MonkeyPat
     assert kwargs["creationflags"] == subprocess.CREATE_NO_WINDOW
 
 
-def test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary(tmp_path: Path):
+def test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary(
+    tmp_path: Path, hermetic_governed_remote: tuple[str, str]
+):
     """The R1 entry producer must delegate admission to the canonical contract.
 
     This is intentionally a PREP_ONLY artifact: no WARM-100 execution, result, or
@@ -573,6 +596,7 @@ def test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary(tmp_pa
     """
     from scripts.ember_restart.contract import build_r1_warm100_entry, validate_r1_warm100_entry
 
+    governed_remote, governed_ref = hermetic_governed_remote
     manifest_path = _candidate_manifest(tmp_path)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["source_commit"] = _current_source_commit()
@@ -585,21 +609,22 @@ def test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary(tmp_pa
         config_path=REPO_ROOT / "configs/ember-restart-3b.json",
         fixed_prior_path=REPO_ROOT / "manifests/ember-restart-3b/fixed-prior-manifest-v1.json",
         trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
-        # Hermetic, no-network source-identity binding (issue #1296 P1): point
-        # the governed-remote leg at this same checkout via file transport and
-        # ask for the checkout's own fully-qualified ref rather than a fixed
-        # refs/heads/master, since a CI checkout may not materialize a local
-        # master branch ref. canonical_root is left at its default
-        # (self-anchor), which also resolves to this checkout.
-        governed_remote=str(REPO_ROOT),
-        governed_ref=_current_source_ref(),
+        # Hermetic, no-network source-identity binding (issue #1296 P1): the
+        # governed-remote leg is a bare clone of this same checkout's object
+        # store via file transport, with refs/heads/master forced to this
+        # checkout's real HEAD -- resolves to exactly one row on every
+        # checkout shape (attached branch or detached), unlike deriving the
+        # ref from this checkout's own branch state. canonical_root is left
+        # at its default (self-anchor), which also resolves to this checkout.
+        governed_remote=governed_remote,
+        governed_ref=governed_ref,
     )
     assert validate_r1_warm100_entry(
         payload,
         source_root=REPO_ROOT,
         manifest_path=manifest_path,
-        governed_remote=str(REPO_ROOT),
-        governed_ref=_current_source_ref(),
+        governed_remote=governed_remote,
+        governed_ref=governed_ref,
     )
     assert payload["entry"] == "WARM-100"
     assert payload["result"] == "PREP_ONLY"
@@ -612,7 +637,7 @@ def test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary(tmp_pa
     }
     assert payload["source_binding"]["canonical_common_dir_bound"] is True
     assert payload["source_binding"]["worktree_identity"] in {"MAIN", "MANAGED", "LEGACY"}
-    assert payload["source_binding"]["governed_remote"] == str(REPO_ROOT)
+    assert payload["source_binding"]["governed_remote"] == governed_remote
     assert payload["source_binding"]["remote_master_sha"] == manifest["source_commit"]
     assert payload["source_binding"]["ancestry"] == "EQUAL"
 
@@ -629,8 +654,8 @@ def test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary(tmp_pa
                 tampered,
                 source_root=REPO_ROOT,
                 manifest_path=manifest_path,
-                governed_remote=str(REPO_ROOT),
-                governed_ref=_current_source_ref(),
+                governed_remote=governed_remote,
+                governed_ref=governed_ref,
             )
         except ValueError:
             continue
@@ -691,34 +716,44 @@ def test_r1_warm100_entry_rejects_dirty_source_tree(tmp_path: Path):
         dirty_path.write_bytes(original)
 
 
-def test_r1_warm100_entry_cli_emits_path_free_receipt(tmp_path: Path, monkeypatch, capsys):
+def test_r1_warm100_entry_cli_emits_path_free_receipt(
+    tmp_path: Path, monkeypatch, capsys, hermetic_governed_remote: tuple[str, str]
+):
     """The real CLI entry point (argparse main(), in-process), no argv override:
     issue #1296 P1 deliberately exposes no --canonical-root/--governed-remote
     flag, so this test cannot point the CLI at a hermetic remote via argv.
 
-    F1 fix (review-1702-adversarial.md): the prior version instead let this
-    test bind the real network GOVERNED_REMOTE and assert rc==0, which is
-    only true when THIS checkout's HEAD is itself published-or-ancestor on
-    github master -- false on the PR branch itself, on any unpushed branch,
-    and offline (require_published_ancestry binds the branch TIP via
-    _current_source_commit(), not "the branch point" the old docstring
-    claimed). That made the test's own green/red state a function of which
-    branch happened to be checked out, not of the code under test.
+    F1 fix (review-1702-adversarial.md, round 2): the prior version instead
+    let this test bind the real network GOVERNED_REMOTE and assert rc==0,
+    which is only true when THIS checkout's HEAD is itself published-or-
+    ancestor on github master -- false on the PR branch itself, on any
+    unpushed branch, and offline (require_published_ancestry binds the
+    branch TIP via _current_source_commit(), not "the branch point" the old
+    docstring claimed). That made the test's own green/red state a function
+    of which branch happened to be checked out, not of the code under test.
+
+    Round-2 fix used a hermetic file-transport remote, but derived
+    governed_ref from THIS checkout's own branch state -- which broke again
+    (round 3) the moment the checkout was a detached-HEAD managed worktree,
+    the exact shape worktree_lifecycle certification requires. Now uses the
+    same hermetic_governed_remote fixture as
+    test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary: a
+    bare clone with refs/heads/master forced to this checkout's real HEAD,
+    independent of this checkout's own branch/detach state.
 
     Hermetic fix: main()'s r1-entry path always calls build_r1_warm100_entry
     with governed_remote=None (there is no argv flag for it), which falls
     back to reading the module-level GOVERNED_REMOTE/GOVERNED_REMOTE_REF
-    globals at call time. Monkeypatching those two globals to this same
-    checkout via file transport -- same technique
-    test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary
-    already uses at the library level -- exercises the identical CLI code
-    path a real subprocess invocation takes (argv parsing, no override
-    flags, same build_r1_warm100_entry call), with zero new CLI surface.
+    globals at call time. Monkeypatching those two globals exercises the
+    identical CLI code path a real subprocess invocation takes (argv
+    parsing, no override flags, same build_r1_warm100_entry call), with zero
+    new CLI surface.
     """
     from scripts.ember_restart import contract as contract_module
 
-    monkeypatch.setattr(contract_module, "GOVERNED_REMOTE", str(REPO_ROOT))
-    monkeypatch.setattr(contract_module, "GOVERNED_REMOTE_REF", _current_source_ref())
+    governed_remote, governed_ref = hermetic_governed_remote
+    monkeypatch.setattr(contract_module, "GOVERNED_REMOTE", governed_remote)
+    monkeypatch.setattr(contract_module, "GOVERNED_REMOTE_REF", governed_ref)
 
     manifest_path = _candidate_manifest(tmp_path)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -750,7 +785,7 @@ def test_r1_warm100_entry_cli_emits_path_free_receipt(tmp_path: Path, monkeypatc
     assert all("\\" not in row["path"] and ":" not in row["path"] for row in payload["source_files"].values())
     assert payload["source_binding"]["canonical_common_dir_bound"] is True
     assert payload["source_binding"]["worktree_identity"] in {"MAIN", "MANAGED", "LEGACY"}
-    assert payload["source_binding"]["governed_remote"] == str(REPO_ROOT)
+    assert payload["source_binding"]["governed_remote"] == governed_remote
     assert payload["source_binding"]["remote_master_sha"] == manifest["source_commit"]
     assert payload["source_binding"]["ancestry"] == "EQUAL"
 
