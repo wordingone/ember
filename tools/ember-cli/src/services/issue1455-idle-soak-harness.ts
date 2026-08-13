@@ -32,6 +32,12 @@ import { READY_OSC } from "../cli/ready-sentinel.ts";
 // cockpit out of the checkout this test is actually running from, or a worktree PR's changes
 // (including this very scaffold) silently test against a different, unrelated tree. Resolve the
 // checkout root from this file's own location instead.
+//
+// ANY future subprocess/spawn harness that copies this file's shape (the resource-guard
+// L2-L6 probe harnesses included) MUST use this same file-location resolution, never
+// resolveEmberRepoRoot({}) or any other canonicalizing resolver, for the spawn root — the bug
+// this avoided was silent (a valid-looking connect failure, not an obvious wrong-path error)
+// and cost a full debugging round to find.
 function resolveCheckoutRoot(): string {
   const result = spawnSync("git", ["rev-parse", "--show-toplevel"], {
     encoding: "utf8",
@@ -218,10 +224,18 @@ export async function runIdleSoak(opts: IdleSoakOptions): Promise<IdleSoakResult
       await session.send("Runtime.enable");
 
       const readyDeadline = Date.now() + 20_000;
+      let sawReady = false;
       while (Date.now() < readyDeadline) {
-        if (raw.join("").includes(READY_OSC)) break;
+        if (raw.join("").includes(READY_OSC)) { sawReady = true; break; }
         if (exitObserved) throw new Error("child exited: " + raw.join("").slice(-2000));
         await sleep(200);
+      }
+      // A cockpit that prints its inspector banner but never reaches ready (a boot wedge, a
+      // future startup regression) must fail the harness loudly, not proceed to settle+measure
+      // a partially-initialized process — that would be a false-pass channel in exactly the
+      // state this regression test exists to catch.
+      if (!sawReady) {
+        throw new Error("cockpit never reached READY_OSC within 20s: " + raw.join("").slice(-2000));
       }
 
       await session.evaluate(IMPORT_JSC_EXPR, true);
