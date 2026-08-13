@@ -11,8 +11,8 @@
 //! create a second launcher, registry, ledger, or receipt family.
 
 use crate::{
-    atomic_create, hash_bytes, Daemon, DispatchBindingKind, DispatchManifest, DispatchOutcome,
-    EmberLabError, Result,
+    atomic_create, describe_dispatch_manifest_parse_error, hash_bytes, Daemon, DispatchBindingKind,
+    DispatchManifest, DispatchOutcome, EmberLabError, Result,
 };
 use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
@@ -211,6 +211,21 @@ fn invalid(detail: impl Into<String>) -> EmberLabError {
         job_id: String::new(),
         detail: detail.into(),
     }
+}
+
+/// Deserialize a restore-path `DispatchManifest`, wrapping any parse failure
+/// with a refusal that names the specific missing/invalid closed-choice
+/// field (e.g. `cpu_pacing_class`, `window_contract`) and its legal values,
+/// rather than surfacing a bare serde error. `context` distinguishes the two
+/// restore-manifest read sites in their refusal text (e.g. "restore
+/// manifest" vs "serving contract restore manifest").
+fn parse_restore_manifest(bytes: &[u8], context: &str) -> Result<DispatchManifest> {
+    serde_json::from_slice(bytes).map_err(|error| {
+        invalid(format!(
+            "{context} is not closed JSON: {}",
+            describe_dispatch_manifest_parse_error(bytes, &error)
+        ))
+    })
 }
 
 fn canonical_path(path: &Path, label: &str) -> Result<PathBuf> {
@@ -744,8 +759,8 @@ impl Daemon {
         outcome: &DispatchOutcome,
     ) -> Result<ServerAuthority> {
         let manifest_bytes = fs::read(&request.restore_manifest_path)?;
-        let manifest: DispatchManifest = serde_json::from_slice(&manifest_bytes)
-            .map_err(|error| invalid(format!("restore manifest is not closed JSON: {error}")))?;
+        let manifest: DispatchManifest =
+            parse_restore_manifest(&manifest_bytes, "restore manifest")?;
         if manifest.job_id == previous.job_id {
             return Err(invalid(
                 "restore manifest must dispatch a fresh job authority",
@@ -1275,11 +1290,7 @@ impl Daemon {
                     ))
                 })?;
                 let manifest: DispatchManifest =
-                    serde_json::from_slice(&manifest_bytes).map_err(|error| {
-                        invalid(format!(
-                            "serving contract restore manifest is not closed JSON: {error}"
-                        ))
-                    })?;
+                    parse_restore_manifest(&manifest_bytes, "serving contract restore manifest")?;
                 if !manifest_matches_contract(&manifest, &contract) {
                     return Err(invalid(
                         "restore manifest launcher does not match the serving contract",
@@ -1436,6 +1447,37 @@ mod tests {
         format!("{:x}", Sha256::digest(fs::read(path).unwrap()))
     }
 
+    fn restore_manifest_refusal_detail(bytes: &[u8], context: &str) -> String {
+        match parse_restore_manifest(bytes, context).unwrap_err() {
+            EmberLabError::InvalidTransition { detail, .. } => detail,
+            other => panic!("expected InvalidTransition, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn restore_manifest_refusal_names_the_missing_field_and_its_legal_values() {
+        let detail = restore_manifest_refusal_detail(
+            br#"{"window_contract":"cockpit_hosted"}"#,
+            "restore manifest",
+        );
+        assert_eq!(
+            detail,
+            "restore manifest is not closed JSON: cpu_pacing_class: missing required field (legal values: unpaced, governed)"
+        );
+    }
+
+    #[test]
+    fn restore_manifest_refusal_names_an_invalid_variant_and_its_legal_values() {
+        let detail = restore_manifest_refusal_detail(
+            br#"{"cpu_pacing_class":"unpaced","window_contract":"popup"}"#,
+            "serving contract restore manifest",
+        );
+        assert_eq!(
+            detail,
+            "serving contract restore manifest is not closed JSON: window_contract: invalid value \"popup\" (legal values: headless_no_windows, cockpit_hosted)"
+        );
+    }
+
     #[test]
     fn serving_vram_band_is_inclusive_at_fifteen_percent_only() {
         const EXPECTED: u64 = 10_000;
@@ -1517,6 +1559,8 @@ mod tests {
                 "requires_ui_responsiveness": false,
                 "cpu_rate_percent": 100
             },
+            "cpu_pacing_class": "unpaced",
+            "window_contract": "headless_no_windows",
             "env": {},
             "bindings": [],
             "custody_root": root,

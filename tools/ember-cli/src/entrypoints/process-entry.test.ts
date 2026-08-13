@@ -742,6 +742,8 @@ describe("process-entry — isFastPath", () => {
         requires_ui_responsiveness: false,
         cpu_rate_percent: 80,
       },
+      cpu_pacing_class: "unpaced",
+      window_contract: "headless_no_windows",
       env: {},
       bindings: [],
       custody_root: root,

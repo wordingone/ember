@@ -383,6 +383,8 @@ describe("owned server supervisor", () => {
       resource_lease: "owned-interactive",
       program: { path: command.executable, sha256: "f".repeat(64) },
       args: command.args,
+      cpu_pacing_class: "unpaced",
+      window_contract: "headless_no_windows",
       env: {},
       bindings: [
         { kind: "config", path: launch.modelConfigPath, sha256: owned.modelConfigSha256 },
@@ -536,6 +538,8 @@ describe("owned server supervisor", () => {
       resource_lease: "owned-interactive",
       program: { path: command.executable, sha256: "f".repeat(64) },
       args: command.args,
+      cpu_pacing_class: "unpaced",
+      window_contract: "headless_no_windows",
       env: {},
       bindings: [
         { kind: "config", path: launch.modelConfigPath, sha256: owned.modelConfigSha256 },
@@ -572,6 +576,63 @@ describe("owned server supervisor", () => {
     Object.assign(manifest, { unexpected: true });
     expect(() => validateOwnedDispatchManifest(owned, manifest, "e".repeat(40)))
       .toThrow("fields are not closed");
+  });
+  it("names the missing/invalid closed-choice field and its legal values instead of a bare closed-fields refusal", () => {
+    const owned = identity();
+    const command = buildOwnedServerCommand(owned, "cuda");
+    const launch = owned.launch;
+    if (!launch) throw new Error("missing launch");
+    const base = {
+      schema_version: "ember-lab-dispatch-manifest-v3",
+      workload_profile: {
+        profile_id: "owned_serving",
+        pinned_host_producers: [
+          { kind: "model_server", maximum_bytes: 1 },
+          { kind: "telemetry_buffer", maximum_bytes: 1 },
+        ],
+        requires_ui_responsiveness: false,
+      },
+      job_id: "owned-interactive",
+      source_commit: "e".repeat(40),
+      not_before_ms: 1,
+      expires_at_ms: 2,
+      resource_lease: "owned-interactive",
+      program: { path: command.executable, sha256: "f".repeat(64) },
+      args: command.args,
+      cpu_pacing_class: "unpaced",
+      window_contract: "headless_no_windows",
+      env: {},
+      bindings: [
+        { kind: "config", path: launch.modelConfigPath, sha256: owned.modelConfigSha256 },
+        { kind: "manifest", path: launch.tokenizerPath, sha256: owned.tokenizerSha256 },
+        { kind: "manifest", path: launch.serverPath, sha256: owned.serverSourceSha256 },
+        { kind: "manifest", path: join(launch.checkpointDir, "checkpoint-manifest.json"), sha256: owned.checkpointSha256 },
+      ],
+      custody_root: "C:\\owned\\custody",
+      storage_reserves: [{ root: "C:\\owned", minimum_free_bytes: 1 }],
+      minimum_free_vram_bytes: 1,
+      required_available_maximum_commit_bytes: 2,
+      maximum_job_memory_bytes: 2,
+      simulated_peak_commit_bytes: 2,
+      preflight_receipt: "C:\\owned\\custody\\preflight.json",
+    };
+
+    const missingCpuPacingClass: Record<string, unknown> = { ...base };
+    delete missingCpuPacingClass["cpu_pacing_class"];
+    expect(() => validateOwnedDispatchManifest(owned, missingCpuPacingClass, "e".repeat(40)))
+      .toThrow("cpu_pacing_class: missing required field (legal values: unpaced, governed)");
+
+    expect(() => validateOwnedDispatchManifest(
+      owned, { ...base, window_contract: "floating" }, "e".repeat(40),
+    )).toThrow("window_contract: invalid value \"floating\" (legal values: headless_no_windows, cockpit_hosted)");
+
+    // A legal enum member that is simply the wrong value for this owned_serving authority
+    // gets the narrower business-rule refusal, not a fabricated "invalid value" claim. The
+    // owned_serving spawn is headless (requires_ui_responsiveness === false, enforced below) --
+    // cockpit_hosted is reserved for DispatchWorkloadProfileId::Cockpit, a distinct profile.
+    expect(() => validateOwnedDispatchManifest(
+      owned, { ...base, window_contract: "cockpit_hosted" }, "e".repeat(40),
+    )).toThrow("owned server dispatch requires the headless_no_windows window contract");
   });
   it("surfaces a real asynchronous spawn error for a missing executable", async () => {
     const missingExecutable = identity();
