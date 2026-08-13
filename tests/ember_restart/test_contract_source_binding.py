@@ -430,8 +430,13 @@ def test_positive_control_main_and_managed_worktree_mint_green(
         governed_remote=str(governed_remote),
         **_source_paths(managed_worktree),
     )
-    assert managed_payload["source_binding"]["worktree_identity"] == "MANAGED"
-    assert managed_payload["source_binding"]["ancestry"] == "EQUAL"
+    assert managed_payload["source_binding"] == {
+        "canonical_common_dir_bound": True,
+        "worktree_identity": "MANAGED",
+        "governed_remote": str(governed_remote),
+        "remote_master_sha": managed_head,
+        "ancestry": "EQUAL",
+    }
     assert validate_r1_warm100_entry(
         managed_payload,
         source_root=managed_worktree,
@@ -676,3 +681,44 @@ def test_missing_commit_without_census_window_still_fetches_and_resolves(
         capture_output=True,
     )
     assert now_present.returncode == 0, "the real fetch should have written the commit object"
+
+
+def test_identity_before_network_ordering_locked_by_sentinel_remote(tmp_path: Path, foreign: Path):
+    """Issue #1707 (F3): ``bind_source_identity`` runs B1 (root identity)
+    before B2 (network ancestry) deliberately -- a foreign repo must be
+    refused locally, before any network contact. Six of the twelve prior
+    tests in this file (plus the CLI foreign-repo-refusal twin) omit
+    ``governed_remote`` entirely and stay hermetic ONLY because root binding
+    raises before the network leg ever runs; nothing before this test locked
+    that ordering as a property in its own right, so a future change that
+    swapped B1 and B2 (or ran them concurrently) would pass every existing
+    test in this file unnoticed.
+
+    This test closes that gap directly: point ``governed_remote`` at a
+    sentinel path that cannot possibly resolve, and prove the foreign-root
+    refusal fires without B2 ever needing to run. The sentinel is proven a
+    real trap first -- calling ``resolve_governed_master`` against it
+    directly raises its own distinct "did not resolve" error -- so a pass
+    below can only mean B1 fired first, not that B2 silently no-opped on a
+    remote that happened to tolerate being unreachable.
+    """
+    from scripts.ember_restart.contract import build_r1_warm100_entry
+    from scripts.ember_restart.source_authority import resolve_governed_master
+
+    sentinel_remote = str(tmp_path / "sentinel-unreachable-remote-does-not-exist")
+
+    with pytest.raises(ValueError, match="did not resolve"):
+        resolve_governed_master(foreign, sentinel_remote)
+
+    foreign_head = _git(foreign, "rev-parse", "HEAD")
+    manifest_path = _manifest_at(tmp_path, foreign_head)
+
+    with pytest.raises(ValueError, match="object store"):
+        build_r1_warm100_entry(
+            manifest_path,
+            source_commit=foreign_head,
+            source_root=foreign,
+            trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
+            governed_remote=sentinel_remote,
+            **_source_paths(foreign),
+        )
