@@ -310,19 +310,65 @@ function requireDispatchBinding(bindings: unknown, kind: string, path: string, s
   if (matches.length !== 1) throw new Error("dispatch manifest " + label + " binding does not match owned identity");
 }
 
+// Legal snake_case spellings for the two required closed-choice dispatch-manifest fields
+// (runtime/ember-lab/src/lib.rs DispatchCpuPacingClass / DispatchWindowContract). Kept here
+// rather than imported so this transport has no compile-time dependency on the Rust crate;
+// keep in sync by hand if the enums ever grow a variant.
+const CPU_PACING_CLASS_LEGAL_VALUES = ["unpaced", "governed"] as const;
+const WINDOW_CONTRACT_LEGAL_VALUES = ["headless_no_windows", "cockpit_hosted"] as const;
+
+/**
+ * Require `field` to be present on `manifest` and hold one of `legalValues`, throwing a
+ * refusal that names the specific missing/invalid field and enumerates its legal values
+ * (e.g. "dispatch manifest cpu_pacing_class: missing required field (legal values: unpaced,
+ * governed)") rather than a bare "fields are not closed" error. Returns the validated value.
+ */
+function requireClosedChoiceField(
+  manifest: Record<string, unknown>, field: string, legalValues: readonly string[],
+): string {
+  const legal = legalValues.join(", ");
+  if (!(field in manifest)) {
+    throw new Error(`dispatch manifest ${field}: missing required field (legal values: ${legal})`);
+  }
+  const actual = manifest[field];
+  if (typeof actual !== "string" || !legalValues.includes(actual)) {
+    throw new Error(
+      `dispatch manifest ${field}: invalid value ${JSON.stringify(actual)} (legal values: ${legal})`,
+    );
+  }
+  return actual;
+}
+
 export function validateOwnedDispatchManifest(identity: OwnedModelIdentity, value: unknown, expectedSourceCommit: string): void {
   const manifest = manifestObject(value, "dispatch manifest");
   const fields = [
     "schema_version", "job_id", "source_commit", "not_before_ms", "expires_at_ms",
-    "resource_lease", "program", "args", "workload_profile", "env", "bindings", "custody_root",
+    "resource_lease", "program", "args", "workload_profile", "cpu_pacing_class", "window_contract",
+    "env", "bindings", "custody_root",
     "storage_reserves", "minimum_free_vram_bytes", "required_available_maximum_commit_bytes",
     "maximum_job_memory_bytes", "simulated_peak_commit_bytes", "preflight_receipt",
   ].sort();
+  // Named-field checks for the two closed-choice fields run before the generic closed-field
+  // check so a missing/invalid value gets a self-describing refusal instead of the generic
+  // "fields are not closed" message.
+  const cpuPacingClass = requireClosedChoiceField(manifest, "cpu_pacing_class", CPU_PACING_CLASS_LEGAL_VALUES);
+  const windowContract = requireClosedChoiceField(manifest, "window_contract", WINDOW_CONTRACT_LEGAL_VALUES);
   const actualFields = Object.keys(manifest).sort();
   if (actualFields.length !== fields.length || actualFields.some((field, index) => field !== fields[index])) {
     throw new Error("dispatch manifest fields are not closed");
   }
   if (manifest["schema_version"] !== "ember-lab-dispatch-manifest-v3") throw new Error("dispatch manifest schema is not ember-lab-dispatch-manifest-v3");
+  // The owned_serving spawn itself is headless (matches the pre-existing
+  // requires_ui_responsiveness === false invariant enforced below) -- the cockpit is a
+  // separate process (MemoryProcessClass "cockpit" vs "brain_server") that watches an owned
+  // seat, it is not the owned seat's own window. Only DispatchWorkloadProfileId::Cockpit
+  // spawns declare cockpit_hosted; nothing today produces that profile.
+  if (windowContract !== "headless_no_windows") {
+    throw new Error("owned server dispatch requires the headless_no_windows window contract");
+  }
+  if (cpuPacingClass !== "unpaced") {
+    throw new Error("owned server dispatch does not declare CPU pacing enforcement yet");
+  }
   const profile = manifestObject(manifest["workload_profile"], "dispatch manifest workload profile");
   const profileFields = ["profile_id", "pinned_host_producers", "requires_ui_responsiveness"].sort();
   const actualProfileFields = Object.keys(profile).sort();

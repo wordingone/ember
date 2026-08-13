@@ -48,6 +48,8 @@ function fixture(): {
       requires_ui_responsiveness: false,
       cpu_rate_percent: 80,
     },
+    cpu_pacing_class: "unpaced",
+    window_contract: "headless_no_windows",
     env: {},
     bindings: [],
     custody_root: root,
@@ -130,6 +132,9 @@ describe("governed Ember Lab dispatch", () => {
       ["workload profile", (manifest) => { manifest.workload_profile.profile_id = "owned_serving"; }],
       ["resource lease", (manifest) => { manifest.resource_lease = "gpu-other"; }],
       ["fields are not closed", (manifest) => { manifest.parallel_launcher = true; }],
+      ["cpu_pacing_class: missing required field (legal values: unpaced, governed)", (manifest) => { delete manifest.cpu_pacing_class; }],
+      ["window_contract: invalid value \"floating\" (legal values: headless_no_windows, cockpit_hosted)", (manifest) => { manifest.window_contract = "floating"; }],
+      ["window_contract does not match the governed_vertical authority", (manifest) => { manifest.window_contract = "cockpit_hosted"; }],
     ];
     for (const [message, mutate] of cases) {
       const value = fixture();
