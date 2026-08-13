@@ -109,6 +109,45 @@ def run_git(repo: Path, args: Sequence[str], *, check: bool = True) -> subproces
     return result
 
 
+def self_integrity_report(script_path: str | Path) -> dict[str, Any]:
+    """Compare THIS tool's own on-disk bytes against the committed HEAD version of the
+    same path, in the repository the running script physically lives in.
+
+    Deliberately independent of ``--repo``: the incident this exists for (#1696) was a
+    stale, dirty COPY OF THE SCRIPT ITSELF sitting in a shared clone -- a fact about
+    where the script's own bytes came from, not about which repository it was pointed
+    at to manage. Checking `--repo` instead would miss the exact incident shape (and,
+    in tests, would look at an unrelated throwaway repository that never contains a
+    copy of this file at all).
+
+    Fails CLOSED. `git diff --quiet HEAD -- <path>` returning 1 means the bytes differ
+    from HEAD -- staged, unstaged, or both, which covers the incident's exact shape (a
+    STAGED, uncommitted edit). Any OTHER git failure (not a repository, unborn HEAD, an
+    untracked copy of the script, ...) is treated as dirty too, with git's own error
+    text carried through as the reason: an integrity check that could not be verified
+    is not a passed integrity check.
+    """
+    resolved = Path(script_path).resolve(strict=True)
+    result = subprocess.run(
+        ["git", "-C", str(resolved.parent), "diff", "--quiet", "HEAD", "--", str(resolved)],
+        text=True,
+        capture_output=True,
+        encoding="utf-8",
+    )
+    if result.returncode == 0:
+        return {"dirty": False, "detail": None}
+    detail = result.stderr.strip() or result.stdout.strip()
+    if result.returncode == 1:
+        return {
+            "dirty": True,
+            "detail": detail or f"{resolved} differs from the committed HEAD version",
+        }
+    return {
+        "dirty": True,
+        "detail": detail or f"could not verify {resolved} against HEAD (git exit {result.returncode})",
+    }
+
+
 def parse_worktrees(text: str) -> list[Worktree]:
     rows: list[Worktree] = []
     fields: dict[str, Any] = {}
@@ -442,7 +481,54 @@ def install(repo: Path, state_file: Path, target: int) -> dict[str, Any]:
     return report
 
 
+MAIN_BRANCH_REF = "refs/heads/master"
+
+
+def _head_commit_age(repo: Path, head: str) -> str:
+    """Human-readable age of a commit, for the loud main-clone-HEAD warning."""
+    result = run_git(repo, ["show", "-s", "--format=%ct", head], check=False)
+    if result.returncode or not result.stdout.strip():
+        return "an unknown age"
+    try:
+        committed = datetime.fromtimestamp(int(result.stdout.strip()), tz=timezone.utc)
+    except (ValueError, OverflowError, OSError):
+        return "an unknown age"
+    seconds = max(0.0, (datetime.now(timezone.utc) - committed).total_seconds())
+    days = int(seconds // 86400)
+    if days >= 1:
+        return f"{days} day{'s' if days != 1 else ''} old"
+    hours = int(seconds // 3600)
+    return f"{hours} hour{'s' if hours != 1 else ''} old"
+
+
+def warn_if_main_head_irregular(repo: Path) -> None:
+    """Loud, non-fatal WARNING when the main clone's HEAD is detached or off master.
+
+    The incident this exists for (#1696): the shared main clone sat detached on a
+    six-day-old non-master branch for an entire session, and nothing said so. This does
+    NOT refuse -- a detached or feature-branch checkout of the MAIN clone is sometimes
+    a deliberate operator choice -- it only makes the condition impossible to miss on
+    every create/retire.
+    """
+    primary = list_worktrees(repo)[0]
+    if not primary.detached and primary.branch == MAIN_BRANCH_REF:
+        return
+    where = (
+        "DETACHED"
+        if primary.detached
+        else f"on branch '{primary.branch.removeprefix('refs/heads/')}'"
+    )
+    age = _head_commit_age(repo, primary.head)
+    print(
+        f"WARNING: main clone HEAD is {where} (expected branch 'master'); "
+        f"HEAD commit {primary.head[:12]} is {age}",
+        file=sys.stderr,
+        flush=True,
+    )
+
+
 def create_worktree(repo: Path, state_file: Path, args: argparse.Namespace) -> dict[str, Any]:
+    warn_if_main_head_irregular(repo)
     state = load_or_initialize(repo, state_file)
     # Audit WITHOUT ratchet: the ceiling is lowered ONLY by the explicit operator
     # `audit --ratchet` path, never on a growth attempt (and never by retire).
@@ -467,6 +553,16 @@ def create_worktree(repo: Path, state_file: Path, args: argparse.Namespace) -> d
         args.path,
         allow_c_drive=bool(getattr(args, "allow_c_drive", False)),
     )
+    # Issue #1696: a linked worktree nested inside the main clone's own working tree
+    # contaminates that checkout -- the second half of the incident this file exists to
+    # close. worktrees[0] is always the primary/main worktree (git lists it first).
+    main_worktree_path = Path(worktrees[0].path)
+    if is_within(destination, main_worktree_path):
+        raise LifecycleError(
+            "NESTED_INSIDE_MAIN_CLONE",
+            f"{destination} is inside the main clone's own working tree "
+            f"({main_worktree_path}); worktrees must live outside it",
+        )
     if destination.exists():
         raise LifecycleError("PATH_EXISTS", str(destination))
     key = path_key(destination)
@@ -536,6 +632,7 @@ def retire_worktree(
     *,
     force_owner: str | None = None,
 ) -> dict[str, Any]:
+    warn_if_main_head_irregular(repo)
     state = load_or_initialize(repo, state_file)
     # Expiry is a reason to retire, not a gate against retirement. Every other
     # repository-integrity gate remains active, and the selected worktree still
@@ -1043,6 +1140,8 @@ def strict_report(
     registered = {row.key for row in registrations}
     contradictions: list[dict[str, Any]] = []
     main_key = state.get("main_path")
+    main_row = next((row for row in registrations if row.key == main_key), None)
+    main_worktree_path = Path(main_row.path) if main_row is not None else None
     managed = state["managed"]
     legacy = set(state["legacy_paths"])
     common = common_dir(repo)
@@ -1102,6 +1201,29 @@ def strict_report(
                     "cure": (
                         f"python scripts/worktree_lifecycle.py retire --path {row.path}"
                         ", then recreate under the governed B:/A: root"
+                    ),
+                }
+            )
+        # Issue #1696: a linked worktree nested inside the main clone's own working
+        # tree contaminates that checkout. Always an error, regardless of which
+        # registry population (managed/legacy/unregistered) the row belongs to -- this
+        # is a structural placement defect, not inherited migration debt.
+        if main_worktree_path is not None and is_within(path, main_worktree_path):
+            nested_origin, _ = provenance(row.key)
+            contradictions.append(
+                {
+                    "code": "nested_inside_main_clone",
+                    "severity": "error",
+                    "origin": nested_origin,
+                    "reason": (
+                        "registered worktree path is inside the main clone's own "
+                        f"working tree ({main_worktree_path})"
+                    ),
+                    "path": row.path,
+                    "branch": row.branch,
+                    "cure": (
+                        f"python scripts/worktree_lifecycle.py retire --path {row.path}"
+                        ", then recreate it outside the main clone's working tree"
                     ),
                 }
             )
@@ -1291,6 +1413,14 @@ def emit(payload: dict[str, Any], quiet: bool) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=".", help="any worktree in the target repository")
+    parser.add_argument(
+        "--allow-modified-self",
+        action="store_true",
+        help=(
+            "run even though this tool's own on-disk bytes differ from the committed "
+            "HEAD version (issue #1696); explicit, acknowledged operator exception only"
+        ),
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     install_parser = subparsers.add_parser("install")
@@ -1404,8 +1534,20 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    repo = Path(canonical_path(args.repo))
     try:
+        # Issue #1696: refuse EVERY subcommand when this tool's own on-disk bytes are
+        # modified vs the committed HEAD version -- the defect class named in the
+        # incident was a stale, dirty shared clone silently degrading every consumer
+        # instead of failing closed. Checked before --repo is even resolved, so it
+        # applies uniformly regardless of which subcommand or target repository follows.
+        integrity = self_integrity_report(Path(__file__))
+        if integrity["dirty"] and not args.allow_modified_self:
+            raise LifecycleError(
+                "SELF_MODIFIED",
+                f"{integrity['detail']}; pass --allow-modified-self for an explicit, "
+                "acknowledged operator exception",
+            )
+        repo = Path(canonical_path(args.repo))
         common = common_dir(repo)
         state_file = common / STATE_NAME
         with RepositoryLock(common / LOCK_NAME):
@@ -1476,7 +1618,20 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    from gate_provenance import emit_gate_provenance
+    # Issue #1696: this tool's own banner is extended with dirty=true/false, reflecting
+    # whether ITS OWN bytes are modified vs the committed HEAD version. Deliberately
+    # NOT a change to gate_provenance.py's shared render_gate_provenance() -- that
+    # function is also used by check_changed_receipts.py and
+    # verify_authority_conservation.py, and widening its output format would change
+    # their banners too. This composes the shared banner with the tool-specific field
+    # instead.
+    from gate_provenance import render_gate_provenance
 
-    emit_gate_provenance(__file__)
+    _self_integrity = self_integrity_report(Path(__file__))
+    print(
+        f"{render_gate_provenance(__file__)} dirty="
+        f"{'true' if _self_integrity['dirty'] else 'false'}",
+        file=sys.stderr,
+        flush=True,
+    )
     raise SystemExit(main())
