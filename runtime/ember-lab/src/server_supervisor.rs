@@ -11,8 +11,8 @@
 //! create a second launcher, registry, ledger, or receipt family.
 
 use crate::{
-    atomic_create, describe_dispatch_manifest_parse_error, hash_bytes, Daemon,
-    DispatchBindingKind, DispatchManifest, DispatchOutcome, EmberLabError, Result,
+    atomic_create, describe_dispatch_manifest_parse_error, hash_bytes, Daemon, DispatchBindingKind,
+    DispatchManifest, DispatchOutcome, EmberLabError, Result,
 };
 use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
@@ -1289,10 +1289,8 @@ impl Daemon {
                         "serving contract restore manifest is unreadable: {error}"
                     ))
                 })?;
-                let manifest: DispatchManifest = parse_restore_manifest(
-                    &manifest_bytes,
-                    "serving contract restore manifest",
-                )?;
+                let manifest: DispatchManifest =
+                    parse_restore_manifest(&manifest_bytes, "serving contract restore manifest")?;
                 if !manifest_matches_contract(&manifest, &contract) {
                     return Err(invalid(
                         "restore manifest launcher does not match the serving contract",
@@ -1458,8 +1456,10 @@ mod tests {
 
     #[test]
     fn restore_manifest_refusal_names_the_missing_field_and_its_legal_values() {
-        let detail =
-            restore_manifest_refusal_detail(br#"{"window_contract":"cockpit_hosted"}"#, "restore manifest");
+        let detail = restore_manifest_refusal_detail(
+            br#"{"window_contract":"cockpit_hosted"}"#,
+            "restore manifest",
+        );
         assert_eq!(
             detail,
             "restore manifest is not closed JSON: cpu_pacing_class: missing required field (legal values: unpaced, governed)"

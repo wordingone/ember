@@ -313,10 +313,7 @@ fn dispatch_cli_refuses_manifest_missing_cpu_pacing_class_with_named_refusal() {
     let binary = ember_lab_binary();
     let manifest = write_dispatch_manifest(&root, "dispatch-refusal-cpu-pacing-job");
     let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
-    payload
-        .as_object_mut()
-        .unwrap()
-        .remove("cpu_pacing_class");
+    payload.as_object_mut().unwrap().remove("cpu_pacing_class");
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
 
     let mut server = start_server(&binary, &db, &pipe);
@@ -338,7 +335,8 @@ fn dispatch_cli_refuses_manifest_missing_cpu_pacing_class_with_named_refusal() {
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("cpu_pacing_class: missing required field (legal values: unpaced, governed)"),
+        stderr
+            .contains("cpu_pacing_class: missing required field (legal values: unpaced, governed)"),
         "dispatch CLI refusal did not name the missing field and its legal values: {stderr}"
     );
 

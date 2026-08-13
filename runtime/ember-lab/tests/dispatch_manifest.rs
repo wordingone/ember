@@ -544,11 +544,7 @@ fn dispatch_refuses_manifest_missing_window_contract_with_named_refusal() {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_millis() as i64;
-    let manifest = write_manifest(
-        &root,
-        "dispatch-refusal-window-contract-job",
-        dispatch_at,
-    );
+    let manifest = write_manifest(&root, "dispatch-refusal-window-contract-job", dispatch_at);
     let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
     payload.as_object_mut().unwrap().remove("window_contract");
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
