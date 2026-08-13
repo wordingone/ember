@@ -213,6 +213,28 @@ def resolve_governed_master(
     return sha
 
 
+CENSUS_WINDOW_ENV = "EMBER_CENSUS_WINDOW"
+CENSUS_WINDOW_MARKER_NAME = "census-window.lock"
+
+
+def _census_window_active(source_root: Path) -> bool:
+    """True if a census window is declared for source_root's object store.
+
+    Checked immediately before the one write this module performs (the
+    ``git fetch`` below), never earlier: a call that never needs to fetch
+    (commit already local) is genuinely read-only and must not be refused.
+    A missing/unresolvable common dir reads as no marker, not as an error --
+    this is an additional safety gate on top of the write, not a new
+    identity check (that remains ``require_canonical_source_root``'s job).
+    """
+    if os.environ.get(CENSUS_WINDOW_ENV):
+        return True
+    common = _common_dir(source_root)
+    if common is None:
+        return False
+    return (common / CENSUS_WINDOW_MARKER_NAME).exists()
+
+
 def require_published_ancestry(
     source_root: Path,
     source_commit: str,
@@ -226,6 +248,18 @@ def require_published_ancestry(
     missing commit object, an unreachable remote, or unproven ancestry --
     "no evidence" never reads as "related" (certified_train_launch.py
     read_commit_is_ancestor's shape).
+
+    MUTATING (issue #1708): when ``remote_master_sha``'s commit object is not
+    already present in ``source_root``, this runs ``git fetch --no-tags
+    --quiet <governed_remote> <remote_master_sha>``, writing into
+    ``source_root``'s object store. Both ``build_r1_warm100_entry`` and
+    ``validate_r1_warm100_entry`` reach this call (via
+    ``bind_source_identity``), so a "just validate this receipt" call is not
+    actually read-only. Before that write, this function refuses fail-closed
+    if a census window is declared -- either the ``EMBER_CENSUS_WINDOW``
+    environment variable is set, or a ``census-window.lock`` marker file
+    exists at ``source_root``'s git common directory -- so it never writes
+    into a registered worktree while one is active.
     """
     if not COMMIT_RE.fullmatch(source_commit) or not COMMIT_RE.fullmatch(remote_master_sha):
         raise ValueError("source authority: commit shas must be lowercase 40-hex")
@@ -233,6 +267,11 @@ def require_published_ancestry(
         return "EQUAL"
     exists = _run_git(source_root, "cat-file", "-e", f"{remote_master_sha}^{{commit}}")
     if exists.returncode != 0:
+        if _census_window_active(source_root):
+            raise ValueError(
+                "source authority: census window declared; validate performs "
+                "a git fetch into source_root and is held"
+            )
         fetched = _run_git(source_root, "fetch", "--no-tags", "--quiet", governed_remote, remote_master_sha)
         if fetched.returncode != 0:
             raise ValueError("source authority: governed master commit object is unavailable")
