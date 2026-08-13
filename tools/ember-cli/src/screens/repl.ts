@@ -952,7 +952,12 @@ export function ReplScreen({
   // one supervisor which is stopped during unmount. The external receipt root is
   // resolved strictly before the first poll; failure leaves the supervisor inert.
   useEffect(() => {
-    if (isHeadlessCapture()) return;
+    // #1455 diagnostic-only (not shipped behavior): opt-in env kill-switch so a harness can
+    // force JUST this poller live without disabling headlessCaptureEnv() globally -- flipping the
+    // global flag would also un-suppress activity-feed's watermark write (services/activity-feed.ts),
+    // which corrupts the OPERATOR'S real next-cockpit-boot replay-suppression state, not just this
+    // harness's own output. Off by default -- normal behavior unchanged unless this exact var is set.
+    if (isHeadlessCapture() && process.env["EMBER_DIAGNOSTIC_FORCE_POLLERS_LIVE"] !== "1") return;
     let supervisor: ReturnType<typeof createCockpitMemoryFootprintSupervisor> | null = null;
     try {
       const repoRoot = resolveEmberRepoRoot({});
@@ -995,7 +1000,10 @@ export function ReplScreen({
   // serving registry. The durable external alarm is appended before this callback
   // makes the drift operator-visible, and headless capture remains side-effect free.
   useEffect(() => {
-    if (isHeadlessCapture()) return;
+    // #1455 diagnostic-only (not shipped behavior): see the memory-footprint-supervisor
+    // useEffect above for why this is a narrow forced-live switch, not a global
+    // headlessCaptureEnv() flip.
+    if (isHeadlessCapture() && process.env["EMBER_DIAGNOSTIC_FORCE_POLLERS_LIVE"] !== "1") return;
     let topologyService: ReturnType<typeof createLiveServingTopologyService> | null = null;
     try {
       const repoRoot = resolveEmberRepoRoot({});
@@ -1117,6 +1125,11 @@ export function ReplScreen({
   const activityCursorRef = useRef(0);
 
   useEffect(() => {
+    // #1455 diagnostic-only bisection (not shipped behavior): opt-in env kill-switch so a
+    // harness can isolate startActivityFeed()'s own engine (recursive receipts/** fs.watch plus its two
+    // 1s-cadence intervals) from every other always-on tick source, without needing a second
+    // source tree. Off by default -- normal behavior is unchanged unless this exact var is set.
+    if (process.env["EMBER_DIAGNOSTIC_DISABLE_ACTIVITY_FEED"] === "1") return;
     const handle = startActivityFeed();
     return () => handle.stop();
   }, []);
