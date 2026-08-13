@@ -93,7 +93,11 @@ import {
   publishActivityFeedInfrastructureFailure,
   startActivityFeed,
 }                                        from "../services/activity-feed.ts";
-import { createPollFailureDeduper, type PollFailureDeduper } from "../services/poll-failure-dedup.ts";
+import {
+  createPollFailureStatusTracker,
+  type PollFailureStatusEntry,
+  type PollFailureStatusTracker,
+} from "../services/poll-failure-status.ts";
 import { advanceActivityTranscript }      from "../services/activity-transcript-window.ts";
 import { useModelMetricsPoller }         from "../services/model-metrics-poller.ts";
 import { useCircuitBreakerBanner, useRoundtripAge } from "../services/circuit-breaker-banner-poller.ts";
@@ -191,8 +195,11 @@ export const COMPACTION_INDICATOR_TEXT  = "Razzle-dazzling...";
 export const ANALYTICS_SESSION_START    = "ember_repl_session_start";
 export const ANALYTICS_SESSION_END      = "ember_repl_session_end";
 
-/** #1698: window a repeated watcher-poller failure class collapses into one activity-feed line. */
-export const POLL_FAILURE_DEDUP_INTERVAL_MS = 15_000;
+/** #1701: ms of report()-silence for a watcher-poller failure class before it is presumed
+ *  recovered (sticky-status sweep, below). The fastest poller (memory-footprint) polls every
+ *  ~1s and the slowest wired here (serving-topology) every ~5s; this sits comfortably above
+ *  both so a single missed tick never flaps the status between active/recovered. */
+export const POLL_FAILURE_RECOVERY_MS = 20_000;
 
 /** Width budget for the in-window provenance/agent pane. */
 export function operatorSurfaceWidth(terminalColumns: number): number {
@@ -892,16 +899,25 @@ export function ReplScreen({
   // component is mounted with, never the process's raw stdout/stderr), so at 1s/5s poll
   // cadence a persistently-failing poller (e.g. OFFLINE, no EMBER_LAB_PIPE) bled dozens of
   // interleaved raw fragments into the terminal within minutes, overwriting arbitrary panel
-  // cells. Route every poller failure through this deduper into the activity feed instead --
-  // at most one line per failure class per POLL_FAILURE_DEDUP_INTERVAL_MS, carrying the
-  // suppressed count forward, same channel notifyOperator below already uses correctly.
-  const pollFailureDeduperRef = useRef<PollFailureDeduper | null>(null);
-  if (!pollFailureDeduperRef.current) {
-    pollFailureDeduperRef.current = createPollFailureDeduper({
-      intervalMs: POLL_FAILURE_DEDUP_INTERVAL_MS,
-      publish: (text) => { publishActivityFeedInfrastructureFailure(text); },
+  // cells. Route every poller failure through this tracker instead of a raw write.
+  //
+  // #1701: the original #1698/#1700 fix (services/poll-failure-dedup.ts) republished a NEW
+  // activity-feed/transcript line every POLL_FAILURE_DEDUP_INTERVAL_MS window for as long as a
+  // class stayed failing -- an idle OFFLINE cockpit's transcript became a monotone ~4-entries/
+  // min ticker across the interleaved classes, burying real operator activity. This tracker
+  // (services/poll-failure-status.ts) replaces that wiring: it publishes a TRANSITION line only
+  // on first-seen / message-changed / recovered, and exposes the steady-state in-place status
+  // (pollFailureStatuses, below) for the sticky status region instead. poll-failure-dedup.ts
+  // itself is untouched and still valid as a standalone rate-limiting utility -- it is simply no
+  // longer the right fit for a status that needs a running count/since, not a repeat window.
+  const pollFailureStatusRef = useRef<PollFailureStatusTracker | null>(null);
+  if (!pollFailureStatusRef.current) {
+    pollFailureStatusRef.current = createPollFailureStatusTracker({
+      recoveryAfterMs: POLL_FAILURE_RECOVERY_MS,
+      publishTransition: (text) => { publishActivityFeedInfrastructureFailure(text); },
     });
   }
+  const [pollFailureStatuses, setPollFailureStatuses] = useState<PollFailureStatusEntry[]>([]);
 
   // #447: cockpit self-restart event -- read the PREVIOUS session's heartbeat row (if any)
   // exactly once, before this session's own first write (the per-second tick below) overwrites
@@ -947,7 +963,7 @@ export function ReplScreen({
         // instead of the library defaults' raw console.warn (see the deduper's own
         // comment above for why a raw write here corrupts the TUI framebuffer).
         onOwnershipError: (error) => {
-          pollFailureDeduperRef.current?.report(
+          pollFailureStatusRef.current?.report(
             "memory-footprint:ownership",
             `[memory-footprint] Ember Lab process identity unavailable: ${
               error instanceof Error ? error.message : String(error)
@@ -955,18 +971,18 @@ export function ReplScreen({
           );
         },
         onPollError: (error) => {
-          pollFailureDeduperRef.current?.report(
+          pollFailureStatusRef.current?.report(
             "memory-footprint:poll",
             `[memory-footprint] poll failed: ${error instanceof Error ? error.message : String(error)}`,
           );
         },
         warn: (message) => {
-          pollFailureDeduperRef.current?.report("memory-footprint:trip", message);
+          pollFailureStatusRef.current?.report("memory-footprint:trip", message);
         },
       });
       supervisor.start();
     } catch (error) {
-      pollFailureDeduperRef.current?.report(
+      pollFailureStatusRef.current?.report(
         "memory-footprint:inert",
         `[memory-footprint] supervisor is inert: ${error instanceof Error ? error.message : String(error)}`,
       );
@@ -1001,7 +1017,7 @@ export function ReplScreen({
         // #1698: route poll-cadence failures through the deduped activity feed
         // instead of the library default's raw console.warn.
         onPollError: (error) => {
-          pollFailureDeduperRef.current?.report(
+          pollFailureStatusRef.current?.report(
             "serving-topology:poll",
             `[serving-topology] poll failed: ${error instanceof Error ? error.message : String(error)}`,
           );
@@ -1009,7 +1025,7 @@ export function ReplScreen({
       });
       topologyService.start();
     } catch (error) {
-      pollFailureDeduperRef.current?.report(
+      pollFailureStatusRef.current?.report(
         "serving-topology:inert",
         `[serving-topology] supervisor is inert: ${error instanceof Error ? error.message : String(error)}`,
       );
@@ -1113,6 +1129,34 @@ export function ReplScreen({
       const advanced = advanceActivityTranscript(prev, activityCursorRef.current, next.recentLines);
       activityCursorRef.current = advanced.cursor;
       return advanced.messages;
+    });
+  }, 500);
+
+  // #1701: sweep for watcher-poller failure classes gone silent long enough to be presumed
+  // recovered (publishes their one "recovered" transition line) and re-snapshot the active set
+  // for the sticky status region below. Piggybacks on the same 500ms cadence as the
+  // activity-feed pickup above rather than a new timer -- this is render-side bookkeeping over
+  // the tracker's own in-memory state, not a new poll source. Skipped when nothing has ever been
+  // active AND nothing is active now, so an idle ONLINE session (no poller ever failed) never
+  // re-renders on this tick.
+  useInterval(() => {
+    pollFailureStatusRef.current?.sweep();
+    const next = pollFailureStatusRef.current?.getActiveStatuses() ?? [];
+    if (next.length === 0 && pollFailureStatuses.length === 0) return;
+    setPollFailureStatuses((prev) => {
+      const unchanged =
+        prev.length === next.length &&
+        prev.every((entry, i) => {
+          const candidate = next[i]!;
+          return (
+            entry.classKey === candidate.classKey &&
+            entry.message === candidate.message &&
+            entry.count === candidate.count &&
+            entry.since === candidate.since &&
+            entry.lastSeenAt === candidate.lastSeenAt
+          );
+        });
+      return unchanged ? prev : next;
     });
   }, 500);
 
@@ -2259,6 +2303,7 @@ export function ReplScreen({
           effort:         retryStatus,
           degraded:       degradedBanner,
           outage:         outageBanner,
+          pollFailures:   pollFailureStatuses,
           roundtripAge,
           compact:         dropdownOpen,
           // Legibility bar (2026-07-26): without this the bar row had no way to know it was
