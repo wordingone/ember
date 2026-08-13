@@ -3,6 +3,7 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import { describe, expect, test } from "bun:test";
 import { createHostTelemetryPoller } from "./host-telemetry-poller.ts";
+import type { HostTelemetrySnapshot } from "./host-telemetry-poller.ts";
 import type { GpuStateSnapshot } from "./gpu-state-poller.ts";
 
 const gpuSnapshot: GpuStateSnapshot = {
@@ -123,5 +124,41 @@ describe("host telemetry poller", () => {
     const poller = createHostTelemetryPoller({ capacity: 3, readers: fakeReaders({ memory: () => (tick += 1) }) });
     for (let i = 0; i < 5; i++) poller.pollOnce();
     expect(poller.snapshot().memory.values).toEqual([3, 4, 5]);
+  });
+
+  // #1455: onUpdate is the single publish point a consumer subscribes to instead of running its
+  // own decoupled republish timer over snapshot() (the defect: two independent 1s timers can
+  // interleave out of phase, so a consumer on its own timer can read a snapshot up to one tick
+  // stale relative to the poll that just landed).
+  test("#1455: onUpdate fires exactly once per pollOnce, carrying the fresh sample", () => {
+    let tick = 0;
+    const updates: HostTelemetrySnapshot[] = [];
+    const poller = createHostTelemetryPoller({
+      readers: fakeReaders({ memory: () => (tick += 1) }),
+      onUpdate: (snapshot) => updates.push(snapshot),
+    });
+    poller.pollOnce();
+    poller.pollOnce();
+    expect(updates.length).toBe(2);
+    expect(updates[0].memory.values).toEqual([1]);
+    expect(updates[1].memory.values).toEqual([1, 2]); // second update already carries the second sample, never stale
+  });
+
+  test("#1455: onUpdate also fires once per pushGpuSample, with vram/gpu already applied", () => {
+    const updates: HostTelemetrySnapshot[] = [];
+    const poller = createHostTelemetryPoller({
+      readers: fakeReaders(),
+      onUpdate: (snapshot) => updates.push(snapshot),
+    });
+    poller.pushGpuSample(gpuSnapshot);
+    expect(updates.length).toBe(1);
+    expect(updates[0].vram.values).toEqual([18]);
+    expect(updates[0].gpu.values).toEqual([42]);
+  });
+
+  test("#1455: without onUpdate, poller behaves exactly as before (no callback, no throw)", () => {
+    const poller = createHostTelemetryPoller({ readers: fakeReaders() });
+    expect(() => poller.pollOnce()).not.toThrow();
+    expect(() => poller.pushGpuSample(gpuSnapshot)).not.toThrow();
   });
 });
