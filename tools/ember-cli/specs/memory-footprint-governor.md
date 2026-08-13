@@ -22,6 +22,8 @@ Consumer: `tools/ember-cli/src/services/memory-footprint-cockpit.ts`
 
 Consumer: `tools/ember-cli/src/services/issue1455-memory-soak-receipt.ts`
 
+Consumer: `tools/ember-cli/src/services/poll-failure-dedup.ts`
+
 ## Authority and custody
 
 The native Ember CLI cockpit is the sole live poll-loop owner. It loads the
@@ -65,9 +67,13 @@ unfulfilled operator action rather than a false restart claim.
 
 Mount starts exactly one supervisor; unmount stops it. Slow polls never overlap,
 and scheduled census failures are contained and reported without an unhandled
-rejection. Removal of the five consumers, their focused tests, the REPL wiring,
-and this spec is the complete rollback. Rollback reopens #1282 C1 because the
-legacy JSON threshold spec would again have no live consumer.
+rejection. Poll-cadence and construction-failure diagnostics route through the
+shared, dedup-only `poll-failure-dedup.ts` helper into the cockpit activity
+feed rather than raw `console.warn` (#1698); the helper carries no custody,
+threshold, or corrective-action authority of its own. Removal of the six
+consumers, their focused tests, the REPL wiring, and this spec is the complete
+rollback. Rollback reopens #1282 C1 because the legacy JSON threshold spec
+would again have no live consumer.
 
 This carrier grants no GPU, training, checkpoint, model-quality, availability,
 #756 closure, or whole-issue #1282 closure credit. C2-C4 remain separate live
