@@ -565,3 +565,114 @@ def test_foreign_repo_cli_refusal_is_content_addressed(tmp_path: Path, foreign: 
     assert payload["schema"] == "ember-r1-warm100-entry-refusal-v1"
     assert payload["result"] == "REFUSED"
     assert "object store" in payload["errors"][0]
+
+
+def _advance_governed_master(tmp_path: Path, governed_remote: Path) -> str:
+    """Push one further real commit to governed_remote and return its sha.
+
+    Used to put ``require_published_ancestry`` on the genuine "commit object
+    missing locally, a fetch would be needed" leg -- the only leg that ever
+    writes into ``source_root``.
+    """
+    seed = tmp_path / "advance-seed"
+    subprocess.run(["git", "clone", str(governed_remote), str(seed)], check=True, capture_output=True)
+    (seed / "advance.txt").write_text("advance marker\n", encoding="utf-8")
+    _git(seed, "add", "-A")
+    _git(seed, "commit", "-m", "advance governed master")
+    _git(seed, "push", "origin", "master")
+    return _git(seed, "rev-parse", "HEAD")
+
+
+def _common_dir_of(root: Path) -> Path:
+    raw = _git(root, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    return Path(raw).resolve(strict=True)
+
+
+def test_census_window_marker_refuses_before_fetch_is_attempted(tmp_path: Path, canonical: Path, governed_remote: Path):
+    """Issue #1708: a real ``census-window.lock`` marker at canonical's real
+    Git common directory must refuse ``require_published_ancestry`` BEFORE
+    the write it is gating, not merely produce some error afterward.
+
+    The ordering proof is a real git-object-store assertion, not a spy or a
+    mock: canonical_head's remote master has genuinely advanced past what
+    canonical has locally (real ``git push`` from a fresh clone, above), so
+    if the fetch this function guards ever actually ran, the new commit
+    object would now be present in canonical's own store. It still isn't --
+    proof the fetch was never issued, not just that an error came back.
+    """
+    from scripts.ember_restart import source_authority
+
+    new_master = _advance_governed_master(tmp_path, governed_remote)
+    canonical_head = _git(canonical, "rev-parse", "HEAD")
+    assert canonical_head != new_master
+    missing_before = subprocess.run(
+        ["git", "-C", str(canonical), "cat-file", "-e", f"{new_master}^{{commit}}"],
+        capture_output=True,
+    )
+    assert missing_before.returncode != 0
+
+    marker_path = _common_dir_of(canonical) / source_authority.CENSUS_WINDOW_MARKER_NAME
+    marker_path.write_text("", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="census window declared"):
+        source_authority.require_published_ancestry(
+            canonical, canonical_head, new_master, governed_remote=str(governed_remote)
+        )
+
+    still_missing = subprocess.run(
+        ["git", "-C", str(canonical), "cat-file", "-e", f"{new_master}^{{commit}}"],
+        capture_output=True,
+    )
+    assert still_missing.returncode != 0, "the guarded git fetch ran despite the census-window marker"
+
+
+def test_census_window_env_var_refuses_before_fetch_is_attempted(
+    tmp_path: Path, canonical: Path, governed_remote: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Issue #1708: the ``EMBER_CENSUS_WINDOW`` environment variable is the
+    other declared-window trigger, exercised the same real way -- no marker
+    file this time, proving the two triggers are independent paths into the
+    same fail-closed refusal, both stopping the write before it happens."""
+    from scripts.ember_restart import source_authority
+
+    new_master = _advance_governed_master(tmp_path, governed_remote)
+    canonical_head = _git(canonical, "rev-parse", "HEAD")
+    assert canonical_head != new_master
+
+    monkeypatch.setenv(source_authority.CENSUS_WINDOW_ENV, "1")
+
+    with pytest.raises(ValueError, match="census window declared"):
+        source_authority.require_published_ancestry(
+            canonical, canonical_head, new_master, governed_remote=str(governed_remote)
+        )
+
+    still_missing = subprocess.run(
+        ["git", "-C", str(canonical), "cat-file", "-e", f"{new_master}^{{commit}}"],
+        capture_output=True,
+    )
+    assert still_missing.returncode != 0, "the guarded git fetch ran despite EMBER_CENSUS_WINDOW"
+
+
+def test_missing_commit_without_census_window_still_fetches_and_resolves(
+    tmp_path: Path, canonical: Path, governed_remote: Path
+):
+    """Sanity control for the two refusal tests above: with no window
+    declared, the exact same "commit missing locally" setup still performs
+    the real fetch and resolves ancestry -- proving the refusal above comes
+    from the census-window gate, not from an accidental break of the
+    underlying mechanism."""
+    from scripts.ember_restart import source_authority
+
+    new_master = _advance_governed_master(tmp_path, governed_remote)
+    canonical_head = _git(canonical, "rev-parse", "HEAD")
+
+    result = source_authority.require_published_ancestry(
+        canonical, canonical_head, new_master, governed_remote=str(governed_remote)
+    )
+    assert result == "ANCESTOR"
+
+    now_present = subprocess.run(
+        ["git", "-C", str(canonical), "cat-file", "-e", f"{new_master}^{{commit}}"],
+        capture_output=True,
+    )
+    assert now_present.returncode == 0, "the real fetch should have written the commit object"

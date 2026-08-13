@@ -45,6 +45,17 @@ first then commit:
   Minting fails closed if the governed remote is unreachable; there is no
   offline/degraded fallback for this rung-entry gate.
 
+**This ancestry proof is mutating (issue #1708).** When the governed
+master's commit object is not already present in `source_root`, proving
+ancestry runs `git fetch` into `source_root`'s object store. Both
+`build_r1_warm100_entry` and `validate_r1_warm100_entry` reach this call, so
+a pure "validate this receipt" invocation is not actually read-only. Before
+that fetch, the check refuses fail-closed if a census window is declared:
+either the `EMBER_CENSUS_WINDOW` environment variable is set, or a
+`census-window.lock` marker file exists at `source_root`'s Git common
+directory. Declaring and clearing that marker is out of this adapter's
+scope -- it only reads for the marker's presence, never writes it.
+
 The result is recorded in a closed `source_binding` block:
 
 ```json
