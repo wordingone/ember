@@ -109,6 +109,35 @@ def run_git(repo: Path, args: Sequence[str], *, check: bool = True) -> subproces
     return result
 
 
+# Environment variables that redirect git's own repository/worktree/index discovery.
+# An ENCLOSING git process -- notably a hook, see .githooks/pre-commit -- sets these
+# for ITS OWN invocation (e.g. GIT_INDEX_FILE as a path relative to THAT process's
+# working directory). Inheriting them into a git call this tool nests inside itself can
+# silently redirect `-C <dir>` onto the wrong index or repository instead of the one
+# being asked about -- observed concretely: `git -C <this file's own directory> diff
+# --quiet HEAD -- <this file>`, invoked from inside the pre-commit hook, read a
+# GIT_INDEX_FILE inherited from the hook (relative to the WORKTREE ROOT, one directory
+# up) and silently reported no difference even though the staged bytes plainly
+# differed from HEAD. Exactly the class of silent-wrong-answer this file exists to
+# close, just one call deeper.
+_GIT_DISCOVERY_ENV_VARS = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_COMMON_DIR",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_CEILING_DIRECTORIES",
+    "GIT_DISCOVERY_ACROSS_FILESYSTEM",
+)
+
+
+def _clean_git_env() -> dict[str, str]:
+    return {
+        key: value for key, value in os.environ.items() if key not in _GIT_DISCOVERY_ENV_VARS
+    }
+
+
 def self_integrity_report(script_path: str | Path) -> dict[str, Any]:
     """Compare THIS tool's own on-disk bytes against the committed HEAD version of the
     same path, in the repository the running script physically lives in.
@@ -133,6 +162,7 @@ def self_integrity_report(script_path: str | Path) -> dict[str, Any]:
         text=True,
         capture_output=True,
         encoding="utf-8",
+        env=_clean_git_env(),
     )
     if result.returncode == 0:
         return {"dirty": False, "detail": None}
