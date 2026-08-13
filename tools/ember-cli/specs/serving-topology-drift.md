@@ -18,6 +18,8 @@ Consumer: `tools/ember-cli/src/services/serving-topology-census.ts`
 
 Consumer: `tools/ember-cli/src/services/serving-topology-live.ts`
 
+Consumer: `tools/ember-cli/src/services/poll-failure-dedup.ts`
+
 ## Contract
 
 - The cockpit polls at an explicit five-second cadence while mounted and stops
@@ -41,7 +43,12 @@ This is CPU/file-only topology observation. It grants no serving availability,
 restore, GPU, model, training, checkpoint, scientific-result, C3/C4, or issue
 completion credit. `NO_NEW_PARALLEL_AUTHORITY`.
 
+Poll-cadence failure diagnostics route through the shared, dedup-only
+`poll-failure-dedup.ts` helper into the cockpit activity feed rather than raw
+`console.warn` (#1698); the helper carries no drift-detection, alarm-write, or
+reconciliation authority of its own.
+
 ## Rollback
 
-Revert the three consumers, the REPL lifecycle wiring, tests, and this spec as
+Revert the four consumers, the REPL lifecycle wiring, tests, and this spec as
 one unit. Preserve already-emitted external alarm receipts for audit.
