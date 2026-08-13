@@ -718,8 +718,29 @@ fn dispatch_manifest_requires_a_bounded_cpu_rate_before_identity_or_spawn() {
     }
 }
 
-#[test]
-fn dispatch_manifest_applies_the_declared_windows_cpu_hard_cap() {
+fn write_manifest_with_pacing_class(
+    root: &Path,
+    job_id: &str,
+    not_before_ms: i64,
+    pacing_class: &str,
+) -> PathBuf {
+    let manifest = write_manifest(root, job_id, not_before_ms);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["cpu_pacing_class"] = json!(pacing_class);
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    manifest
+}
+
+/// Dispatches one fixture job under `pacing_class` and asserts the host's
+/// blanket CPU hard cap is present on the job object *whatever* that class is
+/// -- the cap is defense-in-depth and never comes off. Returns the live daemon,
+/// sandbox root, and `job_prepared` payload so the caller can assert the
+/// class-specific half of the receipt.
+fn dispatch_under_pacing_class(
+    sandbox_label: &str,
+    job_id: &str,
+    pacing_class: &str,
+) -> (Daemon, PathBuf, Value) {
     use std::mem::{size_of, zeroed};
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Foundation::CloseHandle;
@@ -729,8 +750,8 @@ fn dispatch_manifest_applies_the_declared_windows_cpu_hard_cap() {
         JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP,
     };
 
-    let root = sandbox("cpu-hard-cap");
-    let manifest = write_manifest(&root, "dispatch-cpu-hard-cap", 10_000);
+    let root = sandbox(sandbox_label);
+    let manifest = write_manifest_with_pacing_class(&root, job_id, 10_000, pacing_class);
     let db = root.join("ember-lab.sqlite3");
     let daemon = Daemon::open(&db).unwrap();
     daemon
@@ -745,8 +766,8 @@ fn dispatch_manifest_applies_the_declared_windows_cpu_hard_cap() {
     let connection = Connection::open(&db).unwrap();
     let job_object_name: String = connection
         .query_row(
-            "SELECT job_object_name FROM jobs WHERE job_id='dispatch-cpu-hard-cap'",
-            [],
+            "SELECT job_object_name FROM jobs WHERE job_id=?1",
+            [job_id],
             |row| row.get(0),
         )
         .unwrap();
@@ -770,22 +791,34 @@ fn dispatch_manifest_applies_the_declared_windows_cpu_hard_cap() {
     assert_ne!(ok, 0);
     assert_eq!(
         info.ControlFlags,
-        JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP
+        JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP,
+        "{pacing_class} spawn lost the host CPU hard-cap flags"
     );
-    assert_eq!(unsafe { info.Anonymous.CpuRate }, CPU_RATE_PERCENT * 100);
+    assert_eq!(
+        unsafe { info.Anonymous.CpuRate },
+        CPU_RATE_PERCENT * 100,
+        "{pacing_class} spawn lost the host CPU hard-cap rate"
+    );
     let prepared_payload: String = connection
         .query_row(
-            "SELECT payload_json FROM events WHERE job_id='dispatch-cpu-hard-cap' AND kind='job_prepared'",
-            [],
+            "SELECT payload_json FROM events WHERE job_id=?1 AND kind='job_prepared'",
+            [job_id],
             |row| row.get(0),
         )
         .unwrap();
     let prepared: Value = serde_json::from_str(&prepared_payload).unwrap();
-    assert_eq!(prepared["cpu_rate_control_verified"], true);
-    assert_eq!(prepared["applied_cpu_rate"], CPU_RATE_PERCENT * 100);
-    daemon.stop_job("dispatch-cpu-hard-cap").unwrap();
+    (daemon, root, prepared)
+}
+
+fn assert_terminal_receipt_carries_prepared(
+    daemon: &Daemon,
+    root: &Path,
+    job_id: &str,
+    prepared: &Value,
+) {
+    daemon.stop_job(job_id).unwrap();
     let artifact = daemon
-        .export_content_addressed_receipt("dispatch-cpu-hard-cap", &root.join("terminal-receipts"))
+        .export_content_addressed_receipt(job_id, &root.join("terminal-receipts"))
         .unwrap();
     let terminal: Value = serde_json::from_slice(&fs::read(artifact.path).unwrap()).unwrap();
     let terminal_prepared = terminal["events"]
@@ -794,11 +827,59 @@ fn dispatch_manifest_applies_the_declared_windows_cpu_hard_cap() {
         .iter()
         .find(|event| event["kind"] == "job_prepared")
         .unwrap();
-    assert_eq!(terminal_prepared["payload"], prepared);
+    assert_eq!(terminal_prepared["payload"], *prepared);
 }
 
 #[test]
-fn dispatched_cpu_burn_stays_inside_the_reopened_hard_cap() {
+fn dispatch_manifest_applies_the_declared_windows_cpu_hard_cap() {
+    // `unpaced` declares no pacing contract, so it earns no verification
+    // receipt -- but the host still caps it, which the shared helper asserts
+    // directly off the job object.
+    let (daemon, root, prepared) =
+        dispatch_under_pacing_class("cpu-hard-cap", "dispatch-cpu-hard-cap", "unpaced");
+    assert_eq!(prepared["cpu_pacing_class"], "unpaced");
+    assert_eq!(prepared["cpu_rate_control_verified"], false);
+    assert_eq!(prepared["applied_cpu_rate"], Value::Null);
+    assert_terminal_receipt_carries_prepared(&daemon, &root, "dispatch-cpu-hard-cap", &prepared);
+}
+
+#[test]
+fn governed_dispatch_earns_the_reopened_cpu_rate_verification_receipt() {
+    let (daemon, root, prepared) =
+        dispatch_under_pacing_class("cpu-hard-cap-governed", "dispatch-cpu-governed", "governed");
+    assert_eq!(prepared["cpu_pacing_class"], "governed");
+    assert_eq!(prepared["cpu_rate_control_verified"], true);
+    assert_eq!(prepared["applied_cpu_rate"], CPU_RATE_PERCENT * 100);
+    assert_terminal_receipt_carries_prepared(&daemon, &root, "dispatch-cpu-governed", &prepared);
+}
+
+#[test]
+fn governed_pacing_is_refused_at_a_cpu_rate_that_paces_nothing() {
+    let root = sandbox("governed-full-rate");
+    let manifest =
+        write_manifest_with_pacing_class(&root, "dispatch-governed-100", 10_000, "governed");
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["workload_profile"]["cpu_rate_percent"] = json!(100);
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
+    assert!(matches!(
+        daemon.dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        ),
+        Err(EmberLabError::InvalidDispatchManifest { .. })
+    ));
+    assert_eq!(daemon.job_state("dispatch-governed-100").unwrap(), None);
+}
+
+/// Runs a real sustained all-core burn inside a dispatched job and asserts the
+/// job object actually throttled it. This is #898's CPU acceptance probe, and
+/// it runs for BOTH pacing classes: the host cap is what does the throttling,
+/// and a `Governed` declaration must not be what a job depends on to be capped.
+fn assert_cpu_burn_stays_inside_hard_cap(sandbox_label: &str, job_id: &str, pacing_class: &str) {
     use std::mem::{size_of, zeroed};
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Foundation::CloseHandle;
@@ -807,8 +888,8 @@ fn dispatched_cpu_burn_stays_inside_the_reopened_hard_cap() {
         JOBOBJECT_BASIC_ACCOUNTING_INFORMATION,
     };
 
-    let root = sandbox("cpu-burn-boundary");
-    let manifest = write_manifest(&root, "dispatch-cpu-burn", 10_000);
+    let root = sandbox(sandbox_label);
+    let manifest = write_manifest_with_pacing_class(&root, job_id, 10_000, pacing_class);
     let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
     payload["env"]["EMBER_LAB_DISPATCH_CPU_BURN"] = json!("1");
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
@@ -828,8 +909,8 @@ fn dispatched_cpu_burn_stays_inside_the_reopened_hard_cap() {
     let connection = Connection::open(&db).unwrap();
     let job_object_name: String = connection
         .query_row(
-            "SELECT job_object_name FROM jobs WHERE job_id='dispatch-cpu-burn'",
-            [],
+            "SELECT job_object_name FROM jobs WHERE job_id=?1",
+            [job_id],
             |row| row.get(0),
         )
         .unwrap();
@@ -857,13 +938,27 @@ fn dispatched_cpu_burn_stays_inside_the_reopened_hard_cap() {
     let expected_cap_ms = elapsed_ms * logical_cpus * CPU_RATE_PERCENT as i64 / 100;
     assert!(
         cpu_ms >= 100,
-        "probe did not create sustained CPU load: {cpu_ms}ms"
+        "{pacing_class} probe did not create sustained CPU load: {cpu_ms}ms"
     );
     assert!(
         cpu_ms <= expected_cap_ms * 3 / 2 + 100,
-        "25% hard cap exceeded bounded tolerance: cpu={cpu_ms}ms cap={expected_cap_ms}ms"
+        "{pacing_class}: 25% hard cap exceeded bounded tolerance: cpu={cpu_ms}ms cap={expected_cap_ms}ms"
     );
-    daemon.stop_job("dispatch-cpu-burn").unwrap();
+    daemon.stop_job(job_id).unwrap();
+}
+
+#[test]
+fn dispatched_cpu_burn_stays_inside_the_reopened_hard_cap() {
+    assert_cpu_burn_stays_inside_hard_cap(
+        "cpu-burn-governed",
+        "dispatch-cpu-burn-governed",
+        "governed",
+    );
+}
+
+#[test]
+fn unpaced_dispatched_cpu_burn_still_stays_inside_the_host_hard_cap() {
+    assert_cpu_burn_stays_inside_hard_cap("cpu-burn-boundary", "dispatch-cpu-burn", "unpaced");
 }
 
 #[test]
