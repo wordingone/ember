@@ -12,14 +12,23 @@ Two bindings, both fail-closed:
 * ``source_commit`` -> published governed-remote history, proven by contacting
   the pinned remote URL (``git ls-remote``) and walking real ancestry
   (``git merge-base --is-ancestor``) -- never an ``origin`` URL string
-  comparison, which is spoofable in one config write. This still trusts the
-  executing environment's git configuration to resolve that pinned URL
-  honestly: neither the ls-remote nor the fetch call sanitizes the
-  environment, so a candidate repo's local ``url.*.insteadOf`` rewrite (or an
-  inherited ``GIT_CONFIG_GLOBAL``/``GIT_CONFIG_COUNT``/``GIT_CONFIG_KEY_*``)
-  can redirect the contact to an attacker-controlled remote serving a spoofed
-  master, "proving" ancestry against fabricated history. Env-hardening
-  against this is tracked as issue #1706, not yet implemented.
+  comparison, which is spoofable in one config write.
+
+  Env-hardening against config-based remote-contact spoofing (issue #1706):
+  ``resolve_governed_master``'s ls-remote runs with no repository context at
+  all (no ``-C``, an explicit unusable ``GIT_DIR``) and a stripped,
+  system/global-silenced environment, so no git config from any source --
+  local, global, system, or environment-injected -- can redirect it; this is
+  the only call in the pinned-URL binding whose result is otherwise
+  unconstrained (an attacker who controls what "master" resolves to can
+  fabricate a whole history to be "ancestor" of). ``require_published_ancestry``'s
+  fetch runs with the same stripped, system/global-silenced environment, but
+  still binds to ``source_root`` (it fetches INTO that object store), so a
+  repository-local rewrite is not excluded the same way for that call --
+  it is safe regardless, because a fetch is content-addressed: redirecting
+  its transport can only succeed if the redirected remote actually holds an
+  object matching the exact sha already fixed by the (hardened) ls-remote
+  above, which an attacker cannot forge.
 
 No component here trusts a copied constant: the canonical root, the
 worktree-lifecycle registry, and the governed remote's tip are all read fresh,
@@ -39,6 +48,48 @@ COMMIT_RE = re.compile(r"[0-9a-f]{40}")
 DEFAULT_GOVERNED_REF = "refs/heads/master"
 
 _WORKTREE_LIFECYCLE_MODULE_NAME = "_ember_source_authority_worktree_lifecycle"
+_GIT_ENV_HARDENING_MODULE_NAME = "_ember_source_authority_git_env_hardening"
+
+
+def _load_git_env_hardening():
+    """Load scripts/git_env_hardening.py by file path (issue #1706).
+
+    Same discipline as ``_load_worktree_lifecycle`` below and for the same
+    reason: this module is executed both as ``scripts.ember_restart.source_authority``
+    (package import) and directly (``python scripts/ember_restart/contract.py``,
+    which falls back to a bare ``import source_authority`` -- see contract.py's
+    own try/except). Under direct execution, ``sys.path[0]`` is
+    ``scripts/ember_restart/``, not ``scripts/``, so a plain
+    ``from scripts.git_env_hardening import ...`` would raise ModuleNotFoundError
+    in that shape -- this failed exactly that way against the CLI-subprocess
+    tests before being caught. File-path loading, relative to this module's
+    own installation, works under every execution shape.
+    """
+    module_path = Path(__file__).resolve().parents[1] / "git_env_hardening.py"
+    spec = importlib.util.spec_from_file_location(_GIT_ENV_HARDENING_MODULE_NAME, module_path)
+    if spec is None or spec.loader is None:
+        raise ValueError("source authority: git env hardening module cannot be loaded")
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+    except OSError as error:
+        raise ValueError("source authority: git env hardening module is unreadable") from error
+    return module
+
+
+def hardened_git_env() -> dict[str, str]:
+    return _load_git_env_hardening().hardened_git_env()
+
+# An explicit, deliberately-unusable GIT_DIR for the one call
+# (resolve_governed_master's ls-remote) that must consult NO repository's
+# config, local included. `ls-remote <literal-url>` needs no repository
+# context to succeed -- verified empirically for issue #1706 -- so pointing
+# GIT_DIR at a path that is not a valid repository is safe: the call either
+# resolves the literal URL with no git-directory work at all, or fails
+# closed if git ever changes that behavior. Never created on disk.
+_NO_REPO_CONTEXT_GIT_DIR = os.path.join(
+    os.path.dirname(__file__), ".ember-1706-no-repo-context-sentinel-do-not-create"
+)
 
 
 def _run_git(root: Path, *git_args: str) -> subprocess.CompletedProcess:
@@ -46,7 +97,11 @@ def _run_git(root: Path, *git_args: str) -> subprocess.CompletedProcess:
 
     Mirrors contract._run_git's discipline (shell=False, CREATE_NO_WINDOW).
     Kept local rather than imported: contract.py calls into this module, and
-    an import back the other way would create a cycle.
+    an import back the other way would create a cycle. Env-hardened (issue
+    #1706): closes the GIT_CONFIG_GLOBAL and GIT_CONFIG_COUNT/KEY_*/VALUE_*
+    vectors for every call through this function. Still binds to `root` via
+    `-C`, so a repository-local config rewrite is not excluded here -- see
+    `_run_git_pinned_remote` for the one call that needs that too.
     """
     return subprocess.run(
         ["git", "-C", str(root), *git_args],
@@ -54,6 +109,36 @@ def _run_git(root: Path, *git_args: str) -> subprocess.CompletedProcess:
         capture_output=True,
         text=True,
         shell=False,
+        env=hardened_git_env(),
+        creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+    )
+
+
+def _run_git_pinned_remote(*git_args: str) -> subprocess.CompletedProcess:
+    """Contact a pinned, literal remote URL with NO repository context at all.
+
+    Issue #1706 (F2): unlike every other call in this module, this one never
+    needs `-C source_root` -- `git ls-remote <url> <ref>` resolves a literal
+    URL, not a locally-configured remote name, so no repository's config
+    (local, global, or system) is relevant to it. Dropping repository
+    context is what actually closes the local-`.git/config`
+    `url.*.insteadOf` vector here: a command-line `-c` addition cannot
+    retract a same-key entry a local config already defined (`insteadOf` is
+    multi-valued and merges by longest-prefix-match across every source, so
+    an empty `-c` override sits alongside the real rule rather than
+    replacing it -- verified empirically), but omitting repository context
+    means no such rule, from any repository, is ever read in the first
+    place. Combined with `hardened_git_env` (system/global/env-injected
+    vectors), all three vectors named in issue #1706 are closed for this
+    one call.
+    """
+    return subprocess.run(
+        ["git", *git_args],
+        check=False,
+        capture_output=True,
+        text=True,
+        shell=False,
+        env={**hardened_git_env(), "GIT_DIR": _NO_REPO_CONTEXT_GIT_DIR},
         creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
     )
 
@@ -197,8 +282,16 @@ def resolve_governed_master(
 
     Never reads the candidate's configured ``origin`` -- the remote to
     contact is always the caller-supplied, governed value.
+
+    ``source_root`` is accepted for call-site stability and because this
+    function conceptually answers "what does the governed remote say,
+    on behalf of this candidate" -- but it is deliberately UNUSED in the git
+    invocation itself (issue #1706): contacting ``governed_remote`` runs
+    with no repository context at all, so ``source_root``'s configuration,
+    local or otherwise, is never consulted. See ``_run_git_pinned_remote``.
     """
-    result = _run_git(source_root, "ls-remote", "--exit-code", governed_remote, ref)
+    del source_root
+    result = _run_git_pinned_remote("ls-remote", "--exit-code", governed_remote, ref)
     if result.returncode != 0:
         raise ValueError("source authority: governed remote did not resolve")
     rows = [line for line in result.stdout.splitlines() if line.strip()]

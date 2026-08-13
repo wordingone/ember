@@ -38,12 +38,24 @@ first then commit:
   is resolved by contact (`git ls-remote`, never a locally configured
   `origin` -- an `origin` URL is a one-line, spoofable config write, not an
   identity), and `source_commit` must be that ref's tip or a real ancestor of
-  it (`git merge-base --is-ancestor`), proven against real Git history as
-  resolved by the executing environment's git configuration -- the contact
-  itself does not yet sanitize `url.*.insteadOf` rewriting or inherited
-  `GIT_CONFIG_*` variables that could redirect it (tracked as issue #1706).
-  Minting fails closed if the governed remote is unreachable; there is no
-  offline/degraded fallback for this rung-entry gate.
+  it (`git merge-base --is-ancestor`). Minting fails closed if the governed
+  remote is unreachable; there is no offline/degraded fallback for this
+  rung-entry gate.
+
+  **Env-hardening against config-based remote-contact spoofing (issue
+  #1706).** The resolving `ls-remote` runs with no repository context at all
+  (no `-C`, an explicit unusable `GIT_DIR`) and a stripped,
+  system/global-silenced environment, so no git config from any source --
+  local, global, system, or environment-injected (`GIT_CONFIG_COUNT` /
+  `GIT_CONFIG_KEY_*` / `GIT_CONFIG_VALUE_*`) -- can redirect it to an
+  attacker-controlled remote via `url.*.insteadOf`. The subsequent ancestry
+  fetch runs under the same stripped, system/global-silenced environment, but
+  still binds to `source_root` (it fetches into that object store), so a
+  repository-local `url.*.insteadOf` rewrite is not excluded the same way for
+  that call -- it is safe regardless, because a fetch is content-addressed:
+  redirecting its transport can only succeed if the redirected remote
+  actually holds an object matching the exact sha already fixed by the
+  hardened `ls-remote` above, which an attacker cannot forge.
 
 **This ancestry proof is mutating (issue #1708).** When the governed
 master's commit object is not already present in `source_root`, proving

@@ -2,7 +2,21 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Fail-closed run-tree provenance for the Ember totality board."""
+"""Fail-closed run-tree provenance for the Ember totality board.
+
+Env-hardening (issue #1706): every git call here runs with
+``hardened_git_env`` (system config silenced, environment-injected
+GIT_CONFIG_COUNT/KEY_*/VALUE_* stripped). Unlike
+``scripts/ember_restart/source_authority.py``'s pinned-URL binding, this
+module resolves a NAMED remote (``origin``, by default) rather than a
+literal constant, so resolving it inherently requires ``root``'s own
+repository context -- there is no "no repository context" call shape here
+the way there is for a pinned literal URL. A repository-local rewrite of
+what ``origin`` points to (via ``remote.origin.url`` or a local
+``url.*.insteadOf``) is therefore NOT closed by this change; that would
+require this module to pin and cross-check an expected URL, which is a
+design change beyond issue #1706's env-hardening scope.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +24,8 @@ import re
 import subprocess
 from pathlib import Path
 from typing import Any
+
+from scripts.git_env_hardening import hardened_git_env
 
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
@@ -30,6 +46,7 @@ def _git(
         text=True,
         encoding="utf-8",
         errors="strict",
+        env=hardened_git_env(),
     )
 
 
