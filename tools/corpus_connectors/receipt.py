@@ -214,6 +214,8 @@ _MAGIC_SIGNATURES = (
     (b"PK\x03\x04", "zip"),
     (b"PK\x05\x06", "zip"),
     (b"\x1f\x8b", "gzip"),
+    (b"7z\xbc\xaf\x27\x1c", "7z"),
+    (b"BZh", "bzip2"),
 )
 
 _EXTENSION_TYPES = {
@@ -222,6 +224,7 @@ _EXTENSION_TYPES = {
     ".gz": "gzip",
     ".tgz": "gzip",
     ".bz2": "bzip2",
+    ".7z": "7z",
     ".htm": "html",
     ".html": "html",
 }
