@@ -246,7 +246,7 @@ class TextLabCorpusTests(unittest.TestCase):
         duplicate=[dict(x) for x in entries]; duplicate[1]["content_sha256"]=duplicate[0]["content_sha256"]
         with self.assertRaisesRegex(ValueError,"duplicate"): build_manifest(duplicate, frozen_eval_hashes=set())
         with self.assertRaisesRegex(ValueError,"frozen eval"): build_manifest(entries, frozen_eval_hashes={entries[0]["content_sha256"]})
-_ALLOWED_LICENSES_SORTED = ["Apache-2.0", "BSD-3-Clause", "CC-BY-4.0", "CC0-1.0", "MIT", "PDDL-1.0"]
+_ALLOWED_LICENSES_SORTED = ["Apache-2.0", "BSD-3-Clause", "CC-BY-4.0", "CC0-1.0", "MIT", "ODC-By-1.0", "PDDL-1.0"]
 _REQUIRED_EVIDENCE_V2 = ["source_descriptor", "source_content", "license_evidence", "policy", "verifier_result"]
 
 
@@ -558,6 +558,18 @@ class LocalNormalizerAndLicenseProvenanceTests(unittest.TestCase):
             local_license_provenance_v1(content_sha256=content, license_spdx="CC0-1.0", evidence={"kind": "us_gov_federal_authorship", "agency": "NIST"})
         with self.assertRaisesRegex(ValueError, "kind is not recognized"):
             local_license_provenance_v1(content_sha256=content, license_spdx="MIT", evidence={"kind": "not_a_real_route"})
+
+    def test_license_provenance_admits_odc_by_1_0(self):
+        # Named, narrow allow-set extension: ODC-By-1.0 (Open Data Commons Attribution
+        # License v1.0) -- academic/pretraining-scale corpora (S2ORC, peS2o, S2ORC-ML,
+        # Zyda-2, Dolma) concentrate under this license and no CC0/CC-BY/MIT/Apache/
+        # BSD/PDDL alternative exists at comparable scale for the 5 slots this unblocks.
+        from text_lab_corpus import local_normalizer_v1, local_license_provenance_v1
+        _, content = local_normalizer_v1(b"odc-by licensed source text\n")
+        evidence = {"kind": "publisher_terms", "terms_url": "https://opendatacommons.org/licenses/by/1-0/", "declared_spdx": "ODC-By-1.0"}
+        receipt = local_license_provenance_v1(content_sha256=content, license_spdx="ODC-By-1.0", evidence=evidence)
+        self.assertEqual(receipt["license_spdx"], "ODC-By-1.0")
+        self.assertEqual(receipt["result"], "VERIFIED")
 
 
 class ConnectorReceiptAdapterTests(unittest.TestCase):
