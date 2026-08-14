@@ -824,3 +824,78 @@ def test_r1_warm100_entry_cli_refusal_is_content_addressed(tmp_path: Path):
     assert payload["receipt_sha256"] == hashlib.sha256(
         (json.dumps(unsigned, sort_keys=True, separators=(",", ":")) + "\n").encode()
     ).hexdigest()
+
+
+REAL_PARAMETER_COUNTER = (
+    REPO_ROOT
+    / "manifests"
+    / "ember-02-admission"
+    / "verifiers"
+    / "parameter-realization-verifier.py"
+)
+SHARED_ROUTE_ACTIVE_PARAMETERS = 1_020_589_568
+
+
+def test_shared_route_candidate_clears_the_real_trusted_parameter_counter(tmp_path: Path):
+    """A shared-route candidate must satisfy the real counter contract.py invokes (#1718).
+
+    contract.py spells the shared route "shared"; the trusted verifier spells it as an
+    absent expert (`--active-expert <id|empty>`) and rejects "shared" outright. The
+    fixture counter in this file accepts "shared", so only the real verifier catches it.
+    """
+    manifest_path = _candidate_manifest(tmp_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    counter = tmp_path / "counter" / "parameter-realization-verifier.py"
+    counter.write_bytes(REAL_PARAMETER_COUNTER.read_bytes())
+    counter_record = {
+        "path": str(counter.relative_to(tmp_path)),
+        "sha256": _sha256(counter),
+    }
+    registry_path = tmp_path / "trusted-verifiers.json"
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    registry["verifiers"] = [
+        (
+            {
+                **counter_record,
+                "evidence_classes": ["parameter_realization"],
+                "criterion_ids": [],
+            }
+            if "parameter_realization" in entry.get("evidence_classes", [])
+            else entry
+        )
+        for entry in registry["verifiers"]
+    ]
+    _write_json(registry_path, registry)
+
+    architecture = manifest["architecture"]
+    architecture["parameter_counter"] = counter_record
+    architecture["active_expert_ids"] = ["shared"]
+    architecture["active_parameters"] = SHARED_ROUTE_ACTIVE_PARAMETERS
+    architecture["episode_trainable_parameters"] = SHARED_ROUTE_ACTIVE_PARAMETERS
+
+    receipt_path = tmp_path / architecture["parameter_receipt"]["path"]
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["counter_sha256"] = counter_record["sha256"]
+    receipt["active_expert_ids"] = ["shared"]
+    receipt["active_parameters"] = SHARED_ROUTE_ACTIVE_PARAMETERS
+    receipt["episode_trainable_parameters"] = SHARED_ROUTE_ACTIVE_PARAMETERS
+    architecture["parameter_receipt"]["sha256"] = _write_json(receipt_path, receipt)
+
+    _write_json(manifest_path, manifest)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            "validate",
+            str(manifest_path),
+            "--trusted-verifier-registry",
+            str(registry_path),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
