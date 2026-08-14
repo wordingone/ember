@@ -3197,14 +3197,14 @@ impl Daemon {
             };
             let observed_identity = live.identity.clone();
             let mut conn = self.conn()?;
-            return consume_dispatch_token_transaction(
+            consume_dispatch_token_transaction(
                 &mut conn,
                 job_id,
                 token,
                 client_pid,
                 &observed_identity,
                 || Ok(live_process_is_running(&live)),
-            );
+            )
         }
         #[cfg(not(windows))]
         {
