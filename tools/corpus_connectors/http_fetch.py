@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """http_fetch.py -- plain HTTP(S) connector CLI for named-source pulls
 (OpenStax, archive.org dumps, NIST, and similar single-URL textbook/dump
 sources that have no dedicated API).
@@ -34,6 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--license-evidence", dest="license_evidence", default=None, metavar="STR")
     p.add_argument("--dest", default=None, help="local destination dir (default: ./corpus-downloads/http/<key>)")
     p.add_argument("--allow-unverified-license", action="store_true")
+    p.add_argument("--allow-content-mismatch", action="store_true")
     return p
 
 
@@ -59,6 +63,15 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
     dest_file = dest_root / _dest_filename(args.url)
 
     size, digest = rcpt.download_url(args.url, dest_file, expected_sha256=args.expected_sha256, opener=opener)
+
+    with dest_file.open("rb") as fh:
+        head = fh.read(1024)
+    try:
+        rcpt.gate_content_type(args.url, head, args.allow_content_mismatch)
+    except rcpt.ContentTypeMismatchError:
+        dest_file.unlink(missing_ok=True)
+        raise
+
     downloaded_paths = [dest_file]
 
     files = rcpt.build_file_entries(dest_root, [dest_file.relative_to(dest_root)])
