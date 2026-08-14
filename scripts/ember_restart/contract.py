@@ -719,6 +719,17 @@ def _verify_architecture(
             if isinstance(checkpoint, dict)
             else None
         )
+        # The trusted counter has no "shared" expert domain; it encodes the shared
+        # route as an absent expert and derives the same shared-only count as above.
+        # Translating here keeps its pinned bytes and this route vocabulary intact.
+        counter_active_expert = (
+            str(active_experts[0])
+            if isinstance(active_experts, list) and active_experts
+            else ""
+        )
+        if counter_active_expert == "shared":
+            counter_active_expert = ""
+        counter_active_expert_ids = [counter_active_expert] if counter_active_expert else []
         if (
             counter_is_trusted
             and counter_path is not None
@@ -736,7 +747,7 @@ def _verify_architecture(
                         "--checkpoint-manifest",
                         str(checkpoint_path),
                         "--active-expert",
-                        str(active_experts[0]) if isinstance(active_experts, list) and active_experts else "",
+                        counter_active_expert,
                     ],
                     cwd=root,
                     text=True,
@@ -772,7 +783,12 @@ def _verify_architecture(
                                 "active_expert_ids",
                             )
                             for field in measured_fields:
-                                if measured.get(field) != receipt.get(field):
+                                expected = (
+                                    counter_active_expert_ids
+                                    if field == "active_expert_ids"
+                                    else receipt.get(field)
+                                )
+                                if measured.get(field) != expected:
                                     errors.append(
                                         f"architecture.parameter_counter: executed {field} mismatch"
                                     )

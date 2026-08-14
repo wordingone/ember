@@ -2,7 +2,7 @@
 
 | Directory | Purpose | Type |
 |-----------|---------|------|
-| `.claude` | Claude Code session state: git worktrees for parallel PR-lane work (`.claude/worktrees/<lane>/`); machine-local, untracked | infra |
+| `.claude` | Claude Code session state; machine-local, untracked. PR-lane worktrees are **not** here: `scripts/worktree_lifecycle.py` creates them outside the repository, under the root named by `EMBER_WORKTREE_ROOT`, and refuses the C: drive without an explicit operator exception. See Worktree lifecycle below | infra |
 | `.github` | GitHub Actions workflows and CI/CD configuration | infra |
 | `.githooks` | Git hooks for pre-commit, commit-msg, pre-push gates | infra |
 | `baseline` | Foundation baseline protocols, specifications, receipts, and control data for C1–C8 reference gates | spec |
