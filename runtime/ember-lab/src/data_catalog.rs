@@ -7,6 +7,7 @@ use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::PathBuf;
 
 const MANIFEST_SCHEMA: &str = "ember-data-catalog-manifest-v1";
 const RECORD_KINDS: &[&str] = &[
@@ -78,7 +79,23 @@ pub(crate) fn migrate(conn: &Connection) -> Result<()> {
              record_count INTEGER NOT NULL CHECK(record_count >= 0),
              edge_count INTEGER NOT NULL CHECK(edge_count >= 0),
              imported_at_ms INTEGER NOT NULL CHECK(imported_at_ms >= 0)
-         );",
+         );
+         CREATE TABLE IF NOT EXISTS data_catalog_location_events(
+             seq INTEGER PRIMARY KEY AUTOINCREMENT,
+             object_kind TEXT NOT NULL CHECK(object_kind='immutable_object'),
+             object_id TEXT NOT NULL,
+             volume TEXT NOT NULL,
+             locator TEXT NOT NULL,
+             event TEXT NOT NULL CHECK(event IN ('registered','retired')),
+             event_at_ms INTEGER NOT NULL CHECK(event_at_ms >= 0),
+             reason TEXT,
+             payload_json TEXT NOT NULL,
+             payload_sha256 TEXT NOT NULL,
+             FOREIGN KEY(object_kind,object_id)
+                 REFERENCES data_catalog_records(kind,record_id)
+         );
+         CREATE INDEX IF NOT EXISTS data_catalog_location_events_by_tuple
+             ON data_catalog_location_events(object_id,volume,locator,seq);",
     )?;
     Ok(())
 }
@@ -423,6 +440,409 @@ pub(crate) fn status(conn: &Connection) -> Result<Value> {
         "unresolved_blockers": unresolved_blockers,
         "consumers": consumers,
     }))
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ArtifactLocationInput {
+    pub volume: String,
+    pub locator: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ArtifactLocationOutcome {
+    pub volume: String,
+    pub locator: String,
+    pub newly_registered: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RegisterArtifactOutcome {
+    pub object_id: String,
+    pub object_newly_registered: bool,
+    pub locations: Vec<ArtifactLocationOutcome>,
+}
+
+/// Registers a checkpoint/artifact and one or more of its physical locations in a single
+/// transaction: the object identity reuses `immutable_object`'s existing shape/validation
+/// (#1581), and each location is appended to `data_catalog_location_events` idempotently by
+/// (object,volume,locator) identity. Re-registering the same object+location is a no-op;
+/// re-registering the same object with different byte_count/media_type refuses.
+pub(crate) fn register_artifact(
+    conn: &mut Connection,
+    sha256_hex: &str,
+    byte_count: i64,
+    media_type: &str,
+    locations: &[ArtifactLocationInput],
+    registered_at_ms: i64,
+) -> Result<RegisterArtifactOutcome> {
+    if locations.is_empty() {
+        return invalid("artifact registration requires at least one location");
+    }
+    let digest = validate_hex_sha256(sha256_hex)?.to_string();
+    if byte_count <= 0 {
+        return invalid("artifact byte_count must be positive");
+    }
+    if media_type.is_empty() {
+        return invalid("artifact media_type must be nonempty");
+    }
+    let object_id = format!("sha256:{digest}");
+    let record = json!({
+        "kind": "immutable_object",
+        "id": object_id,
+        "sha256": digest,
+        "byte_count": byte_count,
+        "media_type": media_type,
+        "locator": format!("sha256/{}/{digest}", &digest[..2]),
+        "custody_state": "available",
+    });
+    validate_record(&record)?;
+
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+
+    let payload_json = serde_json::to_string(&record)?;
+    let payload_sha256 = sha256(payload_json.as_bytes());
+    let changed = tx.execute(
+        "INSERT OR IGNORE INTO data_catalog_records(kind,record_id,payload_json,payload_sha256)
+         VALUES('immutable_object',?1,?2,?3)",
+        params![object_id, payload_json, payload_sha256],
+    )?;
+    let object_newly_registered = changed == 1;
+    if !object_newly_registered {
+        let existing: (String, String) = tx.query_row(
+            "SELECT payload_json,payload_sha256 FROM data_catalog_records
+             WHERE kind='immutable_object' AND record_id=?1",
+            params![object_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        if existing != (payload_json, payload_sha256) {
+            return invalid(format!(
+                "artifact {object_id} is already registered with a different byte_count/media_type"
+            ));
+        }
+    }
+
+    let mut outcomes = Vec::with_capacity(locations.len());
+    let mut seen = BTreeSet::new();
+    for location in locations {
+        validate_volume(&location.volume)?;
+        validate_locator(&location.locator)?;
+        if !seen.insert((location.volume.clone(), location.locator.clone())) {
+            return invalid(format!(
+                "duplicate location {}/{} in one registration call",
+                location.volume, location.locator
+            ));
+        }
+        let latest = latest_location_event(&tx, &object_id, &location.volume, &location.locator)?;
+        let newly_registered = if latest.as_deref() == Some("registered") {
+            false
+        } else {
+            insert_location_event(
+                &tx,
+                &object_id,
+                &location.volume,
+                &location.locator,
+                "registered",
+                registered_at_ms,
+                None,
+            )?;
+            true
+        };
+        outcomes.push(ArtifactLocationOutcome {
+            volume: location.volume.clone(),
+            locator: location.locator.clone(),
+            newly_registered,
+        });
+    }
+
+    tx.commit()?;
+    Ok(RegisterArtifactOutcome {
+        object_id,
+        object_newly_registered,
+        locations: outcomes,
+    })
+}
+
+/// Retires a previously registered location as an explicit catalog event -- never a row
+/// deletion. Refuses if the object was never registered or the location is not currently
+/// in the `registered` state (already retired, or never registered).
+pub(crate) fn retire_artifact_location(
+    conn: &mut Connection,
+    sha256_hex: &str,
+    volume: &str,
+    locator: &str,
+    retired_at_ms: i64,
+    reason: &str,
+) -> Result<()> {
+    let digest = validate_hex_sha256(sha256_hex)?.to_string();
+    if reason.is_empty() {
+        return invalid("location retirement requires a nonempty reason");
+    }
+    validate_volume(volume)?;
+    validate_locator(locator)?;
+    let object_id = format!("sha256:{digest}");
+
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let object_exists: Option<String> = tx
+        .query_row(
+            "SELECT record_id FROM data_catalog_records
+             WHERE kind='immutable_object' AND record_id=?1",
+            params![object_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if object_exists.is_none() {
+        return invalid(format!("artifact {object_id} is not registered"));
+    }
+    let latest = latest_location_event(&tx, &object_id, volume, locator)?;
+    if latest.as_deref() != Some("registered") {
+        return invalid(format!(
+            "location {volume}/{locator} for {object_id} is not currently registered"
+        ));
+    }
+    insert_location_event(
+        &tx,
+        &object_id,
+        volume,
+        locator,
+        "retired",
+        retired_at_ms,
+        Some(reason),
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
+fn insert_location_event(
+    conn: &Connection,
+    object_id: &str,
+    volume: &str,
+    locator: &str,
+    event: &str,
+    event_at_ms: i64,
+    reason: Option<&str>,
+) -> Result<()> {
+    let payload = json!({
+        "object_id": object_id,
+        "volume": volume,
+        "locator": locator,
+        "event": event,
+        "event_at_ms": event_at_ms,
+        "reason": reason,
+    });
+    let payload_json = serde_json::to_string(&payload)?;
+    let payload_sha256 = sha256(payload_json.as_bytes());
+    conn.execute(
+        "INSERT INTO data_catalog_location_events(
+             object_kind,object_id,volume,locator,event,event_at_ms,reason,payload_json,payload_sha256
+         ) VALUES('immutable_object',?1,?2,?3,?4,?5,?6,?7,?8)",
+        params![
+            object_id,
+            volume,
+            locator,
+            event,
+            event_at_ms,
+            reason,
+            payload_json,
+            payload_sha256
+        ],
+    )?;
+    Ok(())
+}
+
+fn latest_location_event(
+    conn: &Connection,
+    object_id: &str,
+    volume: &str,
+    locator: &str,
+) -> Result<Option<String>> {
+    Ok(conn
+        .query_row(
+            "SELECT event FROM data_catalog_location_events
+             WHERE object_id=?1 AND volume=?2 AND locator=?3
+             ORDER BY seq DESC LIMIT 1",
+            params![object_id, volume, locator],
+            |row| row.get(0),
+        )
+        .optional()?)
+}
+
+fn active_locations_for(conn: &Connection, object_id: &str) -> Result<Vec<(String, String)>> {
+    let mut statement = conn.prepare(
+        "SELECT volume,locator,event FROM data_catalog_location_events
+         WHERE object_id=?1 ORDER BY volume,locator,seq",
+    )?;
+    let rows = statement.query_map(params![object_id], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    })?;
+    let mut latest: BTreeMap<(String, String), String> = BTreeMap::new();
+    for row in rows {
+        let (volume, locator, event) = row?;
+        latest.insert((volume, locator), event);
+    }
+    Ok(latest
+        .into_iter()
+        .filter(|(_, event)| event == "registered")
+        .map(|(key, _)| key)
+        .collect())
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CustodyVerdict {
+    Verified,
+    SizeMismatch,
+    AbsentAtRegisteredLocation,
+    NoRegisteredLocation,
+}
+
+impl CustodyVerdict {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Verified => "verified",
+            Self::SizeMismatch => "size_mismatch",
+            Self::AbsentAtRegisteredLocation => "absent_at_registered_location",
+            Self::NoRegisteredLocation => "no_registered_location",
+        }
+    }
+}
+
+/// Resolves each pinned hash to its currently active (registered, not retired) locations and
+/// verifies existence + byte count against a caller-supplied volume->root mapping. The catalog
+/// itself never stores an absolute host path (#1581/#1507 portability contract); the root map
+/// is a verification-time-only input, never persisted. Fails closed (returns Err) if an active
+/// location's volume has no supplied root, rather than guessing a verdict for it. `rehash`
+/// additionally recomputes the full SHA-256 of on-disk bytes; a rehash mismatch is folded into
+/// `size_mismatch` (declared identity does not match actual bytes), since the receipt's verdict
+/// enum is closed to the four values #1721 names.
+pub(crate) fn custody_verify(
+    conn: &Connection,
+    hashes: &[String],
+    roots: &BTreeMap<String, PathBuf>,
+    rehash: bool,
+    verified_at_ms: i64,
+) -> Result<Value> {
+    let mut results = Vec::with_capacity(hashes.len());
+    let mut admitted = true;
+    for hash in hashes {
+        let digest = validate_hex_sha256(hash)?.to_string();
+        let object_id = format!("sha256:{digest}");
+        let object_row: Option<String> = conn
+            .query_row(
+                "SELECT payload_json FROM data_catalog_records
+                 WHERE kind='immutable_object' AND record_id=?1",
+                params![object_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        let active_locations = active_locations_for(conn, &object_id)?;
+
+        let Some(object_payload) = object_row.filter(|_| !active_locations.is_empty()) else {
+            admitted = false;
+            results.push(json!({
+                "sha256": digest,
+                "verdict": CustodyVerdict::NoRegisteredLocation.as_str(),
+                "locations": [],
+            }));
+            continue;
+        };
+
+        let expected_bytes = {
+            let record: Value = serde_json::from_str(&object_payload)?;
+            let row = object(&record, "immutable object record")?;
+            integer_value(row, "byte_count", "immutable object record")?
+        };
+
+        let mut location_reports = Vec::with_capacity(active_locations.len());
+        let mut any_verified = false;
+        let mut any_size_mismatch = false;
+        for (volume, locator) in &active_locations {
+            let root = roots.get(volume).ok_or_else(|| {
+                invalid_error(format!(
+                    "custody verify has no root mapping supplied for volume {volume}"
+                ))
+            })?;
+            let candidate = root.join(locator);
+            let verdict = match std::fs::metadata(&candidate) {
+                Ok(meta) if meta.len() as i64 != expected_bytes => CustodyVerdict::SizeMismatch,
+                Ok(_) if rehash => match crate::hash_file(&candidate) {
+                    Ok(actual) if actual == digest => CustodyVerdict::Verified,
+                    Ok(_) => CustodyVerdict::SizeMismatch,
+                    Err(_) => CustodyVerdict::AbsentAtRegisteredLocation,
+                },
+                Ok(_) => CustodyVerdict::Verified,
+                Err(_) => CustodyVerdict::AbsentAtRegisteredLocation,
+            };
+            match verdict {
+                CustodyVerdict::Verified => any_verified = true,
+                CustodyVerdict::SizeMismatch => any_size_mismatch = true,
+                _ => {}
+            }
+            location_reports.push(json!({
+                "volume": volume,
+                "locator": locator,
+                "verdict": verdict.as_str(),
+            }));
+        }
+        let hash_verdict = if any_verified {
+            CustodyVerdict::Verified
+        } else if any_size_mismatch {
+            CustodyVerdict::SizeMismatch
+        } else {
+            CustodyVerdict::AbsentAtRegisteredLocation
+        };
+        if hash_verdict != CustodyVerdict::Verified {
+            admitted = false;
+        }
+        results.push(json!({
+            "sha256": digest,
+            "verdict": hash_verdict.as_str(),
+            "locations": location_reports,
+        }));
+    }
+    Ok(json!({
+        "schema_version": "ember-custody-verify-receipt-v1",
+        "verified_at_ms": verified_at_ms,
+        "rehash": rehash,
+        "admitted": admitted,
+        "results": results,
+    }))
+}
+
+fn validate_volume(value: &str) -> Result<()> {
+    validate_identity(value, "artifact location volume")
+}
+
+fn validate_locator(value: &str) -> Result<()> {
+    let looks_like_drive_prefix = value.len() >= 2 && value.as_bytes()[1] == b':';
+    if value.is_empty()
+        || value.len() > 4096
+        || value.starts_with('/')
+        || value.starts_with('\\')
+        || looks_like_drive_prefix
+        || value.split(['/', '\\']).any(|segment| segment == "..")
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-'))
+    {
+        return invalid(format!(
+            "artifact location locator {value} is not a portable relative path"
+        ));
+    }
+    Ok(())
+}
+
+fn validate_hex_sha256(value: &str) -> Result<&str> {
+    if value.len() != 64
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
+        return invalid("value must be 64 lowercase hexadecimal characters");
+    }
+    Ok(value)
 }
 
 fn unresolved_state(row: &Map<String, Value>, kind: &str) -> Result<Option<String>> {
