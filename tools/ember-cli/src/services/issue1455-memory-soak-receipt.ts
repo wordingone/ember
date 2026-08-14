@@ -11,7 +11,7 @@ const SHA256 = /^[0-9a-f]{64}$/;
 const GIB = 1024 ** 3;
 const MIB = 1024 ** 2;
 const SOAK_SECONDS = 7_200;
-const SAMPLE_INTERVAL_SECONDS = 60;
+const CADENCE_TOLERANCE_RATIO = 0.25;
 const GROWTH_CEILING_BYTES = 256 * MIB;
 const INCIDENT = {
   provider: "Microsoft-Windows-Resource-Exhaustion-Detector",
@@ -53,7 +53,7 @@ interface CommonInput {
 
 export interface Issue1455IdleSoakInput extends CommonInput {
   evidence_kind: "idle_soak";
-  sample_interval_seconds: 60;
+  sample_interval_seconds: number;
   samples: Issue1455MemorySample[];
 }
 
@@ -194,13 +194,18 @@ function buildIdleReceipt(input: Issue1455IdleSoakInput): Issue1455MemoryEvidenc
     ["schema_version", "evidence_kind", "incident", "source", "cockpit_pid", "sample_interval_seconds", "samples"],
     "ISSUE1455_IDLE_PROPERTIES_INVALID",
   );
-  if (input.sample_interval_seconds !== SAMPLE_INTERVAL_SECONDS || input.samples.length < 121) {
+  if (!Number.isSafeInteger(input.sample_interval_seconds) || input.sample_interval_seconds <= 0) {
+    throw new Error("ISSUE1455_IDLE_CADENCE_INVALID");
+  }
+  const intervalMs = input.sample_interval_seconds * 1_000;
+  const minSamples = Math.floor(SOAK_SECONDS / input.sample_interval_seconds) + 1;
+  if (input.samples.length < minSamples) {
     throw new Error("ISSUE1455_IDLE_CADENCE_INVALID");
   }
   const timestamps = input.samples.map(parseSample);
   for (let index = 1; index < timestamps.length; index += 1) {
     const elapsed = timestamps[index]! - timestamps[index - 1]!;
-    if (elapsed < 45_000 || elapsed > 75_000) {
+    if (elapsed < intervalMs * (1 - CADENCE_TOLERANCE_RATIO) || elapsed > intervalMs * (1 + CADENCE_TOLERANCE_RATIO)) {
       throw new Error("ISSUE1455_IDLE_CADENCE_INVALID");
     }
   }
@@ -223,7 +228,7 @@ function buildIdleReceipt(input: Issue1455IdleSoakInput): Issue1455MemoryEvidenc
     started_at: input.samples[0]!.ts,
     ended_at: input.samples.at(-1)!.ts,
     duration_seconds: durationSeconds,
-    sample_interval_seconds: SAMPLE_INTERVAL_SECONDS,
+    sample_interval_seconds: input.sample_interval_seconds,
     sample_count: input.samples.length,
     min_commit_bytes: Math.min(...commits),
     max_commit_bytes: Math.max(...commits),
@@ -334,7 +339,7 @@ export function verifyIssue1455MemoryReceipt(
       incident: row.incident as Issue1455Incident,
       source: row.source as Issue1455SourceIdentity,
       cockpit_pid: row.cockpit_pid as number,
-      sample_interval_seconds: row.sample_interval_seconds as 60,
+      sample_interval_seconds: row.sample_interval_seconds as number,
       samples: row.samples as Issue1455MemorySample[],
     });
   } else if (row.evidence_kind === "injected_growth") {
