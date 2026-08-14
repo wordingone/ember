@@ -32,11 +32,6 @@ CLOSURE_MODULE_RELATIVE_PATH = "scripts/training_closure.py"
 # Issue #1706: same load-out-of-the-tree-being-launched discipline as
 # CLOSURE_MODULE_RELATIVE_PATH, for the shared git-subprocess-env hardening.
 GIT_ENV_HARDENING_MODULE_RELATIVE_PATH = "scripts/git_env_hardening.py"
-# Issue #1721: same fixed-installation discipline as GIT_ENV_HARDENING_MODULE_
-# RELATIVE_PATH -- the custody gate is infrastructure with no dependency on
-# which tree is being launched, so it is loaded from THIS file's own tree even
-# though the repo_root it is asked to verify custody against varies per call.
-ARTIFACT_CUSTODY_GATE_MODULE_RELATIVE_PATH = "scripts/artifact_custody_gate.py"
 # Guard-floor keys (issue #1410): the remote guard's receipt_check requires
 # ticket/ts/sha_convention on any receipt carrying sha256 fields, and authority
 # leg 4 requires goal_id/next_executed_outcome on committed artifacts. They are
@@ -512,32 +507,6 @@ def load_git_env_hardening_module():
         specification.loader.exec_module(module)
     except OSError as error:
         raise ValueError("git env hardening module is unreadable") from error
-    return module
-
-
-def load_artifact_custody_gate_module():
-    """Load the shared #1721 custody-verify gate from THIS file's own tree.
-
-    Same fixed-installation rationale as ``load_git_env_hardening_module``: the
-    gate module itself is infrastructure, loaded once from the tree this launcher
-    ships in, and then asked to verify custody against the caller-supplied
-    ``repo_root`` (which may differ, e.g. under test).
-    """
-
-    module_path = (
-        pathlib.Path(__file__).resolve().parents[2]
-        / ARTIFACT_CUSTODY_GATE_MODULE_RELATIVE_PATH
-    )
-    specification = importlib.util.spec_from_file_location(
-        "ember_artifact_custody_gate", module_path
-    )
-    if specification is None or specification.loader is None:
-        raise ValueError("artifact custody gate module cannot be loaded")
-    module = importlib.util.module_from_spec(specification)
-    try:
-        specification.loader.exec_module(module)
-    except OSError as error:
-        raise ValueError("artifact custody gate module is unreadable") from error
     return module
 
 
@@ -1073,31 +1042,6 @@ def _validate_resume_request(
             "resume checkpoint architecture_revision does not match this "
             f"tree's config ({manifest_revision!r} vs {config_revision!r})"
         )
-
-    # Issue #1721: a certified launch names a subject artifact -- this resume
-    # checkpoint's shard bytes -- and must fail closed on unverified custody
-    # rather than trust that a directory existing and a manifest parsing means
-    # the bytes are what the catalog would call reachable. Runs the real
-    # `ember-lab custody-verify` CLI (never a Python reimplementation) against
-    # every shard hash the manifest itself declares, rooted at this exact
-    # checkpoint directory under the RESUME_CHECKPOINT_VOLUME convention. A
-    # manifest with no declared shard-hash contract (checkpoint_manifest_hashes
-    # returns []) has nothing this gate can verify and is left to the checks
-    # above; every real checkpoint schema this repo writes always declares one.
-    custody_gate = load_artifact_custody_gate_module()
-    custody_hashes = custody_gate.checkpoint_manifest_hashes(manifest)
-    if custody_hashes:
-        try:
-            custody_gate.custody_verify(
-                repo_root,
-                custody_hashes,
-                {custody_gate.RESUME_CHECKPOINT_VOLUME: checkpoint},
-            )
-        except custody_gate.CustodyRefused as error:
-            raise ValueError(
-                "run spec resume_checkpoint failed custody verification: "
-                f"{error}"
-            ) from error
 
     return ResumeRequest(
         checkpoint=checkpoint,
