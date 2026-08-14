@@ -123,9 +123,7 @@ fn to_wide_null(text: &str) -> Vec<u16> {
 #[test]
 fn fixture_dispatch_child_presents_a_visible_window() {
     if std::env::var("EMBER_LAB_DISPATCH_FIXTURE_CHILD_WINDOW").as_deref() == Ok("1") {
-        use windows_sys::Win32::UI::WindowsAndMessaging::{
-            CreateWindowExW, WS_POPUP, WS_VISIBLE,
-        };
+        use windows_sys::Win32::UI::WindowsAndMessaging::{CreateWindowExW, WS_POPUP, WS_VISIBLE};
         // A top-level visible window on the predefined STATIC class -- the exact
         // thing census_top_level_windows() enumerates (EnumWindows +
         // IsWindowVisible + owning PID), and a fair stand-in for any GUI a
