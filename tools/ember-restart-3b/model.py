@@ -421,12 +421,16 @@ class UnifiedDecoder(nn.Module):
         projector: nn.Module,
         name: str,
     ) -> tuple[torch.Tensor, torch.Tensor]:
+        if raw_values is None:
+            # image_token_id/audio_token_id are ordinary emittable vocab ids, not
+            # reserved out-of-band markers (issue #1725) -- they can appear in
+            # text-only input by coincidence. Injection is driven by whether a real
+            # modality tensor was passed, never by a marker-id match alone, so a
+            # coincidental match here is ordinary text: no raise, and no mask entry
+            # for downstream callers (e.g. _coordinates) to mistake for a real span.
+            return hidden_states, torch.zeros_like(input_ids, dtype=torch.bool)
         mask = input_ids.eq(marker_id)
         count = int(mask.sum().item())
-        if raw_values is None:
-            if count:
-                raise ValueError(f"{name} marker requires corresponding raw modality values")
-            return hidden_states, mask
         if not count:
             raise ValueError(f"raw {name} values were supplied but no {name} marker is present")
         projected = projector(raw_values).reshape(-1, self.config.hidden_size)
