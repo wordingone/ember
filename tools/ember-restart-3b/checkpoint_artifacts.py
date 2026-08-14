@@ -430,6 +430,67 @@ def _unique_tensor_storage_bytes(value: object) -> int:
     return visit(value)
 
 
+def _optimizer_tensor_storage_by_route_for_write(
+    *,
+    model: UnifiedDecoder,
+    optimizer: torch.optim.Optimizer,
+    shard_storage_lower_bounds: Mapping[str, int],
+    optimizer_state_layout: str,
+) -> dict[str, int]:
+    """Per-route optimizer tensor-storage bytes, consistent with the shards actually written.
+
+    ``_optimizer_tensor_storage_by_route`` measures the live in-memory
+    optimizer, where a tensor an optimizer shares across parameters --
+    bitsandbytes AdamW8bit's ``qmap1``/``qmap2`` -- is still one shared
+    object and dedupes to a single copy. Owner-sharded layout detaches each
+    owner's state independently before writing (``_detach_optimizer_value``
+    calls ``.cpu()`` per reference), which breaks that shared identity: the
+    written ``optimizer-state-{owner}.pt`` files each carry their own
+    physical copy. Re-deriving route bytes from the live optimizer after
+    that split understates what is actually on disk and desyncs from the
+    independently reopened per-shard measurement this projection is later
+    checked against. For owner-sharded layout, read the real bytes already
+    measured per shard instead of re-measuring the live optimizer.
+    """
+
+    if optimizer_state_layout == _OWNER_SHARDED_OPTIMIZER_STATE_LAYOUT:
+        return {
+            owner: shard_storage_lower_bounds.get(f"optimizer-state-{owner}.pt", 0)
+            for owner in ("shared", *EXPERT_NAMES)
+        }
+    return _optimizer_tensor_storage_by_route(model, optimizer)
+
+
+def _optimizer_state_actual_tensor_storage_bytes(
+    *,
+    optimizer_file_payload: Mapping[str, Any],
+    shard_storage_lower_bounds: Mapping[str, int],
+    optimizer_state_layout: str,
+) -> int:
+    """The realized optimizer-state tensor-storage floor for what is actually written.
+
+    Owner-sharded layout writes one independent ``optimizer-state-{owner}.pt``
+    file per owner. Any tensor an optimizer shares across parameters -- for
+    example bitsandbytes AdamW8bit's ``qmap1``/``qmap2`` quantization lookup
+    tables, which are the exact same tensor object on every 8-bit parameter's
+    state -- is therefore physically duplicated once per owner file on disk,
+    not deduplicated the way a single unsplit blob would dedupe it. The
+    realized floor must sum the real per-shard bounds already measured at
+    write time (``shard_storage_lower_bounds``); deduping a blob that will
+    never be serialized as one file understates the owner-sharded layout's
+    true disk footprint and desyncs from the independently re-measured
+    per-shard total this projection is later checked against.
+    """
+
+    if optimizer_state_layout == _OWNER_SHARDED_OPTIMIZER_STATE_LAYOUT:
+        return sum(
+            bound
+            for path, bound in shard_storage_lower_bounds.items()
+            if path.startswith("optimizer-state-")
+        )
+    return _unique_tensor_storage_bytes(optimizer_file_payload)
+
+
 def _optimizer_owner_for_parameter(name: str) -> str:
     for expert_name in EXPERT_NAMES:
         if f".experts.{expert_name}." in name:
@@ -960,8 +1021,17 @@ def _storage_failure_comparison_operands(
     active_parameters: int | None = None,
     shard_publication_modes: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
-    routed_optimizer = _optimizer_tensor_storage_by_route(model, optimizer)
-    optimizer_actual = _unique_tensor_storage_bytes(optimizer_file_payload)
+    routed_optimizer = _optimizer_tensor_storage_by_route_for_write(
+        model=model,
+        optimizer=optimizer,
+        shard_storage_lower_bounds=shard_storage_lower_bounds,
+        optimizer_state_layout=optimizer_state_layout,
+    )
+    optimizer_actual = _optimizer_state_actual_tensor_storage_bytes(
+        optimizer_file_payload=optimizer_file_payload,
+        shard_storage_lower_bounds=shard_storage_lower_bounds,
+        optimizer_state_layout=optimizer_state_layout,
+    )
     specialist_routes = [name for name in EXPERT_NAMES if routed_optimizer[name] > 0]
     route_multiplier = (
         1
@@ -1085,7 +1155,11 @@ def _derive_checkpoint_storage_projection(
             "checkpoint storage projection contains an unbounded publication mode"
         )
 
-    optimizer_actual = _unique_tensor_storage_bytes(optimizer_file_payload)
+    optimizer_actual = _optimizer_state_actual_tensor_storage_bytes(
+        optimizer_file_payload=optimizer_file_payload,
+        shard_storage_lower_bounds=shard_storage_lower_bounds,
+        optimizer_state_layout=optimizer_state_layout,
+    )
     active_bytes = routed_optimizer[model.active_expert]
     specialist_routes = [
         name for name in EXPERT_NAMES if routed_optimizer[name] > 0
@@ -1174,6 +1248,22 @@ def _derive_checkpoint_storage_projection(
             comparison_operands=comparison_operands,
         )
 
+    # owner_ids/route_valid/active_bytes above only need route positivity,
+    # which the live-optimizer measurement gives correctly regardless of
+    # whether owner-sharded writing later breaks shared-tensor identity, and
+    # cross-checking that positivity against shard_storage_lower_bounds'
+    # independently-derived owner set is a real integrity check worth
+    # keeping. The stored by-route byte field is checked byte-exactly
+    # against the reopened per-shard measurement in
+    # _validate_owner_storage_projection_authority, so it needs the same
+    # real, write-time bytes as optimizer_actual above -- not the live,
+    # pre-detach dedup this function otherwise uses for routed_optimizer.
+    routed_optimizer_actual = _optimizer_tensor_storage_by_route_for_write(
+        model=model,
+        optimizer=optimizer,
+        shard_storage_lower_bounds=shard_storage_lower_bounds,
+        optimizer_state_layout=optimizer_state_layout,
+    )
     projection = {
         "schema_version": "ember-checkpoint-storage-projection-v1",
         **({"optimizer_state_layout": optimizer_state_layout} if optimizer_state_layout != "legacy-v1" else {}),
@@ -1182,7 +1272,7 @@ def _derive_checkpoint_storage_projection(
         "optimizer_state_after_global_step": global_step,
         "optimizer_state_active_expert_ids": active_routes,
         "optimizer_state_tensor_storage_lower_bound_bytes": optimizer_actual,
-        "optimizer_state_tensor_storage_by_route_bytes": routed_optimizer,
+        "optimizer_state_tensor_storage_by_route_bytes": routed_optimizer_actual,
         "projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes": (
             projected_optimizer
         ),
