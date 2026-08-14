@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from test_admission import test_owned_admission_binds_sufficient_pretraining_evals_and_cli
-from test_contract import REPO_ROOT, _write_json
+from test_contract import REPO_ROOT, _register_checkpoint_custody, _write_json
 
 # cond3 seat-chain bridge wiring (state/specs/cond3-seat-bridge-spec.md): the
 # in-process axis-6 production-reach test imports the resolver module
@@ -67,18 +67,23 @@ def _approval(manifest: Path) -> Path:
 def _resolve(
     manifest: Path,
     approval: Path | None = None,
+    *,
+    custody_db: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
     approval = approval or _approval(manifest)
+    argv = [
+        sys.executable,
+        str(RESOLVER),
+        str(manifest),
+        "--trusted-verifier-registry",
+        str(manifest.parent / "trusted-verifiers.json"),
+        "--trusted-verifier-registry-approval",
+        str(approval),
+    ]
+    if custody_db is not None:
+        argv += ["--custody-db", str(custody_db)]
     return subprocess.run(
-        [
-            sys.executable,
-            str(RESOLVER),
-            str(manifest),
-            "--trusted-verifier-registry",
-            str(manifest.parent / "trusted-verifiers.json"),
-            "--trusted-verifier-registry-approval",
-            str(approval),
-        ],
+        argv,
         cwd=REPO_ROOT,
         text=True,
         capture_output=True,
@@ -145,7 +150,10 @@ def test_resolver_derives_owned_identity_from_cert_bridge_but_refuses_unadmitted
     manifest["cert_manifest_digest"] = digest
     _write_json(manifest_path, manifest)
 
-    result = _resolve(manifest_path)
+    # The setup call above already registered this tmp_path's checkpoint
+    # shards at this exact db path (_register_checkpoint_custody's own
+    # fixed name) -- reuse it rather than re-registering.
+    result = _resolve(manifest_path, custody_db=tmp_path / "custody-gate-test.sqlite3")
     assert result.returncode != 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
     assert payload["valid"] is False
@@ -189,6 +197,7 @@ def test_axis6_production_path_reaches_seat_identity_bridge(tmp_path: Path, monk
         manifest_path,
         tmp_path / "trusted-verifiers.json",
         _approval(manifest_path),
+        custody_db=tmp_path / "custody-gate-test.sqlite3",
     )
 
     assert len(calls) == 1, "production default path did not reach derive_seat_identity exactly once"
@@ -344,8 +353,9 @@ def test_resolver_requires_external_registry_approval(tmp_path: Path, monkeypatc
             "errors": [],
         }
 
+    custody_db = tmp_path / "custody-gate-test.sqlite3"
     monkeypatch.setattr(cli_seat, "derive_seat_identity", _admitted_bridge)
-    accepted = cli_seat.resolve_owned_seat(manifest_path, registry, approval)
+    accepted = cli_seat.resolve_owned_seat(manifest_path, registry, approval, custody_db=custody_db)
     assert accepted["valid"] is True
 
     replaced = json.loads(registry.read_text(encoding="utf-8"))
@@ -354,6 +364,6 @@ def test_resolver_requires_external_registry_approval(tmp_path: Path, monkeypatc
     manifest["trusted_verifier_registry_sha256"] = hashlib.sha256(registry.read_bytes()).hexdigest()
     _write_json(manifest_path, manifest)
 
-    rejected = cli_seat.resolve_owned_seat(manifest_path, registry, approval)
+    rejected = cli_seat.resolve_owned_seat(manifest_path, registry, approval, custody_db=custody_db)
     assert rejected["valid"] is False
     assert any("external authority hash mismatch" in error for error in rejected["errors"])
