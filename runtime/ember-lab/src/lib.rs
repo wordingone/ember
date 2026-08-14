@@ -317,6 +317,10 @@ pub enum EmberLabError {
     InvalidDataCatalog {
         detail: String,
     },
+    WindowContractViolation {
+        job_id: String,
+        detail: String,
+    },
     Poisoned,
 }
 
@@ -466,6 +470,7 @@ pub struct JobSpec {
     cpu_rate_percent: Option<u32>,
     cpu_pacing_class: DispatchCpuPacingClass,
     requires_ui_responsiveness: bool,
+    window_contract: DispatchWindowContract,
     dispatch_token: Option<DispatchToken>,
 }
 
@@ -725,6 +730,14 @@ const PROTECTIVE_CHECKPOINT_REQUEST_ENV: &str = "EMBER_LAB_PROTECTIVE_CHECKPOINT
 const PROTECTIVE_CHECKPOINT_RESPONSE_ENV: &str = "EMBER_LAB_PROTECTIVE_CHECKPOINT_RESPONSE_PATH";
 const PROTECTIVE_CHECKPOINT_MAX_GRACE_MS: u64 = 30_000;
 const PROTECTIVE_CHECKPOINT_MONITOR_TOTAL_GRACE_MS: u64 = 5_000;
+/// Production window-contract census budget (issue #898 L6): how long
+/// `poll_for_new_job_owned_windows` keeps checking for a job-owned window
+/// after resume before concluding none appeared. Tests that need to
+/// distinguish a real refusal from a scheduler-timing race under host load
+/// inject a larger budget via
+/// `dispatch_manifest_at_with_probes_and_host_and_window_census_budget`
+/// instead of shrinking this constant.
+const DEFAULT_WINDOW_CENSUS_BUDGET: Duration = Duration::from_millis(200);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DispatchOutcome {
@@ -752,6 +765,7 @@ impl JobSpec {
             cpu_rate_percent: None,
             cpu_pacing_class: DispatchCpuPacingClass::Unpaced,
             requires_ui_responsiveness: false,
+            window_contract: DispatchWindowContract::HeadlessNoWindows,
             dispatch_token: None,
         }
     }
@@ -799,6 +813,20 @@ impl JobSpec {
     /// spec is ever built from a manifest).
     pub fn with_requires_ui_responsiveness(mut self, requires_ui_responsiveness: bool) -> Self {
         self.requires_ui_responsiveness = requires_ui_responsiveness;
+        self
+    }
+
+    /// Declares the spawned process's window-visibility contract (issue
+    /// #898 L6). Defaults to `HeadlessNoWindows` -- the same
+    /// restricted-by-omission posture as `requires_ui_responsiveness`.
+    /// `HeadlessNoWindows` is enforced by a live before/after top-level
+    /// window census taken around the spawn's resume (see
+    /// `census_top_level_windows`/`poll_for_new_job_owned_windows`):
+    /// any window that appears and belongs to the job is a fail-closed
+    /// refusal. `CockpitHosted` is exempt -- the cockpit's own window is
+    /// the contract's named exception.
+    pub fn with_window_contract(mut self, window_contract: DispatchWindowContract) -> Self {
+        self.window_contract = window_contract;
         self
     }
 
@@ -1244,6 +1272,23 @@ type ScheduleRunRow = (
     Option<String>,
     Option<String>,
 );
+
+/// Bundles the injectable dispatch-manifest probes (free-space, free-VRAM,
+/// free-host-commit) and the window-census budget into one value, so a new
+/// injectable knob widens this struct instead of adding another positional
+/// parameter to `dispatch_manifest_bytes_at_with_probes_and_host_inner` and
+/// pushing it back over clippy's argument-count cap (#898 L6 follow-up).
+struct DispatchProbes<F, G, H>
+where
+    F: FnMut(&Path) -> Result<u64>,
+    G: FnMut() -> Result<u64>,
+    H: FnMut() -> Result<HostCommitCapacity>,
+{
+    free_space: F,
+    free_vram: G,
+    free_host_commit: H,
+    window_census_budget: Duration,
+}
 
 impl Daemon {
     pub fn open(path: &Path) -> Result<Self> {
@@ -1896,6 +1941,36 @@ impl Daemon {
         G: FnMut() -> Result<u64>,
         H: FnMut() -> Result<HostCommitCapacity>,
     {
+        self.dispatch_manifest_at_with_probes_and_host_and_window_census_budget(
+            manifest_path,
+            observed_at_ms,
+            free_space,
+            free_vram,
+            free_host_commit,
+            DEFAULT_WINDOW_CENSUS_BUDGET,
+        )
+    }
+
+    /// Same as `dispatch_manifest_at_with_probes_and_host`, with the
+    /// window-contract census budget also injectable. Production callers
+    /// use the plain method above (fixed at `DEFAULT_WINDOW_CENSUS_BUDGET`);
+    /// this variant exists so a test can widen the budget to verify the
+    /// refusal MECHANISM (enriched hwnd/pid/title detail, receipt shape)
+    /// without racing the fixed production timing under host load.
+    pub fn dispatch_manifest_at_with_probes_and_host_and_window_census_budget<F, G, H>(
+        &self,
+        manifest_path: &Path,
+        observed_at_ms: i64,
+        free_space: F,
+        free_vram: G,
+        free_host_commit: H,
+        window_census_budget: Duration,
+    ) -> Result<DispatchOutcome>
+    where
+        F: FnMut(&Path) -> Result<u64>,
+        G: FnMut() -> Result<u64>,
+        H: FnMut() -> Result<HostCommitCapacity>,
+    {
         let canonical = fs::canonicalize(manifest_path).map_err(|error| {
             EmberLabError::InvalidDispatchManifest {
                 detail: format!("dispatch manifest is not a canonical file: {error}"),
@@ -1906,9 +1981,12 @@ impl Daemon {
             &manifest_bytes,
             &canonical,
             observed_at_ms,
-            free_space,
-            free_vram,
-            free_host_commit,
+            DispatchProbes {
+                free_space,
+                free_vram,
+                free_host_commit,
+                window_census_budget,
+            },
         )
     }
 
@@ -1963,9 +2041,12 @@ impl Daemon {
                 manifest_bytes,
                 &snapshot,
                 observed_at_ms,
-                free_space,
-                free_vram,
-                free_host_commit,
+                DispatchProbes {
+                    free_space,
+                    free_vram,
+                    free_host_commit,
+                    window_census_budget: DEFAULT_WINDOW_CENSUS_BUDGET,
+                },
             );
         }
         let mut snapshots = fs::read_dir(&snapshot_dir)?
@@ -2005,9 +2086,12 @@ impl Daemon {
             manifest_bytes,
             &snapshot,
             observed_at_ms,
-            free_space,
-            free_vram,
-            free_host_commit,
+            DispatchProbes {
+                free_space,
+                free_vram,
+                free_host_commit,
+                window_census_budget: DEFAULT_WINDOW_CENSUS_BUDGET,
+            },
         )
     }
 
@@ -2137,15 +2221,19 @@ impl Daemon {
         manifest_bytes: &[u8],
         manifest_identity_path: &Path,
         observed_at_ms: i64,
-        mut free_space: F,
-        mut free_vram: G,
-        mut free_host_commit: H,
+        probes: DispatchProbes<F, G, H>,
     ) -> Result<DispatchOutcome>
     where
         F: FnMut(&Path) -> Result<u64>,
         G: FnMut() -> Result<u64>,
         H: FnMut() -> Result<HostCommitCapacity>,
     {
+        let DispatchProbes {
+            mut free_space,
+            mut free_vram,
+            mut free_host_commit,
+            window_census_budget,
+        } = probes;
         let manifest_path = fs::canonicalize(manifest_identity_path).map_err(|error| {
             EmberLabError::InvalidDispatchManifest {
                 detail: format!("dispatch manifest identity snapshot is unavailable: {error}"),
@@ -2475,14 +2563,15 @@ impl Daemon {
         .with_maximum_job_memory_bytes(manifest.maximum_job_memory_bytes)
         .with_cpu_rate_percent(manifest.workload_profile.cpu_rate_percent)
         .with_cpu_pacing_class(manifest.cpu_pacing_class)
-        .with_requires_ui_responsiveness(manifest.workload_profile.requires_ui_responsiveness);
+        .with_requires_ui_responsiveness(manifest.workload_profile.requires_ui_responsiveness)
+        .with_window_contract(manifest.window_contract);
         for (key, value) in manifest.env {
             spec = spec.with_env(key, value);
         }
         if profile_id == DispatchWorkloadProfileId::EvidenceVerifier {
             spec = spec.with_dispatch_token(dispatch_expires_at_ms)?;
         }
-        let handle = match self.start_job(spec) {
+        let handle = match self.start_job_with_window_census_budget(spec, window_census_budget) {
             Ok(handle) => handle,
             Err(error) => {
                 let _ = self.rollback_dispatch_attempt(&job_id, &resource_lease, created_identity);
@@ -2712,7 +2801,20 @@ impl Daemon {
         tx.commit()?;
         Ok(())
     }
-    pub fn start_job(&self, mut spec: JobSpec) -> Result<JobHandle> {
+    pub fn start_job(&self, spec: JobSpec) -> Result<JobHandle> {
+        self.start_job_with_window_census_budget(spec, DEFAULT_WINDOW_CENSUS_BUDGET)
+    }
+
+    /// Same as `start_job`, with the window-contract census budget also
+    /// injectable. Production callers use `start_job` (fixed at
+    /// `DEFAULT_WINDOW_CENSUS_BUDGET`); the dispatch-manifest path and tests
+    /// that need to distinguish a real refusal from a scheduler-timing race
+    /// under host load use this directly.
+    pub fn start_job_with_window_census_budget(
+        &self,
+        mut spec: JobSpec,
+        window_census_budget: Duration,
+    ) -> Result<JobHandle> {
         self.verify_identity(&spec.job_id)?;
         let protective_key = hash_bytes(spec.job_id.as_bytes());
         let checkpoint_request_path = self.log_dir.join(format!(
@@ -2879,7 +2981,36 @@ impl Daemon {
                     detail: "prepared start lost its state or lease fence".into(),
                 });
             }
+            // Window contract (issue #898 L6): the process is still suspended
+            // here, so it cannot have created a window yet -- this is a true
+            // baseline regardless of exactly when it is sampled relative to
+            // other work in this closure.
+            #[cfg(windows)]
+            let pre_resume_windows = census_top_level_windows();
             spawned.resume()?;
+            #[cfg(windows)]
+            if spec.window_contract == DispatchWindowContract::HeadlessNoWindows {
+                let violating_windows = poll_for_new_job_owned_windows(
+                    &pre_resume_windows,
+                    spawned.job_handle(),
+                    window_census_budget,
+                    Duration::from_millis(20),
+                );
+                if !violating_windows.is_empty() {
+                    let windows_detail = violating_windows
+                        .iter()
+                        .map(ViolatingWindow::to_string)
+                        .collect::<Vec<_>>()
+                        .join("; ");
+                    return Err(EmberLabError::WindowContractViolation {
+                        job_id: spec.job_id.clone(),
+                        detail: format!(
+                            "headless_no_windows spawn presented {} visible window(s) outside the cockpit contract: {windows_detail}",
+                            violating_windows.len()
+                        ),
+                    });
+                }
+            }
             let changed = tx.execute(
                 "UPDATE jobs SET state='running',updated_at_ms=?2 WHERE job_id=?1 AND state='prepared' AND EXISTS(SELECT 1 FROM leases l WHERE l.resource=jobs.resource AND l.owner_job_id=jobs.job_id AND l.lease_epoch=jobs.lease_epoch)",
                 params![spec.job_id, now_ms()],
@@ -2903,7 +3034,12 @@ impl Daemon {
         })();
         if let Err(error) = running {
             let _ = spawned.terminate_and_wait();
-            let _ = self.mark_failed(&spec.job_id, "job_launch_commit_failed");
+            let failure_kind = if matches!(error, EmberLabError::WindowContractViolation { .. }) {
+                "job_window_contract_violation"
+            } else {
+                "job_launch_commit_failed"
+            };
+            let _ = self.mark_failed(&spec.job_id, failure_kind);
             return Err(error);
         }
         #[cfg(windows)]
@@ -6881,6 +7017,11 @@ impl SpawnedProcess {
     fn stderr_child_handle(&self) -> i64 {
         self.stderr_log_guard.raw() as isize as i64
     }
+    /// Raw job-object handle, borrowed for the window-contract census
+    /// (`IsProcessInJob`) -- ownership stays with `self.job`.
+    fn job_handle(&self) -> windows_sys::Win32::Foundation::HANDLE {
+        self.job.raw()
+    }
     fn resume(&mut self) -> Result<()> {
         use windows_sys::Win32::System::Threading::ResumeThread;
         if unsafe { ResumeThread(self.thread.0) } == u32::MAX {
@@ -7075,6 +7216,166 @@ fn managed_windows_creation_flags() -> u32 {
         | CREATE_NO_WINDOW
         | CREATE_UNICODE_ENVIRONMENT
         | EXTENDED_STARTUPINFO_PRESENT
+}
+
+/// A snapshot of every visible top-level window on the desktop, as
+/// (HWND-as-isize, owning PID) pairs. `HWND` is not `Send`; it is carried
+/// as `isize` between the enumeration callback and the caller, and cast
+/// back to `HWND` only at the point of a further Win32 call.
+#[cfg(windows)]
+type WindowCensus = Vec<(isize, u32)>;
+
+/// Enumerate every visible top-level window system-wide (issue #898 L6:
+/// window contract). This is a plain `EnumWindows`/`IsWindowVisible`
+/// census, not the COM `IUIAutomation` subsystem -- issue #898's own
+/// resolution ("no standing UIA subsystem required") calls for exactly
+/// this weight class: a before/after snapshot, not a live automation tree.
+#[cfg(windows)]
+fn census_top_level_windows() -> WindowCensus {
+    use windows_sys::Win32::Foundation::{BOOL, HWND, LPARAM};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        EnumWindows, GetWindowThreadProcessId, IsWindowVisible,
+    };
+
+    unsafe extern "system" fn collect(hwnd: HWND, state: LPARAM) -> BOOL {
+        if IsWindowVisible(hwnd) == 0 {
+            return 1;
+        }
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(hwnd, &mut pid);
+        let windows = &mut *(state as *mut WindowCensus);
+        windows.push((hwnd as isize, pid));
+        1
+    }
+
+    let mut windows: WindowCensus = Vec::new();
+    unsafe {
+        EnumWindows(Some(collect), std::ptr::addr_of_mut!(windows) as LPARAM);
+    }
+    windows
+}
+
+/// A window-contract violation, carrying enough to debug a real one after
+/// the fact -- the offending window is gone by the time anyone reads the
+/// refusal (the job is terminated as part of the same fail-closed path),
+/// so this is captured at detection time, not re-queryable later.
+#[cfg(windows)]
+struct ViolatingWindow {
+    hwnd: isize,
+    pid: u32,
+    class_name: String,
+    title: String,
+}
+
+#[cfg(windows)]
+impl fmt::Display for ViolatingWindow {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "hwnd=0x{:x} pid={} class={:?} title={:?}",
+            self.hwnd, self.pid, self.class_name, self.title
+        )
+    }
+}
+
+/// `GetWindowTextW`/`GetClassNameW` into an owned `String`, best-effort:
+/// an empty result (no text, or the call fails) is a legitimate outcome for
+/// plenty of real windows and is not itself part of the violation signal,
+/// so failures here never suppress the detection this exists to debug.
+#[cfg(windows)]
+fn window_text_best_effort(
+    hwnd: windows_sys::Win32::Foundation::HWND,
+    call: unsafe extern "system" fn(windows_sys::Win32::Foundation::HWND, *mut u16, i32) -> i32,
+) -> String {
+    let mut buffer = [0u16; 256];
+    let length = unsafe { call(hwnd, buffer.as_mut_ptr(), buffer.len() as i32) };
+    if length <= 0 {
+        return String::new();
+    }
+    String::from_utf16_lossy(&buffer[..length as usize])
+}
+
+/// Windows present in `after` but not `before`, filtered to only those
+/// owned by a process that is a member of `job` (`IsProcessInJob` --
+/// covers the job's own process and any child it spawned, since jobs
+/// inherit down the process tree by construction here). A window that is
+/// new but belongs to an unrelated, pre-existing process on the desktop
+/// (not this spawn's job) is not a contract violation and is excluded.
+#[cfg(windows)]
+fn new_windows_owned_by_job(
+    before: &WindowCensus,
+    after: &WindowCensus,
+    job: windows_sys::Win32::Foundation::HANDLE,
+) -> Vec<ViolatingWindow> {
+    use windows_sys::Win32::Foundation::{CloseHandle, BOOL};
+    use windows_sys::Win32::System::JobObjects::IsProcessInJob;
+    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{GetClassNameW, GetWindowTextW};
+
+    let previously_seen: std::collections::HashSet<isize> =
+        before.iter().map(|(hwnd, _)| *hwnd).collect();
+    let mut owned = Vec::new();
+    for (hwnd, pid) in after {
+        if previously_seen.contains(hwnd) {
+            continue;
+        }
+        let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, *pid) };
+        if process.is_null() {
+            continue;
+        }
+        let mut in_job: BOOL = 0;
+        let queried = unsafe { IsProcessInJob(process, job, &mut in_job) };
+        unsafe { CloseHandle(process) };
+        if queried != 0 && in_job != 0 {
+            let raw_hwnd = *hwnd as windows_sys::Win32::Foundation::HWND;
+            owned.push(ViolatingWindow {
+                hwnd: *hwnd,
+                pid: *pid,
+                class_name: window_text_best_effort(raw_hwnd, GetClassNameW),
+                title: window_text_best_effort(raw_hwnd, GetWindowTextW),
+            });
+        }
+    }
+    owned
+}
+
+/// Poll for a window contract violation for up to `budget` after the
+/// spawn's resume, checking every `interval`. Bounded, not instantaneous:
+/// a window's creation is scheduled by the OS on the child's own thread,
+/// so this is a receipted best-effort census, not a synchronous guarantee.
+/// Returns any job-owned windows found; empty means no violation was
+/// observed within the budget.
+#[cfg(windows)]
+fn poll_for_new_job_owned_windows(
+    before: &WindowCensus,
+    job: windows_sys::Win32::Foundation::HANDLE,
+    budget: Duration,
+    interval: Duration,
+) -> Vec<ViolatingWindow> {
+    let deadline = Instant::now() + budget;
+    loop {
+        let after = census_top_level_windows();
+        let found = new_windows_owned_by_job(before, &after, job);
+        if !found.is_empty() || Instant::now() >= deadline {
+            return found;
+        }
+        std::thread::sleep(interval);
+    }
+}
+
+#[cfg(test)]
+mod window_census_budget_tests {
+    use super::*;
+
+    #[test]
+    fn production_default_window_census_budget_is_unchanged_at_200ms() {
+        // Issue #898 L6 / #1727 round 3: the census budget became
+        // injectable so a test could widen it without racing production
+        // admission timing. This pins the production default itself so a
+        // future edit cannot silently loosen (or tighten) the real
+        // admission-time budget while only touching the injectable path.
+        assert_eq!(DEFAULT_WINDOW_CENSUS_BUDGET, Duration::from_millis(200));
+    }
 }
 
 /// The full Windows/UI job-object restriction set (issue #898) applied to

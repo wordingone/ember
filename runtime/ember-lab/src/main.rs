@@ -992,7 +992,11 @@ mod tests {
             identity.to_string_lossy(),
             [
                 "--exact",
-                "tests::tests::rehearsal_orchestration_fixture_child",
+                // Single `tests::` -- this binary's only test module. The old
+                // `tests::tests::` path matched zero tests, so the fixture's
+                // 30s sleep never ran and the child exited during startup,
+                // leaving the stop to race the child's own exit.
+                "tests::rehearsal_orchestration_fixture_child",
                 "--nocapture",
             ],
             "cpu-fixture",
