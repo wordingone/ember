@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import math
 import os
@@ -119,6 +120,11 @@ R1_ENTRY_CLAIM_BOUNDARY = {
     "capability": False,
     "benchmark": False,
 }
+# Issue #1721: same fixed-installation discipline as certified_train_launch.py's
+# ARTIFACT_CUSTODY_GATE_MODULE_RELATIVE_PATH -- the gate is infrastructure loaded
+# from THIS file's own tree, independent of the checkpoint directory it verifies.
+ARTIFACT_CUSTODY_GATE_MODULE_RELATIVE_PATH = "scripts/artifact_custody_gate.py"
+
 R1_ENTRY_KEYS = {
     "schema",
     "source_commit",
@@ -147,6 +153,26 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def load_artifact_custody_gate_module():
+    """Load the shared #1721 custody-verify gate from THIS file's own tree.
+
+    Same fixed-installation rationale as certified_train_launch.py's loader of the
+    same module: infrastructure, loaded once from the tree this validator ships in.
+    """
+    module_path = Path(__file__).resolve().parents[2] / ARTIFACT_CUSTODY_GATE_MODULE_RELATIVE_PATH
+    specification = importlib.util.spec_from_file_location(
+        "ember_artifact_custody_gate", module_path
+    )
+    if specification is None or specification.loader is None:
+        raise ValueError("artifact custody gate module cannot be loaded")
+    module = importlib.util.module_from_spec(specification)
+    try:
+        specification.loader.exec_module(module)
+    except OSError as error:
+        raise ValueError("artifact custody gate module is unreadable") from error
+    return module
 
 
 def _run_git(source_root: Path, *git_args: str, text: bool = False) -> subprocess.CompletedProcess:
@@ -348,11 +374,14 @@ def build_r1_warm100_entry(
     canonical_root: Path | None = None,
     governed_remote: str | None = None,
     governed_ref: str | None = None,
+    custody_db: Path | None = None,
 ) -> dict[str, Any]:
     """Build a source-bound PREP_ONLY WARM-100 entry around the canonical validator.
 
     ``canonical_root``/``governed_remote``/``governed_ref`` are a library-only
     injection seam for tests (issue #1296 P1); see :func:`validate_r1_warm100_entry`.
+    ``custody_db`` (issue #1721) is the same test-only catalog-database injection
+    seam :func:`validate_manifest` accepts -- forwarded unchanged.
     """
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -362,6 +391,7 @@ def build_r1_warm100_entry(
         manifest_path,
         trusted_verifier_registry,
         expected_trusted_verifier_registry_sha256,
+        custody_db=custody_db,
     )
     if not validation["valid"]:
         raise ValueError(
@@ -1202,7 +1232,13 @@ def _verify_training(root: Path, manifest: dict[str, Any], errors: list[str]) ->
     if isinstance(tokens_seen, int) and not isinstance(tokens_seen, bool) and total > tokens_seen:
         errors.append("training.modality_tokens: sum exceeds tokens_seen")
 
-def _verify_checkpoint(root: Path, manifest: dict[str, Any], errors: list[str]) -> None:
+def _verify_checkpoint(
+    root: Path,
+    manifest: dict[str, Any],
+    errors: list[str],
+    *,
+    custody_db: Path | None = None,
+) -> None:
     checkpoint = manifest.get("checkpoint")
     path = _verify_file(
         root,
@@ -1236,6 +1272,31 @@ def _verify_checkpoint(root: Path, manifest: dict[str, Any], errors: list[str]) 
                 errors.append(f"{prefix}.bytes: size mismatch")
             if isinstance(shard.get("path"), str) and isinstance(shard.get("sha256"), str):
                 checkpoint_shards[shard["path"]] = shard["sha256"]
+    # Issue #1721: a rung-admission preflight names this checkpoint's shard bytes
+    # by hash and must fail closed on unverified custody, not just on a local
+    # existence+hash check of whatever happens to sit at the declared path. Runs
+    # the real `ember-lab custody-verify` CLI against every shard hash this
+    # checkpoint's own index declares, rooted at this exact checkpoint directory.
+    # Skipped (not refused) only when no canonical ember-lab binary is built on
+    # this host -- the CLI is a Windows-only build (runtime/ember-lab), while this
+    # validator itself runs cross-platform (ci-nightly's extended-audit job runs
+    # this exact suite on ubuntu-latest); a platform that structurally cannot run
+    # the verifier is a build-availability fact, not a custody fact, and must not
+    # be conflated with a real catalog refusal. When the binary IS present, a
+    # custody refusal fails this validation closed exactly like any other check.
+    if checkpoint_shards:
+        custody_gate = load_artifact_custody_gate_module()
+        custody_repo_root = Path(__file__).resolve().parents[2]
+        if custody_gate.canonical_ember_lab_binary(custody_repo_root) is not None:
+            try:
+                custody_gate.custody_verify(
+                    custody_repo_root,
+                    list(checkpoint_shards.values()),
+                    {custody_gate.RESUME_CHECKPOINT_VOLUME: root},
+                    db=custody_db,
+                )
+            except custody_gate.CustodyRefused as error:
+                errors.append(f"checkpoint: failed custody verification: {error}")
     architecture = manifest.get("architecture")
     expert_banks = architecture.get("expert_banks") if isinstance(architecture, dict) else None
     if isinstance(expert_banks, list):
@@ -2134,6 +2195,8 @@ def validate_manifest(
     path: Path,
     trusted_verifier_registry: Path | None = None,
     expected_trusted_verifier_registry_sha256: str | None = None,
+    *,
+    custody_db: Path | None = None,
 ) -> dict[str, Any]:
     errors: list[str] = []
     try:
@@ -2160,7 +2223,7 @@ def validate_manifest(
     _verify_architecture(root, manifest, trusted_verifiers, errors)
     _verify_data(root, manifest, trusted_verifiers, errors)
     _verify_training(root, manifest, errors)
-    _verify_checkpoint(root, manifest, errors)
+    _verify_checkpoint(root, manifest, errors, custody_db=custody_db)
     if stage == "OWNED_ADMITTED":
         training = manifest.get("training")
         if not isinstance(training, dict) or training.get("input_class") != "SEMANTIC_PRETRAINING":
@@ -2178,6 +2241,16 @@ def main(argv: list[str] | None = None) -> int:
     validate.add_argument("manifest", type=Path)
     validate.add_argument("--trusted-verifier-registry", type=Path)
     validate.add_argument("--trusted-verifier-registry-approval", type=Path)
+    validate.add_argument(
+        "--custody-db",
+        type=Path,
+        help=(
+            "Issue #1721: override the ember-lab custody catalog database the "
+            "checkpoint's shard hashes are verified against. Test-only injection "
+            "seam -- omitted, this defaults to the real repository catalog "
+            "(scripts/artifact_custody_gate.default_catalog_db)."
+        ),
+    )
     entry = subparsers.add_parser(
         "r1-entry",
         help="emit a source-bound PREP_ONLY R1 WARM-100 entry receipt after canonical validation",
@@ -2190,6 +2263,7 @@ def main(argv: list[str] | None = None) -> int:
     entry.add_argument("--fixed-prior", type=Path, required=True)
     entry.add_argument("--trusted-verifier-registry", type=Path)
     entry.add_argument("--trusted-verifier-registry-approval", type=Path)
+    entry.add_argument("--custody-db", type=Path)
     entry.add_argument("--out", type=Path)
     args = parser.parse_args(argv)
     if args.command == "r1-entry":
@@ -2206,6 +2280,7 @@ def main(argv: list[str] | None = None) -> int:
                 fixed_prior_path=args.fixed_prior,
                 trusted_verifier_registry=args.trusted_verifier_registry,
                 expected_trusted_verifier_registry_sha256=expected_registry_sha256,
+                custody_db=args.custody_db,
             )
             encoded = json.dumps(payload, sort_keys=True, indent=2) + "\n"
             if args.out is not None:
@@ -2239,7 +2314,12 @@ def main(argv: list[str] | None = None) -> int:
         result = {"valid": False, "stage": None, "errors": [str(exc)]}
         print(json.dumps(result, sort_keys=True))
         return 1
-    result = validate_manifest(args.manifest, args.trusted_verifier_registry, expected_registry_sha256)
+    result = validate_manifest(
+        args.manifest,
+        args.trusted_verifier_registry,
+        expected_registry_sha256,
+        custody_db=args.custody_db,
+    )
     print(json.dumps(result, sort_keys=True))
     return 0 if result["valid"] else 1
 
