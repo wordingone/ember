@@ -30,6 +30,10 @@ NIST_SOFT_404 = b"<HTML>\n   <HEAD>\n   <TITLE>NIST/SEMATECH</TITLE>" + b"x" * 5
 REAL_PDF = b"%PDF-1.7\n" + b"x" * 5000
 REAL_ZIP = b"PK\x03\x04" + b"x" * 5000
 REAL_GZIP = b"\x1f\x8b\x08\x00" + b"x" * 5000
+# Leading bytes of archive.org's real ai.stackexchange.com.7z, fetched 2026-08-14.
+# .7z is the format of 7 of the 44 rows -- the largest source class in the program.
+REAL_7Z = b"7z\xbc\xaf\x27\x1c" + b"x" * 5000
+REAL_BZIP2 = b"BZh9" + b"x" * 5000
 
 
 class _FakeResp:
@@ -101,6 +105,24 @@ class ContentSanityTests(unittest.TestCase):
                 dest = Path(td) / "d"
                 self.assertTrue(http_fetch.fetch(_args(url, dest), opener=_opener_for(payload)).is_file())
 
+    def test_html_served_for_7z_url_is_blocked(self):
+        """StackExchange dumps are .7z -- 7 of the 44 rows, the largest source
+        class. Without a 7z signature the gate passes them unconditionally."""
+        with tempfile.TemporaryDirectory() as td:
+            dest = Path(td) / "d"
+            args = _args("https://archive.org/download/stackexchange/math.stackexchange.com.7z", dest)
+            with self.assertRaises(rcpt.ContentTypeMismatchError):
+                http_fetch.fetch(args, opener=_opener_for(OPENSTAX_SOFT_404))
+
+    def test_real_7z_and_bzip2_pass(self):
+        for url, payload in (
+            ("https://archive.org/download/stackexchange/ai.stackexchange.com.7z", REAL_7Z),
+            ("https://example.org/dump.bz2", REAL_BZIP2),
+        ):
+            with tempfile.TemporaryDirectory() as td:
+                dest = Path(td) / "d"
+                self.assertTrue(http_fetch.fetch(_args(url, dest), opener=_opener_for(payload)).is_file())
+
     def test_html_url_serving_html_passes(self):
         """An .htm URL serving HTML is not a content mismatch -- that is the
         entry-page problem, which requires_resolution handles, not this gate."""
@@ -133,6 +155,8 @@ class SniffTests(unittest.TestCase):
             (REAL_PDF, "pdf"),
             (REAL_ZIP, "zip"),
             (REAL_GZIP, "gzip"),
+            (REAL_7Z, "7z"),
+            (REAL_BZIP2, "bzip2"),
             (b"textbook contents", None),
             (b"", None),
         ]
@@ -144,6 +168,8 @@ class SniffTests(unittest.TestCase):
             ("https://e.org/a/book.pdf", "pdf"),
             ("https://e.org/a/docs.zip", "zip"),
             ("https://e.org/a/src.tar.gz", "gzip"),
+            ("https://e.org/a/math.stackexchange.com.7z", "7z"),
+            ("https://e.org/a/dump.bz2", "bzip2"),
             ("https://e.org/a/page.htm", "html"),
             ("https://e.org/a/page.html", "html"),
             ("https://e.org/a/set.mm", None),
