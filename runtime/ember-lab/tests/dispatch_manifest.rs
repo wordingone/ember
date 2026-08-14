@@ -1224,6 +1224,30 @@ fn dispatch_manifest_refuses_a_headless_no_windows_spawn_that_presents_a_visible
 
     let db = root.join("ember-lab.sqlite3");
     let daemon = Daemon::open(&db).unwrap();
+
+    // Test-side warmup (issue #1727 redo). A fresh copy of this same test
+    // binary has its own process cold-start cost -- loader, CRT, harness
+    // init -- which can exceed the 200ms admission census before the
+    // CreateWindowExW call in fixture_dispatch_child_presents_a_visible_window
+    // ever runs. Reproduced 1-for-1: this exact acceptance test fails on a
+    // cold (first-spawn) binary and passes immediately after. Spawn the
+    // binary once as a throwaway (window env var left unset, so the fixture
+    // no-ops and exits at once) so the exe is loader-warm before the timed
+    // dispatch below. This makes the test deterministic against its own
+    // cold-start; lib.rs's 200ms census boundary is untouched.
+    let warmup_status = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "fixture_dispatch_child_presents_a_visible_window",
+            "--nocapture",
+        ])
+        .status()
+        .unwrap();
+    assert!(
+        warmup_status.success(),
+        "warmup spawn of the fixture binary failed"
+    );
+
     let outcome = daemon.dispatch_manifest_at_with_probes_and_host(
         &manifest,
         10_001,
