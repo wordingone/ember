@@ -1197,6 +1197,23 @@ type ScheduleRunRow = (
     Option<String>,
 );
 
+/// Bundles the injectable dispatch-manifest probes (free-space, free-VRAM,
+/// free-host-commit) and the window-census budget into one value, so a new
+/// injectable knob widens this struct instead of adding another positional
+/// parameter to `dispatch_manifest_bytes_at_with_probes_and_host_inner` and
+/// pushing it back over clippy's argument-count cap (#898 L6 follow-up).
+struct DispatchProbes<F, G, H>
+where
+    F: FnMut(&Path) -> Result<u64>,
+    G: FnMut() -> Result<u64>,
+    H: FnMut() -> Result<HostCommitCapacity>,
+{
+    free_space: F,
+    free_vram: G,
+    free_host_commit: H,
+    window_census_budget: Duration,
+}
+
 impl Daemon {
     pub fn open(path: &Path) -> Result<Self> {
         if let Some(parent) = path.parent() {
@@ -1842,10 +1859,12 @@ impl Daemon {
             &manifest_bytes,
             &canonical,
             observed_at_ms,
-            free_space,
-            free_vram,
-            free_host_commit,
-            window_census_budget,
+            DispatchProbes {
+                free_space,
+                free_vram,
+                free_host_commit,
+                window_census_budget,
+            },
         )
     }
 
@@ -1900,10 +1919,12 @@ impl Daemon {
                 manifest_bytes,
                 &snapshot,
                 observed_at_ms,
-                free_space,
-                free_vram,
-                free_host_commit,
-                DEFAULT_WINDOW_CENSUS_BUDGET,
+                DispatchProbes {
+                    free_space,
+                    free_vram,
+                    free_host_commit,
+                    window_census_budget: DEFAULT_WINDOW_CENSUS_BUDGET,
+                },
             );
         }
         let mut snapshots = fs::read_dir(&snapshot_dir)?
@@ -1943,10 +1964,12 @@ impl Daemon {
             manifest_bytes,
             &snapshot,
             observed_at_ms,
-            free_space,
-            free_vram,
-            free_host_commit,
-            DEFAULT_WINDOW_CENSUS_BUDGET,
+            DispatchProbes {
+                free_space,
+                free_vram,
+                free_host_commit,
+                window_census_budget: DEFAULT_WINDOW_CENSUS_BUDGET,
+            },
         )
     }
 
@@ -2076,16 +2099,19 @@ impl Daemon {
         manifest_bytes: &[u8],
         manifest_identity_path: &Path,
         observed_at_ms: i64,
-        mut free_space: F,
-        mut free_vram: G,
-        mut free_host_commit: H,
-        window_census_budget: Duration,
+        probes: DispatchProbes<F, G, H>,
     ) -> Result<DispatchOutcome>
     where
         F: FnMut(&Path) -> Result<u64>,
         G: FnMut() -> Result<u64>,
         H: FnMut() -> Result<HostCommitCapacity>,
     {
+        let DispatchProbes {
+            mut free_space,
+            mut free_vram,
+            mut free_host_commit,
+            window_census_budget,
+        } = probes;
         let manifest_path = fs::canonicalize(manifest_identity_path).map_err(|error| {
             EmberLabError::InvalidDispatchManifest {
                 detail: format!("dispatch manifest identity snapshot is unavailable: {error}"),
