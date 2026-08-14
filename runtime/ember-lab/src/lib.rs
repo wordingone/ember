@@ -1290,6 +1290,96 @@ where
     window_census_budget: Duration,
 }
 
+#[cfg(any(not(windows), test))]
+fn consume_dispatch_token_with_process_observer<F>(
+    conn: &mut Connection,
+    job_id: &str,
+    token: &str,
+    client_pid: u32,
+    mut observe_process: F,
+) -> Result<()>
+where
+    F: FnMut(u32) -> Result<ProcessIdentity>,
+{
+    let observed_identity =
+        observe_process(client_pid).map_err(|_| EmberLabError::DispatchTokenRefused {
+            job_id: job_id.into(),
+        })?;
+    consume_dispatch_token_transaction(conn, job_id, token, client_pid, &observed_identity, || {
+        let final_identity =
+            observe_process(client_pid).map_err(|_| EmberLabError::DispatchTokenRefused {
+                job_id: job_id.into(),
+            })?;
+        Ok(final_identity.start_token == observed_identity.start_token
+            && same_executable(&final_identity.executable, &observed_identity.executable))
+    })
+}
+
+fn consume_dispatch_token_transaction<F>(
+    conn: &mut Connection,
+    job_id: &str,
+    token: &str,
+    client_pid: u32,
+    observed_identity: &ProcessIdentity,
+    final_identity_matches: F,
+) -> Result<()>
+where
+    F: FnOnce() -> Result<bool>,
+{
+    let token_sha256 = hash_bytes(token.as_bytes());
+    let consumed_at_ms = now_ms();
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let changed = tx.execute(
+        "UPDATE dispatch_tokens AS t SET consumed_at_ms=?4
+         WHERE t.token_sha256=?1 AND t.job_id=?2 AND t.pid=?3
+           AND t.consumed_at_ms IS NULL AND t.expires_at_ms>?4
+           AND EXISTS(
+             SELECT 1 FROM jobs j
+             WHERE j.job_id=t.job_id AND j.pid=t.pid
+               AND j.program=t.program AND j.argv_sha256=t.argv_sha256
+               AND j.process_start_token=?5
+               AND j.executable_identity=?6
+               AND j.state IN ('prepared','running')
+           )",
+        params![
+            token_sha256,
+            job_id,
+            client_pid,
+            consumed_at_ms,
+            observed_identity.start_token,
+            observed_identity.executable,
+        ],
+    )?;
+    if changed != 1 {
+        return Err(EmberLabError::DispatchTokenRefused {
+            job_id: job_id.into(),
+        });
+    }
+    let persisted_identity: (String, String) = tx
+        .query_row(
+            "SELECT process_start_token,executable_identity FROM jobs WHERE job_id=?1 AND pid=?2",
+            params![job_id, client_pid],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|_| EmberLabError::DispatchTokenRefused {
+            job_id: job_id.into(),
+        })?;
+    if persisted_identity.0 != observed_identity.start_token
+        || !same_executable(&persisted_identity.1, &observed_identity.executable)
+        || !final_identity_matches()?
+    {
+        return Err(EmberLabError::DispatchTokenRefused {
+            job_id: job_id.into(),
+        });
+    }
+    tx.execute(
+        "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'dispatch_token_consumed',?3)",
+        params![job_id, consumed_at_ms, json!({"client_pid":client_pid}).to_string()],
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
 impl Daemon {
     pub fn open(path: &Path) -> Result<Self> {
         if let Some(parent) = path.parent() {
@@ -3096,79 +3186,37 @@ impl Daemon {
             });
         }
         #[cfg(windows)]
-        let live = match open_live_status(&row) {
-            LiveStatus::Verified(live) => live,
-            LiveStatus::Dead | LiveStatus::Orphaned(_) | LiveStatus::IdentityConflict(_) => {
-                return Err(EmberLabError::DispatchTokenRefused {
-                    job_id: job_id.into(),
-                })
-            }
-        };
-        #[cfg(windows)]
-        let observed_identity = live.identity.clone();
-        #[cfg(not(windows))]
-        let observed_identity =
-            inspect_process(client_pid).map_err(|_| EmberLabError::DispatchTokenRefused {
-                job_id: job_id.into(),
-            })?;
-        let token_sha256 = hash_bytes(token.as_bytes());
-        let consumed_at_ms = now_ms();
-        let mut conn = self.conn()?;
-        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let changed = tx.execute(
-            "UPDATE dispatch_tokens AS t SET consumed_at_ms=?4
-             WHERE t.token_sha256=?1 AND t.job_id=?2 AND t.pid=?3
-               AND t.consumed_at_ms IS NULL AND t.expires_at_ms>?4
-               AND EXISTS(
-                 SELECT 1 FROM jobs j
-                 WHERE j.job_id=t.job_id AND j.pid=t.pid
-                   AND j.program=t.program AND j.argv_sha256=t.argv_sha256
-                   AND j.process_start_token=?5
-                   AND j.executable_identity=?6
-                   AND j.state IN ('prepared','running')
-               )",
-            params![
-                token_sha256,
-                job_id,
-                client_pid,
-                consumed_at_ms,
-                observed_identity.start_token,
-                observed_identity.executable,
-            ],
-        )?;
-        if changed != 1 {
-            return Err(EmberLabError::DispatchTokenRefused {
-                job_id: job_id.into(),
-            });
-        }
-        let persisted_identity: (String, String) = tx
-            .query_row(
-                "SELECT process_start_token,executable_identity FROM jobs WHERE job_id=?1 AND pid=?2",
-                params![job_id, client_pid],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .map_err(|_| EmberLabError::DispatchTokenRefused {
-                job_id: job_id.into(),
-            })?;
-        if persisted_identity.0 != observed_identity.start_token
-            || !same_executable(&persisted_identity.1, &observed_identity.executable)
         {
-            return Err(EmberLabError::DispatchTokenRefused {
-                job_id: job_id.into(),
-            });
+            let live = match open_live_status(&row) {
+                LiveStatus::Verified(live) => live,
+                LiveStatus::Dead | LiveStatus::Orphaned(_) | LiveStatus::IdentityConflict(_) => {
+                    return Err(EmberLabError::DispatchTokenRefused {
+                        job_id: job_id.into(),
+                    })
+                }
+            };
+            let observed_identity = live.identity.clone();
+            let mut conn = self.conn()?;
+            consume_dispatch_token_transaction(
+                &mut conn,
+                job_id,
+                token,
+                client_pid,
+                &observed_identity,
+                || Ok(live_process_is_running(&live)),
+            )
         }
-        #[cfg(windows)]
-        if !live_process_is_running(&live) {
-            return Err(EmberLabError::DispatchTokenRefused {
-                job_id: job_id.into(),
-            });
+        #[cfg(not(windows))]
+        {
+            let mut conn = self.conn()?;
+            consume_dispatch_token_with_process_observer(
+                &mut conn,
+                job_id,
+                token,
+                client_pid,
+                inspect_process,
+            )
         }
-        tx.execute(
-            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'dispatch_token_consumed',?3)",
-            params![job_id, consumed_at_ms, json!({"client_pid":client_pid}).to_string()],
-        )?;
-        tx.commit()?;
-        Ok(())
     }
 
     pub fn job_exit_code(&self, job_id: &str) -> Result<Option<i64>> {
@@ -8376,6 +8424,98 @@ fn terminate_process(pid: u32) -> Result<()> {
 #[cfg(test)]
 mod dispatch_binding_snapshot_tests {
     use super::*;
+
+    #[test]
+    fn dispatch_token_second_process_observation_mismatch_rolls_back_consumption_and_event() {
+        let mut connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE jobs(job_id TEXT PRIMARY KEY,pid INTEGER NOT NULL,program TEXT NOT NULL,argv_sha256 TEXT NOT NULL,process_start_token TEXT NOT NULL,executable_identity TEXT NOT NULL,state TEXT NOT NULL);
+                 CREATE TABLE dispatch_tokens(token_sha256 TEXT PRIMARY KEY,job_id TEXT NOT NULL,pid INTEGER NOT NULL,program TEXT NOT NULL,argv_sha256 TEXT NOT NULL,expires_at_ms INTEGER NOT NULL,consumed_at_ms INTEGER);
+                 CREATE TABLE events(job_id TEXT NOT NULL,ts_ms INTEGER NOT NULL,kind TEXT NOT NULL,payload_json TEXT NOT NULL);",
+            )
+            .unwrap();
+        let job_id = "posix-second-observation-job";
+        let token = "a".repeat(DISPATCH_TOKEN_BYTES * 2);
+        let client_pid = 4242_u32;
+        let initial_identity = ProcessIdentity {
+            start_token: "initial-start-token".into(),
+            executable: "/usr/bin/owned-worker".into(),
+        };
+        connection
+            .execute(
+                "INSERT INTO jobs(job_id,pid,program,argv_sha256,process_start_token,executable_identity,state) VALUES(?1,?2,?3,?4,?5,?6,'running')",
+                params![
+                    job_id,
+                    client_pid,
+                    "/usr/bin/owned-worker",
+                    "argv-sha",
+                    &initial_identity.start_token,
+                    &initial_identity.executable,
+                ],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO dispatch_tokens(token_sha256,job_id,pid,program,argv_sha256,expires_at_ms,consumed_at_ms) VALUES(?1,?2,?3,?4,?5,?6,NULL)",
+                params![
+                    hash_bytes(token.as_bytes()),
+                    job_id,
+                    client_pid,
+                    "/usr/bin/owned-worker",
+                    "argv-sha",
+                    now_ms() + 60_000,
+                ],
+            )
+            .unwrap();
+        let final_identity = ProcessIdentity {
+            start_token: "reused-start-token".into(),
+            executable: "/usr/bin/reused-worker".into(),
+        };
+        let observation_calls = std::cell::Cell::new(0_usize);
+
+        let result = consume_dispatch_token_with_process_observer(
+            &mut connection,
+            job_id,
+            &token,
+            client_pid,
+            |_| {
+                let call = observation_calls.get();
+                observation_calls.set(call + 1);
+                Ok(if call == 0 {
+                    initial_identity.clone()
+                } else {
+                    final_identity.clone()
+                })
+            },
+        );
+
+        assert!(
+            matches!(result, Err(EmberLabError::DispatchTokenRefused { .. })),
+            "second process observation mismatch must refuse: {result:?}"
+        );
+        assert_eq!(observation_calls.get(), 2);
+        assert_eq!(
+            connection
+                .query_row(
+                    "SELECT consumed_at_ms FROM dispatch_tokens WHERE job_id=?1",
+                    [job_id],
+                    |row| row.get::<_, Option<i64>>(0),
+                )
+                .unwrap(),
+            None
+        );
+        assert_eq!(
+            connection
+                .query_row(
+                    "SELECT COUNT(*) FROM events WHERE job_id=?1 AND kind='dispatch_token_consumed'",
+                    [job_id],
+                    |row| row.get::<_, i64>(0),
+                )
+                .unwrap(),
+            0
+        );
+    }
 
     #[cfg(not(windows))]
     #[test]
