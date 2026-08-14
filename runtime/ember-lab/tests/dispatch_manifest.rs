@@ -123,13 +123,40 @@ fn to_wide_null(text: &str) -> Vec<u16> {
 #[test]
 fn fixture_dispatch_child_presents_a_visible_window() {
     if std::env::var("EMBER_LAB_DISPATCH_FIXTURE_CHILD_WINDOW").as_deref() == Ok("1") {
-        use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_OK};
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            CreateWindowExW, WS_POPUP, WS_VISIBLE,
+        };
+        // A top-level visible window on the predefined STATIC class -- the exact
+        // thing census_top_level_windows() enumerates (EnumWindows +
+        // IsWindowVisible + owning PID), and a fair stand-in for any GUI a
+        // headless_no_windows job might wrongly present.
+        //
+        // Deliberately NOT MessageBoxW. A modal dialog has to load a dialog
+        // template, theme, and font and enter a modal loop before it is ever
+        // visible, which under the parallel suite regularly overran the 200ms
+        // admission census and made this test flaky (see the PR's cold-start
+        // note). It also blocked on input, so killed-late children held a lock
+        // on their own .exe and broke the next relink with LNK1104. One
+        // CreateWindowExW call is visible essentially immediately and needs no
+        // message pump to be enumerable, so the test now exercises the census
+        // rather than the host's dialog-subsystem latency.
+        let class = to_wide_null("STATIC");
         let title = to_wide_null("l6-window-contract-fixture");
-        let text = to_wide_null(
-            "this window proves the window-contract census probe detects a headless_no_windows violation",
-        );
         unsafe {
-            MessageBoxW(std::ptr::null_mut(), text.as_ptr(), title.as_ptr(), MB_OK);
+            CreateWindowExW(
+                0,
+                class.as_ptr(),
+                title.as_ptr(),
+                WS_POPUP | WS_VISIBLE,
+                0,
+                0,
+                320,
+                120,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null(),
+            );
         }
         thread::sleep(Duration::from_secs(30));
     }
