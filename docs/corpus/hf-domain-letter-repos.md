@@ -6,19 +6,25 @@ research lead's ruling of 2026-08-14, governing issue #1720.
 ## The convention
 
 ```
-wordingone/ember-corpus-<letter>-<domain-shortname>                     # permissive rows
-wordingone/ember-corpus-<letter>-<domain-shortname>-cc-by-sa-<version>  # one per SA version present
+wordingone/ember-corpus-<letter>-<domain-shortname>             # permissive rows
+wordingone/ember-corpus-<letter>-<domain-shortname>-cc-by-sa    # one per domain letter carrying any SA row
   README.md              # per-source license table (see below)
+  LICENSE                # SA repos whose floor version has no HF tag: full licence text (see below)
   NOTICE                 # SA repos only: date-range -> licence-version map
   raw/<source-slug>/     # one subdirectory per acquired row
 ```
 
 - The **per-domain repo is the auditable unit**, not the row. 44 rows must not
   become 44 repos.
-- **Split by domain letter AND by licence family.** A share-alike row may only sit
-  in a repo whose own licence identity is that same CC-BY-SA version. Hugging Face
-  carries one licence field per repo, so mixing an SA row in with other-licence
-  rows would mislabel the repo.
+- **Split by domain letter AND by licence family**, not by licence family AND
+  version. A share-alike row sits in its domain letter's `-cc-by-sa` repo
+  regardless of which CC-BY-SA version it floors at — the repo id carries no
+  version number. Hugging Face carries one licence field per repo, so the
+  version distinction that field can't hold lives in the `NOTICE` file
+  instead, never in the id. (In the current 13 landed rows this is moot in
+  practice — no domain letter carries more than one SA row — but the rule is
+  stated generally because the naming must not need to change the day a
+  second one lands.)
 - **Private by default.** A repo goes public only when *every* row inside it has
   verified redistribution rights.
 
@@ -83,18 +89,18 @@ direct lift.
 | Row | Letter | Licence | Destination repo |
 |---|---|---|---|
 | openstax-math | A | CC-BY-4.0 | `ember-corpus-a-math` |
-| stackexchange-math | A | CC-BY-SA-2.5-mixed | `ember-corpus-a-math-cc-by-sa-2-5` |
+| stackexchange-math | A | CC-BY-SA-2.5-mixed | `ember-corpus-a-math-cc-by-sa` |
 | metamath-set-mm | B | CC0-1.0 | `ember-corpus-b-stats-inference` |
-| stackexchange-stats | B | CC-BY-SA-2.5-mixed | `ember-corpus-b-stats-inference-cc-by-sa-2-5` |
-| stackexchange-physics | C | CC-BY-SA-2.5-mixed | `ember-corpus-c-physics-dynamics-cc-by-sa-2-5` |
-| stackexchange-cs | D | CC-BY-SA-2.5-mixed | `ember-corpus-d-cs-systems-cc-by-sa-2-5` |
-| stackexchange-ai | E | CC-BY-SA-3.0-mixed | `ember-corpus-e-ml-ai-cc-by-sa-3-0` |
+| stackexchange-stats | B | CC-BY-SA-2.5-mixed | `ember-corpus-b-stats-inference-cc-by-sa` |
+| stackexchange-physics | C | CC-BY-SA-2.5-mixed | `ember-corpus-c-physics-dynamics-cc-by-sa` |
+| stackexchange-cs | D | CC-BY-SA-2.5-mixed | `ember-corpus-d-cs-systems-cc-by-sa` |
+| stackexchange-ai | E | CC-BY-SA-3.0-mixed | `ember-corpus-e-ml-ai-cc-by-sa` |
 | llvm-docs | F | Apache-2.0 WITH LLVM-exception | `ember-corpus-f-training-infra-cuda-hw` |
 | lean-mathlib-docs | G | Apache-2.0 | `ember-corpus-g-logic-proof` |
 | python-language-docs | H | Python-2.0 | `ember-corpus-h-swe` |
 | rust-reference-docs | H | MIT OR Apache-2.0 | `ember-corpus-h-swe` |
 | ros-docs | K | CC-BY-4.0 | `ember-corpus-k-application-worlds` |
-| stackexchange-robotics | K | CC-BY-SA-2.5-mixed | `ember-corpus-k-application-worlds-cc-by-sa-2-5` |
+| stackexchange-robotics | K | CC-BY-SA-2.5-mixed | `ember-corpus-k-application-worlds-cc-by-sa` |
 
 Every row sits at `raw/<row-slug>/` inside its destination repo.
 
@@ -184,10 +190,39 @@ the authority index — so any change to the set invalidates all 44 and forces a
 authority-artifact regeneration. Sequencing is the research lead's call, not a
 side effect of this document.
 
-### Open
+### HF `license:` metadata for the SA repos — ruled 2026-08-14
 
-The Hugging Face `license:` metadata value for a `CC-BY-SA-2.5-mixed` repo. The
-Hub's identifier list has no `cc-by-sa-2.5` — it starts at 3.0 — so the five
-2.5-labelled repos have no correct value to declare. Options are `other` with the
-real label in the card body, or the nearest available identifier with a NOTICE
-correction; neither is chosen yet. Repo creation waits on this.
+The Hugging Face Hub's `license:` identifier list has no `cc-by-sa-2.5` — it
+starts at 3.0 — so a repo whose SA rows floor at 2.5 has no matching value to
+declare. The five repos affected (`a-math`, `b-stats-inference`,
+`c-physics-dynamics`, `d-cs-systems`, `k-application-worlds` — every SA repo
+except `e-ml-ai`, whose one SA row floors at 3.0, a version the Hub does
+carry) use a different mechanism from the one SA repo the Hub's list already
+covers:
+
+| Repo | Floor version | HF `license:` | HF `license_name:` | Extra files |
+|---|---|---|---|---|
+| `ember-corpus-a-math-cc-by-sa` | 2.5 | `other` | `cc-by-sa-2.5` | `LICENSE` (full CC BY-SA 2.5 text) + `NOTICE` |
+| `ember-corpus-b-stats-inference-cc-by-sa` | 2.5 | `other` | `cc-by-sa-2.5` | `LICENSE` + `NOTICE` |
+| `ember-corpus-c-physics-dynamics-cc-by-sa` | 2.5 | `other` | `cc-by-sa-2.5` | `LICENSE` + `NOTICE` |
+| `ember-corpus-d-cs-systems-cc-by-sa` | 2.5 | `other` | `cc-by-sa-2.5` | `LICENSE` + `NOTICE` |
+| `ember-corpus-k-application-worlds-cc-by-sa` | 2.5 | `other` | `cc-by-sa-2.5` | `LICENSE` + `NOTICE` |
+| `ember-corpus-e-ml-ai-cc-by-sa` | 3.0 | `cc-by-sa-3.0` (real Hub tag) | — (not needed; the real tag already says it) | `NOTICE` only |
+
+- **`license: other` + `license_name:`** is the Hub-documented way to declare
+  a licence outside its identifier list without lying about it as a nearby
+  version — a 2.5 repo does not get relabelled 3.0 to fit the dropdown.
+- **`LICENSE`** carries the full CC BY-SA 2.5 legal text (the Hub can't
+  render a licence it doesn't have a page for). The five 2.5-floor repos
+  carry this file; `e-ml-ai` doesn't need it, since `cc-by-sa-3.0` already
+  resolves to the Hub's own licence page.
+- **`NOTICE`** is required in all six SA repos regardless of floor version —
+  even `e-ml-ai`'s one row (`stackexchange-ai`) spans 3.0/4.0, so the date
+  → version mapping still needs recording. Content and derivation: see
+  "Measured licence versions" above.
+- This closes the naming question too: since the id carries no version
+  number (see "The convention" above), `license_name`/the real Hub tag is
+  now the only place the floor version is asserted at the repo level; `NOTICE`
+  is the only place per-era versions are asserted at the row level.
+
+Repo creation is unblocked by this ruling.
