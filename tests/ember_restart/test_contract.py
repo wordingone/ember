@@ -384,7 +384,9 @@ shared = (
     + hidden
 )
 total = shared + len(experts) * layers * expert_per_layer
-active = shared if args.active_expert == "shared" else shared + layers * expert_per_layer
+if args.active_expert and args.active_expert not in experts:
+    raise SystemExit(1)
+active = shared if not args.active_expert else shared + layers * expert_per_layer
 print(json.dumps({
     "result": "MEASURED",
     "subject_checkpoint_sha256": sha256(args.checkpoint_manifest),
@@ -396,7 +398,7 @@ print(json.dumps({
     "served_parameters": total,
     "active_parameters": active,
     "episode_trainable_parameters": active,
-    "active_expert_ids": [args.active_expert],
+    "active_expert_ids": [args.active_expert] if args.active_expert else [],
 }, sort_keys=True))
 """,
         encoding="utf-8",
