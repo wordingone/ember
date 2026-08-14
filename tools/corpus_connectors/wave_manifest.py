@@ -104,6 +104,9 @@ class WaveSource:
     est_tokens_high_b: float
     notes: str = ""
     requires_resolution: bool = False
+    #: For a disjunctive licence ("A OR B"), which branch this row takes. An
+    #: unelected OR is not a licence, so spdx_gate refuses one that omits this.
+    license_elected: Optional[str] = None
 
     def __post_init__(self) -> None:
         if self.connector not in CONNECTOR_SCRIPTS:
@@ -118,6 +121,15 @@ class WaveSource:
             if is_entry_page_url(url):
                 raise ValueError(
                     f"{self.name}: {url!r} is an entry page, not a concrete artifact URL"
+                )
+        if self.license_elected is not None:
+            argv = list(self.argv)
+            if "--license" not in argv:
+                raise ValueError(f"{self.name}: license_elected set but no --license is declared")
+            declared = argv[argv.index("--license") + 1]
+            if self.license_elected not in declared.split(" OR "):
+                raise ValueError(
+                    f"{self.name}: elected {self.license_elected!r} is not a branch of {declared!r}"
                 )
         if self.est_tokens_low_b <= 0 or self.est_tokens_high_b < self.est_tokens_low_b:
             raise ValueError(f"{self.name}: est_tokens bounds must be positive and ordered")
@@ -342,7 +354,7 @@ WAVE2_SOURCES: List[WaveSource] = [
         connector="http_fetch",
         argv=(
             "https://github.com/llvm/llvm-project/archive/refs/heads/main.tar.gz",
-            "--license", "Apache-2.0-WITH-LLVM-exception",
+            "--license", "Apache-2.0 WITH LLVM-exception",
             "--license-evidence",
             "llvm/llvm-project LICENSE.TXT; GitHub license API returns NOASSERTION because "
             "the LLVM exception is non-standard, so the bare Apache-2.0 tag understated it",
@@ -455,7 +467,7 @@ WAVE2_SOURCES: List[WaveSource] = [
         connector="http_fetch",
         argv=(
             "https://github.com/rust-lang/reference/archive/refs/heads/master.tar.gz",
-            "--license", "MIT-OR-Apache-2.0",
+            "--license", "MIT OR Apache-2.0",
             "--license-evidence",
             "rust-lang/reference LICENSE-APACHE and LICENSE-MIT via GitHub license API",
         ),
@@ -463,6 +475,7 @@ WAVE2_SOURCES: List[WaveSource] = [
         est_tokens_high_b=0.4,
         notes="independent language-reference register for H-domain diversity",
         requires_resolution=True,
+        license_elected="MIT",
     ),
 ]
 
