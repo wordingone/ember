@@ -1229,7 +1229,8 @@ fn dispatch_manifest_refuses_a_headless_no_windows_spawn_that_presents_a_visible
     // "headless_no_windows" (the required-field default for every non-Cockpit
     // profile). Swap only the spawned program's args/env to point at
     // fixture_dispatch_child_presents_a_visible_window, which paints a real
-    // MessageBoxW instead of the default fixture's plain 30s sleep.
+    // window (CreateWindowExW) instead of the default fixture's plain 30s
+    // sleep.
     let root = sandbox("window-contract-violation");
     let manifest = write_manifest(&root, "dispatch-window-violation", 10_000);
     let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
@@ -1244,19 +1245,10 @@ fn dispatch_manifest_refuses_a_headless_no_windows_spawn_that_presents_a_visible
     let db = root.join("ember-lab.sqlite3");
     let daemon = Daemon::open(&db).unwrap();
 
-    // Test-side warmup (issue #1727 round 2). A fresh copy of this same test
-    // binary has its own process cold-start cost -- loader, CRT, harness
-    // init -- which can exceed the 200ms admission census before the
-    // CreateWindowExW call in fixture_dispatch_child_presents_a_visible_window
-    // ever runs. Round 1 warmed only that process cost (window env var left
-    // unset, so the fixture no-op'd and exited) and still failed cold: the
-    // dominant first-use cost is the window-creation path itself (win32k
-    // session init, desktop-heap connection, class registration), which only
-    // pays down when a window is actually created, and that cost is
-    // session-side rather than process-side -- so a real create+destroy in
-    // this throwaway process warms it for the timed dispatch below even
-    // though the two run as separate processes. lib.rs's 200ms census
-    // boundary is untouched by either round.
+    // Test-side warmup (issue #1727 round 2), kept: it is a real, measured
+    // latency reduction for the spawned child's own cold start (loader, CRT,
+    // harness init, first window-creation call), even though round 3 proved
+    // it is not sufficient on its own (see the budget comment below).
     let warmup_status = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
@@ -1272,12 +1264,30 @@ fn dispatch_manifest_refuses_a_headless_no_windows_spawn_that_presents_a_visible
         "warmup spawn of the fixture binary failed"
     );
 
-    let outcome = daemon.dispatch_manifest_at_with_probes_and_host(
+    // Issue #1727 round 3: rounds 1-2 chased a cold-start/session-warmth
+    // theory and both failed a forced-cold 3x-green bar (round 3 evidence:
+    // COLD_GREEN_RUNS=2/3, an identically-shaped failure on a maximally warm
+    // session). The real defect is a fixed-budget timing race: the child's
+    // CreateWindowExW has no scheduling guarantee against the census+poll
+    // window, and under host load (parallel test threads, rebuild tails) it
+    // can lose that race even though the window contract is not actually
+    // respected. Production keeps a tight 200ms budget
+    // (DEFAULT_WINDOW_CENSUS_BUDGET in lib.rs, its own small default-value
+    // test) because admission must stay fast; late windows are explicitly
+    // out of scope for admission-time enforcement (the L7 periodic
+    // re-census leg covers those). This test exists to verify the REFUSAL
+    // MECHANISM -- that a job-owned window is detected and enriched with
+    // hwnd/pid/title detail, and that the refusal fails closed -- not to
+    // race the production scheduler, so it injects a generous budget via
+    // the census-budget-injectable entry point instead of shrinking the
+    // production default.
+    let outcome = daemon.dispatch_manifest_at_with_probes_and_host_and_window_census_budget(
         &manifest,
         10_001,
         |_root| Ok(1024),
         || Ok(2048),
         || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        Duration::from_secs(5),
     );
     let error = outcome.unwrap_err();
     match &error {
@@ -1288,8 +1298,8 @@ fn dispatch_manifest_refuses_a_headless_no_windows_spawn_that_presents_a_visible
                 "refusal message must self-describe the violated contract: {detail}"
             );
             // The refusal carries real per-window debugging detail (HWND,
-            // owning PID, and the fixture's own MessageBoxW caption text),
-            // not just a bare count -- prove the enrichment actually ran
+            // owning PID, and the fixture's own window title text), not
+            // just a bare count -- prove the enrichment actually ran
             // against the real window, not merely that the code compiles.
             assert!(
                 detail.contains("hwnd=0x") && detail.contains("pid="),

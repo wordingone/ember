@@ -654,6 +654,14 @@ const PROTECTIVE_CHECKPOINT_REQUEST_ENV: &str = "EMBER_LAB_PROTECTIVE_CHECKPOINT
 const PROTECTIVE_CHECKPOINT_RESPONSE_ENV: &str = "EMBER_LAB_PROTECTIVE_CHECKPOINT_RESPONSE_PATH";
 const PROTECTIVE_CHECKPOINT_MAX_GRACE_MS: u64 = 30_000;
 const PROTECTIVE_CHECKPOINT_MONITOR_TOTAL_GRACE_MS: u64 = 5_000;
+/// Production window-contract census budget (issue #898 L6): how long
+/// `poll_for_new_job_owned_windows` keeps checking for a job-owned window
+/// after resume before concluding none appeared. Tests that need to
+/// distinguish a real refusal from a scheduler-timing race under host load
+/// inject a larger budget via
+/// `dispatch_manifest_at_with_probes_and_host_and_window_census_budget`
+/// instead of shrinking this constant.
+const DEFAULT_WINDOW_CENSUS_BUDGET: Duration = Duration::from_millis(200);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DispatchOutcome {
@@ -1794,6 +1802,36 @@ impl Daemon {
         G: FnMut() -> Result<u64>,
         H: FnMut() -> Result<HostCommitCapacity>,
     {
+        self.dispatch_manifest_at_with_probes_and_host_and_window_census_budget(
+            manifest_path,
+            observed_at_ms,
+            free_space,
+            free_vram,
+            free_host_commit,
+            DEFAULT_WINDOW_CENSUS_BUDGET,
+        )
+    }
+
+    /// Same as `dispatch_manifest_at_with_probes_and_host`, with the
+    /// window-contract census budget also injectable. Production callers
+    /// use the plain method above (fixed at `DEFAULT_WINDOW_CENSUS_BUDGET`);
+    /// this variant exists so a test can widen the budget to verify the
+    /// refusal MECHANISM (enriched hwnd/pid/title detail, receipt shape)
+    /// without racing the fixed production timing under host load.
+    pub fn dispatch_manifest_at_with_probes_and_host_and_window_census_budget<F, G, H>(
+        &self,
+        manifest_path: &Path,
+        observed_at_ms: i64,
+        free_space: F,
+        free_vram: G,
+        free_host_commit: H,
+        window_census_budget: Duration,
+    ) -> Result<DispatchOutcome>
+    where
+        F: FnMut(&Path) -> Result<u64>,
+        G: FnMut() -> Result<u64>,
+        H: FnMut() -> Result<HostCommitCapacity>,
+    {
         let canonical = fs::canonicalize(manifest_path).map_err(|error| {
             EmberLabError::InvalidDispatchManifest {
                 detail: format!("dispatch manifest is not a canonical file: {error}"),
@@ -1807,6 +1845,7 @@ impl Daemon {
             free_space,
             free_vram,
             free_host_commit,
+            window_census_budget,
         )
     }
 
@@ -1864,6 +1903,7 @@ impl Daemon {
                 free_space,
                 free_vram,
                 free_host_commit,
+                DEFAULT_WINDOW_CENSUS_BUDGET,
             );
         }
         let mut snapshots = fs::read_dir(&snapshot_dir)?
@@ -1906,6 +1946,7 @@ impl Daemon {
             free_space,
             free_vram,
             free_host_commit,
+            DEFAULT_WINDOW_CENSUS_BUDGET,
         )
     }
 
@@ -2038,6 +2079,7 @@ impl Daemon {
         mut free_space: F,
         mut free_vram: G,
         mut free_host_commit: H,
+        window_census_budget: Duration,
     ) -> Result<DispatchOutcome>
     where
         F: FnMut(&Path) -> Result<u64>,
@@ -2381,7 +2423,7 @@ impl Daemon {
         if profile_id == DispatchWorkloadProfileId::EvidenceVerifier {
             spec = spec.with_dispatch_token(dispatch_expires_at_ms)?;
         }
-        let handle = match self.start_job(spec) {
+        let handle = match self.start_job_with_window_census_budget(spec, window_census_budget) {
             Ok(handle) => handle,
             Err(error) => {
                 let _ = self.rollback_dispatch_attempt(&job_id, &resource_lease, created_identity);
@@ -2611,7 +2653,20 @@ impl Daemon {
         tx.commit()?;
         Ok(())
     }
-    pub fn start_job(&self, mut spec: JobSpec) -> Result<JobHandle> {
+    pub fn start_job(&self, spec: JobSpec) -> Result<JobHandle> {
+        self.start_job_with_window_census_budget(spec, DEFAULT_WINDOW_CENSUS_BUDGET)
+    }
+
+    /// Same as `start_job`, with the window-contract census budget also
+    /// injectable. Production callers use `start_job` (fixed at
+    /// `DEFAULT_WINDOW_CENSUS_BUDGET`); the dispatch-manifest path and tests
+    /// that need to distinguish a real refusal from a scheduler-timing race
+    /// under host load use this directly.
+    pub fn start_job_with_window_census_budget(
+        &self,
+        mut spec: JobSpec,
+        window_census_budget: Duration,
+    ) -> Result<JobHandle> {
         self.verify_identity(&spec.job_id)?;
         let protective_key = hash_bytes(spec.job_id.as_bytes());
         let checkpoint_request_path = self.log_dir.join(format!(
@@ -2790,7 +2845,7 @@ impl Daemon {
                 let violating_windows = poll_for_new_job_owned_windows(
                     &pre_resume_windows,
                     spawned.job_handle(),
-                    Duration::from_millis(200),
+                    window_census_budget,
                     Duration::from_millis(20),
                 );
                 if !violating_windows.is_empty() {
@@ -7157,6 +7212,21 @@ fn poll_for_new_job_owned_windows(
             return found;
         }
         std::thread::sleep(interval);
+    }
+}
+
+#[cfg(test)]
+mod window_census_budget_tests {
+    use super::*;
+
+    #[test]
+    fn production_default_window_census_budget_is_unchanged_at_200ms() {
+        // Issue #898 L6 / #1727 round 3: the census budget became
+        // injectable so a test could widen it without racing production
+        // admission timing. This pins the production default itself so a
+        // future edit cannot silently loosen (or tighten) the real
+        // admission-time budget while only touching the injectable path.
+        assert_eq!(DEFAULT_WINDOW_CENSUS_BUDGET, Duration::from_millis(200));
     }
 }
 
