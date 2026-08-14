@@ -22,6 +22,7 @@ use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::thread;
 use std::time::{Duration, Instant};
 
 #[cfg(windows)]
@@ -450,6 +451,31 @@ pub fn probe_endpoint(authority: &ServerAuthority) -> EndpointHealth {
         }
         Err(error) if error.kind() == std::io::ErrorKind::TimedOut => EndpointHealth::Hung,
         Err(_) => EndpointHealth::Dead,
+    }
+}
+
+/// Default budget for polling a freshly dispatched/rebound server's health
+/// endpoint before a restore attempt is treated as failed. `probe_endpoint`'s
+/// own per-attempt timeouts are tuned for a single already-running server on
+/// a periodic tick; a server that was JUST dispatched needs real wall time to
+/// bind its port, so restore polls it repeatedly within this budget instead
+/// of trusting a single attempt. Test callers that need a larger budget to
+/// avoid racing host scheduling use the `..._and_restore_health_poll_budget`
+/// entry points instead of loosening this constant.
+const DEFAULT_RESTORE_HEALTH_POLL_BUDGET: Duration = Duration::from_millis(2_000);
+const RESTORE_HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(50);
+
+fn poll_endpoint_until_healthy_or_budget(
+    authority: &ServerAuthority,
+    budget: Duration,
+) -> EndpointHealth {
+    let deadline = Instant::now() + budget;
+    loop {
+        let health = probe_endpoint(authority);
+        if health == EndpointHealth::Healthy || Instant::now() >= deadline {
+            return health;
+        }
+        thread::sleep(RESTORE_HEALTH_POLL_INTERVAL);
     }
 }
 
@@ -1188,6 +1214,29 @@ impl Daemon {
         model_name: String,
         vram_bytes: u64,
     ) -> Result<ServerCycleReceipt> {
+        self.supervise_server_live_cycle_with_test_observation_and_restore_health_poll_budget(
+            request,
+            model_name,
+            vram_bytes,
+            DEFAULT_RESTORE_HEALTH_POLL_BUDGET,
+        )
+    }
+
+    /// Same integration seam as [`Self::supervise_server_live_cycle_with_test_observation`],
+    /// but lets a caller override the post-restore health poll budget. Real
+    /// dispatch under test still competes for host CPU/process-creation time
+    /// with every other test thread, so a test asserting on the restore
+    /// MECHANISM (not on production timing) should pass a generous budget
+    /// here instead of racing host scheduling at the production default.
+    #[cfg(debug_assertions)]
+    #[doc(hidden)]
+    pub fn supervise_server_live_cycle_with_test_observation_and_restore_health_poll_budget(
+        &self,
+        request: ServerLiveCycleRequest,
+        model_name: String,
+        vram_bytes: u64,
+        restore_health_poll_budget: Duration,
+    ) -> Result<ServerCycleReceipt> {
         self.supervise_server_live_cycle_with_dispatch_and_observer(
             request,
             |daemon, path| daemon.dispatch_manifest(path),
@@ -1197,6 +1246,7 @@ impl Daemon {
                     vram_bytes,
                 })
             },
+            restore_health_poll_budget,
         )
     }
 
@@ -1212,6 +1262,7 @@ impl Daemon {
             request,
             dispatch,
             observe_serving_identity,
+            DEFAULT_RESTORE_HEALTH_POLL_BUDGET,
         )
     }
 
@@ -1220,6 +1271,7 @@ impl Daemon {
         request: ServerLiveCycleRequest,
         dispatch: F,
         observe: O,
+        restore_health_poll_budget: Duration,
     ) -> Result<ServerCycleReceipt>
     where
         F: FnOnce(&Daemon, &std::path::Path) -> Result<DispatchOutcome>,
@@ -1365,7 +1417,8 @@ impl Daemon {
                     .ok_or_else(|| invalid("restore callback lacks its serving contract"))?;
                 let outcome = dispatch(self, &manifest_path)?;
                 let rebound = self.rebind_server_supervision(authority, &registration, &outcome)?;
-                let health = probe_endpoint(&rebound);
+                let health =
+                    poll_endpoint_until_healthy_or_budget(&rebound, restore_health_poll_budget);
                 let observed = observe(&rebound);
                 let assertions = match observed {
                     Ok(observed) => ServingContractAssertions {
@@ -1650,5 +1703,21 @@ mod tests {
         assert_eq!(receipt.job_id, "restored-server-job");
         daemon.stop_job("restored-server-job").unwrap();
         server.join().unwrap();
+    }
+}
+
+#[cfg(test)]
+mod restore_health_poll_budget_tests {
+    use super::*;
+
+    /// Pins the real production restore health-poll budget, so an edit to
+    /// the injectable path (added for #1722) cannot silently loosen or
+    /// tighten real restore-timeout behavior.
+    #[test]
+    fn production_default_restore_health_poll_budget_is_unchanged_at_2s() {
+        assert_eq!(
+            DEFAULT_RESTORE_HEALTH_POLL_BUDGET,
+            Duration::from_millis(2_000)
+        );
     }
 }
