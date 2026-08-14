@@ -544,8 +544,60 @@ print(json.dumps({
     _write_json(manifest_path, manifest)
     return manifest_path
 
+
+def _register_checkpoint_custody(tmp_path: Path) -> Path:
+    """Issue #1721: contract.py's checkpoint admission now runs the real
+    `ember-lab custody-verify` gate over `_candidate_manifest`'s checkpoint
+    shards. Registers those exact shard hashes into an ISOLATED per-test
+    catalog (never the real repo state/ember-lab-catalog.sqlite3) via the
+    real `register-artifact` CLI, so the fixture is admitted instead of
+    refused as unregistered. Skips (not fails) when no binary is built --
+    the same skip-not-refuse convention contract.py's own gate uses for a
+    host that structurally cannot run the Windows-only ember-lab CLI.
+    """
+    from scripts import artifact_custody_gate as gate
+
+    binary = gate.canonical_ember_lab_binary(REPO_ROOT)
+    if binary is None:
+        pytest.skip(
+            "no built ember-lab binary under runtime/ember-lab/target/"
+            "{release,debug}/ember-lab.exe; build it before running this test"
+        )
+    index = json.loads((tmp_path / "checkpoint" / "checkpoint-manifest.json").read_text(encoding="utf-8"))
+    db_path = tmp_path / "custody-gate-test.sqlite3"
+    for shard in index["shards"]:
+        # The manifest's shard "path" is relative to `root` (this fixture's
+        # `tmp_path`, matching contract.py's own custody_verify(root=...)
+        # call) but was built via `str(Path.relative_to(...))`, which on
+        # Windows yields backslash separators. The catalog's locator
+        # validator is portable-relative-path-only (forward slashes) --
+        # normalize before registering, exactly as a real writer would.
+        locator = shard["path"].replace("\\", "/")
+        registration = subprocess.run(
+            [
+                str(binary),
+                "register-artifact",
+                "--db",
+                str(db_path),
+                "--sha256",
+                shard["sha256"],
+                "--byte-count",
+                str(shard["bytes"]),
+                "--media-type",
+                "application/octet-stream",
+                "--location",
+                f"{gate.RESUME_CHECKPOINT_VOLUME}={locator}",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert registration.returncode == 0, registration.stderr
+    return db_path
+
+
 def test_checkpoint_candidate_binds_owned_multimodal_reasoning_tool_path(tmp_path: Path):
     manifest = _candidate_manifest(tmp_path)
+    custody_db = _register_checkpoint_custody(tmp_path)
     result = subprocess.run(
         [
             sys.executable,
@@ -554,6 +606,8 @@ def test_checkpoint_candidate_binds_owned_multimodal_reasoning_tool_path(tmp_pat
             str(manifest),
             "--trusted-verifier-registry",
             str(tmp_path / "trusted-verifiers.json"),
+            "--custody-db",
+            str(custody_db),
         ],
         cwd=REPO_ROOT,
         text=True,
@@ -600,6 +654,7 @@ def test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary(
 
     governed_remote, governed_ref = hermetic_governed_remote
     manifest_path = _candidate_manifest(tmp_path)
+    custody_db = _register_checkpoint_custody(tmp_path)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["source_commit"] = _current_source_commit()
     _write_json(manifest_path, manifest)
@@ -620,6 +675,7 @@ def test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary(
         # at its default (self-anchor), which also resolves to this checkout.
         governed_remote=governed_remote,
         governed_ref=governed_ref,
+        custody_db=custody_db,
     )
     assert validate_r1_warm100_entry(
         payload,
@@ -676,6 +732,7 @@ def test_r1_warm100_entry_rejects_stale_source_commit(tmp_path: Path):
     ).strip()
     assert stale and stale != current
     manifest_path = _candidate_manifest(tmp_path)
+    custody_db = _register_checkpoint_custody(tmp_path)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["source_commit"] = stale
     _write_json(manifest_path, manifest)
@@ -689,6 +746,7 @@ def test_r1_warm100_entry_rejects_stale_source_commit(tmp_path: Path):
             config_path=REPO_ROOT / "configs/ember-restart-3b.json",
             fixed_prior_path=REPO_ROOT / "manifests/ember-restart-3b/fixed-prior-manifest-v1.json",
             trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
+            custody_db=custody_db,
         )
 
 
@@ -697,6 +755,7 @@ def test_r1_warm100_entry_rejects_dirty_source_tree(tmp_path: Path):
     from scripts.ember_restart.contract import build_r1_warm100_entry
 
     manifest_path = _candidate_manifest(tmp_path)
+    custody_db = _register_checkpoint_custody(tmp_path)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["source_commit"] = _current_source_commit()
     _write_json(manifest_path, manifest)
@@ -713,6 +772,7 @@ def test_r1_warm100_entry_rejects_dirty_source_tree(tmp_path: Path):
                 config_path=REPO_ROOT / "configs/ember-restart-3b.json",
                 fixed_prior_path=REPO_ROOT / "manifests/ember-restart-3b/fixed-prior-manifest-v1.json",
                 trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
+                custody_db=custody_db,
             )
     finally:
         dirty_path.write_bytes(original)
@@ -758,6 +818,7 @@ def test_r1_warm100_entry_cli_emits_path_free_receipt(
     monkeypatch.setattr(contract_module, "GOVERNED_REMOTE_REF", governed_ref)
 
     manifest_path = _candidate_manifest(tmp_path)
+    custody_db = _register_checkpoint_custody(tmp_path)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["source_commit"] = _current_source_commit()
     _write_json(manifest_path, manifest)
@@ -777,6 +838,8 @@ def test_r1_warm100_entry_cli_emits_path_free_receipt(
             str(REPO_ROOT / "manifests/ember-restart-3b/fixed-prior-manifest-v1.json"),
             "--trusted-verifier-registry",
             str(tmp_path / "trusted-verifiers.json"),
+            "--custody-db",
+            str(custody_db),
         ]
     )
     captured = capsys.readouterr()
@@ -846,6 +909,7 @@ def test_shared_route_candidate_clears_the_real_trusted_parameter_counter(tmp_pa
     fixture counter in this file accepts "shared", so only the real verifier catches it.
     """
     manifest_path = _candidate_manifest(tmp_path)
+    custody_db = _register_checkpoint_custody(tmp_path)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
     counter = tmp_path / "counter" / "parameter-realization-verifier.py"
@@ -894,6 +958,8 @@ def test_shared_route_candidate_clears_the_real_trusted_parameter_counter(tmp_pa
             str(manifest_path),
             "--trusted-verifier-registry",
             str(registry_path),
+            "--custody-db",
+            str(custody_db),
         ],
         cwd=REPO_ROOT,
         text=True,

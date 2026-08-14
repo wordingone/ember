@@ -1,0 +1,27 @@
+{
+  "ticket": "1721-CUSTODY-PREFLIGHT-REFUSE-THEN-PASS",
+  "ts": "2026-08-14T20:51:00Z",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "bytes on disk as-is (binary read, no normalization)",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "pair_step": "2-of-2: same hash, real register-artifact against the same catalog, same unmodified custody_verify() call now resolves and admits",
+  "admitted": true,
+  "rehash": false,
+  "results": [
+    {
+      "locations": [
+        {
+          "locator": "shard.bin",
+          "verdict": "verified",
+          "volume": "resume-checkpoint"
+        }
+      ],
+      "sha256": "c8090809d4ca83f996889cb8cb44b6ef31c392f321d18c00dd3287f607c6e456",
+      "verdict": "verified"
+    }
+  ],
+  "schema_version": "ember-custody-verify-receipt-v1",
+  "verified_at_ms": 1786740660259
+}
