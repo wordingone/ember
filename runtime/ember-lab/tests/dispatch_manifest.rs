@@ -107,7 +107,7 @@ fn fixture_dispatch_child() {
 
 /// Window-contract fixture (issue #898 L6): when
 /// `EMBER_LAB_DISPATCH_FIXTURE_CHILD_WINDOW=1`, paints a real, visible
-/// top-level `MessageBoxW` window on the current desktop. This is the
+/// top-level `CreateWindowExW` window on the current desktop. This is the
 /// exact gap PR #1691 left open (its own "Unverified areas" section: the
 /// UILIMIT job-object wall "does not, by themselves, prevent the job's own
 /// process from creating a window on the existing interactive desktop") --
@@ -116,6 +116,17 @@ fn fixture_dispatch_child() {
 /// sleep keeps the fixture from exiting cleanly on its own if the parent's
 /// census/kill is ever slower than expected, so a probe miss shows up as a
 /// hang the test's own deadline catches, not a silent false negative.
+///
+/// `EMBER_LAB_DISPATCH_FIXTURE_CHILD_WINDOW_WARMUP=1` (issue #1727 round 2):
+/// paired with the window var, creates the same window, destroys it
+/// immediately, and returns instead of sleeping. A prior fix warmed only the
+/// process (loader/CRT/harness init) by spawning this fixture with the
+/// window var unset; that still failed cold, because the dominant first-use
+/// cost is the window-creation path itself (win32k session init, desktop-
+/// heap connection, class registration), which only pays down when a window
+/// is actually created -- and that cost is session-side, not process-side,
+/// so a real create+destroy in a throwaway process still warms it for the
+/// timed dispatch that follows.
 fn to_wide_null(text: &str) -> Vec<u16> {
     text.encode_utf16().chain(std::iter::once(0)).collect()
 }
@@ -123,7 +134,9 @@ fn to_wide_null(text: &str) -> Vec<u16> {
 #[test]
 fn fixture_dispatch_child_presents_a_visible_window() {
     if std::env::var("EMBER_LAB_DISPATCH_FIXTURE_CHILD_WINDOW").as_deref() == Ok("1") {
-        use windows_sys::Win32::UI::WindowsAndMessaging::{CreateWindowExW, WS_POPUP, WS_VISIBLE};
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            CreateWindowExW, DestroyWindow, WS_POPUP, WS_VISIBLE,
+        };
         // A top-level visible window on the predefined STATIC class -- the exact
         // thing census_top_level_windows() enumerates (EnumWindows +
         // IsWindowVisible + owning PID), and a fair stand-in for any GUI a
@@ -140,7 +153,7 @@ fn fixture_dispatch_child_presents_a_visible_window() {
         // rather than the host's dialog-subsystem latency.
         let class = to_wide_null("STATIC");
         let title = to_wide_null("l6-window-contract-fixture");
-        unsafe {
+        let hwnd = unsafe {
             CreateWindowExW(
                 0,
                 class.as_ptr(),
@@ -154,7 +167,13 @@ fn fixture_dispatch_child_presents_a_visible_window() {
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
                 std::ptr::null(),
-            );
+            )
+        };
+        if std::env::var("EMBER_LAB_DISPATCH_FIXTURE_CHILD_WINDOW_WARMUP").as_deref() == Ok("1") {
+            unsafe {
+                DestroyWindow(hwnd);
+            }
+            return;
         }
         thread::sleep(Duration::from_secs(30));
     }
@@ -1225,22 +1244,27 @@ fn dispatch_manifest_refuses_a_headless_no_windows_spawn_that_presents_a_visible
     let db = root.join("ember-lab.sqlite3");
     let daemon = Daemon::open(&db).unwrap();
 
-    // Test-side warmup (issue #1727 redo). A fresh copy of this same test
+    // Test-side warmup (issue #1727 round 2). A fresh copy of this same test
     // binary has its own process cold-start cost -- loader, CRT, harness
     // init -- which can exceed the 200ms admission census before the
     // CreateWindowExW call in fixture_dispatch_child_presents_a_visible_window
-    // ever runs. Reproduced 1-for-1: this exact acceptance test fails on a
-    // cold (first-spawn) binary and passes immediately after. Spawn the
-    // binary once as a throwaway (window env var left unset, so the fixture
-    // no-ops and exits at once) so the exe is loader-warm before the timed
-    // dispatch below. This makes the test deterministic against its own
-    // cold-start; lib.rs's 200ms census boundary is untouched.
+    // ever runs. Round 1 warmed only that process cost (window env var left
+    // unset, so the fixture no-op'd and exited) and still failed cold: the
+    // dominant first-use cost is the window-creation path itself (win32k
+    // session init, desktop-heap connection, class registration), which only
+    // pays down when a window is actually created, and that cost is
+    // session-side rather than process-side -- so a real create+destroy in
+    // this throwaway process warms it for the timed dispatch below even
+    // though the two run as separate processes. lib.rs's 200ms census
+    // boundary is untouched by either round.
     let warmup_status = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
             "fixture_dispatch_child_presents_a_visible_window",
             "--nocapture",
         ])
+        .env("EMBER_LAB_DISPATCH_FIXTURE_CHILD_WINDOW", "1")
+        .env("EMBER_LAB_DISPATCH_FIXTURE_CHILD_WINDOW_WARMUP", "1")
         .status()
         .unwrap();
     assert!(
