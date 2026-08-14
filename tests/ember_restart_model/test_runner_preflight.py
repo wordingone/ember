@@ -524,7 +524,7 @@ class RunnerPreflightTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "write budget"):
             run_vertical_slice.semantic_publication_plan(steps=100, checkpoint_interval=32, checkpoint_byte_bound=10, write_budget_bytes=39)
 
-    def _run_semantic_with_mocks(self, *, resume: bool) -> tuple[dict[str, object], dict[str, object], MagicMock, list[int]]:
+    def _run_semantic_with_mocks(self, *, resume: bool, telemetry_path: Path | None = None, telemetry_run_id: str | None = None) -> tuple[dict[str, object], dict[str, object], MagicMock, list[int]]:
         model = SimpleNamespace(active_expert="reasoning")
         model._activate_expert = lambda expert: setattr(model, "active_expert", expert)
         model.expert_bank_genesis_hashes = lambda: {name: name * 64 for name in ("vision", "audio", "reasoning", "tool")}
@@ -558,7 +558,10 @@ class RunnerPreflightTests(unittest.TestCase):
             steps = int(kwargs["steps"])
             interval = int(kwargs["checkpoint_every"])
             callback = kwargs["checkpoint_callback"]
+            progress = kwargs.get("progress_callback")
             for step in range(initial + 1, initial + steps + 1):
+                if progress is not None:
+                    progress({"step": step, "total_steps": initial + steps, "loss": 1.0 / step, "step_ms": 10.0, "tokens_consumed": step * 1024, "grad_norm": 2.0 / step})
                 if step % interval == 0 or step == initial + steps:
                     callback(step, {"data_cursor": {"shard": "TOKEN-SHARDS-V0:current", "record_index": step, "global_step": step, "tokens_seen": step * 1024}})
             return {"global_step": initial + steps, "tokens_seen": (initial + steps) * 1024, "data_cursor": {"shard": "TOKEN-SHARDS-V0:current", "record_index": initial + steps, "global_step": initial + steps, "tokens_seen": (initial + steps) * 1024}}
@@ -589,7 +592,7 @@ class RunnerPreflightTests(unittest.TestCase):
             stack.enter_context(patch.object(run_vertical_slice, "require_counter_success_receipt", return_value={"verified": True, "counter_sha256": "h" * 64}))
             stack.enter_context(patch.object(run_vertical_slice, "published_checkpoint_receipt", side_effect=lambda _path: (call_order.append("receipt"), resume_receipt)[1]))
             stack.enter_context(patch.object(run_vertical_slice, "load_checkpoint_artifacts", restore_loader))
-            stack.enter_context(patch.object(Path, "is_dir", autospec=True, side_effect=lambda path: path.drive.upper() == "B:"))
+            stack.enter_context(patch.object(Path, "is_dir", autospec=True, side_effect=lambda path: path.drive.upper() == "B:" or os.path.isdir(str(path))))
             stack.enter_context(patch.object(Path, "read_text", autospec=True, side_effect=read_text))
             stack.enter_context(patch.object(run_vertical_slice, "_sha256", return_value="a" * 64))
             result = run_vertical_slice.run_semantic(
@@ -600,6 +603,7 @@ class RunnerPreflightTests(unittest.TestCase):
                 steps=2,
                 sequence_length=1024, checkpoint_interval=32, write_budget_bytes=24 * 1024**3,
                 resume_checkpoint=parent if resume else None,
+                telemetry_path=telemetry_path, telemetry_run_id=telemetry_run_id,
             )
         self._semantic_restore_loader = restore_loader
         self._semantic_resume_receipt = resume_receipt
@@ -634,6 +638,22 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertIs(receipt, self._semantic_resume_receipt)
         self.assertEqual(receipt["checkpoint"], {"byte_sha256": "a" * 64})
         self.assertLess(self._semantic_call_order.index("receipt"), self._semantic_call_order.index("model"))
+
+    def test_semantic_run_forwards_per_step_telemetry_when_telemetry_path_is_set(self) -> None:
+        """Issue #1719 blocker 1: semantic is the only >=100-contiguous-step-capable CLI
+        mode, but run_semantic accepted no telemetry_path/telemetry_run_id at all, so
+        R1-E1/R1-E2 per-step loss/grad-norm telemetry was architecturally unreachable from
+        the only path that can actually run 100 contiguous steps.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            telemetry_path = Path(directory) / "telemetry" / "telemetry.jsonl"
+            self._run_semantic_with_mocks(resume=False, telemetry_path=telemetry_path, telemetry_run_id="semantic-run-1719")
+            events = [json.loads(line) for line in telemetry_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        train_steps = [event for event in events if event["kind"] == "train_step"]
+        self.assertEqual([event["payload"]["step"] for event in train_steps], [1, 2])
+        self.assertTrue(all(event["payload"]["run_id"] == "semantic-run-1719" for event in train_steps))
+        self.assertTrue(all(isinstance(event["payload"]["loss"], float) for event in train_steps))
+        self.assertTrue(all(isinstance(event["payload"]["grad_norm"], float) and event["payload"]["grad_norm"] > 0.0 for event in train_steps))
 
     def test_disk_reopen_resume_receipt_binds_exact_frozen_manifest_bytes(self) -> None:
         """A disk-reopened resume receipt carries the manifest's out-of-band identity."""
@@ -1059,7 +1079,33 @@ class RunnerPreflightTests(unittest.TestCase):
             resume_realization_registry=None,
             resume_optimizer_transition_registry=None,
             resume_optimizer_transition_registry_sha256=None,
+            telemetry_path=None,
+            telemetry_run_id=None,
         )
+
+    def test_semantic_cli_forwards_telemetry_flags_when_supplied(self) -> None:
+        """Issue #1719 blocker 1: the semantic subparser had zero telemetry wiring --
+        --telemetry-path/--telemetry-run-id must reach run_semantic when the operator
+        supplies them, the same way the specialist subparser already forwards its
+        (required) telemetry flags.
+        """
+        with patch.object(run_vertical_slice, "run_semantic", return_value={"steps": 1}) as semantic:
+            with patch.object(
+                sys,
+                "argv",
+                [
+                    "run_vertical_slice.py", "semantic", "--seed", "83", "--artifact-root", "B:/ember-artifacts",
+                    "--receipt", "semantic/receipt.json", "--shards-root", "semantic/shards",
+                    "--tokenizer", "semantic/tokenizer.json",
+                    "--expected-receipt-sha256", "r" * 64, "--expected-tokenizer-sha256", "t" * 64,
+                    "--expected-architecture-sha256", "a" * 64,
+                    "--steps", "1", "--sequence-length", "1024", "--checkpoint-interval", "32", "--write-budget-gib", "24",
+                    "--telemetry-path", "semantic/telemetry.jsonl", "--telemetry-run-id", "semantic-run-1719",
+                ],
+            ):
+                run_vertical_slice.main()
+        self.assertEqual(semantic.call_args.kwargs["telemetry_path"], Path("semantic/telemetry.jsonl"))
+        self.assertEqual(semantic.call_args.kwargs["telemetry_run_id"], "semantic-run-1719")
 
     def test_vertical_cli_refuses_direct_launch_without_disk_budget_runner(self) -> None:
         with patch.dict(os.environ, {}, clear=True):

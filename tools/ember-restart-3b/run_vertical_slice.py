@@ -3368,11 +3368,16 @@ def run_semantic(
     resume_counter_receipt: Path | None = None, resume_realization_registry: Path | None = None,
     resume_optimizer_transition_registry: Path | None = None,
     resume_optimizer_transition_registry_sha256: str | None = None,
+    telemetry_path: Path | None = None, telemetry_run_id: str | None = None,
 ) -> dict[str, object]:
     """Train receipt-bound semantic text through the shared nonlinear language path."""
 
     if not isinstance(seed, int) or seed < 0 or not isinstance(steps, int) or steps < 1 or not isinstance(sequence_length, int) or sequence_length < 1 or not isinstance(checkpoint_interval, int) or checkpoint_interval < 1 or not isinstance(write_budget_bytes, int) or write_budget_bytes < 1:
         raise ValueError("semantic launch requires nonnegative seed and positive steps and sequence length")
+    if (telemetry_path is None) != (telemetry_run_id is None):
+        raise ValueError("semantic training telemetry requires telemetry_path and telemetry_run_id together")
+    if telemetry_run_id is not None and (not telemetry_run_id or len(telemetry_run_id) > 128):
+        raise ValueError("semantic training telemetry run id is invalid")
     # Shared-text authority must be complete before even a CUDA availability probe.
     text_lab_preflight = run_text_lab_preflight(repo_root=Path(__file__).resolve().parents[2])
     if text_lab_preflight.get("result") != "VERIFIED":
@@ -3517,13 +3522,21 @@ def run_semantic(
             last_checkpointed_step=last_checkpointed_step,
             deferral_state=low_commit_deferral_state,
             publish=publish_and_verify,
-            telemetry_path=None,
-            telemetry_run_id=None,
+            telemetry_path=telemetry_path,
+            telemetry_run_id=telemetry_run_id,
         )
         if result is None:
             return
         checkpoint, parameter_receipt = result
         last_checkpointed_step = global_step
+
+    def progress_callback(progress: dict[str, object]) -> None:
+        if telemetry_path is None or telemetry_run_id is None:
+            return
+        append_training_telemetry(telemetry_path, kind="train_step", payload={
+            "run_id": telemetry_run_id,
+            **progress,
+        })
 
     segment = run_manifest_bound_semantic_segment(
         model=model,
@@ -3535,6 +3548,7 @@ def run_semantic(
         steps=steps,
         checkpoint_every=checkpoint_interval,
         checkpoint_callback=checkpoint_callback,
+        progress_callback=progress_callback,
         initial_data_cursor=resume_cursor,
         initial_global_step=initial_global_step,
         initial_tokens_seen=initial_tokens_seen,
@@ -3635,6 +3649,8 @@ def main() -> None:
     semantic_resume.add_argument("--resume-realization-registry", type=Path)
     semantic_resume.add_argument("--resume-optimizer-transition-registry", type=Path)
     semantic.add_argument("--resume-optimizer-transition-registry-sha256")
+    semantic.add_argument("--telemetry-path", type=Path)
+    semantic.add_argument("--telemetry-run-id")
     args = parser.parse_args()
     if args.command == "governed-vertical":
         result = run_governed_vertical(
@@ -3675,6 +3691,8 @@ def main() -> None:
             resume_realization_registry=args.resume_realization_registry,
             resume_optimizer_transition_registry=args.resume_optimizer_transition_registry,
             resume_optimizer_transition_registry_sha256=args.resume_optimizer_transition_registry_sha256,
+            telemetry_path=args.telemetry_path,
+            telemetry_run_id=args.telemetry_run_id,
         )
     else:
         require_disk_budget_runner_contract()
