@@ -119,6 +119,7 @@ jobs:
           cargo test --locked --lib
           cargo test --locked --test control_plane
           cargo test --locked --test dispatch_manifest
+          cargo test --locked --test artifact_custody
           cargo test --locked --test rpc_named_pipe named_pipe_rpc_survives_daemon_restart_and_controls_bound_job -- --exact
   production-rung-replay:
     # Class-kill for #1302: a generator/tokenizer/config edit that lands
