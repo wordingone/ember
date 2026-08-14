@@ -45,6 +45,7 @@ import os
 import re
 import shutil
 import sys
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -84,6 +85,10 @@ class UnverifiedLicenseError(BlockedError):
 
 
 class ReceiptWriteError(BlockedError):
+    pass
+
+
+class ContentTypeMismatchError(BlockedError):
     pass
 
 
@@ -204,6 +209,71 @@ def safe_key(s: str) -> str:
 # ---------------------------------------------------------------------------
 # License / credential gates
 # ---------------------------------------------------------------------------
+_MAGIC_SIGNATURES = (
+    (b"%PDF", "pdf"),
+    (b"PK\x03\x04", "zip"),
+    (b"PK\x05\x06", "zip"),
+    (b"\x1f\x8b", "gzip"),
+    (b"7z\xbc\xaf\x27\x1c", "7z"),
+    (b"BZh", "bzip2"),
+)
+
+_EXTENSION_TYPES = {
+    ".pdf": "pdf",
+    ".zip": "zip",
+    ".gz": "gzip",
+    ".tgz": "gzip",
+    ".bz2": "bzip2",
+    ".7z": "7z",
+    ".htm": "html",
+    ".html": "html",
+}
+
+
+def sniff_content_type(head: bytes) -> Optional[str]:
+    """Positively identify a payload from its leading bytes, or return None.
+
+    None means "cannot prove anything", never "wrong" -- callers must not block
+    on an unidentifiable payload or every plain-text source becomes a refusal.
+    """
+    if not head:
+        return None
+    for signature, name in _MAGIC_SIGNATURES:
+        if head.startswith(signature):
+            return name
+    if head.lstrip()[:512].lower().startswith((b"<!doctype html", b"<html", b"<?xml-stylesheet", b"<head")):
+        return "html"
+    return None
+
+
+def expected_content_type(url: str) -> Optional[str]:
+    """Map a URL's filename extension to the type its bytes should have."""
+    name = Path(urllib.parse.urlparse(url).path).name.lower()
+    if name.endswith(".tar.gz"):
+        return "gzip"
+    suffix = Path(name).suffix
+    return _EXTENSION_TYPES.get(suffix)
+
+
+def gate_content_type(url: str, head: bytes, allow_mismatch: bool) -> None:
+    """Refuse a payload whose identified type contradicts the URL's extension.
+
+    Guards the soft-404 class: a server answering 200 with an HTML error page
+    for a URL naming a binary artifact. Status codes do not catch this, and the
+    receipt that results is indistinguishable from a real acquisition.
+    """
+    if allow_mismatch:
+        return
+    expected = expected_content_type(url)
+    actual = sniff_content_type(head)
+    if expected is None or actual is None or expected == actual:
+        return
+    raise ContentTypeMismatchError(
+        f"{url} declares {expected} by extension but the body is {actual}; "
+        f"pass --allow-content-mismatch to record it anyway"
+    )
+
+
 def gate_license(license_str: str, allow_unverified: bool) -> None:
     """Raise UnverifiedLicenseError unless license_str is resolved or the caller
     explicitly passed --allow-unverified-license. Never guesses a license."""

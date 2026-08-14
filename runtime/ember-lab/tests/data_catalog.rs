@@ -2,7 +2,10 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-use ember_lab::{rollback_empty_data_catalog_migration, Daemon, EmberLabError};
+use ember_lab::{
+    rollback_empty_artifact_custody_migration, rollback_empty_data_catalog_migration, Daemon,
+    EmberLabError,
+};
 use serde_json::json;
 use std::collections::BTreeSet;
 use std::fs;
@@ -965,6 +968,9 @@ fn empty_migration_can_roll_back_but_catalog_data_blocks_downgrade() {
     let root = temp_root("catalog-explicit-rollback");
     let empty_db = root.join("empty.sqlite3");
     drop(Daemon::open(&empty_db).unwrap());
+    // A fresh Daemon::open lands at the current schema (6, #1721's artifact-custody tables
+    // included), so a downgrade to 4 chains through each historical step in order.
+    rollback_empty_artifact_custody_migration(&empty_db).unwrap();
     rollback_empty_data_catalog_migration(&empty_db).unwrap();
     let conn = rusqlite::Connection::open(&empty_db).unwrap();
     let version: String = conn
@@ -994,6 +1000,10 @@ fn empty_migration_can_roll_back_but_catalog_data_blocks_downgrade() {
         .unwrap();
     let before = populated.export_data_catalog_manifest().unwrap();
     drop(populated);
+    // No artifact custody data exists in this fixture, so the 6 -> 5 step succeeds; the
+    // 5 -> 4 step is the one this test actually exercises: the manifest's catalog data blocks
+    // that downgrade.
+    rollback_empty_artifact_custody_migration(&populated_db).unwrap();
     let error = rollback_empty_data_catalog_migration(&populated_db).unwrap_err();
     assert!(matches!(error, EmberLabError::InvalidDataCatalog { .. }));
     let reopened = Daemon::open(&populated_db).unwrap();

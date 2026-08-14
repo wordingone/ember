@@ -73,6 +73,24 @@ CONNECTOR_SCRIPTS = {
 }
 
 
+def is_entry_page_url(url: str) -> bool:
+    """True when a URL names a site root or directory index rather than an artifact.
+
+    #1480 gave `BulkVein` an entry-page-vs-artifact distinction via
+    `requires_resolution`; `WaveSource` never got one, so eight single-shot rows
+    shipped pointing at documentation roots that fetch one HTML page.
+    """
+    if not url:
+        return False
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return False
+    path = parsed.path
+    if not path or path == "/" or path.endswith("/"):
+        return True
+    return "." not in Path(path).name
+
+
 @dataclass(frozen=True)
 class WaveSource:
     """One named source from the wave-2 table, routed to one connector call."""
@@ -85,6 +103,10 @@ class WaveSource:
     est_tokens_low_b: float
     est_tokens_high_b: float
     notes: str = ""
+    requires_resolution: bool = False
+    #: For a disjunctive licence ("A OR B"), which branch this row takes. An
+    #: unelected OR is not a licence, so spdx_gate refuses one that omits this.
+    license_elected: Optional[str] = None
 
     def __post_init__(self) -> None:
         if self.connector not in CONNECTOR_SCRIPTS:
@@ -94,6 +116,21 @@ class WaveSource:
                 raise ValueError(f"{self.name}: unknown charter domain {d!r}")
         if not self.argv:
             raise ValueError(f"{self.name}: argv must not be empty")
+        if self.requires_resolution:
+            url = next((a for a in self.argv if a.startswith(("http://", "https://"))), "")
+            if is_entry_page_url(url):
+                raise ValueError(
+                    f"{self.name}: {url!r} is an entry page, not a concrete artifact URL"
+                )
+        if self.license_elected is not None:
+            argv = list(self.argv)
+            if "--license" not in argv:
+                raise ValueError(f"{self.name}: license_elected set but no --license is declared")
+            declared = argv[argv.index("--license") + 1]
+            if self.license_elected not in declared.split(" OR "):
+                raise ValueError(
+                    f"{self.name}: elected {self.license_elected!r} is not a branch of {declared!r}"
+                )
         if self.est_tokens_low_b <= 0 or self.est_tokens_high_b < self.est_tokens_low_b:
             raise ValueError(f"{self.name}: est_tokens bounds must be positive and ordered")
 
@@ -247,12 +284,21 @@ WAVE2_SOURCES: List[WaveSource] = [
         license_basis="CC-BY (OpenStax)",
         connector="http_fetch",
         argv=(
-            "https://openstax.org/exports/precalculus.pdf",
+            "https://assets.openstax.org/oscms-prodcms/media/documents/Precalculus-OP_9wwF7YT.pdf",
             "--license", "CC-BY-4.0",
-            "--license-evidence", "OpenStax textbook page license notice",
+            "--license-evidence",
+            "OpenStax CMS API license_url for book slug 'precalculus' (1st ed) = "
+            "creativecommons.org/licenses/by/4.0/, read 2026-08-14",
         ),
         est_tokens_low_b=0.05,
         est_tokens_high_b=0.15,
+        notes=(
+            "MUST stay pinned to the 1st edition: OpenStax 2nd editions (slug suffix -2e) "
+            "are CC-BY-NC-SA-4.0, which is not usable here. openstax.org answers 200 with an "
+            "HTML SPA shell for unknown paths, so the old /exports/ URL fetched 12,410 bytes "
+            "of HTML under a .pdf name."
+        ),
+        requires_resolution=True,
     ),
     WaveSource(
         name="arxiv-stat-metadata",
@@ -275,6 +321,13 @@ WAVE2_SOURCES: List[WaveSource] = [
         ),
         est_tokens_low_b=0.1,
         est_tokens_high_b=0.3,
+        notes=(
+            "UNRESOLVED as of 2026-08-14: itl.nist.gov answers 200 with Content-Type "
+            "text/html for every path including handbook.zip and handbook.tgz, so no "
+            "bundle URL can be confirmed and status codes cannot tell a hit from a miss. "
+            "This URL fetches a single 2,064-byte index page, not the handbook. Needs a "
+            "crawling connector or a replacement source before it can be credited."
+        ),
     ),
     WaveSource(
         name="arxiv-physics-metadata",
@@ -297,15 +350,18 @@ WAVE2_SOURCES: List[WaveSource] = [
     WaveSource(
         name="llvm-docs",
         domains=("F",),
-        license_basis="Apache-2.0 (LLVM)",
+        license_basis="Apache-2.0 WITH LLVM-exception (LLVM)",
         connector="http_fetch",
         argv=(
-            "https://llvm.org/docs/",
-            "--license", "Apache-2.0",
-            "--license-evidence", "LLVM docs repository LICENSE.txt",
+            "https://github.com/llvm/llvm-project/archive/refs/heads/main.tar.gz",
+            "--license", "Apache-2.0 WITH LLVM-exception",
+            "--license-evidence",
+            "llvm/llvm-project LICENSE.TXT; GitHub license API returns NOASSERTION because "
+            "the LLVM exception is non-standard, so the bare Apache-2.0 tag understated it",
         ),
         est_tokens_low_b=0.05,
         est_tokens_high_b=0.2,
+        requires_resolution=True,
     ),
     WaveSource(
         name="arxiv-ml-metadata",
@@ -344,12 +400,13 @@ WAVE2_SOURCES: List[WaveSource] = [
         license_basis="Apache-2.0 (mathlib4)",
         connector="http_fetch",
         argv=(
-            "https://leanprover-community.github.io/mathlib4_docs/",
+            "https://github.com/leanprover-community/mathlib4/archive/refs/heads/master.tar.gz",
             "--license", "Apache-2.0",
-            "--license-evidence", "mathlib4 repository LICENSE",
+            "--license-evidence", "leanprover-community/mathlib4 LICENSE via GitHub license API = Apache-2.0",
         ),
         est_tokens_low_b=0.2,
         est_tokens_high_b=0.6,
+        requires_resolution=True,
     ),
     WaveSource(
         name="arxiv-dataset-eval-metadata",
@@ -373,15 +430,18 @@ WAVE2_SOURCES: List[WaveSource] = [
     WaveSource(
         name="ros-docs",
         domains=("K",),
-        license_basis="CC-BY (ROS wiki/docs)",
+        license_basis="CC-BY-4.0 (ROS 2 documentation)",
         connector="http_fetch",
         argv=(
-            "https://docs.ros.org/en/rolling/index.html",
-            "--license", "CC-BY-3.0",
-            "--license-evidence", "ROS documentation footer license notice",
+            "https://github.com/ros2/ros2_documentation/archive/refs/heads/rolling.tar.gz",
+            "--license", "CC-BY-4.0",
+            "--license-evidence",
+            "ros2/ros2_documentation LICENSE via GitHub license API = CC-BY-4.0; "
+            "the table previously declared CC-BY-3.0",
         ),
         est_tokens_low_b=0.1,
         est_tokens_high_b=0.3,
+        requires_resolution=True,
     ),
     WaveSource(
         name="python-language-docs",
@@ -389,13 +449,16 @@ WAVE2_SOURCES: List[WaveSource] = [
         license_basis="Python Software Foundation License (Python documentation)",
         connector="http_fetch",
         argv=(
-            "https://docs.python.org/3/",
+            "https://docs.python.org/3/archives/python-3.14-docs-text.zip",
             "--license", "Python-2.0",
-            "--license-evidence", "Python documentation license page and PSF LICENSE",
+            "--license-evidence",
+            "python/cpython LICENSE (PSF License Agreement); archive published on "
+            "docs.python.org/3/download.html",
         ),
         est_tokens_low_b=0.1,
         est_tokens_high_b=0.4,
-        notes="independent API/reference register for H-domain diversity",
+        notes="independent API/reference register for H-domain diversity; text variant, not HTML",
+        requires_resolution=True,
     ),
     WaveSource(
         name="rust-reference-docs",
@@ -403,13 +466,16 @@ WAVE2_SOURCES: List[WaveSource] = [
         license_basis="MIT/Apache-2.0 (Rust project documentation)",
         connector="http_fetch",
         argv=(
-            "https://doc.rust-lang.org/reference/",
-            "--license", "MIT-OR-Apache-2.0",
-            "--license-evidence", "Rust repository LICENSE-APACHE and LICENSE-MIT",
+            "https://github.com/rust-lang/reference/archive/refs/heads/master.tar.gz",
+            "--license", "MIT OR Apache-2.0",
+            "--license-evidence",
+            "rust-lang/reference LICENSE-APACHE and LICENSE-MIT via GitHub license API",
         ),
         est_tokens_low_b=0.1,
         est_tokens_high_b=0.4,
         notes="independent language-reference register for H-domain diversity",
+        requires_resolution=True,
+        license_elected="MIT",
     ),
 ]
 

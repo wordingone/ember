@@ -1,7 +1,13 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """gpu_lock_guard.py — Windows-side pre-CUDA guard for cross-boundary GPU serialization (#368).
 
-Lockfile: <local-path> — shared between Windows-side scripts (this
-module, side="windows") and WSL2 train daemon (server.py, side="wsl2").
+Lockfile: set EMBER_GPU_LOCK_PATH to the shared lock file — shared between
+Windows-side scripts (this module, side="windows") and the WSL2 train daemon
+(server.py, side="wsl2"). Both sides must resolve to the SAME file; because
+Windows and WSL2 address it by different strings (drive letter vs /mnt mount),
+the path cannot be a committed constant and each side exports its own view.
 
 Lockfile format (refcounted — daemon may hold while running multiple concurrent jobs):
   {"daemon_pid": int, "side": "wsl2"|"windows", "active_jobs": int,
@@ -25,7 +31,33 @@ import subprocess
 import sys
 import time
 
-LOCK_PATH = os.path.normpath("<local-path>")
+LOCK_PATH_ENV = "EMBER_GPU_LOCK_PATH"
+
+
+def _configured_lock_path():
+    raw = os.environ.get(LOCK_PATH_ENV, "").strip()
+    return os.path.normpath(raw) if raw else ""
+
+
+# Empty when unconfigured; every caller fails closed rather than guessing a
+# path, because a wrong guess would give each side of the boundary a different
+# lock file and silently defeat the serialization this module exists for.
+# Rebindable at module level on purpose -- gpu_lock_selftest.py injects a
+# temp path by assigning gpu_lock_guard.LOCK_PATH.
+LOCK_PATH = _configured_lock_path()
+
+
+def _require_lock_path():
+    """Return the configured lock path, or refuse. Reads the module global so a
+    caller that rebinds gpu_lock_guard.LOCK_PATH still wins."""
+    if not LOCK_PATH:
+        print(
+            f"[gpu_lock_guard] REFUSED — {LOCK_PATH_ENV} is unset, so CUDA access "
+            "cannot be serialized against the WSL2 train daemon",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return LOCK_PATH
 
 
 def _is_pid_alive(pid, side):
@@ -52,8 +84,9 @@ def _is_pid_alive(pid, side):
 
 
 def _read_lock():
+    path = _require_lock_path()
     try:
-        with open(LOCK_PATH, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
         return None
@@ -62,7 +95,10 @@ def _read_lock():
 
 
 def _write_lock(script=None):
-    os.makedirs(os.path.dirname(LOCK_PATH), exist_ok=True)
+    path = _require_lock_path()
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
     ts = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     data = {
         "daemon_pid": os.getpid(),
@@ -72,13 +108,17 @@ def _write_lock(script=None):
         "ts_first": ts,
         "ts_last": ts,
     }
-    tmp = LOCK_PATH + ".tmp"
+    tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f)
-    os.replace(tmp, LOCK_PATH)  # atomic on Windows
+    os.replace(tmp, path)  # atomic on Windows
 
 
 def _release_lock():
+    # Releasing an unconfigured lock is a no-op, not a refusal: there is
+    # nothing held, and exiting here would turn cleanup into a hard failure.
+    if not LOCK_PATH:
+        return
     try:
         lock = _read_lock()
         if (lock and lock.get("daemon_pid") == os.getpid()
@@ -90,12 +130,13 @@ def _release_lock():
 
 def check_or_die(script=None):
     """Acquire GPU lock or exit(1) if held by a live process with active jobs."""
+    path = _require_lock_path()
     lock = _read_lock()
     if lock is not None:
         if not lock:
             # corrupt / empty dict — fail-closed
             print(
-                f"[gpu_lock_guard] HELD (corrupt lock at {LOCK_PATH}) — refusing CUDA init",
+                f"[gpu_lock_guard] HELD (corrupt lock at {path}) — refusing CUDA init",
                 file=sys.stderr,
             )
             sys.exit(1)
@@ -118,7 +159,7 @@ def check_or_die(script=None):
         print(f"[gpu_lock_guard] stale lock (PID {pid} dead or jobs=0) — clearing",
               file=sys.stderr)
         try:
-            os.remove(LOCK_PATH)
+            os.remove(path)
         except FileNotFoundError:
             pass
 

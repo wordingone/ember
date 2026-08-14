@@ -31,7 +31,7 @@ pub type Result<T> = std::result::Result<T, EmberLabError>;
 
 /// Largest UTF-8 dispatch-manifest payload that fits the 64 KiB JSON-RPC line envelope even when JSON string escaping doubles every source byte.
 pub const MAX_DISPATCH_MANIFEST_BYTES: usize = 30_000;
-const CURRENT_DATABASE_SCHEMA_VERSION: u32 = 5;
+const CURRENT_DATABASE_SCHEMA_VERSION: u32 = 6;
 const DISPATCH_TOKEN_ENV: &str = "EMBER_LAB_DISPATCH_TOKEN";
 const DISPATCH_JOB_ID_ENV: &str = "EMBER_LAB_DISPATCH_JOB_ID";
 const DISPATCH_DAEMON_PID_ENV: &str = "EMBER_LAB_DISPATCH_DAEMON_PID";
@@ -56,7 +56,43 @@ pub fn read_data_catalog_status(path: &Path) -> Result<Value> {
     data_catalog::status(&conn)
 }
 
+/// Verifies pinned artifact hashes against their registered locations without acquiring the
+/// state-writer lock, mirroring `read_data_catalog_status`. Custody verification is a pure read,
+/// and the preflights that consume it (rung entry, evaluation binding, certified launch) run
+/// while the ember-lab daemon holds the writer lock -- routing this through `Daemon::open` would
+/// make the gate unusable in exactly the deployment shape it exists for.
+pub fn read_custody_verify(
+    path: &Path,
+    hashes: &[String],
+    roots: &BTreeMap<String, PathBuf>,
+    rehash: bool,
+) -> Result<Value> {
+    let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    conn.busy_timeout(Duration::from_secs(10))?;
+    conn.execute_batch("PRAGMA foreign_keys=ON;")?;
+    let schema_version: String = conn.query_row(
+        "SELECT value FROM metadata WHERE key='schema_version'",
+        [],
+        |row| row.get(0),
+    )?;
+    if schema_version != CURRENT_DATABASE_SCHEMA_VERSION.to_string() {
+        return Err(EmberLabError::InvalidDataCatalog {
+            detail: format!(
+                "read-only custody verify requires database schema version {CURRENT_DATABASE_SCHEMA_VERSION}, found {schema_version}"
+            ),
+        });
+    }
+    data_catalog::custody_verify(&conn, hashes, roots, rehash, now_ms())
+}
+
+/// Rolls back the #1581 data-catalog migration specifically (schema version 5 -> 4). This is
+/// pinned to the literal version 5, not `CURRENT_DATABASE_SCHEMA_VERSION`: it represents one
+/// specific historical transition, and later migrations (e.g. #1721's schema 6) move the
+/// "current" version forward without changing what this step means. A database sitting at a
+/// later version must roll back through each later step first (e.g.
+/// `rollback_empty_artifact_custody_migration` for 6 -> 5) before this one applies.
 pub fn rollback_empty_data_catalog_migration(path: &Path) -> Result<()> {
+    const ROLLBACK_FROM_SCHEMA_VERSION: u32 = 5;
     let _state_writer_lock = acquire_state_writer_lock(path)?;
     let mut conn = Connection::open(path)?;
     conn.busy_timeout(Duration::from_secs(10))?;
@@ -67,10 +103,10 @@ pub fn rollback_empty_data_catalog_migration(path: &Path) -> Result<()> {
         [],
         |row| row.get(0),
     )?;
-    if schema_version != CURRENT_DATABASE_SCHEMA_VERSION.to_string() {
+    if schema_version != ROLLBACK_FROM_SCHEMA_VERSION.to_string() {
         return Err(EmberLabError::InvalidDataCatalog {
             detail: format!(
-                "data catalog rollback requires database schema version {CURRENT_DATABASE_SCHEMA_VERSION}, found {schema_version}"
+                "data catalog rollback requires database schema version {ROLLBACK_FROM_SCHEMA_VERSION}, found {schema_version}"
             ),
         });
     }
@@ -92,6 +128,46 @@ pub fn rollback_empty_data_catalog_migration(path: &Path) -> Result<()> {
          DROP TABLE data_catalog_imports;
          DROP TABLE data_catalog_records;
          UPDATE metadata SET value='4' WHERE key='schema_version';",
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// Rolls back the #1721 artifact-custody migration specifically (schema version 6 -> 5). Pinned
+/// to the literal version 6 for the same reason `rollback_empty_data_catalog_migration` is
+/// pinned to 5: it names one historical transition, not "whatever is current."
+pub fn rollback_empty_artifact_custody_migration(path: &Path) -> Result<()> {
+    const ROLLBACK_FROM_SCHEMA_VERSION: u32 = 6;
+    let _state_writer_lock = acquire_state_writer_lock(path)?;
+    let mut conn = Connection::open(path)?;
+    conn.busy_timeout(Duration::from_secs(10))?;
+    conn.execute_batch("PRAGMA foreign_keys=ON;")?;
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let schema_version: String = tx.query_row(
+        "SELECT value FROM metadata WHERE key='schema_version'",
+        [],
+        |row| row.get(0),
+    )?;
+    if schema_version != ROLLBACK_FROM_SCHEMA_VERSION.to_string() {
+        return Err(EmberLabError::InvalidDataCatalog {
+            detail: format!(
+                "artifact custody rollback requires database schema version {ROLLBACK_FROM_SCHEMA_VERSION}, found {schema_version}"
+            ),
+        });
+    }
+    let event_rows: i64 = tx.query_row(
+        "SELECT COUNT(*) FROM data_catalog_location_events",
+        [],
+        |row| row.get(0),
+    )?;
+    if event_rows != 0 {
+        return Err(EmberLabError::InvalidDataCatalog {
+            detail: "artifact custody rollback refuses after location events exist".into(),
+        });
+    }
+    tx.execute_batch(
+        "DROP TABLE data_catalog_location_events;
+         UPDATE metadata SET value='5' WHERE key='schema_version';",
     )?;
     tx.commit()?;
     Ok(())
@@ -1323,6 +1399,52 @@ impl Daemon {
     pub fn data_catalog_status(&self) -> Result<Value> {
         let conn = self.conn()?;
         data_catalog::status(&conn)
+    }
+
+    pub fn register_artifact(
+        &self,
+        sha256_hex: &str,
+        byte_count: i64,
+        media_type: &str,
+        locations: &[data_catalog::ArtifactLocationInput],
+    ) -> Result<data_catalog::RegisterArtifactOutcome> {
+        let mut conn = self.conn()?;
+        data_catalog::register_artifact(
+            &mut conn,
+            sha256_hex,
+            byte_count,
+            media_type,
+            locations,
+            now_ms(),
+        )
+    }
+
+    pub fn retire_artifact_location(
+        &self,
+        sha256_hex: &str,
+        volume: &str,
+        locator: &str,
+        reason: &str,
+    ) -> Result<()> {
+        let mut conn = self.conn()?;
+        data_catalog::retire_artifact_location(
+            &mut conn,
+            sha256_hex,
+            volume,
+            locator,
+            now_ms(),
+            reason,
+        )
+    }
+
+    pub fn custody_verify(
+        &self,
+        hashes: &[String],
+        roots: &BTreeMap<String, PathBuf>,
+        rehash: bool,
+    ) -> Result<Value> {
+        let conn = self.conn()?;
+        data_catalog::custody_verify(&conn, hashes, roots, rehash, now_ms())
     }
 
     fn frozen_resource_guard(&self) -> Result<Option<Value>> {

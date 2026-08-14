@@ -119,6 +119,13 @@ jobs:
           cargo test --locked --lib
           cargo test --locked --test control_plane
           cargo test --locked --test dispatch_manifest
+          cargo test --locked --test artifact_custody
+          # This block runs under pwsh (the windows-latest default), which
+          # propagates only the LAST command's exit code -- every line above is
+          # therefore non-gating today. Bind the custody gate explicitly
+          # so it actually fails the job, without changing any other line's
+          # existing behaviour.
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test --locked --test rpc_named_pipe named_pipe_rpc_survives_daemon_restart_and_controls_bound_job -- --exact
   production-rung-replay:
     # Class-kill for #1302: a generator/tokenizer/config edit that lands
