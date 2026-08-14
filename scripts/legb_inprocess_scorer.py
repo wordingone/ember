@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """legb_inprocess_scorer.py -- Leg-B in-process teacher-forced loglikelihood
 scorer (issue #757, refs #735).
 
@@ -771,13 +774,14 @@ def device_lease(requested_device: str):
     """No-op for CPU. For an AUTHORIZED cuda* request, serializes via
     gpu_lock_guard.acquire() (#368, reused verbatim -- never reimplemented)
     so this process cannot collide with the WSL2 train daemon or another
-    Windows-side CUDA user. KNOWN LIMITATION, disclosed rather than routed
-    around: as committed, gpu_lock_guard.LOCK_PATH is a literal
-    '<local-path>' placeholder (verified via `git cat-file -p` against the
-    raw object, not a display artifact) -- acquire() will fail loudly if
-    that has not been pointed at a real shared path by the time this runs;
-    that failure is surfaced here as a named refusal, never a bare
-    traceback and never a silent skip of the lock."""
+    Windows-side CUDA user. OPERATOR PRECONDITION, disclosed rather than
+    routed around: gpu_lock_guard resolves its lock file from the
+    EMBER_GPU_LOCK_PATH environment variable and refuses when it is unset,
+    because the Windows and WSL2 views of that shared file are different
+    strings and neither can be a committed constant. If the variable is not
+    exported, acquire() fails loudly; that failure is surfaced here as a
+    named refusal, never a bare traceback and never a silent skip of the
+    lock."""
     _check_cuda_authorized(requested_device)
     if not requested_device.startswith("cuda"):
         yield
