@@ -52,6 +52,44 @@ class RestartDecoderModelTests(unittest.TestCase):
         self.assertEqual(logits.shape, (1, 4, self.config.vocab_size))
         self.assertTrue(torch.isfinite(logits).all())
 
+    def test_forward_is_total_over_text_only_input_colliding_with_modality_markers(self) -> None:
+        # image_token_id/audio_token_id are ordinary emittable vocab ids, not reserved
+        # out-of-band markers (issue #1725). A text-only forward (no image_patches, no
+        # audio_frames) must complete even when a token in input_ids happens to equal
+        # one of them by coincidence.
+        model = UnifiedDecoder(self.config)
+        ids = torch.tensor([[1, self.config.image_token_id, self.config.audio_token_id, 2]])
+        logits = model(ids, active_expert="reasoning")
+        self.assertEqual(logits.shape, (1, 4, self.config.vocab_size))
+        self.assertTrue(torch.isfinite(logits).all())
+
+    def test_text_only_collision_does_not_inject_modality_embedding(self) -> None:
+        # A colliding marker id with no raw modality tensor supplied must be embedded
+        # as an ordinary token, not silently treated as a zero/garbage modality slot.
+        model = UnifiedDecoder(self.config)
+        model.eval()
+        ids = torch.tensor([[1, self.config.image_token_id, 2]])
+        with torch.no_grad():
+            hidden_states = model.token_embedding(ids)
+            injected, image_mask = model._inject_modality(
+                hidden_states,
+                ids,
+                marker_id=self.config.image_token_id,
+                raw_values=None,
+                projector=model.image_projector,
+                name="image",
+            )
+        self.assertTrue(torch.equal(injected, hidden_states))
+        self.assertFalse(bool(image_mask.any()))
+
+    def test_raw_modality_values_without_marker_still_raise(self) -> None:
+        # The genuine caller-error case (raw tensor supplied but no marker present)
+        # must still be rejected -- only the text-only-collision case is tolerated.
+        model = UnifiedDecoder(self.config)
+        ids = torch.tensor([[1, 2, 3]])
+        with self.assertRaises(ValueError):
+            model(ids, image_patches=torch.randn(1, 48, 48, 3))
+
     def test_gradient_checkpointing_is_training_only(self) -> None:
         model = UnifiedDecoder(self.config)
         ids = torch.randint(0, self.config.vocab_size - 2, (1, 4))
