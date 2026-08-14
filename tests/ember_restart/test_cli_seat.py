@@ -367,3 +367,38 @@ def test_resolver_requires_external_registry_approval(tmp_path: Path, monkeypatc
     rejected = cli_seat.resolve_owned_seat(manifest_path, registry, approval, custody_db=custody_db)
     assert rejected["valid"] is False
     assert any("external authority hash mismatch" in error for error in rejected["errors"])
+
+
+def test_production_default_path_forwards_custody_db_none_unchanged(tmp_path: Path, monkeypatch):
+    """The new custody_db seam (this PR) must be inert on the production
+    default path: no caller of resolve_owned_seat in this codebase --
+    including the real owned-seat-loader.ts spawn -- passes custody_db, so
+    the call into validate_manifest must still receive exactly
+    custody_db=None, byte-for-byte the same call this production path made
+    before this seam existed. Spies on the real validate_manifest (not a
+    stand-in) to prove the forwarded value, not just that a manifest gets
+    refused for some reason.
+    """
+    manifest_path = tmp_path / "run.json"
+    registry = tmp_path / "trusted-verifiers.json"
+    approval = tmp_path / "approval.json"
+    manifest_path.write_text("{}", encoding="utf-8")
+
+    calls: list[dict] = []
+    real_validate_manifest = cli_seat.validate_manifest
+
+    def _spy(*args, **kwargs):
+        calls.append(kwargs)
+        return real_validate_manifest(*args, **kwargs)
+
+    monkeypatch.setattr(cli_seat, "validate_manifest", _spy)
+    monkeypatch.setattr(
+        cli_seat,
+        "_registry_approval",
+        lambda _approval_path: ("0" * 64, "0" * 64),
+    )
+
+    cli_seat.resolve_owned_seat(manifest_path, registry, approval)
+
+    assert len(calls) == 1
+    assert calls[0]["custody_db"] is None
