@@ -1251,6 +1251,83 @@ class CheckpointArtifactTests(unittest.TestCase):
             self.assertNotIn("optimizer-state-reasoning.pt", load_calls)
             self.assertNotIn("optimizer-state-tool.pt", load_calls)
 
+    def test_v5_owner_shards_with_cross_owner_shared_optimizer_tensor_state_writes_consistent_projection(self) -> None:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            import bitsandbytes as bnb
+        if not torch.cuda.is_available():
+            self.skipTest("bitsandbytes AdamW8bit device-resident state requires CUDA")
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=901).to("cuda")
+        model._activate_expert("vision")
+        optimizer_contract = load_optimizer_contract(ROOT / "configs" / "ember-restart-3b.json")
+        hyperparameters = optimizer_contract["hyperparameters"]
+        optimizer = bnb.optim.AdamW8bit(
+            (parameter for parameter in model.parameters() if parameter.requires_grad),
+            lr=hyperparameters["learning_rate"],
+            weight_decay=hyperparameters["weight_decay"],
+            percentile_clipping=hyperparameters["percentile_clipping"],
+            block_wise=hyperparameters["block_wise"],
+            min_8bit_size=1,
+        )
+        model(
+            torch.tensor([[1, 2, 3]], dtype=torch.long, device="cuda"),
+            active_expert="vision",
+        ).float().square().mean().backward()
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+
+        # bitsandbytes AdamW8bit caches qmap1/qmap2 (the 8-bit quantization
+        # lookup tables) once per optimizer and reuses the exact same tensor
+        # object across every 8-bit-tracked parameter's state
+        # (bitsandbytes/optim/optimizer.py Optimizer2State.init_state,
+        # name2qmap cache). Owner-sharded checkpoints serialize each owner's
+        # parameters to an independent file, so that one shared tensor is
+        # physically duplicated once per owner file on disk -- confirm the
+        # sharing actually spans this run's two owners (shared, vision), or
+        # this test would pass vacuously without exercising the cross-owner
+        # case the fix addresses.
+        qmap_ids = {
+            id(state["qmap1"]) for state in optimizer.state.values() if "qmap1" in state
+        }
+        self.assertEqual(
+            len(qmap_ids),
+            1,
+            "expected one shared qmap1 tensor identity across all 8-bit "
+            "parameter state; if bitsandbytes stopped sharing it this test "
+            "no longer exercises the cross-owner storage-projection case",
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "owner-sharded-8bit"
+            receipt = write_checkpoint_artifacts(
+                model,
+                optimizer,
+                root,
+                launch_seed=901,
+                rng_state=_valid_rng_state(),
+                data_cursor={"shard": "owned", "record_index": 1, "global_step": 1, "tokens_seen": 3},
+                model_config_sha256="a" * 64,
+                contract_sha256="b" * 64,
+                expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                optimizer_state_layout="owner-sharded-v1",
+                optimizer_contract=optimizer_contract,
+                max_transient_scratch_bytes=10_000_000_000,
+                max_serialized_bytes=10_000_000_000,
+            )
+            self.assertEqual(receipt["optimizer_state_owner_ids"], ["shared", "vision"])
+            self.assertIsNotNone(receipt.get("storage_projection"))
+            restored = UnifiedDecoder(config, genesis_seed=902).to("cuda")
+            restore_optimizer = bnb.optim.AdamW8bit(
+                restored.parameters(),
+                lr=hyperparameters["learning_rate"],
+                weight_decay=hyperparameters["weight_decay"],
+                percentile_clipping=hyperparameters["percentile_clipping"],
+                block_wise=hyperparameters["block_wise"],
+                min_8bit_size=1,
+            )
+            load_checkpoint_artifacts(restored, restore_optimizer, root, receipt)
+
     def test_v5_owner_shards_reject_self_signed_full_coverage_projection(self) -> None:
         config = RestartDecoderConfig.small_for_tests(
             hidden_size=32, layers=2, attention_heads=4, vocab_size=64
