@@ -456,6 +456,60 @@ class ArxivFetchMockedTests(unittest.TestCase):
             self.assertEqual(data["license"], "http://creativecommons.org/licenses/by/4.0/")
             self.assertIn("(override)", data["notes"])
 
+    def test_eligibility_filter_logs_candidates_in_and_eligible_out(self):
+        # A-train-2 (2026-08-15): a 53,615-candidate paper-list collapsed to
+        # 492 eligible with a completely clean run -- zero errors, WALK-END
+        # examined=492 -- because nothing in the log ever compared the
+        # eligible count against the candidate pool size. This is the fix:
+        # one unconditional line at the filter itself, with a basis
+        # breakdown, so that collapse is visible from the log alone on the
+        # very next run instead of requiring forensic reconstruction after
+        # the fact.
+        atom_mixed = b"""<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
+  <entry>
+    <id>http://arxiv.org/abs/2301.00003v1</id>
+    <title>Live CC Paper</title>
+    <updated>2023-01-03T00:00:00Z</updated>
+    <arxiv:license>http://creativecommons.org/licenses/by/4.0/</arxiv:license>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2301.00005v1</id>
+    <title>No License Element Paper (override-rescued)</title>
+    <updated>2023-01-05T00:00:00Z</updated>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2301.00002v1</id>
+    <title>Live Perpetual-License Paper (excluded, override does not apply)</title>
+    <updated>2023-01-02T00:00:00Z</updated>
+    <arxiv:license>http://arxiv.org/licenses/nonexclusive-distrib/1.0/</arxiv:license>
+  </entry>
+</feed>
+"""
+        import contextlib
+        import io as _io
+
+        with tempfile.TemporaryDirectory() as td:
+            list_path = Path(td) / "ids.txt"
+            list_path.write_text("2301.00003\n2301.00005\n2301.00002\n", encoding="utf-8")
+            dest = Path(td) / "arxivdata"
+            args = arxiv_fetch.build_parser().parse_args(
+                [
+                    "--paper-list", str(list_path), "--what", "source", "--dest", str(dest),
+                    "--license-override", "http://creativecommons.org/licenses/by/4.0/",
+                    "--license-override-evidence", "OAI-PMH bulk harvest <license> element, exact-SPDX match",
+                ]
+            )
+            buf = _io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                arxiv_fetch.fetch(args, opener=_opener_for(atom_mixed))
+            printed = buf.getvalue()
+            self.assertIn(
+                "ELIGIBILITY-FILTER candidates_in=3 eligible_out=2 "
+                "(live_cc=1, override_rescued=1) excluded=1 license_filter=cc-only",
+                printed,
+            )
+
     def test_license_override_does_not_rescue_live_resolved_non_cc_under_cc_only(self):
         # Conflict case: live resolves to a NON-CC license (the arXiv
         # perpetual label, a RESOLVED value, not UNVERIFIED) and an override
@@ -820,7 +874,12 @@ class ArxivFetchMockedTests(unittest.TestCase):
             with contextlib.redirect_stdout(buf):
                 code = rcpt.run_cli(lambda: arxiv_fetch.fetch(args, opener=_opener_for(ATOM_PERPETUAL)))
             self.assertEqual(code, 1)
-            self.assertTrue(buf.getvalue().strip().startswith("BLOCKED"))
+            lines = buf.getvalue().strip().splitlines()
+            # The eligibility-filter diagnostic (candidates_in=1 eligible_out=0)
+            # now prints before the terminal BLOCKED line -- exactly the
+            # zero-eligible case where that count matters most.
+            self.assertIn("ELIGIBILITY-FILTER candidates_in=1 eligible_out=0", lines[0])
+            self.assertTrue(lines[-1].startswith("BLOCKED"))
 
 
 if __name__ == "__main__":
