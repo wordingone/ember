@@ -6358,10 +6358,33 @@ mod linux_host_commit_capacity_tests {
 
     #[test]
     fn probe_host_survival_headroom_matches_commit_capacity_fields() {
+        // Each call reads /proc/meminfo live, so `capacity` and `headroom` are
+        // two independent kernel reads taken microseconds apart -- on a busy
+        // host MemAvailable/Committed_AS can drift by a few KiB between them.
+        // A generous tolerance still catches a real delegation bug (which
+        // would differ by orders of magnitude, not kilobytes) without being
+        // flaky on live CI runners.
+        const DRIFT_TOLERANCE_BYTES: u64 = 64 * 1024 * 1024;
         let capacity = probe_host_commit_capacity().unwrap();
         let headroom = probe_host_survival_headroom().unwrap();
-        assert_eq!(headroom.physical_available_bytes, capacity.physical_available_bytes);
-        assert_eq!(headroom.commit_remaining_bytes, capacity.current_commit_remaining_bytes);
+        let physical_diff = headroom
+            .physical_available_bytes
+            .abs_diff(capacity.physical_available_bytes);
+        let commit_diff = headroom
+            .commit_remaining_bytes
+            .abs_diff(capacity.current_commit_remaining_bytes);
+        assert!(
+            physical_diff <= DRIFT_TOLERANCE_BYTES,
+            "physical_available_bytes drifted by {physical_diff} bytes between two live reads (headroom={}, capacity={})",
+            headroom.physical_available_bytes,
+            capacity.physical_available_bytes,
+        );
+        assert!(
+            commit_diff <= DRIFT_TOLERANCE_BYTES,
+            "commit_remaining_bytes drifted by {commit_diff} bytes between two live reads (headroom={}, capacity={})",
+            headroom.commit_remaining_bytes,
+            capacity.current_commit_remaining_bytes,
+        );
     }
 
     #[test]
