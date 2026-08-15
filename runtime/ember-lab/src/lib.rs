@@ -3163,7 +3163,7 @@ impl Daemon {
         #[cfg(windows)]
         self.retain_and_monitor(&spec.job_id, spawned.into_live())?;
         #[cfg(not(windows))]
-        spawned.detach_reaper();
+        spawned.detach_reaper(Arc::downgrade(&self.db), spec.job_id.clone());
         Ok(JobHandle { pid })
     }
 
@@ -7979,13 +7979,16 @@ fn duplicate_owned_handle(source: windows_sys::Win32::Foundation::HANDLE) -> Res
     Ok(OwnedHandle(duplicate))
 }
 
-#[cfg(windows)]
-fn record_natural_exit(
+/// Receipted natural-exit state flip shared by every platform: fence on
+/// `state='running' AND pid=?`, seal log hashes, flip to `exited` with the
+/// real exit code, release the lease, insert the `job_exited` event. Windows'
+/// `record_natural_exit` and the Unix reaper thread both delegate here so the
+/// two platforms can never diverge in DB shape.
+fn record_process_exit(
     db: &Mutex<Connection>,
     job_id: &str,
     pid: u32,
-    exit_code: u32,
-    live: &LiveProcess,
+    exit_code: i64,
 ) -> Result<()> {
     let mut conn = db.lock().map_err(|_| EmberLabError::Poisoned)?;
     let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -8000,7 +8003,6 @@ fn record_natural_exit(
         job_id: job_id.into(),
         detail: "natural-exit monitor lost its running state fence".into(),
     })?;
-    terminate_live(live)?;
     let (stdout_sha256, stderr_sha256) = seal_log_hashes(&tx, job_id)?;
     let timestamp = now_ms();
     let changed = tx.execute(
@@ -8008,7 +8010,7 @@ fn record_natural_exit(
         params![
             job_id,
             pid,
-            exit_code as i64,
+            exit_code,
             timestamp,
             lease_epoch,
             stdout_sha256,
@@ -8041,6 +8043,31 @@ fn record_natural_exit(
     )?;
     tx.commit()?;
     Ok(())
+}
+
+#[cfg(windows)]
+fn record_natural_exit(
+    db: &Mutex<Connection>,
+    job_id: &str,
+    pid: u32,
+    exit_code: u32,
+    live: &LiveProcess,
+) -> Result<()> {
+    terminate_live(live)?;
+    record_process_exit(db, job_id, pid, exit_code as i64)
+}
+
+/// Unix exit-code encoding for the shared `exit_code` column: the process's
+/// real exit code when it exited normally, or the standard shell convention
+/// of `128 + signal` when it was killed by a signal (`ExitStatus::code()`
+/// returns `None` in that case).
+#[cfg(not(windows))]
+fn unix_exit_code(status: std::process::ExitStatus) -> i64 {
+    use std::os::unix::process::ExitStatusExt;
+    status
+        .code()
+        .map(|code| code as i64)
+        .unwrap_or_else(|| 128 + status.signal().unwrap_or(0) as i64)
 }
 
 #[cfg(windows)]
@@ -8508,10 +8535,17 @@ impl SpawnedProcess {
         }
         Ok(())
     }
-    fn detach_reaper(mut self) {
+    fn detach_reaper(mut self, db: Weak<Mutex<Connection>>, job_id: String) {
         if let Some(mut child) = self.child.take() {
+            let pid = self.pid;
             std::thread::spawn(move || {
-                let _ = child.wait();
+                let Ok(status) = child.wait() else {
+                    return;
+                };
+                let Some(db) = db.upgrade() else {
+                    return;
+                };
+                let _ = record_process_exit(&db, &job_id, pid, unix_exit_code(status));
             });
         }
     }
