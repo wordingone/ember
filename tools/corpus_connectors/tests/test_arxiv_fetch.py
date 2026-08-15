@@ -4,11 +4,13 @@
 """Mocked test for arxiv_fetch.py -- no network. Fakes the Atom API + PDF fetch."""
 from __future__ import annotations
 
+import email.utils
 import io
 import json
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -232,6 +234,33 @@ class ArxivFetchMockedTests(unittest.TestCase):
             self.assertNotIn("2301.00004=", data["notes"])
             self.assertIn("selected=1", data["notes"])
             self.assertIn("budget_walk_manifest=", data["notes"])
+
+    def test_budget_bytes_walk_emits_periodic_heartbeat_and_end_line(self):
+        # The walk has no other log() call in its loop -- at
+        # RATE_LIMIT_SECONDS=3.0/candidate a multi-thousand-candidate walk can
+        # run for HOURS with zero output otherwise, indistinguishable from a
+        # wedged process (same lesson as the metadata phase's META-BATCH fix,
+        # discovered live on 2026-08-15 when A-train-2's own capped run sat
+        # silent for its entire walk with no way to tell it apart from stalled).
+        with tempfile.TemporaryDirectory() as td:
+            list_path = Path(td) / "ids.txt"
+            list_path.write_text("2301.00003\n2301.00004\n", encoding="utf-8")
+            dest = Path(td) / "arxivdata"
+            args = arxiv_fetch.build_parser().parse_args(
+                ["--paper-list", str(list_path), "--what", "source", "--dest", str(dest), "--budget-bytes", "1000"]
+            )
+            opener = _opener_with_sizes(ATOM_TWO_CC, {"2301.00003": 100, "2301.00004": 100})
+            lines = []
+            with patch.object(arxiv_fetch, "log", lambda m: lines.append(m)), \
+                 patch.object(arxiv_fetch, "WALK_HEARTBEAT_EVERY", 1):
+                arxiv_fetch.fetch(args, opener=opener)
+            walk_lines = [ln for ln in lines if ln.startswith("WALK-BATCH")]
+            self.assertEqual(len(walk_lines), 2)
+            self.assertIn("examined=1 selected=0 cumulative_bytes=0", walk_lines[0])
+            self.assertIn("examined=2 selected=1 cumulative_bytes=100", walk_lines[1])
+            end_lines = [ln for ln in lines if ln.startswith("WALK-END")]
+            self.assertEqual(len(end_lines), 1)
+            self.assertIn("examined=2 selected=2 cumulative_bytes=200", end_lines[0])
 
     def test_budget_bytes_honors_paper_list_declared_order_not_api_response_order(self):
         with tempfile.TemporaryDirectory() as td:
@@ -522,6 +551,262 @@ class ArxivFetchMockedTests(unittest.TestCase):
             )
             with self.assertRaises(rcpt.BlockedError):
                 arxiv_fetch.fetch(args, opener=_opener_for(ATOM_CC))
+
+    def test_flow_control_429_retries_with_backoff_then_succeeds(self):
+        # A transient 429 (arXiv's rate-limit flow control) must be retried,
+        # not raised straight through -- the behavior live on 2026-08-15 killed
+        # an unattended --paper-list run on a single rate-limit hit.
+        import urllib.error
+
+        calls = {"n": 0}
+        sleeps = []
+
+        def _opener(request, timeout=60):
+            calls["n"] += 1
+            if calls["n"] <= 2:
+                raise urllib.error.HTTPError(
+                    request.full_url, 429, "Too Many Requests", {"Retry-After": "7"}, None
+                )
+            return _FakeResp(ATOM_CC)
+
+        with patch.object(arxiv_fetch.time, "sleep", lambda s: sleeps.append(s)):
+            result = arxiv_fetch._http_get("http://export.arxiv.org/api/query?id_list=2301.00001", opener=_opener)
+        self.assertEqual(result, ATOM_CC)
+        self.assertEqual(calls["n"], 3)
+        self.assertEqual(len(sleeps), 2)
+        # Escalating, not the flat interval the prior implementation produced
+        # by taking Retry-After verbatim (which would have been [7, 7]).
+        self.assertGreater(sleeps[1], sleeps[0])
+        self.assertGreaterEqual(sleeps[0], arxiv_fetch.BACKOFF_BASE_SECONDS)
+
+    def test_flow_control_bare_timeout_retries_with_backoff_then_succeeds(self):
+        # A bare socket read timeout (TimeoutError raised directly by urlopen
+        # when the read exceeds timeout=) has no status code and no
+        # Retry-After header, but is the same transient-failure shape as a
+        # 429/503 -- it must retry, not raise straight through and kill an
+        # unattended run on one slow response.
+        calls = {"n": 0}
+        sleeps = []
+
+        def _opener(request, timeout=60):
+            calls["n"] += 1
+            if calls["n"] <= 2:
+                raise TimeoutError("timed out")
+            return _FakeResp(ATOM_CC)
+
+        with patch.object(arxiv_fetch.time, "sleep", lambda s: sleeps.append(s)):
+            result = arxiv_fetch._http_get("http://export.arxiv.org/api/query?id_list=2301.00001", opener=_opener)
+        self.assertEqual(result, ATOM_CC)
+        self.assertEqual(calls["n"], 3)
+        self.assertEqual(len(sleeps), 2)
+        self.assertGreaterEqual(sleeps[0], arxiv_fetch.BACKOFF_BASE_SECONDS)
+
+    def test_flow_control_timeout_exhausts_retries_and_raises(self):
+        calls = {"n": 0}
+
+        def _opener(request, timeout=60):
+            calls["n"] += 1
+            raise TimeoutError("timed out")
+
+        with patch.object(arxiv_fetch.time, "sleep", lambda *_a, **_kw: None):
+            with self.assertRaises(TimeoutError):
+                arxiv_fetch._http_get("http://export.arxiv.org/api/query?id_list=2301.00001", opener=_opener)
+        self.assertEqual(calls["n"], arxiv_fetch.MAX_FLOW_CONTROL_RETRIES + 1)
+
+    def test_flow_control_timeout_logs_code_timeout(self):
+        lines = []
+
+        def _opener(request, timeout=60):
+            raise TimeoutError("timed out")
+
+        with patch.object(arxiv_fetch, "log", lambda m: lines.append(m)), \
+             patch.object(arxiv_fetch.time, "sleep", lambda *_a, **_kw: None):
+            with self.assertRaises(TimeoutError):
+                arxiv_fetch._http_get("http://export.arxiv.org/api/query", opener=_opener)
+
+        retries = [ln for ln in lines if ln.startswith("FLOW-CONTROL code=timeout")]
+        self.assertEqual(len(retries), arxiv_fetch.MAX_FLOW_CONTROL_RETRIES)
+        self.assertTrue(any(ln.startswith("FLOW-CONTROL-EXHAUSTED code=timeout") for ln in lines))
+
+    def test_retry_after_is_a_floor_never_a_replacement(self):
+        # A server that keeps echoing a small Retry-After must not hold the
+        # client at a constant interval while it is still being refused --
+        # that is exactly the fixed-interval behavior that failed here.
+        self.assertGreaterEqual(
+            arxiv_fetch.backoff_sleep_seconds(0, retry_after=1.0, jitter=False),
+            arxiv_fetch.BACKOFF_BASE_SECONDS,
+        )
+        # ...but a LARGER server-stated minimum is genuinely honored.
+        self.assertEqual(
+            arxiv_fetch.backoff_sleep_seconds(0, retry_after=120.0, jitter=False), 120.0
+        )
+
+    def test_retry_after_http_date_format_does_not_crash(self):
+        # RFC 7231 s7.1.3 permits Retry-After as delta-seconds OR an HTTP-date.
+        # A bare int() on the header raises ValueError on the date form and
+        # kills the run via the very header it is trying to honor.
+        future = datetime.now(timezone.utc) + timedelta(seconds=90)
+        header = email.utils.format_datetime(future)
+        parsed = arxiv_fetch.parse_retry_after(header)
+        self.assertIsNotNone(parsed)
+        self.assertAlmostEqual(parsed, 90, delta=5)
+
+    def test_retry_after_past_http_date_clamps_to_zero(self):
+        past = datetime.now(timezone.utc) - timedelta(seconds=300)
+        self.assertEqual(arxiv_fetch.parse_retry_after(email.utils.format_datetime(past)), 0.0)
+
+    def test_retry_after_malformed_degrades_to_exponential_not_crash(self):
+        for bad in ["", "   ", "soon", "not-a-date", None]:
+            self.assertIsNone(arxiv_fetch.parse_retry_after(bad))
+        # And the schedule still advances without it.
+        self.assertEqual(
+            arxiv_fetch.backoff_sleep_seconds(0, retry_after=None, jitter=False),
+            arxiv_fetch.BACKOFF_BASE_SECONDS,
+        )
+
+    def test_retry_after_absurd_value_is_capped(self):
+        # A hostile or mistaken `Retry-After: 86400` must not silently park an
+        # unattended run for a day.
+        self.assertEqual(
+            arxiv_fetch.backoff_sleep_seconds(0, retry_after=86400.0, jitter=False),
+            arxiv_fetch.RETRY_AFTER_CAP_SECONDS,
+        )
+
+    def test_backoff_is_exponential_and_capped(self):
+        seq = [arxiv_fetch.backoff_sleep_seconds(i, None, jitter=False) for i in range(8)]
+        self.assertEqual(seq[0], arxiv_fetch.BACKOFF_BASE_SECONDS)
+        self.assertEqual(seq[1], arxiv_fetch.BACKOFF_BASE_SECONDS * arxiv_fetch.BACKOFF_FACTOR)
+        for earlier, later in zip(seq, seq[1:]):
+            self.assertGreaterEqual(later, earlier)
+        self.assertLessEqual(max(seq), arxiv_fetch.BACKOFF_MAX_SLEEP_SECONDS)
+
+    def test_jitter_never_sleeps_less_than_the_schedule(self):
+        # Additive-only: jitter de-synchronizes colliding retries but must
+        # never undercut a server-declared floor.
+        for _ in range(200):
+            self.assertGreaterEqual(
+                arxiv_fetch.backoff_sleep_seconds(2, retry_after=None, jitter=True),
+                arxiv_fetch.backoff_sleep_seconds(2, retry_after=None, jitter=False),
+            )
+
+    def test_flow_control_503_without_retry_after_uses_exponential_backoff(self):
+        import urllib.error
+
+        calls = {"n": 0}
+        sleeps = []
+
+        def _opener(request, timeout=60):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise urllib.error.HTTPError(request.full_url, 503, "Service Unavailable", {}, None)
+            return _FakeResp(ATOM_CC)
+
+        with patch.object(arxiv_fetch.time, "sleep", lambda s: sleeps.append(s)):
+            arxiv_fetch._http_get("http://export.arxiv.org/api/query?id_list=2301.00001", opener=_opener)
+        self.assertEqual(len(sleeps), 1)
+        self.assertGreaterEqual(sleeps[0], arxiv_fetch.BACKOFF_BASE_SECONDS)
+
+    def test_policy_line_declares_every_backoff_parameter(self):
+        # The startup declaration is the evidence that a LIVE process is
+        # running this policy -- the prior death left no way to tell whether
+        # retry logic existed, was configured, or was simply never reached.
+        line = arxiv_fetch.flow_control_policy_line()
+        self.assertIn(f"version={arxiv_fetch.FLOW_CONTROL_POLICY_VERSION}", line)
+        self.assertIn("429", line)
+        self.assertIn("503", line)
+        self.assertIn(f"max_retries={arxiv_fetch.MAX_FLOW_CONTROL_RETRIES}", line)
+        self.assertIn(f"base_seconds={arxiv_fetch.BACKOFF_BASE_SECONDS}", line)
+        self.assertIn(f"factor={arxiv_fetch.BACKOFF_FACTOR}", line)
+        self.assertIn(f"max_sleep_seconds={arxiv_fetch.BACKOFF_MAX_SLEEP_SECONDS}", line)
+        self.assertIn("retry_after_honored=true", line)
+        self.assertIn(f"retry_after_cap_seconds={arxiv_fetch.RETRY_AFTER_CAP_SECONDS}", line)
+
+    def test_retry_logs_next_attempt_time_and_exhaustion_is_logged(self):
+        import urllib.error
+
+        lines = []
+
+        def _opener(request, timeout=60):
+            raise urllib.error.HTTPError(request.full_url, 429, "Too Many Requests", {}, None)
+
+        with patch.object(arxiv_fetch, "log", lambda m: lines.append(m)), \
+             patch.object(arxiv_fetch.time, "sleep", lambda *_a, **_kw: None):
+            with self.assertRaises(urllib.error.HTTPError):
+                arxiv_fetch._http_get("http://export.arxiv.org/api/query", opener=_opener)
+
+        retries = [ln for ln in lines if ln.startswith("FLOW-CONTROL code=")]
+        self.assertEqual(len(retries), arxiv_fetch.MAX_FLOW_CONTROL_RETRIES)
+        for ln in retries:
+            self.assertIn("next_attempt_at=", ln)
+            self.assertIn("sleep_seconds=", ln)
+        self.assertTrue(any(ln.startswith("FLOW-CONTROL-EXHAUSTED") for ln in lines))
+
+    def test_log_file_receives_startup_policy_and_terminal_line(self):
+        # Bar points 1 and 3 together, through main()'s real path: a run that
+        # dies must leave BOTH the policy declaration (proving which backoff
+        # was live) and a TERMINAL line naming the cause -- the token the
+        # liveness watch greps to alert immediately.
+        import contextlib
+        import io
+
+        with tempfile.TemporaryDirectory() as td:
+            log_path = Path(td) / "logs" / "fetch.log"
+            list_path = Path(td) / "ids.txt"
+            list_path.write_text("2301.00001\n", encoding="utf-8")
+            argv = [
+                "--paper-list", str(list_path),
+                "--what", "pdf",
+                "--dest", str(Path(td) / "out"),
+                "--log-file", str(log_path),
+            ]
+
+            def _boom(*_a, **_kw):
+                raise RuntimeError("simulated unrecoverable failure")
+
+            buf = io.StringIO()
+            try:
+                with patch.object(arxiv_fetch, "fetch", _boom), contextlib.redirect_stdout(buf):
+                    rc = arxiv_fetch.main(argv)
+            finally:
+                # main() sets a module global; leaving it pointed at this
+                # TemporaryDirectory would have later tests appending to a
+                # deleted path.
+                arxiv_fetch._LOG_PATH = None
+
+            self.assertEqual(rc, 1)
+            written = log_path.read_text(encoding="utf-8")
+            self.assertIn("FLOW-CONTROL-POLICY", written)
+            self.assertIn(f"version={arxiv_fetch.FLOW_CONTROL_POLICY_VERSION}", written)
+            self.assertIn("TERMINAL RuntimeError: simulated unrecoverable failure", written)
+            self.assertIn("BLOCKED", buf.getvalue())
+
+    def test_flow_control_exhausts_retries_and_raises(self):
+        import urllib.error
+
+        calls = {"n": 0}
+
+        def _opener(request, timeout=60):
+            calls["n"] += 1
+            raise urllib.error.HTTPError(request.full_url, 429, "Too Many Requests", {}, None)
+
+        with patch.object(arxiv_fetch.time, "sleep", lambda *_a, **_kw: None):
+            with self.assertRaises(urllib.error.HTTPError):
+                arxiv_fetch._http_get("http://export.arxiv.org/api/query?id_list=2301.00001", opener=_opener)
+        self.assertEqual(calls["n"], arxiv_fetch.MAX_FLOW_CONTROL_RETRIES + 1)
+
+    def test_non_flow_control_http_error_raises_immediately_no_retry(self):
+        import urllib.error
+
+        calls = {"n": 0}
+
+        def _opener(request, timeout=60):
+            calls["n"] += 1
+            raise urllib.error.HTTPError(request.full_url, 404, "Not Found", {}, None)
+
+        with patch.object(arxiv_fetch.time, "sleep", lambda *_a, **_kw: None):
+            with self.assertRaises(urllib.error.HTTPError):
+                arxiv_fetch._http_get("http://export.arxiv.org/api/query?id_list=2301.00001", opener=_opener)
+        self.assertEqual(calls["n"], 1)
 
     def test_main_blocked_line_on_no_eligible_papers(self):
         import contextlib
