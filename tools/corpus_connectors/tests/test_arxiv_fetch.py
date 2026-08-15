@@ -88,7 +88,11 @@ def _opener_with_sizes(atom_bytes: bytes, sizes_by_id: dict, body: bytes = b"fak
     """Mocked opener for budget-walk tests: HEAD requests return Content-Length
     from sizes_by_id (keyed by arxiv id; a missing/None entry means "no
     Content-Length header", exercising the streamed running-budget fallback).
-    GET requests return body_by_id[id] if given, else the shared `body`."""
+    GET requests return body_by_id[id] if given; otherwise, when a declared
+    size exists, the body is generated to match it EXACTLY (a realistic mock
+    -- HEAD and GET agreeing -- since arxiv_fetch.py now refuses a GET/HEAD
+    size mismatch). Tests exercising that refusal pass body_by_id explicitly
+    to deliberately disagree with the declared size."""
 
     def _opener(request, timeout=60):
         url = request.full_url
@@ -100,7 +104,12 @@ def _opener_with_sizes(atom_bytes: bytes, sizes_by_id: dict, body: bytes = b"fak
         if request.get_method() == "HEAD":
             headers = {"Content-Length": str(size)} if size is not None else {}
             return _FakeResp(b"", headers=headers)
-        get_body = (body_by_id or {}).get(stripped_id, body)
+        if body_by_id and stripped_id in body_by_id:
+            get_body = body_by_id[stripped_id]
+        elif size is not None:
+            get_body = b"x" * size
+        else:
+            get_body = body
         return _FakeResp(get_body)
 
     return _opener
@@ -384,6 +393,123 @@ class ArxivFetchMockedTests(unittest.TestCase):
             # a live-resolved CC-BY-4.0 paper would share the identical URL string,
             # so the (override)/(live) tag is the only thing telling them apart.
             self.assertIn("2301.00005v1=http://creativecommons.org/licenses/by/4.0/(override)", data["notes"])
+
+    def test_license_override_rescues_unverified_under_default_cc_only_filter(self):
+        # The real fix: eligibility must evaluate the RESOLVED (post-override)
+        # license, not the pre-override live label. Before this fix, cc-only
+        # (the default -- no --license-filter flag) would exclude this
+        # UNVERIFIED candidate before the override was ever consulted, forcing
+        # callers to widen to --license-filter all just to exercise the
+        # override at all. No --license-filter flag here at all.
+        atom_unverified = b"""<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
+  <entry>
+    <id>http://arxiv.org/abs/2301.00006v1</id>
+    <title>No License Element Paper, cc-only path</title>
+    <updated>2023-01-06T00:00:00Z</updated>
+  </entry>
+</feed>
+"""
+        with tempfile.TemporaryDirectory() as td:
+            list_path = Path(td) / "ids.txt"
+            list_path.write_text("2301.00006\n", encoding="utf-8")
+            dest = Path(td) / "arxivdata"
+            args = arxiv_fetch.build_parser().parse_args(
+                [
+                    "--paper-list", str(list_path), "--what", "source", "--dest", str(dest),
+                    "--license-override", "http://creativecommons.org/licenses/by/4.0/",
+                    "--license-override-evidence", "OAI-PMH bulk harvest <license> element, exact-SPDX match",
+                ]
+            )
+            receipt_path = arxiv_fetch.fetch(args, opener=_opener_for(atom_unverified))
+            data = json.loads(receipt_path.read_text(encoding="utf-8"))
+            self.assertEqual(len(data["files"]), 1)
+            self.assertEqual(data["license"], "http://creativecommons.org/licenses/by/4.0/")
+            self.assertIn("(override)", data["notes"])
+
+    def test_license_override_does_not_rescue_live_resolved_non_cc_under_cc_only(self):
+        # Conflict case: live resolves to a NON-CC license (the arXiv
+        # perpetual label, a RESOLVED value, not UNVERIFIED) and an override
+        # is also supplied. Precedence must hold:
+        # a live-resolved license always wins over a supplied override, so
+        # this candidate stays excluded under cc-only even with an override
+        # present -- a conflict means exclude, not fetch.
+        with tempfile.TemporaryDirectory() as td:
+            list_path = Path(td) / "ids.txt"
+            list_path.write_text("2301.00002\n", encoding="utf-8")
+            dest = Path(td) / "arxivdata"
+            args = arxiv_fetch.build_parser().parse_args(
+                [
+                    "--paper-list", str(list_path), "--what", "source", "--dest", str(dest),
+                    "--license-override", "http://creativecommons.org/licenses/by/4.0/",
+                    "--license-override-evidence", "OAI-PMH bulk harvest <license> element, exact-SPDX match",
+                ]
+            )
+            with self.assertRaises(rcpt.BlockedError):
+                arxiv_fetch.fetch(args, opener=_opener_for(ATOM_PERPETUAL))
+
+    def test_budget_bytes_head_get_size_mismatch_refuses_not_silently_admits(self):
+        # Required fix: a HEAD-selected candidate is charged its declared size
+        # for --budget-bytes accounting -- if the GET actually delivers a
+        # different size, that silently breaks the budget the walk computed
+        # the selection against. Must refuse (fail-closed), never admit.
+        with tempfile.TemporaryDirectory() as td:
+            list_path = Path(td) / "ids.txt"
+            list_path.write_text("2301.00003\n", encoding="utf-8")
+            dest = Path(td) / "arxivdata"
+            args = arxiv_fetch.build_parser().parse_args(
+                ["--paper-list", str(list_path), "--what", "source", "--dest", str(dest), "--budget-bytes", "10000"]
+            )
+            # HEAD declares 100 bytes (what the walk accounts against); the GET
+            # actually delivers only 40 -- a real disagreement, not a mock artifact.
+            opener = _opener_with_sizes(ATOM_TWO_CC, {"2301.00003": 100}, body_by_id={"2301.00003": b"x" * 40})
+            with self.assertRaises(arxiv_fetch.HeadSizeMismatchError):
+                arxiv_fetch.fetch(args, opener=opener)
+            # no wrongly-sized file left behind
+            self.assertFalse(any(dest.glob("*2301.00003*")))
+
+    def test_budget_bytes_head_get_oversized_aborts_mid_stream(self):
+        # Same disagreement, but the GET is LARGER than declared -- must abort
+        # mid-download (via the max_bytes cap) rather than complete a fetch
+        # that would silently exceed the budget the walk accounted for.
+        with tempfile.TemporaryDirectory() as td:
+            list_path = Path(td) / "ids.txt"
+            list_path.write_text("2301.00003\n", encoding="utf-8")
+            dest = Path(td) / "arxivdata"
+            args = arxiv_fetch.build_parser().parse_args(
+                ["--paper-list", str(list_path), "--what", "source", "--dest", str(dest), "--budget-bytes", "10000"]
+            )
+            opener = _opener_with_sizes(ATOM_TWO_CC, {"2301.00003": 100}, body_by_id={"2301.00003": b"x" * 500})
+            with self.assertRaises(arxiv_fetch.HeadSizeMismatchError):
+                arxiv_fetch.fetch(args, opener=opener)
+            self.assertFalse(any(dest.glob("*2301.00003*")))
+
+    def test_budget_walk_manifest_write_failure_cleans_up_streamed_files(self):
+        # Should-fix: a streamed-under-budget file is already on disk before the
+        # walk-manifest is written -- if that write itself fails (e.g. a
+        # collision), the file must not be left orphaned with no receipt to
+        # cover it (mirrors lean_fetch.py's own manifest-write-failure cleanup).
+        with tempfile.TemporaryDirectory() as td:
+            list_path = Path(td) / "ids.txt"
+            list_path.write_text("2301.00003\n", encoding="utf-8")
+            dest = Path(td) / "arxivdata"
+            dest.mkdir(parents=True)
+            manifests_dir = dest / "_manifests"
+            manifests_dir.mkdir()
+            # Force the exact manifest path the write will target to already
+            # exist, so _write_budget_walk_manifest raises DestCollisionError.
+            (manifests_dir / "FIXEDSTAMP-ids.budget-walk.json").write_text("{}", encoding="utf-8")
+            args = arxiv_fetch.build_parser().parse_args(
+                ["--paper-list", str(list_path), "--what", "source", "--dest", str(dest), "--budget-bytes", "10000"]
+            )
+            # 2301.00003 has no discoverable Content-Length -- streams under the
+            # running budget check, landing a real file on disk before the
+            # (forced-to-fail) manifest write is attempted.
+            opener = _opener_with_sizes(ATOM_TWO_CC, {}, body_by_id={"2301.00003": b"x" * 18})
+            with patch.object(arxiv_fetch.rcpt, "utc_stamp_compact", lambda: "FIXEDSTAMP"):
+                with self.assertRaises(rcpt.DestCollisionError):
+                    arxiv_fetch.fetch(args, opener=opener)
+            self.assertFalse(any(dest.glob("*2301.00003*")))
 
     def test_license_override_requires_evidence_paired(self):
         with tempfile.TemporaryDirectory() as td:

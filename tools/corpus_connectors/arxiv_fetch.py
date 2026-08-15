@@ -92,6 +92,19 @@ RATE_LIMIT_SECONDS = 3.0
 ARXIV_PERPETUAL_LABEL = "arXiv perpetual, non-exclusive license"
 
 
+def _is_cc_url(license_url: str) -> bool:
+    return "creativecommons.org" in license_url or "publicdomain/zero" in license_url
+
+
+class HeadSizeMismatchError(rcpt.BlockedError):
+    """A candidate's HEAD-declared Content-Length (used for --budget-bytes
+    accounting) disagrees with what the GET actually delivered. Fail-closed,
+    same posture as chunked_download.py's StreamingSizeMismatchError: a GET
+    response larger than its own HEAD declaration would otherwise silently
+    break the budget the walk computed the selection against, so the
+    downloaded file is refused and removed rather than kept."""
+
+
 @dataclass
 class ArxivEntry:
     arxiv_id: str
@@ -103,7 +116,7 @@ class ArxivEntry:
     def is_cc(self) -> bool:
         if not self.raw_license_url:
             return False
-        return "creativecommons.org" in self.raw_license_url or "publicdomain/zero" in self.raw_license_url
+        return _is_cc_url(self.raw_license_url)
 
     @property
     def license_label(self) -> str:
@@ -380,7 +393,17 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
         license_str = "public (arXiv API metadata only; per-paper licenses in notes)"
         license_evidence = "arXiv API metadata (titles/ids/updated) carries no separate reuse license"
     else:
-        eligible = entries if args.license_filter == "all" else [e for e in entries if e.is_cc]
+        # Eligibility must evaluate the RESOLVED (post-override) license, not
+        # the pre-override live label: filtering on e.is_cc alone means an
+        # override can never rescue a live-UNVERIFIED paper under cc-only,
+        # forcing callers to widen to --license-filter all just to exercise
+        # the override -- which then also admits live-resolved NON-CC papers,
+        # a real license-admission leak. Precedence still holds: the override
+        # closure only substitutes when live is UNVERIFIED, so a live-resolved
+        # non-CC paper (e.g. the arXiv perpetual label) stays excluded under
+        # cc-only even when an override was supplied for it -- live-resolved
+        # always wins, a conflict means exclude, not fetch.
+        eligible = entries if args.license_filter == "all" else [e for e in entries if _is_cc_url(_resolved_license(e)[0])]
         if not eligible:
             raise rcpt.BlockedError(
                 f"no license-clean papers eligible for content fetch under --license-filter cc-only "
@@ -389,6 +412,7 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
 
         budget_note = ""
         streamed_paths: dict = {}  # arxiv_id -> Path, for candidates already fetched during the walk
+        declared_sizes: dict = {}  # arxiv_id -> HEAD-declared Content-Length, for the post-download size check below
         if args.budget_bytes is not None:
             # Rank-fidelity: honor the paper-list file's OWN declared order, not
             # the Atom API's response order (not guaranteed to preserve input order).
@@ -417,6 +441,7 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
                     selected.append(e)
                     cumulative += size
                     head_count += 1
+                    declared_sizes[e.arxiv_id] = size
                     walk_notes.append(
                         {"id": e.arxiv_id, "bytes": size, "status": "selected", "size_source": "head", "cumulative_bytes": cumulative}
                     )
@@ -460,14 +485,27 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
                     f"(first candidate in declared order alone exceeds budget, or its size was undeterminable "
                     f"and streaming it under a running budget check also exceeded budget)"
                 )
-            budget_walk_manifest_path = _write_budget_walk_manifest(
-                dest_root, key, args.budget_bytes,
-                order_rule="paper-list file declared order (ascending, as written)",
-                size_rule="HEAD Content-Length where available; else streamed download capped to the "
-                          "remaining budget via max_bytes, aborting mid-download on exceed (fail-closed, "
-                          "never a blind stop on unknown size)",
-                walk_notes=walk_notes,
-            )
+            try:
+                budget_walk_manifest_path = _write_budget_walk_manifest(
+                    dest_root, key, args.budget_bytes,
+                    order_rule="paper-list file declared order (ascending, as written)",
+                    size_rule="HEAD Content-Length where available; else streamed download capped to the "
+                              "remaining budget via max_bytes, aborting mid-download on exceed (fail-closed, "
+                              "never a blind stop on unknown size)",
+                    walk_notes=walk_notes,
+                )
+            except rcpt.BlockedError:
+                # Streamed-under-budget files are already on disk with no receipt
+                # to cover them if the manifest write itself fails -- clean them up
+                # before re-raising rather than leaving orphans (same posture as
+                # lean_fetch.py's own manifest-write-failure cleanup).
+                for p in streamed_paths.values():
+                    if p.is_file():
+                        try:
+                            p.unlink()
+                        except OSError:
+                            pass
+                raise
             budget_note = (
                 f"; budget_bytes={args.budget_bytes}; candidates_in_list={len(order_index)}; "
                 f"examined={len(walk_notes)}; selected={len(eligible)} (via_head={head_count}, via_stream={streamed_count}); "
@@ -486,7 +524,32 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
             url = _content_url(e, args.what)
             ext = ".pdf" if args.what == "pdf" else ".tar"
             dest_file = dest_root / f"{rcpt.safe_key(e.arxiv_id)}{ext}"
-            rcpt.download_url(url, dest_file, opener=opener)
+            declared = declared_sizes.get(e.arxiv_id)
+            # A HEAD-selected candidate was charged its declared Content-Length
+            # for --budget-bytes accounting -- if the GET actually delivers more,
+            # that silently breaks the budget the walk computed the selection
+            # against. Cap the download at the declared size so an over-large
+            # response aborts mid-stream (DownloadTooLargeError) instead of
+            # completing and being kept; a response that completes SMALLER than
+            # declared isn't caught by the cap, so it's checked explicitly below.
+            try:
+                actual_size, _digest = rcpt.download_url(
+                    url, dest_file, opener=opener,
+                    max_bytes=declared if declared is not None else rcpt.MAX_DOWNLOAD_BYTES,
+                )
+            except rcpt.DownloadTooLargeError as exc:
+                raise HeadSizeMismatchError(
+                    f"{e.arxiv_id}: GET exceeded its own HEAD-declared Content-Length "
+                    f"({declared} bytes, used for --budget-bytes accounting): {exc}"
+                ) from exc
+            if declared is not None and actual_size != declared:
+                dest_file.unlink()
+                raise HeadSizeMismatchError(
+                    f"{e.arxiv_id}: HEAD declared Content-Length {declared} bytes (used for "
+                    f"--budget-bytes accounting) but the GET delivered {actual_size} bytes -- "
+                    f"refusing rather than silently admitting a fetch the budget walk didn't "
+                    f"actually account for"
+                )
             downloaded_paths.append(dest_file)
             time.sleep(RATE_LIMIT_SECONDS)
         files = rcpt.build_file_entries(dest_root, [p.relative_to(dest_root) for p in downloaded_paths])
