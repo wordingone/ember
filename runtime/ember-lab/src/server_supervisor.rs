@@ -161,6 +161,13 @@ pub struct ServerCycleRequest {
     pub receipt_path: PathBuf,
     pub observation: ServerObservation,
     pub available_headroom_bytes: u64,
+    /// `Some(detail)` when the resource-guard headroom probe itself failed
+    /// (observation `result: "PROBE_FAILED"`) rather than succeeding with a
+    /// low reading. `available_headroom_bytes` is still zeroed as the safe
+    /// default in this case, but this field records *why* -- a probe
+    /// failure must never be indistinguishable from a genuine "no headroom"
+    /// reading in the receipt.
+    pub resource_guard_probe_error: Option<String>,
     pub required_headroom_bytes: u64,
     pub now_ms: i64,
 }
@@ -198,6 +205,7 @@ pub struct ServerCycleReceipt {
     pub serving_contract_assertions: Option<ServingContractAssertions>,
     pub restarts_last_hour: u32,
     pub activity_event: String,
+    pub resource_guard_probe_error: Option<String>,
 }
 
 fn valid_sha(value: &str) -> bool {
@@ -1145,6 +1153,7 @@ impl Daemon {
             serving_contract_assertions: contract_assertions,
             restarts_last_hour,
             activity_event: activity_event.into(),
+            resource_guard_probe_error: request.resource_guard_probe_error,
         };
         let preflight_contract_refusal = receipt.decision == "RESTORE_FAILED_CONTRACT"
             && receipt
@@ -1295,12 +1304,30 @@ impl Daemon {
             process_alive,
             endpoint: probe_endpoint(&authority),
         };
-        let available_headroom_bytes = self
-            .resource_guard_status()?
-            .get("observation")
-            .and_then(|observation| observation.get("physical_available_bytes"))
+        let resource_guard_status = self.resource_guard_status()?;
+        let resource_guard_observation = resource_guard_status.get("observation");
+        let available_headroom_bytes = resource_guard_observation
+            .and_then(|value| value.get("physical_available_bytes"))
             .and_then(serde_json::Value::as_u64)
             .unwrap_or(0);
+        // `physical_available_bytes` is absent both when the probe genuinely
+        // failed (observation `result: "PROBE_FAILED"`, see
+        // persist_resource_guard_headroom) and, in principle, from any other
+        // shape drift in the stored observation JSON -- only the former is a
+        // known, named failure mode, so only that case is surfaced here;
+        // anything else still falls back to the safe `available_headroom_bytes
+        // = 0` default silently, same as before.
+        let resource_guard_probe_error = resource_guard_observation
+            .and_then(|value| value.get("result"))
+            .and_then(serde_json::Value::as_str)
+            .filter(|result| *result == "PROBE_FAILED")
+            .map(|_| {
+                resource_guard_observation
+                    .and_then(|value| value.get("error"))
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("resource guard probe failed")
+                    .to_string()
+            });
         let outage = planned_outage_state(self, &authority.resource_lease, request.now_ms)?;
         if outage == PlannedOutageState::Expired {
             sweep_expired_outage(self, &authority.resource_lease, request.now_ms)?;
@@ -1371,6 +1398,7 @@ impl Daemon {
                         receipt_path: request.receipt_path,
                         observation,
                         available_headroom_bytes,
+                        resource_guard_probe_error: resource_guard_probe_error.clone(),
                         required_headroom_bytes: request.required_headroom_bytes,
                         now_ms: request.now_ms,
                     };
@@ -1404,6 +1432,7 @@ impl Daemon {
             receipt_path: request.receipt_path,
             observation,
             available_headroom_bytes,
+            resource_guard_probe_error,
             required_headroom_bytes: request.required_headroom_bytes,
             now_ms: request.now_ms,
         };

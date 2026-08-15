@@ -6248,11 +6248,128 @@ fn pagefile_maximum_bytes_from_entries(entries: &[String]) -> Result<u64> {
         })
 }
 
+/// Linux commit-capacity probe, read from `/proc/meminfo`. Field mapping
+/// (`man proc_meminfo`): `MemAvailable` is the kernel's own load-aware
+/// estimate of free-for-allocation memory and is used directly as
+/// `physical_available_bytes` -- the same role `PhysicalAvailable` plays in
+/// the Windows probe above. `CommitLimit` minus `Committed_AS` is the
+/// kernel's own headroom-before-overcommit-limit figure and is used
+/// directly as `current_commit_remaining_bytes` -- the same role
+/// `CommitLimit - CommitTotal` plays on Windows. `SwapTotal` stands in for
+/// Windows' pagefile maximum.
+///
+/// Unlike Windows, `CommitLimit` is not guaranteed to be `<=`
+/// `MemTotal + SwapTotal` on Linux -- it is `SwapTotal + MemTotal *
+/// (overcommit_ratio / 100)`, and an admin-configured `overcommit_ratio` over
+/// 100 (or `overcommit_memory=1`, "always overcommit") can legitimately push
+/// it higher. Windows' cross-invariant checks (`maximum_commit_capacity_bytes
+/// >= current_commit_limit_bytes` / `>= commit_total_bytes`) are therefore
+/// not ported as hard errors here; `available_maximum_commit_bytes` is
+/// clamped to 0 instead of erroring when that physical-RAM-plus-swap figure
+/// is genuinely below what is already committed.
 #[cfg(not(windows))]
 pub fn probe_host_commit_capacity() -> Result<HostCommitCapacity> {
-    Err(EmberLabError::InvalidDispatchManifest {
-        detail: "native host commit probing is currently Windows-only".into(),
+    let raw = std::fs::read_to_string("/proc/meminfo").map_err(|error| {
+        EmberLabError::InvalidDispatchManifest {
+            detail: format!("Linux host commit probe failed to read /proc/meminfo: {error}"),
+        }
+    })?;
+    let field_bytes = |name: &str| -> Result<u64> {
+        meminfo_field_kib(&raw, name)?
+            .checked_mul(1024)
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                detail: format!("Linux host commit probe overflowed {name} bytes"),
+            })
+    };
+    let physical_ram_bytes = field_bytes("MemTotal")?;
+    let physical_available_bytes = field_bytes("MemAvailable")?;
+    let pagefile_maximum_bytes = field_bytes("SwapTotal")?;
+    let commit_total_bytes = field_bytes("Committed_AS")?;
+    let current_commit_limit_bytes = field_bytes("CommitLimit")?;
+    let current_commit_remaining_bytes = current_commit_limit_bytes
+        .checked_sub(commit_total_bytes)
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+            detail: "live committed bytes exceed the current Linux commit limit".into(),
+        })?;
+    let maximum_commit_capacity_bytes = physical_ram_bytes
+        .checked_add(pagefile_maximum_bytes)
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+            detail: "Linux maximum commit capacity overflowed bytes".into(),
+        })?;
+    let available_maximum_commit_bytes = maximum_commit_capacity_bytes
+        .checked_sub(commit_total_bytes)
+        .unwrap_or(0);
+    Ok(HostCommitCapacity {
+        physical_ram_bytes,
+        physical_available_bytes,
+        pagefile_maximum_bytes,
+        pagefile_configuration_source: "/proc/meminfo SwapTotal".into(),
+        pagefile_configuration_sha256: hash_bytes(raw.as_bytes()),
+        commit_total_bytes,
+        current_commit_limit_bytes,
+        current_commit_remaining_bytes,
+        maximum_commit_capacity_bytes,
+        available_maximum_commit_bytes,
     })
+}
+
+/// Parses a `NAME:    <value> kB` line out of `/proc/meminfo` content,
+/// returning the value in KiB. `/proc/meminfo` field names are unique and
+/// unambiguous as line prefixes (e.g. `MemTotal` vs `MemAvailable` never
+/// collide), so an exact-prefix match is sufficient.
+#[cfg(not(windows))]
+fn meminfo_field_kib(raw: &str, name: &str) -> Result<u64> {
+    raw.lines()
+        .find_map(|line| {
+            let value = line.strip_prefix(name)?.strip_prefix(':')?.trim();
+            value.strip_suffix(" kB")?.trim().parse::<u64>().ok()
+        })
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+            detail: format!("/proc/meminfo is missing a parseable {name} line"),
+        })
+}
+
+#[cfg(all(test, not(windows)))]
+mod linux_host_commit_capacity_tests {
+    use super::*;
+
+    /// Exercises the real probe against this test runner's actual
+    /// `/proc/meminfo` -- not a stub, not injected values. Prior to this
+    /// fix, `probe_host_commit_capacity()` always returned
+    /// `Err(InvalidDispatchManifest)` on Linux, so this test could not
+    /// exist; its mere presence and pass is direct evidence the probe now
+    /// executes and returns real numbers on `ubuntu-latest`.
+    #[test]
+    fn probe_host_commit_capacity_reads_real_proc_meminfo() {
+        let capacity = probe_host_commit_capacity().expect(
+            "probe_host_commit_capacity must succeed against a real /proc/meminfo on Linux CI",
+        );
+        assert!(capacity.physical_ram_bytes > 0);
+        assert!(capacity.maximum_commit_capacity_bytes >= capacity.physical_ram_bytes);
+        assert_eq!(
+            capacity.available_maximum_commit_bytes,
+            capacity
+                .maximum_commit_capacity_bytes
+                .saturating_sub(capacity.commit_total_bytes)
+        );
+        assert_eq!(capacity.pagefile_configuration_source, "/proc/meminfo SwapTotal");
+        assert_eq!(capacity.pagefile_configuration_sha256.len(), 64);
+    }
+
+    #[test]
+    fn probe_host_survival_headroom_matches_commit_capacity_fields() {
+        let capacity = probe_host_commit_capacity().unwrap();
+        let headroom = probe_host_survival_headroom().unwrap();
+        assert_eq!(headroom.physical_available_bytes, capacity.physical_available_bytes);
+        assert_eq!(headroom.commit_remaining_bytes, capacity.current_commit_remaining_bytes);
+    }
+
+    #[test]
+    fn meminfo_field_kib_parses_a_real_field_and_rejects_an_absent_one() {
+        let raw = std::fs::read_to_string("/proc/meminfo").unwrap();
+        assert!(meminfo_field_kib(&raw, "MemTotal").unwrap() > 0);
+        assert!(meminfo_field_kib(&raw, "NotARealMeminfoField").is_err());
+    }
 }
 
 fn available_free_vram_bytes() -> Result<u64> {
@@ -6601,10 +6718,16 @@ fn probe_host_survival_headroom() -> Result<HostSurvivalHeadroom> {
     })
 }
 
+/// Delegates to `probe_host_commit_capacity()` rather than re-reading
+/// `/proc/meminfo` a second time -- `HostSurvivalHeadroom` is exactly the
+/// two live-headroom fields (`physical_available_bytes`,
+/// `current_commit_remaining_bytes`) that probe already computes.
 #[cfg(not(windows))]
 fn probe_host_survival_headroom() -> Result<HostSurvivalHeadroom> {
-    Err(EmberLabError::InvalidDispatchManifest {
-        detail: "native resource guard probing is currently Windows-only".into(),
+    let capacity = probe_host_commit_capacity()?;
+    Ok(HostSurvivalHeadroom {
+        physical_available_bytes: capacity.physical_available_bytes,
+        commit_remaining_bytes: capacity.current_commit_remaining_bytes,
     })
 }
 

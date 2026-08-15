@@ -927,6 +927,7 @@ fn ember_lab_server_cycle_uses_bound_authority_and_governed_restore() {
             endpoint: EndpointHealth::Dead,
         },
         available_headroom_bytes: 2,
+        resource_guard_probe_error: None,
         required_headroom_bytes: 1,
         now_ms: 1_000,
     };
@@ -1000,6 +1001,7 @@ fn ember_lab_server_cycle_covers_health_outage_hung_headroom_and_alarm_law() {
                 endpoint,
             },
             available_headroom_bytes: headroom,
+            resource_guard_probe_error: None,
             required_headroom_bytes: 10,
             now_ms,
         }
@@ -1139,6 +1141,7 @@ fn ember_lab_server_cycle_rejects_unbound_or_overwritten_authority() {
             endpoint: EndpointHealth::Dead,
         },
         available_headroom_bytes: 20,
+        resource_guard_probe_error: None,
         required_headroom_bytes: 10,
         now_ms: 1_000,
     };
@@ -1319,6 +1322,7 @@ fn server_cycle_derives_restart_count_from_authoritative_activity_events() {
                     endpoint: EndpointHealth::Dead,
                 },
                 available_headroom_bytes: 2,
+                resource_guard_probe_error: None,
                 required_headroom_bytes: 1,
                 now_ms: 1_000,
             },
@@ -1395,6 +1399,7 @@ fn server_cycle_backoff_spans_rebound_job_ids_and_rejects_restore() {
                     endpoint: EndpointHealth::Dead,
                 },
                 available_headroom_bytes: 2,
+                resource_guard_probe_error: None,
                 required_headroom_bytes: 1,
                 now_ms: 1_000,
             },
