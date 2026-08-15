@@ -15,9 +15,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 #[cfg(not(windows))]
 use std::process::{Command, Stdio};
-use std::sync::{Arc, Mutex, Weak};
 #[cfg(windows)]
 use std::sync::RwLock;
+use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub mod data_catalog;
