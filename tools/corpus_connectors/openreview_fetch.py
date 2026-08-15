@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """openreview_fetch.py -- OpenReview API v2 connector CLI.
 
     openreview_fetch.py --venue VENUE_ID [--year Y] [--what meta|pdf]
@@ -28,11 +31,20 @@ implemented per the v2 REST docs as understood at build time
 (`content.venueid`, `offset`, `limit`); this is NOT covered by the spec's
 optional `--live` smoke (that smoke is hf_fetch-only) -- verify against a
 real venue before a production pull if the venue's schema differs.
+
+Token auth (fast-follow): anonymous requests to the public API can be
+bot-challenged (403). `--token`/`OPENREVIEW_TOKEN` accepts an
+already-obtained Bearer token (this connector never performs a login/account
+flow -- get the token yourself, e.g. via the OpenReview web UI or a prior
+`POST /login`) and forwards it as `Authorization: Bearer <token>` on both the
+notes-query requests and any PDF download. Purely additive: with no token
+supplied, behavior is byte-identical to before -- still anonymous.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import urllib.parse
 import urllib.request
@@ -45,6 +57,18 @@ import receipt as rcpt
 CONNECTOR_NAME = "openreview_fetch"
 API_BASE = "https://api2.openreview.net/notes"
 PAGE_SIZE = 100
+
+
+def _resolve_token(cli_token: Optional[str]) -> Optional[str]:
+    """CLI flag wins; falls back to OPENREVIEW_TOKEN env var; None if neither
+    is set (anonymous, unchanged default behavior)."""
+    if cli_token:
+        return cli_token
+    return os.environ.get("OPENREVIEW_TOKEN") or None
+
+
+def _auth_headers(token: Optional[str]) -> Optional[dict]:
+    return {"Authorization": f"Bearer {token}"} if token else None
 
 
 @dataclass
@@ -63,9 +87,12 @@ class OpenReviewNote:
         return "note content.license field" if self.license_str else "no content.license field on note"
 
 
-def _http_get_json(url: str, opener=None) -> dict:
+def _http_get_json(url: str, opener=None, headers: Optional[dict] = None) -> dict:
     urlopen = opener or urllib.request.urlopen
-    req = urllib.request.Request(url, headers={"User-Agent": "ember-corpus-connector/1", "Accept": "application/json"})
+    req_headers = {"User-Agent": "ember-corpus-connector/1", "Accept": "application/json"}
+    if headers:
+        req_headers.update(headers)
+    req = urllib.request.Request(url, headers=req_headers)
     with urlopen(req, timeout=60) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
@@ -77,7 +104,7 @@ def _extract_content_field(content: dict, key: str) -> Optional[str]:
     return val
 
 
-def query_venue(venue_id: str, year: Optional[int], opener=None) -> List[OpenReviewNote]:
+def query_venue(venue_id: str, year: Optional[int], opener=None, headers: Optional[dict] = None) -> List[OpenReviewNote]:
     notes: List[OpenReviewNote] = []
     offset = 0
     while True:
@@ -85,7 +112,7 @@ def query_venue(venue_id: str, year: Optional[int], opener=None) -> List[OpenRev
         if year is not None:
             params["content.year"] = year
         url = f"{API_BASE}?{urllib.parse.urlencode(params)}"
-        payload = _http_get_json(url, opener)
+        payload = _http_get_json(url, opener, headers=headers)
         page = payload.get("notes", [])
         if not page:
             break
@@ -111,12 +138,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--year", type=int, default=None)
     p.add_argument("--what", choices=["meta", "pdf"], default="meta")
     p.add_argument("--dest", default=None, help="local destination dir (default: ./corpus-downloads/openreview/<venue>)")
+    p.add_argument("--token", default=None, help="OpenReview Bearer token (or set OPENREVIEW_TOKEN); anonymous if omitted")
     p.add_argument("--allow-unverified-license", action="store_true")
     return p
 
 
 def fetch(args: argparse.Namespace, opener=None) -> Path:
-    notes = query_venue(args.venue_id, args.year, opener)
+    token = _resolve_token(getattr(args, "token", None))
+    auth_headers = _auth_headers(token)
+    notes = query_venue(args.venue_id, args.year, opener, headers=auth_headers)
     if not notes:
         raise rcpt.BlockedError(f"no OpenReview notes returned for venue {args.venue_id}")
 
@@ -152,7 +182,7 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
         for n in eligible:
             url = f"https://openreview.net{n.pdf_path}"
             dest_file = dest_root / f"{rcpt.safe_key(n.note_id)}.pdf"
-            rcpt.download_url(url, dest_file, opener=opener)
+            rcpt.download_url(url, dest_file, opener=opener, headers=auth_headers)
             downloaded_paths.append(dest_file)
         files = rcpt.build_file_entries(dest_root, [p.relative_to(dest_root) for p in downloaded_paths])
         distinct_licenses = sorted({n.license_label for n in eligible})

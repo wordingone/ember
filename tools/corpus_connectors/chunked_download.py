@@ -53,9 +53,29 @@ Design summary
 
 Stdlib-only (`urllib.request`, `http.client`), per this package's dependency
 posture (see README).
+
+Streaming transport (fast-follow, `fetch_streaming()` below): some bulk
+sources (e.g. Dolma's actual host) do not honour HTTP Range at all -- the
+`fetch_chunked()` engine above refuses immediately (`RangeNotSupportedError`)
+against such a source, by design, rather than silently treating a 200 as a
+chunk. `fetch_streaming()` is a SEPARATE transport for exactly that case: one
+sequential GET, read and sha256-hashed incrementally in bounded
+`read_chunk_bytes` pieces (never one single in-memory buffer -- the whole
+point of this module existing alongside `receipt.py`'s 512 MiB single-shot
+`download_url()`), written to disk as it arrives. Range is a resume
+convenience, not a transport requirement: `fetch_streaming()` is not
+resumable (a killed process restarts the whole transfer -- no
+`.bulkstate.json` sidecar, no partial-chunk re-verification) but keeps every
+other fail-closed contract identical to `fetch_chunked()` -- budget
+enforcement (checked against `Content-Length` up front when the server
+supplies one, and against the running byte count throughout, in case it
+doesn't), disk-margin checks before every write, and a size-mismatch-at-
+completion refusal (declared `Content-Length` vs. bytes actually written)
+plus the same optional whole-file `--sha256` verification.
 """
 from __future__ import annotations
 
+import hashlib
 import http.client
 import json
 import math
@@ -140,6 +160,22 @@ class ChunkDigestMismatchError(rcpt.BlockedError):
 class WholeFileDigestMismatchError(rcpt.BlockedError):
     """The assembled file's whole-file sha256 does not match an explicitly
     supplied --sha256."""
+
+
+class StreamingStatusError(rcpt.BlockedError):
+    """A streaming GET (fetch_streaming) got an HTTP status other than 200."""
+
+    def __init__(self, message: str, *, status_code: Optional[int] = None):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+class StreamingSizeMismatchError(rcpt.BlockedError):
+    """The declared Content-Length and the bytes actually streamed disagree,
+    or a leftover .partial from an earlier interrupted streaming attempt
+    exists (fetch_streaming never resumes -- an orphaned partial is refused,
+    exactly like fetch_chunked's own orphaned-partial refusal, never
+    silently reused or silently overwritten)."""
 
 
 # ---------------------------------------------------------------------------
@@ -665,4 +701,140 @@ def fetch_chunked(
         resumed=resumed,
         retry_attempts=retry_attempts,
         retry_events=retry_events,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Streaming (non-Range) transport -- see module docstring "Streaming
+# transport" for the full rationale.
+# ---------------------------------------------------------------------------
+DEFAULT_STREAM_READ_BYTES = 4 * 1024 * 1024  # 4 MiB per read() call
+
+
+def fetch_streaming(
+    url: str,
+    dest_file: Path,
+    *,
+    budget_bytes: int,
+    read_chunk_bytes: int = DEFAULT_STREAM_READ_BYTES,
+    disk_margin_bytes: int = DEFAULT_DISK_MARGIN_BYTES,
+    expected_sha256: Optional[str] = None,
+    timeout: int = 60,
+    headers: Optional[dict] = None,
+    opener: Optional[Callable] = None,
+    disk_usage_fn: Optional[Callable[[str], object]] = None,
+) -> BulkFetchResult:
+    """Fetch `url` to `dest_file` via a single sequential GET (no Range
+    header), never exceeding `budget_bytes`. Raises a BlockedError subclass
+    on any refusal; on success returns a BulkFetchResult (chunks=[] -- this
+    transport has no discrete Range chunks to record) and leaves exactly
+    `dest_file` on disk (no .partial)."""
+    if budget_bytes <= 0:
+        raise rcpt.BlockedError("budget_bytes must be positive")
+    if read_chunk_bytes <= 0:
+        raise rcpt.BlockedError("read_chunk_bytes must be positive")
+
+    rcpt.check_no_collision(dest_file)
+    dest_file.parent.mkdir(parents=True, exist_ok=True)
+    _check_disk_margin(dest_file.parent, budget_bytes, disk_margin_bytes, disk_usage_fn or shutil.disk_usage)
+
+    partial_path = _partial_path(dest_file)
+    if partial_path.exists():
+        raise StreamingSizeMismatchError(
+            f"partial file {partial_path} exists from a previous streaming attempt; "
+            f"this transport does not resume -- remove it manually to retry from scratch"
+        )
+
+    req_headers = {"User-Agent": "ember-corpus-connector/1"}
+    if headers:
+        req_headers.update(headers)
+    request = urllib.request.Request(url, headers=req_headers)
+    urlopen = opener or urllib.request.urlopen
+
+    hasher = hashlib.sha256()
+    written = 0
+    declared_total: Optional[int] = None
+    try:
+        try:
+            response_cm = urlopen(request, timeout=timeout)
+        except urllib.error.HTTPError as exc:
+            # urlopen() raises HTTPError (rather than returning a normal
+            # response) for any non-2xx/3xx status by default -- mirrors
+            # _fetch_one_chunk's identical catch above; a 4xx/5xx answer to a
+            # streaming GET never reaches the status check below unless it is
+            # caught here first and turned into StreamingStatusError.
+            raise StreamingStatusError(
+                f"unexpected HTTP status {exc.code} for streaming GET {url}", status_code=exc.code
+            ) from exc
+        with response_cm as resp:
+            status = getattr(resp, "status", None)
+            if status is None:
+                status = resp.getcode()
+            if status != 200:
+                raise StreamingStatusError(
+                    f"unexpected HTTP status {status} for streaming GET {url}", status_code=status
+                )
+
+            get_header = resp.headers.get if hasattr(resp, "headers") else (lambda *_a, **_kw: None)
+            content_length = get_header("Content-Length")
+            if content_length is not None:
+                try:
+                    declared_total = int(content_length)
+                except (TypeError, ValueError):
+                    declared_total = None
+                if declared_total is not None and declared_total > budget_bytes:
+                    raise BudgetExceededError(
+                        f"remote Content-Length {declared_total} bytes exceeds declared "
+                        f"budget_bytes {budget_bytes} for {url}"
+                    )
+
+            with partial_path.open("wb") as pf:
+                while True:
+                    piece = resp.read(read_chunk_bytes)
+                    if not piece:
+                        break
+                    written += len(piece)
+                    if written > budget_bytes:
+                        raise BudgetExceededError(
+                            f"streamed bytes {written} exceeded declared budget_bytes "
+                            f"{budget_bytes} for {url} before the transfer completed"
+                        )
+                    _check_disk_margin(
+                        dest_file.parent, len(piece), disk_margin_bytes,
+                        disk_usage_fn or shutil.disk_usage, context="next_chunk_bytes",
+                    )
+                    hasher.update(piece)
+                    pf.write(piece)
+                pf.flush()
+                os.fsync(pf.fileno())
+    except Exception:
+        if partial_path.exists():
+            partial_path.unlink()
+        raise
+
+    if declared_total is not None and written != declared_total:
+        # Fail-closed size-mismatch-at-completion, same posture as
+        # fetch_chunked's own final-size check: abandon rather than leave a
+        # wrongly-sized file (or the disk it occupies) sitting around.
+        partial_path.unlink()
+        raise StreamingSizeMismatchError(
+            f"streamed {written} bytes but server declared Content-Length {declared_total} for {url}"
+        )
+
+    whole_digest = hasher.hexdigest()
+    if expected_sha256 and whole_digest.lower() != expected_sha256.lower():
+        partial_path.unlink()
+        raise WholeFileDigestMismatchError(
+            f"expected {expected_sha256}, got {whole_digest} for assembled {dest_file}"
+        )
+
+    partial_path.replace(dest_file)
+
+    return BulkFetchResult(
+        dest_file=dest_file,
+        total_bytes=written,
+        sha256=whole_digest,
+        chunk_size=read_chunk_bytes,
+        chunks=[],
+        resumed=False,
     )

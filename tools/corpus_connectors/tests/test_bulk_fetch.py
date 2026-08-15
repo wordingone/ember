@@ -22,6 +22,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import bulk_fetch  # noqa: E402
+import chunked_download as bulk  # noqa: E402
 import receipt as rcpt  # noqa: E402
 from _range_fixture import start_server, stop_server  # noqa: E402
 
@@ -153,6 +154,83 @@ class ReceiptAndChunkManifestTests(BulkFetchServerTestCase):
                 ]
             )
             with self.assertRaises(rcpt.BlockedError):
+                bulk_fetch.fetch(args)
+
+
+class StreamingTransportTests(BulkFetchServerTestCase):
+    """--transport streaming routes through chunked_download.fetch_streaming
+    instead of fetch_chunked; --transport range (the default, unspecified)
+    stays on the original resumable path -- both asserted here so a
+    regression in the branch itself (not just fetch_streaming in isolation)
+    would be caught."""
+
+    def test_transport_streaming_writes_receipt_with_streaming_notes(self):
+        payload = _payload(2000)
+        url, _ = self._serve(payload)
+        with tempfile.TemporaryDirectory() as td:
+            dest = Path(td) / "bulkdata"
+            args = bulk_fetch.build_parser().parse_args(
+                [
+                    url,
+                    "--budget-bytes", "10000",
+                    "--transport", "streaming",
+                    "--allow-unverified-license",
+                    "--dest", str(dest),
+                ]
+            )
+            receipt_path = bulk_fetch.fetch(args)
+            data = json.loads(receipt_path.read_text(encoding="utf-8"))
+
+            self.assertEqual(data["files"][0]["bytes"], len(payload))
+            self.assertEqual(data["files"][0]["sha256"], hashlib.sha256(payload).hexdigest())
+            self.assertIn("streaming (non-Range)", data["notes"])
+            self.assertIn("chunk_manifest=", data["notes"])
+
+            dest_filename = Path(data["files"][0]["path"]).name
+            self.assertEqual((dest / dest_filename).read_bytes(), payload)
+
+            manifests_dir = dest / "_manifests"
+            chunk_manifest_paths = list(manifests_dir.glob("*.chunks.json"))
+            self.assertEqual(len(chunk_manifest_paths), 1)
+            chunk_data = json.loads(chunk_manifest_paths[0].read_text(encoding="utf-8"))
+            self.assertEqual(chunk_data["chunks"], [])
+            self.assertEqual(chunk_data["sha256"], hashlib.sha256(payload).hexdigest())
+
+    def test_transport_omitted_defaults_to_range_unchanged(self):
+        payload = _payload(1000)
+        url, _ = self._serve(payload)
+        with tempfile.TemporaryDirectory() as td:
+            dest = Path(td) / "bulkdata"
+            args = bulk_fetch.build_parser().parse_args(
+                [
+                    url,
+                    "--budget-bytes", "10000",
+                    "--chunk-size-bytes", "128",
+                    "--allow-unverified-license",
+                    "--dest", str(dest),
+                ]
+            )
+            self.assertEqual(args.transport, "range")
+            receipt_path = bulk_fetch.fetch(args)
+            data = json.loads(receipt_path.read_text(encoding="utf-8"))
+            self.assertIn("resumable chunked-bulk transfer", data["notes"])
+            self.assertNotIn("streaming (non-Range)", data["notes"])
+
+    def test_transport_streaming_still_enforces_budget(self):
+        payload = _payload(5000)
+        url, _ = self._serve(payload)
+        with tempfile.TemporaryDirectory() as td:
+            dest = Path(td) / "bulkdata"
+            args = bulk_fetch.build_parser().parse_args(
+                [
+                    url,
+                    "--budget-bytes", "1000",
+                    "--transport", "streaming",
+                    "--allow-unverified-license",
+                    "--dest", str(dest),
+                ]
+            )
+            with self.assertRaises(bulk.BudgetExceededError):
                 bulk_fetch.fetch(args)
 
 

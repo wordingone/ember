@@ -722,5 +722,94 @@ class RetryPolicyTests(ChunkedFetchServerTestCase):
                 )
 
 
+class StreamingFetchTests(ChunkedFetchServerTestCase):
+    """fetch_streaming() -- the sequential-GET (non-Range) transport. The
+    fixture server always answers a request with no Range header with a
+    plain 200 + full body (see _range_fixture.RangeHandler.do_GET), so the
+    unmodified _serve() helper already exercises the real no-Range wire path
+    fetch_streaming relies on -- no fixture changes needed."""
+
+    def test_clean_streaming_fetch_writes_file_and_matches_digest(self):
+        payload = _payload(5000)
+        url, _ = self._serve(payload)
+        with tempfile.TemporaryDirectory() as td:
+            dest_file = Path(td) / "out.bin"
+            result = bulk.fetch_streaming(url, dest_file, budget_bytes=10_000, read_chunk_bytes=777)
+
+            self.assertEqual(dest_file.read_bytes(), payload)
+            self.assertEqual(result.sha256, hashlib.sha256(payload).hexdigest())
+            self.assertEqual(result.total_bytes, len(payload))
+            self.assertFalse(result.resumed)
+            self.assertEqual(result.chunks, [])
+            self.assertFalse(dest_file.with_name(dest_file.name + ".partial").exists())
+
+    def test_streaming_fetch_with_matching_expected_sha256(self):
+        payload = _payload(300)
+        url, _ = self._serve(payload)
+        with tempfile.TemporaryDirectory() as td:
+            dest_file = Path(td) / "out.bin"
+            bulk.fetch_streaming(
+                url, dest_file, budget_bytes=10_000,
+                expected_sha256=hashlib.sha256(payload).hexdigest(),
+            )
+            self.assertEqual(dest_file.read_bytes(), payload)
+
+    def test_streaming_fetch_rejects_mismatched_expected_sha256(self):
+        payload = _payload(300)
+        url, _ = self._serve(payload)
+        with tempfile.TemporaryDirectory() as td:
+            dest_file = Path(td) / "out.bin"
+            with self.assertRaises(bulk.WholeFileDigestMismatchError):
+                bulk.fetch_streaming(
+                    url, dest_file, budget_bytes=10_000,
+                    expected_sha256="0" * 64,
+                )
+            self.assertFalse(dest_file.exists())
+            self.assertFalse(dest_file.with_name(dest_file.name + ".partial").exists())
+
+    def test_streaming_fetch_refuses_when_content_length_exceeds_budget(self):
+        payload = _payload(5000)
+        url, _ = self._serve(payload)
+        with tempfile.TemporaryDirectory() as td:
+            dest_file = Path(td) / "out.bin"
+            with self.assertRaises(bulk.BudgetExceededError):
+                bulk.fetch_streaming(url, dest_file, budget_bytes=1000)
+            self.assertFalse(dest_file.exists())
+            self.assertFalse(dest_file.with_name(dest_file.name + ".partial").exists())
+
+    def test_streaming_fetch_surfaces_non_200_status(self):
+        payload = _payload(50)
+        url, _ = self._serve(payload, force_status=503)
+        with tempfile.TemporaryDirectory() as td:
+            dest_file = Path(td) / "out.bin"
+            with self.assertRaises(bulk.StreamingStatusError) as ctx:
+                bulk.fetch_streaming(url, dest_file, budget_bytes=10_000)
+            self.assertEqual(ctx.exception.status_code, 503)
+            self.assertFalse(dest_file.with_name(dest_file.name + ".partial").exists())
+
+    def test_streaming_fetch_refuses_orphaned_partial_never_resumes(self):
+        payload = _payload(200)
+        url, _ = self._serve(payload)
+        with tempfile.TemporaryDirectory() as td:
+            dest_file = Path(td) / "out.bin"
+            partial = dest_file.with_name(dest_file.name + ".partial")
+            partial.write_bytes(b"leftover-from-a-previous-interrupted-attempt")
+            with self.assertRaises(bulk.StreamingSizeMismatchError):
+                bulk.fetch_streaming(url, dest_file, budget_bytes=10_000)
+            # refusal leaves the orphaned partial untouched (never silently
+            # reused or overwritten) and never produces a dest_file
+            self.assertTrue(partial.exists())
+            self.assertFalse(dest_file.exists())
+
+    def test_streaming_fetch_refuses_existing_dest_collision(self):
+        payload = _payload(200)
+        url, _ = self._serve(payload)
+        with tempfile.TemporaryDirectory() as td:
+            dest_file = Path(td) / "out.bin"
+            dest_file.write_bytes(b"already here")
+            with self.assertRaises(rcpt.DestCollisionError):
+                bulk.fetch_streaming(url, dest_file, budget_bytes=10_000)
+
+
 if __name__ == "__main__":
     unittest.main()

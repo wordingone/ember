@@ -28,6 +28,18 @@ chunked_download.py for the full resume/fail-closed contract.
 License is a human/lead judgment about the named source, exactly like
 http_fetch.py: `--license`/`--license-evidence` must be supplied together or
 not at all (absent = UNVERIFIED, gated by --allow-unverified-license).
+
+`--transport {range,streaming}` (fast-follow, default `range`, byte-identical
+to prior behavior when omitted): `range` is the resumable Range-chunked
+engine above; `streaming` (chunked_download.fetch_streaming) is a sequential
+GET with incremental hashing, for sources that do not honour HTTP Range at
+all (e.g. Dolma's actual host) -- Range is a resume convenience, never a
+transport requirement. `streaming` does not resume; every other fail-closed
+contract (budget enforcement, disk margin, whole-file --sha256, size-
+mismatch-at-completion) is identical between the two transports.
+`--chunk-size-bytes` is shared between them: for `range` it is the Range
+request size; for `streaming` it is the per-`read()` I/O buffer size (there
+is no Range chunk to size).
 """
 from __future__ import annotations
 
@@ -62,6 +74,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=bulk.DEFAULT_RETRY_BACKOFF_SECONDS,
         metavar="N",
+    )
+    p.add_argument(
+        "--transport", choices=["range", "streaming"], default="range",
+        help="range (default, resumable HTTP Range chunks) or streaming (sequential GET, "
+             "for sources that do not honour Range at all; not resumable)",
     )
     p.add_argument("--sha256", dest="expected_sha256", default=None, metavar="EXPECTED")
     p.add_argument("--license", dest="license_str", default=None, metavar="STR")
@@ -120,21 +137,35 @@ def fetch(args: argparse.Namespace, opener=None, disk_usage_fn=None) -> Path:
     dest_root.mkdir(parents=True, exist_ok=True)
     dest_file = dest_root / _dest_filename(args.url)
 
-    result = bulk.fetch_chunked(
-        args.url,
-        dest_file,
-        budget_bytes=args.budget_bytes,
-        chunk_size=args.chunk_size_bytes,
-        disk_margin_bytes=args.disk_margin_bytes,
-        expected_sha256=args.expected_sha256,
-        timeout=args.timeout,
-        opener=opener,
-        disk_usage_fn=disk_usage_fn,
-        max_retries=getattr(args, "max_retries", bulk.DEFAULT_MAX_RETRIES),
-        backoff_base_seconds=getattr(
-            args, "retry_backoff_seconds", bulk.DEFAULT_RETRY_BACKOFF_SECONDS
-        ),
-    )
+    transport = getattr(args, "transport", "range")
+    if transport == "streaming":
+        result = bulk.fetch_streaming(
+            args.url,
+            dest_file,
+            budget_bytes=args.budget_bytes,
+            read_chunk_bytes=args.chunk_size_bytes,
+            disk_margin_bytes=args.disk_margin_bytes,
+            expected_sha256=args.expected_sha256,
+            timeout=args.timeout,
+            opener=opener,
+            disk_usage_fn=disk_usage_fn,
+        )
+    else:
+        result = bulk.fetch_chunked(
+            args.url,
+            dest_file,
+            budget_bytes=args.budget_bytes,
+            chunk_size=args.chunk_size_bytes,
+            disk_margin_bytes=args.disk_margin_bytes,
+            expected_sha256=args.expected_sha256,
+            timeout=args.timeout,
+            opener=opener,
+            disk_usage_fn=disk_usage_fn,
+            max_retries=getattr(args, "max_retries", bulk.DEFAULT_MAX_RETRIES),
+            backoff_base_seconds=getattr(
+                args, "retry_backoff_seconds", bulk.DEFAULT_RETRY_BACKOFF_SECONDS
+            ),
+        )
 
     downloaded_paths = [dest_file]
 
@@ -167,10 +198,14 @@ def fetch(args: argparse.Namespace, opener=None, disk_usage_fn=None) -> Path:
         connector=rcpt.ConnectorInfo(name=CONNECTOR_NAME),
         dest_root=str(dest_root),
         notes=(
-            f"resumable chunked-bulk transfer; {len(result.chunks)} chunks of "
-            f"{result.chunk_size} bytes; budget_bytes={args.budget_bytes}; "
-            f"resumed={'yes' if result.resumed else 'no'}; "
-            f"retry_attempts={result.retry_attempts}; "
+            (
+                f"resumable chunked-bulk transfer; {len(result.chunks)} chunks of "
+                f"{result.chunk_size} bytes; resumed={'yes' if result.resumed else 'no'}; "
+                f"retry_attempts={result.retry_attempts}; "
+                if transport == "range"
+                else f"streaming (non-Range) sequential transfer; {result.chunk_size}-byte read buffer; "
+            )
+            + f"budget_bytes={args.budget_bytes}; "
             f"chunk_manifest={chunk_manifest_path.relative_to(dest_root).as_posix()}; "
             f"sha256_verified={'yes' if args.expected_sha256 else 'no'}"
         ),
