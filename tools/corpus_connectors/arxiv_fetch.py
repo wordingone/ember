@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """arxiv_fetch.py -- arXiv API (Atom) connector CLI.
 
     arxiv_fetch.py (--ids ID... | --query Q --max N) [--what meta|pdf|source]
@@ -27,6 +30,15 @@ per receipt): for `--what meta` the single file is a JSON listing of the
 returned entries (id/title/license/updated); for `--what pdf|source` the
 files are the downloaded PDFs/source archives for papers eligible under the
 license filter -- per-paper license detail always goes into `notes`.
+
+`--paper-list FILE` (fast-follow): a third, mutually-exclusive source mode
+alongside `--ids`/`--query`, for an exact, pre-filtered id list too large to
+pass as CLI args (e.g. the output of the separate arXiv bulk OAI-PMH
+metadata harvest + license filter, thousands of ids). One id per line;
+blank lines and lines starting with `#` are skipped; every id is then routed
+through the SAME `query_by_ids()` used by `--ids` (identical batching,
+politeness sleep, license handling) -- this is a different id SOURCE, not a
+different query mechanism.
 """
 from __future__ import annotations
 
@@ -139,11 +151,28 @@ def query_by_search(query: str, max_results: int, opener=None) -> List[ArxivEntr
     return entries
 
 
+def read_paper_list(path: Path) -> List[str]:
+    ids: List[str] = []
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        ids.append(line)
+    if not ids:
+        raise rcpt.BlockedError(f"--paper-list {path} contained no arXiv ids")
+    return ids
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Fetch arXiv metadata/content with an L4 receipt.")
     src = p.add_mutually_exclusive_group(required=True)
     src.add_argument("--ids", nargs="+", metavar="ID", help="explicit arXiv id(s)")
     src.add_argument("--query", help="arXiv search_query string")
+    src.add_argument(
+        "--paper-list", type=Path, metavar="FILE",
+        help="path to a file of arXiv ids, one per line (# comments/blank lines skipped); "
+             "for an exact pre-filtered set (e.g. from the bulk metadata harvest) instead of live sampling",
+    )
     p.add_argument("--max", type=int, default=50, help="max results for --query mode (default 50)")
     p.add_argument("--what", choices=["meta", "pdf", "source"], default="meta")
     p.add_argument("--dest", default=None, help="local destination dir (default: ./corpus-downloads/arxiv/<key>)")
@@ -163,6 +192,11 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
         entries = query_by_ids(args.ids, opener)
         key = rcpt.safe_key("-".join(args.ids[:3]) + (f"-plus{len(args.ids)-3}" if len(args.ids) > 3 else ""))
         source_id = ",".join(args.ids)
+    elif args.paper_list:
+        paper_ids = read_paper_list(args.paper_list)
+        entries = query_by_ids(paper_ids, opener)
+        key = rcpt.safe_key(args.paper_list.stem)[:60]
+        source_id = f"paper-list:{args.paper_list.name} ({len(paper_ids)} ids)"
     else:
         entries = query_by_search(args.query, args.max, opener)
         key = rcpt.safe_key(args.query)[:60]
