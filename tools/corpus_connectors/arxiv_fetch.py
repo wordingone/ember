@@ -621,6 +621,7 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
             head_count = 0
             streamed_count = 0
             examined = 0
+            walk_end_reason = "list-exhausted"
             for e in eligible:
                 # The walk is otherwise silent for its entire duration (no other
                 # log() call in this loop) -- at RATE_LIMIT_SECONDS=3.0/candidate,
@@ -644,6 +645,7 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
                         walk_notes.append(
                             {"id": e.arxiv_id, "bytes": size, "status": "stopped", "size_source": "head", "reason": "would exceed budget"}
                         )
+                        walk_end_reason = f"budget-stop id={e.arxiv_id}"
                         break
                     selected.append(e)
                     cumulative += size
@@ -671,12 +673,20 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
                         {"id": e.arxiv_id, "status": "stopped", "size_source": "streamed",
                          "reason": f"streamed past remaining budget ({remaining_budget} bytes); size undeterminable up front"}
                     )
+                    walk_end_reason = f"budget-stop id={e.arxiv_id}"
                     break
                 except Exception as exc:
+                    # Only budget conditions may end the walk early. A single
+                    # permanently-unavailable candidate (dead link, 404, transient
+                    # server fault) is NOT a budget condition -- terminating the
+                    # entire walk on it silently stranded 7.6GB of unused budget
+                    # in A-train-2 (2026-08-15, id=2212.07920v4, real root cause).
+                    # Skip this one candidate and keep walking the rest of the list.
                     walk_notes.append(
-                        {"id": e.arxiv_id, "status": "stopped", "size_source": "streamed", "reason": f"streamed fetch failed: {exc!r}"}
+                        {"id": e.arxiv_id, "status": "skipped", "size_source": "streamed", "reason": f"streamed fetch failed: {exc!r}"}
                     )
-                    break
+                    log(f"WALK-SKIP id={e.arxiv_id} reason={exc!r}")
+                    continue
                 selected.append(e)
                 streamed_paths[e.arxiv_id] = dest_file
                 cumulative += actual_size
@@ -688,7 +698,8 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
             eligible = selected
             log(
                 f"WALK-END examined={examined} selected={len(eligible)} "
-                f"cumulative_bytes={cumulative} budget_bytes={args.budget_bytes}"
+                f"cumulative_bytes={cumulative} budget_bytes={args.budget_bytes} "
+                f"end_reason={walk_end_reason}"
             )
             if not eligible:
                 raise rcpt.BlockedError(
