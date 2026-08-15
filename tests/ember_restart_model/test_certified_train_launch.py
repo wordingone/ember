@@ -2813,6 +2813,12 @@ class CompletionHeadAncestorTests(unittest.TestCase):
                 "training_checkpoint_interval",
                 "training_telemetry_path",
                 "training_model_chat_restore_not_before",
+                "semantic_canary_mode",
+                "semantic_canary_receipt",
+                "semantic_canary_shards_root",
+                "semantic_canary_sequence_length",
+                "semantic_canary_checkpoint_interval",
+                "semantic_canary_telemetry_path",
             },
         )
 
@@ -3733,6 +3739,7 @@ class ResumeRootAuthorizationTests(_ResumeBundleMixin, unittest.TestCase):
                 "allowed_resume_roots",
                 "allowed_training_capabilities",
                 "resume_relocation_custody_root",
+                "allowed_semantic_canary_modes",
             },
         )
         self.assertFalse(
@@ -4526,6 +4533,683 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
             emitted_flags,
             "the runner's required specialist flags and what "
             "build_runner_argv actually emits have diverged",
+        )
+
+
+class SemanticCanaryRoutingTests(unittest.TestCase):
+    """Issue #1719 acceptance clause 3: certified_train_launch.py could only
+    ever authorize governed-vertical (or, since #1430/#1454, the specialist
+    single-capability continuation route) -- there was no certified way to
+    launch a telemetered, clean-genesis WARM-100 canary through
+    run_vertical_slice.py's "semantic" subcommand. Extending allowed_modes
+    itself was rejected as the cure (scripts/r1_exit_battery.py's headline
+    finding): _require_scope_subset hard-requires allowed_modes ==
+    ["governed-vertical"] exactly, so this route is authorized through the
+    certificate's separate allowed_semantic_canary_modes key instead, exactly
+    mirroring how #1430/#1454 authorized the specialist route through
+    allowed_training_capabilities rather than touching allowed_modes/mode at
+    all. Semantic-canary routing is expressed as optional run-spec keys,
+    validated fail-closed before argv, mirroring how SpecialistRoutingTests
+    covers #1430.
+
+    Deliberately does NOT reuse _ResumeBundleMixin: that mixin's bundle
+    installs and authorizes a resume triple by default, which is exactly
+    backwards for this route -- issue #1719 acceptance clause 1 requires
+    WARM-100 be clean-random genesis, never a continuation, so this class's
+    own _bundle stays clean-genesis by default and only the one refusal test
+    below (test_semantic_canary_with_resume_checkpoint_is_refused) installs
+    resume material at all."""
+
+    def _bundle(
+        self,
+        directory: str,
+        *,
+        mutate_run_spec=None,
+        mode: str = "warm-100",
+        config_revision: str = ARCHITECTURE_REVISION,
+        authorize_mode: bool = True,
+        authorized_modes: list[str] | None = None,
+    ) -> dict[str, pathlib.Path]:
+        paths = write_valid_bundle(pathlib.Path(directory))
+        install_model_config(paths["repo"], config_revision)
+
+        tokenizer_path = paths["repo"] / "tokenizer" / "tokenizer.json"
+        write_json(tokenizer_path, {})
+        paths["tokenizer"] = tokenizer_path
+
+        # In-tree, mirroring training_data_manifest's own containment
+        # discipline (issue #1430 review Defect 1/2): the launcher requires
+        # semantic_canary_receipt/semantic_canary_shards_root to resolve
+        # below repo_root, so the fixture places them there too -- a
+        # custody_root fixture location could never pass the containment
+        # check (custody_root is outside repo_root by construction, see
+        # write_valid_bundle).
+        receipt_path = paths["repo"] / "manifests" / "token-shards-receipt.json"
+        write_json(receipt_path, {"ticket": "TOKEN-SHARDS-V0"})
+        paths["semantic_receipt"] = receipt_path
+
+        shards_root = paths["repo"] / "data" / "token-shards"
+        shards_root.mkdir(parents=True, exist_ok=True)
+        paths["semantic_shards_root"] = shards_root
+
+        paths["semantic_telemetry"] = (
+            paths["custody_root"] / "semantic-telemetry.jsonl"
+        )
+
+        run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+        # valid_scope's max_optimizer_steps ceiling is 200 -- 100 sits at the
+        # T-01 entry floor without also tripping the ceiling check.
+        run_spec["requested_scope"]["optimizer_steps"] = 100
+        run_spec["semantic_canary_mode"] = mode
+        run_spec["semantic_canary_receipt"] = str(receipt_path)
+        run_spec["semantic_canary_shards_root"] = str(shards_root)
+        run_spec["semantic_canary_sequence_length"] = 512
+        run_spec["semantic_canary_checkpoint_interval"] = 50
+        run_spec["semantic_canary_telemetry_path"] = str(paths["semantic_telemetry"])
+        if mutate_run_spec is not None:
+            mutate_run_spec(run_spec)
+        write_json(paths["run_spec"], run_spec)
+        # write_valid_bundle's custody sidecars were hashed against the
+        # PLAIN governed-vertical run_spec.json bytes, before this method
+        # added the semantic_canary_* keys above -- resync now so the
+        # custody packet (checked ahead of routing, in
+        # _validate_run_scoped_custody_packet) does not itself refuse before
+        # the check under test ever gets a chance to run. Independent of
+        # authorize_mode below (rewrite_certificate also resyncs, but only
+        # when authorize_mode=True).
+        _write_custody_sidecars(paths)
+
+        # The certificate, not the run spec, decides which modes may route to
+        # the semantic-canary runner (mirrors authorize_training_capabilities'
+        # default-authorize-what-this-bundle-declares posture): every
+        # existing routing/coherence test keeps exercising ITS OWN check
+        # rather than tripping the new authorization gate; tests targeting
+        # authorization itself opt out or override explicitly.
+        if authorize_mode:
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate["execution_scope"].__setitem__(
+                    "allowed_semantic_canary_modes",
+                    [mode] if authorized_modes is None else authorized_modes,
+                ),
+            )
+        return paths
+
+    def _validate(self, module, paths: dict[str, pathlib.Path]):
+        with mock.patch.object(module, "read_current_master", return_value=SHA):
+            return module.validate_certified_request(
+                paths["repo"],
+                paths["certificate"],
+                paths["ledger"],
+                paths["run_spec"],
+            )
+
+    def _refused(self, paths: dict[str, pathlib.Path], pattern: str) -> None:
+        module = load_module()
+        with self.assertRaisesRegex(ValueError, pattern):
+            self._validate(module, paths)
+
+    def test_valid_semantic_canary_route_is_accepted_and_reaches_the_runner_argv(
+        self,
+    ) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            launch = self._validate(module, paths)
+
+            self.assertEqual(launch.semantic_canary_mode, "warm-100")
+            self.assertEqual(
+                launch.semantic_canary_receipt, paths["semantic_receipt"].resolve()
+            )
+            self.assertEqual(
+                launch.semantic_canary_shards_root,
+                paths["semantic_shards_root"].resolve(),
+            )
+            self.assertEqual(
+                launch.semantic_canary_tokenizer_path, paths["tokenizer"]
+            )
+            self.assertEqual(launch.semantic_canary_sequence_length, 512)
+            self.assertEqual(launch.semantic_canary_checkpoint_interval, 50)
+            self.assertEqual(launch.semantic_canary_write_budget_gib, 16)
+            self.assertEqual(
+                launch.semantic_canary_telemetry_path, paths["semantic_telemetry"]
+            )
+            self.assertEqual(launch.semantic_canary_telemetry_run_id, "owned-3b-canary-test")
+            self.assertEqual(launch.semantic_canary_steps, 100)
+            # Never trusted from a caller-supplied value: self-computed from
+            # the exact resolved bytes this launch is about to pass as
+            # --receipt/--tokenizer/the live model config.
+            self.assertEqual(
+                launch.semantic_canary_expected_receipt_sha256,
+                sha256_bytes(paths["semantic_receipt"].read_bytes()),
+            )
+            self.assertEqual(
+                launch.semantic_canary_expected_tokenizer_sha256,
+                sha256_bytes(paths["tokenizer"].read_bytes()),
+            )
+            self.assertEqual(
+                launch.semantic_canary_expected_architecture_sha256,
+                sha256_bytes(
+                    (paths["repo"] / "configs" / "ember-restart-3b.json").read_bytes()
+                ),
+            )
+
+            self.assertEqual(
+                module.build_runner_argv(paths["repo"], launch),
+                [
+                    sys.executable,
+                    str(
+                        paths["repo"]
+                        / "tools"
+                        / "ember-restart-3b"
+                        / "disk_budget_runner.py"
+                    ),
+                    "--max-c-write-gib",
+                    "0.0",
+                    "--max-b-write-gib",
+                    "16.0",
+                    "--receipt",
+                    str(paths["custody_root"] / "runner-receipt.json"),
+                    "--write-root",
+                    f"custody={paths['custody_root']}",
+                    "--write-root",
+                    f"artifacts={paths['artifact_root']}",
+                    "--",
+                    sys.executable,
+                    str(
+                        paths["repo"]
+                        / "tools"
+                        / "ember-restart-3b"
+                        / "run_vertical_slice.py"
+                    ),
+                    "semantic",
+                    "--seed",
+                    "83",
+                    "--artifact-root",
+                    str(paths["artifact_root"]),
+                    "--receipt",
+                    str(paths["semantic_receipt"].resolve()),
+                    "--shards-root",
+                    str(paths["semantic_shards_root"].resolve()),
+                    "--tokenizer",
+                    str(paths["tokenizer"]),
+                    "--expected-receipt-sha256",
+                    sha256_bytes(paths["semantic_receipt"].read_bytes()),
+                    "--expected-tokenizer-sha256",
+                    sha256_bytes(paths["tokenizer"].read_bytes()),
+                    "--expected-architecture-sha256",
+                    sha256_bytes(
+                        (
+                            paths["repo"] / "configs" / "ember-restart-3b.json"
+                        ).read_bytes()
+                    ),
+                    "--steps",
+                    "100",
+                    "--sequence-length",
+                    "512",
+                    "--checkpoint-interval",
+                    "50",
+                    "--write-budget-gib",
+                    "16",
+                    "--telemetry-path",
+                    str(paths["semantic_telemetry"]),
+                    "--telemetry-run-id",
+                    "owned-3b-canary-test",
+                ],
+            )
+
+    def test_semantic_canary_with_resume_checkpoint_is_refused(self) -> None:
+        """THE load-bearing security property (issue #1719 acceptance clause
+        1): WARM-100 must be clean-random genesis, never a continuation. This
+        is the mirror image of the specialist route's own
+        test_specialist_without_resume_checkpoint_is_refused -- specialist
+        REQUIRES resume present, this route REQUIRES it absent. A run spec
+        that declares a fully valid, fully authorized semantic-canary route
+        AND a fully valid, fully authorized resume triple in the same
+        document must still be refused outright, before any argv exists."""
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            checkpoint, evidence = install_resume_material(paths["custody_root"])
+            set_resume_paths(paths, checkpoint, evidence)
+            authorize_resume_roots(paths, paths["custody_root"])
+            self._refused(
+                paths,
+                "semantic canary launch must not resume a checkpoint",
+            )
+
+    def test_optimizer_steps_below_the_t01_floor_is_refused(self) -> None:
+        """T-01 entry floor (>= 100), semantic-canary-only: valid_scope's own
+        max_optimizer_steps ceiling is 200, so 99 stays comfortably under it
+        -- proving the floor fires without also tripping the ceiling check
+        _require_scope_subset already applies to every mode."""
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec["requested_scope"].__setitem__(
+                    "optimizer_steps", 99
+                ),
+            )
+            self._refused(
+                paths, r"optimizer_steps must be at least 100.*T-01"
+            )
+
+    def test_plain_bundle_has_no_semantic_canary_route(self) -> None:
+        """A run spec with none of the semantic_canary_* keys is the
+        pre-#1719 shape -- the existing ResumePlumbingTests/SpecialistRouting
+        Tests non-regression tests already prove this bundle's argv stays
+        byte-identical; this pins the launch field driving that decision."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            launch = self._validate(module, paths)
+            self.assertIsNone(launch.semantic_canary_mode)
+
+    def test_governed_vertical_launch_builds_byte_identical_pre_1719_argv(
+        self,
+    ) -> None:
+        """Non-regression (mirrors ResumePlumbingTests'
+        test_run_spec_without_resume_keys_builds_the_pre_1425_argv and
+        SpecialistRoutingTests' test_plain_bundle_has_no_specialist_route): a
+        launch that sets none of the new semantic_canary_* fields must
+        produce byte-identical argv to what certified_train_launch.py
+        produced before this route existed."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            launch = self._validate(module, paths)
+            self.assertEqual(
+                module.build_runner_argv(paths["repo"], launch),
+                [
+                    sys.executable,
+                    str(
+                        paths["repo"]
+                        / "tools"
+                        / "ember-restart-3b"
+                        / "disk_budget_runner.py"
+                    ),
+                    "--max-c-write-gib",
+                    "0.0",
+                    "--max-b-write-gib",
+                    "16.0",
+                    "--receipt",
+                    str(paths["custody_root"] / "runner-receipt.json"),
+                    "--write-root",
+                    f"custody={paths['custody_root']}",
+                    "--write-root",
+                    f"artifacts={paths['artifact_root']}",
+                    "--",
+                    sys.executable,
+                    str(
+                        paths["repo"]
+                        / "tools"
+                        / "ember-restart-3b"
+                        / "run_vertical_slice.py"
+                    ),
+                    "governed-vertical",
+                    "--seed",
+                    "83",
+                    "--artifact-root",
+                    str(paths["artifact_root"]),
+                    "--write-budget-bytes",
+                    str(16 * 1024**3),
+                    "--max-records",
+                    "1",
+                ],
+            )
+
+    def test_exactly_one_pair_key_is_refused(self) -> None:
+        for missing in ("semantic_canary_mode", "semantic_canary_receipt"):
+            with self.subTest(missing=missing), tempfile.TemporaryDirectory(
+                dir="B:/tmp"
+            ) as directory:
+                paths = self._bundle(
+                    directory,
+                    mutate_run_spec=lambda spec, missing=missing: spec.pop(missing),
+                )
+                self._refused(paths, f"requires {missing}, which is absent")
+
+    def test_semantic_canary_companion_key_missing_is_refused(self) -> None:
+        for missing in (
+            "semantic_canary_shards_root",
+            "semantic_canary_sequence_length",
+            "semantic_canary_checkpoint_interval",
+            "semantic_canary_telemetry_path",
+        ):
+            with self.subTest(missing=missing), tempfile.TemporaryDirectory(
+                dir="B:/tmp"
+            ) as directory:
+                paths = self._bundle(
+                    directory,
+                    mutate_run_spec=lambda spec, missing=missing: spec.pop(missing),
+                )
+                self._refused(paths, f"requires {missing}, which is absent")
+
+    def test_semantic_canary_companion_without_pair_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: (
+                    spec.pop("semantic_canary_mode"),
+                    spec.pop("semantic_canary_receipt"),
+                ),
+            )
+            self._refused(
+                paths,
+                "requires semantic_canary_mode and semantic_canary_receipt",
+            )
+
+    def test_invalid_mode_value_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "semantic_canary_mode", "cold-1000"
+                ),
+            )
+            self._refused(paths, "semantic_canary_mode must be one of")
+
+    def test_certificate_without_allowed_semantic_canary_modes_is_refused(
+        self,
+    ) -> None:
+        """A certificate carrying no allowed_semantic_canary_modes at all is
+        the pre-#1719 population -- fail-closed on it, same reasoning #1426/
+        #1430 applied to resume roots and training capabilities."""
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory, authorize_mode=False)
+            certificate = json.loads(
+                paths["certificate"].read_text(encoding="utf-8")
+            )
+            self.assertNotIn(
+                "allowed_semantic_canary_modes", certificate["execution_scope"]
+            )
+            self._refused(paths, "declares no allowed_semantic_canary_modes")
+
+    def test_empty_allowed_semantic_canary_modes_authorizes_nothing(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory, authorized_modes=[])
+            self._refused(
+                paths, "run scope exceeds certificate: semantic_canary_mode"
+            )
+
+    def test_mode_not_in_allowed_semantic_canary_modes_is_refused(self) -> None:
+        """A certificate that authorizes a DIFFERENT mode than the one the
+        run spec requests -- not absent, not empty, just disagreeing. Only
+        one real mode exists today (warm-100), so the certificate is made to
+        authorize a value outside SEMANTIC_CANARY_MODES entirely -- still a
+        legal (if currently unusable) certificate declaration, and still
+        must not authorize a run spec asking for a different mode."""
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory, mode="warm-100", authorized_modes=["cold-1000"]
+            )
+            self._refused(
+                paths, "run scope exceeds certificate: semantic_canary_mode"
+            )
+
+    def test_malformed_allowed_semantic_canary_modes_fails_closed(self) -> None:
+        for declared in ("not-a-list", [""], [None], ["warm-100", 7]):
+            with self.subTest(declared=declared), tempfile.TemporaryDirectory(
+                dir="B:/tmp"
+            ) as directory:
+                paths = self._bundle(directory)
+                rewrite_certificate(
+                    paths,
+                    lambda certificate, declared=declared: certificate[
+                        "execution_scope"
+                    ].__setitem__("allowed_semantic_canary_modes", declared),
+                )
+                self._refused(
+                    paths,
+                    "allowed_semantic_canary_modes must be a list of "
+                    "non-empty strings",
+                )
+
+    def test_out_of_tree_receipt_is_refused(self) -> None:
+        """The launcher requires semantic_canary_receipt to resolve below
+        repo_root -- an operator-declared absolute path elsewhere must be
+        refused before this process reads it, not accepted into a
+        perfect-looking argv the runner can never actually be trusted to
+        start from (mirrors SpecialistRoutingTests'
+        test_out_of_tree_manifest_is_refused for training_data_manifest)."""
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            outside_receipt = pathlib.Path(directory) / "outside-receipt.json"
+            write_json(outside_receipt, {"ticket": "TOKEN-SHARDS-V0"})
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "semantic_canary_receipt", str(outside_receipt)
+                ),
+            )
+            self._refused(
+                paths, "semantic_canary_receipt must resolve below repo_root"
+            )
+
+    def test_out_of_tree_shards_root_is_accepted(self) -> None:
+        """Deliberately the OPPOSITE of test_out_of_tree_receipt_is_refused:
+        unlike semantic_canary_receipt, semantic_canary_shards_root is NOT
+        repo_root-constrained (see _validate_semantic_canary_request's
+        docstring/comment on shards_root) -- corpus shard bytes are bulk data
+        the acquisition sprint fetches to an external data root, never
+        committed to the tree. Its integrity is bound a different way: the
+        runner's own ManifestBoundTokenStream.from_receipt independently
+        sha256-verifies every shard file's bytes against the receipt's
+        content-addressed claims before reading a single token, so an
+        operator pointing this elsewhere gains nothing an unmatched receipt
+        wouldn't already refuse. Pinned here so a future edit does not
+        silently narrow this on the (incorrect) assumption it was an
+        oversight."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            outside_shards = pathlib.Path(directory) / "outside-shards"
+            outside_shards.mkdir()
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "semantic_canary_shards_root", str(outside_shards)
+                ),
+            )
+            launch = self._validate(module, paths)
+            self.assertEqual(
+                launch.semantic_canary_shards_root, outside_shards.resolve()
+            )
+
+    def test_relative_receipt_resolves_against_repo_root(self) -> None:
+        """A RELATIVE semantic_canary_receipt must resolve against repo_root,
+        not run_spec_path.parent (the custody root, which is outside the
+        repo by construction) -- mirrors SpecialistRoutingTests'
+        test_relative_manifest_resolves_against_repo_root."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "semantic_canary_receipt",
+                    "manifests/token-shards-receipt.json",
+                ),
+            )
+            launch = self._validate(module, paths)
+            self.assertEqual(
+                launch.semantic_canary_receipt, paths["semantic_receipt"].resolve()
+            )
+
+    def test_non_positive_sequence_length_is_refused(self) -> None:
+        for value in (0, -1):
+            with self.subTest(value=value), tempfile.TemporaryDirectory(
+                dir="B:/tmp"
+            ) as directory:
+                paths = self._bundle(
+                    directory,
+                    mutate_run_spec=lambda spec, value=value: spec.__setitem__(
+                        "semantic_canary_sequence_length", value
+                    ),
+                )
+                self._refused(
+                    paths, "semantic_canary_sequence_length must be a positive integer"
+                )
+
+    def test_non_positive_checkpoint_interval_is_refused(self) -> None:
+        for value in (0, -1):
+            with self.subTest(value=value), tempfile.TemporaryDirectory(
+                dir="B:/tmp"
+            ) as directory:
+                paths = self._bundle(
+                    directory,
+                    mutate_run_spec=lambda spec, value=value: spec.__setitem__(
+                        "semantic_canary_checkpoint_interval", value
+                    ),
+                )
+                self._refused(
+                    paths,
+                    "semantic_canary_checkpoint_interval must be a positive integer",
+                )
+
+    def test_write_budget_not_exact_gib_multiple_is_refused_for_semantic_canary(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["requested_scope"]["write_budget_bytes"] = 16 * 1024**3 - 1
+            write_json(paths["run_spec"], run_spec)
+            # Resync the custody sidecars against this direct mutation --
+            # same reasoning as the resync inside _bundle above.
+            _write_custody_sidecars(paths)
+            self._refused(paths, "exact GiB multiple")
+
+    def test_missing_canonical_tokenizer_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            paths["tokenizer"].unlink()
+            self._refused(paths, "canonical")
+
+    # No test_run_id_over_128_characters_is_refused here (unlike
+    # SpecialistRoutingTests' test of the same name): the run-scoped custody
+    # packet's own _RUN_ID_RE (checked in _validate_run_scoped_custody_packet,
+    # ahead of routing) already caps run_id at 128 characters via its
+    # {0,127}-after-one-required-char pattern, so a 129-character run_id is
+    # refused there first, with "launch-authority custody run_id is invalid"
+    # -- the semantic_canary-route-local "at most 128 characters" check added
+    # in _validate_semantic_canary_request (mirroring the specialist route's
+    # own, identically unreachable, check) can never actually be exercised
+    # through the public run_spec.json path. Confirmed this is a pre-existing
+    # condition, not something this change introduced: SpecialistRoutingTests
+    # ::test_run_id_over_128_characters_is_refused fails the same way on an
+    # unmodified checkout. Not fixed here (out of scope for this route) --
+    # the length check is left in place for parity/defense-in-depth, just not
+    # asserted against dead code.
+
+    def test_telemetry_path_outside_custody_root_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "semantic_canary_telemetry_path",
+                    str(pathlib.Path(directory) / "outside-telemetry.jsonl"),
+                ),
+            )
+            self._refused(
+                paths,
+                "run scope exceeds certificate: semantic_canary_telemetry_path",
+            )
+
+    def test_semantic_canary_flags_match_the_runner_argparse(self) -> None:
+        """Bind the consumer's flag spelling to run_vertical_slice's semantic
+        parser, ast-parsed the same way SpecialistRoutingTests'
+        test_specialist_flags_match_the_runner_argparse binds the specialist
+        parser. Unlike the specialist parser (where every flag this launcher
+        emits is ALSO required=True on the runner's own parser, so the two
+        sets are exactly equal), the semantic parser declares
+        --telemetry-path/--telemetry-run-id as OPTIONAL (all-or-none at the
+        bare-runner level) -- this certified route makes them REQUIRED at the
+        certificate layer instead (semantic_canary_telemetry_path is in
+        SEMANTIC_CANARY_LAUNCH_RUN_SPEC_KEYS), so build_runner_argv always
+        emits them even though the runner's own parser would accept their
+        absence. The correct invariant here is therefore two-sided: every
+        flag the runner actually requires must be present (required_flags
+        subset of emitted_flags), and every flag emitted must be one the
+        parser actually recognizes (emitted_flags subset of all_flags) --
+        equality would be the wrong assertion for this specific parser. The
+        --resume-checkpoint/evidence group is excluded from both sets: this
+        route is genesis-only by construction and never emits resume flags,
+        and the runner itself does not require resume either."""
+
+        import ast
+
+        runner_path = ROOT / "tools" / "ember-restart-3b" / "run_vertical_slice.py"
+        tree = ast.parse(runner_path.read_text(encoding="utf-8"))
+
+        def call_owner_attr(node: ast.AST) -> tuple[str, str] | None:
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+            ):
+                return node.func.value.id, node.func.attr
+            return None
+
+        def is_required_kw(call: ast.Call) -> bool:
+            return any(
+                keyword.arg == "required"
+                and isinstance(keyword.value, ast.Constant)
+                and keyword.value.value is True
+                for keyword in call.keywords
+            )
+
+        all_flags: set[str] = set()
+        required_flags: set[str] = set()
+        for node in ast.walk(tree):
+            owner = call_owner_attr(node)
+            if owner is None or owner[1] != "add_argument" or owner[0] != "semantic":
+                continue
+            if not node.args or not isinstance(node.args[0], ast.Constant):
+                continue
+            flag = node.args[0].value
+            if not isinstance(flag, str) or not flag.startswith("--"):
+                continue
+            all_flags.add(flag)
+            if is_required_kw(node):
+                required_flags.add(flag)
+
+        self.assertTrue(
+            required_flags,
+            "no required flags found on the semantic subparser -- the ast "
+            "scoping above found nothing to bind",
+        )
+        # Confirms the asymmetry this test's docstring documents still holds
+        # -- if telemetry ever became required=True on the runner's own
+        # parser, this assertion (not the subset checks below) is what would
+        # need re-deriving.
+        self.assertNotIn("--telemetry-path", required_flags)
+        self.assertNotIn("--telemetry-run-id", required_flags)
+
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            launch = self._validate(module, paths)
+            argv = module.build_runner_argv(paths["repo"], launch)
+            semantic_argv = argv[argv.index("semantic") + 1 :]
+            emitted_flags = {
+                token for token in semantic_argv if token.startswith("--")
+            }
+
+        self.assertTrue(
+            required_flags <= emitted_flags,
+            "build_runner_argv omits a flag the runner's semantic subparser "
+            f"actually requires: {required_flags - emitted_flags}",
+        )
+        self.assertTrue(
+            emitted_flags <= all_flags,
+            "build_runner_argv emits a flag the runner's semantic subparser "
+            f"does not recognize: {emitted_flags - all_flags}",
         )
 
 
