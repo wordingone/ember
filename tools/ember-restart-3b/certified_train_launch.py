@@ -171,11 +171,47 @@ TRAINING_CAPABILITIES = {"image", "audio", "reasoning", "tool"}
 # launch train against different token identity than every other consumer of
 # this same tree without the certificate ever noticing.
 SPECIALIST_TOKENIZER_RELATIVE_PATH = "tokenizer/tokenizer.json"
+# Semantic canary routing (issue #1719 acceptance clause 3) rides
+# the RUN SPEC for the same reason specialist routing does: which receipt/
+# shard set a canary trains against is a launch-time decision, while the
+# certificate is a frozen sha-cited payload. The pair is required together --
+# a receipt with no declared mode cannot be scope-checked, and a mode with no
+# receipt names no data. Mirrors SPECIALIST_RUN_SPEC_KEYS exactly.
+SEMANTIC_CANARY_RUN_SPEC_KEYS = {"semantic_canary_mode", "semantic_canary_receipt"}
+# The runner's "semantic" subcommand additionally REQUIRES a shard root, a
+# sequence length, a checkpoint publication cadence, and a telemetry sink
+# before it will start. telemetry is REQUIRED here (unlike the bare runner,
+# where it is optional) -- the entire purpose of authorizing this route is
+# telemetry-backed R1-E1/R1-E2 evidence (T-01: >=100 contiguous steps from
+# step 1), so a canary-authorized launch with no telemetry sink would
+# silently degrade to an uncredited semantic run. steps and write-budget are
+# NOT declared here: steps reuses requested_scope.optimizer_steps (already
+# declared and scope-checked by _require_scope_subset's numeric_pairs loop
+# for every mode, but unconsumed until this route), and write-budget-gib is
+# derived from requested_scope.write_budget_bytes, mirroring
+# SPECIALIST_LAUNCH_RUN_SPEC_KEYS's write-budget derivation exactly.
+SEMANTIC_CANARY_LAUNCH_RUN_SPEC_KEYS = {
+    "semantic_canary_shards_root",
+    "semantic_canary_sequence_length",
+    "semantic_canary_checkpoint_interval",
+    "semantic_canary_telemetry_path",
+}
+# Closed enumeration (same discipline TRAINING_CAPABILITIES uses): the only
+# defined canary shape today is the prereg's T-01 WARM-100 rung. A second
+# canary shape could be added here later without a certificate schema change.
+SEMANTIC_CANARY_MODES = {"warm-100"}
+# T-01 = 100 consecutive steps (docs/spec/ember02-preregistration-v1.md). This
+# is an ENTRY minimum on what this route may launch, not a copy of the prereg
+# threshold itself -- adjudicating R1-E1/R1-E2 against telemetry evidence
+# stays scripts/r1_exit_battery.py's job, never this launcher's.
+SEMANTIC_CANARY_MIN_STEPS = 100
 OPTIONAL_RUN_SPEC_KEYS = (
     {"training_verify_receipt_path", "training_verify_receipt_sha256"}
     | RESUME_RUN_SPEC_KEYS
     | SPECIALIST_RUN_SPEC_KEYS
     | SPECIALIST_LAUNCH_RUN_SPEC_KEYS
+    | SEMANTIC_CANARY_RUN_SPEC_KEYS
+    | SEMANTIC_CANARY_LAUNCH_RUN_SPEC_KEYS
 )
 CHECKPOINT_MANIFEST_NAME = "checkpoint-manifest.json"
 CONFIG_RELATIVE_PATH = "configs/ember-restart-3b.json"
@@ -214,10 +250,18 @@ AUTHORIZED_SCOPE_KEYS = {
 # the C: custody root the disk-budget runner relocated it under is exactly
 # that same kind of decision, for the same reason -- the launcher must never
 # derive it locally (from the checkpoint's own parents or any local default).
+# allowed_semantic_canary_modes (issue #1719 acceptance clause 3) rides the
+# SAME mechanism as allowed_training_capabilities, for the identical
+# reason: build_runner_argv routes on run-spec content alone and never
+# re-reads allowed_modes (extending allowed_modes is documented as NOT a cure
+# in scripts/r1_exit_battery.py -- any list other than exactly
+# ["governed-vertical"] refuses every launch outright). A certificate must
+# explicitly opt in a canary mode here, or no canary route is authorized.
 OPTIONAL_AUTHORIZED_SCOPE_KEYS = {
     "allowed_resume_roots",
     "allowed_training_capabilities",
     "resume_relocation_custody_root",
+    "allowed_semantic_canary_modes",
 }
 REQUESTED_SCOPE_KEYS = {
     "mode",
@@ -345,6 +389,23 @@ class ValidatedLaunch(NamedTuple):
     specialist_telemetry_path: pathlib.Path | None = None
     specialist_telemetry_run_id: str | None = None
     specialist_model_chat_restore_not_before: str | None = None
+    # Semantic canary routing is absent on every other launch shape, and a
+    # launch that carries none of these builds byte-identical argv to a
+    # pre-#1719 one. semantic_canary_mode is the field build_runner_argv
+    # reads to decide whether to emit the "semantic" subcommand.
+    semantic_canary_mode: str | None = None
+    semantic_canary_receipt: pathlib.Path | None = None
+    semantic_canary_expected_receipt_sha256: str | None = None
+    semantic_canary_shards_root: pathlib.Path | None = None
+    semantic_canary_tokenizer_path: pathlib.Path | None = None
+    semantic_canary_expected_tokenizer_sha256: str | None = None
+    semantic_canary_expected_architecture_sha256: str | None = None
+    semantic_canary_steps: int | None = None
+    semantic_canary_sequence_length: int | None = None
+    semantic_canary_checkpoint_interval: int | None = None
+    semantic_canary_write_budget_gib: int | None = None
+    semantic_canary_telemetry_path: pathlib.Path | None = None
+    semantic_canary_telemetry_run_id: str | None = None
     # Exact authority inputs validated for this launch. Failed-attempt
     # retention keeps these at the live run root so a retry can be
     # revalidated against the same certificate/ledger/spec bytes.
@@ -1425,6 +1486,296 @@ def _validate_specialist_request(
     )
 
 
+class SemanticCanaryRequest(NamedTuple):
+    mode: str
+    receipt: pathlib.Path
+    receipt_sha256: str
+    shards_root: pathlib.Path
+    tokenizer_path: pathlib.Path
+    tokenizer_sha256: str
+    architecture_sha256: str
+    steps: int
+    sequence_length: int
+    checkpoint_interval: int
+    write_budget_gib: int
+    telemetry_path: pathlib.Path
+    telemetry_run_id: str
+
+
+def _authorized_semantic_canary_modes(
+    authorized: dict[str, Any]
+) -> set[str] | None:
+    """The certificate's declared semantic-canary modes; None when undeclared.
+
+    Same absent-vs-empty split _authorized_training_capabilities implements
+    (issue #1430), applied to canary routing for the identical reason: a
+    certificate minted before this route existed carries no
+    allowed_semantic_canary_modes at all, so it authorizes no canary route --
+    an accept-when-absent default would leave every previously minted
+    certificate a standing bypass, since build_runner_argv routes on run-spec
+    content alone and never re-reads allowed_modes. A certificate that DOES
+    declare the key but lists no modes is a different, deliberate statement --
+    still authorizes nothing, but distinguished in the refusal message
+    because the two are different operator actions to cure.
+    """
+
+    declared = authorized.get("allowed_semantic_canary_modes")
+    if declared is None:
+        return None
+    if not isinstance(declared, list) or not all(
+        isinstance(item, str) and item for item in declared
+    ):
+        raise ValueError(
+            "certificate allowed_semantic_canary_modes must be a list of "
+            "non-empty strings"
+        )
+    return set(declared)
+
+
+def _require_authorized_semantic_canary_mode(
+    mode: str, authorized_modes: set[str] | None
+) -> None:
+    if authorized_modes is None:
+        raise ValueError(
+            "certificate declares no allowed_semantic_canary_modes, so run "
+            "spec semantic_canary_mode is unauthorized (re-mint the "
+            "certificate to launch a semantic canary route)"
+        )
+    if mode not in authorized_modes:
+        raise ValueError("run scope exceeds certificate: semantic_canary_mode")
+
+
+def _validate_semantic_canary_request(
+    run_spec: dict[str, Any],
+    run_spec_path: pathlib.Path,
+    repo_root: pathlib.Path,
+    resume: ResumeRequest | None,
+    write_budget_bytes: int,
+    optimizer_steps: int,
+    authorized_semantic_canary_modes: set[str] | None,
+) -> SemanticCanaryRequest | None:
+    """Validate the optional semantic-canary route, fail-closed, before any argv exists.
+
+    Returns None when the run spec declares no canary route at all -- the
+    governed-vertical shape, which must stay exactly as it was. Mirrors
+    _validate_specialist_request's structure; the two load-bearing
+    differences from that route, both required by the WARM-100 definition
+    itself (issue #1719 acceptance clause 1, "clean-random genesis, not
+    continuation"):
+
+    1. A canary route REFUSES when a resume request is also present --
+       inverted from specialist, which REQUIRES one. A canary-authorized
+       launch that also resumed a checkpoint would produce a continuation
+       run wearing canary authorization, defeating the whole point of the
+       mode. This is the load-bearing security property of this route.
+    2. requested steps must clear SEMANTIC_CANARY_MIN_STEPS (T-01 = 100).
+       _require_scope_subset's numeric_pairs loop already floors
+       optimizer_steps at >= 0 generically (a shared ceiling check across
+       every mode, and 0 is valid where nothing consumes the field yet) --
+       this is a canary-only floor, mirroring how issue #1430 added its own
+       max_records floor locally rather than tightening the shared
+       comparator, so no other mode's existing tolerance is touched.
+    """
+
+    pair_present = {
+        key for key in SEMANTIC_CANARY_RUN_SPEC_KEYS if run_spec.get(key) is not None
+    }
+    companions_present = {
+        key
+        for key in SEMANTIC_CANARY_LAUNCH_RUN_SPEC_KEYS
+        if run_spec.get(key) is not None
+    }
+    if not pair_present and not companions_present:
+        return None
+    if len(pair_present) == 1:
+        missing = sorted(SEMANTIC_CANARY_RUN_SPEC_KEYS - pair_present)[0]
+        raise ValueError(
+            f"run spec semantic canary launch requires {missing}, which is absent"
+        )
+    if not pair_present:
+        dangling = sorted(companions_present)[0]
+        raise ValueError(
+            f"run spec {dangling} requires semantic_canary_mode and "
+            "semantic_canary_receipt"
+        )
+    missing_companions = sorted(SEMANTIC_CANARY_LAUNCH_RUN_SPEC_KEYS - companions_present)
+    if missing_companions:
+        raise ValueError(
+            "run spec semantic canary launch requires "
+            f"{missing_companions[0]}, which is absent"
+        )
+
+    mode = _require_specialist_string(
+        run_spec["semantic_canary_mode"], "semantic_canary_mode"
+    )
+    if mode not in SEMANTIC_CANARY_MODES:
+        raise ValueError(
+            "run spec semantic_canary_mode must be one of "
+            + ", ".join(sorted(SEMANTIC_CANARY_MODES))
+        )
+    # Authorized before anything named by the run spec is opened: the
+    # certificate, not the run spec, decides which canary modes this launch
+    # may train (mirrors _require_authorized_training_capability's ordering
+    # and its issue #1430 review rationale exactly).
+    _require_authorized_semantic_canary_mode(mode, authorized_semantic_canary_modes)
+
+    # Clean-random genesis only -- see docstring. Checked as early as
+    # possible, before any path on the run spec is opened, same discipline
+    # _validate_specialist_request applies to its OWN (opposite) resume
+    # requirement.
+    if resume is not None:
+        raise ValueError(
+            "run spec semantic canary launch must not resume a checkpoint "
+            "(WARM-100 is clean-random genesis, not continuation -- a "
+            "resumed canary route is refused rather than silently trained "
+            "as a continuation under canary authorization)"
+        )
+
+    if optimizer_steps < SEMANTIC_CANARY_MIN_STEPS:
+        raise ValueError(
+            "run spec requested_scope.optimizer_steps must be at least "
+            f"{SEMANTIC_CANARY_MIN_STEPS} for a semantic canary launch (T-01)"
+        )
+
+    # Receipt path authorization mirrors _validate_specialist_request's
+    # training_data_manifest handling exactly, including the issue #1430
+    # review Defect F3 "authorize A, use B" fix: rebind to the RESOLVED form
+    # once, so every downstream use -- the sha256 read below, the
+    # SemanticCanaryRequest field, and the --receipt argv build_runner_argv
+    # emits -- carries the authorized path, never a syntactically-different-
+    # but-equivalent spelling.
+    receipt = pathlib.Path(
+        _require_specialist_string(
+            run_spec["semantic_canary_receipt"], "semantic_canary_receipt"
+        )
+    )
+    if not receipt.is_absolute():
+        receipt = pathlib.Path(repo_root) / receipt
+    resolved_repo_root = pathlib.Path(repo_root).resolve()
+    receipt = receipt.resolve(strict=False)
+    if resolved_repo_root not in receipt.parents:
+        raise ValueError(
+            "run spec semantic_canary_receipt must resolve below repo_root "
+            "(the runner refuses to load a semantic stream receipt from "
+            "anywhere else)"
+        )
+    receipt_sha256 = _file_sha256(receipt, "semantic canary receipt")
+
+    # shards_root is deliberately NOT repo_root-constrained, unlike receipt:
+    # corpus shard bytes are bulk data the acquisition sprint fetches to an
+    # external data root, never committed to the tree (mirrors how telemetry/
+    # checkpoint artifacts live under custody_root rather than repo_root).
+    # Its integrity is bound a different way -- run_semantic's own
+    # ManifestBoundTokenStream.from_receipt independently sha256-verifies
+    # every individual shard file's bytes against the receipt's own declared
+    # per-shard digest before reading a single token, so an operator pointing
+    # this at an arbitrary directory gains nothing: only bytes that already
+    # match the receipt's content-addressed claims are ever read. Disclosed
+    # explicitly here (and in the PR body) rather than silently assumed.
+    shards_root = pathlib.Path(
+        _require_specialist_string(
+            run_spec["semantic_canary_shards_root"], "semantic_canary_shards_root"
+        )
+    )
+
+    sequence_length = run_spec["semantic_canary_sequence_length"]
+    if (
+        isinstance(sequence_length, bool)
+        or not isinstance(sequence_length, int)
+        or sequence_length < 1
+    ):
+        raise ValueError(
+            "run spec semantic_canary_sequence_length must be a positive integer"
+        )
+
+    checkpoint_interval = run_spec["semantic_canary_checkpoint_interval"]
+    if (
+        isinstance(checkpoint_interval, bool)
+        or not isinstance(checkpoint_interval, int)
+        or checkpoint_interval < 1
+    ):
+        raise ValueError(
+            "run spec semantic_canary_checkpoint_interval must be a positive integer"
+        )
+
+    # write-budget-gib is derived, not declared: same reasoning
+    # SPECIALIST_LAUNCH_RUN_SPEC_KEYS documents for the specialist route --
+    # refusing a non-exact GiB multiple keeps the derivation lossless.
+    if write_budget_bytes % (1024**3) != 0:
+        raise ValueError(
+            "run spec requested_scope.write_budget_bytes must be an exact "
+            "GiB multiple for a semantic canary launch (the runner's "
+            "--write-budget-gib takes whole GiB)"
+        )
+    write_budget_gib = write_budget_bytes // (1024**3)
+    if write_budget_gib < 1:
+        raise ValueError(
+            "run spec requested_scope.write_budget_bytes must authorize at "
+            "least 1 GiB for a semantic canary launch"
+        )
+
+    # run_id doubles as --telemetry-run-id, which the runner bounds to 128
+    # characters (mirrors the specialist route's identical check against the
+    # same runner-level bound).
+    run_id = run_spec["run_id"]
+    if len(run_id) > 128:
+        raise ValueError(
+            "run spec run_id must be at most 128 characters for a semantic "
+            "canary launch (the runner's --telemetry-run-id enforces this "
+            "bound)"
+        )
+
+    # Telemetry is REQUIRED (not optional the way it is at the bare runner
+    # level) -- see SEMANTIC_CANARY_LAUNCH_RUN_SPEC_KEYS. No format check on
+    # the path itself: mirrors _validate_specialist_request's identical
+    # telemetry_path handling and its documented reasoning (no real consumer
+    # of this value imposes a format this launcher could correctly check).
+    telemetry_path = pathlib.Path(
+        _require_specialist_string(
+            run_spec["semantic_canary_telemetry_path"], "semantic_canary_telemetry_path"
+        )
+    )
+    if not telemetry_path.is_absolute():
+        telemetry_path = run_spec_path.parent / telemetry_path
+
+    # Fixed canonical tokenizer, never operator-declared: identical reasoning
+    # to SPECIALIST_TOKENIZER_RELATIVE_PATH -- an operator-declared tokenizer
+    # path would let a canary launch train against different token identity
+    # than every other consumer of this tree without the certificate ever
+    # noticing.
+    tokenizer_path = pathlib.Path(repo_root) / SPECIALIST_TOKENIZER_RELATIVE_PATH
+    if not tokenizer_path.is_file():
+        raise ValueError(
+            "run spec semantic canary launch requires the tree's canonical "
+            f"{SPECIALIST_TOKENIZER_RELATIVE_PATH}"
+        )
+    tokenizer_sha256 = _file_sha256(tokenizer_path, "semantic canary tokenizer")
+
+    # Self-computed, not caller-supplied: mirrors this file's established
+    # expected-digest pattern (the launcher proves what it BELIEVES the
+    # architecture bytes are; run_semantic independently recomputes and
+    # cross-checks before training a single step).
+    architecture_sha256 = _file_sha256(
+        pathlib.Path(repo_root) / CONFIG_RELATIVE_PATH, "semantic canary architecture config"
+    )
+
+    return SemanticCanaryRequest(
+        mode=mode,
+        receipt=receipt,
+        receipt_sha256=receipt_sha256,
+        shards_root=shards_root,
+        tokenizer_path=tokenizer_path,
+        tokenizer_sha256=tokenizer_sha256,
+        architecture_sha256=architecture_sha256,
+        steps=optimizer_steps,
+        sequence_length=sequence_length,
+        checkpoint_interval=checkpoint_interval,
+        write_budget_gib=write_budget_gib,
+        telemetry_path=telemetry_path,
+        telemetry_run_id=run_id,
+    )
+
+
 def _require_scope_subset(
     requested: dict[str, Any], authorized: dict[str, Any]
 ) -> None:
@@ -1971,6 +2322,31 @@ def validate_certified_request(
         _authorized_training_capabilities(authorized_scope),
     )
 
+    # Same float-truncation guard as requested_max_records above, applied to
+    # optimizer_steps now that a route (semantic canary) actually consumes
+    # it -- _require_scope_subset has already proven it is a non-bool
+    # int-or-float within the certificate's ceiling.
+    requested_optimizer_steps = requested_scope["optimizer_steps"]
+    if (
+        isinstance(requested_optimizer_steps, float)
+        and not requested_optimizer_steps.is_integer()
+    ):
+        raise ValueError(
+            "run spec requested_scope.optimizer_steps must be an exact "
+            "integer (a fractional value would be silently truncated)"
+        )
+    requested_optimizer_steps = int(requested_optimizer_steps)
+
+    semantic_canary = _validate_semantic_canary_request(
+        run_spec,
+        run_spec_path,
+        repo_root,
+        resume,
+        int(requested_scope["write_budget_bytes"]),
+        requested_optimizer_steps,
+        _authorized_semantic_canary_modes(authorized_scope),
+    )
+
     custody_root = pathlib.Path(requested_scope["custody_root"])
     runner_receipt = pathlib.Path(run_spec["runner_receipt"])
     try:
@@ -1994,6 +2370,17 @@ def validate_certified_request(
             raise ValueError(
                 "run scope exceeds certificate: training_telemetry_path"
             ) from error
+    if semantic_canary is not None:
+        # Same reasoning as the specialist telemetry check above, applied to
+        # the canary route's own telemetry sink.
+        try:
+            semantic_canary.telemetry_path.resolve(strict=False).relative_to(
+                custody_root.resolve(strict=False)
+            )
+        except ValueError as error:
+            raise ValueError(
+                "run scope exceeds certificate: semantic_canary_telemetry_path"
+            ) from error
 
     authority_candidates: list[pathlib.Path | None] = [
         certificate_path,
@@ -2007,6 +2394,9 @@ def validate_certified_request(
         None if specialist is None else specialist.tokenizer_path,
         None if specialist is None else specialist.parent_manifest,
         None if specialist is None else specialist.root_manifest,
+        None if semantic_canary is None else semantic_canary.receipt,
+        None if semantic_canary is None else semantic_canary.tokenizer_path,
+        None if semantic_canary is None else semantic_canary.telemetry_path,
     ]
     resolved_custody_root = custody_root.resolve(strict=False)
     authority_paths: list[pathlib.Path] = []
@@ -2064,6 +2454,39 @@ def validate_certified_request(
         ),
         specialist_model_chat_restore_not_before=(
             None if specialist is None else specialist.model_chat_restore_not_before
+        ),
+        semantic_canary_mode=None if semantic_canary is None else semantic_canary.mode,
+        semantic_canary_receipt=None if semantic_canary is None else semantic_canary.receipt,
+        semantic_canary_expected_receipt_sha256=(
+            None if semantic_canary is None else semantic_canary.receipt_sha256
+        ),
+        semantic_canary_shards_root=(
+            None if semantic_canary is None else semantic_canary.shards_root
+        ),
+        semantic_canary_tokenizer_path=(
+            None if semantic_canary is None else semantic_canary.tokenizer_path
+        ),
+        semantic_canary_expected_tokenizer_sha256=(
+            None if semantic_canary is None else semantic_canary.tokenizer_sha256
+        ),
+        semantic_canary_expected_architecture_sha256=(
+            None if semantic_canary is None else semantic_canary.architecture_sha256
+        ),
+        semantic_canary_steps=None if semantic_canary is None else semantic_canary.steps,
+        semantic_canary_sequence_length=(
+            None if semantic_canary is None else semantic_canary.sequence_length
+        ),
+        semantic_canary_checkpoint_interval=(
+            None if semantic_canary is None else semantic_canary.checkpoint_interval
+        ),
+        semantic_canary_write_budget_gib=(
+            None if semantic_canary is None else semantic_canary.write_budget_gib
+        ),
+        semantic_canary_telemetry_path=(
+            None if semantic_canary is None else semantic_canary.telemetry_path
+        ),
+        semantic_canary_telemetry_run_id=(
+            None if semantic_canary is None else semantic_canary.telemetry_run_id
         ),
         authority_paths=tuple(authority_paths),
     )
@@ -2161,6 +2584,47 @@ def build_runner_argv(
                 "--relocation-custody-root",
                 str(launch.resume_relocation_custody_root),
             ]
+        return argv
+
+    # A launch that declares no semantic-canary route reaches only the
+    # governed-vertical tail below, so its argv is byte-identical to a
+    # pre-#1719 one. validate_certified_request has already proven a
+    # declared route is complete, coherent, and clean-genesis (no resume) --
+    # so no partial or continuation canary argv can be emitted. No resume
+    # flags are ever emitted here: the genesis-only refusal upstream means
+    # launch.resume_checkpoint is never set on a semantic-canary launch.
+    if launch.semantic_canary_mode is not None:
+        argv += [
+            "semantic",
+            "--seed",
+            str(launch.seed),
+            "--artifact-root",
+            str(launch.artifact_root),
+            "--receipt",
+            str(launch.semantic_canary_receipt),
+            "--shards-root",
+            str(launch.semantic_canary_shards_root),
+            "--tokenizer",
+            str(launch.semantic_canary_tokenizer_path),
+            "--expected-receipt-sha256",
+            launch.semantic_canary_expected_receipt_sha256,
+            "--expected-tokenizer-sha256",
+            launch.semantic_canary_expected_tokenizer_sha256,
+            "--expected-architecture-sha256",
+            launch.semantic_canary_expected_architecture_sha256,
+            "--steps",
+            str(launch.semantic_canary_steps),
+            "--sequence-length",
+            str(launch.semantic_canary_sequence_length),
+            "--checkpoint-interval",
+            str(launch.semantic_canary_checkpoint_interval),
+            "--write-budget-gib",
+            str(launch.semantic_canary_write_budget_gib),
+            "--telemetry-path",
+            str(launch.semantic_canary_telemetry_path),
+            "--telemetry-run-id",
+            launch.semantic_canary_telemetry_run_id,
+        ]
         return argv
 
     argv += [
