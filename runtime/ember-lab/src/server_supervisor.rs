@@ -1444,10 +1444,30 @@ impl Daemon {
                 let (contract, manifest) = contract_and_manifest
                     .as_ref()
                     .ok_or_else(|| invalid("restore callback lacks its serving contract"))?;
-                let outcome = dispatch(self, &manifest_path)?;
-                let rebound = self.rebind_server_supervision(authority, &registration, &outcome)?;
+                let outcome = match dispatch(self, &manifest_path) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        eprintln!("MEASURED_LATENCY_MS restore_error stage=dispatch error={error}");
+                        return Err(error);
+                    }
+                };
+                let rebound = match self.rebind_server_supervision(authority, &registration, &outcome)
+                {
+                    Ok(value) => value,
+                    Err(error) => {
+                        eprintln!("MEASURED_LATENCY_MS restore_error stage=rebind error={error}");
+                        return Err(error);
+                    }
+                };
+                let poll_started = Instant::now();
                 let health =
                     poll_endpoint_until_healthy_or_budget(&rebound, restore_health_poll_budget);
+                eprintln!(
+                    "MEASURED_LATENCY_MS restore_poll dispatch_rebind_ms={} poll_ms={} health={:?}",
+                    started.elapsed().as_millis() - poll_started.elapsed().as_millis(),
+                    poll_started.elapsed().as_millis(),
+                    health
+                );
                 let observed = observe(&rebound);
                 let assertions = match observed {
                     Ok(observed) => ServingContractAssertions {
