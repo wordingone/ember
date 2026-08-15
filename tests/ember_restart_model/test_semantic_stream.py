@@ -103,6 +103,31 @@ class SemanticStreamTests(unittest.TestCase):
         self.assertEqual(cursor, {"shard_index": 1, "token_offset": 1, "tokens_seen": 4})
 
 
+    def test_progress_callback_is_forwarded_through_the_semantic_segment(self) -> None:
+        """Issue #1719 blocker 1: the semantic path is the only >=100-contiguous-step-capable
+        mode, but run_manifest_bound_semantic_segment never forwarded a progress_callback to
+        its own inner run_pretraining_segment call -- per-step loss/grad-norm (R1-E1/R1-E2)
+        was architecturally unreachable from this path even though the shared primitive
+        already supports it.
+        """
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            receipt, shards_root, tokenizer = self._receipt(root, [[8, 9, 10, 11, 12, 13, 14]])
+            stream = ManifestBoundTokenStream.from_receipt(receipt_path=receipt, shards_root=shards_root, tokenizer_path=tokenizer)
+            config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+            model = UnifiedDecoder(config, genesis_seed=53)
+            optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+            progress: list[dict[str, object]] = []
+            run_manifest_bound_semantic_segment(
+                model=model, optimizer=optimizer, stream=stream, config=config, device=torch.device("cpu"),
+                sequence_length=2, steps=2, checkpoint_every=2,
+                checkpoint_callback=lambda _step, _state: None,
+                progress_callback=progress.append,
+            )
+        self.assertEqual([event["step"] for event in progress], [1, 2])
+        self.assertTrue(all(isinstance(event["loss"], float) for event in progress))
+        self.assertTrue(all(isinstance(event["grad_norm"], float) and event["grad_norm"] > 0.0 for event in progress))
+
     def test_segment_carries_receipt_bound_shard_cursor_into_checkpoints(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
