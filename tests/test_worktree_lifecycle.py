@@ -2186,3 +2186,110 @@ def test_provenance_banner_reports_dirty_state_of_its_own_bytes(tmp_path: Path) 
     ]
     assert dirty_banner, dirty.stderr
     assert dirty_banner[0].endswith(" dirty=true"), dirty_banner[0]
+
+
+def make_clone_with_stale_upstream(tmp_path: Path) -> tuple[Path, Path, str]:
+    """A clone whose origin has moved on and which has NOT fetched since.
+
+    Returns (clone, upstream, upstream_head). This is the real-world shape of the
+    defect: nothing fast-forwards a local checkout, so `create` branching from HEAD
+    silently produced a worktree missing whatever landed upstream in the meantime.
+    """
+    upstream = make_repo(tmp_path)
+    clone = tmp_path / "clone"
+    run("git", "clone", str(upstream), str(clone), cwd=tmp_path)
+    git(clone, "config", "user.name", "Ember Test")
+    git(clone, "config", "user.email", "ember@example.invalid")
+
+    (upstream / "landed-upstream.txt").write_text("only upstream has this\n", encoding="utf-8")
+    git(upstream, "add", "landed-upstream.txt")
+    git(upstream, "commit", "-m", "upstream moves ahead")
+    upstream_head = git(upstream, "rev-parse", "HEAD").stdout.strip()
+
+    # Deliberately no fetch. Both `master` and `origin/master` in the clone now read the
+    # same superseded commit, which is why a divergence check without a fetch cannot see
+    # this: the remote-tracking ref went stale alongside the branch.
+    assert git(clone, "rev-parse", "master").stdout.strip() != upstream_head
+    assert git(clone, "rev-parse", "origin/master").stdout.strip() != upstream_head
+    return clone, upstream, upstream_head
+
+
+def test_create_defaults_to_fetched_origin_not_stale_local_head(tmp_path: Path) -> None:
+    clone, _upstream, upstream_head = make_clone_with_stale_upstream(tmp_path)
+    lifecycle(clone, "install", "--target", "2")
+    destination = tmp_path / "from-origin"
+
+    lifecycle(
+        clone, "create",
+        "--path", str(destination),
+        "--branch", "feat/from-origin",
+        "--owner", "tester",
+        "--purpose", "default start point must be current",
+        "--expires", str(date.today() + timedelta(days=3)),
+    )
+
+    assert git(destination, "rev-parse", "HEAD").stdout.strip() == upstream_head
+    assert (destination / "landed-upstream.txt").exists()
+
+
+def test_create_honours_an_explicit_start_point_verbatim(tmp_path: Path) -> None:
+    clone, _upstream, upstream_head = make_clone_with_stale_upstream(tmp_path)
+    lifecycle(clone, "install", "--target", "2")
+    stale = git(clone, "rev-parse", "master").stdout.strip()
+    destination = tmp_path / "pinned"
+
+    lifecycle(
+        clone, "create",
+        "--path", str(destination),
+        "--branch", "feat/pinned",
+        "--owner", "tester",
+        "--purpose", "an explicitly named ref is the operator's own choice",
+        "--expires", str(date.today() + timedelta(days=3)),
+        "--start-point", stale,
+    )
+
+    # Explicit wins even though it is demonstrably behind origin: naming a ref is taking
+    # responsibility for it. Only the DEFAULT was ever the bug.
+    assert git(destination, "rev-parse", "HEAD").stdout.strip() == stale
+    assert git(destination, "rev-parse", "HEAD").stdout.strip() != upstream_head
+
+
+def test_create_without_an_origin_remote_still_defaults_to_head(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "2")
+    head = git(repo, "rev-parse", "HEAD").stdout.strip()
+    destination = tmp_path / "no-origin"
+
+    lifecycle(
+        repo, "create",
+        "--path", str(destination),
+        "--branch", "feat/no-origin",
+        "--owner", "tester",
+        "--purpose", "a repo with no upstream has nothing to be stale against",
+        "--expires", str(date.today() + timedelta(days=3)),
+    )
+
+    assert git(destination, "rev-parse", "HEAD").stdout.strip() == head
+
+
+def test_create_refuses_when_origin_cannot_be_fetched(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "2")
+    git(repo, "remote", "add", "origin", str(tmp_path / "does-not-exist"))
+    destination = tmp_path / "unfetchable"
+
+    result = lifecycle(
+        repo, "create",
+        "--path", str(destination),
+        "--branch", "feat/unfetchable",
+        "--owner", "tester",
+        "--purpose", "an unprovable base must refuse, not silently fall back to HEAD",
+        "--expires", str(date.today() + timedelta(days=3)),
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "ORIGIN_FETCH_FAILED" in result.stderr
+    # Fail CLOSED: refusing after creating the directory would leave an unregistered
+    # worktree behind, which is the UNMANAGED_WORKTREE condition that blocks every seat.
+    assert not destination.exists()
