@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """hf_fetch.py -- HuggingFace datasets/files connector CLI.
 
     hf_fetch.py REPO_ID [--revision R] [--include GLOB ...] [--dest DIR]
@@ -12,10 +15,30 @@ metadata, and writes an L4 receipt. Prints `RECEIPT <path>` on success or
 `BLOCKED <reason>` (nonzero exit) on refusal.
 
 No GPU, no model inference, no dedup/decontamination (L3: fetch-only).
+
+Token auth (fast-follow): `--hf-token`/`HF_TOKEN` accepts an already-obtained
+HuggingFace token, forwarded explicitly to `HfApi(token=...)` and
+`snapshot_download(..., token=...)` -- for gated/private repos. Explicit by
+design (this codebase's "no ambient magic" convention, matching every other
+connector's explicit `--license`/credential flags): when neither the flag
+nor the env var is set, `token` is not passed to either call at all, so
+behavior is byte-identical to before (whatever huggingface_hub's own default
+resolution already did, unaffected).
+
+License-evidence override (fast-follow): mirrors the `--license`/
+`--license-evidence`-together pattern `http_fetch.py`/`bulk_fetch.py`
+already use. Applies ONLY when the repo card's own metadata carries no
+`license` field (the UNVERIFIED case) -- a resolved metadata license is
+never silently overridden by a human-supplied flag; the override exists to
+turn an UNVERIFIED tranche into a verified receipt when the lead has
+independently confirmed the license, not to contest what the card states.
+`--allow-unverified-license` is unaffected and still means what it always
+has: proceed anyway with UNVERIFIED recorded.
 """
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import List, Optional
@@ -25,6 +48,14 @@ from huggingface_hub import HfApi, snapshot_download
 import receipt as rcpt
 
 CONNECTOR_NAME = "hf_fetch"
+
+
+def _resolve_token(cli_token: Optional[str]) -> Optional[str]:
+    """CLI flag wins; falls back to HF_TOKEN env var; None if neither is set
+    (unchanged default behavior -- token kwarg not passed at all)."""
+    if cli_token:
+        return cli_token
+    return os.environ.get("HF_TOKEN") or None
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -37,6 +68,9 @@ def build_parser() -> argparse.ArgumentParser:
     repo_type_group.add_argument("--dataset", action="store_const", dest="repo_type", const="dataset")
     repo_type_group.add_argument("--model", action="store_const", dest="repo_type", const="model")
     p.set_defaults(repo_type="dataset")
+    p.add_argument("--hf-token", dest="hf_token", default=None, help="HuggingFace token (or set HF_TOKEN); for gated/private repos")
+    p.add_argument("--license", dest="license_str", default=None, metavar="STR")
+    p.add_argument("--license-evidence", dest="license_evidence", default=None, metavar="STR")
     p.add_argument("--allow-unverified-license", action="store_true", help="proceed with license recorded UNVERIFIED")
     return p
 
@@ -55,19 +89,31 @@ def _extract_license(info) -> Optional[str]:
 
 
 def fetch(args: argparse.Namespace) -> Path:
-    api = HfApi()
+    if (args.license_str is None) != (args.license_evidence is None):
+        raise rcpt.BlockedError("--license and --license-evidence must be supplied together")
+
+    token = _resolve_token(getattr(args, "hf_token", None))
+    api_kwargs = {"token": token} if token else {}
+    api = HfApi(**api_kwargs)
     if args.repo_type == "model":
         info = api.model_info(args.repo_id, revision=args.revision)
     else:
         info = api.dataset_info(args.repo_id, revision=args.revision)
 
     pinned_sha = getattr(info, "sha", None)
-    license_str = _extract_license(info) or rcpt.UNVERIFIED
-    license_evidence = (
-        "HuggingFace repo card metadata `license` field"
-        if license_str != rcpt.UNVERIFIED
-        else "no `license` field present in repo card metadata"
-    )
+    metadata_license = _extract_license(info)
+    if metadata_license:
+        license_str = metadata_license
+        license_evidence = "HuggingFace repo card metadata `license` field"
+    elif args.license_str:
+        # metadata carried no license -- a human-supplied, evidenced override
+        # (never applied when the card DOES resolve a license; see module
+        # docstring "License-evidence override").
+        license_str = args.license_str
+        license_evidence = args.license_evidence
+    else:
+        license_str = rcpt.UNVERIFIED
+        license_evidence = "no `license` field present in repo card metadata"
     rcpt.gate_license(license_str, args.allow_unverified_license)
 
     dest_root = Path(args.dest) if args.dest else Path("corpus-downloads") / "hf" / rcpt.safe_key(args.repo_id)
@@ -75,12 +121,14 @@ def fetch(args: argparse.Namespace) -> Path:
         raise rcpt.DestCollisionError(f"destination already has content: {dest_root}")
     dest_root.mkdir(parents=True, exist_ok=True)
 
+    snapshot_kwargs = {"token": token} if token else {}
     snapshot_download(
         repo_id=args.repo_id,
         repo_type=args.repo_type,
         revision=pinned_sha or args.revision,
         allow_patterns=args.include,
         local_dir=str(dest_root),
+        **snapshot_kwargs,
     )
 
     rel_paths = rcpt.relative_files_under(dest_root)

@@ -127,6 +127,63 @@ def _raw_url(repo_id: str, sha: str, path: str) -> str:
     return f"https://raw.githubusercontent.com/{repo_id}/{sha}/{urllib.parse.quote(path)}"
 
 
+def _write_file_manifest(
+    dest_root: Path,
+    key: str,
+    full_tree_file_count: int,
+    partition_count: int,
+    partition_index: int,
+    partition_selected_count: int,
+    budget_bytes: Optional[int],
+    fetched_notes: List[dict],
+) -> Path:
+    """Write the full per-file breakdown to a sibling manifest JSON, mirroring
+    bulk_fetch.py's _write_chunk_manifest. Keeps receipt.notes bounded: without
+    this, notes embedded the full per-file list inline, and receipt.py's
+    to_manifest_row() copies notes into every manifest.jsonl row (one row per
+    file) -- an N-file fetch duplicated the same growing blob N times
+    (O(n^2) growth; confirmed ~14.4GB for a 9067-file fetch vs ~116MB of
+    actual content). The full per-file record still exists exactly once, here,
+    referenced from notes rather than repeated per row."""
+
+    manifests_dir = dest_root / "_manifests"
+    try:
+        manifests_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise rcpt.ReceiptWriteError(f"could not create manifests dir: {exc}") from exc
+
+    ts = rcpt.utc_stamp_compact()
+    out_path = manifests_dir / f"{ts}-{key}.files.json"
+    if out_path.exists():
+        raise rcpt.DestCollisionError(f"file manifest already exists at {out_path}")
+
+    tmp_path = out_path.with_name(out_path.name + ".tmp")
+    try:
+        tmp_path.write_text(
+            json.dumps(
+                {
+                    "full_tree_file_count": full_tree_file_count,
+                    "partition_count": partition_count,
+                    "partition_index": partition_index,
+                    "partition_selected_count": partition_selected_count,
+                    "files_fetched": len(fetched_notes),
+                    "budget_bytes": budget_bytes,
+                    "files": fetched_notes,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        tmp_path.replace(out_path)
+    except OSError as exc:
+        if tmp_path.exists():
+            tmp_path.unlink()
+        raise rcpt.ReceiptWriteError(f"could not write file manifest json: {exc}") from exc
+    return out_path
+
+
 def fetch(args: argparse.Namespace, opener=None) -> Path:
     _validate_partition_args(args.partition_count, args.partition_index)
 
@@ -183,6 +240,31 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
 
     rel_paths = [p.relative_to(dest_root) for p in downloaded_paths]
     files = rcpt.build_file_entries(dest_root, rel_paths)
+    fetched_count = len(downloaded_paths)
+
+    # The file manifest is itself a file this fetch attempt wrote -- if writing it
+    # fails, treat that the same as any other receipt-write failure: fail-closed,
+    # clean up the (otherwise unreceipted) downloaded files before re-raising.
+    try:
+        file_manifest_path = _write_file_manifest(
+            dest_root,
+            key,
+            len(manifest),
+            args.partition_count,
+            args.partition_index,
+            len(partition),
+            args.budget_bytes,
+            fetched_notes,
+        )
+    except rcpt.BlockedError:
+        for p in downloaded_paths:
+            if p.is_file():
+                try:
+                    p.unlink()
+                except OSError:
+                    pass
+        raise
+    downloaded_paths.append(file_manifest_path)
 
     receipt = rcpt.Receipt(
         source="lean-github",
@@ -195,19 +277,16 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
         fetched_at=rcpt.utc_now_iso(),
         connector=rcpt.ConnectorInfo(name=CONNECTOR_NAME),
         dest_root=str(dest_root),
-        notes=json.dumps(
-            {
-                "full_tree_file_count": len(manifest),
-                "partition_count": args.partition_count,
-                "partition_index": args.partition_index,
-                "partition_selected_count": len(partition),
-                "files_fetched": len(downloaded_paths),
-                "budget_bytes": args.budget_bytes,
-                "files": fetched_notes,
-            },
-            sort_keys=True,
+        notes=(
+            f"disjoint-partition GitHub tree fetch; {len(manifest)} files in full tree; "
+            f"partition {args.partition_index}/{args.partition_count} selected "
+            f"{len(partition)} files; {fetched_count} fetched; "
+            f"budget_bytes={args.budget_bytes}; "
+            f"file_manifest={file_manifest_path.relative_to(dest_root).as_posix()}"
         ),
     )
+    # commit_receipt's own fail-closed cleanup covers both the fetched files and
+    # the file manifest (both are in downloaded_paths) if the receipt write itself fails.
     return rcpt.commit_receipt(receipt, dest_root, downloaded_paths)
 
 
