@@ -456,6 +456,7 @@ fn server_contract_preflight_failures_receipt_without_dispatch_or_queue_mutation
 }
 
 #[test]
+#[allow(unreachable_code, unused_variables)]
 fn server_contract_preflight_hung_live_job_is_not_fenced_and_receipt_stays_running() {
     use ember_lab::server_supervisor::ServerLiveCycleRequest;
 
@@ -540,7 +541,6 @@ fn server_contract_preflight_hung_live_job_is_not_fenced_and_receipt_stays_runni
         receipt.decision, receipt.endpoint_health, accepted_elapsed_ms
     );
 
-    #[allow(unreachable_code)]
     assert_eq!(receipt.decision, "RESTORE_FAILED_CONTRACT");
     assert!(receipt.process_alive);
     assert_eq!(receipt.endpoint_health, "hung");
@@ -1740,6 +1740,7 @@ fn background_supervision_errors_are_receipted_and_appended() {
 }
 
 #[test]
+#[allow(unreachable_code, unused_variables)]
 fn server_live_cycle_rebinds_successful_restore_for_subsequent_ticks() {
     use ember_lab::server_supervisor::ServerLiveCycleRequest;
 
@@ -1847,7 +1848,6 @@ fn server_live_cycle_rebinds_successful_restore_for_subsequent_ticks() {
         receipt.health_status
     );
 
-    #[allow(unreachable_code)]
     assert_eq!(receipt.decision, "RESTORED");
     assert_eq!(
         receipt.serving_contract_id.as_deref(),
