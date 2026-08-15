@@ -98,6 +98,20 @@ class LivenessWatchTests(unittest.TestCase):
         child.write_bytes(b"xy")
         self.assertGreaterEqual(flw.newest_mtime(self.dest), dir_mtime)
 
+    def test_fresh_log_line_counts_as_progress_when_dest_is_untouched(self):
+        # A large --paper-list spends its whole metadata phase (hundreds of
+        # batched API calls) writing log lines and no output files at all.
+        # Watching dest alone would call that healthy phase a stall.
+        import os
+
+        ancient = time.time() - 5000
+        os.utime(self.dest, (ancient, ancient))
+        self.log.write_text("START\nMETA-BATCH 3/539 ids=100 entries=300\n", encoding="utf-8")
+        dest_only_age = time.time() - flw.newest_mtime(self.dest)
+        combined_age = time.time() - max(flw.newest_mtime(self.dest), self.log.stat().st_mtime)
+        self.assertGreater(dest_only_age, 4000)
+        self.assertLess(combined_age, 60)
+
     def test_missing_dest_reports_zero_rather_than_raising(self):
         self.assertEqual(flw.newest_mtime(self.root / "does-not-exist"), 0.0)
 

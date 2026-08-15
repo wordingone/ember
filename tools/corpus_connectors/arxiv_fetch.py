@@ -381,10 +381,18 @@ def _write_budget_walk_manifest(
 
 def query_by_ids(ids: List[str], opener=None) -> List[ArxivEntry]:
     entries: List[ArxivEntry] = []
+    total_batches = (len(ids) + PAGE_SIZE_MAX - 1) // PAGE_SIZE_MAX
     for i in range(0, len(ids), PAGE_SIZE_MAX):
         chunk = ids[i : i + PAGE_SIZE_MAX]
         url = f"{API_BASE}?id_list={urllib.parse.quote(','.join(chunk))}&max_results={len(chunk)}"
         entries.extend(_parse_atom(_http_get(url, opener)))
+        # A large --paper-list spends this whole phase before ANY file is
+        # written to dest (539 batches x 3s ~ 27min for a 54k-id list), so
+        # without a heartbeat here both the output dir and the log go
+        # untouched for half an hour -- indistinguishable from a wedged
+        # process to any liveness watch, and to a human reading the log.
+        if total_batches > 1:
+            log(f"META-BATCH {i // PAGE_SIZE_MAX + 1}/{total_batches} ids={len(chunk)} entries={len(entries)}")
         if i + PAGE_SIZE_MAX < len(ids):
             time.sleep(RATE_LIMIT_SECONDS)
     return entries

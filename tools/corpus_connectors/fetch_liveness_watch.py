@@ -157,7 +157,15 @@ def watch(log_path: Path, dest: Path, pid: Optional[int], stale_seconds: float, 
             )
             return 1
 
-        age = time.time() - newest_mtime(dest)
+        # Progress is EITHER a new/updated output file OR a new log line: a
+        # large paper-list spends its whole metadata phase writing log lines
+        # and no files at all, so watching dest alone would call a healthy
+        # 27-minute metadata walk a stall.
+        try:
+            log_mtime = log_path.stat().st_mtime
+        except OSError:
+            log_mtime = 0.0
+        age = time.time() - max(newest_mtime(dest), log_mtime)
         if age > stale_seconds:
             deadline = pending_retry_deadline(log_path)
             now = datetime.now(timezone.utc)
