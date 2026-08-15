@@ -376,11 +376,16 @@ def test_live_ledger_closed_guarded_rows_resolve() -> None:
 # ---------------------------------------------------------------------------
 
 # A KNOWN dead-on-import guard: bytes exist, resolve_guard_ref() passes, but
-# `pytest --collect-only` on this file INTERNALERRORs because it imports the
-# sub-3B trainer chain, which commit 4f758db0 (2026-07-12) locks at module scope
-# with a raise SystemExit("historical_only: ...execution-denied") -- a lock that
-# POSTDATES this guard's own landing (#792).
-_DEAD_GUARD_REL_PATH = "scripts/tests/test_screen792_bf16_momentum.py"
+# `pytest --collect-only` on this file always fails (module-scope SystemExit).
+# This fixture is OWNED by this test (tests/ember_01_custody/fixtures/) rather
+# than borrowing a production file's incidental dead-on-import behavior -- the
+# prior version of this constant pointed at
+# scripts/tests/test_screen792_bf16_momentum.py, which became collectable
+# again once commit cc84936 (#1637, 2026-08-10) legitimately fixed that
+# production file's import path, silently breaking this negative test (#1751).
+# A negative fixture bound to production brokenness fails the moment someone
+# fixes the production file; it must own its dead subject, not borrow one.
+_DEAD_GUARD_REL_PATH = "tests/ember_01_custody/fixtures/dead_on_import_fixture.py"
 
 # A KNOWN collectable guard, for the positive control (must NOT be falsely flagged).
 _LIVE_GUARD_REL_PATH = "scripts/test_v0_launch_gate_shard_dir_override.py"
