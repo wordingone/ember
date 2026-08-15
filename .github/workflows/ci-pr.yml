@@ -53,6 +53,7 @@ jobs:
             > "${RUNNER_TEMP}/pr-files.json"
           python -m scripts.github.live_pr_policy \
             --root . \
+            --subject-root . \
             --pr-json "${RUNNER_TEMP}/pr.json" \
             --files-json "${RUNNER_TEMP}/pr-files.json" \
             --event-base-sha "${BASE_SHA}" \
