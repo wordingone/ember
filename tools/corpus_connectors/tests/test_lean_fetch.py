@@ -136,6 +136,87 @@ class LeanFetchDisjointTests(unittest.TestCase):
             with self.assertRaises(rcpt.BlockedError):
                 lean_fetch.fetch(args, opener=_DispatchOpener())
 
+    def test_notes_stays_bounded_and_references_a_sibling_file_manifest(self):
+        """receipt.notes must never embed the full per-file list inline --
+        receipt.py's to_manifest_row() copies notes into every manifest.jsonl
+        row (one row per file), so an inline per-file list duplicates itself
+        once per row (O(n^2) growth). The full per-file record must exist
+        exactly once, in a sibling _manifests/*.files.json, referenced from
+        notes by relative path."""
+        with tempfile.TemporaryDirectory() as td:
+            dest = Path(td) / "p0"
+            args = lean_fetch.build_parser().parse_args(
+                [
+                    REPO, "--partition-count", "1", "--partition-index", "0",
+                    "--license", "MIT", "--license-evidence", "test",
+                    "--dest", str(dest),
+                ]
+            )
+            receipt_path = lean_fetch.fetch(args, opener=_DispatchOpener())
+            data = json.loads(receipt_path.read_text(encoding="utf-8"))
+
+            self.assertNotIn("declared_size_bytes", data["notes"])
+            self.assertNotIn('"files"', data["notes"])
+            self.assertIn("file_manifest=", data["notes"])
+            self.assertLess(len(data["notes"]), 400)
+
+            manifests_dir = dest / "_manifests"
+            file_manifest_paths = list(manifests_dir.glob("*.files.json"))
+            self.assertEqual(len(file_manifest_paths), 1)
+            file_manifest = json.loads(file_manifest_paths[0].read_text(encoding="utf-8"))
+            self.assertEqual(file_manifest["files_fetched"], 6)
+            self.assertEqual(len(file_manifest["files"]), 6)
+            self.assertEqual(
+                {f["path"] for f in file_manifest["files"]},
+                {item["path"] for item in TREE_FILES if item["type"] == "blob"},
+            )
+
+    def test_manifest_jsonl_row_size_does_not_grow_with_file_count(self):
+        """The regression this fixes: before this change, every
+        manifest.jsonl row's human_provenance_basis carried the full
+        per-file list (one growing blob duplicated once per row, O(n^2)
+        total size). After the fix, every row's human_provenance_basis is
+        bounded regardless of how many files the fetch contained -- confirmed
+        here by fetching partitions of different sizes (1 file vs 6 files)
+        and checking the per-row basis length does not scale with file
+        count."""
+        with tempfile.TemporaryDirectory() as td:
+            small_dest = Path(td) / "small"
+            small_args = lean_fetch.build_parser().parse_args(
+                [
+                    REPO, "--partition-count", "6", "--partition-index", "0",
+                    "--license", "MIT", "--license-evidence", "test",
+                    "--dest", str(small_dest),
+                ]
+            )
+            lean_fetch.fetch(small_args, opener=_DispatchOpener())
+            small_rows = [
+                json.loads(line)
+                for line in (small_dest / "manifest.jsonl").read_text(encoding="utf-8").splitlines()
+            ]
+
+            big_dest = Path(td) / "big"
+            big_args = lean_fetch.build_parser().parse_args(
+                [
+                    REPO, "--partition-count", "1", "--partition-index", "0",
+                    "--license", "MIT", "--license-evidence", "test",
+                    "--dest", str(big_dest),
+                ]
+            )
+            lean_fetch.fetch(big_args, opener=_DispatchOpener())
+            big_rows = [
+                json.loads(line)
+                for line in (big_dest / "manifest.jsonl").read_text(encoding="utf-8").splitlines()
+            ]
+
+            self.assertEqual(len(small_rows), 1)
+            self.assertEqual(len(big_rows), 6)
+            small_basis_len = len(small_rows[0]["human_provenance_basis"])
+            big_basis_len = max(len(r["human_provenance_basis"]) for r in big_rows)
+            # Bounded, not proportional to file count -- a pre-fix basis for the
+            # 6-file partition would have been roughly 6x the 1-file partition's.
+            self.assertLess(abs(big_basis_len - small_basis_len), 50)
+
     def test_budget_bytes_stops_before_a_file_that_would_exceed_it(self):
         with tempfile.TemporaryDirectory() as td:
             dest = Path(td) / "p0"
