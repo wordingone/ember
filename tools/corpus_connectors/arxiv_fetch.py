@@ -334,7 +334,7 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
     if (args.license_override is None) != (args.license_override_evidence is None):
         raise rcpt.BlockedError("--license-override and --license-override-evidence must be supplied together")
 
-    def _resolved_license_label(e: "ArxivEntry") -> str:
+    def _resolved_license(e: "ArxivEntry") -> "tuple[str, str]":
         # The live Atom API's per-paper arxiv:license element is known-unreliable
         # for entries sourced from the OAI-PMH bulk harvest -- it is frequently
         # absent even for papers the harvest's own <license> element confirms are
@@ -342,9 +342,16 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
         # bulk-harvest approach in the first place, reconfirmed here for the
         # --paper-list content-fetch path specifically). The override fills that
         # gap; it never substitutes for a live check that actually resolved.
+        #
+        # Returns (resolved_label, basis) rather than just the label: a
+        # live-resolved license and an override-filled one can be the exact
+        # same URL string (e.g. both CC-BY-4.0), which would otherwise make
+        # the two populations indistinguishable in the receipt -- the basis
+        # tag is what lets a reader tell which admission path a given paper
+        # actually took.
         if e.license_label == rcpt.UNVERIFIED and args.license_override is not None:
-            return args.license_override
-        return e.license_label
+            return args.license_override, "override"
+        return e.license_label, "live"
 
     dest_root = Path(args.dest) if args.dest else Path("corpus-downloads") / "arxiv" / key
     dest_root.mkdir(parents=True, exist_ok=True)
@@ -483,7 +490,8 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
             downloaded_paths.append(dest_file)
             time.sleep(RATE_LIMIT_SECONDS)
         files = rcpt.build_file_entries(dest_root, [p.relative_to(dest_root) for p in downloaded_paths])
-        distinct_licenses = sorted({_resolved_license_label(e) for e in eligible})
+        resolved_by_id = {e.arxiv_id: _resolved_license(e) for e in eligible}
+        distinct_licenses = sorted({label for label, _basis in resolved_by_id.values()})
         license_str = distinct_licenses[0] if len(distinct_licenses) == 1 else "cc-mixed (see notes)"
         if args.license_override is not None and any(e.license_label == rcpt.UNVERIFIED for e in eligible):
             license_evidence = (
@@ -496,7 +504,13 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
         # full --paper-list candidate pool -- a large paper-list must not bloat
         # this receipt's notes field (same bounded-notes discipline as the
         # budget-walk sidecar manifest above, and as lean_fetch.py's own fix).
-        per_paper_notes = "; ".join(f"{e.arxiv_id}={_resolved_license_label(e)}" for e in eligible) + budget_note
+        # Each entry tags its admission basis (live vs override) -- a
+        # live-resolved license and an override-filled one can share the exact
+        # same URL string, so the basis tag is the only thing that lets a
+        # reader tell the two populations apart.
+        per_paper_notes = (
+            "; ".join(f"{aid}={label}({basis})" for aid, (label, basis) in resolved_by_id.items()) + budget_note
+        )
 
     # Note: the top-level receipt `license` field above is always a resolved
     # label (a specific CC URL, "cc-mixed", the arXiv-perpetual label, or the

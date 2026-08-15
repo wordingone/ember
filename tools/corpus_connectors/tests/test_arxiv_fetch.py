@@ -380,7 +380,10 @@ class ArxivFetchMockedTests(unittest.TestCase):
             data = json.loads(receipt_path.read_text(encoding="utf-8"))
             self.assertEqual(data["license"], "http://creativecommons.org/licenses/by/4.0/")
             self.assertIn("OAI-PMH bulk harvest", data["license_evidence"])
-            self.assertIn("2301.00005v1=http://creativecommons.org/licenses/by/4.0/", data["notes"])
+            # basis tag distinguishes override-filled from live-resolved admission --
+            # a live-resolved CC-BY-4.0 paper would share the identical URL string,
+            # so the (override)/(live) tag is the only thing telling them apart.
+            self.assertIn("2301.00005v1=http://creativecommons.org/licenses/by/4.0/(override)", data["notes"])
 
     def test_license_override_requires_evidence_paired(self):
         with tempfile.TemporaryDirectory() as td:
