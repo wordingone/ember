@@ -309,9 +309,18 @@ fn validate_public_master_sha(public_master_sha: &str) -> Result<()> {
     Ok(())
 }
 
-fn local_git_pin_is_ancestor(root: &Path, public_master_sha: &str) -> Result<bool> {
+/// `git_program` is named explicitly rather than resolved from `PATH` so tests
+/// can point at a stub by absolute path. Installing a stub on `PATH` instead
+/// would mean `set_var("PATH")`, which is process-global: unit tests share one
+/// process, so it strips the real `PATH` from every test spawning a child
+/// concurrently.
+fn local_git_pin_is_ancestor(
+    root: &Path,
+    public_master_sha: &str,
+    git_program: &Path,
+) -> Result<bool> {
     validate_public_master_sha(public_master_sha)?;
-    let output = Command::new("git")
+    let output = Command::new(git_program)
         .arg("-C")
         .arg(root)
         .args(["merge-base", "--is-ancestor", public_master_sha, "HEAD"])
@@ -331,6 +340,20 @@ pub fn check_certificate(
     certificate_path: &Path,
     live_closure_sha256: &str,
 ) -> Result<CertificateCheckResult> {
+    check_certificate_with(
+        root,
+        certificate_path,
+        live_closure_sha256,
+        Path::new("git"),
+    )
+}
+
+pub(crate) fn check_certificate_with(
+    root: &Path,
+    certificate_path: &Path,
+    live_closure_sha256: &str,
+    git_program: &Path,
+) -> Result<CertificateCheckResult> {
     let certificate: Value = serde_json::from_slice(&fs::read(certificate_path)?)?;
     let certificate_closure_sha256 = certificate
         .get("closure_sha256")
@@ -345,7 +368,7 @@ pub fn check_certificate(
             TrainingVerifyError::Manifest("certificate lacks public_master_sha".into())
         })?;
 
-    let pin_is_ancestor = local_git_pin_is_ancestor(root, public_master_sha)?;
+    let pin_is_ancestor = local_git_pin_is_ancestor(root, public_master_sha, git_program)?;
 
     Ok(CertificateCheckResult {
         path: certificate_path.to_string_lossy().into_owned(),
@@ -507,53 +530,41 @@ mod tests {
     use super::*;
     use std::ffi::OsString;
     use std::fs;
+    use std::path::PathBuf;
     use std::process::Command;
-    use std::sync::Mutex;
-
-    static PATH_LOCK: Mutex<()> = Mutex::new(());
-
     const VALID_PUBLIC_MASTER_SHA: &str = "3ceada9dbf6b13b6153798a5fafc718ee052942d";
 
-    struct EnvRestore {
-        path: Option<OsString>,
-    }
-
-    impl Drop for EnvRestore {
-        fn drop(&mut self) {
-            match self.path.take() {
-                Some(path) => std::env::set_var("PATH", path),
-                None => std::env::remove_var("PATH"),
-            }
-            for name in [
-                "EMBER_TEST_GIT_LOG",
-                "EMBER_TEST_GIT_ROOT",
-                "EMBER_TEST_GIT_SHA",
-            ] {
-                std::env::remove_var(name);
-            }
-        }
-    }
-
-    fn install_recording_git_stub(tmp: &Path, root: &Path) -> EnvRestore {
+    /// Compiles a `git` stub that records its argv, and returns its absolute
+    /// path for injection via `check_certificate_with`.
+    ///
+    /// Everything the stub needs is baked into its source at compile time. The
+    /// earlier version passed this config through `EMBER_TEST_GIT_*` env vars
+    /// and put the stub on `PATH`, both via `set_var` -- process-global writes
+    /// that every concurrently-running unit test in this binary inherited,
+    /// leaving them unable to resolve any program on the real `PATH`.
+    fn build_recording_git_stub(tmp: &Path, root: &Path) -> PathBuf {
         let stub_source = tmp.join("git-stub.rs");
         let stub_exe = tmp.join(if cfg!(windows) { "git.exe" } else { "git" });
+        let log = tmp.join("git-argv.log");
         write(
             &stub_source,
-            br#"use std::fs;
-use std::path::PathBuf;
-fn main() {
+            format!(
+                r#"use std::fs;
+fn main() {{
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let log = PathBuf::from(std::env::var_os("EMBER_TEST_GIT_LOG").unwrap());
-    fs::write(&log, args.join("\n")).unwrap();
-    let root = std::env::var("EMBER_TEST_GIT_ROOT").unwrap();
-    let sha = std::env::var("EMBER_TEST_GIT_SHA").unwrap();
-    let expected = vec!["-C", &root, "merge-base", "--is-ancestor", &sha, "HEAD"];
-    if args.iter().map(String::as_str).eq(expected) {
+    fs::write({log:?}, args.join("\n")).unwrap();
+    let expected = vec!["-C", {root:?}, "merge-base", "--is-ancestor", {sha:?}, "HEAD"];
+    if args.iter().map(String::as_str).eq(expected) {{
         std::process::exit(0);
-    }
+    }}
     std::process::exit(97);
-}
+}}
 "#,
+                log = log.to_string_lossy(),
+                root = root.to_string_lossy(),
+                sha = VALID_PUBLIC_MASTER_SHA,
+            )
+            .as_bytes(),
         );
         let rustc = std::env::var_os("RUSTC").unwrap_or_else(|| OsString::from("rustc"));
         let status = Command::new(rustc)
@@ -564,15 +575,7 @@ fn main() {
             .expect("recording git stub must compile");
         assert!(status.success(), "recording git stub compilation failed");
 
-        let log = tmp.join("git-argv.log");
-        std::env::set_var("EMBER_TEST_GIT_LOG", &log);
-        std::env::set_var("EMBER_TEST_GIT_ROOT", root);
-        std::env::set_var("EMBER_TEST_GIT_SHA", VALID_PUBLIC_MASTER_SHA);
-        let restore = EnvRestore {
-            path: std::env::var_os("PATH"),
-        };
-        std::env::set_var("PATH", tmp);
-        restore
+        stub_exe
     }
 
     fn write_certificate(path: &Path, public_master_sha: &str) {
@@ -697,16 +700,15 @@ fn main() {
 
     #[test]
     fn certificate_ancestor_check_invokes_only_the_local_git_allowlist() {
-        let _lock = PATH_LOCK.lock().unwrap();
         let tmp = std::env::temp_dir().join(format!("ember-lab-tv-git-ok-{}", now_ms()));
         fs::create_dir_all(&tmp).unwrap();
         let root = tmp.join("repo");
         fs::create_dir_all(&root).unwrap();
         let certificate = tmp.join("certificate.json");
         write_certificate(&certificate, VALID_PUBLIC_MASTER_SHA);
-        let _restore = install_recording_git_stub(&tmp, &root);
+        let git_stub = build_recording_git_stub(&tmp, &root);
 
-        let result = check_certificate(&root, &certificate, "closure").unwrap();
+        let result = check_certificate_with(&root, &certificate, "closure", &git_stub).unwrap();
 
         assert!(result.closure_sha256_matches);
         assert!(result.pin_is_ancestor);
@@ -724,7 +726,6 @@ fn main() {
 
     #[test]
     fn certificate_rejects_network_or_option_like_pin_before_git_spawn() {
-        let _lock = PATH_LOCK.lock().unwrap();
         for (case, invalid_pin) in [
             ("url", "https://example.invalid/ember.git"),
             ("option", "--upload-pack=https://example.invalid/escape"),
@@ -735,9 +736,9 @@ fn main() {
             fs::create_dir_all(&root).unwrap();
             let certificate = tmp.join("certificate.json");
             write_certificate(&certificate, invalid_pin);
-            let _restore = install_recording_git_stub(&tmp, &root);
+            let git_stub = build_recording_git_stub(&tmp, &root);
 
-            let result = check_certificate(&root, &certificate, "closure");
+            let result = check_certificate_with(&root, &certificate, "closure", &git_stub);
 
             assert!(
                 matches!(result, Err(TrainingVerifyError::Manifest(_))),
