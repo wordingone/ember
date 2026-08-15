@@ -122,11 +122,21 @@ jobs:
       # guard only ever gated the one line directly above it, leaving --lib,
       # control_plane and dispatch_manifest able to fail internally while the
       # job still reported success.
+      #
+      # control_plane carries --show-output because two of its tests skip
+      # themselves on hosted windows-latest (system-managed pagefile, see
+      # #1771) by printing a reason and returning early. That makes them
+      # *pass*, and libtest discards a passing test's output, so without this
+      # flag the log shows only "68 passed" and a reader cannot tell the two
+      # ran from the two skipped. --show-output rather than --nocapture: it
+      # keeps capture on, so each reason line stays attributed to its test
+      # instead of interleaving across parallel threads. Measured cost is 32
+      # lines (115 -> 147 locally).
       - name: Run host-independent Rust gate
         run: |
           cargo test --locked --lib
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --locked --test control_plane
+          cargo test --locked --test control_plane -- --show-output
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test --locked --test dispatch_manifest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
