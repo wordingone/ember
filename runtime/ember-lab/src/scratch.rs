@@ -9,7 +9,7 @@
 // tools/check_no_temp.py for the enforcement gate covering the rest of the stack.
 
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Resolves the user's home directory without an extra crate dependency:
 /// `USERPROFILE` on Windows, `HOME` elsewhere, falling back to `.` only if
@@ -47,6 +47,15 @@ pub fn ember_scratch_dir(purpose: &str) -> io::Result<PathBuf> {
     let ember_home = std::env::var("EMBER_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|_| home_dir().join(".ember"));
+    ember_scratch_dir_under(&ember_home, purpose)
+}
+
+/// `ember_scratch_dir` with the root supplied explicitly.
+///
+/// Exists so the path contract can be tested without `set_var("EMBER_HOME")`:
+/// unit tests share one process, so mutating that variable retargets
+/// `ember_scratch_dir` for every test running concurrently.
+pub(crate) fn ember_scratch_dir_under(ember_home: &Path, purpose: &str) -> io::Result<PathBuf> {
     let scratch_path = ember_home
         .join(".runtime")
         .join(purpose)
@@ -57,8 +66,7 @@ pub fn ember_scratch_dir(purpose: &str) -> io::Result<PathBuf> {
 
 #[cfg(test)]
 mod ember_scratch_dir_tests {
-    use super::ember_scratch_dir;
-    use std::env;
+    use super::ember_scratch_dir_under;
     use std::path::PathBuf;
 
     /// In-tree (never system-temp) scratch root for THIS test's own EMBER_HOME
@@ -70,49 +78,31 @@ mod ember_scratch_dir_tests {
             .join(format!("ember-home-{}", std::process::id()))
     }
 
+    // This test used to prove its point by pointing %TEMP%/%TMP% at a bogus
+    // wrongly-cased path and setting %EMBER_HOME%, all via `env::set_var`.
+    // Those writes are process-global and unit tests share one process, so
+    // every test running concurrently saw them: `std::env::temp_dir()` started
+    // returning the bogus root, and the teardown's `remove_dir_all` deleted
+    // scratch directories out from under other tests mid-run. It was also
+    // proving nothing -- `ember_scratch_dir` reads `EMBER_HOME`, never
+    // `TEMP`/`TMP`, so the bogus override could not have leaked even in
+    // principle. Source-level enforcement of the NO-TEMP policy is
+    // `tools/check_no_temp.py`; the path contract is checked here against an
+    // explicit root instead.
     #[test]
-    fn snapshot_dir_lands_under_ember_home_even_with_bogus_wrongly_cased_temp_env() {
-        let prior_ember_home = env::var("EMBER_HOME").ok();
-        let prior_temp = env::var("TEMP").ok();
-        let prior_tmp = env::var("TMP").ok();
-
-        // A bogus, wrongly-cased %TEMP%/%TMP% -- the exact launch-blocker shape
-        // (Windows short-name/case mismatch) -- must never leak into the
-        // resolved scratch path.
-        env::set_var("TEMP", r"c:\BOGUS-WRONGLY-CASED-TEMP\nope");
-        env::set_var("TMP", r"c:\BOGUS-WRONGLY-CASED-TEMP\nope");
-
+    fn scratch_dir_lands_under_its_root() {
         let ember_home = test_fixture_root();
         let _ = std::fs::remove_dir_all(&ember_home);
-        env::set_var("EMBER_HOME", &ember_home);
 
-        let result = ember_scratch_dir("binding-snapshot-test");
-
-        match prior_temp {
-            Some(v) => env::set_var("TEMP", v),
-            None => env::remove_var("TEMP"),
-        }
-        match prior_tmp {
-            Some(v) => env::set_var("TMP", v),
-            None => env::remove_var("TMP"),
-        }
-        match prior_ember_home {
-            Some(v) => env::set_var("EMBER_HOME", v),
-            None => env::remove_var("EMBER_HOME"),
-        }
-
-        let dir = result.expect("scratch dir creation must succeed");
+        let dir = ember_scratch_dir_under(&ember_home, "binding-snapshot-test")
+            .expect("scratch dir creation must succeed");
         assert!(dir.exists(), "scratch dir must exist after creation");
 
         let dir_lower = dir.to_string_lossy().to_ascii_lowercase();
         let ember_home_lower = ember_home.to_string_lossy().to_ascii_lowercase();
         assert!(
             dir_lower.contains(&ember_home_lower),
-            "scratch dir {dir_lower} did not land under EMBER_HOME {ember_home_lower}"
-        );
-        assert!(
-            !dir_lower.contains("bogus-wrongly-cased-temp"),
-            "scratch dir leaked the bogus TEMP override: {dir_lower}"
+            "scratch dir {dir_lower} did not land under root {ember_home_lower}"
         );
 
         let _ = std::fs::remove_dir_all(&ember_home);
