@@ -274,10 +274,12 @@ def backoff_sleep_seconds(attempt: int, retry_after: Optional[float], jitter: bo
 
 
 def _urlopen_with_backoff(req: "urllib.request.Request", urlopen, timeout: int, sleeper=None):
-    """A 429/503 from arXiv is a politeness signal to back off and retry, not a
-    terminal failure -- letting it raise straight through (the behavior that was
-    live on 2026-08-15) killed an unattended --paper-list run on a single
-    rate-limit hit, leaving a one-line log.
+    """A 429/503 from arXiv, or a bare socket read timeout (TimeoutError raised
+    directly by urlopen when the read exceeds `timeout=`), is a politeness/
+    transient signal to back off and retry, not a terminal failure -- letting
+    it raise straight through (the behavior that was live on 2026-08-15) killed
+    an unattended --paper-list run on a single rate-limit hit, leaving a
+    one-line log.
 
     Note the previously-cited precedent does not actually cover this case:
     harvest_oai.py's fetch() retries 503 ONLY, so a 429 falls through to raise
@@ -293,21 +295,28 @@ def _urlopen_with_backoff(req: "urllib.request.Request", urlopen, timeout: int, 
     for attempt in range(MAX_FLOW_CONTROL_RETRIES + 1):
         try:
             return urlopen(req, timeout=timeout)
-        except urllib.error.HTTPError as exc:
-            if exc.code not in FLOW_CONTROL_CODES:
-                raise
+        except (urllib.error.HTTPError, TimeoutError) as exc:
+            if isinstance(exc, urllib.error.HTTPError):
+                if exc.code not in FLOW_CONTROL_CODES:
+                    raise
+                code = exc.code
+                raw_header = exc.headers.get("Retry-After") if exc.headers is not None else None
+            else:
+                # No status code and no Retry-After header on a bare timeout --
+                # same politeness-signal shape as 429/503, treated identically.
+                code = "timeout"
+                raw_header = None
+            retry_after = parse_retry_after(raw_header)
             if attempt == MAX_FLOW_CONTROL_RETRIES:
                 log(
-                    f"FLOW-CONTROL-EXHAUSTED code={exc.code} url={req.full_url} "
+                    f"FLOW-CONTROL-EXHAUSTED code={code} url={req.full_url} "
                     f"attempts={MAX_FLOW_CONTROL_RETRIES + 1} -- giving up"
                 )
                 raise
-            raw_header = exc.headers.get("Retry-After") if exc.headers is not None else None
-            retry_after = parse_retry_after(raw_header)
             sleep_for = backoff_sleep_seconds(attempt, retry_after)
             next_at = datetime.now(timezone.utc) + timedelta(seconds=sleep_for)
             log(
-                f"FLOW-CONTROL code={exc.code} attempt={attempt + 1}/{MAX_FLOW_CONTROL_RETRIES} "
+                f"FLOW-CONTROL code={code} attempt={attempt + 1}/{MAX_FLOW_CONTROL_RETRIES} "
                 f"retry_after_header={raw_header!r} retry_after_seconds={retry_after} "
                 f"sleep_seconds={sleep_for:.1f} next_attempt_at={next_at.isoformat()} "
                 f"url={req.full_url}"

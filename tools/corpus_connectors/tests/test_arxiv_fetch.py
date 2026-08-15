@@ -552,6 +552,55 @@ class ArxivFetchMockedTests(unittest.TestCase):
         self.assertGreater(sleeps[1], sleeps[0])
         self.assertGreaterEqual(sleeps[0], arxiv_fetch.BACKOFF_BASE_SECONDS)
 
+    def test_flow_control_bare_timeout_retries_with_backoff_then_succeeds(self):
+        # A bare socket read timeout (TimeoutError raised directly by urlopen
+        # when the read exceeds timeout=) has no status code and no
+        # Retry-After header, but is the same transient-failure shape as a
+        # 429/503 -- it must retry, not raise straight through and kill an
+        # unattended run on one slow response.
+        calls = {"n": 0}
+        sleeps = []
+
+        def _opener(request, timeout=60):
+            calls["n"] += 1
+            if calls["n"] <= 2:
+                raise TimeoutError("timed out")
+            return _FakeResp(ATOM_CC)
+
+        with patch.object(arxiv_fetch.time, "sleep", lambda s: sleeps.append(s)):
+            result = arxiv_fetch._http_get("http://export.arxiv.org/api/query?id_list=2301.00001", opener=_opener)
+        self.assertEqual(result, ATOM_CC)
+        self.assertEqual(calls["n"], 3)
+        self.assertEqual(len(sleeps), 2)
+        self.assertGreaterEqual(sleeps[0], arxiv_fetch.BACKOFF_BASE_SECONDS)
+
+    def test_flow_control_timeout_exhausts_retries_and_raises(self):
+        calls = {"n": 0}
+
+        def _opener(request, timeout=60):
+            calls["n"] += 1
+            raise TimeoutError("timed out")
+
+        with patch.object(arxiv_fetch.time, "sleep", lambda *_a, **_kw: None):
+            with self.assertRaises(TimeoutError):
+                arxiv_fetch._http_get("http://export.arxiv.org/api/query?id_list=2301.00001", opener=_opener)
+        self.assertEqual(calls["n"], arxiv_fetch.MAX_FLOW_CONTROL_RETRIES + 1)
+
+    def test_flow_control_timeout_logs_code_timeout(self):
+        lines = []
+
+        def _opener(request, timeout=60):
+            raise TimeoutError("timed out")
+
+        with patch.object(arxiv_fetch, "log", lambda m: lines.append(m)), \
+             patch.object(arxiv_fetch.time, "sleep", lambda *_a, **_kw: None):
+            with self.assertRaises(TimeoutError):
+                arxiv_fetch._http_get("http://export.arxiv.org/api/query", opener=_opener)
+
+        retries = [ln for ln in lines if ln.startswith("FLOW-CONTROL code=timeout")]
+        self.assertEqual(len(retries), arxiv_fetch.MAX_FLOW_CONTROL_RETRIES)
+        self.assertTrue(any(ln.startswith("FLOW-CONTROL-EXHAUSTED code=timeout") for ln in lines))
+
     def test_retry_after_is_a_floor_never_a_replacement(self):
         # A server that keeps echoing a small Retry-After must not hold the
         # client at a constant interval while it is still being refused --
