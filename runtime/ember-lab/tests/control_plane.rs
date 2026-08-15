@@ -609,6 +609,58 @@ fn wait_for_host_peak(path: &Path) -> u64 {
     );
 }
 
+/// Budget for [`wait_for_completion_marker`], derived from measurement rather
+/// than copied from a neighbouring helper.
+///
+/// The phase fixture is a real spawned child that must be scheduled by the
+/// host, run, and flush `completion.json` before this poll can observe it, so
+/// the wait races host CPU/process-creation contention from every other test
+/// thread. The prior fixed 1s budget (100 * 10ms) lost that race on
+/// ubuntu-latest and fell through to an unrelated `NotFound` panic on the
+/// caller's own `fs::read`/`fs::remove_file`.
+///
+/// Provenance: a diagnostic build of this helper (branch
+/// `fix/1464-timing-class-cure-completion-markers`, commit e7a9770) was run on
+/// real ubuntu-latest CI and reported the elapsed wait for each of the three
+/// completion-marker tests -- GitHub Actions run 31883192473, `ember-lab` job
+/// 95008520456, log lines `MEASURED_LATENCY_MS completion_marker`:
+///
+/// ```text
+/// MEASURED_LATENCY_MS completion_marker 1345
+/// MEASURED_LATENCY_MS completion_marker 1325
+/// MEASURED_LATENCY_MS completion_marker 1508
+/// ```
+///
+/// Worst observed = 1508ms. Budget = worst observed * 4 (= 6032ms, rounded
+/// down to 6000ms). The 4x margin covers host-contention variance not captured
+/// by a three-sample measurement; it is deliberately small so a genuinely
+/// broken producer still fails within seconds instead of stalling the suite.
+const COMPLETION_MARKER_WAIT_BUDGET_MS: u64 = 6_000;
+
+/// Poll interval for [`wait_for_completion_marker`]. Kept fine-grained so the
+/// widened budget above does not coarsen when the marker is actually observed.
+const COMPLETION_MARKER_POLL_INTERVAL_MS: u64 = 20;
+
+fn wait_for_completion_marker(path: &Path) -> Value {
+    let attempts = COMPLETION_MARKER_WAIT_BUDGET_MS / COMPLETION_MARKER_POLL_INTERVAL_MS;
+    for _ in 0..attempts {
+        // Retry past a torn read: the marker can exist before its contents are
+        // fully flushed, so treat an unparseable body as "not ready yet"
+        // rather than unwrapping on it.
+        if let Ok(bytes) = fs::read(path) {
+            if let Ok(value) = serde_json::from_slice(&bytes) {
+                return value;
+            }
+        }
+        thread::sleep(Duration::from_millis(COMPLETION_MARKER_POLL_INTERVAL_MS));
+    }
+    panic!(
+        "phase fixture completion marker never appeared after {}s: {}",
+        COMPLETION_MARKER_WAIT_BUDGET_MS / 1_000,
+        path.display()
+    );
+}
+
 #[test]
 fn fixture_child_process() {
     if std::env::var("EMBER_LAB_FIXTURE_CHILD").as_deref() != Ok("1") {
@@ -2562,12 +2614,7 @@ fn missing_completion_marker_refuses_even_when_phase_files_are_complete() {
     let root = sandbox("phase-missing-completion");
     let (daemon, phase_root) = start_phase_fixture(&root, "phase-missing-completion", true);
     let _ = wait_for_host_peak(&phase_root.join("host_peak.json"));
-    for _ in 0..100 {
-        if phase_root.join("completion.json").exists() {
-            break;
-        }
-        thread::sleep(Duration::from_millis(10));
-    }
+    let _ = wait_for_completion_marker(&phase_root.join("completion.json"));
     fs::remove_file(phase_root.join("completion.json")).unwrap();
     assert!(daemon
         .execute_minimal_episode(
@@ -2583,14 +2630,7 @@ fn missing_completion_marker_refuses_even_when_phase_files_are_complete() {
 fn foreign_completion_marker_cannot_authorize_consumption() {
     let root = sandbox("phase-foreign-completion");
     let (daemon, phase_root) = start_phase_fixture(&root, "phase-foreign", true);
-    for _ in 0..100 {
-        if phase_root.join("completion.json").exists() {
-            break;
-        }
-        thread::sleep(Duration::from_millis(10));
-    }
-    let mut completion: Value =
-        serde_json::from_slice(&fs::read(phase_root.join("completion.json")).unwrap()).unwrap();
+    let mut completion = wait_for_completion_marker(&phase_root.join("completion.json"));
     completion["job_id"] = json!("foreign-job");
     fs::write(
         phase_root.join("completion.json"),
@@ -2607,14 +2647,7 @@ fn foreign_completion_marker_cannot_authorize_consumption() {
 fn stale_completion_marker_cannot_authorize_consumption() {
     let root = sandbox("phase-stale-completion");
     let (daemon, phase_root) = start_phase_fixture(&root, "phase-stale", true);
-    for _ in 0..100 {
-        if phase_root.join("completion.json").exists() {
-            break;
-        }
-        thread::sleep(Duration::from_millis(10));
-    }
-    let mut completion: Value =
-        serde_json::from_slice(&fs::read(phase_root.join("completion.json")).unwrap()).unwrap();
+    let mut completion = wait_for_completion_marker(&phase_root.join("completion.json"));
     completion["completed_at_ms"] = json!(0);
     fs::write(
         phase_root.join("completion.json"),
