@@ -548,15 +548,6 @@ WAVE2_BULK_VEINS: List[BulkVein] = [
         requires_resolution=True,
     ),
     BulkVein(
-        name="open-textbooks-reference",
-        domains=("A", "B", "C", "D", "G"),
-        license_basis="CC-BY / public-domain (OpenStax/LibreTexts CC-BY subset/Wikibooks/Stacks Project/nLab)",
-        url="https://openstax.org/api/v2/pages/",
-        est_tokens_low_b=3.0,
-        est_tokens_high_b=6.0,
-        requires_resolution=True,
-    ),
-    BulkVein(
         name="wikipedia-en-baseline",
         domains=("baseline",),
         license_basis="CC-BY-SA-4.0 (Wikipedia EN dump)",
