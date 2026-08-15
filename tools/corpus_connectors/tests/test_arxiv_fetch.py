@@ -372,6 +372,88 @@ class ArxivFetchMockedTests(unittest.TestCase):
             self.assertEqual(len(data["files"]), 1)
             self.assertEqual(data["files"][0]["bytes"], 18)
 
+    def test_budget_bytes_walk_skips_candidate_whose_streamed_fetch_fails_and_continues(self):
+        # A-train-2's real root cause (2026-08-15): the walk loop's bare
+        # `except Exception: break` ended the ENTIRE budget walk on the first
+        # candidate that threw ANY non-budget exception (here: a permanent
+        # 404, id=2212.07920v4 in production), stranding 7.6GB of unused
+        # budget. Only budget conditions (would-exceed, DownloadTooLargeError)
+        # may end the walk; any other exception must skip just that one
+        # candidate and continue to the next.
+        import urllib.error
+
+        list_path_ids = ["2301.00003", "2301.00004"]
+
+        def _opener(request, timeout=60):
+            url = request.full_url
+            if "export.arxiv.org/api/query" in url:
+                return _FakeResp(ATOM_TWO_CC)
+            arxiv_id = url.rstrip("/").rsplit("/", 1)[-1]
+            stripped_id = arxiv_fetch._strip_version(arxiv_id)
+            if request.get_method() == "HEAD":
+                if stripped_id == "2301.00003":
+                    # No Content-Length -- forces the streamed fallback below.
+                    return _FakeResp(b"", headers={})
+                return _FakeResp(b"", headers={"Content-Length": "40"})
+            # GET (streamed path): 2301.00003's fetch is permanently broken.
+            if stripped_id == "2301.00003":
+                raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+            return _FakeResp(b"x" * 40)
+
+        with tempfile.TemporaryDirectory() as td:
+            list_path = Path(td) / "ids.txt"
+            list_path.write_text("\n".join(list_path_ids) + "\n", encoding="utf-8")
+            dest = Path(td) / "arxivdata"
+            args = arxiv_fetch.build_parser().parse_args(
+                ["--paper-list", str(list_path), "--what", "source", "--dest", str(dest), "--budget-bytes", "1000"]
+            )
+            lines = []
+            with patch.object(arxiv_fetch, "log", lambda m: lines.append(m)):
+                receipt_path = arxiv_fetch.fetch(args, opener=_opener)
+            data = json.loads(receipt_path.read_text(encoding="utf-8"))
+            # 2301.00003 was skipped, not stopped -- 2301.00004 downstream of
+            # it in declared order is still reached and selected.
+            self.assertEqual(len(data["files"]), 1)
+            self.assertIn("2301.00004", data["notes"])
+            self.assertNotIn("2301.00003", data["notes"])
+            skip_lines = [ln for ln in lines if ln.startswith("WALK-SKIP")]
+            self.assertEqual(len(skip_lines), 1)
+            self.assertIn("id=2301.00003", skip_lines[0])
+            end_lines = [ln for ln in lines if ln.startswith("WALK-END")]
+            self.assertEqual(len(end_lines), 1)
+            self.assertIn("end_reason=list-exhausted", end_lines[0])
+            manifest_rel = data["notes"].split("budget_walk_manifest=")[1].strip()
+            walk = json.loads((dest / manifest_rel).read_text(encoding="utf-8"))
+            # walk-note ids carry the API's own versioned form (e.g. v1), not
+            # the paper-list's unversioned id -- match on the stripped form.
+            statuses = {arxiv_fetch._strip_version(n["id"]): n["status"] for n in walk["walk"]}
+            self.assertEqual(statuses["2301.00003"], "skipped")
+            self.assertEqual(statuses["2301.00004"], "selected")
+
+    def test_budget_bytes_all_candidates_skipped_still_blocks(self):
+        # The zero-selected BLOCKED path (already covered for the budget-stop
+        # case) must behave identically when every candidate is skipped for a
+        # non-budget reason rather than stopped for a budget reason.
+        import urllib.error
+
+        def _opener(request, timeout=60):
+            url = request.full_url
+            if "export.arxiv.org/api/query" in url:
+                return _FakeResp(ATOM_TWO_CC)
+            if request.get_method() == "HEAD":
+                return _FakeResp(b"", headers={})
+            raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+
+        with tempfile.TemporaryDirectory() as td:
+            list_path = Path(td) / "ids.txt"
+            list_path.write_text("2301.00003\n2301.00004\n", encoding="utf-8")
+            dest = Path(td) / "arxivdata"
+            args = arxiv_fetch.build_parser().parse_args(
+                ["--paper-list", str(list_path), "--what", "source", "--dest", str(dest), "--budget-bytes", "1000"]
+            )
+            with self.assertRaises(rcpt.BlockedError):
+                arxiv_fetch.fetch(args, opener=_opener)
+
     def test_license_override_fills_gap_when_live_check_is_unverified(self):
         with tempfile.TemporaryDirectory() as td:
             list_path = Path(td) / "ids.txt"
@@ -455,6 +537,60 @@ class ArxivFetchMockedTests(unittest.TestCase):
             self.assertEqual(len(data["files"]), 1)
             self.assertEqual(data["license"], "http://creativecommons.org/licenses/by/4.0/")
             self.assertIn("(override)", data["notes"])
+
+    def test_eligibility_filter_logs_candidates_in_and_eligible_out(self):
+        # A-train-2 (2026-08-15): a 53,615-candidate paper-list collapsed to
+        # 492 eligible with a completely clean run -- zero errors, WALK-END
+        # examined=492 -- because nothing in the log ever compared the
+        # eligible count against the candidate pool size. This is the fix:
+        # one unconditional line at the filter itself, with a basis
+        # breakdown, so that collapse is visible from the log alone on the
+        # very next run instead of requiring forensic reconstruction after
+        # the fact.
+        atom_mixed = b"""<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
+  <entry>
+    <id>http://arxiv.org/abs/2301.00003v1</id>
+    <title>Live CC Paper</title>
+    <updated>2023-01-03T00:00:00Z</updated>
+    <arxiv:license>http://creativecommons.org/licenses/by/4.0/</arxiv:license>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2301.00005v1</id>
+    <title>No License Element Paper (override-rescued)</title>
+    <updated>2023-01-05T00:00:00Z</updated>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2301.00002v1</id>
+    <title>Live Perpetual-License Paper (excluded, override does not apply)</title>
+    <updated>2023-01-02T00:00:00Z</updated>
+    <arxiv:license>http://arxiv.org/licenses/nonexclusive-distrib/1.0/</arxiv:license>
+  </entry>
+</feed>
+"""
+        import contextlib
+        import io as _io
+
+        with tempfile.TemporaryDirectory() as td:
+            list_path = Path(td) / "ids.txt"
+            list_path.write_text("2301.00003\n2301.00005\n2301.00002\n", encoding="utf-8")
+            dest = Path(td) / "arxivdata"
+            args = arxiv_fetch.build_parser().parse_args(
+                [
+                    "--paper-list", str(list_path), "--what", "source", "--dest", str(dest),
+                    "--license-override", "http://creativecommons.org/licenses/by/4.0/",
+                    "--license-override-evidence", "OAI-PMH bulk harvest <license> element, exact-SPDX match",
+                ]
+            )
+            buf = _io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                arxiv_fetch.fetch(args, opener=_opener_for(atom_mixed))
+            printed = buf.getvalue()
+            self.assertIn(
+                "ELIGIBILITY-FILTER candidates_in=3 eligible_out=2 "
+                "(live_cc=1, override_rescued=1) excluded=1 license_filter=cc-only",
+                printed,
+            )
 
     def test_license_override_does_not_rescue_live_resolved_non_cc_under_cc_only(self):
         # Conflict case: live resolves to a NON-CC license (the arXiv
@@ -820,7 +956,12 @@ class ArxivFetchMockedTests(unittest.TestCase):
             with contextlib.redirect_stdout(buf):
                 code = rcpt.run_cli(lambda: arxiv_fetch.fetch(args, opener=_opener_for(ATOM_PERPETUAL)))
             self.assertEqual(code, 1)
-            self.assertTrue(buf.getvalue().strip().startswith("BLOCKED"))
+            lines = buf.getvalue().strip().splitlines()
+            # The eligibility-filter diagnostic (candidates_in=1 eligible_out=0)
+            # now prints before the terminal BLOCKED line -- exactly the
+            # zero-eligible case where that count matters most.
+            self.assertIn("ELIGIBILITY-FILTER candidates_in=1 eligible_out=0", lines[0])
+            self.assertTrue(lines[-1].startswith("BLOCKED"))
 
 
 if __name__ == "__main__":

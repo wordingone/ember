@@ -577,6 +577,27 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
         # cc-only even when an override was supplied for it -- live-resolved
         # always wins, a conflict means exclude, not fetch.
         eligible = entries if args.license_filter == "all" else [e for e in entries if _is_cc_url(_resolved_license(e)[0])]
+        # A silent collapse here is invisible anywhere else in the run's output --
+        # the walk phase only ever sees the post-filter `eligible` list, so a
+        # 53,615-candidate pool that collapses to 492 eligible produces a
+        # completely clean, zero-error run (WALK-END examined=492 selected=491)
+        # with nothing in the log to distinguish "492 really is the whole
+        # license-clean population" from "the filter silently ate 99% of the
+        # pool" (A-train-2, 2026-08-15). Logged unconditionally (not just when it
+        # looks wrong) since the threshold for "suspicious" isn't knowable in
+        # general -- a reader comparing this line against the paper-list's own
+        # size is the check.
+        if args.license_filter != "all":
+            live_cc = sum(1 for e in entries if e.is_cc)
+            override_rescued = sum(
+                1 for e in entries if e.license_label == rcpt.UNVERIFIED and args.license_override is not None
+            )
+            excluded = len(entries) - live_cc - override_rescued
+            log(
+                f"ELIGIBILITY-FILTER candidates_in={len(entries)} eligible_out={len(eligible)} "
+                f"(live_cc={live_cc}, override_rescued={override_rescued}) excluded={excluded} "
+                f"license_filter={args.license_filter}"
+            )
         if not eligible:
             raise rcpt.BlockedError(
                 f"no license-clean papers eligible for content fetch under --license-filter cc-only "
@@ -600,6 +621,7 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
             head_count = 0
             streamed_count = 0
             examined = 0
+            walk_end_reason = "list-exhausted"
             for e in eligible:
                 # The walk is otherwise silent for its entire duration (no other
                 # log() call in this loop) -- at RATE_LIMIT_SECONDS=3.0/candidate,
@@ -623,6 +645,7 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
                         walk_notes.append(
                             {"id": e.arxiv_id, "bytes": size, "status": "stopped", "size_source": "head", "reason": "would exceed budget"}
                         )
+                        walk_end_reason = f"budget-stop id={e.arxiv_id}"
                         break
                     selected.append(e)
                     cumulative += size
@@ -650,12 +673,20 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
                         {"id": e.arxiv_id, "status": "stopped", "size_source": "streamed",
                          "reason": f"streamed past remaining budget ({remaining_budget} bytes); size undeterminable up front"}
                     )
+                    walk_end_reason = f"budget-stop id={e.arxiv_id}"
                     break
                 except Exception as exc:
+                    # Only budget conditions may end the walk early. A single
+                    # permanently-unavailable candidate (dead link, 404, transient
+                    # server fault) is NOT a budget condition -- terminating the
+                    # entire walk on it silently stranded 7.6GB of unused budget
+                    # in A-train-2 (2026-08-15, id=2212.07920v4, real root cause).
+                    # Skip this one candidate and keep walking the rest of the list.
                     walk_notes.append(
-                        {"id": e.arxiv_id, "status": "stopped", "size_source": "streamed", "reason": f"streamed fetch failed: {exc!r}"}
+                        {"id": e.arxiv_id, "status": "skipped", "size_source": "streamed", "reason": f"streamed fetch failed: {exc!r}"}
                     )
-                    break
+                    log(f"WALK-SKIP id={e.arxiv_id} reason={exc!r}")
+                    continue
                 selected.append(e)
                 streamed_paths[e.arxiv_id] = dest_file
                 cumulative += actual_size
@@ -667,7 +698,8 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
             eligible = selected
             log(
                 f"WALK-END examined={examined} selected={len(eligible)} "
-                f"cumulative_bytes={cumulative} budget_bytes={args.budget_bytes}"
+                f"cumulative_bytes={cumulative} budget_bytes={args.budget_bytes} "
+                f"end_reason={walk_end_reason}"
             )
             if not eligible:
                 raise rcpt.BlockedError(
