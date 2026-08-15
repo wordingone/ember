@@ -53,6 +53,7 @@ def _load_test_contract_helpers():
 _test_contract = _load_test_contract_helpers()
 _candidate_manifest = _test_contract._candidate_manifest
 _write_json = _test_contract._write_json
+_register_checkpoint_custody = _test_contract._register_checkpoint_custody
 
 GOVERNED_RELATIVE_PATHS = sorted(set(R1_ENTRY_SOURCE_FILES.values()) | set(R1_ENTRY_PINNED_FILES.values()))
 
@@ -185,6 +186,7 @@ def test_foreign_repo_is_refused(tmp_path: Path, foreign: Path):
 
     foreign_head = _git(foreign, "rev-parse", "HEAD")
     manifest_path = _manifest_at(tmp_path, foreign_head)
+    custody_db = _register_checkpoint_custody(tmp_path)
 
     with pytest.raises(ValueError, match="object store"):
         build_r1_warm100_entry(
@@ -192,6 +194,7 @@ def test_foreign_repo_is_refused(tmp_path: Path, foreign: Path):
             source_commit=foreign_head,
             source_root=foreign,
             trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
+            custody_db=custody_db,
             **_source_paths(foreign),
         )
 
@@ -207,6 +210,7 @@ def test_origin_url_spoof_is_refused(tmp_path: Path, foreign: Path):
     _git(foreign, "remote", "add", "origin", "https://github.com/wordingone/ember.git")
     foreign_head = _git(foreign, "rev-parse", "HEAD")
     manifest_path = _manifest_at(tmp_path, foreign_head)
+    custody_db = _register_checkpoint_custody(tmp_path)
 
     with pytest.raises(ValueError, match="object store"):
         build_r1_warm100_entry(
@@ -214,6 +218,7 @@ def test_origin_url_spoof_is_refused(tmp_path: Path, foreign: Path):
             source_commit=foreign_head,
             source_root=foreign,
             trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
+            custody_db=custody_db,
             **_source_paths(foreign),
         )
 
@@ -231,6 +236,7 @@ def test_ancestry_severed_clone_is_refused_by_default_anchor(tmp_path: Path, gov
     _git(severed, "commit", "-m", "unpublished local commit")
     severed_head = _git(severed, "rev-parse", "HEAD")
     manifest_path = _manifest_at(tmp_path, severed_head)
+    custody_db = _register_checkpoint_custody(tmp_path)
 
     with pytest.raises(ValueError, match="object store"):
         build_r1_warm100_entry(
@@ -238,6 +244,7 @@ def test_ancestry_severed_clone_is_refused_by_default_anchor(tmp_path: Path, gov
             source_commit=severed_head,
             source_root=severed,
             trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
+            custody_db=custody_db,
             **_source_paths(severed),
         )
 
@@ -256,6 +263,7 @@ def test_ancestry_severed_clone_is_refused_by_unpublished_ancestry(tmp_path: Pat
     _git(severed, "commit", "-m", "unpublished local commit")
     severed_head = _git(severed, "rev-parse", "HEAD")
     manifest_path = _manifest_at(tmp_path, severed_head)
+    custody_db = _register_checkpoint_custody(tmp_path)
 
     with pytest.raises(ValueError, match="publish"):
         build_r1_warm100_entry(
@@ -265,6 +273,7 @@ def test_ancestry_severed_clone_is_refused_by_unpublished_ancestry(tmp_path: Pat
             trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
             canonical_root=severed,
             governed_remote=str(governed_remote),
+            custody_db=custody_db,
             **_source_paths(severed),
         )
 
@@ -285,6 +294,7 @@ def test_unmanaged_worktree_is_refused(tmp_path: Path, canonical: Path, managed_
     _git(canonical, "worktree", "add", "-b", "ad-hoc-branch", str(ad_hoc), "HEAD")
     ad_hoc_head = _git(ad_hoc, "rev-parse", "HEAD")
     manifest_path = _manifest_at(tmp_path, ad_hoc_head)
+    custody_db = _register_checkpoint_custody(tmp_path)
 
     with pytest.raises(ValueError, match="managed-worktree"):
         build_r1_warm100_entry(
@@ -293,6 +303,7 @@ def test_unmanaged_worktree_is_refused(tmp_path: Path, canonical: Path, managed_
             source_root=ad_hoc,
             trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
             canonical_root=canonical,
+            custody_db=custody_db,
             **_source_paths(ad_hoc),
         )
 
@@ -308,6 +319,7 @@ def test_unpublished_commit_from_right_root_is_refused(tmp_path: Path, canonical
     _git(canonical, "commit", "-m", "unpublished local commit")
     new_head = _git(canonical, "rev-parse", "HEAD")
     manifest_path = _manifest_at(tmp_path, new_head)
+    custody_db = _register_checkpoint_custody(tmp_path)
 
     with pytest.raises(ValueError, match="publish"):
         build_r1_warm100_entry(
@@ -317,6 +329,7 @@ def test_unpublished_commit_from_right_root_is_refused(tmp_path: Path, canonical
             trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
             canonical_root=canonical,
             governed_remote=str(governed_remote),
+            custody_db=custody_db,
             **_source_paths(canonical),
         )
 
@@ -329,6 +342,7 @@ def test_receipt_tampering_of_source_binding_is_refused(tmp_path: Path, canonica
 
     head = _git(canonical, "rev-parse", "HEAD")
     manifest_path = _manifest_at(tmp_path, head)
+    custody_db = _register_checkpoint_custody(tmp_path)
     payload = build_r1_warm100_entry(
         manifest_path,
         source_commit=head,
@@ -336,6 +350,7 @@ def test_receipt_tampering_of_source_binding_is_refused(tmp_path: Path, canonica
         trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
         canonical_root=canonical,
         governed_remote=str(governed_remote),
+        custody_db=custody_db,
         **_source_paths(canonical),
     )
     assert payload["source_binding"]["worktree_identity"] == "MAIN"
@@ -373,6 +388,7 @@ def test_missing_registry_refuses(tmp_path: Path, canonical: Path, managed_workt
 
     head = _git(managed_worktree, "rev-parse", "HEAD")
     manifest_path = _manifest_at(tmp_path, head)
+    custody_db = _register_checkpoint_custody(tmp_path)
 
     with pytest.raises(ValueError, match="registry"):
         build_r1_warm100_entry(
@@ -381,6 +397,7 @@ def test_missing_registry_refuses(tmp_path: Path, canonical: Path, managed_workt
             source_root=managed_worktree,
             trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
             canonical_root=canonical,
+            custody_db=custody_db,
             **_source_paths(managed_worktree),
         )
 
@@ -395,6 +412,7 @@ def test_positive_control_main_and_managed_worktree_mint_green(
 
     main_head = _git(canonical, "rev-parse", "HEAD")
     main_manifest = _manifest_at(tmp_path / "main-manifest", main_head)
+    main_custody_db = _register_checkpoint_custody(main_manifest.parent)
     main_payload = build_r1_warm100_entry(
         main_manifest,
         source_commit=main_head,
@@ -402,6 +420,7 @@ def test_positive_control_main_and_managed_worktree_mint_green(
         trusted_verifier_registry=main_manifest.parent / "trusted-verifiers.json",
         canonical_root=canonical,
         governed_remote=str(governed_remote),
+        custody_db=main_custody_db,
         **_source_paths(canonical),
     )
     assert main_payload["source_binding"] == {
@@ -421,6 +440,7 @@ def test_positive_control_main_and_managed_worktree_mint_green(
 
     managed_head = _git(managed_worktree, "rev-parse", "HEAD")
     managed_manifest = _manifest_at(tmp_path / "managed-manifest", managed_head)
+    managed_custody_db = _register_checkpoint_custody(managed_manifest.parent)
     managed_payload = build_r1_warm100_entry(
         managed_manifest,
         source_commit=managed_head,
@@ -428,6 +448,7 @@ def test_positive_control_main_and_managed_worktree_mint_green(
         trusted_verifier_registry=managed_manifest.parent / "trusted-verifiers.json",
         canonical_root=canonical,
         governed_remote=str(governed_remote),
+        custody_db=managed_custody_db,
         **_source_paths(managed_worktree),
     )
     assert managed_payload["source_binding"] == {
@@ -467,6 +488,7 @@ def test_self_invocation_from_ad_hoc_worktree_is_refused(
     _git(canonical, "worktree", "add", "-b", "ad-hoc-self-invoke-branch", str(ad_hoc), "HEAD")
     ad_hoc_head = _git(ad_hoc, "rev-parse", "HEAD")
     manifest_path = _manifest_at(tmp_path, ad_hoc_head)
+    custody_db = _register_checkpoint_custody(tmp_path)
 
     with pytest.raises(ValueError, match="managed-worktree"):
         build_r1_warm100_entry(
@@ -475,6 +497,7 @@ def test_self_invocation_from_ad_hoc_worktree_is_refused(
             source_root=ad_hoc,
             trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
             canonical_root=ad_hoc,
+            custody_db=custody_db,
             **_source_paths(ad_hoc),
         )
 
@@ -500,6 +523,7 @@ def test_canonical_on_feature_branch_or_detached_head_binds_correctly(
     assert detached_head == published_tip
 
     manifest_path = _manifest_at(tmp_path / "detached-manifest", detached_head)
+    custody_db = _register_checkpoint_custody(manifest_path.parent)
     payload = build_r1_warm100_entry(
         manifest_path,
         source_commit=detached_head,
@@ -507,6 +531,7 @@ def test_canonical_on_feature_branch_or_detached_head_binds_correctly(
         trusted_verifier_registry=manifest_path.parent / "trusted-verifiers.json",
         canonical_root=canonical,
         governed_remote=str(governed_remote),
+        custody_db=custody_db,
         **_source_paths(canonical),
     )
     assert payload["source_binding"]["worktree_identity"] == "MAIN"
@@ -520,6 +545,7 @@ def test_canonical_on_feature_branch_or_detached_head_binds_correctly(
     feature_head = _git(canonical, "rev-parse", "HEAD")
     assert feature_head != published_tip
     manifest_path_2 = _manifest_at(tmp_path / "feature-manifest", feature_head)
+    custody_db_2 = _register_checkpoint_custody(manifest_path_2.parent)
 
     with pytest.raises(ValueError, match="publish"):
         build_r1_warm100_entry(
@@ -529,6 +555,7 @@ def test_canonical_on_feature_branch_or_detached_head_binds_correctly(
             trusted_verifier_registry=manifest_path_2.parent / "trusted-verifiers.json",
             canonical_root=canonical,
             governed_remote=str(governed_remote),
+            custody_db=custody_db_2,
             **_source_paths(canonical),
         )
 
@@ -539,6 +566,7 @@ def test_foreign_repo_cli_refusal_is_content_addressed(tmp_path: Path, foreign: 
     --source-root is refused with no test-only override needed."""
     foreign_head = _git(foreign, "rev-parse", "HEAD")
     manifest_path = _manifest_at(tmp_path, foreign_head)
+    custody_db = _register_checkpoint_custody(tmp_path)
     paths = _source_paths(foreign)
 
     result = subprocess.run(
@@ -559,6 +587,8 @@ def test_foreign_repo_cli_refusal_is_content_addressed(tmp_path: Path, foreign: 
             str(paths["fixed_prior_path"]),
             "--trusted-verifier-registry",
             str(tmp_path / "trusted-verifiers.json"),
+            "--custody-db",
+            str(custody_db),
         ],
         cwd=REPO_ROOT,
         text=True,
@@ -712,6 +742,7 @@ def test_identity_before_network_ordering_locked_by_sentinel_remote(tmp_path: Pa
 
     foreign_head = _git(foreign, "rev-parse", "HEAD")
     manifest_path = _manifest_at(tmp_path, foreign_head)
+    custody_db = _register_checkpoint_custody(tmp_path)
 
     with pytest.raises(ValueError, match="object store"):
         build_r1_warm100_entry(
@@ -720,6 +751,7 @@ def test_identity_before_network_ordering_locked_by_sentinel_remote(tmp_path: Pa
             source_root=foreign,
             trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
             governed_remote=sentinel_remote,
+            custody_db=custody_db,
             **_source_paths(foreign),
         )
 

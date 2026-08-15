@@ -46,13 +46,45 @@ class CustodyRefused(RuntimeError):
         self.receipt = receipt
 
 
+def _durable_repo_root(repo_root: Path) -> Path:
+    """The durable main-tree root for ``repo_root``'s repository, resolved via
+    ``git rev-parse --path-format=absolute --git-common-dir`` -- never
+    ``Path(__file__).resolve()``, which names whichever tree happens to be
+    executing this module (#1741 Known Limitation B).
+
+    Precedent: ``scripts/worktree_lifecycle.py::common_dir`` and
+    ``scripts/ember_restart/source_authority.py::_common_dir``. A genuine main
+    checkout's ``.git`` is a real directory that IS the common dir; a worktree's
+    (lifecycle-managed or ad hoc) ``.git`` is a FILE pointing elsewhere -- so the
+    common dir's parent always names the main tree, whichever tree issued the
+    query. This is a purely local ``rev-parse`` (no remote contact), so the
+    remote-config-injection hardening ``scripts/git_env_hardening.py`` exists for
+    does not apply here; matches this module's own unhardened ``custody_verify``
+    subprocess style.
+    """
+    root = repo_root.resolve(strict=True)
+    result = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise ValueError(f"artifact custody gate: git identity is unavailable for {root}")
+    common_dir = Path(result.stdout.strip()).resolve(strict=True)
+    return common_dir.parent
+
+
 def canonical_ember_lab_binary(repo_root: Path) -> Path | None:
     """The one repository-governed daemon/CLI binary -- never a caller-supplied path.
 
     Mirrors ``scripts/ember_dispatch_token.py::_canonical_ember_lab_binary`` exactly:
-    the same two candidate build outputs, the same containment check.
+    the same two candidate build outputs, the same containment check. Always
+    resolved against the durable main-tree root (``_durable_repo_root``), even
+    when ``repo_root`` names a worktree -- there is exactly one governed build,
+    never a per-worktree copy.
     """
-    root = repo_root.resolve(strict=True)
+    root = _durable_repo_root(repo_root)
     for candidate in (
         root / "runtime" / "ember-lab" / "target" / "release" / "ember-lab.exe",
         root / "runtime" / "ember-lab" / "target" / "debug" / "ember-lab.exe",
@@ -72,9 +104,11 @@ def default_catalog_db(repo_root: Path) -> Path:
     Lives under the gitignored ``state/`` directory at the repository root (never
     inside a worktree, which is retired and deleted independently of the catalog it
     would otherwise silently take with it) -- the same durability class as the
-    other host-state ``state/`` carries today.
+    other host-state ``state/`` carries today. Always resolved against the
+    durable main-tree root (``_durable_repo_root``), even when ``repo_root``
+    names a worktree.
     """
-    return repo_root.resolve(strict=True) / "state" / "ember-lab-catalog.sqlite3"
+    return _durable_repo_root(repo_root) / "state" / "ember-lab-catalog.sqlite3"
 
 
 def custody_verify(

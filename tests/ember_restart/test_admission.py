@@ -6,7 +6,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-from test_contract import REPO_ROOT, VALIDATOR, _candidate_manifest, _sha256, _write_json
+from test_contract import (
+    REPO_ROOT,
+    VALIDATOR,
+    _candidate_manifest,
+    _register_checkpoint_custody,
+    _sha256,
+    _write_json,
+)
 
 
 def test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path: Path):
@@ -468,6 +475,7 @@ print(json.dumps({
             "trusted_verifier_registry_sha256": _sha256(registry),
         },
     )
+    custody_db = _register_checkpoint_custody(tmp_path)
     result = subprocess.run(
         [
             sys.executable,
@@ -478,6 +486,8 @@ print(json.dumps({
             str(registry),
             "--trusted-verifier-registry-approval",
             str(registry_approval),
+            "--custody-db",
+            str(custody_db),
         ],
         cwd=REPO_ROOT,
         text=True,
