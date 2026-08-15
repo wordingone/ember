@@ -577,6 +577,27 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
         # cc-only even when an override was supplied for it -- live-resolved
         # always wins, a conflict means exclude, not fetch.
         eligible = entries if args.license_filter == "all" else [e for e in entries if _is_cc_url(_resolved_license(e)[0])]
+        # A silent collapse here is invisible anywhere else in the run's output --
+        # the walk phase only ever sees the post-filter `eligible` list, so a
+        # 53,615-candidate pool that collapses to 492 eligible produces a
+        # completely clean, zero-error run (WALK-END examined=492 selected=491)
+        # with nothing in the log to distinguish "492 really is the whole
+        # license-clean population" from "the filter silently ate 99% of the
+        # pool" (A-train-2, 2026-08-15). Logged unconditionally (not just when it
+        # looks wrong) since the threshold for "suspicious" isn't knowable in
+        # general -- a reader comparing this line against the paper-list's own
+        # size is the check.
+        if args.license_filter != "all":
+            live_cc = sum(1 for e in entries if e.is_cc)
+            override_rescued = sum(
+                1 for e in entries if e.license_label == rcpt.UNVERIFIED and args.license_override is not None
+            )
+            excluded = len(entries) - live_cc - override_rescued
+            log(
+                f"ELIGIBILITY-FILTER candidates_in={len(entries)} eligible_out={len(eligible)} "
+                f"(live_cc={live_cc}, override_rescued={override_rescued}) excluded={excluded} "
+                f"license_filter={args.license_filter}"
+            )
         if not eligible:
             raise rcpt.BlockedError(
                 f"no license-clean papers eligible for content fetch under --license-filter cc-only "
