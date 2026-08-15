@@ -2,6 +2,14 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
+// This entire file exercises the Windows named-pipe dispatch-token transport
+// (EMBER_LAB_PIPE, windows_sys Win32 pipe APIs, raw Windows handles). Nothing
+// in it targets Linux, so the whole file is gated rather than individual
+// imports/usages -- an ungated top-level `use std::os::windows::io::...`
+// here previously failed the whole ember-lab crate to COMPILE on
+// ubuntu-latest CI (#1751), meaning zero tests in this crate ever ran there.
+#![cfg(windows)]
+
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::os::windows::io::{FromRawHandle, RawHandle};

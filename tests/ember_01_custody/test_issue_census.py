@@ -59,6 +59,7 @@ def test_issue_census_binds_master_blobs_and_history_without_closure(
     git(root, "init")
     git(root, "config", "user.email", "fixture@example.invalid")
     git(root, "config", "user.name", "fixture")
+    (root / "docs/authority").mkdir(parents=True, exist_ok=True)
     (root / "docs/authority/STATE.md").write_text("Tracks #7.\n", encoding="utf-8")
     git(root, "add", "docs/authority/STATE.md")
     git(root, "commit", "-m", "Bind issue #9 in history")
