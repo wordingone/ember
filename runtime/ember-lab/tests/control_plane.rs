@@ -3488,7 +3488,10 @@ fn assessment_export_refuses_coherent_preflight_binding_tamper() {
     let output = root.join("coherent-tamper-output");
     let export_result = daemon.export_assessment_evidence("assessment-coherent-tamper", &output);
     assert!(
-        matches!(export_result, Err(EmberLabError::InvalidDispatchManifest { .. })),
+        matches!(
+            export_result,
+            Err(EmberLabError::InvalidDispatchManifest { .. })
+        ),
         "expected InvalidDispatchManifest, got: {export_result:?}"
     );
     assert!(!output.exists());
@@ -3508,7 +3511,10 @@ fn assessment_export_refuses_preflight_lease_mismatch() {
     let output = root.join("lease-mismatch-output");
     let export_result = daemon.export_assessment_evidence("assessment-lease-mismatch", &output);
     assert!(
-        matches!(export_result, Err(EmberLabError::InvalidDispatchManifest { .. })),
+        matches!(
+            export_result,
+            Err(EmberLabError::InvalidDispatchManifest { .. })
+        ),
         "expected InvalidDispatchManifest, got: {export_result:?}"
     );
     assert!(!output.exists());

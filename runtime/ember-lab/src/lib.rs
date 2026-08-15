@@ -6380,7 +6380,10 @@ mod linux_host_commit_capacity_tests {
                 .maximum_commit_capacity_bytes
                 .saturating_sub(capacity.commit_total_bytes)
         );
-        assert_eq!(capacity.pagefile_configuration_source, "/proc/meminfo SwapTotal");
+        assert_eq!(
+            capacity.pagefile_configuration_source,
+            "/proc/meminfo SwapTotal"
+        );
         assert_eq!(capacity.pagefile_configuration_sha256.len(), 64);
     }
 
