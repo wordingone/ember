@@ -70,7 +70,9 @@ one receipt should never grow with candidate count).
 from __future__ import annotations
 
 import argparse
+import email.utils
 import json
+import random
 import re
 import sys
 import time
@@ -79,6 +81,7 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -167,17 +170,162 @@ def _parse_atom(xml_bytes: bytes) -> List[ArxivEntry]:
     return out
 
 
+FLOW_CONTROL_CODES = (429, 503)
+FLOW_CONTROL_POLICY_VERSION = "v2-exponential"
+MAX_FLOW_CONTROL_RETRIES = 8
+BACKOFF_BASE_SECONDS = 30.0
+BACKOFF_FACTOR = 2.0
+BACKOFF_MAX_SLEEP_SECONDS = 900.0
+BACKOFF_JITTER_FRACTION = 0.25
+RETRY_AFTER_CAP_SECONDS = 1800.0
+
+_LOG_PATH: Optional[Path] = None
+
+
+def log(msg: str) -> None:
+    """Single logging surface for the connector's flow-control lifecycle.
+
+    Always goes to stdout (so a shell redirect captures it exactly as the
+    prior run's fetch.log did) and additionally appends to --log-file when
+    configured, opening/closing per line so an unattended multi-hour run's
+    progress is durable on disk even if the process is killed uncleanly --
+    the previous death left a single 57-byte log with no evidence of whether
+    any retry logic had run at all."""
+    line = f"{datetime.now(timezone.utc).isoformat()} {msg}"
+    print(line, flush=True)
+    if _LOG_PATH is not None:
+        try:
+            with _LOG_PATH.open("a", encoding="utf-8") as f:
+                f.write(line + "\n")
+        except OSError:
+            # A broken log sink must never take down a live fetch; stdout above
+            # already carried the line.
+            pass
+
+
+def flow_control_policy_line() -> str:
+    """The startup declaration proving WHICH backoff policy a live process is
+    actually running -- the prior run died on a 429 with no way to tell from
+    its log whether retry logic existed, was configured, or had simply never
+    been reached. Emitted before the first request of every invocation."""
+    return (
+        f"FLOW-CONTROL-POLICY version={FLOW_CONTROL_POLICY_VERSION} "
+        f"codes={','.join(str(c) for c in FLOW_CONTROL_CODES)} "
+        f"max_retries={MAX_FLOW_CONTROL_RETRIES} "
+        f"base_seconds={BACKOFF_BASE_SECONDS} factor={BACKOFF_FACTOR} "
+        f"max_sleep_seconds={BACKOFF_MAX_SLEEP_SECONDS} "
+        f"jitter_fraction={BACKOFF_JITTER_FRACTION} "
+        f"retry_after_honored=true retry_after_formats=delta-seconds|http-date "
+        f"retry_after_cap_seconds={RETRY_AFTER_CAP_SECONDS} "
+        f"politeness_sleep_seconds={RATE_LIMIT_SECONDS}"
+    )
+
+
+def parse_retry_after(raw: Optional[str], now: Optional[datetime] = None) -> Optional[float]:
+    """Retry-After per RFC 7231 s7.1.3, which permits EITHER delta-seconds OR
+    an HTTP-date -- the prior implementation did a bare int() on the header and
+    would raise ValueError on the HTTP-date form, killing the run via the exact
+    header it was trying to honor.
+
+    Returns seconds to wait, or None when the header is absent/unparseable (a
+    malformed header must degrade to the exponential schedule, never crash).
+    Negative or past-dated values clamp to 0."""
+    if raw is None:
+        return None
+    raw = raw.strip()
+    if not raw:
+        return None
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        pass
+    try:
+        when = email.utils.parsedate_to_datetime(raw)
+    except (TypeError, ValueError):
+        return None
+    if when is None:
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    reference = now or datetime.now(timezone.utc)
+    return max(0.0, (when - reference).total_seconds())
+
+
+def backoff_sleep_seconds(attempt: int, retry_after: Optional[float], jitter: bool = True) -> float:
+    """Exponential schedule for retry `attempt` (0-based), with Retry-After
+    honored as a FLOOR rather than a replacement.
+
+    Taking the server's value outright would let a small Retry-After (or a
+    header echoed unchanged across repeated refusals) hold the client at a
+    constant interval while it is still being rate-limited -- exactly the
+    fixed-interval behavior that failed here. Taking max() honors the server's
+    stated minimum while still escalating, and the cap keeps a hostile or
+    mistaken Retry-After (e.g. 86400) from silently parking an unattended run
+    for hours."""
+    exponential = min(BACKOFF_BASE_SECONDS * (BACKOFF_FACTOR ** attempt), BACKOFF_MAX_SLEEP_SECONDS)
+    if retry_after is not None:
+        exponential = max(exponential, min(retry_after, RETRY_AFTER_CAP_SECONDS))
+    if jitter:
+        # Additive-only jitter: never sleeps LESS than the schedule (or than a
+        # server-declared Retry-After floor), while still de-synchronizing
+        # retries that would otherwise re-collide in lockstep.
+        exponential += random.uniform(0.0, BACKOFF_JITTER_FRACTION * exponential)
+    return exponential
+
+
+def _urlopen_with_backoff(req: "urllib.request.Request", urlopen, timeout: int, sleeper=None):
+    """A 429/503 from arXiv is a politeness signal to back off and retry, not a
+    terminal failure -- letting it raise straight through (the behavior that was
+    live on 2026-08-15) killed an unattended --paper-list run on a single
+    rate-limit hit, leaving a one-line log.
+
+    Note the previously-cited precedent does not actually cover this case:
+    harvest_oai.py's fetch() retries 503 ONLY, so a 429 falls through to raise
+    there too. Retries here are exponential with jitter, honor Retry-After in
+    both RFC 7231 formats as a floor, log every retry with its next-attempt
+    wall-clock time, and give up after MAX_FLOW_CONTROL_RETRIES so a
+    persistently blocked host still fails loudly rather than looping forever."""
+    # Resolved at call time, not bound as a default: a module-level default of
+    # time.sleep would freeze the reference at import and silently defeat
+    # patch.object(arxiv_fetch.time, "sleep", ...) in tests -- which would then
+    # sleep for real, or worse, appear to pass while asserting nothing.
+    sleep_fn = sleeper or time.sleep
+    for attempt in range(MAX_FLOW_CONTROL_RETRIES + 1):
+        try:
+            return urlopen(req, timeout=timeout)
+        except urllib.error.HTTPError as exc:
+            if exc.code not in FLOW_CONTROL_CODES:
+                raise
+            if attempt == MAX_FLOW_CONTROL_RETRIES:
+                log(
+                    f"FLOW-CONTROL-EXHAUSTED code={exc.code} url={req.full_url} "
+                    f"attempts={MAX_FLOW_CONTROL_RETRIES + 1} -- giving up"
+                )
+                raise
+            raw_header = exc.headers.get("Retry-After") if exc.headers is not None else None
+            retry_after = parse_retry_after(raw_header)
+            sleep_for = backoff_sleep_seconds(attempt, retry_after)
+            next_at = datetime.now(timezone.utc) + timedelta(seconds=sleep_for)
+            log(
+                f"FLOW-CONTROL code={exc.code} attempt={attempt + 1}/{MAX_FLOW_CONTROL_RETRIES} "
+                f"retry_after_header={raw_header!r} retry_after_seconds={retry_after} "
+                f"sleep_seconds={sleep_for:.1f} next_attempt_at={next_at.isoformat()} "
+                f"url={req.full_url}"
+            )
+            sleep_fn(sleep_for)
+
+
 def _http_get(url: str, opener=None) -> bytes:
     urlopen = opener or urllib.request.urlopen
     req = urllib.request.Request(url, headers={"User-Agent": "ember-corpus-connector/1"})
-    with urlopen(req, timeout=60) as resp:
+    with _urlopen_with_backoff(req, urlopen, 60) as resp:
         return resp.read()
 
 
 def _head_content_length(url: str, opener=None, timeout: int = 30) -> Optional[int]:
     urlopen = opener or urllib.request.urlopen
     req = urllib.request.Request(url, headers={"User-Agent": "ember-corpus-connector/1"}, method="HEAD")
-    with urlopen(req, timeout=timeout) as resp:
+    with _urlopen_with_backoff(req, urlopen, timeout) as resp:
         cl = resp.headers.get("Content-Length")
         return int(cl) if cl else None
 
@@ -313,6 +461,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--license-override-evidence", dest="license_override_evidence", default=None, metavar="STR",
         help="required together with --license-override: names the out-of-band source (e.g. "
              "'OAI-PMH bulk harvest <license> element, snapshot <date>, exact-SPDX CC-BY-4.0 match').",
+    )
+    p.add_argument(
+        "--log-file", type=Path, default=None, metavar="FILE",
+        help="append the flow-control lifecycle log (startup policy declaration, every retry with "
+             "its next-attempt time, per-file progress, terminal error) to FILE in addition to "
+             "stdout. Strongly recommended for unattended runs: it is what makes an mtime/staleness "
+             "watch and a post-hoc 'did the backoff actually run' check possible.",
     )
     return p
 
@@ -514,6 +669,10 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
             )
 
         downloaded_paths: List[Path] = []
+        progress_total = len(eligible)
+        progress_bytes = 0
+        progress_started = time.monotonic()
+        log(f"FETCH-BEGIN eligible={progress_total} what={args.what} dest_root={dest_root}")
         for e in eligible:
             if e.arxiv_id in streamed_paths:
                 # Already fetched during the budget walk under a running budget cap --
@@ -551,6 +710,14 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
                     f"actually account for"
                 )
             downloaded_paths.append(dest_file)
+            progress_bytes += actual_size
+            elapsed = max(time.monotonic() - progress_started, 1e-9)
+            log(
+                f"PROGRESS n={len(downloaded_paths)}/{progress_total} id={e.arxiv_id} "
+                f"bytes={actual_size} cumulative_bytes={progress_bytes} "
+                f"elapsed_s={elapsed:.1f} files_per_min={len(downloaded_paths) / elapsed * 60:.2f} "
+                f"bytes_per_min={progress_bytes / elapsed * 60:.0f}"
+            )
             time.sleep(RATE_LIMIT_SECONDS)
         files = rcpt.build_file_entries(dest_root, [p.relative_to(dest_root) for p in downloaded_paths])
         resolved_by_id = {e.arxiv_id: _resolved_license(e) for e in eligible}
@@ -601,8 +768,32 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    global _LOG_PATH
     args = build_parser().parse_args(argv)
-    return rcpt.run_cli(lambda: fetch(args))
+    if args.log_file is not None:
+        args.log_file.parent.mkdir(parents=True, exist_ok=True)
+        _LOG_PATH = args.log_file
+    # Startup declaration BEFORE the first request: proves from the log alone
+    # which policy a live process is running, rather than leaving a reader to
+    # infer it from source that may not be what was deployed.
+    log(f"START connector={CONNECTOR_NAME} what={args.what} dest={args.dest}")
+    log(flow_control_policy_line())
+
+    def _run() -> Path:
+        try:
+            return fetch(args)
+        except BaseException as exc:
+            # Terminal path: the log must carry the cause even though run_cli's
+            # own BLOCKED line only reaches stdout. TERMINAL is the token the
+            # liveness watch greps for to alert immediately rather than waiting
+            # for the staleness threshold to expire.
+            log(f"TERMINAL {type(exc).__name__}: {exc}")
+            raise
+
+    rc = rcpt.run_cli(_run)
+    if rc == 0:
+        log("DONE receipt committed")
+    return rc
 
 
 if __name__ == "__main__":
