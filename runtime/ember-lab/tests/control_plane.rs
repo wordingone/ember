@@ -927,6 +927,7 @@ fn ember_lab_server_cycle_uses_bound_authority_and_governed_restore() {
             endpoint: EndpointHealth::Dead,
         },
         available_headroom_bytes: 2,
+        resource_guard_probe_error: None,
         required_headroom_bytes: 1,
         now_ms: 1_000,
     };
@@ -1000,6 +1001,7 @@ fn ember_lab_server_cycle_covers_health_outage_hung_headroom_and_alarm_law() {
                 endpoint,
             },
             available_headroom_bytes: headroom,
+            resource_guard_probe_error: None,
             required_headroom_bytes: 10,
             now_ms,
         }
@@ -1139,6 +1141,7 @@ fn ember_lab_server_cycle_rejects_unbound_or_overwritten_authority() {
             endpoint: EndpointHealth::Dead,
         },
         available_headroom_bytes: 20,
+        resource_guard_probe_error: None,
         required_headroom_bytes: 10,
         now_ms: 1_000,
     };
@@ -1319,6 +1322,7 @@ fn server_cycle_derives_restart_count_from_authoritative_activity_events() {
                     endpoint: EndpointHealth::Dead,
                 },
                 available_headroom_bytes: 2,
+                resource_guard_probe_error: None,
                 required_headroom_bytes: 1,
                 now_ms: 1_000,
             },
@@ -1395,6 +1399,7 @@ fn server_cycle_backoff_spans_rebound_job_ids_and_rejects_restore() {
                     endpoint: EndpointHealth::Dead,
                 },
                 available_headroom_bytes: 2,
+                resource_guard_probe_error: None,
                 required_headroom_bytes: 1,
                 now_ms: 1_000,
             },
@@ -1676,7 +1681,11 @@ fn server_live_cycle_rebinds_successful_restore_for_subsequent_ticks() {
     let root = sandbox("server-supervision-rebind");
     let db = root.join("ember-lab.sqlite3");
     let (identity, identity_hash) = write_identity(&root);
-    let daemon = Daemon::open(&db).unwrap();
+    // See dispatch_completed_assessment_job for why: a CI runner's real
+    // /proc/meminfo commonly falls under the production survival floor,
+    // sticky-freezing the daemon before this test's own restore/dispatch
+    // step ever runs.
+    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(test_host_capacity())).unwrap();
     daemon
         .bind_identity("old-server-job", &identity, &identity_hash)
         .unwrap();
@@ -1857,7 +1866,11 @@ fn server_live_cycle_restarts_across_rebound_authorities_then_backs_off() {
     let root = sandbox("server-supervision-stable-backoff");
     let db = root.join("ember-lab.sqlite3");
     let (identity, identity_hash) = write_identity(&root);
-    let daemon = Daemon::open(&db).unwrap();
+    // See dispatch_completed_assessment_job for why: a CI runner's real
+    // /proc/meminfo commonly falls under the production survival floor,
+    // sticky-freezing the daemon before this test's own restore/dispatch
+    // step ever runs.
+    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(test_host_capacity())).unwrap();
     daemon
         .bind_identity("old-server-job", &identity, &identity_hash)
         .unwrap();
@@ -3415,7 +3428,13 @@ fn assessment_evidence_is_one_fresh_atomic_daemon_export() {
 
 fn dispatch_completed_assessment_job(root: &Path, job_id: &str) -> (Daemon, PathBuf) {
     let db = root.join("ember-lab.sqlite3");
-    let daemon = Daemon::open(&db).unwrap();
+    // A CI runner's real /proc/meminfo commonly falls under the production
+    // survival floor (RESOURCE_GUARD_MIN_*), which would sticky-freeze the
+    // daemon before this test's own dispatch-time capacity injection is ever
+    // consulted -- that gate is separate from and runs after the injected
+    // free_host_commit closure below. Seed it with the same synthetic
+    // healthy capacity instead of the real probe.
+    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(test_host_capacity())).unwrap();
     let manifest = write_restore_manifest(root, job_id);
     let mut manifest_payload: Value =
         serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
@@ -3467,10 +3486,14 @@ fn assessment_export_refuses_coherent_preflight_binding_tamper() {
         )
         .unwrap();
     let output = root.join("coherent-tamper-output");
-    assert!(matches!(
-        daemon.export_assessment_evidence("assessment-coherent-tamper", &output),
-        Err(EmberLabError::InvalidDispatchManifest { .. })
-    ));
+    let export_result = daemon.export_assessment_evidence("assessment-coherent-tamper", &output);
+    assert!(
+        matches!(
+            export_result,
+            Err(EmberLabError::InvalidDispatchManifest { .. })
+        ),
+        "expected InvalidDispatchManifest, got: {export_result:?}"
+    );
     assert!(!output.exists());
 }
 
@@ -3486,10 +3509,14 @@ fn assessment_export_refuses_preflight_lease_mismatch() {
         )
         .unwrap();
     let output = root.join("lease-mismatch-output");
-    assert!(matches!(
-        daemon.export_assessment_evidence("assessment-lease-mismatch", &output),
-        Err(EmberLabError::InvalidDispatchManifest { .. })
-    ));
+    let export_result = daemon.export_assessment_evidence("assessment-lease-mismatch", &output);
+    assert!(
+        matches!(
+            export_result,
+            Err(EmberLabError::InvalidDispatchManifest { .. })
+        ),
+        "expected InvalidDispatchManifest, got: {export_result:?}"
+    );
     assert!(!output.exists());
 }
 
