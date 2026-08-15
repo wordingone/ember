@@ -40,9 +40,29 @@ ATOM_PERPETUAL = b"""<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
+ATOM_TWO_CC = b"""<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
+  <entry>
+    <id>http://arxiv.org/abs/2301.00003v1</id>
+    <title>Second CC Paper</title>
+    <updated>2023-01-03T00:00:00Z</updated>
+    <arxiv:license>http://creativecommons.org/licenses/by/4.0/</arxiv:license>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2301.00004v1</id>
+    <title>Third CC Paper</title>
+    <updated>2023-01-04T00:00:00Z</updated>
+    <arxiv:license>http://creativecommons.org/licenses/by/4.0/</arxiv:license>
+  </entry>
+</feed>
+"""
+
+
 class _FakeResp:
-    def __init__(self, data: bytes):
+    def __init__(self, data: bytes, headers: dict = None, status: int = 200):
         self._buf = io.BytesIO(data)
+        self.headers = headers or {}
+        self.status = status
 
     def read(self, size=-1):
         return self._buf.read(size)
@@ -60,6 +80,28 @@ def _opener_for(atom_bytes: bytes, pdf_bytes: bytes = b"%PDF-fake-content"):
         if "export.arxiv.org/api/query" in url:
             return _FakeResp(atom_bytes)
         return _FakeResp(pdf_bytes)
+
+    return _opener
+
+
+def _opener_with_sizes(atom_bytes: bytes, sizes_by_id: dict, body: bytes = b"fake-tarball-bytes", body_by_id: dict = None):
+    """Mocked opener for budget-walk tests: HEAD requests return Content-Length
+    from sizes_by_id (keyed by arxiv id; a missing/None entry means "no
+    Content-Length header", exercising the streamed running-budget fallback).
+    GET requests return body_by_id[id] if given, else the shared `body`."""
+
+    def _opener(request, timeout=60):
+        url = request.full_url
+        if "export.arxiv.org/api/query" in url:
+            return _FakeResp(atom_bytes)
+        arxiv_id = url.rstrip("/").rsplit("/", 1)[-1]
+        stripped_id = arxiv_fetch._strip_version(arxiv_id)
+        size = sizes_by_id.get(stripped_id)
+        if request.get_method() == "HEAD":
+            headers = {"Content-Length": str(size)} if size is not None else {}
+            return _FakeResp(b"", headers=headers)
+        get_body = (body_by_id or {}).get(stripped_id, body)
+        return _FakeResp(get_body)
 
     return _opener
 
@@ -162,6 +204,195 @@ class ArxivFetchMockedTests(unittest.TestCase):
             list_path.write_text("# only comments\n\n", encoding="utf-8")
             with self.assertRaises(rcpt.BlockedError):
                 arxiv_fetch.read_paper_list(list_path)
+
+    def test_budget_bytes_stops_before_a_candidate_that_would_exceed_it(self):
+        with tempfile.TemporaryDirectory() as td:
+            list_path = Path(td) / "ids.txt"
+            list_path.write_text("2301.00003\n2301.00004\n", encoding="utf-8")
+            dest = Path(td) / "arxivdata"
+            args = arxiv_fetch.build_parser().parse_args(
+                ["--paper-list", str(list_path), "--what", "source", "--dest", str(dest), "--budget-bytes", "150"]
+            )
+            opener = _opener_with_sizes(ATOM_TWO_CC, {"2301.00003": 100, "2301.00004": 100})
+            receipt_path = arxiv_fetch.fetch(args, opener=opener)
+            data = json.loads(receipt_path.read_text(encoding="utf-8"))
+            # 100 fits under 150; 100+100=200 would exceed -- rank-fidelity stop
+            # after the first candidate, no skip to a smaller later one.
+            self.assertEqual(len(data["files"]), 1)
+            self.assertIn("2301.00003", data["notes"])
+            self.assertNotIn("2301.00004=", data["notes"])
+            self.assertIn("selected=1", data["notes"])
+            self.assertIn("budget_walk_manifest=", data["notes"])
+
+    def test_budget_bytes_honors_paper_list_declared_order_not_api_response_order(self):
+        with tempfile.TemporaryDirectory() as td:
+            # declared order puts 2301.00004 FIRST -- API response order (fixed
+            # in ATOM_TWO_CC) puts 2301.00003 first; the walk must follow the file.
+            list_path = Path(td) / "ids.txt"
+            list_path.write_text("2301.00004\n2301.00003\n", encoding="utf-8")
+            dest = Path(td) / "arxivdata"
+            args = arxiv_fetch.build_parser().parse_args(
+                ["--paper-list", str(list_path), "--what", "source", "--dest", str(dest), "--budget-bytes", "150"]
+            )
+            opener = _opener_with_sizes(ATOM_TWO_CC, {"2301.00003": 100, "2301.00004": 100})
+            receipt_path = arxiv_fetch.fetch(args, opener=opener)
+            data = json.loads(receipt_path.read_text(encoding="utf-8"))
+            self.assertEqual(len(data["files"]), 1)
+            self.assertIn("2301.00004", data["notes"])
+            self.assertNotIn("2301.00003=", data["notes"])
+
+    def test_budget_bytes_writes_sidecar_walk_manifest_not_bloated_receipt_notes(self):
+        with tempfile.TemporaryDirectory() as td:
+            list_path = Path(td) / "ids.txt"
+            list_path.write_text("2301.00003\n2301.00004\n", encoding="utf-8")
+            dest = Path(td) / "arxivdata"
+            args = arxiv_fetch.build_parser().parse_args(
+                ["--paper-list", str(list_path), "--what", "source", "--dest", str(dest), "--budget-bytes", "10000"]
+            )
+            opener = _opener_with_sizes(ATOM_TWO_CC, {"2301.00003": 100, "2301.00004": 100})
+            receipt_path = arxiv_fetch.fetch(args, opener=opener)
+            data = json.loads(receipt_path.read_text(encoding="utf-8"))
+            self.assertEqual(len(data["files"]), 2)
+            manifest_rel = data["notes"].split("budget_walk_manifest=")[1].strip()
+            manifest_path = dest / manifest_rel
+            self.assertTrue(manifest_path.exists())
+            walk = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(walk["selected_count"], 2)
+            self.assertEqual(len(walk["walk"]), 2)
+            # bounded: receipt notes stays short regardless of candidate count
+            self.assertLess(len(data["notes"]), 1000)
+
+    def test_budget_bytes_requires_paper_list(self):
+        with tempfile.TemporaryDirectory() as td:
+            dest = Path(td) / "arxivdata"
+            args = arxiv_fetch.build_parser().parse_args(
+                ["--ids", "2301.00001", "--what", "pdf", "--dest", str(dest), "--budget-bytes", "1000"]
+            )
+            with self.assertRaises(rcpt.BlockedError):
+                arxiv_fetch.fetch(args, opener=_opener_for(ATOM_CC))
+
+    def test_budget_bytes_unknown_size_streams_under_running_budget_check(self):
+        # 2301.00003 has no discoverable Content-Length -- fail-closed rule:
+        # stream it under a running budget check (max_bytes = remaining budget)
+        # instead of stopping blind. The fake GET body is small enough to fit,
+        # so it must be SELECTED (not skipped, not stopped) and the walk
+        # continues on to the next candidate.
+        with tempfile.TemporaryDirectory() as td:
+            list_path = Path(td) / "ids.txt"
+            list_path.write_text("2301.00003\n2301.00004\n", encoding="utf-8")
+            dest = Path(td) / "arxivdata"
+            args = arxiv_fetch.build_parser().parse_args(
+                ["--paper-list", str(list_path), "--what", "source", "--dest", str(dest), "--budget-bytes", "10000"]
+            )
+            opener = _opener_with_sizes(ATOM_TWO_CC, {"2301.00004": 100}, body_by_id={"2301.00003": b"x" * 18})
+            receipt_path = arxiv_fetch.fetch(args, opener=opener)
+            data = json.loads(receipt_path.read_text(encoding="utf-8"))
+            self.assertEqual(len(data["files"]), 2)
+            self.assertIn("selected=2 (via_head=1, via_stream=1)", data["notes"])
+            manifest_rel = data["notes"].split("budget_walk_manifest=")[1].strip()
+            walk = json.loads((dest / manifest_rel).read_text(encoding="utf-8"))
+            first, second = walk["walk"]
+            self.assertEqual(first["size_source"], "streamed")
+            self.assertEqual(first["bytes"], 18)
+            self.assertEqual(second["size_source"], "head")
+
+    def test_budget_bytes_unknown_size_streamed_download_exceeding_budget_aborts_no_skip(self):
+        # Same missing-Content-Length case, but now the streamed body itself
+        # exceeds the remaining budget -- download_url must abort mid-stream
+        # (DownloadTooLargeError) and the walk must STOP there, never skip
+        # ahead to 2301.00004 even though it would fit on its own.
+        with tempfile.TemporaryDirectory() as td:
+            list_path = Path(td) / "ids.txt"
+            list_path.write_text("2301.00003\n2301.00004\n", encoding="utf-8")
+            dest = Path(td) / "arxivdata"
+            args = arxiv_fetch.build_parser().parse_args(
+                ["--paper-list", str(list_path), "--what", "source", "--dest", str(dest), "--budget-bytes", "10"]
+            )
+            opener = _opener_with_sizes(ATOM_TWO_CC, {"2301.00004": 5}, body_by_id={"2301.00003": b"x" * 500})
+            with self.assertRaises(rcpt.BlockedError):
+                arxiv_fetch.fetch(args, opener=opener)
+            # no partial/leftover file for the aborted stream
+            self.assertFalse(any((dest).glob("*2301.00003*")))
+
+    def test_budget_bytes_streamed_candidate_not_redownloaded_in_fetch_loop(self):
+        # A streamed-under-budget candidate is already on disk from the walk --
+        # the main download loop must reuse that file, not re-request it (which
+        # would also hit download_url's own collision check on the file it just wrote).
+        # 2301.00003 streams at 18 bytes; the remaining budget (20-18=2) is too
+        # small for 2301.00004's declared 50-byte size, so exactly one file is
+        # selected -- letting this assert both "no re-download" and "no skip".
+        with tempfile.TemporaryDirectory() as td:
+            list_path = Path(td) / "ids.txt"
+            list_path.write_text("2301.00003\n2301.00004\n", encoding="utf-8")
+            dest = Path(td) / "arxivdata"
+            args = arxiv_fetch.build_parser().parse_args(
+                ["--paper-list", str(list_path), "--what", "source", "--dest", str(dest), "--budget-bytes", "20"]
+            )
+            opener = _opener_with_sizes(ATOM_TWO_CC, {"2301.00004": 50}, body_by_id={"2301.00003": b"x" * 18})
+            receipt_path = arxiv_fetch.fetch(args, opener=opener)
+            data = json.loads(receipt_path.read_text(encoding="utf-8"))
+            self.assertEqual(len(data["files"]), 1)
+            self.assertEqual(data["files"][0]["bytes"], 18)
+
+    def test_license_override_fills_gap_when_live_check_is_unverified(self):
+        with tempfile.TemporaryDirectory() as td:
+            list_path = Path(td) / "ids.txt"
+            list_path.write_text("2301.00002\n", encoding="utf-8")
+            dest = Path(td) / "arxivdata"
+            args = arxiv_fetch.build_parser().parse_args(
+                [
+                    "--paper-list", str(list_path), "--what", "source", "--dest", str(dest),
+                    "--license-filter", "all",
+                    "--license-override", "http://creativecommons.org/licenses/by/4.0/",
+                    "--license-override-evidence", "OAI-PMH bulk harvest <license> element, exact-SPDX match",
+                ]
+            )
+            # ATOM_PERPETUAL's own arxiv:license is the arXiv perpetual label
+            # (resolved, not UNVERIFIED) -- override must NOT touch a live check
+            # that actually resolved to something.
+            receipt_path = arxiv_fetch.fetch(args, opener=_opener_for(ATOM_PERPETUAL))
+            data = json.loads(receipt_path.read_text(encoding="utf-8"))
+            self.assertEqual(data["license"], arxiv_fetch.ARXIV_PERPETUAL_LABEL)
+
+    def test_license_override_applies_when_live_check_returns_unverified(self):
+        atom_unverified = b"""<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
+  <entry>
+    <id>http://arxiv.org/abs/2301.00005v1</id>
+    <title>No License Element Paper</title>
+    <updated>2023-01-05T00:00:00Z</updated>
+  </entry>
+</feed>
+"""
+        with tempfile.TemporaryDirectory() as td:
+            list_path = Path(td) / "ids.txt"
+            list_path.write_text("2301.00005\n", encoding="utf-8")
+            dest = Path(td) / "arxivdata"
+            args = arxiv_fetch.build_parser().parse_args(
+                [
+                    "--paper-list", str(list_path), "--what", "source", "--dest", str(dest),
+                    "--license-filter", "all",
+                    "--license-override", "http://creativecommons.org/licenses/by/4.0/",
+                    "--license-override-evidence", "OAI-PMH bulk harvest <license> element, exact-SPDX match",
+                ]
+            )
+            receipt_path = arxiv_fetch.fetch(args, opener=_opener_for(atom_unverified))
+            data = json.loads(receipt_path.read_text(encoding="utf-8"))
+            self.assertEqual(data["license"], "http://creativecommons.org/licenses/by/4.0/")
+            self.assertIn("OAI-PMH bulk harvest", data["license_evidence"])
+            self.assertIn("2301.00005v1=http://creativecommons.org/licenses/by/4.0/", data["notes"])
+
+    def test_license_override_requires_evidence_paired(self):
+        with tempfile.TemporaryDirectory() as td:
+            dest = Path(td) / "arxivdata"
+            args = arxiv_fetch.build_parser().parse_args(
+                [
+                    "--ids", "2301.00001", "--what", "pdf", "--dest", str(dest),
+                    "--license-override", "http://creativecommons.org/licenses/by/4.0/",
+                ]
+            )
+            with self.assertRaises(rcpt.BlockedError):
+                arxiv_fetch.fetch(args, opener=_opener_for(ATOM_CC))
 
     def test_main_blocked_line_on_no_eligible_papers(self):
         import contextlib
