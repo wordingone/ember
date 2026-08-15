@@ -239,7 +239,16 @@ def test_designated_bytes_resolve_through_the_real_owned_seat_resolver(
 
     monkeypatch.setattr(cli_seat, "derive_seat_identity", _admitted_bridge)
 
-    resolved = cli_seat.resolve_owned_seat(current_json, registry_path, approval_path)
+    # The setup call above already registered workspace's checkpoint shards
+    # at this exact db path (_register_checkpoint_custody's own fixed name)
+    # -- reuse it. Custody records are hash-keyed, not location-keyed, so
+    # they still cover current_json's copied-but-byte-identical manifest.
+    resolved = cli_seat.resolve_owned_seat(
+        current_json,
+        registry_path,
+        approval_path,
+        custody_db=workspace / "custody-gate-test.sqlite3",
+    )
 
     assert resolved["valid"] is True, resolved["errors"]
     assert resolved["seat"] == "OWNED_ADMITTED"
