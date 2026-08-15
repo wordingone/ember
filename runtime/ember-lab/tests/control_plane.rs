@@ -695,6 +695,20 @@ fn fixture_child_process() {
         println!("stdout:{message}");
         eprintln!("stderr:{message}");
     }
+    // Opt-in: when a sentinel path is supplied, SLEEP_MS stops being the child's
+    // fixed lifetime and becomes an upper bound. The child lives until the test
+    // says otherwise, so a test that must adopt/observe a *running* child can
+    // never lose a race against the child's own exit. Unset (every existing
+    // caller) leaves the fixed-sleep behaviour byte-identical.
+    if let Some(sentinel) = std::env::var_os("EMBER_LAB_FIXTURE_EXIT_SENTINEL") {
+        let sentinel = PathBuf::from(sentinel);
+        let mut waited_ms = 0_u64;
+        while !sentinel.exists() && waited_ms < sleep_ms {
+            thread::sleep(Duration::from_millis(5));
+            waited_ms += 5;
+        }
+        return;
+    }
     thread::sleep(Duration::from_millis(sleep_ms));
 }
 
@@ -2760,7 +2774,16 @@ fn missing_checkpoint_publish_selectable_or_restore_artifact_refuses() {
                 readiness_deadline_after_ms(5_000),
             )
             .is_err());
-        daemon.stop_job(&format!("phase-missing-{phase}")).unwrap();
+        // Cleanup, not an assertion: the episode above was required to refuse,
+        // and a refused episode can leave the child already terminal -- in
+        // which case there is nothing left to stop and the transition is
+        // rejected. Tolerate only that specific outcome, so a genuine stop_job
+        // regression still fails this test instead of being swallowed here.
+        match daemon.stop_job(&format!("phase-missing-{phase}")) {
+            Ok(()) => {}
+            Err(EmberLabError::InvalidTransition { .. }) => {}
+            Err(other) => panic!("unexpected stop_job failure for {phase}: {other:?}"),
+        }
     }
 }
 
@@ -3193,6 +3216,7 @@ fn daemon_handoff_cancels_old_monitor_and_records_exit_once() {
         .bind_identity("handoff-job", &identity, &identity_hash)
         .unwrap();
     daemon.acquire_lease("cpu-fixture", "handoff-job").unwrap();
+    let exit_sentinel = root.join("handoff-exit.signal");
     daemon
         .start_job(
             JobSpec::new(
@@ -3202,17 +3226,28 @@ fn daemon_handoff_cancels_old_monitor_and_records_exit_once() {
                 "cpu-fixture",
             )
             .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
-            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "250"),
+            // Upper bound, not a lifetime: the child exits when this test
+            // writes the sentinel below.
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000")
+            .with_env(
+                "EMBER_LAB_FIXTURE_EXIT_SENTINEL",
+                exit_sentinel.to_string_lossy(),
+            ),
         )
         .unwrap();
     drop(daemon);
 
     let reopened = Daemon::open(&db).unwrap();
+    // The child is still alive by construction -- it holds until the sentinel
+    // appears -- so adoption cannot lose a race against the child's own exit.
+    // That race is what failed here on windows-latest (ProcessUnavailable at
+    // this call): the old fixed 250ms lifetime had to outlast monitor teardown
+    // plus a state-store reopen, and under host contention it did not.
     reopened.adopt_job("handoff-job").unwrap();
-    // Same fixed-budget-vs-real-dispatch-latency class as #1722's restore
-    // path: the child's own 250ms sleep plus real CreateProcess/exit-detect
-    // latency under host contention can outlast a small fixed poll count.
-    // Poll longer at the same interval instead of racing host scheduling.
+    // Release the child only now, so its exit is observed by the NEW monitor.
+    // That ordering is the behaviour under test, and it is now guaranteed
+    // rather than hoped for.
+    fs::write(&exit_sentinel, b"exit").unwrap();
     for _ in 0..3_000 {
         if reopened.job_state("handoff-job").unwrap() == Some(JobState::Exited) {
             break;
