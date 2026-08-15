@@ -235,6 +235,33 @@ class ArxivFetchMockedTests(unittest.TestCase):
             self.assertIn("selected=1", data["notes"])
             self.assertIn("budget_walk_manifest=", data["notes"])
 
+    def test_budget_bytes_walk_emits_periodic_heartbeat_and_end_line(self):
+        # The walk has no other log() call in its loop -- at
+        # RATE_LIMIT_SECONDS=3.0/candidate a multi-thousand-candidate walk can
+        # run for HOURS with zero output otherwise, indistinguishable from a
+        # wedged process (same lesson as the metadata phase's META-BATCH fix,
+        # discovered live on 2026-08-15 when A-train-2's own capped run sat
+        # silent for its entire walk with no way to tell it apart from stalled).
+        with tempfile.TemporaryDirectory() as td:
+            list_path = Path(td) / "ids.txt"
+            list_path.write_text("2301.00003\n2301.00004\n", encoding="utf-8")
+            dest = Path(td) / "arxivdata"
+            args = arxiv_fetch.build_parser().parse_args(
+                ["--paper-list", str(list_path), "--what", "source", "--dest", str(dest), "--budget-bytes", "1000"]
+            )
+            opener = _opener_with_sizes(ATOM_TWO_CC, {"2301.00003": 100, "2301.00004": 100})
+            lines = []
+            with patch.object(arxiv_fetch, "log", lambda m: lines.append(m)), \
+                 patch.object(arxiv_fetch, "WALK_HEARTBEAT_EVERY", 1):
+                arxiv_fetch.fetch(args, opener=opener)
+            walk_lines = [ln for ln in lines if ln.startswith("WALK-BATCH")]
+            self.assertEqual(len(walk_lines), 2)
+            self.assertIn("examined=1 selected=0 cumulative_bytes=0", walk_lines[0])
+            self.assertIn("examined=2 selected=1 cumulative_bytes=100", walk_lines[1])
+            end_lines = [ln for ln in lines if ln.startswith("WALK-END")]
+            self.assertEqual(len(end_lines), 1)
+            self.assertIn("examined=2 selected=2 cumulative_bytes=200", end_lines[0])
+
     def test_budget_bytes_honors_paper_list_declared_order_not_api_response_order(self):
         with tempfile.TemporaryDirectory() as td:
             # declared order puts 2301.00004 FIRST -- API response order (fixed

@@ -92,6 +92,7 @@ API_BASE = "https://export.arxiv.org/api/query"
 NS = {"atom": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
 PAGE_SIZE_MAX = 100
 RATE_LIMIT_SECONDS = 3.0
+WALK_HEARTBEAT_EVERY = 100  # candidates examined between --budget-bytes walk log lines
 ARXIV_PERPETUAL_LABEL = "arXiv perpetual, non-exclusive license"
 
 
@@ -598,7 +599,20 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
             cumulative = 0
             head_count = 0
             streamed_count = 0
+            examined = 0
             for e in eligible:
+                # The walk is otherwise silent for its entire duration (no other
+                # log() call in this loop) -- at RATE_LIMIT_SECONDS=3.0/candidate,
+                # a multi-thousand-candidate walk can run for HOURS with zero
+                # output, indistinguishable from a wedged process to a human or
+                # the liveness watch (same lesson as 973ff18's META-BATCH fix for
+                # the metadata phase, one stage later in the same pipeline).
+                examined += 1
+                if examined % WALK_HEARTBEAT_EVERY == 0:
+                    log(
+                        f"WALK-BATCH examined={examined} selected={len(selected)} "
+                        f"cumulative_bytes={cumulative} budget_bytes={args.budget_bytes}"
+                    )
                 url = _content_url(e, args.what)
                 try:
                     size = _head_content_length(url, opener=opener)
@@ -651,6 +665,10 @@ def fetch(args: argparse.Namespace, opener=None) -> Path:
                 )
                 time.sleep(RATE_LIMIT_SECONDS)
             eligible = selected
+            log(
+                f"WALK-END examined={examined} selected={len(eligible)} "
+                f"cumulative_bytes={cumulative} budget_bytes={args.budget_bytes}"
+            )
             if not eligible:
                 raise rcpt.BlockedError(
                     f"rank-fidelity budget stop selected zero candidates under budget_bytes={args.budget_bytes} "
