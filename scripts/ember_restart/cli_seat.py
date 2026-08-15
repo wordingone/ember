@@ -51,12 +51,21 @@ def resolve_owned_seat(
     manifest_path: Path,
     verifier_registry: Path,
     verifier_registry_approval: Path,
+    *,
+    custody_db: Path | None = None,
 ) -> dict[str, Any]:
+    """``custody_db`` (issue #1721) is the same test-only catalog-database
+    injection seam :func:`contract.validate_manifest` accepts -- forwarded
+    unchanged. The production entrypoint (``owned-seat-loader.ts``) never
+    passes it, so this is additive: every existing caller keeps resolving
+    the real durable catalog exactly as before.
+    """
     expected_registry_sha256, approval_sha256 = _registry_approval(verifier_registry_approval)
     validation = validate_manifest(
         manifest_path,
         verifier_registry,
         expected_trusted_verifier_registry_sha256=expected_registry_sha256,
+        custody_db=custody_db,
     )
     if not validation["valid"] or validation["stage"] != "OWNED_ADMITTED":
         return {
@@ -154,12 +163,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("manifest", type=Path)
     parser.add_argument("--trusted-verifier-registry", required=True, type=Path)
     parser.add_argument("--trusted-verifier-registry-approval", required=True, type=Path)
+    parser.add_argument("--custody-db", type=Path)
     args = parser.parse_args(argv)
     try:
         result = resolve_owned_seat(
             args.manifest,
             args.trusted_verifier_registry,
             args.trusted_verifier_registry_approval,
+            custody_db=args.custody_db,
         )
     except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
         result = {"valid": False, "seat": None, "errors": [f"owned seat: {exc}"]}
