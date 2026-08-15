@@ -279,28 +279,6 @@ WAVE2_SOURCES: List[WaveSource] = [
         notes="breadth pass; depth pass raises --max under the per-wave disk budget",
     ),
     WaveSource(
-        name="openstax-math",
-        domains=("A",),
-        license_basis="CC-BY (OpenStax)",
-        connector="http_fetch",
-        argv=(
-            "https://assets.openstax.org/oscms-prodcms/media/documents/Precalculus-OP_9wwF7YT.pdf",
-            "--license", "CC-BY-4.0",
-            "--license-evidence",
-            "OpenStax CMS API license_url for book slug 'precalculus' (1st ed) = "
-            "creativecommons.org/licenses/by/4.0/, read 2026-08-14",
-        ),
-        est_tokens_low_b=0.05,
-        est_tokens_high_b=0.15,
-        notes=(
-            "MUST stay pinned to the 1st edition: OpenStax 2nd editions (slug suffix -2e) "
-            "are CC-BY-NC-SA-4.0, which is not usable here. openstax.org answers 200 with an "
-            "HTML SPA shell for unknown paths, so the old /exports/ URL fetched 12,410 bytes "
-            "of HTML under a .pdf name."
-        ),
-        requires_resolution=True,
-    ),
-    WaveSource(
         name="arxiv-stat-metadata",
         domains=("B",),
         license_basis="arXiv per-paper license (CC-only content filter)",
@@ -567,15 +545,6 @@ WAVE2_BULK_VEINS: List[BulkVein] = [
         url="https://ntrs.nasa.gov/api/citations/search",
         est_tokens_low_b=4.0,
         est_tokens_high_b=8.0,
-        requires_resolution=True,
-    ),
-    BulkVein(
-        name="open-textbooks-reference",
-        domains=("A", "B", "C", "D", "G"),
-        license_basis="CC-BY / public-domain (OpenStax/LibreTexts CC-BY subset/Wikibooks/Stacks Project/nLab)",
-        url="https://openstax.org/api/v2/pages/",
-        est_tokens_low_b=3.0,
-        est_tokens_high_b=6.0,
         requires_resolution=True,
     ),
     BulkVein(
