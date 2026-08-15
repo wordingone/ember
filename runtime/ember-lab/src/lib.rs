@@ -4008,6 +4008,17 @@ impl Daemon {
         }
         let completion_path = phase_dir.join("completion.json");
         let completion_bytes = {
+            // `write_new`/`atomic_create` publish this file via a same-directory
+            // temp-file + atomic rename/hard-link, so a reader never observes a
+            // torn (partially-written) file. But a parse failure on freshly-read
+            // bytes is still possible in principle (e.g. a future writer of this
+            // path that doesn't go through that primitive) and, unlike a plain
+            // `NotFound`, was previously treated as immediately terminal — the
+            // real defect this loop fixes. Treat a parse failure the same as
+            // `NotFound`: retry within the existing readiness deadline, and only
+            // surface it as terminal once that deadline actually expires, citing
+            // the last parse error alongside the expiry.
+            let mut last_parse_error: Option<String> = None;
             loop {
                 let current_row = self.job_process_row(job_id)?;
                 if current_row.state != JobState::Running
@@ -4023,11 +4034,24 @@ impl Daemon {
                 if now_ms() >= readiness_deadline_ms {
                     return Err(EmberLabError::InvalidTransition {
                         job_id: job_id.into(),
-                        detail: "minimal-slice readiness deadline expired before completion".into(),
+                        detail: match last_parse_error {
+                            Some(parse_error) => format!(
+                                "minimal-slice readiness deadline expired before completion (last parse error: {parse_error})"
+                            ),
+                            None => {
+                                "minimal-slice readiness deadline expired before completion".into()
+                            }
+                        },
                     });
                 }
                 match fs::read(&completion_path) {
-                    Ok(bytes) => break bytes,
+                    Ok(bytes) => match serde_json::from_slice::<Value>(&bytes) {
+                        Ok(_) => break bytes,
+                        Err(error) => {
+                            last_parse_error = Some(error.to_string());
+                            std::thread::sleep(Duration::from_millis(10));
+                        }
+                    },
                     Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                         std::thread::sleep(Duration::from_millis(10));
                     }
@@ -4058,6 +4082,15 @@ impl Daemon {
                 detail: "minimal-slice durable completion marker is malformed".into(),
             }
         })?;
+        // Class-sweep note (does NOT need the completion.json loop's
+        // retry-on-parse-failure treatment): the shared producer (rehearsal.rs)
+        // always calls `write_new` on `host_peak.json` strictly before
+        // `completion.json` in the same function, and `write_new` only returns
+        // `Ok` after its own internal `sync_all()`/atomic-publish completes.
+        // Program order therefore guarantees `host_peak.json` is already fully
+        // durable by the time this reader has just finished successfully
+        // reading+parsing `completion.json` above — there is no window in
+        // which this read can observe a torn or malformed file.
         let host_peak_path = phase_dir.join("host_peak.json");
         let host_peak_bytes =
             fs::read(&host_peak_path).map_err(|_| EmberLabError::InvalidTransition {
@@ -4071,6 +4104,14 @@ impl Daemon {
             }
         })?;
         let executable_sha256 = hash_file(Path::new(&row.executable))?;
+        // Class-sweep note: `phase_artifact_digest` reads six files
+        // (data_verify.json, train.json, checkpoint.json, publish.json,
+        // selectable_checkpoint.json, restore.json) that the same producer
+        // writes, in that fixed order, strictly before `host_peak.json` and
+        // `completion.json` (rehearsal.rs). Reaching this call already proves
+        // `completion.json` was durable, so by the same program-order argument
+        // all six are durable too — no retry-on-parse-failure treatment needed
+        // here either.
         let phase_artifact_sha256 =
             crate::rehearsal::phase_artifact_digest(&phase_dir).map_err(EmberLabError::Io)?;
         let completion_valid = completion.get("schema")
@@ -4555,6 +4596,16 @@ impl Daemon {
                 job_id: job_id.into(),
                 detail: "daemon-owned whole-run peak receipt has no phase directory".into(),
             })?;
+        // Class-sweep note (does NOT need retry-on-parse-failure treatment):
+        // this function is only reachable once `host_peak.observed.json`
+        // exists, which `execute_minimal_episode` only writes (via
+        // `atomic_create`, same process) strictly after it already
+        // successfully read AND parsed both `completion.json` and
+        // `host_peak.json` earlier in that same call. Every marker/receipt
+        // file this producer writes is create-new-only (`write_new`/
+        // `atomic_create` both fail rather than overwrite an existing path),
+        // so these two files are permanently immutable once durable — their
+        // proven-valid state at that earlier point in time still holds now.
         let completion_path = phase_dir.join("completion.json");
         let child_peak_path = phase_dir.join("host_peak.json");
         let completion_bytes =

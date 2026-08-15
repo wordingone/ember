@@ -176,13 +176,55 @@ fn sha256_bytes(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
+/// Publish `bytes` at `path` as a rehearsal marker/receipt file.
+///
+/// Writes to a same-directory temp file, syncs it, then publishes via
+/// `std::fs::rename` rather than writing the final path in place — so a
+/// concurrent cross-process reader of `path` never observes a torn
+/// (partially-written) file. `create_new`-then-`write_all` made the
+/// destination visible-but-empty the instant `open()` succeeded, before any
+/// bytes landed. `fs::rename` (not a hand-rolled `MoveFileExW`/`hard_link`
+/// call) is used deliberately: std's own Windows path handling applies
+/// long-path normalization a raw FFI call does not get for free, and this
+/// helper is called many times in quick succession in a single freshly
+/// created directory (twelve marker files per rehearsal run) — a pattern
+/// under which a bare `MoveFileExW` call was observed to fail with a
+/// transient `ERROR_PATH_NOT_FOUND` in real (non-isolated, job-object
+/// supervised child process) conditions that a minimal same-shape repro did
+/// not reproduce. `fs::rename` overwrites an existing destination on both
+/// platforms, so the create-only guarantee `create_new` gave the original
+/// single-step write is reconstructed with an explicit pre-check; every
+/// caller here writes each filename exactly once from a single producer, so
+/// the narrow check-then-rename window is not a real double-write risk.
 fn write_new(path: &std::path::Path, bytes: &[u8]) -> Result<(), Error> {
+    if path.exists() {
+        return Err(Error::new(
+            ErrorKind::AlreadyExists,
+            format!("{} already exists", path.display()),
+        ));
+    }
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let temp = path.with_extension(format!(
+        "tmp-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    ));
     let mut file = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(path)?;
+        .open(&temp)?;
     file.write_all(bytes)?;
     file.sync_all()?;
+    drop(file);
+    if let Err(error) = fs::rename(&temp, path) {
+        let _ = fs::remove_file(&temp);
+        return Err(error);
+    }
     Ok(())
 }
 
