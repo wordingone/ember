@@ -1434,13 +1434,20 @@ impl Daemon {
             #[cfg(windows)]
             monitor_ownership: Arc::new(RwLock::new(true)),
         };
+        // Linux gets the same real point-in-time headroom seed as Windows so
+        // `resource_guard_state` is never left at its empty-observation seed
+        // row (which reads as `available_headroom_bytes = 0` everywhere that
+        // consumes it, e.g. supervise_server_live_cycle). The periodic
+        // re-sampling monitor below stays Windows-only -- it depends on
+        // WaitForSingleObject/job-object machinery with no Linux equivalent
+        // wired up yet; porting that loop is separate, larger scope.
+        persist_resource_guard_headroom(
+            &*daemon.conn()?,
+            now_ms(),
+            probe_host_survival_headroom(),
+        )?;
         #[cfg(windows)]
         {
-            persist_resource_guard_headroom(
-                &*daemon.conn()?,
-                now_ms(),
-                probe_host_survival_headroom(),
-            )?;
             spawn_resource_guard_monitor(
                 Arc::downgrade(&daemon.db),
                 Arc::downgrade(&daemon.live),
