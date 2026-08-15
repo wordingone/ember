@@ -19,7 +19,7 @@ use std::sync::{
 };
 use std::thread;
 use std::time::Duration;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 fn sandbox(name: &str) -> PathBuf {
     let nonce = SystemTime::now()
@@ -456,7 +456,6 @@ fn server_contract_preflight_failures_receipt_without_dispatch_or_queue_mutation
 }
 
 #[test]
-#[allow(unreachable_code, unused_variables)]
 fn server_contract_preflight_hung_live_job_is_not_fenced_and_receipt_stays_running() {
     use ember_lab::server_supervisor::ServerLiveCycleRequest;
 
@@ -484,12 +483,17 @@ fn server_contract_preflight_hung_live_job_is_not_fenced_and_receipt_stays_runni
         .unwrap();
     let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
     let port = listener.local_addr().unwrap().port();
-    let accepted_at: Arc<std::sync::Mutex<Option<Instant>>> = Arc::new(std::sync::Mutex::new(None));
-    let accepted_at_probe = Arc::clone(&accepted_at);
+    // Hold the accepted connection open well past probe_endpoint's fixed
+    // 750ms read_timeout before ever closing it, so the health probe reliably
+    // observes a read timeout (Hung) rather than an EOF (Dead). 3000ms is
+    // ~2x the sum of that 750ms production timeout and the worst pre-probe
+    // internal overhead measured under real contended CI (806ms, across two
+    // ubuntu-latest and one windows-latest run on 2026-08-15) -- margin
+    // against both socket-timeout scheduling jitter and host contention, not
+    // a hand-picked number. See #1296/#1722.
     let hung_endpoint = thread::spawn(move || {
         let (_stream, _) = listener.accept().unwrap();
-        *accepted_at_probe.lock().unwrap() = Some(Instant::now());
-        thread::sleep(Duration::from_millis(1_000));
+        thread::sleep(Duration::from_millis(3_000));
     });
     let serving_contract_path = root.join("malformed-serving-contract.json");
     fs::write(&serving_contract_path, b"{").unwrap();
@@ -531,15 +535,6 @@ fn server_contract_preflight_hung_live_job_is_not_fenced_and_receipt_stays_runni
             1,
         )
         .unwrap();
-
-    let accepted_elapsed_ms = accepted_at
-        .lock()
-        .unwrap()
-        .map(|instant| instant.elapsed().as_millis());
-    panic!(
-        "MEASURED_LATENCY_MS hung_probe decision={} endpoint_health={} accepted_elapsed_ms={:?}",
-        receipt.decision, receipt.endpoint_health, accepted_elapsed_ms
-    );
 
     assert_eq!(receipt.decision, "RESTORE_FAILED_CONTRACT");
     assert!(receipt.process_alive);
@@ -1754,7 +1749,6 @@ fn background_supervision_errors_are_receipted_and_appended() {
 }
 
 #[test]
-#[allow(unreachable_code, unused_variables)]
 fn server_live_cycle_rebinds_successful_restore_for_subsequent_ticks() {
     use ember_lab::server_supervisor::ServerLiveCycleRequest;
 
@@ -1855,13 +1849,6 @@ fn server_live_cycle_rebinds_successful_restore_for_subsequent_ticks() {
             Duration::from_secs(5),
         )
         .unwrap();
-    panic!(
-        "MEASURED_LATENCY_MS restore_rebind decision={} restore_cost_ms={:?} health_status={:?}",
-        receipt.decision,
-        receipt.restore_cost_s.map(|s| (s * 1000.0) as i64),
-        receipt.health_status
-    );
-
     assert_eq!(receipt.decision, "RESTORED");
     assert_eq!(
         receipt.serving_contract_id.as_deref(),
@@ -2029,7 +2016,6 @@ fn server_live_cycle_restarts_across_rebound_authorities_then_backs_off() {
         &serving_contract_sha256,
     );
     let mut job_id = "old-server-job".to_string();
-    let mut measured_iterations: Vec<String> = Vec::new();
 
     for iteration in 1..=3 {
         if iteration > 1 {
@@ -2062,17 +2048,15 @@ fn server_live_cycle_restarts_across_rebound_authorities_then_backs_off() {
                 Duration::from_secs(5),
             )
             .unwrap();
-        measured_iterations.push(format!(
-            "iteration={} decision={} restore_cost_ms={:?} health_status={:?}",
-            iteration,
-            receipt.decision,
-            receipt.restore_cost_s.map(|s| (s * 1000.0) as i64),
-            receipt.health_status
-        ));
-        if iteration == 3 {
-            panic!("MEASURED_LATENCY_MS restore_backoff {measured_iterations:?}");
-        }
-
+        assert_eq!(receipt.decision, "RESTORED");
+        assert_eq!(
+            receipt.supervision_id,
+            "ember-lab-server-supervision-v1:server:8082"
+        );
+        assert_eq!(
+            daemon.job_state(&next_job_id).unwrap(),
+            Some(JobState::Running)
+        );
         let stem = authority_path.file_stem().unwrap().to_string_lossy();
         let rebound_name = format!(
             "{stem}-rebound-{}.json",

@@ -6101,14 +6101,7 @@ fn available_free_bytes(root: &Path) -> Result<u64> {
         )
     } == 0
     {
-        let io_error = std::io::Error::last_os_error();
-        eprintln!(
-            "MEASURED_LATENCY_MS windows_disk_probe_error root={:?} path_len={} wide_len={} os_error={io_error}",
-            root,
-            root.as_os_str().len(),
-            wide.len()
-        );
-        return Err(io_error.into());
+        return Err(std::io::Error::last_os_error().into());
     }
     Ok(available)
 }
