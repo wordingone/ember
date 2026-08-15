@@ -1451,14 +1451,16 @@ impl Daemon {
                         return Err(error);
                     }
                 };
-                let rebound = match self.rebind_server_supervision(authority, &registration, &outcome)
-                {
-                    Ok(value) => value,
-                    Err(error) => {
-                        eprintln!("MEASURED_LATENCY_MS restore_error stage=rebind error={error}");
-                        return Err(error);
-                    }
-                };
+                let rebound =
+                    match self.rebind_server_supervision(authority, &registration, &outcome) {
+                        Ok(value) => value,
+                        Err(error) => {
+                            eprintln!(
+                                "MEASURED_LATENCY_MS restore_error stage=rebind error={error}"
+                            );
+                            return Err(error);
+                        }
+                    };
                 let poll_started = Instant::now();
                 let health =
                     poll_endpoint_until_healthy_or_budget(&rebound, restore_health_poll_budget);
