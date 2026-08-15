@@ -3125,7 +3125,6 @@ fn starting_reconciliation_cannot_kill_a_concurrently_committed_start() {
         Err(EmberLabError::InvalidTransition { .. })
     ));
 }
-#[cfg(windows)]
 #[test]
 fn resident_daemon_reaps_natural_exit_records_status_and_releases_lease() {
     let root = sandbox("resident-reaper");
