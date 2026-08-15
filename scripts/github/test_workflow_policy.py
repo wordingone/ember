@@ -496,6 +496,30 @@ jobs:
                     workflow_policy._cancels_in_progress(workflow["concurrency"])
                 )
 
+    def test_ci_pr_bootstrap_passes_subject_root(self) -> None:
+        """ci-pr.yml's live_pr_policy bootstrap must pass --subject-root
+        alongside --root, or the stale-base-only escape hatch
+        (pinned_base_covers_live_base / pinned_head_covers_live_head) is
+        permanently dead code: main() only builds policy_roots when
+        args.subject_root is not None (#46)."""
+        root = Path(__file__).resolve().parents[2]
+        path = root / ".github" / "workflows" / "ci-pr.yml"
+        text = path.read_text(encoding="utf-8", errors="strict")
+        workflow = yaml.safe_load(text)
+        if True in workflow and "on" not in workflow:
+            workflow["on"] = workflow.pop(True)
+        bootstrap_runs = [
+            step["run"]
+            for job in workflow["jobs"].values()
+            for step in job.get("steps", [])
+            if step.get("name") == "Bootstrap exact-head live PR policy (read-only)"
+        ]
+        self.assertTrue(bootstrap_runs, "bootstrap step not found in ci-pr.yml")
+        for run in bootstrap_runs:
+            self.assertIn("scripts.github.live_pr_policy", run)
+            self.assertIn("--root .", run)
+            self.assertIn("--subject-root .", run)
+
     def test_pr_policy_reads_no_live_state_and_stays_stripped(self) -> None:
         """pr-policy validates in-tree sources only, so it is the one required
         PR workflow that may drop every metadata trigger outright."""
