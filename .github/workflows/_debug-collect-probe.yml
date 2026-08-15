@@ -1,0 +1,38 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+name: debug-collect-probe
+
+on:
+  pull_request:
+    branches: [master]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - run: python -m pip install "pytest==8.4.1" "PyYAML==6.0.2" "jsonschema==4.26.0" "cryptography==49.0.0"
+      - name: Full collect-only, BF16_SILENT_FREEZE guard
+        continue-on-error: true
+        run: |
+          python -m pytest tests/ember_01_custody/test_bf16_silent_freeze_guard_wiring.py --collect-only -q -rA 2>&1 | tee /tmp/bf16.txt
+          echo "EXIT_CODE_BF16=$?"
+      - name: Full collect-only, CRASH_SURVIVAL guard
+        continue-on-error: true
+        run: |
+          python -m pytest tests/ember_01_custody/test_crash_survival_guard.py --collect-only -q -rA 2>&1 | tee /tmp/crash.txt
+          echo "EXIT_CODE_CRASH=$?"
+      - name: Report pip freeze (check for torch)
+        run: python -m pip list 2>&1 | grep -i torch || echo "TORCH_NOT_INSTALLED"
