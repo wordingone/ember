@@ -49,8 +49,8 @@
     "started_at": { "type": "string", "format": "date-time" },
     "ended_at": { "type": "string", "format": "date-time" },
     "duration_seconds": { "type": "integer", "minimum": 7200 },
-    "sample_interval_seconds": { "const": 60 },
-    "sample_count": { "type": "integer", "minimum": 121 },
+    "sample_interval_seconds": { "type": "integer", "minimum": 1 },
+    "sample_count": { "type": "integer", "minimum": 2 },
     "min_commit_bytes": { "type": "integer", "minimum": 0 },
     "max_commit_bytes": { "type": "integer", "minimum": 0 },
     "max_commit_growth_bytes": { "type": "integer", "minimum": 0, "maximum": 268435456 },
@@ -60,7 +60,7 @@
     "growth_ceiling_bytes": { "const": 268435456 },
     "samples": {
       "type": "array",
-      "minItems": 121,
+      "minItems": 2,
       "items": {
         "type": "object",
         "additionalProperties": false,

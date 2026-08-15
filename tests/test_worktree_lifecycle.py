@@ -685,7 +685,10 @@ def test_hooks_and_agents_require_lifecycle_guard() -> None:
     pre_push = (REPO_ROOT / ".githooks" / "pre-push").read_text(encoding="utf-8")
     agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
 
-    invocation = 'bash "$ROOT/tools/run-python-hidden.sh" "$ROOT/scripts/worktree_lifecycle.py" audit --strict --quiet'
+    invocation = (
+        'bash "$ROOT/tools/run-python-hidden.sh" "$ROOT/scripts/worktree_lifecycle.py" '
+        "--allow-modified-self audit --strict --quiet"
+    )
     assert invocation in pre_commit
     assert invocation in pre_push
     assert "scripts/worktree_lifecycle.py create" in agents
@@ -1951,3 +1954,235 @@ def test_expired_then_renewed_worktree_passes_the_strict_audit(tmp_path: Path) -
     assert '"status": "RENEWED"' in renewed.stdout
 
     assert strict(repo).returncode == 0, strict(repo).stderr
+
+
+# ---------------------------------------------------------------------------
+# self-integrity and main-clone hygiene (#1696): the shared main clone sat
+# detached on a six-day-old non-master branch with a STAGED, uncommitted edit
+# to this tool's own file, and every create/retire/audit call that session
+# silently ran the stale bytes instead of failing. Four defenses:
+#   (1) refuse every subcommand when the tool's own bytes differ from HEAD;
+#   (2) warn loudly on create/retire when the main clone's HEAD is irregular;
+#   (3) refuse (create) / flag as error (audit --strict) a worktree nested
+#       inside the main clone's own working tree;
+#   (4) EMBER_GATE_PROVENANCE carries dirty=true/false for this tool's own file.
+# ---------------------------------------------------------------------------
+
+
+def make_throwaway_tool_checkout(tmp_path: Path) -> Path:
+    """A standalone git repo holding ONLY a committed copy of worktree_lifecycle.py and
+    the gate_provenance.py it imports at the bottom of the file.
+
+    The self-integrity check (#1696) is about the running SCRIPT's own bytes versus
+    ITS OWN committed HEAD -- a fact that has nothing to do with `--repo`, which every
+    other fixture in this file points at a throwaway registry repo that never contains
+    a copy of the tool at all. This fixture gives the check something real to compare
+    against: a known-good commit, and full control over drifting the working copy away
+    from it exactly the way the incident did (append bytes, never commit).
+    """
+    checkout = tmp_path / "tool-checkout"
+    scripts_dir = checkout / "scripts"
+    scripts_dir.mkdir(parents=True)
+    shutil.copy(SCRIPT, scripts_dir / "worktree_lifecycle.py")
+    shutil.copy(REPO_ROOT / "scripts" / "gate_provenance.py", scripts_dir / "gate_provenance.py")
+    git(checkout, "init", "-b", "master")
+    git(checkout, "config", "user.name", "Ember Test")
+    git(checkout, "config", "user.email", "ember@example.invalid")
+    git(checkout, "add", "scripts/worktree_lifecycle.py", "scripts/gate_provenance.py")
+    git(checkout, "commit", "-m", "seed tool checkout")
+    return checkout
+
+
+def test_refuses_every_subcommand_when_own_bytes_are_modified_vs_head(tmp_path: Path) -> None:
+    """Acceptance (1): reproduces the incident directly. `scripts/worktree_lifecycle.py`
+    is modified on disk (appended, never committed) in a throwaway checkout, and every
+    subcommand must refuse with a named error rather than silently run the stale bytes.
+    RED before the self-integrity gate existed: every one of these calls would have
+    proceeded (and `create`/`retire` would have mutated real state).
+    """
+    checkout = make_throwaway_tool_checkout(tmp_path)
+    tool = checkout / "scripts" / "worktree_lifecycle.py"
+
+    # Control: the clean checkout's own copy of the tool runs normally.
+    clean = run(
+        sys.executable, str(tool), "--repo", str(checkout), "install", "--target", "3",
+        cwd=checkout, check=False,
+    )
+    assert clean.returncode == 0, clean.stderr
+
+    # Modify the tool's own on-disk bytes without committing -- the incident's exact
+    # shape (the incident's edit was staged; an unstaged append is the same "differs
+    # from HEAD" fact and must refuse identically).
+    with tool.open("a", encoding="utf-8") as handle:
+        handle.write("\n# stale drift appended by the test, never committed\n")
+
+    subcommands = [
+        ["install", "--target", "3"],
+        ["audit"],
+        ["audit", "--strict", "--quiet"],
+        [
+            "create", "--path", str(tmp_path / "must-not-create"),
+            "--branch", "must-not-create", "--owner", "o", "--purpose", "p",
+            "--expires", "2099-01-01",
+        ],
+        ["retire", "--path", str(checkout)],
+        ["renew", "--path", str(checkout), "--days", "1"],
+        ["reconcile", "--path", str(checkout)],
+    ]
+    for subcommand in subcommands:
+        refused = run(
+            sys.executable, str(tool), "--repo", str(checkout), *subcommand,
+            cwd=checkout, check=False,
+        )
+        assert refused.returncode == 2, (subcommand, refused.stdout, refused.stderr)
+        assert "SELF_MODIFIED" in refused.stderr, (subcommand, refused.stderr)
+    assert not (tmp_path / "must-not-create").exists()
+
+
+def test_allow_modified_self_overrides_the_self_integrity_refusal(tmp_path: Path) -> None:
+    """The named escape hatch: an explicit, acknowledged `--allow-modified-self`
+    override, and only that flag, lets a dirty-self tool run.
+    """
+    checkout = make_throwaway_tool_checkout(tmp_path)
+    tool = checkout / "scripts" / "worktree_lifecycle.py"
+    with tool.open("a", encoding="utf-8") as handle:
+        handle.write("\n# stale drift, deliberately overridden\n")
+
+    refused = run(
+        sys.executable, str(tool), "--repo", str(checkout), "install", "--target", "3",
+        cwd=checkout, check=False,
+    )
+    assert refused.returncode == 2
+    assert "SELF_MODIFIED" in refused.stderr
+
+    overridden = run(
+        sys.executable, str(tool), "--allow-modified-self", "--repo", str(checkout),
+        "install", "--target", "3", cwd=checkout, check=False,
+    )
+    assert overridden.returncode == 0, overridden.stderr
+
+
+def test_create_and_retire_warn_loudly_when_main_clone_head_is_irregular(tmp_path: Path) -> None:
+    """Acceptance (2): the incident's other half -- the shared main clone sat detached
+    on a six-day-old branch and nothing said so. `create`/`retire` must print a loud,
+    named WARNING (not a refusal -- the main clone can legitimately be in this state).
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    target = tmp_path / "wt-a"
+
+    # Detach the MAIN clone itself (not a linked worktree).
+    head = git(repo, "rev-parse", "HEAD").stdout.strip()
+    git(repo, "checkout", "--detach", head)
+
+    created = lifecycle(
+        repo, "create", "--path", str(target), "--branch", "wt-a",
+        "--owner", "o", "--purpose", "p", "--expires", "2099-01-01", check=False,
+    )
+    assert created.returncode == 0, created.stderr
+    assert "WARNING" in created.stderr
+    assert "DETACHED" in created.stderr
+    assert "HEAD commit" in created.stderr and "old" in created.stderr
+
+    # Now put the main clone on a non-master branch instead of detached.
+    git(repo, "checkout", "-b", "stale-branch")
+
+    retired = lifecycle(repo, "retire", "--path", str(target), check=False)
+    assert retired.returncode == 0, retired.stderr
+    assert "WARNING" in retired.stderr
+    assert "stale-branch" in retired.stderr
+    assert "HEAD commit" in retired.stderr and "old" in retired.stderr
+
+
+def test_create_and_retire_are_silent_when_main_clone_head_is_normal(tmp_path: Path) -> None:
+    """Invariant guard: the loud WARNING must not fire on the ordinary, healthy case --
+    the main clone attached to master -- or it stops being a signal.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    target = tmp_path / "wt-normal"
+
+    created = lifecycle(
+        repo, "create", "--path", str(target), "--branch", "wt-normal",
+        "--owner", "o", "--purpose", "p", "--expires", "2099-01-01", check=False,
+    )
+    assert created.returncode == 0, created.stderr
+    assert "WARNING" not in created.stderr
+
+    retired = lifecycle(repo, "retire", "--path", str(target), check=False)
+    assert retired.returncode == 0, retired.stderr
+    assert "WARNING" not in retired.stderr
+
+
+def test_create_refuses_a_worktree_nested_inside_the_main_clones_working_tree(
+    tmp_path: Path,
+) -> None:
+    """Acceptance (3a): the incident's other structural half -- a linked worktree was
+    found nested INSIDE the main clone tree, contaminating the working tree. `create`
+    must refuse rather than let this happen again.
+    """
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "6")
+    nested = repo / "nested-worktree"
+
+    result = lifecycle(
+        repo, "create", "--path", str(nested), "--branch", "nested",
+        "--owner", "founder-one", "--purpose", "must-refuse-nested",
+        "--expires", "2099-01-01", check=False,
+    )
+
+    assert result.returncode == 2
+    assert "NESTED_INSIDE_MAIN_CLONE" in result.stderr
+    assert not nested.exists()
+
+
+def test_strict_audit_flags_a_nested_worktree_as_an_error(tmp_path: Path) -> None:
+    """Acceptance (3b): `audit --strict` must flag a nested worktree that reached the
+    registry some other way (a raw `git worktree add`, exactly like the incident) as an
+    ERROR unconditionally -- not backlog, regardless of managed/legacy/unregistered
+    origin, because nesting is a structural defect, not inherited migration debt.
+    """
+    repo = make_repo(tmp_path)
+    nested = repo / "nested-raw"
+    git(repo, "worktree", "add", "-b", "nested-raw", str(nested))
+    lifecycle(repo, "install", "--target", "6")
+
+    result = strict(repo)
+    assert result.returncode == 2
+    found = [item for item in contradictions_of(result) if item["code"] == "nested_inside_main_clone"]
+    assert [item["path"] for item in found] == [str(nested)]
+    assert found[0]["severity"] == "error"
+    assert found[0]["origin"] == "legacy"
+
+
+def test_provenance_banner_reports_dirty_state_of_its_own_bytes(tmp_path: Path) -> None:
+    """Acceptance (4): EMBER_GATE_PROVENANCE is extended with dirty=true/false,
+    reflecting whether the tool's OWN on-disk bytes are modified vs HEAD.
+    """
+    checkout = make_throwaway_tool_checkout(tmp_path)
+    tool = checkout / "scripts" / "worktree_lifecycle.py"
+
+    clean = run(
+        sys.executable, str(tool), "--repo", str(checkout), "install", "--target", "3",
+        cwd=checkout, check=False,
+    )
+    assert clean.returncode == 0, clean.stderr
+    clean_banner = [
+        line for line in clean.stderr.splitlines() if line.startswith("EMBER_GATE_PROVENANCE")
+    ]
+    assert clean_banner, clean.stderr
+    assert clean_banner[0].endswith(" dirty=false"), clean_banner[0]
+
+    with tool.open("a", encoding="utf-8") as handle:
+        handle.write("\n# stale drift for the provenance banner test\n")
+
+    dirty = run(
+        sys.executable, str(tool), "--allow-modified-self", "--repo", str(checkout),
+        "install", "--target", "3", cwd=checkout, check=False,
+    )
+    assert dirty.returncode == 0, dirty.stderr
+    dirty_banner = [
+        line for line in dirty.stderr.splitlines() if line.startswith("EMBER_GATE_PROVENANCE")
+    ]
+    assert dirty_banner, dirty.stderr
+    assert dirty_banner[0].endswith(" dirty=true"), dirty_banner[0]

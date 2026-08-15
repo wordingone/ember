@@ -172,6 +172,10 @@ function buildEvidenceVerifierManifest(options: {
       requires_ui_responsiveness: false,
       cpu_rate_percent: 50,
     },
+    // evidence_verifier is not CPU-paced today and presents no window (truth-declared, not
+    // aspirational -- runtime/ember-lab is the sole spawner and this command never opens a UI).
+    cpu_pacing_class: "unpaced",
+    window_contract: "headless_no_windows",
     env: { ...cacheEnv, EMBER_LAB_PIPE: configuredEmberLabPipe(options.env) },
     bindings: [
       { kind: "config", path: rootBindingPath, sha256: sha256File(rootBindingPath) },

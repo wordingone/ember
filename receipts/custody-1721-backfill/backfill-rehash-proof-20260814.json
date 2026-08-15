@@ -1,0 +1,215 @@
+{
+  "ticket": "1721-CUSTODY-BACKFILL-REHASH-PROOF",
+  "ts": "2026-08-14T18:22:29Z",
+  "sha_convention": "bytes on disk as-is (binary read, no normalization)",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "admitted": true,
+  "rehash": true,
+  "results": [
+    {
+      "locations": [
+        {
+          "locator": "checkpoint-manifest.json",
+          "verdict": "verified",
+          "volume": "niko-semantic-seed83-retry1-step2"
+        },
+        {
+          "locator": "checkpoint-manifest.json",
+          "verdict": "verified",
+          "volume": "vera-eval-anchor-bf20f050"
+        }
+      ],
+      "sha256": "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b",
+      "verdict": "verified"
+    },
+    {
+      "locations": [
+        {
+          "locator": "shared.pt",
+          "verdict": "verified",
+          "volume": "niko-semantic-seed83-retry1-step2"
+        },
+        {
+          "locator": "shared.pt",
+          "verdict": "verified",
+          "volume": "vera-eval-anchor-bf20f050"
+        }
+      ],
+      "sha256": "ee864fc9779e7f0d943a08836253726a41f86679360f477a35d5348486f3162b",
+      "verdict": "verified"
+    },
+    {
+      "locations": [
+        {
+          "locator": "replay-state.pt",
+          "verdict": "verified",
+          "volume": "niko-semantic-seed83-retry1-step2"
+        },
+        {
+          "locator": "replay-state.pt",
+          "verdict": "verified",
+          "volume": "vera-eval-anchor-bf20f050"
+        }
+      ],
+      "sha256": "c2bd047f6a38ff8b0d24e6dbf3d75295c3af10e1a25e698ac41e819848e83c37",
+      "verdict": "verified"
+    },
+    {
+      "locations": [
+        {
+          "locator": "expert-vision.pt",
+          "verdict": "verified",
+          "volume": "niko-semantic-seed83-retry1-step2"
+        },
+        {
+          "locator": "expert-vision.pt",
+          "verdict": "verified",
+          "volume": "vera-eval-anchor-bf20f050"
+        }
+      ],
+      "sha256": "8e485774f75a5345279dc294501aa6ec55a53cf6247c70f3ce71944b2827bab0",
+      "verdict": "verified"
+    },
+    {
+      "locations": [
+        {
+          "locator": "expert-audio.pt",
+          "verdict": "verified",
+          "volume": "niko-semantic-seed83-retry1-step2"
+        },
+        {
+          "locator": "expert-audio.pt",
+          "verdict": "verified",
+          "volume": "vera-eval-anchor-bf20f050"
+        }
+      ],
+      "sha256": "0383834d92217380a6c97f2f65428dfac27405205304ea657e7dd2dccf521e15",
+      "verdict": "verified"
+    },
+    {
+      "locations": [
+        {
+          "locator": "expert-reasoning.pt",
+          "verdict": "verified",
+          "volume": "niko-semantic-seed83-retry1-step2"
+        },
+        {
+          "locator": "expert-reasoning.pt",
+          "verdict": "verified",
+          "volume": "vera-eval-anchor-bf20f050"
+        }
+      ],
+      "sha256": "65820c4f8466e37016ee86943a298f22efc066221a75e22c272479839282712f",
+      "verdict": "verified"
+    },
+    {
+      "locations": [
+        {
+          "locator": "expert-tool.pt",
+          "verdict": "verified",
+          "volume": "niko-semantic-seed83-retry1-step2"
+        },
+        {
+          "locator": "expert-tool.pt",
+          "verdict": "verified",
+          "volume": "vera-eval-anchor-bf20f050"
+        }
+      ],
+      "sha256": "eb5839469d0680fa6aa51bfa2fc7e68141524871eb447f4f1bf7939f3767415e",
+      "verdict": "verified"
+    },
+    {
+      "locations": [
+        {
+          "locator": "checkpoint-manifest.json",
+          "verdict": "verified",
+          "volume": "ember-live-receipts-r1-warm100-20260804"
+        }
+      ],
+      "sha256": "4655a76b7e5b40396be8637f9aa0898ae94fc2321f2e75630d8f4ab83b555c0b",
+      "verdict": "verified"
+    },
+    {
+      "locations": [
+        {
+          "locator": "shared-model.pt",
+          "verdict": "verified",
+          "volume": "ember-live-receipts-r1-warm100-20260804"
+        }
+      ],
+      "sha256": "4fc54afb85f1f3a512d63d4b9faf4e79ea9286fcb4e78caff011c0ad108b6ad7",
+      "verdict": "verified"
+    },
+    {
+      "locations": [
+        {
+          "locator": "optimizer-state.pt",
+          "verdict": "verified",
+          "volume": "ember-live-receipts-r1-warm100-20260804"
+        }
+      ],
+      "sha256": "c31b51b8a7d502fe000ea2a951d7cbb450aea995c2442dda460d48b289590e3c",
+      "verdict": "verified"
+    },
+    {
+      "locations": [
+        {
+          "locator": "replay-state.pt",
+          "verdict": "verified",
+          "volume": "ember-live-receipts-r1-warm100-20260804"
+        }
+      ],
+      "sha256": "425a20b1adfc3246dcd4ac742d074a426c194a95abe09160fd5c32bb76483354",
+      "verdict": "verified"
+    },
+    {
+      "locations": [
+        {
+          "locator": "expert-vision.pt",
+          "verdict": "verified",
+          "volume": "ember-live-receipts-r1-warm100-20260804"
+        }
+      ],
+      "sha256": "07cff223f23a2ccfbe507b85206763b3fb009b8e753548938704dac54a4f6f94",
+      "verdict": "verified"
+    },
+    {
+      "locations": [
+        {
+          "locator": "expert-audio.pt",
+          "verdict": "verified",
+          "volume": "ember-live-receipts-r1-warm100-20260804"
+        }
+      ],
+      "sha256": "8801b7f95f69cae3d268dda0a30adbdf9c54fdc6c1f6517acca009a9b9e5ab0b",
+      "verdict": "verified"
+    },
+    {
+      "locations": [
+        {
+          "locator": "expert-reasoning.pt",
+          "verdict": "verified",
+          "volume": "ember-live-receipts-r1-warm100-20260804"
+        }
+      ],
+      "sha256": "992923c2abc11e8d226fb0c809e8f12f83c4640deb12d535f727295412c8376e",
+      "verdict": "verified"
+    },
+    {
+      "locations": [
+        {
+          "locator": "expert-tool.pt",
+          "verdict": "verified",
+          "volume": "ember-live-receipts-r1-warm100-20260804"
+        }
+      ],
+      "sha256": "550f50733ea3d78d9efc42afb946ea9d1e0b6f3e2f9bde712b8ebb68e5de1e5c",
+      "verdict": "verified"
+    }
+  ],
+  "schema_version": "ember-custody-verify-receipt-v1",
+  "verified_at_ms": 1786731749990
+}

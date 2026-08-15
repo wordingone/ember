@@ -20,6 +20,45 @@ def _current_source_commit() -> str:
     ).strip()
 
 
+@pytest.fixture
+def hermetic_governed_remote(tmp_path: Path) -> tuple[str, str]:
+    """A real clone of this checkout's own object store, ref forced to HEAD.
+
+    Round-3 fix (review-1702-adversarial.md, round 3): the prior approach
+    derived the governed ref from this checkout's OWN branch state
+    (``git rev-parse --symbolic-full-name HEAD``, falling back to bare
+    "HEAD" when detached). That fallback was never exercised until a
+    lifecycle-managed ``--detach`` worktree -- the exact shape
+    worktree_lifecycle certification requires -- hit it: bare "HEAD"
+    ambiguous-suffix-matches both this repo's own ``HEAD`` and
+    ``refs/remotes/origin/HEAD`` on ``git ls-remote``, so
+    ``resolve_governed_master`` sees two rows and fails closed regardless of
+    which commit is actually checked out. Test outcome was still a function
+    of checkout shape, not of the code under test.
+
+    Cloning a fresh bare remote from this checkout and forcing
+    ``refs/heads/master`` to this checkout's real HEAD sha resolves to
+    exactly one row on every checkout shape (attached branch, detached HEAD,
+    orphan detach reachable only via the branch this checkout's HEAD sits
+    on) and drops the self-referential dependency on this checkout's own
+    branch state entirely.
+    """
+    remote_dir = tmp_path / "governed-remote.git"
+    subprocess.run(
+        # --no-hardlinks: pytest's tmp_path and this checkout can sit on
+        # different Windows volumes/drives, where a hardlinking --local
+        # clone fails outright ("Improper link") rather than falling back.
+        ["git", "clone", "--local", "--no-hardlinks", "--bare", str(REPO_ROOT), str(remote_dir)],
+        check=True, capture_output=True, text=True,
+    )
+    head_sha = _current_source_commit()
+    subprocess.run(
+        ["git", "-C", str(remote_dir), "update-ref", "refs/heads/master", head_sha],
+        check=True, capture_output=True, text=True,
+    )
+    return str(remote_dir), "refs/heads/master"
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -345,7 +384,9 @@ shared = (
     + hidden
 )
 total = shared + len(experts) * layers * expert_per_layer
-active = shared if args.active_expert == "shared" else shared + layers * expert_per_layer
+if args.active_expert and args.active_expert not in experts:
+    raise SystemExit(1)
+active = shared if not args.active_expert else shared + layers * expert_per_layer
 print(json.dumps({
     "result": "MEASURED",
     "subject_checkpoint_sha256": sha256(args.checkpoint_manifest),
@@ -357,7 +398,7 @@ print(json.dumps({
     "served_parameters": total,
     "active_parameters": active,
     "episode_trainable_parameters": active,
-    "active_expert_ids": [args.active_expert],
+    "active_expert_ids": [args.active_expert] if args.active_expert else [],
 }, sort_keys=True))
 """,
         encoding="utf-8",
@@ -503,8 +544,60 @@ print(json.dumps({
     _write_json(manifest_path, manifest)
     return manifest_path
 
+
+def _register_checkpoint_custody(tmp_path: Path) -> Path:
+    """Issue #1721: contract.py's checkpoint admission now runs the real
+    `ember-lab custody-verify` gate over `_candidate_manifest`'s checkpoint
+    shards. Registers those exact shard hashes into an ISOLATED per-test
+    catalog (never the real repo state/ember-lab-catalog.sqlite3) via the
+    real `register-artifact` CLI, so the fixture is admitted instead of
+    refused as unregistered. Skips (not fails) when no binary is built --
+    the same skip-not-refuse convention contract.py's own gate uses for a
+    host that structurally cannot run the Windows-only ember-lab CLI.
+    """
+    from scripts import artifact_custody_gate as gate
+
+    binary = gate.canonical_ember_lab_binary(REPO_ROOT)
+    if binary is None:
+        pytest.skip(
+            "no built ember-lab binary under runtime/ember-lab/target/"
+            "{release,debug}/ember-lab.exe; build it before running this test"
+        )
+    index = json.loads((tmp_path / "checkpoint" / "checkpoint-manifest.json").read_text(encoding="utf-8"))
+    db_path = tmp_path / "custody-gate-test.sqlite3"
+    for shard in index["shards"]:
+        # The manifest's shard "path" is relative to `root` (this fixture's
+        # `tmp_path`, matching contract.py's own custody_verify(root=...)
+        # call) but was built via `str(Path.relative_to(...))`, which on
+        # Windows yields backslash separators. The catalog's locator
+        # validator is portable-relative-path-only (forward slashes) --
+        # normalize before registering, exactly as a real writer would.
+        locator = shard["path"].replace("\\", "/")
+        registration = subprocess.run(
+            [
+                str(binary),
+                "register-artifact",
+                "--db",
+                str(db_path),
+                "--sha256",
+                shard["sha256"],
+                "--byte-count",
+                str(shard["bytes"]),
+                "--media-type",
+                "application/octet-stream",
+                "--location",
+                f"{gate.RESUME_CHECKPOINT_VOLUME}={locator}",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert registration.returncode == 0, registration.stderr
+    return db_path
+
+
 def test_checkpoint_candidate_binds_owned_multimodal_reasoning_tool_path(tmp_path: Path):
     manifest = _candidate_manifest(tmp_path)
+    custody_db = _register_checkpoint_custody(tmp_path)
     result = subprocess.run(
         [
             sys.executable,
@@ -513,6 +606,8 @@ def test_checkpoint_candidate_binds_owned_multimodal_reasoning_tool_path(tmp_pat
             str(manifest),
             "--trusted-verifier-registry",
             str(tmp_path / "trusted-verifiers.json"),
+            "--custody-db",
+            str(custody_db),
         ],
         cwd=REPO_ROOT,
         text=True,
@@ -546,7 +641,9 @@ def test_git_authority_probe_hides_windows_console(monkeypatch: pytest.MonkeyPat
     assert kwargs["creationflags"] == subprocess.CREATE_NO_WINDOW
 
 
-def test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary(tmp_path: Path):
+def test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary(
+    tmp_path: Path, hermetic_governed_remote: tuple[str, str]
+):
     """The R1 entry producer must delegate admission to the canonical contract.
 
     This is intentionally a PREP_ONLY artifact: no WARM-100 execution, result, or
@@ -555,7 +652,9 @@ def test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary(tmp_pa
     """
     from scripts.ember_restart.contract import build_r1_warm100_entry, validate_r1_warm100_entry
 
+    governed_remote, governed_ref = hermetic_governed_remote
     manifest_path = _candidate_manifest(tmp_path)
+    custody_db = _register_checkpoint_custody(tmp_path)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["source_commit"] = _current_source_commit()
     _write_json(manifest_path, manifest)
@@ -567,8 +666,24 @@ def test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary(tmp_pa
         config_path=REPO_ROOT / "configs/ember-restart-3b.json",
         fixed_prior_path=REPO_ROOT / "manifests/ember-restart-3b/fixed-prior-manifest-v1.json",
         trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
+        # Hermetic, no-network source-identity binding (issue #1296 P1): the
+        # governed-remote leg is a bare clone of this same checkout's object
+        # store via file transport, with refs/heads/master forced to this
+        # checkout's real HEAD -- resolves to exactly one row on every
+        # checkout shape (attached branch or detached), unlike deriving the
+        # ref from this checkout's own branch state. canonical_root is left
+        # at its default (self-anchor), which also resolves to this checkout.
+        governed_remote=governed_remote,
+        governed_ref=governed_ref,
+        custody_db=custody_db,
     )
-    assert validate_r1_warm100_entry(payload, source_root=REPO_ROOT, manifest_path=manifest_path)
+    assert validate_r1_warm100_entry(
+        payload,
+        source_root=REPO_ROOT,
+        manifest_path=manifest_path,
+        governed_remote=governed_remote,
+        governed_ref=governed_ref,
+    )
     assert payload["entry"] == "WARM-100"
     assert payload["result"] == "PREP_ONLY"
     assert payload["claim_boundary"] == {
@@ -578,6 +693,11 @@ def test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary(tmp_pa
         "capability": False,
         "benchmark": False,
     }
+    assert payload["source_binding"]["canonical_common_dir_bound"] is True
+    assert payload["source_binding"]["worktree_identity"] in {"MAIN", "MANAGED", "LEGACY"}
+    assert payload["source_binding"]["governed_remote"] == governed_remote
+    assert payload["source_binding"]["remote_master_sha"] == manifest["source_commit"]
+    assert payload["source_binding"]["ancestry"] == "EQUAL"
 
     for mutate in (
         lambda candidate: candidate["dispatch"].update({"authority": "standalone-launcher"}),
@@ -588,7 +708,13 @@ def test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary(tmp_pa
         tampered = json.loads(json.dumps(payload))
         mutate(tampered)
         try:
-            validate_r1_warm100_entry(tampered, source_root=REPO_ROOT, manifest_path=manifest_path)
+            validate_r1_warm100_entry(
+                tampered,
+                source_root=REPO_ROOT,
+                manifest_path=manifest_path,
+                governed_remote=governed_remote,
+                governed_ref=governed_ref,
+            )
         except ValueError:
             continue
         raise AssertionError("tampered R1 entry was accepted")
@@ -606,6 +732,7 @@ def test_r1_warm100_entry_rejects_stale_source_commit(tmp_path: Path):
     ).strip()
     assert stale and stale != current
     manifest_path = _candidate_manifest(tmp_path)
+    custody_db = _register_checkpoint_custody(tmp_path)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["source_commit"] = stale
     _write_json(manifest_path, manifest)
@@ -619,6 +746,7 @@ def test_r1_warm100_entry_rejects_stale_source_commit(tmp_path: Path):
             config_path=REPO_ROOT / "configs/ember-restart-3b.json",
             fixed_prior_path=REPO_ROOT / "manifests/ember-restart-3b/fixed-prior-manifest-v1.json",
             trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
+            custody_db=custody_db,
         )
 
 
@@ -627,6 +755,7 @@ def test_r1_warm100_entry_rejects_dirty_source_tree(tmp_path: Path):
     from scripts.ember_restart.contract import build_r1_warm100_entry
 
     manifest_path = _candidate_manifest(tmp_path)
+    custody_db = _register_checkpoint_custody(tmp_path)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["source_commit"] = _current_source_commit()
     _write_json(manifest_path, manifest)
@@ -643,20 +772,58 @@ def test_r1_warm100_entry_rejects_dirty_source_tree(tmp_path: Path):
                 config_path=REPO_ROOT / "configs/ember-restart-3b.json",
                 fixed_prior_path=REPO_ROOT / "manifests/ember-restart-3b/fixed-prior-manifest-v1.json",
                 trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
+                custody_db=custody_db,
             )
     finally:
         dirty_path.write_bytes(original)
 
 
-def test_r1_warm100_entry_cli_emits_path_free_receipt(tmp_path: Path):
+def test_r1_warm100_entry_cli_emits_path_free_receipt(
+    tmp_path: Path, monkeypatch, capsys, hermetic_governed_remote: tuple[str, str]
+):
+    """The real CLI entry point (argparse main(), in-process), no argv override:
+    issue #1296 P1 deliberately exposes no --canonical-root/--governed-remote
+    flag, so this test cannot point the CLI at a hermetic remote via argv.
+
+    F1 fix (review-1702-adversarial.md, round 2): the prior version instead
+    let this test bind the real network GOVERNED_REMOTE and assert rc==0,
+    which is only true when THIS checkout's HEAD is itself published-or-
+    ancestor on github master -- false on the PR branch itself, on any
+    unpushed branch, and offline (require_published_ancestry binds the
+    branch TIP via _current_source_commit(), not "the branch point" the old
+    docstring claimed). That made the test's own green/red state a function
+    of which branch happened to be checked out, not of the code under test.
+
+    Round-2 fix used a hermetic file-transport remote, but derived
+    governed_ref from THIS checkout's own branch state -- which broke again
+    (round 3) the moment the checkout was a detached-HEAD managed worktree,
+    the exact shape worktree_lifecycle certification requires. Now uses the
+    same hermetic_governed_remote fixture as
+    test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary: a
+    bare clone with refs/heads/master forced to this checkout's real HEAD,
+    independent of this checkout's own branch/detach state.
+
+    Hermetic fix: main()'s r1-entry path always calls build_r1_warm100_entry
+    with governed_remote=None (there is no argv flag for it), which falls
+    back to reading the module-level GOVERNED_REMOTE/GOVERNED_REMOTE_REF
+    globals at call time. Monkeypatching those two globals exercises the
+    identical CLI code path a real subprocess invocation takes (argv
+    parsing, no override flags, same build_r1_warm100_entry call), with zero
+    new CLI surface.
+    """
+    from scripts.ember_restart import contract as contract_module
+
+    governed_remote, governed_ref = hermetic_governed_remote
+    monkeypatch.setattr(contract_module, "GOVERNED_REMOTE", governed_remote)
+    monkeypatch.setattr(contract_module, "GOVERNED_REMOTE_REF", governed_ref)
+
     manifest_path = _candidate_manifest(tmp_path)
+    custody_db = _register_checkpoint_custody(tmp_path)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["source_commit"] = _current_source_commit()
     _write_json(manifest_path, manifest)
-    result = subprocess.run(
+    exit_code = contract_module.main(
         [
-            sys.executable,
-            str(VALIDATOR),
             "r1-entry",
             str(manifest_path),
             "--source-commit",
@@ -671,17 +838,21 @@ def test_r1_warm100_entry_cli_emits_path_free_receipt(tmp_path: Path):
             str(REPO_ROOT / "manifests/ember-restart-3b/fixed-prior-manifest-v1.json"),
             "--trusted-verifier-registry",
             str(tmp_path / "trusted-verifiers.json"),
-        ],
-        cwd=REPO_ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
+            "--custody-db",
+            str(custody_db),
+        ]
     )
-    assert result.returncode == 0, result.stdout + result.stderr
-    payload = json.loads(result.stdout)
-    assert payload["schema"] == "ember-r1-warm100-entry-v1"
+    captured = capsys.readouterr()
+    assert exit_code == 0, captured.out + captured.err
+    payload = json.loads(captured.out)
+    assert payload["schema"] == "ember-r1-warm100-entry-v2"
     assert payload["result"] == "PREP_ONLY"
     assert all("\\" not in row["path"] and ":" not in row["path"] for row in payload["source_files"].values())
+    assert payload["source_binding"]["canonical_common_dir_bound"] is True
+    assert payload["source_binding"]["worktree_identity"] in {"MAIN", "MANAGED", "LEGACY"}
+    assert payload["source_binding"]["governed_remote"] == governed_remote
+    assert payload["source_binding"]["remote_master_sha"] == manifest["source_commit"]
+    assert payload["source_binding"]["ancestry"] == "EQUAL"
 
 
 def test_r1_warm100_entry_cli_refusal_is_content_addressed(tmp_path: Path):
@@ -718,3 +889,81 @@ def test_r1_warm100_entry_cli_refusal_is_content_addressed(tmp_path: Path):
     assert payload["receipt_sha256"] == hashlib.sha256(
         (json.dumps(unsigned, sort_keys=True, separators=(",", ":")) + "\n").encode()
     ).hexdigest()
+
+
+REAL_PARAMETER_COUNTER = (
+    REPO_ROOT
+    / "manifests"
+    / "ember-02-admission"
+    / "verifiers"
+    / "parameter-realization-verifier.py"
+)
+SHARED_ROUTE_ACTIVE_PARAMETERS = 1_020_589_568
+
+
+def test_shared_route_candidate_clears_the_real_trusted_parameter_counter(tmp_path: Path):
+    """A shared-route candidate must satisfy the real counter contract.py invokes (#1718).
+
+    contract.py spells the shared route "shared"; the trusted verifier spells it as an
+    absent expert (`--active-expert <id|empty>`) and rejects "shared" outright. The
+    fixture counter in this file accepts "shared", so only the real verifier catches it.
+    """
+    manifest_path = _candidate_manifest(tmp_path)
+    custody_db = _register_checkpoint_custody(tmp_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    counter = tmp_path / "counter" / "parameter-realization-verifier.py"
+    counter.write_bytes(REAL_PARAMETER_COUNTER.read_bytes())
+    counter_record = {
+        "path": str(counter.relative_to(tmp_path)),
+        "sha256": _sha256(counter),
+    }
+    registry_path = tmp_path / "trusted-verifiers.json"
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    registry["verifiers"] = [
+        (
+            {
+                **counter_record,
+                "evidence_classes": ["parameter_realization"],
+                "criterion_ids": [],
+            }
+            if "parameter_realization" in entry.get("evidence_classes", [])
+            else entry
+        )
+        for entry in registry["verifiers"]
+    ]
+    _write_json(registry_path, registry)
+
+    architecture = manifest["architecture"]
+    architecture["parameter_counter"] = counter_record
+    architecture["active_expert_ids"] = ["shared"]
+    architecture["active_parameters"] = SHARED_ROUTE_ACTIVE_PARAMETERS
+    architecture["episode_trainable_parameters"] = SHARED_ROUTE_ACTIVE_PARAMETERS
+
+    receipt_path = tmp_path / architecture["parameter_receipt"]["path"]
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["counter_sha256"] = counter_record["sha256"]
+    receipt["active_expert_ids"] = ["shared"]
+    receipt["active_parameters"] = SHARED_ROUTE_ACTIVE_PARAMETERS
+    receipt["episode_trainable_parameters"] = SHARED_ROUTE_ACTIVE_PARAMETERS
+    architecture["parameter_receipt"]["sha256"] = _write_json(receipt_path, receipt)
+
+    _write_json(manifest_path, manifest)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            "validate",
+            str(manifest_path),
+            "--trusted-verifier-registry",
+            str(registry_path),
+            "--custody-db",
+            str(custody_db),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

@@ -10,7 +10,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-from test_contract import REPO_ROOT, VALIDATOR, _candidate_manifest, _write_json
+from test_contract import (
+    REPO_ROOT,
+    VALIDATOR,
+    _candidate_manifest,
+    _register_checkpoint_custody,
+    _write_json,
+)
 
 
 TOTAL = 3_839_161_856
@@ -42,16 +48,19 @@ def _make_sparse(tmp_path: Path) -> Path:
     return source
 
 
-def _run(path: Path) -> subprocess.CompletedProcess[str]:
+def _run(path: Path, *, custody_db: Path | None = None) -> subprocess.CompletedProcess[str]:
+    argv = [
+        sys.executable,
+        str(VALIDATOR),
+        "validate",
+        str(path),
+        "--trusted-verifier-registry",
+        str(path.parent / "trusted-verifiers.json"),
+    ]
+    if custody_db is not None:
+        argv += ["--custody-db", str(custody_db)]
     return subprocess.run(
-        [
-            sys.executable,
-            str(VALIDATOR),
-            "validate",
-            str(path),
-            "--trusted-verifier-registry",
-            str(path.parent / "trusted-verifiers.json"),
-        ],
+        argv,
         cwd=REPO_ROOT,
         text=True,
         capture_output=True,
@@ -60,7 +69,9 @@ def _run(path: Path) -> subprocess.CompletedProcess[str]:
 
 
 def test_sparse_total_above_3b_with_one_active_expert_is_valid(tmp_path: Path) -> None:
-    result = _run(_make_sparse(tmp_path))
+    path = _make_sparse(tmp_path)
+    custody_db = _register_checkpoint_custody(path.parent)
+    result = _run(path, custody_db=custody_db)
     assert result.returncode == 0, result.stdout + result.stderr
 
 
@@ -79,7 +90,8 @@ def test_shared_semantic_route_uses_the_always_active_nonlinear_ffn(tmp_path: Pa
     receipt["episode_trainable_parameters"] = SHARED_ACTIVE
     receipt_ref["sha256"] = _write_json(receipt_path, receipt)
     _write_json(path, payload)
-    result = _run(path)
+    custody_db = _register_checkpoint_custody(path.parent)
+    result = _run(path, custody_db=custody_db)
     assert result.returncode == 0, result.stdout + result.stderr
 
 

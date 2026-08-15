@@ -22,6 +22,15 @@ TOOLS = (
 PROVENANCE = re.compile(
     r"^EMBER_GATE_PROVENANCE path=(?P<path>\S+) sha256=(?P<sha>[0-9a-f]{64}) head=(?P<head>\S+)$"
 )
+# worktree_lifecycle.py's own banner additionally carries dirty=true/false (#1696):
+# whether ITS OWN on-disk bytes are modified vs the committed HEAD version. That field
+# is composed onto the banner by worktree_lifecycle.py itself, not by
+# gate_provenance.py's shared render_gate_provenance() -- so the other two direct gate
+# entrypoints below are unaffected and keep matching the plain PROVENANCE form.
+SELF_INTEGRITY_PROVENANCE = re.compile(
+    r"^EMBER_GATE_PROVENANCE path=(?P<path>\S+) sha256=(?P<sha>[0-9a-f]{64}) "
+    r"head=(?P<head>\S+) dirty=(?P<dirty>true|false)$"
+)
 
 
 def _banner(tool: Path) -> str:
@@ -45,11 +54,19 @@ def test_direct_gate_entrypoints_emit_matching_self_provenance() -> None:
     ).stdout.strip()
     for tool in TOOLS:
         banner = _banner(tool)
-        match = PROVENANCE.fullmatch(banner)
+        pattern = (
+            SELF_INTEGRITY_PROVENANCE if tool.name == "worktree_lifecycle.py" else PROVENANCE
+        )
+        match = pattern.fullmatch(banner)
         assert match, (tool, banner)
         assert match.group("path") == tool.relative_to(ROOT).as_posix()
         assert match.group("sha") == hashlib.sha256(tool.read_bytes()).hexdigest()
         assert match.group("head") == expected_head
+        if tool.name == "worktree_lifecycle.py":
+            assert match.group("dirty") == "false", (
+                "the checked-out worktree_lifecycle.py must match its own committed "
+                "HEAD in a clean test/CI run"
+            )
 
 
 def test_different_tool_bytes_have_visibly_different_first_line(tmp_path: Path) -> None:

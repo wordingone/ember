@@ -1,0 +1,14 @@
+{
+  "ticket": "1721-CUSTODY-PREFLIGHT-REFUSE-THEN-PASS",
+  "ts": "2026-08-14T20:51:00Z",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "bytes on disk as-is (binary read, no normalization)",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "pair_step": "1-of-2: unregistered shard, real ember-lab.exe, isolated per-demo catalog with no prior registration",
+  "admitted": false,
+  "refusal_reason": "custody-verify produced no receipt file (exit=1): ember-lab: Sqlite(SqliteFailure(Error { code: CannotOpen, extended_code: 14 }, Some(\"unable to open database file: <isolated per-demo temp catalog, never created -- no artifact was ever registered under this hash>/custody-gate-preflight-demo.sqlite3\")))",
+  "results": [],
+  "schema_version": "ember-custody-verify-receipt-v1"
+}

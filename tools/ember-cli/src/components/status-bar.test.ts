@@ -18,6 +18,8 @@ import {
   DegradedBanner,
   formatOutageBannerText,
   OutageBanner,
+  formatPollFailureStatusLine,
+  PollFailureStatusPane,
   formatRoundtripAgeDuration,
   formatRoundtripAgeText,
   RoundtripAgeIndicator,
@@ -32,6 +34,7 @@ import {
   type RoundtripAgeState,
   type StatusBarOptionalSegment,
 } from "./status-bar.ts";
+import type { PollFailureStatusEntry } from "../services/poll-failure-status.ts";
 import type { CognitiveMode } from "../cognitive-mode.ts";
 import type { ModelSeatState } from "../entrypoints/model-seat.ts";
 
@@ -334,6 +337,51 @@ describe("OutageBanner component — hook-free, follows DegradedBanner conventio
     expect((el as { props: { color: string } }).props.color).toBe("yellow");
     const text = (el as { props: { children: string } }).props.children;
     expect(text).toContain("PLANNED OUTAGE (jun)");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// issue #1701: PollFailureStatusPane — sticky per-class watcher-poller failure status. Each
+// active class renders as ONE line (class, message, running count, since-age); the pane is
+// hidden entirely when no class is active, matching DegradedBanner/OutageBanner.
+// ---------------------------------------------------------------------------
+
+describe("formatPollFailureStatusLine — issue #1701 sticky status content", () => {
+  const entry: PollFailureStatusEntry = {
+    classKey: "memory-footprint:ownership",
+    message: "identity unavailable",
+    count: 47,
+    since: 0,
+    lastSeenAt: 46_000,
+  };
+
+  it("includes the class key, message, running count, and age since first-seen", () => {
+    const text = formatPollFailureStatusLine(entry, 46_000);
+    expect(text).toContain("memory-footprint:ownership");
+    expect(text).toContain("identity unavailable");
+    expect(text).toContain("47x");
+    expect(text).toContain("46s");
+  });
+});
+
+describe("PollFailureStatusPane component — hook-free, hidden when empty", () => {
+  it("renders null when entries is empty", () => {
+    expect(PollFailureStatusPane({ entries: [] })).toBeNull();
+  });
+
+  it("renders one yellow Text line per active class", () => {
+    const entries: PollFailureStatusEntry[] = [
+      { classKey: "memory-footprint:ownership", message: "identity unavailable", count: 3, since: 0, lastSeenAt: 2000 },
+      { classKey: "serving-topology:poll", message: "poll failed: X", count: 1, since: 1000, lastSeenAt: 1000 },
+    ];
+    const el = PollFailureStatusPane({ entries, now: 2000 });
+    expect(el).not.toBeNull();
+    const children = (el as { props: { children: { props: { color: string; children: string } }[] } })
+      .props.children;
+    expect(children.length).toBe(2);
+    expect(children[0]!.props.color).toBe("yellow");
+    expect(children[0]!.props.children).toContain("memory-footprint:ownership");
+    expect(children[1]!.props.children).toContain("serving-topology:poll");
   });
 });
 

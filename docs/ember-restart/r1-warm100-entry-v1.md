@@ -2,11 +2,14 @@ goal_id: EMBER-02
 workstream_id: EMBER-02A
 next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-# R1 WARM-100 entry adapter v1
+# R1 WARM-100 entry adapter (schema v2)
 
 `scripts/ember_restart/contract.py r1-entry` is a thin producer/consumer
 adapter around the existing `ember-owned-rung-v1` validator. It does not
-replace that validator and it does not launch a run.
+replace that validator and it does not launch a run. This file documents the
+adapter's current schema, `ember-r1-warm100-entry-v2`; the filename is kept
+stable across the v1 -> v2 bump rather than renamed, since nothing links to it
+by version-numbered path.
 
 The command first runs `contract.py validate` on the supplied candidate
 manifest. Only a green `CHECKPOINT_CANDIDATE` can produce the entry receipt.
@@ -15,7 +18,82 @@ contract, Ember CLI train command, fixed certified consumer, and Ember Lab
 training-verification source, plus the preregistration, runtime config, and
 fixed-prior manifest bytes.
 
-The resulting schema is `ember-r1-warm100-entry-v1` with:
+## Source-identity binding (v2, issue #1296 P1)
+
+Before v2, nothing tied `source_root` to the canonical Ember checkout or
+`source_commit` to real published Ember history: any git repository whose
+`HEAD` matched the claimed commit and whose tree was clean could mint a green
+receipt binding its own, potentially attacker-authored, bytes at the governed
+paths. v2 closes that gap with two additional bindings, both enforced
+identically in `build_r1_warm100_entry` and `validate_r1_warm100_entry`, root
+first then commit:
+
+- **`source_root` -> canonical checkout or managed worktree.** `source_root`
+  must share the canonical checkout's Git common directory (a clone or fork
+  has its own object store even with byte-identical contents) and must either
+  be that checkout itself or a `scripts/worktree_lifecycle.py`-managed
+  worktree of it. An ad-hoc `git worktree add` that bypasses the lifecycle
+  tool is refused, as is a missing or malformed worktree-lifecycle registry.
+- **`source_commit` -> governed-remote ancestry.** The governed remote's ref
+  is resolved by contact (`git ls-remote`, never a locally configured
+  `origin` -- an `origin` URL is a one-line, spoofable config write, not an
+  identity), and `source_commit` must be that ref's tip or a real ancestor of
+  it (`git merge-base --is-ancestor`). Minting fails closed if the governed
+  remote is unreachable; there is no offline/degraded fallback for this
+  rung-entry gate.
+
+  **Env-hardening against config-based remote-contact spoofing (issue
+  #1706).** The resolving `ls-remote` runs with no repository context at all
+  (no `-C`, an explicit unusable `GIT_DIR`) and a stripped,
+  system/global-silenced environment, so no git config from any source --
+  local, global, system, or environment-injected (`GIT_CONFIG_COUNT` /
+  `GIT_CONFIG_KEY_*` / `GIT_CONFIG_VALUE_*`) -- can redirect it to an
+  attacker-controlled remote via `url.*.insteadOf`. The subsequent ancestry
+  fetch runs under the same stripped, system/global-silenced environment, but
+  still binds to `source_root` (it fetches into that object store), so a
+  repository-local `url.*.insteadOf` rewrite is not excluded the same way for
+  that call -- it is safe regardless, because a fetch is content-addressed:
+  redirecting its transport can only succeed if the redirected remote
+  actually holds an object matching the exact sha already fixed by the
+  hardened `ls-remote` above, which an attacker cannot forge.
+
+**This ancestry proof is mutating (issue #1708).** When the governed
+master's commit object is not already present in `source_root`, proving
+ancestry runs `git fetch` into `source_root`'s object store. Both
+`build_r1_warm100_entry` and `validate_r1_warm100_entry` reach this call, so
+a pure "validate this receipt" invocation is not actually read-only. Before
+that fetch, the check refuses fail-closed if a census window is declared:
+either the `EMBER_CENSUS_WINDOW` environment variable is set, or a
+`census-window.lock` marker file exists at `source_root`'s Git common
+directory. Declaring and clearing that marker is out of this adapter's
+scope -- it only reads for the marker's presence, never writes it.
+
+The result is recorded in a closed `source_binding` block:
+
+```json
+{
+  "canonical_common_dir_bound": true,
+  "worktree_identity": "MAIN" | "MANAGED" | "LEGACY",
+  "governed_remote": "<contacted remote>",
+  "remote_master_sha": "<40-hex>",
+  "ancestry": "EQUAL" | "ANCESTOR"
+}
+```
+
+This block attests content identity only -- that this exact source tree, at
+this exact commit, came from a canonical-or-managed root -- not
+minting-authority identity: it says nothing about which validator instance
+produced the receipt.
+
+`canonical_root`, `governed_remote`, and `governed_ref` are library-only
+parameters on `build_r1_warm100_entry`/`validate_r1_warm100_entry`, used by
+tests to bind against a synthetic canonical checkout or a hermetic,
+file-transport remote. The CLI exposes no equivalent flags: it always binds
+against the real canonical checkout (the repository that owns the executing
+`contract.py` bytes) and the real governed remote
+(`https://github.com/wordingone/ember`).
+
+The resulting schema is `ember-r1-warm100-entry-v2` with:
 
 - `entry: WARM-100`, `steps: 100`, and `result: PREP_ONLY`;
 - dispatch fixed to `ember-cli` -> `ember-lab` through
@@ -24,12 +102,14 @@ The resulting schema is `ember-r1-warm100-entry-v1` with:
 - `closed_boundary.status: PENDING_EXECUTION` and
   `closed_boundary.ledger_complete: false`;
 - an explicit claim boundary with execution, sufficiency, capability, and
-  benchmark credit all false.
+  benchmark credit all false;
+- the `source_binding` block described above.
 
 The receipt is path-free and self-hashed. Reopening it requires the caller to
 reopen the exact candidate manifest and pass that path to
-`validate_r1_warm100_entry`; manifest bytes, source commit, pinned prereg/config
-files, source blobs, dispatch, and claim boundary are independently checked.
+`validate_r1_warm100_entry`; manifest bytes, source commit, source-identity
+binding, pinned prereg/config files, source blobs, dispatch, and claim
+boundary are independently checked.
 
 This carrier satisfies the CPU/source launch-readiness tranche only. The
 remaining terminal work is a governed Ember CLI -> Ember Lab WARM-100 run that

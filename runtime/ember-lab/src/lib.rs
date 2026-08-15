@@ -31,7 +31,7 @@ pub type Result<T> = std::result::Result<T, EmberLabError>;
 
 /// Largest UTF-8 dispatch-manifest payload that fits the 64 KiB JSON-RPC line envelope even when JSON string escaping doubles every source byte.
 pub const MAX_DISPATCH_MANIFEST_BYTES: usize = 30_000;
-const CURRENT_DATABASE_SCHEMA_VERSION: u32 = 5;
+const CURRENT_DATABASE_SCHEMA_VERSION: u32 = 6;
 const DISPATCH_TOKEN_ENV: &str = "EMBER_LAB_DISPATCH_TOKEN";
 const DISPATCH_JOB_ID_ENV: &str = "EMBER_LAB_DISPATCH_JOB_ID";
 const DISPATCH_DAEMON_PID_ENV: &str = "EMBER_LAB_DISPATCH_DAEMON_PID";
@@ -56,7 +56,43 @@ pub fn read_data_catalog_status(path: &Path) -> Result<Value> {
     data_catalog::status(&conn)
 }
 
+/// Verifies pinned artifact hashes against their registered locations without acquiring the
+/// state-writer lock, mirroring `read_data_catalog_status`. Custody verification is a pure read,
+/// and the preflights that consume it (rung entry, evaluation binding, certified launch) run
+/// while the ember-lab daemon holds the writer lock -- routing this through `Daemon::open` would
+/// make the gate unusable in exactly the deployment shape it exists for.
+pub fn read_custody_verify(
+    path: &Path,
+    hashes: &[String],
+    roots: &BTreeMap<String, PathBuf>,
+    rehash: bool,
+) -> Result<Value> {
+    let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    conn.busy_timeout(Duration::from_secs(10))?;
+    conn.execute_batch("PRAGMA foreign_keys=ON;")?;
+    let schema_version: String = conn.query_row(
+        "SELECT value FROM metadata WHERE key='schema_version'",
+        [],
+        |row| row.get(0),
+    )?;
+    if schema_version != CURRENT_DATABASE_SCHEMA_VERSION.to_string() {
+        return Err(EmberLabError::InvalidDataCatalog {
+            detail: format!(
+                "read-only custody verify requires database schema version {CURRENT_DATABASE_SCHEMA_VERSION}, found {schema_version}"
+            ),
+        });
+    }
+    data_catalog::custody_verify(&conn, hashes, roots, rehash, now_ms())
+}
+
+/// Rolls back the #1581 data-catalog migration specifically (schema version 5 -> 4). This is
+/// pinned to the literal version 5, not `CURRENT_DATABASE_SCHEMA_VERSION`: it represents one
+/// specific historical transition, and later migrations (e.g. #1721's schema 6) move the
+/// "current" version forward without changing what this step means. A database sitting at a
+/// later version must roll back through each later step first (e.g.
+/// `rollback_empty_artifact_custody_migration` for 6 -> 5) before this one applies.
 pub fn rollback_empty_data_catalog_migration(path: &Path) -> Result<()> {
+    const ROLLBACK_FROM_SCHEMA_VERSION: u32 = 5;
     let _state_writer_lock = acquire_state_writer_lock(path)?;
     let mut conn = Connection::open(path)?;
     conn.busy_timeout(Duration::from_secs(10))?;
@@ -67,10 +103,10 @@ pub fn rollback_empty_data_catalog_migration(path: &Path) -> Result<()> {
         [],
         |row| row.get(0),
     )?;
-    if schema_version != CURRENT_DATABASE_SCHEMA_VERSION.to_string() {
+    if schema_version != ROLLBACK_FROM_SCHEMA_VERSION.to_string() {
         return Err(EmberLabError::InvalidDataCatalog {
             detail: format!(
-                "data catalog rollback requires database schema version {CURRENT_DATABASE_SCHEMA_VERSION}, found {schema_version}"
+                "data catalog rollback requires database schema version {ROLLBACK_FROM_SCHEMA_VERSION}, found {schema_version}"
             ),
         });
     }
@@ -92,6 +128,46 @@ pub fn rollback_empty_data_catalog_migration(path: &Path) -> Result<()> {
          DROP TABLE data_catalog_imports;
          DROP TABLE data_catalog_records;
          UPDATE metadata SET value='4' WHERE key='schema_version';",
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// Rolls back the #1721 artifact-custody migration specifically (schema version 6 -> 5). Pinned
+/// to the literal version 6 for the same reason `rollback_empty_data_catalog_migration` is
+/// pinned to 5: it names one historical transition, not "whatever is current."
+pub fn rollback_empty_artifact_custody_migration(path: &Path) -> Result<()> {
+    const ROLLBACK_FROM_SCHEMA_VERSION: u32 = 6;
+    let _state_writer_lock = acquire_state_writer_lock(path)?;
+    let mut conn = Connection::open(path)?;
+    conn.busy_timeout(Duration::from_secs(10))?;
+    conn.execute_batch("PRAGMA foreign_keys=ON;")?;
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let schema_version: String = tx.query_row(
+        "SELECT value FROM metadata WHERE key='schema_version'",
+        [],
+        |row| row.get(0),
+    )?;
+    if schema_version != ROLLBACK_FROM_SCHEMA_VERSION.to_string() {
+        return Err(EmberLabError::InvalidDataCatalog {
+            detail: format!(
+                "artifact custody rollback requires database schema version {ROLLBACK_FROM_SCHEMA_VERSION}, found {schema_version}"
+            ),
+        });
+    }
+    let event_rows: i64 = tx.query_row(
+        "SELECT COUNT(*) FROM data_catalog_location_events",
+        [],
+        |row| row.get(0),
+    )?;
+    if event_rows != 0 {
+        return Err(EmberLabError::InvalidDataCatalog {
+            detail: "artifact custody rollback refuses after location events exist".into(),
+        });
+    }
+    tx.execute_batch(
+        "DROP TABLE data_catalog_location_events;
+         UPDATE metadata SET value='5' WHERE key='schema_version';",
     )?;
     tx.commit()?;
     Ok(())
@@ -241,6 +317,10 @@ pub enum EmberLabError {
     InvalidDataCatalog {
         detail: String,
     },
+    WindowContractViolation {
+        job_id: String,
+        detail: String,
+    },
     Poisoned,
 }
 
@@ -388,7 +468,9 @@ pub struct JobSpec {
     restart_policy: RestartPolicy,
     maximum_job_memory_bytes: Option<u64>,
     cpu_rate_percent: Option<u32>,
+    cpu_pacing_class: DispatchCpuPacingClass,
     requires_ui_responsiveness: bool,
+    window_contract: DispatchWindowContract,
     dispatch_token: Option<DispatchToken>,
 }
 
@@ -464,6 +546,43 @@ pub struct DispatchWorkloadProfile {
     pub cpu_rate_percent: u32,
 }
 
+/// Declares whether a dispatched job's CPU usage is paced.
+///
+/// This is a required, closed-choice declaration: no `Option`, no
+/// `#[serde(default)]`, and an unknown/missing value is refused rather than
+/// silently defaulted (serde's ordinary enum/required-field deserialization
+/// already enforces this -- there is deliberately no catch-all/other variant).
+/// Later lanes may ADD variants to this enum (additive -- old manifests stay
+/// valid); they must never add a default variant.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DispatchCpuPacingClass {
+    /// Explicit, visible declaration that this spawn has no CPU pacing. This
+    /// is the truth-telling value until a later CPU-enforcement lane lands;
+    /// it is never used as a silent/implicit default.
+    Unpaced,
+    /// Paced by the daemon's governor. At L1 this only carries the
+    /// declaration -- a later lane gives it enforcement teeth.
+    Governed,
+}
+
+/// Declares the window-visibility contract of a dispatched job.
+///
+/// This is a required, closed-choice declaration: no `Option`, no
+/// `#[serde(default)]`, and an unknown/missing value is refused rather than
+/// silently defaulted (serde's ordinary enum/required-field deserialization
+/// already enforces this -- there is deliberately no catch-all/other variant).
+/// Later lanes may ADD variants to this enum (additive -- old manifests stay
+/// valid); they must never add a default variant.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DispatchWindowContract {
+    /// The spawn presents zero visible windows.
+    HeadlessNoWindows,
+    /// Visible surface exists only through the cockpit contract.
+    CockpitHosted,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct DispatchManifest {
@@ -476,6 +595,8 @@ pub struct DispatchManifest {
     pub program: DispatchFileHash,
     pub args: Vec<String>,
     pub workload_profile: DispatchWorkloadProfile,
+    pub cpu_pacing_class: DispatchCpuPacingClass,
+    pub window_contract: DispatchWindowContract,
     #[serde(default)]
     pub env: BTreeMap<String, String>,
     pub bindings: Vec<DispatchFileBinding>,
@@ -488,6 +609,118 @@ pub struct DispatchManifest {
     pub preflight_receipt: PathBuf,
 }
 
+/// Field name and legal snake_case spellings for `DispatchManifest`'s
+/// closed-choice fields, shared between the parse-error describer below and
+/// its tests.
+const CPU_PACING_CLASS_FIELD: &str = "cpu_pacing_class";
+const CPU_PACING_CLASS_LEGAL_VALUES: &[&str] = &["unpaced", "governed"];
+const WINDOW_CONTRACT_FIELD: &str = "window_contract";
+const WINDOW_CONTRACT_LEGAL_VALUES: &[&str] = &["headless_no_windows", "cockpit_hosted"];
+
+/// Rewrite a `DispatchManifest` JSON parse failure into a refusal message
+/// that names the specific missing/invalid closed-choice field and
+/// enumerates its legal values, e.g. `"cpu_pacing_class: missing required
+/// field (legal values: unpaced, governed)"`. Falls back to the underlying
+/// serde message for every other failure shape (a different missing field,
+/// malformed JSON, or a bad value on a field this function does not know
+/// about). This never weakens fail-closed behavior --
+/// `serde_json::from_slice::<DispatchManifest>` has already performed the
+/// real rejection by the time this runs; it only rewrites the text the
+/// caller sees.
+pub fn describe_dispatch_manifest_parse_error(bytes: &[u8], error: &serde_json::Error) -> String {
+    for (field, legal_values) in [
+        (CPU_PACING_CLASS_FIELD, CPU_PACING_CLASS_LEGAL_VALUES),
+        (WINDOW_CONTRACT_FIELD, WINDOW_CONTRACT_LEGAL_VALUES),
+    ] {
+        if let Some(detail) = describe_closed_choice_field_error(bytes, field, legal_values) {
+            return detail;
+        }
+    }
+    error.to_string()
+}
+
+fn describe_closed_choice_field_error(
+    bytes: &[u8],
+    field: &str,
+    legal_values: &[&str],
+) -> Option<String> {
+    let value: Value = serde_json::from_slice(bytes).ok()?;
+    let object = value.as_object()?;
+    let legal = legal_values.join(", ");
+    match object.get(field) {
+        None => Some(format!(
+            "{field}: missing required field (legal values: {legal})"
+        )),
+        Some(Value::String(actual)) if !legal_values.contains(&actual.as_str()) => Some(format!(
+            "{field}: invalid value \"{actual}\" (legal values: {legal})"
+        )),
+        Some(Value::String(_)) => None,
+        Some(other) => Some(format!(
+            "{field}: invalid value {other} (legal values: {legal})"
+        )),
+    }
+}
+
+#[cfg(test)]
+mod dispatch_manifest_refusal_message_tests {
+    use super::*;
+
+    fn parse_failure(bytes: &[u8]) -> serde_json::Error {
+        serde_json::from_slice::<DispatchManifest>(bytes).unwrap_err()
+    }
+
+    #[test]
+    fn names_missing_cpu_pacing_class_and_its_legal_values() {
+        let bytes = br#"{"window_contract":"headless_no_windows"}"#;
+        let error = parse_failure(bytes);
+        assert_eq!(
+            describe_dispatch_manifest_parse_error(bytes, &error),
+            "cpu_pacing_class: missing required field (legal values: unpaced, governed)"
+        );
+    }
+
+    #[test]
+    fn names_invalid_cpu_pacing_class_value_and_its_legal_values() {
+        let bytes = br#"{"cpu_pacing_class":"throttled","window_contract":"headless_no_windows"}"#;
+        let error = parse_failure(bytes);
+        assert_eq!(
+            describe_dispatch_manifest_parse_error(bytes, &error),
+            "cpu_pacing_class: invalid value \"throttled\" (legal values: unpaced, governed)"
+        );
+    }
+
+    #[test]
+    fn names_missing_window_contract_and_its_legal_values() {
+        let bytes = br#"{"cpu_pacing_class":"unpaced"}"#;
+        let error = parse_failure(bytes);
+        assert_eq!(
+            describe_dispatch_manifest_parse_error(bytes, &error),
+            "window_contract: missing required field (legal values: headless_no_windows, cockpit_hosted)"
+        );
+    }
+
+    #[test]
+    fn names_invalid_window_contract_value_and_its_legal_values() {
+        let bytes = br#"{"cpu_pacing_class":"unpaced","window_contract":"floating"}"#;
+        let error = parse_failure(bytes);
+        assert_eq!(
+            describe_dispatch_manifest_parse_error(bytes, &error),
+            "window_contract: invalid value \"floating\" (legal values: headless_no_windows, cockpit_hosted)"
+        );
+    }
+
+    #[test]
+    fn falls_back_to_the_raw_serde_message_for_unrelated_failures() {
+        // Both closed-choice fields are present and legal here; the actual
+        // failure (malformed top-level JSON) has nothing to do with either,
+        // so the describer must not fabricate a field-specific message.
+        let bytes = b"not json";
+        let error = serde_json::from_slice::<DispatchManifest>(bytes).unwrap_err();
+        let detail = describe_dispatch_manifest_parse_error(bytes, &error);
+        assert_eq!(detail, error.to_string());
+    }
+}
+
 const DISPATCH_HOST_COMMIT_RESERVE_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 const RESOURCE_GUARD_MIN_PHYSICAL_AVAILABLE_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 const RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES: u64 = 10 * 1024 * 1024 * 1024;
@@ -497,6 +730,14 @@ const PROTECTIVE_CHECKPOINT_REQUEST_ENV: &str = "EMBER_LAB_PROTECTIVE_CHECKPOINT
 const PROTECTIVE_CHECKPOINT_RESPONSE_ENV: &str = "EMBER_LAB_PROTECTIVE_CHECKPOINT_RESPONSE_PATH";
 const PROTECTIVE_CHECKPOINT_MAX_GRACE_MS: u64 = 30_000;
 const PROTECTIVE_CHECKPOINT_MONITOR_TOTAL_GRACE_MS: u64 = 5_000;
+/// Production window-contract census budget (issue #898 L6): how long
+/// `poll_for_new_job_owned_windows` keeps checking for a job-owned window
+/// after resume before concluding none appeared. Tests that need to
+/// distinguish a real refusal from a scheduler-timing race under host load
+/// inject a larger budget via
+/// `dispatch_manifest_at_with_probes_and_host_and_window_census_budget`
+/// instead of shrinking this constant.
+const DEFAULT_WINDOW_CENSUS_BUDGET: Duration = Duration::from_millis(200);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DispatchOutcome {
@@ -522,7 +763,9 @@ impl JobSpec {
             restart_policy: RestartPolicy::Never,
             maximum_job_memory_bytes: None,
             cpu_rate_percent: None,
+            cpu_pacing_class: DispatchCpuPacingClass::Unpaced,
             requires_ui_responsiveness: false,
+            window_contract: DispatchWindowContract::HeadlessNoWindows,
             dispatch_token: None,
         }
     }
@@ -546,6 +789,21 @@ impl JobSpec {
         self
     }
 
+    /// Declares the job's CPU *pacing contract*, which is not the same thing
+    /// as whether the host caps it. The `cpu_rate_percent` hard cap above is
+    /// host-side defense-in-depth and is applied to every managed spawn
+    /// regardless of this value -- it never comes off. This declaration only
+    /// decides whether the spawn additionally proves the cap took: `Governed`
+    /// re-reads the job object after setting it and refuses the spawn if the
+    /// kernel did not accept the requested rate, and records that proof in
+    /// the `job_prepared` receipt. `Unpaced` (the default, so an undeclared
+    /// spec claims nothing) means no pacing contract was declared and no such
+    /// proof is produced.
+    pub fn with_cpu_pacing_class(mut self, cpu_pacing_class: DispatchCpuPacingClass) -> Self {
+        self.cpu_pacing_class = cpu_pacing_class;
+        self
+    }
+
     /// Declares whether the spawned process is allowed to interact with the
     /// interactive desktop (clipboard, display settings, global atoms,
     /// cross-job USER handles, ExitWindows). Defaults to `false` (restricted)
@@ -555,6 +813,20 @@ impl JobSpec {
     /// spec is ever built from a manifest).
     pub fn with_requires_ui_responsiveness(mut self, requires_ui_responsiveness: bool) -> Self {
         self.requires_ui_responsiveness = requires_ui_responsiveness;
+        self
+    }
+
+    /// Declares the spawned process's window-visibility contract (issue
+    /// #898 L6). Defaults to `HeadlessNoWindows` -- the same
+    /// restricted-by-omission posture as `requires_ui_responsiveness`.
+    /// `HeadlessNoWindows` is enforced by a live before/after top-level
+    /// window census taken around the spawn's resume (see
+    /// `census_top_level_windows`/`poll_for_new_job_owned_windows`):
+    /// any window that appears and belongs to the job is a fail-closed
+    /// refusal. `CockpitHosted` is exempt -- the cockpit's own window is
+    /// the contract's named exception.
+    pub fn with_window_contract(mut self, window_contract: DispatchWindowContract) -> Self {
+        self.window_contract = window_contract;
         self
     }
 
@@ -1001,6 +1273,113 @@ type ScheduleRunRow = (
     Option<String>,
 );
 
+/// Bundles the injectable dispatch-manifest probes (free-space, free-VRAM,
+/// free-host-commit) and the window-census budget into one value, so a new
+/// injectable knob widens this struct instead of adding another positional
+/// parameter to `dispatch_manifest_bytes_at_with_probes_and_host_inner` and
+/// pushing it back over clippy's argument-count cap (#898 L6 follow-up).
+struct DispatchProbes<F, G, H>
+where
+    F: FnMut(&Path) -> Result<u64>,
+    G: FnMut() -> Result<u64>,
+    H: FnMut() -> Result<HostCommitCapacity>,
+{
+    free_space: F,
+    free_vram: G,
+    free_host_commit: H,
+    window_census_budget: Duration,
+}
+
+#[cfg(any(not(windows), test))]
+fn consume_dispatch_token_with_process_observer<F>(
+    conn: &mut Connection,
+    job_id: &str,
+    token: &str,
+    client_pid: u32,
+    mut observe_process: F,
+) -> Result<()>
+where
+    F: FnMut(u32) -> Result<ProcessIdentity>,
+{
+    let observed_identity =
+        observe_process(client_pid).map_err(|_| EmberLabError::DispatchTokenRefused {
+            job_id: job_id.into(),
+        })?;
+    consume_dispatch_token_transaction(conn, job_id, token, client_pid, &observed_identity, || {
+        let final_identity =
+            observe_process(client_pid).map_err(|_| EmberLabError::DispatchTokenRefused {
+                job_id: job_id.into(),
+            })?;
+        Ok(final_identity.start_token == observed_identity.start_token
+            && same_executable(&final_identity.executable, &observed_identity.executable))
+    })
+}
+
+fn consume_dispatch_token_transaction<F>(
+    conn: &mut Connection,
+    job_id: &str,
+    token: &str,
+    client_pid: u32,
+    observed_identity: &ProcessIdentity,
+    final_identity_matches: F,
+) -> Result<()>
+where
+    F: FnOnce() -> Result<bool>,
+{
+    let token_sha256 = hash_bytes(token.as_bytes());
+    let consumed_at_ms = now_ms();
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let changed = tx.execute(
+        "UPDATE dispatch_tokens AS t SET consumed_at_ms=?4
+         WHERE t.token_sha256=?1 AND t.job_id=?2 AND t.pid=?3
+           AND t.consumed_at_ms IS NULL AND t.expires_at_ms>?4
+           AND EXISTS(
+             SELECT 1 FROM jobs j
+             WHERE j.job_id=t.job_id AND j.pid=t.pid
+               AND j.program=t.program AND j.argv_sha256=t.argv_sha256
+               AND j.process_start_token=?5
+               AND j.executable_identity=?6
+               AND j.state IN ('prepared','running')
+           )",
+        params![
+            token_sha256,
+            job_id,
+            client_pid,
+            consumed_at_ms,
+            observed_identity.start_token,
+            observed_identity.executable,
+        ],
+    )?;
+    if changed != 1 {
+        return Err(EmberLabError::DispatchTokenRefused {
+            job_id: job_id.into(),
+        });
+    }
+    let persisted_identity: (String, String) = tx
+        .query_row(
+            "SELECT process_start_token,executable_identity FROM jobs WHERE job_id=?1 AND pid=?2",
+            params![job_id, client_pid],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|_| EmberLabError::DispatchTokenRefused {
+            job_id: job_id.into(),
+        })?;
+    if persisted_identity.0 != observed_identity.start_token
+        || !same_executable(&persisted_identity.1, &observed_identity.executable)
+        || !final_identity_matches()?
+    {
+        return Err(EmberLabError::DispatchTokenRefused {
+            job_id: job_id.into(),
+        });
+    }
+    tx.execute(
+        "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'dispatch_token_consumed',?3)",
+        params![job_id, consumed_at_ms, json!({"client_pid":client_pid}).to_string()],
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
 impl Daemon {
     pub fn open(path: &Path) -> Result<Self> {
         if let Some(parent) = path.parent() {
@@ -1110,6 +1489,52 @@ impl Daemon {
     pub fn data_catalog_status(&self) -> Result<Value> {
         let conn = self.conn()?;
         data_catalog::status(&conn)
+    }
+
+    pub fn register_artifact(
+        &self,
+        sha256_hex: &str,
+        byte_count: i64,
+        media_type: &str,
+        locations: &[data_catalog::ArtifactLocationInput],
+    ) -> Result<data_catalog::RegisterArtifactOutcome> {
+        let mut conn = self.conn()?;
+        data_catalog::register_artifact(
+            &mut conn,
+            sha256_hex,
+            byte_count,
+            media_type,
+            locations,
+            now_ms(),
+        )
+    }
+
+    pub fn retire_artifact_location(
+        &self,
+        sha256_hex: &str,
+        volume: &str,
+        locator: &str,
+        reason: &str,
+    ) -> Result<()> {
+        let mut conn = self.conn()?;
+        data_catalog::retire_artifact_location(
+            &mut conn,
+            sha256_hex,
+            volume,
+            locator,
+            now_ms(),
+            reason,
+        )
+    }
+
+    pub fn custody_verify(
+        &self,
+        hashes: &[String],
+        roots: &BTreeMap<String, PathBuf>,
+        rehash: bool,
+    ) -> Result<Value> {
+        let conn = self.conn()?;
+        data_catalog::custody_verify(&conn, hashes, roots, rehash, now_ms())
     }
 
     fn frozen_resource_guard(&self) -> Result<Option<Value>> {
@@ -1606,6 +2031,36 @@ impl Daemon {
         G: FnMut() -> Result<u64>,
         H: FnMut() -> Result<HostCommitCapacity>,
     {
+        self.dispatch_manifest_at_with_probes_and_host_and_window_census_budget(
+            manifest_path,
+            observed_at_ms,
+            free_space,
+            free_vram,
+            free_host_commit,
+            DEFAULT_WINDOW_CENSUS_BUDGET,
+        )
+    }
+
+    /// Same as `dispatch_manifest_at_with_probes_and_host`, with the
+    /// window-contract census budget also injectable. Production callers
+    /// use the plain method above (fixed at `DEFAULT_WINDOW_CENSUS_BUDGET`);
+    /// this variant exists so a test can widen the budget to verify the
+    /// refusal MECHANISM (enriched hwnd/pid/title detail, receipt shape)
+    /// without racing the fixed production timing under host load.
+    pub fn dispatch_manifest_at_with_probes_and_host_and_window_census_budget<F, G, H>(
+        &self,
+        manifest_path: &Path,
+        observed_at_ms: i64,
+        free_space: F,
+        free_vram: G,
+        free_host_commit: H,
+        window_census_budget: Duration,
+    ) -> Result<DispatchOutcome>
+    where
+        F: FnMut(&Path) -> Result<u64>,
+        G: FnMut() -> Result<u64>,
+        H: FnMut() -> Result<HostCommitCapacity>,
+    {
         let canonical = fs::canonicalize(manifest_path).map_err(|error| {
             EmberLabError::InvalidDispatchManifest {
                 detail: format!("dispatch manifest is not a canonical file: {error}"),
@@ -1616,9 +2071,12 @@ impl Daemon {
             &manifest_bytes,
             &canonical,
             observed_at_ms,
-            free_space,
-            free_vram,
-            free_host_commit,
+            DispatchProbes {
+                free_space,
+                free_vram,
+                free_host_commit,
+                window_census_budget,
+            },
         )
     }
 
@@ -1646,7 +2104,10 @@ impl Daemon {
         let manifest: DispatchManifest =
             serde_json::from_slice(manifest_bytes).map_err(|error| {
                 EmberLabError::InvalidDispatchManifest {
-                    detail: format!("dispatch manifest schema is invalid: {error}"),
+                    detail: format!(
+                        "dispatch manifest schema is invalid: {}",
+                        describe_dispatch_manifest_parse_error(manifest_bytes, &error)
+                    ),
                 }
             })?;
         if manifest_bytes.len() > MAX_DISPATCH_MANIFEST_BYTES {
@@ -1670,9 +2131,12 @@ impl Daemon {
                 manifest_bytes,
                 &snapshot,
                 observed_at_ms,
-                free_space,
-                free_vram,
-                free_host_commit,
+                DispatchProbes {
+                    free_space,
+                    free_vram,
+                    free_host_commit,
+                    window_census_budget: DEFAULT_WINDOW_CENSUS_BUDGET,
+                },
             );
         }
         let mut snapshots = fs::read_dir(&snapshot_dir)?
@@ -1712,9 +2176,12 @@ impl Daemon {
             manifest_bytes,
             &snapshot,
             observed_at_ms,
-            free_space,
-            free_vram,
-            free_host_commit,
+            DispatchProbes {
+                free_space,
+                free_vram,
+                free_host_commit,
+                window_census_budget: DEFAULT_WINDOW_CENSUS_BUDGET,
+            },
         )
     }
 
@@ -1754,6 +2221,7 @@ impl Daemon {
         }
         validate_dispatch_workload_profile(
             &manifest.workload_profile,
+            manifest.cpu_pacing_class,
             &manifest.args,
             manifest.maximum_job_memory_bytes,
             manifest.simulated_peak_commit_bytes,
@@ -1843,15 +2311,19 @@ impl Daemon {
         manifest_bytes: &[u8],
         manifest_identity_path: &Path,
         observed_at_ms: i64,
-        mut free_space: F,
-        mut free_vram: G,
-        mut free_host_commit: H,
+        probes: DispatchProbes<F, G, H>,
     ) -> Result<DispatchOutcome>
     where
         F: FnMut(&Path) -> Result<u64>,
         G: FnMut() -> Result<u64>,
         H: FnMut() -> Result<HostCommitCapacity>,
     {
+        let DispatchProbes {
+            mut free_space,
+            mut free_vram,
+            mut free_host_commit,
+            window_census_budget,
+        } = probes;
         let manifest_path = fs::canonicalize(manifest_identity_path).map_err(|error| {
             EmberLabError::InvalidDispatchManifest {
                 detail: format!("dispatch manifest identity snapshot is unavailable: {error}"),
@@ -1860,7 +2332,10 @@ impl Daemon {
         let manifest: DispatchManifest =
             serde_json::from_slice(manifest_bytes).map_err(|error| {
                 EmberLabError::InvalidDispatchManifest {
-                    detail: format!("dispatch manifest schema is invalid: {error}"),
+                    detail: format!(
+                        "dispatch manifest schema is invalid: {}",
+                        describe_dispatch_manifest_parse_error(manifest_bytes, &error)
+                    ),
                 }
             })?;
         if manifest.schema_version != "ember-lab-dispatch-manifest-v3"
@@ -1895,6 +2370,7 @@ impl Daemon {
         }
         validate_dispatch_workload_profile(
             &manifest.workload_profile,
+            manifest.cpu_pacing_class,
             &manifest.args,
             manifest.maximum_job_memory_bytes,
             manifest.simulated_peak_commit_bytes,
@@ -2176,14 +2652,16 @@ impl Daemon {
         )
         .with_maximum_job_memory_bytes(manifest.maximum_job_memory_bytes)
         .with_cpu_rate_percent(manifest.workload_profile.cpu_rate_percent)
-        .with_requires_ui_responsiveness(manifest.workload_profile.requires_ui_responsiveness);
+        .with_cpu_pacing_class(manifest.cpu_pacing_class)
+        .with_requires_ui_responsiveness(manifest.workload_profile.requires_ui_responsiveness)
+        .with_window_contract(manifest.window_contract);
         for (key, value) in manifest.env {
             spec = spec.with_env(key, value);
         }
         if profile_id == DispatchWorkloadProfileId::EvidenceVerifier {
             spec = spec.with_dispatch_token(dispatch_expires_at_ms)?;
         }
-        let handle = match self.start_job(spec) {
+        let handle = match self.start_job_with_window_census_budget(spec, window_census_budget) {
             Ok(handle) => handle,
             Err(error) => {
                 let _ = self.rollback_dispatch_attempt(&job_id, &resource_lease, created_identity);
@@ -2413,7 +2891,20 @@ impl Daemon {
         tx.commit()?;
         Ok(())
     }
-    pub fn start_job(&self, mut spec: JobSpec) -> Result<JobHandle> {
+    pub fn start_job(&self, spec: JobSpec) -> Result<JobHandle> {
+        self.start_job_with_window_census_budget(spec, DEFAULT_WINDOW_CENSUS_BUDGET)
+    }
+
+    /// Same as `start_job`, with the window-contract census budget also
+    /// injectable. Production callers use `start_job` (fixed at
+    /// `DEFAULT_WINDOW_CENSUS_BUDGET`); the dispatch-manifest path and tests
+    /// that need to distinguish a real refusal from a scheduler-timing race
+    /// under host load use this directly.
+    pub fn start_job_with_window_census_budget(
+        &self,
+        mut spec: JobSpec,
+        window_census_budget: Duration,
+    ) -> Result<JobHandle> {
         self.verify_identity(&spec.job_id)?;
         let protective_key = hash_bytes(spec.job_id.as_bytes());
         let checkpoint_request_path = self.log_dir.join(format!(
@@ -2520,6 +3011,7 @@ impl Daemon {
             };
         let pid = spawned.pid();
         let identity = spawned.identity();
+        let applied_cpu_rate = spawned.applied_cpu_rate();
         let prepared = (|| -> Result<()> {
             let mut conn = self.conn()?;
             let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -2535,7 +3027,7 @@ impl Daemon {
             }
             tx.execute(
                 "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_prepared',?3)",
-                params![spec.job_id, now_ms(), json!({"pid":pid,"job_object_name":job_object_name,"cpu_rate_percent":spec.cpu_rate_percent,"requires_ui_responsiveness":spec.requires_ui_responsiveness}).to_string()],
+                params![spec.job_id, now_ms(), json!({"pid":pid,"job_object_name":job_object_name,"cpu_rate_percent":spec.cpu_rate_percent,"requires_ui_responsiveness":spec.requires_ui_responsiveness,"cpu_pacing_class":spec.cpu_pacing_class,"cpu_rate_control_verified":applied_cpu_rate.is_some(),"applied_cpu_rate":applied_cpu_rate}).to_string()],
             )?;
             if let Some(token) = &spec.dispatch_token {
                 tx.execute(
@@ -2579,7 +3071,36 @@ impl Daemon {
                     detail: "prepared start lost its state or lease fence".into(),
                 });
             }
+            // Window contract (issue #898 L6): the process is still suspended
+            // here, so it cannot have created a window yet -- this is a true
+            // baseline regardless of exactly when it is sampled relative to
+            // other work in this closure.
+            #[cfg(windows)]
+            let pre_resume_windows = census_top_level_windows();
             spawned.resume()?;
+            #[cfg(windows)]
+            if spec.window_contract == DispatchWindowContract::HeadlessNoWindows {
+                let violating_windows = poll_for_new_job_owned_windows(
+                    &pre_resume_windows,
+                    spawned.job_handle(),
+                    window_census_budget,
+                    Duration::from_millis(20),
+                );
+                if !violating_windows.is_empty() {
+                    let windows_detail = violating_windows
+                        .iter()
+                        .map(ViolatingWindow::to_string)
+                        .collect::<Vec<_>>()
+                        .join("; ");
+                    return Err(EmberLabError::WindowContractViolation {
+                        job_id: spec.job_id.clone(),
+                        detail: format!(
+                            "headless_no_windows spawn presented {} visible window(s) outside the cockpit contract: {windows_detail}",
+                            violating_windows.len()
+                        ),
+                    });
+                }
+            }
             let changed = tx.execute(
                 "UPDATE jobs SET state='running',updated_at_ms=?2 WHERE job_id=?1 AND state='prepared' AND EXISTS(SELECT 1 FROM leases l WHERE l.resource=jobs.resource AND l.owner_job_id=jobs.job_id AND l.lease_epoch=jobs.lease_epoch)",
                 params![spec.job_id, now_ms()],
@@ -2603,7 +3124,12 @@ impl Daemon {
         })();
         if let Err(error) = running {
             let _ = spawned.terminate_and_wait();
-            let _ = self.mark_failed(&spec.job_id, "job_launch_commit_failed");
+            let failure_kind = if matches!(error, EmberLabError::WindowContractViolation { .. }) {
+                "job_window_contract_violation"
+            } else {
+                "job_launch_commit_failed"
+            };
+            let _ = self.mark_failed(&spec.job_id, failure_kind);
             return Err(error);
         }
         #[cfg(windows)]
@@ -2660,79 +3186,37 @@ impl Daemon {
             });
         }
         #[cfg(windows)]
-        let live = match open_live_status(&row) {
-            LiveStatus::Verified(live) => live,
-            LiveStatus::Dead | LiveStatus::Orphaned(_) | LiveStatus::IdentityConflict(_) => {
-                return Err(EmberLabError::DispatchTokenRefused {
-                    job_id: job_id.into(),
-                })
-            }
-        };
-        #[cfg(windows)]
-        let observed_identity = live.identity.clone();
-        #[cfg(not(windows))]
-        let observed_identity =
-            inspect_process(client_pid).map_err(|_| EmberLabError::DispatchTokenRefused {
-                job_id: job_id.into(),
-            })?;
-        let token_sha256 = hash_bytes(token.as_bytes());
-        let consumed_at_ms = now_ms();
-        let mut conn = self.conn()?;
-        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let changed = tx.execute(
-            "UPDATE dispatch_tokens AS t SET consumed_at_ms=?4
-             WHERE t.token_sha256=?1 AND t.job_id=?2 AND t.pid=?3
-               AND t.consumed_at_ms IS NULL AND t.expires_at_ms>?4
-               AND EXISTS(
-                 SELECT 1 FROM jobs j
-                 WHERE j.job_id=t.job_id AND j.pid=t.pid
-                   AND j.program=t.program AND j.argv_sha256=t.argv_sha256
-                   AND j.process_start_token=?5
-                   AND j.executable_identity=?6
-                   AND j.state IN ('prepared','running')
-               )",
-            params![
-                token_sha256,
-                job_id,
-                client_pid,
-                consumed_at_ms,
-                observed_identity.start_token,
-                observed_identity.executable,
-            ],
-        )?;
-        if changed != 1 {
-            return Err(EmberLabError::DispatchTokenRefused {
-                job_id: job_id.into(),
-            });
-        }
-        let persisted_identity: (String, String) = tx
-            .query_row(
-                "SELECT process_start_token,executable_identity FROM jobs WHERE job_id=?1 AND pid=?2",
-                params![job_id, client_pid],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .map_err(|_| EmberLabError::DispatchTokenRefused {
-                job_id: job_id.into(),
-            })?;
-        if persisted_identity.0 != observed_identity.start_token
-            || !same_executable(&persisted_identity.1, &observed_identity.executable)
         {
-            return Err(EmberLabError::DispatchTokenRefused {
-                job_id: job_id.into(),
-            });
+            let live = match open_live_status(&row) {
+                LiveStatus::Verified(live) => live,
+                LiveStatus::Dead | LiveStatus::Orphaned(_) | LiveStatus::IdentityConflict(_) => {
+                    return Err(EmberLabError::DispatchTokenRefused {
+                        job_id: job_id.into(),
+                    })
+                }
+            };
+            let observed_identity = live.identity.clone();
+            let mut conn = self.conn()?;
+            consume_dispatch_token_transaction(
+                &mut conn,
+                job_id,
+                token,
+                client_pid,
+                &observed_identity,
+                || Ok(live_process_is_running(&live)),
+            )
         }
-        #[cfg(windows)]
-        if !live_process_is_running(&live) {
-            return Err(EmberLabError::DispatchTokenRefused {
-                job_id: job_id.into(),
-            });
+        #[cfg(not(windows))]
+        {
+            let mut conn = self.conn()?;
+            consume_dispatch_token_with_process_observer(
+                &mut conn,
+                job_id,
+                token,
+                client_pid,
+                inspect_process,
+            )
         }
-        tx.execute(
-            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'dispatch_token_consumed',?3)",
-            params![job_id, consumed_at_ms, json!({"client_pid":client_pid}).to_string()],
-        )?;
-        tx.commit()?;
-        Ok(())
     }
 
     pub fn job_exit_code(&self, job_id: &str) -> Result<Option<i64>> {
@@ -5234,6 +5718,7 @@ fn is_sha256(value: &str) -> bool {
 
 fn validate_dispatch_workload_profile(
     profile: &DispatchWorkloadProfile,
+    cpu_pacing_class: DispatchCpuPacingClass,
     args: &[String],
     maximum_job_memory_bytes: u64,
     simulated_peak_commit_bytes: u64,
@@ -5241,6 +5726,17 @@ fn validate_dispatch_workload_profile(
     if !(1..=100).contains(&profile.cpu_rate_percent) {
         return Err(EmberLabError::InvalidDispatchManifest {
             detail: "dispatch workload CPU rate must be between 1 and 100 percent".into(),
+        });
+    }
+    // A `Governed` declaration asserts a pacing contract exists. At 100 percent
+    // the hard cap admits the whole machine, so such a contract would pace
+    // nothing while still earning a `cpu_rate_control_verified` receipt --
+    // exactly the decorative-declaration problem this class was added to end.
+    // `Unpaced` keeps the full 1..=100 range: it promises nothing, and the
+    // host's blanket cap applies to it either way.
+    if cpu_pacing_class == DispatchCpuPacingClass::Governed && profile.cpu_rate_percent == 100 {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "governed CPU pacing requires a cpu_rate_percent below 100".into(),
         });
     }
     if profile.pinned_host_producers.is_empty() {
@@ -6546,6 +7042,7 @@ struct SpawnedProcess {
     pid: u32,
     main_thread_id: u32,
     identity: ProcessIdentity,
+    applied_cpu_rate: Option<u32>,
 }
 
 #[cfg(windows)]
@@ -6559,11 +7056,19 @@ impl SpawnedProcess {
     fn identity(&self) -> ProcessIdentity {
         self.identity.clone()
     }
+    fn applied_cpu_rate(&self) -> Option<u32> {
+        self.applied_cpu_rate
+    }
     fn stdout_child_handle(&self) -> i64 {
         self.stdout_log_guard.raw() as isize as i64
     }
     fn stderr_child_handle(&self) -> i64 {
         self.stderr_log_guard.raw() as isize as i64
+    }
+    /// Raw job-object handle, borrowed for the window-contract census
+    /// (`IsProcessInJob`) -- ownership stays with `self.job`.
+    fn job_handle(&self) -> windows_sys::Win32::Foundation::HANDLE {
+        self.job.raw()
     }
     fn resume(&mut self) -> Result<()> {
         use windows_sys::Win32::System::Threading::ResumeThread;
@@ -6761,6 +7266,166 @@ fn managed_windows_creation_flags() -> u32 {
         | EXTENDED_STARTUPINFO_PRESENT
 }
 
+/// A snapshot of every visible top-level window on the desktop, as
+/// (HWND-as-isize, owning PID) pairs. `HWND` is not `Send`; it is carried
+/// as `isize` between the enumeration callback and the caller, and cast
+/// back to `HWND` only at the point of a further Win32 call.
+#[cfg(windows)]
+type WindowCensus = Vec<(isize, u32)>;
+
+/// Enumerate every visible top-level window system-wide (issue #898 L6:
+/// window contract). This is a plain `EnumWindows`/`IsWindowVisible`
+/// census, not the COM `IUIAutomation` subsystem -- issue #898's own
+/// resolution ("no standing UIA subsystem required") calls for exactly
+/// this weight class: a before/after snapshot, not a live automation tree.
+#[cfg(windows)]
+fn census_top_level_windows() -> WindowCensus {
+    use windows_sys::Win32::Foundation::{BOOL, HWND, LPARAM};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        EnumWindows, GetWindowThreadProcessId, IsWindowVisible,
+    };
+
+    unsafe extern "system" fn collect(hwnd: HWND, state: LPARAM) -> BOOL {
+        if IsWindowVisible(hwnd) == 0 {
+            return 1;
+        }
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(hwnd, &mut pid);
+        let windows = &mut *(state as *mut WindowCensus);
+        windows.push((hwnd as isize, pid));
+        1
+    }
+
+    let mut windows: WindowCensus = Vec::new();
+    unsafe {
+        EnumWindows(Some(collect), std::ptr::addr_of_mut!(windows) as LPARAM);
+    }
+    windows
+}
+
+/// A window-contract violation, carrying enough to debug a real one after
+/// the fact -- the offending window is gone by the time anyone reads the
+/// refusal (the job is terminated as part of the same fail-closed path),
+/// so this is captured at detection time, not re-queryable later.
+#[cfg(windows)]
+struct ViolatingWindow {
+    hwnd: isize,
+    pid: u32,
+    class_name: String,
+    title: String,
+}
+
+#[cfg(windows)]
+impl fmt::Display for ViolatingWindow {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "hwnd=0x{:x} pid={} class={:?} title={:?}",
+            self.hwnd, self.pid, self.class_name, self.title
+        )
+    }
+}
+
+/// `GetWindowTextW`/`GetClassNameW` into an owned `String`, best-effort:
+/// an empty result (no text, or the call fails) is a legitimate outcome for
+/// plenty of real windows and is not itself part of the violation signal,
+/// so failures here never suppress the detection this exists to debug.
+#[cfg(windows)]
+fn window_text_best_effort(
+    hwnd: windows_sys::Win32::Foundation::HWND,
+    call: unsafe extern "system" fn(windows_sys::Win32::Foundation::HWND, *mut u16, i32) -> i32,
+) -> String {
+    let mut buffer = [0u16; 256];
+    let length = unsafe { call(hwnd, buffer.as_mut_ptr(), buffer.len() as i32) };
+    if length <= 0 {
+        return String::new();
+    }
+    String::from_utf16_lossy(&buffer[..length as usize])
+}
+
+/// Windows present in `after` but not `before`, filtered to only those
+/// owned by a process that is a member of `job` (`IsProcessInJob` --
+/// covers the job's own process and any child it spawned, since jobs
+/// inherit down the process tree by construction here). A window that is
+/// new but belongs to an unrelated, pre-existing process on the desktop
+/// (not this spawn's job) is not a contract violation and is excluded.
+#[cfg(windows)]
+fn new_windows_owned_by_job(
+    before: &WindowCensus,
+    after: &WindowCensus,
+    job: windows_sys::Win32::Foundation::HANDLE,
+) -> Vec<ViolatingWindow> {
+    use windows_sys::Win32::Foundation::{CloseHandle, BOOL};
+    use windows_sys::Win32::System::JobObjects::IsProcessInJob;
+    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{GetClassNameW, GetWindowTextW};
+
+    let previously_seen: std::collections::HashSet<isize> =
+        before.iter().map(|(hwnd, _)| *hwnd).collect();
+    let mut owned = Vec::new();
+    for (hwnd, pid) in after {
+        if previously_seen.contains(hwnd) {
+            continue;
+        }
+        let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, *pid) };
+        if process.is_null() {
+            continue;
+        }
+        let mut in_job: BOOL = 0;
+        let queried = unsafe { IsProcessInJob(process, job, &mut in_job) };
+        unsafe { CloseHandle(process) };
+        if queried != 0 && in_job != 0 {
+            let raw_hwnd = *hwnd as windows_sys::Win32::Foundation::HWND;
+            owned.push(ViolatingWindow {
+                hwnd: *hwnd,
+                pid: *pid,
+                class_name: window_text_best_effort(raw_hwnd, GetClassNameW),
+                title: window_text_best_effort(raw_hwnd, GetWindowTextW),
+            });
+        }
+    }
+    owned
+}
+
+/// Poll for a window contract violation for up to `budget` after the
+/// spawn's resume, checking every `interval`. Bounded, not instantaneous:
+/// a window's creation is scheduled by the OS on the child's own thread,
+/// so this is a receipted best-effort census, not a synchronous guarantee.
+/// Returns any job-owned windows found; empty means no violation was
+/// observed within the budget.
+#[cfg(windows)]
+fn poll_for_new_job_owned_windows(
+    before: &WindowCensus,
+    job: windows_sys::Win32::Foundation::HANDLE,
+    budget: Duration,
+    interval: Duration,
+) -> Vec<ViolatingWindow> {
+    let deadline = Instant::now() + budget;
+    loop {
+        let after = census_top_level_windows();
+        let found = new_windows_owned_by_job(before, &after, job);
+        if !found.is_empty() || Instant::now() >= deadline {
+            return found;
+        }
+        std::thread::sleep(interval);
+    }
+}
+
+#[cfg(test)]
+mod window_census_budget_tests {
+    use super::*;
+
+    #[test]
+    fn production_default_window_census_budget_is_unchanged_at_200ms() {
+        // Issue #898 L6 / #1727 round 3: the census budget became
+        // injectable so a test could widen it without racing production
+        // admission timing. This pins the production default itself so a
+        // future edit cannot silently loosen (or tighten) the real
+        // admission-time budget while only touching the injectable path.
+        assert_eq!(DEFAULT_WINDOW_CENSUS_BUDGET, Duration::from_millis(200));
+    }
+}
+
 /// The full Windows/UI job-object restriction set (issue #898) applied to
 /// every spawned job that has not declared `requires_ui_responsiveness`.
 /// Bars cross-desktop UI surfaces: USER handles owned outside the job, the
@@ -6785,6 +7450,83 @@ fn managed_windows_ui_restrictions_all() -> u32 {
         | JOB_OBJECT_UILIMIT_EXITWINDOWS
 }
 
+/// Applies the Windows job-object CPU hard cap. This is the host's blanket
+/// defense-in-depth cap: it runs for every managed spawn, whatever pacing
+/// class was declared, and a failure here fails the spawn.
+#[cfg(windows)]
+fn set_windows_cpu_rate(job: windows_sys::Win32::Foundation::HANDLE, percent: u32) -> Result<u32> {
+    use std::mem::{size_of, zeroed};
+    use windows_sys::Win32::System::JobObjects::{
+        JobObjectCpuRateControlInformation, SetInformationJobObject,
+        JOBOBJECT_CPU_RATE_CONTROL_INFORMATION, JOB_OBJECT_CPU_RATE_CONTROL_ENABLE,
+        JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP,
+    };
+
+    if !(1..=100).contains(&percent) {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "cpu_rate_percent must be between 1 and 100".into(),
+        });
+    }
+    let expected_rate = percent * 100;
+    let mut configured: JOBOBJECT_CPU_RATE_CONTROL_INFORMATION = unsafe { zeroed() };
+    configured.ControlFlags =
+        JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP;
+    configured.Anonymous.CpuRate = expected_rate;
+    if unsafe {
+        SetInformationJobObject(
+            job,
+            JobObjectCpuRateControlInformation,
+            (&configured as *const JOBOBJECT_CPU_RATE_CONTROL_INFORMATION).cast(),
+            size_of::<JOBOBJECT_CPU_RATE_CONTROL_INFORMATION>() as u32,
+        )
+    } == 0
+    {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    Ok(expected_rate)
+}
+
+/// Applies the cap, then re-reads it back off the job object and refuses the
+/// spawn unless the kernel reports exactly what was requested. This is the
+/// extra proof a `Governed` pacing contract earns; `Unpaced` spawns get the
+/// cap from [`set_windows_cpu_rate`] without this reopen.
+#[cfg(windows)]
+fn configure_and_verify_windows_cpu_rate(
+    job: windows_sys::Win32::Foundation::HANDLE,
+    percent: u32,
+) -> Result<u32> {
+    use std::mem::{size_of, zeroed};
+    use windows_sys::Win32::System::JobObjects::{
+        JobObjectCpuRateControlInformation, QueryInformationJobObject,
+        JOBOBJECT_CPU_RATE_CONTROL_INFORMATION, JOB_OBJECT_CPU_RATE_CONTROL_ENABLE,
+        JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP,
+    };
+
+    let expected_rate = set_windows_cpu_rate(job, percent)?;
+    let expected_flags = JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP;
+    let mut reopened: JOBOBJECT_CPU_RATE_CONTROL_INFORMATION = unsafe { zeroed() };
+    if unsafe {
+        QueryInformationJobObject(
+            job,
+            JobObjectCpuRateControlInformation,
+            (&mut reopened as *mut JOBOBJECT_CPU_RATE_CONTROL_INFORMATION).cast(),
+            size_of::<JOBOBJECT_CPU_RATE_CONTROL_INFORMATION>() as u32,
+            std::ptr::null_mut(),
+        )
+    } == 0
+    {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    let reopened_rate = unsafe { reopened.Anonymous.CpuRate };
+    if reopened.ControlFlags != expected_flags || reopened_rate != expected_rate {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "Windows job object CPU hard cap did not reopen with the requested value"
+                .into(),
+        });
+    }
+    Ok(reopened_rate)
+}
+
 #[cfg(windows)]
 fn spawn_managed(
     spec: &JobSpec,
@@ -6796,11 +7538,9 @@ fn spawn_managed(
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Foundation::{DuplicateHandle, DUPLICATE_SAME_ACCESS};
     use windows_sys::Win32::System::JobObjects::{
-        CreateJobObjectW, JobObjectBasicUIRestrictions, JobObjectCpuRateControlInformation,
-        JobObjectExtendedLimitInformation, SetInformationJobObject, TerminateJobObject,
-        JOBOBJECT_BASIC_UI_RESTRICTIONS, JOBOBJECT_CPU_RATE_CONTROL_INFORMATION,
-        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_CPU_RATE_CONTROL_ENABLE,
-        JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP, JOB_OBJECT_LIMIT_JOB_MEMORY,
+        CreateJobObjectW, JobObjectBasicUIRestrictions, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, TerminateJobObject, JOBOBJECT_BASIC_UI_RESTRICTIONS,
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_JOB_MEMORY,
         JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     };
     use windows_sys::Win32::System::Threading::{
@@ -6815,10 +7555,6 @@ fn spawn_managed(
         .map_err(|_| EmberLabError::InvalidDispatchManifest {
             detail: "maximum job memory does not fit the current Windows address space".into(),
         })?;
-    let cpu_rate = spec
-        .cpu_rate_percent
-        .map(|percent| percent.saturating_mul(100));
-
     unsafe { windows_sys::Win32::Foundation::SetLastError(0) };
     let name = wide(job_name);
     let job = unsafe { CreateJobObjectW(std::ptr::null(), name.as_ptr()) };
@@ -6853,25 +7589,33 @@ fn spawn_managed(
         return Err(error.into());
     }
 
-    if let Some(cpu_rate) = cpu_rate {
-        let mut cpu: JOBOBJECT_CPU_RATE_CONTROL_INFORMATION = unsafe { zeroed() };
-        cpu.ControlFlags =
-            JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP;
-        cpu.Anonymous.CpuRate = cpu_rate;
-        if unsafe {
-            SetInformationJobObject(
-                job,
-                JobObjectCpuRateControlInformation,
-                (&cpu as *const JOBOBJECT_CPU_RATE_CONTROL_INFORMATION).cast(),
-                size_of::<JOBOBJECT_CPU_RATE_CONTROL_INFORMATION>() as u32,
-            )
-        } == 0
-        {
-            let error = std::io::Error::last_os_error();
-            unsafe { windows_sys::Win32::Foundation::CloseHandle(job) };
-            return Err(error.into());
+    // The hard cap itself is unconditional -- it is the host's own floor and
+    // does not depend on what the manifest declared. The pacing class only
+    // decides whether the spawn additionally proves the cap took: `Governed`
+    // re-reads it off the job object and refuses to spawn on a mismatch,
+    // yielding the rate the kernel actually reported. `Unpaced` declared no
+    // contract, so no proof is produced and `applied_cpu_rate` stays `None`
+    // rather than asserting a value that was never read back.
+    let applied_cpu_rate = match spec.cpu_rate_percent {
+        Some(cpu_rate_percent) => {
+            let outcome = match spec.cpu_pacing_class {
+                DispatchCpuPacingClass::Governed => {
+                    configure_and_verify_windows_cpu_rate(job, cpu_rate_percent).map(Some)
+                }
+                DispatchCpuPacingClass::Unpaced => {
+                    set_windows_cpu_rate(job, cpu_rate_percent).map(|_| None)
+                }
+            };
+            match outcome {
+                Ok(applied) => applied,
+                Err(error) => {
+                    unsafe { windows_sys::Win32::Foundation::CloseHandle(job) };
+                    return Err(error);
+                }
+            }
         }
-    }
+        None => None,
+    };
 
     // Windows/UI surface wall (issue #898): a job that has not declared
     // `requires_ui_responsiveness` (only the closed Cockpit workload profile
@@ -7023,6 +7767,7 @@ fn spawn_managed(
         pid: info.dwProcessId,
         main_thread_id: info.dwThreadId,
         identity,
+        applied_cpu_rate,
     })
 }
 #[cfg(windows)]
@@ -7567,6 +8312,9 @@ impl SpawnedProcess {
     fn identity(&self) -> ProcessIdentity {
         self.identity.clone()
     }
+    fn applied_cpu_rate(&self) -> Option<u32> {
+        None
+    }
     fn stdout_child_handle(&self) -> i64 {
         0
     }
@@ -7677,6 +8425,98 @@ fn terminate_process(pid: u32) -> Result<()> {
 mod dispatch_binding_snapshot_tests {
     use super::*;
 
+    #[test]
+    fn dispatch_token_second_process_observation_mismatch_rolls_back_consumption_and_event() {
+        let mut connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE jobs(job_id TEXT PRIMARY KEY,pid INTEGER NOT NULL,program TEXT NOT NULL,argv_sha256 TEXT NOT NULL,process_start_token TEXT NOT NULL,executable_identity TEXT NOT NULL,state TEXT NOT NULL);
+                 CREATE TABLE dispatch_tokens(token_sha256 TEXT PRIMARY KEY,job_id TEXT NOT NULL,pid INTEGER NOT NULL,program TEXT NOT NULL,argv_sha256 TEXT NOT NULL,expires_at_ms INTEGER NOT NULL,consumed_at_ms INTEGER);
+                 CREATE TABLE events(job_id TEXT NOT NULL,ts_ms INTEGER NOT NULL,kind TEXT NOT NULL,payload_json TEXT NOT NULL);",
+            )
+            .unwrap();
+        let job_id = "posix-second-observation-job";
+        let token = "a".repeat(DISPATCH_TOKEN_BYTES * 2);
+        let client_pid = 4242_u32;
+        let initial_identity = ProcessIdentity {
+            start_token: "initial-start-token".into(),
+            executable: "/usr/bin/owned-worker".into(),
+        };
+        connection
+            .execute(
+                "INSERT INTO jobs(job_id,pid,program,argv_sha256,process_start_token,executable_identity,state) VALUES(?1,?2,?3,?4,?5,?6,'running')",
+                params![
+                    job_id,
+                    client_pid,
+                    "/usr/bin/owned-worker",
+                    "argv-sha",
+                    &initial_identity.start_token,
+                    &initial_identity.executable,
+                ],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO dispatch_tokens(token_sha256,job_id,pid,program,argv_sha256,expires_at_ms,consumed_at_ms) VALUES(?1,?2,?3,?4,?5,?6,NULL)",
+                params![
+                    hash_bytes(token.as_bytes()),
+                    job_id,
+                    client_pid,
+                    "/usr/bin/owned-worker",
+                    "argv-sha",
+                    now_ms() + 60_000,
+                ],
+            )
+            .unwrap();
+        let final_identity = ProcessIdentity {
+            start_token: "reused-start-token".into(),
+            executable: "/usr/bin/reused-worker".into(),
+        };
+        let observation_calls = std::cell::Cell::new(0_usize);
+
+        let result = consume_dispatch_token_with_process_observer(
+            &mut connection,
+            job_id,
+            &token,
+            client_pid,
+            |_| {
+                let call = observation_calls.get();
+                observation_calls.set(call + 1);
+                Ok(if call == 0 {
+                    initial_identity.clone()
+                } else {
+                    final_identity.clone()
+                })
+            },
+        );
+
+        assert!(
+            matches!(result, Err(EmberLabError::DispatchTokenRefused { .. })),
+            "second process observation mismatch must refuse: {result:?}"
+        );
+        assert_eq!(observation_calls.get(), 2);
+        assert_eq!(
+            connection
+                .query_row(
+                    "SELECT consumed_at_ms FROM dispatch_tokens WHERE job_id=?1",
+                    [job_id],
+                    |row| row.get::<_, Option<i64>>(0),
+                )
+                .unwrap(),
+            None
+        );
+        assert_eq!(
+            connection
+                .query_row(
+                    "SELECT COUNT(*) FROM events WHERE job_id=?1 AND kind='dispatch_token_consumed'",
+                    [job_id],
+                    |row| row.get::<_, i64>(0),
+                )
+                .unwrap(),
+            0
+        );
+    }
+
     #[cfg(not(windows))]
     #[test]
     fn proc_stat_start_token_uses_suffix_after_final_comm_paren() {
@@ -7734,6 +8574,19 @@ mod dispatch_binding_snapshot_tests {
         // windows-sys bump that adds a new bit is caught here, not silently
         // left unrestricted.
         assert_eq!(restrictions, 0x0000_00FF);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn managed_windows_cpu_rate_is_reopened_from_job_object() {
+        use windows_sys::Win32::Foundation::CloseHandle;
+        use windows_sys::Win32::System::JobObjects::CreateJobObjectW;
+
+        let job = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
+        assert!(!job.is_null());
+        let applied = configure_and_verify_windows_cpu_rate(job, 25).unwrap();
+        assert_eq!(applied, 2_500);
+        unsafe { CloseHandle(job) };
     }
 
     #[test]

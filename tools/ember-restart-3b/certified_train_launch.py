@@ -29,6 +29,14 @@ from typing import Any, NamedTuple
 # out-of-repo mint producer reads (it already exec-loads this module), so
 # producer and consumer cannot skew.
 CLOSURE_MODULE_RELATIVE_PATH = "scripts/training_closure.py"
+# Issue #1706: same load-out-of-the-tree-being-launched discipline as
+# CLOSURE_MODULE_RELATIVE_PATH, for the shared git-subprocess-env hardening.
+GIT_ENV_HARDENING_MODULE_RELATIVE_PATH = "scripts/git_env_hardening.py"
+# Issue #1721: same fixed-installation discipline as GIT_ENV_HARDENING_MODULE_
+# RELATIVE_PATH -- the custody gate is infrastructure with no dependency on
+# which tree is being launched, so it is loaded from THIS file's own tree even
+# though the repo_root it is asked to verify custody against varies per call.
+ARTIFACT_CUSTODY_GATE_MODULE_RELATIVE_PATH = "scripts/artifact_custody_gate.py"
 # Guard-floor keys (issue #1410): the remote guard's receipt_check requires
 # ticket/ts/sha_convention on any receipt carrying sha256 fields, and authority
 # leg 4 requires goal_id/next_executed_outcome on committed artifacts. They are
@@ -478,6 +486,61 @@ def load_closure_module(repo_root: pathlib.Path):
     return module
 
 
+def load_git_env_hardening_module():
+    """Load the shared git-subprocess-env hardening from THIS file's own tree.
+
+    Deliberately NOT loaded relative to a caller-supplied ``repo_root`` the
+    way ``load_closure_module`` is: that function audits a SPECIFIC tree's
+    training dependency closure, so it must load that tree's own copy.
+    ``git_env_hardening.py`` is an infrastructure-level subprocess-safety
+    helper with no dependency on which tree is being launched or inspected
+    -- ``read_commit_is_ancestor`` is called against arbitrary git
+    repositories (including test fixtures with no ``scripts/`` directory at
+    all), so loading it relative to THIS file's fixed installation is what
+    keeps that call correct regardless of which repo it is answering a
+    question about.
+    """
+
+    module_path = pathlib.Path(__file__).resolve().parents[2] / GIT_ENV_HARDENING_MODULE_RELATIVE_PATH
+    specification = importlib.util.spec_from_file_location(
+        "ember_git_env_hardening", module_path
+    )
+    if specification is None or specification.loader is None:
+        raise ValueError("git env hardening module cannot be loaded")
+    module = importlib.util.module_from_spec(specification)
+    try:
+        specification.loader.exec_module(module)
+    except OSError as error:
+        raise ValueError("git env hardening module is unreadable") from error
+    return module
+
+
+def load_artifact_custody_gate_module():
+    """Load the shared #1721 custody-verify gate from THIS file's own tree.
+
+    Same fixed-installation rationale as ``load_git_env_hardening_module``: the
+    gate module itself is infrastructure, loaded once from the tree this launcher
+    ships in, and then asked to verify custody against the caller-supplied
+    ``repo_root`` (which may differ, e.g. under test).
+    """
+
+    module_path = (
+        pathlib.Path(__file__).resolve().parents[2]
+        / ARTIFACT_CUSTODY_GATE_MODULE_RELATIVE_PATH
+    )
+    specification = importlib.util.spec_from_file_location(
+        "ember_artifact_custody_gate", module_path
+    )
+    if specification is None or specification.loader is None:
+        raise ValueError("artifact custody gate module cannot be loaded")
+    module = importlib.util.module_from_spec(specification)
+    try:
+        specification.loader.exec_module(module)
+    except OSError as error:
+        raise ValueError("artifact custody gate module is unreadable") from error
+    return module
+
+
 def read_live_closure_sha256(repo_root: pathlib.Path) -> str:
     """Recompute the training closure from LIVE TREE BYTES, boundary included.
 
@@ -551,9 +614,18 @@ def read_commit_is_ancestor(
     either commit, yields no evidence of ancestry, and "no evidence" must never
     read as "related". Distinguished from `read_pin_is_ancestor`, which answers
     the different question (pin vs live HEAD) and tolerates a silent no.
+
+    Env-hardened (issue #1706): closes the same GIT_CONFIG_GLOBAL /
+    GIT_CONFIG_COUNT/KEY_*/VALUE_* environment-injected config vectors as
+    the other two call sites named in that issue, for consistency -- this
+    call takes no remote URL, so `url.*.insteadOf` rewriting has no argument
+    to act on here, but an inherited environment-injected config entry could
+    still define an unrelated key (this is a general config-injection
+    surface, not solely the insteadOf case).
     """
 
     try:
+        git_env_hardening = load_git_env_hardening_module()
         result = subprocess.run(
             [
                 "git",
@@ -568,7 +640,7 @@ def read_commit_is_ancestor(
             capture_output=True,
             text=True,
             shell=False,
-            env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
+            env={**git_env_hardening.hardened_git_env(), "GIT_OPTIONAL_LOCKS": "0"},
             **_hidden_subprocess_kwargs(),
         )
     except OSError as error:
@@ -1001,6 +1073,31 @@ def _validate_resume_request(
             "resume checkpoint architecture_revision does not match this "
             f"tree's config ({manifest_revision!r} vs {config_revision!r})"
         )
+
+    # Issue #1721: a certified launch names a subject artifact -- this resume
+    # checkpoint's shard bytes -- and must fail closed on unverified custody
+    # rather than trust that a directory existing and a manifest parsing means
+    # the bytes are what the catalog would call reachable. Runs the real
+    # `ember-lab custody-verify` CLI (never a Python reimplementation) against
+    # every shard hash the manifest itself declares, rooted at this exact
+    # checkpoint directory under the RESUME_CHECKPOINT_VOLUME convention. A
+    # manifest with no declared shard-hash contract (checkpoint_manifest_hashes
+    # returns []) has nothing this gate can verify and is left to the checks
+    # above; every real checkpoint schema this repo writes always declares one.
+    custody_gate = load_artifact_custody_gate_module()
+    custody_hashes = custody_gate.checkpoint_manifest_hashes(manifest)
+    if custody_hashes:
+        try:
+            custody_gate.custody_verify(
+                repo_root,
+                custody_hashes,
+                {custody_gate.RESUME_CHECKPOINT_VOLUME: checkpoint},
+            )
+        except custody_gate.CustodyRefused as error:
+            raise ValueError(
+                "run spec resume_checkpoint failed custody verification: "
+                f"{error}"
+            ) from error
 
     return ResumeRequest(
         checkpoint=checkpoint,

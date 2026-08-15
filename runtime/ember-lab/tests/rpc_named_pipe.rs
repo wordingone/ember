@@ -174,6 +174,8 @@ fn write_dispatch_manifest(root: &Path, job_id: &str) -> PathBuf {
                 "requires_ui_responsiveness": false,
                 "cpu_rate_percent": 100
             },
+            "cpu_pacing_class": "unpaced",
+            "window_contract": "headless_no_windows",
             "job_id": job_id,
             "source_commit": "5326043c344227c1b145a4ddbb3519cfa62d4943",
             "not_before_ms": now - 1_000,
@@ -287,6 +289,58 @@ fn dispatch_cli_uses_persistent_named_pipe_daemon_and_governed_spawn() {
         json!({"job_id": "dispatch-cli-job"}),
     );
     rpc(&pipe, 103, "shutdown", json!({}));
+    wait_for_exit(&mut server);
+}
+
+#[test]
+fn dispatch_cli_refuses_manifest_missing_cpu_pacing_class_with_named_refusal() {
+    // Proves the refusal-message-quality requirement end-to-end through the
+    // real CLI subcommand (main.rs `dispatch`) and the real named-pipe RPC
+    // surface (rpc.rs/lib.rs): a manifest missing a required closed-choice
+    // field must fail closed with a message naming the field and its legal
+    // values, not a bare serde parse error, and that message must reach the
+    // operator through the CLI's stderr exactly as the daemon produced it.
+    let root = sandbox("dispatch-refusal-cpu-pacing");
+    let db = root.join("ember-lab.sqlite3");
+    let pipe = format!(
+        r"\\.\pipe\ember-lab-dispatch-refusal-cpu-pacing-test-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
+    let binary = ember_lab_binary();
+    let manifest = write_dispatch_manifest(&root, "dispatch-refusal-cpu-pacing-job");
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload.as_object_mut().unwrap().remove("cpu_pacing_class");
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+
+    let mut server = start_server(&binary, &db, &pipe);
+    assert_eq!(rpc(&pipe, 190, "ping", json!({}))["status"], "ok");
+
+    let output = Command::new(&binary)
+        .args([
+            "dispatch",
+            "--pipe",
+            &pipe,
+            "--manifest",
+            &manifest.to_string_lossy(),
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "dispatch CLI unexpectedly succeeded on a manifest missing cpu_pacing_class"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr
+            .contains("cpu_pacing_class: missing required field (legal values: unpaced, governed)"),
+        "dispatch CLI refusal did not name the missing field and its legal values: {stderr}"
+    );
+
+    rpc(&pipe, 191, "shutdown", json!({}));
     wait_for_exit(&mut server);
 }
 

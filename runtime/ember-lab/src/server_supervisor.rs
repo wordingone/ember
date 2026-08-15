@@ -11,8 +11,8 @@
 //! create a second launcher, registry, ledger, or receipt family.
 
 use crate::{
-    atomic_create, hash_bytes, Daemon, DispatchBindingKind, DispatchManifest, DispatchOutcome,
-    EmberLabError, Result,
+    atomic_create, describe_dispatch_manifest_parse_error, hash_bytes, Daemon, DispatchBindingKind,
+    DispatchManifest, DispatchOutcome, EmberLabError, Result,
 };
 use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
@@ -22,6 +22,7 @@ use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::thread;
 use std::time::{Duration, Instant};
 
 #[cfg(windows)]
@@ -211,6 +212,21 @@ fn invalid(detail: impl Into<String>) -> EmberLabError {
         job_id: String::new(),
         detail: detail.into(),
     }
+}
+
+/// Deserialize a restore-path `DispatchManifest`, wrapping any parse failure
+/// with a refusal that names the specific missing/invalid closed-choice
+/// field (e.g. `cpu_pacing_class`, `window_contract`) and its legal values,
+/// rather than surfacing a bare serde error. `context` distinguishes the two
+/// restore-manifest read sites in their refusal text (e.g. "restore
+/// manifest" vs "serving contract restore manifest").
+fn parse_restore_manifest(bytes: &[u8], context: &str) -> Result<DispatchManifest> {
+    serde_json::from_slice(bytes).map_err(|error| {
+        invalid(format!(
+            "{context} is not closed JSON: {}",
+            describe_dispatch_manifest_parse_error(bytes, &error)
+        ))
+    })
 }
 
 fn canonical_path(path: &Path, label: &str) -> Result<PathBuf> {
@@ -435,6 +451,31 @@ pub fn probe_endpoint(authority: &ServerAuthority) -> EndpointHealth {
         }
         Err(error) if error.kind() == std::io::ErrorKind::TimedOut => EndpointHealth::Hung,
         Err(_) => EndpointHealth::Dead,
+    }
+}
+
+/// Default budget for polling a freshly dispatched/rebound server's health
+/// endpoint before a restore attempt is treated as failed. `probe_endpoint`'s
+/// own per-attempt timeouts are tuned for a single already-running server on
+/// a periodic tick; a server that was JUST dispatched needs real wall time to
+/// bind its port, so restore polls it repeatedly within this budget instead
+/// of trusting a single attempt. Test callers that need a larger budget to
+/// avoid racing host scheduling use the `..._and_restore_health_poll_budget`
+/// entry points instead of loosening this constant.
+const DEFAULT_RESTORE_HEALTH_POLL_BUDGET: Duration = Duration::from_millis(2_000);
+const RESTORE_HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(50);
+
+fn poll_endpoint_until_healthy_or_budget(
+    authority: &ServerAuthority,
+    budget: Duration,
+) -> EndpointHealth {
+    let deadline = Instant::now() + budget;
+    loop {
+        let health = probe_endpoint(authority);
+        if health == EndpointHealth::Healthy || Instant::now() >= deadline {
+            return health;
+        }
+        thread::sleep(RESTORE_HEALTH_POLL_INTERVAL);
     }
 }
 
@@ -744,8 +785,8 @@ impl Daemon {
         outcome: &DispatchOutcome,
     ) -> Result<ServerAuthority> {
         let manifest_bytes = fs::read(&request.restore_manifest_path)?;
-        let manifest: DispatchManifest = serde_json::from_slice(&manifest_bytes)
-            .map_err(|error| invalid(format!("restore manifest is not closed JSON: {error}")))?;
+        let manifest: DispatchManifest =
+            parse_restore_manifest(&manifest_bytes, "restore manifest")?;
         if manifest.job_id == previous.job_id {
             return Err(invalid(
                 "restore manifest must dispatch a fresh job authority",
@@ -1173,6 +1214,29 @@ impl Daemon {
         model_name: String,
         vram_bytes: u64,
     ) -> Result<ServerCycleReceipt> {
+        self.supervise_server_live_cycle_with_test_observation_and_restore_health_poll_budget(
+            request,
+            model_name,
+            vram_bytes,
+            DEFAULT_RESTORE_HEALTH_POLL_BUDGET,
+        )
+    }
+
+    /// Same integration seam as [`Self::supervise_server_live_cycle_with_test_observation`],
+    /// but lets a caller override the post-restore health poll budget. Real
+    /// dispatch under test still competes for host CPU/process-creation time
+    /// with every other test thread, so a test asserting on the restore
+    /// MECHANISM (not on production timing) should pass a generous budget
+    /// here instead of racing host scheduling at the production default.
+    #[cfg(debug_assertions)]
+    #[doc(hidden)]
+    pub fn supervise_server_live_cycle_with_test_observation_and_restore_health_poll_budget(
+        &self,
+        request: ServerLiveCycleRequest,
+        model_name: String,
+        vram_bytes: u64,
+        restore_health_poll_budget: Duration,
+    ) -> Result<ServerCycleReceipt> {
         self.supervise_server_live_cycle_with_dispatch_and_observer(
             request,
             |daemon, path| daemon.dispatch_manifest(path),
@@ -1182,6 +1246,7 @@ impl Daemon {
                     vram_bytes,
                 })
             },
+            restore_health_poll_budget,
         )
     }
 
@@ -1197,6 +1262,7 @@ impl Daemon {
             request,
             dispatch,
             observe_serving_identity,
+            DEFAULT_RESTORE_HEALTH_POLL_BUDGET,
         )
     }
 
@@ -1205,6 +1271,7 @@ impl Daemon {
         request: ServerLiveCycleRequest,
         dispatch: F,
         observe: O,
+        restore_health_poll_budget: Duration,
     ) -> Result<ServerCycleReceipt>
     where
         F: FnOnce(&Daemon, &std::path::Path) -> Result<DispatchOutcome>,
@@ -1275,11 +1342,7 @@ impl Daemon {
                     ))
                 })?;
                 let manifest: DispatchManifest =
-                    serde_json::from_slice(&manifest_bytes).map_err(|error| {
-                        invalid(format!(
-                            "serving contract restore manifest is not closed JSON: {error}"
-                        ))
-                    })?;
+                    parse_restore_manifest(&manifest_bytes, "serving contract restore manifest")?;
                 if !manifest_matches_contract(&manifest, &contract) {
                     return Err(invalid(
                         "restore manifest launcher does not match the serving contract",
@@ -1354,7 +1417,8 @@ impl Daemon {
                     .ok_or_else(|| invalid("restore callback lacks its serving contract"))?;
                 let outcome = dispatch(self, &manifest_path)?;
                 let rebound = self.rebind_server_supervision(authority, &registration, &outcome)?;
-                let health = probe_endpoint(&rebound);
+                let health =
+                    poll_endpoint_until_healthy_or_budget(&rebound, restore_health_poll_budget);
                 let observed = observe(&rebound);
                 let assertions = match observed {
                     Ok(observed) => ServingContractAssertions {
@@ -1434,6 +1498,37 @@ mod tests {
 
     fn sha256(path: &Path) -> String {
         format!("{:x}", Sha256::digest(fs::read(path).unwrap()))
+    }
+
+    fn restore_manifest_refusal_detail(bytes: &[u8], context: &str) -> String {
+        match parse_restore_manifest(bytes, context).unwrap_err() {
+            EmberLabError::InvalidTransition { detail, .. } => detail,
+            other => panic!("expected InvalidTransition, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn restore_manifest_refusal_names_the_missing_field_and_its_legal_values() {
+        let detail = restore_manifest_refusal_detail(
+            br#"{"window_contract":"cockpit_hosted"}"#,
+            "restore manifest",
+        );
+        assert_eq!(
+            detail,
+            "restore manifest is not closed JSON: cpu_pacing_class: missing required field (legal values: unpaced, governed)"
+        );
+    }
+
+    #[test]
+    fn restore_manifest_refusal_names_an_invalid_variant_and_its_legal_values() {
+        let detail = restore_manifest_refusal_detail(
+            br#"{"cpu_pacing_class":"unpaced","window_contract":"popup"}"#,
+            "serving contract restore manifest",
+        );
+        assert_eq!(
+            detail,
+            "serving contract restore manifest is not closed JSON: window_contract: invalid value \"popup\" (legal values: headless_no_windows, cockpit_hosted)"
+        );
     }
 
     #[test]
@@ -1517,6 +1612,8 @@ mod tests {
                 "requires_ui_responsiveness": false,
                 "cpu_rate_percent": 100
             },
+            "cpu_pacing_class": "unpaced",
+            "window_contract": "headless_no_windows",
             "env": {},
             "bindings": [],
             "custody_root": root,
@@ -1606,5 +1703,21 @@ mod tests {
         assert_eq!(receipt.job_id, "restored-server-job");
         daemon.stop_job("restored-server-job").unwrap();
         server.join().unwrap();
+    }
+}
+
+#[cfg(test)]
+mod restore_health_poll_budget_tests {
+    use super::*;
+
+    /// Pins the real production restore health-poll budget, so an edit to
+    /// the injectable path (added for #1722) cannot silently loosen or
+    /// tighten real restore-timeout behavior.
+    #[test]
+    fn production_default_restore_health_poll_budget_is_unchanged_at_2s() {
+        assert_eq!(
+            DEFAULT_RESTORE_HEALTH_POLL_BUDGET,
+            Duration::from_millis(2_000)
+        );
     }
 }

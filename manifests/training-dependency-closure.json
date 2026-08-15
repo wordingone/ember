@@ -38,6 +38,8 @@
     "tools/ember-restart-3b/train.py",
     "tools/ember-restart-3b/verify_capability_record.py",
     "tools/ember-restart-3b/verify_training_data.py",
+    "scripts/artifact_custody_gate.py",
+    "scripts/git_env_hardening.py",
     "scripts/training_closure.py"
   ],
   "data": [
@@ -54,10 +56,15 @@
   "data_declaration_note": "Data dependencies are declared rather than walked: a static walker cannot honestly prove which JSON a program reads, and a fabricated 'machine-detected' data edge would be worse than an explicit declaration. Every entry is a runtime input of the training chain -- the repo-relative constants in closure members (production_rung.SHARD_RELATIVE/RECEIPT_RELATIVE/TOKENIZER_RELATIVE/CONFIG_RELATIVE, text_lab_corpus._AUTHORITY_INDEX, run_vertical_slice's deferral policy and model config), the launch surface the certificate already binds by bytes (Ember.cmd as cli_binary_sha256, plus the launcher it invokes), and manifests/python-environment-v1.json, which pins the third-party imports (tokenizers, torch) that live outside the repo and therefore outside any path hash. All are inside the closure hash, so changing one demands re-verification.",
   "dynamic_call_sites": {
     "tools/ember-restart-3b/certified_train_launch.py": [
+      "scripts/artifact_custody_gate.py",
+      "scripts/git_env_hardening.py",
       "scripts/training_closure.py",
       "tools/ember-restart-3b/disk_budget_runner.py",
       "tools/ember-restart-3b/run_vertical_slice.py",
       "no repo target: git rev-parse and git merge-base --is-ancestor"
+    ],
+    "scripts/artifact_custody_gate.py": [
+      "no repo target: spawns the repository-governed ember-lab.exe custody-verify/register-artifact subcommands"
     ],
     "tools/ember-restart-3b/disk_budget_runner.py": [
       "no repo target: spawns the certificate-declared child argv it is handed"

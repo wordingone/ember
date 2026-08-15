@@ -2,13 +2,16 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
+use ember_lab::data_catalog::ArtifactLocationInput;
 use ember_lab::rehearsal::{self, Phase, PhaseOutcome, RehearsalManifest, RehearsalRunner};
 use ember_lab::{
-    ember_lab_source_hash, hash_file, read_data_catalog_status, rpc::serve_named_pipe,
-    training_verify, Daemon, DispatchManifest, DispatchOutcome, MAX_DISPATCH_MANIFEST_BYTES,
+    ember_lab_source_hash, hash_file, read_custody_verify, read_data_catalog_status,
+    rpc::serve_named_pipe, training_verify, Daemon, DispatchManifest, DispatchOutcome,
+    MAX_DISPATCH_MANIFEST_BYTES,
 };
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
@@ -21,7 +24,7 @@ const DISPATCH_DAEMON_PID_ENV: &str = "EMBER_LAB_DISPATCH_DAEMON_PID";
 const DISPATCH_PIPE_ENV: &str = "EMBER_LAB_PIPE";
 
 fn usage() -> &'static str {
-    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab data-catalog-status --db <path>\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
+    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab data-catalog-status --db <path>\n  ember-lab register-artifact --db <path> --sha256 <hex> --byte-count <n> --media-type <type> --location <volume>=<locator> [--location <volume>=<locator> ...]\n  ember-lab retire-artifact-location --db <path> --sha256 <hex> --volume <volume> --locator <locator> --reason <text>\n  ember-lab custody-verify --db <path> --hash <sha256> [--hash <sha256> ...] --root <volume>=<path> [--root <volume>=<path> ...] --receipt <path> [--rehash]\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
 }
 
 enum Command {
@@ -35,6 +38,27 @@ enum Command {
     },
     DataCatalogStatus {
         db: PathBuf,
+    },
+    RegisterArtifact {
+        db: PathBuf,
+        sha256: String,
+        byte_count: i64,
+        media_type: String,
+        locations: Vec<(String, String)>,
+    },
+    RetireArtifactLocation {
+        db: PathBuf,
+        sha256: String,
+        volume: String,
+        locator: String,
+        reason: String,
+    },
+    CustodyVerify {
+        db: PathBuf,
+        hashes: Vec<String>,
+        roots: Vec<(String, PathBuf)>,
+        rehash: bool,
+        receipt: PathBuf,
     },
     ProduceMinimalSlice {
         root: PathBuf,
@@ -213,6 +237,115 @@ fn parse_args() -> Result<Command, String> {
         }
         return Ok(Command::DataCatalogStatus {
             db: PathBuf::from(db),
+        });
+    }
+
+    if command == "register-artifact" {
+        let mut db = None;
+        let mut sha256 = None;
+        let mut byte_count = None;
+        let mut media_type = None;
+        let mut locations = Vec::new();
+        while let Some(flag) = args.next() {
+            let value = args
+                .next()
+                .ok_or_else(|| format!("missing value for {flag}\n{}", usage()))?;
+            match flag.as_str() {
+                "--db" => db = Some(PathBuf::from(value)),
+                "--sha256" => sha256 = Some(value),
+                "--byte-count" => {
+                    byte_count = Some(
+                        value
+                            .parse::<i64>()
+                            .map_err(|_| format!("--byte-count must be an integer\n{}", usage()))?,
+                    )
+                }
+                "--media-type" => media_type = Some(value),
+                "--location" => {
+                    let (volume, locator) = value
+                        .split_once('=')
+                        .ok_or_else(|| format!("--location must be VOLUME=LOCATOR\n{}", usage()))?;
+                    locations.push((volume.to_string(), locator.to_string()));
+                }
+                _ => return Err(format!("unknown flag {flag}\n{}", usage())),
+            }
+        }
+        return Ok(Command::RegisterArtifact {
+            db: db.ok_or_else(|| format!("missing --db\n{}", usage()))?,
+            sha256: sha256.ok_or_else(|| format!("missing --sha256\n{}", usage()))?,
+            byte_count: byte_count.ok_or_else(|| format!("missing --byte-count\n{}", usage()))?,
+            media_type: media_type.ok_or_else(|| format!("missing --media-type\n{}", usage()))?,
+            locations,
+        });
+    }
+
+    if command == "retire-artifact-location" {
+        let mut db = None;
+        let mut sha256 = None;
+        let mut volume = None;
+        let mut locator = None;
+        let mut reason = None;
+        while let Some(flag) = args.next() {
+            let value = args
+                .next()
+                .ok_or_else(|| format!("missing value for {flag}\n{}", usage()))?;
+            match flag.as_str() {
+                "--db" => db = Some(PathBuf::from(value)),
+                "--sha256" => sha256 = Some(value),
+                "--volume" => volume = Some(value),
+                "--locator" => locator = Some(value),
+                "--reason" => reason = Some(value),
+                _ => return Err(format!("unknown flag {flag}\n{}", usage())),
+            }
+        }
+        return Ok(Command::RetireArtifactLocation {
+            db: db.ok_or_else(|| format!("missing --db\n{}", usage()))?,
+            sha256: sha256.ok_or_else(|| format!("missing --sha256\n{}", usage()))?,
+            volume: volume.ok_or_else(|| format!("missing --volume\n{}", usage()))?,
+            locator: locator.ok_or_else(|| format!("missing --locator\n{}", usage()))?,
+            reason: reason.ok_or_else(|| format!("missing --reason\n{}", usage()))?,
+        });
+    }
+
+    if command == "custody-verify" {
+        let mut db = None;
+        let mut hashes = Vec::new();
+        let mut roots = Vec::new();
+        let mut receipt = None;
+        let mut rehash = false;
+        while let Some(flag) = args.next() {
+            if flag == "--rehash" {
+                rehash = true;
+                continue;
+            }
+            let value = args
+                .next()
+                .ok_or_else(|| format!("missing value for {flag}\n{}", usage()))?;
+            match flag.as_str() {
+                "--db" => db = Some(PathBuf::from(value)),
+                "--hash" => hashes.push(value),
+                "--root" => {
+                    let (volume, path) = value
+                        .split_once('=')
+                        .ok_or_else(|| format!("--root must be VOLUME=PATH\n{}", usage()))?;
+                    roots.push((volume.to_string(), PathBuf::from(path)));
+                }
+                "--receipt" => receipt = Some(PathBuf::from(value)),
+                _ => return Err(format!("unknown flag {flag}\n{}", usage())),
+            }
+        }
+        if hashes.is_empty() {
+            return Err(format!(
+                "custody-verify requires at least one --hash\n{}",
+                usage()
+            ));
+        }
+        return Ok(Command::CustodyVerify {
+            db: db.ok_or_else(|| format!("missing --db\n{}", usage()))?,
+            hashes,
+            roots,
+            rehash,
+            receipt: receipt.ok_or_else(|| format!("missing --receipt\n{}", usage()))?,
         });
     }
 
@@ -663,6 +796,70 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 serde_json::to_string(&read_data_catalog_status(&db)?)?
             );
         }
+        Command::RegisterArtifact {
+            db,
+            sha256,
+            byte_count,
+            media_type,
+            locations,
+        } => {
+            let daemon = Daemon::open(&db)?;
+            let locations: Vec<ArtifactLocationInput> = locations
+                .into_iter()
+                .map(|(volume, locator)| ArtifactLocationInput { volume, locator })
+                .collect();
+            let outcome = daemon.register_artifact(&sha256, byte_count, &media_type, &locations)?;
+            println!(
+                "register-artifact: object {} ({}), {} location(s) newly registered",
+                outcome.object_id,
+                if outcome.object_newly_registered {
+                    "new"
+                } else {
+                    "already present, identical"
+                },
+                outcome
+                    .locations
+                    .iter()
+                    .filter(|location| location.newly_registered)
+                    .count()
+            );
+        }
+        Command::RetireArtifactLocation {
+            db,
+            sha256,
+            volume,
+            locator,
+            reason,
+        } => {
+            let daemon = Daemon::open(&db)?;
+            daemon.retire_artifact_location(&sha256, &volume, &locator, &reason)?;
+            println!("retire-artifact-location: {volume}/{locator} for sha256:{sha256} retired");
+        }
+        Command::CustodyVerify {
+            db,
+            hashes,
+            roots,
+            rehash,
+            receipt,
+        } => {
+            let root_map: BTreeMap<String, PathBuf> = roots.into_iter().collect();
+            let outcome = read_custody_verify(&db, &hashes, &root_map, rehash)?;
+            std::fs::write(&receipt, serde_json::to_vec_pretty(&outcome)?)?;
+            println!("{}", serde_json::to_string(&outcome)?);
+            // Mirrors verify-training's own convention (see its comment above): a completed-
+            // but-refused verdict is exit 1, distinct from an infra-level Err (unreadable db,
+            // missing root mapping) that main() already turns into exit 1 on its own -- a
+            // caller that needs to tell them apart reads the receipt's `admitted` field, not
+            // the exit code alone. The receipt is always written before this check, so a
+            // refusal is never reported without one.
+            let admitted = outcome
+                .get("admitted")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            if !admitted {
+                std::process::exit(1);
+            }
+        }
         Command::ProduceMinimalSlice { root, job_id } => {
             rehearsal::produce_minimal_slice(&root, &job_id)?;
         }
@@ -795,7 +992,11 @@ mod tests {
             identity.to_string_lossy(),
             [
                 "--exact",
-                "tests::tests::rehearsal_orchestration_fixture_child",
+                // Single `tests::` -- this binary's only test module. The old
+                // `tests::tests::` path matched zero tests, so the fixture's
+                // 30s sleep never ran and the child exited during startup,
+                // leaving the stop to race the child's own exit.
+                "tests::rehearsal_orchestration_fixture_child",
                 "--nocapture",
             ],
             "cpu-fixture",

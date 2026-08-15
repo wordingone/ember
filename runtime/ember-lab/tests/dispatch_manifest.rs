@@ -88,6 +88,93 @@ fn fixture_dispatch_child() {
             }
             std::hint::black_box(allocation);
         }
+        if std::env::var("EMBER_LAB_DISPATCH_CPU_BURN").as_deref() == Ok("1") {
+            let workers = std::thread::available_parallelism().unwrap().get();
+            for seed in 0..workers {
+                thread::spawn(move || {
+                    let until = std::time::Instant::now() + Duration::from_secs(10);
+                    let mut value = seed as u64;
+                    while std::time::Instant::now() < until {
+                        value = value.wrapping_mul(6364136223846793005).wrapping_add(1);
+                        std::hint::black_box(value);
+                    }
+                });
+            }
+        }
+        thread::sleep(Duration::from_secs(30));
+    }
+}
+
+/// Window-contract fixture (issue #898 L6): when
+/// `EMBER_LAB_DISPATCH_FIXTURE_CHILD_WINDOW=1`, paints a real, visible
+/// top-level `CreateWindowExW` window on the current desktop. This is the
+/// exact gap PR #1691 left open (its own "Unverified areas" section: the
+/// UILIMIT job-object wall "does not, by themselves, prevent the job's own
+/// process from creating a window on the existing interactive desktop") --
+/// a plain `CREATE_NO_WINDOW`/`JOB_OBJECT_UILIMIT_*`-restricted child can
+/// still call a real user32 window API and have it render. The fallback
+/// sleep keeps the fixture from exiting cleanly on its own if the parent's
+/// census/kill is ever slower than expected, so a probe miss shows up as a
+/// hang the test's own deadline catches, not a silent false negative.
+///
+/// `EMBER_LAB_DISPATCH_FIXTURE_CHILD_WINDOW_WARMUP=1` (issue #1727 round 2):
+/// paired with the window var, creates the same window, destroys it
+/// immediately, and returns instead of sleeping. A prior fix warmed only the
+/// process (loader/CRT/harness init) by spawning this fixture with the
+/// window var unset; that still failed cold, because the dominant first-use
+/// cost is the window-creation path itself (win32k session init, desktop-
+/// heap connection, class registration), which only pays down when a window
+/// is actually created -- and that cost is session-side, not process-side,
+/// so a real create+destroy in a throwaway process still warms it for the
+/// timed dispatch that follows.
+fn to_wide_null(text: &str) -> Vec<u16> {
+    text.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+#[test]
+fn fixture_dispatch_child_presents_a_visible_window() {
+    if std::env::var("EMBER_LAB_DISPATCH_FIXTURE_CHILD_WINDOW").as_deref() == Ok("1") {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            CreateWindowExW, DestroyWindow, WS_POPUP, WS_VISIBLE,
+        };
+        // A top-level visible window on the predefined STATIC class -- the exact
+        // thing census_top_level_windows() enumerates (EnumWindows +
+        // IsWindowVisible + owning PID), and a fair stand-in for any GUI a
+        // headless_no_windows job might wrongly present.
+        //
+        // Deliberately NOT MessageBoxW. A modal dialog has to load a dialog
+        // template, theme, and font and enter a modal loop before it is ever
+        // visible, which under the parallel suite regularly overran the 200ms
+        // admission census and made this test flaky (see the PR's cold-start
+        // note). It also blocked on input, so killed-late children held a lock
+        // on their own .exe and broke the next relink with LNK1104. One
+        // CreateWindowExW call is visible essentially immediately and needs no
+        // message pump to be enumerable, so the test now exercises the census
+        // rather than the host's dialog-subsystem latency.
+        let class = to_wide_null("STATIC");
+        let title = to_wide_null("l6-window-contract-fixture");
+        let hwnd = unsafe {
+            CreateWindowExW(
+                0,
+                class.as_ptr(),
+                title.as_ptr(),
+                WS_POPUP | WS_VISIBLE,
+                0,
+                0,
+                320,
+                120,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null(),
+            )
+        };
+        if std::env::var("EMBER_LAB_DISPATCH_FIXTURE_CHILD_WINDOW_WARMUP").as_deref() == Ok("1") {
+            unsafe {
+                DestroyWindow(hwnd);
+            }
+            return;
+        }
         thread::sleep(Duration::from_secs(30));
     }
 }
@@ -143,6 +230,8 @@ fn write_manifest(root: &Path, job_id: &str, not_before_ms: i64) -> PathBuf {
                 "requires_ui_responsiveness": false,
                 "cpu_rate_percent": CPU_RATE_PERCENT
             },
+            "cpu_pacing_class": "unpaced",
+            "window_contract": "headless_no_windows",
             "env": env,
         "bindings": [
             {"kind": "config", "path": binding, "sha256": sha256(&binding)},
@@ -531,6 +620,45 @@ fn evidence_verifier_dispatch_is_cpu_only_and_rejects_caller_token_authority() {
 }
 
 #[test]
+fn dispatch_refuses_manifest_missing_window_contract_with_named_refusal() {
+    // Proves the refusal-message-quality requirement through the real
+    // dispatch path (Daemon::dispatch_manifest_at_with_probes_and_host):
+    // a manifest missing a required closed-choice field must fail closed
+    // with a message naming the field and its legal values, not a bare
+    // serde parse error.
+    let root = sandbox("dispatch-refusal-window-contract");
+    let dispatch_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    let manifest = write_manifest(&root, "dispatch-refusal-window-contract-job", dispatch_at);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload.as_object_mut().unwrap().remove("window_contract");
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
+    let error = daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            dispatch_at + 1,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap_err();
+    let EmberLabError::InvalidDispatchManifest { detail } = error else {
+        panic!("expected InvalidDispatchManifest, got {error:?}");
+    };
+    assert!(
+        detail.contains(
+            "window_contract: missing required field (legal values: headless_no_windows, cockpit_hosted)"
+        ),
+        "refusal did not name the missing field and its legal values: {detail}"
+    );
+    drop(daemon);
+    remove_sandbox_when_unlocked(&root);
+}
+
+#[test]
 fn dispatch_manifest_hashes_preflights_and_governs_spawn() {
     let root = sandbox("green");
     let manifest = write_manifest(&root, "dispatch-green", 10_000);
@@ -664,8 +792,29 @@ fn dispatch_manifest_requires_a_bounded_cpu_rate_before_identity_or_spawn() {
     }
 }
 
-#[test]
-fn dispatch_manifest_applies_the_declared_windows_cpu_hard_cap() {
+fn write_manifest_with_pacing_class(
+    root: &Path,
+    job_id: &str,
+    not_before_ms: i64,
+    pacing_class: &str,
+) -> PathBuf {
+    let manifest = write_manifest(root, job_id, not_before_ms);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["cpu_pacing_class"] = json!(pacing_class);
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    manifest
+}
+
+/// Dispatches one fixture job under `pacing_class` and asserts the host's
+/// blanket CPU hard cap is present on the job object *whatever* that class is
+/// -- the cap is defense-in-depth and never comes off. Returns the live daemon,
+/// sandbox root, and `job_prepared` payload so the caller can assert the
+/// class-specific half of the receipt.
+fn dispatch_under_pacing_class(
+    sandbox_label: &str,
+    job_id: &str,
+    pacing_class: &str,
+) -> (Daemon, PathBuf, Value) {
     use std::mem::{size_of, zeroed};
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Foundation::CloseHandle;
@@ -675,8 +824,8 @@ fn dispatch_manifest_applies_the_declared_windows_cpu_hard_cap() {
         JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP,
     };
 
-    let root = sandbox("cpu-hard-cap");
-    let manifest = write_manifest(&root, "dispatch-cpu-hard-cap", 10_000);
+    let root = sandbox(sandbox_label);
+    let manifest = write_manifest_with_pacing_class(&root, job_id, 10_000, pacing_class);
     let db = root.join("ember-lab.sqlite3");
     let daemon = Daemon::open(&db).unwrap();
     daemon
@@ -691,8 +840,8 @@ fn dispatch_manifest_applies_the_declared_windows_cpu_hard_cap() {
     let connection = Connection::open(&db).unwrap();
     let job_object_name: String = connection
         .query_row(
-            "SELECT job_object_name FROM jobs WHERE job_id='dispatch-cpu-hard-cap'",
-            [],
+            "SELECT job_object_name FROM jobs WHERE job_id=?1",
+            [job_id],
             |row| row.get(0),
         )
         .unwrap();
@@ -716,10 +865,174 @@ fn dispatch_manifest_applies_the_declared_windows_cpu_hard_cap() {
     assert_ne!(ok, 0);
     assert_eq!(
         info.ControlFlags,
-        JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP
+        JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP,
+        "{pacing_class} spawn lost the host CPU hard-cap flags"
     );
-    assert_eq!(unsafe { info.Anonymous.CpuRate }, CPU_RATE_PERCENT * 100);
-    daemon.stop_job("dispatch-cpu-hard-cap").unwrap();
+    assert_eq!(
+        unsafe { info.Anonymous.CpuRate },
+        CPU_RATE_PERCENT * 100,
+        "{pacing_class} spawn lost the host CPU hard-cap rate"
+    );
+    let prepared_payload: String = connection
+        .query_row(
+            "SELECT payload_json FROM events WHERE job_id=?1 AND kind='job_prepared'",
+            [job_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let prepared: Value = serde_json::from_str(&prepared_payload).unwrap();
+    (daemon, root, prepared)
+}
+
+fn assert_terminal_receipt_carries_prepared(
+    daemon: &Daemon,
+    root: &Path,
+    job_id: &str,
+    prepared: &Value,
+) {
+    daemon.stop_job(job_id).unwrap();
+    let artifact = daemon
+        .export_content_addressed_receipt(job_id, &root.join("terminal-receipts"))
+        .unwrap();
+    let terminal: Value = serde_json::from_slice(&fs::read(artifact.path).unwrap()).unwrap();
+    let terminal_prepared = terminal["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["kind"] == "job_prepared")
+        .unwrap();
+    assert_eq!(terminal_prepared["payload"], *prepared);
+}
+
+#[test]
+fn dispatch_manifest_applies_the_declared_windows_cpu_hard_cap() {
+    // `unpaced` declares no pacing contract, so it earns no verification
+    // receipt -- but the host still caps it, which the shared helper asserts
+    // directly off the job object.
+    let (daemon, root, prepared) =
+        dispatch_under_pacing_class("cpu-hard-cap", "dispatch-cpu-hard-cap", "unpaced");
+    assert_eq!(prepared["cpu_pacing_class"], "unpaced");
+    assert_eq!(prepared["cpu_rate_control_verified"], false);
+    assert_eq!(prepared["applied_cpu_rate"], Value::Null);
+    assert_terminal_receipt_carries_prepared(&daemon, &root, "dispatch-cpu-hard-cap", &prepared);
+}
+
+#[test]
+fn governed_dispatch_earns_the_reopened_cpu_rate_verification_receipt() {
+    let (daemon, root, prepared) =
+        dispatch_under_pacing_class("cpu-hard-cap-governed", "dispatch-cpu-governed", "governed");
+    assert_eq!(prepared["cpu_pacing_class"], "governed");
+    assert_eq!(prepared["cpu_rate_control_verified"], true);
+    assert_eq!(prepared["applied_cpu_rate"], CPU_RATE_PERCENT * 100);
+    assert_terminal_receipt_carries_prepared(&daemon, &root, "dispatch-cpu-governed", &prepared);
+}
+
+#[test]
+fn governed_pacing_is_refused_at_a_cpu_rate_that_paces_nothing() {
+    let root = sandbox("governed-full-rate");
+    let manifest =
+        write_manifest_with_pacing_class(&root, "dispatch-governed-100", 10_000, "governed");
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["workload_profile"]["cpu_rate_percent"] = json!(100);
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
+    assert!(matches!(
+        daemon.dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        ),
+        Err(EmberLabError::InvalidDispatchManifest { .. })
+    ));
+    assert_eq!(daemon.job_state("dispatch-governed-100").unwrap(), None);
+}
+
+/// Runs a real sustained all-core burn inside a dispatched job and asserts the
+/// job object actually throttled it. This is #898's CPU acceptance probe, and
+/// it runs for BOTH pacing classes: the host cap is what does the throttling,
+/// and a `Governed` declaration must not be what a job depends on to be capped.
+fn assert_cpu_burn_stays_inside_hard_cap(sandbox_label: &str, job_id: &str, pacing_class: &str) {
+    use std::mem::{size_of, zeroed};
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::JobObjects::{
+        JobObjectBasicAccountingInformation, OpenJobObjectW, QueryInformationJobObject,
+        JOBOBJECT_BASIC_ACCOUNTING_INFORMATION,
+    };
+
+    let root = sandbox(sandbox_label);
+    let manifest = write_manifest_with_pacing_class(&root, job_id, 10_000, pacing_class);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["env"]["EMBER_LAB_DISPATCH_CPU_BURN"] = json!("1");
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let db = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open(&db).unwrap();
+    let started = std::time::Instant::now();
+    daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(2048),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap();
+    thread::sleep(Duration::from_millis(1_500));
+    let connection = Connection::open(&db).unwrap();
+    let job_object_name: String = connection
+        .query_row(
+            "SELECT job_object_name FROM jobs WHERE job_id=?1",
+            [job_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let wide: Vec<u16> = std::ffi::OsStr::new(&job_object_name)
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    let job = unsafe { OpenJobObjectW(0x0004, 0, wide.as_ptr()) };
+    assert!(!job.is_null());
+    let mut accounting: JOBOBJECT_BASIC_ACCOUNTING_INFORMATION = unsafe { zeroed() };
+    let ok = unsafe {
+        QueryInformationJobObject(
+            job,
+            JobObjectBasicAccountingInformation,
+            (&mut accounting as *mut JOBOBJECT_BASIC_ACCOUNTING_INFORMATION).cast(),
+            size_of::<JOBOBJECT_BASIC_ACCOUNTING_INFORMATION>() as u32,
+            std::ptr::null_mut(),
+        )
+    };
+    unsafe { CloseHandle(job) };
+    assert_ne!(ok, 0);
+    let cpu_ms = (accounting.TotalUserTime + accounting.TotalKernelTime) / 10_000;
+    let elapsed_ms = started.elapsed().as_millis() as i64;
+    let logical_cpus = std::thread::available_parallelism().unwrap().get() as i64;
+    let expected_cap_ms = elapsed_ms * logical_cpus * CPU_RATE_PERCENT as i64 / 100;
+    assert!(
+        cpu_ms >= 100,
+        "{pacing_class} probe did not create sustained CPU load: {cpu_ms}ms"
+    );
+    assert!(
+        cpu_ms <= expected_cap_ms * 3 / 2 + 100,
+        "{pacing_class}: 25% hard cap exceeded bounded tolerance: cpu={cpu_ms}ms cap={expected_cap_ms}ms"
+    );
+    daemon.stop_job(job_id).unwrap();
+}
+
+#[test]
+fn dispatched_cpu_burn_stays_inside_the_reopened_hard_cap() {
+    assert_cpu_burn_stays_inside_hard_cap(
+        "cpu-burn-governed",
+        "dispatch-cpu-burn-governed",
+        "governed",
+    );
+}
+
+#[test]
+fn unpaced_dispatched_cpu_burn_still_stays_inside_the_host_hard_cap() {
+    assert_cpu_burn_stays_inside_hard_cap("cpu-burn-boundary", "dispatch-cpu-burn", "unpaced");
 }
 
 #[test]
@@ -908,6 +1221,128 @@ fn dispatch_manifest_does_not_wall_the_windows_ui_surface_for_cockpit_profiles()
         assert_eq!(value["requires_ui_responsiveness"], true);
     }
     daemon.stop_job("dispatch-ui-cockpit-escape").unwrap();
+}
+
+#[test]
+fn dispatch_manifest_refuses_a_headless_no_windows_spawn_that_presents_a_visible_window() {
+    // write_manifest's fixture already declares window_contract:
+    // "headless_no_windows" (the required-field default for every non-Cockpit
+    // profile). Swap only the spawned program's args/env to point at
+    // fixture_dispatch_child_presents_a_visible_window, which paints a real
+    // window (CreateWindowExW) instead of the default fixture's plain 30s
+    // sleep.
+    let root = sandbox("window-contract-violation");
+    let manifest = write_manifest(&root, "dispatch-window-violation", 10_000);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["args"] = json!([
+        "--exact",
+        "fixture_dispatch_child_presents_a_visible_window",
+        "--nocapture"
+    ]);
+    payload["env"]["EMBER_LAB_DISPATCH_FIXTURE_CHILD_WINDOW"] = json!("1");
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+
+    let db = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open(&db).unwrap();
+
+    // Test-side warmup (issue #1727 round 2), kept: it is a real, measured
+    // latency reduction for the spawned child's own cold start (loader, CRT,
+    // harness init, first window-creation call), even though round 3 proved
+    // it is not sufficient on its own (see the budget comment below).
+    let warmup_status = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "fixture_dispatch_child_presents_a_visible_window",
+            "--nocapture",
+        ])
+        .env("EMBER_LAB_DISPATCH_FIXTURE_CHILD_WINDOW", "1")
+        .env("EMBER_LAB_DISPATCH_FIXTURE_CHILD_WINDOW_WARMUP", "1")
+        .status()
+        .unwrap();
+    assert!(
+        warmup_status.success(),
+        "warmup spawn of the fixture binary failed"
+    );
+
+    // Issue #1727 round 3: rounds 1-2 chased a cold-start/session-warmth
+    // theory and both failed a forced-cold 3x-green bar (round 3 evidence:
+    // COLD_GREEN_RUNS=2/3, an identically-shaped failure on a maximally warm
+    // session). The real defect is a fixed-budget timing race: the child's
+    // CreateWindowExW has no scheduling guarantee against the census+poll
+    // window, and under host load (parallel test threads, rebuild tails) it
+    // can lose that race even though the window contract is not actually
+    // respected. Production keeps a tight 200ms budget
+    // (DEFAULT_WINDOW_CENSUS_BUDGET in lib.rs, its own small default-value
+    // test) because admission must stay fast; late windows are explicitly
+    // out of scope for admission-time enforcement (the L7 periodic
+    // re-census leg covers those). This test exists to verify the REFUSAL
+    // MECHANISM -- that a job-owned window is detected and enriched with
+    // hwnd/pid/title detail, and that the refusal fails closed -- not to
+    // race the production scheduler, so it injects a generous budget via
+    // the census-budget-injectable entry point instead of shrinking the
+    // production default.
+    let outcome = daemon.dispatch_manifest_at_with_probes_and_host_and_window_census_budget(
+        &manifest,
+        10_001,
+        |_root| Ok(1024),
+        || Ok(2048),
+        || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        Duration::from_secs(5),
+    );
+    let error = outcome.unwrap_err();
+    match &error {
+        EmberLabError::WindowContractViolation { job_id, detail } => {
+            assert_eq!(job_id, "dispatch-window-violation");
+            assert!(
+                detail.contains("headless_no_windows"),
+                "refusal message must self-describe the violated contract: {detail}"
+            );
+            // The refusal carries real per-window debugging detail (HWND,
+            // owning PID, and the fixture's own window title text), not
+            // just a bare count -- prove the enrichment actually ran
+            // against the real window, not merely that the code compiles.
+            assert!(
+                detail.contains("hwnd=0x") && detail.contains("pid="),
+                "refusal message must carry per-window hwnd/pid detail: {detail}"
+            );
+            assert!(
+                detail.contains("l6-window-contract-fixture"),
+                "refusal message must carry the offending window's own title text: {detail}"
+            );
+        }
+        other => panic!("expected WindowContractViolation, got {other:?}"),
+    }
+
+    // Fail-closed cleanup: dispatch_manifest_at_with_probes_and_host's outer
+    // rollback_dispatch_attempt purges the job/events/lease rows for any
+    // start_job failure that reaches a terminal state (mirrors every other
+    // start_job failure kind -- job_spawn_failed, job_prepare_commit_failed,
+    // job_launch_commit_failed -- see e.g.
+    // dispatch_manifest_rejects_a_missing_job_memory_ceiling's identical
+    // job_state==None assertion). The synchronous returned
+    // WindowContractViolation error, asserted above, is the receipt a
+    // caller actually sees; a caller retrying the same resource is not
+    // blocked by the refused spawn.
+    assert_eq!(daemon.job_state("dispatch-window-violation").unwrap(), None);
+    assert_eq!(daemon.lease_owner("gpu-smoke").unwrap(), None);
+
+    // mark_failed still records the distinct "job_window_contract_violation"
+    // kind (not the generic job_launch_commit_failed every other running-
+    // closure failure shares) in the same commit that transitions the job
+    // to 'failed' -- it is visible for the instant between that commit and
+    // rollback_dispatch_attempt's purge, and would remain durable if this
+    // codebase's purge-on-terminal-failure convention ever changes. Confirm
+    // the purge actually ran (rather than merely never having written
+    // anything) by checking the jobs table is empty for this job_id too.
+    let connection = Connection::open(&db).unwrap();
+    let remaining_job_rows: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM jobs WHERE job_id='dispatch-window-violation'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(remaining_job_rows, 0);
 }
 
 #[test]
