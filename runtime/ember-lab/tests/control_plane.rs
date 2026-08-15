@@ -1681,7 +1681,11 @@ fn server_live_cycle_rebinds_successful_restore_for_subsequent_ticks() {
     let root = sandbox("server-supervision-rebind");
     let db = root.join("ember-lab.sqlite3");
     let (identity, identity_hash) = write_identity(&root);
-    let daemon = Daemon::open(&db).unwrap();
+    // See dispatch_completed_assessment_job for why: a CI runner's real
+    // /proc/meminfo commonly falls under the production survival floor,
+    // sticky-freezing the daemon before this test's own restore/dispatch
+    // step ever runs.
+    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(test_host_capacity())).unwrap();
     daemon
         .bind_identity("old-server-job", &identity, &identity_hash)
         .unwrap();
@@ -1862,7 +1866,11 @@ fn server_live_cycle_restarts_across_rebound_authorities_then_backs_off() {
     let root = sandbox("server-supervision-stable-backoff");
     let db = root.join("ember-lab.sqlite3");
     let (identity, identity_hash) = write_identity(&root);
-    let daemon = Daemon::open(&db).unwrap();
+    // See dispatch_completed_assessment_job for why: a CI runner's real
+    // /proc/meminfo commonly falls under the production survival floor,
+    // sticky-freezing the daemon before this test's own restore/dispatch
+    // step ever runs.
+    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(test_host_capacity())).unwrap();
     daemon
         .bind_identity("old-server-job", &identity, &identity_hash)
         .unwrap();
@@ -3420,7 +3428,13 @@ fn assessment_evidence_is_one_fresh_atomic_daemon_export() {
 
 fn dispatch_completed_assessment_job(root: &Path, job_id: &str) -> (Daemon, PathBuf) {
     let db = root.join("ember-lab.sqlite3");
-    let daemon = Daemon::open(&db).unwrap();
+    // A CI runner's real /proc/meminfo commonly falls under the production
+    // survival floor (RESOURCE_GUARD_MIN_*), which would sticky-freeze the
+    // daemon before this test's own dispatch-time capacity injection is ever
+    // consulted -- that gate is separate from and runs after the injected
+    // free_host_commit closure below. Seed it with the same synthetic
+    // healthy capacity instead of the real probe.
+    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(test_host_capacity())).unwrap();
     let manifest = write_restore_manifest(root, job_id);
     let mut manifest_payload: Value =
         serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();

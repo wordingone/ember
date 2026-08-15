@@ -1382,6 +1382,31 @@ where
 
 impl Daemon {
     pub fn open(path: &Path) -> Result<Self> {
+        Self::open_inner(path, probe_host_survival_headroom())
+    }
+
+    /// Debug-build integration seam. It exercises the real `Daemon::open`
+    /// schema/migration/registration path while replacing only the resource
+    /// guard's startup headroom sample -- the one host observation a CI
+    /// runner cannot be relied on to match the production survival floor.
+    /// It is absent from release builds and is not reachable through Ember
+    /// Lab RPC.
+    #[cfg(debug_assertions)]
+    #[doc(hidden)]
+    pub fn open_with_resource_guard_seed(
+        path: &Path,
+        resource_guard_seed: Result<HostCommitCapacity>,
+    ) -> Result<Self> {
+        Self::open_inner(
+            path,
+            resource_guard_seed.map(|capacity| HostSurvivalHeadroom {
+                physical_available_bytes: capacity.physical_available_bytes,
+                commit_remaining_bytes: capacity.current_commit_remaining_bytes,
+            }),
+        )
+    }
+
+    fn open_inner(path: &Path, resource_guard_seed: Result<HostSurvivalHeadroom>) -> Result<Self> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -1441,11 +1466,7 @@ impl Daemon {
         // re-sampling monitor below stays Windows-only -- it depends on
         // WaitForSingleObject/job-object machinery with no Linux equivalent
         // wired up yet; porting that loop is separate, larger scope.
-        persist_resource_guard_headroom(
-            &*daemon.conn()?,
-            now_ms(),
-            probe_host_survival_headroom(),
-        )?;
+        persist_resource_guard_headroom(&*daemon.conn()?, now_ms(), resource_guard_seed)?;
         #[cfg(windows)]
         {
             spawn_resource_guard_monitor(
