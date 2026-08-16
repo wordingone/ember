@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    Arc, Barrier,
+    mpsc, Arc, Barrier,
 };
 use std::thread;
 use std::time::Duration;
@@ -483,9 +483,20 @@ fn server_contract_preflight_hung_live_job_is_not_fenced_and_receipt_stays_runni
         .unwrap();
     let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
     let port = listener.local_addr().unwrap().port();
+    // Hold the accepted connection open until this test explicitly releases
+    // it, rather than racing a fixed sleep against probe_endpoint's fixed
+    // 750ms read_timeout. A fixed-duration hold can always be out-run by CI
+    // contention (real ubuntu-latest run 31911206653 falsified a 3000ms
+    // margin -- ~2x the worst overhead measured across 3 prior runs -- with
+    // "dead" instead of "hung"; no multiplier is safe against unbounded
+    // pre-probe overhead). A sentinel removes the race by construction: the
+    // connection cannot close before the daemon call and its assertions have
+    // run, no matter how slow the host is. Same class of fix as #1767's
+    // EMBER_LAB_FIXTURE_EXIT_SENTINEL. See #1296/#1722.
+    let (release_tx, release_rx) = mpsc::channel::<()>();
     let hung_endpoint = thread::spawn(move || {
         let (_stream, _) = listener.accept().unwrap();
-        thread::sleep(Duration::from_millis(1_000));
+        let _ = release_rx.recv();
     });
     let serving_contract_path = root.join("malformed-serving-contract.json");
     fs::write(&serving_contract_path, b"{").unwrap();
@@ -542,6 +553,7 @@ fn server_contract_preflight_hung_live_job_is_not_fenced_and_receipt_stays_runni
     let persisted: Value = serde_json::from_slice(&fs::read(&receipt_path).unwrap()).unwrap();
     assert_eq!(persisted["state"], "running");
     daemon.stop_job("hung-live-job").unwrap();
+    release_tx.send(()).unwrap();
     hung_endpoint.join().unwrap();
 }
 
