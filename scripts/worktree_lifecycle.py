@@ -557,6 +557,54 @@ def warn_if_main_head_irregular(repo: Path) -> None:
     )
 
 
+def resolve_default_start_point(repo: Path) -> str:
+    """Start point for `create` when the operator did not name one.
+
+    `--start-point` used to default to the literal string "HEAD", which in the main
+    clone is whatever local `master` happens to be. Nothing fast-forwards that branch,
+    so a stale checkout silently produced a stale worktree -- `git worktree add` reports
+    no error, and the missing commits only surface later as an inexplicably absent flag
+    or file. The standing workaround was for every operator to remember `fetch &&
+    merge --ff-only` before every create; this makes the tool do it instead.
+
+    Fetching is REQUIRED, not an optimization, and comparing local master against
+    `origin/master` without one is worthless: the remote-tracking ref goes stale
+    alongside the branch, so both read the same superseded commit and any divergence
+    check passes. Observed directly on 2026-08-15 -- `master` and `origin/master` both
+    read 6fe9e27 and looked synchronized until a fetch revealed origin at e139258.
+
+    A repo with no `origin` keeps the old `HEAD` behaviour: there is no upstream for it
+    to be stale against.
+    """
+    remotes = run_git(repo, ["remote"], check=False).stdout.split()
+    if "origin" not in remotes:
+        return "HEAD"
+
+    fetched = run_git(repo, ["fetch", "--quiet", "origin"], check=False)
+    if fetched.returncode:
+        # Refuse rather than fall back to HEAD. Falling back would reintroduce exactly
+        # the silent staleness this function exists to remove, and would do it on the
+        # branch where the operator is least likely to suspect it.
+        detail = (fetched.stderr.strip() or fetched.stdout.strip() or "no detail").splitlines()[-1]
+        raise LifecycleError(
+            "ORIGIN_FETCH_FAILED",
+            f"could not fetch origin, so the base cannot be proven current: {detail}. "
+            f"Pass --start-point explicitly to create from a ref you have chosen yourself.",
+        )
+
+    head_ref = run_git(repo, ["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], check=False)
+    candidate = head_ref.stdout.strip().removeprefix("refs/remotes/") if not head_ref.returncode else ""
+    if not candidate:
+        candidate = "origin/master"
+    if run_git(repo, ["rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}"], check=False).returncode:
+        raise LifecycleError(
+            "ORIGIN_BASE_UNRESOLVED",
+            f"origin exists but {candidate} does not resolve to a commit; "
+            f"pass --start-point explicitly.",
+        )
+    return candidate
+
+
 def create_worktree(repo: Path, state_file: Path, args: argparse.Namespace) -> dict[str, Any]:
     warn_if_main_head_irregular(repo)
     state = load_or_initialize(repo, state_file)
@@ -606,10 +654,14 @@ def create_worktree(repo: Path, state_file: Path, args: argparse.Namespace) -> d
     # takes retire's archive-ref path, so its head is preserved without leaving a
     # permanent `refs/heads/...` behind for every run.
     detach = bool(getattr(args, "detach", False))
+    # An explicit --start-point is honoured verbatim: the operator naming a ref has taken
+    # responsibility for it. Only the DEFAULT is resolved, because the old default ("HEAD")
+    # was the silent-staleness bug.
+    start_point = getattr(args, "start_point", None) or resolve_default_start_point(repo)
     if detach:
-        command = ["worktree", "add", "--detach", str(destination), args.start_point]
+        command = ["worktree", "add", "--detach", str(destination), start_point]
     else:
-        command = ["worktree", "add", "-b", args.branch, str(destination), args.start_point]
+        command = ["worktree", "add", "-b", args.branch, str(destination), start_point]
     run_git(repo, command)
     try:
         live = {row.key: row for row in list_worktrees(repo)}
@@ -1502,7 +1554,17 @@ def build_parser() -> argparse.ArgumentParser:
     create_parser.add_argument("--owner", required=True)
     create_parser.add_argument("--purpose", required=True)
     create_parser.add_argument("--expires", required=True)
-    create_parser.add_argument("--start-point", default="HEAD")
+    create_parser.add_argument(
+        "--start-point",
+        default=None,
+        help=(
+            "ref to create the worktree from. Defaults to the fetched origin default "
+            "branch (origin/HEAD, else origin/master), NOT local HEAD -- local master is "
+            "not fast-forwarded automatically, so a stale checkout silently produced a "
+            "stale worktree. A repo with no origin still defaults to HEAD. An explicit "
+            "value is used verbatim and is never fetched or checked."
+        ),
+    )
     create_parser.add_argument(
         "--allow-c-drive",
         action="store_true",
