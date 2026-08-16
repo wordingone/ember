@@ -115,19 +115,35 @@ jobs:
       # exact local fixed-pagefile replay recorded in the PR.
       - name: Compile complete Rust test suite
         run: cargo test --locked --no-run
+      # This block runs under pwsh (the windows-latest default), which
+      # propagates only the LAST command's exit code. A native command that
+      # fails mid-block does not stop the block and does not fail the job, so
+      # every cargo invocation needs its OWN exit check -- a single trailing
+      # guard only ever gated the one line directly above it, leaving --lib,
+      # control_plane and dispatch_manifest able to fail internally while the
+      # job still reported success.
+      #
+      # control_plane carries --show-output because two of its tests skip
+      # themselves on hosted windows-latest (system-managed pagefile, see
+      # #1771) by printing a reason and returning early. That makes them
+      # *pass*, and libtest discards a passing test's output, so without this
+      # flag the log shows only "68 passed" and a reader cannot tell the two
+      # ran from the two skipped. --show-output rather than --nocapture: it
+      # keeps capture on, so each reason line stays attributed to its test
+      # instead of interleaving across parallel threads. Measured cost is 32
+      # lines (115 -> 147 locally).
       - name: Run host-independent Rust gate
         run: |
           cargo test --locked --lib
-          cargo test --locked --test control_plane
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --locked --test control_plane -- --show-output
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test --locked --test dispatch_manifest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test --locked --test artifact_custody
-          # This block runs under pwsh (the windows-latest default), which
-          # propagates only the LAST command's exit code -- every line above is
-          # therefore non-gating today. Bind the custody gate explicitly
-          # so it actually fails the job, without changing any other line's
-          # existing behaviour.
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test --locked --test rpc_named_pipe named_pipe_rpc_survives_daemon_restart_and_controls_bound_job -- --exact
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   production-rung-replay:
     # Class-kill for #1302: a generator/tokenizer/config edit that lands
     # without re-minting the checked-in rung must fail HERE, on the PR --
