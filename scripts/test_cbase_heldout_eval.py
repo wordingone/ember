@@ -4,6 +4,7 @@
 from __future__ import annotations
 import hashlib, importlib.util, json
 from pathlib import Path
+from types import SimpleNamespace
 import numpy as np
 import pytest
 import torch
@@ -104,7 +105,124 @@ class TinyTiedModel(torch.nn.Module):
     def forward(self, ids): return self.head(self.backbone_model.embed_tokens(ids))
 
 def test_public_contract():
-    m=load_module(); assert {"HeldoutEvalRefusal","derive_checkpoint_identity","verify_checkpoint_files","load_frozen_slice_manifest","read_eval_windows","evaluate_teacher_forced","build_receipt"}.issubset(vars(m))
+    m=load_module(); assert {"HeldoutEvalRefusal","derive_checkpoint_identity","verify_checkpoint_files","verify_v5_checkpoint_for_heldout","load_v5_live_model","load_frozen_slice_manifest","read_eval_windows","evaluate_teacher_forced","build_receipt"}.issubset(vars(m))
+
+def _v5_binding(*, step=100, tokens_seen=409600, route="tool", declared=None,
+                tied=True, measured=None):
+    declared = [route] if declared is None else declared
+    measured = measured or {
+        "shared-model.pt":"1"*64,
+        "expert-vision.pt":"2"*64,
+        "expert-audio.pt":"3"*64,
+        "expert-reasoning.pt":"4"*64,
+        "expert-tool.pt":"5"*64,
+    }
+    return {
+        "checkpoint":{
+            "schema_version":"ember-sparse-checkpoint-v5",
+            "manifest_sha256":"a"*64,
+            "measured_shard_sha256":measured,
+            "architecture_revision":"ember-sparse-3b-v2",
+            "contract_version":5,
+            "launch_seed":830013,
+            "global_step":step,
+            "tokens_seen":tokens_seen,
+        },
+        "model_config":{
+            "path":"configs/ember-restart-3b.json",
+            "sha256":"b"*64,
+            "hidden_size":4,
+            "layers":1,
+            "attention_heads":1,
+            "vocab_size":11,
+        },
+        "route":{
+            "selected":route,
+            "selection_policy":"explicit_required_argument_no_default",
+            "config_default_active_expert":"reasoning",
+            "manifest_declared_active_expert_ids":declared,
+            "selected_matches_manifest_declared":declared == [route],
+        },
+        "tied_embeddings_reasserted":tied,
+        "tokenizer":{"path":"<external>","sha256":"c"*64},
+        "requested_device":"cpu",
+        "realized_device":"cpu",
+        "realized_dtype":"torch.float32",
+        "max_position_embeddings":1024,
+    }
+
+class FakeV5Module:
+    class LiveCandidateRefusal(Exception):
+        pass
+    MODEL_SHARDS=("shared-model.pt","expert-vision.pt","expert-audio.pt","expert-reasoning.pt","expert-tool.pt")
+    __file__=str(Path(__file__).with_name("legb_live_candidate_v5_scorer.py"))
+    def __init__(self, *, binding=None, verified=None, refusal=None):
+        self.binding=binding or _v5_binding(); self.verified=verified or {
+            "manifest":{"schema_version":"ember-sparse-checkpoint-v5","active_expert_ids":self.binding["route"]["manifest_declared_active_expert_ids"]},
+            "manifest_sha256":"a"*64,
+            "measured_shard_sha256":self.binding["checkpoint"]["measured_shard_sha256"],
+            "global_step":self.binding["checkpoint"]["global_step"],
+            "tokens_seen":self.binding["checkpoint"]["tokens_seen"],
+        }; self.refusal=refusal; self.build_calls=0
+    def load_verified_v5_checkpoint(self, checkpoint_dir):
+        if self.refusal: raise self.LiveCandidateRefusal(self.refusal)
+        return self.verified
+    def build_live_candidate_scorer(self, **kwargs):
+        self.build_calls += 1
+        if self.refusal: raise self.LiveCandidateRefusal(self.refusal)
+        return SimpleNamespace(model=TinyTiedModel()), self.binding
+
+def test_v5_verify_path_accepts_structural_fixture_but_translates_byte_refusal(monkeypatch):
+    m=load_module(); fake=FakeV5Module(binding=_v5_binding(step=4,tokens_seen=36))
+    monkeypatch.setattr(m,"_v5_scorer_module",lambda:fake)
+    verified=m.verify_v5_checkpoint_for_heldout("seed-830013")
+    assert verified["global_step"]==4 and verified["tokens_seen"]==36
+    fake.refusal="CHECKPOINT_SHARD_SHA_MISMATCH: expert-tool.pt"
+    with pytest.raises(m.HeldoutEvalRefusal,match="CHECKPOINT_SHARD_SHA_MISMATCH"):
+        m.verify_v5_checkpoint_for_heldout("seed-830013")
+
+def test_v5_scoring_requires_warm100_exact_route_tied_head_and_closed_model_map(monkeypatch):
+    m=load_module(); fake=FakeV5Module(binding=_v5_binding(step=4,tokens_seen=36))
+    monkeypatch.setattr(m,"_v5_scorer_module",lambda:fake)
+    with pytest.raises(m.HeldoutEvalRefusal,match="WARM100_CHECKPOINT_REQUIRED"):
+        m.load_v5_live_model("seed-830013",route="tool",device="cpu",max_position_embeddings=1024)
+    assert fake.build_calls==0
+    fake=FakeV5Module(binding=_v5_binding(step=100,declared=["reasoning"])); monkeypatch.setattr(m,"_v5_scorer_module",lambda:fake)
+    with pytest.raises(m.HeldoutEvalRefusal,match="CHECKPOINT_ROUTE_MISMATCH"):
+        m.load_v5_live_model("warm100",route="tool",device="cpu",max_position_embeddings=1024)
+    fake=FakeV5Module(binding=_v5_binding(step=100,tied=False)); monkeypatch.setattr(m,"_v5_scorer_module",lambda:fake)
+    with pytest.raises(m.HeldoutEvalRefusal,match="PRIMARY_HEAD_NOT_TIED"):
+        m.load_v5_live_model("warm100",route="tool",device="cpu",max_position_embeddings=1024)
+    fake=FakeV5Module(binding=_v5_binding(step=100,measured={"shared-model.pt":"1"*64})); monkeypatch.setattr(m,"_v5_scorer_module",lambda:fake)
+    with pytest.raises(m.HeldoutEvalRefusal,match="CHECKPOINT_MODEL_SHARD_MAP_INVALID"):
+        m.load_v5_live_model("warm100",route="tool",device="cpu",max_position_embeddings=1024)
+    bad_runtime=_v5_binding(step=100); bad_runtime["requested_device"]="cuda"
+    fake=FakeV5Module(binding=bad_runtime); monkeypatch.setattr(m,"_v5_scorer_module",lambda:fake)
+    with pytest.raises(m.HeldoutEvalRefusal,match="CHECKPOINT_RUNTIME_BINDING_INVALID"):
+        m.load_v5_live_model("warm100",route="tool",device="cpu",max_position_embeddings=1024)
+    fake=FakeV5Module(binding=_v5_binding(step=100)); fake.verified["manifest_sha256"]="f"*64
+    monkeypatch.setattr(m,"_v5_scorer_module",lambda:fake)
+    with pytest.raises(m.HeldoutEvalRefusal,match="CHECKPOINT_CHANGED_DURING_MODEL_LOAD"):
+        m.load_v5_live_model("warm100",route="tool",device="cpu",max_position_embeddings=1024)
+
+def test_v5_scoring_adapter_returns_exact_checkpoint_route_and_model_identity(monkeypatch):
+    m=load_module(); fake=FakeV5Module(binding=_v5_binding(step=100))
+    monkeypatch.setattr(m,"_v5_scorer_module",lambda:fake)
+    model,identity,checkpoint=m.load_v5_live_model(
+        "warm100",route="tool",device="cpu",max_position_embeddings=1024)
+    assert isinstance(model,TinyTiedModel)
+    assert checkpoint["manifest_sha256"]=="a"*64
+    assert checkpoint["route"]["selected"]=="tool"
+    assert identity=={
+        "architecture_revision":"ember-sparse-3b-v2",
+        "contract_version":5,
+        "hidden_size":4,
+        "layer_count":1,
+        "attention_head_count":1,
+        "vocab_size":11,
+        "primary_head_tied":True,
+        "selected_expert_route":"tool",
+    }
 
 def test_identity_derived_from_storage_and_shapes():
     m=load_module(); assert m.derive_checkpoint_identity(TinyTiedModel().state_dict()) == {"unique_parameter_count":76,"state_dict_parameter_count":120,"duplicate_parameter_count":44,"vocab_size":11,"hidden_size":4,"feed_forward_width":8,"layer_count":1,"primary_head_tied":True}
@@ -137,6 +255,7 @@ def test_teacher_forced_is_deterministic_and_receipted():
     assert first==second and first["token_count"]==8 and first["document_count"]==4 and first["repeat_run_match"] is True and len(first["per_batch_loss_vector_sha256"])==64
     assert first["bits_per_packed_byte"]==pytest.approx(first["mean_nll"]/np.log(2)/2.0)
     receipt=m.build_receipt(checkpoint={"files_sha256":{"model.pt":"c"*64},"manifest_sha256":"d"*64,"manifest_step":50},checkpoint_identity=m.derive_checkpoint_identity(model.state_dict()),slice_manifest_sha256="e"*64,slice_manifest={"scale":"W1_FROM_SCRATCH_PILOT_BASELINE"},evaluation=first)
+    assert receipt["issue_refs"]==["#760","#1433"]
     assert receipt["api_spend_usd"]==0.0 and receipt["markers"]==["HELDOUT_EVAL_DETERMINISM_PASS","HELDOUT_EVAL_NEGATIVE_FIXTURES_PASS","HELDOUT_SLICE_DISJOINT_PASS"]
 
 def test_nonfinite_loss_refused():
