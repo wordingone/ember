@@ -457,8 +457,14 @@ pub fn probe_endpoint(authority: &ServerAuthority) -> EndpointHealth {
                 EndpointHealth::Dead
             }
         }
-        Err(error) if error.kind() == std::io::ErrorKind::TimedOut => EndpointHealth::Hung,
-        Err(_) => EndpointHealth::Dead,
+        Err(error) => endpoint_health_for_read_error(error.kind()),
+    }
+}
+
+fn endpoint_health_for_read_error(kind: std::io::ErrorKind) -> EndpointHealth {
+    match kind {
+        std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock => EndpointHealth::Hung,
+        _ => EndpointHealth::Dead,
     }
 }
 
@@ -1259,6 +1265,39 @@ impl Daemon {
         )
     }
 
+    /// CPU-host integration seam for restore tests. It preserves the real
+    /// dispatch, custody, fencing, and host-capacity probes while replacing
+    /// only the GPU free-memory probe that is unavailable on CPU CI runners.
+    #[cfg(debug_assertions)]
+    #[doc(hidden)]
+    pub fn supervise_server_live_cycle_with_test_probes(
+        &self,
+        request: ServerLiveCycleRequest,
+        model_name: String,
+        observed_vram_bytes: u64,
+        free_vram_bytes: u64,
+        restore_health_poll_budget: Duration,
+    ) -> Result<ServerCycleReceipt> {
+        self.supervise_server_live_cycle_with_dispatch_and_observer(
+            request,
+            move |daemon, path| {
+                daemon.dispatch_manifest_at_with_probes(
+                    path,
+                    crate::now_ms(),
+                    crate::available_free_bytes,
+                    move || Ok(free_vram_bytes),
+                )
+            },
+            move |_authority| {
+                Ok(ObservedServingIdentity {
+                    model_name,
+                    vram_bytes: observed_vram_bytes,
+                })
+            },
+            restore_health_poll_budget,
+        )
+    }
+
     fn supervise_server_live_cycle_with_dispatch<F>(
         &self,
         request: ServerLiveCycleRequest,
@@ -1738,6 +1777,22 @@ mod tests {
 #[cfg(test)]
 mod restore_health_poll_budget_tests {
     use super::*;
+
+    #[test]
+    fn socket_read_would_block_is_a_hung_endpoint() {
+        assert_eq!(
+            endpoint_health_for_read_error(std::io::ErrorKind::WouldBlock),
+            EndpointHealth::Hung
+        );
+    }
+
+    #[test]
+    fn unrelated_socket_read_error_is_a_dead_endpoint() {
+        assert_eq!(
+            endpoint_health_for_read_error(std::io::ErrorKind::ConnectionReset),
+            EndpointHealth::Dead
+        );
+    }
 
     /// Pins the real production restore health-poll budget, so an edit to
     /// the injectable path (added for #1722) cannot silently loosen or
