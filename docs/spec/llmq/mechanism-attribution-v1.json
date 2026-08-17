@@ -1,0 +1,58 @@
+{
+  "schema": "ember-llmq-mechanism-attribution-v1",
+  "status": "NOT_MEASURED",
+  "issue": 1413,
+  "source_commit": "f5b234c4b95009dfe43ee15181be93bc3fb34563",
+  "common_base": {
+    "model": "Qwen2.5-3B",
+    "sequence_length": 1024,
+    "microbatch": 1,
+    "gradient_accumulation": 512,
+    "tokens_per_step": 524288,
+    "matmul_dtype": "e4m3",
+    "cuda_graphs": true,
+    "classifier_kernel": "fused",
+    "offload_master": true,
+    "offload_adam_m": true,
+    "offload_adam_v": true,
+    "recompute_swiglu": false
+  },
+  "run_order": [
+    {"run": "FP8_BASE_A", "factor": "none"},
+    {"run": "BF16_ONLY", "factor": "matmul_dtype", "from": "e4m3", "to": "bf16"},
+    {"run": "FP8_BASE_B", "factor": "none"},
+    {"run": "GRAPHS_OFF", "factor": "cuda_graphs", "from": true, "to": false},
+    {"run": "FP8_BASE_C", "factor": "none"},
+    {"run": "MASTER_OFF", "factor": "offload_master", "from": true, "to": false},
+    {"run": "FP8_BASE_D", "factor": "none"},
+    {"run": "FUSED_REFERENCE", "factor": "classifier_kernel", "from": "fused", "to": "unfused-reference"},
+    {"run": "FP8_BASE_E", "factor": "none"}
+  ],
+  "measurement": {
+    "excluded_steps": [0],
+    "measured_steps": [1, 2, 3, 4, 5],
+    "throughput_law": "sum(tokens)/sum(elapsed_seconds)",
+    "base_repeat_policy": "each toggle is bracketed by adjacent base runs",
+    "required_environment": [
+      "GPU UUID",
+      "exact binary SHA256",
+      "source commit",
+      "ordered argv and factor map",
+      "dataset and tokenizer hashes",
+      "CUDA, cuDNN, and NCCL versions",
+      "pre and post clocks, temperature, and power",
+      "VRAM and pinned-host memory ledger",
+      "matched loss"
+    ]
+  },
+  "claim_limits": [
+    "FP8-002 and BF16-003 are reproduction evidence, not a one-factor precision pair",
+    "MASTER_OFF attributes master-weight offload only",
+    "FUSED_REFERENCE attributes the classifier kernel only",
+    "an arm that does not fit receives a capacity refusal, not a throughput delta",
+    "no mechanism fraction is credited before every required receipt is reopened"
+  ],
+  "refusal_over_substitution": "REFUSAL_OVER_SUBSTITUTION",
+  "execution_claim": false,
+  "result_credit": false
+}

@@ -29,6 +29,9 @@ _DAEMON_RECEIPT_SCHEMA = "ember-lab-operational-receipt-v1"
 _ASSESSMENT_EVIDENCE_SCHEMA = "ember-lab-assessment-evidence-v1"
 _SCHEDULE_ALARM_SCHEMA = "ember-lab-schedule-alarm-state-v1"
 _GOVERNED_ORIGIN = "https://github.com/IST-DASLab/llmq.git"
+_ADOPTION_DESIGN_PATH = "docs/spec/llmq/adoption-design-v1.json"
+_MECHANISM_ATTRIBUTION_PATH = "docs/spec/llmq/mechanism-attribution-v1.json"
+_LLMQ_PIN = "f5b234c4b95009dfe43ee15181be93bc3fb34563"
 _EMBER_LAB_SOURCE_PATH = "runtime/ember-lab/src/lib.rs"
 _PIPE_PREFIX = r"\\.\pipe\ember-lab-"
 _OPERATOR_PIPE_PREFIX = r"\\.\pipe\ember-operator-"
@@ -418,6 +421,144 @@ def _safe_dir(root: Path, relative_value: object) -> Path | None:
     except OSError:
         return None
     return candidate if candidate.is_dir() and candidate.is_relative_to(root) else None
+
+
+def _closed_json(path: Path) -> object:
+    def unique_object(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                raise ValueError("duplicate JSON key")
+            value[key] = item
+        return value
+
+    return json.loads(path.read_text(encoding="utf-8", errors="strict"), object_pairs_hook=unique_object)
+
+
+def _valid_adoption_design(value: object) -> bool:
+    expected_transfer = [
+        {"mechanism": "fp8_matmul", "decision": "CANDIDATE_AFTER_ONE_FACTOR_ATTRIBUTION", "scope": "matmul dtype only"},
+        {"mechanism": "cuda_graphs", "decision": "CANDIDATE_AFTER_ONE_FACTOR_ATTRIBUTION", "scope": "training-step launch capture only"},
+        {"mechanism": "master_weight_offload", "decision": "CANDIDATE_AFTER_ONE_FACTOR_ATTRIBUTION", "scope": "master weights only"},
+        {"mechanism": "fused_classifier", "decision": "CANDIDATE_AFTER_ONE_FACTOR_ATTRIBUTION", "scope": "classifier loss and dlogits only"},
+    ]
+    return isinstance(value, dict) and value == {
+        "schema": "ember-llmq-adoption-design-v1",
+        "status": "FROZEN_NOT_EXECUTED",
+        "issue": 1413,
+        "source": {"repository": "https://github.com/IST-DASLab/llmq.git", "branch": "dev", "commit": _LLMQ_PIN},
+        "target": {"architecture": "ember-sparse-3b-v2", "runner": "governed Ember training pipeline"},
+        "mechanism_transfer": expected_transfer,
+        "non_transfer": [
+            "Qwen2.5-3B architecture",
+            "LLMQ checkpoint bytes",
+            "LLMQ dataset or tokenizer authority",
+            "LLMQ launch or receipt authority",
+            "unmeasured optimizer-moment offload",
+            "a broad all-fused-kernels claim",
+        ],
+        "preserved_authority": [
+            "Ember corpus identity and tokenizer",
+            "Ember architecture and checkpoint lineage",
+            "Ember CLI to Ember Lab launch authority",
+            "Ember source, binary, input, runtime, and receipt custody",
+            "independent exact-head review before trainer changes",
+        ],
+        "target_gate": {
+            "metric": "ember02_training_tok_s",
+            "threshold": "greater_than_1000",
+            "operator_trigger": "ping_on_crossing",
+            "before_after_receipts_required": True,
+        },
+        "implementation_gate": "SEPARATE_REVIEW_REQUIRED",
+        "refusal_over_substitution": "REFUSAL_OVER_SUBSTITUTION",
+        "execution_claim": False,
+        "result_credit": False,
+    }
+
+
+def _valid_mechanism_attribution(value: object) -> bool:
+    return isinstance(value, dict) and value == {
+        "schema": "ember-llmq-mechanism-attribution-v1",
+        "status": "NOT_MEASURED",
+        "issue": 1413,
+        "source_commit": _LLMQ_PIN,
+        "common_base": {
+            "model": "Qwen2.5-3B",
+            "sequence_length": 1024,
+            "microbatch": 1,
+            "gradient_accumulation": 512,
+            "tokens_per_step": 524288,
+            "matmul_dtype": "e4m3",
+            "cuda_graphs": True,
+            "classifier_kernel": "fused",
+            "offload_master": True,
+            "offload_adam_m": True,
+            "offload_adam_v": True,
+            "recompute_swiglu": False,
+        },
+        "run_order": [
+            {"run": "FP8_BASE_A", "factor": "none"},
+            {"run": "BF16_ONLY", "factor": "matmul_dtype", "from": "e4m3", "to": "bf16"},
+            {"run": "FP8_BASE_B", "factor": "none"},
+            {"run": "GRAPHS_OFF", "factor": "cuda_graphs", "from": True, "to": False},
+            {"run": "FP8_BASE_C", "factor": "none"},
+            {"run": "MASTER_OFF", "factor": "offload_master", "from": True, "to": False},
+            {"run": "FP8_BASE_D", "factor": "none"},
+            {"run": "FUSED_REFERENCE", "factor": "classifier_kernel", "from": "fused", "to": "unfused-reference"},
+            {"run": "FP8_BASE_E", "factor": "none"},
+        ],
+        "measurement": {
+            "excluded_steps": [0],
+            "measured_steps": [1, 2, 3, 4, 5],
+            "throughput_law": "sum(tokens)/sum(elapsed_seconds)",
+            "base_repeat_policy": "each toggle is bracketed by adjacent base runs",
+            "required_environment": [
+                "GPU UUID",
+                "exact binary SHA256",
+                "source commit",
+                "ordered argv and factor map",
+                "dataset and tokenizer hashes",
+                "CUDA, cuDNN, and NCCL versions",
+                "pre and post clocks, temperature, and power",
+                "VRAM and pinned-host memory ledger",
+                "matched loss",
+            ],
+        },
+        "claim_limits": [
+            "FP8-002 and BF16-003 are reproduction evidence, not a one-factor precision pair",
+            "MASTER_OFF attributes master-weight offload only",
+            "FUSED_REFERENCE attributes the classifier kernel only",
+            "an arm that does not fit receives a capacity refusal, not a throughput delta",
+            "no mechanism fraction is credited before every required receipt is reopened",
+        ],
+        "refusal_over_substitution": "REFUSAL_OVER_SUBSTITUTION",
+        "execution_claim": False,
+        "result_credit": False,
+    }
+
+
+def _contract_missing(root: Path, payload: dict, path_field: str, digest_field: str, exact_path: str, validator) -> list[str]:
+    missing = []
+    digest = payload.get(digest_field)
+    if not isinstance(digest, str) or not _DIGEST.fullmatch(digest):
+        missing.append(digest_field)
+    if payload.get(path_field) != exact_path:
+        missing.append(path_field)
+        return missing
+    path = _safe_file(root, exact_path)
+    if path is None:
+        missing.append(path_field)
+        return missing
+    try:
+        raw = path.read_bytes()
+        if isinstance(digest, str) and _DIGEST.fullmatch(digest) and hashlib.sha256(raw).hexdigest() != digest:
+            missing.append(digest_field)
+        if not validator(_closed_json(path)):
+            missing.append(path_field.replace("_path", "_contract"))
+    except (OSError, UnicodeError, ValueError, json.JSONDecodeError):
+        missing.append(path_field.replace("_path", "_contract"))
+    return missing
 
 
 def _authority_file(root: Path | None, path_value: object) -> Path | None:
@@ -1085,22 +1226,18 @@ def assess(source_root: Path, payload: dict) -> dict:
     )
     missing.extend(benchmark_authority_missing)
 
-    for path_field, digest_field in (
-        ("adoption_design_path", "adoption_design_sha256"),
-        ("mechanism_attribution_path", "mechanism_attribution_sha256"),
-    ):
-        bound_path = _safe_file(Path(source_root), payload.get(path_field))
-        if bound_path is None:
-            missing.append(path_field)
-        value = payload.get(digest_field)
-        if not isinstance(value, str) or not _DIGEST.fullmatch(value):
-            missing.append(digest_field)
-        elif bound_path is not None:
-            try:
-                if hashlib.sha256(bound_path.read_bytes()).hexdigest() != value:
-                    missing.append(digest_field)
-            except OSError:
-                missing.append(digest_field)
+    missing.extend(
+        _contract_missing(
+            Path(source_root), payload, "adoption_design_path", "adoption_design_sha256",
+            _ADOPTION_DESIGN_PATH, _valid_adoption_design,
+        )
+    )
+    missing.extend(
+        _contract_missing(
+            Path(source_root), payload, "mechanism_attribution_path", "mechanism_attribution_sha256",
+            _MECHANISM_ATTRIBUTION_PATH, _valid_mechanism_attribution,
+        )
+    )
 
     benchmark = payload.get("benchmark_receipt")
     if not isinstance(benchmark, dict) or benchmark.get("schema") != "ember-4090-3b-benchmark-receipt-v1":
@@ -1131,8 +1268,10 @@ def assess(source_root: Path, payload: dict) -> dict:
             "build_receipt",
             "adoption_design_path",
             "adoption_design_sha256",
+            "adoption_design_contract",
             "mechanism_attribution_path",
             "mechanism_attribution_sha256",
+            "mechanism_attribution_contract",
         )
     )
     if (
@@ -1154,9 +1293,9 @@ def assess(source_root: Path, payload: dict) -> dict:
         external_remainder.append("pinned LLMQ source commit and source bytes")
     if any(field.startswith("build_receipt") for field in missing):
         external_remainder.append("governed LLMQ build receipt and binary bytes")
-    if any(field in missing for field in ("adoption_design_path", "adoption_design_sha256")):
+    if any(field in missing for field in ("adoption_design_path", "adoption_design_sha256", "adoption_design_contract")):
         external_remainder.append("frozen adoption design bytes")
-    if any(field in missing for field in ("mechanism_attribution_path", "mechanism_attribution_sha256")):
+    if any(field in missing for field in ("mechanism_attribution_path", "mechanism_attribution_sha256", "mechanism_attribution_contract")):
         external_remainder.append("mechanism attribution bytes")
     if any(field.startswith("benchmark_receipt") for field in missing):
         external_remainder.append("owned RTX 4090 x1 3B benchmark receipt")
