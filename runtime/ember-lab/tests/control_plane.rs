@@ -1854,7 +1854,7 @@ fn server_live_cycle_rebinds_successful_restore_for_subsequent_ticks() {
     // health-poll budget instead of racing host scheduling at the production
     // default (see #1722).
     let receipt = daemon
-        .supervise_server_live_cycle_with_test_observation_and_restore_health_poll_budget(
+        .supervise_server_live_cycle_with_test_probes(
             ServerLiveCycleRequest {
                 authority_path,
                 authority_sha256,
@@ -1867,6 +1867,7 @@ fn server_live_cycle_rebinds_successful_restore_for_subsequent_ticks() {
             },
             "fixture-owned-3b".into(),
             115 * 1024 * 1024,
+            u64::MAX,
             Duration::from_secs(5),
         )
         .unwrap();
@@ -2064,7 +2065,7 @@ fn server_live_cycle_restarts_across_rebound_authorities_then_backs_off() {
         // health-poll budget so this asserts the restore/rebind mechanism,
         // not how fast a freshly dispatched endpoint answers (#1722).
         let receipt = daemon
-            .supervise_server_live_cycle_with_test_observation_and_restore_health_poll_budget(
+            .supervise_server_live_cycle_with_test_probes(
                 ServerLiveCycleRequest {
                     authority_path: authority_path.clone(),
                     authority_sha256: format!("{:x}", Sha256::digest(&authority_bytes)),
@@ -2077,6 +2078,7 @@ fn server_live_cycle_restarts_across_rebound_authorities_then_backs_off() {
                 },
                 "fixture-owned-3b".into(),
                 100 * 1024 * 1024,
+                u64::MAX,
                 Duration::from_secs(5),
             )
             .unwrap();
