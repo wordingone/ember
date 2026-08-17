@@ -10,7 +10,7 @@ import re
 import stat
 import subprocess
 import unicodedata
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from jsonschema import Draft202012Validator
 from typing import Any, Iterable
 
@@ -517,13 +517,56 @@ def _path(root: Path, value: object) -> Path:
         raise ValueError("authority path is absent or escapes root")
     return path
 
-def _bound_json(root: Path, binding: object) -> tuple[bytes, dict[str, Any]]:
+def _external_path(root: Path, value: object) -> Path:
+    if not isinstance(value, str) or not value:
+        raise ValueError("external authority path is invalid")
+    relative = PurePosixPath(value)
+    windows_path = PureWindowsPath(value)
+    if (
+        relative.is_absolute()
+        or windows_path.is_absolute()
+        or windows_path.drive
+        or ".." in relative.parts
+        or relative.as_posix() != value
+    ):
+        raise ValueError("external authority path is not exact root-relative")
+    unresolved_root = root.absolute()
+    try:
+        root_metadata = unresolved_root.lstat()
+    except OSError as exc:
+        raise ValueError("external authority root is absent") from exc
+    root_attributes = getattr(root_metadata, "st_file_attributes", 0)
+    reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    if stat.S_ISLNK(root_metadata.st_mode) or (reparse_flag and root_attributes & reparse_flag):
+        raise ValueError("external authority root is invalid or reparsed")
+    root = unresolved_root.resolve(strict=True)
+    if not root.is_dir():
+        raise ValueError("external authority root is invalid or reparsed")
+    candidate = root.joinpath(*relative.parts)
+    current = root
+    for part in relative.parts:
+        current = current / part
+        try:
+            metadata = current.lstat()
+        except OSError as exc:
+            raise ValueError("external authority path is absent") from exc
+        attributes = getattr(metadata, "st_file_attributes", 0)
+        reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+        if stat.S_ISLNK(metadata.st_mode) or (reparse_flag and attributes & reparse_flag):
+            raise ValueError("external authority path contains a reparse point")
+    resolved = candidate.resolve(strict=True)
+    if root not in resolved.parents or not resolved.is_file() or not stat.S_ISREG(resolved.stat().st_mode):
+        raise ValueError("external authority path is absent, non-regular, or escapes root")
+    return resolved
+
+def _bound_json(root: Path, binding: object, *, external_root: Path | None = None) -> tuple[bytes, dict[str, Any]]:
     if not isinstance(binding, dict) or set(binding) != {"path", "sha256", "schema"}:
         raise ValueError("authority artifact binding is invalid")
     expected = binding["sha256"]
     if not isinstance(expected, str) or _HEX.fullmatch(expected) is None:
         raise ValueError("authority hash is invalid")
-    payload = _path(root, binding["path"]).read_bytes()
+    payload_path = _external_path(external_root, binding["path"]) if external_root is not None else _path(root, binding["path"])
+    payload = payload_path.read_bytes()
     if _sha_bytes(payload) != expected:
         raise ValueError("authority bytes do not match the bound hash")
     value = json.loads(payload)
@@ -581,7 +624,12 @@ def _protected_identifier_sets(root: Path, protected: list[object]) -> dict[str,
             result[identifier["kind"]].add(identifier["value"])
     return result
 
-def validate_authority_index(repo_root: Path, *, index_relative: str = _AUTHORITY_INDEX) -> dict[str, Any]:
+def validate_authority_index(
+    repo_root: Path,
+    *,
+    index_relative: str = _AUTHORITY_INDEX,
+    external_authority_root: Path | None = None,
+) -> dict[str, Any]:
     """Validate the non-acquired, exact-byte text authority before shared-text use.
 
     v1 (`ember-text-lab-authority-index-v1`) is the original, unconditional-refusal schema:
@@ -592,11 +640,14 @@ def validate_authority_index(repo_root: Path, *, index_relative: str = _AUTHORIT
     never forked) passes, returns VERIFIED. Any single unadmitted slot or failed check on the
     v2 path falls through to the SAME NOT_ADMITTED_SOURCE_EVIDENCE_MISSING terminal v1 returns.
     """
-    root=repo_root.resolve(); index_bytes=_path(root,index_relative).read_bytes(); index=json.loads(index_bytes)
+    root=repo_root.resolve()
+    authority_root = external_authority_root if external_authority_root is not None else None
+    index_path = _external_path(authority_root, index_relative) if authority_root is not None else _path(root, index_relative)
+    index_bytes=index_path.read_bytes(); index=json.loads(index_bytes)
     if not isinstance(index,dict) or set(index)!={"schema_version","result","boundary","registry","receipt_bundle","corpus","input_identity"}: raise ValueError("text authority index is not closed")
     if index["schema_version"] not in (_AUTHORITY_INDEX_SCHEMA_V1, _AUTHORITY_INDEX_SCHEMA_V2) or index["result"]!="PREFLIGHT_ONLY": raise ValueError("text authority index is not preflight-only")
     is_v2 = index["schema_version"] == _AUTHORITY_INDEX_SCHEMA_V2
-    registry_bytes,registry=_bound_json(root,index["registry"]); bundle_bytes,bundle=_bound_json(root,index["receipt_bundle"]); corpus_bytes,corpus=_bound_json(root,index["corpus"]); _,identity=_bound_json(root,index["input_identity"])
+    registry_bytes,registry=_bound_json(root,index["registry"]); bundle_bytes,bundle=_bound_json(root,index["receipt_bundle"], external_root=authority_root); corpus_bytes,corpus=_bound_json(root,index["corpus"], external_root=authority_root); _,identity=_bound_json(root,index["input_identity"], external_root=authority_root)
     if corpus.get("registry_sha256")!=_sha_bytes(registry_bytes) or corpus.get("receipt_bundle_sha256")!=_sha_bytes(bundle_bytes): raise ValueError("corpus does not bind external authority")
     if identity.get("corpus_sha256")!=_sha_bytes(corpus_bytes) or not isinstance(identity.get("source_base_commit"),str) or re.fullmatch(r"[0-9a-f]{40}",identity["source_base_commit"]) is None: raise ValueError("input identity does not bind exact authority")
     base_check = subprocess.run(["git", "-C", str(root), "merge-base", "--is-ancestor", identity["source_base_commit"], "HEAD"], capture_output=True, check=False)
@@ -680,7 +731,11 @@ def validate_authority_index(repo_root: Path, *, index_relative: str = _AUTHORIT
         "registry_sha256": _sha_bytes(registry_bytes),
         "receipt_bundle_sha256": _sha_bytes(bundle_bytes),
         "corpus_sha256": _sha_bytes(corpus_bytes),
-        "input_identity_sha256": _sha_bytes(_path(root, index["input_identity"]["path"]).read_bytes()),
+        "input_identity_sha256": _sha_bytes((
+            _external_path(authority_root, index["input_identity"]["path"])
+            if authority_root is not None
+            else _path(root, index["input_identity"]["path"])
+        ).read_bytes()),
         "train_root_sha256": corpus["train_root_sha256"],
         "heldout_root_sha256": corpus["heldout_root_sha256"],
         "domain_count": 11,
