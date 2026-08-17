@@ -23,6 +23,7 @@ from pathlib import Path
 
 DEFAULT_MINIMUM = 380
 DEFAULT_TIMEOUT_SECONDS = 180
+MAX_FAILURE_DIAGNOSTIC_CHARS = 4_000
 _COLLECTION_RE = re.compile(r"\b(\d+)\s+tests?\s+collected\b")
 
 
@@ -48,8 +49,11 @@ def parse_collection_count(output: str) -> int:
 
 def validate_collection(*, returncode: int, output: str, minimum: int) -> int:
     if returncode != 0:
+        diagnostic = output.strip()[-MAX_FAILURE_DIAGNOSTIC_CHARS:]
+        detail = f"; diagnostic tail:\n{diagnostic}" if diagnostic else ""
         raise CollectionGuardError(
-            f"collection command failed with exit code {returncode}; refusing truncated population"
+            f"collection command failed with exit code {returncode}; "
+            f"refusing truncated population{detail}"
         )
     collected = parse_collection_count(output)
     if collected < minimum:

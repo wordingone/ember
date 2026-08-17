@@ -23,8 +23,15 @@ def test_parse_collection_count_requires_a_complete_summary() -> None:
 
 def test_validate_collection_is_fail_closed_on_nonzero_or_truncated() -> None:
     guard.validate_collection(returncode=0, output="386 tests collected", minimum=380)
-    with pytest.raises(guard.CollectionGuardError, match="collection command failed"):
-        guard.validate_collection(returncode=1, output="386 tests collected", minimum=380)
+    diagnostic = "ModuleNotFoundError: No module named 'torch'"
+    with pytest.raises(guard.CollectionGuardError, match="collection command failed") as failure:
+        guard.validate_collection(
+            returncode=1,
+            output=f"{'x' * 10_000}\n{diagnostic}",
+            minimum=380,
+        )
+    assert diagnostic in str(failure.value)
+    assert len(str(failure.value)) < 5_000
     with pytest.raises(guard.CollectionGuardError, match="below floor"):
         guard.validate_collection(returncode=0, output="12 tests collected", minimum=380)
 
