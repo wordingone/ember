@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # goal_id: EMBER-02
-# workstream_id: EMBER-02A
+# workstream_id: EMBER-02B
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Mint one forward, externally reopenable #1719 text-authority successor."""
 from __future__ import annotations
@@ -503,8 +503,10 @@ def mint_successor(
             {
                 "schema_version": "ember-issue1719-tranche-admission-mint-log-v1",
                 "source_commit": source_commit,
-                "producer_path": "scripts/mint_issue1719_tranche_admission.py",
-                "producer_sha256": sha256_file(repo / "scripts" / "mint_issue1719_tranche_admission.py"),
+                "producer_path": "tools/ember-restart-3b/mint_issue1719_tranche_admission.py",
+                "producer_sha256": sha256_file(
+                    repo / "tools" / "ember-restart-3b" / "mint_issue1719_tranche_admission.py"
+                ),
                 "plan_sha256": sha256_bytes(plan_raw),
                 "predecessor_receipt_sha256": predecessor_receipt_sha256,
                 "receipt_sha256": sha256_bytes(receipt_raw),

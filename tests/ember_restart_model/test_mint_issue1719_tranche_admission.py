@@ -1,5 +1,5 @@
 # goal_id: EMBER-02
-# workstream_id: EMBER-02A
+# workstream_id: EMBER-02B
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ def _write(path: Path, value: object) -> bytes:
 
 
 def _load_producer():
-    path = ROOT / "scripts" / "mint_issue1719_tranche_admission.py"
+    path = ROOT / "tools" / "ember-restart-3b" / "mint_issue1719_tranche_admission.py"
     spec = importlib.util.spec_from_file_location("mint_issue1719_tranche_admission", path)
     if spec is None or spec.loader is None:
         pytest.fail("canonical #1719 tranche admission producer is unavailable")
