@@ -14,6 +14,13 @@ from types import SimpleNamespace
 
 import pytest
 
+# The ci-nightly scripts/tests environment intentionally omits NumPy. Preserve
+# the real suite-compiler coverage where it is installed without aborting
+# collection of every other scripts test.
+pytest.importorskip(
+    "numpy", reason="suite compiler requires optional NumPy", exc_type=ImportError
+)
+
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "scripts"
