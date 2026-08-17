@@ -1,0 +1,178 @@
+{
+  "ticket": "R1-WARM100-STEP2-AUTHORITY-REFUSAL",
+  "ts": "2026-08-17T19:53:14Z",
+  "schema_version": "ember-r1-step2-authority-refusal-v1",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02B",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "source_base_commit": "2708cfa1a59f049429c40398c2d49ac83116e966",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "subject_checkpoint_sha256": "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b",
+  "validator": {
+    "path": "scripts/ember_restart/contract.py",
+    "sha256": "34d2c3e3be26f8586b7cbf6d5212961d6d76b3f732f57c611a8e326724e2d156",
+    "required_schema_version": "ember-owned-rung-v1"
+  },
+  "result": "REFUSED",
+  "grounds": [
+    {
+      "code": "MISSING_ADMISSIBLE_OWNED_RUNG_AUTHORITY",
+      "independently_sufficient": true,
+      "finding": "No consulted authority supplies the closed lineage, execution, optimizer, token-ledger, verifier, and path bindings required to author an ember-owned-rung-v1 manifest without fabrication."
+    },
+    {
+      "code": "HISTORICAL_SUBJECT_CONFLICTS_WITH_FRESH_GENESIS_DECISION",
+      "independently_sufficient": true,
+      "finding": "The newer operator decision requires FRESH_GENESIS and D-011 excludes the tracked historical step-2 checkpoint from clean-genesis execution."
+    }
+  ],
+  "authorities_consulted": {
+    "tracked_execution_authorities": {
+      "path": "manifests/ember-restart-execution-authorities-v1.json",
+      "sha256": "1e9d946dd74aeba84c7e826b34ac742c98e62563ade6078df3482b748b16480d",
+      "finding": "One historical route supplies eight artifact hashes but no complete owned-rung fields or canonical artifact paths."
+    },
+    "tracked_current_subject": {
+      "path": "manifests/ember-current-subject-v1.json",
+      "sha256": "de8d7dfad4fb4b070e26c88a18b2537b1aaac486e89329ded8bff3549dc4c427",
+      "finding": "The subject is CHECKPOINT_CANDIDATE_NOT_ADMITTED and supplies cursor, counts, hashes, and a private locator, not a valid owned-rung manifest."
+    },
+    "verified_tranche2_admission": {
+      "custody": "off-repo corpus admission receipt, content-addressed",
+      "sha256": "04343e108535800e615476ec1dbf55ac3b13465d1e2e7d188cdb56871af6ea0a",
+      "schema_version": "ember-issue1719-tranche2-admission-v1",
+      "finding": "PARTIAL_AUTHORITY_SUCCESSOR with 6 admitted and 38 unresolved rows; it supplies corpus-source evidence only and no model-run lineage, optimizer, token ledger, or checkpoint manifest."
+    }
+  },
+  "missing_fields": [
+    {
+      "field": "run_id",
+      "consulted_authorities": ["tracked_execution_authorities", "tracked_current_subject"],
+      "finding": "NOT_SUPPLIED"
+    },
+    {
+      "field": "source_commit",
+      "consulted_authorities": ["tracked_execution_authorities", "tracked_current_subject"],
+      "finding": "NOT_SUPPLIED"
+    },
+    {
+      "field": "lineage",
+      "consulted_authorities": ["tracked_execution_authorities", "tracked_current_subject"],
+      "finding": "NOT_SUPPLIED"
+    },
+    {
+      "field": "architecture.model_config.path",
+      "consulted_authorities": ["tracked_execution_authorities", "tracked_current_subject"],
+      "finding": "NOT_SUPPLIED"
+    },
+    {
+      "field": "architecture.parameter_counter.path",
+      "consulted_authorities": ["tracked_execution_authorities", "tracked_current_subject"],
+      "finding": "NOT_SUPPLIED"
+    },
+    {
+      "field": "architecture.parameter_receipt.path",
+      "consulted_authorities": ["tracked_execution_authorities", "tracked_current_subject"],
+      "finding": "NOT_SUPPLIED"
+    },
+    {
+      "field": "tokenizer.path",
+      "consulted_authorities": ["tracked_execution_authorities", "tracked_current_subject"],
+      "finding": "NOT_SUPPLIED"
+    },
+    {
+      "field": "tokenizer.training_script",
+      "consulted_authorities": ["tracked_execution_authorities", "tracked_current_subject"],
+      "finding": "NOT_SUPPLIED"
+    },
+    {
+      "field": "tokenizer.training_corpus_manifest",
+      "consulted_authorities": ["tracked_execution_authorities", "tracked_current_subject", "verified_tranche2_admission"],
+      "finding": "NOT_SUPPLIED"
+    },
+    {
+      "field": "tokenizer.freeze_receipt",
+      "consulted_authorities": ["tracked_execution_authorities", "tracked_current_subject"],
+      "finding": "NOT_SUPPLIED"
+    },
+    {
+      "field": "tokenizer.verifier",
+      "consulted_authorities": ["tracked_execution_authorities", "tracked_current_subject"],
+      "finding": "NOT_SUPPLIED"
+    },
+    {
+      "field": "training_data",
+      "consulted_authorities": ["tracked_execution_authorities", "tracked_current_subject", "verified_tranche2_admission"],
+      "finding": "NOT_SUPPLIED"
+    },
+    {
+      "field": "training.optimizer",
+      "consulted_authorities": ["tracked_execution_authorities", "tracked_current_subject"],
+      "finding": "NOT_SUPPLIED"
+    },
+    {
+      "field": "training.optimizer_receipt",
+      "consulted_authorities": ["tracked_execution_authorities", "tracked_current_subject"],
+      "finding": "NOT_SUPPLIED"
+    },
+    {
+      "field": "training.modality_tokens",
+      "consulted_authorities": ["tracked_execution_authorities", "tracked_current_subject", "verified_tranche2_admission"],
+      "finding": "NOT_SUPPLIED"
+    },
+    {
+      "field": "training.command",
+      "consulted_authorities": ["tracked_execution_authorities", "tracked_current_subject"],
+      "finding": "NOT_SUPPLIED"
+    },
+    {
+      "field": "checkpoint.manifest_path",
+      "consulted_authorities": ["tracked_execution_authorities", "tracked_current_subject"],
+      "finding": "NOT_SUPPLIED"
+    },
+    {
+      "field": "trusted_verifier_registry.path_and_approval",
+      "consulted_authorities": ["tracked_execution_authorities", "tracked_current_subject"],
+      "finding": "NOT_SUPPLIED"
+    }
+  ],
+  "excluded_archive": {
+    "custody": "off-repo archive, content-addressed",
+    "raw_sha256": "b29eac5837d41779e21321d27a0637376fbee12509d167121b186c53c5838581",
+    "schema_version": "ember-owned-development-seat-v1",
+    "seat_claim_status": "NON_ADMISSIBLE",
+    "reason": "The archive is not an owned-rung authority and conflicts with both tracked parameter and verifier identities.",
+    "hash_conflicts": [
+      {
+        "field": "parameter_receipt_sha256",
+        "archive": "e3565f1e73e5384480c19cfc2007141905d8fa1787538d4fcb282319ccde8cfd",
+        "tracked_authority": "f3cd8773c9db9e83a1f3566ecb7c02d33be185dde619ea7b4e4c7050bd44e042"
+      },
+      {
+        "field": "trusted_verifier_registry_sha256",
+        "archive": "72d9e738a3e7849481d26ff2011735362d74d16d0fb3b006d719d0df941ee04f",
+        "tracked_authority": "845ae1cdc34b4df29c4428cda2f2cee8d045a1db9df831e99e4a6f4c1960309e"
+      }
+    ]
+  },
+  "fresh_genesis_decision": {
+    "issue": 1296,
+    "issue_comment_id": 5287388117,
+    "url": "https://github.com/wordingone/ember/issues/1296#issuecomment-5287388117",
+    "decided_at": "2026-08-13T23:02:21Z",
+    "subject": "FRESH_GENESIS",
+    "historical_checkpoint_disposition": "NEVER_RESTORE",
+    "authority_matrix_row": "D-011",
+    "authority_matrix_path": "docs/authority/ember-authority-matrix.md",
+    "authority_matrix_sha256": "cacb09b1cd16b3272dbe0eb0d35dc0b5b334b74f791d1ade4bfc651f93c9f4db",
+    "authority_matrix_finding": "Tainted corpus lineage excludes the historical checkpoint from clean genesis."
+  },
+  "synthesized_values": [],
+  "manifest_authored": false,
+  "training_launched": false,
+  "gpu_allocated": false,
+  "claim_boundary": "No model, manifest admission, training, GPU, checkpoint, capability, benchmark, result, issue closure, or milestone completion credit.",
+  "next_action": "After issue #1719 corpus admission completes, the governed fresh-genesis 100-step run must produce its own run_id, ancestry-bound source_commit, lineage, optimizer receipt, token ledger, and checkpoint receipt before an owned-rung candidate can be authored and validated.",
+  "payload_sha256": "0df4a666e1458e06a842da5e4a8d150b4a6fffd05ecfd325df83be3f5647a61a"
+}
