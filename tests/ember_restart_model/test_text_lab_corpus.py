@@ -5,6 +5,7 @@
 from __future__ import annotations
 import hashlib
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -387,6 +388,25 @@ class TextLabResolverV2Tests(unittest.TestCase):
     def _write(root, rows, **kwargs):
         return _write_v2_fixture(root, rows, **kwargs)
 
+    @staticmethod
+    def _write_external_packet(root, published):
+        data = root / "data" / "ember-restart-3b"
+        published.mkdir()
+        names = (
+            "text-lab-source-receipt-bundle-v3.json",
+            "owned-text-lab-corpus-v3.json",
+            "owned-text-lab-input-identity-v3.json",
+        )
+        for name in names:
+            shutil.copyfile(data / name, published / name)
+        index = json.loads((data / "text-lab-authority-index-v2.json").read_bytes())
+        index["receipt_bundle"]["path"] = names[0]
+        index["corpus"]["path"] = names[1]
+        index["input_identity"]["path"] = names[2]
+        index_path = published / "text-lab-authority-index-v2.json"
+        index_path.write_text(json.dumps(index, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+        return index, index_path
+
     def _validate_v2(self, root):
         import text_lab_corpus
         with patch.object(text_lab_corpus.subprocess, "run", return_value=type("Result", (), {"returncode": 0})()):
@@ -401,6 +421,81 @@ class TextLabResolverV2Tests(unittest.TestCase):
         root = self._fixture_root(_admitted_rows(), frozen_eval_hashes=_default_frozen_eval_hashes())
         result = self._validate_v2(root)
         self.assertEqual(result["result"], "VERIFIED")
+
+    def test_external_authority_root_reopens_packet_local_published_bytes(self):
+        root = self._fixture_root(_admitted_rows(), frozen_eval_hashes=_default_frozen_eval_hashes())
+        published = root.parent / "published-authority"
+        self._write_external_packet(root, published)
+
+        import text_lab_corpus
+
+        with patch.object(text_lab_corpus.subprocess, "run", return_value=type("Result", (), {"returncode": 0})()):
+            result = text_lab_corpus.validate_authority_index(
+                root,
+                index_relative="text-lab-authority-index-v2.json",
+                external_authority_root=published,
+            )
+        self.assertEqual(result["result"], "VERIFIED")
+
+    def test_external_authority_root_refuses_absolute_and_traversal_paths(self):
+        root = self._fixture_root(_admitted_rows(), frozen_eval_hashes=_default_frozen_eval_hashes())
+        import text_lab_corpus
+
+        for bad_path in (str((root / "outside.json").resolve()), "../outside.json"):
+            with self.subTest(path=bad_path):
+                published = root.parent / f"published-{len(list(root.parent.iterdir()))}"
+                index, index_path = self._write_external_packet(root, published)
+                index["receipt_bundle"]["path"] = bad_path
+                index_path.write_text(json.dumps(index, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+                with patch.object(text_lab_corpus.subprocess, "run", return_value=type("Result", (), {"returncode": 0})()):
+                    with self.assertRaisesRegex(ValueError, "not exact root-relative"):
+                        text_lab_corpus.validate_authority_index(
+                            root,
+                            index_relative="text-lab-authority-index-v2.json",
+                            external_authority_root=published,
+                        )
+
+    def test_external_authority_root_refuses_reparsed_root(self):
+        root = self._fixture_root(_admitted_rows(), frozen_eval_hashes=_default_frozen_eval_hashes())
+        published = root.parent / "published-authority"
+        self._write_external_packet(root, published)
+        linked = root.parent / "published-authority-link"
+        try:
+            os.symlink(published, linked, target_is_directory=True)
+        except OSError as exc:
+            self.skipTest(f"host cannot create the reparse-point fixture: {exc}")
+
+        import text_lab_corpus
+
+        with patch.object(text_lab_corpus.subprocess, "run", return_value=type("Result", (), {"returncode": 0})()):
+            with self.assertRaisesRegex(ValueError, "root is invalid or reparsed"):
+                text_lab_corpus.validate_authority_index(
+                    root,
+                    index_relative="text-lab-authority-index-v2.json",
+                    external_authority_root=linked,
+                )
+
+    def test_external_authority_root_refuses_reparsed_artifact_escape(self):
+        root = self._fixture_root(_admitted_rows(), frozen_eval_hashes=_default_frozen_eval_hashes())
+        published = root.parent / "published-authority"
+        self._write_external_packet(root, published)
+        bundle = published / "text-lab-source-receipt-bundle-v3.json"
+        escaped = root.parent / "escaped-bundle.json"
+        shutil.move(bundle, escaped)
+        try:
+            os.symlink(escaped, bundle)
+        except OSError as exc:
+            self.skipTest(f"host cannot create the reparse-point fixture: {exc}")
+
+        import text_lab_corpus
+
+        with patch.object(text_lab_corpus.subprocess, "run", return_value=type("Result", (), {"returncode": 0})()):
+            with self.assertRaisesRegex(ValueError, "contains a reparse point"):
+                text_lab_corpus.validate_authority_index(
+                    root,
+                    index_relative="text-lab-authority-index-v2.json",
+                    external_authority_root=published,
+                )
 
     def test_fully_admitted_v2_accepts_closed_conjunctive_tree_license(self):
         from text_lab_corpus import local_license_provenance_v1
