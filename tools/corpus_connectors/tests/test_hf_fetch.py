@@ -56,7 +56,7 @@ class HfFetchMockedTests(unittest.TestCase):
             data = json.loads(receipt_path.read_text(encoding="utf-8"))
             self.assertEqual(data["source"], "huggingface")
             self.assertEqual(data["source_id"], "org/dataset-name")
-            self.assertEqual(data["license"], "mit")
+            self.assertEqual(data["license"], "MIT")
             self.assertEqual(data["revision"], "abcdef1234567890")
             self.assertEqual(len(data["files"]), 2)
             self.assertEqual(data["total_bytes"], sum(f["bytes"] for f in data["files"]))
@@ -65,7 +65,13 @@ class HfFetchMockedTests(unittest.TestCase):
             self.assertEqual(len(manifest_lines), 2)
             row = json.loads(manifest_lines[0])
             self.assertEqual(row["source_url"], "https://huggingface.co/datasets/org/dataset-name")
-            self.assertEqual(row["license"], "mit")
+            self.assertEqual(row["license"], "MIT")
+
+    def test_huggingface_license_tag_is_canonicalized_only_by_closed_map(self):
+        self.assertEqual(hf_fetch._canonical_hf_license("apache-2.0"), "Apache-2.0")
+        self.assertEqual(hf_fetch._canonical_hf_license("cc-by-4.0"), "CC-BY-4.0")
+        self.assertEqual(hf_fetch._canonical_hf_license("mit"), "MIT")
+        self.assertEqual(hf_fetch._canonical_hf_license("unknown-future-tag"), "unknown-future-tag")
 
     def test_fetch_blocks_on_unverified_license_without_flag(self):
         with tempfile.TemporaryDirectory() as td:
@@ -152,7 +158,7 @@ class HfFetchMockedTests(unittest.TestCase):
             data = json.loads(receipt_path.read_text(encoding="utf-8"))
             # metadata's own resolved license wins -- the CLI override is never
             # silently applied on top of a license the card card already states.
-            self.assertEqual(data["license"], "mit")
+            self.assertEqual(data["license"], "MIT")
             self.assertEqual(data["license_evidence"], "HuggingFace repo card metadata `license` field")
 
     def test_license_and_evidence_must_be_supplied_together(self):
