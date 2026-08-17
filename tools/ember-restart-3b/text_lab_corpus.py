@@ -5,7 +5,9 @@
 from __future__ import annotations
 import hashlib
 import json
+import os
 import re
+import stat
 import subprocess
 import unicodedata
 from pathlib import Path, PurePosixPath
@@ -33,7 +35,13 @@ def local_normalizer_v1(raw: bytes) -> tuple[bytes, str]:
     return normalized, hashlib.sha256(normalized).hexdigest()
 
 
-def local_license_provenance_v1(*, content_sha256: str, license_spdx: str, evidence: dict[str, Any]) -> dict[str, Any]:
+def local_license_provenance_v1(
+    *,
+    content_sha256: str,
+    license_spdx: str | list[str],
+    evidence: dict[str, Any],
+    generator: str = "local-normalizer-v1",
+) -> dict[str, Any]:
     """D4: adjudicate (content, declared license, evidence) -> the exact VERIFIED l4_receipt.
 
     Highest-scrutiny component (resolver spec decision, "PD->CC0" section of the design spec).
@@ -56,11 +64,21 @@ def local_license_provenance_v1(*, content_sha256: str, license_spdx: str, evide
     """
     if not isinstance(content_sha256, str) or _HEX.fullmatch(content_sha256) is None:
         raise ValueError("license provenance requires an exact content hash")
-    if license_spdx not in LICENSES:
+    if generator not in {"local-normalizer-v1", "local-tree-root-v1"}:
+        raise ValueError("license provenance generator is not recognized")
+    is_conjunction = isinstance(license_spdx, list)
+    if is_conjunction:
+        if not license_spdx or license_spdx != sorted(set(license_spdx)):
+            raise ValueError("license provenance conjunction must be a closed sorted deduplicated nonempty list")
+        if any(not isinstance(item, str) or item not in LICENSES for item in license_spdx):
+            raise ValueError("license provenance conjunction is not wholly in the allow-set")
+    elif not isinstance(license_spdx, str) or license_spdx not in LICENSES:
         raise ValueError("license provenance target is not in the allow-set")
     if not isinstance(evidence, dict):
         raise ValueError("license provenance evidence is missing")
     kind = evidence.get("kind")
+    if is_conjunction and kind != "spdx_repo_license":
+        raise ValueError("license provenance conjunction requires pinned repository LICENSE evidence")
     if kind == "spdx_repo_license":
         if not isinstance(evidence.get("license_sha256"), str) or _HEX.fullmatch(evidence["license_sha256"]) is None or evidence.get("declared_spdx") != license_spdx:
             raise ValueError("repo license evidence does not prove the declared SPDX id")
@@ -80,6 +98,13 @@ def local_license_provenance_v1(*, content_sha256: str, license_spdx: str, evide
     else:
         raise ValueError("license provenance evidence kind is not recognized")
     evidence_sha256 = hashlib.sha256(json.dumps(evidence, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+    if is_conjunction or generator != "local-normalizer-v1":
+        return {
+            "schema_version": "ember-text-source-receipt-v3", "result": "VERIFIED",
+            "source_sha256": content_sha256, "generator": generator,
+            "verifier": "local-license-provenance-v1", "model_mediated": False, "borrowed_labels": False,
+            "license_spdx": license_spdx, "evidence_sha256": evidence_sha256,
+        }
     return {
         "schema_version": "ember-text-source-receipt-v2", "result": "VERIFIED",
         "source_sha256": content_sha256, "generator": "local-normalizer-v1",
@@ -101,29 +126,196 @@ def adapt_connector_receipt(receipt: dict[str, Any], *, evidence: dict[str, Any]
     if not isinstance(receipt, dict) or receipt.get("schema") != "corpus-connector-receipt-v1":
         raise ValueError("connector receipt schema is not corpus-connector-receipt-v1")
     files = receipt.get("files")
-    if not isinstance(files, list) or len(files) != 1:
-        raise ValueError("connector receipt must carry exactly one fetched file for a text-lab source")
-    entry = files[0]
-    if not isinstance(entry, dict) or not isinstance(entry.get("path"), str) or not isinstance(entry.get("sha256"), str):
-        raise ValueError("connector receipt file entry is malformed")
+    if not isinstance(files, list) or not files:
+        raise ValueError("connector receipt must carry at least one fetched file for a text-lab source")
     dest_root = receipt.get("dest_root")
     if not isinstance(dest_root, str) or not dest_root:
         raise ValueError("connector receipt dest_root is missing")
-    raw_path = Path(dest_root) / PurePosixPath(entry["path"])
-    raw_bytes = raw_path.read_bytes()
-    if _sha_bytes(raw_bytes) != entry["sha256"]:
-        raise ValueError("connector receipt file bytes do not match its own recorded hash")
-    _, content_sha256 = local_normalizer_v1(raw_bytes)
-    license_spdx = receipt.get("license")
-    if not isinstance(license_spdx, str) or license_spdx not in LICENSES:
-        raise ValueError("connector receipt license is not on the text-lab allow-list")
-    l4_receipt = local_license_provenance_v1(content_sha256=content_sha256, license_spdx=license_spdx, evidence=evidence)
+    root = Path(dest_root)
+    if not root.is_dir() or _is_reparse_or_symlink(root):
+        raise ValueError("connector receipt dest_root must be a regular non-reparse directory")
+
+    verified_entries: list[dict[str, Any]] = []
+    raw_by_path: dict[str, bytes] = {}
+    seen_paths: set[str] = set()
+    for entry in files:
+        if not isinstance(entry, dict) or set(entry) != {"path", "bytes", "sha256"}:
+            raise ValueError("connector receipt file entry is malformed")
+        normalized_path = _normalize_connector_path(entry["path"])
+        if normalized_path in seen_paths:
+            raise ValueError("connector receipt has a duplicate normalized file path")
+        seen_paths.add(normalized_path)
+        recorded_bytes = entry["bytes"]
+        recorded_sha256 = entry["sha256"]
+        if not isinstance(recorded_bytes, int) or isinstance(recorded_bytes, bool) or recorded_bytes < 0:
+            raise ValueError("connector receipt file entry has an invalid recorded size")
+        if not isinstance(recorded_sha256, str) or _HEX.fullmatch(recorded_sha256) is None:
+            raise ValueError("connector receipt file entry has an invalid recorded hash")
+        raw_path = _regular_contained_file(root, normalized_path)
+        raw_bytes = raw_path.read_bytes()
+        if len(raw_bytes) != recorded_bytes:
+            raise ValueError("connector receipt file bytes do not match its recorded size")
+        recomputed_sha256 = _sha_bytes(raw_bytes)
+        if recomputed_sha256 != recorded_sha256:
+            raise ValueError("connector receipt file bytes do not match its own recorded hash")
+        verified_entries.append({"path": normalized_path, "bytes": len(raw_bytes), "sha256": recomputed_sha256})
+        raw_by_path[normalized_path] = raw_bytes
+
+    actual_paths = _listed_data_paths(root)
+    if actual_paths != seen_paths:
+        missing = sorted(seen_paths - actual_paths)
+        extra = sorted(actual_paths - seen_paths)
+        if missing:
+            raise ValueError(f"connector receipt listed file is missing: {missing[0]}")
+        raise ValueError(f"connector receipt destination contains an unlisted file: {extra[0]}")
+    total_bytes = sum(entry["bytes"] for entry in verified_entries)
+    recorded_total_bytes = receipt.get("total_bytes")
+    if (
+        not isinstance(recorded_total_bytes, int)
+        or isinstance(recorded_total_bytes, bool)
+        or recorded_total_bytes != total_bytes
+    ):
+        raise ValueError("connector receipt total_bytes does not match reopened files")
+    manifest_sha256 = _sha_bytes("\n".join(sorted(entry["sha256"] for entry in verified_entries)).encode("utf-8"))
+    if receipt.get("sha256_manifest") != manifest_sha256:
+        raise ValueError("connector receipt sha256_manifest does not match reopened files")
+
+    raw_license = receipt.get("license")
+    license_spdx = _closed_connector_license(raw_license)
+    if isinstance(license_spdx, list) or len(verified_entries) > 1:
+        _bind_multi_file_license_artifact(verified_entries, evidence)
+    if len(verified_entries) == 1:
+        raw_bytes = raw_by_path[verified_entries[0]["path"]]
+        _, content_sha256 = local_normalizer_v1(raw_bytes)
+        provenance_generator = "local-normalizer-v1"
+    else:
+        content_sha256 = _multi_file_content_root(verified_entries)
+        provenance_generator = "local-tree-root-v1"
+    l4_receipt = local_license_provenance_v1(
+        content_sha256=content_sha256,
+        license_spdx=license_spdx,
+        evidence=evidence,
+        generator=provenance_generator,
+    )
     return {
         "content_sha256": content_sha256,
         "license_spdx": license_spdx,
         "license_evidence": evidence,
         "l4_receipt": l4_receipt,
     }
+
+
+_CONNECTOR_SIDECAR_DIRS = {"_manifests", ".cache"}
+_CONNECTOR_SIDECAR_FILES = {"manifest.jsonl"}
+
+
+def _normalize_connector_path(value: Any) -> str:
+    if not isinstance(value, str) or not value or "\x00" in value:
+        raise ValueError("connector receipt file path is not a relative contained path")
+    portable = value.replace("\\", "/")
+    if portable.startswith("/") or re.match(r"^[A-Za-z]:", portable):
+        raise ValueError("connector receipt file path is not a relative contained path")
+    parts = portable.split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        raise ValueError("connector receipt file path is not a relative contained path")
+    return "/".join(parts)
+
+
+def _is_reparse_or_symlink(path: Path) -> bool:
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return False
+    attributes = getattr(info, "st_file_attributes", 0)
+    reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    return stat.S_ISLNK(info.st_mode) or bool(attributes & reparse_flag)
+
+
+def _regular_contained_file(root: Path, normalized_path: str) -> Path:
+    cursor = root
+    for index, part in enumerate(normalized_path.split("/")):
+        cursor = cursor / part
+        try:
+            info = cursor.lstat()
+        except FileNotFoundError as exc:
+            raise ValueError(f"connector receipt listed file is missing: {normalized_path}") from exc
+        if _is_reparse_or_symlink(cursor):
+            raise ValueError("connector receipt file path crosses a symlink or reparse point")
+        if index < len(normalized_path.split("/")) - 1 and not stat.S_ISDIR(info.st_mode):
+            raise ValueError("connector receipt file path is not a relative contained path")
+    if not stat.S_ISREG(cursor.lstat().st_mode):
+        raise ValueError("connector receipt listed path is not a regular file")
+    try:
+        cursor.resolve(strict=True).relative_to(root.resolve(strict=True))
+    except (OSError, ValueError) as exc:
+        raise ValueError("connector receipt file path is not a relative contained path") from exc
+    return cursor
+
+
+def _is_connector_sidecar(normalized_path: str) -> bool:
+    parts = normalized_path.split("/")
+    return parts[0] in _CONNECTOR_SIDECAR_DIRS or (
+        len(parts) == 1 and parts[0] in _CONNECTOR_SIDECAR_FILES
+    )
+
+
+def _listed_data_paths(root: Path) -> set[str]:
+    result: set[str] = set()
+    for current, directories, filenames in os.walk(root, topdown=True, followlinks=False):
+        current_path = Path(current)
+        kept_directories: list[str] = []
+        for directory in directories:
+            child = current_path / directory
+            relative = child.relative_to(root).as_posix()
+            if _is_connector_sidecar(relative):
+                continue
+            if _is_reparse_or_symlink(child):
+                raise ValueError("connector receipt destination contains a symlink or reparse point")
+            kept_directories.append(directory)
+        directories[:] = kept_directories
+        for filename in filenames:
+            child = current_path / filename
+            relative = child.relative_to(root).as_posix()
+            if _is_connector_sidecar(relative):
+                continue
+            if _is_reparse_or_symlink(child):
+                raise ValueError("connector receipt destination contains a symlink or reparse point")
+            if not child.is_file():
+                raise ValueError("connector receipt destination contains a non-regular file")
+            result.add(relative)
+    return result
+
+
+def _closed_connector_license(value: Any) -> str | list[str]:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("connector receipt license is not on the text-lab allow-list")
+    if re.search(r"(?:\bOR\b|\|\|)", value, flags=re.IGNORECASE):
+        raise ValueError("connector receipt license is an OR expression and cannot be guessed as a conjunction")
+    components = sorted(set(part.strip() for part in re.split(r"[,+]", value) if part.strip()))
+    if not components:
+        raise ValueError("connector receipt license is not on the text-lab allow-list")
+    if any(component not in LICENSES for component in components):
+        raise ValueError("connector receipt whole conjunction is not on the text-lab allow-list")
+    return components[0] if len(components) == 1 else components
+
+
+def _multi_file_content_root(entries: list[dict[str, Any]]) -> str:
+    canonical_entries = sorted(entries, key=lambda entry: entry["path"].encode("utf-8"))
+    payload = json.dumps(canonical_entries, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return _sha_bytes(b"ember-text-source-tree-v1\0" + payload)
+
+
+def _bind_multi_file_license_artifact(entries: list[dict[str, Any]], evidence: dict[str, Any]) -> None:
+    if not isinstance(evidence, dict) or evidence.get("kind") != "spdx_repo_license":
+        raise ValueError("multi-file conjunctive license requires pinned repository LICENSE evidence")
+    license_sha256 = evidence.get("license_sha256")
+    matches = [
+        entry for entry in entries
+        if PurePosixPath(entry["path"]).name.upper().startswith("LICENSE")
+        and entry["sha256"] == license_sha256
+    ]
+    if len(matches) != 1:
+        raise ValueError("multi-file conjunctive license is not bound to exactly one reopened LICENSE artifact")
 
 def _root(rows: Iterable[dict[str, Any]], split: str) -> str:
     digest=hashlib.sha256(f"ember-text-lab-corpus-v1\0{split}\0".encode())

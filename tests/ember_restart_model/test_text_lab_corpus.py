@@ -587,14 +587,15 @@ class ConnectorReceiptAdapterTests(unittest.TestCase):
         return sha(content)
 
     def _receipt(self, dest_root, *, path="source.txt", content_sha256, license="CC-BY-4.0"):
+        content_bytes = (dest_root / path).stat().st_size
         return {
             "schema": "corpus-connector-receipt-v1",
             "source": "http_fetch", "source_id": "candidate-mathematics-train-0",
             "canonical_url": "https://example.org/source.txt",
             "license": license, "license_evidence": "publisher terms page",
             "revision": None,
-            "files": [{"path": path, "bytes": 20, "sha256": content_sha256}],
-            "total_bytes": 20, "sha256_manifest": sha(content_sha256.encode()),
+            "files": [{"path": path, "bytes": content_bytes, "sha256": content_sha256}],
+            "total_bytes": content_bytes, "sha256_manifest": sha(content_sha256.encode()),
             "fetched_at": "2026-08-14T00:00:00Z",
             "connector": {"name": "http_fetch", "version": "v1"},
             "l3_statement": "fetch-only; no external model authored/filtered/ranked/scored/selected any token",
@@ -616,6 +617,33 @@ class ConnectorReceiptAdapterTests(unittest.TestCase):
         self.assertEqual(row["content_sha256"], expected_content_sha256)
         self.assertEqual(row["l4_receipt"]["source_sha256"], expected_content_sha256)
         self.assertEqual(row["l4_receipt"]["result"], "VERIFIED")
+
+    def test_single_file_adapter_output_is_byte_for_byte_unchanged(self):
+        from text_lab_corpus import adapt_connector_receipt, local_normalizer_v1
+        dest_root = self._fetch_dir()
+        content = b"same scalar adapter bytes\r\n"
+        content_sha256 = self._write_fetched_file(dest_root, "source.txt", content)
+        receipt = self._receipt(dest_root, content_sha256=content_sha256)
+        evidence = {"kind": "publisher_terms", "terms_url": "https://example.org/license", "declared_spdx": "CC-BY-4.0"}
+        _, normalized_sha256 = local_normalizer_v1(content)
+        evidence_sha256 = sha(json.dumps(evidence, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+
+        self.assertEqual(adapt_connector_receipt(receipt, evidence=evidence), {
+            "content_sha256": normalized_sha256,
+            "license_spdx": "CC-BY-4.0",
+            "license_evidence": evidence,
+            "l4_receipt": {
+                "schema_version": "ember-text-source-receipt-v2",
+                "result": "VERIFIED",
+                "source_sha256": normalized_sha256,
+                "generator": "local-normalizer-v1",
+                "verifier": "local-license-provenance-v1",
+                "model_mediated": False,
+                "borrowed_labels": False,
+                "license_spdx": "CC-BY-4.0",
+                "evidence_sha256": evidence_sha256,
+            },
+        })
 
     def test_rejects_wrong_receipt_schema(self):
         from text_lab_corpus import adapt_connector_receipt
@@ -643,14 +671,224 @@ class ConnectorReceiptAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "not on the text-lab allow-list"):
             adapt_connector_receipt(receipt, evidence={"kind": "publisher_terms", "terms_url": "u", "declared_spdx": "Proprietary"})
 
-    def test_rejects_multi_file_receipt(self):
+    def _multi_file_receipt(self, dest_root, entries, *, license="CC-BY-4.0, MIT"):
+        files = []
+        for relative, content in entries:
+            files.append({
+                "path": relative,
+                "bytes": len(content),
+                "sha256": self._write_fetched_file(dest_root, relative, content),
+            })
+        return {
+            "schema": "corpus-connector-receipt-v1",
+            "source": "git_fetch",
+            "source_id": "candidate-scientific_method-train-1",
+            "canonical_url": "https://example.org/repo",
+            "license": license,
+            "license_evidence": "pinned repository LICENSE",
+            "revision": "a" * 40,
+            "files": files,
+            "total_bytes": sum(item["bytes"] for item in files),
+            "sha256_manifest": sha("\n".join(sorted(item["sha256"] for item in files)).encode("utf-8")),
+            "fetched_at": "2026-08-14T00:00:00Z",
+            "connector": {"name": "git_fetch", "version": "v1"},
+            "l3_statement": "fetch-only; no external model authored/filtered/ranked/scored/selected any token",
+            "dest_root": str(dest_root),
+            "notes": "",
+        }
+
+    def _dual_license_evidence(self, license_bytes):
+        return {
+            "kind": "spdx_repo_license",
+            "license_sha256": sha(license_bytes),
+            "declared_spdx": ["CC-BY-4.0", "MIT"],
+        }
+
+    def test_adapts_multi_file_receipt_with_conjunctive_licenses_and_bytewise_path_root(self):
         from text_lab_corpus import adapt_connector_receipt
         dest_root = self._fetch_dir()
-        content_sha256 = self._write_fetched_file(dest_root, "source.txt", b"x")
-        receipt = self._receipt(dest_root, content_sha256=content_sha256)
-        receipt["files"].append({"path": "extra.txt", "bytes": 1, "sha256": sha(b"y")})
-        with self.assertRaisesRegex(ValueError, "exactly one fetched file"):
-            adapt_connector_receipt(receipt, evidence={"kind": "publisher_terms", "terms_url": "u", "declared_spdx": "CC-BY-4.0"})
+        license_bytes = b"Documentation CC-BY-4.0; software MIT\n"
+        receipt = self._multi_file_receipt(dest_root, [
+            ("z.txt", b"z\n"),
+            ("LICENSE.md", license_bytes),
+            ("A.txt", b"a\n"),
+        ])
+        evidence = self._dual_license_evidence(license_bytes)
+
+        row = adapt_connector_receipt(receipt, evidence=evidence)
+
+        canonical_entries = sorted(receipt["files"], key=lambda item: item["path"].encode("utf-8"))
+        expected_root = sha(
+            b"ember-text-source-tree-v1\0"
+            + json.dumps(canonical_entries, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        )
+        self.assertEqual(row["content_sha256"], expected_root)
+        self.assertEqual(row["license_spdx"], ["CC-BY-4.0", "MIT"])
+        self.assertEqual(row["l4_receipt"]["schema_version"], "ember-text-source-receipt-v3")
+        self.assertEqual(row["l4_receipt"]["license_spdx"], ["CC-BY-4.0", "MIT"])
+
+    def test_adapts_multi_file_receipt_with_scalar_license(self):
+        from text_lab_corpus import adapt_connector_receipt
+        dest_root = self._fetch_dir()
+        license_bytes = b"MIT License\n"
+        receipt = self._multi_file_receipt(
+            dest_root,
+            [("LICENSE", license_bytes), ("source.txt", b"source\n")],
+            license="MIT",
+        )
+        evidence = {
+            "kind": "spdx_repo_license",
+            "license_sha256": sha(license_bytes),
+            "declared_spdx": "MIT",
+        }
+
+        row = adapt_connector_receipt(receipt, evidence=evidence)
+
+        self.assertEqual(row["license_spdx"], "MIT")
+        self.assertEqual(row["l4_receipt"]["schema_version"], "ember-text-source-receipt-v3")
+        self.assertEqual(row["l4_receipt"]["generator"], "local-tree-root-v1")
+        self.assertEqual(row["l4_receipt"]["license_spdx"], "MIT")
+
+    def test_rejects_multi_file_receipt_with_out_of_set_conjunct(self):
+        from text_lab_corpus import adapt_connector_receipt
+        dest_root = self._fetch_dir()
+        license_bytes = b"Documentation CC-BY-4.0; code GPL-3.0-only\n"
+        receipt = self._multi_file_receipt(
+            dest_root,
+            [("LICENSE.md", license_bytes), ("source.txt", b"source\n")],
+            license="CC-BY-4.0, GPL-3.0-only",
+        )
+        with self.assertRaisesRegex(ValueError, "whole conjunction"):
+            adapt_connector_receipt(receipt, evidence={
+                "kind": "spdx_repo_license",
+                "license_sha256": sha(license_bytes),
+                "declared_spdx": ["CC-BY-4.0", "GPL-3.0-only"],
+            })
+
+    def test_rejects_conjunctive_license_without_reopened_license_artifact(self):
+        from text_lab_corpus import adapt_connector_receipt
+        dest_root = self._fetch_dir()
+        content = b"not a license artifact\n"
+        content_sha256 = self._write_fetched_file(dest_root, "source.txt", content)
+        receipt = self._receipt(
+            dest_root,
+            content_sha256=content_sha256,
+            license="CC-BY-4.0, MIT",
+        )
+        with self.assertRaisesRegex(ValueError, "LICENSE artifact"):
+            adapt_connector_receipt(receipt, evidence={
+                "kind": "spdx_repo_license",
+                "license_sha256": content_sha256,
+                "declared_spdx": ["CC-BY-4.0", "MIT"],
+            })
+
+    def test_provenance_helper_refuses_conjunction_without_repo_license_route(self):
+        from text_lab_corpus import local_license_provenance_v1
+        with self.assertRaisesRegex(ValueError, "repository LICENSE"):
+            local_license_provenance_v1(
+                content_sha256="0" * 64,
+                license_spdx=["CC-BY-4.0", "MIT"],
+                evidence={
+                    "kind": "publisher_terms",
+                    "terms_url": "https://example.org/terms",
+                    "declared_spdx": ["CC-BY-4.0", "MIT"],
+                },
+                generator="local-tree-root-v1",
+            )
+
+    def test_rejects_or_license_expression_instead_of_guessing_conjunction(self):
+        from text_lab_corpus import adapt_connector_receipt
+        dest_root = self._fetch_dir()
+        license_bytes = b"MIT OR Apache-2.0\n"
+        receipt = self._multi_file_receipt(
+            dest_root,
+            [("LICENSE", license_bytes), ("source.txt", b"source\n")],
+            license="MIT OR Apache-2.0",
+        )
+        with self.assertRaisesRegex(ValueError, "OR expression"):
+            adapt_connector_receipt(receipt, evidence={
+                "kind": "spdx_repo_license",
+                "license_sha256": sha(license_bytes),
+                "declared_spdx": ["Apache-2.0", "MIT"],
+            })
+
+    def test_rejects_traversal_in_multi_file_receipt(self):
+        from text_lab_corpus import adapt_connector_receipt
+        dest_root = self._fetch_dir()
+        license_bytes = b"CC-BY-4.0 and MIT\n"
+        receipt = self._multi_file_receipt(dest_root, [("LICENSE", license_bytes), ("source.txt", b"source\n")])
+        receipt["files"][1]["path"] = "../source.txt"
+        with self.assertRaisesRegex(ValueError, "relative contained path"):
+            adapt_connector_receipt(receipt, evidence=self._dual_license_evidence(license_bytes))
+
+    def test_rejects_duplicate_normalized_multi_file_path(self):
+        from text_lab_corpus import adapt_connector_receipt
+        dest_root = self._fetch_dir()
+        license_bytes = b"CC-BY-4.0 and MIT\n"
+        receipt = self._multi_file_receipt(dest_root, [("LICENSE", license_bytes), ("nested/source.txt", b"source\n")])
+        receipt["files"].append(dict(receipt["files"][1], path="nested\\source.txt"))
+        receipt["total_bytes"] += receipt["files"][1]["bytes"]
+        receipt["sha256_manifest"] = sha("\n".join(sorted(item["sha256"] for item in receipt["files"])).encode("utf-8"))
+        with self.assertRaisesRegex(ValueError, "duplicate normalized"):
+            adapt_connector_receipt(receipt, evidence=self._dual_license_evidence(license_bytes))
+
+    def test_rejects_missing_multi_file_receipt_path(self):
+        from text_lab_corpus import adapt_connector_receipt
+        dest_root = self._fetch_dir()
+        license_bytes = b"CC-BY-4.0 and MIT\n"
+        receipt = self._multi_file_receipt(dest_root, [("LICENSE", license_bytes), ("missing.txt", b"gone\n")])
+        (dest_root / "missing.txt").unlink()
+        with self.assertRaisesRegex(ValueError, "missing"):
+            adapt_connector_receipt(receipt, evidence=self._dual_license_evidence(license_bytes))
+
+    def test_rejects_extra_unlisted_multi_file_path(self):
+        from text_lab_corpus import adapt_connector_receipt
+        dest_root = self._fetch_dir()
+        license_bytes = b"CC-BY-4.0 and MIT\n"
+        receipt = self._multi_file_receipt(dest_root, [("LICENSE", license_bytes), ("source.txt", b"source\n")])
+        self._write_fetched_file(dest_root, "unlisted.txt", b"unlisted\n")
+        with self.assertRaisesRegex(ValueError, "unlisted"):
+            adapt_connector_receipt(receipt, evidence=self._dual_license_evidence(license_bytes))
+
+    def test_rejects_symlink_or_reparse_multi_file_path(self):
+        from text_lab_corpus import adapt_connector_receipt
+        dest_root = self._fetch_dir()
+        license_bytes = b"CC-BY-4.0 and MIT\n"
+        receipt = self._multi_file_receipt(dest_root, [("LICENSE", license_bytes), ("target.txt", b"source\n")])
+        link_path = dest_root / "link.txt"
+        try:
+            link_path.symlink_to(dest_root / "target.txt")
+        except OSError as exc:
+            self.skipTest(f"symlink creation is unavailable: {exc}")
+        receipt["files"][1] = {
+            "path": "link.txt",
+            "bytes": len(b"source\n"),
+            "sha256": sha(b"source\n"),
+        }
+        with self.assertRaisesRegex(ValueError, "symlink|reparse"):
+            adapt_connector_receipt(receipt, evidence=self._dual_license_evidence(license_bytes))
+
+    def test_rejects_tampered_multi_file_size_total_and_manifest(self):
+        from text_lab_corpus import adapt_connector_receipt
+        dest_root = self._fetch_dir()
+        license_bytes = b"CC-BY-4.0 and MIT\n"
+        evidence = self._dual_license_evidence(license_bytes)
+        receipt = self._multi_file_receipt(dest_root, [("LICENSE", license_bytes), ("source.txt", b"source\n")])
+
+        bad_size = json.loads(json.dumps(receipt))
+        bad_size["files"][1]["bytes"] += 1
+        with self.assertRaisesRegex(ValueError, "recorded size"):
+            adapt_connector_receipt(bad_size, evidence=evidence)
+
+        bad_total = json.loads(json.dumps(receipt))
+        bad_total["total_bytes"] += 1
+        with self.assertRaisesRegex(ValueError, "total_bytes"):
+            adapt_connector_receipt(bad_total, evidence=evidence)
+
+        bad_manifest = json.loads(json.dumps(receipt))
+        bad_manifest["sha256_manifest"] = "0" * 64
+        with self.assertRaisesRegex(ValueError, "sha256_manifest"):
+            adapt_connector_receipt(bad_manifest, evidence=evidence)
 
 
 if __name__ == "__main__": unittest.main()
