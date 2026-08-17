@@ -1916,7 +1916,7 @@ fn server_live_cycle_rebinds_successful_restore_for_subsequent_ticks() {
     let rebound_authority_sha256 = sha256(&rebound_authority_path);
     let swapped_manifest = write_restore_manifest(&root, "swapped-server-job");
     let swapped = daemon
-        .supervise_server_live_cycle_with_test_observation(
+        .supervise_server_live_cycle_with_test_probes(
             ServerLiveCycleRequest {
                 authority_path: rebound_authority_path,
                 authority_sha256: rebound_authority_sha256,
@@ -1929,6 +1929,8 @@ fn server_live_cycle_rebinds_successful_restore_for_subsequent_ticks() {
             },
             "foreign-config-swap".into(),
             100 * 1024 * 1024,
+            u64::MAX,
+            Duration::from_secs(5),
         )
         .unwrap();
     assert_eq!(swapped.decision, "RESTORE_FAILED_CONTRACT");
