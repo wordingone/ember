@@ -16,10 +16,28 @@ from scripts.llmq_adoption_readiness import assess
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SOURCE_PATH = "scripts/llmq_adoption_readiness.py"
 SOURCE_SHA = hashlib.sha256((REPO_ROOT / SOURCE_PATH).read_bytes()).hexdigest()
-DESIGN_PATH = "docs/spec/llmq/adoption-design-v1.md"
+DESIGN_PATH = "docs/spec/llmq/adoption-design-v1.json"
 DESIGN_SHA = hashlib.sha256((REPO_ROOT / DESIGN_PATH).read_bytes()).hexdigest()
-MECHANISM_PATH = "docs/spec/llmq/mechanism-attribution-v1.md"
+MECHANISM_PATH = "docs/spec/llmq/mechanism-attribution-v1.json"
 MECHANISM_SHA = hashlib.sha256((REPO_ROOT / MECHANISM_PATH).read_bytes()).hexdigest()
+
+
+def _run_hidden(args, **kwargs):
+    return subprocess.run(
+        args,
+        shell=False,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        **kwargs,
+    )
+
+
+def _check_output_hidden(args, **kwargs):
+    return subprocess.check_output(
+        args,
+        shell=False,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        **kwargs,
+    )
 
 
 def _daemon_preflight(job_id, identity, source_commit="b" * 40, program_sha256="d" * 64):
@@ -497,6 +515,73 @@ def test_malformed_payload_type_is_structured_fail_closed_refusal():
         assert result["external_remainder"] == ["closed readiness payload"]
 
 
+def _copy_contracts(root: Path) -> dict:
+    payload = {}
+    for path_field, digest_field, relative in (
+        ("adoption_design_path", "adoption_design_sha256", DESIGN_PATH),
+        ("mechanism_attribution_path", "mechanism_attribution_sha256", MECHANISM_PATH),
+    ):
+        destination = root / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(REPO_ROOT / relative, destination)
+        payload[path_field] = relative
+        payload[digest_field] = hashlib.sha256(destination.read_bytes()).hexdigest()
+    return payload
+
+
+def test_canonical_design_contracts_are_semantically_closed(tmp_path):
+    payload = _copy_contracts(tmp_path)
+    result = assess(tmp_path, payload)
+    assert "adoption_design_contract" not in result["missing"]
+    assert "mechanism_attribution_contract" not in result["missing"]
+    assert "adoption_design_path" not in result["missing"]
+    assert "mechanism_attribution_path" not in result["missing"]
+    adoption = json.loads((tmp_path / DESIGN_PATH).read_text(encoding="utf-8"))
+    attribution = json.loads((tmp_path / MECHANISM_PATH).read_text(encoding="utf-8"))
+    assert adoption["status"] == "FROZEN_NOT_EXECUTED"
+    assert adoption["implementation_gate"] == "SEPARATE_REVIEW_REQUIRED"
+    assert adoption["target_gate"] == {
+        "metric": "ember02_training_tok_s",
+        "threshold": "greater_than_1000",
+        "operator_trigger": "ping_on_crossing",
+        "before_after_receipts_required": True,
+    }
+    assert adoption["refusal_over_substitution"] == "REFUSAL_OVER_SUBSTITUTION"
+    assert adoption["execution_claim"] is False and adoption["result_credit"] is False
+    assert attribution["status"] == "NOT_MEASURED"
+    assert attribution["common_base"]["microbatch"] == 1
+    assert attribution["common_base"]["gradient_accumulation"] == 512
+    assert attribution["common_base"]["tokens_per_step"] == 524288
+    assert attribution["measurement"]["measured_steps"] == [1, 2, 3, 4, 5]
+    assert [row["run"] for row in attribution["run_order"]] == [
+        "FP8_BASE_A", "BF16_ONLY", "FP8_BASE_B", "GRAPHS_OFF", "FP8_BASE_C",
+        "MASTER_OFF", "FP8_BASE_D", "FUSED_REFERENCE", "FP8_BASE_E",
+    ]
+    assert attribution["execution_claim"] is False and attribution["result_credit"] is False
+
+
+def test_caller_selected_contract_path_is_refused_even_with_identical_bytes(tmp_path):
+    payload = _copy_contracts(tmp_path)
+    foreign = tmp_path / "caller" / "adoption-design-v1.json"
+    foreign.parent.mkdir()
+    shutil.copy2(tmp_path / DESIGN_PATH, foreign)
+    payload["adoption_design_path"] = str(foreign.relative_to(tmp_path))
+    payload["adoption_design_sha256"] = hashlib.sha256(foreign.read_bytes()).hexdigest()
+    result = assess(tmp_path, payload)
+    assert "adoption_design_path" in result["missing"]
+
+
+def test_rehashed_contract_with_changed_semantics_is_refused(tmp_path):
+    payload = _copy_contracts(tmp_path)
+    path = tmp_path / MECHANISM_PATH
+    contract = json.loads(path.read_text(encoding="utf-8"))
+    contract["status"] = "MEASURED"
+    path.write_text(json.dumps(contract), encoding="utf-8")
+    payload["mechanism_attribution_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    result = assess(tmp_path, payload)
+    assert "mechanism_attribution_contract" in result["missing"]
+
+
 def test_partial_source_and_build_receipt_exposes_external_benchmark_remainder(monkeypatch):
     # A caller-selected state root is not authority; only a live authenticated
     # Ember Lab export over EMBER_LAB_PIPE can satisfy daemon custody.
@@ -774,7 +859,7 @@ def test_self_authored_source_build_and_benchmark_are_not_ready_evidence():
 def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(tmp_path, monkeypatch):
     """A real governed source/build chain may wait for the owned benchmark, but not fake it."""
     remote = tmp_path / "llmq-remote.git"
-    subprocess.run(["git", "init", "--bare", "-q", str(remote)], check=True)
+    _run_hidden(["git", "init", "--bare", "-q", str(remote)], check=True)
     from scripts import llmq_adoption_readiness as readiness
 
     monkeypatch.setattr(readiness, "_GOVERNED_ORIGIN", str(remote))
@@ -785,17 +870,17 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
     monkeypatch.setenv("EMBER_STATE_ROOT", str(authority_root))
     repo = tmp_path / "llmq-repo"
     repo.mkdir()
-    subprocess.run(["git", "-C", str(repo), "init", "-q"], check=True)
-    subprocess.run(["git", "-C", str(repo), "config", "user.email", "test@example.invalid"], check=True)
-    subprocess.run(["git", "-C", str(repo), "config", "user.name", "Test"], check=True)
-    subprocess.run(["git", "-C", str(repo), "remote", "add", "origin", str(remote)], check=True)
+    _run_hidden(["git", "-C", str(repo), "init", "-q"], check=True)
+    _run_hidden(["git", "-C", str(repo), "config", "user.email", "test@example.invalid"], check=True)
+    _run_hidden(["git", "-C", str(repo), "config", "user.name", "Test"], check=True)
+    _run_hidden(["git", "-C", str(repo), "remote", "add", "origin", str(remote)], check=True)
     source = repo / "llmq.py"
     source.write_bytes(b"governed source bytes")
     source_sha = hashlib.sha256(source.read_bytes()).hexdigest()
-    subprocess.run(["git", "-C", str(repo), "add", "llmq.py"], check=True)
-    subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "source"], check=True)
-    commit = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()
-    tree = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD^{tree}"], text=True).strip()
+    _run_hidden(["git", "-C", str(repo), "add", "llmq.py"], check=True)
+    _run_hidden(["git", "-C", str(repo), "commit", "-q", "-m", "source"], check=True)
+    commit = _check_output_hidden(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()
+    tree = _check_output_hidden(["git", "-C", str(repo), "rev-parse", "HEAD^{tree}"], text=True).strip()
     def copy_loose_objects(target: Path = remote) -> None:
         for object_path in (repo / ".git" / "objects").rglob("*"):
             if not object_path.is_file() or object_path.parent.name in {"info", "pack"}:
@@ -806,8 +891,8 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
                 shutil.copy2(object_path, destination)
 
     copy_loose_objects()
-    subprocess.run(["git", "--git-dir", str(remote), "update-ref", "refs/heads/dev", commit], check=True)
-    subprocess.run(["git", "-C", str(repo), "update-ref", "refs/remotes/origin/dev", commit], check=True)
+    _run_hidden(["git", "--git-dir", str(remote), "update-ref", "refs/heads/dev", commit], check=True)
+    _run_hidden(["git", "-C", str(repo), "update-ref", "refs/remotes/origin/dev", commit], check=True)
     manifest = tmp_path / "source-manifest.json"
     manifest.write_text(
         json.dumps(
@@ -858,12 +943,11 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
         encoding="utf-8",
     )
     operational_sha = hashlib.sha256(operational.read_bytes()).hexdigest()
-    design_dir = tmp_path / "fixtures"
-    design_dir.mkdir()
-    design = design_dir / "design.md"
-    design.write_bytes(b"design")
-    attribution = design_dir / "attribution.md"
-    attribution.write_bytes(b"attribution")
+    design = tmp_path / DESIGN_PATH
+    design.parent.mkdir(parents=True)
+    shutil.copy2(REPO_ROOT / DESIGN_PATH, design)
+    attribution = tmp_path / MECHANISM_PATH
+    shutil.copy2(REPO_ROOT / MECHANISM_PATH, attribution)
     design_sha = hashlib.sha256(design.read_bytes()).hexdigest()
     attribution_sha = hashlib.sha256(attribution.read_bytes()).hexdigest()
     # Rewrite dispatch after the source manifest hash is known.
@@ -924,9 +1008,9 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
             "producer_binary_path": "runtime/ember-lab/ember-lab.exe",
             "producer_binary_sha256": producer_binary_sha,
         },
-        "adoption_design_path": "fixtures/design.md",
+        "adoption_design_path": DESIGN_PATH,
         "adoption_design_sha256": design_sha,
-        "mechanism_attribution_path": "fixtures/attribution.md",
+        "mechanism_attribution_path": MECHANISM_PATH,
         "mechanism_attribution_sha256": attribution_sha,
     }
     forged_build = json.loads(json.dumps(payload))
@@ -1410,47 +1494,47 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
     # Multiple origin URLs are ambiguous: single-value config lookup can report
     # the canonical last value while transport selects an attacker-controlled first.
     attacker_remote = tmp_path / "attacker.git"
-    subprocess.run(["git", "init", "--bare", "-q", str(attacker_remote)], check=True)
+    _run_hidden(["git", "init", "--bare", "-q", str(attacker_remote)], check=True)
     copy_loose_objects(attacker_remote)
-    subprocess.run(["git", "--git-dir", str(attacker_remote), "update-ref", "refs/heads/dev", commit], check=True)
-    subprocess.run(["git", "-C", str(repo), "config", "--unset-all", "remote.origin.url"], check=True)
-    subprocess.run(["git", "-C", str(repo), "config", "--add", "remote.origin.url", str(attacker_remote)], check=True)
-    subprocess.run(["git", "-C", str(repo), "config", "--add", "remote.origin.url", str(remote)], check=True)
+    _run_hidden(["git", "--git-dir", str(attacker_remote), "update-ref", "refs/heads/dev", commit], check=True)
+    _run_hidden(["git", "-C", str(repo), "config", "--unset-all", "remote.origin.url"], check=True)
+    _run_hidden(["git", "-C", str(repo), "config", "--add", "remote.origin.url", str(attacker_remote)], check=True)
+    _run_hidden(["git", "-C", str(repo), "config", "--add", "remote.origin.url", str(remote)], check=True)
     ambiguous_origin = assess(tmp_path, payload)
     assert ambiguous_origin["verdict"] == "PRELAUNCH_REJECTED"
     assert "governed_source_receipt.git_origin" in ambiguous_origin["missing"]
-    subprocess.run(["git", "-C", str(repo), "config", "--unset-all", "remote.origin.url"], check=True)
-    subprocess.run(["git", "-C", str(repo), "config", "--add", "remote.origin.url", str(remote)], check=True)
+    _run_hidden(["git", "-C", str(repo), "config", "--unset-all", "remote.origin.url"], check=True)
+    _run_hidden(["git", "-C", str(repo), "config", "--add", "remote.origin.url", str(remote)], check=True)
 
     # pushInsteadOf is also transport authority drift and must be rejected even
     # though this read-only probe does not itself push.
     push_rewrite_key = f"url.{attacker_remote.as_uri()}.pushinsteadof"
-    subprocess.run(["git", "-C", str(repo), "config", push_rewrite_key, str(remote)], check=True)
+    _run_hidden(["git", "-C", str(repo), "config", push_rewrite_key, str(remote)], check=True)
     push_redirected = assess(tmp_path, payload)
     assert push_redirected["verdict"] == "PRELAUNCH_REJECTED"
     assert "governed_source_receipt.git_url_rewrite" in push_redirected["missing"]
-    subprocess.run(["git", "-C", str(repo), "config", "--unset-all", push_rewrite_key], check=True)
+    _run_hidden(["git", "-C", str(repo), "config", "--unset-all", push_rewrite_key], check=True)
 
     # Raw remote.origin.url can remain canonical while Git silently redirects
     # ls-remote through a caller-controlled insteadOf mapping.
     rewrite_key = f"url.{attacker_remote.as_uri()}.insteadof"
-    subprocess.run(
+    _run_hidden(
         ["git", "-C", str(repo), "config", rewrite_key, str(remote)],
         check=True,
     )
     redirected = assess(tmp_path, payload)
     assert redirected["verdict"] == "PRELAUNCH_REJECTED"
     assert "governed_source_receipt.git_url_rewrite" in redirected["missing"]
-    subprocess.run(["git", "-C", str(repo), "config", "--unset-all", rewrite_key], check=True)
+    _run_hidden(["git", "-C", str(repo), "config", "--unset-all", rewrite_key], check=True)
 
     # A local commit in a repository with a spoofable origin URL is not governed
     # source unless it is reachable from the previously fetched origin object set.
     source.write_bytes(b"foreign local source bytes")
     foreign_source_sha = hashlib.sha256(source.read_bytes()).hexdigest()
-    subprocess.run(["git", "-C", str(repo), "add", "llmq.py"], check=True)
-    subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "foreign"], check=True)
-    foreign_commit = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()
-    foreign_tree = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD^{tree}"], text=True).strip()
+    _run_hidden(["git", "-C", str(repo), "add", "llmq.py"], check=True)
+    _run_hidden(["git", "-C", str(repo), "commit", "-q", "-m", "foreign"], check=True)
+    foreign_commit = _check_output_hidden(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()
+    foreign_tree = _check_output_hidden(["git", "-C", str(repo), "rev-parse", "HEAD^{tree}"], text=True).strip()
     manifest.write_text(
         json.dumps(
             {
@@ -1485,8 +1569,8 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
     # Even a governed commit cannot borrow dirty worktree bytes and remint every
     # local hash; the reopened bytes must equal the exact <commit>:<path> blob.
     copy_loose_objects()
-    subprocess.run(["git", "--git-dir", str(remote), "update-ref", "refs/heads/dev", foreign_commit], check=True)
-    subprocess.run(["git", "-C", str(repo), "update-ref", "refs/remotes/origin/dev", foreign_commit], check=True)
+    _run_hidden(["git", "--git-dir", str(remote), "update-ref", "refs/heads/dev", foreign_commit], check=True)
+    _run_hidden(["git", "-C", str(repo), "update-ref", "refs/remotes/origin/dev", foreign_commit], check=True)
     source.write_bytes(b"dirty worktree source bytes")
     dirty_source_sha = hashlib.sha256(source.read_bytes()).hexdigest()
     manifest_value = json.loads(manifest.read_text(encoding="utf-8"))

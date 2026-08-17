@@ -1,0 +1,45 @@
+{
+  "schema": "ember-llmq-adoption-design-v1",
+  "status": "FROZEN_NOT_EXECUTED",
+  "issue": 1413,
+  "source": {
+    "repository": "https://github.com/IST-DASLab/llmq.git",
+    "branch": "dev",
+    "commit": "f5b234c4b95009dfe43ee15181be93bc3fb34563"
+  },
+  "target": {
+    "architecture": "ember-sparse-3b-v2",
+    "runner": "governed Ember training pipeline"
+  },
+  "mechanism_transfer": [
+    {"mechanism": "fp8_matmul", "decision": "CANDIDATE_AFTER_ONE_FACTOR_ATTRIBUTION", "scope": "matmul dtype only"},
+    {"mechanism": "cuda_graphs", "decision": "CANDIDATE_AFTER_ONE_FACTOR_ATTRIBUTION", "scope": "training-step launch capture only"},
+    {"mechanism": "master_weight_offload", "decision": "CANDIDATE_AFTER_ONE_FACTOR_ATTRIBUTION", "scope": "master weights only"},
+    {"mechanism": "fused_classifier", "decision": "CANDIDATE_AFTER_ONE_FACTOR_ATTRIBUTION", "scope": "classifier loss and dlogits only"}
+  ],
+  "non_transfer": [
+    "Qwen2.5-3B architecture",
+    "LLMQ checkpoint bytes",
+    "LLMQ dataset or tokenizer authority",
+    "LLMQ launch or receipt authority",
+    "unmeasured optimizer-moment offload",
+    "a broad all-fused-kernels claim"
+  ],
+  "preserved_authority": [
+    "Ember corpus identity and tokenizer",
+    "Ember architecture and checkpoint lineage",
+    "Ember CLI to Ember Lab launch authority",
+    "Ember source, binary, input, runtime, and receipt custody",
+    "independent exact-head review before trainer changes"
+  ],
+  "target_gate": {
+    "metric": "ember02_training_tok_s",
+    "threshold": "greater_than_1000",
+    "operator_trigger": "ping_on_crossing",
+    "before_after_receipts_required": true
+  },
+  "implementation_gate": "SEPARATE_REVIEW_REQUIRED",
+  "refusal_over_substitution": "REFUSAL_OVER_SUBSTITUTION",
+  "execution_claim": false,
+  "result_credit": false
+}
