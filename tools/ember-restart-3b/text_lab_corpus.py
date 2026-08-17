@@ -323,14 +323,28 @@ def _root(rows: Iterable[dict[str, Any]], split: str) -> str:
         digest.update(row["domain"].encode()+b"\0"+row["source_id"].encode()+b"\0"+bytes.fromhex(row["content_sha256"]))
     return digest.hexdigest()
 
-def _validate(rows: list[dict[str, Any]], frozen: set[str]) -> None:
+def _validate(
+    rows: list[dict[str, Any]],
+    frozen: set[str],
+    *,
+    require_domain_floor: bool = True,
+) -> None:
     if not rows: raise ValueError("text corpus source set is empty")
     seen=set(); by_domain={domain:0 for domain in DOMAINS}
     for row in rows:
         if not isinstance(row,dict) or set(row) != {"source_id","domain","license_spdx","content_sha256","l4_receipt","split"}: raise ValueError("source row schema is invalid")
         domain=row["domain"]; content=row["content_sha256"]; receipt=row["l4_receipt"]
         if domain not in by_domain or row["split"] not in {"train","heldout"}: raise ValueError("source domain or split is invalid")
-        if row["license_spdx"] not in LICENSES: raise ValueError("source license is not permitted")
+        license_spdx = row["license_spdx"]
+        if isinstance(license_spdx, list):
+            if (
+                not license_spdx
+                or license_spdx != sorted(set(license_spdx))
+                or any(not isinstance(item, str) or item not in LICENSES for item in license_spdx)
+            ):
+                raise ValueError("source license conjunction is not a closed sorted allow-set")
+        elif not isinstance(license_spdx, str) or license_spdx not in LICENSES:
+            raise ValueError("source license is not permitted")
         if not isinstance(content,str) or len(content)!=64 or content.lower()!=content: raise ValueError("source content hash is invalid")
         if content in seen: raise ValueError("duplicate source content is forbidden")
         if content in frozen: raise ValueError("source contaminates frozen eval")
@@ -340,9 +354,16 @@ def _validate(rows: list[dict[str, Any]], frozen: set[str]) -> None:
         # whole receipt from the row's license_evidence (validate_authority_index tail) - this
         # check alone is not a truth check, only a shape check, by design.
         evidence_digest = receipt.get("evidence_sha256") if isinstance(receipt, dict) else None
-        if not isinstance(receipt,dict) or not isinstance(evidence_digest,str) or _HEX.fullmatch(evidence_digest) is None or receipt != {"schema_version":"ember-text-source-receipt-v2","result":"VERIFIED","source_sha256":content,"generator":"local-normalizer-v1","verifier":"local-license-provenance-v1","model_mediated":False,"borrowed_labels":False,"license_spdx":row["license_spdx"],"evidence_sha256":evidence_digest}: raise ValueError("source L4 provenance receipt is invalid")
+        generator = receipt.get("generator") if isinstance(receipt, dict) else None
+        expected_schema = {
+            "local-normalizer-v1": "ember-text-source-receipt-v2",
+            "local-tree-root-v1": "ember-text-source-receipt-v3",
+        }.get(generator)
+        if isinstance(license_spdx, list) and generator != "local-tree-root-v1":
+            raise ValueError("source L4 provenance receipt is invalid")
+        if not isinstance(receipt,dict) or not isinstance(evidence_digest,str) or _HEX.fullmatch(evidence_digest) is None or expected_schema is None or receipt != {"schema_version":expected_schema,"result":"VERIFIED","source_sha256":content,"generator":generator,"verifier":"local-license-provenance-v1","model_mediated":False,"borrowed_labels":False,"license_spdx":license_spdx,"evidence_sha256":evidence_digest}: raise ValueError("source L4 provenance receipt is invalid")
         seen.add(content); by_domain[domain]+=1
-    if any(count < 2 for count in by_domain.values()): raise ValueError("each charter domain requires two independent sources")
+    if require_domain_floor and any(count < 2 for count in by_domain.values()): raise ValueError("each charter domain requires two independent sources")
 
 def build_manifest(entries: Iterable[dict[str, Any]], *, frozen_eval_hashes: set[str]) -> dict[str, Any]:
     rows=[dict(x) for x in entries]; _validate(rows,frozen_eval_hashes)
@@ -499,7 +520,7 @@ def validate_authority_index(repo_root: Path, *, index_relative: str = _AUTHORIT
         raise ValueError("unresolved candidate bundle result is invalid")
     if not isinstance(rows, list) or not isinstance(candidates, list) or not isinstance(protected, list):
         raise ValueError("authority payload is incomplete")
-    _protected_identifier_sets(root, protected)
+    protected_identifiers = _protected_identifier_sets(root, protected)
     candidate_map = {item.get("source_id"): item for item in candidates if isinstance(item, dict)}
     if len(candidate_map) != len(candidates):
         raise ValueError("candidate source mapping is ambiguous")
@@ -541,6 +562,26 @@ def validate_authority_index(repo_root: Path, *, index_relative: str = _AUTHORIT
     if corpus.get("train_root_sha256") != _authority_split_root(rows, "train") or corpus.get("heldout_root_sha256") != _authority_split_root(rows, "heldout"):
         raise ValueError("authority corpus split root does not match")
 
+    # A partial v2 successor still makes row-local `admission: ADMITTED` claims even though
+    # the corpus as a whole remains NOT_ADMITTED. Validate those admitted rows now, before
+    # the terminal partial return: exact L4 literal, duplicate content, protected-eval
+    # exclusion, and evidence re-derivation cannot be deferred until all 44 slots resolve.
+    if admitted_rows:
+        _validate(
+            admitted_rows,
+            protected_identifiers["content_sha256"],
+            require_domain_floor=False,
+        )
+        for evidence_row in admitted_evidence_rows:
+            recomputed = local_license_provenance_v1(
+                content_sha256=evidence_row["content_sha256"],
+                license_spdx=evidence_row["license_spdx"],
+                evidence=evidence_row["license_evidence"],
+                generator=evidence_row["l4_receipt"].get("generator", ""),
+            )
+            if recomputed != evidence_row["l4_receipt"]:
+                raise ValueError("source license evidence does not re-derive the claimed receipt")
+
     base_receipt = {
         "authority_index_sha256": _sha_bytes(index_bytes),
         "registry_sha256": _sha_bytes(registry_bytes),
@@ -575,18 +616,4 @@ def validate_authority_index(repo_root: Path, *, index_relative: str = _AUTHORIT
         raise ValueError("frozen eval hash registry is required for VERIFIED and is empty")
     _validate(admitted_rows, frozen_hashes)
 
-    # Finding 1/1b: `_validate`'s receipt check above is SHAPE-only (no evidence dict to
-    # re-derive from). Re-run the actual verifier per admitted row and require its output
-    # equal the row's claimed receipt exactly — this is what makes the license claim TRUE,
-    # not merely well-formed: a swapped license_spdx, a forged receipt with no valid evidence,
-    # or evidence that doesn't prove what the row declares all fail here, at the verifier's
-    # own raise or at the equality check.
-    for evidence_row in admitted_evidence_rows:
-        recomputed = local_license_provenance_v1(
-            content_sha256=evidence_row["content_sha256"],
-            license_spdx=evidence_row["license_spdx"],
-            evidence=evidence_row["license_evidence"],
-        )
-        if recomputed != evidence_row["l4_receipt"]:
-            raise ValueError("source license evidence does not re-derive the claimed receipt")
     return {"result": "VERIFIED", **base_receipt}
