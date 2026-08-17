@@ -1,0 +1,495 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02B
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+from __future__ import annotations
+
+import hashlib
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+import pytest
+
+
+ROOT = Path(__file__).resolve().parents[2]
+TOOLS = ROOT / "tools" / "ember-restart-3b"
+if str(TOOLS) not in sys.path:
+    sys.path.insert(0, str(TOOLS))
+
+import text_lab_corpus  # noqa: E402
+
+
+def _canonical(value: object) -> bytes:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def _sha(raw: bytes) -> str:
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _write(path: Path, value: object) -> bytes:
+    raw = _canonical(value)
+    path.write_bytes(raw)
+    return raw
+
+
+def _load_producer():
+    path = ROOT / "tools" / "ember-restart-3b" / "mint_issue1719_tranche_admission.py"
+    spec = importlib.util.spec_from_file_location("mint_issue1719_tranche_admission", path)
+    if spec is None or spec.loader is None:
+        pytest.fail("canonical #1719 tranche admission producer is unavailable")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+    except FileNotFoundError:
+        pytest.fail("canonical #1719 tranche admission producer is unavailable")
+    return module
+
+
+def _source_custody(tmp_path: Path) -> tuple[Path, str, str]:
+    custody = tmp_path / "predecessor"
+    custody.mkdir()
+    data = ROOT / "data" / "ember-restart-3b"
+    rows = json.loads((data / "owned-text-lab-corpus-v2.json").read_bytes())["sources"]
+    registry_raw = (data / "protected-eval-registry-v2.json").read_bytes()
+    bundle = {
+        "schema_version": "ember-text-source-receipt-bundle-v3",
+        "result": "UNRESOLVED_CANDIDATE",
+        "candidates": rows,
+    }
+    bundle_raw = _write(custody / "text-lab-source-receipt-bundle-v3.json", bundle)
+    corpus = {
+        "schema_version": "ember-text-lab-corpus-v3",
+        "registry_sha256": _sha(registry_raw),
+        "receipt_bundle_sha256": _sha(bundle_raw),
+        "sources": rows,
+        "train_root_sha256": text_lab_corpus._authority_split_root(rows, "train"),
+        "heldout_root_sha256": text_lab_corpus._authority_split_root(rows, "heldout"),
+    }
+    corpus_raw = _write(custody / "owned-text-lab-corpus-v3.json", corpus)
+    code_files = {
+        # The predecessor was minted before the external-root validator existed. Its
+        # exact identity must remain source evidence while the successor rebinds current code.
+        "text_lab_corpus": "f" * 64,
+        "train": _sha((TOOLS / "train.py").read_bytes()),
+        "run_vertical_slice": _sha((TOOLS / "run_vertical_slice.py").read_bytes()),
+    }
+    identity = {
+        "schema_version": "ember-text-lab-input-identity-v2",
+        "corpus_sha256": _sha(corpus_raw),
+        "code_files": code_files,
+        "source_base_commit": "4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+    }
+    identity_raw = _write(custody / "owned-text-lab-input-identity-v3.json", identity)
+    scratch_prefix = ".issue1719-deleted-mint-fixture"
+    index = {
+        "schema_version": "ember-text-lab-authority-index-v2",
+        "result": "PREFLIGHT_ONLY",
+        "boundary": "NO_ACQUISITION_NO_TRAINING_NO_SUFFICIENT_PRETRAINING_CLAIM",
+        "registry": {
+            "path": "data/ember-restart-3b/protected-eval-registry-v2.json",
+            "sha256": _sha(registry_raw),
+            "schema": {
+                "path": "data/ember-restart-3b/text-lab-registry-v2.schema.json",
+                "sha256": _sha((data / "text-lab-registry-v2.schema.json").read_bytes()),
+            },
+        },
+        "receipt_bundle": {
+            "path": f"{scratch_prefix}/text-lab-source-receipt-bundle-v3.json",
+            "sha256": _sha(bundle_raw),
+            "schema": {
+                "path": "data/ember-restart-3b/text-lab-bundle-v3.schema.json",
+                "sha256": _sha((data / "text-lab-bundle-v3.schema.json").read_bytes()),
+            },
+        },
+        "corpus": {
+            "path": f"{scratch_prefix}/owned-text-lab-corpus-v3.json",
+            "sha256": _sha(corpus_raw),
+            "schema": {
+                "path": "data/ember-restart-3b/text-lab-corpus-v3.schema.json",
+                "sha256": _sha((data / "text-lab-corpus-v3.schema.json").read_bytes()),
+            },
+        },
+        "input_identity": {
+            "path": f"{scratch_prefix}/owned-text-lab-input-identity-v3.json",
+            "sha256": _sha(identity_raw),
+            "schema": {
+                "path": "data/ember-restart-3b/text-lab-identity-v2.schema.json",
+                "sha256": _sha((data / "text-lab-identity-v2.schema.json").read_bytes()),
+            },
+        },
+    }
+    index_raw = _write(custody / "text-lab-authority-index-v2.json", index)
+    generated = {
+        "owned-text-lab-corpus-v3.json": {"bytes": len(corpus_raw), "sha256": _sha(corpus_raw)},
+        "owned-text-lab-input-identity-v3.json": {"bytes": len(identity_raw), "sha256": _sha(identity_raw)},
+        "text-lab-authority-index-v2.json": {"bytes": len(index_raw), "sha256": _sha(index_raw)},
+        "text-lab-source-receipt-bundle-v3.json": {"bytes": len(bundle_raw), "sha256": _sha(bundle_raw)},
+    }
+    receipt = {
+        "admitted_row_count": 0,
+        "boundary": "NO_CORPUS_BYTE_MOVEMENT_NO_TRAINING_NO_SUFFICIENT_PRETRAINING_CLAIM",
+        "generated_files": generated,
+        "minted_at": "2026-08-17T00:00:00+00:00",
+        "negative_receipts": {},
+        "overall_authority_result": "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING",
+        "reopened_connector_file_count": 0,
+        "reopened_connector_total_bytes": 0,
+        "result": "PARTIAL_AUTHORITY_SUCCESSOR",
+        "row_receipts": [],
+        "schema_version": "ember-issue1719-tranche3-admission-v1",
+        "source_authority": {"fixture": "0" * 64},
+        "source_code_files": code_files,
+        "source_commit": "4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+        "unresolved_row_count": 44,
+        "validation_receipt": {"result": "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING"},
+    }
+    receipt_raw = _write(custody / "tranche3-admission-receipt.json", receipt)
+    _write(
+        custody / "mint-log.json",
+        {
+            "schema_version": "ember-issue1719-tranche3-mint-log-v1",
+            "source_commit": receipt["source_commit"],
+            "adapter_path": "tools/ember-restart-3b/text_lab_corpus.py",
+            "adapter_sha256": code_files["text_lab_corpus"],
+            "receipt_sha256": _sha(receipt_raw),
+            "event": "FIXTURE_PREDECESSOR",
+            "overall_authority_result": receipt["overall_authority_result"],
+        },
+    )
+    return custody, _sha(receipt_raw), _sha(index_raw)
+
+
+def test_generic_successor_republishes_packet_local_authority_and_reopens_it(tmp_path: Path):
+    producer = _load_producer()
+    custody, predecessor_sha, predecessor_index_sha = _source_custody(tmp_path)
+    plan_path = tmp_path / "plan.json"
+    plan_raw = _write(
+        plan_path,
+        {
+            "schema_version": "ember-issue1719-tranche-admission-plan-v1",
+            "successor_id": "tranche3r",
+            "cases": [],
+        },
+    )
+    source_hashes = {path.name: _sha(path.read_bytes()) for path in custody.iterdir() if path.is_file()}
+    output = tmp_path / "published"
+
+    result = producer.mint_successor(
+        repo=ROOT,
+        source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+        source_custody=custody,
+        predecessor_receipt_name="tranche3-admission-receipt.json",
+        predecessor_receipt_sha256=predecessor_sha,
+        plan_path=plan_path,
+        plan_sha256=_sha(plan_raw),
+        output=output,
+    )
+
+    assert {path.name: _sha(path.read_bytes()) for path in custody.iterdir() if path.is_file()} == source_hashes
+    index = json.loads((output / "text-lab-authority-index-v2.json").read_bytes())
+    assert index["receipt_bundle"]["path"] == "text-lab-source-receipt-bundle-v3.json"
+    assert index["corpus"]["path"] == "owned-text-lab-corpus-v3.json"
+    assert index["input_identity"]["path"] == "owned-text-lab-input-identity-v3.json"
+    reopened = text_lab_corpus.validate_authority_index(
+        ROOT,
+        index_relative="text-lab-authority-index-v2.json",
+        external_authority_root=output,
+    )
+    assert reopened == result["validation_receipt"]
+    receipt = json.loads((output / "tranche-admission-receipt.json").read_bytes())
+    assert receipt["predecessor"]["receipt_sha256"] == predecessor_sha
+    assert receipt["index_transition"] == {
+        "predecessor_sha256": predecessor_index_sha,
+        "successor_sha256": _sha((output / "text-lab-authority-index-v2.json").read_bytes()),
+        "rewrite": "scratch-relative artifact paths replaced by packet-local basenames",
+    }
+    assert receipt["identity_transition"]["predecessor_sha256"] != receipt["identity_transition"]["successor_sha256"]
+    assert (output / "tranche-admission-plan.json").read_bytes() == plan_raw
+    assert receipt["plan"] == {
+        "file_name": "tranche-admission-plan.json",
+        "sha256": _sha(plan_raw),
+        "successor_id": "tranche3r",
+    }
+    assert result["result"] == "PARTIAL_AUTHORITY_SUCCESSOR"
+
+
+def test_generic_successor_admits_one_closed_connector_case(tmp_path: Path):
+    producer = _load_producer()
+    custody, predecessor_sha, _ = _source_custody(tmp_path)
+    connector_root = tmp_path / "connector"
+    connector_root.mkdir()
+    source_raw = b"human-authored licensed mathematics source\n"
+    (connector_root / "source.txt").write_bytes(source_raw)
+    source_sha = _sha(source_raw)
+    connector = {
+        "schema": "corpus-connector-receipt-v1",
+        "connector": {"name": "fixture_fetch", "version": "v1"},
+        "source": "fixture",
+        "source_id": "fixture/math",
+        "canonical_url": "https://example.invalid/math",
+        "revision": "fixture-v1",
+        "dest_root": str(connector_root),
+        "fetched_at": "2026-08-17T00:00:00Z",
+        "files": [{"path": "source.txt", "bytes": len(source_raw), "sha256": source_sha}],
+        "total_bytes": len(source_raw),
+        "sha256_manifest": _sha(source_sha.encode("utf-8")),
+        "license": "CC-BY-4.0",
+        "license_evidence": "publisher terms",
+        "l3_statement": "fetch-only; no model mediation",
+        "notes": "fixture",
+    }
+    connector_path = tmp_path / "connector-receipt.json"
+    connector_raw = _write(connector_path, connector)
+    plan_path = tmp_path / "plan.json"
+    plan_raw = _write(
+        plan_path,
+        {
+            "schema_version": "ember-issue1719-tranche-admission-plan-v1",
+            "successor_id": "tranche4",
+            "cases": [
+                {
+                    "source_id": "candidate-mathematics-train-0",
+                    "connector_slot": "fixture-math",
+                    "connector_receipt_path": str(connector_path),
+                    "connector_receipt_sha256": _sha(connector_raw),
+                    "expected_license_spdx": "CC-BY-4.0",
+                    "evidence": {
+                        "kind": "publisher_terms",
+                        "terms_url": "https://example.invalid/license",
+                        "declared_spdx": "CC-BY-4.0",
+                    },
+                }
+            ],
+        },
+    )
+    output = tmp_path / "published"
+
+    producer.mint_successor(
+        repo=ROOT,
+        source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+        source_custody=custody,
+        predecessor_receipt_name="tranche3-admission-receipt.json",
+        predecessor_receipt_sha256=predecessor_sha,
+        plan_path=plan_path,
+        plan_sha256=_sha(plan_raw),
+        output=output,
+    )
+
+    corpus = json.loads((output / "owned-text-lab-corpus-v3.json").read_bytes())
+    admitted = [row for row in corpus["sources"] if row["admission"] == "ADMITTED"]
+    assert len(admitted) == 1
+    assert admitted[0]["source_id"] == "candidate-mathematics-train-0"
+    assert admitted[0]["content_sha256"] == source_sha
+    receipt = json.loads((output / "tranche-admission-receipt.json").read_bytes())
+    assert receipt["admitted_row_count"] == 1
+    assert receipt["unresolved_row_count"] == 43
+    assert receipt["row_receipts"][0]["connector_receipt_sha256"] == _sha(connector_raw)
+
+
+def test_generic_successor_chains_from_its_own_published_receipt(tmp_path: Path):
+    producer = _load_producer()
+    custody, predecessor_sha, _ = _source_custody(tmp_path)
+    first_plan = tmp_path / "first-plan.json"
+    first_plan_raw = _write(
+        first_plan,
+        {"schema_version": "ember-issue1719-tranche-admission-plan-v1", "successor_id": "tranche3r", "cases": []},
+    )
+    first_output = tmp_path / "first-published"
+    first = producer.mint_successor(
+        repo=ROOT,
+        source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+        source_custody=custody,
+        predecessor_receipt_name="tranche3-admission-receipt.json",
+        predecessor_receipt_sha256=predecessor_sha,
+        plan_path=first_plan,
+        plan_sha256=_sha(first_plan_raw),
+        output=first_output,
+    )
+    second_plan = tmp_path / "second-plan.json"
+    second_plan_raw = _write(
+        second_plan,
+        {"schema_version": "ember-issue1719-tranche-admission-plan-v1", "successor_id": "tranche4", "cases": []},
+    )
+    second_output = tmp_path / "second-published"
+
+    second = producer.mint_successor(
+        repo=ROOT,
+        source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+        source_custody=first_output,
+        predecessor_receipt_name="tranche-admission-receipt.json",
+        predecessor_receipt_sha256=first["receipt_sha256"],
+        plan_path=second_plan,
+        plan_sha256=_sha(second_plan_raw),
+        output=second_output,
+    )
+
+    receipt = json.loads((second_output / "tranche-admission-receipt.json").read_bytes())
+    assert receipt["predecessor"]["receipt_sha256"] == first["receipt_sha256"]
+    assert second["validation_receipt"] == text_lab_corpus.validate_authority_index(
+        ROOT,
+        index_relative="text-lab-authority-index-v2.json",
+        external_authority_root=second_output,
+    )
+
+
+def test_generic_successor_refuses_to_overwrite_existing_output(tmp_path: Path):
+    producer = _load_producer()
+    custody, predecessor_sha, _ = _source_custody(tmp_path)
+    plan_path = tmp_path / "plan.json"
+    plan_raw = _write(
+        plan_path,
+        {"schema_version": "ember-issue1719-tranche-admission-plan-v1", "successor_id": "tranche3r", "cases": []},
+    )
+    output = tmp_path / "published"
+    output.mkdir()
+    sentinel = output / "operator-owned.txt"
+    sentinel.write_bytes(b"preserve me")
+
+    with pytest.raises(FileExistsError, match="output already exists"):
+        producer.mint_successor(
+            repo=ROOT,
+            source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+            source_custody=custody,
+            predecessor_receipt_name="tranche3-admission-receipt.json",
+            predecessor_receipt_sha256=predecessor_sha,
+            plan_path=plan_path,
+            plan_sha256=_sha(plan_raw),
+            output=output,
+        )
+
+    assert sentinel.read_bytes() == b"preserve me"
+    assert {path.name for path in output.iterdir()} == {"operator-owned.txt"}
+
+
+def test_generic_successor_loses_publish_race_without_replacing_foreign_custody(tmp_path: Path, monkeypatch):
+    producer = _load_producer()
+    custody, predecessor_sha, _ = _source_custody(tmp_path)
+    plan_path = tmp_path / "plan.json"
+    plan_raw = _write(
+        plan_path,
+        {"schema_version": "ember-issue1719-tranche-admission-plan-v1", "successor_id": "tranche3r", "cases": []},
+    )
+    output = tmp_path / "published"
+    real_publish = producer.atomic_publish_no_replace
+
+    def publish_after_foreign_winner(source: Path, destination: Path):
+        destination.mkdir()
+        (destination / "foreign.txt").write_bytes(b"foreign custody wins")
+        return real_publish(source, destination)
+
+    monkeypatch.setattr(producer, "atomic_publish_no_replace", publish_after_foreign_winner)
+    with pytest.raises(FileExistsError):
+        producer.mint_successor(
+            repo=ROOT,
+            source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+            source_custody=custody,
+            predecessor_receipt_name="tranche3-admission-receipt.json",
+            predecessor_receipt_sha256=predecessor_sha,
+            plan_path=plan_path,
+            plan_sha256=_sha(plan_raw),
+            output=output,
+        )
+
+    assert (output / "foreign.txt").read_bytes() == b"foreign custody wins"
+    assert not list(tmp_path.glob(".published.staging-*"))
+
+
+def test_generic_successor_refuses_forged_predecessor_validation_receipt(tmp_path: Path):
+    producer = _load_producer()
+    custody, predecessor_sha, _ = _source_custody(tmp_path)
+    first_plan = tmp_path / "first-plan.json"
+    first_plan_raw = _write(
+        first_plan,
+        {"schema_version": "ember-issue1719-tranche-admission-plan-v1", "successor_id": "tranche3r", "cases": []},
+    )
+    first_output = tmp_path / "first-published"
+    producer.mint_successor(
+        repo=ROOT,
+        source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+        source_custody=custody,
+        predecessor_receipt_name="tranche3-admission-receipt.json",
+        predecessor_receipt_sha256=predecessor_sha,
+        plan_path=first_plan,
+        plan_sha256=_sha(first_plan_raw),
+        output=first_output,
+    )
+    receipt_path = first_output / "tranche-admission-receipt.json"
+    receipt = json.loads(receipt_path.read_bytes())
+    receipt["validation_receipt"]["authority_index_sha256"] = "0" * 64
+    forged_receipt_raw = _write(receipt_path, receipt)
+    log_path = first_output / "mint-log.json"
+    log = json.loads(log_path.read_bytes())
+    log["receipt_sha256"] = _sha(forged_receipt_raw)
+    _write(log_path, log)
+    next_plan = tmp_path / "next-plan.json"
+    next_plan_raw = _write(
+        next_plan,
+        {"schema_version": "ember-issue1719-tranche-admission-plan-v1", "successor_id": "tranche4", "cases": []},
+    )
+
+    with pytest.raises(ValueError, match="predecessor validation receipt changed"):
+        producer.mint_successor(
+            repo=ROOT,
+            source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+            source_custody=first_output,
+            predecessor_receipt_name="tranche-admission-receipt.json",
+            predecessor_receipt_sha256=_sha(forged_receipt_raw),
+            plan_path=next_plan,
+            plan_sha256=_sha(next_plan_raw),
+            output=tmp_path / "second-published",
+        )
+
+
+def test_generic_successor_refuses_nonfile_in_predecessor_custody(tmp_path: Path):
+    producer = _load_producer()
+    custody, predecessor_sha, _ = _source_custody(tmp_path)
+    (custody / "unbound-directory").mkdir()
+    plan_path = tmp_path / "plan.json"
+    plan_raw = _write(
+        plan_path,
+        {"schema_version": "ember-issue1719-tranche-admission-plan-v1", "successor_id": "tranche3r", "cases": []},
+    )
+    with pytest.raises(ValueError, match="predecessor custody file set is not exact"):
+        producer.mint_successor(
+            repo=ROOT,
+            source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+            source_custody=custody,
+            predecessor_receipt_name="tranche3-admission-receipt.json",
+            predecessor_receipt_sha256=predecessor_sha,
+            plan_path=plan_path,
+            plan_sha256=_sha(plan_raw),
+            output=tmp_path / "published",
+        )
+
+
+def test_generic_successor_refuses_postpublish_nonfile_and_rolls_back(tmp_path: Path, monkeypatch):
+    producer = _load_producer()
+    custody, predecessor_sha, _ = _source_custody(tmp_path)
+    plan_path = tmp_path / "plan.json"
+    plan_raw = _write(
+        plan_path,
+        {"schema_version": "ember-issue1719-tranche-admission-plan-v1", "successor_id": "tranche3r", "cases": []},
+    )
+    output = tmp_path / "published"
+    real_publish = producer.atomic_publish_no_replace
+
+    def publish_then_add_unbound_directory(source: Path, destination: Path):
+        real_publish(source, destination)
+        (destination / "unbound-directory").mkdir()
+
+    monkeypatch.setattr(producer, "atomic_publish_no_replace", publish_then_add_unbound_directory)
+    with pytest.raises(ValueError, match="published custody file set changed on reopen"):
+        producer.mint_successor(
+            repo=ROOT,
+            source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+            source_custody=custody,
+            predecessor_receipt_name="tranche3-admission-receipt.json",
+            predecessor_receipt_sha256=predecessor_sha,
+            plan_path=plan_path,
+            plan_sha256=_sha(plan_raw),
+            output=output,
+        )
+    assert not output.exists()
