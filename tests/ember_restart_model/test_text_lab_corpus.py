@@ -289,6 +289,21 @@ def _default_frozen_eval_hashes():
     return {sha(b"held-out canary content, never claimed by an admitted row")}
 
 
+def _partial_admitted_rows():
+    rows = _admitted_rows()
+    for index, row in enumerate(rows):
+        if index >= 4:
+            rows[index] = {
+                "source_id": row["source_id"],
+                "domain": row["domain"],
+                "split": row["split"],
+                "admission": "UNRESOLVED_CANDIDATE",
+                "required_evidence": _REQUIRED_EVIDENCE_V2,
+                "allowed_license_spdx": _ALLOWED_LICENSES_SORTED,
+            }
+    return rows
+
+
 def _write_v2_fixture(root, rows, *, bundle_result="RESOLVED", frozen_eval_hashes=None, corrupt_code_after=False):
     from text_lab_corpus import _authority_split_root
     shutil.copytree(ROOT / "data", root / "data")
@@ -387,6 +402,98 @@ class TextLabResolverV2Tests(unittest.TestCase):
         result = self._validate_v2(root)
         self.assertEqual(result["result"], "VERIFIED")
 
+    def test_fully_admitted_v2_accepts_closed_conjunctive_tree_license(self):
+        from text_lab_corpus import local_license_provenance_v1
+
+        rows = _admitted_rows()
+        row = rows[0]
+        row["license_spdx"] = ["CC-BY-4.0", "MIT"]
+        row["license_evidence"] = {
+            "kind": "spdx_repo_license",
+            "license_sha256": sha(b"pinned multi-file LICENSE artifact"),
+            "declared_spdx": ["CC-BY-4.0", "MIT"],
+        }
+        row["l4_receipt"] = local_license_provenance_v1(
+            content_sha256=row["content_sha256"],
+            license_spdx=row["license_spdx"],
+            evidence=row["license_evidence"],
+            generator="local-tree-root-v1",
+        )
+        root = self._fixture_root(rows, frozen_eval_hashes=_default_frozen_eval_hashes())
+        result = self._validate_v2(root)
+        self.assertEqual(result["result"], "VERIFIED")
+
+    def test_conjunctive_tree_license_with_scalar_generator_refuses(self):
+        from text_lab_corpus import local_license_provenance_v1
+
+        rows = _admitted_rows()
+        row = rows[0]
+        row["license_spdx"] = ["CC-BY-4.0", "MIT"]
+        row["license_evidence"] = {
+            "kind": "spdx_repo_license",
+            "license_sha256": sha(b"pinned multi-file LICENSE artifact"),
+            "declared_spdx": ["CC-BY-4.0", "MIT"],
+        }
+        row["l4_receipt"] = local_license_provenance_v1(
+            content_sha256=row["content_sha256"],
+            license_spdx=row["license_spdx"],
+            evidence=row["license_evidence"],
+            generator="local-tree-root-v1",
+        )
+        row["l4_receipt"]["generator"] = "local-normalizer-v1"
+        root = self._fixture_root(rows, frozen_eval_hashes=_default_frozen_eval_hashes())
+        with self.assertRaisesRegex(ValueError, "L4 provenance receipt"):
+            self._validate_v2(root)
+
+    def test_unsorted_conjunctive_license_refuses_after_schema_admission(self):
+        from text_lab_corpus import local_license_provenance_v1
+
+        rows = _admitted_rows()
+        row = rows[0]
+        row["license_spdx"] = ["CC-BY-4.0", "MIT"]
+        row["license_evidence"] = {
+            "kind": "spdx_repo_license",
+            "license_sha256": sha(b"pinned multi-file LICENSE artifact"),
+            "declared_spdx": ["CC-BY-4.0", "MIT"],
+        }
+        row["l4_receipt"] = local_license_provenance_v1(
+            content_sha256=row["content_sha256"],
+            license_spdx=row["license_spdx"],
+            evidence=row["license_evidence"],
+            generator="local-tree-root-v1",
+        )
+        row["license_spdx"] = ["MIT", "CC-BY-4.0"]
+        row["license_evidence"]["declared_spdx"] = ["MIT", "CC-BY-4.0"]
+        row["l4_receipt"]["license_spdx"] = ["MIT", "CC-BY-4.0"]
+        root = self._fixture_root(rows, frozen_eval_hashes=_default_frozen_eval_hashes())
+        with self.assertRaisesRegex(ValueError, "closed sorted allow-set"):
+            self._validate_v2(root)
+
+    def test_duplicate_conjunctive_license_refuses_in_bound_schema(self):
+        rows = _admitted_rows()
+        row = rows[0]
+        duplicated = ["MIT", "MIT"]
+        row["license_spdx"] = duplicated
+        row["license_evidence"] = {
+            "kind": "spdx_repo_license",
+            "license_sha256": sha(b"pinned multi-file LICENSE artifact"),
+            "declared_spdx": duplicated,
+        }
+        row["l4_receipt"] = {
+            "schema_version": "ember-text-source-receipt-v3",
+            "result": "VERIFIED",
+            "source_sha256": row["content_sha256"],
+            "generator": "local-tree-root-v1",
+            "verifier": "local-license-provenance-v1",
+            "model_mediated": False,
+            "borrowed_labels": False,
+            "license_spdx": duplicated,
+            "evidence_sha256": sha(json.dumps(row["license_evidence"], sort_keys=True, separators=(",", ":")).encode()),
+        }
+        root = self._fixture_root(rows, frozen_eval_hashes=_default_frozen_eval_hashes())
+        with self.assertRaisesRegex(ValueError, "authority schema rejects bytes"):
+            self._validate_v2(root)
+
     def test_one_unadmitted_slot_among_admitted_refuses(self):
         # Caught by: the `all_admitted` gate at the tail of validate_authority_index (43 rows
         # ADMITTED + 1 still UNRESOLVED_CANDIDATE -> all_admitted=False -> falls through to
@@ -402,6 +509,37 @@ class TextLabResolverV2Tests(unittest.TestCase):
         root = self._fixture_root(rows, bundle_result="UNRESOLVED_CANDIDATE")
         result = self._validate_v2(root)
         self.assertEqual(result["result"], "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING")
+
+    def test_partial_admitted_rows_are_individually_validated_before_terminal_refusal(self):
+        rows = _partial_admitted_rows()
+        rows[1]["content_sha256"] = rows[0]["content_sha256"]
+        rows[1]["l4_receipt"]["source_sha256"] = rows[0]["content_sha256"]
+        root = self._fixture_root(rows, bundle_result="UNRESOLVED_CANDIDATE")
+        with self.assertRaisesRegex(ValueError, "duplicate"):
+            self._validate_v2(root)
+
+    def test_partial_admitted_row_cannot_contaminate_protected_eval(self):
+        rows = _partial_admitted_rows()
+        protected_content = "76080f5597b8f4d29abba8551489c4b82e4a285b9d62b946fd67a1952e95502c"
+        rows[0]["content_sha256"] = protected_content
+        rows[0]["l4_receipt"]["source_sha256"] = protected_content
+        root = self._fixture_root(rows, bundle_result="UNRESOLVED_CANDIDATE")
+        with self.assertRaisesRegex(ValueError, "frozen eval"):
+            self._validate_v2(root)
+
+    def test_partial_admitted_row_rederives_license_evidence(self):
+        rows = _partial_admitted_rows()
+        rows[0]["license_evidence"] = {"kind": "not_a_real_route"}
+        root = self._fixture_root(rows, bundle_result="UNRESOLVED_CANDIDATE")
+        with self.assertRaisesRegex(ValueError, "kind is not recognized"):
+            self._validate_v2(root)
+
+    def test_partial_admitted_row_refuses_mismatched_generator(self):
+        rows = _partial_admitted_rows()
+        rows[0]["l4_receipt"]["generator"] = "local-tree-root-v1"
+        root = self._fixture_root(rows, bundle_result="UNRESOLVED_CANDIDATE")
+        with self.assertRaisesRegex(ValueError, "L4 provenance receipt"):
+            self._validate_v2(root)
 
     def test_duplicate_content_hash_across_admitted_slots_refuses(self):
         # Caught by: reused `_validate` (text_lab_corpus.py, "duplicate source content is
