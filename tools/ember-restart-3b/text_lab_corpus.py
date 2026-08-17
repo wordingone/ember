@@ -16,6 +16,13 @@ from typing import Any, Iterable
 
 DOMAINS = ("mathematics", "statistics", "physics", "computer_science", "ml_ai", "training_infrastructure", "formal_logic", "software_engineering", "data_evaluation", "scientific_method", "application_worlds")
 LICENSES = {"CC0-1.0", "CC-BY-4.0", "MIT", "Apache-2.0", "BSD-3-Clause", "PDDL-1.0", "ODC-By-1.0"}
+_HF_DATASET_CARD_LICENSES = {
+    "apache-2.0": "Apache-2.0",
+    "bsd-3-clause": "BSD-3-Clause",
+    "cc-by-4.0": "CC-BY-4.0",
+    "cc0-1.0": "CC0-1.0",
+    "mit": "MIT",
+}
 _UNRESOLVED_EVIDENCE = ["source_descriptor", "source_content", "license_evidence", "policy", "verifier_result"]
 
 
@@ -50,6 +57,8 @@ def local_license_provenance_v1(
         declares; license_spdx must match that declared id.
       - "publisher_terms": evidence carries the publisher's stated terms url/sha + the exact
         SPDX id those terms map to (e.g. PLOS's CC-BY-4.0 policy).
+      - "hf_dataset_card": evidence binds the exact reopened root README.md and its sha256;
+        the leading closed YAML front matter must declare exactly one known license token.
       - "us_gov_federal_authorship": PD->CC0 rule. Evidence must attest the work is authored by
         a US federal employee as part of official duties (17 USC 105) with an agency name and an
         attestation statement; license_spdx must be exactly "CC0-1.0" (there is no "Public
@@ -85,6 +94,15 @@ def local_license_provenance_v1(
     elif kind == "publisher_terms":
         if not isinstance(evidence.get("terms_url"), str) or not evidence["terms_url"] or evidence.get("declared_spdx") != license_spdx:
             raise ValueError("publisher terms evidence does not prove the declared SPDX id")
+    elif kind == "hf_dataset_card":
+        if (
+            set(evidence) != {"kind", "card_path", "card_sha256", "declared_spdx"}
+            or evidence.get("card_path") != "README.md"
+            or not isinstance(evidence.get("card_sha256"), str)
+            or _HEX.fullmatch(evidence["card_sha256"]) is None
+            or evidence.get("declared_spdx") != license_spdx
+        ):
+            raise ValueError("Hugging Face dataset card evidence does not prove the declared SPDX id")
     elif kind == "us_gov_federal_authorship":
         if license_spdx != "CC0-1.0":
             raise ValueError("US-gov PD provenance only admits under CC0-1.0")
@@ -183,7 +201,20 @@ def adapt_connector_receipt(receipt: dict[str, Any], *, evidence: dict[str, Any]
     raw_license = receipt.get("license")
     license_spdx = _closed_connector_license(raw_license)
     if isinstance(license_spdx, list) or len(verified_entries) > 1:
-        _bind_multi_file_license_artifact(verified_entries, evidence)
+        has_repository_license = any(
+            PurePosixPath(entry["path"]).name.upper().startswith("LICENSE")
+            for entry in verified_entries
+        )
+        if has_repository_license or evidence.get("kind") != "hf_dataset_card":
+            _bind_multi_file_license_artifact(verified_entries, evidence)
+        else:
+            _bind_hf_dataset_card_license(
+                receipt,
+                verified_entries,
+                raw_by_path,
+                evidence,
+                license_spdx,
+            )
     if len(verified_entries) == 1:
         raw_bytes = raw_by_path[verified_entries[0]["path"]]
         _, content_sha256 = local_normalizer_v1(raw_bytes)
@@ -303,6 +334,68 @@ def _multi_file_content_root(entries: list[dict[str, Any]]) -> str:
     canonical_entries = sorted(entries, key=lambda entry: entry["path"].encode("utf-8"))
     payload = json.dumps(canonical_entries, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     return _sha_bytes(b"ember-text-source-tree-v1\0" + payload)
+
+
+def _hf_dataset_card_license(raw: bytes) -> str:
+    try:
+        lines = raw.decode("utf-8", errors="strict").splitlines()
+    except UnicodeDecodeError as exc:
+        raise ValueError("Hugging Face dataset card is not strict UTF-8") from exc
+    if not lines or lines[0] != "---":
+        raise ValueError("Hugging Face dataset card lacks leading YAML front matter")
+    try:
+        close = lines.index("---", 1)
+    except ValueError as exc:
+        raise ValueError("Hugging Face dataset card front matter is not closed") from exc
+    declared: list[str] = []
+    for line in lines[1:close]:
+        if line.lstrip().lower().startswith("license"):
+            match = re.fullmatch(r"license:\s*([A-Za-z0-9][A-Za-z0-9.-]*)\s*", line)
+            if match is None:
+                raise ValueError("Hugging Face dataset card license entry is malformed")
+            declared.append(match.group(1))
+    if len(declared) != 1:
+        raise ValueError("Hugging Face dataset card must contain exactly one license key")
+    canonical = _HF_DATASET_CARD_LICENSES.get(declared[0].lower())
+    if canonical is None:
+        raise ValueError("Hugging Face dataset card license is not on the closed map")
+    return canonical
+
+
+def _bind_hf_dataset_card_license(
+    receipt: dict[str, Any],
+    entries: list[dict[str, Any]],
+    raw_by_path: dict[str, bytes],
+    evidence: dict[str, Any],
+    license_spdx: str | list[str],
+) -> None:
+    if (
+        receipt.get("source") != "huggingface"
+        or receipt.get("connector") != {"name": "hf_fetch", "version": "v1"}
+    ):
+        raise ValueError("Hugging Face dataset card evidence requires the closed hf_fetch connector")
+    if (
+        not isinstance(evidence, dict)
+        or set(evidence) != {"kind", "card_path", "card_sha256", "declared_spdx"}
+        or evidence.get("kind") != "hf_dataset_card"
+        or evidence.get("card_path") != "README.md"
+        or not isinstance(evidence.get("card_sha256"), str)
+        or _HEX.fullmatch(evidence["card_sha256"]) is None
+    ):
+        raise ValueError("Hugging Face dataset card evidence is malformed")
+    matches = [
+        entry for entry in entries
+        if entry["path"] == "README.md" and entry["sha256"] == evidence["card_sha256"]
+    ]
+    if len(matches) != 1 or "README.md" not in raw_by_path:
+        raise ValueError("Hugging Face dataset card is not bound to the exact reopened README.md")
+    card_license = _hf_dataset_card_license(raw_by_path["README.md"])
+    if (
+        isinstance(license_spdx, list)
+        or card_license != license_spdx
+        or evidence.get("declared_spdx") != license_spdx
+    ):
+        raise ValueError("Hugging Face dataset card, connector, and declared SPDX licenses differ")
 
 
 def _bind_multi_file_license_artifact(entries: list[dict[str, Any]], evidence: dict[str, Any]) -> None:

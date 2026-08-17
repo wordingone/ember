@@ -842,6 +842,128 @@ class ConnectorReceiptAdapterTests(unittest.TestCase):
             "declared_spdx": ["CC-BY-4.0", "MIT"],
         }
 
+    def _hf_dataset_card_evidence(self, card_bytes, *, declared_spdx="Apache-2.0", card_path="README.md"):
+        return {
+            "kind": "hf_dataset_card",
+            "card_path": card_path,
+            "card_sha256": sha(card_bytes),
+            "declared_spdx": declared_spdx,
+        }
+
+    def test_adapts_multi_file_hf_dataset_card_license(self):
+        from text_lab_corpus import adapt_connector_receipt
+        dest_root = self._fetch_dir()
+        card_bytes = b"---\nlicense: apache-2.0\nlanguage:\n- en\n---\n\n# Dataset\n"
+        receipt = self._multi_file_receipt(
+            dest_root,
+            [("README.md", card_bytes), ("data.json", b"{}\n")],
+            license="Apache-2.0",
+        )
+        receipt["source"] = "huggingface"
+        receipt["connector"] = {"name": "hf_fetch", "version": "v1"}
+        evidence = self._hf_dataset_card_evidence(card_bytes)
+
+        row = adapt_connector_receipt(receipt, evidence=evidence)
+
+        self.assertEqual(row["license_spdx"], "Apache-2.0")
+        self.assertEqual(row["license_evidence"], evidence)
+        self.assertEqual(row["l4_receipt"]["generator"], "local-tree-root-v1")
+        self.assertEqual(row["l4_receipt"]["result"], "VERIFIED")
+
+    def test_rejects_malformed_or_ambiguous_hf_dataset_card_license(self):
+        from text_lab_corpus import adapt_connector_receipt
+        cases = {
+            "not-leading": b"# prose\n---\nlicense: apache-2.0\n---\n",
+            "unclosed": b"---\nlicense: apache-2.0\n",
+            "missing": b"---\nlanguage: en\n---\n",
+            "duplicate": b"---\nlicense: apache-2.0\nlicense: apache-2.0\n---\n",
+            "malformed": b"---\nlicense = apache-2.0\n---\n",
+            "unknown": b"---\nlicense: proprietary\n---\n",
+        }
+        for name, card_bytes in cases.items():
+            with self.subTest(name=name):
+                dest_root = self._fetch_dir()
+                receipt = self._multi_file_receipt(
+                    dest_root,
+                    [("README.md", card_bytes), ("data.json", b"{}\n")],
+                    license="Apache-2.0",
+                )
+                with self.assertRaisesRegex(ValueError, "dataset card"):
+                    adapt_connector_receipt(
+                        receipt,
+                        evidence=self._hf_dataset_card_evidence(card_bytes),
+                    )
+
+    def test_rejects_hf_dataset_card_hash_path_and_license_mismatches(self):
+        from text_lab_corpus import adapt_connector_receipt
+        card_bytes = b"---\nlicense: apache-2.0\n---\n"
+
+        def receipt_at(dest_root, *, connector_license="Apache-2.0"):
+            return self._multi_file_receipt(
+                dest_root,
+                [("README.md", card_bytes), ("data.json", b"{}\n")],
+                license=connector_license,
+            )
+
+        dest_root = self._fetch_dir()
+        with self.assertRaisesRegex(ValueError, "dataset card"):
+            adapt_connector_receipt(
+                receipt_at(dest_root),
+                evidence=self._hf_dataset_card_evidence(b"different bytes"),
+            )
+
+        dest_root = self._fetch_dir()
+        with self.assertRaisesRegex(ValueError, "dataset card"):
+            adapt_connector_receipt(
+                receipt_at(dest_root),
+                evidence=self._hf_dataset_card_evidence(card_bytes, card_path="docs/README.md"),
+            )
+
+        dest_root = self._fetch_dir()
+        with self.assertRaisesRegex(ValueError, "dataset card"):
+            adapt_connector_receipt(
+                receipt_at(dest_root, connector_license="MIT"),
+                evidence=self._hf_dataset_card_evidence(card_bytes),
+            )
+
+        dest_root = self._fetch_dir()
+        with self.assertRaisesRegex(ValueError, "dataset card"):
+            adapt_connector_receipt(
+                receipt_at(dest_root),
+                evidence=self._hf_dataset_card_evidence(card_bytes, declared_spdx="MIT"),
+            )
+
+    def test_repository_license_route_wins_over_hf_dataset_card(self):
+        from text_lab_corpus import adapt_connector_receipt
+        dest_root = self._fetch_dir()
+        card_bytes = b"---\nlicense: apache-2.0\n---\n"
+        license_bytes = b"Apache License 2.0\n"
+        receipt = self._multi_file_receipt(
+            dest_root,
+            [
+                ("README.md", card_bytes),
+                ("LICENSE", license_bytes),
+                ("data.json", b"{}\n"),
+            ],
+            license="Apache-2.0",
+        )
+
+        with self.assertRaisesRegex(ValueError, "LICENSE evidence"):
+            adapt_connector_receipt(
+                receipt,
+                evidence=self._hf_dataset_card_evidence(card_bytes),
+            )
+
+        row = adapt_connector_receipt(
+            receipt,
+            evidence={
+                "kind": "spdx_repo_license",
+                "license_sha256": sha(license_bytes),
+                "declared_spdx": "Apache-2.0",
+            },
+        )
+        self.assertEqual(row["license_spdx"], "Apache-2.0")
+
     def test_adapts_multi_file_receipt_with_conjunctive_licenses_and_bytewise_path_root(self):
         from text_lab_corpus import adapt_connector_receipt
         dest_root = self._fetch_dir()
