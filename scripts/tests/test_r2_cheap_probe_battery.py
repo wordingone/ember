@@ -24,6 +24,12 @@ from pathlib import Path
 
 import pytest
 
+# The ci-nightly scripts/tests environment intentionally omits the heavyweight
+# PyTorch dependency.  Preserve this module's real checkpoint-fixture coverage
+# wherever PyTorch is installed, but do not let the optional dependency abort
+# collection of every other scripts test.
+pytest.importorskip("torch", reason="checkpoint fixture requires optional PyTorch")
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 sys.path.insert(0, str(REPO_ROOT / "tests"))
