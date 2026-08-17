@@ -49,6 +49,14 @@ import receipt as rcpt
 
 CONNECTOR_NAME = "hf_fetch"
 
+_HF_LICENSE_CANONICAL = {
+    "apache-2.0": "Apache-2.0",
+    "bsd-3-clause": "BSD-3-Clause",
+    "cc-by-4.0": "CC-BY-4.0",
+    "cc0-1.0": "CC0-1.0",
+    "mit": "MIT",
+}
+
 
 def _resolve_token(cli_token: Optional[str]) -> Optional[str]:
     """CLI flag wins; falls back to HF_TOKEN env var; None if neither is set
@@ -88,6 +96,18 @@ def _extract_license(info) -> Optional[str]:
     return lic
 
 
+def _canonical_hf_license(value: str) -> str:
+    """Translate only closed, known HuggingFace card tags to project SPDX casing.
+
+    Unknown tags are preserved byte-for-byte so the downstream license gate continues
+    to refuse them rather than guessing a new authority mapping.
+    """
+    return ", ".join(
+        _HF_LICENSE_CANONICAL.get(component.strip(), component.strip())
+        for component in value.split(",")
+    )
+
+
 def fetch(args: argparse.Namespace) -> Path:
     if (args.license_str is None) != (args.license_evidence is None):
         raise rcpt.BlockedError("--license and --license-evidence must be supplied together")
@@ -103,7 +123,7 @@ def fetch(args: argparse.Namespace) -> Path:
     pinned_sha = getattr(info, "sha", None)
     metadata_license = _extract_license(info)
     if metadata_license:
-        license_str = metadata_license
+        license_str = _canonical_hf_license(metadata_license)
         license_evidence = "HuggingFace repo card metadata `license` field"
     elif args.license_str:
         # metadata carried no license -- a human-supplied, evidenced override
