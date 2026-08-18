@@ -139,7 +139,7 @@ Applying both keys:
 | 1 | GSM8K | 0 / 1319 = 0.00% | 1319 |
 | 2 | ARC-Challenge | 0 / 1172 = 0.00% | 1172 |
 | 3 | MATH-500 | 0 / 500 = 0.00% | 500 |
-| 4 | HellaSwag | 8 / 10003 = 0.08% | 9995 |
+| 4 | HellaSwag (historical test split) | 8 / 10003 = 0.08% | 9995 |
 | 5 | MMLU-Pro | 69 / 12032 = 0.57% | 11963 |
 | 6 | MBPP | 12 / 500 = 2.40% | 488 |
 | 7 | HumanEval+ | 58 / 164 = 35.37% | 106 |
@@ -150,12 +150,15 @@ full multi-sentence worked solutions, the largest scored-token mass per row of t
 items, so less NLL mass per row; MATH-500 has the fewest clusters (500) *and* the least
 cheap-rung-tractable content, so it is last of the clean three despite a spotless scan.
 
-HellaSwag ranks 4th and not higher despite the largest post-exclusion row count: its rate is
-nonzero, its WikiHow half is instructional web text — the nearest neighbour to `fineweb_edu` among
-the non-code candidates — and its adversarial wrong endings are machine-generated rather than
-human-authored, which weakens "external in provenance" as a description of a third of the token
-mass on each row. (No L3 implication: L3 bans an external model touching a *training* token, and
-this is eval text.) MMLU-Pro follows on rate. MBPP and HumanEval+ are last: both are Python
+The HellaSwag rank is historical: its 8/10,003 rate was measured on the unlabelled `test` split.
+DEV-007 binds the actually scored 10,042-row `validation` split and refuses to copy that rate or
+ranking. The revised instrument remains `PENDING_FINAL_CORPUS_CONTAMINATION_SCAN` until validation
+is scanned against the final tokenized WARM-100 corpus. Its WikiHow half is instructional web text
+— the nearest neighbour to `fineweb_edu` among the non-code candidates — and its adversarial wrong
+endings are machine-generated rather than human-authored, which weakens "external in provenance"
+as a description of a third of the token mass on each row. (No L3 implication: L3 bans an external
+model touching a *training* token, and this is eval text.) MMLU-Pro follows on historical rate.
+MBPP and HumanEval+ are last: both are Python
 solution-and-docstring text, i.e. the same idiom family as `code_github_clean` even though the
 items were authored rather than scraped, and HumanEval+ additionally lost 35% of its split to
 exclusion, leaving 106 rows — the weakest instrument in the pool on both keys simultaneously. It
@@ -225,14 +228,17 @@ against upstream on 2026-08-03.
   WikiHow how-to articles, with wrong endings produced by adversarial filtering against a
   generative model.
 - **Disjointness**: nearest ember family is `fineweb_edu` — WikiHow is instructional web text of
-  the same register, the closest adjacency of any non-code candidate. Held disjoint on two
-  grounds: WikiHow is not a member of any named family, and the measured leg is **8 of 10003 items
-  excluded (0.08%)**, all removed. Disclosed against it: the machine-generated distractor endings
+  the same register, the closest adjacency of any non-code candidate. The historical `test`-split
+  leg measured **8 of 10003 items excluded (0.08%)**. That result does not transfer to the scored
+  `validation` split. Validation remains `PENDING_FINAL_CORPUS_CONTAMINATION_SCAN` against the
+  final tokenized WARM-100 corpus, so this carrier is not READY_FOR_COMPUTE. Disclosed against it:
+  the machine-generated distractor endings
   make part of each row's token mass model-authored rather than human-external. No L3 implication
   (L3 governs training tokens, not eval text).
-- **Fetch/build**: `https://huggingface.co/datasets/Rowan/hellaswag`, split `test`, 10003 rows
-  (9995 post-exclusion), `test_split_sha256`
-  `6a78734fc71263f4257d9b52dbfd697830622b2eedb6473094120eed2d142a9f`, 11,663,748 bytes. Licence:
+- **Fetch/build**: `https://huggingface.co/datasets/Rowan/hellaswag`, split `validation`, 10042 rows,
+  revision `218ec52e09a7e7462a5400043bb9a69a41d06b76`, exact file
+  `data/validation-00000-of-00001.parquet`, SHA-256
+  `899813071e1e95efafec90f856e1987d2150fa4d020fc005df6962c259f660cd`. Licence:
   no licence field is declared on the HF dataset repo (checked 2026-08-03); the upstream release,
   `github.com/rowanz/hellaswag`, is MIT. Same recording rule as MATH-500.
 

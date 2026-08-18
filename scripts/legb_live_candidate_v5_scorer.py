@@ -84,6 +84,7 @@ import json
 import os
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(HERE)
@@ -123,6 +124,27 @@ FROZEN_SUITE_SPEC = (
     "docs/spec/eval-suite-freeze-v1.md (freeze v1) + "
     "docs/spec/c8-f3-instrument-list-v1.md (full test_split_sha256 values)")
 
+HELLASWAG_DATASET_REVISION = "218ec52e09a7e7462a5400043bb9a69a41d06b76"
+HELLASWAG_VALIDATION_PARQUET_PATH = "data/validation-00000-of-00001.parquet"
+HELLASWAG_VALIDATION_PARQUET_SHA256 = (
+    "899813071e1e95efafec90f856e1987d2150fa4d020fc005df6962c259f660cd"
+)
+HELLASWAG_VALIDATION_ROWS = 10042
+HELLASWAG_CONTAMINATION_AUTHORITY = {
+    "status": "PENDING_FINAL_CORPUS_CONTAMINATION_SCAN",
+    "ready_for_compute": False,
+    "historical_scan_scope": "unlabeled test split (10003 rows) against shards-v0",
+    "required_scan_scope": (
+        "revision-pinned validation split (10042 rows) against the final tokenized "
+        "training corpus consumed by WARM-100"
+    ),
+    "reason": (
+        "the historical 8/10003 exclusion census was measured on the unlabeled "
+        "test split and cannot be transferred to validation; the canonical scanner "
+        "currently binds historical shards-v0, not the growing #1719 corpus authority"
+    ),
+}
+
 # Per-task binding between the FROZEN suite pin and the split the INSTALLED
 # harness actually scores. These are not always the same split, and pretending
 # they are would put a hash in the receipt over bytes that were never scored.
@@ -130,12 +152,10 @@ FROZEN_SUITE_SPEC = (
 # arc_challenge: arc_easy.yaml (included by arc_challenge.yaml) sets
 #   test_split: test -- the harness scores the same 1172-row test split the
 #   freeze pins. Genuinely bindable.
-# hellaswag: hellaswag.yaml sets test_split: null, validation_split: validation
-#   -- upstream HellaSwag's test split is UNLABELED, so the harness scores
-#   validation (10042 rows). The freeze pins the 10003-row TEST split. The pin
-#   therefore cannot be bound to these predictions; it names bytes the harness
-#   cannot score. Recorded as a disclosed non-alignment, never silently
-#   asserted as a match.
+# hellaswag: hellaswag.yaml sets test_split: null, validation_split: validation.
+#   The governed task override pins the dataset revision whose exact validation
+#   parquet is frozen below, so the 10042 scored rows and their source bytes are
+#   the same authority rather than the unlabeled 10003-row test split.
 FROZEN_SPLIT_BINDING = {
     "arc_challenge": {
         "dataset": "allenai/ai2_arc",
@@ -150,16 +170,14 @@ FROZEN_SPLIT_BINDING = {
     "hellaswag": {
         "dataset": "Rowan/hellaswag",
         "subset": None,
-        "frozen_pinned_split": "test",
-        "frozen_pinned_rows": 10003,
+        "dataset_revision": HELLASWAG_DATASET_REVISION,
+        "frozen_pinned_split": "validation",
+        "frozen_pinned_rows": HELLASWAG_VALIDATION_ROWS,
         "frozen_test_split_sha256":
-            "6a78734fc71263f4257d9b52dbfd697830622b2eedb6473094120eed2d142a9f",
+            HELLASWAG_VALIDATION_PARQUET_SHA256,
+        "frozen_split_file": HELLASWAG_VALIDATION_PARQUET_PATH,
         "harness_scored_split": "validation",
-        "frozen_pin_matches_scored_split": False,
-        "non_alignment_reason": (
-            "installed hellaswag.yaml sets test_split: null (upstream test split "
-            "is unlabeled) and scores validation; the freeze pins the test split, "
-            "so the pinned sha256 is NOT a hash of the scored bytes"),
+        "frozen_pin_matches_scored_split": True,
     },
 }
 
@@ -174,6 +192,100 @@ PUBLISHED_CURSOR_EXTRA_KEYS = {"governor", "resume_authority"}
 class LiveCandidateRefusal(Exception):
     """Fail-closed refusal (schema mismatch, hash drift, unknown route) --
     never a silent skip, never a default value, never a trivial pass."""
+
+
+def build_bound_task_specs(tasks: list[str]) -> list[object]:
+    """Translate the closed suite into lm_eval's own task-spec grammar."""
+    specs: list[object] = []
+    for task in tasks:
+        if task == "arc_challenge":
+            specs.append(task)
+        elif task == "hellaswag":
+            specs.append({
+                "task": task,
+                "dataset_kwargs": {"revision": HELLASWAG_DATASET_REVISION},
+            })
+        else:
+            raise LiveCandidateRefusal(f"UNBOUND_EVALUATOR_TASK: {task}")
+    return specs
+
+
+def load_bound_evaluator_tasks(tasks: list[str], task_manager) -> tuple[list, dict]:
+    loaded = task_manager.load(build_bound_task_specs(tasks))
+    by_name = loaded.get("tasks") if isinstance(loaded, dict) else None
+    if not isinstance(by_name, dict) or set(by_name) != set(tasks):
+        raise LiveCandidateRefusal("EVALUATOR_TASK_LOAD_CHANGED")
+    return [by_name[name] for name in tasks], by_name
+
+
+def verify_frozen_task_runtime(
+    task_name: str,
+    loaded_task: object,
+    *,
+    limit: object,
+    observed_rows: int,
+    expected_parquet_sha256: str = HELLASWAG_VALIDATION_PARQUET_SHA256,
+    snapshot_locator=None,
+) -> dict:
+    """Reopen the dataset authority which the installed task actually loaded."""
+    if task_name != "hellaswag":
+        if task_name != "arc_challenge":
+            raise LiveCandidateRefusal(f"UNBOUND_EVALUATOR_TASK: {task_name}")
+        return {
+            **FROZEN_SPLIT_BINDING[task_name],
+            "terminal_split_binding": limit is None,
+        }
+    dataset_kwargs = getattr(getattr(loaded_task, "config", None), "dataset_kwargs", None)
+    if (
+        not isinstance(dataset_kwargs, dict)
+        or dataset_kwargs.get("revision") != HELLASWAG_DATASET_REVISION
+    ):
+        raise LiveCandidateRefusal("HELLASWAG_REVISION_PIN_REQUIRED")
+    dataset = getattr(loaded_task, "dataset", None)
+    validation = dataset.get("validation") if isinstance(dataset, dict) else None
+    if validation is None or len(validation) != HELLASWAG_VALIDATION_ROWS:
+        raise LiveCandidateRefusal("HELLASWAG_DATASET_ROW_COUNT_CHANGED")
+    if limit is None and observed_rows != HELLASWAG_VALIDATION_ROWS:
+        raise LiveCandidateRefusal("HELLASWAG_FULL_COUNT_REQUIRED")
+    if snapshot_locator is None:
+        from huggingface_hub import snapshot_download
+
+        snapshot_locator = snapshot_download
+    runtime_verification = "UNVERIFIABLE_FROM_RUNTIME_CACHE"
+    parquet_sha256 = None
+    try:
+        snapshot = Path(snapshot_locator(
+            repo_id="Rowan/hellaswag",
+            repo_type="dataset",
+            revision=HELLASWAG_DATASET_REVISION,
+            allow_patterns=[HELLASWAG_VALIDATION_PARQUET_PATH],
+            local_files_only=True,
+        ))
+        parquet = snapshot / HELLASWAG_VALIDATION_PARQUET_PATH
+        if parquet.is_file():
+            parquet_sha256 = _sha256_file(str(parquet))
+            if parquet_sha256 != expected_parquet_sha256:
+                raise LiveCandidateRefusal("HELLASWAG_PARQUET_HASH_CHANGED")
+            runtime_verification = "VERIFIED"
+    except LiveCandidateRefusal:
+        raise
+    except (FileNotFoundError, OSError, ValueError):
+        pass
+    full_count_verified = limit is None and observed_rows == HELLASWAG_VALIDATION_ROWS
+    return {
+        **FROZEN_SPLIT_BINDING[task_name],
+        "dataset_revision": HELLASWAG_DATASET_REVISION,
+        "validation_parquet_path": HELLASWAG_VALIDATION_PARQUET_PATH,
+        "expected_parquet_sha256": expected_parquet_sha256,
+        "parquet_sha256": parquet_sha256,
+        "parquet_runtime_verification": runtime_verification,
+        "revision_pin_verified": True,
+        "observed_rows": observed_rows,
+        "full_count_verified": full_count_verified,
+        "terminal_split_binding": (
+            full_count_verified and runtime_verification == "VERIFIED"
+        ),
+    }
 
 
 def _sha256_file(path: str) -> str:
@@ -205,8 +317,8 @@ def claim_boundary(checkpoint: dict) -> str:
         "WARM100_IDENTITY_AND_MEASUREMENT_ONLY; the governed run receipt and "
         f"subject checkpoint agree at data_cursor.tokens_seen={checkpoint['tokens_seen']} "
         f"and global_step={checkpoint['global_step']} -- no capability, parity, "
-        "acceleration, HellaSwag split-alignment, modality-marker, or "
-        "issue-closure credit"
+        "acceleration, modality-marker, or issue-closure credit; "
+        "PENDING_FINAL_CORPUS_CONTAMINATION_SCAN, not READY_FOR_COMPUTE"
     )
 
 
@@ -544,6 +656,10 @@ def run_evaluator(*, checkpoint_dir: str, warm100_receipt_path: str,
         checkpoint_dir, warm100_receipt_path, warm100_receipt_sha256)
 
     from lm_eval.evaluator import simple_evaluate
+    from lm_eval.tasks import TaskManager
+
+    task_manager = TaskManager()
+    loaded_tasks, loaded_by_name = load_bound_evaluator_tasks(tasks, task_manager)
 
     with device_lease(device):
         scorer, binding = build_live_candidate_scorer(
@@ -557,8 +673,8 @@ def run_evaluator(*, checkpoint_dir: str, warm100_receipt_path: str,
             "sha256": warm100["run_receipt_sha256"],
         }
         results = simple_evaluate(
-            model=scorer, tasks=tasks, limit=limit, bootstrap_iters=0,
-            log_samples=True, verbosity="ERROR")
+            model=scorer, tasks=loaded_tasks, task_manager=task_manager,
+            limit=limit, bootstrap_iters=0, log_samples=True, verbosity="ERROR")
 
     per_task = {}
     for task_name, metrics in (results.get("results") or {}).items():
@@ -570,13 +686,17 @@ def run_evaluator(*, checkpoint_dir: str, warm100_receipt_path: str,
     os.makedirs(os.path.dirname(os.path.abspath(predictions_path)) or ".",
                 exist_ok=True)
     row_count = 0
+    task_row_counts = {name: 0 for name in tasks}
     with open(predictions_path, "w", encoding="utf-8", newline="\n") as handle:
         for task_name, samples in sorted((results.get("samples") or {}).items()):
+            if task_name not in task_row_counts:
+                raise LiveCandidateRefusal("UNBOUND_EVALUATOR_TASK_RESULT")
             for sample in samples:
                 handle.write(json.dumps(
                     {"task": task_name, **_prediction_row(sample)},
                     sort_keys=True, ensure_ascii=False) + "\n")
                 row_count += 1
+                task_row_counts[task_name] += 1
     if row_count < 1:
         raise LiveCandidateRefusal("RAW_PREDICTIONS_EMPTY")
     _write_authority_sidecar(predictions_path)
@@ -585,6 +705,13 @@ def run_evaluator(*, checkpoint_dir: str, warm100_receipt_path: str,
         "rows": row_count,
         "sha256": _sha256_file(predictions_path),
         "format": "jsonl; one row per scored eval item",
+    }
+    runtime_binding = {
+        name: verify_frozen_task_runtime(
+            name, loaded_by_name[name], limit=limit,
+            observed_rows=task_row_counts[name],
+        )
+        for name in tasks
     }
 
     evaluation = {
@@ -595,6 +722,8 @@ def run_evaluator(*, checkpoint_dir: str, warm100_receipt_path: str,
         "task_versions": results.get("versions"),
         "frozen_suite": {
             "spec": FROZEN_SUITE_SPEC,
+            "ready_for_compute": False,
+            "contamination_authority": HELLASWAG_CONTAMINATION_AUTHORITY,
             "split_binding": {
                 name: FROZEN_SPLIT_BINDING[name]
                 for name in tasks if name in FROZEN_SPLIT_BINDING
@@ -602,6 +731,7 @@ def run_evaluator(*, checkpoint_dir: str, warm100_receipt_path: str,
             "unbound_tasks": [
                 name for name in tasks if name not in FROZEN_SPLIT_BINDING
             ],
+            "runtime_binding": runtime_binding,
         },
         "n_samples": {
             name: counts for name, counts in (results.get("n-samples") or {}).items()
@@ -693,8 +823,14 @@ def _prediction_row(sample: dict) -> dict:
     fields: which item, what the model scored, and what it got. Kept explicit
     rather than dumping the whole sample so the JSONL stays reviewable and
     carries no incidental local paths."""
+    identity_hashes = {
+        key: sample.get(key) for key in ("doc_hash", "prompt_hash", "target_hash")
+    }
+    if any(not _is_sha256(value) for value in identity_hashes.values()):
+        raise LiveCandidateRefusal("SAMPLE_IDENTITY_HASH_REQUIRED")
     return {
         "doc_id": sample.get("doc_id"),
+        **identity_hashes,
         "target": sample.get("target"),
         "arguments_count": len(sample.get("arguments") or ()),
         "resps": sample.get("resps"),
