@@ -216,7 +216,7 @@ def _derive(
         matcher = re.compile(text_filter["pattern"], 0 if text_filter["case_sensitive"] else re.IGNORECASE)
     accepted: list[tuple[str, str]] = []
     rejected: Counter[str] = Counter()
-    seen: set[str] = set()
+    seen: dict[str, tuple[Any, ...]] = {}
     parsed = 0
     for page in inventory:
         for record in _iter_records(pages_dir / page["path"]):
@@ -229,9 +229,20 @@ def _derive(
                 raise SelectionRefusal(f"arXiv id {arxiv_id!r} carries a version suffix")
             if _ID.fullmatch(arxiv_id) is None:
                 raise SelectionRefusal(f"arXiv id {arxiv_id!r} is not canonical")
+            record_tuple = (
+                record["id"],
+                record["license_url"],
+                tuple(record["categories"]),
+                record["created"],
+                record["title"],
+                record["abstract"],
+            )
             if arxiv_id in seen:
-                raise SelectionRefusal(f"duplicate arXiv id {arxiv_id!r} across OAI pages")
-            seen.add(arxiv_id)
+                if seen[arxiv_id] != record_tuple:
+                    raise SelectionRefusal(f"duplicate arXiv id {arxiv_id!r} differs across OAI pages")
+                rejected["duplicate_identical_record"] += 1
+                continue
+            seen[arxiv_id] = record_tuple
             raw_license = record["license_url"]
             if raw_license != spec["license_url"]:
                 if isinstance(raw_license, str) and raw_license.rstrip("/") == spec["license_url"].rstrip("/"):
