@@ -8,12 +8,14 @@ import importlib.util
 import json
 import sys
 import types
+from contextlib import nullcontext
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[1]
 SCORER = ROOT / "scripts" / "legb_live_candidate_v5_scorer.py"
 
 
@@ -147,6 +149,8 @@ def test_exact_warm100_receipt_reopened_and_boundary_derived(tmp_path: Path) -> 
     assert verified["tokens_seen"] == 102400
     assert "global_step=100" in module.claim_boundary(verified)
     assert "tokens_seen=102400" in module.claim_boundary(verified)
+    assert "HellaSwag split-alignment" not in module.claim_boundary(verified)
+    assert "PENDING_FINAL_CORPUS_CONTAMINATION_SCAN" in module.claim_boundary(verified)
 
 
 @pytest.mark.parametrize("failure", ["subscale", "stale", "swap"])
@@ -225,3 +229,304 @@ def test_score_binding_refuses_missing_scores() -> None:
             },
             "results": {},
         })
+
+
+def test_evaluator_task_specs_pin_hellaswag_and_refuse_unknown() -> None:
+    module = _load()
+
+    assert module.build_bound_task_specs(["arc_challenge", "hellaswag"]) == [
+        "arc_challenge",
+        {
+            "task": "hellaswag",
+            "dataset_kwargs": {"revision": module.HELLASWAG_DATASET_REVISION},
+        },
+    ]
+    binding = module.FROZEN_SPLIT_BINDING["hellaswag"]
+    assert binding["frozen_pin_matches_scored_split"] is True
+    assert binding["frozen_pinned_split"] == "validation"
+    assert binding["frozen_pinned_rows"] == module.HELLASWAG_VALIDATION_ROWS
+    assert binding["dataset_revision"] == module.HELLASWAG_DATASET_REVISION
+    assert (
+        binding["frozen_test_split_sha256"]
+        == module.HELLASWAG_VALIDATION_PARQUET_SHA256
+    )
+    with pytest.raises(module.LiveCandidateRefusal, match="UNBOUND_EVALUATOR_TASK"):
+        module.build_bound_task_specs(["mmlu_pro"])
+
+
+def test_bound_tasks_are_loaded_once_and_returned_in_requested_order() -> None:
+    module = _load()
+    arc = object()
+    hella = object()
+
+    class Manager:
+        def __init__(self) -> None:
+            self.received = None
+
+        def load(self, specs):
+            self.received = specs
+            return {
+                "tasks": {"hellaswag": hella, "arc_challenge": arc},
+                "groups": {},
+                "group_map": {},
+            }
+
+    manager = Manager()
+    ordered, by_name = module.load_bound_evaluator_tasks(
+        ["arc_challenge", "hellaswag"], manager
+    )
+    assert manager.received == module.build_bound_task_specs(
+        ["arc_challenge", "hellaswag"]
+    )
+    assert ordered == [arc, hella]
+    assert by_name == {"arc_challenge": arc, "hellaswag": hella}
+
+
+def test_prediction_row_requires_and_preserves_lm_eval_identity_hashes() -> None:
+    module = _load()
+    sample = {
+        "doc_id": 7,
+        "target": "2",
+        "arguments": [["prompt", "continuation"]],
+        "resps": [[-1.0]],
+        "filtered_resps": [-1.0],
+        "acc": 1,
+        "acc_norm": 1,
+        "doc_hash": "a" * 64,
+        "prompt_hash": "b" * 64,
+        "target_hash": "c" * 64,
+    }
+
+    row = module._prediction_row(sample)
+    assert row["doc_hash"] == "a" * 64
+    assert row["prompt_hash"] == "b" * 64
+    assert row["target_hash"] == "c" * 64
+
+    sample.pop("doc_hash")
+    with pytest.raises(module.LiveCandidateRefusal, match="SAMPLE_IDENTITY_HASH_REQUIRED"):
+        module._prediction_row(sample)
+
+
+def test_hellaswag_runtime_binding_hashes_consumed_revision_parquet(
+    tmp_path: Path,
+) -> None:
+    module = _load()
+    snapshot = tmp_path / "snapshot"
+    parquet = snapshot / module.HELLASWAG_VALIDATION_PARQUET_PATH
+    parquet.parent.mkdir(parents=True)
+    parquet.write_bytes(b"validation parquet")
+    expected_sha = _sha(parquet)
+    task = SimpleNamespace(
+        config=SimpleNamespace(
+            dataset_kwargs={"revision": module.HELLASWAG_DATASET_REVISION}
+        ),
+        dataset={"validation": list(range(module.HELLASWAG_VALIDATION_ROWS))},
+    )
+
+    binding = module.verify_frozen_task_runtime(
+        "hellaswag",
+        task,
+        limit=None,
+        observed_rows=module.HELLASWAG_VALIDATION_ROWS,
+        expected_parquet_sha256=expected_sha,
+        snapshot_locator=lambda **_kwargs: snapshot,
+    )
+    assert binding["revision_pin_verified"] is True
+    assert binding["parquet_runtime_verification"] == "VERIFIED"
+    assert binding["parquet_sha256"] == expected_sha
+    assert binding["full_count_verified"] is True
+
+    with pytest.raises(module.LiveCandidateRefusal, match="HELLASWAG_FULL_COUNT_REQUIRED"):
+        module.verify_frozen_task_runtime(
+            "hellaswag",
+            task,
+            limit=None,
+            observed_rows=module.HELLASWAG_VALIDATION_ROWS - 1,
+            expected_parquet_sha256=expected_sha,
+            snapshot_locator=lambda **_kwargs: snapshot,
+        )
+
+
+def test_bounded_hellaswag_runtime_records_nonterminal_cache_boundary(
+    tmp_path: Path,
+) -> None:
+    module = _load()
+    task = SimpleNamespace(
+        config=SimpleNamespace(
+            dataset_kwargs={"revision": module.HELLASWAG_DATASET_REVISION}
+        ),
+        dataset={"validation": list(range(module.HELLASWAG_VALIDATION_ROWS))},
+    )
+
+    binding = module.verify_frozen_task_runtime(
+        "hellaswag",
+        task,
+        limit=4,
+        observed_rows=4,
+        snapshot_locator=lambda **_kwargs: (_ for _ in ()).throw(FileNotFoundError()),
+    )
+    assert binding["parquet_runtime_verification"] == "UNVERIFIABLE_FROM_RUNTIME_CACHE"
+    assert binding["full_count_verified"] is False
+    assert binding["terminal_split_binding"] is False
+
+
+def test_hellaswag_runtime_refuses_revision_and_parquet_drift(
+    tmp_path: Path,
+) -> None:
+    module = _load()
+    snapshot = tmp_path / "snapshot"
+    parquet = snapshot / module.HELLASWAG_VALIDATION_PARQUET_PATH
+    parquet.parent.mkdir(parents=True)
+    parquet.write_bytes(b"wrong parquet bytes")
+    task = SimpleNamespace(
+        config=SimpleNamespace(dataset_kwargs={"revision": "0" * 40}),
+        dataset={"validation": list(range(module.HELLASWAG_VALIDATION_ROWS))},
+    )
+
+    with pytest.raises(module.LiveCandidateRefusal, match="HELLASWAG_REVISION_PIN_REQUIRED"):
+        module.verify_frozen_task_runtime(
+            "hellaswag",
+            task,
+            limit=None,
+            observed_rows=module.HELLASWAG_VALIDATION_ROWS,
+            snapshot_locator=lambda **_kwargs: snapshot,
+        )
+
+    task.config.dataset_kwargs["revision"] = module.HELLASWAG_DATASET_REVISION
+    with pytest.raises(module.LiveCandidateRefusal, match="HELLASWAG_PARQUET_HASH_CHANGED"):
+        module.verify_frozen_task_runtime(
+            "hellaswag",
+            task,
+            limit=None,
+            observed_rows=module.HELLASWAG_VALIDATION_ROWS,
+            snapshot_locator=lambda **_kwargs: snapshot,
+        )
+
+
+def test_run_evaluator_uses_loaded_revision_bound_tasks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _load()
+    parquet_root = tmp_path / "snapshot"
+    parquet = parquet_root / module.HELLASWAG_VALIDATION_PARQUET_PATH
+    parquet.parent.mkdir(parents=True)
+    parquet.write_bytes(b"validation parquet")
+    monkeypatch.setattr(
+        module,
+        "load_verified_warm100_checkpoint",
+        lambda *_args: {
+            "manifest_sha256": "d" * 64,
+            "run_receipt_path": "warm100.json",
+            "run_receipt_sha256": "e" * 64,
+        },
+    )
+    monkeypatch.setattr(module, "device_lease", lambda _device: nullcontext())
+    scorer = object()
+    monkeypatch.setattr(
+        module,
+        "build_live_candidate_scorer",
+        lambda **_kwargs: (
+            scorer,
+            {"checkpoint": {"manifest_sha256": "d" * 64}},
+        ),
+    )
+
+    arc = SimpleNamespace(config=SimpleNamespace(dataset_kwargs=None), dataset={})
+    hella = SimpleNamespace(
+        config=SimpleNamespace(
+            dataset_kwargs={"revision": module.HELLASWAG_DATASET_REVISION}
+        ),
+        dataset={"validation": list(range(module.HELLASWAG_VALIDATION_ROWS))},
+    )
+
+    class TaskManager:
+        last = None
+
+        def __init__(self):
+            self.received = None
+            TaskManager.last = self
+
+        def load(self, specs):
+            self.received = specs
+            return {
+                "tasks": {"arc_challenge": arc, "hellaswag": hella},
+                "groups": {},
+                "group_map": {},
+            }
+
+    sample = {
+        "doc_id": 0,
+        "target": "0",
+        "arguments": [["p", "c"]],
+        "resps": [[-1.0]],
+        "filtered_resps": [-1.0],
+        "acc": 1,
+        "acc_norm": 1,
+        "doc_hash": "a" * 64,
+        "prompt_hash": "b" * 64,
+        "target_hash": "c" * 64,
+    }
+
+    def simple_evaluate(**kwargs):
+        assert kwargs["model"] is scorer
+        assert kwargs["tasks"] == [arc, hella]
+        assert kwargs["task_manager"] is TaskManager.last
+        return {
+            "results": {
+                "arc_challenge": {"acc,none": 1.0},
+                "hellaswag": {"acc,none": 1.0},
+            },
+            "samples": {
+                "arc_challenge": [sample],
+                "hellaswag": [sample],
+            },
+            "versions": {"arc_challenge": 1, "hellaswag": 1},
+            "n-samples": {
+                "arc_challenge": {"original": 1172, "effective": 1},
+                "hellaswag": {"original": 10042, "effective": 1},
+            },
+        }
+
+    lm_eval = types.ModuleType("lm_eval")
+    evaluator = types.ModuleType("lm_eval.evaluator")
+    tasks = types.ModuleType("lm_eval.tasks")
+    evaluator.simple_evaluate = simple_evaluate
+    tasks.TaskManager = TaskManager
+    monkeypatch.setitem(sys.modules, "lm_eval", lm_eval)
+    monkeypatch.setitem(sys.modules, "lm_eval.evaluator", evaluator)
+    monkeypatch.setitem(sys.modules, "lm_eval.tasks", tasks)
+    runtime_calls = []
+
+    def verify_runtime(name, loaded_task, **kwargs):
+        runtime_calls.append((name, loaded_task, kwargs))
+        return {"revision_pin_verified": name == "hellaswag"}
+
+    monkeypatch.setattr(module, "verify_frozen_task_runtime", verify_runtime)
+
+    evaluation = module.run_evaluator(
+        checkpoint_dir="checkpoint",
+        warm100_receipt_path="warm100.json",
+        warm100_receipt_sha256="e" * 64,
+        route="tool",
+        tasks=["arc_challenge", "hellaswag"],
+        limit=1,
+        device="cpu",
+        max_position_embeddings=1024,
+        predictions_path=str(tmp_path / "predictions.jsonl"),
+    )
+    assert TaskManager.last.received == module.build_bound_task_specs(
+        ["arc_challenge", "hellaswag"]
+    )
+    assert [call[0] for call in runtime_calls] == ["arc_challenge", "hellaswag"]
+    assert runtime_calls[1][1] is hella
+    assert runtime_calls[1][2]["observed_rows"] == 1
+    assert (
+        evaluation["frozen_suite"]["runtime_binding"]["hellaswag"]
+        ["revision_pin_verified"]
+        is True
+    )
+    assert evaluation["frozen_suite"]["ready_for_compute"] is False
+    assert (
+        evaluation["frozen_suite"]["contamination_authority"]["status"]
+        == "PENDING_FINAL_CORPUS_CONTAMINATION_SCAN"
+    )

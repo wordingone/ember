@@ -59,6 +59,16 @@ contaminated items (HumanEval+ 58/164, MMLU-Pro 69, MBPP 12, HellaSwag 8,
 GSM8K/MATH-500/ARC-Challenge 0); post-exclusion = 0. Amendment receipt:
 `receipts/eval-suite-freeze/a1-freeze-exclusion-amendment-*.json`.
 
+HellaSwag scored-split amendment (2026-08-18, DEV-007): the 8/10,003 result
+above is historical evidence for the unlabelled `test` split only. The governed
+#1433 scorer instead pins the labelled `validation` split at revision
+`218ec52e09a7e7462a5400043bb9a69a41d06b76`, file
+`data/validation-00000-of-00001.parquet`, 10,042 rows, SHA-256
+`899813071e1e95efafec90f856e1987d2150fa4d020fc005df6962c259f660cd`.
+That split is `PENDING_FINAL_CORPUS_CONTAMINATION_SCAN`; it is not
+READY_FOR_COMPUTE until scanned against the final tokenized corpus consumed by
+WARM-100. No old exclusion count transfers between splits.
+
 ## Binding Clauses
 
 ### Clause 1: Text-only, C1 insufficient
@@ -110,7 +120,7 @@ As of 2026-07-08, the following datasets have been successfully pinned and verif
 | ARC-Challenge | 1172 | c0e7635ee91b9ca4... | Pinned |
 | HumanEval+ | 164 | 4e8dbe9885c253ae... | Pinned |
 | MBPP | 500 | 88d690200dbe7f37... | Pinned |
-| HellaSwag | 10003 | 6a78734fc71263f4... | Pinned |
+| HellaSwag | 10042 | 899813071e1e95ef... | Scored split pinned; contamination scan pending (DEV-007) |
 | GPQA-diamond | — | — | PIN-PENDING (license gate) |
 
 **PIN-PENDING Status Note**: GPQA-diamond requires operator-session authorization via HuggingFace. The automated pin process refuses to accept consent on behalf of the operator. This pin is queued for when the operator is next active.
