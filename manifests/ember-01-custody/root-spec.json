@@ -289,6 +289,22 @@
                       "mutability":  "dirty_or_branch_specific",
                       "owner":  "operator",
                       "authority_status":  "noncanonical_worktree",
+                      "absence_policy":  "operator_noncanonical_worktree_absent_with_archival_pointers",
+                      "absence_evidence":  {
+                                               "observed_absent_at":  "2026-08-18T05:04Z",
+                                               "observed_by":  "independent-review-session",
+                                               "deletion_evidence":  "none_located"
+                                           },
+                      "archival_pointers":  [
+                                                {
+                                                    "binding":  "EMBER_PUBLIC_WORKTREE_MIRROR_GIT",
+                                                    "kind":  "bare_mirror"
+                                                },
+                                                {
+                                                    "binding":  "EMBER_PUBLIC_WORKTREE_MIRROR_BUNDLE",
+                                                    "kind":  "bundle"
+                                                }
+                                            ],
                       "runtime_state_exclusions":  [
                           {
                               "pattern":  "*tools/ember-cli/state/*",
