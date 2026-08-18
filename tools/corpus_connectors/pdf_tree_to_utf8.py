@@ -1,0 +1,929 @@
+#!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+"""Deterministically transform one closed connector PDF tree into UTF-8 custody."""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import shutil
+import stat
+import sys
+import time
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path, PurePosixPath
+from typing import Any
+
+from tools.corpus_connectors import pdf_to_utf8
+
+
+SCHEMA = "ember-pdf-tree-extraction-receipt-v1"
+DERIVED_CONNECTOR = "_manifests/derived-connector-receipt.json"
+TRANSFORM_RECEIPT = "_manifests/pdf-tree-extraction-receipt.json"
+DEFAULT_MAX_FILES = 10_000
+DEFAULT_MAX_TOTAL_PAGES = 2_000_000
+DEFAULT_MAX_TOTAL_DECODED_CONTENT_BYTES = 1 << 40
+DEFAULT_MAX_TOTAL_OUTPUT_BYTES = 1 << 38
+_HEX = re.compile(r"^[0-9a-f]{64}$")
+_SIDECAR_ROOTS = {"_manifests", ".cache"}
+_SIDECAR_FILES = {"manifest.jsonl"}
+
+
+class PdfTreeExtractionRefusal(ValueError):
+    """The requested tree transform cannot satisfy the closed custody contract."""
+
+
+def _sha256(raw: bytes) -> str:
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _canonical(value: object) -> bytes:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def _is_reparse_or_symlink(path: Path) -> bool:
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return False
+    attributes = getattr(info, "st_file_attributes", 0)
+    return stat.S_ISLNK(info.st_mode) or bool(
+        attributes & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    )
+
+
+def _normalize_relative(value: Any) -> str:
+    if not isinstance(value, str) or not value or "\x00" in value:
+        raise PdfTreeExtractionRefusal("connector file path is invalid")
+    portable = value.replace("\\", "/")
+    pure = PurePosixPath(portable)
+    if pure.is_absolute() or re.match(r"^[A-Za-z]:", portable) or any(
+        part in {"", ".", ".."} for part in pure.parts
+    ):
+        raise PdfTreeExtractionRefusal("connector file path is not contained")
+    return pure.as_posix()
+
+
+def _regular_contained(root: Path, relative: str, label: str) -> Path:
+    cursor = root
+    parts = relative.split("/")
+    for index, part in enumerate(parts):
+        cursor = cursor / part
+        try:
+            info = cursor.lstat()
+        except FileNotFoundError as error:
+            raise PdfTreeExtractionRefusal(f"{label} is missing: {relative}") from error
+        if _is_reparse_or_symlink(cursor):
+            raise PdfTreeExtractionRefusal(f"{label} crosses a symlink or reparse point")
+        if index < len(parts) - 1 and not stat.S_ISDIR(info.st_mode):
+            raise PdfTreeExtractionRefusal(f"{label} path is malformed")
+    if not stat.S_ISREG(cursor.lstat().st_mode):
+        raise PdfTreeExtractionRefusal(f"{label} is not a regular file")
+    try:
+        cursor.resolve(strict=True).relative_to(root.resolve(strict=True))
+    except (OSError, ValueError) as error:
+        raise PdfTreeExtractionRefusal(f"{label} escapes custody") from error
+    return cursor
+
+
+def _data_paths(root: Path) -> set[str]:
+    result: set[str] = set()
+    for current, directories, filenames in os.walk(root, topdown=True, followlinks=False):
+        current_path = Path(current)
+        kept: list[str] = []
+        for directory in directories:
+            child = current_path / directory
+            relative = child.relative_to(root).as_posix()
+            if relative.split("/", 1)[0] in _SIDECAR_ROOTS:
+                continue
+            if _is_reparse_or_symlink(child):
+                raise PdfTreeExtractionRefusal("custody contains a symlink or reparse point")
+            kept.append(directory)
+        directories[:] = kept
+        for filename in filenames:
+            child = current_path / filename
+            relative = child.relative_to(root).as_posix()
+            if relative.split("/", 1)[0] in _SIDECAR_ROOTS or relative in _SIDECAR_FILES:
+                continue
+            if _is_reparse_or_symlink(child) or not child.is_file():
+                raise PdfTreeExtractionRefusal("custody contains a non-regular data path")
+            result.add(relative)
+    return result
+
+
+def _all_file_paths(root: Path) -> set[str]:
+    result: set[str] = set()
+    for current, directories, filenames in os.walk(root, topdown=True, followlinks=False):
+        current_path = Path(current)
+        for directory in directories:
+            if _is_reparse_or_symlink(current_path / directory):
+                raise PdfTreeExtractionRefusal("custody contains a symlink or reparse point")
+        for filename in filenames:
+            child = current_path / filename
+            if _is_reparse_or_symlink(child) or not child.is_file():
+                raise PdfTreeExtractionRefusal("custody contains a non-regular file")
+            result.add(child.relative_to(root).as_posix())
+    return result
+
+
+def _all_directory_paths(root: Path) -> set[str]:
+    result: set[str] = set()
+    for current, directories, _ in os.walk(root, topdown=True, followlinks=False):
+        current_path = Path(current)
+        for directory in directories:
+            child = current_path / directory
+            if _is_reparse_or_symlink(child):
+                raise PdfTreeExtractionRefusal("custody contains a symlink or reparse point")
+            result.add(child.relative_to(root).as_posix())
+    return result
+
+
+def _parent_directories(paths: set[str]) -> set[str]:
+    result: set[str] = set()
+    for relative in paths:
+        parts = PurePosixPath(relative).parts[:-1]
+        for end in range(1, len(parts) + 1):
+            result.add(PurePosixPath(*parts[:end]).as_posix())
+    return result
+
+
+def _read_json(path: Path, label: str) -> tuple[bytes, dict[str, Any]]:
+    if _is_reparse_or_symlink(path) or not path.is_file():
+        raise PdfTreeExtractionRefusal(f"{label} must be a regular non-reparse file")
+    raw = path.read_bytes()
+    try:
+        value = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise PdfTreeExtractionRefusal(f"{label} must be strict UTF-8 JSON") from error
+    if not isinstance(value, dict):
+        raise PdfTreeExtractionRefusal(f"{label} must contain one JSON object")
+    return raw, value
+
+
+def _require_outside_custody(path: Path, custody_root: Path, label: str) -> None:
+    candidate = path.resolve(strict=True) if path.exists() else path.parent.resolve(strict=True) / path.name
+    try:
+        candidate.relative_to(custody_root.resolve(strict=True))
+    except ValueError:
+        return
+    raise PdfTreeExtractionRefusal(f"{label} must be outside connector custody")
+
+
+def _canonical_license(value: Any) -> str:
+    if value in {
+        "CC-BY-4.0",
+        "http://creativecommons.org/licenses/by/4.0/",
+        "https://creativecommons.org/licenses/by/4.0/",
+    }:
+        return "CC-BY-4.0"
+    raise PdfTreeExtractionRefusal("connector license is not the closed CC-BY-4.0 identity")
+
+
+def _source_tree(
+    connector_receipt: Path,
+    connector_receipt_sha256: str,
+    *,
+    max_files: int,
+) -> tuple[dict[str, Any], Path, list[dict[str, Any]]]:
+    if _HEX.fullmatch(connector_receipt_sha256) is None:
+        raise PdfTreeExtractionRefusal("connector receipt hash is invalid")
+    raw, receipt = _read_json(Path(connector_receipt), "connector receipt")
+    if _sha256(raw) != connector_receipt_sha256:
+        raise PdfTreeExtractionRefusal("connector receipt bytes do not match the bound hash")
+    if receipt.get("schema") != "corpus-connector-receipt-v1":
+        raise PdfTreeExtractionRefusal("connector receipt schema is invalid")
+    if not isinstance(max_files, int) or isinstance(max_files, bool) or max_files <= 0:
+        raise PdfTreeExtractionRefusal("max_files must be a positive integer")
+    files = receipt.get("files")
+    if not isinstance(files, list) or not files or len(files) > max_files:
+        raise PdfTreeExtractionRefusal("connector PDF count exceeds the closed bound")
+    root_value = receipt.get("dest_root")
+    if not isinstance(root_value, str) or not root_value:
+        raise PdfTreeExtractionRefusal("connector destination root is missing")
+    root = Path(root_value)
+    if _is_reparse_or_symlink(root) or not root.is_dir():
+        raise PdfTreeExtractionRefusal("connector destination root is not a regular directory")
+    reopened: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in files:
+        if not isinstance(item, dict) or set(item) != {"path", "bytes", "sha256"}:
+            raise PdfTreeExtractionRefusal("connector file entry is malformed")
+        relative = _normalize_relative(item.get("path"))
+        if relative in seen:
+            raise PdfTreeExtractionRefusal("connector receipt contains a duplicate path")
+        seen.add(relative)
+        if not relative.lower().endswith(".pdf"):
+            raise PdfTreeExtractionRefusal("connector tree contains a non-PDF file")
+        path = _regular_contained(root, relative, "source PDF")
+        size = item.get("bytes")
+        digest = item.get("sha256")
+        if (
+            not isinstance(size, int)
+            or isinstance(size, bool)
+            or size <= 0
+            or not isinstance(digest, str)
+            or _HEX.fullmatch(digest) is None
+            or path.stat().st_size != size
+            or _sha256_file(path) != digest
+        ):
+            raise PdfTreeExtractionRefusal("source PDF bytes do not match the connector receipt")
+        with path.open("rb") as handle:
+            if handle.read(5) != b"%PDF-":
+                raise PdfTreeExtractionRefusal("source PDF magic is invalid")
+        reopened.append({"path": relative, "bytes": size, "sha256": digest, "source_path": path})
+    if _data_paths(root) != seen:
+        raise PdfTreeExtractionRefusal("connector custody file set differs from its receipt")
+    if receipt.get("total_bytes") != sum(item["bytes"] for item in reopened):
+        raise PdfTreeExtractionRefusal("connector receipt total bytes do not rederive")
+    manifest = _sha256("\n".join(sorted(item["sha256"] for item in reopened)).encode("utf-8"))
+    if receipt.get("sha256_manifest") != manifest:
+        raise PdfTreeExtractionRefusal("connector receipt manifest does not rederive")
+    reopened.sort(key=lambda item: item["path"])
+    return receipt, root, reopened
+
+
+def _positive_bound(label: str, value: int) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        raise PdfTreeExtractionRefusal(f"{label} must be a positive integer")
+    return value
+
+
+def _extract_one(
+    path: Path,
+    *,
+    max_pages: int,
+    max_decoded_content_bytes: int,
+    max_output_bytes: int,
+) -> tuple[bytes, int, int]:
+    try:
+        return pdf_to_utf8._extract_pdf(
+            path,
+            max_pages=max_pages,
+            max_decoded_content_bytes=max_decoded_content_bytes,
+            max_output_bytes=max_output_bytes,
+        )
+    except pdf_to_utf8.PdfExtractionRefusal as error:
+        raise PdfTreeExtractionRefusal(str(error)) from error
+
+
+def _extractor_identity(
+    *,
+    max_files: int,
+    max_pages: int,
+    max_decoded_content_bytes: int,
+    max_output_bytes: int,
+    max_total_pages: int,
+    max_total_decoded_content_bytes: int,
+    max_total_output_bytes: int,
+) -> dict[str, Any]:
+    pypdf = pdf_to_utf8._load_pypdf()
+    return {
+        "normalization": pdf_to_utf8.NORMALIZATION,
+        "producer_sha256": _sha256_file(Path(__file__).resolve(strict=True)),
+        "single_pdf_producer_sha256": _sha256_file(Path(pdf_to_utf8.__file__).resolve(strict=True)),
+        "pypdf_version": pdf_to_utf8.PYPDF_VERSION,
+        "pypdf_package_tree_sha256": pdf_to_utf8._package_tree_sha256(pypdf),
+        "pypdf_wheel_sha256": pdf_to_utf8.PYPDF_WHEEL_SHA256,
+        "python_major_minor": pdf_to_utf8.PYTHON_MAJOR_MINOR,
+        "python_version": sys.version,
+        "max_files": max_files,
+        "max_pages": max_pages,
+        "max_decoded_content_bytes": max_decoded_content_bytes,
+        "max_output_bytes": max_output_bytes,
+        "max_total_pages": max_total_pages,
+        "max_total_decoded_content_bytes": max_total_decoded_content_bytes,
+        "max_total_output_bytes": max_total_output_bytes,
+        "zero_fallback": True,
+    }
+
+
+def _write_exclusive(path: Path, raw: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, "wb") as handle:
+        handle.write(raw)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def _receipt_payload(receipt: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(receipt)
+    payload.pop("receipt_sha256", None)
+    return payload
+
+
+def _validate_transform_shape(receipt: dict[str, Any]) -> None:
+    if set(receipt) != {
+        "schema",
+        "result",
+        "claim_boundary",
+        "source",
+        "extractor",
+        "census",
+        "files",
+        "totals",
+        "derived_connector",
+        "receipt_sha256",
+    }:
+        raise PdfTreeExtractionRefusal("PDF tree receipt schema is not closed")
+    if receipt.get("schema") != SCHEMA or receipt.get("result") != "VERIFIED":
+        raise PdfTreeExtractionRefusal("PDF tree receipt result is invalid")
+    if receipt.get("receipt_sha256") != _sha256(_canonical(_receipt_payload(receipt))):
+        raise PdfTreeExtractionRefusal("PDF tree receipt self-hash does not rederive")
+
+
+def _load_census_binding(
+    *,
+    census_report: Path,
+    census_report_sha256: str,
+    connector_receipt_sha256: str,
+    source_file_count: int,
+    expected_extractor: dict[str, Any],
+) -> dict[str, Any]:
+    if _HEX.fullmatch(census_report_sha256) is None:
+        raise PdfTreeExtractionRefusal("census report hash is invalid")
+    raw, report = _read_json(Path(census_report), "PDF tree refusal census")
+    if _sha256(raw) != census_report_sha256:
+        raise PdfTreeExtractionRefusal("census report bytes do not match the bound hash")
+    if set(report) != {
+        "schema",
+        "result",
+        "claim_boundary",
+        "started_at",
+        "ended_at",
+        "elapsed_seconds",
+        "source",
+        "extractor",
+        "files",
+        "totals",
+        "receipt_sha256",
+    } or report.get("schema") != "ember-pdf-tree-refusal-census-v1":
+        raise PdfTreeExtractionRefusal("census report schema is not closed")
+    embedded = report.get("receipt_sha256")
+    if not isinstance(embedded, str) or embedded != _sha256(_canonical(_receipt_payload(report))):
+        raise PdfTreeExtractionRefusal("census report self-hash does not rederive")
+    source = report.get("source")
+    if not isinstance(source, dict) or source.get("connector_receipt_sha256") != connector_receipt_sha256:
+        raise PdfTreeExtractionRefusal("census connector receipt identity changed")
+    totals = report.get("totals")
+    files = report.get("files")
+    if (
+        report.get("result") != "PASS"
+        or not isinstance(totals, dict)
+        or totals != {"file_count": source_file_count, "pass_count": source_file_count, "refusal_count": 0}
+        or not isinstance(files, list)
+        or len(files) != source_file_count
+        or any(not isinstance(row, dict) or row.get("result") != "PASS" for row in files)
+    ):
+        raise PdfTreeExtractionRefusal("census result is not a complete zero-refusal PASS")
+    extractor = report.get("extractor")
+    if not isinstance(extractor, dict):
+        raise PdfTreeExtractionRefusal("census extractor identity is incomplete")
+    identity_keys = {
+        "normalization",
+        "producer_sha256",
+        "single_pdf_producer_sha256",
+        "pypdf_version",
+        "pypdf_package_tree_sha256",
+        "pypdf_wheel_sha256",
+        "python_major_minor",
+        "python_version",
+        "max_files",
+        "max_pages",
+        "max_decoded_content_bytes",
+        "max_output_bytes",
+        "zero_fallback",
+    }
+    if {key: extractor.get(key) for key in identity_keys} != {
+        key: expected_extractor.get(key) for key in identity_keys
+    }:
+        raise PdfTreeExtractionRefusal("census extractor identity changed")
+    return {
+        "path": str(Path(census_report).resolve(strict=True)),
+        "sha256": census_report_sha256,
+        "receipt_sha256": embedded,
+    }
+
+
+def _refusal_class(detail: str) -> str:
+    categories = (
+        ("produced empty text", "EMPTY_TEXT"),
+        ("could not be parsed", "PARSE_FAILED"),
+        ("page count", "PAGE_BOUND"),
+        ("decoded content", "DECODED_CONTENT_FAILED_OR_BOUND"),
+        ("text extraction failed", "TEXT_EXTRACTION_FAILED"),
+        ("output byte count", "OUTPUT_BOUND"),
+    )
+    for fragment, category in categories:
+        if fragment in detail:
+            return category
+    return "OTHER_EXTRACTION_REFUSAL"
+
+
+def census_pdf_tree_refusals(
+    *,
+    connector_receipt: Path,
+    connector_receipt_sha256: str,
+    report_path: Path,
+    max_files: int = DEFAULT_MAX_FILES,
+    max_pages: int = pdf_to_utf8.DEFAULT_MAX_PAGES,
+    max_decoded_content_bytes: int = pdf_to_utf8.DEFAULT_MAX_DECODED_CONTENT_BYTES,
+    max_output_bytes: int = pdf_to_utf8.DEFAULT_MAX_OUTPUT_BYTES,
+) -> dict[str, Any]:
+    """Attempt every receipt-listed PDF and write only a closed refusal census."""
+    report_path = Path(report_path).absolute()
+    if report_path.exists() or report_path.is_symlink():
+        raise PdfTreeExtractionRefusal("census report already exists")
+    if _is_reparse_or_symlink(report_path.parent) or not report_path.parent.is_dir():
+        raise PdfTreeExtractionRefusal("census report parent must be a regular non-reparse directory")
+    for label, value in (
+        ("max_files", max_files),
+        ("max_pages", max_pages),
+        ("max_decoded_content_bytes", max_decoded_content_bytes),
+        ("max_output_bytes", max_output_bytes),
+    ):
+        _positive_bound(label, value)
+    source, source_root, source_files = _source_tree(
+        Path(connector_receipt), connector_receipt_sha256, max_files=max_files
+    )
+    _require_outside_custody(report_path, source_root, "census report")
+    started_at = datetime.now(timezone.utc).isoformat()
+    started = time.monotonic()
+    rows: list[dict[str, Any]] = []
+    for item in source_files:
+        try:
+            output, pages, decoded = _extract_one(
+                item["source_path"],
+                max_pages=max_pages,
+                max_decoded_content_bytes=max_decoded_content_bytes,
+                max_output_bytes=max_output_bytes,
+            )
+            rows.append({
+                "source_path": item["path"],
+                "source_bytes": item["bytes"],
+                "source_sha256": item["sha256"],
+                "result": "PASS",
+                "pages": pages,
+                "decoded_content_bytes": decoded,
+                "output_bytes": len(output),
+                "output_sha256": _sha256(output),
+            })
+        except PdfTreeExtractionRefusal as error:
+            detail = str(error)
+            rows.append({
+                "source_path": item["path"],
+                "source_bytes": item["bytes"],
+                "source_sha256": item["sha256"],
+                "result": "REFUSED",
+                "refusal_class": _refusal_class(detail),
+                "detail": detail,
+            })
+    refusal_count = sum(row["result"] == "REFUSED" for row in rows)
+    extractor = _extractor_identity(
+        max_files=max_files,
+        max_pages=max_pages,
+        max_decoded_content_bytes=max_decoded_content_bytes,
+        max_output_bytes=max_output_bytes,
+        max_total_pages=DEFAULT_MAX_TOTAL_PAGES,
+        max_total_decoded_content_bytes=DEFAULT_MAX_TOTAL_DECODED_CONTENT_BYTES,
+        max_total_output_bytes=DEFAULT_MAX_TOTAL_OUTPUT_BYTES,
+    )
+    report: dict[str, Any] = {
+        "schema": "ember-pdf-tree-refusal-census-v1",
+        "result": "PASS" if refusal_count == 0 else "REFUSED",
+        "claim_boundary": (
+            "read-only extraction refusal census; no derived custody, admission, training, result, "
+            "capability, or issue-closure credit"
+        ),
+        "started_at": started_at,
+        "ended_at": datetime.now(timezone.utc).isoformat(),
+        "elapsed_seconds": time.monotonic() - started,
+        "source": {
+            "connector_receipt_sha256": connector_receipt_sha256,
+            "source": source.get("source"),
+            "source_id": source.get("source_id"),
+            "revision": source.get("revision"),
+            "license": source.get("license"),
+            "file_count": len(source_files),
+            "total_bytes": sum(item["bytes"] for item in source_files),
+            "manifest_sha256": source.get("sha256_manifest"),
+        },
+        "extractor": extractor,
+        "files": rows,
+        "totals": {
+            "file_count": len(rows),
+            "pass_count": len(rows) - refusal_count,
+            "refusal_count": refusal_count,
+        },
+    }
+    report["receipt_sha256"] = _sha256(_canonical(report))
+    raw = (json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
+    _write_exclusive(report_path, raw)
+    reopened_raw, reopened = _read_json(report_path, "PDF tree refusal census")
+    if reopened != report or _sha256(reopened_raw) != _sha256(raw):
+        raise PdfTreeExtractionRefusal("published refusal census changed on reopen")
+    return report
+
+
+def _verify_at(
+    *,
+    custody_root: Path,
+    expected_final_root: Path,
+    receipt: dict[str, Any],
+    connector_receipt: Path,
+    connector_receipt_sha256: str,
+) -> None:
+    _validate_transform_shape(receipt)
+    extractor = receipt.get("extractor")
+    if not isinstance(extractor, dict):
+        raise PdfTreeExtractionRefusal("PDF tree extractor identity is incomplete")
+    expected_extractor = _extractor_identity(
+        max_files=extractor.get("max_files"),
+        max_pages=extractor.get("max_pages"),
+        max_decoded_content_bytes=extractor.get("max_decoded_content_bytes"),
+        max_output_bytes=extractor.get("max_output_bytes"),
+        max_total_pages=extractor.get("max_total_pages"),
+        max_total_decoded_content_bytes=extractor.get("max_total_decoded_content_bytes"),
+        max_total_output_bytes=extractor.get("max_total_output_bytes"),
+    )
+    if extractor != expected_extractor:
+        raise PdfTreeExtractionRefusal("PDF tree extractor identity changed")
+    source, _, source_files = _source_tree(
+        Path(connector_receipt), connector_receipt_sha256, max_files=extractor["max_files"]
+    )
+    expected_source = {
+        "connector_receipt_sha256": connector_receipt_sha256,
+        "connector": source.get("connector"),
+        "source": source.get("source"),
+        "source_id": source.get("source_id"),
+        "canonical_url": source.get("canonical_url"),
+        "revision": source.get("revision"),
+        "license": source.get("license"),
+        "license_spdx": _canonical_license(source.get("license")),
+        "file_count": len(source_files),
+        "total_bytes": sum(item["bytes"] for item in source_files),
+        "manifest_sha256": source.get("sha256_manifest"),
+    }
+    if receipt.get("source") != expected_source:
+        raise PdfTreeExtractionRefusal("PDF tree source identity changed")
+    census = receipt.get("census")
+    if (
+        not isinstance(census, dict)
+        or set(census) != {"path", "sha256", "receipt_sha256"}
+        or not isinstance(census.get("path"), str)
+        or _HEX.fullmatch(census.get("sha256", "")) is None
+        or _HEX.fullmatch(census.get("receipt_sha256", "")) is None
+    ):
+        raise PdfTreeExtractionRefusal("PDF tree census binding is not closed")
+    claimed_files = receipt.get("files")
+    if not isinstance(claimed_files, list) or len(claimed_files) != len(source_files):
+        raise PdfTreeExtractionRefusal("PDF tree file map is incomplete")
+    if [row.get("source_path") for row in claimed_files if isinstance(row, dict)] != [
+        item["path"] for item in source_files
+    ]:
+        raise PdfTreeExtractionRefusal("PDF tree file map order is not canonical")
+    by_source = {row.get("source_path"): row for row in claimed_files if isinstance(row, dict)}
+    if len(by_source) != len(source_files):
+        raise PdfTreeExtractionRefusal("PDF tree file map contains duplicates")
+    actual_output_paths: set[str] = set()
+    total_pages = total_decoded = total_output = 0
+    for item in source_files:
+        claim = by_source.get(item["path"])
+        if not isinstance(claim, dict):
+            raise PdfTreeExtractionRefusal("PDF tree source file is missing from the map")
+        output_path = f"documents/{item['path']}.txt"
+        if claim.get("output_path") != output_path:
+            raise PdfTreeExtractionRefusal("PDF tree output mapping changed")
+        output_bytes, pages, decoded = _extract_one(
+            item["source_path"],
+            max_pages=extractor["max_pages"],
+            max_decoded_content_bytes=extractor["max_decoded_content_bytes"],
+            max_output_bytes=extractor["max_output_bytes"],
+        )
+        expected_claim = {
+            "source_path": item["path"],
+            "source_bytes": item["bytes"],
+            "source_sha256": item["sha256"],
+            "output_path": output_path,
+            "output_bytes": len(output_bytes),
+            "output_sha256": _sha256(output_bytes),
+            "pages": pages,
+            "decoded_content_bytes": decoded,
+        }
+        if claim != expected_claim:
+            raise PdfTreeExtractionRefusal("PDF tree file receipt differs from re-extraction")
+        stored = _regular_contained(custody_root, output_path, "extracted UTF-8 output").read_bytes()
+        if stored != output_bytes:
+            raise PdfTreeExtractionRefusal("PDF tree output differs from independent re-extraction")
+        actual_output_paths.add(output_path)
+        total_pages += pages
+        total_decoded += decoded
+        total_output += len(output_bytes)
+    if (
+        total_pages > extractor["max_total_pages"]
+        or total_decoded > extractor["max_total_decoded_content_bytes"]
+        or total_output > extractor["max_total_output_bytes"]
+    ):
+        raise PdfTreeExtractionRefusal("PDF tree aggregate extraction exceeds the closed bound")
+    expected_totals = {
+        "file_count": len(source_files),
+        "source_bytes": sum(item["bytes"] for item in source_files),
+        "output_bytes": total_output,
+        "pages": total_pages,
+        "decoded_content_bytes": total_decoded,
+    }
+    if receipt.get("totals") != expected_totals:
+        raise PdfTreeExtractionRefusal("PDF tree aggregate totals do not rederive")
+    derived_path = custody_root / DERIVED_CONNECTOR
+    derived_raw, derived = _read_json(derived_path, "derived connector receipt")
+    derived_claim = receipt.get("derived_connector")
+    if derived_claim != {
+        "path": DERIVED_CONNECTOR,
+        "sha256": _sha256(derived_raw),
+        "manifest_sha256": derived.get("sha256_manifest"),
+    }:
+        raise PdfTreeExtractionRefusal("derived connector receipt identity changed")
+    expected_derived_files = [
+        {"path": row["output_path"], "bytes": row["output_bytes"], "sha256": row["output_sha256"]}
+        for row in claimed_files
+    ]
+    expected_derived_files.sort(key=lambda row: row["path"])
+    if (
+        derived.get("schema") != "corpus-connector-receipt-v1"
+        or derived.get("dest_root") != str(expected_final_root)
+        or derived.get("license") != expected_source["license_spdx"]
+        or derived.get("files") != expected_derived_files
+        or derived.get("total_bytes") != total_output
+        or derived.get("sha256_manifest")
+        != _sha256("\n".join(sorted(row["sha256"] for row in expected_derived_files)).encode("utf-8"))
+    ):
+        raise PdfTreeExtractionRefusal("derived connector receipt does not rederive")
+    if _data_paths(custody_root) != actual_output_paths:
+        raise PdfTreeExtractionRefusal("PDF tree output custody contains missing or extra paths")
+    expected_files = actual_output_paths | {DERIVED_CONNECTOR, TRANSFORM_RECEIPT}
+    if _all_file_paths(custody_root) != expected_files:
+        raise PdfTreeExtractionRefusal("PDF tree output custody contains missing or extra paths")
+    if _all_directory_paths(custody_root) != _parent_directories(expected_files):
+        raise PdfTreeExtractionRefusal("PDF tree output custody contains missing or extra paths")
+
+
+def produce_pdf_tree_receipt(
+    *,
+    connector_receipt: Path,
+    connector_receipt_sha256: str,
+    census_report: Path,
+    census_report_sha256: str,
+    output_dir: Path,
+    max_files: int = DEFAULT_MAX_FILES,
+    max_pages: int = pdf_to_utf8.DEFAULT_MAX_PAGES,
+    max_decoded_content_bytes: int = pdf_to_utf8.DEFAULT_MAX_DECODED_CONTENT_BYTES,
+    max_output_bytes: int = pdf_to_utf8.DEFAULT_MAX_OUTPUT_BYTES,
+    max_total_pages: int = DEFAULT_MAX_TOTAL_PAGES,
+    max_total_decoded_content_bytes: int = DEFAULT_MAX_TOTAL_DECODED_CONTENT_BYTES,
+    max_total_output_bytes: int = DEFAULT_MAX_TOTAL_OUTPUT_BYTES,
+) -> dict[str, Any]:
+    output_dir = Path(output_dir).absolute()
+    if output_dir.exists() or output_dir.is_symlink():
+        raise PdfTreeExtractionRefusal("output directory already exists")
+    if _is_reparse_or_symlink(output_dir.parent) or not output_dir.parent.is_dir():
+        raise PdfTreeExtractionRefusal("output parent must be a regular non-reparse directory")
+    for label, value in (
+        ("max_files", max_files),
+        ("max_pages", max_pages),
+        ("max_decoded_content_bytes", max_decoded_content_bytes),
+        ("max_output_bytes", max_output_bytes),
+        ("max_total_pages", max_total_pages),
+        ("max_total_decoded_content_bytes", max_total_decoded_content_bytes),
+        ("max_total_output_bytes", max_total_output_bytes),
+    ):
+        _positive_bound(label, value)
+    source, source_root, source_files = _source_tree(
+        Path(connector_receipt), connector_receipt_sha256, max_files=max_files
+    )
+    extractor = _extractor_identity(
+        max_files=max_files,
+        max_pages=max_pages,
+        max_decoded_content_bytes=max_decoded_content_bytes,
+        max_output_bytes=max_output_bytes,
+        max_total_pages=max_total_pages,
+        max_total_decoded_content_bytes=max_total_decoded_content_bytes,
+        max_total_output_bytes=max_total_output_bytes,
+    )
+    _require_outside_custody(Path(census_report), source_root, "census report")
+    census = _load_census_binding(
+        census_report=Path(census_report),
+        census_report_sha256=census_report_sha256,
+        connector_receipt_sha256=connector_receipt_sha256,
+        source_file_count=len(source_files),
+        expected_extractor=extractor,
+    )
+    staging = output_dir.with_name(f".{output_dir.name}.staging-{uuid.uuid4().hex}")
+    staging.mkdir()
+    published = False
+    try:
+        rows: list[dict[str, Any]] = []
+        total_pages = total_decoded = total_output = 0
+        for item in source_files:
+            output_bytes, pages, decoded = _extract_one(
+                item["source_path"],
+                max_pages=max_pages,
+                max_decoded_content_bytes=max_decoded_content_bytes,
+                max_output_bytes=max_output_bytes,
+            )
+            total_pages += pages
+            total_decoded += decoded
+            total_output += len(output_bytes)
+            if (
+                total_pages > max_total_pages
+                or total_decoded > max_total_decoded_content_bytes
+                or total_output > max_total_output_bytes
+            ):
+                raise PdfTreeExtractionRefusal("PDF tree aggregate extraction exceeds the closed bound")
+            output_path = f"documents/{item['path']}.txt"
+            _write_exclusive(staging / Path(output_path), output_bytes)
+            rows.append({
+                "source_path": item["path"],
+                "source_bytes": item["bytes"],
+                "source_sha256": item["sha256"],
+                "output_path": output_path,
+                "output_bytes": len(output_bytes),
+                "output_sha256": _sha256(output_bytes),
+                "pages": pages,
+                "decoded_content_bytes": decoded,
+            })
+        derived_at = datetime.now(timezone.utc).isoformat()
+        derived_files = [
+            {"path": row["output_path"], "bytes": row["output_bytes"], "sha256": row["output_sha256"]}
+            for row in rows
+        ]
+        derived_files.sort(key=lambda row: row["path"])
+        derived = {
+            **source,
+            "source": "derived_pdf_text_custody",
+            "source_id": f"{source.get('source_id')}+pdf-tree-text-v1",
+            "license": _canonical_license(source.get("license")),
+            "license_evidence": (
+                "deterministic local PDF-to-UTF-8 derivation; exact original connector and transform "
+                "receipts are bound under _manifests"
+            ),
+            "revision": f"{source.get('revision')}+pdf-tree-text-v1",
+            "files": derived_files,
+            "total_bytes": total_output,
+            "sha256_manifest": _sha256(
+                "\n".join(sorted(row["sha256"] for row in derived_files)).encode("utf-8")
+            ),
+            "fetched_at": derived_at,
+            "connector": {"name": "pdf_tree_to_utf8", "version": "v1"},
+            "l3_statement": "deterministic local derivation; no network fetch and no model-mediated selection",
+            "dest_root": str(output_dir),
+            "notes": (
+                f"DERIVED_PDF_TEXT original_connector_receipt_sha256={connector_receipt_sha256}; "
+                f"transform_receipt={TRANSFORM_RECEIPT}"
+            ),
+        }
+        derived_raw = (json.dumps(derived, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
+        _write_exclusive(staging / DERIVED_CONNECTOR, derived_raw)
+        receipt: dict[str, Any] = {
+            "schema": SCHEMA,
+            "result": "VERIFIED",
+            "claim_boundary": (
+                "deterministic PDF-tree-to-UTF-8 transform only; no acquisition, admission, training, "
+                "result, capability, or issue-closure credit"
+            ),
+            "source": {
+                "connector_receipt_sha256": connector_receipt_sha256,
+                "connector": source.get("connector"),
+                "source": source.get("source"),
+                "source_id": source.get("source_id"),
+                "canonical_url": source.get("canonical_url"),
+                "revision": source.get("revision"),
+                "license": source.get("license"),
+                "license_spdx": _canonical_license(source.get("license")),
+                "file_count": len(source_files),
+                "total_bytes": sum(item["bytes"] for item in source_files),
+                "manifest_sha256": source.get("sha256_manifest"),
+            },
+            "extractor": extractor,
+            "census": census,
+            "files": rows,
+            "totals": {
+                "file_count": len(rows),
+                "source_bytes": sum(item["bytes"] for item in source_files),
+                "output_bytes": total_output,
+                "pages": total_pages,
+                "decoded_content_bytes": total_decoded,
+            },
+            "derived_connector": {
+                "path": DERIVED_CONNECTOR,
+                "sha256": _sha256(derived_raw),
+                "manifest_sha256": derived["sha256_manifest"],
+            },
+        }
+        receipt["receipt_sha256"] = _sha256(_canonical(receipt))
+        receipt_raw = (json.dumps(receipt, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
+        _write_exclusive(staging / TRANSFORM_RECEIPT, receipt_raw)
+        _verify_at(
+            custody_root=staging,
+            expected_final_root=output_dir,
+            receipt=receipt,
+            connector_receipt=Path(connector_receipt),
+            connector_receipt_sha256=connector_receipt_sha256,
+        )
+        os.rename(staging, output_dir)
+        published = True
+        expected_output_paths = {row["output_path"] for row in rows}
+        expected_published_files = expected_output_paths | {DERIVED_CONNECTOR, TRANSFORM_RECEIPT}
+        if (
+            _sha256_file(output_dir / TRANSFORM_RECEIPT) != _sha256(receipt_raw)
+            or _sha256_file(output_dir / DERIVED_CONNECTOR) != _sha256(derived_raw)
+            or _data_paths(output_dir) != expected_output_paths
+            or _all_file_paths(output_dir) != expected_published_files
+            or _all_directory_paths(output_dir) != _parent_directories(expected_published_files)
+        ):
+            raise PdfTreeExtractionRefusal("published PDF tree custody changed on reopen")
+        return receipt
+    except BaseException:
+        shutil.rmtree(output_dir if published else staging, ignore_errors=True)
+        raise
+
+
+def verify_pdf_tree_receipt(
+    *,
+    receipt_path: Path,
+    connector_receipt: Path,
+    connector_receipt_sha256: str,
+) -> dict[str, Any]:
+    receipt_path = Path(receipt_path)
+    _, receipt = _read_json(receipt_path, "PDF tree extraction receipt")
+    custody_root = receipt_path.parent.parent
+    if _is_reparse_or_symlink(custody_root) or not custody_root.is_dir():
+        raise PdfTreeExtractionRefusal("PDF tree output custody is not a regular directory")
+    _verify_at(
+        custody_root=custody_root,
+        expected_final_root=custody_root.absolute(),
+        receipt=receipt,
+        connector_receipt=Path(connector_receipt),
+        connector_receipt_sha256=connector_receipt_sha256,
+    )
+    return receipt
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--connector-receipt", type=Path, required=True)
+    parser.add_argument("--connector-receipt-sha256", required=True)
+    parser.add_argument("--output-dir", type=Path)
+    parser.add_argument("--census-report", type=Path)
+    parser.add_argument("--census-report-sha256")
+    parser.add_argument("--verify", action="store_true")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.census_report is not None and args.output_dir is None:
+        if args.census_report_sha256 is not None or args.verify:
+            parser.error("census generation cannot be combined with --census-report-sha256 or --verify")
+        receipt = census_pdf_tree_refusals(
+            connector_receipt=args.connector_receipt,
+            connector_receipt_sha256=args.connector_receipt_sha256,
+            report_path=args.census_report,
+        )
+    elif args.output_dir is None:
+        parser.error("--output-dir is required unless --census-report is used")
+    elif args.verify:
+        receipt = verify_pdf_tree_receipt(
+            receipt_path=args.output_dir / TRANSFORM_RECEIPT,
+            connector_receipt=args.connector_receipt,
+            connector_receipt_sha256=args.connector_receipt_sha256,
+        )
+    else:
+        if args.census_report is None or args.census_report_sha256 is None:
+            parser.error("transform requires --census-report and --census-report-sha256")
+        receipt = produce_pdf_tree_receipt(
+            connector_receipt=args.connector_receipt,
+            connector_receipt_sha256=args.connector_receipt_sha256,
+            census_report=args.census_report,
+            census_report_sha256=args.census_report_sha256,
+            output_dir=args.output_dir,
+        )
+    print(json.dumps(receipt, ensure_ascii=False, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
