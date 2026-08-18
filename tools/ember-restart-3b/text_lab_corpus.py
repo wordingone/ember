@@ -75,7 +75,7 @@ def local_license_provenance_v1(
     """
     if not isinstance(content_sha256, str) or _HEX.fullmatch(content_sha256) is None:
         raise ValueError("license provenance requires an exact content hash")
-    if generator not in {"local-normalizer-v1", "local-tree-root-v1"}:
+    if generator not in {"local-normalizer-v1", "local-tree-root-v1", "pdf-text-extraction-v1"}:
         raise ValueError("license provenance generator is not recognized")
     is_conjunction = isinstance(license_spdx, list)
     if is_conjunction:
@@ -237,6 +237,58 @@ def adapt_connector_receipt(receipt: dict[str, Any], *, evidence: dict[str, Any]
         license_spdx=license_spdx,
         evidence=evidence,
         generator=provenance_generator,
+    )
+    return {
+        "content_sha256": content_sha256,
+        "license_spdx": license_spdx,
+        "license_evidence": evidence,
+        "l4_receipt": l4_receipt,
+    }
+
+
+def adapt_pdf_extraction_receipt(
+    *,
+    receipt_path: Path,
+    connector_receipt: Path,
+    connector_receipt_sha256: str,
+    evidence: dict[str, Any],
+) -> dict[str, Any]:
+    """Reopen one governed PDF transform without pretending it was a connector fetch."""
+    producer_path = Path(__file__).resolve().parents[2] / "tools" / "corpus_connectors" / "pdf_to_utf8.py"
+    if not producer_path.is_file() or _is_reparse_or_symlink(producer_path):
+        raise ValueError("PDF extraction reopener is unavailable")
+    spec = importlib.util.spec_from_file_location("_ember_pdf_text_extraction_reopener", producer_path)
+    if spec is None or spec.loader is None:
+        raise ValueError("PDF extraction reopener is unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        receipt = module.verify_pdf_text_receipt(
+            receipt_path=Path(receipt_path),
+            connector_receipt=Path(connector_receipt),
+            connector_receipt_sha256=connector_receipt_sha256,
+        )
+    except Exception as error:
+        raise ValueError(str(error)) from error
+    source = receipt.get("source")
+    output = receipt.get("output")
+    if not isinstance(source, dict) or not isinstance(output, dict):
+        raise ValueError("PDF extraction receipt identity is incomplete")
+    output_path = Path(receipt_path).parent / output.get("path", "")
+    if not output_path.is_file() or _is_reparse_or_symlink(output_path):
+        raise ValueError("PDF extraction output is not a regular file")
+    output_bytes = output_path.read_bytes()
+    normalized, content_sha256 = local_normalizer_v1(output_bytes)
+    if normalized != output_bytes or content_sha256 != output.get("sha256"):
+        raise ValueError("PDF extraction output is not canonical text custody")
+    license_spdx = _closed_connector_license(source.get("license"))
+    if isinstance(license_spdx, list):
+        raise ValueError("PDF extraction source license must be one closed SPDX value")
+    l4_receipt = local_license_provenance_v1(
+        content_sha256=content_sha256,
+        license_spdx=license_spdx,
+        evidence=evidence,
+        generator="pdf-text-extraction-v1",
     )
     return {
         "content_sha256": content_sha256,
@@ -481,6 +533,7 @@ def _validate(
         expected_schema = {
             "local-normalizer-v1": "ember-text-source-receipt-v2",
             "local-tree-root-v1": "ember-text-source-receipt-v3",
+            "pdf-text-extraction-v1": "ember-text-source-receipt-v3",
         }.get(generator)
         if isinstance(license_spdx, list) and generator != "local-tree-root-v1":
             raise ValueError("source L4 provenance receipt is invalid")
