@@ -6,6 +6,28 @@ artifact + its freeze SHA/date, what changes, why, and who owns the call.
 
 ---
 
+## DEV-008 — EMBER-02 R1-E8: charged-budget projection remains external authority
+
+**Date filed:** 2026-08-18, before any A1 liveness receipt or R1-E8 verdict.
+**Frozen artifacts:** `docs/spec/ember02-preregistration-v1.md` and
+`docs/spec/ember02-preregistration-thresholds-v1.json`.
+
+**Gap recorded, no formula amendment:** the preregistration freezes T-08 as
+`A1 equal-budget tokens / A3 tokens >= 0.33` and requires tokens/second plus
+proxy-joules/token measurements, but it does not freeze a rule that converts
+those two measurements into one projected R2 charged-budget token count. The
+R1-E8 source carrier therefore does not invent that rule. It requires an
+external canonical `ember02-r2-charged-budget-contract-v1` receipt, reopens and
+hash-binds it to both matched run receipts, and remains `EVIDENCE_MISSING`
+forever when it is absent. This entry grants no liveness, parity, execution,
+compute, capability, or issue-closure credit.
+
+**Why / owner:** fail-closed implementation ruling for issue #1464 Packet A,
+independently reviewed on 2026-08-18. The future charged-budget authority owns
+the projection definition; Packet A owns only byte and arithmetic validation.
+
+---
+
 ## DEV-007 — eval-suite-freeze-v1 (battery-14): HellaSwag scored split bound to revision-pinned validation; contamination gate remains pending
 
 **Date filed:** 2026-08-18, before any #1433 WARM-100 evaluation or capability

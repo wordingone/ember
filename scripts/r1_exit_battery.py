@@ -59,9 +59,9 @@ in one command. E4, E5, and E6 carry implemented content validators
 (receipt-vs-inputs consistency for the E4 measurement receipt; the
 section-5.4 eight-leg frontier-receipt validation for E5; forecast value
 binding for E6) -- each still refuses until its run root carries real
-evidence, and a filename or marker-word match never mints MET. E8 remains
-refuse-until-validatable (the A1 liveness/parity leg computations do not
-exist). Only E3 yields a real, scoped,
+evidence, and a filename or marker-word match never mints MET. E8 now validates
+the closed liveness/parity receipt family while remaining EVIDENCE_MISSING
+until the charged-budget contract and real run receipts exist. Only E3 yields a real, scoped,
 DERIVABLE-NOW sub-receipt today (checkpoint write-side hash integrity) --
 it stays NOT-MET overall because the restore leg has never been exercised
 (the one attempt crashed on a bookkeeping guard before reaching restore
@@ -103,10 +103,9 @@ SCOPE BOUNDARIES (disclosed, not silent gaps):
     instead of validating itself. Telemetry series length is E1's leg (the
     battery composes all exits on one root); E5 checks the receipt's
     steps_measured against T-01 only.
-  * check_r1_e8 looks for ANY A1-labeled run evidence (dense mechanism,
-    tier1/tier2 markers) under the given search roots. It does not invent
-    an A1 checkpoint schema (none exists anywhere in this repo as of
-    2026-08-05) -- absence is reported as EVIDENCE_MISSING, not guessed at.
+  * check_r1_e8 consumes only the closed receipt family frozen in
+    docs/spec/ember02-r1-e8-receipts-v1.md. It never infers an A1 result from
+    marker words and never invents the missing charged-budget projection.
 
 Refusal reasons (R1ExitBatteryRefusal, always prefixed onto the message):
   THRESHOLDS_UNREADABLE, THRESHOLDS_SCHEMA_INVALID, THRESHOLDS_PIN_MISMATCH,
@@ -138,6 +137,7 @@ from pathlib import Path, PurePath
 from typing import Any, Mapping
 
 import r1_frozen_eval_runner as frozen_eval
+from r1_e8_validator import validate_e8
 
 ISSUE_REF = "#1463"
 PREREG_DOC = "docs/spec/ember02-preregistration-v1.md"
@@ -2608,118 +2608,11 @@ def check_r1_e7(seed_roots: list[Path], thresholds: dict[str, Any]) -> dict[str,
 # R1-E8 -- A1 discriminating check (liveness T-08, parity T-09/F-11).
 # ---------------------------------------------------------------------------
 
-## Word-boundary regex, not raw substring: a bare "a1" substring check
-# false-positives on hex sha256 digests, which contain the two characters
-# "a1" somewhere in a 64-hex-char string with high probability by pure
-# chance -- every real checkpoint has several such hashes. _HEX_DIGEST_RE
-# strips any hex-digest-shaped string value out of the scanned haystack
-# before matching, belt-and-suspenders against that class of false
-# positive. Separately, \b alone is not enough: this codebase's own
-# identifiers are snake_case/kebab-case ("tier_1", "governed-vertical"),
-# and `_` is a \w character in regex -- "tier_1" has NO \b between "tier"
-# and "_1", so a naive \btier ?1\b would miss it. _normalize_separators
-# turns '_'/'-' into spaces before matching so both "tier_1"/"tier-1" and
-# "tier1" hit the same word-bounded pattern.
-_A1_MARKER_RE = re.compile(r"\b(a1|dense|tier ?1|q ?galore|offload)\b", re.IGNORECASE)
-_HEX_DIGEST_RE = re.compile(r"^[0-9a-f]{16,}$", re.IGNORECASE)
-_SEPARATOR_RE = re.compile(r"[_\-]+")
-
-
-def _normalize_separators(text: str) -> str:
-    return _SEPARATOR_RE.sub(" ", text)
-
-
-def _marker_scan_strings(obj: Any) -> list[str]:
-    """Collect every dict key and non-hex-digest-shaped string value,
-    recursively -- the haystack for A1-marker matching. Numeric/hash/bytes
-    fields never contribute (they cannot spell a marker word on purpose,
-    only by hex-digest coincidence, which is exactly what this excludes)."""
-    out: list[str] = []
-    if isinstance(obj, dict):
-        for key, value in obj.items():
-            out.append(str(key))
-            out.extend(_marker_scan_strings(value))
-    elif isinstance(obj, list):
-        for item in obj:
-            out.extend(_marker_scan_strings(item))
-    elif isinstance(obj, str):
-        if not _HEX_DIGEST_RE.match(obj):
-            out.append(obj)
-    return out
-
-
-def check_r1_e8(search_roots: list[Path], thresholds: dict[str, Any]) -> dict[str, Any]:
-    t08 = float(thresholds["T-08"])
-    t09 = int(thresholds["T-09"])
-    f11_formula = str(thresholds["F-11"])
-    candidates: list[str] = []
-    for root in search_roots:
-        if not root.is_dir():
-            continue
-        for manifest_path in root.rglob("checkpoint-manifest.json"):
-            try:
-                manifest = json.loads(manifest_path.read_bytes())
-            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-                continue
-            haystack = _normalize_separators(" ".join(_marker_scan_strings(manifest)))
-            if _A1_MARKER_RE.search(haystack):
-                candidates.append(str(manifest_path))
-    # The marker scan only LOCATES candidate A1 evidence -- it is never the
-    # exit itself. R1-E8 adjudicates two computed legs (§4-A1): liveness
-    # (equal-budget token ratio vs A3, floor T-08) and, iff the fallback tier
-    # is invoked, parity (per-step loss/grad-norm trajectories vs the
-    # CPU-offloaded full-state AdamW reference over T-09 matched steps,
-    # inside the F-11 band, which itself consumes sigma_seed from a green
-    # R1-E7). None of those inputs exists in any receiptable form, so MET is
-    # deliberately unreachable: status stays EVIDENCE_MISSING until the leg
-    # computations are implemented AND their evidence exists.
-    liveness_leg = {
-        "status": "EVIDENCE_MISSING",
-        "bar": {"threshold_id": "T-08", "floor_fraction": t08, "meaning": "A1 equal-budget tokens vs A3 (leg 1)"},
-        "missing": [
-            "an A1 tier-1 (CPU-offloaded full-state AdamW) run with measured tokens/s and proxy-joules/token",
-            "the matched A3 equal-budget token count to ratio against",
-        ],
-    }
-    parity_leg = {
-        "status": "EVIDENCE_MISSING",
-        "required_when": "the fallback tier 2 mechanism is invoked (Tier 1 below the T-08 liveness floor)",
-        "bar": {"threshold_ids": ["T-09", "F-11"], "matched_steps_required": t09, "band_formula": f11_formula},
-        "missing": [
-            "candidate-mechanism per-step loss/grad-norm trajectory over T-09 matched steps",
-            "CPU-offloaded full-state AdamW reference trajectory (same model/data/seed)",
-            "sigma_seed(loss) and sigma_seed(grad_norm_ratio) from a green R1-E7",
-        ],
-    }
-    return {
-        "status": "EVIDENCE_MISSING",
-        "detail": (
-            (
-                f"{len(candidates)} manifest(s) carry A1 marker words -- recorded as candidate "
-                f"pointers ONLY; R1-E8 adjudicates the computed liveness leg (floor T-08={t08}) "
-                f"and conditional parity leg (T-09={t09} matched steps inside the F-11 band), and "
-                "neither is computable from any evidence on disk (a marker word in a manifest is "
-                "not a leg receipt)"
-            ) if candidates else
-            "no A1 (dense) arm run found under any given search root -- every checkpoint inspected is "
-            "architecture_revision ember-sparse-3b-v2 (A3's role-prior sparse architecture); repo-wide "
-            "grep for tier1/offload/Q-GaLore mechanisms in tools/ember-restart-3b finds zero hits "
-            "beyond the preregistration text itself (2026-08-05)"
-        ),
-        "components": {
-            "candidate_manifests": candidates,
-            "liveness_leg": liveness_leg,
-            "parity_leg": parity_leg,
-        },
-        "needs": (
-            f"an A1 tier-1 (CPU-offloaded full-state AdamW) run, its liveness leg computed against "
-            f"T-08={t08} (equal-budget tokens vs A3), and -- if the fallback tier is invoked -- the "
-            f"parity leg over T-09={t09} matched steps inside the F-11 band (formula in "
-            "components.parity_leg.bar.band_formula, consuming sigma_seed from a green R1-E7) -- "
-            "no A1 execution path exists anywhere in this repo yet; this is an engineering task "
-            "before it is an execution one"
-        ),
-    }
+def check_r1_e8(
+    search_roots: list[Path], thresholds: dict[str, Any], *, thresholds_sha256: str | None = None
+) -> dict[str, Any]:
+    """Compose R1-E8 from exact, hash-reopened liveness/parity receipts."""
+    return validate_e8(search_roots, thresholds, thresholds_sha256)
 
 
 # ---------------------------------------------------------------------------
@@ -2856,7 +2749,9 @@ def _run_one_exit(
     elif exit_id == "e7":
         result = check_r1_e7(seed_roots_effective, thresholds)
     elif exit_id == "e8":
-        result = check_r1_e8(sibling_roots + [run_root], thresholds)
+        result = check_r1_e8(
+            sibling_roots + [run_root], thresholds, thresholds_sha256=thresholds_sha256
+        )
     else:
         raise R1ExitBatteryRefusal(f"UNKNOWN_EXIT_ID: {exit_id!r}")
     subject: dict[str, Any] = {
@@ -4337,22 +4232,23 @@ def run_selftest() -> None:
         assert "matched_step_count: loss=50" in e7_offset["detail"], e7_offset
         assert "sigma_seed" not in e7_offset, e7_offset
 
-        # --- E8 (R-4): no A1 evidence anywhere -> EVIDENCE_MISSING, frozen bars quoted from the thresholds dict ---
-        e8_missing = check_r1_e8([ok_ckpt_root, empty_root], thresholds)
+        # --- E8: only the closed receipt family counts; marker files never do. ---
+        e8_missing = check_r1_e8(
+            [ok_ckpt_root, empty_root], thresholds, thresholds_sha256=thresholds_sha256
+        )
         assert e8_missing["status"] == "EVIDENCE_MISSING", e8_missing
-        assert e8_missing["components"]["candidate_manifests"] == [], e8_missing
-        assert e8_missing["components"]["liveness_leg"]["bar"]["floor_fraction"] == thresholds["T-08"], e8_missing
-        assert e8_missing["components"]["parity_leg"]["bar"]["matched_steps_required"] == thresholds["T-09"], e8_missing
-        assert e8_missing["components"]["parity_leg"]["bar"]["band_formula"] == thresholds["F-11"], e8_missing
+        assert "A1_LIVENESS_RECEIPT_MISSING" in e8_missing["detail"], e8_missing
 
-        # --- E8 (R-4): a manifest carrying A1 marker words is a CANDIDATE pointer only -- never MET ---
+        # --- E8: a manifest carrying A1 marker words is never a receipt. ---
         a1_root = tmp_path / "a1_run"
         a1_ckpt_dir = a1_root / "artifacts" / "checkpoints" / "checkpoint-a1"
         a1_ckpt_dir.mkdir(parents=True)
         (a1_ckpt_dir / "checkpoint-manifest.json").write_bytes(json.dumps({"schema_version": "SELFTEST_FIXTURE", "arm": "A1_dense_tier1_offload"}).encode("utf-8"))
-        e8_found = check_r1_e8([a1_root], thresholds)
+        e8_found = check_r1_e8(
+            [a1_root], thresholds, thresholds_sha256=thresholds_sha256
+        )
         assert e8_found["status"] == "EVIDENCE_MISSING", e8_found
-        assert len(e8_found["components"]["candidate_manifests"]) == 1, e8_found
+        assert "A1_LIVENESS_RECEIPT_MISSING" in e8_found["detail"], e8_found
 
         # --- Receipt envelope + write path: build + write one receipt per exit id, verify schema-floor-clean ---
         import receipt_check
