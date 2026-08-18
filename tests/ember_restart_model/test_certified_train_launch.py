@@ -2819,6 +2819,16 @@ class CompletionHeadAncestorTests(unittest.TestCase):
                 "semantic_canary_sequence_length",
                 "semantic_canary_checkpoint_interval",
                 "semantic_canary_telemetry_path",
+                "a1_family",
+                "a1_tier",
+                "a1_mechanism",
+                "a1_token_shards_receipt",
+                "a1_shards_root",
+                "a1_comparison_authority",
+                "a1_comparison_authority_sha256",
+                "a1_sequence_length",
+                "a1_checkpoint_interval",
+                "a1_telemetry_path",
             },
         )
 
@@ -3740,6 +3750,7 @@ class ResumeRootAuthorizationTests(_ResumeBundleMixin, unittest.TestCase):
                 "allowed_training_capabilities",
                 "resume_relocation_custody_root",
                 "allowed_semantic_canary_modes",
+                "allowed_a1_families",
             },
         )
         self.assertFalse(

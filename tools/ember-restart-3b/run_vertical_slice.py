@@ -37,6 +37,7 @@ from semantic_contract import semantic_model_contract_sha256
 from optimizer_transition import validate_optimizer_transition_registry
 from step2_realization_registry import validate_step2_realization_registry_bundle
 from train import run_launch, run_text_lab_preflight
+from a1_execution import run_dense_a1
 
 # R1-E4 measurement receipt (issue #1464): the two constants the MFU arithmetic
 # depends on, stated here so the receipt can carry them verbatim. Active count
@@ -3651,6 +3652,18 @@ def main() -> None:
     semantic.add_argument("--resume-optimizer-transition-registry-sha256")
     semantic.add_argument("--telemetry-path", type=Path)
     semantic.add_argument("--telemetry-run-id")
+    a1 = subparsers.add_parser("a1-dense-tier1")
+    a1.add_argument("--seed", type=int, required=True)
+    a1.add_argument("--artifact-root", type=Path, required=True)
+    a1.add_argument("--token-shards-receipt", type=Path, required=True)
+    a1.add_argument("--shards-root", type=Path, required=True)
+    a1.add_argument("--comparison-authority", type=Path, required=True)
+    a1.add_argument("--steps", type=int, required=True)
+    a1.add_argument("--sequence-length", type=int, required=True)
+    a1.add_argument("--checkpoint-interval", type=int, required=True)
+    a1.add_argument("--write-budget-gib", type=int, required=True)
+    a1.add_argument("--telemetry-path", type=Path, required=True)
+    a1.add_argument("--telemetry-run-id", required=True)
     args = parser.parse_args()
     if args.command == "governed-vertical":
         result = run_governed_vertical(
@@ -3691,6 +3704,22 @@ def main() -> None:
             resume_realization_registry=args.resume_realization_registry,
             resume_optimizer_transition_registry=args.resume_optimizer_transition_registry,
             resume_optimizer_transition_registry_sha256=args.resume_optimizer_transition_registry_sha256,
+            telemetry_path=args.telemetry_path,
+            telemetry_run_id=args.telemetry_run_id,
+        )
+    elif args.command == "a1-dense-tier1":
+        require_disk_budget_runner_contract()
+        result = run_dense_a1(
+            repo_root=Path(__file__).resolve().parents[2],
+            seed=args.seed,
+            artifact_root=args.artifact_root,
+            token_shards_receipt=args.token_shards_receipt,
+            shards_root=args.shards_root,
+            comparison_authority=args.comparison_authority,
+            steps=args.steps,
+            sequence_length=args.sequence_length,
+            checkpoint_interval=args.checkpoint_interval,
+            write_budget_bytes=args.write_budget_gib * 1024**3,
             telemetry_path=args.telemetry_path,
             telemetry_run_id=args.telemetry_run_id,
         )
