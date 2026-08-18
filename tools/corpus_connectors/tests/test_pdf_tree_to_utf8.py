@@ -99,6 +99,23 @@ def _write_exclusion_set(
     return exclusion_path, _sha256(raw)
 
 
+def _rewrite_census_extractor(
+    census: Path,
+    *,
+    producer_sha256: str,
+    field_overrides: dict[str, object] | None = None,
+) -> str:
+    report = json.loads(census.read_bytes())
+    report["extractor"]["producer_sha256"] = producer_sha256
+    report["extractor"].update(field_overrides or {})
+    payload = dict(report)
+    payload.pop("receipt_sha256")
+    report["receipt_sha256"] = _sha256(_canonical(payload))
+    raw = (json.dumps(report, sort_keys=True, indent=2) + "\n").encode()
+    census.write_bytes(raw)
+    return _sha256(raw)
+
+
 class PdfTreeToUtf8Tests(unittest.TestCase):
     def test_produces_collision_free_closed_tree_and_reextracts_every_pdf(self) -> None:
         from tools.corpus_connectors import pdf_tree_to_utf8 as module
@@ -209,6 +226,151 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
                     connector_receipt_sha256=connector_sha256,
                 ),
                 receipt,
+            )
+
+    def test_predecessor_census_requires_explicit_producer_hash(self) -> None:
+        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            connector_receipt, connector_sha256, _ = _write_tree_fixture(root)
+            census, _ = _write_pass_census(module, root, connector_receipt, connector_sha256)
+            predecessor_sha256 = "1" * 64
+            census_sha256 = _rewrite_census_extractor(
+                census,
+                producer_sha256=predecessor_sha256,
+            )
+
+            with self.assertRaisesRegex(module.PdfTreeExtractionRefusal, "census extractor identity changed"):
+                module.produce_pdf_tree_receipt(
+                    connector_receipt=connector_receipt,
+                    connector_receipt_sha256=connector_sha256,
+                    census_report=census,
+                    census_report_sha256=census_sha256,
+                    output_dir=root / "output",
+                )
+
+    def test_predecessor_census_accepts_only_exact_explicit_producer_hash(self) -> None:
+        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            connector_receipt, connector_sha256, _ = _write_tree_fixture(root)
+            census, _ = _write_pass_census(module, root, connector_receipt, connector_sha256)
+            predecessor_sha256 = "1" * 64
+            census_sha256 = _rewrite_census_extractor(
+                census,
+                producer_sha256=predecessor_sha256,
+            )
+            output = root / "output"
+
+            receipt = module.produce_pdf_tree_receipt(
+                connector_receipt=connector_receipt,
+                connector_receipt_sha256=connector_sha256,
+                census_report=census,
+                census_report_sha256=census_sha256,
+                census_producer_sha256=predecessor_sha256,
+                output_dir=output,
+            )
+
+            self.assertEqual(receipt["census"]["census_producer_sha256"], predecessor_sha256)
+            self.assertEqual(
+                module.verify_pdf_tree_receipt(
+                    receipt_path=output / "_manifests/pdf-tree-extraction-receipt.json",
+                    connector_receipt=connector_receipt,
+                    connector_receipt_sha256=connector_sha256,
+                ),
+                receipt,
+            )
+
+    def test_predecessor_census_refuses_wrong_or_noncanonical_explicit_hash(self) -> None:
+        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            connector_receipt, connector_sha256, _ = _write_tree_fixture(root)
+            census, _ = _write_pass_census(module, root, connector_receipt, connector_sha256)
+            predecessor_sha256 = "1" * 64
+            census_sha256 = _rewrite_census_extractor(
+                census,
+                producer_sha256=predecessor_sha256,
+            )
+
+            for label, supplied in (
+                ("wrong", "2" * 64),
+                ("uppercase", "A" * 64),
+            ):
+                with self.subTest(label=label):
+                    with self.assertRaises(module.PdfTreeExtractionRefusal):
+                        module.produce_pdf_tree_receipt(
+                            connector_receipt=connector_receipt,
+                            connector_receipt_sha256=connector_sha256,
+                            census_report=census,
+                            census_report_sha256=census_sha256,
+                            census_producer_sha256=supplied,
+                            output_dir=root / f"output-{label}",
+                        )
+
+    def test_predecessor_census_override_does_not_allow_other_extractor_drift(self) -> None:
+        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            connector_receipt, connector_sha256, _ = _write_tree_fixture(root)
+            census, _ = _write_pass_census(module, root, connector_receipt, connector_sha256)
+            predecessor_sha256 = "1" * 64
+            census_sha256 = _rewrite_census_extractor(
+                census,
+                producer_sha256=predecessor_sha256,
+                field_overrides={"pypdf_version": "0.0.0-drift"},
+            )
+
+            with self.assertRaisesRegex(module.PdfTreeExtractionRefusal, "census extractor identity changed"):
+                module.produce_pdf_tree_receipt(
+                    connector_receipt=connector_receipt,
+                    connector_receipt_sha256=connector_sha256,
+                    census_report=census,
+                    census_report_sha256=census_sha256,
+                    census_producer_sha256=predecessor_sha256,
+                    output_dir=root / "output",
+                )
+
+    def test_cli_forwards_explicit_predecessor_census_producer_hash(self) -> None:
+        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            connector_receipt, connector_sha256, _ = _write_tree_fixture(root)
+            census, _ = _write_pass_census(module, root, connector_receipt, connector_sha256)
+            predecessor_sha256 = "1" * 64
+            census_sha256 = _rewrite_census_extractor(
+                census,
+                producer_sha256=predecessor_sha256,
+            )
+            output = root / "output"
+
+            with redirect_stdout(io.StringIO()):
+                returncode = module.main([
+                    "--connector-receipt",
+                    str(connector_receipt),
+                    "--connector-receipt-sha256",
+                    connector_sha256,
+                    "--census-report",
+                    str(census),
+                    "--census-report-sha256",
+                    census_sha256,
+                    "--census-producer-sha256",
+                    predecessor_sha256,
+                    "--output-dir",
+                    str(output),
+                ])
+
+            self.assertEqual(returncode, 0)
+            self.assertEqual(
+                json.loads((output / "_manifests/pdf-tree-extraction-receipt.json").read_bytes())["census"][
+                    "census_producer_sha256"
+                ],
+                predecessor_sha256,
             )
 
     def test_exclusion_set_must_equal_exact_census_refusal_set(self) -> None:
