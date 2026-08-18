@@ -975,7 +975,7 @@ class ConnectorReceiptAdapterTests(unittest.TestCase):
                 receipt = self._multi_file_receipt(
                     dest_root,
                     [("README.md", card_bytes), ("data.json", b"{}\n")],
-                    license="ODC-By-1.0",
+                    license=card_token,
                 )
                 receipt["source"] = "huggingface"
                 receipt["connector"] = {"name": "hf_fetch", "version": "v1"}
@@ -989,6 +989,52 @@ class ConnectorReceiptAdapterTests(unittest.TestCase):
                 self.assertEqual(row["license_spdx"], "ODC-By-1.0")
                 self.assertEqual(row["license_evidence"], evidence)
                 self.assertEqual(row["l4_receipt"]["license_spdx"], "ODC-By-1.0")
+
+    def test_adapts_exact_one_item_odc_by_hf_dataset_card_license(self):
+        from text_lab_corpus import adapt_connector_receipt
+
+        dest_root = self._fetch_dir()
+        card_bytes = b"---\nlicense:\n- odc-by\nlanguage: en\n---\n\n# Dataset\n"
+        receipt = self._multi_file_receipt(
+            dest_root,
+            [("README.md", card_bytes), ("data.json", b"{}\n")],
+            license="odc-by",
+        )
+        receipt["source"] = "huggingface"
+        receipt["connector"] = {"name": "hf_fetch", "version": "v1"}
+        evidence = self._hf_dataset_card_evidence(
+            card_bytes,
+            declared_spdx="ODC-By-1.0",
+        )
+
+        row = adapt_connector_receipt(receipt, evidence=evidence)
+
+        self.assertEqual(row["license_spdx"], "ODC-By-1.0")
+        self.assertEqual(row["license_evidence"], evidence)
+
+    def test_rejects_odc_by_connector_token_outside_exact_hf_card_route(self):
+        from text_lab_corpus import adapt_connector_receipt
+
+        for raw_token in ("odc_by", "odc-by-1.0", "odc by", "odc-by"):
+            with self.subTest(raw_token=raw_token):
+                dest_root = self._fetch_dir()
+                card_bytes = b"---\nlicense: odc-by\n---\n\n# Dataset\n"
+                receipt = self._multi_file_receipt(
+                    dest_root,
+                    [("README.md", card_bytes), ("data.json", b"{}\n")],
+                    license=raw_token,
+                )
+                receipt["source"] = "foreign"
+                receipt["connector"] = {"name": "http_fetch", "version": "v1"}
+
+                with self.assertRaisesRegex(ValueError, "allow-list"):
+                    adapt_connector_receipt(
+                        receipt,
+                        evidence=self._hf_dataset_card_evidence(
+                            card_bytes,
+                            declared_spdx="ODC-By-1.0",
+                        ),
+                    )
 
     def test_rejects_odc_by_claim_without_exact_readme_declaration(self):
         from text_lab_corpus import adapt_connector_receipt
@@ -1023,6 +1069,14 @@ class ConnectorReceiptAdapterTests(unittest.TestCase):
             "duplicate": b"---\nlicense: apache-2.0\nlicense: apache-2.0\n---\n",
             "malformed": b"---\nlicense = apache-2.0\n---\n",
             "unknown": b"---\nlicense: proprietary\n---\n",
+            "empty-list": b"---\nlicense:\nlanguage: en\n---\n",
+            "multiple-items": b"---\nlicense:\n- apache-2.0\n- mit\n---\n",
+            "inline-list": b"---\nlicense: [apache-2.0]\n---\n",
+            "nested-mapping": b"---\nlicense:\n  name: apache-2.0\n---\n",
+            "anchor": b"---\nlicense: &license apache-2.0\n---\n",
+            "alias": b"---\nlicense: *license\n---\n",
+            "item-comment": b"---\nlicense:\n- apache-2.0 # comment\n---\n",
+            "item-trailing": b"---\nlicense:\n- apache-2.0 trailing\n---\n",
         }
         for name, card_bytes in cases.items():
             with self.subTest(name=name):

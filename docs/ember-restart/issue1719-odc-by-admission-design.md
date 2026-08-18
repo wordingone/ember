@@ -29,3 +29,17 @@ The global text-lab allow-set already contains `ODC-By-1.0`; this change adds no
 - Negative regression: connector/evidence claims of `ODC-By-1.0` refuse when the reopened README independently declares another token, omits the license key, changes path/hash, or uses any near-match token.
 - GREEN requires the focused production adapter tests, the existing malformed/ambiguous/hash/path/license matrix, source compilation, diff check, authority guard, and independent exact-byte review.
 - Public metadata must remain `Refs #1719`, nonclosing. No corpus admission, byte movement, training, sufficient-pretraining, or issue-closure credit is earned by this source change alone.
+
+## Real-consumer successor: connector-token canonicalization
+
+The first current-source tranche4d mint exposed a narrower missing edge before publishing output: production `hf_fetch` receipts preserve the source token as `license: odc-by`, while the adapter called the canonical-SPDX conjunction gate before applying the dataset-card closed map. The original fixture used `license: ODC-By-1.0` and therefore did not reproduce the acquisition receipt grammar.
+
+The successor canonicalizes the single receipt-level token through `_HF_DATASET_CARD_LICENSES` only when all three route identities are exact: `source=huggingface`, connector `{name: hf_fetch, version: v1}`, and `evidence.kind=hf_dataset_card`. The existing README reopen, closed leading-frontmatter parser, evidence hash, and canonical three-way equality remain unchanged. Generic connectors remain canonical-SPDX-only. Whitespace, punctuation variants, aliases, conjunctions, and a foreign connector claiming the same token remain refused. Existing connector receipts are not rewritten because they truthfully record the acquired source token.
+
+Completion requires a production-shaped `license: odc-by` RED/GREEN, alias and foreign-connector negatives, the full affected adapter suite, and the actual current-master tranche4d mint against the frozen connector receipts and admission plan. That real mint is the downstream-consumer proof; it does not by itself close #1719.
+
+## Real-consumer successor: one-item dataset-card license lists
+
+The next current-source mint reopened the exact peS2o README and found its declaration uses the YAML sequence form `license:` followed immediately by the sole item `- odc-by`; Zyda uses the scalar form. The parser therefore accepts exactly those two shapes for the sole license key: the existing scalar token, or an empty scalar remainder followed immediately by one plain token list item. After the item, only the end of front matter or a new top-level key is permitted. Both shapes feed the same lowercase closed map and retain the same reopened README hash and three-way connector/card/evidence equality.
+
+Empty or multi-item sequences, inline flow lists, nested mappings, duplicate keys, anchors, aliases, comments, and trailing item content are refused. No generic YAML parser, normalization rule, new license, receipt rewrite, or fallback is introduced. The production-shaped peS2o list is the deliberate RED; Zyda's scalar declaration stays green. Completion still requires the actual no-overwrite three-row tranche4d mint against the frozen plan and predecessor receipt.
