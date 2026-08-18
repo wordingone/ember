@@ -4,6 +4,7 @@
 """L4 manifest gate for planned, non-acquired AI-lab shared-text sources."""
 from __future__ import annotations
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -505,6 +506,9 @@ _AUTHORITY_INDEX_SCHEMA_V1 = "ember-text-lab-authority-index-v1"
 _AUTHORITY_INDEX_SCHEMA_V2 = "ember-text-lab-authority-index-v2"
 _UNRESOLVED_FIELDS = {"source_id", "domain", "split", "admission", "required_evidence", "allowed_license_spdx"}
 _ADMITTED_FIELDS = _UNRESOLVED_FIELDS | {"content_sha256", "license_spdx", "l4_receipt", "license_evidence"}
+_PARTITION_ADMITTED_FIELDS = _UNRESOLVED_FIELDS | {
+    "content_sha256", "license_partition_receipt", "license_partition_sha256", "l4_receipt",
+}
 _ADMITTED_ROW_FIELDS = ("source_id", "domain", "license_spdx", "content_sha256", "l4_receipt", "split")
 _FROZEN_EVAL_HASHES_PATH = "data/ember-restart-3b/text-lab-frozen-eval-hashes-v1.json"
 
@@ -588,6 +592,31 @@ def _external_path(root: Path, value: object) -> Path:
         raise ValueError("external authority path is absent, non-regular, or escapes root")
     return resolved
 
+
+def _partition_receipt_path(authority_root: Path, value: object) -> Path:
+    if not isinstance(value, str) or not value:
+        raise ValueError("partition authority path is invalid")
+    windows = PureWindowsPath(value)
+    candidate = Path(value)
+    if not (candidate.is_absolute() or windows.is_absolute() or windows.drive):
+        return _external_path(authority_root, value)
+    if not candidate.is_absolute():
+        raise ValueError("partition authority absolute path is invalid on this host")
+    candidate = candidate.absolute()
+    for current in (candidate, *candidate.parents):
+        try:
+            metadata = current.lstat()
+        except OSError as exc:
+            raise ValueError("partition authority path is absent") from exc
+        attributes = getattr(metadata, "st_file_attributes", 0)
+        reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+        if stat.S_ISLNK(metadata.st_mode) or (reparse_flag and attributes & reparse_flag):
+            raise ValueError("partition authority path contains a reparse point")
+    resolved = candidate.resolve(strict=True)
+    if not resolved.is_file() or not stat.S_ISREG(resolved.stat().st_mode):
+        raise ValueError("partition authority path is absent or non-regular")
+    return resolved
+
 def _bound_json(root: Path, binding: object, *, external_root: Path | None = None) -> tuple[bytes, dict[str, Any]]:
     if not isinstance(binding, dict) or set(binding) != {"path", "sha256", "schema"}:
         raise ValueError("authority artifact binding is invalid")
@@ -609,6 +638,56 @@ def _bound_json(root: Path, binding: object, *, external_root: Path | None = Non
     errors=sorted(Draft202012Validator(schema_value).iter_errors(value),key=str)
     if errors: raise ValueError("authority schema rejects bytes: "+errors[0].message)
     return payload,value
+
+
+def _validate_partition_authority_row(repo_root: Path, authority_root: Path, row: dict[str, Any]) -> dict[str, Any]:
+    """Reopen the exact partition receipt and every source/file/blob join it binds."""
+    if not isinstance(row, dict) or set(row) != _PARTITION_ADMITTED_FIELDS:
+        raise ValueError("partition authority row is not a closed alternative")
+    content = row.get("content_sha256")
+    receipt_sha = row.get("license_partition_sha256")
+    if not isinstance(content, str) or _HEX.fullmatch(content) is None:
+        raise ValueError("partition authority content root is invalid")
+    if not isinstance(receipt_sha, str) or _HEX.fullmatch(receipt_sha) is None:
+        raise ValueError("partition authority receipt hash is invalid")
+    receipt_path = _partition_receipt_path(Path(authority_root), row.get("license_partition_receipt"))
+    receipt_bytes = receipt_path.read_bytes()
+    if _sha_bytes(receipt_bytes) != receipt_sha:
+        raise ValueError("partition receipt bytes do not match the bound hash")
+    producer_path = _path(repo_root.resolve(), "tools/ember-restart-3b/mint_github_license_partition.py")
+    spec = importlib.util.spec_from_file_location("_ember_github_license_partition_reopener", producer_path)
+    if spec is None or spec.loader is None:
+        raise ValueError("partition receipt reopener is unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    receipt = module.validate_partition_receipt(receipt_path)
+    if receipt.get("producer_sha256") != _sha_bytes(producer_path.read_bytes()):
+        raise ValueError("partition receipt producer bytes changed")
+    if any(receipt.get(field) != row.get(field) for field in ("source_id", "split", "domain")):
+        raise ValueError("partition receipt identity does not match the admitted row")
+    if receipt.get("partition_root_sha256") != content:
+        raise ValueError("partition receipt root does not match row content identity")
+    repositories = receipt.get("repositories")
+    if not isinstance(repositories, list) or any(
+        repository.get("declared_spdx") not in row.get("allowed_license_spdx", [])
+        or any(item.get("declared_spdx") != repository.get("declared_spdx") for item in repository.get("files", []))
+        for repository in repositories
+        if isinstance(repository, dict)
+    ):
+        raise ValueError("partition receipt contains a disallowed or mismatched SPDX value")
+    expected_l4 = {
+        "schema_version": "ember-text-source-partition-receipt-v1",
+        "result": "VERIFIED",
+        "source_sha256": content,
+        "generator": "github-license-partition-v1",
+        "verifier": "github-license-partition-reopen-v1",
+        "model_mediated": False,
+        "borrowed_labels": False,
+        "license_partition_sha256": receipt_sha,
+    }
+    if row.get("l4_receipt") != expected_l4:
+        raise ValueError("partition authority L4 receipt is invalid")
+    return receipt
 
 def _commit(root: Path) -> str:
     value=subprocess.run(["git","-C",str(root),"rev-parse","HEAD"],text=True,capture_output=True,check=False).stdout.strip()
@@ -701,6 +780,8 @@ def validate_authority_index(
     seen: set[str] = set()
     admitted_rows: list[dict[str, Any]] = []
     admitted_evidence_rows: list[dict[str, Any]] = []
+    partition_rows: list[dict[str, Any]] = []
+    admitted_content_hashes: list[str] = []
     all_admitted = True
     for row in rows:
         if not isinstance(row, dict) or not isinstance(row.get("source_id"), str) or row["source_id"] in seen:
@@ -708,7 +789,8 @@ def validate_authority_index(
         admission = row.get("admission")
         row_is_admitted = is_v2 and admission == "ADMITTED"
         if row_is_admitted:
-            if set(row) != _ADMITTED_FIELDS: raise ValueError("candidate descriptor is invalid or duplicated")
+            if set(row) not in (_ADMITTED_FIELDS, _PARTITION_ADMITTED_FIELDS):
+                raise ValueError("candidate descriptor is invalid or duplicated")
         else:
             if set(row) != _UNRESOLVED_FIELDS: raise ValueError("candidate descriptor is invalid or duplicated")
             all_admitted = False
@@ -722,11 +804,15 @@ def validate_authority_index(
         seen.add(row["source_id"])
         by_domain[(row["domain"], row["split"])] = by_domain.get((row["domain"], row["split"]), 0) + 1
         if row_is_admitted:
-            admitted_rows.append({field: row[field] for field in _ADMITTED_ROW_FIELDS})
-            admitted_evidence_rows.append({
-                "content_sha256": row["content_sha256"], "license_spdx": row["license_spdx"],
-                "license_evidence": row["license_evidence"], "l4_receipt": row["l4_receipt"],
-            })
+            admitted_content_hashes.append(row["content_sha256"])
+            if set(row) == _PARTITION_ADMITTED_FIELDS:
+                partition_rows.append(row)
+            else:
+                admitted_rows.append({field: row[field] for field in _ADMITTED_ROW_FIELDS})
+                admitted_evidence_rows.append({
+                    "content_sha256": row["content_sha256"], "license_spdx": row["license_spdx"],
+                    "license_evidence": row["license_evidence"], "l4_receipt": row["l4_receipt"],
+                })
     if len(rows) != 44 or {row.get("domain") for row in rows} != set(DOMAINS):
         raise ValueError("authority corpus lacks eleven-domain source matrix")
     for domain in DOMAINS:
@@ -754,6 +840,14 @@ def validate_authority_index(
             )
             if recomputed != evidence_row["l4_receipt"]:
                 raise ValueError("source license evidence does not re-derive the claimed receipt")
+    partition_authority_root = authority_root if authority_root is not None else root
+    for partition_row in partition_rows:
+        _validate_partition_authority_row(root, partition_authority_root, partition_row)
+    if (
+        len(set(admitted_content_hashes)) != len(admitted_content_hashes)
+        or any(value in protected_identifiers["content_sha256"] for value in admitted_content_hashes)
+    ):
+        raise ValueError("admitted source content is duplicated or protected")
 
     base_receipt = {
         "authority_index_sha256": _sha_bytes(index_bytes),
@@ -791,6 +885,8 @@ def validate_authority_index(
     frozen_hashes = _frozen_eval_hashes(root)
     if not frozen_hashes:
         raise ValueError("frozen eval hash registry is required for VERIFIED and is empty")
-    _validate(admitted_rows, frozen_hashes)
+    _validate(admitted_rows, frozen_hashes, require_domain_floor=not partition_rows)
+    if any(value in frozen_hashes for value in admitted_content_hashes):
+        raise ValueError("source contaminates frozen eval")
 
     return {"result": "VERIFIED", **base_receipt}

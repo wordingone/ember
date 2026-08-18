@@ -31,6 +31,12 @@ ARTIFACT_NAMES = {
     "identity": "owned-text-lab-input-identity-v3.json",
     "index": "text-lab-authority-index-v2.json",
 }
+PARTITION_ARTIFACT_NAMES = {
+    "bundle": "text-lab-source-receipt-bundle-v4.json",
+    "corpus": "owned-text-lab-corpus-v4.json",
+    "identity": "owned-text-lab-input-identity-v4.json",
+    "index": "text-lab-authority-index-v2.json",
+}
 OUTPUT_RECEIPT = "tranche-admission-receipt.json"
 OUTPUT_LOG = "mint-log.json"
 OUTPUT_PLAN = "tranche-admission-plan.json"
@@ -160,6 +166,10 @@ def _rewrite_packet_local_index(
     index: dict[str, Any],
     predecessor_generated: dict[str, bytes],
     successor_generated: dict[str, bytes],
+    *,
+    source_names: dict[str, str],
+    output_names: dict[str, str],
+    repo: Path,
 ) -> bytes:
     if not isinstance(index, dict) or index.get("schema_version") != "ember-text-lab-authority-index-v2":
         raise ValueError("predecessor authority index is not v2")
@@ -168,7 +178,8 @@ def _rewrite_packet_local_index(
         binding = rewritten.get(role)
         if not isinstance(binding, dict) or set(binding) != {"path", "sha256", "schema"}:
             raise ValueError("predecessor authority binding is invalid")
-        expected_name = ARTIFACT_NAMES[{"receipt_bundle": "bundle", "corpus": "corpus", "input_identity": "identity"}[role]]
+        artifact_role = {"receipt_bundle": "bundle", "corpus": "corpus", "input_identity": "identity"}[role]
+        expected_name = source_names[artifact_role]
         old_path = binding["path"]
         old_relative = PurePosixPath(old_path) if isinstance(old_path, str) else None
         if (
@@ -180,8 +191,16 @@ def _rewrite_packet_local_index(
             raise ValueError("predecessor authority artifact path is not a safe exact file binding")
         if binding["sha256"] != sha256_bytes(predecessor_generated[expected_name]):
             raise ValueError("predecessor authority artifact hash changed")
-        binding["path"] = expected_name
-        binding["sha256"] = sha256_bytes(successor_generated[expected_name])
+        output_name = output_names[artifact_role]
+        binding["path"] = output_name
+        binding["sha256"] = sha256_bytes(successor_generated[output_name])
+        if output_names is PARTITION_ARTIFACT_NAMES and artifact_role in {"bundle", "corpus"}:
+            schema_name = f"text-lab-{artifact_role}-v4.schema.json"
+            schema_path = repo / "data" / "ember-restart-3b" / schema_name
+            binding["schema"] = {
+                "path": f"data/ember-restart-3b/{schema_name}",
+                "sha256": sha256_file(schema_path),
+            }
     return canonical(rewritten)
 
 
@@ -342,6 +361,7 @@ def _read_plan(path: Path, expected_sha256: str, module: Any) -> tuple[dict[str,
 def _apply_cases(
     *,
     module: Any,
+    repo: Path,
     rows: list[dict[str, Any]],
     cases: list[dict[str, Any]],
     predecessor_row_receipts: list[dict[str, Any]],
@@ -355,12 +375,16 @@ def _apply_cases(
     total_files = predecessor_file_count
     total_bytes = predecessor_total_bytes
     seen_cases: set[str] = set()
-    expected_case_keys = {
+    homogeneous_case_keys = {
         "source_id", "connector_slot", "connector_receipt_path",
         "connector_receipt_sha256", "expected_license_spdx", "evidence",
     }
+    partition_case_keys = {
+        "source_id", "connector_slot", "license_partition_receipt_path",
+        "license_partition_receipt_sha256",
+    }
     for case in cases:
-        if not isinstance(case, dict) or set(case) != expected_case_keys:
+        if not isinstance(case, dict) or set(case) not in (homogeneous_case_keys, partition_case_keys):
             raise ValueError("tranche case is not closed")
         source_id = case["source_id"]
         if not isinstance(source_id, str) or source_id in seen_cases or source_id not in row_map:
@@ -369,10 +393,64 @@ def _apply_cases(
         old = row_map[source_id]
         if old.get("admission") != "UNRESOLVED_CANDIDATE":
             raise ValueError("tranche case does not target an unresolved candidate")
+        if set(case) == partition_case_keys:
+            receipt_path = Path(case["license_partition_receipt_path"])
+            expected_receipt_sha = case["license_partition_receipt_sha256"]
+            if (
+                not isinstance(expected_receipt_sha, str)
+                or HEX64.fullmatch(expected_receipt_sha) is None
+                or not receipt_path.is_file()
+                or module._is_reparse_or_symlink(receipt_path)
+            ):
+                raise ValueError("partition receipt path or hash is invalid")
+            receipt_raw = receipt_path.read_bytes()
+            if sha256_bytes(receipt_raw) != expected_receipt_sha:
+                raise ValueError("partition receipt bytes changed")
+            partition = json.loads(receipt_raw)
+            content = partition.get("partition_root_sha256") if isinstance(partition, dict) else None
+            admitted = {
+                **old,
+                "admission": "ADMITTED",
+                "content_sha256": content,
+                "license_partition_receipt": str(receipt_path.resolve(strict=True)),
+                "license_partition_sha256": expected_receipt_sha,
+                "l4_receipt": {
+                    "schema_version": "ember-text-source-partition-receipt-v1",
+                    "result": "VERIFIED",
+                    "source_sha256": content,
+                    "generator": "github-license-partition-v1",
+                    "verifier": "github-license-partition-reopen-v1",
+                    "model_mediated": False,
+                    "borrowed_labels": False,
+                    "license_partition_sha256": expected_receipt_sha,
+                },
+            }
+            reopened = module._validate_partition_authority_row(repo, repo, admitted)
+            if reopened.get("connector_slot") != case["connector_slot"]:
+                raise ValueError("partition receipt connector slot does not match the tranche case")
+            row_map[source_id] = admitted
+            file_count = reopened["file_count"]
+            byte_count = reopened["blob_bytes"]
+            total_files += file_count
+            total_bytes += byte_count
+            row_receipts.append({
+                "source_id": source_id,
+                "connector_slot": case["connector_slot"],
+                "license_partition_receipt_path": str(receipt_path.resolve(strict=True)),
+                "license_partition_receipt_sha256": expected_receipt_sha,
+                "repository_count": reopened["repository_count"],
+                "partition_file_count": file_count,
+                "partition_total_bytes": byte_count,
+                "content_sha256": content,
+                "license_summary": reopened["license_summary"],
+                "l4_receipt_sha256": sha256_bytes(canonical(admitted["l4_receipt"])),
+            })
+            continue
         receipt_path = Path(case["connector_receipt_path"])
         expected_receipt_sha = case["connector_receipt_sha256"]
         if (
-            HEX64.fullmatch(expected_receipt_sha) is None
+            not isinstance(expected_receipt_sha, str)
+            or HEX64.fullmatch(expected_receipt_sha) is None
             or not receipt_path.is_file()
             or module._is_reparse_or_symlink(receipt_path)
         ):
@@ -433,14 +511,22 @@ def mint_successor(
         raise ValueError("output parent is reparsed")
 
     plan, plan_raw = _read_plan(plan_path, plan_sha256, module)
+    plan_adds_partition = any(
+        isinstance(case, dict) and "license_partition_receipt_path" in case
+        for case in plan["cases"]
+    )
 
-    expected_source_files = set(ARTIFACT_NAMES.values()) | {predecessor_receipt_name, OUTPUT_LOG}
     source_entries = list(source_custody.iterdir())
     if any(not path.is_file() or module._is_reparse_or_symlink(path) for path in source_entries):
         raise ValueError("predecessor custody file set is not exact")
     actual_source_files = {path.name for path in source_entries}
-    if actual_source_files not in (expected_source_files, expected_source_files | {OUTPUT_PLAN}):
+    expected_v3 = set(ARTIFACT_NAMES.values()) | {predecessor_receipt_name, OUTPUT_LOG}
+    expected_v4 = set(PARTITION_ARTIFACT_NAMES.values()) | {predecessor_receipt_name, OUTPUT_LOG}
+    allowed_source_sets = {frozenset(expected_v3), frozenset(expected_v3 | {OUTPUT_PLAN}), frozenset(expected_v4), frozenset(expected_v4 | {OUTPUT_PLAN})}
+    if frozenset(actual_source_files) not in allowed_source_sets:
         raise ValueError("predecessor custody file set is not exact")
+    source_names = PARTITION_ARTIFACT_NAMES if set(PARTITION_ARTIFACT_NAMES.values()).issubset(actual_source_files) else ARTIFACT_NAMES
+    expected_source_files = set(source_names.values()) | {predecessor_receipt_name, OUTPUT_LOG}
     predecessor_path = _exact_file(source_custody, predecessor_receipt_name, module)
     predecessor_raw = predecessor_path.read_bytes()
     if sha256_bytes(predecessor_raw) != predecessor_receipt_sha256:
@@ -478,16 +564,16 @@ def mint_successor(
     if predecessor_log.get("receipt_sha256") != predecessor_receipt_sha256:
         raise ValueError("predecessor mint log does not bind its receipt")
     generated_bindings = predecessor.get("generated_files")
-    if not isinstance(generated_bindings, dict) or set(generated_bindings) != set(ARTIFACT_NAMES.values()):
+    if not isinstance(generated_bindings, dict) or set(generated_bindings) != set(source_names.values()):
         raise ValueError("predecessor generated-file set is invalid")
     source_raw = {
         name: _bound_generated_file(source_custody, generated_bindings, name, module)
-        for name in ARTIFACT_NAMES.values()
+        for name in source_names.values()
     }
-    bundle = json.loads(source_raw[ARTIFACT_NAMES["bundle"]])
-    corpus = json.loads(source_raw[ARTIFACT_NAMES["corpus"]])
-    source_identity = json.loads(source_raw[ARTIFACT_NAMES["identity"]])
-    source_index = json.loads(source_raw[ARTIFACT_NAMES["index"]])
+    bundle = json.loads(source_raw[source_names["bundle"]])
+    corpus = json.loads(source_raw[source_names["corpus"]])
+    source_identity = json.loads(source_raw[source_names["identity"]])
+    source_index = json.loads(source_raw[source_names["index"]])
     historical_reopen = None
     if generic_receipt:
         _, historical_reopen = _validate_predecessor_authority(
@@ -510,6 +596,8 @@ def mint_successor(
         or predecessor.get("unresolved_row_count") != 44 - predecessor.get("admitted_row_count", -1)
     ):
         raise ValueError("predecessor row authority is inconsistent")
+    partition_plan = plan_adds_partition or source_names is PARTITION_ARTIFACT_NAMES
+    output_names = PARTITION_ARTIFACT_NAMES if partition_plan else ARTIFACT_NAMES
 
     predecessor_row_receipts = predecessor.get("row_receipts")
     predecessor_file_count = predecessor.get("reopened_connector_file_count")
@@ -524,6 +612,7 @@ def mint_successor(
         raise ValueError("predecessor connector custody is invalid")
     rows, row_receipts, reopened_file_count, reopened_total_bytes = _apply_cases(
         module=module,
+        repo=repo,
         rows=rows,
         cases=plan["cases"],
         predecessor_row_receipts=predecessor_row_receipts,
@@ -534,13 +623,17 @@ def mint_successor(
     registry_path = repo / "data" / "ember-restart-3b" / "protected-eval-registry-v2.json"
     registry_raw = registry_path.read_bytes()
     bundle = {
-        "schema_version": "ember-text-source-receipt-bundle-v3",
+        "schema_version": (
+            "ember-text-source-receipt-bundle-v4"
+            if partition_plan
+            else "ember-text-source-receipt-bundle-v3"
+        ),
         "result": "RESOLVED" if admitted_count == 44 else "UNRESOLVED_CANDIDATE",
         "candidates": rows,
     }
     bundle_raw = canonical(bundle)
     corpus = {
-        "schema_version": "ember-text-lab-corpus-v3",
+        "schema_version": "ember-text-lab-corpus-v4" if partition_plan else "ember-text-lab-corpus-v3",
         "registry_sha256": sha256_bytes(registry_raw),
         "receipt_bundle_sha256": sha256_bytes(bundle_raw),
         "sources": rows,
@@ -558,18 +651,21 @@ def mint_successor(
     }
     identity_raw = canonical(identity)
     generated = {
-        ARTIFACT_NAMES["bundle"]: bundle_raw,
-        ARTIFACT_NAMES["corpus"]: corpus_raw,
-        ARTIFACT_NAMES["identity"]: identity_raw,
+        output_names["bundle"]: bundle_raw,
+        output_names["corpus"]: corpus_raw,
+        output_names["identity"]: identity_raw,
     }
     index_raw = _rewrite_packet_local_index(
         source_index,
         source_raw,
         generated,
+        source_names=source_names,
+        output_names=output_names,
+        repo=repo,
     )
     index = json.loads(index_raw)
     index_raw = canonical(index)
-    generated[ARTIFACT_NAMES["index"]] = index_raw
+    generated[output_names["index"]] = index_raw
 
     staging = output.with_name(f".{output.name}.staging-{uuid.uuid4().hex}")
     staging.mkdir()
@@ -580,7 +676,7 @@ def mint_successor(
         (staging / OUTPUT_PLAN).write_bytes(plan_raw)
         staging_validation = module.validate_authority_index(
             repo,
-            index_relative=ARTIFACT_NAMES["index"],
+            index_relative=output_names["index"],
             external_authority_root=staging,
         )
         if staging_validation.get("result") != "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING":
@@ -620,12 +716,12 @@ def mint_successor(
             "row_receipts": row_receipts,
             "negative_receipts": predecessor["negative_receipts"],
             "index_transition": {
-                "predecessor_sha256": sha256_bytes(source_raw[ARTIFACT_NAMES["index"]]),
+                "predecessor_sha256": sha256_bytes(source_raw[source_names["index"]]),
                 "successor_sha256": sha256_bytes(index_raw),
                 "rewrite": "scratch-relative artifact paths replaced by packet-local basenames",
             },
             "identity_transition": {
-                "predecessor_sha256": sha256_bytes(source_raw[ARTIFACT_NAMES["identity"]]),
+                "predecessor_sha256": sha256_bytes(source_raw[source_names["identity"]]),
                 "successor_sha256": sha256_bytes(identity_raw),
                 "reason": "current source commit and exact validator code binding",
             },
@@ -656,7 +752,7 @@ def mint_successor(
         published = True
         published_validation = module.validate_authority_index(
             repo,
-            index_relative=ARTIFACT_NAMES["index"],
+            index_relative=output_names["index"],
             external_authority_root=output,
         )
         if published_validation != staging_validation:
