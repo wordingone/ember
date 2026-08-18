@@ -965,6 +965,55 @@ class ConnectorReceiptAdapterTests(unittest.TestCase):
         self.assertEqual(row["l4_receipt"]["generator"], "local-tree-root-v1")
         self.assertEqual(row["l4_receipt"]["result"], "VERIFIED")
 
+    def test_adapts_exact_odc_by_hf_dataset_card_license(self):
+        from text_lab_corpus import adapt_connector_receipt
+
+        for card_token in ("odc-by", "ODC-By"):
+            with self.subTest(card_token=card_token):
+                dest_root = self._fetch_dir()
+                card_bytes = f"---\nlicense: {card_token}\n---\n\n# Dataset\n".encode()
+                receipt = self._multi_file_receipt(
+                    dest_root,
+                    [("README.md", card_bytes), ("data.json", b"{}\n")],
+                    license="ODC-By-1.0",
+                )
+                receipt["source"] = "huggingface"
+                receipt["connector"] = {"name": "hf_fetch", "version": "v1"}
+                evidence = self._hf_dataset_card_evidence(
+                    card_bytes,
+                    declared_spdx="ODC-By-1.0",
+                )
+
+                row = adapt_connector_receipt(receipt, evidence=evidence)
+
+                self.assertEqual(row["license_spdx"], "ODC-By-1.0")
+                self.assertEqual(row["license_evidence"], evidence)
+                self.assertEqual(row["l4_receipt"]["license_spdx"], "ODC-By-1.0")
+
+    def test_rejects_odc_by_claim_without_exact_readme_declaration(self):
+        from text_lab_corpus import adapt_connector_receipt
+
+        for card_token in ("apache-2.0", "odc_by", "odc-by-1.0"):
+            with self.subTest(card_token=card_token):
+                dest_root = self._fetch_dir()
+                card_bytes = f"---\nlicense: {card_token}\n---\n".encode()
+                receipt = self._multi_file_receipt(
+                    dest_root,
+                    [("README.md", card_bytes), ("data.json", b"{}\n")],
+                    license="ODC-By-1.0",
+                )
+                receipt["source"] = "huggingface"
+                receipt["connector"] = {"name": "hf_fetch", "version": "v1"}
+
+                with self.assertRaisesRegex(ValueError, "dataset card"):
+                    adapt_connector_receipt(
+                        receipt,
+                        evidence=self._hf_dataset_card_evidence(
+                            card_bytes,
+                            declared_spdx="ODC-By-1.0",
+                        ),
+                    )
+
     def test_rejects_malformed_or_ambiguous_hf_dataset_card_license(self):
         from text_lab_corpus import adapt_connector_receipt
         cases = {
