@@ -491,6 +491,24 @@ def census_pdf_tree_refusals(
                 "refusal_class": _refusal_class(detail),
                 "detail": detail,
             })
+        except MemoryError:
+            raise
+        except Exception as error:
+            # A census exists to enumerate the complete refusal set in one pass.
+            # Third-party parser exceptions may escape the adapter's expected
+            # refusal type at lazy page-tree access; record that one file and
+            # continue. Deliberately do not catch BaseException: interrupts and
+            # fatal resource failures must still terminate the census.
+            detail = f"{type(error).__name__}: {error!s}"[:320]
+            rows.append({
+                "source_path": item["path"],
+                "source_bytes": item["bytes"],
+                "source_sha256": item["sha256"],
+                "result": "REFUSED",
+                "refusal_class": "UNWRAPPED_EXTRACTOR_ERROR",
+                "exception_class": type(error).__name__,
+                "detail": detail,
+            })
     refusal_count = sum(row["result"] == "REFUSED" for row in rows)
     extractor = _extractor_identity(
         max_files=max_files,

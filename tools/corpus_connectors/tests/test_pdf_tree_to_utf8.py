@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
 from tools.corpus_connectors.tests.test_pdf_to_utf8 import _minimal_pdf
 
@@ -23,7 +24,9 @@ def _canonical(value: object) -> bytes:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
 
 
-def _write_tree_fixture(root: Path, *, empty_second: bool = False) -> tuple[Path, str, Path]:
+def _write_tree_fixture(
+    root: Path, *, empty_second: bool = False, malformed_second: bool = False
+) -> tuple[Path, str, Path]:
     source = root / "source"
     source.mkdir()
     rows = []
@@ -34,6 +37,14 @@ def _write_tree_fixture(root: Path, *, empty_second: bool = False) -> tuple[Path
         path = source / relative
         path.parent.mkdir()
         raw = _minimal_pdf(text)
+        if malformed_second and relative.startswith("beta/"):
+            start = raw.index(b"3 0 obj")
+            end = raw.index(b"4 0 obj")
+            malformed = (
+                b"3 0 obj\nconcordance:chapter.tex:chapter.Rnw:1 33 1 1 0 "
+                b"7 1 1 17 270 "
+            )
+            raw = raw[:start] + malformed.ljust(end - start, b" ") + raw[end:]
         path.write_bytes(raw)
         rows.append({"path": relative, "bytes": len(raw), "sha256": _sha256(raw)})
     rows.sort(key=lambda row: row["path"])
@@ -156,6 +167,51 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
             )
             self.assertEqual(json.loads(report_path.read_bytes()), report)
             self.assertEqual({path.name for path in root.iterdir()}, {"source", "connector-receipt.json", "refusal-census.json"})
+
+    def test_census_seals_valid_and_unwrapped_malformed_pdf_rows(self) -> None:
+        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            connector_receipt, connector_sha256, _ = _write_tree_fixture(
+                root, malformed_second=True
+            )
+            report_path = root / "refusal-census.json"
+
+            report = module.census_pdf_tree_refusals(
+                connector_receipt=connector_receipt,
+                connector_receipt_sha256=connector_sha256,
+                report_path=report_path,
+            )
+
+            self.assertEqual(report["result"], "REFUSED")
+            self.assertEqual(report["totals"], {
+                "file_count": 2, "pass_count": 1, "refusal_count": 1,
+            })
+            self.assertEqual(report["files"][0]["result"], "PASS")
+            refusal = report["files"][1]
+            self.assertEqual(refusal["source_path"], "beta/document.pdf")
+            self.assertEqual(refusal["result"], "REFUSED")
+            self.assertEqual(refusal["refusal_class"], "UNWRAPPED_EXTRACTOR_ERROR")
+            self.assertEqual(refusal["exception_class"], "PdfReadError")
+            self.assertLessEqual(len(refusal["detail"]), 320)
+            self.assertEqual(json.loads(report_path.read_bytes()), report)
+
+    def test_census_does_not_convert_memory_exhaustion_into_a_file_refusal(self) -> None:
+        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            connector_receipt, connector_sha256, _ = _write_tree_fixture(root)
+            report_path = root / "refusal-census.json"
+            with patch.object(module, "_extract_one", side_effect=MemoryError("fatal")):
+                with self.assertRaises(MemoryError):
+                    module.census_pdf_tree_refusals(
+                        connector_receipt=connector_receipt,
+                        connector_receipt_sha256=connector_sha256,
+                        report_path=report_path,
+                    )
+            self.assertFalse(report_path.exists())
 
     def test_produce_structurally_requires_a_census(self) -> None:
         from tools.corpus_connectors import pdf_tree_to_utf8 as module
