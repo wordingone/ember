@@ -17,6 +17,10 @@
   ],
   "dynamic_entrypoints_note": "Programs the run path loads through spec_from_file_location or spawns from a path assembled out of several literals, which no static walk can recover: run_vertical_slice exec-loads scripts/governor.py (a different top-level directory) before any CUDA allocation, and launch_packet.py is the launch-surface program whose bytes the certificate already binds as launch_packet_sha256. Declaring one still subjects ITS imports to the walk.",
   "code": [
+    "tools/ember-restart-3b/a1_checkpoint.py",
+    "tools/ember-restart-3b/a1_dense.py",
+    "tools/ember-restart-3b/a1_execution.py",
+    "tools/ember-restart-3b/a1_optimizer.py",
     "tools/ember-restart-3b/batch.py",
     "tools/ember-restart-3b/build_owned_audio_frames.py",
     "tools/ember-restart-3b/build_owned_reasoning_tool_trajectories.py",
@@ -46,12 +50,14 @@
   "data": [
     "Ember.cmd",
     "configs/ember-restart-3b.json",
+    "docs/spec/ember02-preregistration-thresholds-v1.json",
     "data/ember-restart-3b/owned-four-domain-production-rung-v1.json",
     "data/ember-restart-3b/owned-four-domain-production-rung-v1.receipt.json",
     "data/ember-restart-3b/text-lab-authority-index-v1.json",
     "manifests/python-environment-v1.json",
     "scripts/launch-ember-cli.ps1",
     "tokenizer/tokenizer.json",
+    "tools/ember-restart-3b/ember-restart-3b-a1.json",
     "tools/ember-restart-3b/checkpoint-low-commit-deferral-policy.json"
   ],
   "data_declaration_note": "Data dependencies are declared rather than walked: a static walker cannot honestly prove which JSON a program reads, and a fabricated 'machine-detected' data edge would be worse than an explicit declaration. Every entry is a runtime input of the training chain -- the repo-relative constants in closure members (production_rung.SHARD_RELATIVE/RECEIPT_RELATIVE/TOKENIZER_RELATIVE/CONFIG_RELATIVE, text_lab_corpus._AUTHORITY_INDEX, run_vertical_slice's deferral policy and model config), the launch surface the certificate already binds by bytes (Ember.cmd as cli_binary_sha256, plus the launcher it invokes), and manifests/python-environment-v1.json, which pins the third-party imports (tokenizers, torch) that live outside the repo and therefore outside any path hash. All are inside the closure hash, so changing one demands re-verification.",
@@ -60,6 +66,7 @@
       "scripts/artifact_custody_gate.py",
       "scripts/git_env_hardening.py",
       "scripts/training_closure.py",
+      "tools/ember-restart-3b/a1_execution.py",
       "tools/ember-restart-3b/disk_budget_runner.py",
       "tools/ember-restart-3b/run_vertical_slice.py",
       "no repo target: git rev-parse and git merge-base --is-ancestor"

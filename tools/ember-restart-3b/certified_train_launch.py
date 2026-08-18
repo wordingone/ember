@@ -16,6 +16,7 @@ import sys
 import tempfile
 import uuid
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Any, NamedTuple
 
 
@@ -205,6 +206,20 @@ SEMANTIC_CANARY_MODES = {"warm-100"}
 # threshold itself -- adjudicating R1-E1/R1-E2 against telemetry evidence
 # stays scripts/r1_exit_battery.py's job, never this launcher's.
 SEMANTIC_CANARY_MIN_STEPS = 100
+A1_RUN_SPEC_KEYS = {
+    "a1_family",
+    "a1_tier",
+    "a1_mechanism",
+    "a1_token_shards_receipt",
+    "a1_shards_root",
+    "a1_comparison_authority",
+    "a1_comparison_authority_sha256",
+    "a1_sequence_length",
+    "a1_checkpoint_interval",
+    "a1_telemetry_path",
+}
+A1_FAMILIES = {"dense-tier1-full-state-adamw-cpu-offload-v1"}
+A1_CONFIG_SHA256 = "563331b746619788f01900f4d951df29e4c6549c937a4662bac76234f5d71edc"
 OPTIONAL_RUN_SPEC_KEYS = (
     {"training_verify_receipt_path", "training_verify_receipt_sha256"}
     | RESUME_RUN_SPEC_KEYS
@@ -212,6 +227,7 @@ OPTIONAL_RUN_SPEC_KEYS = (
     | SPECIALIST_LAUNCH_RUN_SPEC_KEYS
     | SEMANTIC_CANARY_RUN_SPEC_KEYS
     | SEMANTIC_CANARY_LAUNCH_RUN_SPEC_KEYS
+    | A1_RUN_SPEC_KEYS
 )
 CHECKPOINT_MANIFEST_NAME = "checkpoint-manifest.json"
 CONFIG_RELATIVE_PATH = "configs/ember-restart-3b.json"
@@ -262,6 +278,7 @@ OPTIONAL_AUTHORIZED_SCOPE_KEYS = {
     "allowed_training_capabilities",
     "resume_relocation_custody_root",
     "allowed_semantic_canary_modes",
+    "allowed_a1_families",
 }
 REQUESTED_SCOPE_KEYS = {
     "mode",
@@ -417,6 +434,44 @@ class ValidatedLaunch(NamedTuple):
     # Existing, hash-bound launch authority used for the live-attempt row.
     # Kept trailing/defaulted for the same compatibility reason as run_id.
     run_spec_path: pathlib.Path | None = None
+    # Dense A1 discriminating routing is absent on all legacy launch shapes.
+    # These trailing defaults preserve direct construction and argv bytes for
+    # governed, specialist, and semantic callers.
+    a1_family: str | None = None
+    a1_tier: "A1Tier | None" = None
+    a1_mechanism: "A1Mechanism | None" = None
+    a1_token_shards_receipt: pathlib.Path | None = None
+    a1_shards_root: pathlib.Path | None = None
+    a1_comparison_authority: pathlib.Path | None = None
+    a1_steps: int | None = None
+    a1_sequence_length: int | None = None
+    a1_checkpoint_interval: int | None = None
+    a1_write_budget_gib: int | None = None
+    a1_telemetry_path: pathlib.Path | None = None
+
+
+class A1Tier(str, Enum):
+    TIER_1 = "TIER_1"
+    TIER_2 = "TIER_2"
+
+
+class A1Mechanism(str, Enum):
+    FULL_STATE_ADAMW_CPU_OFFLOAD = "FULL_STATE_ADAMW_CPU_OFFLOAD"
+    OWNED_Q_GALORE_PROJECTED_GRADIENT = "OWNED_Q_GALORE_PROJECTED_GRADIENT"
+
+
+class A1DiscriminatingRequest(NamedTuple):
+    family: str
+    tier: A1Tier
+    mechanism: A1Mechanism
+    token_shards_receipt: pathlib.Path
+    shards_root: pathlib.Path
+    comparison_authority: pathlib.Path
+    steps: int
+    sequence_length: int
+    checkpoint_interval: int
+    write_budget_gib: int
+    telemetry_path: pathlib.Path
 
 
 def _canonical_bytes(value: object) -> bytes:
@@ -1545,6 +1600,293 @@ def _require_authorized_semantic_canary_mode(
         raise ValueError("run scope exceeds certificate: semantic_canary_mode")
 
 
+def _authorized_a1_families(authorized: dict[str, Any]) -> set[str] | None:
+    """The certificate's explicit dense-A1 family allowlist, if declared."""
+
+    declared = authorized.get("allowed_a1_families")
+    if declared is None:
+        return None
+    if not isinstance(declared, list) or not all(
+        isinstance(item, str) and item for item in declared
+    ):
+        raise ValueError(
+            "certificate allowed_a1_families must be a list of non-empty strings"
+        )
+    if len(set(declared)) != len(declared):
+        raise ValueError(
+            "certificate allowed_a1_families must be globally unique"
+        )
+    return set(declared)
+
+
+def _validate_a1_family_authority(
+    run_spec: dict[str, Any], authorized_families: set[str] | None
+) -> str | None:
+    """Authorize an all-or-nothing A1 route before any route input is opened."""
+
+    present = {key for key in A1_RUN_SPEC_KEYS if run_spec.get(key) is not None}
+    if not present:
+        return None
+    missing = sorted(A1_RUN_SPEC_KEYS - present)
+    if missing:
+        raise ValueError(
+            f"run spec A1 discriminating launch requires {missing[0]}, which is absent"
+        )
+    family = run_spec["a1_family"]
+    if not isinstance(family, str) or not family:
+        raise ValueError("run spec a1_family must be a non-empty string")
+    if family not in A1_FAMILIES:
+        raise ValueError(
+            "run spec a1_family must be one of " + ", ".join(sorted(A1_FAMILIES))
+        )
+    if authorized_families is None:
+        raise ValueError(
+            "certificate declares no allowed_a1_families, so run spec "
+            "a1_family is unauthorized (re-mint the certificate to launch "
+            "a dense A1 route)"
+        )
+    if family not in authorized_families:
+        raise ValueError("run scope exceeds certificate: a1_family")
+    return family
+
+
+def _require_a1_positive_int(value: object, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ValueError(f"run spec {label} must be a positive integer")
+    return value
+
+
+def _require_a1_string(value: object, label: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"run spec {label} must be a non-empty string")
+    return value
+
+
+def _validate_a1_request(
+    run_spec: dict[str, Any],
+    run_spec_path: pathlib.Path,
+    repo_root: pathlib.Path,
+    certificate: dict[str, Any],
+    resume: ResumeRequest | None,
+    write_budget_bytes: int,
+    optimizer_steps: int,
+    authorized_families: set[str] | None,
+) -> A1DiscriminatingRequest | None:
+    family = _validate_a1_family_authority(run_spec, authorized_families)
+    if family is None:
+        return None
+    if resume is not None:
+        raise ValueError("dense A1 launch requires clean-random genesis, not resume")
+    try:
+        tier = A1Tier(run_spec["a1_tier"])
+    except (TypeError, ValueError) as error:
+        raise ValueError("run spec a1_tier is invalid") from error
+    try:
+        mechanism = A1Mechanism(run_spec["a1_mechanism"])
+    except (TypeError, ValueError) as error:
+        raise ValueError("run spec a1_mechanism is invalid") from error
+    expected_mechanism = {
+        A1Tier.TIER_1: A1Mechanism.FULL_STATE_ADAMW_CPU_OFFLOAD,
+        A1Tier.TIER_2: A1Mechanism.OWNED_Q_GALORE_PROJECTED_GRADIENT,
+    }[tier]
+    if mechanism is not expected_mechanism:
+        raise ValueError("run spec A1 tier/mechanism binding is invalid")
+    if tier is not A1Tier.TIER_1:
+        raise ValueError("certified dense A1 runner currently authorizes TIER_1 only")
+
+    sequence_length = _require_a1_positive_int(
+        run_spec["a1_sequence_length"], "a1_sequence_length"
+    )
+    checkpoint_interval = _require_a1_positive_int(
+        run_spec["a1_checkpoint_interval"], "a1_checkpoint_interval"
+    )
+    if optimizer_steps <= 0:
+        raise ValueError("dense A1 launch requires positive optimizer_steps")
+    if write_budget_bytes <= 0 or write_budget_bytes % (1024**3) != 0:
+        raise ValueError(
+            "dense A1 launch write_budget_bytes must be a positive exact GiB"
+        )
+
+    config_path = repo_root / "tools" / "ember-restart-3b" / "ember-restart-3b-a1.json"
+    config_sha = _file_sha256(config_path, "canonical A1 config")
+    if config_sha != A1_CONFIG_SHA256 or config_sha != certificate["config_sha256"]:
+        raise ValueError("certificate does not bind canonical A1 config bytes")
+
+    token_receipt_path = pathlib.Path(
+        _require_a1_string(run_spec["a1_token_shards_receipt"], "a1_token_shards_receipt")
+    )
+    if not token_receipt_path.is_absolute():
+        token_receipt_path = repo_root / token_receipt_path
+    token_receipt = _load_json(token_receipt_path, "A1 token shards receipt")
+    token_receipt_sha = _file_sha256(token_receipt_path, "A1 token shards receipt")
+    if token_receipt_sha != certificate["input_authority_sha256"]:
+        raise ValueError("certificate does not bind A1 token shards receipt bytes")
+    if token_receipt.get("ticket") != "TOKEN-SHARDS-V0":
+        raise ValueError("A1 token shards receipt ticket mismatch")
+    shards = token_receipt.get("shards")
+    if not isinstance(shards, list) or not shards:
+        raise ValueError("A1 token shards receipt shards must be a non-empty list")
+    shard_sequence_sha = _canonical_sha256(shards)
+
+    tokenizer_path = repo_root / "tokenizer" / "tokenizer.json"
+    tokenizer_sha = _file_sha256(tokenizer_path, "canonical A1 tokenizer")
+    if tokenizer_sha != certificate["tokenizer_sha256"]:
+        raise ValueError("certificate does not bind canonical A1 tokenizer bytes")
+
+    comparison_path = pathlib.Path(
+        _require_a1_string(run_spec["a1_comparison_authority"], "a1_comparison_authority")
+    )
+    if not comparison_path.is_absolute():
+        comparison_path = run_spec_path.parent / comparison_path
+    expected_comparison_sha = _require_sha256(
+        run_spec["a1_comparison_authority_sha256"],
+        "run spec a1_comparison_authority_sha256",
+    )
+    if _file_sha256(comparison_path, "A1 comparison authority") != expected_comparison_sha:
+        raise ValueError("A1 comparison authority raw SHA-256 mismatch")
+    comparison = _load_json(comparison_path, "A1 comparison authority")
+    _require_keys(
+        comparison,
+        {
+            "schema_version", "comparison_id", "matched_a3_run",
+            "token_shards_receipt_sha256", "shard_sequence_sha256",
+            "tokenizer_sha256", "seed", "cursor_start", "schedule_sha256",
+            "genesis_authority_sha256",
+        },
+        "A1 comparison authority",
+    )
+    if comparison["schema_version"] != "ember-a1-comparison-authority-v1":
+        raise ValueError("A1 comparison authority schema mismatch")
+    schedule = {
+        "schema_version": "ember-a1-schedule-v1",
+        "optimizer_steps": optimizer_steps,
+        "sequence_length": sequence_length,
+        "checkpoint_interval": checkpoint_interval,
+        "config_sha256": config_sha,
+    }
+    expected_comparison = {
+        "token_shards_receipt_sha256": token_receipt_sha,
+        "shard_sequence_sha256": shard_sequence_sha,
+        "tokenizer_sha256": tokenizer_sha,
+        "seed": run_spec["seed"],
+        "cursor_start": {"global_step": 0, "record_index": 0, "tokens_seen": 0},
+        "schedule_sha256": _canonical_sha256(schedule),
+    }
+    for key, expected in expected_comparison.items():
+        if comparison.get(key) != expected:
+            raise ValueError(f"A1 comparison authority {key} mismatch")
+    expected_identity = {
+        "corpus_authority_sha256": token_receipt_sha,
+        "shard_sequence_sha256": shard_sequence_sha,
+        "tokenizer_sha256": tokenizer_sha,
+        "seed": run_spec["seed"],
+        "cursor_start": {"global_step": 0, "record_index": 0, "tokens_seen": 0},
+        "schedule_sha256": _canonical_sha256(schedule),
+    }
+    matched_ref = _require_object(comparison["matched_a3_run"], "matched A3 reference")
+    _require_keys(matched_ref, {"path", "sha256"}, "matched A3 reference")
+    matched_path = pathlib.Path(
+        _require_a1_string(matched_ref["path"], "matched_a3_run.path")
+    )
+    if matched_path.is_absolute() or ".." in matched_path.parts:
+        raise ValueError("matched A3 reference path must be packet-relative")
+    matched_path = comparison_path.parent / matched_path
+    if _file_sha256(matched_path, "matched A3 run") != _require_sha256(
+        matched_ref["sha256"], "matched A3 run sha256"
+    ):
+        raise ValueError("matched A3 run raw SHA-256 mismatch")
+    matched = _load_json(matched_path, "matched A3 run")
+    _require_keys(
+        matched,
+        {
+            "schema_version", "arm_id", "tier", "mechanism", "status",
+            "certified_launch_sha256", "source_commit", "architecture_revision",
+            "parameter_count", "active_parameter_count", "contains_router_or_experts",
+            "optimizer", "identity", "energy_sample_coverage", "checkpoint_sha256",
+            "receipt_sha256",
+        },
+        "matched A3 run",
+    )
+    unsigned = {key: value for key, value in matched.items() if key != "receipt_sha256"}
+    if matched.get("receipt_sha256") != _canonical_sha256(unsigned):
+        raise ValueError("matched A3 run self digest mismatch")
+    if (
+        matched.get("schema_version") != "ember02-r1-e8-run-v1"
+        or matched.get("arm_id") != "A3"
+        or matched.get("status") != "TERMINAL"
+        or matched.get("source_commit") != certificate["public_master_sha"]
+    ):
+        raise ValueError("matched A3 run identity is invalid")
+    identity = _require_object(matched.get("identity"), "matched A3 identity")
+    _require_keys(
+        identity,
+        {
+            "comparison_id", "corpus_authority_sha256", "shard_sequence_sha256",
+            "tokenizer_sha256", "seed", "cursor_start", "schedule_sha256",
+            "genesis_sha256",
+        },
+        "matched A3 identity",
+    )
+    for key, expected in expected_identity.items():
+        if identity.get(key) != expected:
+            raise ValueError(f"matched A3 identity {key} mismatch")
+    if identity.get("comparison_id") != comparison["comparison_id"]:
+        raise ValueError("matched A3 comparison_id mismatch")
+    if identity.get("genesis_sha256") != comparison["genesis_authority_sha256"]:
+        raise ValueError("matched A3 genesis identity mismatch")
+
+    shards_root = pathlib.Path(
+        _require_a1_string(run_spec["a1_shards_root"], "a1_shards_root")
+    )
+    if not shards_root.is_absolute():
+        shards_root = run_spec_path.parent / shards_root
+    shards_root = shards_root.resolve(strict=False)
+    if not shards_root.is_dir():
+        raise ValueError("A1 shards root is unavailable")
+    declared_total = 0
+    for row in shards:
+        if (
+            not isinstance(row, dict)
+            or not isinstance(row.get("name"), str)
+            or not isinstance(row.get("sha256"), str)
+            or type(row.get("n_tokens")) is not int
+            or row["n_tokens"] <= 0
+        ):
+            raise ValueError("A1 token shard declaration is invalid")
+        shard_path = (shards_root / row["name"]).resolve(strict=False)
+        if shard_path.parent != shards_root or not shard_path.is_file():
+            raise ValueError("A1 token shard path escapes or is unavailable")
+        if shard_path.stat().st_size != row["n_tokens"] * 2:
+            raise ValueError("A1 token shard byte length mismatch")
+        if _file_sha256(shard_path, "A1 token shard") != row["sha256"]:
+            raise ValueError("A1 token shard raw SHA-256 mismatch")
+        declared_total += row["n_tokens"]
+    if token_receipt.get("total_stream_tokens") != declared_total:
+        raise ValueError("A1 token shard total mismatch")
+    premise = token_receipt.get("premises")
+    tokenizer_premise = premise.get("tokenizer_json") if isinstance(premise, dict) else None
+    if not isinstance(tokenizer_premise, dict) or tokenizer_premise.get("sha256") != tokenizer_sha:
+        raise ValueError("A1 token receipt tokenizer identity mismatch")
+    telemetry_path = pathlib.Path(
+        _require_a1_string(run_spec["a1_telemetry_path"], "a1_telemetry_path")
+    )
+    if not telemetry_path.is_absolute():
+        telemetry_path = run_spec_path.parent / telemetry_path
+    return A1DiscriminatingRequest(
+        family=family,
+        tier=tier,
+        mechanism=mechanism,
+        token_shards_receipt=token_receipt_path,
+        shards_root=shards_root,
+        comparison_authority=comparison_path,
+        steps=optimizer_steps,
+        sequence_length=sequence_length,
+        checkpoint_interval=checkpoint_interval,
+        write_budget_gib=write_budget_bytes // (1024**3),
+        telemetry_path=telemetry_path,
+    )
+
+
 def _validate_semantic_canary_request(
     run_spec: dict[str, Any],
     run_spec_path: pathlib.Path,
@@ -2287,6 +2629,11 @@ def validate_certified_request(
         expected_launch_authority_packet_directory,
     )
 
+    _validate_a1_family_authority(
+        run_spec,
+        _authorized_a1_families(authorized_scope),
+    )
+
     resume = _validate_resume_request(
         run_spec,
         run_spec_path,
@@ -2346,6 +2693,16 @@ def validate_certified_request(
         requested_optimizer_steps,
         _authorized_semantic_canary_modes(authorized_scope),
     )
+    a1 = _validate_a1_request(
+        run_spec,
+        run_spec_path,
+        repo_root,
+        certificate,
+        resume,
+        int(requested_scope["write_budget_bytes"]),
+        requested_optimizer_steps,
+        _authorized_a1_families(authorized_scope),
+    )
 
     custody_root = pathlib.Path(requested_scope["custody_root"])
     runner_receipt = pathlib.Path(run_spec["runner_receipt"])
@@ -2381,6 +2738,15 @@ def validate_certified_request(
             raise ValueError(
                 "run scope exceeds certificate: semantic_canary_telemetry_path"
             ) from error
+    if a1 is not None:
+        try:
+            a1.telemetry_path.resolve(strict=False).relative_to(
+                custody_root.resolve(strict=False)
+            )
+        except ValueError as error:
+            raise ValueError(
+                "run scope exceeds certificate: a1_telemetry_path"
+            ) from error
 
     authority_candidates: list[pathlib.Path | None] = [
         certificate_path,
@@ -2397,6 +2763,8 @@ def validate_certified_request(
         None if semantic_canary is None else semantic_canary.receipt,
         None if semantic_canary is None else semantic_canary.tokenizer_path,
         None if semantic_canary is None else semantic_canary.telemetry_path,
+        None if a1 is None else a1.comparison_authority,
+        None if a1 is None else a1.telemetry_path,
     ]
     resolved_custody_root = custody_root.resolve(strict=False)
     authority_paths: list[pathlib.Path] = []
@@ -2488,6 +2856,17 @@ def validate_certified_request(
         semantic_canary_telemetry_run_id=(
             None if semantic_canary is None else semantic_canary.telemetry_run_id
         ),
+        a1_family=None if a1 is None else a1.family,
+        a1_tier=None if a1 is None else a1.tier,
+        a1_mechanism=None if a1 is None else a1.mechanism,
+        a1_token_shards_receipt=None if a1 is None else a1.token_shards_receipt,
+        a1_shards_root=None if a1 is None else a1.shards_root,
+        a1_comparison_authority=None if a1 is None else a1.comparison_authority,
+        a1_steps=None if a1 is None else a1.steps,
+        a1_sequence_length=None if a1 is None else a1.sequence_length,
+        a1_checkpoint_interval=None if a1 is None else a1.checkpoint_interval,
+        a1_write_budget_gib=None if a1 is None else a1.write_budget_gib,
+        a1_telemetry_path=None if a1 is None else a1.telemetry_path,
         authority_paths=tuple(authority_paths),
     )
 
@@ -2523,6 +2902,35 @@ def build_runner_argv(
             / "run_vertical_slice.py"
         ),
     ]
+    # Dense A1 is a parallel certificate family, not an allowed_modes value
+    # and not an alias for governed-vertical's sparse UnifiedDecoder route.
+    if launch.a1_family is not None:
+        argv += [
+            "a1-dense-tier1",
+            "--seed",
+            str(launch.seed),
+            "--artifact-root",
+            str(launch.artifact_root),
+            "--token-shards-receipt",
+            str(launch.a1_token_shards_receipt),
+            "--shards-root",
+            str(launch.a1_shards_root),
+            "--comparison-authority",
+            str(launch.a1_comparison_authority),
+            "--steps",
+            str(launch.a1_steps),
+            "--sequence-length",
+            str(launch.a1_sequence_length),
+            "--checkpoint-interval",
+            str(launch.a1_checkpoint_interval),
+            "--write-budget-gib",
+            str(launch.a1_write_budget_gib),
+            "--telemetry-path",
+            str(launch.a1_telemetry_path),
+            "--telemetry-run-id",
+            launch.run_id,
+        ]
+        return argv
     # A launch that declares no specialist route reaches only the
     # governed-vertical tail below, so its argv is byte-identical to a
     # pre-#1430 one. validate_certified_request has already proven a declared
@@ -3236,6 +3644,37 @@ def _finish_energy_sidecar(
     disclosure["receipt_written"] = receipt.is_file()
 
 
+def _finalize_a1_packet_a(repo_root: pathlib.Path, launch: ValidatedLaunch) -> None:
+    """Load the dense finalizer from this tree only after the energy window."""
+
+    module_path = repo_root / "tools" / "ember-restart-3b" / "a1_execution.py"
+    tools_directory = str(module_path.parent)
+    inserted = tools_directory not in sys.path
+    if inserted:
+        sys.path.insert(0, tools_directory)
+    try:
+        specification = importlib.util.spec_from_file_location(
+            "ember_a1_execution_finalizer", module_path
+        )
+        if specification is None or specification.loader is None:
+            raise RuntimeError("dense A1 finalizer cannot be loaded")
+        module = importlib.util.module_from_spec(specification)
+        specification.loader.exec_module(module)
+        module.finalize_tier1_run(
+            artifact_root=launch.artifact_root,
+            energy_receipt=launch.artifact_root / "energy-proxy-receipt.json",
+            thresholds_path=(
+                repo_root / "docs" / "spec" / "ember02-preregistration-thresholds-v1.json"
+            ),
+            expected_source_commit=launch.public_master_sha,
+            expected_certified_launch_sha256=launch.run_spec_sha256,
+            expected_comparison_authority=launch.a1_comparison_authority,
+        )
+    finally:
+        if inserted:
+            sys.path.remove(tools_directory)
+
+
 def execute_validated_launch(
     repo_root: pathlib.Path,
     launch: ValidatedLaunch,
@@ -3264,6 +3703,9 @@ def execute_validated_launch(
     # of an -B argv insertion, which would shift that pinned position.
     child_env = os.environ.copy()
     child_env["PYTHONDONTWRITEBYTECODE"] = "1"
+    if launch.a1_family is not None:
+        child_env["EMBER_A1_SOURCE_COMMIT"] = launch.public_master_sha
+        child_env["EMBER_A1_CERTIFIED_LAUNCH_SHA256"] = launch.run_spec_sha256
     # R1-E5 energy sidecar rides only REAL launches: an injected run_process
     # is a test double with no child process to meter, and metering a fake
     # would slow every launcher test by the idle-baseline interval. The
@@ -3352,6 +3794,15 @@ def execute_validated_launch(
                 sidecar_disclosure["note"] = (
                     f"{prior_note}; {finalize_note}" if prior_note else finalize_note
                 )
+    if exit_code == 0 and launch.a1_family is not None:
+        try:
+            _finalize_a1_packet_a(repo_root, launch)
+        except Exception as error:  # fail closed: no Packet-A receipt, nonzero launch
+            exit_code = 78
+            sidecar_disclosure["note"] = (
+                (sidecar_disclosure.get("note") or "")
+                + f"; dense A1 receipt finalization refused: {type(error).__name__}"
+            ).lstrip("; ")
     attempt_retention: dict[str, Any] | None = None
     bound_runner_receipt_path = launch.runner_receipt
     retained_execution_receipt_path: pathlib.Path | None = None

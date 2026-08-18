@@ -1133,6 +1133,33 @@ def measure_parameter_counts(model: Any) -> dict[str, Any]:
     }
 
 
+def measure_dense_a1_parameter_counts(model: Any) -> dict[str, Any]:
+    """Measure the distinct dense carrier without sparse-route semantics."""
+
+    from a1_dense import DenseA1Decoder
+
+    if not isinstance(model, DenseA1Decoder):
+        raise ValueError("dense A1 counter requires DenseA1Decoder")
+    named = list(model.named_parameters())
+    if len({id(parameter) for _, parameter in named}) != len(named):
+        raise ValueError("dense A1 live parameter inventory contains aliases")
+    unique = sum(parameter.numel() for _, parameter in named)
+    structural = model.config.structural_parameter_count()
+    if unique != structural:
+        raise ValueError("dense A1 live parameter inventory differs from structure")
+    return {
+        "schema_version": "ember-a1-dense-parameter-inventory-v1",
+        "architecture_revision": "ember-dense-a1-3b-v1",
+        "unique_parameters": unique,
+        "trainable_parameters": sum(
+            parameter.numel() for _, parameter in named if parameter.requires_grad
+        ),
+        "active_parameters": unique,
+        "contains_router_or_experts": False,
+        "parameter_tensors": len(named),
+    }
+
+
 def write_parameter_receipt(
     model: Any,
     config_path: Path,
