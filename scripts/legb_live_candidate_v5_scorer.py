@@ -46,13 +46,13 @@ it is validated, and both the chosen route and the manifest's declared
 active_expert_ids are bound into the receipt so a reader can see whether they
 agreed.
 
-SCOPE BOUNDARY -- what a receipt from this module does and does not mean.
-The live candidate's manifest records data_cursor.global_step = 4 and
-data_cursor.tokens_seen = 36. This is an identity-binding baseline: proof
-that the frozen suite, the tokenizer, the checkpoint bytes and the scoring
-core compose end to end against a live owned artifact. It is NOT a
-capability baseline, and scores near chance are the expected and correct
-outcome for a 36-token checkpoint. Receipts carry claim_boundary saying so.
+WARM-100 IDENTITY IS CONSUMED, NEVER INVENTED HERE. The scorer requires the
+exact path and SHA-256 of the governed semantic runner's own JSON result. That
+result carries `post_step_checkpoint`, minted by
+checkpoint_artifacts.published_checkpoint_receipt(), plus its segment and
+resume boundary. The scorer reopens those bytes, requires a fresh exact
+100-step run, and cross-checks the published checkpoint receipt against the
+actual manifest, shards, and cursor before any model load.
 
 GPU: never initialized without EMBER_GATE_AUTHORIZED=1, and any cuda* run is
 serialized through legb_inprocess_scorer.device_lease -> gpu_lock_guard
@@ -64,10 +64,15 @@ full-suite run, not a defect introduced here.
 
 Usage:
   python scripts/legb_live_candidate_v5_scorer.py --verify-only \\
-      --checkpoint-dir <live v5 custody dir>
+      --checkpoint-dir <live v5 custody dir> \\
+      --warm100-receipt <certified child result> \\
+      --warm100-receipt-sha256 <sha256>
   python scripts/legb_live_candidate_v5_scorer.py --evaluator-run \\
       --checkpoint-dir <live v5 custody dir> --route tool --limit 2 \\
       --tasks arc_challenge,hellaswag --device cpu \\
+      --warm100-receipt <certified child result> \\
+      --warm100-receipt-sha256 <sha256> \\
+      --predictions receipts/legb-live-candidate/<name>.jsonl \\
       --out receipts/legb-live-candidate/<name>.json
 """
 
@@ -158,11 +163,12 @@ FROZEN_SPLIT_BINDING = {
     },
 }
 
-CLAIM_BOUNDARY = (
-    "IDENTITY_BINDING_ONLY; the subject checkpoint records "
-    "data_cursor.tokens_seen=36 at global_step=4, so scores near chance are "
-    "expected -- no capability, parity, acceleration, or issue-closure credit"
-)
+WARM100_GLOBAL_STEP = 100
+SEMANTIC_CURSOR_KEYS = {
+    "shard", "record_index", "receipt_sha256", "tokenizer_sha256",
+    "shard_index", "token_offset", "global_step", "tokens_seen",
+}
+PUBLISHED_CURSOR_EXTRA_KEYS = {"governor", "resume_authority"}
 
 
 class LiveCandidateRefusal(Exception):
@@ -176,6 +182,32 @@ def _sha256_file(path: str) -> str:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _is_sha256(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
+def _canonical_sha256(value: object) -> str:
+    encoded = json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def claim_boundary(checkpoint: dict) -> str:
+    """Derive the claim boundary from the accepted checkpoint, never literals."""
+    return (
+        "WARM100_IDENTITY_AND_MEASUREMENT_ONLY; the governed run receipt and "
+        f"subject checkpoint agree at data_cursor.tokens_seen={checkpoint['tokens_seen']} "
+        f"and global_step={checkpoint['global_step']} -- no capability, parity, "
+        "acceleration, HellaSwag split-alignment, modality-marker, or "
+        "issue-closure credit"
+    )
 
 
 def _utc_stamp() -> str:
@@ -301,6 +333,84 @@ def load_verified_v5_checkpoint(checkpoint_dir: str) -> dict:
     }
 
 
+def load_verified_warm100_checkpoint(
+        checkpoint_dir: str, run_receipt_path: str,
+        expected_run_receipt_sha256: str) -> dict:
+    """Reopen the governed run result and bind it to the actual WARM-100 bytes.
+
+    This consumes `run_vertical_slice.py`'s existing result shape. It does not
+    mint or reinterpret a second run-receipt schema.
+    """
+    if not _is_sha256(expected_run_receipt_sha256):
+        raise LiveCandidateRefusal("RUN_RECEIPT_SHA256_INVALID")
+    if not os.path.isfile(run_receipt_path):
+        raise LiveCandidateRefusal("RUN_RECEIPT_MISSING")
+    actual_receipt_sha256 = _sha256_file(run_receipt_path)
+    if actual_receipt_sha256 != expected_run_receipt_sha256:
+        raise LiveCandidateRefusal(
+            "RUN_RECEIPT_SHA_MISMATCH: "
+            f"expected={expected_run_receipt_sha256} actual={actual_receipt_sha256}")
+    try:
+        with open(run_receipt_path, "r", encoding="utf-8", errors="strict") as handle:
+            run_receipt = json.load(handle)
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise LiveCandidateRefusal(f"RUN_RECEIPT_UNREADABLE: {exc}") from exc
+    if not isinstance(run_receipt, dict):
+        raise LiveCandidateRefusal("RUN_RECEIPT_NOT_OBJECT")
+
+    verified = load_verified_v5_checkpoint(checkpoint_dir)
+    published = run_receipt.get("post_step_checkpoint")
+    if not isinstance(published, dict):
+        raise LiveCandidateRefusal("RUN_RECEIPT_CHECKPOINT_MISSING")
+    manifest = verified["manifest"]
+    expected_published_keys = set(manifest) | {
+        "checkpoint_manifest_sha256", "checkpoint"}
+    checkpoint_identity = published.get("checkpoint")
+    if (
+        set(published) != expected_published_keys
+        or {key: published.get(key) for key in manifest} != manifest
+        or published.get("checkpoint_manifest_sha256") != verified["manifest_sha256"]
+        or not isinstance(checkpoint_identity, dict)
+        or checkpoint_identity != {"byte_sha256": verified["manifest_sha256"]}
+    ):
+        raise LiveCandidateRefusal("RUN_RECEIPT_CHECKPOINT_MISMATCH")
+
+    cursor = manifest.get("data_cursor")
+    segment = run_receipt.get("segment")
+    if not isinstance(cursor, dict) or not isinstance(segment, dict):
+        raise LiveCandidateRefusal("RUN_RECEIPT_CURSOR_MISSING")
+    segment_cursor = segment.get("data_cursor")
+    cursor_projection_matches = (
+        isinstance(segment_cursor, dict)
+        and set(segment_cursor) == SEMANTIC_CURSOR_KEYS
+        and set(segment_cursor).issubset(cursor)
+        and set(cursor) - set(segment_cursor) <= PUBLISHED_CURSOR_EXTRA_KEYS
+        and {key: cursor[key] for key in segment_cursor} == segment_cursor
+    )
+    global_step = cursor.get("global_step")
+    tokens_seen = cursor.get("tokens_seen")
+    if (
+        type(global_step) is not int
+        or type(tokens_seen) is not int
+        or global_step != WARM100_GLOBAL_STEP
+        or tokens_seen < 1
+        or run_receipt.get("resume_authority", object()) is not None
+        or segment.get("steps") != WARM100_GLOBAL_STEP
+        or segment.get("global_step") != global_step
+        or segment.get("tokens_seen") != tokens_seen
+        or not cursor_projection_matches
+        or not isinstance(segment.get("losses"), list)
+        or len(segment["losses"]) != WARM100_GLOBAL_STEP
+    ):
+        raise LiveCandidateRefusal("WARM100_BOUNDARY_REQUIRED")
+
+    return {
+        **verified,
+        "run_receipt_path": _redact_external_path(run_receipt_path),
+        "run_receipt_sha256": actual_receipt_sha256,
+    }
+
+
 def build_live_candidate_scorer(*, checkpoint_dir: str, route: str,
                                  tokenizer_path: str | None = None,
                                  device: str = "cpu",
@@ -415,7 +525,8 @@ def build_live_candidate_scorer(*, checkpoint_dir: str, route: str,
     return scorer, binding
 
 
-def run_evaluator(*, checkpoint_dir: str, route: str, tasks: list,
+def run_evaluator(*, checkpoint_dir: str, warm100_receipt_path: str,
+                   warm100_receipt_sha256: str, route: str, tasks: list,
                    limit, device: str, max_position_embeddings: int,
                    tokenizer_path: str | None = None,
                    predictions_path: str | None = None) -> dict:
@@ -427,6 +538,11 @@ def run_evaluator(*, checkpoint_dir: str, route: str, tasks: list,
     returned payload. #1433 acceptance requires the chain checkpoint sha ->
     suite split sha -> RAW PREDICTIONS -> scores; a metrics-only receipt does
     not satisfy it."""
+    if predictions_path is None:
+        raise LiveCandidateRefusal("RAW_PREDICTIONS_REQUIRED")
+    warm100 = load_verified_warm100_checkpoint(
+        checkpoint_dir, warm100_receipt_path, warm100_receipt_sha256)
+
     from lm_eval.evaluator import simple_evaluate
 
     with device_lease(device):
@@ -434,9 +550,15 @@ def run_evaluator(*, checkpoint_dir: str, route: str, tasks: list,
             checkpoint_dir=checkpoint_dir, route=route,
             tokenizer_path=tokenizer_path, device=device,
             max_position_embeddings=max_position_embeddings)
+        if binding["checkpoint"]["manifest_sha256"] != warm100["manifest_sha256"]:
+            raise LiveCandidateRefusal("CHECKPOINT_CHANGED_DURING_MODEL_LOAD")
+        binding["checkpoint"]["run_receipt"] = {
+            "path": warm100["run_receipt_path"],
+            "sha256": warm100["run_receipt_sha256"],
+        }
         results = simple_evaluate(
             model=scorer, tasks=tasks, limit=limit, bootstrap_iters=0,
-            log_samples=predictions_path is not None, verbosity="ERROR")
+            log_samples=True, verbosity="ERROR")
 
     per_task = {}
     for task_name, metrics in (results.get("results") or {}).items():
@@ -445,27 +567,27 @@ def run_evaluator(*, checkpoint_dir: str, route: str, tasks: list,
             if isinstance(value, (int, float, str, bool)) or value is None
         }
 
-    predictions = None
-    if predictions_path is not None:
-        os.makedirs(os.path.dirname(os.path.abspath(predictions_path)) or ".",
-                    exist_ok=True)
-        row_count = 0
-        with open(predictions_path, "w", encoding="utf-8", newline="\n") as handle:
-            for task_name, samples in sorted((results.get("samples") or {}).items()):
-                for sample in samples:
-                    handle.write(json.dumps(
-                        {"task": task_name, **_prediction_row(sample)},
-                        sort_keys=True, ensure_ascii=False) + "\n")
-                    row_count += 1
-        _write_authority_sidecar(predictions_path)
-        predictions = {
-            "path": _repo_relative(predictions_path),
-            "rows": row_count,
-            "sha256": _sha256_file(predictions_path),
-            "format": "jsonl; one row per scored eval item",
-        }
+    os.makedirs(os.path.dirname(os.path.abspath(predictions_path)) or ".",
+                exist_ok=True)
+    row_count = 0
+    with open(predictions_path, "w", encoding="utf-8", newline="\n") as handle:
+        for task_name, samples in sorted((results.get("samples") or {}).items()):
+            for sample in samples:
+                handle.write(json.dumps(
+                    {"task": task_name, **_prediction_row(sample)},
+                    sort_keys=True, ensure_ascii=False) + "\n")
+                row_count += 1
+    if row_count < 1:
+        raise LiveCandidateRefusal("RAW_PREDICTIONS_EMPTY")
+    _write_authority_sidecar(predictions_path)
+    predictions = {
+        "path": _repo_relative(predictions_path),
+        "rows": row_count,
+        "sha256": _sha256_file(predictions_path),
+        "format": "jsonl; one row per scored eval item",
+    }
 
-    return {
+    evaluation = {
         "binding": binding,
         "tasks": tasks,
         "limit": limit,
@@ -486,6 +608,34 @@ def run_evaluator(*, checkpoint_dir: str, route: str, tasks: list,
         },
         "raw_predictions": predictions,
         "results": per_task,
+    }
+    evaluation["artifact_binding"] = bind_evaluation_artifacts(evaluation)
+    return evaluation
+
+
+def bind_evaluation_artifacts(evaluation: dict) -> dict:
+    """Bind the required raw predictions and canonical score object."""
+    predictions = evaluation.get("raw_predictions")
+    if (
+        not isinstance(predictions, dict)
+        or type(predictions.get("rows")) is not int
+        or predictions["rows"] < 1
+        or not _is_sha256(predictions.get("sha256"))
+    ):
+        raise LiveCandidateRefusal("RAW_PREDICTIONS_REQUIRED")
+    scores = evaluation.get("results")
+    if not isinstance(scores, dict) or not scores:
+        raise LiveCandidateRefusal("SCORES_REQUIRED")
+    scores_sha256 = _canonical_sha256(scores)
+    return {
+        "raw_predictions_sha256": predictions["sha256"],
+        "scores_sha256": scores_sha256,
+        "prediction_score_binding_sha256": _canonical_sha256({
+            "raw_predictions_sha256": predictions["sha256"],
+            "scores_sha256": scores_sha256,
+        }),
+        "scores_sha256_convention": (
+            "sha256 over UTF-8 JSON with sort_keys=True and separators=(',', ':')"),
     }
 
 
@@ -555,6 +705,13 @@ def _prediction_row(sample: dict) -> dict:
 
 
 def _receipt(ticket: str, payload: dict) -> dict:
+    checkpoint = (
+        payload.get("checkpoint")
+        if payload.get("mode") == "verify-only"
+        else (payload.get("binding") or {}).get("checkpoint")
+    )
+    if not isinstance(checkpoint, dict):
+        raise LiveCandidateRefusal("RECEIPT_CHECKPOINT_BINDING_MISSING")
     return {
         "ticket": ticket,
         "ts": _utc_stamp(),
@@ -568,7 +725,7 @@ def _receipt(ticket: str, payload: dict) -> dict:
             "next_executed_outcome": (
                 "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"),
         },
-        "claim_boundary": CLAIM_BOUNDARY,
+        "claim_boundary": claim_boundary(checkpoint),
         "result_credit": False,
         "capability_credit": False,
         "api_spend_usd": 0,
@@ -585,6 +742,11 @@ def main() -> int:
                         help="Score the named tasks through the installed lm_eval.")
     parser.add_argument("--checkpoint-dir", required=True,
                         help="Live v5 custody checkpoint dir (external, never committed).")
+    parser.add_argument("--warm100-receipt", required=True,
+                        help="Governed semantic runner result containing "
+                             "post_step_checkpoint (exact custody path).")
+    parser.add_argument("--warm100-receipt-sha256", required=True,
+                        help="SHA-256 over the exact --warm100-receipt bytes.")
     parser.add_argument("--route", default=None, choices=VALID_ROUTES,
                         help="REQUIRED for --evaluator-run. Expert route to score "
                              "through. Deliberately has no default: the config default "
@@ -626,7 +788,9 @@ def main() -> int:
 
     try:
         if args.verify_only:
-            verified = load_verified_v5_checkpoint(args.checkpoint_dir)
+            verified = load_verified_warm100_checkpoint(
+                args.checkpoint_dir, args.warm100_receipt,
+                args.warm100_receipt_sha256)
             payload = {
                 "mode": "verify-only",
                 "checkpoint": {
@@ -640,6 +804,10 @@ def main() -> int:
                     "global_step": verified["global_step"],
                     "tokens_seen": verified["tokens_seen"],
                     "declared_active_expert_ids": verified["declared_active_expert_ids"],
+                    "run_receipt": {
+                        "path": verified["run_receipt_path"],
+                        "sha256": verified["run_receipt_sha256"],
+                    },
                 },
                 "model_config": {
                     "path": verified["model_config_path"],
@@ -661,10 +829,18 @@ def main() -> int:
                       "active_expert_ids disagree; this scorer will not guess.",
                       file=sys.stderr)
                 return 2
+            if args.predictions is None:
+                print("ERROR: --predictions is REQUIRED for --evaluator-run; "
+                      "a metrics-only receipt cannot bind the scored items.",
+                      file=sys.stderr)
+                return 2
             tasks = [name.strip() for name in args.tasks.split(",") if name.strip()]
             payload = {"mode": "evaluator-run",
                        **run_evaluator(
-                           checkpoint_dir=args.checkpoint_dir, route=args.route,
+                           checkpoint_dir=args.checkpoint_dir,
+                           warm100_receipt_path=args.warm100_receipt,
+                           warm100_receipt_sha256=args.warm100_receipt_sha256,
+                           route=args.route,
                            tasks=tasks, limit=args.limit, device=args.device,
                            max_position_embeddings=args.max_position_embeddings,
                            tokenizer_path=args.tokenizer_path,
