@@ -6,6 +6,43 @@ artifact + its freeze SHA/date, what changes, why, and who owns the call.
 
 ---
 
+## DEV-007 — eval-suite-freeze-v1 (battery-14): HellaSwag scored split bound to revision-pinned validation; contamination gate remains pending
+
+**Date filed:** 2026-08-18, before any #1433 WARM-100 evaluation or capability
+claim consumes this amendment. **Frozen artifact:**
+`docs/spec/eval-suite-freeze-v1.md`.
+
+**What changes:** the HellaSwag scoring instrument moves from the upstream
+unlabelled `test` split to the labelled `validation` split that the installed
+`lm_eval` task actually scores. The governed override pins dataset revision
+`218ec52e09a7e7462a5400043bb9a69a41d06b76`; the exact scored file is
+`data/validation-00000-of-00001.parquet`, 10,042 rows, SHA-256
+`899813071e1e95efafec90f856e1987d2150fa4d020fc005df6962c259f660cd`.
+The scorer reopens that revision, row count, and cached parquet hash at runtime
+and binds per-row `doc_hash`, `prompt_hash`, and `target_hash` values into raw
+prediction evidence.
+
+**Contamination boundary:** the historical 8/10,003 HellaSwag exclusions remain
+valid only for the old unlabelled `test` split against historical `shards-v0`.
+They are not copied to `validation`. The amended HellaSwag instrument is
+`PENDING_FINAL_CORPUS_CONTAMINATION_SCAN`, and every receipt says
+`ready_for_compute=false`, until the exact 10,042-row validation split is scanned
+against the final tokenized training corpus consumed by WARM-100. The current
+canonical scanner is deliberately bound to historical `shards-v0`; the #1719
+corpus is still growing and is not yet that final tokenized corpus. Any later
+corpus admission also invalidates an earlier scan and requires recensus at run
+entry.
+
+**Why:** the upstream HellaSwag `test` split has no labels, while the installed
+harness scores `validation`. Pretending the old test hash or exclusion count
+describes the scored rows would create a plausible but false receipt. This
+amendment corrects only the split/revision/file identity and keeps the unresolved
+contamination gate visible; it grants no READY_FOR_COMPUTE, result, capability,
+GPU, or issue-closure credit. **Who owns the call:** the 2026-08-18 independent
+#1433 review ruling. Relates to #1433 and #1498.
+
+---
+
 ## DEV-006 — A1 freeze declaration (battery-14): consumer rule (3) amended — ancestry binding → declaration-content-in-master binding
 
 **Date filed:** 2026-07-10 (the A1 machinery-cure lane, issue #631, executing the
