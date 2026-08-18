@@ -1,0 +1,207 @@
+{
+  "schema": "ember-00-completion-evidence-pack-index-v1",
+  "ticket": "1114",
+  "ts": "2026-08-18T00:18:45Z",
+  "assembled_at_utc": "2026-08-18T00:18:45Z",
+  "sha_convention": "sha256 is the lowercase digest of raw bytes on disk; git_blob_sha is git hash-object over the same bytes",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "completion_subject_goal_id": "EMBER-00",
+  "assembled_against_public_master_sha": "bfc394a09cf09bf61b7a6cdbe6cfd52c132807b7",
+  "purpose": "Provide the one current, repository-reopenable receipt required by EMBER-00 CERT.001. Every certificate entry binds live source bytes or an executed run; a clause remains false if its evidence cannot be reopened and rederived.",
+  "certificate_entries": [
+    {
+      "clause_id": "CERT.002",
+      "status": "SATISFIED",
+      "receipt_kind": "file-pin",
+      "artifacts": [{"path": "docs/authority/ember-authority-matrix.md", "sha256": "cacb09b1cd16b3272dbe0eb0d35dc0b5b334b74f791d1ade4bfc651f93c9f4db", "git_blob_sha": "43c3bca9cadc58c29276abd6710eb2624554105b"}],
+      "rederived_facts": {
+        "row_range": "D-001..D-062",
+        "row_count": 62,
+        "missing_rows": [],
+        "unclassified_rows": [],
+        "blank_enforcing_surface_rows": [],
+        "row_disposition_counts": {"ENFORCED": 60, "HISTORICAL_ONLY": 46, "OPEN_RESEARCH": 20},
+        "historical_only_without_enforced_rows": ["D-034", "D-043"],
+        "whole_document_token_counts": {"ENFORCED": 62, "HISTORICAL_ONLY": 47, "OPEN_RESEARCH": 21},
+        "counting_note": "The whole-document token counts include explanatory header occurrences. Row-disposition counts are computed only from the 62 D-numbered table rows; every row has at least one permitted disposition and a nonblank surface path."
+      }
+    },
+    {
+      "clause_id": "CERT.003",
+      "status": "SATISFIED",
+      "receipt_kind": "file-pin+cross-read",
+      "artifacts": [
+        {"path": "docs/authority/ember-authority-matrix.md", "sha256": "cacb09b1cd16b3272dbe0eb0d35dc0b5b334b74f791d1ade4bfc651f93c9f4db", "git_blob_sha": "43c3bca9cadc58c29276abd6710eb2624554105b"},
+        {"path": "docs/authority/GOAL.md", "sha256": "2a63a91f1541e0c57c5cc26cca5e3da3f6b5e39661a57af61665e3a0a4b77374", "git_blob_sha": "9878aa83aaac131e0cf522c4bd3c82f222815f99"}
+      ],
+      "boundary": {"minimum_new_network_parameters": 3000000000, "destination_total_parameters": ">27000000000"},
+      "work_003_points": [
+        "3B genesis boundary",
+        "native text-image-audio-reasoning-structured-tool-use at every rung",
+        "owned 30-35B sparse destination",
+        "Verified Expert Accretion remains the headline causal hypothesis without erasing interacting mechanisms",
+        "whole-stack ownership, autonomous local laboratory, self-sufficiency, and individual local ownership",
+        "clean genesis for every created intelligence",
+        "borrowed systems are frozen references only",
+        "negative evidence updates the research graph without deleting requirements or mechanism families",
+        "operator relationships are dynamically configurable, explicit, revocable, and behavior-tested"
+      ],
+      "subordinate_contract_cross_read": [
+        {
+          "path": "docs/contracts/goal-clear-protocol.md",
+          "sha256": "6a0a5d8bf04d22b374b197b2c6a380d80c893748bf38fab706137ec47c33635c",
+          "git_blob_sha": "2d96473fbd48f8ac4ddac8fc8e5ff4d4f45883d3",
+          "verdict": "NO_CONTRADICTION",
+          "detail": "Preserves 3B birth, native capabilities, owned >27B destination, Verified Expert Accretion, clean genesis, frozen-reference-only borrowing, negative-evidence conservation, whole-stack ownership, a general local laboratory, and individual self-sufficiency; operator-mode mechanics remain delegated to the governing goal."
+        },
+        {
+          "path": "docs/contracts/ember-floor-contract.md",
+          "sha256": "83816f1de862f9dc4bbe90e73474f4e50f0e1aef7c1a191f31c40683d0493ad1",
+          "git_blob_sha": "aa44c588dd247d603100348d8860d2d4d6d471f9",
+          "verdict": "NO_CONTRADICTION",
+          "detail": "Preserves the 3B clean-genesis birth floor, native five-capability decoder, >27B rung, frozen-reference boundary, and Verified Expert Accretion controls; it contains no rule reducing whole-stack, mechanism, or operator requirements."
+        },
+        {
+          "path": "docs/contracts/nc2-own-technique-contract.md",
+          "sha256": "a0a12328b2d96f6df12bd7d51d029f88279436c9e1073835edbc12e7c8b85b9c",
+          "git_blob_sha": "f1620c2b708173f3cedbdc493b6d9227555345e0",
+          "verdict": "NO_CONTRADICTION",
+          "detail": "Preserves one owned native multimodal decoder from the first 3B birth, differentiated sparse capacity and Verified Expert Accretion, frozen references only, negative-evidence conservation, and the whole mechanism portfolio; its header preserves the >27B destination."
+        },
+        {
+          "path": "docs/contracts/goal-mode-mechanism.md",
+          "sha256": "f3d0a29007db098fceaeed650bcae530a442e99598e8a9a092f47945a1c7d300",
+          "git_blob_sha": "69484c1f6904630b611162c9dda7f6898d0b886a",
+          "verdict": "NO_CONTRADICTION",
+          "detail": "Its conservation header preserves the scientific boundaries. Its body forbids objective shrinking and requires explicit, scoped, revocable, behavior-tested operator modes; other scientific points remain delegated to GOAL.md."
+        },
+        {
+          "path": "docs/spec/autonomy-relinquishment-ladder-v1.md",
+          "sha256": "36c23511461da3ad5e988d4ed0c2193340e0f523d25886461d6026442798e0cb",
+          "git_blob_sha": "9090683ffed0e343364bd3bbf77f9d3786f9f7fc",
+          "verdict": "NO_CONTRADICTION",
+          "detail": "Its conservation header preserves the scientific boundaries. Its body requires explicit, inspectable, scoped, revocable, behavior-tested authority changes and never silently grants permissions."
+        },
+        {
+          "path": "docs/spec/conditions-v1.md",
+          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37",
+          "git_blob_sha": "3a5c71d9d9b701a871a078aa5ec694a4cd9f47db",
+          "verdict": "NO_CURRENT_AUTHORITY_CONTRADICTION",
+          "detail": "Declares C-AUTHORITY as its only current condition under EMBER-00, treats every other clause as historical evidence, and makes GOAL.md plus the conservation verifier supersede legacy kill, retire, successor, and governing vocabulary. Legacy text cannot authorize a smaller goal."
+        }
+      ]
+    },
+    {
+      "clause_id": "CERT.004",
+      "status": "SATISFIED",
+      "receipt_kind": "file-pin+executed-run",
+      "artifacts": [
+        {"path": "scripts/verify_authority_conservation.py", "sha256": "18ae2682aa355ab301dad54f0e4a19ecc2eaa86b506e7bfe010501fcbcac567c", "git_blob_sha": "ad0c269643f51577c1cd29e8e8d842ccddc63226"},
+        {"path": "scripts/tests/test_authority_conservation.py", "sha256": "9ccbbfe6c61c260c2892d764366970b5ab8a7c87381653988cac764732bab5f5", "git_blob_sha": "99a86a28df041d8c63c5b4dbdb86a9f7cfb40239"}
+      ],
+      "named_mutation_tests": [
+        "test_lower_precedence_document_cannot_authorize_completion",
+        "test_any_declared_model_mediated_signal_is_rejected",
+        "test_borrowed_reference_requires_frozen_non_ingress_seat",
+        "test_candidate_lineage_mutations_are_rejected"
+      ],
+      "suite_execution": {"executed_at_utc": "2026-08-18T00:23:00Z", "source_head": "bfc394a09cf09bf61b7a6cdbe6cfd52c132807b7", "command": "python -B -m pytest -p no:cacheprovider scripts/tests/test_authority_conservation.py -q", "result": "PASS", "passed": 97, "failed": 0, "duration_seconds": 36.16}
+    },
+    {
+      "clause_id": "CERT.005",
+      "status": "SATISFIED",
+      "receipt_kind": "executed-run+PR-merge",
+      "direct_execution": {
+        "executed_at_utc": "2026-08-18T00:23:00Z",
+        "source_head": "bfc394a09cf09bf61b7a6cdbe6cfd52c132807b7",
+        "command": "python -B scripts/verify_authority_conservation.py",
+        "result": "PASS",
+        "stdout_verdict": "EMBER_AUTHORITY_CONSERVATION PASS",
+        "provenance_path": "scripts/verify_authority_conservation.py",
+        "provenance_sha256": "18ae2682aa355ab301dad54f0e4a19ecc2eaa86b506e7bfe010501fcbcac567c"
+      },
+      "suite_execution": {"executed_at_utc": "2026-08-18T00:23:00Z", "source_head": "bfc394a09cf09bf61b7a6cdbe6cfd52c132807b7", "result": "PASS", "passed": 97, "failed": 0, "duration_seconds": 36.16},
+      "python_312_collection_cures": [
+        {"receipt_kind": "PR-merge", "merge_commit": "b978f124", "purpose": "scripts/tests collection cure"},
+        {"receipt_kind": "PR-merge", "merge_commit": "4a5870c1", "purpose": "optional numpy consumer collection cure"}
+      ],
+      "extended_audit": {
+        "run_id": 32068087873,
+        "source_commit": "4a5870c118a752f278f96be33b409fb041875dc9",
+        "collection_guard": "SCRIPTS_TESTS_COLLECTION_PASS: collected=626 floor=380",
+        "authority_suite_execution": "EXECUTED",
+        "authority_suite_environment_conditional_failure": {
+          "test": "test_graph_selection_rejects_goal_path_escape[C:/escaped/goal.md]",
+          "observed": "On the POSIX runner the Windows-drive-form path is relative and was refused as graph_goal_file_missing rather than graph_goal_path_escape.",
+          "property_preserved": "The input remained refused fail-closed; the direct authority certificate passed on the same runner class."
+        }
+      },
+      "known_limits": [
+        {"count": 4, "class": "cockpit_watchdog platform-path fixtures", "scope": "environment debt outside the authority-conservation property"},
+        {"count": 5, "class": "goal-pin fixture parent-directory creation", "scope": "fixture debt outside the authority-conservation property"},
+        {"count": 2, "class": "issue-1451 stale classifications", "scope": "baseline expectation debt outside the authority-conservation property"},
+        {"count": 2, "class": "redact_local_paths expectations", "scope": "baseline expectation debt outside the authority-conservation property"},
+        {"count_approximate": 14, "class": "tests optional-dependency collection errors", "scope": "optional-environment debt outside the authority-conservation property"}
+      ],
+      "whole_job_green_required": false,
+      "whole_job_green_ruling": "The clean collection guard, the executed authority suite with its one fail-closed platform-classification difference, and the fresh direct verifier plus 97-case suite establish this property. Unrelated baseline and optional-environment debt is disclosed and receives no certificate credit."
+    },
+    {
+      "clause_id": "CERT.006",
+      "status": "SATISFIED",
+      "receipt_kind": "file-pin",
+      "artifacts": [
+        {"path": "docs/authority/GOAL.md", "sha256": "2a63a91f1541e0c57c5cc26cca5e3da3f6b5e39661a57af61665e3a0a4b77374", "git_blob_sha": "9878aa83aaac131e0cf522c4bd3c82f222815f99", "rederived_fact": "Section 2 defines exactly twelve required terms."},
+        {"path": "docs/authority/CONTINUITY.md", "sha256": "f406058bbe2b935e1fccb12d02f620b37989cda63b05cdf0cb74def2cf797d85", "git_blob_sha": "38e5aa770f08d4d3be8f3839312c183483d2f68e", "rederived_fact": "The content-addressed resolver contains the current artifact identity rows and their authority dispositions."}
+      ],
+      "twelve_terms": ["Ember", "Ember model", "research candidate", "historical artifact", "borrowed reference", "parameter count", "trained capacity", "active capacity", "checkpoint", "body", "organism", "laboratory"]
+    },
+    {
+      "clause_id": "CERT.007",
+      "status": "SATISFIED",
+      "receipt_kind": "file-pin",
+      "artifacts": [{"path": "docs/authority/GOAL.md", "sha256": "2a63a91f1541e0c57c5cc26cca5e3da3f6b5e39661a57af61665e3a0a4b77374", "git_blob_sha": "9878aa83aaac131e0cf522c4bd3c82f222815f99"}],
+      "closing_statement": "The master authority document itself creates, trains, evaluates, and serves no network and claims no model, training, benchmark, or capability completion. Any subordinate runtime receives credit only through that goal's exact execution and evidence contract.",
+      "labeling_fix": "Replaced a stale subject-specific self-description with a goal-neutral master-authority statement; no scientific requirement or execution authority changed."
+    },
+    {
+      "clause_id": "WORK.009",
+      "status": "SATISFIED_BY_EXISTING_MECHANISM",
+      "receipt_kind": "PR-merge+file-pin+executed-regression",
+      "provenance_pr": 807,
+      "artifacts": [
+        {"path": "tools/repo-guard.sh", "sha256": "ec291033b23a08f9a0442f15690e2ca8e4bb8b927fa85e3f210e3c541f759984", "git_blob_sha": "8f22fe5136427d1f688b276688165143afea143d"},
+        {"path": "scripts/verify_authority_conservation.py", "sha256": "18ae2682aa355ab301dad54f0e4a19ecc2eaa86b506e7bfe010501fcbcac567c", "git_blob_sha": "ad0c269643f51577c1cd29e8e8d842ccddc63226"},
+        {"path": "scripts/tests/test_authority_conservation.py", "sha256": "9ccbbfe6c61c260c2892d764366970b5ab8a7c87381653988cac764732bab5f5", "git_blob_sha": "99a86a28df041d8c63c5b4dbdb86a9f7cfb40239"}
+      ],
+      "mechanism": {"gate_call": "tools/repo-guard.sh invokes scripts/verify_authority_conservation.py", "validator": "check_changed_artifact_bindings", "changed_range_diff_filter": "ACMRT", "python_is_source_suffix": true, "failure_classes": ["artifact.goal_binding", "artifact.workstream_binding"]},
+      "production_regression": {"test": "test_staged_binding_covers_scripts_and_python_experiments", "reproduced_at_commit": "b0e7ec42", "observations": ["A headerless staged Python artifact is refused.", "Bound staged Python and TypeScript artifacts pass."]},
+      "new_parallel_checker_added": false
+    }
+  ],
+  "anchors": [
+    {"name": "constitutional invariant", "path": "docs/authority/INVARIANT.md", "bytes": 5658, "sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6", "git_blob_sha": "8d5c7924a8dcd59c3edb86926dd47e76fcdea02b", "constant_path": "scripts/verify_authority_conservation.py", "constant_line": 28, "constant_matches": true},
+    {"name": "canonical EMBER-00 acceptance contract", "path": "docs/roadmap/milestones/EMBER-00.md", "sha256": "6deea3bf2b74a6531635405aeef5ca8fcd865bdbac90689073019924c4d0d354", "git_blob_sha": "5fc593be450dac13357dcf5fbd70075464216205"}
+  ],
+  "claim_scope": {
+    "ember_00_authority_and_totality_lock_completed": true,
+    "training_completed": false,
+    "model_completed": false,
+    "benchmark_completed": false,
+    "runtime_completed": false,
+    "capability_completed": false,
+    "network_created_trained_evaluated_or_served_by_this_pack": false
+  },
+  "verification_procedure": [
+    "Recompute raw SHA-256 and Git blob SHA for every artifact path and require exact equality with this index.",
+    "Parse the authority matrix and require exactly D-001 through D-062, no gaps, no unclassified row, no blank surface column, the recorded row-disposition counts, and the separately recorded whole-document token counts.",
+    "Require the six subordinate cross-read paths to retain the conservation header and stated authority relationship to GOAL.md.",
+    "Run python -B scripts/verify_authority_conservation.py and require EMBER_AUTHORITY_CONSERVATION PASS.",
+    "Run python -B -m pytest -p no:cacheprovider scripts/tests/test_authority_conservation.py -q and require 97 passed.",
+    "Require the invariant raw SHA-256 to equal the constant in scripts/verify_authority_conservation.py.",
+    "Require every scientific and runtime claim_scope value to remain false."
+  ]
+}
