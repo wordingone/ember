@@ -354,6 +354,7 @@ def _load_census_binding(
     connector_receipt_sha256: str,
     source_files: list[dict[str, Any]],
     expected_extractor: dict[str, Any],
+    census_producer_sha256: str | None = None,
     exclusion_set: Path | None = None,
     exclusion_set_sha256: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
@@ -448,14 +449,22 @@ def _load_census_binding(
         "max_output_bytes",
         "zero_fallback",
     }
-    if {key: extractor.get(key) for key in identity_keys} != {
-        key: expected_extractor.get(key) for key in identity_keys
-    }:
+    if census_producer_sha256 is not None and _HEX.fullmatch(census_producer_sha256) is None:
+        raise PdfTreeExtractionRefusal("census producer hash is invalid")
+    expected_census_extractor = {
+        key: expected_extractor.get(key)
+        for key in identity_keys
+    }
+    if census_producer_sha256 is not None:
+        expected_census_extractor["producer_sha256"] = census_producer_sha256
+    if {key: extractor.get(key) for key in identity_keys} != expected_census_extractor:
         raise PdfTreeExtractionRefusal("census extractor identity changed")
+    bound_census_producer = extractor["producer_sha256"]
     census_binding = {
         "path": str(Path(census_report).resolve(strict=True)),
         "sha256": census_report_sha256,
         "receipt_sha256": embedded,
+        "census_producer_sha256": bound_census_producer,
     }
     if not refused_rows:
         if exclusion_set is not None or exclusion_set_sha256 is not None:
@@ -687,10 +696,11 @@ def _verify_at(
     census = receipt.get("census")
     if (
         not isinstance(census, dict)
-        or set(census) != {"path", "sha256", "receipt_sha256"}
+        or set(census) != {"path", "sha256", "receipt_sha256", "census_producer_sha256"}
         or not isinstance(census.get("path"), str)
         or _HEX.fullmatch(census.get("sha256", "")) is None
         or _HEX.fullmatch(census.get("receipt_sha256", "")) is None
+        or _HEX.fullmatch(census.get("census_producer_sha256", "")) is None
     ):
         raise PdfTreeExtractionRefusal("PDF tree census binding is not closed")
     exclusions = receipt.get("exclusions")
@@ -714,7 +724,8 @@ def _verify_at(
         census_report_sha256=census["sha256"],
         connector_receipt_sha256=connector_receipt_sha256,
         source_files=source_files,
-        expected_extractor=extractor,
+        expected_extractor=expected_extractor,
+        census_producer_sha256=census["census_producer_sha256"],
         exclusion_set=Path(exclusion_binding["path"]) if exclusion_binding is not None else None,
         exclusion_set_sha256=exclusion_binding["sha256"] if exclusion_binding is not None else None,
     )
@@ -824,6 +835,7 @@ def produce_pdf_tree_receipt(
     exclusion_set: Path | None = None,
     exclusion_set_sha256: str | None = None,
     output_dir: Path,
+    census_producer_sha256: str | None = None,
     max_files: int = DEFAULT_MAX_FILES,
     max_pages: int = pdf_to_utf8.DEFAULT_MAX_PAGES,
     max_decoded_content_bytes: int = pdf_to_utf8.DEFAULT_MAX_DECODED_CONTENT_BYTES,
@@ -866,6 +878,7 @@ def produce_pdf_tree_receipt(
         connector_receipt_sha256=connector_receipt_sha256,
         source_files=source_files,
         expected_extractor=extractor,
+        census_producer_sha256=census_producer_sha256,
         exclusion_set=Path(exclusion_set) if exclusion_set is not None else None,
         exclusion_set_sha256=exclusion_set_sha256,
     )
@@ -1033,6 +1046,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--census-report", type=Path)
     parser.add_argument("--census-report-sha256")
+    parser.add_argument("--census-producer-sha256")
     parser.add_argument("--exclusion-set", type=Path)
     parser.add_argument("--exclusion-set-sha256")
     parser.add_argument("--verify", action="store_true")
@@ -1045,6 +1059,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.census_report is not None and args.output_dir is None:
         if (
             args.census_report_sha256 is not None
+            or args.census_producer_sha256 is not None
             or args.exclusion_set is not None
             or args.exclusion_set_sha256 is not None
             or args.verify
@@ -1058,6 +1073,8 @@ def main(argv: list[str] | None = None) -> int:
     elif args.output_dir is None:
         parser.error("--output-dir is required unless --census-report is used")
     elif args.verify:
+        if args.census_producer_sha256 is not None:
+            parser.error("--census-producer-sha256 is recorded by transform and cannot be supplied to --verify")
         receipt = verify_pdf_tree_receipt(
             receipt_path=args.output_dir / TRANSFORM_RECEIPT,
             connector_receipt=args.connector_receipt,
@@ -1071,6 +1088,7 @@ def main(argv: list[str] | None = None) -> int:
             connector_receipt_sha256=args.connector_receipt_sha256,
             census_report=args.census_report,
             census_report_sha256=args.census_report_sha256,
+            census_producer_sha256=args.census_producer_sha256,
             exclusion_set=args.exclusion_set,
             exclusion_set_sha256=args.exclusion_set_sha256,
             output_dir=args.output_dir,
