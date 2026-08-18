@@ -1,0 +1,60 @@
+{
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02B",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "schema_version": "ember-restart-3b-a1-dense-v1",
+  "architecture_revision": "ember-dense-a1-3b-v1",
+  "comparison_arm": "A1",
+  "model": {
+    "hidden_size": 2048,
+    "layers": 56,
+    "attention_heads": 16,
+    "vocab_size": 32000,
+    "image_input_shape": [48, 48, 3],
+    "audio_frame_samples": 640,
+    "gradient_checkpointing": true,
+    "tied_embeddings": true,
+    "total_unique_trainable_parameters": 3839344640,
+    "assertion_minimum_unique_trainable_parameters": 3000000000
+  },
+  "training_state": {
+    "default_tier": "TIER_1",
+    "default_mechanism": "FULL_STATE_ADAMW_CPU_OFFLOAD",
+    "tier_mechanism": {
+      "TIER_1": "FULL_STATE_ADAMW_CPU_OFFLOAD",
+      "TIER_2": "OWNED_Q_GALORE_PROJECTED_GRADIENT"
+    },
+    "optimizer": {
+      "name": "full_state_adamw_cpu_offload",
+      "implementation": "owned.FullStateAdamWCPUOffload",
+      "placement": "cpu_fp32_master_and_moments",
+      "state_format": "ember-a1-full-state-adamw-cpu-offload-v1",
+      "hyperparameters": {
+        "learning_rate": 0.00001,
+        "betas": [0.9, 0.999],
+        "epsilon": 1e-8,
+        "weight_decay": 0.01
+      }
+    }
+  },
+  "thresholds": {
+    "path": "docs/spec/ember02-preregistration-thresholds-v1.json",
+    "sha256": "12c83ca9ac90f85d5e8c0ce2c8156ac0c2cf9695929b211971ee277582a5eeb5",
+    "required_ids": ["T-08", "T-09", "T-20"]
+  },
+  "lineage": {
+    "parent_checkpoint": null,
+    "initialization": "random",
+    "borrowed_weights": false,
+    "teacher_outputs": false,
+    "model_derived_data": false,
+    "external_judges": false
+  },
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02B",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "execution_authority": "certified_launch_only",
+    "claim_boundary": "source_carrier_only_until_real_dense_execution"
+  }
+}
