@@ -952,11 +952,93 @@ def classify_discovery_snapshot_change(
 
 
 _EXTERNAL_ABSENCE_POLICY = "external_party_evidence_absent_by_design"
+_OPERATOR_WORKTREE_ABSENCE_POLICY = (
+    "operator_noncanonical_worktree_absent_with_archival_pointers"
+)
 
 
-def _valid_required_absence_policy(root_spec: Mapping[str, Any]) -> bool:
-    """Allow absence only for closed, noncanonical external evidence surfaces."""
-    return (
+def _valid_operator_worktree_absence_policy(
+    root_spec: Mapping[str, Any],
+    *,
+    present: bool,
+    bindings: Mapping[str, Path],
+) -> bool:
+    """Accept the one closed declaration for the retired public worktree.
+
+    Archival pointers prove only that named archives still exist. They never
+    replace, bind, or promote the absent worktree itself.
+    """
+    if present:
+        return False
+    required_tuple = {
+        "root_id": "public-worktree",
+        "required": True,
+        "scan": "git_repository",
+        "provenance_class": "archive_history",
+        "lineage_admissibility": "unresolved_requires_patch_review",
+        "mutability": "dirty_or_branch_specific",
+        "owner": "operator",
+        "authority_status": "noncanonical_worktree",
+    }
+    if any(root_spec.get(key) != value for key, value in required_tuple.items()):
+        return False
+
+    evidence = root_spec.get("absence_evidence")
+    if not isinstance(evidence, Mapping):
+        return False
+    deletion_evidence = evidence.get("deletion_evidence")
+    expected_evidence_keys = {
+        "observed_absent_at",
+        "observed_by",
+        "deletion_evidence",
+    }
+    if deletion_evidence == "receipted":
+        expected_evidence_keys.add("receipt_path")
+        receipt_path = evidence.get("receipt_path")
+        if not isinstance(receipt_path, str) or not receipt_path.strip():
+            return False
+    elif deletion_evidence != "none_located":
+        return False
+    if set(evidence) != expected_evidence_keys:
+        return False
+    if (
+        evidence.get("observed_absent_at") != "2026-08-18T05:04Z"
+        or evidence.get("observed_by") != "independent-review-session"
+    ):
+        return False
+
+    pointers = root_spec.get("archival_pointers")
+    if not isinstance(pointers, list) or len(pointers) != 2:
+        return False
+    seen_kinds: set[str] = set()
+    required_bindings = {
+        "bare_mirror": "EMBER_PUBLIC_WORKTREE_MIRROR_GIT",
+        "bundle": "EMBER_PUBLIC_WORKTREE_MIRROR_BUNDLE",
+    }
+    for pointer in pointers:
+        if not isinstance(pointer, Mapping) or set(pointer) != {"binding", "kind"}:
+            return False
+        kind = pointer.get("kind")
+        binding = pointer.get("binding")
+        if kind not in {"bare_mirror", "bundle"} or kind in seen_kinds:
+            return False
+        if binding != required_bindings[kind]:
+            return False
+        resolved = bindings.get(binding)
+        if resolved is None or not Path(resolved).exists():
+            return False
+        seen_kinds.add(kind)
+    return seen_kinds == {"bare_mirror", "bundle"}
+
+
+def _valid_required_absence_policy(
+    root_spec: Mapping[str, Any],
+    *,
+    present: bool,
+    bindings: Mapping[str, Path],
+) -> bool:
+    """Allow only the two closed declared-absence policy families."""
+    external_policy_valid = (
         root_spec.get("required") is True
         and root_spec.get("absence_policy") == _EXTERNAL_ABSENCE_POLICY
         and root_spec.get("provenance_class") == "evidence_receipt"
@@ -965,6 +1047,15 @@ def _valid_required_absence_policy(root_spec: Mapping[str, Any]) -> bool:
         and root_spec.get("lineage_admissibility")
         in {"excluded_evidence_only", "excluded_stale_audit_copy"}
     )
+    if external_policy_valid:
+        return True
+    if root_spec.get("absence_policy") == _OPERATOR_WORKTREE_ABSENCE_POLICY:
+        return _valid_operator_worktree_absence_policy(
+            root_spec,
+            present=present,
+            bindings=bindings,
+        )
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -1154,9 +1245,12 @@ def build_root_census(
         bound = Path(bound_value) if bound_value is not None else None
         present = bool(bound is not None and bound.exists())
         absence_policy = root_spec.get("absence_policy")
-        absence_attested = bool(
-            not present and _valid_required_absence_policy(root_spec)
+        absence_policy_valid = _valid_required_absence_policy(
+            root_spec,
+            present=present,
+            bindings=bindings,
         )
+        absence_attested = bool(not present and absence_policy_valid)
         root_row = {
             "root_id": root_id,
             "required": bool(root_spec.get("required")),
@@ -1171,7 +1265,26 @@ def build_root_census(
         }
         if isinstance(absence_policy, str):
             root_row["absence_policy"] = absence_policy
-        if not present and absence_policy is not None:
+        if absence_policy == _OPERATOR_WORKTREE_ABSENCE_POLICY:
+            if "absence_evidence" in root_spec:
+                root_row["absence_evidence"] = root_spec["absence_evidence"]
+            if "archival_pointers" in root_spec:
+                root_row["archival_pointers"] = [
+                    {
+                        "binding": pointer.get("binding"),
+                        "kind": pointer.get("kind"),
+                        "resolved_exists": bool(
+                            isinstance(pointer.get("binding"), str)
+                            and bindings.get(pointer["binding"]) is not None
+                            and Path(bindings[pointer["binding"]]).exists()
+                        ),
+                    }
+                    for pointer in root_spec["archival_pointers"]
+                    if isinstance(pointer, Mapping)
+                ]
+        if (
+            not present or absence_policy == _OPERATOR_WORKTREE_ABSENCE_POLICY
+        ) and absence_policy is not None:
             root_row["absence_attested"] = absence_attested
         if isinstance(source_root_id, str):
             root_row["source_root_id"] = source_root_id
@@ -1180,6 +1293,18 @@ def build_root_census(
             root_row["alias_of_root_id"] = alias_of_root_id
         roots.append(root_row)
         root_clock = open_root_clock(root_row)
+        if (
+            present
+            and absence_policy == _OPERATOR_WORKTREE_ABSENCE_POLICY
+            and not absence_policy_valid
+        ):
+            contradictions.append(
+                {
+                    "code": "invalid_required_absence_policy",
+                    "root_id": root_id,
+                    "resolution": "unresolved",
+                }
+            )
         if not present:
             if absence_policy is not None and not absence_attested:
                 contradictions.append(

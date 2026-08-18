@@ -576,6 +576,214 @@ def test_missing_required_external_root_with_closed_attestation_is_resolved() ->
     assert result["contradictions"] == []
 
 
+def _approved_missing_public_worktree() -> dict:
+    return {
+        "root_id": "public-worktree",
+        "binding": "EMBER_PUBLIC_WORKTREE",
+        "required": True,
+        "scan": "git_repository",
+        "provenance_class": "archive_history",
+        "lineage_admissibility": "unresolved_requires_patch_review",
+        "mutability": "dirty_or_branch_specific",
+        "owner": "operator",
+        "authority_status": "noncanonical_worktree",
+        "absence_policy": (
+            "operator_noncanonical_worktree_absent_with_archival_pointers"
+        ),
+        "absence_evidence": {
+            "observed_absent_at": "2026-08-18T05:04Z",
+            "observed_by": "independent-review-session",
+            "deletion_evidence": "none_located",
+        },
+        "archival_pointers": [
+            {
+                "binding": "EMBER_PUBLIC_WORKTREE_MIRROR_GIT",
+                "kind": "bare_mirror",
+            },
+            {
+                "binding": "EMBER_PUBLIC_WORKTREE_MIRROR_BUNDLE",
+                "kind": "bundle",
+            },
+        ],
+    }
+
+
+def _public_worktree_absence_fixture(
+    tmp_path: Path,
+) -> tuple[dict, Path, dict[str, Path]]:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    bare_mirror = tmp_path / "archive.git"
+    bare_mirror.mkdir()
+    bundle = tmp_path / "archive.bundle"
+    bundle.write_bytes(b"bundle pointer")
+    missing_worktree = tmp_path / "missing-public-worktree"
+    return (
+        _approved_missing_public_worktree(),
+        missing_worktree,
+        {
+            "public-worktree": missing_worktree,
+            "EMBER_PUBLIC_WORKTREE_MIRROR_GIT": bare_mirror,
+            "EMBER_PUBLIC_WORKTREE_MIRROR_BUNDLE": bundle,
+        },
+    )
+
+
+def test_missing_public_worktree_with_closed_operator_attestation_is_resolved(
+    tmp_path: Path,
+) -> None:
+    root_spec, missing_worktree, bindings = _public_worktree_absence_fixture(
+        tmp_path
+    )
+
+    result = build_root_census(
+        {"roots": [root_spec]},
+        bindings,
+    )
+
+    row = result["roots"][0]
+    row.pop(TIMING_FIELD)
+    assert row == {
+        "root_id": "public-worktree",
+        "required": True,
+        "present": False,
+        "scan": "git_repository",
+        "provenance_class": "archive_history",
+        "lineage_admissibility": "unresolved_requires_patch_review",
+        "absence_policy": (
+            "operator_noncanonical_worktree_absent_with_archival_pointers"
+        ),
+        "absence_evidence": {
+            "observed_absent_at": "2026-08-18T05:04Z",
+            "observed_by": "independent-review-session",
+            "deletion_evidence": "none_located",
+        },
+        "archival_pointers": [
+            {**pointer, "resolved_exists": True}
+            for pointer in root_spec["archival_pointers"]
+        ],
+        "absence_attested": True,
+    }
+    assert result["contradictions"] == []
+
+
+def test_public_worktree_absence_policy_requires_exact_root_tuple(
+    tmp_path: Path,
+) -> None:
+    mutations = {
+        "root_id": "another-worktree",
+        "required": False,
+        "scan": "files",
+        "provenance_class": "evidence_receipt",
+        "lineage_admissibility": "excluded_evidence_only",
+        "mutability": "preserve_read_only",
+        "owner": "auditor",
+        "authority_status": "noncanonical_evidence",
+    }
+    for field, invalid_value in mutations.items():
+        root_spec, missing_worktree, bindings = _public_worktree_absence_fixture(
+            tmp_path / field
+        )
+        root_spec[field] = invalid_value
+        result = build_root_census(
+            {"roots": [root_spec]},
+            {**bindings, root_spec["root_id"]: missing_worktree},
+        )
+        codes = {row["code"] for row in result["contradictions"]}
+        assert "invalid_required_absence_policy" in codes, field
+
+
+def test_public_worktree_absence_policy_requires_closed_evidence(
+    tmp_path: Path,
+) -> None:
+    mutations = (
+        lambda row: row.pop("absence_evidence"),
+        lambda row: row.__setitem__("absence_evidence", []),
+        lambda row: row["absence_evidence"].pop("observed_absent_at"),
+        lambda row: row["absence_evidence"].__setitem__(
+            "observed_absent_at", "2026-08-18T05:05Z"
+        ),
+        lambda row: row["absence_evidence"].__setitem__(
+            "observed_by", "unbound-session"
+        ),
+        lambda row: row["absence_evidence"].__setitem__(
+            "deletion_evidence", "unknown"
+        ),
+    )
+    for index, mutate in enumerate(mutations):
+        root_spec, missing_worktree, bindings = _public_worktree_absence_fixture(
+            tmp_path / str(index)
+        )
+        mutate(root_spec)
+        result = build_root_census(
+            {"roots": [root_spec]},
+            bindings,
+        )
+        codes = {row["code"] for row in result["contradictions"]}
+        assert "invalid_required_absence_policy" in codes, index
+
+
+def test_public_worktree_absence_policy_receipt_path_is_conditional(
+    tmp_path: Path,
+) -> None:
+    for deletion_evidence, receipt_path in (
+        ("receipted", None),
+        ("none_located", "retirement-receipt.json"),
+    ):
+        root_spec, missing_worktree, bindings = _public_worktree_absence_fixture(
+            tmp_path / deletion_evidence
+        )
+        evidence = root_spec["absence_evidence"]
+        evidence["deletion_evidence"] = deletion_evidence
+        if receipt_path is not None:
+            evidence["receipt_path"] = receipt_path
+        result = build_root_census(
+            {"roots": [root_spec]},
+            bindings,
+        )
+        codes = {row["code"] for row in result["contradictions"]}
+        assert "invalid_required_absence_policy" in codes, deletion_evidence
+
+
+def test_public_worktree_absence_policy_requires_existing_typed_pointers(
+    tmp_path: Path,
+) -> None:
+    mutations = (
+        lambda row: row.pop("archival_pointers"),
+        lambda row: row.__setitem__("archival_pointers", []),
+        lambda row: row["archival_pointers"][0].__setitem__("kind", "clone"),
+        lambda row: row["archival_pointers"][1].__setitem__(
+            "binding", "EMBER_PUBLIC_WORKTREE_MIRROR_MISSING"
+        ),
+    )
+    for index, mutate in enumerate(mutations):
+        root_spec, missing_worktree, bindings = _public_worktree_absence_fixture(
+            tmp_path / str(index)
+        )
+        mutate(root_spec)
+        result = build_root_census(
+            {"roots": [root_spec]},
+            bindings,
+        )
+        codes = {row["code"] for row in result["contradictions"]}
+        assert "invalid_required_absence_policy" in codes, index
+
+
+def test_public_worktree_absence_policy_refuses_a_present_bound_path(
+    tmp_path: Path,
+) -> None:
+    root_spec, worktree, bindings = _public_worktree_absence_fixture(tmp_path)
+    worktree.mkdir()
+
+    result = build_root_census(
+        {"roots": [root_spec]},
+        {**bindings, "public-worktree": worktree},
+    )
+
+    codes = {row["code"] for row in result["contradictions"]}
+    assert "invalid_required_absence_policy" in codes
+    assert result["roots"][0]["absence_attested"] is False
+
+
 
 def test_required_absence_policy_cannot_bypass_owned_root_custody() -> None:
     result = build_root_census(
