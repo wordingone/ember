@@ -383,8 +383,16 @@ def _apply_cases(
         "source_id", "connector_slot", "license_partition_receipt_path",
         "license_partition_receipt_sha256",
     }
+    pdf_case_keys = {
+        "source_id", "connector_slot", "connector_receipt_path",
+        "connector_receipt_sha256", "transform_receipt_path",
+        "transform_receipt_raw_sha256", "transform_receipt_sha256",
+        "expected_license_spdx", "evidence",
+    }
     for case in cases:
-        if not isinstance(case, dict) or set(case) not in (homogeneous_case_keys, partition_case_keys):
+        if not isinstance(case, dict) or set(case) not in (
+            homogeneous_case_keys, partition_case_keys, pdf_case_keys,
+        ):
             raise ValueError("tranche case is not closed")
         source_id = case["source_id"]
         if not isinstance(source_id, str) or source_id in seen_cases or source_id not in row_map:
@@ -459,6 +467,84 @@ def _apply_cases(
         if sha256_bytes(receipt_raw) != expected_receipt_sha:
             raise ValueError("connector receipt bytes changed")
         connector = json.loads(receipt_raw)
+        if set(case) == pdf_case_keys:
+            transform_path = Path(case["transform_receipt_path"])
+            expected_transform_raw_sha = case["transform_receipt_raw_sha256"]
+            expected_transform_sha = case["transform_receipt_sha256"]
+            if (
+                not isinstance(expected_transform_raw_sha, str)
+                or HEX64.fullmatch(expected_transform_raw_sha) is None
+                or not isinstance(expected_transform_sha, str)
+                or HEX64.fullmatch(expected_transform_sha) is None
+                or not transform_path.is_file()
+                or module._is_reparse_or_symlink(transform_path)
+            ):
+                raise ValueError("PDF transform receipt path or hash is invalid")
+            transform_raw = transform_path.read_bytes()
+            if sha256_bytes(transform_raw) != expected_transform_raw_sha:
+                raise ValueError("PDF transform receipt bytes changed")
+            transform = json.loads(transform_raw)
+            if not isinstance(transform, dict) or transform.get("receipt_sha256") != expected_transform_sha:
+                raise ValueError("PDF transform receipt identity changed")
+            evidence = case["evidence"]
+            if (
+                not isinstance(evidence, dict)
+                or set(evidence) != {
+                    "kind", "terms_url", "declared_spdx",
+                    "connector_receipt_path", "connector_receipt_sha256",
+                    "transform_receipt_path", "transform_receipt_sha256",
+                }
+                or evidence.get("connector_receipt_sha256") != expected_receipt_sha
+                or evidence.get("transform_receipt_sha256") != expected_transform_sha
+            ):
+                raise ValueError("PDF evidence hashes do not match the tranche case")
+            try:
+                evidence_connector_path = Path(evidence["connector_receipt_path"]).resolve(strict=True)
+                evidence_transform_path = Path(evidence["transform_receipt_path"]).resolve(strict=True)
+            except (KeyError, OSError, TypeError, ValueError) as error:
+                raise ValueError("PDF evidence paths do not match the tranche case") from error
+            if (
+                evidence_connector_path != receipt_path.resolve(strict=True)
+                or evidence_transform_path != transform_path.resolve(strict=True)
+            ):
+                raise ValueError("PDF evidence paths do not match the tranche case")
+            adapted = module.adapt_pdf_extraction_receipt(
+                receipt_path=transform_path,
+                connector_receipt=receipt_path,
+                connector_receipt_sha256=expected_receipt_sha,
+                evidence=evidence,
+            )
+            if adapted.get("license_spdx") != case["expected_license_spdx"]:
+                raise ValueError("PDF source license does not match the approved tranche case")
+            output = transform.get("output")
+            if not isinstance(output, dict):
+                raise ValueError("PDF transform receipt output is missing")
+            if adapted.get("content_sha256") != output.get("sha256"):
+                raise ValueError("PDF transform output does not match adapted content")
+            output_bytes = output.get("bytes")
+            if not isinstance(output_bytes, int) or isinstance(output_bytes, bool) or output_bytes < 0:
+                raise ValueError("PDF transform receipt output byte count is invalid")
+            row_map[source_id] = {**old, "admission": "ADMITTED", **adapted}
+            total_files += 1
+            total_bytes += output_bytes
+            row_receipts.append({
+                "source_id": source_id,
+                "connector_slot": case["connector_slot"],
+                "connector_receipt_path": str(receipt_path.resolve(strict=True)),
+                "connector_receipt_sha256": expected_receipt_sha,
+                "transform_receipt_path": str(transform_path.resolve(strict=True)),
+                "transform_receipt_raw_sha256": expected_transform_raw_sha,
+                "transform_receipt_sha256": expected_transform_sha,
+                "transform_output_sha256": output.get("sha256"),
+                "transform_output_bytes": output_bytes,
+                "transform_page_count": output.get("pages"),
+                "transform_decoded_content_bytes": output.get("decoded_content_bytes"),
+                "content_sha256": adapted["content_sha256"],
+                "license_spdx": adapted["license_spdx"],
+                "license_evidence_sha256": sha256_bytes(canonical(adapted["license_evidence"])),
+                "l4_receipt_sha256": sha256_bytes(canonical(adapted["l4_receipt"])),
+            })
+            continue
         adapted = module.adapt_connector_receipt(connector, evidence=case["evidence"])
         if adapted.get("license_spdx") != case["expected_license_spdx"]:
             raise ValueError("connector license does not match the approved tranche case")
