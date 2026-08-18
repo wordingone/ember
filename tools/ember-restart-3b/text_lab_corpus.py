@@ -200,6 +200,14 @@ def adapt_connector_receipt(receipt: dict[str, Any], *, evidence: dict[str, Any]
         raise ValueError("connector receipt sha256_manifest does not match reopened files")
 
     raw_license = receipt.get("license")
+    if (
+        receipt.get("source") == "huggingface"
+        and receipt.get("connector") == {"name": "hf_fetch", "version": "v1"}
+        and evidence.get("kind") == "hf_dataset_card"
+        and isinstance(raw_license, str)
+        and raw_license == raw_license.strip()
+    ):
+        raw_license = _HF_DATASET_CARD_LICENSES.get(raw_license.lower(), raw_license)
     license_spdx = _closed_connector_license(raw_license)
     if isinstance(license_spdx, list) or len(verified_entries) > 1:
         has_repository_license = any(
@@ -349,12 +357,32 @@ def _hf_dataset_card_license(raw: bytes) -> str:
     except ValueError as exc:
         raise ValueError("Hugging Face dataset card front matter is not closed") from exc
     declared: list[str] = []
-    for line in lines[1:close]:
+    front_matter = lines[1:close]
+    index = 0
+    while index < len(front_matter):
+        line = front_matter[index]
         if line.lstrip().lower().startswith("license"):
-            match = re.fullmatch(r"license:\s*([A-Za-z0-9][A-Za-z0-9.-]*)\s*", line)
-            if match is None:
+            scalar = re.fullmatch(r"license:\s*([A-Za-z0-9][A-Za-z0-9.-]*)\s*", line)
+            if scalar is not None:
+                declared.append(scalar.group(1))
+            elif line == "license:":
+                if index + 1 >= len(front_matter):
+                    raise ValueError("Hugging Face dataset card license list is empty")
+                item = re.fullmatch(
+                    r"\s*-\s+([A-Za-z0-9][A-Za-z0-9.-]*)\s*",
+                    front_matter[index + 1],
+                )
+                if item is None:
+                    raise ValueError("Hugging Face dataset card license list item is malformed")
+                if index + 2 < len(front_matter) and re.fullmatch(
+                    r"[A-Za-z0-9_.-]+:\s*.*", front_matter[index + 2]
+                ) is None:
+                    raise ValueError("Hugging Face dataset card license list is not closed")
+                declared.append(item.group(1))
+                index += 1
+            else:
                 raise ValueError("Hugging Face dataset card license entry is malformed")
-            declared.append(match.group(1))
+        index += 1
     if len(declared) != 1:
         raise ValueError("Hugging Face dataset card must contain exactly one license key")
     canonical = _HF_DATASET_CARD_LICENSES.get(declared[0].lower())
