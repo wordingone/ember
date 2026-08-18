@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -46,6 +47,160 @@ def _load_producer():
     except FileNotFoundError:
         pytest.fail("canonical #1719 tranche admission producer is unavailable")
     return module
+
+
+def _historical_source_fixture(tmp_path: Path):
+    historical = tmp_path / "historical"
+    tools = historical / "tools" / "ember-restart-3b"
+    tools.mkdir(parents=True)
+    for name in ("text_lab_corpus.py", "train.py", "run_vertical_slice.py"):
+        (tools / name).write_bytes((TOOLS / name).read_bytes() + b"\n# historical fixture\n")
+    common = tmp_path / "common.git"
+    common.mkdir()
+    pinned = "1" * 40
+    key = str(historical.resolve()).lower()
+    state = {
+        "version": 1,
+        "target": 12,
+        "ceiling": 12,
+        "main_path": str(tmp_path / "main"),
+        "legacy_paths": [],
+        "managed": {
+            key: {
+                "path": str(historical.resolve()),
+                "branch": None,
+                "detached": True,
+                "head": pinned,
+                "owner": "fixture",
+                "purpose": "historical predecessor fixture",
+                "created_at": "2026-08-18T00:00:00+00:00",
+                "expires": "2026-08-20",
+                "c_drive_override": False,
+            }
+        },
+        "retired": {},
+        "pending_removals": {},
+    }
+    state_raw = _write(common / "ember-worktree-lifecycle.json", state)
+    identity = {
+        "schema_version": "ember-text-lab-input-identity-v2",
+        "corpus_sha256": "2" * 64,
+        "source_base_commit": pinned,
+        "code_files": {
+            "text_lab_corpus": _sha((tools / "text_lab_corpus.py").read_bytes()),
+            "train": _sha((tools / "train.py").read_bytes()),
+            "run_vertical_slice": _sha((tools / "run_vertical_slice.py").read_bytes()),
+        },
+    }
+    return historical, common, state, state_raw, identity
+
+
+def test_historical_predecessor_reopen_requires_governed_detached_ancestor(tmp_path: Path, monkeypatch):
+    producer = _load_producer()
+    historical, common, _, state_raw, identity = _historical_source_fixture(tmp_path)
+    stored_validation = {"result": "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING", "code_files": identity["code_files"]}
+
+    def fake_git(repo: Path, *args: str):
+        command = tuple(args)
+        if command == ("merge-base", "--is-ancestor", identity["source_base_commit"], "3" * 40):
+            return subprocess.CompletedProcess(command, 0, "", "")
+        if command == ("rev-parse", "--show-toplevel"):
+            return subprocess.CompletedProcess(command, 0, str(historical.resolve()) + "\n", "")
+        if command == ("status", "--porcelain=v1", "--untracked-files=all"):
+            return subprocess.CompletedProcess(command, 0, "", "")
+        if command == ("symbolic-ref", "--quiet", "HEAD"):
+            return subprocess.CompletedProcess(command, 1, "", "")
+        if command == ("rev-parse", "HEAD"):
+            return subprocess.CompletedProcess(command, 0, identity["source_base_commit"] + "\n", "")
+        if command == ("rev-parse", "--git-common-dir"):
+            return subprocess.CompletedProcess(command, 0, str(common.resolve()) + "\n", "")
+        raise AssertionError(command)
+
+    monkeypatch.setattr(producer, "_git", fake_git)
+    module = text_lab_corpus
+    monkeypatch.setattr(module, "validate_authority_index", lambda *args, **kwargs: stored_validation)
+
+    validation, evidence = producer._validate_predecessor_authority(
+        module=module,
+        current_repo=ROOT,
+        current_source_commit="3" * 40,
+        source_custody=tmp_path,
+        source_identity=identity,
+        stored_validation=stored_validation,
+        predecessor_source_repo=historical,
+    )
+
+    assert validation == stored_validation
+    assert evidence == {
+        "result": "HISTORICAL_PREDECESSOR_REOPENED",
+        "source_base_commit": identity["source_base_commit"],
+        "source_code_files": identity["code_files"],
+        "lifecycle_state_sha256": _sha(state_raw),
+        "lifecycle_managed_key": str(historical.resolve()).lower(),
+        "ancestry": "ANCESTOR_OF_CURRENT_SOURCE",
+    }
+    current_identity = {**identity, "code_files": producer._code_files(ROOT)}
+    with pytest.raises(ValueError, match="historical predecessor source repo is forbidden"):
+        producer._validate_predecessor_authority(
+            module=module,
+            current_repo=ROOT,
+            current_source_commit="3" * 40,
+            source_custody=tmp_path,
+            source_identity=current_identity,
+            stored_validation=stored_validation,
+            predecessor_source_repo=historical,
+        )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        ("missing", "historical predecessor source repo is required"),
+        ("attached", "historical predecessor checkout must be detached"),
+        ("dirty", "historical predecessor checkout must be clean"),
+        ("wrong-head", "historical predecessor checkout HEAD changed"),
+        ("unregistered", "historical predecessor checkout is not governed"),
+        ("nonancestor", "historical predecessor commit is not an ancestor"),
+    ],
+)
+def test_historical_predecessor_reopen_refusal_matrix(tmp_path: Path, monkeypatch, mutation: str, message: str):
+    producer = _load_producer()
+    historical, common, state, _, identity = _historical_source_fixture(tmp_path)
+    if mutation == "unregistered":
+        state["managed"] = {}
+        _write(common / "ember-worktree-lifecycle.json", state)
+    stored_validation = {"result": "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING"}
+
+    def fake_git(repo: Path, *args: str):
+        command = tuple(args)
+        if command[0] == "merge-base":
+            return subprocess.CompletedProcess(command, 1 if mutation == "nonancestor" else 0, "", "")
+        if command == ("rev-parse", "--show-toplevel"):
+            return subprocess.CompletedProcess(command, 0, str(historical.resolve()) + "\n", "")
+        if command == ("status", "--porcelain=v1", "--untracked-files=all"):
+            return subprocess.CompletedProcess(command, 0, " M file\n" if mutation == "dirty" else "", "")
+        if command == ("symbolic-ref", "--quiet", "HEAD"):
+            return subprocess.CompletedProcess(command, 0 if mutation == "attached" else 1, "refs/heads/main\n", "")
+        if command == ("rev-parse", "HEAD"):
+            head = "4" * 40 if mutation == "wrong-head" else identity["source_base_commit"]
+            return subprocess.CompletedProcess(command, 0, head + "\n", "")
+        if command == ("rev-parse", "--git-common-dir"):
+            return subprocess.CompletedProcess(command, 0, str(common.resolve()) + "\n", "")
+        raise AssertionError(command)
+
+    monkeypatch.setattr(producer, "_git", fake_git)
+    module = text_lab_corpus
+    monkeypatch.setattr(module, "validate_authority_index", lambda *args, **kwargs: stored_validation)
+    with pytest.raises(ValueError, match=message):
+        producer._validate_predecessor_authority(
+            module=module,
+            current_repo=ROOT,
+            current_source_commit="3" * 40,
+            source_custody=tmp_path,
+            source_identity=identity,
+            stored_validation=stored_validation,
+            predecessor_source_repo=None if mutation == "missing" else historical,
+        )
 
 
 def _source_custody(tmp_path: Path) -> tuple[Path, str, str]:
@@ -333,6 +488,111 @@ def test_generic_successor_chains_from_its_own_published_receipt(tmp_path: Path)
         index_relative="text-lab-authority-index-v2.json",
         external_authority_root=second_output,
     )
+
+
+def test_historical_reopen_evidence_is_frozen_and_successor_does_not_reopen_old_lifecycle(
+    tmp_path: Path, monkeypatch
+):
+    producer = _load_producer()
+    legacy, legacy_sha, _ = _source_custody(tmp_path)
+    predecessor_plan = tmp_path / "predecessor-plan.json"
+    predecessor_plan_raw = _write(
+        predecessor_plan,
+        {"schema_version": "ember-issue1719-tranche-admission-plan-v1", "successor_id": "tranche4c", "cases": []},
+    )
+    predecessor_output = tmp_path / "historical-predecessor"
+    producer.mint_successor(
+        repo=ROOT,
+        source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+        source_custody=legacy,
+        predecessor_receipt_name="tranche3-admission-receipt.json",
+        predecessor_receipt_sha256=legacy_sha,
+        plan_path=predecessor_plan,
+        plan_sha256=_sha(predecessor_plan_raw),
+        output=predecessor_output,
+    )
+
+    identity_path = predecessor_output / "owned-text-lab-input-identity-v3.json"
+    identity = json.loads(identity_path.read_bytes())
+    identity["source_base_commit"] = "1" * 40
+    identity["code_files"] = {
+        "text_lab_corpus": "a" * 64,
+        "train": "b" * 64,
+        "run_vertical_slice": "c" * 64,
+    }
+    identity_raw = _write(identity_path, identity)
+    index_path = predecessor_output / "text-lab-authority-index-v2.json"
+    index = json.loads(index_path.read_bytes())
+    index["input_identity"]["sha256"] = _sha(identity_raw)
+    index_raw = _write(index_path, index)
+    receipt_path = predecessor_output / "tranche-admission-receipt.json"
+    receipt = json.loads(receipt_path.read_bytes())
+    receipt["source_code_files"] = identity["code_files"]
+    receipt["generated_files"][identity_path.name] = {"bytes": len(identity_raw), "sha256": _sha(identity_raw)}
+    receipt["generated_files"][index_path.name] = {"bytes": len(index_raw), "sha256": _sha(index_raw)}
+    stored_validation = {"result": "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING", "historical": True}
+    receipt["validation_receipt"] = stored_validation
+    predecessor_raw = _write(receipt_path, receipt)
+    log_path = predecessor_output / "mint-log.json"
+    log = json.loads(log_path.read_bytes())
+    log["receipt_sha256"] = _sha(predecessor_raw)
+    _write(log_path, log)
+
+    frozen_evidence = {
+        "result": "HISTORICAL_PREDECESSOR_REOPENED",
+        "source_base_commit": identity["source_base_commit"],
+        "source_code_files": identity["code_files"],
+        "lifecycle_state_sha256": "d" * 64,
+        "lifecycle_managed_key": "fixture-historical-checkout",
+        "ancestry": "ANCESTOR_OF_CURRENT_SOURCE",
+    }
+    calls = []
+    real_validate_predecessor = producer._validate_predecessor_authority
+
+    def historical_once(**kwargs):
+        calls.append(kwargs)
+        assert kwargs["predecessor_source_repo"] == tmp_path / "governed-historical"
+        return stored_validation, frozen_evidence
+
+    monkeypatch.setattr(producer, "_validate_predecessor_authority", historical_once)
+    successor_plan = tmp_path / "successor-plan.json"
+    successor_plan_raw = _write(
+        successor_plan,
+        {"schema_version": "ember-issue1719-tranche-admission-plan-v1", "successor_id": "tranche4d", "cases": []},
+    )
+    successor_output = tmp_path / "successor"
+    successor = producer.mint_successor(
+        repo=ROOT,
+        source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+        source_custody=predecessor_output,
+        predecessor_receipt_name="tranche-admission-receipt.json",
+        predecessor_receipt_sha256=_sha(predecessor_raw),
+        plan_path=successor_plan,
+        plan_sha256=_sha(successor_plan_raw),
+        output=successor_output,
+        predecessor_source_repo=tmp_path / "governed-historical",
+    )
+    successor_receipt = json.loads((successor_output / "tranche-admission-receipt.json").read_bytes())
+    assert successor_receipt["predecessor"]["historical_predecessor_reopen"] == frozen_evidence
+    assert len(calls) == 1
+
+    monkeypatch.setattr(producer, "_validate_predecessor_authority", real_validate_predecessor)
+    final_plan = tmp_path / "final-plan.json"
+    final_plan_raw = _write(
+        final_plan,
+        {"schema_version": "ember-issue1719-tranche-admission-plan-v1", "successor_id": "tranche4e", "cases": []},
+    )
+    final = producer.mint_successor(
+        repo=ROOT,
+        source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+        source_custody=successor_output,
+        predecessor_receipt_name="tranche-admission-receipt.json",
+        predecessor_receipt_sha256=successor["receipt_sha256"],
+        plan_path=final_plan,
+        plan_sha256=_sha(final_plan_raw),
+        output=tmp_path / "final",
+    )
+    assert final["result"] == "PARTIAL_AUTHORITY_SUCCESSOR"
 
 
 def test_generic_successor_refuses_to_overwrite_existing_output(tmp_path: Path):
