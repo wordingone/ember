@@ -4,12 +4,12 @@
 <!-- workstream_id: EMBER-02B -->
 <!-- next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember -->
 
-Date: 2026-08-17 PT  
+Date: 2026-08-17 PT
 Source authority: issue #1719 and public Ember commit `80b34e5ef5e87b17ef5f11e8a7a716f28896bd4b`.
 
 ## Objective and boundary
 
-Admit the exact Hugging Face dataset-card token `odc-by` as canonical SPDX `ODC-By-1.0` only when the connector receipt reopens one root `README.md`, that README independently declares exactly `license: odc-by` in closed leading YAML front matter, and the connector license plus supplied evidence both declare `ODC-By-1.0`.
+Admit the exact normalized (lowercased) Hugging Face dataset-card token `odc-by` as canonical SPDX `ODC-By-1.0` only when the connector receipt reopens one root `README.md`, that README independently declares the same token in closed leading YAML front matter, and the connector license plus supplied evidence both declare `ODC-By-1.0`. The existing parser uniformly lowercases the declared token before lookup for every closed-map entry; punctuation variants and aliases remain outside the map.
 
 The global text-lab allow-set already contains `ODC-By-1.0`; this change adds no other license, alias, connector, evidence route, corpus byte, training authority, or model-result claim. It does not mint tranche4d. The two E rows remain unresolved until this source change is independently reviewed, merged, and then consumed by a separate no-overwrite admission mint.
 

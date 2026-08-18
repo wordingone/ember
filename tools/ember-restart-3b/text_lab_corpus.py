@@ -22,6 +22,7 @@ _HF_DATASET_CARD_LICENSES = {
     "cc-by-4.0": "CC-BY-4.0",
     "cc0-1.0": "CC0-1.0",
     "mit": "MIT",
+    "odc-by": "ODC-By-1.0",
 }
 _UNRESOLVED_EVIDENCE = ["source_descriptor", "source_content", "license_evidence", "policy", "verifier_result"]
 
