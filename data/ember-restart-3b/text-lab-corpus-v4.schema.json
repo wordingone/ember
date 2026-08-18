@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "unresolved": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {"type": "string", "pattern": "^candidate-[a-z_]+-(train|heldout)-[0-9]+$"},
+        "domain": {"type": "string"},
+        "split": {"enum": ["train", "heldout"]},
+        "admission": {"const": "UNRESOLVED_CANDIDATE"},
+        "required_evidence": {"const": ["source_descriptor", "source_content", "license_evidence", "policy", "verifier_result"]},
+        "allowed_license_spdx": {"const": ["Apache-2.0", "BSD-3-Clause", "CC-BY-4.0", "CC0-1.0", "MIT", "ODC-By-1.0", "PDDL-1.0"]}
+      },
+      "required": ["source_id", "domain", "split", "admission", "required_evidence", "allowed_license_spdx"]
+    },
+    "homogeneous": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {"type": "string", "pattern": "^candidate-[a-z_]+-(train|heldout)-[0-9]+$"},
+        "domain": {"type": "string"},
+        "split": {"enum": ["train", "heldout"]},
+        "admission": {"const": "ADMITTED"},
+        "required_evidence": {"const": ["source_descriptor", "source_content", "license_evidence", "policy", "verifier_result"]},
+        "allowed_license_spdx": {"const": ["Apache-2.0", "BSD-3-Clause", "CC-BY-4.0", "CC0-1.0", "MIT", "ODC-By-1.0", "PDDL-1.0"]},
+        "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "license_spdx": {"oneOf": [{"enum": ["Apache-2.0", "BSD-3-Clause", "CC-BY-4.0", "CC0-1.0", "MIT", "ODC-By-1.0", "PDDL-1.0"]}, {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["Apache-2.0", "BSD-3-Clause", "CC-BY-4.0", "CC0-1.0", "MIT", "ODC-By-1.0", "PDDL-1.0"]}}]},
+        "license_evidence": {"type": "object"},
+        "l4_receipt": {"type": "object"}
+      },
+      "required": ["source_id", "domain", "split", "admission", "required_evidence", "allowed_license_spdx", "content_sha256", "license_spdx", "license_evidence", "l4_receipt"]
+    },
+    "partition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {"type": "string", "pattern": "^candidate-[a-z_]+-(train|heldout)-[0-9]+$"},
+        "domain": {"type": "string"},
+        "split": {"enum": ["train", "heldout"]},
+        "admission": {"const": "ADMITTED"},
+        "required_evidence": {"const": ["source_descriptor", "source_content", "license_evidence", "policy", "verifier_result"]},
+        "allowed_license_spdx": {"const": ["Apache-2.0", "BSD-3-Clause", "CC-BY-4.0", "CC0-1.0", "MIT", "ODC-By-1.0", "PDDL-1.0"]},
+        "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "license_partition_receipt": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+        "license_partition_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "l4_receipt": {"type": "object"}
+      },
+      "required": ["source_id", "domain", "split", "admission", "required_evidence", "allowed_license_spdx", "content_sha256", "license_partition_receipt", "license_partition_sha256", "l4_receipt"]
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "ember-text-lab-corpus-v4"},
+    "registry_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "receipt_bundle_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "train_root_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "heldout_root_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "sources": {"type": "array", "minItems": 44, "items": {"oneOf": [{"$ref": "#/$defs/unresolved"}, {"$ref": "#/$defs/homogeneous"}, {"$ref": "#/$defs/partition"}]}}
+  },
+  "required": ["schema_version", "registry_sha256", "receipt_bundle_sha256", "train_root_sha256", "heldout_root_sha256", "sources"]
+}
