@@ -146,7 +146,7 @@ class ArxivPaperlistSelectTests(unittest.TestCase):
                 "category_mismatch", "date_outside_range", "excluded_by_bound_list", "license_mismatch"
             })
 
-    def test_refuses_unknown_spec_key_versioned_id_and_duplicate_id(self) -> None:
+    def test_refuses_unknown_spec_key_and_versioned_id(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             pages = root / "pages"
@@ -161,9 +161,54 @@ class ArxivPaperlistSelectTests(unittest.TestCase):
             with self.assertRaisesRegex(selector.SelectionRefusal, "version suffix"):
                 selector.produce_selection(pages_dir=pages, spec_path=spec, spec_sha256=spec_sha, output_dir=root / "version")
 
-            (pages / "000000.xml").write_bytes(_page([_record("2501.00001"), _record("2501.00001")]))
-            with self.assertRaisesRegex(selector.SelectionRefusal, "duplicate arXiv id"):
-                selector.produce_selection(pages_dir=pages, spec_path=spec, spec_sha256=spec_sha, output_dir=root / "duplicate")
+
+    def test_counts_identical_page_boundary_repeat_once(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            pages = root / "pages"
+            pages.mkdir()
+            repeated = _record("2501.00001")
+            (pages / "000000.xml").write_bytes(_page([repeated]))
+            (pages / "000001.xml").write_bytes(_page([repeated]))
+            spec, spec_sha = _write_spec(root, exclusions=[])
+
+            manifest = selector.produce_selection(
+                pages_dir=pages,
+                spec_path=spec,
+                spec_sha256=spec_sha,
+                output_dir=root / "out",
+            )
+
+            self.assertEqual((root / "out" / "paper-list.txt").read_text(encoding="utf-8"), "2501.00001\n")
+            self.assertEqual(manifest["counts"], {
+                "parsed": 2,
+                "accepted": 1,
+                "rejected_by_reason": {"duplicate_identical_record": 1},
+            })
+            self.assertEqual(selector.verify_selection(root / "out"), manifest)
+
+    def test_refuses_page_boundary_repeat_when_parsed_record_differs(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            pages = root / "pages"
+            pages.mkdir()
+            (pages / "000000.xml").write_bytes(_page([_record("2501.00001")]))
+            (pages / "000001.xml").write_bytes(_page([
+                _record("2501.00001", abstract="The repeated ID now has different metadata."),
+            ]))
+            spec, spec_sha = _write_spec(root, exclusions=[])
+
+            with self.assertRaisesRegex(
+                selector.SelectionRefusal,
+                "duplicate arXiv id '2501\\.00001' differs across OAI pages",
+            ):
+                selector.produce_selection(
+                    pages_dir=pages,
+                    spec_path=spec,
+                    spec_sha256=spec_sha,
+                    output_dir=root / "out",
+                )
+            self.assertFalse((root / "out").exists())
 
     def test_refuses_output_overwrite_and_drift_on_verify(self) -> None:
         with tempfile.TemporaryDirectory() as td:
