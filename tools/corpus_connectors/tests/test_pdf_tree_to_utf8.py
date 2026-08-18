@@ -81,6 +81,24 @@ def _write_pass_census(module: object, root: Path, receipt: Path, receipt_sha256
     return report, _sha256(report.read_bytes())
 
 
+def _write_exclusion_set(
+    root: Path,
+    census: Path,
+    census_sha256: str,
+    files: list[dict[str, str]],
+) -> tuple[Path, str]:
+    exclusion_path = root / "pdf-exclusion-set.json"
+    payload = {
+        "schema": "ember-pdf-tree-exclusion-set-v1",
+        "census_report_sha256": census_sha256,
+        "files": files,
+    }
+    payload["receipt_sha256"] = _sha256(_canonical(payload))
+    raw = (json.dumps(payload, sort_keys=True, indent=2) + "\n").encode()
+    exclusion_path.write_bytes(raw)
+    return exclusion_path, _sha256(raw)
+
+
 class PdfTreeToUtf8Tests(unittest.TestCase):
     def test_produces_collision_free_closed_tree_and_reextracts_every_pdf(self) -> None:
         from tools.corpus_connectors import pdf_tree_to_utf8 as module
@@ -130,7 +148,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
                 report_path=census,
             )
             output = root / "output"
-            with self.assertRaisesRegex(module.PdfTreeExtractionRefusal, "census result"):
+            with self.assertRaisesRegex(module.PdfTreeExtractionRefusal, "requires an explicit exclusion set"):
                 module.produce_pdf_tree_receipt(
                     connector_receipt=connector_receipt,
                     connector_receipt_sha256=connector_sha256,
@@ -140,6 +158,94 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
                 )
             self.assertFalse(output.exists())
             self.assertEqual(list(root.glob(".output.staging-*")), [])
+
+    def test_exact_census_refusal_partition_transforms_only_pass_rows(self) -> None:
+        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            connector_receipt, connector_sha256, _ = _write_tree_fixture(root, empty_second=True)
+            census = root / "refusal-census.json"
+            census_receipt = module.census_pdf_tree_refusals(
+                connector_receipt=connector_receipt,
+                connector_receipt_sha256=connector_sha256,
+                report_path=census,
+            )
+            census_sha256 = _sha256(census.read_bytes())
+            refused = census_receipt["files"][1]
+            exclusion, exclusion_sha256 = _write_exclusion_set(
+                root,
+                census,
+                census_sha256,
+                [{"source_path": refused["source_path"], "source_sha256": refused["source_sha256"]}],
+            )
+            output = root / "output"
+
+            receipt = module.produce_pdf_tree_receipt(
+                connector_receipt=connector_receipt,
+                connector_receipt_sha256=connector_sha256,
+                census_report=census,
+                census_report_sha256=census_sha256,
+                exclusion_set=exclusion,
+                exclusion_set_sha256=exclusion_sha256,
+                output_dir=output,
+            )
+
+            self.assertEqual(receipt["result"], "VERIFIED")
+            self.assertEqual(receipt["totals"]["source_file_count"], 2)
+            self.assertEqual(receipt["totals"]["file_count"], 1)
+            self.assertEqual(receipt["totals"]["excluded_file_count"], 1)
+            self.assertEqual(receipt["exclusions"]["requested_files"], [
+                {"source_path": refused["source_path"], "source_sha256": refused["source_sha256"]}
+            ])
+            self.assertEqual(receipt["exclusions"]["census_refusal_rows"], [refused])
+            self.assertEqual([row["source_path"] for row in receipt["files"]], ["alpha/document.pdf"])
+            self.assertTrue((output / "documents/alpha/document.pdf.txt").is_file())
+            self.assertFalse((output / "documents/beta/document.pdf.txt").exists())
+            self.assertEqual(
+                module.verify_pdf_tree_receipt(
+                    receipt_path=output / "_manifests/pdf-tree-extraction-receipt.json",
+                    connector_receipt=connector_receipt,
+                    connector_receipt_sha256=connector_sha256,
+                ),
+                receipt,
+            )
+
+    def test_exclusion_set_must_equal_exact_census_refusal_set(self) -> None:
+        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            connector_receipt, connector_sha256, _ = _write_tree_fixture(root, empty_second=True)
+            census = root / "refusal-census.json"
+            module.census_pdf_tree_refusals(
+                connector_receipt=connector_receipt,
+                connector_receipt_sha256=connector_sha256,
+                report_path=census,
+            )
+            census_sha256 = _sha256(census.read_bytes())
+            for label, files in (
+                ("omits refused row", []),
+                ("names PASS row", [{"source_path": "alpha/document.pdf", "source_sha256": json.loads(connector_receipt.read_bytes())["files"][0]["sha256"]}]),
+            ):
+                with self.subTest(label=label):
+                    exclusion, exclusion_sha256 = _write_exclusion_set(
+                        root,
+                        census,
+                        census_sha256,
+                        files,
+                    )
+                    with self.assertRaisesRegex(module.PdfTreeExtractionRefusal, "exactly equal census refusal"):
+                        module.produce_pdf_tree_receipt(
+                            connector_receipt=connector_receipt,
+                            connector_receipt_sha256=connector_sha256,
+                            census_report=census,
+                            census_report_sha256=census_sha256,
+                            exclusion_set=exclusion,
+                            exclusion_set_sha256=exclusion_sha256,
+                            output_dir=root / f"output-{len(files)}",
+                        )
+                    exclusion.unlink()
 
     def test_census_records_every_refusal_without_writing_transform_custody(self) -> None:
         from tools.corpus_connectors import pdf_tree_to_utf8 as module

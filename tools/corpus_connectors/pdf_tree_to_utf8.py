@@ -22,7 +22,8 @@ from typing import Any
 from tools.corpus_connectors import pdf_to_utf8
 
 
-SCHEMA = "ember-pdf-tree-extraction-receipt-v1"
+SCHEMA = "ember-pdf-tree-extraction-receipt-v2"
+EXCLUSION_SCHEMA = "ember-pdf-tree-exclusion-set-v1"
 DERIVED_CONNECTOR = "_manifests/derived-connector-receipt.json"
 TRANSFORM_RECEIPT = "_manifests/pdf-tree-extraction-receipt.json"
 DEFAULT_MAX_FILES = 10_000
@@ -333,6 +334,7 @@ def _validate_transform_shape(receipt: dict[str, Any]) -> None:
         "source",
         "extractor",
         "census",
+        "exclusions",
         "files",
         "totals",
         "derived_connector",
@@ -350,9 +352,11 @@ def _load_census_binding(
     census_report: Path,
     census_report_sha256: str,
     connector_receipt_sha256: str,
-    source_file_count: int,
+    source_files: list[dict[str, Any]],
     expected_extractor: dict[str, Any],
-) -> dict[str, Any]:
+    exclusion_set: Path | None = None,
+    exclusion_set_sha256: str | None = None,
+) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
     if _HEX.fullmatch(census_report_sha256) is None:
         raise PdfTreeExtractionRefusal("census report hash is invalid")
     raw, report = _read_json(Path(census_report), "PDF tree refusal census")
@@ -380,15 +384,52 @@ def _load_census_binding(
         raise PdfTreeExtractionRefusal("census connector receipt identity changed")
     totals = report.get("totals")
     files = report.get("files")
-    if (
-        report.get("result") != "PASS"
-        or not isinstance(totals, dict)
-        or totals != {"file_count": source_file_count, "pass_count": source_file_count, "refusal_count": 0}
-        or not isinstance(files, list)
-        or len(files) != source_file_count
-        or any(not isinstance(row, dict) or row.get("result") != "PASS" for row in files)
-    ):
-        raise PdfTreeExtractionRefusal("census result is not a complete zero-refusal PASS")
+    if not isinstance(files, list) or len(files) != len(source_files):
+        raise PdfTreeExtractionRefusal("census file map is incomplete")
+    if [row.get("source_path") for row in files if isinstance(row, dict)] != [
+        item["path"] for item in source_files
+    ]:
+        raise PdfTreeExtractionRefusal("census file map order is not canonical")
+    refused_rows: list[dict[str, Any]] = []
+    included_files: list[dict[str, Any]] = []
+    for row, item in zip(files, source_files):
+        if not isinstance(row, dict):
+            raise PdfTreeExtractionRefusal("census file row is invalid")
+        common = {
+            "source_path": item["path"],
+            "source_bytes": item["bytes"],
+            "source_sha256": item["sha256"],
+        }
+        if any(row.get(key) != value for key, value in common.items()):
+            raise PdfTreeExtractionRefusal("census source identity changed")
+        if row.get("result") == "PASS":
+            if set(row) != {
+                *common,
+                "result",
+                "pages",
+                "decoded_content_bytes",
+                "output_bytes",
+                "output_sha256",
+            } or _HEX.fullmatch(row.get("output_sha256", "")) is None:
+                raise PdfTreeExtractionRefusal("census PASS row is not closed")
+            included_files.append(item)
+        elif row.get("result") == "REFUSED":
+            allowed = {"source_path", "source_bytes", "source_sha256", "result", "refusal_class", "detail"}
+            if "exception_class" in row:
+                allowed.add("exception_class")
+            if set(row) != allowed or not isinstance(row.get("refusal_class"), str) or not isinstance(row.get("detail"), str):
+                raise PdfTreeExtractionRefusal("census refusal row is not closed")
+            refused_rows.append(row)
+        else:
+            raise PdfTreeExtractionRefusal("census file result is invalid")
+    expected_totals = {
+        "file_count": len(source_files),
+        "pass_count": len(included_files),
+        "refusal_count": len(refused_rows),
+    }
+    expected_result = "PASS" if not refused_rows else "REFUSED"
+    if totals != expected_totals or report.get("result") != expected_result:
+        raise PdfTreeExtractionRefusal("census result does not rederive")
     extractor = report.get("extractor")
     if not isinstance(extractor, dict):
         raise PdfTreeExtractionRefusal("census extractor identity is incomplete")
@@ -411,11 +452,57 @@ def _load_census_binding(
         key: expected_extractor.get(key) for key in identity_keys
     }:
         raise PdfTreeExtractionRefusal("census extractor identity changed")
-    return {
+    census_binding = {
         "path": str(Path(census_report).resolve(strict=True)),
         "sha256": census_report_sha256,
         "receipt_sha256": embedded,
     }
+    if not refused_rows:
+        if exclusion_set is not None or exclusion_set_sha256 is not None:
+            raise PdfTreeExtractionRefusal("zero-refusal census must not carry an exclusion set")
+        return census_binding, {
+            "set": None,
+            "requested_files": [],
+            "census_refusal_rows": [],
+        }, included_files
+    if exclusion_set is None or exclusion_set_sha256 is None:
+        raise PdfTreeExtractionRefusal("refused census requires an explicit exclusion set")
+    if _HEX.fullmatch(exclusion_set_sha256) is None:
+        raise PdfTreeExtractionRefusal("exclusion set hash is invalid")
+    exclusion_raw, exclusion = _read_json(Path(exclusion_set), "PDF tree exclusion set")
+    if _sha256(exclusion_raw) != exclusion_set_sha256:
+        raise PdfTreeExtractionRefusal("exclusion set bytes do not match the bound hash")
+    if set(exclusion) != {"schema", "census_report_sha256", "files", "receipt_sha256"}:
+        raise PdfTreeExtractionRefusal("exclusion set schema is not closed")
+    if exclusion.get("schema") != EXCLUSION_SCHEMA or exclusion.get("census_report_sha256") != census_report_sha256:
+        raise PdfTreeExtractionRefusal("exclusion set census identity changed")
+    exclusion_receipt_sha = exclusion.get("receipt_sha256")
+    if not isinstance(exclusion_receipt_sha, str) or exclusion_receipt_sha != _sha256(_canonical(_receipt_payload(exclusion))):
+        raise PdfTreeExtractionRefusal("exclusion set self-hash does not rederive")
+    requested = exclusion.get("files")
+    if not isinstance(requested, list) or any(
+        not isinstance(row, dict)
+        or set(row) != {"source_path", "source_sha256"}
+        or not isinstance(row.get("source_path"), str)
+        or _HEX.fullmatch(row.get("source_sha256", "")) is None
+        for row in requested
+    ):
+        raise PdfTreeExtractionRefusal("exclusion file set is not closed")
+    expected_requested = [
+        {"source_path": row["source_path"], "source_sha256": row["source_sha256"]}
+        for row in refused_rows
+    ]
+    if requested != expected_requested:
+        raise PdfTreeExtractionRefusal("exclusion set is not exactly equal census refusal set")
+    return census_binding, {
+        "set": {
+            "path": str(Path(exclusion_set).resolve(strict=True)),
+            "sha256": exclusion_set_sha256,
+            "receipt_sha256": exclusion_receipt_sha,
+        },
+        "requested_files": requested,
+        "census_refusal_rows": refused_rows,
+    }, included_files
 
 
 def _refusal_class(detail: str) -> str:
@@ -606,19 +693,46 @@ def _verify_at(
         or _HEX.fullmatch(census.get("receipt_sha256", "")) is None
     ):
         raise PdfTreeExtractionRefusal("PDF tree census binding is not closed")
+    exclusions = receipt.get("exclusions")
+    if not isinstance(exclusions, dict) or set(exclusions) != {
+        "set",
+        "requested_files",
+        "census_refusal_rows",
+    }:
+        raise PdfTreeExtractionRefusal("PDF tree exclusion binding is not closed")
+    exclusion_binding = exclusions.get("set")
+    if exclusion_binding is not None and (
+        not isinstance(exclusion_binding, dict)
+        or set(exclusion_binding) != {"path", "sha256", "receipt_sha256"}
+        or not isinstance(exclusion_binding.get("path"), str)
+        or _HEX.fullmatch(exclusion_binding.get("sha256", "")) is None
+        or _HEX.fullmatch(exclusion_binding.get("receipt_sha256", "")) is None
+    ):
+        raise PdfTreeExtractionRefusal("PDF tree exclusion set binding is not closed")
+    expected_census, expected_exclusions, included_files = _load_census_binding(
+        census_report=Path(census["path"]),
+        census_report_sha256=census["sha256"],
+        connector_receipt_sha256=connector_receipt_sha256,
+        source_files=source_files,
+        expected_extractor=extractor,
+        exclusion_set=Path(exclusion_binding["path"]) if exclusion_binding is not None else None,
+        exclusion_set_sha256=exclusion_binding["sha256"] if exclusion_binding is not None else None,
+    )
+    if census != expected_census or exclusions != expected_exclusions:
+        raise PdfTreeExtractionRefusal("PDF tree census partition binding changed")
     claimed_files = receipt.get("files")
-    if not isinstance(claimed_files, list) or len(claimed_files) != len(source_files):
+    if not isinstance(claimed_files, list) or len(claimed_files) != len(included_files):
         raise PdfTreeExtractionRefusal("PDF tree file map is incomplete")
     if [row.get("source_path") for row in claimed_files if isinstance(row, dict)] != [
-        item["path"] for item in source_files
+        item["path"] for item in included_files
     ]:
         raise PdfTreeExtractionRefusal("PDF tree file map order is not canonical")
     by_source = {row.get("source_path"): row for row in claimed_files if isinstance(row, dict)}
-    if len(by_source) != len(source_files):
+    if len(by_source) != len(included_files):
         raise PdfTreeExtractionRefusal("PDF tree file map contains duplicates")
     actual_output_paths: set[str] = set()
     total_pages = total_decoded = total_output = 0
-    for item in source_files:
+    for item in included_files:
         claim = by_source.get(item["path"])
         if not isinstance(claim, dict):
             raise PdfTreeExtractionRefusal("PDF tree source file is missing from the map")
@@ -657,8 +771,11 @@ def _verify_at(
     ):
         raise PdfTreeExtractionRefusal("PDF tree aggregate extraction exceeds the closed bound")
     expected_totals = {
-        "file_count": len(source_files),
-        "source_bytes": sum(item["bytes"] for item in source_files),
+        "source_file_count": len(source_files),
+        "file_count": len(included_files),
+        "excluded_file_count": len(source_files) - len(included_files),
+        "source_bytes": sum(item["bytes"] for item in included_files),
+        "excluded_source_bytes": sum(item["bytes"] for item in source_files) - sum(item["bytes"] for item in included_files),
         "output_bytes": total_output,
         "pages": total_pages,
         "decoded_content_bytes": total_decoded,
@@ -704,6 +821,8 @@ def produce_pdf_tree_receipt(
     connector_receipt_sha256: str,
     census_report: Path,
     census_report_sha256: str,
+    exclusion_set: Path | None = None,
+    exclusion_set_sha256: str | None = None,
     output_dir: Path,
     max_files: int = DEFAULT_MAX_FILES,
     max_pages: int = pdf_to_utf8.DEFAULT_MAX_PAGES,
@@ -741,12 +860,14 @@ def produce_pdf_tree_receipt(
         max_total_output_bytes=max_total_output_bytes,
     )
     _require_outside_custody(Path(census_report), source_root, "census report")
-    census = _load_census_binding(
+    census, exclusions, included_files = _load_census_binding(
         census_report=Path(census_report),
         census_report_sha256=census_report_sha256,
         connector_receipt_sha256=connector_receipt_sha256,
-        source_file_count=len(source_files),
+        source_files=source_files,
         expected_extractor=extractor,
+        exclusion_set=Path(exclusion_set) if exclusion_set is not None else None,
+        exclusion_set_sha256=exclusion_set_sha256,
     )
     staging = output_dir.with_name(f".{output_dir.name}.staging-{uuid.uuid4().hex}")
     staging.mkdir()
@@ -754,7 +875,7 @@ def produce_pdf_tree_receipt(
     try:
         rows: list[dict[str, Any]] = []
         total_pages = total_decoded = total_output = 0
-        for item in source_files:
+        for item in included_files:
             output_bytes, pages, decoded = _extract_one(
                 item["source_path"],
                 max_pages=max_pages,
@@ -809,7 +930,8 @@ def produce_pdf_tree_receipt(
             "dest_root": str(output_dir),
             "notes": (
                 f"DERIVED_PDF_TEXT original_connector_receipt_sha256={connector_receipt_sha256}; "
-                f"transform_receipt={TRANSFORM_RECEIPT}"
+                f"transform_receipt={TRANSFORM_RECEIPT}; "
+                f"included_files={len(included_files)}; excluded_files={len(source_files) - len(included_files)}"
             ),
         }
         derived_raw = (json.dumps(derived, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
@@ -836,10 +958,15 @@ def produce_pdf_tree_receipt(
             },
             "extractor": extractor,
             "census": census,
+            "exclusions": exclusions,
             "files": rows,
             "totals": {
+                "source_file_count": len(source_files),
                 "file_count": len(rows),
-                "source_bytes": sum(item["bytes"] for item in source_files),
+                "excluded_file_count": len(source_files) - len(included_files),
+                "source_bytes": sum(item["bytes"] for item in included_files),
+                "excluded_source_bytes": sum(item["bytes"] for item in source_files)
+                - sum(item["bytes"] for item in included_files),
                 "output_bytes": total_output,
                 "pages": total_pages,
                 "decoded_content_bytes": total_decoded,
@@ -906,6 +1033,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--census-report", type=Path)
     parser.add_argument("--census-report-sha256")
+    parser.add_argument("--exclusion-set", type=Path)
+    parser.add_argument("--exclusion-set-sha256")
     parser.add_argument("--verify", action="store_true")
     return parser
 
@@ -914,8 +1043,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.census_report is not None and args.output_dir is None:
-        if args.census_report_sha256 is not None or args.verify:
-            parser.error("census generation cannot be combined with --census-report-sha256 or --verify")
+        if (
+            args.census_report_sha256 is not None
+            or args.exclusion_set is not None
+            or args.exclusion_set_sha256 is not None
+            or args.verify
+        ):
+            parser.error("census generation cannot be combined with transform bindings or --verify")
         receipt = census_pdf_tree_refusals(
             connector_receipt=args.connector_receipt,
             connector_receipt_sha256=args.connector_receipt_sha256,
@@ -937,6 +1071,8 @@ def main(argv: list[str] | None = None) -> int:
             connector_receipt_sha256=args.connector_receipt_sha256,
             census_report=args.census_report,
             census_report_sha256=args.census_report_sha256,
+            exclusion_set=args.exclusion_set,
+            exclusion_set_sha256=args.exclusion_set_sha256,
             output_dir=args.output_dir,
         )
     print(json.dumps(receipt, ensure_ascii=False, sort_keys=True))
