@@ -193,6 +193,134 @@ def _code_files(repo: Path) -> dict[str, str]:
     }
 
 
+def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    kwargs: dict[str, Any] = {
+        "capture_output": True,
+        "check": False,
+        "text": True,
+    }
+    if os.name == "nt":
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+    return subprocess.run(["git", "-C", str(repo), *args], **kwargs)
+
+
+def _path_key(path: Path) -> str:
+    return os.path.normcase(os.path.normpath(str(path.resolve(strict=True)))).casefold()
+
+
+def _validate_predecessor_authority(
+    *,
+    module: Any,
+    current_repo: Path,
+    current_source_commit: str,
+    source_custody: Path,
+    source_identity: dict[str, Any],
+    stored_validation: dict[str, Any],
+    predecessor_source_repo: Path | None,
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    expected_code = source_identity.get("code_files")
+    pinned_commit = source_identity.get("source_base_commit")
+    if (
+        not isinstance(expected_code, dict)
+        or set(expected_code) != {"text_lab_corpus", "train", "run_vertical_slice"}
+        or any(not isinstance(value, str) or HEX64.fullmatch(value) is None for value in expected_code.values())
+        or not isinstance(pinned_commit, str)
+        or HEX40.fullmatch(pinned_commit) is None
+        or not isinstance(stored_validation, dict)
+    ):
+        raise ValueError("predecessor source identity is invalid")
+    current_code = _code_files(current_repo)
+    if expected_code == current_code:
+        if predecessor_source_repo is not None:
+            raise ValueError("historical predecessor source repo is forbidden for current-source bytes")
+        validation = module.validate_authority_index(
+            current_repo,
+            index_relative=ARTIFACT_NAMES["index"],
+            external_authority_root=source_custody,
+        )
+        if validation != stored_validation:
+            raise ValueError("predecessor validation receipt changed")
+        return validation, None
+
+    if predecessor_source_repo is None:
+        raise ValueError("historical predecessor source repo is required")
+    if HEX40.fullmatch(current_source_commit) is None:
+        raise ValueError("current source commit is invalid")
+    historical = _regular_root(predecessor_source_repo, "historical predecessor source repo", module)
+    ancestry = _git(current_repo, "merge-base", "--is-ancestor", pinned_commit, current_source_commit)
+    if ancestry.returncode != 0:
+        raise ValueError("historical predecessor commit is not an ancestor of current source")
+    top = _git(historical, "rev-parse", "--show-toplevel")
+    if top.returncode != 0 or Path(top.stdout.strip()).resolve(strict=True) != historical:
+        raise ValueError("historical predecessor checkout root changed")
+    status = _git(historical, "status", "--porcelain=v1", "--untracked-files=all")
+    if status.returncode != 0 or status.stdout:
+        raise ValueError("historical predecessor checkout must be clean")
+    attached = _git(historical, "symbolic-ref", "--quiet", "HEAD")
+    if attached.returncode not in {0, 1}:
+        raise ValueError("historical predecessor checkout state is unreadable")
+    if attached.returncode == 0:
+        raise ValueError("historical predecessor checkout must be detached")
+    head = _git(historical, "rev-parse", "HEAD")
+    if head.returncode != 0 or head.stdout.strip() != pinned_commit:
+        raise ValueError("historical predecessor checkout HEAD changed")
+    if _code_files(historical) != expected_code:
+        raise ValueError("historical predecessor code bytes changed")
+
+    common_result = _git(historical, "rev-parse", "--git-common-dir")
+    if common_result.returncode != 0 or not common_result.stdout.strip():
+        raise ValueError("historical predecessor lifecycle root is unavailable")
+    common = Path(common_result.stdout.strip())
+    if not common.is_absolute():
+        common = historical / common
+    common = common.resolve(strict=True)
+    state_path = common / "ember-worktree-lifecycle.json"
+    if not state_path.is_file() or module._is_reparse_or_symlink(state_path):
+        raise ValueError("historical predecessor lifecycle state is unavailable")
+    state_raw = state_path.read_bytes()
+    state = json.loads(state_raw)
+    if (
+        not isinstance(state, dict)
+        or state.get("version") != 1
+        or not isinstance(state.get("managed"), dict)
+        or not isinstance(state.get("target"), int)
+        or not isinstance(state.get("ceiling"), int)
+        or not isinstance(state.get("legacy_paths"), list)
+    ):
+        raise ValueError("historical predecessor lifecycle state is invalid")
+    key = _path_key(historical)
+    row = state["managed"].get(key)
+    if not isinstance(row, dict):
+        raise ValueError("historical predecessor checkout is not governed")
+    try:
+        row_path = Path(row["path"]).resolve(strict=True)
+    except (KeyError, OSError):
+        raise ValueError("historical predecessor lifecycle row changed") from None
+    if (
+        row_path != historical
+        or row.get("detached") is not True
+        or row.get("branch") is not None
+        or row.get("head") != pinned_commit
+    ):
+        raise ValueError("historical predecessor lifecycle row changed")
+
+    validation = module.validate_authority_index(
+        historical,
+        index_relative=ARTIFACT_NAMES["index"],
+        external_authority_root=source_custody,
+    )
+    if validation != stored_validation:
+        raise ValueError("predecessor validation receipt changed")
+    return validation, {
+        "result": "HISTORICAL_PREDECESSOR_REOPENED",
+        "source_base_commit": pinned_commit,
+        "source_code_files": expected_code,
+        "lifecycle_state_sha256": sha256_bytes(state_raw),
+        "lifecycle_managed_key": key,
+        "ancestry": "ANCESTOR_OF_CURRENT_SOURCE",
+    }
+
+
 def _read_plan(path: Path, expected_sha256: str, module: Any) -> tuple[dict[str, Any], bytes]:
     if HEX64.fullmatch(expected_sha256) is None or not path.is_file() or module._is_reparse_or_symlink(path):
         raise ValueError("tranche plan path or hash is invalid")
@@ -290,6 +418,7 @@ def mint_successor(
     plan_path: Path,
     plan_sha256: str,
     output: Path,
+    predecessor_source_repo: Path | None = None,
 ) -> dict[str, Any]:
     if HEX40.fullmatch(source_commit) is None or HEX64.fullmatch(predecessor_receipt_sha256) is None:
         raise ValueError("source commit or predecessor receipt hash is invalid")
@@ -355,18 +484,23 @@ def mint_successor(
         name: _bound_generated_file(source_custody, generated_bindings, name, module)
         for name in ARTIFACT_NAMES.values()
     }
-    if generic_receipt:
-        predecessor_validation = module.validate_authority_index(
-            repo,
-            index_relative=ARTIFACT_NAMES["index"],
-            external_authority_root=source_custody,
-        )
-        if predecessor_validation != predecessor.get("validation_receipt"):
-            raise ValueError("predecessor validation receipt changed")
     bundle = json.loads(source_raw[ARTIFACT_NAMES["bundle"]])
     corpus = json.loads(source_raw[ARTIFACT_NAMES["corpus"]])
     source_identity = json.loads(source_raw[ARTIFACT_NAMES["identity"]])
     source_index = json.loads(source_raw[ARTIFACT_NAMES["index"]])
+    historical_reopen = None
+    if generic_receipt:
+        _, historical_reopen = _validate_predecessor_authority(
+            module=module,
+            current_repo=repo,
+            current_source_commit=source_commit,
+            source_custody=source_custody,
+            source_identity=source_identity,
+            stored_validation=predecessor.get("validation_receipt"),
+            predecessor_source_repo=predecessor_source_repo,
+        )
+    elif predecessor_source_repo is not None:
+        raise ValueError("historical predecessor source repo is forbidden for legacy predecessor")
     rows = corpus.get("sources")
     if (
         not isinstance(rows, list)
@@ -468,6 +602,11 @@ def mint_successor(
                     if old_receipt
                     else "REOPENED_BY_PRODUCTION_VALIDATOR"
                 ),
+                **(
+                    {"historical_predecessor_reopen": historical_reopen}
+                    if historical_reopen is not None
+                    else {}
+                ),
             },
             "plan": {
                 "file_name": OUTPUT_PLAN,
@@ -558,6 +697,7 @@ def main() -> int:
     parser.add_argument("--plan", type=Path, required=True)
     parser.add_argument("--plan-sha256", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--predecessor-source-repo", type=Path)
     args = parser.parse_args()
     result = mint_successor(
         repo=args.repo,
@@ -568,6 +708,7 @@ def main() -> int:
         plan_path=args.plan,
         plan_sha256=args.plan_sha256,
         output=args.output,
+        predecessor_source_repo=args.predecessor_source_repo,
     )
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     return 0
