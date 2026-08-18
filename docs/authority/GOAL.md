@@ -497,7 +497,7 @@ then implementation and evidence, then history.
 No completion claim is valid unless the primitive, model, organism, body, and
 laboratory totality and every hard-rung requirement pass together.
 
-This custody, identity, and experiment-spine goal creates, trains, evaluates,
-and serves no network and claims no model, training, benchmark, or capability
-completion. Its bounded control-plane runtime exists only to make the first
-clean-genesis 3B execution truthful, detachable, recoverable, and inspectable.
+This master authority document itself creates, trains, evaluates, and serves
+no network and claims no model, training, benchmark, or capability completion.
+Any runtime named by a subordinate goal receives credit only through that
+goal's own exact execution and evidence contract.
