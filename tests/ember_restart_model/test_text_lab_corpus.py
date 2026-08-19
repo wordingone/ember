@@ -50,11 +50,11 @@ class TextLabCorpusTests(unittest.TestCase):
         self.assertRegex(result["heldout_root_sha256"], r"^[0-9a-f]{64}$")
         admitted = validate_admitted_authority_subset(ROOT, result)
         self.assertEqual(admitted["result"], "VERIFIED_ADMITTED_SUBSET")
-        self.assertEqual(admitted["admitted_row_count"], 15)
-        self.assertEqual(admitted["run_manifest_row_count"], 15)
+        self.assertEqual(admitted["admitted_row_count"], 16)
+        self.assertEqual(admitted["run_manifest_row_count"], 16)
         self.assertEqual(
             admitted["admitted_row_set_sha256"],
-            "80e56787d544fa4c1139294f6bf8424e25ccfe998a453649f8a905b9c21102f5",
+            "864ee7dbe1c47fb9a8de9f0ea7a7d66d69ef4896ba6d276eb953686bf68c2ee7",
         )
         corpus = json.loads((ROOT / "data/ember-restart-3b/owned-text-lab-corpus-v4.json").read_bytes())
         dropped = {
