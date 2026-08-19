@@ -192,6 +192,91 @@ def _exit_source_bindings(source_root: Path, source_commit: str) -> dict[str, An
     }
 
 
+def _validate_admitted_authority_subset(
+    text_authority,
+    repo_root: Path,
+    receipt: dict[str, Any],
+    *,
+    index_relative: str,
+    external_authority_root: Path | None,
+    manifest_rows: list[dict[str, Any]] | None,
+) -> dict[str, Any]:
+    if receipt.get("result") not in {
+        "VERIFIED",
+        "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING",
+    }:
+        raise ValueError("text authority validator returned an unknown result")
+
+    root = repo_root.resolve()
+    authority_root = external_authority_root if external_authority_root is not None else None
+    index_path = (
+        text_authority._external_path(authority_root, index_relative)
+        if authority_root is not None
+        else text_authority._path(root, index_relative)
+    )
+    index_bytes = index_path.read_bytes()
+    if text_authority._sha_bytes(index_bytes) != receipt.get("authority_index_sha256"):
+        raise ValueError("text authority index changed during admitted-subset validation")
+    index = json.loads(index_bytes)
+    if index.get("schema_version") != text_authority._AUTHORITY_INDEX_SCHEMA_V2:
+        raise ValueError("R1 admitted-subset authority requires a v2 index")
+    corpus_bytes, corpus = text_authority._bound_json(
+        root,
+        index["corpus"],
+        external_root=authority_root,
+    )
+    if text_authority._sha_bytes(corpus_bytes) != receipt.get("corpus_sha256"):
+        raise ValueError("text authority corpus changed during admitted-subset validation")
+
+    rows = corpus.get("sources")
+    if not isinstance(rows, list):
+        raise ValueError("authority payload is incomplete")
+    admitted_by_id: dict[str, dict[str, Any]] = {}
+    unadmitted_ids: set[str] = set()
+    for row in rows:
+        source_id = row.get("source_id") if isinstance(row, dict) else None
+        if not isinstance(source_id, str):
+            raise ValueError("candidate descriptor is invalid or duplicated")
+        if row.get("admission") == "ADMITTED":
+            admitted_by_id[source_id] = {
+                field: row[field] for field in text_authority._ADMITTED_ROW_FIELDS
+            }
+        else:
+            unadmitted_ids.add(source_id)
+    admitted_rows = sorted(admitted_by_id.values(), key=lambda row: row["source_id"])
+    if not admitted_rows:
+        raise ValueError("R1 admitted-subset authority contains no admitted rows")
+
+    selected = admitted_rows if manifest_rows is None else manifest_rows
+    if not isinstance(selected, list) or not selected:
+        raise ValueError("R1 run manifest rows must be a non-empty list")
+    run_manifest_rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in selected:
+        source_id = row.get("source_id") if isinstance(row, dict) else None
+        if source_id in unadmitted_ids:
+            raise ValueError("R1 run manifest claims unadmitted source")
+        if (
+            not isinstance(source_id, str)
+            or source_id in seen
+            or admitted_by_id.get(source_id) != row
+        ):
+            raise ValueError("R1 run manifest row is outside admitted set")
+        seen.add(source_id)
+        run_manifest_rows.append(row)
+    run_manifest_rows.sort(key=lambda row: row["source_id"])
+    admitted_set_bytes = _canonical_bytes({"rows": admitted_rows})
+
+    return {
+        **{key: value for key, value in receipt.items() if key != "result"},
+        "result": "VERIFIED_ADMITTED_SUBSET",
+        "admitted_row_count": len(admitted_rows),
+        "admitted_row_set_sha256": hashlib.sha256(admitted_set_bytes).hexdigest(),
+        "run_manifest_row_count": len(run_manifest_rows),
+        "run_manifest_rows": run_manifest_rows,
+    }
+
+
 def build_ready_for_compute_packet(
     *,
     source_root: Path,
@@ -211,6 +296,7 @@ def build_ready_for_compute_packet(
     checkpoint_interval: int = 50,
     authority_index_relative: str = TEXT_AUTHORITY_INDEX,
     external_authority_root: Path | None = None,
+    authority_manifest_rows: list[dict[str, Any]] | None = None,
     entry_validator: Callable[..., dict[str, Any]] | None = None,
     authority_validator: Callable[..., dict[str, Any]] | None = None,
     current_master_reader: Callable[[Path], str] | None = None,
@@ -254,18 +340,25 @@ def build_ready_for_compute_packet(
     if not isinstance(source_commit, str):
         raise ValueError("R1 entry source commit is absent")
 
-    if authority_validator is None:
-        text_authority = _load_module(
-            source_root / "tools/ember-restart-3b/text_lab_corpus.py",
-            f"ember_r1_packet_text_authority_{uuid.uuid4().hex}",
-        )
-        authority_validator = text_authority.validate_authority_index
+    text_authority = _load_module(
+        source_root / "tools/ember-restart-3b/text_lab_corpus.py",
+        f"ember_r1_packet_text_authority_{uuid.uuid4().hex}",
+    )
+    validate_authority = authority_validator or text_authority.validate_authority_index
     authority_kwargs: dict[str, Any] = {"index_relative": authority_index_relative}
     if external_authority_root is not None:
         authority_kwargs["external_authority_root"] = external_authority_root
-    authority = authority_validator(launch_repo_root, **authority_kwargs)
-    if authority.get("result") != "VERIFIED":
-        raise ValueError("current text authority is not VERIFIED")
+    authority_receipt = validate_authority(launch_repo_root, **authority_kwargs)
+    authority = _validate_admitted_authority_subset(
+        text_authority,
+        launch_repo_root,
+        authority_receipt,
+        index_relative=authority_index_relative,
+        external_authority_root=external_authority_root,
+        manifest_rows=authority_manifest_rows,
+    )
+    if authority.get("result") != "VERIFIED_ADMITTED_SUBSET":
+        raise ValueError("current text authority admitted subset is not VERIFIED")
 
     certificate_path = _regular_file(certificate_path, "certificate")
     declaration_ledger_path = _regular_file(declaration_ledger_path, "declaration ledger")

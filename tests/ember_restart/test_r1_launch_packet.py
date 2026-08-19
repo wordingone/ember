@@ -77,7 +77,13 @@ def _valid_entry() -> dict[str, object]:
     }
 
 
-def _write_verified_authority(repo: Path) -> Path:
+def _write_verified_authority(
+    repo: Path,
+    *,
+    admitted_count: int = 44,
+    corrupt_admitted_evidence: bool = False,
+    stale_code_identity: bool = False,
+) -> Path:
     data = repo / "data" / "ember-restart-3b"
     data.mkdir(parents=True, exist_ok=True)
     tools = repo / "tools" / "ember-restart-3b"
@@ -128,6 +134,23 @@ def _write_verified_authority(repo: Path) -> Path:
     _write_json(registry_path, registry)
 
     rows = TEXT_SUPPORT._admitted_rows()
+    for offset, row in enumerate(rows):
+        if offset >= admitted_count:
+            rows[offset] = {
+                key: row[key]
+                for key in (
+                    "source_id",
+                    "domain",
+                    "split",
+                    "required_evidence",
+                    "allowed_license_spdx",
+                )
+            } | {"admission": "UNRESOLVED_CANDIDATE"}
+    if corrupt_admitted_evidence:
+        rows[0]["license_evidence"] = {
+            **rows[0]["license_evidence"],
+            "declared_spdx": "MIT",
+        }
     text_module = _load_test_support(
         "tools/ember-restart-3b/text_lab_corpus.py", "r1_packet_authority_writer"
     )
@@ -160,6 +183,9 @@ def _write_verified_authority(repo: Path) -> Path:
     }
     identity_path = data / "owned-text-lab-input-identity-v3.json"
     _write_json(identity_path, identity)
+    if stale_code_identity:
+        with (tools / "train.py").open("ab") as handle:
+            handle.write(b"# stale after identity binding\n")
     _write_json(
         data / "text-lab-frozen-eval-hashes-v1.json",
         {
@@ -192,7 +218,13 @@ def _write_verified_authority(repo: Path) -> Path:
     return index_path
 
 
-def _fixture(tmp_path: Path) -> dict[str, object]:
+def _fixture(
+    tmp_path: Path,
+    *,
+    admitted_count: int = 44,
+    corrupt_admitted_evidence: bool = False,
+    stale_code_identity: bool = False,
+) -> dict[str, object]:
     paths = CERTIFIED_SUPPORT.write_valid_bundle(tmp_path / "bundle")
     CERTIFIED_SUPPORT.rewrite_certificate(
         paths,
@@ -204,7 +236,12 @@ def _fixture(tmp_path: Path) -> dict[str, object]:
     # The current authority validator is exercised against a fully admitted
     # fixture. Its one Git ancestry subprocess is hermetically supplied below;
     # every byte/schema/admission/code-file check remains the production code.
-    authority_index = _write_verified_authority(paths["repo"])
+    authority_index = _write_verified_authority(
+        paths["repo"],
+        admitted_count=admitted_count,
+        corrupt_admitted_evidence=corrupt_admitted_evidence,
+        stale_code_identity=stale_code_identity,
+    )
 
     CERTIFIED_SUPPORT.install_model_config(
         paths["repo"], CERTIFIED_SUPPORT.ARCHITECTURE_REVISION
@@ -256,8 +293,17 @@ def _build(
     telemetry_path: Path | None = None,
     entry=None,
     authority_mutation=None,
+    admitted_count: int = 44,
+    authority_manifest_rows=None,
+    corrupt_admitted_evidence: bool = False,
+    stale_code_identity: bool = False,
 ):
-    fixture = _fixture(tmp_path)
+    fixture = _fixture(
+        tmp_path,
+        admitted_count=admitted_count,
+        corrupt_admitted_evidence=corrupt_admitted_evidence,
+        stale_code_identity=stale_code_identity,
+    )
     text_module = _load_test_support(
         "tools/ember-restart-3b/text_lab_corpus.py",
         f"r1_packet_text_lab_{tmp_path.name}",
@@ -293,6 +339,7 @@ def _build(
         semantic_shards_root=fixture["shards_root"],
         telemetry_path=telemetry_path,
         authority_index_relative="data/ember-restart-3b/text-lab-authority-index-v2.json",
+        authority_manifest_rows=authority_manifest_rows,
         entry_validator=lambda payload, **_: payload,
         authority_validator=validate_authority,
         current_master_reader=lambda _: CERTIFIED_SUPPORT.SHA,
@@ -323,7 +370,7 @@ def test_builds_fixture_packet_reopened_by_real_certified_consumer(tmp_path: Pat
     assert Path(run_spec["semantic_canary_telemetry_path"]).is_relative_to(
         fixture["custody_root"]
     )
-    assert manifest["text_authority"]["result"] == "VERIFIED"
+    assert manifest["text_authority"]["result"] == "VERIFIED_ADMITTED_SUBSET"
     assert set(manifest["exit_source_bindings"]) == {f"E{i}" for i in range(1, 9)}
     assert manifest["dispatch"]["surface_argv"][:2] == ["/train", "--execute"]
     unsigned = {key: value for key, value in manifest.items() if key != "manifest_sha256"}
@@ -375,3 +422,80 @@ def test_refuses_tampered_current_text_authority(tmp_path: Path):
                 sha256="f" * 64
             ),
         )
+
+
+def test_builds_over_verified_admitted_subset_and_freezes_both_hashes(tmp_path: Path):
+    fixture, result = _build(tmp_path, admitted_count=23)
+
+    manifest = json.loads(Path(result["manifest_path"]).read_bytes())
+    authority = manifest["text_authority"]
+    assert authority["result"] == "VERIFIED_ADMITTED_SUBSET"
+    assert authority["admitted_row_count"] == 23
+    assert len(authority["run_manifest_rows"]) == 23
+    assert all(row["source_id"].startswith("candidate-") for row in authority["run_manifest_rows"])
+    assert authority["authority_index_sha256"] == _sha(fixture["authority_index"])
+    expected_rows_sha256 = hashlib.sha256(
+        (
+            json.dumps(
+                {"rows": authority["run_manifest_rows"]},
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            + "\n"
+        ).encode()
+    ).hexdigest()
+    assert authority["admitted_row_set_sha256"] == expected_rows_sha256
+
+
+def test_refuses_run_manifest_claim_for_unadmitted_source(tmp_path: Path):
+    fixture = _fixture(tmp_path, admitted_count=23)
+    corpus = json.loads(
+        (
+            fixture["repo"]
+            / "data"
+            / "ember-restart-3b"
+            / "owned-text-lab-corpus-v3.json"
+        ).read_bytes()
+    )
+    unresolved = next(row for row in corpus["sources"] if row["admission"] != "ADMITTED")
+    claimed = {
+        "source_id": unresolved["source_id"],
+        "domain": unresolved["domain"],
+        "split": unresolved["split"],
+        "license_spdx": "CC-BY-4.0",
+        "content_sha256": "a" * 64,
+        "l4_receipt": {},
+    }
+    with pytest.raises(ValueError, match="claims unadmitted source"):
+        _build(
+            tmp_path / "build",
+            admitted_count=23,
+            authority_manifest_rows=[claimed],
+        )
+
+
+def test_refuses_run_manifest_row_outside_admitted_set(tmp_path: Path):
+    outside = {
+        "source_id": "candidate-unknown-train-0",
+        "domain": "code",
+        "split": "train",
+        "license_spdx": "CC-BY-4.0",
+        "content_sha256": "a" * 64,
+        "l4_receipt": {},
+    }
+    with pytest.raises(ValueError, match="outside admitted set"):
+        _build(
+            tmp_path,
+            admitted_count=23,
+            authority_manifest_rows=[outside],
+        )
+
+
+def test_refuses_admitted_subset_when_an_admitted_row_fails_verification(tmp_path: Path):
+    with pytest.raises(ValueError, match="license evidence"):
+        _build(tmp_path, admitted_count=23, corrupt_admitted_evidence=True)
+
+
+def test_refuses_admitted_subset_with_stale_code_identity(tmp_path: Path):
+    with pytest.raises(ValueError, match="code bytes changed"):
+        _build(tmp_path, admitted_count=23, stale_code_identity=True)
