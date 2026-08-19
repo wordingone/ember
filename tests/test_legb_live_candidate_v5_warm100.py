@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import copy
 import sys
 import types
 from contextlib import nullcontext
@@ -65,7 +66,10 @@ def _write_json(path: Path, payload: object) -> None:
     )
 
 
-def _checkpoint(module, root: Path, *, step: int = 100, tag: bytes = b"a") -> tuple[Path, dict]:
+def _checkpoint(
+    module, root: Path, *, step: int = 100, tag: bytes = b"a",
+    publisher_accounting: bool = False,
+) -> tuple[Path, dict]:
     root.mkdir()
     records = []
     shard_sha = {}
@@ -74,7 +78,12 @@ def _checkpoint(module, root: Path, *, step: int = 100, tag: bytes = b"a") -> tu
         path.write_bytes(tag + bytes([index]))
         digest = _sha(path)
         shard_sha[name] = digest
-        records.append({"path": name, "sha256": digest, "bytes": path.stat().st_size})
+        records.append({
+            "path": name,
+            "sha256": digest,
+            "bytes": path.stat().st_size,
+            "incremental_bytes": path.stat().st_size,
+        })
     cursor = {
         "shard": "semantic-fixture",
         "record_index": step,
@@ -107,6 +116,39 @@ def _checkpoint(module, root: Path, *, step: int = 100, tag: bytes = b"a") -> tu
         "checkpoint_manifest_sha256": _sha(root / "checkpoint-manifest.json"),
         "checkpoint": {"byte_sha256": _sha(root / "checkpoint-manifest.json")},
     }
+    if publisher_accounting:
+        counter_path = root / "parameter-counter-receipt.json"
+        counter_path.write_bytes(b'{"status":"PASS"}\n')
+        metadata = {
+            counter_path.name: {
+                "bytes": counter_path.stat().st_size,
+                "sha256": _sha(counter_path),
+            }
+        }
+        manifest_bytes = (root / "checkpoint-manifest.json").stat().st_size
+        metadata_bytes = counter_path.stat().st_size
+        serialized_bytes = (
+            sum(record["bytes"] for record in records)
+            + manifest_bytes
+            + metadata_bytes
+        )
+        incremental_bytes = (
+            sum(record["incremental_bytes"] for record in records)
+            + manifest_bytes
+            + metadata_bytes
+        )
+        published.update({
+            "metadata": metadata,
+            "serialized_bytes": serialized_bytes,
+            "incremental_publication_bytes": incremental_bytes,
+            "retention_accounting": {
+                "schema_version": "ember-checkpoint-retention-accounting-v1",
+                "live_budget_bytes": 2 * serialized_bytes,
+                "live_charged_bytes": serialized_bytes,
+                "quarantine_budget_bytes": 2 * serialized_bytes,
+                "quarantine_charged_bytes": 0,
+            },
+        })
     return root, published
 
 
@@ -151,6 +193,110 @@ def test_exact_warm100_receipt_reopened_and_boundary_derived(tmp_path: Path) -> 
     assert "tokens_seen=102400" in module.claim_boundary(verified)
     assert "HellaSwag split-alignment" not in module.claim_boundary(verified)
     assert "PENDING_FINAL_CORPUS_CONTAMINATION_SCAN" in module.claim_boundary(verified)
+
+
+def test_current_publisher_accounting_receipt_reopened(tmp_path: Path) -> None:
+    module = _load()
+    checkpoint, published = _checkpoint(
+        module, tmp_path / "warm100", publisher_accounting=True
+    )
+    receipt = tmp_path / "certified-child-result.json"
+    receipt_sha = _run_receipt(receipt, published)
+
+    verified = module.load_verified_warm100_checkpoint(
+        str(checkpoint), str(receipt), receipt_sha
+    )
+
+    assert verified["global_step"] == 100
+    assert verified["tokens_seen"] == 102400
+
+
+def test_checkpoint_writer_three_key_accounting_receipt_reopened(tmp_path: Path) -> None:
+    module = _load()
+    checkpoint, published = _checkpoint(
+        module, tmp_path / "warm100", publisher_accounting=True
+    )
+    del published["retention_accounting"]
+    receipt = tmp_path / "certified-child-result.json"
+    receipt_sha = _run_receipt(receipt, published)
+
+    verified = module.load_verified_warm100_checkpoint(
+        str(checkpoint), str(receipt), receipt_sha
+    )
+
+    assert verified["global_step"] == 100
+
+
+def test_current_publisher_receipt_refuses_fifth_outer_key(tmp_path: Path) -> None:
+    module = _load()
+    checkpoint, published = _checkpoint(
+        module, tmp_path / "warm100", publisher_accounting=True
+    )
+    published["unexpected_accounting"] = 1
+    receipt = tmp_path / "certified-child-result.json"
+    receipt_sha = _run_receipt(receipt, published)
+
+    with pytest.raises(module.LiveCandidateRefusal, match="RUN_RECEIPT_CHECKPOINT_MISMATCH"):
+        module.load_verified_warm100_checkpoint(
+            str(checkpoint), str(receipt), receipt_sha
+        )
+
+
+def test_current_publisher_receipt_refuses_missing_manifest_field(tmp_path: Path) -> None:
+    module = _load()
+    checkpoint, published = _checkpoint(
+        module, tmp_path / "warm100", publisher_accounting=True
+    )
+    del published["launch_seed"]
+    receipt = tmp_path / "certified-child-result.json"
+    receipt_sha = _run_receipt(receipt, published)
+
+    with pytest.raises(module.LiveCandidateRefusal, match="RUN_RECEIPT_CHECKPOINT_MISMATCH"):
+        module.load_verified_warm100_checkpoint(
+            str(checkpoint), str(receipt), receipt_sha
+        )
+
+
+def test_current_publisher_receipt_refuses_partial_accounting_shape(tmp_path: Path) -> None:
+    module = _load()
+    checkpoint, published = _checkpoint(
+        module, tmp_path / "warm100", publisher_accounting=True
+    )
+    del published["serialized_bytes"]
+    receipt = tmp_path / "certified-child-result.json"
+    receipt_sha = _run_receipt(receipt, published)
+
+    with pytest.raises(module.LiveCandidateRefusal, match="RUN_RECEIPT_CHECKPOINT_MISMATCH"):
+        module.load_verified_warm100_checkpoint(
+            str(checkpoint), str(receipt), receipt_sha
+        )
+
+
+@pytest.mark.parametrize(
+    "field,mutate",
+    [
+        ("metadata", lambda value: value["metadata"]["parameter-counter-receipt.json"].update(bytes=999)),
+        ("serialized_bytes", lambda value: value.update(serialized_bytes=value["serialized_bytes"] + 1)),
+        ("incremental_publication_bytes", lambda value: value.update(incremental_publication_bytes=value["incremental_publication_bytes"] + 1)),
+        ("retention_accounting", lambda value: value["retention_accounting"].update(live_charged_bytes=-1)),
+    ],
+)
+def test_current_publisher_receipt_refuses_accounting_value_forgery(
+    tmp_path: Path, field: str, mutate
+) -> None:
+    module = _load()
+    checkpoint, published = _checkpoint(
+        module, tmp_path / "warm100", publisher_accounting=True
+    )
+    forged = copy.deepcopy(published)
+    mutate(forged)
+    receipt = tmp_path / f"forged-{field}.json"
+    receipt_sha = _run_receipt(receipt, forged)
+
+    with pytest.raises(module.LiveCandidateRefusal, match="RUN_RECEIPT_CHECKPOINT_MISMATCH"):
+        module.load_verified_warm100_checkpoint(
+            str(checkpoint), str(receipt), receipt_sha
+        )
 
 
 @pytest.mark.parametrize("failure", ["subscale", "stale", "swap"])
