@@ -38,6 +38,7 @@ from semantic_contract import semantic_model_contract_sha256
 from optimizer_transition import validate_optimizer_transition_registry
 from step2_realization_registry import validate_step2_realization_registry_bundle
 from train import run_launch, run_text_lab_preflight
+from text_lab_corpus import validate_admitted_authority_subset
 from a1_execution import run_dense_a1
 
 # R1-E4 measurement receipt (issue #1464): the two constants the MFU arithmetic
@@ -3828,6 +3829,7 @@ def run_semantic(
     resume_optimizer_transition_registry: Path | None = None,
     resume_optimizer_transition_registry_sha256: str | None = None,
     telemetry_path: Path | None = None, telemetry_run_id: str | None = None,
+    admitted_row_set_sha256: str | None = None,
 ) -> dict[str, object]:
     """Train receipt-bound semantic text through the shared nonlinear language path."""
 
@@ -3837,12 +3839,31 @@ def run_semantic(
         raise ValueError("semantic training telemetry requires telemetry_path and telemetry_run_id together")
     if telemetry_run_id is not None and (not telemetry_run_id or len(telemetry_run_id) > 128):
         raise ValueError("semantic training telemetry run id is invalid")
+    if admitted_row_set_sha256 is not None and re.fullmatch(
+        r"[0-9a-f]{64}", admitted_row_set_sha256
+    ) is None:
+        raise ValueError("admitted row-set hash must be an exact SHA-256")
     # Shared-text authority must be complete before even a CUDA availability probe.
-    text_lab_preflight = run_text_lab_preflight(repo_root=Path(__file__).resolve().parents[2])
-    if text_lab_preflight.get("result") != "VERIFIED":
-        raise ValueError(str(text_lab_preflight.get("result", "text-lab authority was not admitted")))
-    artifact_root = production_artifact_root(artifact_root)
     root = Path(__file__).resolve().parents[2]
+    text_lab_preflight = run_text_lab_preflight(repo_root=root)
+    if text_lab_preflight.get("result") != "VERIFIED":
+        if (
+            admitted_row_set_sha256 is None
+            or text_lab_preflight.get("result")
+            != "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING"
+        ):
+            raise ValueError(str(text_lab_preflight.get("result", "text-lab authority was not admitted")))
+        admitted_subset = validate_admitted_authority_subset(
+            root,
+            text_lab_preflight,
+        )
+        if (
+            admitted_subset.get("result") != "VERIFIED_ADMITTED_SUBSET"
+            or admitted_subset.get("admitted_row_set_sha256")
+            != admitted_row_set_sha256
+        ):
+            raise ValueError("runtime admitted row-set hash does not match certified pin")
+    artifact_root = production_artifact_root(artifact_root)
     config_path = root / "configs" / "ember-restart-3b.json"
     integration_contract_path = root / "docs" / "ember-restart" / "integration-contract-v1.md"
     if not integration_contract_path.is_file():
@@ -4111,6 +4132,7 @@ def main() -> None:
     semantic.add_argument("--expected-receipt-sha256", required=True)
     semantic.add_argument("--expected-tokenizer-sha256", required=True)
     semantic.add_argument("--expected-architecture-sha256", required=True)
+    semantic.add_argument("--admitted-row-set-sha256")
     semantic.add_argument("--steps", type=int, required=True)
     semantic.add_argument("--sequence-length", type=int, required=True)
     semantic.add_argument("--checkpoint-interval", type=int, required=True)
@@ -4179,6 +4201,7 @@ def main() -> None:
             expected_receipt_sha256=args.expected_receipt_sha256,
             expected_tokenizer_sha256=args.expected_tokenizer_sha256,
             expected_architecture_sha256=args.expected_architecture_sha256,
+            admitted_row_set_sha256=args.admitted_row_set_sha256,
             steps=args.steps,
             sequence_length=args.sequence_length,
             checkpoint_interval=args.checkpoint_interval,

@@ -19,8 +19,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "tools" / "ember-restart-3b" / "remint_text_lab_input_identity.py"
-IDENTITY_REL = Path("data/ember-restart-3b/owned-text-lab-input-identity-v2.json")
-INDEX_REL = Path("data/ember-restart-3b/text-lab-authority-index-v1.json")
+IDENTITY_REL = Path("data/ember-restart-3b/owned-text-lab-input-identity-v4.json")
+INDEX_REL = Path("data/ember-restart-3b/text-lab-authority-index-v2.json")
 
 
 def sha(data: bytes) -> str:
@@ -87,7 +87,21 @@ class RemintTextLabInputIdentityTests(unittest.TestCase):
                 cwd=root, capture_output=True, text=True,
             )
             self.assertEqual(check.returncode, 1)
-            self.assertIn("authority-index-v1", check.stdout)
+        self.assertIn("authority-index-v2", check.stdout)
+
+    def test_check_refuses_wrong_authority_index_schema(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._sandbox(Path(tmp))
+            index_path = root / INDEX_REL
+            index = json.loads(index_path.read_bytes())
+            index["schema_version"] = "ember-text-lab-authority-index-v1"
+            index_path.write_bytes(json.dumps(index).encode("utf-8"))
+            check = subprocess.run(
+                [sys.executable, "-B", str(root / "tools/ember-restart-3b/remint_text_lab_input_identity.py"), "--check"],
+                cwd=root, capture_output=True, text=True,
+            )
+            self.assertEqual(check.returncode, 2)
+            self.assertIn("schema_version is invalid", check.stdout)
 
     def test_write_cures_the_drift_and_check_then_passes(self):
         with tempfile.TemporaryDirectory() as tmp:

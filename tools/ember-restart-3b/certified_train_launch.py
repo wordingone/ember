@@ -196,6 +196,7 @@ SEMANTIC_CANARY_LAUNCH_RUN_SPEC_KEYS = {
     "semantic_canary_sequence_length",
     "semantic_canary_checkpoint_interval",
     "semantic_canary_telemetry_path",
+    "admitted_row_set_sha256",
 }
 # Closed enumeration (same discipline TRAINING_CAPABILITIES uses): the only
 # defined canary shape today is the prereg's T-01 WARM-100 rung. A second
@@ -278,6 +279,7 @@ OPTIONAL_AUTHORIZED_SCOPE_KEYS = {
     "allowed_training_capabilities",
     "resume_relocation_custody_root",
     "allowed_semantic_canary_modes",
+    "allowed_admitted_row_set_sha256",
     "allowed_a1_families",
 }
 REQUESTED_SCOPE_KEYS = {
@@ -423,6 +425,7 @@ class ValidatedLaunch(NamedTuple):
     semantic_canary_write_budget_gib: int | None = None
     semantic_canary_telemetry_path: pathlib.Path | None = None
     semantic_canary_telemetry_run_id: str | None = None
+    admitted_row_set_sha256: str | None = None
     # Exact authority inputs validated for this launch. Failed-attempt
     # retention keeps these at the live run root so a retry can be
     # revalidated against the same certificate/ledger/spec bytes.
@@ -1555,6 +1558,7 @@ class SemanticCanaryRequest(NamedTuple):
     write_budget_gib: int
     telemetry_path: pathlib.Path
     telemetry_run_id: str
+    admitted_row_set_sha256: str
 
 
 def _authorized_semantic_canary_modes(
@@ -1598,6 +1602,35 @@ def _require_authorized_semantic_canary_mode(
         )
     if mode not in authorized_modes:
         raise ValueError("run scope exceeds certificate: semantic_canary_mode")
+
+
+def _authorized_admitted_row_set_sha256(
+    authorized: dict[str, Any],
+) -> str | None:
+    declared = authorized.get("allowed_admitted_row_set_sha256")
+    if declared is None:
+        return None
+    if not isinstance(declared, str) or _SHA256_RE.fullmatch(declared) is None:
+        raise ValueError(
+            "certificate allowed_admitted_row_set_sha256 must be an exact SHA-256"
+        )
+    return declared
+
+
+def _require_authorized_admitted_row_set_sha256(
+    requested: str, authorized: str | None
+) -> str:
+    if not isinstance(requested, str) or _SHA256_RE.fullmatch(requested) is None:
+        raise ValueError("run spec admitted_row_set_sha256 must be an exact SHA-256")
+    if authorized is None:
+        raise ValueError(
+            "certificate declares no allowed_admitted_row_set_sha256"
+        )
+    if requested != authorized:
+        raise ValueError(
+            "run scope exceeds certificate: admitted_row_set_sha256"
+        )
+    return requested
 
 
 def _authorized_a1_families(authorized: dict[str, Any]) -> set[str] | None:
@@ -1895,6 +1928,7 @@ def _validate_semantic_canary_request(
     write_budget_bytes: int,
     optimizer_steps: int,
     authorized_semantic_canary_modes: set[str] | None,
+    authorized_admitted_row_set_sha256: str | None,
 ) -> SemanticCanaryRequest | None:
     """Validate the optional semantic-canary route, fail-closed, before any argv exists.
 
@@ -1960,6 +1994,10 @@ def _validate_semantic_canary_request(
     # may train (mirrors _require_authorized_training_capability's ordering
     # and its issue #1430 review rationale exactly).
     _require_authorized_semantic_canary_mode(mode, authorized_semantic_canary_modes)
+    admitted_row_set_sha256 = _require_authorized_admitted_row_set_sha256(
+        run_spec["admitted_row_set_sha256"],
+        authorized_admitted_row_set_sha256,
+    )
 
     # Clean-random genesis only -- see docstring. Checked as early as
     # possible, before any path on the run spec is opened, same discipline
@@ -2115,6 +2153,7 @@ def _validate_semantic_canary_request(
         write_budget_gib=write_budget_gib,
         telemetry_path=telemetry_path,
         telemetry_run_id=run_id,
+        admitted_row_set_sha256=admitted_row_set_sha256,
     )
 
 
@@ -2692,6 +2731,7 @@ def validate_certified_request(
         int(requested_scope["write_budget_bytes"]),
         requested_optimizer_steps,
         _authorized_semantic_canary_modes(authorized_scope),
+        _authorized_admitted_row_set_sha256(authorized_scope),
     )
     a1 = _validate_a1_request(
         run_spec,
@@ -2855,6 +2895,9 @@ def validate_certified_request(
         ),
         semantic_canary_telemetry_run_id=(
             None if semantic_canary is None else semantic_canary.telemetry_run_id
+        ),
+        admitted_row_set_sha256=(
+            None if semantic_canary is None else semantic_canary.admitted_row_set_sha256
         ),
         a1_family=None if a1 is None else a1.family,
         a1_tier=None if a1 is None else a1.tier,
@@ -3020,6 +3063,8 @@ def build_runner_argv(
             launch.semantic_canary_expected_tokenizer_sha256,
             "--expected-architecture-sha256",
             launch.semantic_canary_expected_architecture_sha256,
+            "--admitted-row-set-sha256",
+            launch.admitted_row_set_sha256,
             "--steps",
             str(launch.semantic_canary_steps),
             "--sequence-length",
