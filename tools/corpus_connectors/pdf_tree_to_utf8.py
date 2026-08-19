@@ -186,6 +186,12 @@ def _require_outside_custody(path: Path, custody_root: Path, label: str) -> None
 
 def _canonical_license(value: Any) -> str:
     if value in {
+        "CC0-1.0",
+        "http://creativecommons.org/publicdomain/zero/1.0/",
+        "https://creativecommons.org/publicdomain/zero/1.0/",
+    }:
+        return "CC0-1.0"
+    if value in {
         "CC-BY-4.0",
         "http://creativecommons.org/licenses/by/4.0/",
         "https://creativecommons.org/licenses/by/4.0/",
