@@ -545,6 +545,57 @@ print(json.dumps({
     return manifest_path
 
 
+def _genesis_manifest(tmp_path: Path) -> Path:
+    """Convert the real on-disk trained fixture shape into the additive genesis class.
+
+    The checkpoint, expert shards, independently trusted counter, and custody
+    inputs remain physical files.  Only the claim envelope changes; PR2 will
+    replace this fixture author with the production zero-step materializer.
+    """
+    manifest_path = _candidate_manifest(tmp_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    checkpoint_path = tmp_path / manifest["checkpoint"]["manifest_path"]
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    boundary = {
+        "schema_version": "ember-genesis-claim-boundary-v1",
+        "global_step": 0,
+        "tokens_seen": 0,
+        "optimizer_steps": 0,
+        "training_executed": False,
+        "observed_training": False,
+        "positive_modality_exposure": False,
+        "evaluation_eligible": False,
+        "trained_authority": False,
+        "sufficiency": False,
+        "capability": False,
+        "benchmark": False,
+    }
+    checkpoint["schema_version"] = "ember-sparse-checkpoint-v5"
+    checkpoint["data_cursor"] = {
+        "shard": "GENESIS",
+        "record_index": 0,
+        "global_step": 0,
+        "tokens_seen": 0,
+    }
+    checkpoint["genesis_claim_boundary"] = boundary
+    checkpoint_sha256 = _write_json(checkpoint_path, checkpoint)
+    parameter_receipt_path = tmp_path / manifest["architecture"]["parameter_receipt"]["path"]
+    parameter_receipt = json.loads(parameter_receipt_path.read_text(encoding="utf-8"))
+    parameter_receipt["subject_checkpoint_sha256"] = checkpoint_sha256
+    manifest["architecture"]["parameter_receipt"]["sha256"] = _write_json(
+        parameter_receipt_path, parameter_receipt
+    )
+    manifest["schema_version"] = "ember-owned-genesis-v1"
+    manifest["stage"] = "GENESIS_CANDIDATE"
+    manifest["checkpoint"]["sha256"] = checkpoint_sha256
+    manifest.pop("tokenizer")
+    manifest.pop("training_data")
+    manifest.pop("training")
+    manifest["genesis_claim_boundary"] = boundary
+    _write_json(manifest_path, manifest)
+    return manifest_path
+
+
 def _register_checkpoint_custody(tmp_path: Path) -> Path:
     """Issue #1721: contract.py's checkpoint admission now runs the real
     `ember-lab custody-verify` gate over `_candidate_manifest`'s checkpoint
@@ -618,6 +669,200 @@ def test_checkpoint_candidate_binds_owned_multimodal_reasoning_tool_path(tmp_pat
     payload = json.loads(result.stdout)
     assert payload["valid"] is True
     assert payload["stage"] == "CHECKPOINT_CANDIDATE"
+
+
+def test_genesis_candidate_is_zero_step_entry_only_and_uses_real_checkpoint_bytes(tmp_path: Path):
+    from scripts.ember_restart import contract
+
+    manifest_path = _genesis_manifest(tmp_path)
+    custody_db = _register_checkpoint_custody(tmp_path)
+    result = contract.validate_manifest(
+        manifest_path,
+        tmp_path / "trusted-verifiers.json",
+        custody_db=custody_db,
+    )
+
+    assert result == {"valid": True, "stage": "GENESIS_CANDIDATE", "errors": []}
+
+
+@pytest.mark.parametrize("field", ["global_step", "tokens_seen", "optimizer_steps"])
+def test_genesis_candidate_refuses_any_post_init_counter(tmp_path: Path, field: str):
+    from scripts.ember_restart import contract
+
+    manifest_path = _genesis_manifest(tmp_path)
+    custody_db = _register_checkpoint_custody(tmp_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["genesis_claim_boundary"][field] = 1
+    _write_json(manifest_path, manifest)
+
+    result = contract.validate_manifest(
+        manifest_path,
+        tmp_path / "trusted-verifiers.json",
+        custody_db=custody_db,
+    )
+    assert result["valid"] is False
+    assert "genesis_claim_boundary: exact zero-step entry-only boundary required" in result["errors"]
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "training_executed",
+        "observed_training",
+        "positive_modality_exposure",
+        "evaluation_eligible",
+        "trained_authority",
+        "sufficiency",
+        "capability",
+        "benchmark",
+    ],
+)
+def test_genesis_candidate_refuses_widened_claim_boundary(tmp_path: Path, field: str):
+    from scripts.ember_restart import contract
+
+    manifest_path = _genesis_manifest(tmp_path)
+    custody_db = _register_checkpoint_custody(tmp_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["genesis_claim_boundary"][field] = True
+    _write_json(manifest_path, manifest)
+
+    result = contract.validate_manifest(
+        manifest_path,
+        tmp_path / "trusted-verifiers.json",
+        custody_db=custody_db,
+    )
+    assert result["valid"] is False
+    assert "genesis_claim_boundary: exact zero-step entry-only boundary required" in result["errors"]
+
+
+@pytest.mark.parametrize("field", ["training", "training_data", "admission", "evaluations", "serving"])
+def test_genesis_candidate_refuses_every_post_training_surface(tmp_path: Path, field: str):
+    from scripts.ember_restart import contract
+
+    manifest_path = _genesis_manifest(tmp_path)
+    custody_db = _register_checkpoint_custody(tmp_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest[field] = {} if field != "training_data" else []
+    _write_json(manifest_path, manifest)
+
+    result = contract.validate_manifest(
+        manifest_path,
+        tmp_path / "trusted-verifiers.json",
+        custody_db=custody_db,
+    )
+    assert result["valid"] is False
+    assert "genesis manifest: closed schema keys required" in result["errors"]
+
+
+def test_trained_schema_cannot_claim_genesis_stage(tmp_path: Path):
+    from scripts.ember_restart import contract
+
+    manifest_path = _candidate_manifest(tmp_path)
+    custody_db = _register_checkpoint_custody(tmp_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["stage"] = "GENESIS_CANDIDATE"
+    _write_json(manifest_path, manifest)
+
+    result = contract.validate_manifest(
+        manifest_path,
+        tmp_path / "trusted-verifiers.json",
+        custody_db=custody_db,
+    )
+    assert result["valid"] is False
+    assert "stage: must equal CHECKPOINT_CANDIDATE or OWNED_ADMITTED" in result["errors"]
+
+
+def test_genesis_schema_cannot_claim_trained_stage(tmp_path: Path):
+    from scripts.ember_restart import contract
+
+    manifest_path = _genesis_manifest(tmp_path)
+    custody_db = _register_checkpoint_custody(tmp_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["stage"] = "CHECKPOINT_CANDIDATE"
+    _write_json(manifest_path, manifest)
+
+    result = contract.validate_manifest(
+        manifest_path,
+        tmp_path / "trusted-verifiers.json",
+        custody_db=custody_db,
+    )
+    assert result["valid"] is False
+    assert "stage: must equal GENESIS_CANDIDATE" in result["errors"]
+
+
+def test_genesis_checkpoint_cursor_and_boundary_must_match_outer_claim(tmp_path: Path):
+    from scripts.ember_restart import contract
+
+    manifest_path = _genesis_manifest(tmp_path)
+    custody_db = _register_checkpoint_custody(tmp_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    checkpoint_path = tmp_path / manifest["checkpoint"]["manifest_path"]
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint["data_cursor"]["global_step"] = 1
+    checkpoint_sha256 = _write_json(checkpoint_path, checkpoint)
+    manifest["checkpoint"]["sha256"] = checkpoint_sha256
+    parameter_receipt_path = tmp_path / manifest["architecture"]["parameter_receipt"]["path"]
+    parameter_receipt = json.loads(parameter_receipt_path.read_text(encoding="utf-8"))
+    parameter_receipt["subject_checkpoint_sha256"] = checkpoint_sha256
+    manifest["architecture"]["parameter_receipt"]["sha256"] = _write_json(
+        parameter_receipt_path, parameter_receipt
+    )
+    _write_json(manifest_path, manifest)
+
+    result = contract.validate_manifest(
+        manifest_path,
+        tmp_path / "trusted-verifiers.json",
+        custody_db=custody_db,
+    )
+    assert result["valid"] is False
+    assert "genesis checkpoint: exact zero cursor required" in result["errors"]
+
+
+def test_r1_entry_mints_from_actual_on_disk_genesis_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    from scripts.ember_restart import contract
+
+    manifest_path = _genesis_manifest(tmp_path)
+    custody_db = _register_checkpoint_custody(tmp_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["source_commit"] = _current_source_commit()
+    _write_json(manifest_path, manifest)
+
+    source_binding = {"test_seam": "same-process physical genesis consumer"}
+    monkeypatch.setattr(contract, "_current_source_commit", lambda _root: manifest["source_commit"])
+    monkeypatch.setattr(contract, "_require_clean_source_tree", lambda _root: None)
+    monkeypatch.setattr(
+        contract,
+        "_git_blob_sha256",
+        lambda root, _commit, relative: _sha256(Path(root) / relative),
+    )
+    monkeypatch.setattr(
+        contract.source_authority,
+        "bind_source_identity",
+        lambda *_args, **_kwargs: source_binding,
+    )
+
+    payload = contract.build_r1_warm100_entry(
+        manifest_path,
+        source_commit=manifest["source_commit"],
+        source_root=REPO_ROOT,
+        prereg_path=REPO_ROOT / "docs/spec/ember02-preregistration-v1.md",
+        config_path=REPO_ROOT / "configs/ember-restart-3b.json",
+        fixed_prior_path=REPO_ROOT / "manifests/ember-restart-3b/fixed-prior-manifest-v1.json",
+        trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
+        custody_db=custody_db,
+    )
+
+    assert payload["manifest_stage"] == "GENESIS_CANDIDATE"
+    assert payload["result"] == "PREP_ONLY"
+    assert payload["claim_boundary"] == {
+        "steps": 100,
+        "execution": False,
+        "sufficiency": False,
+        "capability": False,
+        "benchmark": False,
+    }
 
 
 def test_git_authority_probe_hides_windows_console(monkeypatch: pytest.MonkeyPatch):
