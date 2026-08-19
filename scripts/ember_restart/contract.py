@@ -31,6 +31,32 @@ except ImportError:  # Direct execution: python scripts/ember_restart/contract.p
 
 
 SCHEMA_VERSION = "ember-owned-rung-v1"
+GENESIS_SCHEMA_VERSION = "ember-owned-genesis-v1"
+GENESIS_STAGE = "GENESIS_CANDIDATE"
+GENESIS_MANIFEST_KEYS = {
+    "schema_version",
+    "stage",
+    "run_id",
+    "source_commit",
+    "lineage",
+    "architecture",
+    "checkpoint",
+    "genesis_claim_boundary",
+}
+GENESIS_CLAIM_BOUNDARY = {
+    "schema_version": "ember-genesis-claim-boundary-v1",
+    "global_step": 0,
+    "tokens_seen": 0,
+    "optimizer_steps": 0,
+    "training_executed": False,
+    "observed_training": False,
+    "positive_modality_exposure": False,
+    "evaluation_eligible": False,
+    "trained_authority": False,
+    "sufficiency": False,
+    "capability": False,
+    "benchmark": False,
+}
 PARAMETER_FLOOR = 3_000_000_000
 CAPABILITIES = ("text", "image", "audio", "reasoning", "tool")
 SEMANTIC_CHECKS = {
@@ -302,8 +328,8 @@ def validate_r1_warm100_entry(
         raise ValueError("R1 WARM-100 entry: entry/steps mismatch")
     if payload.get("result") != "PREP_ONLY":
         raise ValueError("R1 WARM-100 entry: only PREP_ONLY is valid before execution")
-    if payload.get("manifest_stage") != "CHECKPOINT_CANDIDATE":
-        raise ValueError("R1 WARM-100 entry: candidate stage required")
+    if payload.get("manifest_stage") not in {"CHECKPOINT_CANDIDATE", GENESIS_STAGE}:
+        raise ValueError("R1 WARM-100 entry: trained or genesis candidate stage required")
     if not isinstance(payload.get("run_id"), str) or not payload["run_id"].strip():
         raise ValueError("R1 WARM-100 entry: run_id is required")
     for field in ("manifest_sha256", "prereg_sha256", "config_sha256", "fixed_prior_manifest_sha256"):
@@ -2191,6 +2217,63 @@ def _load_trusted_verifier_registry_approval(path: Path | None) -> str | None:
         raise ValueError("trusted_verifier_registry_approval: expected lowercase SHA-256")
     return registry_sha256
 
+
+def _verify_genesis_claim_boundary(
+    root: Path,
+    manifest: dict[str, Any],
+    errors: list[str],
+) -> None:
+    """Keep zero-step genesis distinct from every trained/admitted claim surface.
+
+    The clean-genesis prerequisite in preregistration is an initializer identity,
+    not observed training.  Its outer manifest and checkpoint both carry the same
+    closed false-claim boundary so a post-step cursor, optimizer-step assertion,
+    training/evaluation payload, or open-ended extra field cannot be relabeled as
+    entry authority.
+    """
+
+    if set(manifest) != GENESIS_MANIFEST_KEYS:
+        errors.append("genesis manifest: closed schema keys required")
+    boundary = manifest.get("genesis_claim_boundary")
+    if boundary != GENESIS_CLAIM_BOUNDARY:
+        errors.append(
+            "genesis_claim_boundary: exact zero-step entry-only boundary required"
+        )
+
+    checkpoint = manifest.get("checkpoint")
+    checkpoint_path = (
+        _artifact(
+            root,
+            checkpoint.get("manifest_path"),
+            "genesis checkpoint.manifest_path",
+            errors,
+        )
+        if isinstance(checkpoint, dict)
+        else None
+    )
+    if checkpoint_path is None:
+        return
+    try:
+        checkpoint_payload = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        errors.append(f"genesis checkpoint: invalid JSON: {exc}")
+        return
+    if not isinstance(checkpoint_payload, dict):
+        errors.append("genesis checkpoint: expected object")
+        return
+    if checkpoint_payload.get("schema_version") != "ember-sparse-checkpoint-v5":
+        errors.append("genesis checkpoint: sparse checkpoint v5 required")
+    cursor = checkpoint_payload.get("data_cursor")
+    if cursor != {
+        "shard": "GENESIS",
+        "record_index": 0,
+        "global_step": 0,
+        "tokens_seen": 0,
+    }:
+        errors.append("genesis checkpoint: exact zero cursor required")
+    if checkpoint_payload.get("genesis_claim_boundary") != boundary:
+        errors.append("genesis checkpoint: claim boundary mismatch")
+
 def validate_manifest(
     path: Path,
     trusted_verifier_registry: Path | None = None,
@@ -2205,10 +2288,14 @@ def validate_manifest(
         return {"valid": False, "stage": None, "errors": [f"manifest: {exc}"]}
     if not isinstance(manifest, dict):
         return {"valid": False, "stage": None, "errors": ["manifest: expected object"]}
-    if manifest.get("schema_version") != SCHEMA_VERSION:
+    is_genesis = manifest.get("schema_version") == GENESIS_SCHEMA_VERSION
+    if not is_genesis and manifest.get("schema_version") != SCHEMA_VERSION:
         errors.append(f"schema_version: must equal {SCHEMA_VERSION}")
     stage = manifest.get("stage")
-    if stage not in {"CHECKPOINT_CANDIDATE", "OWNED_ADMITTED"}:
+    if is_genesis:
+        if stage != GENESIS_STAGE:
+            errors.append(f"stage: must equal {GENESIS_STAGE}")
+    elif stage not in {"CHECKPOINT_CANDIDATE", "OWNED_ADMITTED"}:
         errors.append("stage: must equal CHECKPOINT_CANDIDATE or OWNED_ADMITTED")
     if not isinstance(manifest.get("run_id"), str) or not manifest["run_id"].strip():
         errors.append("run_id: must be non-empty")
@@ -2221,8 +2308,11 @@ def validate_manifest(
     trusted_verifiers = _load_trusted_verifiers(trusted_verifier_registry, errors, expected_trusted_verifier_registry_sha256)
     _verify_lineage(manifest, errors)
     _verify_architecture(root, manifest, trusted_verifiers, errors)
-    _verify_data(root, manifest, trusted_verifiers, errors)
-    _verify_training(root, manifest, errors)
+    if is_genesis:
+        _verify_genesis_claim_boundary(root, manifest, errors)
+    else:
+        _verify_data(root, manifest, trusted_verifiers, errors)
+        _verify_training(root, manifest, errors)
     _verify_checkpoint(root, manifest, errors, custody_db=custody_db)
     if stage == "OWNED_ADMITTED":
         training = manifest.get("training")
