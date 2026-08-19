@@ -30,6 +30,15 @@ def source(domain: str, n: int) -> dict[str, object]:
     return {"source_id": f"{domain}-{n}", "domain": domain, "license_spdx": "CC-BY-4.0", "content_sha256": content_sha, "l4_receipt": {"schema_version":"ember-text-source-receipt-v2","result":"VERIFIED","source_sha256":content_sha,"generator":"local-normalizer-v1","verifier":"local-license-provenance-v1","model_mediated":False,"borrowed_labels":False,"license_spdx":"CC-BY-4.0","evidence_sha256":evidence_sha256}, "split":"train" if n == 0 else "heldout"}
 
 class TextLabCorpusTests(unittest.TestCase):
+    def test_connector_operational_logs_are_not_payload(self):
+        from text_lab_corpus import _listed_data_paths
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "payload.txt").write_bytes(b"payload")
+            (root / "_logs").mkdir()
+            (root / "_logs" / "connector.log").write_bytes(b"operational")
+            self.assertEqual(_listed_data_paths(root), {"payload.txt"})
+
     def test_checked_in_authority_returns_terminal_unresolved_refusal_after_full_validation(self):
         from text_lab_corpus import validate_authority_index
         result = validate_authority_index(ROOT)

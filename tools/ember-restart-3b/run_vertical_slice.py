@@ -13,6 +13,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import stat
 import subprocess
 import sys
@@ -48,6 +49,30 @@ from a1_execution import run_dense_a1
 _E4_ACTIVE_PARAMETERS = 1_725_232_640
 _E4_ASSUMED_PEAK_FLOPS = 165.2e12
 
+_GENESIS_INVENTORY_SCHEMA = "ember-genesis-inventory-v1"
+_GENESIS_INVENTORY_KEYS = {
+    "schema_version", "launch_seed", "active_expert", "model_config",
+    "parameter_counter", "shards",
+}
+_GENESIS_SHARD_NAMES = {
+    "shared-model.pt", "optimizer-state.pt", "replay-state.pt",
+    "expert-vision.pt", "expert-audio.pt", "expert-reasoning.pt", "expert-tool.pt",
+}
+_GENESIS_CLAIM_BOUNDARY = {
+    "schema_version": "ember-genesis-claim-boundary-v1",
+    "global_step": 0,
+    "tokens_seen": 0,
+    "optimizer_steps": 0,
+    "training_executed": False,
+    "observed_training": False,
+    "positive_modality_exposure": False,
+    "evaluation_eligible": False,
+    "trained_authority": False,
+    "sufficiency": False,
+    "capability": False,
+    "benchmark": False,
+}
+
 
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
@@ -55,6 +80,270 @@ def _sha256(path: Path) -> str:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _genesis_relative_file(root: Path, value: object, *, label: str) -> tuple[Path, str]:
+    if not isinstance(value, str) or not value or "\\" in value:
+        raise ValueError(f"{label} must be a closed relative POSIX path")
+    relative = PurePosixPath(value)
+    if relative.is_absolute() or any(part in {"", ".", ".."} for part in relative.parts):
+        raise ValueError(f"{label} must be a closed relative POSIX path")
+    path = root.joinpath(*relative.parts)
+    try:
+        info = path.lstat()
+    except OSError as error:
+        raise ValueError(f"{label} is absent") from error
+    reparse = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    if stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_file_attributes", 0) & reparse):
+        raise ValueError(f"{label} must not be a symlink or reparse point")
+    if not stat.S_ISREG(info.st_mode):
+        raise ValueError(f"{label} must be a regular file")
+    try:
+        path.resolve(strict=True).relative_to(root.resolve(strict=True))
+    except (OSError, ValueError) as error:
+        raise ValueError(f"{label} escapes the inventory root") from error
+    return path, relative.as_posix()
+
+
+def _genesis_bound_file(root: Path, record: object, *, label: str) -> tuple[Path, str]:
+    if not isinstance(record, Mapping) or set(record) != {"path", "sha256"}:
+        raise ValueError(f"{label} has a closed schema violation")
+    path, relative = _genesis_relative_file(root, record.get("path"), label=f"{label}.path")
+    digest = record.get("sha256")
+    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise ValueError(f"{label}.sha256 is invalid")
+    if _sha256(path) != digest:
+        raise ValueError(f"{label}.sha256 does not match bytes")
+    return path, relative
+
+
+def _copy_genesis_file(source: Path, target: Path) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with source.open("rb") as reader, target.open("xb") as writer:
+        shutil.copyfileobj(reader, writer, length=1024 * 1024)
+        writer.flush()
+        os.fsync(writer.fileno())
+
+
+def _genesis_json(path: Path, payload: Mapping[str, object]) -> None:
+    atomic_create_durable(
+        path,
+        (json.dumps(dict(payload), sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"),
+    )
+
+
+def mint_genesis_candidate(
+    *, inventory_path: Path, output_root: Path, source_commit: str, run_id: str,
+) -> dict[str, object]:
+    """Mint one immutable zero-step candidate from a closed physical inventory.
+
+    This is initialization publication only.  It neither constructs an optimizer
+    nor exposes any resume, step, training, evaluation, or sufficiency surface.
+    """
+
+    if not isinstance(source_commit, str) or re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
+        raise ValueError("source_commit must be a lowercase 40-character Git SHA")
+    if not isinstance(run_id, str) or not run_id.strip():
+        raise ValueError("run_id must be non-empty")
+    inventory_path = Path(inventory_path).resolve(strict=True)
+    inventory_root = inventory_path.parent
+    try:
+        inventory = json.loads(inventory_path.read_bytes())
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError("genesis inventory is unreadable") from error
+    if not isinstance(inventory, dict) or set(inventory) != _GENESIS_INVENTORY_KEYS:
+        raise ValueError("genesis inventory has a closed schema violation")
+    if inventory.get("schema_version") != _GENESIS_INVENTORY_SCHEMA:
+        raise ValueError("genesis inventory schema is unsupported")
+    if type(inventory.get("launch_seed")) is not int or inventory["launch_seed"] < 0:
+        raise ValueError("genesis inventory launch_seed must be nonnegative")
+    if inventory.get("active_expert") != "shared":
+        raise ValueError("genesis inventory must use the shared initialization route")
+
+    config_source, _ = _genesis_bound_file(
+        inventory_root, inventory.get("model_config"), label="genesis model_config"
+    )
+    counter_source, _ = _genesis_bound_file(
+        inventory_root, inventory.get("parameter_counter"), label="genesis parameter_counter"
+    )
+    shard_records = inventory.get("shards")
+    if not isinstance(shard_records, list):
+        raise ValueError("genesis inventory has a closed shard inventory violation")
+    sources: dict[str, tuple[Path, dict[str, object]]] = {}
+    for record in shard_records:
+        if not isinstance(record, dict) or set(record) != {"path", "sha256", "bytes"}:
+            raise ValueError("genesis inventory has a closed shard inventory violation")
+        source, relative = _genesis_relative_file(
+            inventory_root, record.get("path"), label="genesis shard.path"
+        )
+        name = PurePosixPath(relative).name
+        if PurePosixPath(relative).parent.as_posix() != "checkpoint" or name in sources:
+            raise ValueError("genesis inventory has a closed shard inventory violation")
+        digest, size = record.get("sha256"), record.get("bytes")
+        if (
+            not isinstance(digest, str)
+            or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+            or type(size) is not int
+            or size < 0
+            or source.stat().st_size != size
+            or _sha256(source) != digest
+        ):
+            raise ValueError("genesis shard bytes do not match their inventory")
+        sources[name] = (source, dict(record))
+    if set(sources) != _GENESIS_SHARD_NAMES:
+        raise ValueError("genesis inventory has a closed shard inventory violation")
+    actual_shards = {
+        child.name
+        for child in (inventory_root / "checkpoint").iterdir()
+        if child.is_file()
+    }
+    if actual_shards != _GENESIS_SHARD_NAMES:
+        raise ValueError("genesis inventory contains a foreign shard")
+
+    output_root = Path(output_root).resolve()
+    output_root.parent.mkdir(parents=True, exist_ok=True)
+    if os.path.lexists(str(output_root)):
+        raise FileExistsError(output_root)
+    staging = output_root.parent / f".{output_root.name}.staging-{os.getpid()}-{uuid.uuid4().hex}"
+    staging.mkdir()
+    try:
+        config_target = staging / "configs" / "ember-restart-3b.json"
+        counter_target = staging / "counter" / "parameter_counter.py"
+        _copy_genesis_file(config_source, config_target)
+        _copy_genesis_file(counter_source, counter_target)
+        candidate_shards: list[dict[str, object]] = []
+        for name in sorted(sources):
+            source, record = sources[name]
+            target = staging / "checkpoint" / name
+            _copy_genesis_file(source, target)
+            candidate_shards.append(
+                {"path": f"checkpoint/{name}", "sha256": record["sha256"], "bytes": record["bytes"]}
+            )
+        expert_genesis = {
+            name: str(sources[f"expert-{name}.pt"][1]["sha256"])
+            for name in ("vision", "audio", "reasoning", "tool")
+        }
+        checkpoint = {
+            "schema_version": "ember-sparse-checkpoint-v5",
+            "contract_version": 5,
+            "architecture_revision": "ember-sparse-3b-v2",
+            "launch_seed": inventory["launch_seed"],
+            "data_cursor": {"shard": "GENESIS", "record_index": 0, "global_step": 0, "tokens_seen": 0},
+            "model_config_sha256": _sha256(config_target),
+            "contract_sha256": _sha256(Path(__file__).resolve().parents[2] / "scripts" / "ember_restart" / "contract.py"),
+            "active_expert_ids": ["shared"],
+            "expert_genesis_sha256": expert_genesis,
+            "expert_checkpoint_sha256": expert_genesis,
+            "shared_model_shard_sha256": str(sources["shared-model.pt"][1]["sha256"]),
+            "optimizer_state_shard_sha256": str(sources["optimizer-state.pt"][1]["sha256"]),
+            "genesis_claim_boundary": dict(_GENESIS_CLAIM_BOUNDARY),
+            "shards": candidate_shards,
+        }
+        checkpoint_path = staging / "checkpoint" / "checkpoint-manifest.json"
+        _genesis_json(checkpoint_path, checkpoint)
+        counter_command = [
+            sys.executable, "-I", str(counter_target),
+            "--model-config", str(config_target),
+            "--checkpoint-manifest", str(checkpoint_path),
+            "--active-expert", "shared",
+        ]
+        completed = subprocess.run(
+            counter_command,
+            cwd=staging,
+            text=True,
+            capture_output=True,
+            timeout=120,
+            check=False,
+            creationflags=(getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0),
+        )
+        if completed.returncode != 0:
+            raise ValueError(f"genesis parameter counter refused inventory: {completed.stderr.strip()}")
+        try:
+            parameter_receipt = validate_realization_receipt(json.loads(completed.stdout))
+        except (json.JSONDecodeError, ValueError) as error:
+            raise ValueError("genesis parameter counter returned an invalid receipt") from error
+        if (
+            parameter_receipt["subject_checkpoint_sha256"] != _sha256(checkpoint_path)
+            or parameter_receipt["model_config_sha256"] != _sha256(config_target)
+            or parameter_receipt["counter_sha256"] != _sha256(counter_target)
+            or parameter_receipt["active_expert_ids"] != ["shared"]
+            or parameter_receipt["expert_genesis_sha256"] != expert_genesis
+            or parameter_receipt["expert_parameter_sha256"] != expert_genesis
+        ):
+            raise ValueError("genesis parameter receipt does not bind the initialization inventory")
+        receipt_path = staging / "receipts" / "parameter-count.json"
+        _genesis_json(receipt_path, parameter_receipt)
+        registry_path = staging / "trusted-verifiers.json"
+        _genesis_json(
+            registry_path,
+            {
+                "schema_version": "ember-trusted-verifiers-v1",
+                "verifiers": [{
+                    "path": "counter/parameter_counter.py",
+                    "sha256": _sha256(counter_target),
+                    "evidence_classes": ["parameter_realization"],
+                    "criterion_ids": [],
+                }],
+            },
+        )
+        architecture = {
+            "family": "ember-unified-decoder",
+            "revision": "ember-sparse-3b-v2",
+            "model_config": {"path": "configs/ember-restart-3b.json", "sha256": _sha256(config_target)},
+            **{field: parameter_receipt[field] for field in (
+                "allocated_parameters", "unique_parameters", "trainable_parameters",
+                "served_parameters", "active_parameters", "episode_trainable_parameters",
+            )},
+            "parameter_counter": {"path": "counter/parameter_counter.py", "sha256": _sha256(counter_target)},
+            "parameter_receipt": {"path": "receipts/parameter-count.json", "sha256": _sha256(receipt_path)},
+            "shared_core": True,
+            "sparse_differentiated_capacity": True,
+            "task_level_expert_routing": True,
+            "asymmetric_expert_initialization": True,
+            "expert_banks": [
+                {"id": name, "domain": name, "path": f"checkpoint/expert-{name}.pt", "genesis_sha256": expert_genesis[name]}
+                for name in ("vision", "audio", "reasoning", "tool")
+            ],
+            "active_expert_ids": ["shared"],
+            "raw_image_patches": True,
+            "raw_audio_frames": True,
+            "soft_token_splicing": True,
+            "multimodal_span_attention": True,
+            "rope_2d": True,
+            "separate_pretrained_encoders": False,
+        }
+        outer_manifest = {
+            "schema_version": "ember-owned-genesis-v1",
+            "stage": "GENESIS_CANDIDATE",
+            "run_id": run_id,
+            "source_commit": source_commit,
+            "lineage": {
+                "genesis": "OWNED_RANDOM_INIT",
+                "parent_checkpoint_sha256": None,
+                "borrowed_weights": False,
+                "borrowed_teachers": False,
+                "borrowed_judges": False,
+                "borrowed_filters": False,
+                "borrowed_generated_labels": False,
+            },
+            "architecture": architecture,
+            "checkpoint": {"manifest_path": "checkpoint/checkpoint-manifest.json", "sha256": _sha256(checkpoint_path)},
+            "genesis_claim_boundary": dict(_GENESIS_CLAIM_BOUNDARY),
+        }
+        manifest_path = staging / "run.json"
+        _genesis_json(manifest_path, outer_manifest)
+        _atomic_publish_no_replace(staging, output_root)
+    except BaseException:
+        if staging.exists():
+            shutil.rmtree(staging)
+        raise
+    return {
+        "result": "GENESIS_CANDIDATE_MINTED",
+        "manifest_path": str(output_root / "run.json"),
+        "manifest_sha256": _sha256(output_root / "run.json"),
+        "checkpoint_manifest_sha256": _sha256(output_root / "checkpoint" / "checkpoint-manifest.json"),
+        "trusted_verifier_registry": str(output_root / "trusted-verifiers.json"),
+    }
 
 
 def governed_resource_preflight() -> dict[str, object]:
@@ -3580,6 +3869,11 @@ def main() -> None:
 
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
+    genesis = subparsers.add_parser("genesis")
+    genesis.add_argument("--inventory", type=Path, required=True)
+    genesis.add_argument("--artifact-root", type=Path, required=True)
+    genesis.add_argument("--source-commit", required=True)
+    genesis.add_argument("--run-id", required=True)
     vertical = subparsers.add_parser("vertical")
     vertical.add_argument("--seed", type=int, required=True)
     vertical.add_argument("--artifact-root", type=Path, required=True)
@@ -3665,7 +3959,14 @@ def main() -> None:
     a1.add_argument("--telemetry-path", type=Path, required=True)
     a1.add_argument("--telemetry-run-id", required=True)
     args = parser.parse_args()
-    if args.command == "governed-vertical":
+    if args.command == "genesis":
+        result = mint_genesis_candidate(
+            inventory_path=args.inventory,
+            output_root=args.artifact_root,
+            source_commit=args.source_commit,
+            run_id=args.run_id,
+        )
+    elif args.command == "governed-vertical":
         result = run_governed_vertical(
             seed=args.seed,
             artifact_root=args.artifact_root,
