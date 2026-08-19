@@ -6,8 +6,11 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+
+from scripts.ember_restart import contract
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -1213,66 +1216,76 @@ def test_r1_warm100_entry_cli_refusal_is_content_addressed(tmp_path: Path):
     ).hexdigest()
 
 
-REAL_PARAMETER_COUNTER = (
-    REPO_ROOT
-    / "manifests"
-    / "ember-02-admission"
-    / "verifiers"
-    / "parameter-realization-verifier.py"
-)
 SHARED_ROUTE_ACTIVE_PARAMETERS = 1_020_589_568
 
 
-def test_shared_route_candidate_clears_the_real_trusted_parameter_counter(tmp_path: Path):
-    """A shared-route candidate must satisfy the real counter contract.py invokes (#1718).
-
-    contract.py spells the shared route "shared"; the trusted verifier spells it as an
-    absent expert (`--active-expert <id|empty>`) and rejects "shared" outright. The
-    fixture counter in this file accepts "shared", so only the real verifier catches it.
-    """
+def _shared_route_candidate(tmp_path: Path) -> tuple[Path, Path, Path]:
     manifest_path = _candidate_manifest(tmp_path)
     custody_db = _register_checkpoint_custody(tmp_path)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-
-    counter = tmp_path / "counter" / "parameter-realization-verifier.py"
-    counter.write_bytes(REAL_PARAMETER_COUNTER.read_bytes())
-    counter_record = {
-        "path": str(counter.relative_to(tmp_path)),
-        "sha256": _sha256(counter),
-    }
     registry_path = tmp_path / "trusted-verifiers.json"
-    registry = json.loads(registry_path.read_text(encoding="utf-8"))
-    registry["verifiers"] = [
-        (
-            {
-                **counter_record,
-                "evidence_classes": ["parameter_realization"],
-                "criterion_ids": [],
-            }
-            if "parameter_realization" in entry.get("evidence_classes", [])
-            else entry
-        )
-        for entry in registry["verifiers"]
-    ]
-    _write_json(registry_path, registry)
 
     architecture = manifest["architecture"]
-    architecture["parameter_counter"] = counter_record
     architecture["active_expert_ids"] = ["shared"]
     architecture["active_parameters"] = SHARED_ROUTE_ACTIVE_PARAMETERS
     architecture["episode_trainable_parameters"] = SHARED_ROUTE_ACTIVE_PARAMETERS
 
     receipt_path = tmp_path / architecture["parameter_receipt"]["path"]
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-    receipt["counter_sha256"] = counter_record["sha256"]
     receipt["active_expert_ids"] = ["shared"]
     receipt["active_parameters"] = SHARED_ROUTE_ACTIVE_PARAMETERS
     receipt["episode_trainable_parameters"] = SHARED_ROUTE_ACTIVE_PARAMETERS
     architecture["parameter_receipt"]["sha256"] = _write_json(receipt_path, receipt)
 
     _write_json(manifest_path, manifest)
+    return manifest_path, registry_path, custody_db
 
-    result = subprocess.run(
+
+def test_shared_route_is_passed_verbatim_to_the_trusted_parameter_counter(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest_path, registry_path, custody_db = _shared_route_candidate(tmp_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    receipt_path = tmp_path / manifest["architecture"]["parameter_receipt"]["path"]
+    measured = json.loads(receipt_path.read_text(encoding="utf-8"))
+    observed_argv: list[str] = []
+    original_run = subprocess.run
+
+    def execute_counter(argv, **kwargs):
+        if "--active-expert" not in argv:
+            return original_run(argv, **kwargs)
+        observed_argv.extend(str(value) for value in argv)
+        return SimpleNamespace(returncode=0, stdout=json.dumps(measured), stderr="")
+
+    monkeypatch.setattr(contract.subprocess, "run", execute_counter)
+    result = contract.validate_manifest(
+        manifest_path,
+        registry_path,
+        custody_db=custody_db,
+    )
+
+    assert result == {"valid": True, "stage": "CHECKPOINT_CANDIDATE", "errors": []}
+    assert observed_argv[observed_argv.index("--active-expert") + 1] == "shared"
+
+
+@pytest.mark.parametrize(
+    ("active_expert_ids", "expected_error"),
+    [
+        ([], "architecture.active_expert_ids: exactly one route must be active per episode"),
+        (["undeclared"], "architecture.active_expert_ids: active route is not declared"),
+    ],
+)
+def test_candidate_refuses_absent_or_wrong_active_route(
+    tmp_path: Path,
+    active_expert_ids: list[str],
+    expected_error: str,
+) -> None:
+    manifest_path, registry_path, custody_db = _shared_route_candidate(tmp_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["architecture"]["active_expert_ids"] = active_expert_ids
+    _write_json(manifest_path, manifest)
+
+    completed = subprocess.run(
         [
             sys.executable,
             str(VALIDATOR),
@@ -1288,4 +1301,7 @@ def test_shared_route_candidate_clears_the_real_trusted_parameter_counter(tmp_pa
         capture_output=True,
         check=False,
     )
-    assert result.returncode == 0, result.stdout + result.stderr
+    result = json.loads(completed.stdout)
+    assert completed.returncode == 1
+    assert result["valid"] is False
+    assert expected_error in result["errors"]
