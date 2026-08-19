@@ -445,6 +445,120 @@ def load_verified_v5_checkpoint(checkpoint_dir: str) -> dict:
     }
 
 
+_PUBLISHER_ACCOUNTING_KEYS = frozenset({
+    "incremental_publication_bytes",
+    "metadata",
+    "serialized_bytes",
+})
+_RUNNER_ACCOUNTING_KEYS = _PUBLISHER_ACCOUNTING_KEYS | {"retention_accounting"}
+_ALLOWED_CHECKPOINT_METADATA = frozenset({"parameter-counter-receipt.json"})
+_RETENTION_ACCOUNTING_KEYS = frozenset({
+    "schema_version",
+    "live_budget_bytes",
+    "live_charged_bytes",
+    "quarantine_budget_bytes",
+    "quarantine_charged_bytes",
+})
+
+
+def _publisher_accounting_matches(
+        checkpoint_dir: str, manifest: dict, published: dict) -> bool:
+    """Re-derive the checkpoint writer's closed outer accounting contract."""
+    identity_keys = {"checkpoint_manifest_sha256", "checkpoint"}
+    extras = set(published) - set(manifest) - identity_keys
+    if not extras:
+        return True
+    if extras not in (_PUBLISHER_ACCOUNTING_KEYS, _RUNNER_ACCOUNTING_KEYS):
+        return False
+
+    metadata = published.get("metadata")
+    if not isinstance(metadata, dict) or not set(metadata).issubset(_ALLOWED_CHECKPOINT_METADATA):
+        return False
+    metadata_bytes = 0
+    for name, record in metadata.items():
+        if not isinstance(record, dict) or set(record) != {"bytes", "sha256"}:
+            return False
+        size, expected_sha256 = record.get("bytes"), record.get("sha256")
+        if type(size) is not int or size < 0 or not _is_sha256(expected_sha256):
+            return False
+        path = os.path.join(checkpoint_dir, name)
+        if not os.path.isfile(path) or os.path.getsize(path) != size:
+            return False
+        if _sha256_file(path) != expected_sha256:
+            return False
+        metadata_bytes += size
+
+    shards = manifest.get("shards")
+    if not isinstance(shards, list):
+        return False
+    shard_names: set[str] = set()
+    serialized_shard_bytes = 0
+    incremental_shard_bytes = 0
+    for record in shards:
+        if not isinstance(record, dict):
+            return False
+        name = record.get("path")
+        size = record.get("bytes")
+        incremental = record.get("incremental_bytes")
+        if (
+            not isinstance(name, str)
+            or type(size) is not int or size < 0
+            or type(incremental) is not int or incremental < 0
+            or incremental > size
+        ):
+            return False
+        shard_names.add(name)
+        serialized_shard_bytes += size
+        incremental_shard_bytes += incremental
+
+    try:
+        actual_files = {
+            name for name in os.listdir(checkpoint_dir)
+            if os.path.isfile(os.path.join(checkpoint_dir, name))
+        }
+        actual_directories = {
+            name for name in os.listdir(checkpoint_dir)
+            if os.path.isdir(os.path.join(checkpoint_dir, name))
+        }
+        manifest_bytes = os.path.getsize(
+            os.path.join(checkpoint_dir, "checkpoint-manifest.json"))
+    except OSError:
+        return False
+    expected_files = {"checkpoint-manifest.json", *shard_names, *metadata}
+    if actual_files != expected_files or actual_directories:
+        return False
+
+    serialized_bytes = published.get("serialized_bytes")
+    incremental_bytes = published.get("incremental_publication_bytes")
+    if (
+        type(serialized_bytes) is not int
+        or serialized_bytes != serialized_shard_bytes + manifest_bytes + metadata_bytes
+        or type(incremental_bytes) is not int
+        or incremental_bytes != incremental_shard_bytes + manifest_bytes + metadata_bytes
+    ):
+        return False
+
+    if extras == _PUBLISHER_ACCOUNTING_KEYS:
+        return True
+    retention = published.get("retention_accounting")
+    if not isinstance(retention, dict) or set(retention) != _RETENTION_ACCOUNTING_KEYS:
+        return False
+    if retention.get("schema_version") != "ember-checkpoint-retention-accounting-v1":
+        return False
+    live_budget = retention.get("live_budget_bytes")
+    live_charged = retention.get("live_charged_bytes")
+    quarantine_budget = retention.get("quarantine_budget_bytes")
+    quarantine_charged = retention.get("quarantine_charged_bytes")
+    return (
+        type(live_budget) is int and live_budget > 0
+        and type(live_charged) is int
+        and incremental_bytes <= live_charged <= live_budget
+        and type(quarantine_budget) is int and quarantine_budget > 0
+        and type(quarantine_charged) is int
+        and 0 <= quarantine_charged <= quarantine_budget
+    )
+
+
 def load_verified_warm100_checkpoint(
         checkpoint_dir: str, run_receipt_path: str,
         expected_run_receipt_sha256: str) -> dict:
@@ -477,13 +591,19 @@ def load_verified_warm100_checkpoint(
     manifest = verified["manifest"]
     expected_published_keys = set(manifest) | {
         "checkpoint_manifest_sha256", "checkpoint"}
+    published_keys = set(published)
     checkpoint_identity = published.get("checkpoint")
     if (
-        set(published) != expected_published_keys
+        published_keys not in (
+            expected_published_keys,
+            expected_published_keys | _PUBLISHER_ACCOUNTING_KEYS,
+            expected_published_keys | _RUNNER_ACCOUNTING_KEYS,
+        )
         or {key: published.get(key) for key in manifest} != manifest
         or published.get("checkpoint_manifest_sha256") != verified["manifest_sha256"]
         or not isinstance(checkpoint_identity, dict)
         or checkpoint_identity != {"byte_sha256": verified["manifest_sha256"]}
+        or not _publisher_accounting_matches(checkpoint_dir, manifest, published)
     ):
         raise LiveCandidateRefusal("RUN_RECEIPT_CHECKPOINT_MISMATCH")
 
