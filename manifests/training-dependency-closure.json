@@ -17,6 +17,7 @@
   ],
   "dynamic_entrypoints_note": "Programs the run path loads through spec_from_file_location or spawns from a path assembled out of several literals, which no static walk can recover: run_vertical_slice exec-loads scripts/governor.py (a different top-level directory) before any CUDA allocation, and launch_packet.py is the launch-surface program whose bytes the certificate already binds as launch_packet_sha256. Declaring one still subjects ITS imports to the walk.",
   "code": [
+    "tools/corpus_connectors/receipt.py",
     "tools/ember-restart-3b/a1_checkpoint.py",
     "tools/ember-restart-3b/a1_dense.py",
     "tools/ember-restart-3b/a1_execution.py",
@@ -79,6 +80,9 @@
     ],
     "tools/ember-restart-3b/launch_packet.py": [
       "no repo target: __import__ of stdlib base64 and hashlib"
+    ],
+    "tools/ember-restart-3b/mint_github_license_partition.py": [
+      "tools/corpus_connectors/receipt.py"
     ],
     "tools/ember-restart-3b/pretrain.py": [
       "tools/ember-restart-3b/verify_capability_record.py"
