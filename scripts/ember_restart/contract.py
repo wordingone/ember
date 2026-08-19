@@ -779,16 +779,11 @@ def _verify_architecture(
             if isinstance(checkpoint, dict)
             else None
         )
-        # The trusted counter has no "shared" expert domain; it encodes the shared
-        # route as an absent expert and derives the same shared-only count as above.
-        # Translating here keeps its pinned bytes and this route vocabulary intact.
         counter_active_expert = (
             str(active_experts[0])
             if isinstance(active_experts, list) and active_experts
             else ""
         )
-        if counter_active_expert == "shared":
-            counter_active_expert = ""
         counter_active_expert_ids = [counter_active_expert] if counter_active_expert else []
         if (
             counter_is_trusted
