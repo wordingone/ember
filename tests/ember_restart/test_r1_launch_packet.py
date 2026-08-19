@@ -15,7 +15,7 @@ from unittest import mock
 import pytest
 
 from scripts.ember_restart.r1_launch_packet import (
-    _validate_admitted_authority_subset,
+    _build_run_spec,
     build_ready_for_compute_packet,
 )
 
@@ -43,10 +43,64 @@ TEXT_SUPPORT = _load_test_support(
     "tests/ember_restart_model/test_text_lab_corpus.py",
     "r1_packet_text_support",
 )
+TEXT_AUTHORITY = _load_test_support(
+    "tools/ember-restart-3b/text_lab_corpus.py",
+    "r1_packet_shared_text_authority",
+)
 
 
 def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def test_run_spec_freezes_only_the_certificate_authorized_admitted_row_set(
+    tmp_path: Path,
+):
+    pin = "d" * 64
+    certificate = {
+        "execution_scope": {
+            "allowed_semantic_canary_modes": ["warm-100"],
+            "allowed_admitted_row_set_sha256": pin,
+            "max_optimizer_steps": 100,
+            "max_records": 1,
+            "max_active_expert_families": 1,
+            "max_gpu_vram_gib": 24,
+            "max_transient_checkpoint_gib": 20,
+            "max_wall_minutes": 30,
+            "max_b_write_gib": 16,
+            "max_c_write_gib": 0,
+            "max_write_budget_bytes": 16 * 1024**3,
+        }
+    }
+    spec = _build_run_spec(
+        certificate,
+        certificate_sha256="c" * 64,
+        custody_root=tmp_path,
+        artifact_root=tmp_path / "run" / "artifacts",
+        run_id="run",
+        semantic_receipt=tmp_path / "receipt.json",
+        semantic_shards_root=tmp_path / "shards",
+        telemetry_path=tmp_path / "run" / "telemetry.jsonl",
+        sequence_length=512,
+        checkpoint_interval=50,
+        admitted_row_set_sha256=pin,
+    )
+    assert spec["admitted_row_set_sha256"] == pin
+    certificate["execution_scope"]["allowed_admitted_row_set_sha256"] = "e" * 64
+    with pytest.raises(ValueError, match="does not authorize"):
+        _build_run_spec(
+            certificate,
+            certificate_sha256="c" * 64,
+            custody_root=tmp_path,
+            artifact_root=tmp_path / "run" / "artifacts",
+            run_id="run",
+            semantic_receipt=tmp_path / "receipt.json",
+            semantic_shards_root=tmp_path / "shards",
+            telemetry_path=tmp_path / "run" / "telemetry.jsonl",
+            sequence_length=512,
+            checkpoint_interval=50,
+            admitted_row_set_sha256=pin,
+        )
 
 
 def _write_json(path: Path, value: object) -> None:
@@ -245,6 +299,34 @@ def _fixture(
         corrupt_admitted_evidence=corrupt_admitted_evidence,
         stale_code_identity=stale_code_identity,
     )
+    index = json.loads(authority_index.read_bytes())
+    corpus = json.loads(
+        (paths["repo"] / index["corpus"]["path"]).read_bytes()
+    )
+    admitted_rows = sorted(
+        (
+            row
+            for row in corpus["sources"]
+            if row.get("admission") == "ADMITTED"
+        ),
+        key=lambda row: row["source_id"],
+    )
+    admitted_row_set_sha256 = hashlib.sha256(
+        (
+            json.dumps(
+                {"rows": admitted_rows},
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            + "\n"
+        ).encode()
+    ).hexdigest()
+    CERTIFIED_SUPPORT.rewrite_certificate(
+        paths,
+        lambda certificate: certificate["execution_scope"].__setitem__(
+            "allowed_admitted_row_set_sha256", admitted_row_set_sha256
+        ),
+    )
 
     CERTIFIED_SUPPORT.install_model_config(
         paths["repo"], CERTIFIED_SUPPORT.ARCHITECTURE_REVISION
@@ -287,6 +369,7 @@ def _fixture(
         "rung_manifest": rung_manifest,
         "semantic_receipt": semantic_receipt,
         "shards_root": shards_root,
+        "admitted_row_set_sha256": admitted_row_set_sha256,
     }
 
 
@@ -448,6 +531,17 @@ def test_builds_over_verified_admitted_subset_and_freezes_both_hashes(tmp_path: 
         ).encode()
     ).hexdigest()
     assert authority["admitted_row_set_sha256"] == expected_rows_sha256
+    run_spec = json.loads(
+        (Path(result["packet_directory"]) / "run-spec.json").read_bytes()
+    )
+    certificate = json.loads(
+        (Path(result["packet_directory"]) / "certificate.json").read_bytes()
+    )
+    assert run_spec["admitted_row_set_sha256"] == expected_rows_sha256
+    assert (
+        certificate["execution_scope"]["allowed_admitted_row_set_sha256"]
+        == expected_rows_sha256
+    )
 
 
 def test_refuses_run_manifest_claim_for_unadmitted_source(tmp_path: Path):
@@ -576,18 +670,22 @@ def _validate_closed_rows(
             },
         },
     )
-    return _validate_admitted_authority_subset(
-        _ClosedRowAuthority,
-        tmp_path,
-        {
-            "result": "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING",
-            "authority_index_sha256": _sha(index_path),
-            "corpus_sha256": _sha(corpus_path),
-        },
-        index_relative=index_path.name,
-        external_authority_root=tmp_path,
-        manifest_rows=manifest_rows,
-    )
+    with mock.patch.object(
+        TEXT_AUTHORITY,
+        "_bound_json",
+        return_value=(corpus_path.read_bytes(), {"sources": rows}),
+    ):
+        return TEXT_AUTHORITY.validate_admitted_authority_subset(
+            tmp_path,
+            {
+                "result": "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING",
+                "authority_index_sha256": _sha(index_path),
+                "corpus_sha256": _sha(corpus_path),
+            },
+            index_relative=index_path.name,
+            external_authority_root=tmp_path,
+            manifest_rows=manifest_rows,
+        )
 
 
 def test_admitted_subset_hashes_both_closed_row_schemas_deterministically(
