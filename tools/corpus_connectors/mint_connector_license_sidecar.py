@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -16,6 +17,8 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
+
+from tools.corpus_connectors import receipt as connector_receipt
 
 
 HEX64 = re.compile(r"[0-9a-f]{64}")
@@ -92,7 +95,10 @@ def _data_paths(root: Path) -> set[str]:
     paths: set[str] = set()
     for path in root.rglob("*"):
         relative = path.relative_to(root).as_posix()
-        if relative.split("/", 1)[0] == "_manifests" or relative in SIDECARS:
+        if (
+            relative.split("/", 1)[0] in connector_receipt.DEFAULT_EXCLUDE_DIRNAMES
+            or relative in SIDECARS
+        ):
             continue
         if path.is_dir() and not _is_reparse_or_symlink(path):
             continue
@@ -168,6 +174,22 @@ def _write_json(path: Path, value: object) -> bytes:
     return raw
 
 
+def _canonical_license_identity(value: Any) -> str:
+    authority_path = Path(__file__).resolve().parents[2] / "tools" / "ember-restart-3b" / "text_lab_corpus.py"
+    spec = importlib.util.spec_from_file_location("text_lab_corpus_sidecar_license_authority", authority_path)
+    if spec is None or spec.loader is None:
+        raise LicenseSidecarRefusal("canonical license authority is unavailable")
+    authority = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(authority)
+        canonical = authority._closed_connector_license(value)
+    except (AttributeError, ImportError, OSError, TypeError, ValueError) as error:
+        raise LicenseSidecarRefusal("canonical license identity is invalid") from error
+    if not isinstance(canonical, str):
+        raise LicenseSidecarRefusal("canonical license identity must be one SPDX value")
+    return canonical
+
+
 def mint_license_sidecar(
     *,
     original_receipt_path: Path,
@@ -181,7 +203,12 @@ def mint_license_sidecar(
 ) -> dict[str, Any]:
     original_receipt_path = Path(original_receipt_path)
     license_receipt_path = Path(license_receipt_path)
-    license_payload_path = Path(license_payload_path)
+    if license_payload_path is None or license_payload_sha256 is None:
+        raise LicenseSidecarRefusal("license payload binding is missing")
+    try:
+        license_payload_path = Path(license_payload_path)
+    except TypeError as error:
+        raise LicenseSidecarRefusal("license payload binding is missing") from error
     output = Path(output).absolute()
     if output.exists():
         raise LicenseSidecarRefusal(f"output already exists: {output}")
@@ -191,21 +218,32 @@ def mint_license_sidecar(
     license_receipt, _ = _read_bound_receipt(license_receipt_path, license_receipt_sha256, "license connector")
     _, original_files = _reopen_files(original, "original connector")
     license_root, license_files = _reopen_files(license_receipt, "license connector")
-    if original.get("license") != expected_spdx or license_receipt.get("license") != expected_spdx:
-        raise LicenseSidecarRefusal("connector and license SPDX identities differ")
+    original_license_raw = original.get("license")
+    license_artifact_identity_raw = license_receipt.get("license")
+    canonical_identities = (
+        _canonical_license_identity(original_license_raw),
+        _canonical_license_identity(license_artifact_identity_raw),
+        _canonical_license_identity(expected_spdx),
+    )
+    if canonical_identities != (expected_spdx, expected_spdx, expected_spdx):
+        raise LicenseSidecarRefusal("canonical license identities differ")
     if any(PurePosixPath(item["path"]).name.upper().startswith("LICENSE") for item in original_files):
         raise LicenseSidecarRefusal("original custody already contains a LICENSE artifact")
-    if len(license_files) != 1:
-        raise LicenseSidecarRefusal("license connector must bind exactly one payload")
     if (
         not isinstance(license_payload_sha256, str)
         or HEX64.fullmatch(license_payload_sha256) is None
         or not license_payload_path.is_file()
         or _is_reparse_or_symlink(license_payload_path)
-        or license_payload_path.resolve(strict=True) != license_files[0]["source_path"].resolve(strict=True)
         or sha256_file(license_payload_path) != license_payload_sha256
-        or license_files[0]["sha256"] != license_payload_sha256
     ):
+        raise LicenseSidecarRefusal("license payload identity differs from its connector receipt")
+    selected_license_files = [
+        item
+        for item in license_files
+        if item["source_path"].resolve(strict=True) == license_payload_path.resolve(strict=True)
+        and item["sha256"] == license_payload_sha256
+    ]
+    if len(selected_license_files) != 1:
         raise LicenseSidecarRefusal("license payload identity differs from its connector receipt")
     try:
         license_payload_path.resolve(strict=True).relative_to(license_root.resolve(strict=True))
@@ -278,6 +316,8 @@ def mint_license_sidecar(
             "license_payload_sha256": license_payload_sha256,
             "license_output_path": "LICENSE.md",
             "expected_spdx": expected_spdx,
+            "original_license_identity_raw": original_license_raw,
+            "license_artifact_identity_raw": license_artifact_identity_raw,
             "derived_connector_receipt_path": CONNECTOR_RECEIPT,
             "derived_connector_receipt_sha256": sha256_bytes(connector_raw),
             "derived_file_count": len(derived_files),
