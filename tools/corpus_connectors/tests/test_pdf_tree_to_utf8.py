@@ -25,7 +25,12 @@ def _canonical(value: object) -> bytes:
 
 
 def _write_tree_fixture(
-    root: Path, *, empty_second: bool = False, malformed_second: bool = False
+    root: Path,
+    *,
+    empty_second: bool = False,
+    malformed_second: bool = False,
+    license_identity: str = "http://creativecommons.org/licenses/by/4.0/",
+    license_evidence: str = "fixture exact CC-BY-4.0",
 ) -> tuple[Path, str, Path]:
     source = root / "source"
     source.mkdir()
@@ -55,8 +60,8 @@ def _write_tree_fixture(
         "fetched_at": "2026-08-18T00:00:00Z",
         "files": rows,
         "l3_statement": "fetch-only; no external model authored/filtered/ranked/scored/selected any token",
-        "license": "http://creativecommons.org/licenses/by/4.0/",
-        "license_evidence": "fixture exact CC-BY-4.0",
+        "license": license_identity,
+        "license_evidence": license_evidence,
         "notes": "fixture",
         "revision": None,
         "schema": "corpus-connector-receipt-v1",
@@ -117,6 +122,57 @@ def _rewrite_census_extractor(
 
 
 class PdfTreeToUtf8Tests(unittest.TestCase):
+    def test_exact_cc0_license_identity_transforms_and_normalizes(self) -> None:
+        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            connector_receipt, connector_sha256, _ = _write_tree_fixture(
+                root,
+                license_identity="http://creativecommons.org/publicdomain/zero/1.0/",
+                license_evidence="fixture exact CC0-1.0",
+            )
+            census, census_sha256 = _write_pass_census(module, root, connector_receipt, connector_sha256)
+            output = root / "output"
+
+            receipt = module.produce_pdf_tree_receipt(
+                connector_receipt=connector_receipt,
+                connector_receipt_sha256=connector_sha256,
+                census_report=census,
+                census_report_sha256=census_sha256,
+                output_dir=output,
+            )
+
+            derived = json.loads((output / "_manifests/derived-connector-receipt.json").read_bytes())
+            self.assertEqual(receipt["result"], "VERIFIED")
+            self.assertEqual(receipt["source"]["license_spdx"], "CC0-1.0")
+            self.assertEqual(derived["license"], "CC0-1.0")
+
+    def test_unlisted_license_identity_refuses_without_residue(self) -> None:
+        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            connector_receipt, connector_sha256, _ = _write_tree_fixture(
+                root,
+                license_identity="arbitrary-unlisted-license",
+                license_evidence="fixture arbitrary unlisted identity",
+            )
+            census, census_sha256 = _write_pass_census(module, root, connector_receipt, connector_sha256)
+            output = root / "output"
+
+            with self.assertRaisesRegex(module.PdfTreeExtractionRefusal, "closed CC-BY-4.0 identity"):
+                module.produce_pdf_tree_receipt(
+                    connector_receipt=connector_receipt,
+                    connector_receipt_sha256=connector_sha256,
+                    census_report=census,
+                    census_report_sha256=census_sha256,
+                    output_dir=output,
+                )
+
+            self.assertFalse(output.exists())
+            self.assertEqual(list(root.glob(".output.staging-*")), [])
+
     def test_census_excludes_top_level_operational_logs(self) -> None:
         from tools.corpus_connectors import pdf_tree_to_utf8 as module
 
