@@ -643,6 +643,43 @@ def _expert_raw_digest(archive: zipfile.ZipFile, payload: Any, *, name: str, sha
     return digest.hexdigest()
 
 
+def derive_expert_genesis_sha256(
+    *, model_config_path: Path, checkpoint_root: Path,
+) -> dict[str, str]:
+    """Derive expert tensor hashes through the counter's restricted reader."""
+
+    config, _config_sha256 = _read_json_snapshot(
+        Path(model_config_path), label="model config"
+    )
+    shape = _model_shape(config)
+    root = Path(checkpoint_root).resolve(strict=True)
+    if not root.is_dir():
+        raise ValueError("genesis checkpoint root must be a directory")
+    hashes: dict[str, str] = {}
+    for name in EXPERT_NAMES:
+        path = (root / f"expert-{name}.pt").resolve(strict=True)
+        if path.parent != root or not path.is_file():
+            raise ValueError(f"genesis expert shard escapes its checkpoint root: {name}")
+        try:
+            with path.open("rb") as handle, zipfile.ZipFile(handle) as archive:
+                payload = _load_checkpoint_metadata(archive)
+                if not isinstance(payload, dict) or payload.get("expert") != name:
+                    raise ValueError(f"expert realization identifies the wrong bank: {name}")
+                _validate_state(
+                    payload.get("model"), _expected_expert(shape, name), label=f"expert {name}"
+                )
+                hashes[name] = _expert_raw_digest(
+                    archive, payload, name=name, shape=shape
+                )
+        except (OSError, zipfile.BadZipFile, ValueError) as error:
+            if isinstance(error, ValueError):
+                raise
+            raise ValueError(
+                f"genesis expert shard cannot be safely inspected: {name}"
+            ) from error
+    return hashes
+
+
 def _verify_shared_expert_genesis(archive: zipfile.ZipFile, payload: Any, *, name: str, genesis: Mapping[str, str], shape: Mapping[str, int]) -> None:
     if _expert_raw_digest(archive, payload, name=name, shape=shape) != genesis[name]:
         raise ValueError(f"shared expert genesis hash mismatch: {name}")

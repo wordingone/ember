@@ -27,8 +27,8 @@ from typing import Any, Callable, Iterable, Mapping
 import tokenizers
 import torch
 
-from checkpoint_artifacts import CheckpointDeferredLowCommit, _atomic_publish_no_replace, _empty_failure_comparison_operands, _normalize_failure_comparison_operands, load_checkpoint_artifacts, load_checkpoint_model_only_transition, optimizer_covers_every_expert_route, preflight_specialist_lineage_sources, published_checkpoint_receipt, write_checkpoint_artifacts
-from parameter_counter import validate_realization_receipt
+from checkpoint_artifacts import CheckpointDeferredLowCommit, _atomic_publish_no_replace, _default_optimizer_contract, _empty_failure_comparison_operands, _normalize_failure_comparison_operands, _optimizer_realization, _select_detached_state, _write_atomic, load_checkpoint_artifacts, load_checkpoint_model_only_transition, optimizer_covers_every_expert_route, preflight_specialist_lineage_sources, published_checkpoint_receipt, write_checkpoint_artifacts
+from parameter_counter import derive_expert_genesis_sha256, validate_realization_receipt
 from model import RestartDecoderConfig, UnifiedDecoder
 from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
 from durable_io import atomic_create_durable, atomic_replace_durable
@@ -132,6 +132,166 @@ def _genesis_json(path: Path, payload: Mapping[str, object]) -> None:
     )
 
 
+def initialize_genesis_inventory(
+    *, config_path: Path, seed: int, output_root: Path,
+) -> dict[str, object]:
+    """Materialize the closed zero-step inventory consumed by ``genesis``.
+
+    The production config fixes CUDA-resident AdamW8bit.  This function only
+    constructs initialization state: it has no data input and never executes a
+    forward pass, backward pass, or optimizer step.
+    """
+
+    if type(seed) is not int or seed < 0:
+        raise ValueError("genesis initialization seed must be nonnegative")
+    output_root = Path(output_root).resolve()
+    output_root.parent.mkdir(parents=True, exist_ok=True)
+    if os.path.lexists(str(output_root)):
+        raise FileExistsError(output_root)
+    config_path = Path(config_path).resolve(strict=True)
+    config = RestartDecoderConfig.from_contract(config_path)
+    device = "cuda" if config.production else "cpu"
+    if config.production and not torch.cuda.is_available():
+        raise RuntimeError("production genesis initialization requires CUDA")
+
+    staging = output_root.parent / f".{output_root.name}.staging-{os.getpid()}-{uuid.uuid4().hex}"
+    staging.mkdir()
+    model: UnifiedDecoder | None = None
+    optimizer: torch.optim.Optimizer | None = None
+    try:
+        model = UnifiedDecoder(
+            config,
+            device=device,
+            allow_production_allocation=config.production,
+            genesis_seed=seed,
+        )
+        model._activate_expert("shared")
+        if config.production:
+            optimizer_contract = load_optimizer_contract(config_path)
+            optimizer = build_production_optimizer(
+                model, optimizer_contract=optimizer_contract
+            )
+        else:
+            optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+            optimizer_contract = _default_optimizer_contract(optimizer)
+        optimizer_realization = _optimizer_realization(optimizer, optimizer_contract)
+
+        config_target = staging / "configs" / "ember-restart-3b.json"
+        counter_source = Path(__file__).with_name("parameter_counter.py").resolve(strict=True)
+        counter_target = staging / "counter" / "parameter_counter.py"
+        _copy_genesis_file(config_path, config_target)
+        _copy_genesis_file(counter_source, counter_target)
+        checkpoint_root = staging / "checkpoint"
+        checkpoint_root.mkdir()
+        model_state = model.state_dict()
+        shared_state = _select_detached_state(
+            model_state, lambda name: ".experts." not in name
+        )
+        shard_paths = [
+            _write_atomic(
+                checkpoint_root,
+                "shared-model.pt",
+                lambda handle: torch.save({"model": shared_state}, handle),
+            ),
+            _write_atomic(
+                checkpoint_root,
+                "optimizer-state.pt",
+                lambda handle: torch.save(
+                    {
+                        "optimizer": optimizer.state_dict(),
+                        "optimizer_contract": optimizer_contract,
+                        "optimizer_realization": optimizer_realization,
+                    },
+                    handle,
+                ),
+            ),
+        ]
+        data_cursor = {
+            "shard": "GENESIS",
+            "record_index": 0,
+            "global_step": 0,
+            "tokens_seen": 0,
+        }
+        cuda_rng_state = (
+            torch.cuda.get_rng_state()
+            if config.production
+            else torch.empty(0, dtype=torch.uint8)
+        )
+        shard_paths.append(
+            _write_atomic(
+                checkpoint_root,
+                "replay-state.pt",
+                lambda handle: torch.save(
+                    {
+                        "rng_state": {
+                            "cpu": torch.get_rng_state(),
+                            "cuda": cuda_rng_state,
+                        },
+                        "data_cursor": data_cursor,
+                    },
+                    handle,
+                ),
+            )
+        )
+        for name in ("vision", "audio", "reasoning", "tool"):
+            expert_state = _select_detached_state(
+                model_state,
+                lambda key, selected=name: f".experts.{selected}." in key,
+            )
+            shard_paths.append(
+                _write_atomic(
+                    checkpoint_root,
+                    f"expert-{name}.pt",
+                    lambda handle, selected=name, state=expert_state: torch.save(
+                        {"expert": selected, "model": state}, handle
+                    ),
+                )
+            )
+        records = [
+            {
+                "path": f"checkpoint/{path.name}",
+                "bytes": path.stat().st_size,
+                "sha256": _sha256(path),
+            }
+            for path in sorted(shard_paths, key=lambda item: item.name)
+        ]
+        inventory_path = staging / "inventory.json"
+        _genesis_json(
+            inventory_path,
+            {
+                "schema_version": _GENESIS_INVENTORY_SCHEMA,
+                "launch_seed": seed,
+                "active_expert": "shared",
+                "model_config": {
+                    "path": "configs/ember-restart-3b.json",
+                    "sha256": _sha256(config_target),
+                },
+                "parameter_counter": {
+                    "path": "counter/parameter_counter.py",
+                    "sha256": _sha256(counter_target),
+                },
+                "shards": records,
+            },
+        )
+        _atomic_publish_no_replace(staging, output_root)
+        return {
+            "result": "GENESIS_INVENTORY_INITIALIZED",
+            "inventory_path": str(output_root / "inventory.json"),
+            "shard_count": len(records),
+            "launch_seed": seed,
+            "training_executed": False,
+            "optimizer_steps": 0,
+        }
+    finally:
+        optimizer = None
+        model = None
+        gc.collect()
+        if config.production and torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        if staging.exists():
+            shutil.rmtree(staging)
+
+
 def mint_genesis_candidate(
     *, inventory_path: Path, output_root: Path, source_commit: str, run_id: str,
 ) -> dict[str, object]:
@@ -199,6 +359,10 @@ def mint_genesis_candidate(
     }
     if actual_shards != _GENESIS_SHARD_NAMES:
         raise ValueError("genesis inventory contains a foreign shard")
+    expert_genesis = derive_expert_genesis_sha256(
+        model_config_path=config_source,
+        checkpoint_root=inventory_root / "checkpoint",
+    )
 
     output_root = Path(output_root).resolve()
     output_root.parent.mkdir(parents=True, exist_ok=True)
@@ -217,12 +381,8 @@ def mint_genesis_candidate(
             target = staging / "checkpoint" / name
             _copy_genesis_file(source, target)
             candidate_shards.append(
-                {"path": f"checkpoint/{name}", "sha256": record["sha256"], "bytes": record["bytes"]}
+                {"path": name, "sha256": record["sha256"], "bytes": record["bytes"]}
             )
-        expert_genesis = {
-            name: str(sources[f"expert-{name}.pt"][1]["sha256"])
-            for name in ("vision", "audio", "reasoning", "tool")
-        }
         checkpoint = {
             "schema_version": "ember-sparse-checkpoint-v5",
             "contract_version": 5,
@@ -233,7 +393,10 @@ def mint_genesis_candidate(
             "contract_sha256": _sha256(Path(__file__).resolve().parents[2] / "scripts" / "ember_restart" / "contract.py"),
             "active_expert_ids": ["shared"],
             "expert_genesis_sha256": expert_genesis,
-            "expert_checkpoint_sha256": expert_genesis,
+            "expert_checkpoint_sha256": {
+                name: str(sources[f"expert-{name}.pt"][1]["sha256"])
+                for name in ("vision", "audio", "reasoning", "tool")
+            },
             "shared_model_shard_sha256": str(sources["shared-model.pt"][1]["sha256"]),
             "optimizer_state_shard_sha256": str(sources["optimizer-state.pt"][1]["sha256"]),
             "genesis_claim_boundary": dict(_GENESIS_CLAIM_BOUNDARY),
@@ -301,7 +464,13 @@ def mint_genesis_candidate(
             "task_level_expert_routing": True,
             "asymmetric_expert_initialization": True,
             "expert_banks": [
-                {"id": name, "domain": name, "path": f"checkpoint/expert-{name}.pt", "genesis_sha256": expert_genesis[name]}
+                {
+                    "id": name,
+                    "domain": name,
+                    "path": f"checkpoint/expert-{name}.pt",
+                    "artifact_sha256": str(sources[f"expert-{name}.pt"][1]["sha256"]),
+                    "genesis_sha256": expert_genesis[name],
+                }
                 for name in ("vision", "audio", "reasoning", "tool")
             ],
             "active_expert_ids": ["shared"],
@@ -3864,6 +4033,13 @@ def run_semantic(
     }
 
 
+def add_genesis_init_parser(subparsers) -> None:
+    genesis_init = subparsers.add_parser("genesis-init")
+    genesis_init.add_argument("--config", type=Path, required=True)
+    genesis_init.add_argument("--seed", type=int, required=True)
+    genesis_init.add_argument("--output-root", type=Path, required=True)
+
+
 def main() -> None:
     import argparse
 
@@ -3874,6 +4050,7 @@ def main() -> None:
     genesis.add_argument("--artifact-root", type=Path, required=True)
     genesis.add_argument("--source-commit", required=True)
     genesis.add_argument("--run-id", required=True)
+    add_genesis_init_parser(subparsers)
     vertical = subparsers.add_parser("vertical")
     vertical.add_argument("--seed", type=int, required=True)
     vertical.add_argument("--artifact-root", type=Path, required=True)
@@ -3959,7 +4136,13 @@ def main() -> None:
     a1.add_argument("--telemetry-path", type=Path, required=True)
     a1.add_argument("--telemetry-run-id", required=True)
     args = parser.parse_args()
-    if args.command == "genesis":
+    if args.command == "genesis-init":
+        result = initialize_genesis_inventory(
+            config_path=args.config,
+            seed=args.seed,
+            output_root=args.output_root,
+        )
+    elif args.command == "genesis":
         result = mint_genesis_candidate(
             inventory_path=args.inventory,
             output_root=args.artifact_root,
