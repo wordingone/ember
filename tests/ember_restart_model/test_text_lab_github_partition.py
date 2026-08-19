@@ -87,6 +87,65 @@ def test_partition_authority_row_reopens_every_join_and_is_schema_disjoint(tmp_p
         assert list(Draft202012Validator(candidate_schema).iter_errors(mixed))
 
 
+def test_partition_authority_reopens_exact_producer_bytes_from_reachable_history(tmp_path: Path):
+    import text_lab_corpus
+
+    row, output, receipt = _partition_fixture(tmp_path)
+    receipt["producer_sha256"] = "0bb5319534d565aa01ed6d65437da3683004ffb84f6234c680e0e46e75661f6d"
+    receipt_path = output / "partition-receipt.json"
+    receipt_path.write_bytes(json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode())
+    receipt_sha = _sha(receipt_path.read_bytes())
+    row["license_partition_sha256"] = receipt_sha
+    row["l4_receipt"]["license_partition_sha256"] = receipt_sha
+
+    reopened = text_lab_corpus._validate_partition_authority_row(ROOT, tmp_path, row)
+
+    assert reopened["producer_sha256"] == receipt["producer_sha256"]
+
+
+def test_partition_authority_refuses_producer_sha_absent_from_closed_table(tmp_path: Path):
+    import text_lab_corpus
+
+    row, output, receipt = _partition_fixture(tmp_path)
+    receipt["producer_sha256"] = "f" * 64
+    receipt_path = output / "partition-receipt.json"
+    receipt_path.write_bytes(json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode())
+    receipt_sha = _sha(receipt_path.read_bytes())
+    row["license_partition_sha256"] = receipt_sha
+    row["l4_receipt"]["license_partition_sha256"] = receipt_sha
+
+    with pytest.raises(ValueError, match="partition receipt producer bytes changed"):
+        text_lab_corpus._validate_partition_authority_row(ROOT, tmp_path, row)
+
+
+def test_partition_authority_refuses_closed_table_with_stale_successor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    import text_lab_corpus
+
+    row, output, receipt = _partition_fixture(tmp_path)
+    receipt["producer_sha256"] = "0bb5319534d565aa01ed6d65437da3683004ffb84f6234c680e0e46e75661f6d"
+    receipt_path = output / "partition-receipt.json"
+    receipt_path.write_bytes(json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode())
+    receipt_sha = _sha(receipt_path.read_bytes())
+    row["license_partition_sha256"] = receipt_sha
+    row["l4_receipt"]["license_partition_sha256"] = receipt_sha
+    table = json.loads((ROOT / text_lab_corpus._PARTITION_PRODUCER_SUPERSESSIONS).read_bytes())
+    table["entries"][0]["successor_sha256"] = "0" * 64
+    stale_table = tmp_path / "stale-partition-producer-supersessions.json"
+    stale_table.write_bytes(json.dumps(table, sort_keys=True, separators=(",", ":")).encode())
+    real_path = text_lab_corpus._path
+
+    def stale_table_path(root: Path, relative: object):
+        if relative == text_lab_corpus._PARTITION_PRODUCER_SUPERSESSIONS:
+            return stale_table
+        return real_path(root, relative)
+
+    monkeypatch.setattr(text_lab_corpus, "_path", stale_table_path)
+    with pytest.raises(ValueError, match="partition receipt producer bytes changed"):
+        text_lab_corpus._validate_partition_authority_row(ROOT, tmp_path, row)
+
+
 def test_partition_authority_refuses_digest_swap_and_blob_tamper(tmp_path: Path):
     import text_lab_corpus
 
