@@ -14,7 +14,10 @@ from unittest import mock
 
 import pytest
 
-from scripts.ember_restart.r1_launch_packet import build_ready_for_compute_packet
+from scripts.ember_restart.r1_launch_packet import (
+    _validate_admitted_authority_subset,
+    build_ready_for_compute_packet,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -476,12 +479,8 @@ def test_refuses_run_manifest_claim_for_unadmitted_source(tmp_path: Path):
 
 def test_refuses_run_manifest_row_outside_admitted_set(tmp_path: Path):
     outside = {
+        **TEXT_SUPPORT._admitted_rows()[0],
         "source_id": "candidate-unknown-train-0",
-        "domain": "code",
-        "split": "train",
-        "license_spdx": "CC-BY-4.0",
-        "content_sha256": "a" * 64,
-        "l4_receipt": {},
     }
     with pytest.raises(ValueError, match="outside admitted set"):
         _build(
@@ -499,3 +498,159 @@ def test_refuses_admitted_subset_when_an_admitted_row_fails_verification(tmp_pat
 def test_refuses_admitted_subset_with_stale_code_identity(tmp_path: Path):
     with pytest.raises(ValueError, match="code bytes changed"):
         _build(tmp_path, admitted_count=23, stale_code_identity=True)
+
+
+class _ClosedRowAuthority:
+    _AUTHORITY_INDEX_SCHEMA_V2 = "ember-text-lab-authority-index-v2"
+    _UNRESOLVED_FIELDS = {
+        "source_id",
+        "domain",
+        "split",
+        "admission",
+        "required_evidence",
+        "allowed_license_spdx",
+    }
+    _ADMITTED_FIELDS = _UNRESOLVED_FIELDS | {
+        "content_sha256",
+        "license_spdx",
+        "l4_receipt",
+        "license_evidence",
+    }
+    _PARTITION_ADMITTED_FIELDS = _UNRESOLVED_FIELDS | {
+        "content_sha256",
+        "license_partition_receipt",
+        "license_partition_sha256",
+        "l4_receipt",
+    }
+
+    @staticmethod
+    def _external_path(root: Path, relative: str) -> Path:
+        return root / relative
+
+    @staticmethod
+    def _sha_bytes(value: bytes) -> str:
+        return hashlib.sha256(value).hexdigest()
+
+    @staticmethod
+    def _bound_json(
+        _repo_root: Path,
+        binding: dict[str, object],
+        *,
+        external_root: Path | None = None,
+    ) -> tuple[bytes, dict[str, object]]:
+        assert external_root is not None
+        payload = (external_root / str(binding["path"])).read_bytes()
+        assert hashlib.sha256(payload).hexdigest() == binding["sha256"]
+        return payload, json.loads(payload)
+
+
+def _partition_admitted_row() -> dict[str, object]:
+    ordinary = TEXT_SUPPORT._admitted_rows()[0]
+    return {
+        key: value
+        for key, value in ordinary.items()
+        if key not in {"license_spdx", "license_evidence"}
+    } | {
+        "source_id": "candidate-software_engineering-train-1",
+        "license_partition_receipt": "receipts/software-engineering-train-1.json",
+        "license_partition_sha256": "b" * 64,
+    }
+
+
+def _validate_closed_rows(
+    tmp_path: Path,
+    rows: list[dict[str, object]],
+    *,
+    manifest_rows: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    corpus_path = tmp_path / "corpus.json"
+    _write_json(corpus_path, {"sources": rows})
+    index_path = tmp_path / "index.json"
+    _write_json(
+        index_path,
+        {
+            "schema_version": "ember-text-lab-authority-index-v2",
+            "corpus": {
+                "path": corpus_path.name,
+                "sha256": _sha(corpus_path),
+            },
+        },
+    )
+    return _validate_admitted_authority_subset(
+        _ClosedRowAuthority,
+        tmp_path,
+        {
+            "result": "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING",
+            "authority_index_sha256": _sha(index_path),
+            "corpus_sha256": _sha(corpus_path),
+        },
+        index_relative=index_path.name,
+        external_authority_root=tmp_path,
+        manifest_rows=manifest_rows,
+    )
+
+
+def test_admitted_subset_hashes_both_closed_row_schemas_deterministically(
+    tmp_path: Path,
+):
+    rows = [TEXT_SUPPORT._admitted_rows()[0], _partition_admitted_row()]
+
+    forward = _validate_closed_rows(tmp_path / "forward", rows)
+    reverse = _validate_closed_rows(tmp_path / "reverse", list(reversed(rows)))
+
+    assert forward["run_manifest_rows"] == reverse["run_manifest_rows"]
+    assert forward["admitted_row_set_sha256"] == reverse["admitted_row_set_sha256"]
+    assert {
+        frozenset(row) for row in forward["run_manifest_rows"]
+    } == {
+        frozenset(_ClosedRowAuthority._ADMITTED_FIELDS),
+        frozenset(_ClosedRowAuthority._PARTITION_ADMITTED_FIELDS),
+    }
+
+
+def test_admitted_subset_refuses_duplicate_source_id(tmp_path: Path):
+    row = TEXT_SUPPORT._admitted_rows()[0]
+    with pytest.raises(ValueError, match="duplicated"):
+        _validate_closed_rows(tmp_path, [row, dict(row)])
+
+
+@pytest.mark.parametrize("mutation", ["extra", "missing"])
+def test_admitted_subset_refuses_unknown_closed_row_schema(
+    tmp_path: Path,
+    mutation: str,
+):
+    row = dict(TEXT_SUPPORT._admitted_rows()[0])
+    if mutation == "extra":
+        row["unexpected"] = True
+    else:
+        row.pop("license_evidence")
+    with pytest.raises(ValueError, match="schema"):
+        _validate_closed_rows(tmp_path, [row])
+
+
+def test_admitted_subset_refuses_claimed_but_unadmitted_row(tmp_path: Path):
+    unresolved = {
+        key: TEXT_SUPPORT._admitted_rows()[1][key]
+        for key in _ClosedRowAuthority._UNRESOLVED_FIELDS
+    }
+    unresolved["admission"] = "UNRESOLVED_CANDIDATE"
+    claim = {**TEXT_SUPPORT._admitted_rows()[0], "source_id": unresolved["source_id"]}
+    with pytest.raises(ValueError, match="claims unadmitted source"):
+        _validate_closed_rows(
+            tmp_path,
+            [TEXT_SUPPORT._admitted_rows()[0], unresolved],
+            manifest_rows=[claim],
+        )
+
+
+def test_admitted_subset_refuses_valid_row_outside_admitted_set(tmp_path: Path):
+    outside = {
+        **TEXT_SUPPORT._admitted_rows()[0],
+        "source_id": "candidate-unknown-train-0",
+    }
+    with pytest.raises(ValueError, match="outside admitted set"):
+        _validate_closed_rows(
+            tmp_path,
+            [TEXT_SUPPORT._admitted_rows()[0]],
+            manifest_rows=[outside],
+        )
