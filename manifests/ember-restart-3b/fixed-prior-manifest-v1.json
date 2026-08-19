@@ -2,7 +2,7 @@
   "schema_version": "ember-fixed-prior-manifest-v1",
   "manifest_version": 1,
   "ticket": "R1-ENTRY-FIXED-PRIOR-MANIFEST",
-  "ts": "2026-08-18T21:20:24+00:00",
+  "ts": "2026-08-19T04:24:15+00:00",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
@@ -12,8 +12,8 @@
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "tree_digest_convention": "combined_sha256 = sha256 over sorted '<name>\\t<sha256>\\t<size_bytes>\\n' lines (scripts/manifest_sha.py convention); git-tracked files only",
   "repo": {
-    "commit": "8fba157a311f249f62eefecb2b3a9363aa038e27",
-    "branch": "HEAD"
+    "commit": "962a5ecb3aae8434823d5194b28a97856a07c779",
+    "branch": "chore/1296-fixed-prior-remint"
   },
   "learned_import_attestation": "Every item in this manifest is a NON-LEARNED prior. Zero imported learned weights, embeddings, learned-parameter tokenizers, teacher outputs, learned filters or judges, or hidden accelerator services (docs/authority/INVARIANT.md clause 3, fail-closed on unknown provenance).",
   "energy_method": {
@@ -34,7 +34,7 @@
       {
         "leg": "windows_pdh_rapl_package",
         "available": true,
-        "detail": "\\Energy Meter(rapl_package0_pkg)\\Energy readable (cumulative picowatt-hours; live read 3427967741479170)",
+        "detail": "\\Energy Meter(rapl_package0_pkg)\\Energy readable (cumulative picowatt-hours; live read 3866304670862500)",
         "reader_wired": true
       },
       {
@@ -115,8 +115,8 @@
       "kind": "file",
       "provenance": "Vertical-slice runner named by launch-packet output; never executed as a command string by ember-cli.",
       "path": "tools/ember-restart-3b/run_vertical_slice.py",
-      "sha256": "1af54177dcc3009ce103f07e94204d922dd5c273747adaa046168effddb3472c",
-      "size_bytes": 211389
+      "sha256": "7b159b249e73030b27640c10708c02af94e4ef0b44f2041b15610fca19f1c56e",
+      "size_bytes": 232875
     },
     {
       "category": "training_loop",
@@ -3376,8 +3376,8 @@
       "kind": "file",
       "provenance": "ember-owned-rung-v1 admission contract; the fail-closed prerequisite of sec1.",
       "path": "scripts/ember_restart/contract.py",
-      "sha256": "34d2c3e3be26f8586b7cbf6d5212961d6d76b3f732f57c611a8e326724e2d156",
-      "size_bytes": 112752
+      "sha256": "3d8b6be1099d8512bece3ac6e24981731afdf3394575827d4b0ad9256365df3f",
+      "size_bytes": 117060
     },
     {
       "category": "deterministic_tools",
