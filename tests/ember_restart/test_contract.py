@@ -571,6 +571,9 @@ def _genesis_manifest(tmp_path: Path) -> Path:
         "benchmark": False,
     }
     checkpoint["schema_version"] = "ember-sparse-checkpoint-v5"
+    checkpoint["contract_version"] = 5
+    for shard in checkpoint["shards"]:
+        shard["path"] = Path(shard["path"]).name
     checkpoint["data_cursor"] = {
         "shard": "GENESIS",
         "record_index": 0,
@@ -588,6 +591,8 @@ def _genesis_manifest(tmp_path: Path) -> Path:
     manifest["schema_version"] = "ember-owned-genesis-v1"
     manifest["stage"] = "GENESIS_CANDIDATE"
     manifest["checkpoint"]["sha256"] = checkpoint_sha256
+    for bank in manifest["architecture"]["expert_banks"]:
+        bank["artifact_sha256"] = bank["genesis_sha256"]
     manifest.pop("tokenizer")
     manifest.pop("training_data")
     manifest.pop("training")
@@ -682,6 +687,78 @@ def test_genesis_candidate_is_zero_step_entry_only_and_uses_real_checkpoint_byte
         custody_db=custody_db,
     )
 
+    assert result == {"valid": True, "stage": "GENESIS_CANDIDATE", "errors": []}
+
+
+def test_checkpoint_shard_resolution_is_version_gated(tmp_path: Path):
+    from scripts.ember_restart import contract
+
+    trained_root = tmp_path / "trained"
+    trained_root.mkdir()
+    trained_manifest = _candidate_manifest(trained_root)
+    trained_db = _register_checkpoint_custody(trained_root)
+    assert contract.validate_manifest(
+        trained_manifest,
+        trained_root / "trusted-verifiers.json",
+        custody_db=trained_db,
+    )["valid"] is True
+
+    genesis_root = tmp_path / "genesis"
+    genesis_root.mkdir()
+    genesis_manifest = _genesis_manifest(genesis_root)
+    genesis_db = _register_checkpoint_custody(genesis_root)
+    assert contract.validate_manifest(
+        genesis_manifest,
+        genesis_root / "trusted-verifiers.json",
+        custody_db=genesis_db,
+    )["valid"] is True
+
+    manifest = json.loads(genesis_manifest.read_text(encoding="utf-8"))
+    checkpoint_path = genesis_root / manifest["checkpoint"]["manifest_path"]
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint["shards"][0]["path"] = f"checkpoint/{checkpoint['shards'][0]['path']}"
+    checkpoint_sha256 = _write_json(checkpoint_path, checkpoint)
+    manifest["checkpoint"]["sha256"] = checkpoint_sha256
+    parameter_receipt_path = genesis_root / manifest["architecture"]["parameter_receipt"]["path"]
+    parameter_receipt = json.loads(parameter_receipt_path.read_text(encoding="utf-8"))
+    parameter_receipt["subject_checkpoint_sha256"] = checkpoint_sha256
+    manifest["architecture"]["parameter_receipt"]["sha256"] = _write_json(
+        parameter_receipt_path, parameter_receipt
+    )
+    _write_json(genesis_manifest, manifest)
+
+    result = contract.validate_manifest(
+        genesis_manifest,
+        genesis_root / "trusted-verifiers.json",
+        custody_db=genesis_db,
+    )
+    assert result["valid"] is False
+    assert any("checkpoint.shards[0]" in error for error in result["errors"])
+
+
+def test_genesis_expert_artifact_sha_is_distinct_from_tensor_genesis_sha(tmp_path: Path):
+    from scripts.ember_restart import contract
+
+    manifest_path = _genesis_manifest(tmp_path)
+    custody_db = _register_checkpoint_custody(tmp_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    receipt_path = tmp_path / manifest["architecture"]["parameter_receipt"]["path"]
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    for index, bank in enumerate(manifest["architecture"]["expert_banks"]):
+        tensor_sha = hashlib.sha256(f"tensor-genesis-{index}".encode()).hexdigest()
+        assert bank["artifact_sha256"] != tensor_sha
+        bank["genesis_sha256"] = tensor_sha
+        receipt["expert_genesis_sha256"][bank["id"]] = tensor_sha
+    manifest["architecture"]["parameter_receipt"]["sha256"] = _write_json(
+        receipt_path, receipt
+    )
+    _write_json(manifest_path, manifest)
+
+    result = contract.validate_manifest(
+        manifest_path,
+        tmp_path / "trusted-verifiers.json",
+        custody_db=custody_db,
+    )
     assert result == {"valid": True, "stage": "GENESIS_CANDIDATE", "errors": []}
 
 

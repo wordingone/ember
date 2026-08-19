@@ -588,6 +588,7 @@ def _verify_architecture(
             bank_id = bank.get("id")
             domain = bank.get("domain")
             genesis = bank.get("genesis_sha256")
+            artifact_sha256 = bank.get("artifact_sha256", genesis)
             if not isinstance(bank_id, str) or not bank_id:
                 errors.append(f"{prefix}.id: expected non-empty string")
             elif bank_id in bank_ids:
@@ -598,15 +599,18 @@ def _verify_architecture(
                 errors.append(f"{prefix}.domain: unsupported domain")
             else:
                 bank_domains.add(domain)
-            if not isinstance(genesis, str) or not SHA256_RE.fullmatch(genesis):
-                errors.append(f"{prefix}.genesis_sha256: expected lowercase SHA-256")
+            if not isinstance(artifact_sha256, str) or not SHA256_RE.fullmatch(artifact_sha256):
+                errors.append(f"{prefix}.artifact_sha256: expected lowercase SHA-256")
             else:
                 _verify_file(
                     root,
-                    {"path": bank.get("path"), "sha256": genesis},
+                    {"path": bank.get("path"), "sha256": artifact_sha256},
                     f"{prefix}.genesis_artifact",
                     errors,
                 )
+            if not isinstance(genesis, str) or not SHA256_RE.fullmatch(genesis):
+                errors.append(f"{prefix}.genesis_sha256: expected lowercase SHA-256")
+            else:
                 if genesis in genesis_hashes:
                     errors.append(f"{prefix}.genesis_sha256: expert genesis hashes must be distinct")
                 else:
@@ -1286,10 +1290,15 @@ def _verify_checkpoint(
     if not isinstance(shards, list) or not shards:
         errors.append("checkpoint manifest: shards must be a non-empty list")
         return
+    manifest_parent_relative = (
+        index.get("schema_version") == "ember-sparse-checkpoint-v5"
+        and index.get("contract_version") == 5
+    )
+    shard_root = path.parent if manifest_parent_relative else root
     checkpoint_shards: dict[str, str] = {}
     for index, shard in enumerate(shards):
         prefix = f"checkpoint.shards[{index}]"
-        shard_path = _verify_file(root, shard, prefix, errors)
+        shard_path = _verify_file(shard_root, shard, prefix, errors)
         if isinstance(shard, dict):
             expected_bytes = shard.get("bytes")
             if not isinstance(expected_bytes, int) or isinstance(expected_bytes, bool) or expected_bytes < 0:
@@ -1297,7 +1306,14 @@ def _verify_checkpoint(
             elif shard_path is not None and shard_path.stat().st_size != expected_bytes:
                 errors.append(f"{prefix}.bytes: size mismatch")
             if isinstance(shard.get("path"), str) and isinstance(shard.get("sha256"), str):
-                checkpoint_shards[shard["path"]] = shard["sha256"]
+                try:
+                    outer_relative = (shard_root / shard["path"]).resolve().relative_to(
+                        root.resolve()
+                    ).as_posix()
+                except (OSError, ValueError):
+                    errors.append(f"{prefix}.path: file escapes artifact root")
+                else:
+                    checkpoint_shards[outer_relative] = shard["sha256"]
     # Issue #1721: a rung-admission preflight names this checkpoint's shard bytes
     # by hash and must fail closed on unverified custody, not just on a local
     # existence+hash check of whatever happens to sit at the declared path. Runs
@@ -1318,7 +1334,7 @@ def _verify_checkpoint(
                 custody_gate.custody_verify(
                     custody_repo_root,
                     list(checkpoint_shards.values()),
-                    {custody_gate.RESUME_CHECKPOINT_VOLUME: root},
+                    {custody_gate.RESUME_CHECKPOINT_VOLUME: shard_root},
                     db=custody_db,
                 )
             except custody_gate.CustodyRefused as error:
@@ -1330,8 +1346,14 @@ def _verify_checkpoint(
             if not isinstance(bank, dict):
                 continue
             path_value = bank.get("path")
-            genesis = bank.get("genesis_sha256")
-            if checkpoint_shards.get(path_value) != genesis:
+            artifact_sha256 = bank.get("artifact_sha256", bank.get("genesis_sha256"))
+            try:
+                checkpoint_key = (root / path_value).resolve().relative_to(
+                    root.resolve()
+                ).as_posix()
+            except (OSError, TypeError, ValueError):
+                checkpoint_key = None
+            if checkpoint_shards.get(checkpoint_key) != artifact_sha256:
                 errors.append(
                     f"architecture.expert_banks[{index}]: genesis artifact must be an exact checkpoint shard"
                 )
