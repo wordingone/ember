@@ -143,6 +143,7 @@ def _build_run_spec(
     telemetry_path: Path,
     sequence_length: int,
     checkpoint_interval: int,
+    admitted_row_set_sha256: str,
 ) -> dict[str, Any]:
     scope = certificate.get("execution_scope")
     if not isinstance(scope, dict):
@@ -151,6 +152,10 @@ def _build_run_spec(
         raise ValueError("certificate does not exclusively authorize warm-100")
     if scope.get("max_optimizer_steps", 0) < 100:
         raise ValueError("certificate optimizer-step ceiling is below WARM-100")
+    if scope.get("allowed_admitted_row_set_sha256") != admitted_row_set_sha256:
+        raise ValueError(
+            "certificate does not authorize the validated admitted row-set hash"
+        )
 
     run_root = custody_root / run_id
     return {
@@ -179,6 +184,7 @@ def _build_run_spec(
         "semantic_canary_sequence_length": sequence_length,
         "semantic_canary_checkpoint_interval": checkpoint_interval,
         "semantic_canary_telemetry_path": str(telemetry_path),
+        "admitted_row_set_sha256": admitted_row_set_sha256,
     }
 
 
@@ -189,101 +195,6 @@ def _exit_source_bindings(source_root: Path, source_commit: str) -> dict[str, An
             for path in paths
         }
         for exit_id, paths in EXIT_SOURCE_PATHS.items()
-    }
-
-
-def _validate_admitted_authority_subset(
-    text_authority,
-    repo_root: Path,
-    receipt: dict[str, Any],
-    *,
-    index_relative: str,
-    external_authority_root: Path | None,
-    manifest_rows: list[dict[str, Any]] | None,
-) -> dict[str, Any]:
-    if receipt.get("result") not in {
-        "VERIFIED",
-        "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING",
-    }:
-        raise ValueError("text authority validator returned an unknown result")
-
-    root = repo_root.resolve()
-    authority_root = external_authority_root if external_authority_root is not None else None
-    index_path = (
-        text_authority._external_path(authority_root, index_relative)
-        if authority_root is not None
-        else text_authority._path(root, index_relative)
-    )
-    index_bytes = index_path.read_bytes()
-    if text_authority._sha_bytes(index_bytes) != receipt.get("authority_index_sha256"):
-        raise ValueError("text authority index changed during admitted-subset validation")
-    index = json.loads(index_bytes)
-    if index.get("schema_version") != text_authority._AUTHORITY_INDEX_SCHEMA_V2:
-        raise ValueError("R1 admitted-subset authority requires a v2 index")
-    corpus_bytes, corpus = text_authority._bound_json(
-        root,
-        index["corpus"],
-        external_root=authority_root,
-    )
-    if text_authority._sha_bytes(corpus_bytes) != receipt.get("corpus_sha256"):
-        raise ValueError("text authority corpus changed during admitted-subset validation")
-
-    rows = corpus.get("sources")
-    if not isinstance(rows, list):
-        raise ValueError("authority payload is incomplete")
-    admitted_by_id: dict[str, dict[str, Any]] = {}
-    unadmitted_ids: set[str] = set()
-    candidate_ids: set[str] = set()
-    for row in rows:
-        source_id = row.get("source_id") if isinstance(row, dict) else None
-        if not isinstance(source_id, str) or source_id in candidate_ids:
-            raise ValueError("candidate descriptor is invalid or duplicated")
-        candidate_ids.add(source_id)
-        if row.get("admission") == "ADMITTED":
-            if frozenset(row) not in (
-                frozenset(text_authority._ADMITTED_FIELDS),
-                frozenset(text_authority._PARTITION_ADMITTED_FIELDS),
-            ):
-                raise ValueError("R1 admitted row schema is unknown")
-            admitted_by_id[source_id] = dict(row)
-        else:
-            unadmitted_ids.add(source_id)
-    admitted_rows = sorted(admitted_by_id.values(), key=lambda row: row["source_id"])
-    if not admitted_rows:
-        raise ValueError("R1 admitted-subset authority contains no admitted rows")
-
-    selected = admitted_rows if manifest_rows is None else manifest_rows
-    if not isinstance(selected, list) or not selected:
-        raise ValueError("R1 run manifest rows must be a non-empty list")
-    run_manifest_rows: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for row in selected:
-        source_id = row.get("source_id") if isinstance(row, dict) else None
-        if source_id in unadmitted_ids:
-            raise ValueError("R1 run manifest claims unadmitted source")
-        if isinstance(row, dict) and frozenset(row) not in (
-            frozenset(text_authority._ADMITTED_FIELDS),
-            frozenset(text_authority._PARTITION_ADMITTED_FIELDS),
-        ):
-            raise ValueError("R1 admitted row schema is unknown")
-        if (
-            not isinstance(source_id, str)
-            or source_id in seen
-            or admitted_by_id.get(source_id) != row
-        ):
-            raise ValueError("R1 run manifest row is outside admitted set")
-        seen.add(source_id)
-        run_manifest_rows.append(row)
-    run_manifest_rows.sort(key=lambda row: row["source_id"])
-    admitted_set_bytes = _canonical_bytes({"rows": admitted_rows})
-
-    return {
-        **{key: value for key, value in receipt.items() if key != "result"},
-        "result": "VERIFIED_ADMITTED_SUBSET",
-        "admitted_row_count": len(admitted_rows),
-        "admitted_row_set_sha256": hashlib.sha256(admitted_set_bytes).hexdigest(),
-        "run_manifest_row_count": len(run_manifest_rows),
-        "run_manifest_rows": run_manifest_rows,
     }
 
 
@@ -359,8 +270,7 @@ def build_ready_for_compute_packet(
     if external_authority_root is not None:
         authority_kwargs["external_authority_root"] = external_authority_root
     authority_receipt = validate_authority(launch_repo_root, **authority_kwargs)
-    authority = _validate_admitted_authority_subset(
-        text_authority,
+    authority = text_authority.validate_admitted_authority_subset(
         launch_repo_root,
         authority_receipt,
         index_relative=authority_index_relative,
@@ -402,6 +312,7 @@ def build_ready_for_compute_packet(
         telemetry_path=selected_telemetry,
         sequence_length=sequence_length,
         checkpoint_interval=checkpoint_interval,
+        admitted_row_set_sha256=authority["admitted_row_set_sha256"],
     )
     if any(key.startswith("resume_") for key in run_spec):
         raise ValueError("WARM-100 packet must not contain resume authority")
