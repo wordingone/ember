@@ -139,6 +139,14 @@ class TrainingClosureDynamicEdgeTests(unittest.TestCase):
         self.assertIn("exec", declaration)
         self.assertIn("sha256", declaration)
 
+    def test_github_license_partition_declares_connector_receipt_import(self) -> None:
+        closure = load_closure()
+        manifest = closure.load_manifest(ROOT)
+        caller = "tools/ember-restart-3b/mint_github_license_partition.py"
+        target = "tools/corpus_connectors/receipt.py"
+        self.assertIn(target, manifest["code"])
+        self.assertIn(target, manifest["dynamic_call_sites"][caller])
+
 
 if __name__ == "__main__":
     unittest.main()
