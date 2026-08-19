@@ -233,14 +233,19 @@ def _validate_admitted_authority_subset(
         raise ValueError("authority payload is incomplete")
     admitted_by_id: dict[str, dict[str, Any]] = {}
     unadmitted_ids: set[str] = set()
+    candidate_ids: set[str] = set()
     for row in rows:
         source_id = row.get("source_id") if isinstance(row, dict) else None
-        if not isinstance(source_id, str):
+        if not isinstance(source_id, str) or source_id in candidate_ids:
             raise ValueError("candidate descriptor is invalid or duplicated")
+        candidate_ids.add(source_id)
         if row.get("admission") == "ADMITTED":
-            admitted_by_id[source_id] = {
-                field: row[field] for field in text_authority._ADMITTED_ROW_FIELDS
-            }
+            if frozenset(row) not in (
+                frozenset(text_authority._ADMITTED_FIELDS),
+                frozenset(text_authority._PARTITION_ADMITTED_FIELDS),
+            ):
+                raise ValueError("R1 admitted row schema is unknown")
+            admitted_by_id[source_id] = dict(row)
         else:
             unadmitted_ids.add(source_id)
     admitted_rows = sorted(admitted_by_id.values(), key=lambda row: row["source_id"])
@@ -256,6 +261,11 @@ def _validate_admitted_authority_subset(
         source_id = row.get("source_id") if isinstance(row, dict) else None
         if source_id in unadmitted_ids:
             raise ValueError("R1 run manifest claims unadmitted source")
+        if isinstance(row, dict) and frozenset(row) not in (
+            frozenset(text_authority._ADMITTED_FIELDS),
+            frozenset(text_authority._PARTITION_ADMITTED_FIELDS),
+        ):
+            raise ValueError("R1 admitted row schema is unknown")
         if (
             not isinstance(source_id, str)
             or source_id in seen
