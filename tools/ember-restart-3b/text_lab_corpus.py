@@ -573,6 +573,8 @@ _HEX = re.compile(r"[0-9a-f]{64}\Z")
 _AUTHORITY_INDEX = "data/ember-restart-3b/text-lab-authority-index-v1.json"
 _AUTHORITY_INDEX_SCHEMA_V1 = "ember-text-lab-authority-index-v1"
 _AUTHORITY_INDEX_SCHEMA_V2 = "ember-text-lab-authority-index-v2"
+_PARTITION_PRODUCER_SUPERSESSIONS = "data/ember-restart-3b/partition-producer-supersessions-v1.json"
+_PARTITION_PRODUCER_PATH = "tools/ember-restart-3b/mint_github_license_partition.py"
 _UNRESOLVED_FIELDS = {"source_id", "domain", "split", "admission", "required_evidence", "allowed_license_spdx"}
 _ADMITTED_FIELDS = _UNRESOLVED_FIELDS | {"content_sha256", "license_spdx", "l4_receipt", "license_evidence"}
 _PARTITION_ADMITTED_FIELDS = _UNRESOLVED_FIELDS | {
@@ -730,7 +732,11 @@ def _validate_partition_authority_row(repo_root: Path, authority_root: Path, row
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     receipt = module.validate_partition_receipt(receipt_path)
-    if receipt.get("producer_sha256") != _sha_bytes(producer_path.read_bytes()):
+    recorded_producer_sha = receipt.get("producer_sha256")
+    current_producer_sha = _sha_bytes(producer_path.read_bytes())
+    if recorded_producer_sha != current_producer_sha and not _partition_producer_supersession_allows(
+        repo_root.resolve(), recorded_producer_sha, current_producer_sha
+    ):
         raise ValueError("partition receipt producer bytes changed")
     if any(receipt.get(field) != row.get(field) for field in ("source_id", "split", "domain")):
         raise ValueError("partition receipt identity does not match the admitted row")
@@ -757,6 +763,70 @@ def _validate_partition_authority_row(repo_root: Path, authority_root: Path, row
     if row.get("l4_receipt") != expected_l4:
         raise ValueError("partition authority L4 receipt is invalid")
     return receipt
+
+
+def _partition_producer_supersession_allows(
+    repo_root: Path, recorded_sha: Any, current_sha: str
+) -> bool:
+    """Accept only the single PR-reviewed, self-expiring producer supersession tuple."""
+    try:
+        table = json.loads(_path(repo_root, _PARTITION_PRODUCER_SUPERSESSIONS).read_bytes())
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return False
+    if not isinstance(table, dict) or set(table) != {"schema_version", "entries"}:
+        return False
+    entries = table.get("entries")
+    if table.get("schema_version") != "ember-partition-producer-supersessions-v1" or not isinstance(entries, list) or len(entries) != 1:
+        return False
+    entry = entries[0]
+    expected_fields = {
+        "path", "superseded_sha256", "resolved_source_commits",
+        "successor_sha256", "cause_commit", "issue",
+    }
+    if not isinstance(entry, dict) or set(entry) != expected_fields:
+        return False
+    resolved = entry.get("resolved_source_commits")
+    if (
+        entry.get("path") != _PARTITION_PRODUCER_PATH
+        or entry.get("superseded_sha256") != recorded_sha
+        or entry.get("successor_sha256") != current_sha
+        or entry.get("issue") != 1719
+        or not isinstance(resolved, list)
+        or len(resolved) != 2
+        or len(set(resolved)) != 2
+        or any(not isinstance(commit, str) or re.fullmatch(r"[0-9a-f]{40}", commit) is None for commit in resolved)
+        or not isinstance(entry.get("cause_commit"), str)
+        or re.fullmatch(r"[0-9a-f]{40}", entry["cause_commit"]) is None
+    ):
+        return False
+
+    kwargs: dict[str, Any] = {"capture_output": True, "check": False}
+    if os.name == "nt":
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+    cause_ancestry = subprocess.run(
+        ["git", "-C", str(repo_root), "merge-base", "--is-ancestor", entry["cause_commit"], "HEAD"],
+        **kwargs,
+    )
+    cause_blob = subprocess.run(
+        ["git", "-C", str(repo_root), "show", f'{entry["cause_commit"]}:{_PARTITION_PRODUCER_PATH}'],
+        **kwargs,
+    )
+    if cause_ancestry.returncode != 0 or cause_blob.returncode != 0 or _sha_bytes(cause_blob.stdout) != current_sha:
+        return False
+    for commit in resolved:
+        ancestry = subprocess.run(
+            ["git", "-C", str(repo_root), "merge-base", "--is-ancestor", commit, "HEAD"],
+            **kwargs,
+        )
+        if ancestry.returncode != 0:
+            continue
+        blob = subprocess.run(
+            ["git", "-C", str(repo_root), "show", f"{commit}:{_PARTITION_PRODUCER_PATH}"],
+            **kwargs,
+        )
+        if blob.returncode == 0 and _sha_bytes(blob.stdout) == recorded_sha:
+            return True
+    return False
 
 def _commit(root: Path) -> str:
     value=subprocess.run(["git","-C",str(root),"rev-parse","HEAD"],text=True,capture_output=True,check=False).stdout.strip()
