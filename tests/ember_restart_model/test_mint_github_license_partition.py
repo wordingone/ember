@@ -165,6 +165,14 @@ def test_mixed_repositories_mint_exact_partition_and_record_link_exclusion(tmp_p
     assert module.validate_partition_receipt(output / "partition-receipt.json") == receipt
 
 
+def test_connector_operational_logs_are_not_payload(tmp_path: Path):
+    module = _load()
+    (tmp_path / "payload.tar.gz").write_bytes(b"payload")
+    (tmp_path / "_logs").mkdir()
+    (tmp_path / "_logs" / "connector.log").write_bytes(b"operational")
+    assert module._listed_payload_paths(tmp_path) == {"payload.tar.gz"}
+
+
 @pytest.mark.parametrize("mutation", ["archive", "receipt", "swap"])
 def test_tamper_and_partition_swap_refuse(tmp_path: Path, mutation: str):
     module = _load()

@@ -10,10 +10,22 @@ import os
 import re
 import stat
 import subprocess
+import sys
 import unicodedata
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from jsonschema import Draft202012Validator
 from typing import Any, Iterable
+
+
+_CONNECTOR_RECEIPT_PATH = Path(__file__).resolve().parents[1] / "corpus_connectors" / "receipt.py"
+_CONNECTOR_RECEIPT_SPEC = importlib.util.spec_from_file_location(
+    "ember_connector_receipt_authority", _CONNECTOR_RECEIPT_PATH
+)
+if _CONNECTOR_RECEIPT_SPEC is None or _CONNECTOR_RECEIPT_SPEC.loader is None:
+    raise RuntimeError("connector receipt authority cannot be loaded")
+connector_receipt = importlib.util.module_from_spec(_CONNECTOR_RECEIPT_SPEC)
+sys.modules[_CONNECTOR_RECEIPT_SPEC.name] = connector_receipt
+_CONNECTOR_RECEIPT_SPEC.loader.exec_module(connector_receipt)
 
 DOMAINS = ("mathematics", "statistics", "physics", "computer_science", "ml_ai", "training_infrastructure", "formal_logic", "software_engineering", "data_evaluation", "scientific_method", "application_worlds")
 LICENSES = {"CC0-1.0", "CC-BY-4.0", "MIT", "Apache-2.0", "BSD-3-Clause", "PDDL-1.0", "ODC-By-1.0"}
@@ -301,7 +313,7 @@ def adapt_pdf_extraction_receipt(
     }
 
 
-_CONNECTOR_SIDECAR_DIRS = {"_manifests", ".cache"}
+_CONNECTOR_SIDECAR_DIRS = set(connector_receipt.DEFAULT_EXCLUDE_DIRNAMES)
 _CONNECTOR_SIDECAR_FILES = {"manifest.jsonl"}
 
 

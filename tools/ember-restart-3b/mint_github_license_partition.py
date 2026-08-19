@@ -12,14 +12,27 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import re
 import secrets
 import shutil
+import sys
 import tarfile
 from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO
+
+
+_CONNECTOR_RECEIPT_PATH = Path(__file__).resolve().parents[1] / "corpus_connectors" / "receipt.py"
+_CONNECTOR_RECEIPT_SPEC = importlib.util.spec_from_file_location(
+    "ember_connector_receipt_authority", _CONNECTOR_RECEIPT_PATH
+)
+if _CONNECTOR_RECEIPT_SPEC is None or _CONNECTOR_RECEIPT_SPEC.loader is None:
+    raise RuntimeError("connector receipt authority cannot be loaded")
+connector_receipt = importlib.util.module_from_spec(_CONNECTOR_RECEIPT_SPEC)
+sys.modules[_CONNECTOR_RECEIPT_SPEC.name] = connector_receipt
+_CONNECTOR_RECEIPT_SPEC.loader.exec_module(connector_receipt)
 
 
 SCHEMA = "ember-github-license-partition-receipt-v1"
@@ -104,7 +117,7 @@ def _contained_regular(root: Path, relative: str) -> Path:
 def _listed_payload_paths(root: Path) -> set[str]:
     found: set[str] = set()
     for child in root.iterdir():
-        if child.name in {"_manifests", ".cache", "manifest.jsonl"}:
+        if child.name in {*connector_receipt.DEFAULT_EXCLUDE_DIRNAMES, "manifest.jsonl"}:
             continue
         if not child.is_file() or _is_reparse_or_symlink(child):
             raise ValueError("connector destination contains a non-regular payload")
