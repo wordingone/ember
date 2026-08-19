@@ -2,7 +2,7 @@
   "schema_version": "ember-fixed-prior-manifest-v1",
   "manifest_version": 1,
   "ticket": "R1-ENTRY-FIXED-PRIOR-MANIFEST",
-  "ts": "2026-08-19T04:24:15+00:00",
+  "ts": "2026-08-19T05:08:10+00:00",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
@@ -12,8 +12,8 @@
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "tree_digest_convention": "combined_sha256 = sha256 over sorted '<name>\\t<sha256>\\t<size_bytes>\\n' lines (scripts/manifest_sha.py convention); git-tracked files only",
   "repo": {
-    "commit": "962a5ecb3aae8434823d5194b28a97856a07c779",
-    "branch": "chore/1296-fixed-prior-remint"
+    "commit": "9deafdd6813cd34b8276e6ccf2201584c4a32380",
+    "branch": "fix/1296-shared-counter-contract"
   },
   "learned_import_attestation": "Every item in this manifest is a NON-LEARNED prior. Zero imported learned weights, embeddings, learned-parameter tokenizers, teacher outputs, learned filters or judges, or hidden accelerator services (docs/authority/INVARIANT.md clause 3, fail-closed on unknown provenance).",
   "energy_method": {
@@ -34,7 +34,7 @@
       {
         "leg": "windows_pdh_rapl_package",
         "available": true,
-        "detail": "\\Energy Meter(rapl_package0_pkg)\\Energy readable (cumulative picowatt-hours; live read 3866304670862500)",
+        "detail": "\\Energy Meter(rapl_package0_pkg)\\Energy readable (cumulative picowatt-hours; live read 3911007990370830)",
         "reader_wired": true
       },
       {
@@ -3376,8 +3376,8 @@
       "kind": "file",
       "provenance": "ember-owned-rung-v1 admission contract; the fail-closed prerequisite of sec1.",
       "path": "scripts/ember_restart/contract.py",
-      "sha256": "3d8b6be1099d8512bece3ac6e24981731afdf3394575827d4b0ad9256365df3f",
-      "size_bytes": 117060
+      "sha256": "0c481589c0e513befead63c23322634d1200492a6c3f12e54193371191e1e3bb",
+      "size_bytes": 116723
     },
     {
       "category": "deterministic_tools",
