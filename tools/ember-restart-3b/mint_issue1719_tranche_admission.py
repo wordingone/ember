@@ -305,6 +305,59 @@ def _validate_identity_cure(
     }
 
 
+class _CureBoundCodePath:
+    def __init__(self, payload: bytes):
+        self._payload = payload
+
+    def read_bytes(self) -> bytes:
+        return self._payload
+
+
+def _validate_authority_with_identity_cure(
+    *,
+    module: Any,
+    current_repo: Path,
+    validation_root: Path,
+    source_custody: Path,
+    cure_evidence: dict[str, Any],
+    expected_code: dict[str, str],
+) -> dict[str, Any]:
+    paths = {
+        "text_lab_corpus": "tools/ember-restart-3b/text_lab_corpus.py",
+        "train": "tools/ember-restart-3b/train.py",
+        "run_vertical_slice": "tools/ember-restart-3b/run_vertical_slice.py",
+    }
+    resolved_commit = cure_evidence["resolved_source_commit"]
+    bound_code = {
+        relative: _git_blob(current_repo, resolved_commit, relative)
+        for relative in paths.values()
+    }
+    if {
+        name: sha256_bytes(bound_code[relative])
+        for name, relative in paths.items()
+    } != expected_code:
+        raise ValueError("source identity cure git objects do not match executed code")
+
+    original_path = module._path
+    validation_root = validation_root.resolve(strict=True)
+
+    def cure_bound_path(root: Path, value: object):
+        relative = PurePosixPath(str(value).replace("\\", "/")).as_posix()
+        if Path(root).resolve(strict=True) == validation_root and relative in bound_code:
+            return _CureBoundCodePath(bound_code[relative])
+        return original_path(root, value)
+
+    module._path = cure_bound_path
+    try:
+        return module.validate_authority_index(
+            validation_root,
+            index_relative=ARTIFACT_NAMES["index"],
+            external_authority_root=source_custody,
+        )
+    finally:
+        module._path = original_path
+
+
 def _path_key(path: Path) -> str:
     return os.path.normcase(os.path.normpath(str(path.resolve(strict=True)))).casefold()
 
@@ -418,10 +471,21 @@ def _validate_predecessor_authority(
     ):
         raise ValueError("historical predecessor lifecycle row changed")
 
-    validation = module.validate_authority_index(
-        historical,
-        index_relative=ARTIFACT_NAMES["index"],
-        external_authority_root=source_custody,
+    validation = (
+        _validate_authority_with_identity_cure(
+            module=module,
+            current_repo=current_repo,
+            validation_root=historical,
+            source_custody=source_custody,
+            cure_evidence=cure_evidence,
+            expected_code=expected_code,
+        )
+        if cure_evidence is not None
+        else module.validate_authority_index(
+            historical,
+            index_relative=ARTIFACT_NAMES["index"],
+            external_authority_root=source_custody,
+        )
     )
     if validation != stored_validation:
         raise ValueError("predecessor validation receipt changed")

@@ -152,7 +152,12 @@ def test_historical_predecessor_reopen_requires_governed_detached_ancestor(tmp_p
         )
 
 
-def test_historical_predecessor_reopen_accepts_reviewed_joint_git_identity_cure(tmp_path: Path, monkeypatch):
+@pytest.mark.parametrize("payload_changed", [False, True])
+def test_historical_predecessor_reopen_binds_reviewed_identity_cure_without_weakening_payload_checks(
+    tmp_path: Path,
+    monkeypatch,
+    payload_changed: bool,
+):
     producer = _load_producer()
     historical, common, _, state_raw, identity = _historical_source_fixture(tmp_path)
     recorded_commit = identity["source_base_commit"]
@@ -187,6 +192,11 @@ def test_historical_predecessor_reopen_accepts_reviewed_joint_git_identity_cure(
     }
     cure_raw = _write(tmp_path / "tranche-admission-source-identity-cure.json", cure)
     stored_validation = {"result": "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING"}
+    payload_path = tmp_path / "payload.json"
+    expected_payload = b'{"authority":"bound"}\n'
+    payload_path.write_bytes(
+        b'{"authority":"changed"}\n' if payload_changed else expected_payload
+    )
 
     def fake_git(repo: Path, *args: str):
         command = tuple(args)
@@ -214,7 +224,39 @@ def test_historical_predecessor_reopen_accepts_reviewed_joint_git_identity_cure(
         lambda repo, commit, path: resolved_blobs[path],
         raising=False,
     )
-    monkeypatch.setattr(text_lab_corpus, "validate_authority_index", lambda *args, **kwargs: stored_validation)
+
+    def validate_authority_index(repo_root: Path, **kwargs):
+        code_paths = {
+            "text_lab_corpus": "tools/ember-restart-3b/text_lab_corpus.py",
+            "train": "tools/ember-restart-3b/train.py",
+            "run_vertical_slice": "tools/ember-restart-3b/run_vertical_slice.py",
+        }
+        observed_code = {
+            name: _sha(text_lab_corpus._path(repo_root, relative).read_bytes())
+            for name, relative in code_paths.items()
+        }
+        if observed_code != identity["code_files"]:
+            raise ValueError("predecessor code bytes changed")
+        if (kwargs["external_authority_root"] / "payload.json").read_bytes() != expected_payload:
+            raise ValueError("predecessor payload bytes changed")
+        return stored_validation
+
+    monkeypatch.setattr(text_lab_corpus, "validate_authority_index", validate_authority_index)
+
+    if payload_changed:
+        with pytest.raises(ValueError, match="payload bytes changed"):
+            producer._validate_predecessor_authority(
+                module=text_lab_corpus,
+                current_repo=ROOT,
+                current_source_commit=current_commit,
+                source_custody=tmp_path,
+                source_identity=identity,
+                stored_validation=stored_validation,
+                predecessor_source_repo=historical,
+                predecessor_receipt_sha256=predecessor_receipt_sha256,
+                predecessor_generated_files=generated_files,
+            )
+        return
 
     validation, evidence = producer._validate_predecessor_authority(
         module=text_lab_corpus,
