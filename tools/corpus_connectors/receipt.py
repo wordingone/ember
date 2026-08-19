@@ -296,16 +296,23 @@ def kaggle_credentials_present(env: Optional[dict] = None) -> bool:
 # ---------------------------------------------------------------------------
 # Filesystem-level dest checks
 # ---------------------------------------------------------------------------
+DEFAULT_EXCLUDE_DIRNAMES = ("_manifests", "_logs", ".cache")
+
+
 def check_no_collision(path: Path) -> None:
     if path.exists():
         raise DestCollisionError(f"destination already exists: {path}")
 
 
-def relative_files_under(root: Path, exclude_dirnames: Iterable[str] = ("_manifests", ".cache")) -> List[Path]:
+def relative_files_under(
+    root: Path,
+    exclude_dirnames: Iterable[str] = DEFAULT_EXCLUDE_DIRNAMES,
+) -> List[Path]:
     """Enumerate files under root (recursively), excluding named directories and
     the compatibility manifest.jsonl / temp files, returned relative to root.
 
-    `.cache` is excluded by default because HF client libraries (huggingface_hub)
+    `_logs` is excluded because connector operational telemetry is not corpus
+    payload. `.cache` is excluded by default because HF client libraries (huggingface_hub)
     write their own local bookkeeping (download metadata, CACHEDIR.TAG, tree
     cache) under a `.cache/` subtree of the destination -- that is library
     internals, not fetched corpus content, and must never enter the receipt's

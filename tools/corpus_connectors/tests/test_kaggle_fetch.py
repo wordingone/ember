@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Mocked test for kaggle_fetch.py -- no network, no real kaggle CLI. Fakes the
 subprocess runner and the credential-presence check."""
 from __future__ import annotations
@@ -81,6 +84,26 @@ def _malformed_double_encoded_runner(cmd):
 
 
 class KaggleFetchMockedTests(unittest.TestCase):
+    def test_fetch_excludes_operational_logs_but_receipts_arbitrary_data(self):
+        def runner(cmd):
+            result = _fake_runner(cmd)
+            if "download" in cmd:
+                dest_dir = Path(_arg_after(cmd, "-p"))
+                logs = dest_dir / "_logs"
+                logs.mkdir()
+                (logs / "kaggle-fetch.log").write_text("operational log\n", encoding="utf-8")
+                (dest_dir / "extra.bin").write_bytes(b"extra data\n")
+            return result
+
+        with tempfile.TemporaryDirectory() as td:
+            dest = Path(td) / "kagdata"
+            args = kaggle_fetch.build_parser().parse_args(["owner/dataset", "--dest", str(dest)])
+            receipt_path = kaggle_fetch.fetch(args, runner=runner, creds_present=lambda: True)
+            data = json.loads(receipt_path.read_text(encoding="utf-8"))
+
+            self.assertEqual([row["path"] for row in data["files"]], ["extra.bin", "rows.csv"])
+            self.assertTrue((dest / "_logs" / "kaggle-fetch.log").is_file())
+
     def test_fetch_writes_receipt_when_credentials_present(self):
         with tempfile.TemporaryDirectory() as td:
             dest = Path(td) / "kagdata"

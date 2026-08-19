@@ -117,6 +117,42 @@ def _rewrite_census_extractor(
 
 
 class PdfTreeToUtf8Tests(unittest.TestCase):
+    def test_census_excludes_top_level_operational_logs(self) -> None:
+        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            connector_receipt, connector_sha256, source = _write_tree_fixture(root)
+            log = source / "_logs" / "arxiv-fetch.log"
+            log.parent.mkdir()
+            log.write_text("operational fetch log\n", encoding="utf-8")
+
+            _, _, files = module._source_tree(
+                connector_receipt,
+                connector_sha256,
+                max_files=module.DEFAULT_MAX_FILES,
+            )
+
+            self.assertEqual([row["path"] for row in files], ["alpha/document.pdf", "beta/document.pdf"])
+
+    def test_census_still_refuses_arbitrary_unreceipted_data(self) -> None:
+        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            connector_receipt, connector_sha256, source = _write_tree_fixture(root)
+            (source / "unreceipted-extra.bin").write_bytes(b"extra data\n")
+
+            with self.assertRaisesRegex(
+                module.PdfTreeExtractionRefusal,
+                "connector custody file set differs from its receipt",
+            ):
+                module.census_pdf_tree_refusals(
+                    connector_receipt=connector_receipt,
+                    connector_receipt_sha256=connector_sha256,
+                    report_path=root / "refusal-census.json",
+                )
+
     def test_produces_collision_free_closed_tree_and_reextracts_every_pdf(self) -> None:
         from tools.corpus_connectors import pdf_tree_to_utf8 as module
 

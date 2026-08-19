@@ -13,6 +13,9 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 PRODUCER = ROOT / "tools" / "corpus_connectors" / "mint_connector_license_sidecar.py"
+CC0_URL = "http://creativecommons.org/publicdomain/zero/1.0/"
+CC0_URL_RECEIPT_NAME = "20260818T202142Z-paper-list-paper-list.txt-939-ids.json"
+CC0_URL_RECEIPT_SHA256 = "402ebb06f9763c33ed34d8d5a3c1dae58fbeed56afb8ccea55de0f980ad45848"
 
 
 def _sha(raw: bytes) -> str:
@@ -112,6 +115,29 @@ def _rewrite_receipt(path: Path, receipt: dict) -> str:
     return _write(path, receipt)
 
 
+def _set_license_identities(inputs: dict, *, original: str, artifact: str) -> None:
+    original_receipt = json.loads(inputs["original_receipt_path"].read_bytes())
+    original_receipt["license"] = original
+    inputs["original_receipt_sha256"] = _rewrite_receipt(
+        inputs["original_receipt_path"], original_receipt
+    )
+    license_receipt = json.loads(inputs["license_receipt_path"].read_bytes())
+    license_receipt["license"] = artifact
+    inputs["license_receipt_sha256"] = _rewrite_receipt(
+        inputs["license_receipt_path"], license_receipt
+    )
+
+
+def _add_license_receipt_file(inputs: dict, *, name: str = "NOTICE", raw: bytes = b"notice\n") -> None:
+    path = inputs["license_payload_path"].parent / name
+    path.write_bytes(raw)
+    receipt = json.loads(inputs["license_receipt_path"].read_bytes())
+    receipt["files"].append({"path": name, "bytes": len(raw), "sha256": _sha(raw)})
+    receipt["total_bytes"] += len(raw)
+    receipt["sha256_manifest"] = _manifest([row["sha256"] for row in receipt["files"]])
+    inputs["license_receipt_sha256"] = _rewrite_receipt(inputs["license_receipt_path"], receipt)
+
+
 def _expect_refusal(inputs: dict, match: str) -> None:
     producer = _load_producer()
     with pytest.raises(producer.LicenseSidecarRefusal, match=match):
@@ -159,7 +185,82 @@ def test_mint_license_sidecar_refuses_predecessor_payload_drift(tmp_path: Path, 
 def test_mint_license_sidecar_refuses_spdx_swap(tmp_path: Path) -> None:
     inputs = _fixture(tmp_path)
     inputs["expected_spdx"] = "MIT"
-    _expect_refusal(inputs, "SPDX identities differ")
+    _expect_refusal(inputs, "canonical license identities differ")
+
+
+def test_mint_license_sidecar_canonicalizes_equivalent_raw_license_identities(tmp_path: Path) -> None:
+    inputs = _fixture(tmp_path)
+    original_raw = CC0_URL
+    artifact_raw = "CC0-1.0"
+    assert original_raw != artifact_raw
+    assert CC0_URL_RECEIPT_NAME == "20260818T202142Z-paper-list-paper-list.txt-939-ids.json"
+    assert len(CC0_URL_RECEIPT_SHA256) == 64
+    _set_license_identities(inputs, original=original_raw, artifact=artifact_raw)
+    inputs["expected_spdx"] = "CC0-1.0"
+
+    result = _load_producer().mint_license_sidecar(**inputs)
+    derived = json.loads(Path(result["connector_receipt_path"]).read_bytes())
+    derivation = json.loads(Path(result["derivation_receipt_path"]).read_bytes())
+
+    assert derived["license"] == "CC0-1.0"
+    assert derivation["expected_spdx"] == "CC0-1.0"
+    assert derivation["original_license_identity_raw"] == original_raw
+    assert derivation["license_artifact_identity_raw"] == artifact_raw
+
+
+def test_mint_license_sidecar_refuses_canonically_different_license_identities(tmp_path: Path) -> None:
+    inputs = _fixture(tmp_path)
+    _set_license_identities(
+        inputs,
+        original="CC-BY-4.0",
+        artifact="CC0-1.0",
+    )
+    inputs["expected_spdx"] = "CC0-1.0"
+    _expect_refusal(inputs, "canonical license identities differ")
+
+
+def test_mint_license_sidecar_selects_explicit_payload_from_multifile_receipt(tmp_path: Path) -> None:
+    inputs = _fixture(tmp_path)
+    _add_license_receipt_file(inputs)
+
+    result = _load_producer().mint_license_sidecar(**inputs)
+    derivation = json.loads(Path(result["derivation_receipt_path"]).read_bytes())
+
+    assert derivation["license_payload_source_path"] == str(inputs["license_payload_path"].resolve())
+    assert derivation["license_payload_sha256"] == inputs["license_payload_sha256"]
+
+
+def test_mint_license_sidecar_refuses_unbound_multifile_license_receipt(tmp_path: Path) -> None:
+    inputs = _fixture(tmp_path)
+    _add_license_receipt_file(inputs)
+    inputs["license_payload_path"] = None
+    inputs["license_payload_sha256"] = None
+    _expect_refusal(inputs, "license payload binding is missing")
+
+
+def test_mint_license_sidecar_refuses_wrong_payload_sha_in_multifile_receipt(tmp_path: Path) -> None:
+    inputs = _fixture(tmp_path)
+    _add_license_receipt_file(inputs)
+    inputs["license_payload_sha256"] = "0" * 64
+    _expect_refusal(inputs, "license payload identity differs")
+
+
+def test_mint_license_sidecar_refuses_payload_absent_from_multifile_receipt(tmp_path: Path) -> None:
+    inputs = _fixture(tmp_path)
+    _add_license_receipt_file(inputs)
+    absent = tmp_path / "absent-license"
+    absent.write_bytes(inputs["license_payload_path"].read_bytes())
+    inputs["license_payload_path"] = absent
+    _expect_refusal(inputs, "license payload identity differs")
+
+
+def test_text_lab_license_authority_refuses_unreceipted_url_alias() -> None:
+    authority = _load_path(
+        "text_lab_corpus_unreceipted_license_alias_test",
+        ROOT / "tools" / "ember-restart-3b" / "text_lab_corpus.py",
+    )
+    with pytest.raises(ValueError, match="whole conjunction is not on the text-lab allow-list"):
+        authority._closed_connector_license("http://creativecommons.org/licenses/by-nc/4.0/")
 
 
 def test_mint_license_sidecar_refuses_traversal_even_when_receipt_is_rehashed(tmp_path: Path) -> None:
@@ -189,6 +290,26 @@ def test_mint_license_sidecar_refuses_output_collision(tmp_path: Path) -> None:
     producer = _load_producer()
     with pytest.raises(producer.LicenseSidecarRefusal, match="output already exists"):
         producer.mint_license_sidecar(**inputs)
+
+
+def test_mint_license_sidecar_excludes_top_level_connector_logs(tmp_path: Path) -> None:
+    inputs = _fixture(tmp_path)
+    log = json.loads(inputs["original_receipt_path"].read_bytes())["dest_root"]
+    log_path = Path(log) / "_logs" / "arxiv-fetch.log"
+    log_path.parent.mkdir()
+    log_path.write_text("operational fetch log\n", encoding="utf-8")
+
+    result = _load_producer().mint_license_sidecar(**inputs)
+
+    assert Path(result["connector_receipt_path"]).is_file()
+
+
+def test_mint_license_sidecar_still_refuses_arbitrary_unreceipted_data(tmp_path: Path) -> None:
+    inputs = _fixture(tmp_path)
+    source = Path(json.loads(inputs["original_receipt_path"].read_bytes())["dest_root"])
+    (source / "unreceipted-extra.bin").write_bytes(b"extra\n")
+
+    _expect_refusal(inputs, "custody file set differs from its receipt")
 
 
 def test_derived_receipt_is_accepted_by_real_text_lab_adapter(tmp_path: Path) -> None:

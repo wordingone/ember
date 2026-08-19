@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """kaggle_fetch.py -- Kaggle CLI wrapper connector.
 
     kaggle_fetch.py DATASET_SLUG [--dest DIR] [--allow-unverified-license]
@@ -104,7 +107,7 @@ def fetch(args: argparse.Namespace, runner=_run, creds_present=None) -> Path:
             zf.extractall(dest_root)
         z.unlink()
 
-    exclude_dirs = ("_manifests", "_kaggle_metadata_scratch", ".cache")
+    exclude_dirs = (*rcpt.DEFAULT_EXCLUDE_DIRNAMES, "_kaggle_metadata_scratch")
     rel_paths = rcpt.relative_files_under(dest_root, exclude_dirnames=exclude_dirs)
     if not rel_paths:
         raise rcpt.BlockedError(f"no files landed under {dest_root} after kaggle datasets download")

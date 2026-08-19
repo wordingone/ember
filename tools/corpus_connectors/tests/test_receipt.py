@@ -85,7 +85,7 @@ class ReceiptSchemaTests(unittest.TestCase):
 
 
 class RelativeFilesUnderTests(unittest.TestCase):
-    def test_excludes_manifests_and_dotcache_dirs_by_default(self):
+    def test_excludes_operational_dirs_but_preserves_arbitrary_data_by_default(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             (root / "data.csv").write_text("a,b\n1,2\n", encoding="utf-8")
@@ -98,10 +98,14 @@ class RelativeFilesUnderTests(unittest.TestCase):
             hf_cache_dir.mkdir(parents=True)
             (hf_cache_dir / "some-blob.json").write_text("{}", encoding="utf-8")
             (root / ".cache" / "CACHEDIR.TAG").write_text("Signature: 8a477f597d28d172789f06886806bc55", encoding="utf-8")
+            logs_dir = root / "_logs"
+            logs_dir.mkdir()
+            (logs_dir / "connector.log").write_text("operational log\n", encoding="utf-8")
+            (root / "unreceipted-extra.bin").write_bytes(b"extra data\n")
 
             rel = rcpt.relative_files_under(root)
             rel_strs = {p.as_posix() for p in rel}
-            self.assertEqual(rel_strs, {"data.csv"})
+            self.assertEqual(rel_strs, {"data.csv", "unreceipted-extra.bin"})
 
 
 class WriteReceiptTests(unittest.TestCase):

@@ -20,6 +20,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from tools.corpus_connectors import pdf_to_utf8
+from tools.corpus_connectors import receipt as connector_receipt
 
 
 SCHEMA = "ember-pdf-tree-extraction-receipt-v2"
@@ -31,7 +32,7 @@ DEFAULT_MAX_TOTAL_PAGES = 2_000_000
 DEFAULT_MAX_TOTAL_DECODED_CONTENT_BYTES = 1 << 40
 DEFAULT_MAX_TOTAL_OUTPUT_BYTES = 1 << 38
 _HEX = re.compile(r"^[0-9a-f]{64}$")
-_SIDECAR_ROOTS = {"_manifests", ".cache"}
+_SIDECAR_ROOTS = set(connector_receipt.DEFAULT_EXCLUDE_DIRNAMES)
 _SIDECAR_FILES = {"manifest.jsonl"}
 
 
