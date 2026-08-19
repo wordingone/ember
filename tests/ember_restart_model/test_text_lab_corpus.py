@@ -11,7 +11,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
@@ -40,7 +40,7 @@ class TextLabCorpusTests(unittest.TestCase):
             self.assertEqual(_listed_data_paths(root), {"payload.txt"})
 
     def test_checked_in_authority_returns_terminal_unresolved_refusal_after_full_validation(self):
-        from text_lab_corpus import validate_authority_index
+        from text_lab_corpus import validate_admitted_authority_subset, validate_authority_index
         result = validate_authority_index(ROOT)
         self.assertEqual(result["result"], "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING")
         self.assertEqual(result["domain_count"], 11)
@@ -48,6 +48,41 @@ class TextLabCorpusTests(unittest.TestCase):
         self.assertEqual(result["heldout_source_count"], 22)
         self.assertRegex(result["train_root_sha256"], r"^[0-9a-f]{64}$")
         self.assertRegex(result["heldout_root_sha256"], r"^[0-9a-f]{64}$")
+        admitted = validate_admitted_authority_subset(ROOT, result)
+        self.assertEqual(admitted["result"], "VERIFIED_ADMITTED_SUBSET")
+        self.assertEqual(admitted["admitted_row_count"], 15)
+        self.assertEqual(admitted["run_manifest_row_count"], 15)
+        self.assertEqual(
+            admitted["admitted_row_set_sha256"],
+            "80e56787d544fa4c1139294f6bf8424e25ccfe998a453649f8a905b9c21102f5",
+        )
+        corpus = json.loads((ROOT / "data/ember-restart-3b/owned-text-lab-corpus-v4.json").read_bytes())
+        dropped = {
+            "candidate-training_infrastructure-train-1",
+            "candidate-software_engineering-train-1",
+            "candidate-software_engineering-heldout-0",
+            "candidate-application_worlds-train-0",
+            "candidate-application_worlds-train-1",
+            "candidate-physics-heldout-0",
+            "candidate-computer_science-train-0",
+            "candidate-scientific_method-heldout-0",
+        }
+        self.assertEqual(
+            {row["source_id"] for row in corpus["sources"] if row["source_id"] in dropped and row["admission"] == "UNRESOLVED_CANDIDATE"},
+            dropped,
+        )
+        bundle = json.loads((ROOT / "data/ember-restart-3b/text-lab-source-receipt-bundle-v4.json").read_bytes())
+        def strings(value):
+            if isinstance(value, dict):
+                for item in value.values():
+                    yield from strings(item)
+            elif isinstance(value, list):
+                for item in value:
+                    yield from strings(item)
+            elif isinstance(value, str):
+                yield value
+        self.assertFalse(any(PureWindowsPath(value).drive for value in strings(corpus)))
+        self.assertFalse(any(PureWindowsPath(value).drive for value in strings(bundle)))
 
     def test_empty_protected_registry_rejects_before_unresolved_candidate_refusal(self):
         from text_lab_corpus import validate_authority_index
@@ -71,6 +106,10 @@ class TextLabCorpusTests(unittest.TestCase):
             identity_path = root / "data/ember-restart-3b/owned-text-lab-input-identity-v2.json"
             identity = json.loads(identity_path.read_text(encoding="utf-8"))
             identity["corpus_sha256"] = sha(corpus_bytes)
+            identity["code_files"] = {
+                name.removesuffix(".py"): sha((tools / name).read_bytes())
+                for name in ("text_lab_corpus.py", "train.py", "run_vertical_slice.py")
+            }
             identity_bytes = json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
             identity_path.write_bytes(identity_bytes)
             index_path = root / "data/ember-restart-3b/text-lab-authority-index-v1.json"
@@ -82,7 +121,10 @@ class TextLabCorpusTests(unittest.TestCase):
             import text_lab_corpus
             with patch.object(text_lab_corpus.subprocess, "run", return_value=type("Result", (), {"returncode": 0})()):
                 with self.assertRaisesRegex(ValueError, "non-empty"):
-                    validate_authority_index(root)
+                    validate_authority_index(
+                        root,
+                        index_relative="data/ember-restart-3b/text-lab-authority-index-v1.json",
+                    )
 
     def test_checked_in_candidates_are_evidence_free_unresolved_descriptors(self):
         corpus = json.loads((ROOT / "data/ember-restart-3b/owned-text-lab-corpus-v2.json").read_text(encoding="utf-8"))
@@ -122,6 +164,10 @@ class TextLabCorpusTests(unittest.TestCase):
             identity_path = root / "data/ember-restart-3b/owned-text-lab-input-identity-v2.json"
             identity = json.loads(identity_path.read_text(encoding="utf-8"))
             identity["corpus_sha256"] = sha(corpus_bytes)
+            identity["code_files"] = {
+                name.removesuffix(".py"): sha((tools / name).read_bytes())
+                for name in ("text_lab_corpus.py", "train.py", "run_vertical_slice.py")
+            }
             identity_bytes = json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
             identity_path.write_bytes(identity_bytes)
             index_path = root / "data/ember-restart-3b/text-lab-authority-index-v1.json"
@@ -132,7 +178,10 @@ class TextLabCorpusTests(unittest.TestCase):
             import text_lab_corpus
             with patch.object(text_lab_corpus.subprocess, "run", return_value=type("Result", (), {"returncode": 0})()):
                 with self.assertRaisesRegex(ValueError, "split root"):
-                    validate_authority_index(root)
+                    validate_authority_index(
+                        root,
+                        index_relative="data/ember-restart-3b/text-lab-authority-index-v1.json",
+                    )
     def test_changed_candidate_descriptor_rejects_at_split_root_before_terminal_refusal(self):
         from text_lab_corpus import validate_authority_index
         with tempfile.TemporaryDirectory() as directory:
@@ -157,6 +206,10 @@ class TextLabCorpusTests(unittest.TestCase):
             identity_path = root / "data/ember-restart-3b/owned-text-lab-input-identity-v2.json"
             identity = json.loads(identity_path.read_text(encoding="utf-8"))
             identity["corpus_sha256"] = sha(corpus_bytes)
+            identity["code_files"] = {
+                name.removesuffix(".py"): sha((tools / name).read_bytes())
+                for name in ("text_lab_corpus.py", "train.py", "run_vertical_slice.py")
+            }
             identity_bytes = json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
             identity_path.write_bytes(identity_bytes)
             index_path = root / "data/ember-restart-3b/text-lab-authority-index-v1.json"
@@ -168,7 +221,10 @@ class TextLabCorpusTests(unittest.TestCase):
             import text_lab_corpus
             with patch.object(text_lab_corpus.subprocess, "run", return_value=type("Result", (), {"returncode": 0})()):
                 with self.assertRaisesRegex(ValueError, "split root"):
-                    validate_authority_index(root)
+                    validate_authority_index(
+                        root,
+                        index_relative="data/ember-restart-3b/text-lab-authority-index-v1.json",
+                    )
 
     def test_checked_in_authority_rejects_changed_corpus_binding(self):
         from text_lab_corpus import validate_authority_index
@@ -180,12 +236,18 @@ class TextLabCorpusTests(unittest.TestCase):
             index["corpus"]["sha256"] = "0" * 64
             index_path.write_text(json.dumps(index), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "bound hash"):
-                validate_authority_index(root)
+                validate_authority_index(
+                    root,
+                    index_relative="data/ember-restart-3b/text-lab-authority-index-v1.json",
+                )
             index = json.loads((ROOT / "data/ember-restart-3b/text-lab-authority-index-v1.json").read_text(encoding="utf-8"))
             index["input_identity"]["sha256"] = "1" * 64
             index_path.write_text(json.dumps(index), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "bound hash"):
-                validate_authority_index(root)
+                validate_authority_index(
+                    root,
+                    index_relative="data/ember-restart-3b/text-lab-authority-index-v1.json",
+                )
 
     def test_unresolved_descriptor_rejects_injected_evidence_derived_hash(self):
         from text_lab_corpus import validate_authority_index
@@ -208,7 +270,10 @@ class TextLabCorpusTests(unittest.TestCase):
             index["input_identity"]["sha256"] = sha(identity_bytes)
             index_path.write_text(json.dumps(index), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "Additional properties"):
-                validate_authority_index(root)
+                validate_authority_index(
+                    root,
+                    index_relative="data/ember-restart-3b/text-lab-authority-index-v1.json",
+                )
 
     def test_checked_in_authority_rejects_changed_bound_code_bytes(self):
         from text_lab_corpus import validate_authority_index
@@ -238,6 +303,28 @@ class TextLabCorpusTests(unittest.TestCase):
         with patch.object(run_vertical_slice, "run_text_lab_preflight", return_value=unresolved), patch.object(run_vertical_slice.torch.cuda, "is_available", side_effect=AssertionError("CUDA reached")):
             with self.assertRaisesRegex(ValueError, "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING"):
                 run_vertical_slice.run_semantic(seed=1, artifact_root=ROOT / "unused", receipt_path=ROOT / "unused", shards_root=ROOT / "unused", tokenizer_path=ROOT / "unused", expected_receipt_sha256="r" * 64, expected_tokenizer_sha256="t" * 64, expected_architecture_sha256="a" * 64, steps=1, sequence_length=1, checkpoint_interval=1, write_budget_bytes=1)
+
+    def test_canonical_runner_accepts_only_matching_pinned_admitted_subset_before_cuda(self):
+        import run_vertical_slice
+        unresolved = {"result": "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING"}
+        admitted = {
+            "result": "VERIFIED_ADMITTED_SUBSET",
+            "admitted_row_set_sha256": "d" * 64,
+        }
+        with patch.object(run_vertical_slice, "run_text_lab_preflight", return_value=unresolved), patch.object(run_vertical_slice, "validate_admitted_authority_subset", return_value=admitted), patch.object(run_vertical_slice, "production_artifact_root", side_effect=RuntimeError("post-authority sentinel")), patch.object(run_vertical_slice.torch.cuda, "is_available", side_effect=AssertionError("CUDA reached")):
+            with self.assertRaisesRegex(RuntimeError, "post-authority sentinel"):
+                run_vertical_slice.run_semantic(seed=1, artifact_root=ROOT / "unused", receipt_path=ROOT / "unused", shards_root=ROOT / "unused", tokenizer_path=ROOT / "unused", expected_receipt_sha256="r" * 64, expected_tokenizer_sha256="t" * 64, expected_architecture_sha256="a" * 64, admitted_row_set_sha256="d" * 64, steps=1, sequence_length=1, checkpoint_interval=1, write_budget_bytes=1)
+
+    def test_canonical_runner_refuses_mismatched_pinned_admitted_subset_before_cuda(self):
+        import run_vertical_slice
+        unresolved = {"result": "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING"}
+        admitted = {
+            "result": "VERIFIED_ADMITTED_SUBSET",
+            "admitted_row_set_sha256": "e" * 64,
+        }
+        with patch.object(run_vertical_slice, "run_text_lab_preflight", return_value=unresolved), patch.object(run_vertical_slice, "validate_admitted_authority_subset", return_value=admitted), patch.object(run_vertical_slice.torch.cuda, "is_available", side_effect=AssertionError("CUDA reached")):
+            with self.assertRaisesRegex(ValueError, "admitted row-set hash"):
+                run_vertical_slice.run_semantic(seed=1, artifact_root=ROOT / "unused", receipt_path=ROOT / "unused", shards_root=ROOT / "unused", tokenizer_path=ROOT / "unused", expected_receipt_sha256="r" * 64, expected_tokenizer_sha256="t" * 64, expected_architecture_sha256="a" * 64, admitted_row_set_sha256="d" * 64, steps=1, sequence_length=1, checkpoint_interval=1, write_budget_bytes=1)
 
     def test_manifest_requires_two_sources_all_domains_and_deterministic_splits(self):
         from text_lab_corpus import build_manifest, validate_manifest
@@ -421,10 +508,88 @@ class TextLabResolverV2Tests(unittest.TestCase):
         with patch.object(text_lab_corpus.subprocess, "run", return_value=type("Result", (), {"returncode": 0})()):
             return text_lab_corpus.validate_authority_index(root, index_relative="data/ember-restart-3b/text-lab-authority-index-v2.json")
 
+    def _validate_subset_rows(self, rows, *, manifest_rows=None):
+        import text_lab_corpus
+
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+        corpus_path = root / "corpus.json"
+        corpus_path.write_text(
+            json.dumps({"sources": rows}, sort_keys=True, separators=(",", ":")),
+            encoding="utf-8",
+        )
+        index_path = root / "index.json"
+        index_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": "ember-text-lab-authority-index-v2",
+                    "corpus": {"path": "corpus.json"},
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+            encoding="utf-8",
+        )
+        receipt = {
+            "result": "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING",
+            "authority_index_sha256": sha(index_path.read_bytes()),
+            "corpus_sha256": sha(corpus_path.read_bytes()),
+        }
+        with patch.object(
+            text_lab_corpus,
+            "_bound_json",
+            return_value=(corpus_path.read_bytes(), {"sources": rows}),
+        ):
+            return text_lab_corpus.validate_admitted_authority_subset(
+                root,
+                receipt,
+                index_relative="index.json",
+                external_authority_root=root,
+                manifest_rows=manifest_rows,
+            )
+
+    def test_admitted_subset_hashes_both_closed_row_schemas_deterministically(self):
+        ordinary = _admitted_rows()[0]
+        partition = {
+            key: ordinary[key]
+            for key in (
+                "source_id",
+                "domain",
+                "split",
+                "admission",
+                "required_evidence",
+                "allowed_license_spdx",
+                "content_sha256",
+                "l4_receipt",
+            )
+        }
+        partition["source_id"] = "partition-admitted-train-0"
+        partition["license_partition_receipt"] = "B:/authority/partition.json"
+        partition["license_partition_sha256"] = "7" * 64
+        forward = self._validate_subset_rows([ordinary, partition])
+        reverse = self._validate_subset_rows([partition, ordinary])
+        self.assertEqual(
+            forward["admitted_row_set_sha256"],
+            reverse["admitted_row_set_sha256"],
+        )
+        self.assertEqual(forward["run_manifest_row_count"], 2)
+
+    def test_admitted_subset_refuses_duplicate_and_outside_manifest_rows(self):
+        ordinary = _admitted_rows()[0]
+        with self.assertRaisesRegex(ValueError, "duplicated"):
+            self._validate_subset_rows([ordinary, dict(ordinary)])
+        outside = {**ordinary, "source_id": "outside-admitted-train-0"}
+        with self.assertRaisesRegex(ValueError, "outside admitted set"):
+            self._validate_subset_rows([ordinary], manifest_rows=[outside])
+
     def test_v1_authority_index_still_refuses_unchanged(self):
         from text_lab_corpus import validate_authority_index
-        result = validate_authority_index(ROOT)
-        self.assertEqual(result["result"], "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING")
+        with self.assertRaisesRegex(ValueError, "code bytes changed"):
+            validate_authority_index(
+                ROOT,
+                index_relative="data/ember-restart-3b/text-lab-authority-index-v1.json",
+            )
 
     def test_fully_admitted_v2_authority_reaches_verified(self):
         root = self._fixture_root(_admitted_rows(), frozen_eval_hashes=_default_frozen_eval_hashes())

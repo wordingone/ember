@@ -3,7 +3,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Canonical regeneration path for the text-lab input-identity pin (#1461, #1470).
 
-The checked-in identity file (owned-text-lab-input-identity-v2.json) pins
+The checked-in identity file (owned-text-lab-input-identity-v4.json) pins
 sha256 hashes of three source modules (text_lab_corpus.py, train.py,
 run_vertical_slice.py). Any commit that edits those modules' bytes without
 re-running this script strands the pin and reddens test_text_lab_corpus.py
@@ -18,8 +18,8 @@ Usage:
 
     python tools/ember-restart-3b/remint_text_lab_input_identity.py --write
         Recompute code_files hashes from live module bytes, rewrite
-        owned-text-lab-input-identity-v2.json and the downstream
-        input_identity.sha256 pin in text-lab-authority-index-v1.json.
+        owned-text-lab-input-identity-v4.json and the downstream
+        input_identity.sha256 pin in text-lab-authority-index-v2.json.
         Every other field (corpus_sha256, source_base_commit, schema_version)
         is carried through byte-identical -- this script touches ONLY the
         code-hash-derived fields, never hand-edits.
@@ -36,8 +36,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-IDENTITY_PATH = ROOT / "data" / "ember-restart-3b" / "owned-text-lab-input-identity-v2.json"
-INDEX_PATH = ROOT / "data" / "ember-restart-3b" / "text-lab-authority-index-v1.json"
+IDENTITY_PATH = ROOT / "data" / "ember-restart-3b" / "owned-text-lab-input-identity-v4.json"
+INDEX_PATH = ROOT / "data" / "ember-restart-3b" / "text-lab-authority-index-v2.json"
 
 EXPECTED_CODE = {
     "run_vertical_slice": "tools/ember-restart-3b/run_vertical_slice.py",
@@ -85,12 +85,12 @@ def _validate_identity(identity: object) -> dict[str, object]:
 def _validate_index(index: object) -> dict[str, object]:
     if not isinstance(index, dict) or set(index) != EXPECTED_INDEX_KEYS:
         raise ValueError("authority index has a closed schema violation")
-    if index.get("schema_version") != "ember-text-lab-authority-index-v1":
+    if index.get("schema_version") != "ember-text-lab-authority-index-v2":
         raise ValueError("authority index schema_version is invalid")
     input_identity = index.get("input_identity")
     if not isinstance(input_identity, dict) or set(input_identity) != EXPECTED_INDEX_INPUT_KEYS:
         raise ValueError("authority index input_identity has a closed schema violation")
-    if input_identity["path"] != "data/ember-restart-3b/owned-text-lab-input-identity-v2.json":
+    if input_identity["path"] != "data/ember-restart-3b/owned-text-lab-input-identity-v4.json":
         raise ValueError("authority index input_identity.path is invalid")
     schema = input_identity["schema"]
     if not isinstance(schema, dict) or set(schema) != EXPECTED_SCHEMA_KEYS:
@@ -126,12 +126,12 @@ def main() -> int:
 
     if args.check:
         if index_stale:
-            print("STALE PIN: text-lab-authority-index-v1.json input_identity.sha256 does not match identity bytes")
+            print("STALE PIN: text-lab-authority-index-v2.json input_identity.sha256 does not match identity bytes")
             return 1
         if not stale:
             print("text-lab input identity: all code_files pins match live bytes")
             return 0
-        print("STALE PIN: owned-text-lab-input-identity-v2.json code_files does not match live module bytes")
+        print("STALE PIN: owned-text-lab-input-identity-v4.json code_files does not match live module bytes")
         for name, (old, new) in stale.items():
             print(f"  {name} ({EXPECTED_CODE[name]}): pinned={old} live={new}")
         print("Cure: python tools/ember-restart-3b/remint_text_lab_input_identity.py --write")
@@ -151,7 +151,7 @@ def main() -> int:
 
     for name, (old, new) in stale.items():
         print(f"re-minted {name}: {old} -> {new}")
-    print(f"re-minted input_identity.sha256 in text-lab-authority-index-v1.json -> {identity_sha}")
+    print(f"re-minted input_identity.sha256 in text-lab-authority-index-v2.json -> {identity_sha}")
     return 0
 
 
