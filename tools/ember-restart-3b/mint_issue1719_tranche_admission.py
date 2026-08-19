@@ -40,6 +40,7 @@ PARTITION_ARTIFACT_NAMES = {
 OUTPUT_RECEIPT = "tranche-admission-receipt.json"
 OUTPUT_LOG = "mint-log.json"
 OUTPUT_PLAN = "tranche-admission-plan.json"
+IDENTITY_CURE = "tranche-admission-source-identity-cure.json"
 OLD_RECEIPT_KEYS = {
     "admitted_row_count", "boundary", "generated_files", "minted_at",
     "negative_receipts", "overall_authority_result", "reopened_connector_file_count",
@@ -223,6 +224,87 @@ def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["git", "-C", str(repo), *args], **kwargs)
 
 
+def _git_blob(repo: Path, commit: str, path: str) -> bytes:
+    kwargs: dict[str, Any] = {"capture_output": True, "check": False}
+    if os.name == "nt":
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+    result = subprocess.run(["git", "-C", str(repo), "show", f"{commit}:{path}"], **kwargs)
+    if result.returncode != 0:
+        raise ValueError("source identity cure commit object is unavailable")
+    return result.stdout
+
+
+def _validate_identity_cure(
+    *,
+    module: Any,
+    current_repo: Path,
+    current_source_commit: str,
+    source_custody: Path,
+    source_identity: dict[str, Any],
+    predecessor_receipt_sha256: str,
+    predecessor_generated_files: dict[str, Any],
+) -> dict[str, Any]:
+    path = source_custody / IDENTITY_CURE
+    if not path.is_file() or module._is_reparse_or_symlink(path):
+        raise ValueError("historical predecessor code bytes changed")
+    raw = path.read_bytes()
+    cure = json.loads(raw)
+    expected_keys = {
+        "schema_version", "result", "predecessor_receipt_sha256",
+        "predecessor_generated_files_sha256", "recorded_source_base_commit",
+        "executed_code_files", "resolved_source_commit", "resolved_code_files",
+        "reviewer_reference", "supersedes_sha256", "replacement_authority",
+        "misbinding_kind", "data_bytes_status",
+    }
+    expected_code = source_identity["code_files"]
+    resolved_commit = cure.get("resolved_source_commit") if isinstance(cure, dict) else None
+    if (
+        not isinstance(cure, dict)
+        or set(cure) != expected_keys
+        or cure.get("schema_version") != "ember-issue1719-source-identity-cure-v1"
+        or cure.get("result") != "VERIFIED_SOURCE_IDENTITY_SUPERSESSION"
+        or cure.get("predecessor_receipt_sha256") != predecessor_receipt_sha256
+        or cure.get("predecessor_generated_files_sha256")
+        != sha256_bytes(canonical(predecessor_generated_files))
+        or cure.get("recorded_source_base_commit") != source_identity["source_base_commit"]
+        or cure.get("executed_code_files") != expected_code
+        or cure.get("resolved_code_files") != expected_code
+        or not isinstance(resolved_commit, str)
+        or HEX40.fullmatch(resolved_commit) is None
+        or cure.get("reviewer_reference") != "mailbox:review:24111"
+        or cure.get("supersedes_sha256")
+        != "3b66e73afcb864769b218a581fc9525eee8af84c30006a65725c24da50d20b60"
+        or cure.get("replacement_authority") != "mailbox:review:24148"
+        or cure.get("misbinding_kind") != "BASE_HEAD_LABEL_WITH_REVIEWED_BRANCH_BYTES"
+        or cure.get("data_bytes_status") != "UNCHANGED_AND_BOUND_BY_PREDECESSOR_RECEIPT"
+    ):
+        raise ValueError("source identity cure receipt is invalid")
+    ancestry = _git(current_repo, "merge-base", "--is-ancestor", resolved_commit, current_source_commit)
+    if ancestry.returncode != 0:
+        raise ValueError("source identity cure commit is not an ancestor of current source")
+    paths = {
+        "text_lab_corpus": "tools/ember-restart-3b/text_lab_corpus.py",
+        "train": "tools/ember-restart-3b/train.py",
+        "run_vertical_slice": "tools/ember-restart-3b/run_vertical_slice.py",
+    }
+    reopened = {
+        name: sha256_bytes(_git_blob(current_repo, resolved_commit, relative))
+        for name, relative in paths.items()
+    }
+    if reopened != expected_code:
+        raise ValueError("source identity cure git objects do not match executed code")
+    return {
+        "source_identity_cure_path": str(path.resolve(strict=True)),
+        "source_identity_cure_sha256": sha256_bytes(raw),
+        "resolved_source_commit": resolved_commit,
+        "resolved_source_code_files": reopened,
+        "reviewer_reference": cure["reviewer_reference"],
+        "supersedes_sha256": cure["supersedes_sha256"],
+        "replacement_authority": cure["replacement_authority"],
+        "data_bytes_status": cure["data_bytes_status"],
+    }
+
+
 def _path_key(path: Path) -> str:
     return os.path.normcase(os.path.normpath(str(path.resolve(strict=True)))).casefold()
 
@@ -236,6 +318,8 @@ def _validate_predecessor_authority(
     source_identity: dict[str, Any],
     stored_validation: dict[str, Any],
     predecessor_source_repo: Path | None,
+    predecessor_receipt_sha256: str | None = None,
+    predecessor_generated_files: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
     expected_code = source_identity.get("code_files")
     pinned_commit = source_identity.get("source_base_commit")
@@ -283,8 +367,19 @@ def _validate_predecessor_authority(
     head = _git(historical, "rev-parse", "HEAD")
     if head.returncode != 0 or head.stdout.strip() != pinned_commit:
         raise ValueError("historical predecessor checkout HEAD changed")
+    cure_evidence = None
     if _code_files(historical) != expected_code:
-        raise ValueError("historical predecessor code bytes changed")
+        if predecessor_receipt_sha256 is None or predecessor_generated_files is None:
+            raise ValueError("historical predecessor code bytes changed")
+        cure_evidence = _validate_identity_cure(
+            module=module,
+            current_repo=current_repo,
+            current_source_commit=current_source_commit,
+            source_custody=source_custody,
+            source_identity=source_identity,
+            predecessor_receipt_sha256=predecessor_receipt_sha256,
+            predecessor_generated_files=predecessor_generated_files,
+        )
 
     common_result = _git(historical, "rev-parse", "--git-common-dir")
     if common_result.returncode != 0 or not common_result.stdout.strip():
@@ -331,12 +426,16 @@ def _validate_predecessor_authority(
     if validation != stored_validation:
         raise ValueError("predecessor validation receipt changed")
     return validation, {
-        "result": "HISTORICAL_PREDECESSOR_REOPENED",
+        "result": (
+            "HISTORICAL_PREDECESSOR_REOPENED_WITH_IDENTITY_CURE"
+            if cure_evidence is not None else "HISTORICAL_PREDECESSOR_REOPENED"
+        ),
         "source_base_commit": pinned_commit,
         "source_code_files": expected_code,
         "lifecycle_state_sha256": sha256_bytes(state_raw),
         "lifecycle_managed_key": key,
         "ancestry": "ANCESTOR_OF_CURRENT_SOURCE",
+        **(cure_evidence or {}),
     }
 
 
@@ -608,7 +707,12 @@ def mint_successor(
     actual_source_files = {path.name for path in source_entries}
     expected_v3 = set(ARTIFACT_NAMES.values()) | {predecessor_receipt_name, OUTPUT_LOG}
     expected_v4 = set(PARTITION_ARTIFACT_NAMES.values()) | {predecessor_receipt_name, OUTPUT_LOG}
-    allowed_source_sets = {frozenset(expected_v3), frozenset(expected_v3 | {OUTPUT_PLAN}), frozenset(expected_v4), frozenset(expected_v4 | {OUTPUT_PLAN})}
+    allowed_source_sets = {
+        frozenset(expected_v3), frozenset(expected_v3 | {OUTPUT_PLAN}),
+        frozenset(expected_v4), frozenset(expected_v4 | {OUTPUT_PLAN}),
+        frozenset(expected_v3 | {OUTPUT_PLAN, IDENTITY_CURE}),
+        frozenset(expected_v4 | {OUTPUT_PLAN, IDENTITY_CURE}),
+    }
     if frozenset(actual_source_files) not in allowed_source_sets:
         raise ValueError("predecessor custody file set is not exact")
     source_names = PARTITION_ARTIFACT_NAMES if set(PARTITION_ARTIFACT_NAMES.values()).issubset(actual_source_files) else ARTIFACT_NAMES
@@ -637,7 +741,8 @@ def mint_successor(
     if old_receipt and actual_source_files != expected_source_files:
         raise ValueError("legacy predecessor custody has an unexpected plan sidecar")
     if generic_receipt:
-        if actual_source_files != expected_source_files | {OUTPUT_PLAN}:
+        expected_generic_files = expected_source_files | {OUTPUT_PLAN}
+        if actual_source_files not in (expected_generic_files, expected_generic_files | {IDENTITY_CURE}):
             raise ValueError("generic predecessor custody lacks its plan sidecar")
         source_plan_raw = _exact_file(source_custody, OUTPUT_PLAN, module).read_bytes()
         if predecessor.get("plan") != {
@@ -670,6 +775,8 @@ def mint_successor(
             source_identity=source_identity,
             stored_validation=predecessor.get("validation_receipt"),
             predecessor_source_repo=predecessor_source_repo,
+            predecessor_receipt_sha256=predecessor_receipt_sha256,
+            predecessor_generated_files=generated_bindings,
         )
     elif predecessor_source_repo is not None:
         raise ValueError("historical predecessor source repo is forbidden for legacy predecessor")
