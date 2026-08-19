@@ -152,6 +152,180 @@ def test_historical_predecessor_reopen_requires_governed_detached_ancestor(tmp_p
         )
 
 
+def test_historical_predecessor_reopen_accepts_reviewed_joint_git_identity_cure(tmp_path: Path, monkeypatch):
+    producer = _load_producer()
+    historical, common, _, state_raw, identity = _historical_source_fixture(tmp_path)
+    recorded_commit = identity["source_base_commit"]
+    resolved_commit = "2" * 40
+    current_commit = "3" * 40
+    resolved_blobs = {
+        "tools/ember-restart-3b/text_lab_corpus.py": b"resolved text lab\n",
+        "tools/ember-restart-3b/train.py": b"resolved train\n",
+        "tools/ember-restart-3b/run_vertical_slice.py": b"resolved vertical\n",
+    }
+    identity["code_files"] = {
+        "text_lab_corpus": _sha(resolved_blobs["tools/ember-restart-3b/text_lab_corpus.py"]),
+        "train": _sha(resolved_blobs["tools/ember-restart-3b/train.py"]),
+        "run_vertical_slice": _sha(resolved_blobs["tools/ember-restart-3b/run_vertical_slice.py"]),
+    }
+    predecessor_receipt_sha256 = "4" * 64
+    generated_files = {"authority.json": {"bytes": 17, "sha256": "5" * 64}}
+    cure = {
+        "schema_version": "ember-issue1719-source-identity-cure-v1",
+        "result": "VERIFIED_SOURCE_IDENTITY_SUPERSESSION",
+        "predecessor_receipt_sha256": predecessor_receipt_sha256,
+        "predecessor_generated_files_sha256": _sha(_canonical(generated_files)),
+        "recorded_source_base_commit": recorded_commit,
+        "executed_code_files": identity["code_files"],
+        "resolved_source_commit": resolved_commit,
+        "resolved_code_files": identity["code_files"],
+        "reviewer_reference": "mailbox:review:24111",
+        "supersedes_sha256": "3b66e73afcb864769b218a581fc9525eee8af84c30006a65725c24da50d20b60",
+        "replacement_authority": "mailbox:review:24148",
+        "misbinding_kind": "BASE_HEAD_LABEL_WITH_REVIEWED_BRANCH_BYTES",
+        "data_bytes_status": "UNCHANGED_AND_BOUND_BY_PREDECESSOR_RECEIPT",
+    }
+    cure_raw = _write(tmp_path / "tranche-admission-source-identity-cure.json", cure)
+    stored_validation = {"result": "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING"}
+
+    def fake_git(repo: Path, *args: str):
+        command = tuple(args)
+        if command in {
+            ("merge-base", "--is-ancestor", recorded_commit, current_commit),
+            ("merge-base", "--is-ancestor", resolved_commit, current_commit),
+        }:
+            return subprocess.CompletedProcess(command, 0, "", "")
+        if command == ("rev-parse", "--show-toplevel"):
+            return subprocess.CompletedProcess(command, 0, str(historical.resolve()) + "\n", "")
+        if command == ("status", "--porcelain=v1", "--untracked-files=all"):
+            return subprocess.CompletedProcess(command, 0, "", "")
+        if command == ("symbolic-ref", "--quiet", "HEAD"):
+            return subprocess.CompletedProcess(command, 1, "", "")
+        if command == ("rev-parse", "HEAD"):
+            return subprocess.CompletedProcess(command, 0, recorded_commit + "\n", "")
+        if command == ("rev-parse", "--git-common-dir"):
+            return subprocess.CompletedProcess(command, 0, str(common.resolve()) + "\n", "")
+        raise AssertionError(command)
+
+    monkeypatch.setattr(producer, "_git", fake_git)
+    monkeypatch.setattr(
+        producer,
+        "_git_blob",
+        lambda repo, commit, path: resolved_blobs[path],
+        raising=False,
+    )
+    monkeypatch.setattr(text_lab_corpus, "validate_authority_index", lambda *args, **kwargs: stored_validation)
+
+    validation, evidence = producer._validate_predecessor_authority(
+        module=text_lab_corpus,
+        current_repo=ROOT,
+        current_source_commit=current_commit,
+        source_custody=tmp_path,
+        source_identity=identity,
+        stored_validation=stored_validation,
+        predecessor_source_repo=historical,
+        predecessor_receipt_sha256=predecessor_receipt_sha256,
+        predecessor_generated_files=generated_files,
+    )
+
+    assert validation == stored_validation
+    assert evidence["result"] == "HISTORICAL_PREDECESSOR_REOPENED_WITH_IDENTITY_CURE"
+    assert evidence["resolved_source_commit"] == resolved_commit
+    assert evidence["source_identity_cure_sha256"] == _sha(cure_raw)
+    assert evidence["lifecycle_state_sha256"] == _sha(state_raw)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        ("absent", "historical predecessor code bytes changed"),
+        ("reviewer", "source identity cure receipt is invalid"),
+        ("receipt", "source identity cure receipt is invalid"),
+        ("generated-files", "source identity cure receipt is invalid"),
+        ("supersedes", "source identity cure receipt is invalid"),
+        ("replacement-authority", "source identity cure receipt is invalid"),
+        ("extra-field", "source identity cure receipt is invalid"),
+        ("nonancestor", "source identity cure commit is not an ancestor"),
+        ("swapped-blob", "source identity cure git objects do not match executed code"),
+    ],
+)
+def test_source_identity_cure_refuses_absent_forged_or_swapped_evidence(
+    tmp_path: Path, monkeypatch, mutation: str, message: str
+):
+    producer = _load_producer()
+    resolved_commit = "2" * 40
+    current_commit = "3" * 40
+    predecessor_receipt_sha256 = "4" * 64
+    generated_files = {"authority.json": {"bytes": 17, "sha256": "5" * 64}}
+    resolved_blobs = {
+        "tools/ember-restart-3b/text_lab_corpus.py": b"resolved text lab\n",
+        "tools/ember-restart-3b/train.py": b"resolved train\n",
+        "tools/ember-restart-3b/run_vertical_slice.py": b"resolved vertical\n",
+    }
+    code_files = {
+        "text_lab_corpus": _sha(resolved_blobs["tools/ember-restart-3b/text_lab_corpus.py"]),
+        "train": _sha(resolved_blobs["tools/ember-restart-3b/train.py"]),
+        "run_vertical_slice": _sha(resolved_blobs["tools/ember-restart-3b/run_vertical_slice.py"]),
+    }
+    identity = {
+        "schema_version": "ember-text-lab-input-identity-v2",
+        "corpus_sha256": "6" * 64,
+        "source_base_commit": "1" * 40,
+        "code_files": code_files,
+    }
+    cure = {
+        "schema_version": "ember-issue1719-source-identity-cure-v1",
+        "result": "VERIFIED_SOURCE_IDENTITY_SUPERSESSION",
+        "predecessor_receipt_sha256": predecessor_receipt_sha256,
+        "predecessor_generated_files_sha256": _sha(_canonical(generated_files)),
+        "recorded_source_base_commit": identity["source_base_commit"],
+        "executed_code_files": code_files,
+        "resolved_source_commit": resolved_commit,
+        "resolved_code_files": code_files,
+        "reviewer_reference": "mailbox:review:24111",
+        "supersedes_sha256": "3b66e73afcb864769b218a581fc9525eee8af84c30006a65725c24da50d20b60",
+        "replacement_authority": "mailbox:review:24148",
+        "misbinding_kind": "BASE_HEAD_LABEL_WITH_REVIEWED_BRANCH_BYTES",
+        "data_bytes_status": "UNCHANGED_AND_BOUND_BY_PREDECESSOR_RECEIPT",
+    }
+    if mutation == "reviewer":
+        cure["reviewer_reference"] = "mailbox:review:99999"
+    elif mutation == "receipt":
+        cure["predecessor_receipt_sha256"] = "7" * 64
+    elif mutation == "generated-files":
+        cure["predecessor_generated_files_sha256"] = "8" * 64
+    elif mutation == "supersedes":
+        cure["supersedes_sha256"] = "9" * 64
+    elif mutation == "replacement-authority":
+        cure["replacement_authority"] = "mailbox:review:99999"
+    elif mutation == "extra-field":
+        cure["unreviewed"] = True
+    if mutation != "absent":
+        _write(tmp_path / "tranche-admission-source-identity-cure.json", cure)
+
+    monkeypatch.setattr(
+        producer,
+        "_git",
+        lambda repo, *args: subprocess.CompletedProcess(
+            args, 1 if mutation == "nonancestor" else 0, "", ""
+        ),
+    )
+    if mutation == "swapped-blob":
+        resolved_blobs["tools/ember-restart-3b/train.py"] = b"swapped train\n"
+    monkeypatch.setattr(producer, "_git_blob", lambda repo, commit, path: resolved_blobs[path])
+
+    with pytest.raises(ValueError, match=message):
+        producer._validate_identity_cure(
+            module=text_lab_corpus,
+            current_repo=ROOT,
+            current_source_commit=current_commit,
+            source_custody=tmp_path,
+            source_identity=identity,
+            predecessor_receipt_sha256=predecessor_receipt_sha256,
+            predecessor_generated_files=generated_files,
+        )
+
+
 @pytest.mark.parametrize(
     ("mutation", "message"),
     [
@@ -537,6 +711,9 @@ def test_historical_reopen_evidence_is_frozen_and_successor_does_not_reopen_old_
     log = json.loads(log_path.read_bytes())
     log["receipt_sha256"] = _sha(predecessor_raw)
     _write(log_path, log)
+    _write(predecessor_output / "tranche-admission-source-identity-cure.json", {
+        "fixture": "the validator double below owns semantic cure validation",
+    })
 
     frozen_evidence = {
         "result": "HISTORICAL_PREDECESSOR_REOPENED",
