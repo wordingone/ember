@@ -2819,6 +2819,7 @@ class CompletionHeadAncestorTests(unittest.TestCase):
                 "semantic_canary_sequence_length",
                 "semantic_canary_checkpoint_interval",
                 "semantic_canary_telemetry_path",
+                "admitted_row_set_sha256",
                 "a1_family",
                 "a1_tier",
                 "a1_mechanism",
@@ -3750,6 +3751,7 @@ class ResumeRootAuthorizationTests(_ResumeBundleMixin, unittest.TestCase):
                 "allowed_training_capabilities",
                 "resume_relocation_custody_root",
                 "allowed_semantic_canary_modes",
+                "allowed_admitted_row_set_sha256",
                 "allowed_a1_families",
             },
         )
@@ -4548,6 +4550,8 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
 
 
 class SemanticCanaryRoutingTests(unittest.TestCase):
+    ADMITTED_ROW_SET_SHA256 = "d" * 64
+
     """Issue #1719 acceptance clause 3: certified_train_launch.py could only
     ever authorize governed-vertical (or, since #1430/#1454, the specialist
     single-capability continuation route) -- there was no certified way to
@@ -4617,6 +4621,7 @@ class SemanticCanaryRoutingTests(unittest.TestCase):
         run_spec["semantic_canary_sequence_length"] = 512
         run_spec["semantic_canary_checkpoint_interval"] = 50
         run_spec["semantic_canary_telemetry_path"] = str(paths["semantic_telemetry"])
+        run_spec["admitted_row_set_sha256"] = self.ADMITTED_ROW_SET_SHA256
         if mutate_run_spec is not None:
             mutate_run_spec(run_spec)
         write_json(paths["run_spec"], run_spec)
@@ -4642,6 +4647,13 @@ class SemanticCanaryRoutingTests(unittest.TestCase):
                 lambda certificate: certificate["execution_scope"].__setitem__(
                     "allowed_semantic_canary_modes",
                     [mode] if authorized_modes is None else authorized_modes,
+                ),
+            )
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate["execution_scope"].__setitem__(
+                    "allowed_admitted_row_set_sha256",
+                    self.ADMITTED_ROW_SET_SHA256,
                 ),
             )
         return paths
@@ -4687,6 +4699,9 @@ class SemanticCanaryRoutingTests(unittest.TestCase):
             )
             self.assertEqual(launch.semantic_canary_telemetry_run_id, "owned-3b-canary-test")
             self.assertEqual(launch.semantic_canary_steps, 100)
+            self.assertEqual(
+                launch.admitted_row_set_sha256, self.ADMITTED_ROW_SET_SHA256
+            )
             # Never trusted from a caller-supplied value: self-computed from
             # the exact resolved bytes this launch is about to pass as
             # --receipt/--tokenizer/the live model config.
@@ -4754,6 +4769,8 @@ class SemanticCanaryRoutingTests(unittest.TestCase):
                             paths["repo"] / "configs" / "ember-restart-3b.json"
                         ).read_bytes()
                     ),
+                    "--admitted-row-set-sha256",
+                    self.ADMITTED_ROW_SET_SHA256,
                     "--steps",
                     "100",
                     "--sequence-length",
@@ -4768,6 +4785,81 @@ class SemanticCanaryRoutingTests(unittest.TestCase):
                     "owned-3b-canary-test",
                 ],
             )
+
+    def test_admitted_row_set_pin_requires_exact_certificate_authority(self) -> None:
+        for mutate, pattern in (
+            (
+                lambda certificate: certificate["execution_scope"].pop(
+                    "allowed_admitted_row_set_sha256"
+                ),
+                "declares no allowed_admitted_row_set_sha256",
+            ),
+            (
+                lambda certificate: certificate["execution_scope"].__setitem__(
+                    "allowed_admitted_row_set_sha256", "e" * 64
+                ),
+                "run scope exceeds certificate: admitted_row_set_sha256",
+            ),
+        ):
+            with self.subTest(pattern=pattern), tempfile.TemporaryDirectory(
+                dir="B:/tmp"
+            ) as directory:
+                paths = self._bundle(directory)
+                rewrite_certificate(paths, mutate)
+                self._refused(paths, pattern)
+
+    def test_admitted_row_set_pin_authorization_is_closed_and_exact(self) -> None:
+        module = load_module()
+        pin = self.ADMITTED_ROW_SET_SHA256
+        with self.assertRaisesRegex(ValueError, "must be an exact SHA-256"):
+            module._authorized_admitted_row_set_sha256(
+                {"allowed_admitted_row_set_sha256": "not-a-hash"}
+            )
+        with self.assertRaisesRegex(
+            ValueError, "declares no allowed_admitted_row_set_sha256"
+        ):
+            module._require_authorized_admitted_row_set_sha256(pin, None)
+        with self.assertRaisesRegex(
+            ValueError, "run scope exceeds certificate: admitted_row_set_sha256"
+        ):
+            module._require_authorized_admitted_row_set_sha256(pin, "e" * 64)
+        self.assertEqual(
+            module._require_authorized_admitted_row_set_sha256(pin, pin), pin
+        )
+
+    def test_admitted_row_set_pin_reaches_semantic_runner_argv(self) -> None:
+        module = load_module()
+        launch = module.ValidatedLaunch(
+            certificate_sha256="0" * 64,
+            run_spec_sha256="1" * 64,
+            public_master_sha="2" * 40,
+            closure_sha256="3" * 64,
+            artifact_root=pathlib.Path("artifacts"),
+            custody_root=pathlib.Path("custody"),
+            runner_receipt=pathlib.Path("receipt.json"),
+            seed=83,
+            write_budget_bytes=16 * 1024**3,
+            max_records=1,
+            max_c_write_gib=0.0,
+            max_b_write_gib=16.0,
+            semantic_canary_mode="warm-100",
+            semantic_canary_receipt=pathlib.Path("receipt.json"),
+            semantic_canary_expected_receipt_sha256="4" * 64,
+            semantic_canary_shards_root=pathlib.Path("shards"),
+            semantic_canary_tokenizer_path=pathlib.Path("tokenizer.json"),
+            semantic_canary_expected_tokenizer_sha256="5" * 64,
+            semantic_canary_expected_architecture_sha256="6" * 64,
+            semantic_canary_steps=100,
+            semantic_canary_sequence_length=512,
+            semantic_canary_checkpoint_interval=50,
+            semantic_canary_write_budget_gib=16,
+            semantic_canary_telemetry_path=pathlib.Path("telemetry.jsonl"),
+            semantic_canary_telemetry_run_id="run-id",
+            admitted_row_set_sha256=self.ADMITTED_ROW_SET_SHA256,
+        )
+        argv = module.build_runner_argv(pathlib.Path("repo"), launch)
+        index = argv.index("--admitted-row-set-sha256")
+        self.assertEqual(argv[index + 1], self.ADMITTED_ROW_SET_SHA256)
 
     def test_semantic_canary_with_resume_checkpoint_is_refused(self) -> None:
         """THE load-bearing security property (issue #1719 acceptance clause

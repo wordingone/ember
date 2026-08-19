@@ -570,7 +570,7 @@ def validate_manifest(manifest: dict[str, Any], *, frozen_eval_hashes: set[str])
     return {"result":"PREFLIGHT_ONLY","train_root_sha256":manifest["train_root_sha256"],"heldout_root_sha256":manifest["heldout_root_sha256"]}
 
 _HEX = re.compile(r"[0-9a-f]{64}\Z")
-_AUTHORITY_INDEX = "data/ember-restart-3b/text-lab-authority-index-v1.json"
+_AUTHORITY_INDEX = "data/ember-restart-3b/text-lab-authority-index-v2.json"
 _AUTHORITY_INDEX_SCHEMA_V1 = "ember-text-lab-authority-index-v1"
 _AUTHORITY_INDEX_SCHEMA_V2 = "ember-text-lab-authority-index-v2"
 _PARTITION_PRODUCER_SUPERSESSIONS = "data/ember-restart-3b/partition-producer-supersessions-v1.json"
@@ -709,6 +709,109 @@ def _bound_json(root: Path, binding: object, *, external_root: Path | None = Non
     errors=sorted(Draft202012Validator(schema_value).iter_errors(value),key=str)
     if errors: raise ValueError("authority schema rejects bytes: "+errors[0].message)
     return payload,value
+
+
+def validate_admitted_authority_subset(
+    repo_root: Path,
+    receipt: dict[str, Any],
+    *,
+    index_relative: str = _AUTHORITY_INDEX,
+    external_authority_root: Path | None = None,
+    manifest_rows: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Reopen and validate the closed admitted subset represented by an index."""
+    if receipt.get("result") not in {
+        "VERIFIED",
+        "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING",
+    }:
+        raise ValueError("text authority validator returned an unknown result")
+
+    root = Path(repo_root).resolve()
+    authority_root = (
+        Path(external_authority_root)
+        if external_authority_root is not None
+        else None
+    )
+    index_path = (
+        _external_path(authority_root, index_relative)
+        if authority_root is not None
+        else _path(root, index_relative)
+    )
+    index_bytes = index_path.read_bytes()
+    if _sha_bytes(index_bytes) != receipt.get("authority_index_sha256"):
+        raise ValueError("text authority index changed during admitted-subset validation")
+    index = json.loads(index_bytes)
+    if index.get("schema_version") != _AUTHORITY_INDEX_SCHEMA_V2:
+        raise ValueError("R1 admitted-subset authority requires a v2 index")
+    corpus_bytes, corpus = _bound_json(
+        root,
+        index["corpus"],
+        external_root=authority_root,
+    )
+    if _sha_bytes(corpus_bytes) != receipt.get("corpus_sha256"):
+        raise ValueError("text authority corpus changed during admitted-subset validation")
+
+    rows = corpus.get("sources")
+    if not isinstance(rows, list):
+        raise ValueError("authority payload is incomplete")
+    admitted_by_id: dict[str, dict[str, Any]] = {}
+    unadmitted_ids: set[str] = set()
+    candidate_ids: set[str] = set()
+    for row in rows:
+        source_id = row.get("source_id") if isinstance(row, dict) else None
+        if not isinstance(source_id, str) or source_id in candidate_ids:
+            raise ValueError("candidate descriptor is invalid or duplicated")
+        candidate_ids.add(source_id)
+        if row.get("admission") == "ADMITTED":
+            if set(row) not in (_ADMITTED_FIELDS, _PARTITION_ADMITTED_FIELDS):
+                raise ValueError("R1 admitted row schema is unknown")
+            admitted_by_id[source_id] = dict(row)
+        else:
+            unadmitted_ids.add(source_id)
+    admitted_rows = sorted(admitted_by_id.values(), key=lambda row: row["source_id"])
+    if not admitted_rows:
+        raise ValueError("R1 admitted-subset authority contains no admitted rows")
+
+    selected = admitted_rows if manifest_rows is None else manifest_rows
+    if not isinstance(selected, list) or not selected:
+        raise ValueError("R1 run manifest rows must be a non-empty list")
+    run_manifest_rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in selected:
+        source_id = row.get("source_id") if isinstance(row, dict) else None
+        if source_id in unadmitted_ids:
+            raise ValueError("R1 run manifest claims unadmitted source")
+        if isinstance(row, dict) and set(row) not in (
+            _ADMITTED_FIELDS,
+            _PARTITION_ADMITTED_FIELDS,
+        ):
+            raise ValueError("R1 admitted row schema is unknown")
+        if (
+            not isinstance(source_id, str)
+            or source_id in seen
+            or admitted_by_id.get(source_id) != row
+        ):
+            raise ValueError("R1 run manifest row is outside admitted set")
+        seen.add(source_id)
+        run_manifest_rows.append(row)
+    run_manifest_rows.sort(key=lambda row: row["source_id"])
+    admitted_set_bytes = (
+        json.dumps(
+            {"rows": admitted_rows},
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    ).encode()
+
+    return {
+        **{key: value for key, value in receipt.items() if key != "result"},
+        "result": "VERIFIED_ADMITTED_SUBSET",
+        "admitted_row_count": len(admitted_rows),
+        "admitted_row_set_sha256": hashlib.sha256(admitted_set_bytes).hexdigest(),
+        "run_manifest_row_count": len(run_manifest_rows),
+        "run_manifest_rows": run_manifest_rows,
+    }
 
 
 def _validate_partition_authority_row(repo_root: Path, authority_root: Path, row: dict[str, Any]) -> dict[str, Any]:
