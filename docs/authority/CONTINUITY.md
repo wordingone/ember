@@ -220,6 +220,9 @@ the closed claim boundary and at least one explicit `caveat:` in evidence.
 | qwen36-reference-backend | backend | model:qwen3.6-27b-q4_k_m:26895998464 | borrowed_reference | 26895998464 | unknown | llama_cpp_reference | none | tools/ember-cli/src/model-config.ts; explicit reference seat only |
 | arc-owned-step50-result | benchmark_result | receipt-sha256:32852248a61f6fc3d705f18f2e8f1ceb88e976ef477aaac5eb2a2d8dc4142c07 | historical_only | 1221633024 | 819200 | lm_eval_cpu | none | ARC-Challenge 1172 samples, acc 0.222696; receipts/legb-scorer/legb-scorer-evaluator-run-arc-full-20260711T080900Z.json |
 | hellaswag-owned-step50-result | benchmark_result | receipt-sha256:105c9f8ba1c089849e12e33a03e258c882fd06f206e0479ac1dd0bd7d667e46e | historical_only | 1221633024 | 819200 | lm_eval_cpu | none | HellaSwag 10042 samples, acc 0.260008, falsifier absent; receipts/legb-scorer/legb-scorer-evaluator-run-hella-full-20260711T095448Z.json |
+| arc-warm100-step100-result | benchmark_result | receipt-sha256:37e2b4c90db2a22777ca0838751bc1eaac6cbd0f51cf2bfbfc0ea8c818d62986 | execution_measurement_only | not_claimed | 51200 | lm_eval_cuda | none | ARC-Challenge 1172 samples, acc 0.229522, acc_norm 0.269625; caveat: chance=0.25 (chance-level); execution+measurement only; no sufficiency/capability/comparison claim; checkpoint-manifest-sha256:fcd68b92767cf0c8248cb7ba75adcf99fac533cd249e00c15443a74681e7ca0b; custody-root-id:issue1433-warm100-eval-20260819T230928Z; receipt-basename:arc-challenge-warm100-receipt.json; receipt-sha256:37e2b4c90db2a22777ca0838751bc1eaac6cbd0f51cf2bfbfc0ea8c818d62986 |
+| hellaswag-warm100-step100-result | benchmark_result | receipt-sha256:efeb0a9848327e08528676f6f49c41eda4f6c380bdd989c1986ee0fed6493a56 | execution_measurement_only | not_claimed | 51200 | lm_eval_cuda | none | HellaSwag 10042 samples, acc 0.258813, acc_norm 0.260904; caveat: chance=0.25 (chance-level); execution+measurement only; no sufficiency/capability/comparison claim; checkpoint-manifest-sha256:fcd68b92767cf0c8248cb7ba75adcf99fac533cd249e00c15443a74681e7ca0b; custody-root-id:issue1433-warm100-eval-20260819T230928Z; receipt-basename:hellaswag-warm100-receipt.json; receipt-sha256:efeb0a9848327e08528676f6f49c41eda4f6c380bdd989c1986ee0fed6493a56 |
+| heldout-nll-warm100-step100-result | benchmark_result | receipt-sha256:88312955fd0e0ff3f7e74a3f42ad1700ddf2e7407e4a5818e192097e83479cca | execution_measurement_only | not_claimed | 51200 | teacher_forced_cuda | none | Heldout NLL 16384 tokens, mean_nll 10.603397, bits_per_packed_byte 7.648734; caveat: scoped-clean only versus this run's bound trained consumption; whole-corpus refusal packet-sha256:5ffd38dca7d8cd10b1133a44c703c2468deb0d4f08f31053678eb9dc873d6aa2 records 20,777 confirmed non-self matches; execution+measurement only; no sufficiency/capability/comparison claim; checkpoint-manifest-sha256:fcd68b92767cf0c8248cb7ba75adcf99fac533cd249e00c15443a74681e7ca0b; custody-root-id:issue1433-warm100-nll-scoped-c63; receipt-basename:heldout-nll.json; receipt-sha256:88312955fd0e0ff3f7e74a3f42ad1700ddf2e7407e4a5818e192097e83479cca |
 | math500-qwen-reference-result | benchmark_result | receipt-sha256:137e3e4c3c8098ed496c9aac3603001fa01a8869b01dc940e241efff50f3f918 | borrowed_reference | 26895998464 | unknown | llama_cpp_reference | none | borrowed Qwen MATH-500 result; receipts/eval-reference/math500-proof/Qwen3.6-27B-Q4_K_M.gguf/results_2026-07-09T23-03-49.194110.json |
 | kaggle-emotion-classifier-result | benchmark_result | receipt-sha256:9abba7c0dd0f832998e8de99159835680819cb072f44f8e9746c24b5a5c333d3 | historical_only | not_applicable | not_applicable | sklearn_naive_bayes | none | receipts/ember-mvp/trained-external-heldout-wheel-20260618/arm-c-trained-benchmark-20260618T152822Z.json; not an Ember-model result |
 | d3-code-artifact-result | benchmark_result | receipt-sha256:ac3be7d4bb8064de9d1722335a41367d847d66919279c6a8b370014d0275f383 | historical_only | not_applicable | not_applicable | external_code_artifact_loop | none | representative D3-Gym A/B/C/Deleted program result; not owned-model capability |
@@ -227,13 +230,17 @@ the closed claim boundary and at least one explicit `caveat:` in evidence.
 | ember-target | model_target | uninstantiated:ember-owned-30-35b-unified-sparse | target | 30000000001 | 0 | owned | none | GOAL.md; target identity only, no model claim |
 | ember-owned-rung-v1-contract | admission_contract | source:scripts/ember_restart/contract.py@8b0d684e9e289aa66a7c18217b71bfaecab1e642 | research_prototype | not_applicable | not_applicable | local_fail_closed_validator | none | docs/ember-restart/integration-contract-v1.md and scripts/ember_restart/contract.py; candidate/admission boundary only |
 
-The seven-task frozen evaluation suite is custody, not seven results. Only the
-ARC-Challenge and HellaSwag result rows above are located full owned-checkpoint
-runs. MMLU-Pro, GSM8K, MATH-500, HumanEval+, and MBPP remain unexecuted or
-blocked for the owned checkpoint at their required full boundaries. GPQA is
-pin-blocked. Terminal-Bench and the broader image, audio, tool, agent, UI, and
-world-model obligations remain outstanding; no missing result is converted
-into completion by this resolver.
+The seven-task frozen evaluation suite is custody, not seven results. The
+located full owned-checkpoint executions are ARC-Challenge and HellaSwag at
+historical step 50 and WARM-100 step 100; the WARM-100 rows remain
+execution-and-measurement evidence with chance-level scores and no capability,
+sufficiency, or comparison claim. The heldout NLL row is scoped clean only
+against this run's bound trained consumption and retains the disclosed
+whole-corpus refusal. MMLU-Pro, GSM8K, MATH-500, HumanEval+, and MBPP remain
+unexecuted or blocked for the owned checkpoint at their required full
+boundaries. GPQA is pin-blocked. Terminal-Bench and the broader image, audio,
+tool, agent, UI, and world-model obligations remain outstanding; no missing
+result is converted into completion by this resolver.
 
 ## Conserved benchmark obligation resolver
 
