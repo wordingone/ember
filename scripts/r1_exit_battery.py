@@ -258,6 +258,20 @@ def _validate_frozen_eval_suite_binding(
     return defects
 
 
+def _validate_frozen_eval_endpoint_seat(
+    capability: Mapping[str, Any],
+    eval_doc: Mapping[str, Any],
+) -> list[str]:
+    """Bind the R1 capability leg to the producer's truthful endpoint seat."""
+    identity = eval_doc.get("owned_identity")
+    endpoint_seat = identity.get("seat") if isinstance(identity, Mapping) else None
+    if capability.get("endpoint_seat") != endpoint_seat:
+        return [
+            "capability.endpoint_seat does not equal the frozen-eval receipt's true seat"
+        ]
+    return []
+
+
 def _registry_rows_and_prefix(
     path: Path, row_limit: int | None = None
 ) -> tuple[list[tuple[int, str]], bytes]:
@@ -1685,6 +1699,10 @@ def _validate_frontier_content(
                         suite_sha256=suite_sha,
                         checkpoint_manifest_sha256=manifest_sha,
                         checkpoint_file_sha256s=checkpoint_hashes,
+                        accepted_endpoint_seats=frozen_eval.R1_ENDPOINT_SEATS,
+                    )
+                    defects.extend(
+                        _validate_frozen_eval_endpoint_seat(capability, eval_doc)
                     )
                     if capability.get("checkpoint_file_sha256s") != checkpoint_hashes:
                         defects.append(
