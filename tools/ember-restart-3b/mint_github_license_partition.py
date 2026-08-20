@@ -20,6 +20,7 @@ import secrets
 import shutil
 import sys
 import tarfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO
 
@@ -68,6 +69,8 @@ PARTITION_FILE_KEYS = {
 }
 AUTHORITY_KEYS = {"connector_receipt_sha256", "selected_note_ordinal", "selected_note_sha256", "evidence"}
 LICENSE_OBSERVATION_KEYS = {"path", "bytes", "sha256", "authoritative"}
+PARTITION_REOPEN_WORKERS = 8
+PARTITION_REOPEN_MAX_IN_FLIGHT = 32
 
 
 def canonical(value: Any) -> bytes:
@@ -379,7 +382,9 @@ def _archive_partition(
     return repository
 
 
-def _validate_repository(repository: dict[str, Any], *, root: Path, receipt_sha256: str) -> int:
+def _validate_repository(
+    repository: dict[str, Any], *, root: Path, receipt_sha256: str
+) -> tuple[int, list[tuple[Path, int, str]]]:
     if not isinstance(repository, dict) or set(repository) != REPOSITORY_KEYS:
         raise ValueError("partition receipt repository is invalid")
     root_digest = repository["repository_content_root_sha256"]
@@ -409,6 +414,7 @@ def _validate_repository(repository: dict[str, Any], *, root: Path, receipt_sha2
             raise ValueError("partition receipt license observation is invalid")
     previous: bytes | None = None
     blob_bytes = 0
+    blob_checks: list[tuple[Path, int, str]] = []
     for row in repository["files"]:
         if not isinstance(row, dict) or set(row) != PARTITION_FILE_KEYS:
             raise ValueError("partition receipt file is invalid")
@@ -427,10 +433,28 @@ def _validate_repository(repository: dict[str, Any], *, root: Path, receipt_sha2
         ):
             raise ValueError("partition receipt file join is invalid")
         blob = root.joinpath(*PurePosixPath(row["blob_path"]).parts)
-        if not blob.is_file() or _is_reparse_or_symlink(blob) or blob.stat().st_size != row["bytes"] or sha256_file(blob) != row["sha256"]:
-            raise ValueError("partition receipt blob changed")
+        blob_checks.append((blob, row["bytes"], row["sha256"]))
         blob_bytes += row["bytes"]
-    return blob_bytes
+    return blob_bytes, blob_checks
+
+
+def _verify_blob_check(check: tuple[Path, int, str]) -> None:
+    blob, expected_bytes, expected_sha256 = check
+    if (
+        not blob.is_file()
+        or _is_reparse_or_symlink(blob)
+        or blob.stat().st_size != expected_bytes
+        or sha256_file(blob) != expected_sha256
+    ):
+        raise ValueError("partition receipt blob changed")
+
+
+def _verify_blob_checks(checks: list[tuple[Path, int, str]]) -> None:
+    with ThreadPoolExecutor(max_workers=PARTITION_REOPEN_WORKERS) as executor:
+        for start in range(0, len(checks), PARTITION_REOPEN_MAX_IN_FLIGHT):
+            batch = checks[start : start + PARTITION_REOPEN_MAX_IN_FLIGHT]
+            for _ in executor.map(_verify_blob_check, batch):
+                pass
 
 
 def validate_partition_receipt(path: Path) -> dict[str, Any]:
@@ -453,13 +477,19 @@ def validate_partition_receipt(path: Path) -> dict[str, Any]:
     previous: str | None = None
     blob_bytes = 0
     file_count = 0
+    blob_checks: list[tuple[Path, int, str]] = []
     for repository in repositories:
         name = repository.get("source_repo") if isinstance(repository, dict) else None
         if not isinstance(name, str) or (previous is not None and name <= previous):
             raise ValueError("partition receipt repositories are not strictly ordered")
         previous = name
-        blob_bytes += _validate_repository(repository, root=root, receipt_sha256=source_sha)
+        repository_bytes, repository_checks = _validate_repository(
+            repository, root=root, receipt_sha256=source_sha
+        )
+        blob_bytes += repository_bytes
+        blob_checks.extend(repository_checks)
         file_count += len(repository["files"])
+    _verify_blob_checks(blob_checks)
     if (
         receipt["repository_count"] != len(repositories)
         or receipt["file_count"] != file_count
