@@ -194,20 +194,27 @@ class LiveCandidateRefusal(Exception):
     never a silent skip, never a default value, never a trivial pass."""
 
 
-def build_bound_task_specs(tasks: list[str]) -> list[object]:
-    """Translate the closed suite into lm_eval's own task-spec grammar."""
-    specs: list[object] = []
+def build_bound_task_specs(tasks: list[str]) -> dict[str, object]:
+    """Build registered task references with only the governed overrides.
+
+    TaskManager treats a top-level task dict as a complete inline task config.
+    A group member dict is instead the supported registered-task override
+    grammar: lm_eval loads the registered YAML first, then applies the member's
+    exact overrides.  That distinction preserves HellaSwag's dataset_path,
+    process_docs, splits, templates, and metrics without duplicating them here.
+    """
+    members: list[object] = []
     for task in tasks:
         if task == "arc_challenge":
-            specs.append(task)
+            members.append(task)
         elif task == "hellaswag":
-            specs.append({
+            members.append({
                 "task": task,
                 "dataset_kwargs": {"revision": HELLASWAG_DATASET_REVISION},
             })
         else:
             raise LiveCandidateRefusal(f"UNBOUND_EVALUATOR_TASK: {task}")
-    return specs
+    return {"group": "ember_issue1433_bound_eval", "task": members}
 
 
 def load_bound_evaluator_tasks(tasks: list[str], task_manager) -> tuple[list, dict]:
