@@ -42,7 +42,9 @@ def _write_json(path: Path, value: object) -> None:
     path.write_text(json.dumps(value, sort_keys=True), encoding="utf-8")
 
 
-def _fixture(tmp_path: Path) -> Path:
+def _fixture(
+    tmp_path: Path, *, checkpoint_schema_version: object = "ember-sparse-checkpoint-v3"
+) -> Path:
     checkpoint_dir = tmp_path / "checkpoint"
     checkpoint_dir.mkdir(parents=True)
     model_config = tmp_path / "configs" / "ember-restart-3b.json"
@@ -79,7 +81,7 @@ def _fixture(tmp_path: Path) -> Path:
     _write_json(
         checkpoint_manifest,
         {
-            "schema_version": "ember-sparse-checkpoint-v3",
+            "schema_version": checkpoint_schema_version,
             "architecture_revision": "ember-sparse-3b-v2",
             "model_config_sha256": config_hash,
             "architecture": {
@@ -206,6 +208,34 @@ def test_development_resolver_binds_exact_non_claiming_checkpoint(tmp_path: Path
         (manifest.parent / source["model_config"]["path"]).resolve()
     )
     assert payload["launch"]["mode"] == "INTERACTIVE"
+
+
+def test_development_resolver_accepts_bound_warm_checkpoint_v5(tmp_path: Path) -> None:
+    manifest = _fixture(
+        tmp_path, checkpoint_schema_version="ember-sparse-checkpoint-v5"
+    )
+    result = _resolve(manifest)
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["valid"] is True
+    assert payload["claim_status"] == "NON_ADMISSIBLE"
+    assert payload["tokens_seen"] == 2048
+
+
+def test_development_resolver_rejects_unapproved_checkpoint_schemas(
+    tmp_path: Path,
+) -> None:
+    for name, schema_version in (
+        ("v4", "ember-sparse-checkpoint-v4"),
+        ("v6", "ember-sparse-checkpoint-v6"),
+        ("malformed", {"name": "ember-sparse-checkpoint-v5"}),
+    ):
+        manifest = _fixture(
+            tmp_path / name, checkpoint_schema_version=schema_version
+        )
+        result = _resolve(manifest)
+        assert result.returncode == 1
+        assert "checkpoint schema_version is not supported" in result.stdout
 
 
 def test_development_resolver_rejects_tamper_claim_upgrade_and_count_drift(tmp_path: Path) -> None:
