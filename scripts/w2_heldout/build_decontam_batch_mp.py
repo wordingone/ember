@@ -124,6 +124,9 @@ HEARTBEAT_INTERVAL_S = 20  # intra-shard progress heartbeat cadence (issue #174 
 RECEIPT_DIR = os.path.join(REPO_ROOT, "receipts", "ember-c-scale")
 PREDECLARED_REQUIRED_WINDOWS = 16
 PREDECLARED_VERDICT = "DECONTAMINATION_NOT_PERFORMED"
+TRAINED_CONSUMPTION_VERDICT = "CLEAN_VS_TRAINED_CONSUMPTION"
+WHOLE_CORPUS_REFUSAL_SHA256 = "5ffd38dca7d8cd10b1133a44c703c2468deb0d4f08f31053678eb9dc873d6aa2"
+WHOLE_CORPUS_CONFIRMED_NON_SELF_MATCHES = 20777
 
 
 def _utc_ts() -> str:
@@ -387,6 +390,179 @@ def verify_predeclared_candidate(
             "Exact-window n-gram decontamination only. Candidate was publicly predeclared before "
             "WARM-100 but was not bound in its run receipt; no model measurement, capability, "
             "registry, issue-closure, or scoring credit."),
+    }
+
+
+def load_training_consumption_set(
+        path: str | os.PathLike[str], expected_sha256: str) -> dict:
+    """Load the exact read-only proof that closes this run's consumed range."""
+    expected = _lower_sha256(expected_sha256, "TRAINING_CONSUMPTION_SET_SHA_INVALID")
+    actual = _sha256_file(path)
+    if actual != expected:
+        raise SystemExit(
+            f"TRAINING_CONSUMPTION_SET_SHA_MISMATCH: expected={expected} actual={actual}")
+    with open(path, encoding="utf-8") as fh:
+        value = json.load(fh)
+    _closed_keys(
+        value,
+        {"schema", "issue", "status", "answer", "question", "trained_run",
+         "scan_evidence", "intersection", "claim_boundary"},
+        set(), "TRAINING_CONSUMPTION_SET_SCHEMA_INVALID")
+    if (value.get("schema") != "issue1433-warm100-trained-range-match-intersection/v1"
+            or value.get("issue") != 1433 or value.get("status") != "PASS"
+            or value.get("answer") != "NO"
+            or not isinstance(value.get("question"), str)
+            or not isinstance(value.get("claim_boundary"), str)):
+        raise SystemExit("TRAINING_CONSUMPTION_SET_SCHEMA_INVALID")
+    trained = value.get("trained_run")
+    _closed_keys(
+        trained,
+        {"run_id", "source_commit", "run_spec_path", "run_spec_sha256",
+         "checkpoint_manifest_path", "checkpoint_manifest_sha256",
+         "stream_receipt_path", "stream_receipt_sha256", "sequence_length", "steps",
+         "start_cursor", "terminal_cursor", "consumed_physical_range", "producer_source"},
+        set(), "TRAINING_CONSUMPTION_SET_RUN_INVALID")
+    if not isinstance(trained.get("run_id"), str) or not trained["run_id"]:
+        raise SystemExit("TRAINING_CONSUMPTION_SET_RUN_INVALID")
+    _lower_sha256(trained.get("run_spec_sha256"), "TRAINING_CONSUMPTION_SET_RUN_INVALID")
+    _lower_sha256(
+        trained.get("checkpoint_manifest_sha256"), "TRAINING_CONSUMPTION_SET_RUN_INVALID")
+    _lower_sha256(trained.get("stream_receipt_sha256"), "TRAINING_CONSUMPTION_SET_RUN_INVALID")
+    if not re.fullmatch(r"[0-9a-f]{40}", str(trained.get("source_commit", ""))):
+        raise SystemExit("TRAINING_CONSUMPTION_SET_RUN_INVALID")
+    start = trained.get("start_cursor")
+    terminal = trained.get("terminal_cursor")
+    _closed_keys(start, {"shard_index", "token_offset"}, set(),
+                 "TRAINING_CONSUMPTION_SET_CURSOR_INVALID")
+    _closed_keys(terminal, {"shard_index", "token_offset", "record_index",
+                            "global_step", "tokens_seen"}, set(),
+                 "TRAINING_CONSUMPTION_SET_CURSOR_INVALID")
+    if (start != {"shard_index": 0, "token_offset": 0}
+            or any(isinstance(terminal.get(field), bool)
+                   or not isinstance(terminal.get(field), int)
+                   or terminal[field] < 0
+                   for field in ("shard_index", "token_offset", "record_index",
+                                 "global_step", "tokens_seen"))
+            or terminal["record_index"] != terminal["global_step"]
+            or terminal["token_offset"] != terminal["tokens_seen"]
+            or terminal["shard_index"] != 0):
+        raise SystemExit("TRAINING_CONSUMPTION_SET_CURSOR_INVALID")
+    physical = trained.get("consumed_physical_range")
+    _closed_keys(physical, {"shard", "input_and_target_token_positions_inclusive",
+                            "derivation"}, set(),
+                 "TRAINING_CONSUMPTION_SET_RANGE_INVALID")
+    bounds = physical.get("input_and_target_token_positions_inclusive")
+    if (not isinstance(physical.get("shard"), str)
+            or Path(physical["shard"]).name != physical["shard"]
+            or not isinstance(bounds, list) or len(bounds) != 2
+            or any(isinstance(item, bool) or not isinstance(item, int) for item in bounds)
+            or bounds[0] != 0 or bounds[1] != terminal["token_offset"]
+            or not isinstance(physical.get("derivation"), str)):
+        raise SystemExit("TRAINING_CONSUMPTION_SET_RANGE_INVALID")
+    scan = value.get("scan_evidence")
+    if (not isinstance(scan, dict)
+            or scan.get("refusal_packet_sha256") != WHOLE_CORPUS_REFUSAL_SHA256
+            or scan.get("confirmed_non_self_matches")
+            != WHOLE_CORPUS_CONFIRMED_NON_SELF_MATCHES):
+        raise SystemExit("TRAINING_CONSUMPTION_SET_REFUSAL_INVALID")
+    intersection = value.get("intersection")
+    if (not isinstance(intersection, dict)
+            or intersection.get("confirmed_non_self_matches_inside_trained_range") != 0
+            or intersection.get("any") is not False):
+        raise SystemExit("TRAINING_CONSUMPTION_SET_INTERSECTION_INVALID")
+    return value
+
+
+def verify_predeclared_candidate_against_training_consumption(
+        manifest: dict, *, candidate_manifest_path: str | os.PathLike[str],
+        candidate_manifest_sha256: str, shard_dir: str | os.PathLike[str],
+        consumption_set: dict, training_consumption_set_sha256: str,
+        contamination_window: int = CONTAMINATION_WINDOW_TOKENS) -> dict:
+    """Scan only the receipt-bound physical consumption range; never reselect."""
+    consumption_sha = _lower_sha256(
+        training_consumption_set_sha256, "TRAINING_CONSUMPTION_SET_SHA_INVALID")
+    seq = manifest["sequence"]["seq"]
+    n_mtp = manifest["sequence"]["n_mtp"]
+    block_len = seq + 1 + n_mtp
+    files = cheap_shard_sizes(str(shard_dir))
+    cum = _cumulative_token_offsets(files)
+    rows: list[list[int]] = []
+    declared_shards = {row["name"]: row for row in manifest["source_corpus"]["shards"]}
+    for declared in manifest["windows"]:
+        position = window_source_position(files, cum, seq, declared["window_index"])
+        if (position["shard"] != declared["shard_name"]
+                or position["offset"] != declared["shard_token_start"]
+                or position["global_start"] != declared["global_token_start"]):
+            raise SystemExit("PREDECLARED_CANDIDATE_PHYSICAL_MAPPING_INVALID")
+        rows.append(read_window_tokens(
+            str(shard_dir), files, cum, seq, block_len, declared["window_index"]))
+    for name in {row["shard_name"] for row in manifest["windows"]}:
+        path = Path(shard_dir) / name
+        declared = declared_shards[name]
+        if (path.stat().st_size != declared["n_tokens"] * 2
+                or _sha256_file(path) != declared["sha256"]):
+            raise SystemExit(f"PREDECLARED_CANDIDATE_SHARD_IDENTITY_INVALID: {name}")
+    physical = consumption_set["trained_run"]["consumed_physical_range"]
+    consumed_path = Path(shard_dir) / physical["shard"]
+    if not consumed_path.is_file() or consumed_path.stat().st_size % 2:
+        raise SystemExit("TRAINING_CONSUMPTION_SHARD_INVALID")
+    bounds = physical["input_and_target_token_positions_inclusive"]
+    token_count = consumed_path.stat().st_size // 2
+    if bounds[1] >= token_count:
+        raise SystemExit("TRAINING_CONSUMPTION_RANGE_OUT_OF_BOUNDS")
+    consumed = np.fromfile(consumed_path, dtype="<u2", count=bounds[1] - bounds[0] + 1,
+                           offset=bounds[0] * 2)
+    needles = {
+        tuple(row[offset:offset + contamination_window])
+        for row in rows
+        for offset in range(len(row) - contamination_window + 1)
+    }
+    windows_hashed = max(0, len(consumed) - contamination_window + 1)
+    confirmed = 0
+    for offset in range(windows_hashed):
+        if tuple(int(item) for item in consumed[offset:offset + contamination_window]) in needles:
+            confirmed += 1
+    if confirmed:
+        raise SystemExit(
+            f"TRAINED_CONSUMPTION_MATCH_REFUSED: confirmed_matches={confirmed}; "
+            "whole candidate refused; zero replacement or reselection")
+    trained = consumption_set["trained_run"]
+    return {
+        "ticket": "ISSUE-1433-TRAINED-CONSUMPTION-DECONTAMINATION",
+        "ts": _utc_ts(),
+        "schema": "issue1433-predeclared-trained-consumption-decontamination/v1",
+        "status": TRAINED_CONSUMPTION_VERDICT,
+        "verdict": TRAINED_CONSUMPTION_VERDICT,
+        "candidate_manifest_sha256": candidate_manifest_sha256,
+        "candidate_batch_sha256": batch_sha256(rows, seq),
+        "training_consumption_set_sha256": consumption_sha,
+        "checkpoint_identity": {
+            "manifest_sha256": trained["checkpoint_manifest_sha256"],
+            "run_id": trained["run_id"],
+            "global_step": trained["terminal_cursor"]["global_step"],
+            "tokens_seen": trained["terminal_cursor"]["tokens_seen"],
+            "stream_receipt_sha256": trained["stream_receipt_sha256"],
+        },
+        "contamination_recheck": {
+            "window_tokens": contamination_window,
+            "windows_hashed": windows_hashed,
+            "confirmed_matches": 0,
+            "verdict": TRAINED_CONSUMPTION_VERDICT,
+        },
+        "whole_corpus_refusal": {
+            "packet_sha256": WHOLE_CORPUS_REFUSAL_SHA256,
+            "confirmed_non_self_matches": WHOLE_CORPUS_CONFIRMED_NON_SELF_MATCHES,
+        },
+        "zero_intersection_proof": {
+            "sha256": consumption_sha,
+            "intersection": 0,
+        },
+        "sha_convention": "sha256 over exact on-disk bytes",
+        "claim_boundary": (
+            "CLEAN only versus this WARM-100 run's exact receipt-bound consumed range. "
+            "Whole-corpus scan remains REFUSED by packet 5FFD38DC with 20,777 confirmed "
+            "non-self matches; zero-intersection proof B5FFAC83 is the consumption-set "
+            "authority. No whole-corpus CLEAN, capability, registry, scoring, or closure claim."),
     }
 
 
@@ -2102,15 +2278,68 @@ def main():
                          "lock unless pointed at the same path explicitly.")
     ap.add_argument("--verify-predeclared-candidate", action="store_true",
                     help="Verify one exact SHA-bound predeclared candidate; never select or replace rows")
+    ap.add_argument("--verify-predeclared-trained-consumption", action="store_true",
+                    help="Verify the exact predeclared candidate only against one SHA-bound trained-consumption set; never select or replace rows")
     ap.add_argument("--candidate-manifest", type=str)
     ap.add_argument("--expected-candidate-sha256", type=str)
+    ap.add_argument("--training-consumption-set", type=str)
+    ap.add_argument("--expected-training-consumption-set-sha256", type=str)
     ap.add_argument("--verification-out", type=str)
     args = ap.parse_args()
 
     if not args.shard_dir:
         raise SystemExit("W2_DECONTAM_SHARD_DIR_REQUIRED")
 
+    if args.verify_predeclared_candidate and args.verify_predeclared_trained_consumption:
+        raise SystemExit("PREDECLARED_VERIFY_MODE_CONFLICT")
+
+    if args.verify_predeclared_trained_consumption:
+        if not all((args.candidate_manifest, args.expected_candidate_sha256,
+                    args.training_consumption_set,
+                    args.expected_training_consumption_set_sha256,
+                    args.verification_out)):
+            raise SystemExit(
+                "TRAINED_CONSUMPTION_ARGUMENTS_REQUIRED: --candidate-manifest, "
+                "--expected-candidate-sha256, --training-consumption-set, "
+                "--expected-training-consumption-set-sha256, --verification-out")
+        if any((args.out_batch != os.path.join(
+                    REPO_ROOT, "receipts", "ember-c-scale", "w2-heldout-batch.npy"),
+                args.pool_start_index is not None, args.batch_size != DEFAULT_BATCH_SIZE,
+                args.pool_oversample != DEFAULT_POOL_OVERSAMPLE,
+                args.max_rounds != DEFAULT_MAX_ROUNDS)):
+            raise SystemExit(
+                "PREDECLARED_SELECTION_ARGUMENT_REFUSED: trained-consumption verify-only "
+                "mode accepts no pool, replacement, batch, or output-batch controls")
+        _check_singleton_lock(lock_file=args.lock_file)
+        total_commit, free_commit = _preflight_check_commit()
+        print(f"[PREFLIGHT] Commit: {total_commit:.1f}GB total, {free_commit:.1f}GB free "
+              f"(>={MIN_COMMIT_FREE_GB}GB required: OK)")
+        manifest = load_predeclared_candidate(
+            args.candidate_manifest, args.expected_candidate_sha256)
+        _validate_predeclared_corpus(manifest, args.shard_dir)
+        consumption_set = load_training_consumption_set(
+            args.training_consumption_set,
+            args.expected_training_consumption_set_sha256)
+        receipt = verify_predeclared_candidate_against_training_consumption(
+            manifest,
+            candidate_manifest_path=args.candidate_manifest,
+            candidate_manifest_sha256=args.expected_candidate_sha256,
+            shard_dir=args.shard_dir,
+            consumption_set=consumption_set,
+            training_consumption_set_sha256=(
+                args.expected_training_consumption_set_sha256),
+        )
+        write_predeclared_verification_receipt(receipt, args.verification_out)
+        print(
+            f"PREDECLARED_TRAINED_CONSUMPTION_DECONTAMINATION_PASS "
+            f"candidate_sha256={args.expected_candidate_sha256} "
+            f"consumption_sha256={args.expected_training_consumption_set_sha256} "
+            f"receipt={args.verification_out}")
+        return
+
     if args.verify_predeclared_candidate:
+        if args.training_consumption_set or args.expected_training_consumption_set_sha256:
+            raise SystemExit("TRAINING_CONSUMPTION_ARGUMENT_UNEXPECTED")
         if not all((args.candidate_manifest, args.expected_candidate_sha256,
                     args.verification_out)):
             raise SystemExit(
@@ -2149,6 +2378,10 @@ def main():
             f"windows={len(receipt['selected_window_indices'])} "
             f"receipt={args.verification_out}")
         return
+
+    if (args.training_consumption_set
+            or args.expected_training_consumption_set_sha256):
+        raise SystemExit("TRAINING_CONSUMPTION_ARGUMENT_UNEXPECTED")
 
     # Check singleton lock before any work
     _check_singleton_lock(lock_file=args.lock_file)
