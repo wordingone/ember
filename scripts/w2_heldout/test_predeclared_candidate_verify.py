@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -170,3 +171,162 @@ def test_receipt_writer_is_no_overwrite(tmp_path: Path) -> None:
         subject.write_predeclared_verification_receipt(receipt, out)
 
     assert out.read_bytes() == original
+
+
+def _scoped_candidate(tmp_path: Path, *, contaminated: bool = False):
+    shard_dir = tmp_path / "scoped-shards"
+    shard_dir.mkdir()
+    consumed = [1000 + (index % 30000) for index in range(51216)]
+    candidate = [40000 + index for index in range(16 * 16 + 1)]
+    if contaminated:
+        consumed[100:113] = candidate[:13]
+    consumed_path = shard_dir / "v0-00000.bin"
+    candidate_path = shard_dir / "v0-00001.bin"
+    np.asarray(consumed, dtype="<u2").tofile(consumed_path)
+    np.asarray(candidate, dtype="<u2").tofile(candidate_path)
+    windows = []
+    for offset in range(16):
+        shard_start = offset * 16
+        global_start = 51216 + shard_start
+        windows.append({
+            "window_index": global_start // 16,
+            "shard_name": "v0-00001.bin",
+            "shard_token_start": shard_start,
+            "shard_token_end_exclusive": shard_start + 17,
+            "source_shard_token_end_exclusive": shard_start + 17,
+            "global_token_start": global_start,
+            "global_token_end_exclusive": global_start + 17,
+            "source_global_token_end_exclusive": global_start + 17,
+        })
+    manifest = {
+        "schema": "cbase-heldout-slice/v1", "issue": "#760",
+        "captured_public_master": "a" * 40,
+        "source_corpus": {
+            "combined_sha256": "b" * 64,
+            "receipt_path": "receipts/token-shards-v0-fixture.json",
+            "receipt_sha256": "c" * 64,
+            "shards": [{
+                "name": "v0-00001.bin",
+                "sha256": hashlib.sha256(candidate_path.read_bytes()).hexdigest(),
+                "n_tokens": len(candidate),
+                "global_token_start": 51216,
+                "global_token_end_exclusive": 51216 + len(candidate),
+            }],
+        },
+        "selection_evidence": {
+            "path": "receipts/cbase-heldout-eval/issue-760-slice-regeneration-finding.json",
+            "sha256": "d" * 64, "batch_sha256": "d" * 64,
+            "verdict": "DECONTAMINATION_NOT_PERFORMED",
+        },
+        "sequence": {"dtype": "<u2", "seq": 16, "n_mtp": 0, "separator_id": 0,
+                     "packed_bytes_per_token": 2, "scoring": "primary_next_token_only"},
+        "training_consumption": [{"source": "fixture", "global_token_start": 0,
+                                  "global_token_end_exclusive": 51201}],
+        "windows": windows, "expected_scored_token_count": 256,
+        "scale": "W1_FROM_SCRATCH_PILOT_BASELINE",
+        "availability": {"status": "AVAILABLE", "missing": [], "note": "fixture"},
+        "claim_boundary": "fixture candidate; no measurement claim",
+    }
+    manifest_path = tmp_path / "scoped-candidate.json"
+    manifest_path.write_text(json.dumps(manifest, sort_keys=True), encoding="utf-8")
+    manifest_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    proof = {
+        "schema": "issue1433-warm100-trained-range-match-intersection/v1",
+        "issue": 1433, "status": "PASS", "answer": "NO", "question": "fixture",
+        "trained_run": {
+            "run_id": "issue1296-warm100-run-20260819T203314Z",
+            "source_commit": "b" * 40,
+            "run_spec_path": "B:/fixture/run-spec.json", "run_spec_sha256": "1" * 64,
+            "checkpoint_manifest_path": "B:/fixture/checkpoint-manifest.json",
+            "checkpoint_manifest_sha256": "2" * 64,
+            "stream_receipt_path": "A:/fixture/token-shards.json",
+            "stream_receipt_sha256": "3" * 64,
+            "sequence_length": 512, "steps": 100,
+            "start_cursor": {"shard_index": 0, "token_offset": 0},
+            "terminal_cursor": {"shard_index": 0, "token_offset": 51200,
+                                "record_index": 100, "global_step": 100,
+                                "tokens_seen": 51200},
+            "consumed_physical_range": {
+                "shard": "v0-00000.bin",
+                "input_and_target_token_positions_inclusive": [0, 51200],
+                "derivation": "fixture",
+            },
+            "producer_source": {},
+        },
+        "scan_evidence": {"refusal_packet_sha256": "5ffd38dca7d8cd10b1133a44c703c2468deb0d4f08f31053678eb9dc873d6aa2",
+                          "confirmed_non_self_matches": 20777},
+        "intersection": {"confirmed_non_self_matches_inside_trained_range": 0,
+                         "any": False, "confidence": "fixture"},
+        "claim_boundary": "fixture",
+    }
+    proof_path = tmp_path / "consumption-proof.json"
+    proof_path.write_text(json.dumps(proof, sort_keys=True), encoding="utf-8")
+    proof_sha = hashlib.sha256(proof_path.read_bytes()).hexdigest()
+    return manifest_path, manifest_sha, shard_dir, proof_path, proof_sha
+
+
+def test_scoped_loader_refuses_wrong_consumption_set_hash(tmp_path: Path) -> None:
+    _manifest_path, _manifest_sha, _shard_dir, proof_path, _proof_sha = _scoped_candidate(tmp_path)
+    with pytest.raises(SystemExit, match="TRAINING_CONSUMPTION_SET_SHA_MISMATCH"):
+        subject.load_training_consumption_set(proof_path, "0" * 64)
+
+
+def test_scoped_scan_binds_candidate_consumption_and_checkpoint(tmp_path: Path) -> None:
+    manifest_path, manifest_sha, shard_dir, proof_path, proof_sha = _scoped_candidate(tmp_path)
+    receipt = subject.verify_predeclared_candidate_against_training_consumption(
+        subject.load_predeclared_candidate(manifest_path, manifest_sha),
+        candidate_manifest_path=manifest_path,
+        candidate_manifest_sha256=manifest_sha,
+        shard_dir=shard_dir,
+        consumption_set=subject.load_training_consumption_set(proof_path, proof_sha),
+        training_consumption_set_sha256=proof_sha,
+        contamination_window=13,
+    )
+    assert receipt["status"] == "CLEAN_VS_TRAINED_CONSUMPTION"
+    assert receipt["candidate_manifest_sha256"] == manifest_sha
+    assert len(receipt["candidate_batch_sha256"]) == 64
+    assert receipt["training_consumption_set_sha256"] == proof_sha
+    assert receipt["checkpoint_identity"]["manifest_sha256"] == "2" * 64
+    assert receipt["contamination_recheck"]["confirmed_matches"] == 0
+    assert receipt["whole_corpus_refusal"]["confirmed_non_self_matches"] == 20777
+    assert receipt["zero_intersection_proof"]["sha256"] == proof_sha
+
+
+def test_scoped_scan_refuses_whole_candidate_on_consumed_range_match(tmp_path: Path) -> None:
+    manifest_path, manifest_sha, shard_dir, proof_path, proof_sha = _scoped_candidate(
+        tmp_path, contaminated=True)
+    with pytest.raises(SystemExit, match="TRAINED_CONSUMPTION_MATCH_REFUSED"):
+        subject.verify_predeclared_candidate_against_training_consumption(
+            subject.load_predeclared_candidate(manifest_path, manifest_sha),
+            candidate_manifest_path=manifest_path,
+            candidate_manifest_sha256=manifest_sha,
+            shard_dir=shard_dir,
+            consumption_set=subject.load_training_consumption_set(proof_path, proof_sha),
+            training_consumption_set_sha256=proof_sha,
+            contamination_window=13,
+        )
+
+
+def test_scoped_verify_cli_writes_closed_receipt_without_selection_controls(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    manifest_path, manifest_sha, shard_dir, proof_path, proof_sha = _scoped_candidate(tmp_path)
+    receipt_path = tmp_path / "scoped-verification.json"
+    monkeypatch.setattr(subject, "_check_singleton_lock", lambda **_kwargs: None)
+    monkeypatch.setattr(subject, "_preflight_check_commit", lambda: (64.0, 32.0))
+    monkeypatch.setattr(subject, "_validate_predeclared_corpus", lambda *_args: None)
+    monkeypatch.setattr(sys, "argv", [
+        "build_decontam_batch_mp.py",
+        "--verify-predeclared-trained-consumption",
+        "--candidate-manifest", str(manifest_path),
+        "--expected-candidate-sha256", manifest_sha,
+        "--training-consumption-set", str(proof_path),
+        "--expected-training-consumption-set-sha256", proof_sha,
+        "--shard-dir", str(shard_dir),
+        "--verification-out", str(receipt_path),
+    ])
+
+    subject.main()
+
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    assert receipt["verdict"] == "CLEAN_VS_TRAINED_CONSUMPTION"
+    assert receipt["training_consumption_set_sha256"] == proof_sha
