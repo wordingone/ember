@@ -3830,6 +3830,7 @@ def run_semantic(
     resume_optimizer_transition_registry_sha256: str | None = None,
     telemetry_path: Path | None = None, telemetry_run_id: str | None = None,
     admitted_row_set_sha256: str | None = None,
+    receipt_custody_root: Path | None = None,
 ) -> dict[str, object]:
     """Train receipt-bound semantic text through the shared nonlinear language path."""
 
@@ -3845,7 +3846,10 @@ def run_semantic(
         raise ValueError("admitted row-set hash must be an exact SHA-256")
     # Shared-text authority must be complete before even a CUDA availability probe.
     root = Path(__file__).resolve().parents[2]
-    text_lab_preflight = run_text_lab_preflight(repo_root=root)
+    text_lab_preflight = run_text_lab_preflight(
+        repo_root=root,
+        receipt_custody_root=receipt_custody_root,
+    )
     if text_lab_preflight.get("result") != "VERIFIED":
         if (
             admitted_row_set_sha256 is None
@@ -4133,6 +4137,7 @@ def main() -> None:
     semantic.add_argument("--expected-tokenizer-sha256", required=True)
     semantic.add_argument("--expected-architecture-sha256", required=True)
     semantic.add_argument("--admitted-row-set-sha256")
+    semantic.add_argument("--text-lab-receipt-custody-root", type=Path)
     semantic.add_argument("--steps", type=int, required=True)
     semantic.add_argument("--sequence-length", type=int, required=True)
     semantic.add_argument("--checkpoint-interval", type=int, required=True)
@@ -4202,6 +4207,7 @@ def main() -> None:
             expected_tokenizer_sha256=args.expected_tokenizer_sha256,
             expected_architecture_sha256=args.expected_architecture_sha256,
             admitted_row_set_sha256=args.admitted_row_set_sha256,
+            receipt_custody_root=args.text_lab_receipt_custody_root,
             steps=args.steps,
             sequence_length=args.sequence_length,
             checkpoint_interval=args.checkpoint_interval,
