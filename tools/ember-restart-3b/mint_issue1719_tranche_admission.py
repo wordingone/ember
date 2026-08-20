@@ -136,6 +136,17 @@ def load_authority_module(repo: Path):
     return module
 
 
+def load_projection_module(repo: Path):
+    path = repo / "tools" / "ember-restart-3b" / "project_text_lab_custody_paths.py"
+    spec = importlib.util.spec_from_file_location("issue1719_custody_projection", path)
+    if spec is None or spec.loader is None:
+        raise ValueError("custody projection module is unavailable")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def _regular_root(path: Path, label: str, module: Any) -> Path:
     path = path.absolute()
     if not path.is_dir() or module._is_reparse_or_symlink(path):
@@ -746,10 +757,16 @@ def mint_successor(
     plan_sha256: str,
     output: Path,
     predecessor_source_repo: Path | None = None,
+    predecessor_projection_receipt: Path | None = None,
+    predecessor_projection_receipt_sha256: str | None = None,
 ) -> dict[str, Any]:
     if HEX40.fullmatch(source_commit) is None or HEX64.fullmatch(predecessor_receipt_sha256) is None:
         raise ValueError("source commit or predecessor receipt hash is invalid")
     repo = repo.resolve(strict=True)
+    if (predecessor_projection_receipt is None) != (predecessor_projection_receipt_sha256 is None):
+        raise ValueError("predecessor projection receipt path/hash must be supplied together")
+    if predecessor_projection_receipt_sha256 is not None and HEX64.fullmatch(predecessor_projection_receipt_sha256) is None:
+        raise ValueError("predecessor projection receipt hash is invalid")
     module = load_authority_module(repo)
     source_custody = _regular_root(source_custody, "source custody", module)
     output = output.absolute()
@@ -844,6 +861,29 @@ def mint_successor(
         )
     elif predecessor_source_repo is not None:
         raise ValueError("historical predecessor source repo is forbidden for legacy predecessor")
+    projection_binding = None
+    if predecessor_projection_receipt is not None:
+        projection_path = predecessor_projection_receipt.resolve(strict=True)
+        projection = load_projection_module(repo).validate_projection_custody(
+            repo=repo,
+            projection_receipt_path=projection_path,
+            expected_receipt_sha256=predecessor_projection_receipt_sha256,
+            source_custody=source_custody,
+            source_receipt_name=predecessor_receipt_name,
+            source_receipt_sha256=predecessor_receipt_sha256,
+        )
+        projected_raw = projection.get("generated")
+        if not isinstance(projected_raw, dict) or set(projected_raw) != set(source_names.values()):
+            raise ValueError("projected predecessor artifact set changed")
+        source_raw = projected_raw
+        bundle = json.loads(source_raw[source_names["bundle"]])
+        corpus = json.loads(source_raw[source_names["corpus"]])
+        source_identity = json.loads(source_raw[source_names["identity"]])
+        source_index = json.loads(source_raw[source_names["index"]])
+        projection_binding = {
+            "receipt_path": str(projection_path),
+            "receipt_sha256": predecessor_projection_receipt_sha256,
+        }
     rows = corpus.get("sources")
     if (
         not isinstance(rows, list)
@@ -960,6 +1000,11 @@ def mint_successor(
                     if historical_reopen is not None
                     else {}
                 ),
+                **(
+                    {"custody_projection": projection_binding}
+                    if projection_binding is not None
+                    else {}
+                ),
             },
             "plan": {
                 "file_name": OUTPUT_PLAN,
@@ -1051,6 +1096,8 @@ def main() -> int:
     parser.add_argument("--plan-sha256", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--predecessor-source-repo", type=Path)
+    parser.add_argument("--predecessor-projection-receipt", type=Path)
+    parser.add_argument("--predecessor-projection-receipt-sha256")
     args = parser.parse_args()
     result = mint_successor(
         repo=args.repo,
@@ -1062,6 +1109,8 @@ def main() -> int:
         plan_sha256=args.plan_sha256,
         output=args.output,
         predecessor_source_repo=args.predecessor_source_repo,
+        predecessor_projection_receipt=args.predecessor_projection_receipt,
+        predecessor_projection_receipt_sha256=args.predecessor_projection_receipt_sha256,
     )
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     return 0

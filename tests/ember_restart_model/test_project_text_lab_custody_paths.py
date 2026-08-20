@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -125,7 +126,150 @@ def scratch_repository(root: pathlib.Path) -> tuple[str, str]:
     return first, second
 
 
+def projection_custody_fixture(module, root: pathlib.Path):
+    receipt_root = root / "corpus"
+    source = root / "source"
+    source.mkdir()
+    rows = projection_fixture(receipt_root)
+    source_values = {
+        "bundle": {"candidates": rows},
+        "corpus": {"sources": rows},
+        "identity": {"source_base_commit": "1" * 40},
+        "index": {"schema_version": "fixture-index"},
+    }
+    source_raw = {}
+    for role, name in module.ARTIFACTS.items():
+        raw = module._canonical(source_values[role])
+        (source / name).write_bytes(raw)
+        source_raw[role] = raw
+    predecessor_raw = module._canonical({"fixture": "immutable predecessor"})
+    (source / "tranche-admission-receipt.json").write_bytes(predecessor_raw)
+    projected_rows = module.project_rows(rows, receipt_custody_root=receipt_root)
+    generated = {
+        module.ARTIFACTS["bundle"]: module._canonical({"candidates": projected_rows}),
+        module.ARTIFACTS["corpus"]: module._canonical({"sources": projected_rows}),
+        module.ARTIFACTS["identity"]: module._canonical({"source_base_commit": "1" * 40}),
+        module.ARTIFACTS["index"]: module._canonical({"schema_version": "fixture-index"}),
+    }
+    source_hashes = {role: module._sha(raw) for role, raw in source_raw.items()}
+    return source, receipt_root, predecessor_raw, generated, source_hashes
+
+
 class CustodyPathProjectionTests(unittest.TestCase):
+    def test_mints_deterministic_closed_projection_receipt_and_reopens(self):
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            source, receipt_root, predecessor_raw, generated, source_hashes = projection_custody_fixture(module, root)
+            authority_calls = []
+
+            def validate_authority_index(repo, *, index_relative, external_authority_root):
+                authority_calls.append(pathlib.Path(external_authority_root))
+                self.assertEqual(index_relative, module.ARTIFACTS["index"])
+                return {"result": "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING"}
+
+            with mock.patch.object(module, "SOURCE_SHA256", source_hashes), mock.patch.object(
+                module, "build_projected_packet", return_value=generated
+            ), mock.patch.object(module, "validate_authority_index", side_effect=validate_authority_index):
+                first = module.mint_projection_custody(
+                    repo=ROOT,
+                    source_custody=source,
+                    source_receipt_name="tranche-admission-receipt.json",
+                    source_receipt_sha256=module._sha(predecessor_raw),
+                    receipt_custody_root=receipt_root,
+                    source_base_commit="1" * 40,
+                    output=root / "first",
+                )
+                second = module.mint_projection_custody(
+                    repo=ROOT,
+                    source_custody=source,
+                    source_receipt_name="tranche-admission-receipt.json",
+                    source_receipt_sha256=module._sha(predecessor_raw),
+                    receipt_custody_root=receipt_root,
+                    source_base_commit="1" * 40,
+                    output=root / "second",
+                )
+                self.assertEqual(
+                    (root / "first" / module.PROJECTION_RECEIPT).read_bytes(),
+                    (root / "second" / module.PROJECTION_RECEIPT).read_bytes(),
+                )
+                reopened = module.validate_projection_custody(
+                    repo=ROOT,
+                    projection_receipt_path=root / "first" / module.PROJECTION_RECEIPT,
+                    expected_receipt_sha256=first["receipt_sha256"],
+                    source_custody=source,
+                    source_receipt_name="tranche-admission-receipt.json",
+                    source_receipt_sha256=module._sha(predecessor_raw),
+                )
+                self.assertEqual(reopened["generated"], generated)
+                self.assertEqual(len(reopened["receipt"]["row_mappings"]), 12)
+                self.assertEqual(
+                    reopened["receipt"]["validation_receipt"],
+                    {"result": "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING"},
+                )
+                self.assertEqual(len(authority_calls), 5)
+                self.assertTrue(authority_calls[0].name.startswith(".first.staging-"))
+                self.assertEqual(authority_calls[1], root / "first")
+                self.assertTrue(authority_calls[2].name.startswith(".second.staging-"))
+                self.assertEqual(authority_calls[3:], [root / "second", root / "first"])
+
+    def test_atomic_projection_publish_refuses_existing_destination(self):
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            source = root / "source"
+            destination = root / "destination"
+            source.mkdir()
+            destination.mkdir()
+            with self.assertRaises(FileExistsError):
+                module.atomic_publish_no_replace(source, destination)
+            self.assertTrue(source.is_dir())
+            self.assertTrue(destination.is_dir())
+
+    def test_projection_receipt_refuses_tamper_swap_root_and_row_set_drift(self):
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            source, receipt_root, predecessor_raw, generated, source_hashes = projection_custody_fixture(module, root)
+            with mock.patch.object(module, "SOURCE_SHA256", source_hashes), mock.patch.object(
+                module, "build_projected_packet", return_value=generated
+            ), mock.patch.object(
+                module,
+                "validate_authority_index",
+                return_value={"result": "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING"},
+            ):
+                for mutation in ("artifact", "swap", "root", "absent", "extra"):
+                    output = root / mutation
+                    module.mint_projection_custody(
+                        repo=ROOT, source_custody=source,
+                        source_receipt_name="tranche-admission-receipt.json",
+                        source_receipt_sha256=module._sha(predecessor_raw),
+                        receipt_custody_root=receipt_root,
+                        source_base_commit="1" * 40, output=output,
+                    )
+                    receipt_path = output / module.PROJECTION_RECEIPT
+                    receipt = json.loads(receipt_path.read_bytes())
+                    if mutation == "artifact":
+                        (output / module.ARTIFACTS["bundle"]).write_bytes(b"tampered")
+                    elif mutation == "swap":
+                        receipt["row_mappings"][0], receipt["row_mappings"][1] = receipt["row_mappings"][1], receipt["row_mappings"][0]
+                    elif mutation == "root":
+                        receipt["receipt_custody_root"] = str((root / "other-root").resolve())
+                    elif mutation == "absent":
+                        receipt["row_mappings"].pop()
+                    else:
+                        receipt["row_mappings"].append(copy.deepcopy(receipt["row_mappings"][0]))
+                    if mutation != "artifact":
+                        receipt_path.write_bytes(module._canonical(receipt))
+                    with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                        module.validate_projection_custody(
+                            repo=ROOT,
+                            projection_receipt_path=receipt_path,
+                            expected_receipt_sha256=module._sha(receipt_path.read_bytes()),
+                            source_custody=source,
+                            source_receipt_name="tranche-admission-receipt.json",
+                            source_receipt_sha256=module._sha(predecessor_raw),
+                        )
     def test_write_source_base_commit_refuses_malformed_and_non_ancestor(self):
         """Catches caller-minted or unreachable source identity on a write."""
         module = load_module()
