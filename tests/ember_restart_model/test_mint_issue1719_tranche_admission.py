@@ -587,6 +587,52 @@ def test_generic_successor_republishes_packet_local_authority_and_reopens_it(tmp
     assert result["result"] == "PARTIAL_AUTHORITY_SUCCESSOR"
 
 
+def test_generic_successor_consumes_only_validated_projected_predecessor(tmp_path: Path, monkeypatch):
+    producer = _load_producer()
+    custody, predecessor_sha, _ = _source_custody(tmp_path)
+    projection_receipt = tmp_path / "projection" / "custody-projection-receipt.json"
+    projection_receipt.parent.mkdir()
+    projection_receipt.write_bytes(b"projection receipt")
+    projection_sha = _sha(projection_receipt.read_bytes())
+    calls = []
+
+    class ProjectionModule:
+        @staticmethod
+        def validate_projection_custody(**kwargs):
+            calls.append(kwargs)
+            return {
+                "generated": {
+                    name: (custody / name).read_bytes()
+                    for name in producer.ARTIFACT_NAMES.values()
+                },
+                "receipt": {"schema_version": "ember-text-lab-custody-projection-v1"},
+            }
+
+    monkeypatch.setattr(producer, "load_projection_module", lambda repo: ProjectionModule)
+    plan_path = tmp_path / "plan.json"
+    plan_raw = _write(plan_path, {
+        "schema_version": "ember-issue1719-tranche-admission-plan-v1",
+        "successor_id": "tranche3r",
+        "cases": [],
+    })
+    output = tmp_path / "published"
+    producer.mint_successor(
+        repo=ROOT, source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+        source_custody=custody,
+        predecessor_receipt_name="tranche3-admission-receipt.json",
+        predecessor_receipt_sha256=predecessor_sha,
+        predecessor_projection_receipt=projection_receipt,
+        predecessor_projection_receipt_sha256=projection_sha,
+        plan_path=plan_path, plan_sha256=_sha(plan_raw), output=output,
+    )
+    receipt = json.loads((output / "tranche-admission-receipt.json").read_bytes())
+    assert receipt["predecessor"]["custody_projection"] == {
+        "receipt_path": str(projection_receipt.resolve()),
+        "receipt_sha256": projection_sha,
+    }
+    assert len(calls) == 1
+
+
 def test_generic_successor_admits_one_closed_connector_case(tmp_path: Path):
     producer = _load_producer()
     custody, predecessor_sha, _ = _source_custody(tmp_path)
