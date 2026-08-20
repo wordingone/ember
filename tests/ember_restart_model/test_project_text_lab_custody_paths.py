@@ -76,7 +76,10 @@ def projection_fixture(root: pathlib.Path) -> list[dict[str, object]]:
         transform = root / source_id / "transform.json"
         connector.parent.mkdir(parents=True)
         connector.write_bytes(b"connector\n")
-        transform.write_bytes(b"transform\n")
+        transform.write_text(
+            json.dumps({"receipt_sha256": "c" * 64}),
+            encoding="utf-8",
+        )
         rows.append(
             {
                 "source_id": source_id,
@@ -209,6 +212,13 @@ class CustodyPathProjectionTests(unittest.TestCase):
                     self.assertNotIn("\\", evidence["connector_receipt_path"])
                     self.assertNotIn(":", evidence["transform_receipt_path"])
                     self.assertNotIn("\\", evidence["transform_receipt_path"])
+                    original_transform = pathlib.Path(
+                        original["license_evidence"]["transform_receipt_path"]
+                    )
+                    self.assertEqual(
+                        evidence["transform_receipt_raw_sha256"],
+                        module._sha(original_transform.read_bytes()),
+                    )
 
     def test_refuses_missing_extra_and_outside_projection_class(self):
         """Catches a partial, widened, or cross-root authority-row projection."""

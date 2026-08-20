@@ -67,7 +67,7 @@ class TextLabCorpusTests(unittest.TestCase):
         self.assertEqual(admitted["run_manifest_row_count"], 28)
         self.assertEqual(
             admitted["admitted_row_set_sha256"],
-            "869df5206ef79e958e0f90167f57b15dab51d762d79e6f99e0264cc05f3b672b",
+            "20203d6f8e69546fec56fcc1802b0a060b0ca2ff67efb42f01eea4c790d7840a",
         )
         corpus = json.loads((ROOT / "data/ember-restart-3b/owned-text-lab-corpus-v4.json").read_bytes())
         projected = {
@@ -836,7 +836,12 @@ class TextLabResolverV2Tests(unittest.TestCase):
             connector.parent.mkdir(parents=True)
             transform.parent.mkdir(parents=True)
             connector.write_bytes(b"connector\n")
-            transform.write_bytes(b"transform\n")
+            semantic_sha = "c" * 64
+            transform.write_text(
+                json.dumps({"receipt_sha256": semantic_sha}),
+                encoding="utf-8",
+            )
+            raw_sha = sha(transform.read_bytes())
             evidence = {
                 "kind": "publisher_terms",
                 "terms_url": "https://example.test/terms",
@@ -844,7 +849,8 @@ class TextLabResolverV2Tests(unittest.TestCase):
                 "connector_receipt_path": "slot/connector.json",
                 "connector_receipt_sha256": sha(connector.read_bytes()),
                 "transform_receipt_path": "derived/transform.json",
-                "transform_receipt_sha256": sha(transform.read_bytes()),
+                "transform_receipt_raw_sha256": raw_sha,
+                "transform_receipt_sha256": semantic_sha,
             }
             adapted = {
                 "content_sha256": "a" * 64,
@@ -868,6 +874,20 @@ class TextLabResolverV2Tests(unittest.TestCase):
                 connector_receipt_sha256=evidence["connector_receipt_sha256"],
                 evidence=evidence,
             )
+            evidence["transform_receipt_raw_sha256"] = semantic_sha
+            with self.assertRaisesRegex(ValueError, "transform receipt bytes"):
+                text_lab_corpus._validate_projected_pdf_authority_row(
+                    row,
+                    custody_root,
+                )
+            evidence["transform_receipt_raw_sha256"] = raw_sha
+            evidence["transform_receipt_sha256"] = raw_sha
+            with self.assertRaisesRegex(ValueError, "transform receipt identity"):
+                text_lab_corpus._validate_projected_pdf_authority_row(
+                    row,
+                    custody_root,
+                )
+            evidence["transform_receipt_sha256"] = semantic_sha
             transform.write_bytes(b"tampered\n")
             with self.assertRaisesRegex(ValueError, "transform receipt bytes"):
                 text_lab_corpus._validate_projected_pdf_authority_row(

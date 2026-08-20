@@ -101,10 +101,26 @@ def project_rows(
             receipt_custody_root,
             evidence.get("connector_receipt_path"),
         )
-        evidence["transform_receipt_path"] = _portable_locator(
+        transform_locator = _portable_locator(
             receipt_custody_root,
             evidence.get("transform_receipt_path"),
         )
+        transform_raw = _receipt_custody_path(
+            receipt_custody_root,
+            transform_locator,
+        ).read_bytes()
+        try:
+            transform_receipt = json.loads(transform_raw)
+        except json.JSONDecodeError as error:
+            raise ValueError("projected PDF transform receipt is not JSON") from error
+        if (
+            not isinstance(transform_receipt, dict)
+            or transform_receipt.get("receipt_sha256")
+            != evidence.get("transform_receipt_sha256")
+        ):
+            raise ValueError("projected PDF transform receipt identity changed")
+        evidence["transform_receipt_path"] = transform_locator
+        evidence["transform_receipt_raw_sha256"] = _sha(transform_raw)
     return projected
 
 

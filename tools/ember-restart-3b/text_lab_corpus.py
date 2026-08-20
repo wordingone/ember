@@ -937,15 +937,19 @@ def _validate_projected_pdf_authority_row(
         "connector_receipt_path",
         "connector_receipt_sha256",
         "transform_receipt_path",
+        "transform_receipt_raw_sha256",
         "transform_receipt_sha256",
     }
     if not isinstance(evidence, dict) or set(evidence) != expected_evidence_fields:
         raise ValueError("projected PDF license evidence is not closed")
     connector_sha = evidence.get("connector_receipt_sha256")
+    transform_raw_sha = evidence.get("transform_receipt_raw_sha256")
     transform_sha = evidence.get("transform_receipt_sha256")
     if (
         not isinstance(connector_sha, str)
         or _HEX.fullmatch(connector_sha) is None
+        or not isinstance(transform_raw_sha, str)
+        or _HEX.fullmatch(transform_raw_sha) is None
         or not isinstance(transform_sha, str)
         or _HEX.fullmatch(transform_sha) is None
     ):
@@ -958,8 +962,18 @@ def _validate_projected_pdf_authority_row(
     )
     if _sha_bytes(connector_path.read_bytes()) != connector_sha:
         raise ValueError("projected PDF connector receipt bytes changed")
-    if _sha_bytes(transform_path.read_bytes()) != transform_sha:
+    transform_raw = transform_path.read_bytes()
+    if _sha_bytes(transform_raw) != transform_raw_sha:
         raise ValueError("projected PDF transform receipt bytes changed")
+    try:
+        transform_receipt = json.loads(transform_raw)
+    except json.JSONDecodeError as error:
+        raise ValueError("projected PDF transform receipt is not JSON") from error
+    if (
+        not isinstance(transform_receipt, dict)
+        or transform_receipt.get("receipt_sha256") != transform_sha
+    ):
+        raise ValueError("projected PDF transform receipt identity changed")
     adapted = adapt_pdf_extraction_receipt(
         receipt_path=transform_path,
         connector_receipt=connector_path,
