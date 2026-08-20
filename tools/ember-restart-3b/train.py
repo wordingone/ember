@@ -52,10 +52,17 @@ def run_launch(
     return packet, validation, receipt
 
 
-def run_text_lab_preflight(*, repo_root: Path | None = None) -> dict[str, Any]:
+def run_text_lab_preflight(
+    *,
+    repo_root: Path | None = None,
+    receipt_custody_root: Path | None = None,
+) -> dict[str, Any]:
     """Validate exact checked-in shared-text authority before a CUDA-facing route."""
     root = (repo_root or Path(__file__).resolve().parents[2]).resolve()
-    authority = validate_authority_index(root)
+    authority = validate_authority_index(
+        root,
+        receipt_custody_root=receipt_custody_root,
+    )
     return {
         "schema_version": "ember-text-lab-preflight-receipt-v1",
         **authority,

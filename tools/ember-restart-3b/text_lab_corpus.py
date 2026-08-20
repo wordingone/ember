@@ -582,6 +582,7 @@ _PARTITION_ADMITTED_FIELDS = _UNRESOLVED_FIELDS | {
 }
 _ADMITTED_ROW_FIELDS = ("source_id", "domain", "license_spdx", "content_sha256", "l4_receipt", "split")
 _FROZEN_EVAL_HASHES_PATH = "data/ember-restart-3b/text-lab-frozen-eval-hashes-v1.json"
+_RECEIPT_CUSTODY_ROOT_BINDING = "runtime-supplied-corpus-root-v1"
 
 
 def _frozen_eval_hashes(root: Path) -> set[str]:
@@ -664,7 +665,53 @@ def _external_path(root: Path, value: object) -> Path:
     return resolved
 
 
-def _partition_receipt_path(authority_root: Path, value: object) -> Path:
+def _receipt_custody_path(root: Path, value: object) -> Path:
+    """Resolve one portable receipt locator strictly below its runtime root."""
+    if not isinstance(value, str) or not value or "\\" in value:
+        raise ValueError("receipt custody path must be a normalized relative path")
+    relative = PurePosixPath(value)
+    windows = PureWindowsPath(value)
+    if (
+        relative.is_absolute()
+        or windows.is_absolute()
+        or windows.drive
+        or ".." in relative.parts
+        or relative.as_posix() != value
+    ):
+        raise ValueError("receipt custody path must be a normalized relative path")
+    try:
+        return _external_path(Path(root), value)
+    except ValueError as error:
+        raise ValueError(f"receipt custody path is invalid: {error}") from error
+
+
+def _bound_receipt_custody_root(
+    corpus: dict[str, Any], supplied: Path | None
+) -> Path | None:
+    """Require one explicit absolute root exactly when projected locators declare it."""
+    binding = corpus.get("receipt_custody_root_binding")
+    if binding is None:
+        if supplied is not None:
+            raise ValueError("receipt custody root was supplied but not declared")
+        return None
+    if binding != _RECEIPT_CUSTODY_ROOT_BINDING:
+        raise ValueError("receipt custody root binding is unknown")
+    if supplied is None:
+        raise ValueError("receipt custody root is required by authority")
+    root = Path(supplied)
+    if not root.is_absolute():
+        raise ValueError("receipt custody root must be absolute")
+    return root
+
+
+def _partition_receipt_path(
+    authority_root: Path,
+    value: object,
+    *,
+    receipt_custody_root: Path | None = None,
+) -> Path:
+    if receipt_custody_root is not None:
+        return _receipt_custody_path(receipt_custody_root, value)
     if not isinstance(value, str) or not value:
         raise ValueError("partition authority path is invalid")
     windows = PureWindowsPath(value)
@@ -814,7 +861,13 @@ def validate_admitted_authority_subset(
     }
 
 
-def _validate_partition_authority_row(repo_root: Path, authority_root: Path, row: dict[str, Any]) -> dict[str, Any]:
+def _validate_partition_authority_row(
+    repo_root: Path,
+    authority_root: Path,
+    row: dict[str, Any],
+    *,
+    receipt_custody_root: Path | None = None,
+) -> dict[str, Any]:
     """Reopen the exact partition receipt and every source/file/blob join it binds."""
     if not isinstance(row, dict) or set(row) != _PARTITION_ADMITTED_FIELDS:
         raise ValueError("partition authority row is not a closed alternative")
@@ -824,7 +877,11 @@ def _validate_partition_authority_row(repo_root: Path, authority_root: Path, row
         raise ValueError("partition authority content root is invalid")
     if not isinstance(receipt_sha, str) or _HEX.fullmatch(receipt_sha) is None:
         raise ValueError("partition authority receipt hash is invalid")
-    receipt_path = _partition_receipt_path(Path(authority_root), row.get("license_partition_receipt"))
+    receipt_path = _partition_receipt_path(
+        Path(authority_root),
+        row.get("license_partition_receipt"),
+        receipt_custody_root=receipt_custody_root,
+    )
     receipt_bytes = receipt_path.read_bytes()
     if _sha_bytes(receipt_bytes) != receipt_sha:
         raise ValueError("partition receipt bytes do not match the bound hash")
@@ -866,6 +923,55 @@ def _validate_partition_authority_row(repo_root: Path, authority_root: Path, row
     if row.get("l4_receipt") != expected_l4:
         raise ValueError("partition authority L4 receipt is invalid")
     return receipt
+
+
+def _validate_projected_pdf_authority_row(
+    row: dict[str, Any], receipt_custody_root: Path
+) -> None:
+    """Reopen both portable PDF authorities and require exact adapter equivalence."""
+    evidence = row.get("license_evidence")
+    expected_evidence_fields = {
+        "kind",
+        "terms_url",
+        "declared_spdx",
+        "connector_receipt_path",
+        "connector_receipt_sha256",
+        "transform_receipt_path",
+        "transform_receipt_sha256",
+    }
+    if not isinstance(evidence, dict) or set(evidence) != expected_evidence_fields:
+        raise ValueError("projected PDF license evidence is not closed")
+    connector_sha = evidence.get("connector_receipt_sha256")
+    transform_sha = evidence.get("transform_receipt_sha256")
+    if (
+        not isinstance(connector_sha, str)
+        or _HEX.fullmatch(connector_sha) is None
+        or not isinstance(transform_sha, str)
+        or _HEX.fullmatch(transform_sha) is None
+    ):
+        raise ValueError("projected PDF receipt hash is invalid")
+    connector_path = _receipt_custody_path(
+        receipt_custody_root, evidence.get("connector_receipt_path")
+    )
+    transform_path = _receipt_custody_path(
+        receipt_custody_root, evidence.get("transform_receipt_path")
+    )
+    if _sha_bytes(connector_path.read_bytes()) != connector_sha:
+        raise ValueError("projected PDF connector receipt bytes changed")
+    if _sha_bytes(transform_path.read_bytes()) != transform_sha:
+        raise ValueError("projected PDF transform receipt bytes changed")
+    adapted = adapt_pdf_extraction_receipt(
+        receipt_path=transform_path,
+        connector_receipt=connector_path,
+        connector_receipt_sha256=connector_sha,
+        evidence=evidence,
+    )
+    expected = {
+        field: row.get(field)
+        for field in ("content_sha256", "license_spdx", "license_evidence", "l4_receipt")
+    }
+    if adapted != expected:
+        raise ValueError("projected PDF authority does not re-derive the admitted row")
 
 
 def _partition_producer_supersession_allows(
@@ -979,6 +1085,7 @@ def validate_authority_index(
     *,
     index_relative: str = _AUTHORITY_INDEX,
     external_authority_root: Path | None = None,
+    receipt_custody_root: Path | None = None,
 ) -> dict[str, Any]:
     """Validate the non-acquired, exact-byte text authority before shared-text use.
 
@@ -998,6 +1105,7 @@ def validate_authority_index(
     if index["schema_version"] not in (_AUTHORITY_INDEX_SCHEMA_V1, _AUTHORITY_INDEX_SCHEMA_V2) or index["result"]!="PREFLIGHT_ONLY": raise ValueError("text authority index is not preflight-only")
     is_v2 = index["schema_version"] == _AUTHORITY_INDEX_SCHEMA_V2
     registry_bytes,registry=_bound_json(root,index["registry"]); bundle_bytes,bundle=_bound_json(root,index["receipt_bundle"], external_root=authority_root); corpus_bytes,corpus=_bound_json(root,index["corpus"], external_root=authority_root); _,identity=_bound_json(root,index["input_identity"], external_root=authority_root)
+    bound_receipt_root = _bound_receipt_custody_root(corpus, receipt_custody_root)
     if corpus.get("registry_sha256")!=_sha_bytes(registry_bytes) or corpus.get("receipt_bundle_sha256")!=_sha_bytes(bundle_bytes): raise ValueError("corpus does not bind external authority")
     if identity.get("corpus_sha256")!=_sha_bytes(corpus_bytes) or not isinstance(identity.get("source_base_commit"),str) or re.fullmatch(r"[0-9a-f]{40}",identity["source_base_commit"]) is None: raise ValueError("input identity does not bind exact authority")
     base_check = subprocess.run(["git", "-C", str(root), "merge-base", "--is-ancestor", identity["source_base_commit"], "HEAD"], capture_output=True, check=False)
@@ -1082,9 +1190,23 @@ def validate_authority_index(
             )
             if recomputed != evidence_row["l4_receipt"]:
                 raise ValueError("source license evidence does not re-derive the claimed receipt")
+            if (
+                bound_receipt_root is not None
+                and evidence_row["l4_receipt"].get("generator")
+                == "pdf-text-extraction-v1"
+            ):
+                _validate_projected_pdf_authority_row(
+                    evidence_row,
+                    bound_receipt_root,
+                )
     partition_authority_root = authority_root if authority_root is not None else root
     for partition_row in partition_rows:
-        _validate_partition_authority_row(root, partition_authority_root, partition_row)
+        _validate_partition_authority_row(
+            root,
+            partition_authority_root,
+            partition_row,
+            receipt_custody_root=bound_receipt_root,
+        )
     if (
         len(set(admitted_content_hashes)) != len(admitted_content_hashes)
         or any(value in protected_identifiers["content_sha256"] for value in admitted_content_hashes)

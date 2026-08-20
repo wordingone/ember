@@ -39,9 +39,22 @@ class TextLabCorpusTests(unittest.TestCase):
             (root / "_logs" / "connector.log").write_bytes(b"operational")
             self.assertEqual(_listed_data_paths(root), {"payload.txt"})
 
-    def test_checked_in_authority_returns_terminal_unresolved_refusal_after_full_validation(self):
+    def test_checked_in_authority_returns_terminal_unresolved_after_portable_structural_validation(self):
         from text_lab_corpus import validate_admitted_authority_subset, validate_authority_index
-        result = validate_authority_index(ROOT)
+        import text_lab_corpus
+
+        fixture_root = Path(tempfile.gettempdir()).resolve()
+        with patch.object(
+            text_lab_corpus,
+            "_validate_partition_authority_row",
+        ), patch.object(
+            text_lab_corpus,
+            "_validate_projected_pdf_authority_row",
+        ):
+            result = validate_authority_index(
+                ROOT,
+                receipt_custody_root=fixture_root,
+            )
         self.assertEqual(result["result"], "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING")
         self.assertEqual(result["domain_count"], 11)
         self.assertEqual(result["train_source_count"], 22)
@@ -50,26 +63,34 @@ class TextLabCorpusTests(unittest.TestCase):
         self.assertRegex(result["heldout_root_sha256"], r"^[0-9a-f]{64}$")
         admitted = validate_admitted_authority_subset(ROOT, result)
         self.assertEqual(admitted["result"], "VERIFIED_ADMITTED_SUBSET")
-        self.assertEqual(admitted["admitted_row_count"], 16)
-        self.assertEqual(admitted["run_manifest_row_count"], 16)
+        self.assertEqual(admitted["admitted_row_count"], 28)
+        self.assertEqual(admitted["run_manifest_row_count"], 28)
         self.assertEqual(
             admitted["admitted_row_set_sha256"],
-            "864ee7dbe1c47fb9a8de9f0ea7a7d66d69ef4896ba6d276eb953686bf68c2ee7",
+            "869df5206ef79e958e0f90167f57b15dab51d762d79e6f99e0264cc05f3b672b",
         )
         corpus = json.loads((ROOT / "data/ember-restart-3b/owned-text-lab-corpus-v4.json").read_bytes())
-        dropped = {
+        projected = {
+            "candidate-statistics-heldout-1",
             "candidate-training_infrastructure-train-1",
+            "candidate-software_engineering-train-0",
             "candidate-software_engineering-train-1",
             "candidate-software_engineering-heldout-0",
+            "candidate-software_engineering-heldout-1",
             "candidate-application_worlds-train-0",
             "candidate-application_worlds-train-1",
+            "candidate-application_worlds-heldout-1",
             "candidate-physics-heldout-0",
             "candidate-computer_science-train-0",
             "candidate-scientific_method-heldout-0",
         }
         self.assertEqual(
-            {row["source_id"] for row in corpus["sources"] if row["source_id"] in dropped and row["admission"] == "UNRESOLVED_CANDIDATE"},
-            dropped,
+            {row["source_id"] for row in corpus["sources"] if row["source_id"] in projected and row["admission"] == "ADMITTED"},
+            projected,
+        )
+        self.assertEqual(
+            corpus["receipt_custody_root_binding"],
+            "runtime-supplied-corpus-root-v1",
         )
         bundle = json.loads((ROOT / "data/ember-restart-3b/text-lab-source-receipt-bundle-v4.json").read_bytes())
         def strings(value):
@@ -83,6 +104,62 @@ class TextLabCorpusTests(unittest.TestCase):
                 yield value
         self.assertFalse(any(PureWindowsPath(value).drive for value in strings(corpus)))
         self.assertFalse(any(PureWindowsPath(value).drive for value in strings(bundle)))
+
+    def test_checked_in_projected_authority_refuses_without_explicit_custody_root(self):
+        from text_lab_corpus import validate_authority_index
+
+        with self.assertRaisesRegex(ValueError, "receipt custody root is required"):
+            validate_authority_index(ROOT)
+
+    def test_semantic_runner_forwards_explicit_receipt_custody_root_before_cuda(self):
+        """Catches dropping the runtime locator before the authority receipt reopen."""
+        import run_vertical_slice
+
+        receipt_custody_root = Path(tempfile.gettempdir()).resolve()
+        unresolved = {"result": "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING"}
+        admitted = {
+            "result": "VERIFIED_ADMITTED_SUBSET",
+            "admitted_row_set_sha256": "d" * 64,
+        }
+
+        def preflight(*, repo_root, receipt_custody_root=None):
+            self.assertEqual(receipt_custody_root, Path(tempfile.gettempdir()).resolve())
+            return unresolved
+
+        with patch.object(
+            run_vertical_slice,
+            "run_text_lab_preflight",
+            side_effect=preflight,
+        ), patch.object(
+            run_vertical_slice,
+            "validate_admitted_authority_subset",
+            return_value=admitted,
+        ), patch.object(
+            run_vertical_slice,
+            "production_artifact_root",
+            side_effect=RuntimeError("post-authority sentinel"),
+        ), patch.object(
+            run_vertical_slice.torch.cuda,
+            "is_available",
+            side_effect=AssertionError("CUDA reached"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "post-authority sentinel"):
+                run_vertical_slice.run_semantic(
+                    seed=1,
+                    artifact_root=ROOT / "unused",
+                    receipt_path=ROOT / "unused",
+                    shards_root=ROOT / "unused",
+                    tokenizer_path=ROOT / "unused",
+                    expected_receipt_sha256="r" * 64,
+                    expected_tokenizer_sha256="t" * 64,
+                    expected_architecture_sha256="a" * 64,
+                    admitted_row_set_sha256="d" * 64,
+                    receipt_custody_root=receipt_custody_root,
+                    steps=1,
+                    sequence_length=1,
+                    checkpoint_interval=1,
+                    write_budget_bytes=1,
+                )
 
     def test_empty_protected_registry_rejects_before_unresolved_candidate_refusal(self):
         from text_lab_corpus import validate_authority_index
@@ -669,6 +746,133 @@ class TextLabResolverV2Tests(unittest.TestCase):
                     root,
                     index_relative="text-lab-authority-index-v2.json",
                     external_authority_root=published,
+                )
+
+    def test_receipt_custody_root_reopens_only_normalized_relative_regular_file(self):
+        """Catches accepting an absolute/traversing locator or resolving against the authority packet."""
+        import text_lab_corpus
+
+        with tempfile.TemporaryDirectory() as directory:
+            custody_root = Path(directory) / "corpus"
+            receipt = custody_root / "wave" / "partition-receipt.json"
+            receipt.parent.mkdir(parents=True)
+            receipt.write_bytes(b"{}\n")
+
+            self.assertEqual(
+                text_lab_corpus._receipt_custody_path(
+                    custody_root,
+                    "wave/partition-receipt.json",
+                ),
+                receipt.resolve(),
+            )
+            for invalid in (
+                str(receipt.resolve()),
+                "../partition-receipt.json",
+                "wave\\partition-receipt.json",
+                "wave/./partition-receipt.json",
+            ):
+                with self.subTest(locator=invalid), self.assertRaisesRegex(
+                    ValueError,
+                    "receipt custody path",
+                ):
+                    text_lab_corpus._receipt_custody_path(custody_root, invalid)
+
+    def test_receipt_custody_root_refuses_reparse_component(self):
+        """Catches a locator escaping the supplied root through a symlink or reparse point."""
+        import text_lab_corpus
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            custody_root = root / "corpus"
+            outside = root / "outside"
+            custody_root.mkdir()
+            outside.mkdir()
+            (outside / "receipt.json").write_bytes(b"{}\n")
+            linked = custody_root / "linked"
+            try:
+                os.symlink(outside, linked, target_is_directory=True)
+            except OSError as exc:
+                self.skipTest(f"host cannot create the reparse-point fixture: {exc}")
+
+            with self.assertRaisesRegex(ValueError, "reparse"):
+                text_lab_corpus._receipt_custody_path(
+                    custody_root,
+                    "linked/receipt.json",
+                )
+
+    def test_receipt_custody_root_binding_is_exact_and_required_only_when_declared(self):
+        """Catches ambient roots, missing certified roots, and unknown binding modes."""
+        import text_lab_corpus
+
+        absolute = Path(tempfile.gettempdir()).resolve()
+        self.assertIsNone(text_lab_corpus._bound_receipt_custody_root({}, None))
+        with self.assertRaisesRegex(ValueError, "not declared"):
+            text_lab_corpus._bound_receipt_custody_root({}, absolute)
+        corpus = {
+            "receipt_custody_root_binding": "runtime-supplied-corpus-root-v1",
+        }
+        with self.assertRaisesRegex(ValueError, "required"):
+            text_lab_corpus._bound_receipt_custody_root(corpus, None)
+        with self.assertRaisesRegex(ValueError, "absolute"):
+            text_lab_corpus._bound_receipt_custody_root(corpus, Path("relative"))
+        self.assertEqual(
+            text_lab_corpus._bound_receipt_custody_root(corpus, absolute),
+            absolute,
+        )
+        with self.assertRaisesRegex(ValueError, "unknown"):
+            text_lab_corpus._bound_receipt_custody_root(
+                {"receipt_custody_root_binding": "future-mode"},
+                absolute,
+            )
+
+    def test_projected_pdf_row_reopens_both_receipts_and_rederives_exact_authority(self):
+        """Catches path-only acceptance without connector/transform hash and L4 revalidation."""
+        import text_lab_corpus
+
+        with tempfile.TemporaryDirectory() as directory:
+            custody_root = Path(directory)
+            connector = custody_root / "slot" / "connector.json"
+            transform = custody_root / "derived" / "transform.json"
+            connector.parent.mkdir(parents=True)
+            transform.parent.mkdir(parents=True)
+            connector.write_bytes(b"connector\n")
+            transform.write_bytes(b"transform\n")
+            evidence = {
+                "kind": "publisher_terms",
+                "terms_url": "https://example.test/terms",
+                "declared_spdx": "CC-BY-4.0",
+                "connector_receipt_path": "slot/connector.json",
+                "connector_receipt_sha256": sha(connector.read_bytes()),
+                "transform_receipt_path": "derived/transform.json",
+                "transform_receipt_sha256": sha(transform.read_bytes()),
+            }
+            adapted = {
+                "content_sha256": "a" * 64,
+                "license_spdx": "CC-BY-4.0",
+                "license_evidence": evidence,
+                "l4_receipt": {"generator": "pdf-text-extraction-v1"},
+            }
+            row = {**adapted, "source_id": "candidate-physics-heldout-0"}
+            with patch.object(
+                text_lab_corpus,
+                "adapt_pdf_extraction_receipt",
+                return_value=adapted,
+            ) as adapter:
+                text_lab_corpus._validate_projected_pdf_authority_row(
+                    row,
+                    custody_root,
+                )
+            adapter.assert_called_once_with(
+                receipt_path=transform.resolve(),
+                connector_receipt=connector.resolve(),
+                connector_receipt_sha256=evidence["connector_receipt_sha256"],
+                evidence=evidence,
+            )
+            transform.write_bytes(b"tampered\n")
+            with self.assertRaisesRegex(ValueError, "transform receipt bytes"):
+                text_lab_corpus._validate_projected_pdf_authority_row(
+                    row,
+                    custody_root,
                 )
 
     def test_fully_admitted_v2_accepts_closed_conjunctive_tree_license(self):
