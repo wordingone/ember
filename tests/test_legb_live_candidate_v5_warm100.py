@@ -68,12 +68,13 @@ def _write_json(path: Path, payload: object) -> None:
 
 def _checkpoint(
     module, root: Path, *, step: int = 100, tag: bytes = b"a",
-    publisher_accounting: bool = False,
+    publisher_accounting: bool = False, owner_optimizer: bool = False,
 ) -> tuple[Path, dict]:
     root.mkdir()
     records = []
     shard_sha = {}
-    for index, name in enumerate((*module.MODEL_SHARDS, "optimizer-state.pt", "replay-state.pt")):
+    optimizer_name = "optimizer-state-shared.pt" if owner_optimizer else "optimizer-state.pt"
+    for index, name in enumerate((*module.MODEL_SHARDS, optimizer_name, "replay-state.pt")):
         path = root / name
         path.write_bytes(tag + bytes([index]))
         digest = _sha(path)
@@ -99,7 +100,6 @@ def _checkpoint(
         "schema_version": module.SUPPORTED_CHECKPOINT_SCHEMA,
         "shards": records,
         "shared_model_shard_sha256": shard_sha["shared-model.pt"],
-        "optimizer_state_shard_sha256": shard_sha["optimizer-state.pt"],
         "expert_checkpoint_sha256": {
             name: shard_sha[f"expert-{name}.pt"] for name in module.EXPERTS
         },
@@ -110,6 +110,13 @@ def _checkpoint(
         "contract_version": 5,
         "launch_seed": 830013,
     }
+    if owner_optimizer:
+        manifest["optimizer_state_owner_ids"] = ["shared"]
+        manifest["optimizer_state_owner_shard_sha256"] = {
+            "shared": shard_sha[optimizer_name]
+        }
+    else:
+        manifest["optimizer_state_shard_sha256"] = shard_sha[optimizer_name]
     _write_json(root / "checkpoint-manifest.json", manifest)
     published = {
         **manifest,
@@ -193,6 +200,50 @@ def test_exact_warm100_receipt_reopened_and_boundary_derived(tmp_path: Path) -> 
     assert "tokens_seen=102400" in module.claim_boundary(verified)
     assert "HellaSwag split-alignment" not in module.claim_boundary(verified)
     assert "PENDING_FINAL_CORPUS_CONTAMINATION_SCAN" in module.claim_boundary(verified)
+
+
+def test_v5_owner_optimizer_checkpoint_reopens(tmp_path: Path) -> None:
+    module = _load()
+    checkpoint, published = _checkpoint(
+        module, tmp_path / "warm100", owner_optimizer=True
+    )
+    receipt = tmp_path / "certified-child-result.json"
+    receipt_sha = _run_receipt(receipt, published)
+
+    verified = module.load_verified_warm100_checkpoint(
+        str(checkpoint), str(receipt), receipt_sha
+    )
+
+    assert verified["global_step"] == 100
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda doc: doc.pop("optimizer_state_owner_shard_sha256"),
+        lambda doc: doc.__setitem__("optimizer_state_shard_sha256", "a" * 64),
+        lambda doc: doc.__setitem__("optimizer_state_owner_shard_sha256", {}),
+        lambda doc: doc.__setitem__("optimizer_state_owner_shard_sha256", []),
+        lambda doc: doc.__setitem__("optimizer_state_owner_ids", ["vision"]),
+        lambda doc: doc["optimizer_state_owner_shard_sha256"].__setitem__("shared", "A" * 64),
+        lambda doc: doc["shards"][-2].__setitem__("sha256", "0" * 64),
+    ],
+    ids=["neither", "both", "empty", "not-object", "key-mismatch", "non-digest", "digest-mismatch"],
+)
+def test_closed_optimizer_union_refuses_every_invalid_shape(
+    tmp_path: Path, mutate
+) -> None:
+    module = _load()
+    checkpoint, _published = _checkpoint(
+        module, tmp_path / "warm100", owner_optimizer=True
+    )
+    manifest_path = checkpoint / "checkpoint-manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    mutate(manifest)
+    _write_json(manifest_path, manifest)
+
+    with pytest.raises(module.LiveCandidateRefusal, match="OPTIMIZER_STATE_SCHEMA_INVALID"):
+        module.load_verified_v5_checkpoint(str(checkpoint))
 
 
 def test_current_publisher_accounting_receipt_reopened(tmp_path: Path) -> None:

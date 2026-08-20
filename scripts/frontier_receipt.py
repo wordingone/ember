@@ -470,17 +470,99 @@ def leg_energy(run_root: Path, t06: float) -> dict[str, Any]:
 
 # --- leg 6: reproducibility ---------------------------------------------------
 
+def _select_optimizer_state_binding(
+    manifest: dict[str, Any],
+) -> tuple[str, Any, dict[str, str]]:
+    """Select exactly one closed optimizer-state manifest representation."""
+    scalar_key = "optimizer_state_shard_sha256"
+    owner_key = "optimizer_state_owner_shard_sha256"
+    scalar_present = scalar_key in manifest
+    owner_present = owner_key in manifest
+    if scalar_present == owner_present:
+        raise FrontierRefusal(
+            "OPTIMIZER_STATE_SCHEMA_INVALID: exactly one optimizer-state digest form is required"
+        )
+
+    shards = manifest.get("shards")
+    if not isinstance(shards, list):
+        raise FrontierRefusal("OPTIMIZER_STATE_SCHEMA_INVALID: shards is not a list")
+    shard_digests: dict[str, str] = {}
+    for record in shards:
+        if isinstance(record, dict) and isinstance(record.get("path"), str):
+            path = record["path"]
+            if path in shard_digests:
+                raise FrontierRefusal(
+                    f"OPTIMIZER_STATE_SCHEMA_INVALID: duplicate shard path {path!r}"
+                )
+            shard_digests[path] = record.get("sha256")
+
+    def _digest(value: Any, label: str) -> str:
+        if not (
+            isinstance(value, str)
+            and len(value) == 64
+            and all(char in "0123456789abcdef" for char in value)
+        ):
+            raise FrontierRefusal(
+                f"OPTIMIZER_STATE_SCHEMA_INVALID: {label} is not a lowercase sha256 digest"
+            )
+        return value
+
+    if scalar_present:
+        digest = _digest(manifest.get(scalar_key), scalar_key)
+        cross_refs = {"optimizer-state.pt": digest}
+        selected: Any = digest
+        selected_key = scalar_key
+    else:
+        owner_ids = manifest.get("optimizer_state_owner_ids")
+        owner_map = manifest.get(owner_key)
+        if not (
+            isinstance(owner_ids, list)
+            and owner_ids
+            and all(isinstance(owner, str) and owner for owner in owner_ids)
+            and len(set(owner_ids)) == len(owner_ids)
+        ):
+            raise FrontierRefusal(
+                "OPTIMIZER_STATE_SCHEMA_INVALID: optimizer_state_owner_ids is not a nonempty unique string list"
+            )
+        if not isinstance(owner_map, dict) or not owner_map:
+            raise FrontierRefusal(
+                "OPTIMIZER_STATE_SCHEMA_INVALID: optimizer_state_owner_shard_sha256 is not a nonempty object"
+            )
+        if set(owner_map) != set(owner_ids):
+            raise FrontierRefusal(
+                "OPTIMIZER_STATE_SCHEMA_INVALID: owner digest keys do not equal optimizer_state_owner_ids"
+            )
+        selected = {
+            owner: _digest(owner_map[owner], f"{owner_key}[{owner!r}]")
+            for owner in owner_ids
+        }
+        cross_refs = {
+            f"optimizer-state-{owner}.pt": selected[owner] for owner in owner_ids
+        }
+        selected_key = owner_key
+
+    for path, digest in cross_refs.items():
+        if shard_digests.get(path) != digest:
+            raise FrontierRefusal(
+                f"OPTIMIZER_STATE_SCHEMA_INVALID: {selected_key} disagrees with shard {path!r}"
+            )
+    return selected_key, selected, cross_refs
+
+
 def leg_reproducibility(run_root: Path, manifest: dict[str, Any], fixed_prior: dict[str, Any]) -> dict[str, Any]:
     pins: dict[str, Any] = {}
     for field, key in (
         ("config_sha256", "model_config_sha256"),
-        ("optimizer_state_sha256", "optimizer_state_shard_sha256"),
         ("rng_state_sha256", "rng_state_sha256"),
     ):
         value = manifest.get(key)
         if not value:
             raise FrontierRefusal(f"REPRODUCIBILITY_PINS_MISSING: checkpoint manifest lacks {key}")
         pins[field] = value
+    _optimizer_key, optimizer_value, _optimizer_cross_refs = (
+        _select_optimizer_state_binding(manifest)
+    )
+    pins["optimizer_state_sha256"] = optimizer_value
     optimizer_contract = manifest.get("optimizer_contract")
     if not optimizer_contract:
         raise FrontierRefusal("REPRODUCIBILITY_PINS_MISSING: checkpoint manifest lacks optimizer_contract")
