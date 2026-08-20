@@ -42,7 +42,7 @@
         "required_evidence": {"const": ["source_descriptor", "source_content", "license_evidence", "policy", "verifier_result"]},
         "allowed_license_spdx": {"const": ["Apache-2.0", "BSD-3-Clause", "CC-BY-4.0", "CC0-1.0", "MIT", "ODC-By-1.0", "PDDL-1.0"]},
         "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-        "license_partition_receipt": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+        "license_partition_receipt": {"type": "string", "pattern": "^(?![A-Za-z]:)(?!(?:.*\\/)?\\.{1,2}(?:\\/|$))[^/\\\\:]+(?:/[^/\\\\:]+)*$"},
         "license_partition_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
         "l4_receipt": {"type": "object"}
       },
@@ -55,6 +55,7 @@
     "schema_version": {"const": "ember-text-lab-corpus-v4"},
     "registry_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "receipt_bundle_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "receipt_custody_root_binding": {"const": "runtime-supplied-corpus-root-v1"},
     "train_root_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "heldout_root_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "sources": {"type": "array", "minItems": 44, "items": {"oneOf": [{"$ref": "#/$defs/unresolved"}, {"$ref": "#/$defs/homogeneous"}, {"$ref": "#/$defs/partition"}]}}

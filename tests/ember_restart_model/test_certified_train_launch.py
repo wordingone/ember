@@ -4861,6 +4861,93 @@ class SemanticCanaryRoutingTests(unittest.TestCase):
         index = argv.index("--admitted-row-set-sha256")
         self.assertEqual(argv[index + 1], self.ADMITTED_ROW_SET_SHA256)
 
+    def test_receipt_custody_root_is_certificate_bound_and_reaches_runner_argv(self) -> None:
+        """Catches a caller-chosen receipt root bypassing the certificate scope."""
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            receipt_custody_root = pathlib.Path(directory) / "corpus"
+            receipt_custody_root.mkdir()
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["receipt_custody_root"] = str(receipt_custody_root)
+            write_json(paths["run_spec"], run_spec)
+            _write_custody_sidecars(paths)
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate["execution_scope"].__setitem__(
+                    "allowed_receipt_custody_root",
+                    str(receipt_custody_root),
+                ),
+            )
+
+            launch = self._validate(module, paths)
+            self.assertEqual(
+                launch.receipt_custody_root,
+                receipt_custody_root,
+            )
+            argv = module.build_runner_argv(paths["repo"], launch)
+            index = argv.index("--text-lab-receipt-custody-root")
+            self.assertEqual(argv[index + 1], str(receipt_custody_root))
+
+    def test_receipt_custody_root_authorization_is_closed_and_exact(self) -> None:
+        """Catches absent, malformed, or unequal certificate authorization."""
+        module = load_module()
+        requested = pathlib.Path(tempfile.gettempdir()).resolve()
+        with self.assertRaisesRegex(
+            ValueError,
+            "declares no allowed_receipt_custody_root",
+        ):
+            module._require_authorized_receipt_custody_root(requested, None)
+        with self.assertRaisesRegex(
+            ValueError,
+            "run scope exceeds certificate: receipt_custody_root",
+        ):
+            module._require_authorized_receipt_custody_root(
+                requested,
+                "B:/different-corpus",
+            )
+        self.assertEqual(
+            module._require_authorized_receipt_custody_root(
+                requested,
+                str(requested),
+            ),
+            requested,
+        )
+        for malformed in ("", 7, False):
+            with self.subTest(malformed=malformed), self.assertRaisesRegex(
+                ValueError,
+                "must be a non-empty absolute path",
+            ):
+                module._authorized_receipt_custody_root(
+                    {"allowed_receipt_custody_root": malformed}
+                )
+
+    def test_receipt_custody_root_refuses_absent_or_mismatched_certificate_pin(self) -> None:
+        """Catches accepting a run-spec root that the certificate omitted or changed."""
+        for authorized, pattern in (
+            (None, "declares no allowed_receipt_custody_root"),
+            ("B:/different-corpus", "run scope exceeds certificate: receipt_custody_root"),
+        ):
+            with self.subTest(authorized=authorized), tempfile.TemporaryDirectory(
+                dir="B:/tmp"
+            ) as directory:
+                paths = self._bundle(directory)
+                receipt_custody_root = pathlib.Path(directory) / "corpus"
+                receipt_custody_root.mkdir()
+                run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+                run_spec["receipt_custody_root"] = str(receipt_custody_root)
+                write_json(paths["run_spec"], run_spec)
+                _write_custody_sidecars(paths)
+                if authorized is not None:
+                    rewrite_certificate(
+                        paths,
+                        lambda certificate: certificate["execution_scope"].__setitem__(
+                            "allowed_receipt_custody_root",
+                            authorized,
+                        ),
+                    )
+                self._refused(paths, pattern)
+
     def test_semantic_canary_with_resume_checkpoint_is_refused(self) -> None:
         """THE load-bearing security property (issue #1719 acceptance clause
         1): WARM-100 must be clean-random genesis, never a continuation. This

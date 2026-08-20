@@ -198,6 +198,7 @@ SEMANTIC_CANARY_LAUNCH_RUN_SPEC_KEYS = {
     "semantic_canary_telemetry_path",
     "admitted_row_set_sha256",
 }
+RECEIPT_CUSTODY_RUN_SPEC_KEYS = {"receipt_custody_root"}
 # Closed enumeration (same discipline TRAINING_CAPABILITIES uses): the only
 # defined canary shape today is the prereg's T-01 WARM-100 rung. A second
 # canary shape could be added here later without a certificate schema change.
@@ -228,6 +229,7 @@ OPTIONAL_RUN_SPEC_KEYS = (
     | SPECIALIST_LAUNCH_RUN_SPEC_KEYS
     | SEMANTIC_CANARY_RUN_SPEC_KEYS
     | SEMANTIC_CANARY_LAUNCH_RUN_SPEC_KEYS
+    | RECEIPT_CUSTODY_RUN_SPEC_KEYS
     | A1_RUN_SPEC_KEYS
 )
 CHECKPOINT_MANIFEST_NAME = "checkpoint-manifest.json"
@@ -280,6 +282,7 @@ OPTIONAL_AUTHORIZED_SCOPE_KEYS = {
     "resume_relocation_custody_root",
     "allowed_semantic_canary_modes",
     "allowed_admitted_row_set_sha256",
+    "allowed_receipt_custody_root",
     "allowed_a1_families",
 }
 REQUESTED_SCOPE_KEYS = {
@@ -426,6 +429,7 @@ class ValidatedLaunch(NamedTuple):
     semantic_canary_telemetry_path: pathlib.Path | None = None
     semantic_canary_telemetry_run_id: str | None = None
     admitted_row_set_sha256: str | None = None
+    receipt_custody_root: pathlib.Path | None = None
     # Exact authority inputs validated for this launch. Failed-attempt
     # retention keeps these at the live run root so a retry can be
     # revalidated against the same certificate/ledger/spec bytes.
@@ -1559,6 +1563,7 @@ class SemanticCanaryRequest(NamedTuple):
     telemetry_path: pathlib.Path
     telemetry_run_id: str
     admitted_row_set_sha256: str
+    receipt_custody_root: pathlib.Path | None
 
 
 def _authorized_semantic_canary_modes(
@@ -1630,6 +1635,32 @@ def _require_authorized_admitted_row_set_sha256(
         raise ValueError(
             "run scope exceeds certificate: admitted_row_set_sha256"
         )
+    return requested
+
+
+def _authorized_receipt_custody_root(authorized: dict[str, Any]) -> str | None:
+    declared = authorized.get("allowed_receipt_custody_root")
+    if declared is None:
+        return None
+    if (
+        not isinstance(declared, str)
+        or not declared
+        or not pathlib.Path(declared).is_absolute()
+    ):
+        raise ValueError(
+            "certificate allowed_receipt_custody_root must be a non-empty absolute path"
+        )
+    return declared
+
+
+def _require_authorized_receipt_custody_root(
+    requested: pathlib.Path,
+    authorized: str | None,
+) -> pathlib.Path:
+    if authorized is None:
+        raise ValueError("certificate declares no allowed_receipt_custody_root")
+    if str(requested) != authorized:
+        raise ValueError("run scope exceeds certificate: receipt_custody_root")
     return requested
 
 
@@ -1929,6 +1960,7 @@ def _validate_semantic_canary_request(
     optimizer_steps: int,
     authorized_semantic_canary_modes: set[str] | None,
     authorized_admitted_row_set_sha256: str | None,
+    authorized_receipt_custody_root: str | None,
 ) -> SemanticCanaryRequest | None:
     """Validate the optional semantic-canary route, fail-closed, before any argv exists.
 
@@ -1961,8 +1993,13 @@ def _validate_semantic_canary_request(
         for key in SEMANTIC_CANARY_LAUNCH_RUN_SPEC_KEYS
         if run_spec.get(key) is not None
     }
-    if not pair_present and not companions_present:
+    receipt_custody_value = run_spec.get("receipt_custody_root")
+    if not pair_present and not companions_present and receipt_custody_value is None:
         return None
+    if receipt_custody_value is not None and not pair_present:
+        raise ValueError(
+            "run spec receipt_custody_root requires semantic_canary_mode and semantic_canary_receipt"
+        )
     if len(pair_present) == 1:
         missing = sorted(SEMANTIC_CANARY_RUN_SPEC_KEYS - pair_present)[0]
         raise ValueError(
@@ -1998,6 +2035,20 @@ def _validate_semantic_canary_request(
         run_spec["admitted_row_set_sha256"],
         authorized_admitted_row_set_sha256,
     )
+    receipt_custody_root = None
+    if receipt_custody_value is not None:
+        requested_receipt_custody_root = pathlib.Path(
+            _require_specialist_string(
+                receipt_custody_value,
+                "receipt_custody_root",
+            )
+        )
+        if not requested_receipt_custody_root.is_absolute():
+            raise ValueError("run spec receipt_custody_root must be an absolute path")
+        receipt_custody_root = _require_authorized_receipt_custody_root(
+            requested_receipt_custody_root,
+            authorized_receipt_custody_root,
+        )
 
     # Clean-random genesis only -- see docstring. Checked as early as
     # possible, before any path on the run spec is opened, same discipline
@@ -2154,6 +2205,7 @@ def _validate_semantic_canary_request(
         telemetry_path=telemetry_path,
         telemetry_run_id=run_id,
         admitted_row_set_sha256=admitted_row_set_sha256,
+        receipt_custody_root=receipt_custody_root,
     )
 
 
@@ -2732,6 +2784,7 @@ def validate_certified_request(
         requested_optimizer_steps,
         _authorized_semantic_canary_modes(authorized_scope),
         _authorized_admitted_row_set_sha256(authorized_scope),
+        _authorized_receipt_custody_root(authorized_scope),
     )
     a1 = _validate_a1_request(
         run_spec,
@@ -2898,6 +2951,9 @@ def validate_certified_request(
         ),
         admitted_row_set_sha256=(
             None if semantic_canary is None else semantic_canary.admitted_row_set_sha256
+        ),
+        receipt_custody_root=(
+            None if semantic_canary is None else semantic_canary.receipt_custody_root
         ),
         a1_family=None if a1 is None else a1.family,
         a1_tier=None if a1 is None else a1.tier,
@@ -3078,6 +3134,11 @@ def build_runner_argv(
             "--telemetry-run-id",
             launch.semantic_canary_telemetry_run_id,
         ]
+        if launch.receipt_custody_root is not None:
+            argv += [
+                "--text-lab-receipt-custody-root",
+                str(launch.receipt_custody_root),
+            ]
         return argv
 
     argv += [
