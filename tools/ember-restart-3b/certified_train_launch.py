@@ -199,6 +199,18 @@ SEMANTIC_CANARY_LAUNCH_RUN_SPEC_KEYS = {
     "admitted_row_set_sha256",
 }
 RECEIPT_CUSTODY_RUN_SPEC_KEYS = {"receipt_custody_root"}
+SEMANTIC_REPRODUCTION_RUN_SPEC_KEYS = {
+    "semantic_reproduction_intent",
+    "semantic_reproduction_target",
+    "semantic_reproduction_adjudication_output",
+}
+SEMANTIC_REPRODUCTION_INTENT = "R1_E3_RUN_C_COMPARISON"
+SEMANTIC_REPRODUCTION_TARGET_SCHEMA = "ember-semantic-reproduction-target-v1"
+SEMANTIC_REPRODUCTION_TARGET_KEYS = {
+    "schema_version",
+    "checkpoint_manifest_sha256",
+    "parameter_counter_receipt_sha256",
+}
 # Closed enumeration (same discipline TRAINING_CAPABILITIES uses): the only
 # defined canary shape today is the prereg's T-01 WARM-100 rung. A second
 # canary shape could be added here later without a certificate schema change.
@@ -230,6 +242,7 @@ OPTIONAL_RUN_SPEC_KEYS = (
     | SEMANTIC_CANARY_RUN_SPEC_KEYS
     | SEMANTIC_CANARY_LAUNCH_RUN_SPEC_KEYS
     | RECEIPT_CUSTODY_RUN_SPEC_KEYS
+    | SEMANTIC_REPRODUCTION_RUN_SPEC_KEYS
     | A1_RUN_SPEC_KEYS
 )
 CHECKPOINT_MANIFEST_NAME = "checkpoint-manifest.json"
@@ -428,6 +441,10 @@ class ValidatedLaunch(NamedTuple):
     semantic_canary_write_budget_gib: int | None = None
     semantic_canary_telemetry_path: pathlib.Path | None = None
     semantic_canary_telemetry_run_id: str | None = None
+    semantic_reproduction_intent: str | None = None
+    semantic_reproduction_checkpoint_manifest_sha256: str | None = None
+    semantic_reproduction_parameter_counter_receipt_sha256: str | None = None
+    semantic_reproduction_adjudication_output: pathlib.Path | None = None
     admitted_row_set_sha256: str | None = None
     receipt_custody_root: pathlib.Path | None = None
     # Exact authority inputs validated for this launch. Failed-attempt
@@ -1564,6 +1581,133 @@ class SemanticCanaryRequest(NamedTuple):
     telemetry_run_id: str
     admitted_row_set_sha256: str
     receipt_custody_root: pathlib.Path | None
+    reproduction: "SemanticReproductionRequest | None"
+
+
+class SemanticReproductionRequest(NamedTuple):
+    intent: str
+    checkpoint_manifest_sha256: str
+    parameter_counter_receipt_sha256: str
+    adjudication_output: pathlib.Path
+
+
+def _validate_semantic_reproduction_request(
+    run_spec: dict[str, Any],
+    resume: ResumeRequest | None,
+    custody_root: pathlib.Path,
+) -> SemanticReproductionRequest | None:
+    """Validate the closed R1-E3 run-C exception to clean-genesis WARM.
+
+    Absence preserves the ordinary WARM refusal.  Presence authorizes exactly
+    one comparison step from the already-authorized semantic checkpoint; it
+    is not a general continuation surface and mints no training/rung credit.
+    """
+
+    present = {
+        key
+        for key in SEMANTIC_REPRODUCTION_RUN_SPEC_KEYS
+        if run_spec.get(key) is not None
+    }
+    if not present:
+        return None
+    missing = sorted(SEMANTIC_REPRODUCTION_RUN_SPEC_KEYS - present)
+    if missing:
+        raise ValueError(
+            "run spec semantic reproduction requires "
+            f"{missing[0]}, which is absent"
+        )
+    if resume is None:
+        raise ValueError(
+            "run spec semantic reproduction requires an authorized resume checkpoint"
+        )
+    if resume.evidence_flag != "--resume-counter-receipt":
+        raise ValueError(
+            "run spec semantic reproduction requires resume_counter_receipt evidence"
+        )
+    if resume.relocation_custody_root is not None:
+        raise ValueError(
+            "run spec semantic reproduction checkpoint must remain on its B: custody volume"
+        )
+
+    intent = _require_specialist_string(
+        run_spec["semantic_reproduction_intent"],
+        "semantic_reproduction_intent",
+    )
+    if intent != SEMANTIC_REPRODUCTION_INTENT:
+        raise ValueError(
+            "run spec semantic_reproduction_intent must equal "
+            f"{SEMANTIC_REPRODUCTION_INTENT}"
+        )
+
+    target = _require_object(
+        run_spec["semantic_reproduction_target"],
+        "semantic_reproduction_target",
+    )
+    _require_keys(
+        target,
+        SEMANTIC_REPRODUCTION_TARGET_KEYS,
+        "semantic_reproduction_target",
+    )
+    if target["schema_version"] != SEMANTIC_REPRODUCTION_TARGET_SCHEMA:
+        raise ValueError(
+            "semantic_reproduction_target schema_version mismatch"
+        )
+    manifest_sha256 = _require_sha256(
+        target["checkpoint_manifest_sha256"],
+        "semantic_reproduction_target.checkpoint_manifest_sha256",
+    )
+    counter_sha256 = _require_sha256(
+        target["parameter_counter_receipt_sha256"],
+        "semantic_reproduction_target.parameter_counter_receipt_sha256",
+    )
+    if _file_sha256(
+        resume.checkpoint / CHECKPOINT_MANIFEST_NAME,
+        "semantic reproduction checkpoint manifest",
+    ) != manifest_sha256:
+        raise ValueError(
+            "semantic reproduction checkpoint manifest SHA-256 mismatch"
+        )
+    if _file_sha256(
+        resume.evidence_path,
+        "semantic reproduction parameter counter receipt",
+    ) != counter_sha256:
+        raise ValueError(
+            "semantic reproduction parameter counter receipt SHA-256 mismatch"
+        )
+
+    adjudication_output = pathlib.Path(
+        _require_specialist_string(
+            run_spec["semantic_reproduction_adjudication_output"],
+            "semantic_reproduction_adjudication_output",
+        )
+    )
+    if not adjudication_output.is_absolute():
+        raise ValueError(
+            "run spec semantic reproduction adjudication output must be absolute"
+        )
+    adjudication_output = adjudication_output.resolve(strict=False)
+    resolved_custody = pathlib.Path(custody_root).resolve(strict=False)
+    try:
+        adjudication_output.relative_to(resolved_custody)
+    except ValueError as error:
+        raise ValueError(
+            "run spec semantic reproduction adjudication output must be below custody_root"
+        ) from error
+    if adjudication_output == resolved_custody:
+        raise ValueError(
+            "run spec semantic reproduction adjudication output must be below custody_root"
+        )
+    if adjudication_output.exists():
+        raise ValueError(
+            "run spec semantic reproduction adjudication output must not already exist"
+        )
+
+    return SemanticReproductionRequest(
+        intent=intent,
+        checkpoint_manifest_sha256=manifest_sha256,
+        parameter_counter_receipt_sha256=counter_sha256,
+        adjudication_output=adjudication_output,
+    )
 
 
 def _authorized_semantic_canary_modes(
@@ -1961,6 +2105,7 @@ def _validate_semantic_canary_request(
     authorized_semantic_canary_modes: set[str] | None,
     authorized_admitted_row_set_sha256: str | None,
     authorized_receipt_custody_root: str | None,
+    custody_root: pathlib.Path,
 ) -> SemanticCanaryRequest | None:
     """Validate the optional semantic-canary route, fail-closed, before any argv exists.
 
@@ -1969,13 +2114,14 @@ def _validate_semantic_canary_request(
     _validate_specialist_request's structure; the two load-bearing
     differences from that route, both required by the WARM-100 definition
     itself (issue #1719 acceptance clause 1, "clean-random genesis, not
-    continuation"):
+    continuation").  The sole exception is a fully bound R1-E3 run-C
+    comparison, validated by _validate_semantic_reproduction_request; it
+    cannot grant ordinary continuation authority:
 
-    1. A canary route REFUSES when a resume request is also present --
-       inverted from specialist, which REQUIRES one. A canary-authorized
-       launch that also resumed a checkpoint would produce a continuation
-       run wearing canary authorization, defeating the whole point of the
-       mode. This is the load-bearing security property of this route.
+    1. A canary route REFUSES when a resume request is also present unless the
+       closed reproduction triple binds that exact checkpoint and output.
+       Inverted from specialist, which always REQUIRES resume.  The ordinary
+       refusal text is preserved byte-for-byte.
     2. requested steps must clear SEMANTIC_CANARY_MIN_STEPS (T-01 = 100).
        _require_scope_subset's numeric_pairs loop already floors
        optimizer_steps at >= 0 generically (a shared ceiling check across
@@ -1994,8 +2140,23 @@ def _validate_semantic_canary_request(
         if run_spec.get(key) is not None
     }
     receipt_custody_value = run_spec.get("receipt_custody_root")
-    if not pair_present and not companions_present and receipt_custody_value is None:
+    reproduction_present = {
+        key
+        for key in SEMANTIC_REPRODUCTION_RUN_SPEC_KEYS
+        if run_spec.get(key) is not None
+    }
+    if (
+        not pair_present
+        and not companions_present
+        and receipt_custody_value is None
+        and not reproduction_present
+    ):
         return None
+    if reproduction_present and not pair_present:
+        raise ValueError(
+            "run spec semantic reproduction requires semantic_canary_mode and "
+            "semantic_canary_receipt"
+        )
     if receipt_custody_value is not None and not pair_present:
         raise ValueError(
             "run spec receipt_custody_root requires semantic_canary_mode and semantic_canary_receipt"
@@ -2050,11 +2211,16 @@ def _validate_semantic_canary_request(
             authorized_receipt_custody_root,
         )
 
-    # Clean-random genesis only -- see docstring. Checked as early as
-    # possible, before any path on the run spec is opened, same discipline
-    # _validate_specialist_request applies to its OWN (opposite) resume
-    # requirement.
-    if resume is not None:
+    reproduction = _validate_semantic_reproduction_request(
+        run_spec,
+        resume,
+        custody_root,
+    )
+
+    # Clean-random genesis remains byte-identical for every ordinary WARM
+    # launch.  Only the closed R1-E3 run-C declaration above may cross this
+    # branch; it is comparison evidence, never general continuation.
+    if resume is not None and reproduction is None:
         raise ValueError(
             "run spec semantic canary launch must not resume a checkpoint "
             "(WARM-100 is clean-random genesis, not continuation -- a "
@@ -2062,7 +2228,12 @@ def _validate_semantic_canary_request(
             "as a continuation under canary authorization)"
         )
 
-    if optimizer_steps < SEMANTIC_CANARY_MIN_STEPS:
+    if reproduction is not None and optimizer_steps != 1:
+        raise ValueError(
+            "run spec semantic reproduction requested_scope.optimizer_steps "
+            "must equal 1 (run C is a cursor-advance comparison only)"
+        )
+    if reproduction is None and optimizer_steps < SEMANTIC_CANARY_MIN_STEPS:
         raise ValueError(
             "run spec requested_scope.optimizer_steps must be at least "
             f"{SEMANTIC_CANARY_MIN_STEPS} for a semantic canary launch (T-01)"
@@ -2206,6 +2377,7 @@ def _validate_semantic_canary_request(
         telemetry_run_id=run_id,
         admitted_row_set_sha256=admitted_row_set_sha256,
         receipt_custody_root=receipt_custody_root,
+        reproduction=reproduction,
     )
 
 
@@ -2785,6 +2957,7 @@ def validate_certified_request(
         _authorized_semantic_canary_modes(authorized_scope),
         _authorized_admitted_row_set_sha256(authorized_scope),
         _authorized_receipt_custody_root(authorized_scope),
+        pathlib.Path(requested_scope["custody_root"]),
     )
     a1 = _validate_a1_request(
         run_spec,
@@ -2949,6 +3122,26 @@ def validate_certified_request(
         semantic_canary_telemetry_run_id=(
             None if semantic_canary is None else semantic_canary.telemetry_run_id
         ),
+        semantic_reproduction_intent=(
+            None
+            if semantic_canary is None or semantic_canary.reproduction is None
+            else semantic_canary.reproduction.intent
+        ),
+        semantic_reproduction_checkpoint_manifest_sha256=(
+            None
+            if semantic_canary is None or semantic_canary.reproduction is None
+            else semantic_canary.reproduction.checkpoint_manifest_sha256
+        ),
+        semantic_reproduction_parameter_counter_receipt_sha256=(
+            None
+            if semantic_canary is None or semantic_canary.reproduction is None
+            else semantic_canary.reproduction.parameter_counter_receipt_sha256
+        ),
+        semantic_reproduction_adjudication_output=(
+            None
+            if semantic_canary is None or semantic_canary.reproduction is None
+            else semantic_canary.reproduction.adjudication_output
+        ),
         admitted_row_set_sha256=(
             None if semantic_canary is None else semantic_canary.admitted_row_set_sha256
         ),
@@ -3096,10 +3289,9 @@ def build_runner_argv(
     # A launch that declares no semantic-canary route reaches only the
     # governed-vertical tail below, so its argv is byte-identical to a
     # pre-#1719 one. validate_certified_request has already proven a
-    # declared route is complete, coherent, and clean-genesis (no resume) --
-    # so no partial or continuation canary argv can be emitted. No resume
-    # flags are ever emitted here: the genesis-only refusal upstream means
-    # launch.resume_checkpoint is never set on a semantic-canary launch.
+    # declared route is complete and coherent.  Ordinary WARM remains
+    # clean-genesis; only the closed reproduction comparison may carry the
+    # existing runner resume suffix appended below.
     if launch.semantic_canary_mode is not None:
         argv += [
             "semantic",
@@ -3139,6 +3331,18 @@ def build_runner_argv(
                 "--text-lab-receipt-custody-root",
                 str(launch.receipt_custody_root),
             ]
+        if launch.semantic_reproduction_intent is not None:
+            argv += [
+                "--resume-checkpoint",
+                str(launch.resume_checkpoint),
+                launch.resume_evidence_flag,
+                str(launch.resume_evidence_path),
+            ]
+            if launch.resume_optimizer_transition_registry_sha256 is not None:
+                argv += [
+                    "--resume-optimizer-transition-registry-sha256",
+                    launch.resume_optimizer_transition_registry_sha256,
+                ]
         return argv
 
     argv += [
@@ -3580,6 +3784,27 @@ def _write_execution_receipt(
             "competitiveness_claimed": False,
         },
     }
+    if launch.semantic_reproduction_intent is not None:
+        receipt["execution_scope"] = "REPRODUCTION_COMPARISON_ONLY"
+        receipt["reproduction_comparison"] = {
+            "intent": launch.semantic_reproduction_intent,
+            "checkpoint_manifest_sha256": (
+                launch.semantic_reproduction_checkpoint_manifest_sha256
+            ),
+            "parameter_counter_receipt_sha256": (
+                launch.semantic_reproduction_parameter_counter_receipt_sha256
+            ),
+            "adjudication_output": str(
+                launch.semantic_reproduction_adjudication_output
+            ),
+        }
+        receipt["claim_scope"].update(
+            {
+                "training_progress_claimed": False,
+                "rung_credit_claimed": False,
+                "milestone_credit_claimed": False,
+            }
+        )
     if prelaunch_refusal is not None:
         receipt["prelaunch_refusal"] = prelaunch_refusal
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
