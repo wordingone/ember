@@ -109,7 +109,7 @@ def load_frozen_slice_manifest(path: str|Path, expected_sha256: str) -> dict:
     if not all(isinstance(row,dict) for row in (sequence,source,selection,availability)) or not isinstance(windows,list) or not windows or not isinstance(training,list): raise HeldoutEvalRefusal("SLICE_SCHEMA_INVALID")
     _closed_keys(source,{"combined_sha256","receipt_path","receipt_sha256","shards"},set(),"SLICE_SOURCE_INVALID"); _digest(source.get("combined_sha256"),length=64,code="SLICE_SOURCE_DIGEST_INVALID"); _digest(source.get("receipt_sha256"),length=64,code="SLICE_SOURCE_DIGEST_INVALID"); _relative_receipt_path(source.get("receipt_path"),"SLICE_SOURCE_PATH_INVALID")
     _closed_keys(selection,{"path","sha256","batch_sha256","verdict"},set(),"SLICE_SELECTION_INVALID"); _relative_receipt_path(selection.get("path"),"SLICE_SELECTION_PATH_INVALID"); _digest(selection.get("sha256"),length=64,code="SLICE_SELECTION_DIGEST_INVALID"); _digest(selection.get("batch_sha256"),length=64,code="SLICE_SELECTION_DIGEST_INVALID")
-    if selection.get("verdict")!="CLEAN": raise HeldoutEvalRefusal("SLICE_SELECTION_VERDICT_INVALID")
+    if selection.get("verdict") not in {"CLEAN","RULE_DERIVED_EXCLUSION_CLEAN"}: raise HeldoutEvalRefusal("SLICE_SELECTION_VERDICT_INVALID")
     _closed_keys(sequence,{"dtype","seq","n_mtp","separator_id","packed_bytes_per_token","scoring"},set(),"SLICE_SEQUENCE_INVALID")
     if sequence.get("dtype")!="<u2" or sequence.get("scoring")!="primary_next_token_only" or isinstance(sequence.get("packed_bytes_per_token"),bool) or not isinstance(sequence.get("packed_bytes_per_token"),(int,float)) or not math.isfinite(float(sequence["packed_bytes_per_token"])) or float(sequence["packed_bytes_per_token"])<=0: raise HeldoutEvalRefusal("SLICE_SEQUENCE_INVALID")
     seq=_integer(sequence,"seq"); _integer(sequence,"n_mtp"); _integer(sequence,"separator_id")
@@ -151,6 +151,56 @@ def load_frozen_slice_manifest(path: str|Path, expected_sha256: str) -> dict:
     expected=_integer(value,"expected_scored_token_count")
     if expected != len(windows)*seq: raise HeldoutEvalRefusal(f"TRUNCATED_SLICE: expected_scored_token_count={expected} derived={len(windows)*seq}")
     return value
+
+def verify_rule_derived_selection(manifest: Mapping[str,Any], *, shard_dir: str|Path,
+                                  nc: str|Path|None=None) -> None:
+    """Re-derive the exact rule-owned window set; legacy n-gram CLEAN is unchanged."""
+    selection=manifest["selection_evidence"]
+    if selection["verdict"]=="CLEAN": return
+    if selection["verdict"]!="RULE_DERIVED_EXCLUSION_CLEAN": raise HeldoutEvalRefusal("RULE_FREEZE_VERDICT_INVALID")
+    root=Path(nc) if nc is not None else Path(__file__).resolve().parents[1]
+    receipt_path=root/selection["path"]
+    if not receipt_path.is_file() or _sha256(receipt_path)!=selection["sha256"] or selection["batch_sha256"]!=selection["sha256"]:
+        raise HeldoutEvalRefusal("RULE_FREEZE_RECEIPT_IDENTITY_INVALID")
+    receipt=_json(receipt_path)
+    required={"ticket","issue","ts","schema","status","selection_rule_id","selection_rule",
+              "exclusion_set","source_receipts","sequence","training_ranges","windows",
+              "previous_refusal","producer","invariant_sha256","sha_convention","authority","claim_boundary"}
+    _closed_keys(receipt,required,set(),"RULE_FREEZE_RECEIPT_SCHEMA_INVALID")
+    if (receipt.get("ticket")!="ISSUE-1433-RULE-DERIVED-HELDOUT-FREEZE"
+            or receipt.get("schema")!="cbase-heldout-rule-freeze/v1"
+            or receipt.get("status")!="RULE_DERIVED_EXCLUSION_CLEAN"
+            or receipt.get("selection_rule_id")!="EARLIEST_ADMISSIBLE_AFTER_EXCLUSION_FRONTIER_V1"):
+        raise HeldoutEvalRefusal("RULE_FREEZE_RECEIPT_SCHEMA_INVALID")
+    exclusion=receipt.get("exclusion_set")
+    _closed_keys(exclusion,{"path","sha256","ranges_sha256","excluded_token_ranges"},set(),"RULE_FREEZE_EXCLUSION_INVALID")
+    exclusion_path=root/_relative_receipt_path(exclusion.get("path"),"RULE_FREEZE_EXCLUSION_INVALID")
+    _digest(exclusion.get("sha256"),length=64,code="RULE_FREEZE_EXCLUSION_INVALID")
+    _digest(exclusion.get("ranges_sha256"),length=64,code="RULE_FREEZE_EXCLUSION_INVALID")
+    try:
+        import regenerate_cbase_heldout_slice as freezer
+    except ImportError:
+        import sys
+        here=str(Path(__file__).resolve().parent)
+        if here not in sys.path: sys.path.insert(0,here)
+        import regenerate_cbase_heldout_slice as freezer
+    try:
+        exclusion_doc=freezer._load_exclusion_set(exclusion_path,exclusion["sha256"],shard_dir=Path(shard_dir))
+        if exclusion_doc["excluded_token_ranges"]!=exclusion["excluded_token_ranges"]:
+            raise HeldoutEvalRefusal("RULE_FREEZE_EXCLUSION_RANGE_MISMATCH")
+        range_sha=hashlib.sha256(json.dumps(exclusion["excluded_token_ranges"],sort_keys=True,separators=(",",":")).encode()).hexdigest()
+        if range_sha!=exclusion["ranges_sha256"]: raise HeldoutEvalRefusal("RULE_FREEZE_EXCLUSION_RANGE_MISMATCH")
+        shard_receipt=_json(root/manifest["source_corpus"]["receipt_path"])
+        training=[tuple(row) for row in receipt["training_ranges"]]
+        expected=freezer.select_earliest_admissible_windows(
+            shard_receipt, excluded_ranges=[tuple(row) for row in exclusion["excluded_token_ranges"]],
+            training_ranges=training, seq=int(receipt["sequence"]["seq"]),
+            n_mtp=int(receipt["sequence"]["n_mtp"]), count=16)
+    except (OSError,ValueError,SystemExit,KeyError,TypeError) as exc:
+        if isinstance(exc,HeldoutEvalRefusal): raise
+        raise HeldoutEvalRefusal(f"RULE_FREEZE_REDERIVATION_FAILED: {exc}") from exc
+    if receipt["windows"]!=expected or manifest["windows"]!=expected:
+        raise HeldoutEvalRefusal("RULE_FREEZE_EARLIEST_WINDOW_MISMATCH")
 
 def _fineweb_exclusion_module():
     """Import scripts/fineweb_exclusion.py (#1436) as a sibling module.
@@ -466,10 +516,12 @@ def main(argv=None) -> int:
     parser=argparse.ArgumentParser(description=__doc__); parser.add_argument("--validate-only",action="store_true"); parser.add_argument("--evaluate",action="store_true"); parser.add_argument("--slice-manifest",default=str(FROZEN_SLICE_PATH)); parser.add_argument("--expected-slice-sha256",default=FROZEN_SLICE_SHA256); parser.add_argument("--shard-dir",required=True); parser.add_argument("--nc",default=None,help="repo root for the fineweb-exclusion receipt lookup (default: this script's own checkout); override lets hermetic fixtures point at a self-contained receipts/ tree instead of the real repo's"); parser.add_argument("--checkpoint-dir"); parser.add_argument("--checkpoint-kind",choices=sorted((*CHECKPOINT_PINS,V5_CHECKPOINT_KIND))); parser.add_argument("--route",default=None,help="required expert route for v5 checkpoints; forbidden for historical checkpoints"); parser.add_argument("--max-position-embeddings",type=int,default=1024); parser.add_argument("--device",default="cpu"); parser.add_argument("--seed",type=int,default=83); parser.add_argument("--bootstrap-samples",type=int,default=2000); parser.add_argument("--out")
     args=parser.parse_args(argv)
     try:
-        manifest=load_frozen_slice_manifest(args.slice_manifest,args.expected_slice_sha256); windows=read_eval_windows(args.shard_dir,manifest)
+        manifest=load_frozen_slice_manifest(args.slice_manifest,args.expected_slice_sha256); verify_rule_derived_selection(manifest,shard_dir=args.shard_dir,nc=args.nc); windows=read_eval_windows(args.shard_dir,manifest)
         excluded_ranges=verify_slice_excludes_ruled_sources(manifest,shard_dir=args.shard_dir,nc=args.nc)
         print("HELDOUT_SLICE_DISJOINT_PASS")
         if args.validate_only and not args.evaluate: return 0
+        if args.evaluate and manifest["selection_evidence"]["verdict"]!="CLEAN":
+            raise HeldoutEvalRefusal("RULE_DERIVED_VERDICT_NOT_SCORABLE: run and bind the real exact-window n-gram phase before evaluation")
         if not args.evaluate or not args.checkpoint_dir or not args.checkpoint_kind or not args.out: raise HeldoutEvalRefusal("EVALUATION_ARGUMENTS_MISSING")
         model,identity,checkpoint=load_live_model(args.checkpoint_dir,args.checkpoint_kind,args.device,args.seed,route=args.route,max_position_embeddings=args.max_position_embeddings); evaluation=evaluate_teacher_forced(model,windows,device=args.device,dtype="bfloat16",seed=args.seed,packed_bytes_per_token=float(manifest["sequence"]["packed_bytes_per_token"]),bootstrap_samples=args.bootstrap_samples); receipt=build_receipt(checkpoint=checkpoint,checkpoint_identity=identity,slice_manifest_sha256=args.expected_slice_sha256,slice_manifest=manifest,evaluation=evaluation,excluded_source_ranges=excluded_ranges); receipt["receipt_sha256"]=_write_receipt(Path(args.out),receipt); print("HELDOUT_EVAL_DETERMINISM_PASS"); print(json.dumps({"out":args.out,"mean_nll":evaluation["mean_nll"],"bits_per_packed_byte":evaluation["bits_per_packed_byte"],"scale":receipt["scale"]},sort_keys=True)); return 0
     except HeldoutEvalRefusal as exc:

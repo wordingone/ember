@@ -3,6 +3,8 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 from __future__ import annotations
 import importlib.util
+import hashlib
+import json
 from pathlib import Path
 
 import pytest
@@ -97,3 +99,69 @@ def test_select_windows_refuses_when_shard_too_small():
     with pytest.raises(SystemExit, match="REGEN_REFUSED"):
         m.select_windows("s.bin", shard_start=0, shard_len=45, seq=4, n_mtp=0,
                          count=100, training_ceiling_token=0)
+
+
+def test_earliest_admissible_rule_is_contiguous_deterministic_and_boundary_safe():
+    m = load_module()
+    receipt = {"total_stream_tokens": 160, "shards": [
+        {"name": "a.bin", "n_tokens": 80}, {"name": "b.bin", "n_tokens": 80}]}
+    # seq=4/block=5: start=48 touches [40,49), so the earliest admissible
+    # start is 52. Training [0,20) is also excluded from candidacy.
+    first = m.select_earliest_admissible_windows(
+        receipt, excluded_ranges=[(40, 49)], training_ranges=[(0, 20)],
+        seq=4, n_mtp=0, count=16)
+    second = m.select_earliest_admissible_windows(
+        receipt, excluded_ranges=[(40, 49)], training_ranges=[(0, 20)],
+        seq=4, n_mtp=0, count=16)
+    assert first == second
+    expected_starts = list(range(52, 76, 4)) + list(range(80, 120, 4))
+    assert [row["global_token_start"] for row in first] == expected_starts
+    assert [row["window_index"] for row in first] == [start//4 for start in expected_starts]
+
+
+def test_earliest_admissible_rule_refuses_short_or_caller_selected_set():
+    m = load_module()
+    receipt = {"total_stream_tokens": 32, "shards": [{"name": "a.bin", "n_tokens": 32}]}
+    with pytest.raises(SystemExit, match="RULE_FREEZE_REFUSED: fewer than 16"):
+        m.select_earliest_admissible_windows(
+            receipt, excluded_ranges=[(0, 20)], training_ranges=[],
+            seq=4, n_mtp=0, count=16)
+    assert "window_indices" not in m.build_rule_derived_candidate.__code__.co_varnames
+
+
+def test_exclusion_set_is_sha_bound_closed_and_rederived(tmp_path, monkeypatch):
+    m = load_module()
+    doc = {
+        "ticket":"FINEWEB-EDU-EXCLUSION-PREFLIGHT","ts":"20260805T140123Z",
+        "shard_receipt":"token-shards.json","assembly_receipt":"assembly.json",
+        "excluded_sources":["fineweb_edu"],"excluded_token_ranges":[[40,80]],
+        "loader_geometry":{"seq":m.tsv.SEQ,"n_mtp":m.tsv.N_MTP,"block_len":m.tsv.BLOCK_LEN},
+        "n_windows_unenforced":10,"n_windows_enforced":5,"n_windows_dropped":5,
+        "zero_overlap_verified":True,"clean_content_tokens":80,"stream_content_tokens":120,
+        "no_gpu":True,"invariant_sha256":m.receipt_check.INVARIANT_SHA256,
+        "sha_convention":"bytes on disk as-is (binary read, no normalization)",
+        "authority":{"goal_id":"EMBER-02","workstream_id":"EMBER-02A",
+                     "next_executed_outcome":"EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"}}
+    path=tmp_path/"exclusion.json"; path.write_text(json.dumps(doc),encoding="utf-8")
+    digest=hashlib.sha256(path.read_bytes()).hexdigest()
+    monkeypatch.setattr(m.fx,"run_preflight",lambda **kwargs: dict(doc))
+    assert m._load_exclusion_set(path,digest,shard_dir=tmp_path)==doc
+    with pytest.raises(SystemExit,match="sha256 mismatch"):
+        m._load_exclusion_set(path,"0"*64,shard_dir=tmp_path)
+    doc["unexpected"]=True; path.write_text(json.dumps(doc),encoding="utf-8")
+    with pytest.raises(SystemExit,match="closed keys"):
+        m._load_exclusion_set(path,hashlib.sha256(path.read_bytes()).hexdigest(),shard_dir=tmp_path)
+
+
+def test_rule_mode_refuses_existing_outputs_before_build(tmp_path, monkeypatch):
+    m=load_module(); out=tmp_path/"candidate.json"; out.write_text("occupied",encoding="utf-8")
+    receipt=tmp_path/"receipt.json"; called=False
+    def forbidden(**kwargs):
+        nonlocal called; called=True; raise AssertionError("read-heavy build reached")
+    monkeypatch.setattr(m,"build_rule_derived_candidate",forbidden)
+    with pytest.raises(SystemExit,match="already exists"):
+        m.main(["--rule-derived-exclusion","--shard-dir",str(tmp_path),
+                "--exclusion-set-receipt",str(tmp_path/"exclusion.json"),
+                "--expected-exclusion-set-sha256","0"*64,
+                "--out",str(out),"--receipt-out",str(receipt)])
+    assert called is False
