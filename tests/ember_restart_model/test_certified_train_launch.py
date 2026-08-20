@@ -2820,6 +2820,7 @@ class CompletionHeadAncestorTests(unittest.TestCase):
                 "semantic_canary_checkpoint_interval",
                 "semantic_canary_telemetry_path",
                 "admitted_row_set_sha256",
+                "receipt_custody_root",
                 "a1_family",
                 "a1_tier",
                 "a1_mechanism",
@@ -3752,6 +3753,7 @@ class ResumeRootAuthorizationTests(_ResumeBundleMixin, unittest.TestCase):
                 "resume_relocation_custody_root",
                 "allowed_semantic_canary_modes",
                 "allowed_admitted_row_set_sha256",
+                "allowed_receipt_custody_root",
                 "allowed_a1_families",
             },
         )

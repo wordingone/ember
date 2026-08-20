@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -136,19 +137,51 @@ def _source_packet(source_custody: Path) -> dict[str, dict[str, Any]]:
     return packet
 
 
-def _current_commit(repo: Path) -> str:
+def _git_is_ancestor(repo: Path, commit: str) -> bool:
     kwargs: dict[str, Any] = {"capture_output": True, "text": True, "check": False}
     if os.name == "nt":
         kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
-    result = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], **kwargs)
-    value = result.stdout.strip()
-    if result.returncode != 0 or len(value) != 40:
-        raise ValueError("current source commit is unavailable")
+    result = subprocess.run(
+        ["git", "-C", str(repo), "merge-base", "--is-ancestor", commit, "HEAD"],
+        **kwargs,
+    )
+    return result.returncode == 0
+
+
+def resolve_source_base_commit(
+    *, repo: Path, write: bool, requested: str | None
+) -> str:
+    """Bind writes to an explicit reachable commit and checks to recorded bytes."""
+    if write:
+        value = requested
+        if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{40}", value) is None:
+            raise ValueError("--write requires a full lowercase --source-base-commit")
+        if not _git_is_ancestor(repo, value):
+            raise ValueError("--source-base-commit is not an ancestor of HEAD")
+        return value
+    if requested is not None:
+        raise ValueError("--source-base-commit is valid only with --write")
+    identity_path = (
+        repo
+        / "data"
+        / "ember-restart-3b"
+        / ARTIFACTS["identity"]
+    )
+    try:
+        value = json.loads(identity_path.read_bytes()).get("source_base_commit")
+    except (OSError, json.JSONDecodeError, AttributeError) as error:
+        raise ValueError("recorded source_base_commit is unavailable") from error
+    if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{40}", value) is None:
+        raise ValueError("recorded source_base_commit is malformed")
     return value
 
 
 def build_projected_packet(
-    *, repo: Path, source_custody: Path, receipt_custody_root: Path
+    *,
+    repo: Path,
+    source_custody: Path,
+    receipt_custody_root: Path,
+    source_base_commit: str,
 ) -> dict[str, bytes]:
     """Build only the four checked-in authority artifacts from the frozen 28-row packet."""
     packet = _source_packet(source_custody)
@@ -183,7 +216,7 @@ def build_projected_packet(
     tools = repo / "tools" / "ember-restart-3b"
     identity = copy.deepcopy(packet["identity"])
     identity["corpus_sha256"] = _sha(corpus_raw)
-    identity["source_base_commit"] = _current_commit(repo)
+    identity["source_base_commit"] = source_base_commit
     identity["code_files"] = {
         "text_lab_corpus": _sha((tools / "text_lab_corpus.py").read_bytes()),
         "train": _sha((tools / "train.py").read_bytes()),
@@ -221,13 +254,20 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source-custody", type=Path, required=True)
     parser.add_argument("--receipt-custody-root", type=Path, required=True)
+    parser.add_argument("--source-base-commit")
     parser.add_argument("--write", action="store_true")
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[2]
+    source_base_commit = resolve_source_base_commit(
+        repo=repo,
+        write=args.write,
+        requested=args.source_base_commit,
+    )
     generated = build_projected_packet(
         repo=repo,
         source_custody=args.source_custody.resolve(strict=True),
         receipt_custody_root=args.receipt_custody_root.resolve(strict=True),
+        source_base_commit=source_base_commit,
     )
     output = repo / "data" / "ember-restart-3b"
     mismatches = []
