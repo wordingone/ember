@@ -377,16 +377,21 @@ def test_score_binding_refuses_missing_scores() -> None:
         })
 
 
-def test_evaluator_task_specs_pin_hellaswag_and_refuse_unknown() -> None:
+def test_evaluator_task_specs_pin_registered_hellaswag_and_refuse_unknown() -> None:
     module = _load()
 
-    assert module.build_bound_task_specs(["arc_challenge", "hellaswag"]) == [
-        "arc_challenge",
-        {
-            "task": "hellaswag",
-            "dataset_kwargs": {"revision": module.HELLASWAG_DATASET_REVISION},
-        },
-    ]
+    assert module.build_bound_task_specs(["arc_challenge", "hellaswag"]) == {
+        "group": "ember_issue1433_bound_eval",
+        "task": [
+            "arc_challenge",
+            {
+                "task": "hellaswag",
+                "dataset_kwargs": {
+                    "revision": module.HELLASWAG_DATASET_REVISION,
+                },
+            },
+        ],
+    }
     binding = module.FROZEN_SPLIT_BINDING["hellaswag"]
     assert binding["frozen_pin_matches_scored_split"] is True
     assert binding["frozen_pinned_split"] == "validation"
@@ -398,6 +403,47 @@ def test_evaluator_task_specs_pin_hellaswag_and_refuse_unknown() -> None:
     )
     with pytest.raises(module.LiveCandidateRefusal, match="UNBOUND_EVALUATOR_TASK"):
         module.build_bound_task_specs(["mmlu_pro"])
+
+
+def test_real_task_manager_loads_registered_hellaswag_yaml_with_revision_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load()
+    datasets = pytest.importorskip("datasets")
+    task_module = pytest.importorskip("lm_eval.tasks")
+    calls = []
+    row = {
+        "ctx_a": "A person starts",
+        "ctx_b": "the task",
+        "activity_label": "Example",
+        "endings": ["one", "two", "three", "four"],
+        "label": "0",
+    }
+
+    def fake_load_dataset(path=None, name=None, **kwargs):
+        calls.append({"path": path, "name": name, "kwargs": kwargs})
+        dataset = datasets.Dataset.from_list([row])
+        return datasets.DatasetDict({"train": dataset, "validation": dataset})
+
+    monkeypatch.setattr(datasets, "load_dataset", fake_load_dataset)
+    ordered, by_name = module.load_bound_evaluator_tasks(
+        ["hellaswag"], task_module.TaskManager()
+    )
+
+    assert list(by_name) == ["hellaswag"]
+    assert ordered == [by_name["hellaswag"]]
+    assert calls == [{
+        "path": "Rowan/hellaswag",
+        "name": None,
+        "kwargs": {"revision": module.HELLASWAG_DATASET_REVISION},
+    }]
+    task = by_name["hellaswag"]
+    assert task.config.validation_split == "validation"
+    assert task.config.test_split is None
+    assert task.config.dataset_kwargs == {
+        "revision": module.HELLASWAG_DATASET_REVISION,
+    }
+    assert task.validation_docs()[0]["query"].startswith("Example:")
 
 
 def test_bound_tasks_are_loaded_once_and_returned_in_requested_order() -> None:
@@ -420,9 +466,6 @@ def test_bound_tasks_are_loaded_once_and_returned_in_requested_order() -> None:
     manager = Manager()
     ordered, by_name = module.load_bound_evaluator_tasks(
         ["arc_challenge", "hellaswag"], manager
-    )
-    assert manager.received == module.build_bound_task_specs(
-        ["arc_challenge", "hellaswag"]
     )
     assert ordered == [arc, hella]
     assert by_name == {"arc_challenge": arc, "hellaswag": hella}
@@ -659,9 +702,6 @@ def test_run_evaluator_uses_loaded_revision_bound_tasks(
         device="cpu",
         max_position_embeddings=1024,
         predictions_path=str(tmp_path / "predictions.jsonl"),
-    )
-    assert TaskManager.last.received == module.build_bound_task_specs(
-        ["arc_challenge", "hellaswag"]
     )
     assert [call[0] for call in runtime_calls] == ["arc_challenge", "hellaswag"]
     assert runtime_calls[1][1] is hella
