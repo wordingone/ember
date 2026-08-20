@@ -33,6 +33,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
 import time
 import traceback
@@ -61,6 +62,9 @@ from w1_collapse_control_run import (
 
 # Import torch-free scanner for multiprocessing pools (no CUDA DLL loads in workers)
 from decon_scan_worker import contamination_scan_memmap
+import receipt_check
+from receipt_write import checked_write
+import token_shards_v0
 
 
 def contamination_recheck(candidate_rows: list[list[int]],
@@ -118,10 +122,281 @@ MIN_SCAN_SUBCHUNK_TOKENS = 1 << 20  # 1,048,576 tokens
 HEARTBEAT_INTERVAL_S = 20  # intra-shard progress heartbeat cadence (issue #174 Phase 2)
 
 RECEIPT_DIR = os.path.join(REPO_ROOT, "receipts", "ember-c-scale")
+PREDECLARED_REQUIRED_WINDOWS = 16
+PREDECLARED_VERDICT = "DECONTAMINATION_NOT_PERFORMED"
 
 
 def _utc_ts() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _sha256_file(path: str | os.PathLike[str]) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _closed_keys(value: dict, required: set[str], optional: set[str], code: str) -> None:
+    if not isinstance(value, dict):
+        raise SystemExit(code)
+    keys = set(value)
+    if not required.issubset(keys) or not keys.issubset(required | optional):
+        raise SystemExit(
+            f"{code}: missing={sorted(required - keys)} "
+            f"extra={sorted(keys - required - optional)}")
+
+
+def _lower_sha256(value: object, code: str) -> str:
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+        raise SystemExit(code)
+    return value
+
+
+def load_predeclared_candidate(path: str | os.PathLike[str], expected_sha256: str) -> dict:
+    """Load the exact #1433 predeclared candidate without selecting windows.
+
+    This is intentionally narrower than ``build_batch``: the manifest already
+    froze the ordered candidate before WARM-100, so this mode may verify those
+    bytes but may never reserve a pool, replace a row, or choose a different
+    clean row after seeing matcher output.
+    """
+    expected = _lower_sha256(expected_sha256, "PREDECLARED_CANDIDATE_SHA_INVALID")
+    actual = _sha256_file(path)
+    if actual != expected:
+        raise SystemExit(
+            f"PREDECLARED_CANDIDATE_SHA_MISMATCH: expected={expected} actual={actual}")
+    with open(path, encoding="utf-8") as fh:
+        manifest = json.load(fh)
+    _closed_keys(
+        manifest,
+        {"schema", "issue", "captured_public_master", "source_corpus",
+         "selection_evidence", "sequence", "training_consumption", "windows",
+         "expected_scored_token_count", "scale", "availability", "claim_boundary"},
+        set(), "PREDECLARED_CANDIDATE_SCHEMA_INVALID")
+    if manifest.get("schema") != "cbase-heldout-slice/v1" or manifest.get("issue") != "#760":
+        raise SystemExit("PREDECLARED_CANDIDATE_SCHEMA_INVALID")
+    if not re.fullmatch(r"[0-9a-f]{40}", str(manifest.get("captured_public_master", ""))):
+        raise SystemExit("PREDECLARED_CANDIDATE_SOURCE_COMMIT_INVALID")
+
+    source = manifest["source_corpus"]
+    selection = manifest["selection_evidence"]
+    sequence = manifest["sequence"]
+    _closed_keys(source, {"combined_sha256", "receipt_path", "receipt_sha256", "shards"},
+                 set(), "PREDECLARED_CANDIDATE_SOURCE_INVALID")
+    _closed_keys(selection, {"path", "sha256", "batch_sha256", "verdict"}, set(),
+                 "PREDECLARED_CANDIDATE_SELECTION_INVALID")
+    _closed_keys(sequence, {"dtype", "seq", "n_mtp", "separator_id",
+                            "packed_bytes_per_token", "scoring"}, set(),
+                 "PREDECLARED_CANDIDATE_SEQUENCE_INVALID")
+    if selection.get("verdict") != PREDECLARED_VERDICT:
+        raise SystemExit("PREDECLARED_CANDIDATE_VERDICT_INVALID")
+    for row, field in ((source, "combined_sha256"), (source, "receipt_sha256"),
+                       (selection, "sha256"), (selection, "batch_sha256")):
+        _lower_sha256(row.get(field), "PREDECLARED_CANDIDATE_DIGEST_INVALID")
+    for field in ("receipt_path",):
+        value = source.get(field)
+        if (not isinstance(value, str) or not value or "\\" in value
+                or Path(value).is_absolute() or ".." in Path(value).parts):
+            raise SystemExit("PREDECLARED_CANDIDATE_PATH_INVALID")
+    value = selection.get("path")
+    if (not isinstance(value, str) or not value or "\\" in value
+            or Path(value).is_absolute() or ".." in Path(value).parts):
+        raise SystemExit("PREDECLARED_CANDIDATE_PATH_INVALID")
+
+    seq = sequence.get("seq")
+    n_mtp = sequence.get("n_mtp")
+    if (sequence.get("dtype") != "<u2" or sequence.get("scoring") != "primary_next_token_only"
+            or isinstance(seq, bool) or not isinstance(seq, int) or seq < 1
+            or isinstance(n_mtp, bool) or not isinstance(n_mtp, int) or n_mtp < 0):
+        raise SystemExit("PREDECLARED_CANDIDATE_SEQUENCE_INVALID")
+    block_len = seq + 1 + n_mtp
+
+    windows = manifest.get("windows")
+    if not isinstance(windows, list) or len(windows) != PREDECLARED_REQUIRED_WINDOWS:
+        raise SystemExit(
+            f"PREDECLARED_CANDIDATE_COUNT_INVALID: expected={PREDECLARED_REQUIRED_WINDOWS} "
+            f"actual={len(windows) if isinstance(windows, list) else 'non-list'}")
+    indices = [row.get("window_index") if isinstance(row, dict) else None for row in windows]
+    if (any(isinstance(i, bool) or not isinstance(i, int) or i < 0 for i in indices)
+            or indices != sorted(indices) or len(set(indices)) != len(indices)):
+        raise SystemExit("PREDECLARED_CANDIDATE_ORDER_INVALID")
+
+    shards = source.get("shards")
+    if not isinstance(shards, list) or not shards:
+        raise SystemExit("PREDECLARED_CANDIDATE_SOURCE_INVALID")
+    shard_map: dict[str, dict] = {}
+    for shard in shards:
+        _closed_keys(shard, {"name", "sha256", "n_tokens"},
+                     {"global_token_start", "global_token_end_exclusive"},
+                     "PREDECLARED_CANDIDATE_SOURCE_INVALID")
+        name = shard.get("name")
+        if not isinstance(name, str) or Path(name).name != name or name in shard_map:
+            raise SystemExit("PREDECLARED_CANDIDATE_SOURCE_INVALID")
+        _lower_sha256(shard.get("sha256"), "PREDECLARED_CANDIDATE_SOURCE_INVALID")
+        if isinstance(shard.get("n_tokens"), bool) or not isinstance(shard.get("n_tokens"), int):
+            raise SystemExit("PREDECLARED_CANDIDATE_SOURCE_INVALID")
+        shard_map[name] = shard
+
+    training_ranges = []
+    for row in manifest.get("training_consumption", []):
+        if not isinstance(row, dict):
+            raise SystemExit("PREDECLARED_CANDIDATE_TRAINING_INVALID")
+        start, end = row.get("global_token_start"), row.get("global_token_end_exclusive")
+        if (isinstance(start, bool) or not isinstance(start, int) or isinstance(end, bool)
+                or not isinstance(end, int) or start < 0 or end <= start):
+            raise SystemExit("PREDECLARED_CANDIDATE_TRAINING_INVALID")
+        training_ranges.append((start, end))
+
+    required_window_keys = {"window_index", "shard_name", "shard_token_start",
+                            "shard_token_end_exclusive", "global_token_start",
+                            "global_token_end_exclusive"}
+    optional_window_keys = {"source_shard_token_end_exclusive",
+                            "source_global_token_end_exclusive"}
+    for row in windows:
+        _closed_keys(row, required_window_keys, optional_window_keys,
+                     "PREDECLARED_CANDIDATE_WINDOW_INVALID")
+        index = row["window_index"]
+        name = row.get("shard_name")
+        if name not in shard_map:
+            raise SystemExit("PREDECLARED_CANDIDATE_WINDOW_INVALID")
+        gs = row.get("global_token_start")
+        ge = row.get("global_token_end_exclusive")
+        sge = row.get("source_global_token_end_exclusive", ge)
+        ss = row.get("shard_token_start")
+        se = row.get("shard_token_end_exclusive")
+        sse = row.get("source_shard_token_end_exclusive", se)
+        if (gs != index * seq or ge != gs + seq + 1 or sge != gs + block_len
+                or se != ss + seq + 1 or sse != ss + block_len):
+            raise SystemExit("PREDECLARED_CANDIDATE_WINDOW_INVALID")
+        shard = shard_map[name]
+        if "global_token_start" in shard and gs != shard["global_token_start"] + ss:
+            raise SystemExit("PREDECLARED_CANDIDATE_WINDOW_INVALID")
+        if sse > shard["n_tokens"]:
+            raise SystemExit("PREDECLARED_CANDIDATE_WINDOW_INVALID")
+        for ts, te in training_ranges:
+            if gs < te and ts < sge:
+                raise SystemExit("PREDECLARED_CANDIDATE_TRAINING_OVERLAP")
+    if manifest.get("expected_scored_token_count") != len(windows) * seq:
+        raise SystemExit("PREDECLARED_CANDIDATE_COUNT_INVALID")
+    return manifest
+
+
+def _validate_predeclared_corpus(manifest: dict, shard_dir: str | os.PathLike[str]) -> None:
+    """Byte-validate the manifest-owned full training stream receipt."""
+    receipt_rel = manifest["source_corpus"]["receipt_path"]
+    receipt_path = Path(REPO_ROOT) / receipt_rel
+    if not receipt_path.is_file():
+        raise SystemExit(f"PREDECLARED_SHARD_RECEIPT_MISSING: {receipt_rel}")
+    actual = _sha256_file(receipt_path)
+    expected = manifest["source_corpus"]["receipt_sha256"]
+    if actual != expected:
+        raise SystemExit(
+            f"PREDECLARED_SHARD_RECEIPT_SHA_MISMATCH: expected={expected} actual={actual}")
+    with receipt_path.open(encoding="utf-8") as fh:
+        receipt = json.load(fh)
+    violations = token_shards_v0.validate_shards_receipt(
+        receipt, REPO_ROOT, shard_dir_override=str(shard_dir))
+    if violations:
+        raise SystemExit(f"PREDECLARED_SHARD_IDENTITY_INVALID: {violations}")
+    evidence = manifest["selection_evidence"]
+    evidence_path = Path(REPO_ROOT) / evidence["path"]
+    if not evidence_path.is_file() or _sha256_file(evidence_path) != evidence["sha256"]:
+        raise SystemExit("PREDECLARED_SELECTION_EVIDENCE_INVALID")
+
+
+def verify_predeclared_candidate(
+        manifest: dict, *, candidate_manifest_path: str | os.PathLike[str],
+        candidate_manifest_sha256: str, shard_dir: str | os.PathLike[str],
+        use_mp: bool = True, n_workers: int = DEFAULT_MP_WORKERS,
+        progress_file: str | None = None,
+        contamination_window: int = CONTAMINATION_WINDOW_TOKENS,
+        chunk_tokens: int = DEFAULT_SCAN_CHUNK_TOKENS) -> dict:
+    """Run one canonical scan over the exact ordered predeclared candidate."""
+    seq = manifest["sequence"]["seq"]
+    n_mtp = manifest["sequence"]["n_mtp"]
+    block_len = seq + 1 + n_mtp
+    files = cheap_shard_sizes(str(shard_dir))
+    cum = _cumulative_token_offsets(files)
+    rows: list[list[int]] = []
+    positions: list[dict] = []
+    indices = [row["window_index"] for row in manifest["windows"]]
+    declared_shards = {row["name"]: row for row in manifest["source_corpus"]["shards"]}
+    for declared in manifest["windows"]:
+        index = declared["window_index"]
+        position = window_source_position(files, cum, seq, index)
+        if (position["shard"] != declared["shard_name"]
+                or position["offset"] != declared["shard_token_start"]
+                or position["global_start"] != declared["global_token_start"]):
+            raise SystemExit("PREDECLARED_CANDIDATE_PHYSICAL_MAPPING_INVALID")
+        rows.append(read_window_tokens(str(shard_dir), files, cum, seq, block_len, index))
+        positions.append(position)
+    for name in {row["shard_name"] for row in manifest["windows"]}:
+        path = Path(shard_dir) / name
+        declared = declared_shards[name]
+        if path.stat().st_size != declared["n_tokens"] * 2 or _sha256_file(path) != declared["sha256"]:
+            raise SystemExit(f"PREDECLARED_CANDIDATE_SHARD_IDENTITY_INVALID: {name}")
+
+    result = classify_candidates(
+        rows, positions, str(shard_dir), window=contamination_window,
+        files=files, cum=cum, use_mp=use_mp, n_workers=n_workers,
+        progress_file=progress_file, block_len=block_len, chunk_tokens=chunk_tokens)
+    non_self_count = sum(len(matches) for matches in result["non_self_matches_by_candidate"])
+    if non_self_count:
+        raise SystemExit(
+            f"PREDECLARED_CANDIDATE_CONTAMINATED: confirmed_non_self_matches={non_self_count}; "
+            "whole candidate refused; zero replacement or reselection")
+    raw = result["raw"]
+    return {
+        "ticket": "ISSUE-1433-PREDECLARED-CANDIDATE-DECONTAMINATION",
+        "ts": _utc_ts(),
+        "schema": "issue1433-predeclared-candidate-decontamination/v1",
+        "status": "CLEAN",
+        "pass": True,
+        "candidate_manifest_path": str(candidate_manifest_path),
+        "candidate_manifest_sha256": candidate_manifest_sha256,
+        "candidate_predeclared_not_run_bound": True,
+        "selected_window_indices": indices,
+        "reselection_or_substitution": False,
+        "candidate_batch_sha256": batch_sha256(rows, seq),
+        "seq": seq,
+        "n_mtp": n_mtp,
+        "canonical_matcher": "scripts/w2_heldout/build_decontam_batch_mp.py:classify_candidates",
+        "contamination_recheck": {
+            "method": raw.get("method"),
+            "window_tokens": contamination_window,
+            "shards_scanned": raw.get("shards_scanned"),
+            "windows_hashed": raw.get("windows_hashed"),
+            "self_matches_excluded": result["self_matches_excluded"],
+            "confirmed_non_self_matches": 0,
+            "verdict": "CLEAN",
+        },
+        "prior_refusal": {
+            "sha256": "5573c2707be5a25ddaff878490a16699f905371f0882e5ebbed918e498ab910b",
+            "reason": "original frozen slice overlapped a ruled-excluded source",
+        },
+        "invariant_sha256": receipt_check.INVARIANT_SHA256,
+        "sha_convention": "sha256 over exact on-disk bytes; candidate batch sha256 uses canonical int64 x/y byte layout",
+        "authority": {
+            "goal_id": "EMBER-02",
+            "workstream_id": "EMBER-02A",
+            "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+        },
+        "claim_boundary": (
+            "Exact-window n-gram decontamination only. Candidate was publicly predeclared before "
+            "WARM-100 but was not bound in its run receipt; no model measurement, capability, "
+            "registry, issue-closure, or scoring credit."),
+    }
+
+
+def write_predeclared_verification_receipt(
+        receipt: dict, out_path: str | os.PathLike[str]) -> None:
+    path = Path(out_path)
+    if path.exists():
+        raise SystemExit(f"PREDECLARED_RECEIPT_EXISTS: {path}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    checked_write(str(path), receipt)
 
 
 def _write_parent_rss_event(progress_file: str | None, phase: str, **extra) -> None:
@@ -1825,10 +2100,55 @@ def main():
                          "want to mutually exclude against -- the default lock path is derived "
                          "from THIS file's own location, so two checkouts don't see each other's "
                          "lock unless pointed at the same path explicitly.")
+    ap.add_argument("--verify-predeclared-candidate", action="store_true",
+                    help="Verify one exact SHA-bound predeclared candidate; never select or replace rows")
+    ap.add_argument("--candidate-manifest", type=str)
+    ap.add_argument("--expected-candidate-sha256", type=str)
+    ap.add_argument("--verification-out", type=str)
     args = ap.parse_args()
 
     if not args.shard_dir:
         raise SystemExit("W2_DECONTAM_SHARD_DIR_REQUIRED")
+
+    if args.verify_predeclared_candidate:
+        if not all((args.candidate_manifest, args.expected_candidate_sha256,
+                    args.verification_out)):
+            raise SystemExit(
+                "PREDECLARED_ARGUMENTS_REQUIRED: --candidate-manifest, "
+                "--expected-candidate-sha256, --verification-out")
+        if any((args.out_batch != os.path.join(
+                    REPO_ROOT, "receipts", "ember-c-scale", "w2-heldout-batch.npy"),
+                args.pool_start_index is not None, args.batch_size != DEFAULT_BATCH_SIZE,
+                args.pool_oversample != DEFAULT_POOL_OVERSAMPLE,
+                args.max_rounds != DEFAULT_MAX_ROUNDS)):
+            raise SystemExit(
+                "PREDECLARED_SELECTION_ARGUMENT_REFUSED: verify-only mode accepts no pool, "
+                "replacement, batch, or output-batch controls")
+
+        _check_singleton_lock(lock_file=args.lock_file)
+        total_commit, free_commit = _preflight_check_commit()
+        print(f"[PREFLIGHT] Commit: {total_commit:.1f}GB total, {free_commit:.1f}GB free "
+              f"(>={MIN_COMMIT_FREE_GB}GB required: OK)")
+        manifest = load_predeclared_candidate(
+            args.candidate_manifest, args.expected_candidate_sha256)
+        _validate_predeclared_corpus(manifest, args.shard_dir)
+        receipt = verify_predeclared_candidate(
+            manifest,
+            candidate_manifest_path=args.candidate_manifest,
+            candidate_manifest_sha256=args.expected_candidate_sha256,
+            shard_dir=args.shard_dir,
+            use_mp=not args.serial_only,
+            n_workers=args.n_workers,
+            progress_file=args.progress_file,
+            chunk_tokens=args.scan_chunk_tokens,
+        )
+        write_predeclared_verification_receipt(receipt, args.verification_out)
+        print(
+            f"PREDECLARED_CANDIDATE_DECONTAMINATION_PASS "
+            f"candidate_sha256={args.expected_candidate_sha256} "
+            f"windows={len(receipt['selected_window_indices'])} "
+            f"receipt={args.verification_out}")
+        return
 
     # Check singleton lock before any work
     _check_singleton_lock(lock_file=args.lock_file)
