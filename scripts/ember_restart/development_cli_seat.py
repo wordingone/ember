@@ -301,8 +301,12 @@ def resolve_development_seat(
         raise ValueError("active_parameters cannot exceed allocated_parameters")
 
     checkpoint = _read_json(checkpoint_path, "checkpoint manifest")
-    if checkpoint.get("schema_version") != "ember-sparse-checkpoint-v3":
-        raise ValueError("checkpoint schema_version is not ember-sparse-checkpoint-v3")
+    checkpoint_schema_version = checkpoint.get("schema_version")
+    if not isinstance(checkpoint_schema_version, str) or checkpoint_schema_version not in {
+        "ember-sparse-checkpoint-v3",
+        "ember-sparse-checkpoint-v5",
+    }:
+        raise ValueError("checkpoint schema_version is not supported")
     architecture = _require_object(checkpoint.get("architecture"), "checkpoint architecture")
     cursor = _require_object(checkpoint.get("data_cursor"), "checkpoint data_cursor")
     if architecture.get("allocated_parameters") != allocated:
