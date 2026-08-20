@@ -342,6 +342,54 @@ def test_manifest_provenance_and_closed_shape_fail_closed(tmp_path):
     ):
         bad=json.loads(json.dumps(doc)); mutate(bad); write_json(p,bad)
         with pytest.raises(m.HeldoutEvalRefusal,match="SLICE_"): m.load_frozen_slice_manifest(p,sha(p))
+
+def test_rule_derived_verdict_is_closed_and_legacy_clean_is_unchanged(tmp_path):
+    m=load_module(); shard=tmp_path/"v0-00000.bin"; np.arange(40,dtype="<u2").tofile(shard); p=tmp_path/"slice.json"
+    legacy=manifest(sha(shard)); write_json(p,legacy)
+    assert m.load_frozen_slice_manifest(p,sha(p))["selection_evidence"]["verdict"]=="CLEAN"
+    ruled=manifest(sha(shard)); ruled["selection_evidence"]["verdict"]="RULE_DERIVED_EXCLUSION_CLEAN"; write_json(p,ruled)
+    assert m.load_frozen_slice_manifest(p,sha(p))["selection_evidence"]["verdict"]=="RULE_DERIVED_EXCLUSION_CLEAN"
+    ruled["selection_evidence"]["unexpected"]="x"; write_json(p,ruled)
+    with pytest.raises(m.HeldoutEvalRefusal,match="SLICE_SELECTION_INVALID"):
+        m.load_frozen_slice_manifest(p,sha(p))
+
+def test_rule_derived_receipt_rederives_exact_windows_and_refuses_later_choice(tmp_path,monkeypatch):
+    m=load_module(); import regenerate_cbase_heldout_slice as freezer
+    (tmp_path/"receipts").mkdir(); write_json(tmp_path/"receipts"/"source.json",{"shards":[]})
+    exclusion=tmp_path/"receipts"/"exclusion.json"; write_json(exclusion,{"fixture":True})
+    doc=manifest("0"*64); doc["selection_evidence"]["verdict"]="RULE_DERIVED_EXCLUSION_CLEAN"
+    expected=list(doc["windows"])
+    rule={"ticket":"ISSUE-1433-RULE-DERIVED-HELDOUT-FREEZE","issue":"#1433","ts":"20260820T000000Z",
+          "schema":"cbase-heldout-rule-freeze/v1","status":"RULE_DERIVED_EXCLUSION_CLEAN",
+          "selection_rule_id":"EARLIEST_ADMISSIBLE_AFTER_EXCLUSION_FRONTIER_V1","selection_rule":"fixture",
+          "exclusion_set":{"path":"receipts/exclusion.json","sha256":sha(exclusion),
+                           "ranges_sha256":hashlib.sha256(b"[[100,200]]").hexdigest(),
+                           "excluded_token_ranges":[[100,200]]},
+          "source_receipts":{},"sequence":{"seq":4,"n_mtp":0,"block_len":5},
+          "training_ranges":[[0,8]],"windows":expected,"previous_refusal":{},"producer":{},
+          "invariant_sha256":"a"*64,"sha_convention":"fixture","authority":{},"claim_boundary":"fixture"}
+    selection=tmp_path/"receipts"/"selection.json"; write_json(selection,rule)
+    doc["selection_evidence"].update(path="receipts/selection.json",sha256=sha(selection),batch_sha256=sha(selection))
+    monkeypatch.setattr(freezer,"_load_exclusion_set",lambda *args,**kwargs:{"excluded_token_ranges":[[100,200]]})
+    monkeypatch.setattr(freezer,"select_earliest_admissible_windows",lambda *args,**kwargs:expected)
+    m.verify_rule_derived_selection(doc,shard_dir=tmp_path,nc=tmp_path)
+    rule["windows"]=list(reversed(expected)); write_json(selection,rule)
+    doc["selection_evidence"].update(sha256=sha(selection),batch_sha256=sha(selection))
+    with pytest.raises(m.HeldoutEvalRefusal,match="EARLIEST_WINDOW_MISMATCH"):
+        m.verify_rule_derived_selection(doc,shard_dir=tmp_path,nc=tmp_path)
+
+def test_evaluate_refuses_intermediate_rule_verdict_before_model_load(tmp_path,monkeypatch,capsys):
+    m=load_module(); doc=manifest("0"*64); doc["selection_evidence"]["verdict"]="RULE_DERIVED_EXCLUSION_CLEAN"
+    monkeypatch.setattr(m,"load_frozen_slice_manifest",lambda *args:doc)
+    monkeypatch.setattr(m,"verify_rule_derived_selection",lambda *args,**kwargs:None)
+    monkeypatch.setattr(m,"read_eval_windows",lambda *args,**kwargs:[])
+    monkeypatch.setattr(m,"verify_slice_excludes_ruled_sources",lambda *args,**kwargs:[])
+    def forbidden(*args,**kwargs): raise AssertionError("checkpoint/model load reached")
+    monkeypatch.setattr(m,"load_live_model",forbidden)
+    code=m.main(["--evaluate","--shard-dir",str(tmp_path),"--checkpoint-dir",str(tmp_path),
+                 "--checkpoint-kind","step25","--out",str(tmp_path/"out.json")])
+    assert code==2
+    assert "RULE_DERIVED_VERDICT_NOT_SCORABLE" in capsys.readouterr().err
 def test_evaluator_does_not_import_execution_denied_historical_trainer():
     source=SCRIPT.read_text(encoding="utf-8")
     assert "from timeshare_pretrain" not in source
