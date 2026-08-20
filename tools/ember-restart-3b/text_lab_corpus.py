@@ -1105,7 +1105,6 @@ def validate_authority_index(
     if index["schema_version"] not in (_AUTHORITY_INDEX_SCHEMA_V1, _AUTHORITY_INDEX_SCHEMA_V2) or index["result"]!="PREFLIGHT_ONLY": raise ValueError("text authority index is not preflight-only")
     is_v2 = index["schema_version"] == _AUTHORITY_INDEX_SCHEMA_V2
     registry_bytes,registry=_bound_json(root,index["registry"]); bundle_bytes,bundle=_bound_json(root,index["receipt_bundle"], external_root=authority_root); corpus_bytes,corpus=_bound_json(root,index["corpus"], external_root=authority_root); _,identity=_bound_json(root,index["input_identity"], external_root=authority_root)
-    bound_receipt_root = _bound_receipt_custody_root(corpus, receipt_custody_root)
     if corpus.get("registry_sha256")!=_sha_bytes(registry_bytes) or corpus.get("receipt_bundle_sha256")!=_sha_bytes(bundle_bytes): raise ValueError("corpus does not bind external authority")
     if identity.get("corpus_sha256")!=_sha_bytes(corpus_bytes) or not isinstance(identity.get("source_base_commit"),str) or re.fullmatch(r"[0-9a-f]{40}",identity["source_base_commit"]) is None: raise ValueError("input identity does not bind exact authority")
     base_check = subprocess.run(["git", "-C", str(root), "merge-base", "--is-ancestor", identity["source_base_commit"], "HEAD"], capture_output=True, check=False)
@@ -1115,6 +1114,7 @@ def validate_authority_index(
     if not isinstance(code_files, dict) or set(code_files) != set(expected_code): raise ValueError("input identity code binding is invalid")
     for name, relative in expected_code.items():
         if code_files[name] != _sha_bytes(_path(root, relative).read_bytes()): raise ValueError("input identity code bytes changed")
+    bound_receipt_root = _bound_receipt_custody_root(corpus, receipt_custody_root)
 
     rows = corpus.get("sources"); candidates = bundle.get("candidates"); protected = registry.get("protected")
     ok_bundle_results = {"UNRESOLVED_CANDIDATE", "RESOLVED"} if is_v2 else {"UNRESOLVED_CANDIDATE"}
