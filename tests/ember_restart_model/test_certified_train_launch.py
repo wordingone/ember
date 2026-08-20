@@ -2821,6 +2821,9 @@ class CompletionHeadAncestorTests(unittest.TestCase):
                 "semantic_canary_telemetry_path",
                 "admitted_row_set_sha256",
                 "receipt_custody_root",
+                "semantic_reproduction_intent",
+                "semantic_reproduction_target",
+                "semantic_reproduction_adjudication_output",
                 "a1_family",
                 "a1_tier",
                 "a1_mechanism",
@@ -4569,13 +4572,11 @@ class SemanticCanaryRoutingTests(unittest.TestCase):
     validated fail-closed before argv, mirroring how SpecialistRoutingTests
     covers #1430.
 
-    Deliberately does NOT reuse _ResumeBundleMixin: that mixin's bundle
-    installs and authorizes a resume triple by default, which is exactly
-    backwards for this route -- issue #1719 acceptance clause 1 requires
-    WARM-100 be clean-random genesis, never a continuation, so this class's
-    own _bundle stays clean-genesis by default and only the one refusal test
-    below (test_semantic_canary_with_resume_checkpoint_is_refused) installs
-    resume material at all."""
+    Deliberately does NOT reuse _ResumeBundleMixin: ordinary issue #1719
+    WARM-100 is clean-random genesis and this class's own _bundle stays that
+    way by default.  Resume material is installed explicitly by the original
+    clean-genesis refusal test and by the closed, no-credit R1-E3 run-C
+    reproduction tests only."""
 
     def _bundle(
         self,
@@ -4673,6 +4674,44 @@ class SemanticCanaryRoutingTests(unittest.TestCase):
         module = load_module()
         with self.assertRaisesRegex(ValueError, pattern):
             self._validate(module, paths)
+
+    def _reproduction_bundle(
+        self,
+        directory: str,
+        *,
+        mutate_reproduction=None,
+    ) -> dict[str, pathlib.Path]:
+        paths = self._bundle(directory)
+        checkpoint, evidence = install_resume_material(paths["custody_root"])
+        set_resume_paths(paths, checkpoint, evidence)
+        run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+        run_spec["requested_scope"]["optimizer_steps"] = 1
+        run_spec["semantic_canary_checkpoint_interval"] = 1
+        run_spec["semantic_reproduction_intent"] = "R1_E3_RUN_C_COMPARISON"
+        run_spec["semantic_reproduction_target"] = {
+            "schema_version": "ember-semantic-reproduction-target-v1",
+            "checkpoint_manifest_sha256": sha256_bytes(
+                (checkpoint / "checkpoint-manifest.json").read_bytes()
+            ),
+            "parameter_counter_receipt_sha256": sha256_bytes(evidence.read_bytes()),
+        }
+        run_spec["semantic_reproduction_adjudication_output"] = str(
+            paths["custody_root"] / "reproduction-adjudication.json"
+        )
+        if mutate_reproduction is not None:
+            mutate_reproduction(run_spec)
+        write_json(paths["run_spec"], run_spec)
+        _write_custody_sidecars(paths)
+        authorize_resume_roots(paths, paths["custody_root"])
+        paths["resume_checkpoint"] = checkpoint
+        paths["resume_evidence"] = evidence
+        paths["reproduction_adjudication"] = pathlib.Path(
+            run_spec.get(
+                "semantic_reproduction_adjudication_output",
+                paths["custody_root"] / "reproduction-adjudication.json",
+            )
+        )
+        return paths
 
     def test_valid_semantic_canary_route_is_accepted_and_reaches_the_runner_argv(
         self,
@@ -4969,6 +5008,241 @@ class SemanticCanaryRoutingTests(unittest.TestCase):
                 paths,
                 "semantic canary launch must not resume a checkpoint",
             )
+
+    def test_semantic_reproduction_resume_is_closed_and_reaches_exact_argv(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._reproduction_bundle(directory)
+            launch = self._validate(module, paths)
+
+            self.assertEqual(
+                launch.semantic_reproduction_intent,
+                "R1_E3_RUN_C_COMPARISON",
+            )
+            self.assertEqual(
+                launch.semantic_reproduction_checkpoint_manifest_sha256,
+                sha256_bytes(
+                    (
+                        paths["resume_checkpoint"] / "checkpoint-manifest.json"
+                    ).read_bytes()
+                ),
+            )
+            self.assertEqual(
+                launch.semantic_reproduction_parameter_counter_receipt_sha256,
+                sha256_bytes(paths["resume_evidence"].read_bytes()),
+            )
+            self.assertEqual(
+                launch.semantic_reproduction_adjudication_output,
+                paths["reproduction_adjudication"],
+            )
+            argv = module.build_runner_argv(paths["repo"], launch)
+            semantic_index = argv.index("semantic")
+            self.assertEqual(argv[semantic_index + 1 :].count("--resume-checkpoint"), 1)
+            resume_index = argv.index("--resume-checkpoint")
+            self.assertEqual(
+                pathlib.Path(argv[resume_index + 1]),
+                paths["resume_checkpoint"].resolve(),
+            )
+            evidence_index = argv.index("--resume-counter-receipt")
+            self.assertEqual(
+                pathlib.Path(argv[evidence_index + 1]),
+                paths["resume_evidence"].resolve(),
+            )
+            self.assertEqual(
+                pathlib.Path(argv[argv.index("--receipt") + 1]),
+                paths["custody_root"] / "runner-receipt.json",
+            )
+            semantic_receipt_index = argv.index("--receipt", semantic_index)
+            self.assertEqual(
+                pathlib.Path(argv[semantic_receipt_index + 1]),
+                paths["semantic_receipt"].resolve(),
+            )
+
+            receipt_path = module._write_execution_receipt(
+                launch, argv, 0, receipt_path=paths["custody_root"] / "execution.json"
+            )
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                receipt["execution_scope"], "REPRODUCTION_COMPARISON_ONLY"
+            )
+            self.assertEqual(
+                receipt["reproduction_comparison"]["checkpoint_manifest_sha256"],
+                launch.semantic_reproduction_checkpoint_manifest_sha256,
+            )
+            self.assertEqual(
+                receipt["reproduction_comparison"]["adjudication_output"],
+                str(paths["reproduction_adjudication"]),
+            )
+            self.assertFalse(receipt["claim_scope"]["training_progress_claimed"])
+            self.assertFalse(receipt["claim_scope"]["rung_credit_claimed"])
+            self.assertFalse(receipt["claim_scope"]["milestone_credit_claimed"])
+
+    def test_plain_semantic_resume_keeps_clean_genesis_refusal_byte_exact(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            checkpoint, evidence = install_resume_material(paths["custody_root"])
+            set_resume_paths(paths, checkpoint, evidence)
+            authorize_resume_roots(paths, paths["custody_root"])
+            self._refused(
+                paths,
+                "run spec semantic canary launch must not resume a checkpoint "
+                r"\(WARM-100 is clean-random genesis, not continuation -- a "
+                "resumed canary route is refused rather than silently trained "
+                r"as a continuation under canary authorization\)",
+            )
+
+    def test_semantic_reproduction_requires_complete_closed_declaration(self) -> None:
+        mutations = (
+            (
+                lambda spec: spec.pop("semantic_reproduction_intent"),
+                "requires semantic_reproduction_intent",
+            ),
+            (
+                lambda spec: spec.__setitem__(
+                    "semantic_reproduction_intent", "GENERAL_CONTINUATION"
+                ),
+                "semantic_reproduction_intent must equal R1_E3_RUN_C_COMPARISON",
+            ),
+            (
+                lambda spec: spec["semantic_reproduction_target"].__setitem__(
+                    "unreviewed", True
+                ),
+                "semantic_reproduction_target schema keys mismatch",
+            ),
+        )
+        for mutate, pattern in mutations:
+            with self.subTest(pattern=pattern), tempfile.TemporaryDirectory(
+                dir="B:/tmp"
+            ) as directory:
+                paths = self._reproduction_bundle(
+                    directory, mutate_reproduction=mutate
+                )
+                self._refused(paths, pattern)
+
+    def test_semantic_reproduction_refuses_target_hash_mismatch(self) -> None:
+        for key, pattern in (
+            (
+                "checkpoint_manifest_sha256",
+                "semantic reproduction checkpoint manifest SHA-256 mismatch",
+            ),
+            (
+                "parameter_counter_receipt_sha256",
+                "semantic reproduction parameter counter receipt SHA-256 mismatch",
+            ),
+        ):
+            with self.subTest(key=key), tempfile.TemporaryDirectory(
+                dir="B:/tmp"
+            ) as directory:
+                paths = self._reproduction_bundle(
+                    directory,
+                    mutate_reproduction=lambda spec, key=key: spec[
+                        "semantic_reproduction_target"
+                    ].__setitem__(key, "0" * 64),
+                )
+                self._refused(paths, pattern)
+
+    def test_semantic_reproduction_is_exactly_one_comparison_step(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._reproduction_bundle(
+                directory,
+                mutate_reproduction=lambda spec: spec["requested_scope"].__setitem__(
+                    "optimizer_steps", 2
+                ),
+            )
+            self._refused(
+                paths,
+                r"semantic reproduction requested_scope.optimizer_steps must equal 1",
+            )
+
+    def test_semantic_reproduction_adjudication_output_is_new_and_in_custody(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            outside = pathlib.Path(directory) / "outside-adjudication.json"
+            paths = self._reproduction_bundle(
+                directory,
+                mutate_reproduction=lambda spec: spec.__setitem__(
+                    "semantic_reproduction_adjudication_output", str(outside)
+                ),
+            )
+            self._refused(paths, "adjudication output must be below custody_root")
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._reproduction_bundle(directory)
+            write_json(paths["reproduction_adjudication"], {"status": "fabricated"})
+            self._refused(paths, "adjudication output must not already exist")
+
+    def test_semantic_reproduction_validator_unit_two_sided(self) -> None:
+        """Seconds-scale closed-union RED/GREEN without opening corpus custody."""
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            custody = pathlib.Path(directory) / "custody"
+            checkpoint = custody / "checkpoint"
+            checkpoint.mkdir(parents=True)
+            manifest = checkpoint / "checkpoint-manifest.json"
+            evidence = custody / "counter-success.json"
+            write_json(manifest, {"schema_version": "ember-sparse-checkpoint-v5"})
+            write_json(evidence, {"ok": True})
+            resume = module.ResumeRequest(
+                checkpoint=checkpoint,
+                evidence_flag="--resume-counter-receipt",
+                evidence_path=evidence,
+                optimizer_transition_registry_sha256=None,
+                relocation_custody_root=None,
+            )
+            target = {
+                "schema_version": "ember-semantic-reproduction-target-v1",
+                "checkpoint_manifest_sha256": sha256_bytes(manifest.read_bytes()),
+                "parameter_counter_receipt_sha256": sha256_bytes(evidence.read_bytes()),
+            }
+            run_spec = {
+                "semantic_reproduction_intent": "R1_E3_RUN_C_COMPARISON",
+                "semantic_reproduction_target": target,
+                "semantic_reproduction_adjudication_output": str(
+                    custody / "reproduction-adjudication.json"
+                ),
+            }
+            validated = module._validate_semantic_reproduction_request(
+                run_spec, resume, custody
+            )
+            self.assertEqual(
+                validated.checkpoint_manifest_sha256,
+                target["checkpoint_manifest_sha256"],
+            )
+            self.assertIsNone(
+                module._validate_semantic_reproduction_request({}, resume, custody)
+            )
+            for mutate, pattern in (
+                (
+                    lambda spec: spec.pop("semantic_reproduction_intent"),
+                    "requires semantic_reproduction_intent",
+                ),
+                (
+                    lambda spec: spec["semantic_reproduction_target"].__setitem__(
+                        "unexpected", True
+                    ),
+                    "semantic_reproduction_target schema keys mismatch",
+                ),
+                (
+                    lambda spec: spec["semantic_reproduction_target"].__setitem__(
+                        "checkpoint_manifest_sha256", "0" * 64
+                    ),
+                    "checkpoint manifest SHA-256 mismatch",
+                ),
+                (
+                    lambda spec: spec.__setitem__(
+                        "semantic_reproduction_adjudication_output",
+                        str(pathlib.Path(directory) / "outside.json"),
+                    ),
+                    "adjudication output must be below custody_root",
+                ),
+            ):
+                candidate = json.loads(json.dumps(run_spec))
+                mutate(candidate)
+                with self.subTest(pattern=pattern), self.assertRaisesRegex(
+                    ValueError, pattern
+                ):
+                    module._validate_semantic_reproduction_request(
+                        candidate, resume, custody
+                    )
 
     def test_optimizer_steps_below_the_t01_floor_is_refused(self) -> None:
         """T-01 entry floor (>= 100), semantic-canary-only: valid_scope's own
