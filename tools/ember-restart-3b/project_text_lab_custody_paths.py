@@ -268,11 +268,40 @@ def _mapping_rows(source_raw: dict[str, bytes], generated: dict[str, bytes]) -> 
     return mappings
 
 
+def packet_localize_projected_index(
+    generated: dict[str, bytes],
+) -> tuple[dict[str, bytes], dict[str, str]]:
+    """Rewrite only external artifact locators for one derived custody packet."""
+    localized = dict(generated)
+    index_name = ARTIFACTS["index"]
+    pre_raw = generated[index_name]
+    index = json.loads(pre_raw)
+    for role, binding_name in (
+        ("bundle", "receipt_bundle"),
+        ("corpus", "corpus"),
+        ("identity", "input_identity"),
+    ):
+        binding = index.get(binding_name)
+        expected = f"data/ember-restart-3b/{ARTIFACTS[role]}"
+        if not isinstance(binding, dict) or binding.get("path") != expected:
+            raise ValueError(f"projected index locator changed: {binding_name}")
+        binding["path"] = ARTIFACTS[role]
+    post_raw = _canonical(index)
+    localized[index_name] = post_raw
+    return localized, {
+        "artifact": index_name,
+        "pre_rewrite_sha256": _sha(pre_raw),
+        "post_rewrite_sha256": _sha(post_raw),
+        "reason": "derived-root binding",
+    }
+
+
 def _projection_receipt(
     *, repo: Path, source_custody: Path, source_receipt_name: str,
     source_receipt_sha256: str, receipt_custody_root: Path,
     source_base_commit: str, source_raw: dict[str, bytes], generated: dict[str, bytes],
     validation_receipt: dict[str, Any],
+    locator_rewrite: dict[str, str],
 ) -> dict[str, Any]:
     return {
         "schema_version": PROJECTION_SCHEMA,
@@ -292,6 +321,7 @@ def _projection_receipt(
         },
         "row_mappings": _mapping_rows(source_raw, generated),
         "validation_receipt": validation_receipt,
+        "locator_rewrites": [locator_rewrite],
         "producer": {
             "path": "tools/ember-restart-3b/project_text_lab_custody_paths.py",
             "sha256": _sha((repo / "tools" / "ember-restart-3b" / "project_text_lab_custody_paths.py").read_bytes()),
@@ -330,9 +360,15 @@ def validate_projection_custody(
         repo,
         index_relative=ARTIFACTS["index"],
         external_authority_root=projection_root,
+        receipt_custody_root=receipt_custody_root,
     )
     if authority_validation.get("result") != "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING":
         raise ValueError("projected authority did not remain fail-closed")
+    expected_generated, locator_rewrite = packet_localize_projected_index(build_projected_packet(
+        repo=repo, source_custody=source_custody,
+        receipt_custody_root=receipt_custody_root,
+        source_base_commit=receipt["source_base_commit"],
+    ))
     expected = _projection_receipt(
         repo=repo, source_custody=source_custody,
         source_receipt_name=source_receipt_name,
@@ -341,14 +377,10 @@ def validate_projection_custody(
         source_base_commit=receipt.get("source_base_commit"),
         source_raw=source_raw, generated=generated,
         validation_receipt=authority_validation,
+        locator_rewrite=locator_rewrite,
     )
     if receipt != expected:
         raise ValueError("projection receipt bindings changed")
-    expected_generated = build_projected_packet(
-        repo=repo, source_custody=source_custody,
-        receipt_custody_root=receipt_custody_root,
-        source_base_commit=receipt["source_base_commit"],
-    )
     if generated != expected_generated:
         raise ValueError("projected authority artifact bytes changed")
     log = json.loads((projection_root / PROJECTION_LOG).read_bytes())
@@ -370,11 +402,11 @@ def mint_projection_custody(
     if not source_receipt.is_file() or _sha(source_receipt.read_bytes()) != source_receipt_sha256:
         raise ValueError("projection predecessor receipt changed")
     source_raw = _source_raw(source_custody)
-    generated = build_projected_packet(
+    generated, locator_rewrite = packet_localize_projected_index(build_projected_packet(
         repo=repo, source_custody=source_custody,
         receipt_custody_root=receipt_custody_root,
         source_base_commit=source_base_commit,
-    )
+    ))
     staging = output.with_name(f".{output.name}.staging-{uuid.uuid4().hex}")
     staging.mkdir(parents=True)
     published = False
@@ -385,6 +417,7 @@ def mint_projection_custody(
             repo,
             index_relative=ARTIFACTS["index"],
             external_authority_root=staging,
+            receipt_custody_root=receipt_custody_root,
         )
         if staging_validation.get("result") != "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING":
             raise ValueError("projected authority did not remain fail-closed")
@@ -396,6 +429,7 @@ def mint_projection_custody(
             source_base_commit=source_base_commit,
             source_raw=source_raw, generated=generated,
             validation_receipt=staging_validation,
+            locator_rewrite=locator_rewrite,
         )
         receipt_raw = _canonical(receipt)
         (staging / PROJECTION_RECEIPT).write_bytes(receipt_raw)
