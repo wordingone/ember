@@ -8,6 +8,8 @@ import importlib.util
 import io
 import json
 import tarfile
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -44,7 +46,15 @@ def _canonical(value: object) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
 
-def _archive(path: Path, *, root: str, revision: str | None, payload: bytes, link: bool = False) -> None:
+def _archive(
+    path: Path,
+    *,
+    root: str,
+    revision: str | None,
+    payload: bytes,
+    link: bool = False,
+    extra_files: int = 0,
+) -> None:
     kwargs = {"format": tarfile.PAX_FORMAT}
     if revision is not None:
         kwargs["pax_headers"] = {"comment": revision}
@@ -55,6 +65,11 @@ def _archive(path: Path, *, root: str, revision: str | None, payload: bytes, lin
         member = tarfile.TarInfo(f"{root}/src/main.txt")
         member.size = len(payload)
         archive.addfile(member, io.BytesIO(payload))
+        for ordinal in range(extra_files):
+            extra_raw = f"fixture-{ordinal}\n".encode()
+            extra = tarfile.TarInfo(f"{root}/src/fixture-{ordinal}.txt")
+            extra.size = len(extra_raw)
+            archive.addfile(extra, io.BytesIO(extra_raw))
         license_member = tarfile.TarInfo(f"{root}/LICENSE")
         license_raw = b"fixture license text\n"
         license_member.size = len(license_raw)
@@ -66,7 +81,13 @@ def _archive(path: Path, *, root: str, revision: str | None, payload: bytes, lin
             archive.addfile(linked)
 
 
-def _connector(tmp_path: Path, *, absent_pax: bool = False, second_license: str = "MIT") -> tuple[Path, str]:
+def _connector(
+    tmp_path: Path,
+    *,
+    absent_pax: bool = False,
+    second_license: str = "MIT",
+    extra_files: int = 0,
+) -> tuple[Path, str]:
     custody = tmp_path / "custody"
     custody.mkdir()
     rows = [
@@ -78,7 +99,14 @@ def _connector(tmp_path: Path, *, absent_pax: bool = False, second_license: str 
     for full_name, license_spdx, revision, payload, link in rows:
         filename = full_name.replace("/", "-") + ".tar.gz"
         path = custody / filename
-        _archive(path, root=full_name.split("/")[1] + "-main", revision=revision, payload=payload, link=link)
+        _archive(
+            path,
+            root=full_name.split("/")[1] + "-main",
+            revision=revision,
+            payload=payload,
+            link=link,
+            extra_files=extra_files,
+        )
         raw = path.read_bytes()
         files.append({"path": filename, "bytes": len(raw), "sha256": _sha(raw)})
         selected.append(
@@ -171,6 +199,36 @@ def test_connector_operational_logs_are_not_payload(tmp_path: Path):
     (tmp_path / "_logs").mkdir()
     (tmp_path / "_logs" / "connector.log").write_bytes(b"operational")
     assert module._listed_payload_paths(tmp_path) == {"payload.tar.gz"}
+
+
+def test_partition_reopen_hashes_blobs_with_closed_bounded_parallelism(tmp_path: Path, monkeypatch):
+    module = _load()
+    receipt_path, receipt_sha = _connector(tmp_path, extra_files=12)
+    output = tmp_path / "partition"
+    receipt = _mint(module, receipt_path, receipt_sha, output)
+    original_sha256_file = module.sha256_file
+    lock = threading.Lock()
+    active = 0
+    maximum_active = 0
+
+    def observed_sha256_file(path: Path) -> str:
+        nonlocal active, maximum_active
+        if "blobs" not in path.parts:
+            return original_sha256_file(path)
+        with lock:
+            active += 1
+            maximum_active = max(maximum_active, active)
+        try:
+            time.sleep(0.02)
+            return original_sha256_file(path)
+        finally:
+            with lock:
+                active -= 1
+
+    monkeypatch.setattr(module, "sha256_file", observed_sha256_file)
+
+    assert module.validate_partition_receipt(output / "partition-receipt.json") == receipt
+    assert 1 < maximum_active <= 8
 
 
 @pytest.mark.parametrize("mutation", ["archive", "receipt", "swap"])
