@@ -390,6 +390,56 @@ def test_evaluate_refuses_intermediate_rule_verdict_before_model_load(tmp_path,m
                  "--checkpoint-kind","step25","--out",str(tmp_path/"out.json")])
     assert code==2
     assert "RULE_DERIVED_VERDICT_NOT_SCORABLE" in capsys.readouterr().err
+
+def test_scoped_verdict_refuses_mismatched_run_consumption_before_model_load(tmp_path,monkeypatch,capsys):
+    m=load_module(); doc=manifest("0"*64)
+    proof={"schema":"issue1433-warm100-trained-range-match-intersection/v1","issue":1433,
+           "status":"PASS","answer":"NO","question":"fixture","trained_run":{
+             "run_id":"issue1296-warm100-run-20260819T203314Z","source_commit":"b"*40,
+             "run_spec_path":"B:/fixture/run-spec.json","run_spec_sha256":"1"*64,
+             "checkpoint_manifest_path":"B:/fixture/checkpoint-manifest.json",
+             "checkpoint_manifest_sha256":"2"*64,"stream_receipt_path":"A:/fixture/token-shards.json",
+             "stream_receipt_sha256":"3"*64,"sequence_length":512,"steps":100,
+             "start_cursor":{"shard_index":0,"token_offset":0},
+             "terminal_cursor":{"shard_index":0,"token_offset":51200,"record_index":100,
+                                "global_step":100,"tokens_seen":51200},
+             "consumed_physical_range":{"shard":"v0-00000.bin",
+               "input_and_target_token_positions_inclusive":[0,51200],"derivation":"fixture"},
+             "producer_source":{}},
+           "scan_evidence":{"refusal_packet_sha256":"5ffd38dca7d8cd10b1133a44c703c2468deb0d4f08f31053678eb9dc873d6aa2",
+                            "confirmed_non_self_matches":20777},
+           "intersection":{"confirmed_non_self_matches_inside_trained_range":0,"any":False,
+                           "confidence":"fixture"},"claim_boundary":"fixture"}
+    proof_path=tmp_path/"consumption.json"; write_json(proof_path,proof)
+    receipt={"ticket":"ISSUE-1433-TRAINED-CONSUMPTION-DECONTAMINATION","ts":"2026-08-19T00:00:00Z","schema":"issue1433-predeclared-trained-consumption-decontamination/v1",
+             "status":"CLEAN_VS_TRAINED_CONSUMPTION","verdict":"CLEAN_VS_TRAINED_CONSUMPTION",
+             "candidate_manifest_sha256":"4"*64,"candidate_batch_sha256":"5"*64,"training_consumption_set_sha256":sha(proof_path),
+             "checkpoint_identity":{"manifest_sha256":"2"*64,"run_id":proof["trained_run"]["run_id"],
+                                    "global_step":100,"tokens_seen":51200,
+                                    "stream_receipt_sha256":"3"*64},
+             "contamination_recheck":{"window_tokens":13,"windows_hashed":51189,
+                                      "confirmed_matches":0,"verdict":"CLEAN_VS_TRAINED_CONSUMPTION"},
+             "whole_corpus_refusal":{"packet_sha256":"5ffd38dca7d8cd10b1133a44c703c2468deb0d4f08f31053678eb9dc873d6aa2",
+                                     "confirmed_non_self_matches":20777},
+      "zero_intersection_proof":{"sha256":sha(proof_path),"intersection":0},"sha_convention":"sha256 over exact on-disk bytes",
+             "claim_boundary":"fixture"}
+    selection=tmp_path/"selection.json"; write_json(selection,receipt)
+    doc["selection_evidence"]={"path":"selection.json","sha256":sha(selection),
+      "batch_sha256":"5"*64,"verdict":"CLEAN_VS_TRAINED_CONSUMPTION",
+      "candidate_manifest_sha256":"4"*64,"training_consumption_set_sha256":sha(proof_path),
+      "checkpoint_manifest_sha256":"2"*64}
+    wrong=dict(proof); wrong["question"]="different run"; wrong_path=tmp_path/"wrong.json"; write_json(wrong_path,wrong)
+    monkeypatch.setattr(m,"load_frozen_slice_manifest",lambda *args:doc)
+    monkeypatch.setattr(m,"verify_rule_derived_selection",lambda *args,**kwargs:None)
+    monkeypatch.setattr(m,"read_eval_windows",lambda *args,**kwargs:[])
+    monkeypatch.setattr(m,"verify_slice_excludes_ruled_sources",lambda *args,**kwargs:[])
+    def forbidden(*args,**kwargs): raise AssertionError("checkpoint/model load reached")
+    monkeypatch.setattr(m,"load_live_model",forbidden)
+    code=m.main(["--evaluate","--shard-dir",str(tmp_path),"--nc",str(tmp_path),
+                 "--training-consumption-set",str(wrong_path),"--checkpoint-dir",str(tmp_path),
+                 "--checkpoint-kind","v5","--out",str(tmp_path/"out.json")])
+    assert code==2
+    assert "TRAINING_CONSUMPTION_SET_SHA_MISMATCH" in capsys.readouterr().err
 def test_evaluator_does_not_import_execution_denied_historical_trainer():
     source=SCRIPT.read_text(encoding="utf-8")
     assert "from timeshare_pretrain" not in source
