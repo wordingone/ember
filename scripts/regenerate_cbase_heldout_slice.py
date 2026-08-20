@@ -69,7 +69,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
+import re
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -84,6 +87,15 @@ import receipt_check                # noqa: E402
 SHARD_RECEIPT_NAME = "token-shards-v0-20260611T170047Z.json"
 ISSUE = "#760"
 SCALE = "W1_FROM_SCRATCH_PILOT_BASELINE"
+RULE_SELECTION_ID = "EARLIEST_ADMISSIBLE_AFTER_EXCLUSION_FRONTIER_V1"
+RULE_VERDICT = "RULE_DERIVED_EXCLUSION_CLEAN"
+RULE_WINDOW_COUNT = 16
+PRIOR_REFUSAL_SHA256 = "5573c2707be5a25ddaff878490a16699f905371f0882e5ebbed918e498ab910b"
+EXCLUSION_KEYS = {"ticket","ts","shard_receipt","assembly_receipt","excluded_sources",
+                  "excluded_token_ranges","loader_geometry","n_windows_unenforced",
+                  "n_windows_enforced","n_windows_dropped","zero_overlap_verified",
+                  "clean_content_tokens","stream_content_tokens","no_gpu",
+                  "invariant_sha256","sha_convention","authority"}
 
 # Highest max_training_window_index_at_ceiling receipted ANYWHERE in this
 # repo as of 2026-08-05 (grepped across receipts/ -- the next-highest values
@@ -127,6 +139,177 @@ def cumulative_shard_offsets(receipt: dict) -> tuple[dict, int]:
         offsets[s["name"]] = (cursor, cursor + n)
         cursor += n
     return offsets, cursor
+
+
+def _lower_sha256(value: object, code: str) -> str:
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+        raise SystemExit(f"RULE_FREEZE_REFUSED: {code}")
+    return value
+
+
+def _load_exclusion_set(path: Path, expected_sha256: str, *, shard_dir: Path) -> dict:
+    _lower_sha256(expected_sha256, "expected exclusion-set sha256 must be lowercase 64-hex")
+    if _sha256(path) != expected_sha256:
+        raise SystemExit("RULE_FREEZE_REFUSED: exclusion-set sha256 mismatch")
+    value = json.loads(path.read_text(encoding="utf-8", errors="strict"))
+    if not isinstance(value, dict) or set(value) != EXCLUSION_KEYS:
+        raise SystemExit("RULE_FREEZE_REFUSED: exclusion-set closed keys invalid")
+    if (value.get("ticket") != "FINEWEB-EDU-EXCLUSION-PREFLIGHT"
+            or value.get("zero_overlap_verified") is not True
+            or value.get("no_gpu") is not True
+            or value.get("invariant_sha256") != receipt_check.INVARIANT_SHA256
+            or value.get("authority") != {
+                "goal_id":"EMBER-02", "workstream_id":"EMBER-02A",
+                "next_executed_outcome":"EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"}):
+        raise SystemExit("RULE_FREEZE_REFUSED: exclusion-set authority invalid")
+    geometry = value.get("loader_geometry")
+    if geometry != {"seq": tsv.SEQ, "n_mtp": tsv.N_MTP, "block_len": tsv.BLOCK_LEN}:
+        raise SystemExit("RULE_FREEZE_REFUSED: exclusion-set geometry drift")
+    ranges = value.get("excluded_token_ranges")
+    if (not isinstance(ranges, list) or not ranges
+            or any(not isinstance(row, list) or len(row) != 2
+                   or not all(isinstance(v, int) and not isinstance(v, bool) for v in row)
+                   or row[1] <= row[0] for row in ranges)):
+        raise SystemExit("RULE_FREEZE_REFUSED: exclusion-set ranges invalid")
+    derived = fx.run_preflight(
+        nc=str(NC), shard_dir=str(shard_dir), shard_receipt_name=value["shard_receipt"],
+        assembly_name=value["assembly_receipt"], excluded_sources=set(value["excluded_sources"]),
+        seq=tsv.SEQ, n_mtp=tsv.N_MTP)
+    for key in ("shard_receipt","assembly_receipt","excluded_sources",
+                "excluded_token_ranges","loader_geometry","zero_overlap_verified"):
+        if derived[key] != value[key]:
+            raise SystemExit(f"RULE_FREEZE_REFUSED: exclusion-set rederivation mismatch: {key}")
+    return value
+
+
+def select_earliest_admissible_windows(
+        receipt: dict, *, excluded_ranges: list[tuple[int, int]],
+        training_ranges: list[tuple[int, int]], seq: int, n_mtp: int,
+        count: int = RULE_WINDOW_COUNT) -> list[dict]:
+    """Canonical first `count` full-span-clean windows after exclusion frontier."""
+    if count != RULE_WINDOW_COUNT:
+        raise SystemExit("RULE_FREEZE_REFUSED: required window count is exactly 16")
+    offsets, total = cumulative_shard_offsets(receipt)
+    if total != receipt.get("total_stream_tokens"):
+        raise SystemExit("RULE_FREEZE_REFUSED: shard token sum mismatch")
+    block_len = seq + 1 + n_mtp
+    frontier = max((end for _start, end in excluded_ranges), default=0)
+    selected = []
+    for shard in receipt["shards"]:
+        shard_start, shard_end = offsets[shard["name"]]
+        first_global = max(frontier, shard_start)
+        first_global = ((first_global + seq - 1) // seq) * seq
+        global_start = first_global
+        while global_start + block_len <= shard_end:
+            span = (global_start, global_start + block_len)
+            if (not any(fx._overlaps(*span, es, ee) for es, ee in excluded_ranges)
+                    and not any(fx._overlaps(*span, ts, te) for ts, te in training_ranges)):
+                local_start = global_start - shard_start
+                selected.append({
+                    "window_index": global_start // seq,
+                    "shard_name": shard["name"],
+                    "shard_token_start": local_start,
+                    "shard_token_end_exclusive": local_start + seq + 1,
+                    "source_shard_token_end_exclusive": local_start + block_len,
+                    "global_token_start": global_start,
+                    "global_token_end_exclusive": global_start + seq + 1,
+                    "source_global_token_end_exclusive": global_start + block_len,
+                })
+                if len(selected) == count:
+                    return selected
+            global_start += seq
+    raise SystemExit(f"RULE_FREEZE_REFUSED: fewer than 16 admissible windows ({len(selected)})")
+
+
+def build_rule_derived_candidate(*, shard_dir: Path, exclusion_set_receipt: Path,
+                                 expected_exclusion_set_sha256: str,
+                                 selection_receipt_path: str) -> tuple[dict, dict]:
+    exclusion = _load_exclusion_set(
+        exclusion_set_receipt, expected_exclusion_set_sha256, shard_dir=shard_dir)
+    shard_receipt_path = NC / "receipts" / exclusion["shard_receipt"]
+    shard_receipt = json.loads(shard_receipt_path.read_text(encoding="utf-8"))
+    violations = tsv.validate_shards_receipt(
+        shard_receipt, str(NC), shard_dir_override=str(shard_dir))
+    if violations:
+        raise SystemExit(f"RULE_FREEZE_REFUSED: shard receipt invalid: {violations}")
+    training_end = MAX_RECEIPTED_TRAINING_WINDOW_CEILING * tsv.SEQ + tsv.BLOCK_LEN
+    training_ranges = [(0, training_end)]
+    ranges = [tuple(row) for row in exclusion["excluded_token_ranges"]]
+    windows = select_earliest_admissible_windows(
+        shard_receipt, excluded_ranges=ranges, training_ranges=training_ranges,
+        seq=tsv.SEQ, n_mtp=tsv.N_MTP)
+    offsets, _ = cumulative_shard_offsets(shard_receipt)
+    used_names = list(dict.fromkeys(row["shard_name"] for row in windows))
+    shard_by_name = {row["name"]: row for row in shard_receipt["shards"]}
+    used = []
+    for name in used_names:
+        meta = shard_by_name[name]; start, end = offsets[name]
+        if _sha256(shard_dir / name) != meta["sha256"]:
+            raise SystemExit(f"RULE_FREEZE_REFUSED: shard identity mismatch: {name}")
+        used.append({"name":name,"sha256":meta["sha256"],"n_tokens":meta["n_tokens"],
+                     "global_token_start":start,"global_token_end_exclusive":end})
+    exclusion_ranges_sha = hashlib.sha256(json.dumps(
+        exclusion["excluded_token_ranges"], sort_keys=True,
+        separators=(",", ":")).encode("utf-8")).hexdigest()
+    receipt = {
+        "ticket":"ISSUE-1433-RULE-DERIVED-HELDOUT-FREEZE", "issue":"#1433",
+        "ts":datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
+        "schema":"cbase-heldout-rule-freeze/v1", "status":"RULE_DERIVED_EXCLUSION_CLEAN",
+        "selection_rule_id":RULE_SELECTION_ID,
+        "selection_rule":"first 16 ascending full-span admissible windows at or after max exclusion end",
+        "exclusion_set":{"path":str(exclusion_set_receipt.relative_to(NC)).replace("\\","/"),
+                         "sha256":expected_exclusion_set_sha256,
+                         "ranges_sha256":exclusion_ranges_sha,
+                         "excluded_token_ranges":exclusion["excluded_token_ranges"]},
+        "source_receipts":{"shard":{"path":f"receipts/{exclusion['shard_receipt']}",
+                                      "sha256":_sha256(shard_receipt_path)},
+                           "assembly":{"path":f"receipts/{exclusion['assembly_receipt']}",
+                                        "sha256":_sha256(NC/'receipts'/exclusion['assembly_receipt'])}},
+        "sequence":{"seq":tsv.SEQ,"n_mtp":tsv.N_MTP,"block_len":tsv.BLOCK_LEN},
+        "training_ranges":[[0,training_end]], "windows":windows,
+        "previous_refusal":{"sha256":PRIOR_REFUSAL_SHA256},
+        "producer":{"path":"scripts/regenerate_cbase_heldout_slice.py",
+                    "sha256":_sha256(Path(__file__)),"source_commit":_git_head(NC)},
+        "invariant_sha256":receipt_check.INVARIANT_SHA256,
+        "sha_convention":"bytes on disk as-is (binary read, no line-ending normalization)",
+        "authority":{"goal_id":"EMBER-02","workstream_id":"EMBER-02A",
+                     "next_executed_outcome":"EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"},
+        "claim_boundary":"Intermediate rule-derived exclusion-clean freeze only; real exact-window n-gram scan is required before scoring or promotion."
+    }
+    combined = hashlib.sha256(json.dumps(
+        [row["sha256"] for row in used], separators=(",", ":")).encode("ascii")).hexdigest()
+    manifest = {
+        "schema":"cbase-heldout-slice/v1","issue":ISSUE,"captured_public_master":_git_head(NC),
+        "source_corpus":{"combined_sha256":combined,
+                         "receipt_path":f"receipts/{exclusion['shard_receipt']}",
+                         "receipt_sha256":_sha256(shard_receipt_path),"shards":used},
+        "selection_evidence":{"path":selection_receipt_path,"sha256":"0"*64,
+                              "batch_sha256":"0"*64,"verdict":RULE_VERDICT},
+        "sequence":{"dtype":"<u2","seq":tsv.SEQ,"n_mtp":tsv.N_MTP,
+                    "separator_id":tsv.SEPARATOR_ID,"packed_bytes_per_token":2,
+                    "scoring":"primary_next_token_only"},
+        "training_consumption":[{"source":TRAINING_CONSUMPTION_SOURCE,
+                                 "window_start":0,"window_end_exclusive":MAX_RECEIPTED_TRAINING_WINDOW_CEILING+1,
+                                 "global_token_start":0,"global_token_end_exclusive":training_end}],
+        "windows":windows,"expected_scored_token_count":len(windows)*tsv.SEQ,"scale":SCALE,
+        "availability":{"status":"AVAILABLE","missing":[],"note":"Rule-derived candidate; named shard bytes rehashed."},
+        "claim_boundary":"Intermediate RULE_DERIVED_EXCLUSION_CLEAN candidate only; n-gram scan, scoring, promotion, registry and closure remain prohibited."
+    }
+    return manifest, receipt
+
+
+def _write_json_no_overwrite(path: Path, value: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists(): raise SystemExit(f"RULE_FREEZE_REFUSED: output exists: {path}")
+    fd, staged = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd,"w",encoding="utf-8",newline="\n") as stream:
+            json.dump(value,stream,sort_keys=True,separators=(",",":")); stream.write("\n")
+            stream.flush(); os.fsync(stream.fileno())
+        os.link(staged,path)
+    finally:
+        try: os.unlink(staged)
+        except FileNotFoundError: pass
 
 
 def pick_clean_shard(receipt: dict, excluded_ranges: list[tuple[int, int]]) -> tuple[str, int, int]:
@@ -349,7 +532,38 @@ def main(argv=None) -> int:
     parser.add_argument("--receipt-out", default=str(
         NC / "receipts" / "cbase-heldout-eval" / "issue-760-slice-regeneration-finding.json"))
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--rule-derived-exclusion", action="store_true")
+    parser.add_argument("--exclusion-set-receipt")
+    parser.add_argument("--expected-exclusion-set-sha256")
     args = parser.parse_args(argv)
+
+    if args.rule_derived_exclusion:
+        raw_args = list(sys.argv[1:] if argv is None else argv)
+        if (not args.exclusion_set_receipt or not args.expected_exclusion_set_sha256
+                or "--out" not in raw_args or "--receipt-out" not in raw_args
+                or "--window-count" in raw_args or args.dry_run):
+            raise SystemExit("RULE_FREEZE_REFUSED: exact exclusion receipt/hash and fresh explicit out/receipt-out are required; caller selection controls and dry-run are forbidden")
+        out_path=Path(args.out); receipt_out=Path(args.receipt_out)
+        if out_path.exists() or receipt_out.exists():
+            raise SystemExit("RULE_FREEZE_REFUSED: output or receipt already exists")
+        try:
+            receipt_rel=str(receipt_out.resolve().relative_to(NC.resolve())).replace("\\","/")
+        except ValueError as exc:
+            raise SystemExit("RULE_FREEZE_REFUSED: receipt-out must be inside repository custody") from exc
+        manifest, receipt = build_rule_derived_candidate(
+            shard_dir=Path(args.shard_dir),
+            exclusion_set_receipt=Path(args.exclusion_set_receipt),
+            expected_exclusion_set_sha256=args.expected_exclusion_set_sha256,
+            selection_receipt_path=receipt_rel)
+        from receipt_write import checked_write        # noqa: E402
+        receipt_out.parent.mkdir(parents=True,exist_ok=True)
+        checked_write(str(receipt_out),receipt)
+        receipt_sha=_sha256(receipt_out)
+        manifest["selection_evidence"]["sha256"]=receipt_sha
+        manifest["selection_evidence"]["batch_sha256"]=receipt_sha
+        _write_json_no_overwrite(out_path,manifest)
+        print(f"RULE_DERIVED_FREEZE_WRITTEN receipt={receipt_out} candidate={out_path} sha256={_sha256(out_path)}")
+        return 0
 
     manifest, finding = build_candidate(shard_dir=Path(args.shard_dir), window_count=args.window_count)
 
