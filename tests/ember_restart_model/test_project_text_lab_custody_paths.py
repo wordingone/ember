@@ -149,13 +149,111 @@ def projection_custody_fixture(module, root: pathlib.Path):
         module.ARTIFACTS["bundle"]: module._canonical({"candidates": projected_rows}),
         module.ARTIFACTS["corpus"]: module._canonical({"sources": projected_rows}),
         module.ARTIFACTS["identity"]: module._canonical({"source_base_commit": "1" * 40}),
-        module.ARTIFACTS["index"]: module._canonical({"schema_version": "fixture-index"}),
+        module.ARTIFACTS["index"]: module._canonical({
+            "schema_version": "fixture-index",
+            "receipt_bundle": {"path": "data/ember-restart-3b/" + module.ARTIFACTS["bundle"]},
+            "corpus": {"path": "data/ember-restart-3b/" + module.ARTIFACTS["corpus"]},
+            "input_identity": {"path": "data/ember-restart-3b/" + module.ARTIFACTS["identity"]},
+        }),
     }
     source_hashes = {role: module._sha(raw) for role, raw in source_raw.items()}
     return source, receipt_root, predecessor_raw, generated, source_hashes
 
 
 class CustodyPathProjectionTests(unittest.TestCase):
+    def test_derived_custody_rewrites_only_external_index_locators_and_binds_lineage(self):
+        module = load_module()
+        generated = {
+            name: module._canonical({"role": role})
+            for role, name in module.ARTIFACTS.items()
+        }
+        generated[module.ARTIFACTS["index"]] = module._canonical({
+            "registry": {"path": "data/ember-restart-3b/protected-eval-registry-v2.json"},
+            "receipt_bundle": {"path": "data/ember-restart-3b/" + module.ARTIFACTS["bundle"]},
+            "corpus": {"path": "data/ember-restart-3b/" + module.ARTIFACTS["corpus"]},
+            "input_identity": {"path": "data/ember-restart-3b/" + module.ARTIFACTS["identity"]},
+        })
+        before = copy.deepcopy(generated)
+
+        localized, rewrite = module.packet_localize_projected_index(generated)
+
+        self.assertEqual(generated, before)
+        self.assertEqual(rewrite, {
+            "artifact": module.ARTIFACTS["index"],
+            "pre_rewrite_sha256": module._sha(before[module.ARTIFACTS["index"]]),
+            "post_rewrite_sha256": module._sha(localized[module.ARTIFACTS["index"]]),
+            "reason": "derived-root binding",
+        })
+        index = json.loads(localized[module.ARTIFACTS["index"]])
+        self.assertEqual(index["registry"]["path"], "data/ember-restart-3b/protected-eval-registry-v2.json")
+        for role, binding in (("bundle", "receipt_bundle"), ("corpus", "corpus"), ("identity", "input_identity")):
+            self.assertEqual(index[binding]["path"], module.ARTIFACTS[role])
+        broken = copy.deepcopy(before)
+        broken_index = json.loads(broken[module.ARTIFACTS["index"]])
+        broken_index["corpus"]["path"] = "elsewhere/" + module.ARTIFACTS["corpus"]
+        broken[module.ARTIFACTS["index"]] = module._canonical(broken_index)
+        with self.assertRaises(ValueError):
+            module.packet_localize_projected_index(broken)
+
+    def test_real_authority_validator_reopens_packet_local_projection_and_refuses_nonbasename(self):
+        module = load_module()
+        fixture_spec = importlib.util.spec_from_file_location(
+            "issue1719_tranche_fixture",
+            ROOT / "tests" / "ember_restart_model" / "test_mint_issue1719_tranche_admission.py",
+        )
+        assert fixture_spec is not None and fixture_spec.loader is not None
+        fixture_module = importlib.util.module_from_spec(fixture_spec)
+        fixture_spec.loader.exec_module(fixture_module)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            custody, _, _ = fixture_module._source_custody(root)
+            old_names = {
+                "bundle": "text-lab-source-receipt-bundle-v3.json",
+                "corpus": "owned-text-lab-corpus-v3.json",
+                "identity": "owned-text-lab-input-identity-v3.json",
+                "index": "text-lab-authority-index-v2.json",
+            }
+            generated = {
+                module.ARTIFACTS[role]: (custody / name).read_bytes()
+                for role, name in old_names.items()
+            }
+            identity = json.loads(generated[module.ARTIFACTS["identity"]])
+            identity["source_base_commit"] = git(ROOT, "rev-parse", "HEAD")
+            identity["code_files"] = {
+                "text_lab_corpus": module._sha((ROOT / "tools" / "ember-restart-3b" / "text_lab_corpus.py").read_bytes()),
+                "train": module._sha((ROOT / "tools" / "ember-restart-3b" / "train.py").read_bytes()),
+                "run_vertical_slice": module._sha((ROOT / "tools" / "ember-restart-3b" / "run_vertical_slice.py").read_bytes()),
+            }
+            generated[module.ARTIFACTS["identity"]] = module._canonical(identity)
+            index = json.loads(generated[module.ARTIFACTS["index"]])
+            for role, binding_name in (("bundle", "receipt_bundle"), ("corpus", "corpus"), ("identity", "input_identity")):
+                index[binding_name]["path"] = "data/ember-restart-3b/" + module.ARTIFACTS[role]
+            index["input_identity"]["sha256"] = module._sha(generated[module.ARTIFACTS["identity"]])
+            generated[module.ARTIFACTS["index"]] = module._canonical(index)
+            localized, _ = module.packet_localize_projected_index(generated)
+            projected = root / "projected"
+            projected.mkdir()
+            for name, raw in localized.items():
+                (projected / name).write_bytes(raw)
+
+            self.assertEqual(
+                module.validate_authority_index(
+                    ROOT,
+                    index_relative=module.ARTIFACTS["index"],
+                    external_authority_root=projected,
+                )["result"],
+                "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING",
+            )
+            broken_index = json.loads((projected / module.ARTIFACTS["index"]).read_bytes())
+            broken_index["corpus"]["path"] = "nested/" + module.ARTIFACTS["corpus"]
+            (projected / module.ARTIFACTS["index"]).write_bytes(module._canonical(broken_index))
+            with self.assertRaises(ValueError):
+                module.validate_authority_index(
+                    ROOT,
+                    index_relative=module.ARTIFACTS["index"],
+                    external_authority_root=projected,
+                )
     def test_mints_deterministic_closed_projection_receipt_and_reopens(self):
         module = load_module()
         with tempfile.TemporaryDirectory() as directory:
@@ -163,9 +261,10 @@ class CustodyPathProjectionTests(unittest.TestCase):
             source, receipt_root, predecessor_raw, generated, source_hashes = projection_custody_fixture(module, root)
             authority_calls = []
 
-            def validate_authority_index(repo, *, index_relative, external_authority_root):
+            def validate_authority_index(repo, *, index_relative, external_authority_root, receipt_custody_root):
                 authority_calls.append(pathlib.Path(external_authority_root))
                 self.assertEqual(index_relative, module.ARTIFACTS["index"])
+                self.assertEqual(pathlib.Path(receipt_custody_root), receipt_root)
                 return {"result": "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING"}
 
             with mock.patch.object(module, "SOURCE_SHA256", source_hashes), mock.patch.object(
@@ -201,7 +300,10 @@ class CustodyPathProjectionTests(unittest.TestCase):
                     source_receipt_name="tranche-admission-receipt.json",
                     source_receipt_sha256=module._sha(predecessor_raw),
                 )
-                self.assertEqual(reopened["generated"], generated)
+                localized, locator_rewrite = module.packet_localize_projected_index(generated)
+                self.assertEqual(reopened["generated"], localized)
+                self.assertEqual(reopened["receipt"]["locator_rewrites"], [locator_rewrite])
+                self.assertIn("data/ember-restart-3b/", json.loads(generated[module.ARTIFACTS["index"]])["corpus"]["path"])
                 self.assertEqual(len(reopened["receipt"]["row_mappings"]), 12)
                 self.assertEqual(
                     reopened["receipt"]["validation_receipt"],
