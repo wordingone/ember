@@ -176,7 +176,6 @@ REQUIRED_THRESHOLD_IDS = {"T-01", "T-02", "T-03", "T-04", "T-05", "T-06", "T-07"
 SUPPORTED_CHECKPOINT_SCHEMA = "ember-sparse-checkpoint-v5"
 CHECKPOINT_TOP_LEVEL_SHA_FIELDS = {
     "shared_model": "shared_model_shard_sha256",
-    "optimizer_state": "optimizer_state_shard_sha256",
 }
 CHECKPOINT_EXPERT_ROLE_PREFIX = "expert_"  # role "expert_vision" -> expert_checkpoint_sha256["vision"]
 
@@ -201,6 +200,83 @@ def _sha256_file(path: Path) -> str:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _select_optimizer_state_binding(
+    manifest: Mapping[str, Any],
+) -> tuple[str, Any, dict[str, str]]:
+    """Select the closed scalar XOR owner-map optimizer digest union."""
+    scalar_key = "optimizer_state_shard_sha256"
+    owner_key = "optimizer_state_owner_shard_sha256"
+    scalar_present = scalar_key in manifest
+    owner_present = owner_key in manifest
+    if scalar_present == owner_present:
+        raise R1ExitBatteryRefusal(
+            "OPTIMIZER_STATE_SCHEMA_INVALID: exactly one optimizer-state digest form is required"
+        )
+    shards = manifest.get("shards")
+    if not isinstance(shards, list):
+        raise R1ExitBatteryRefusal("OPTIMIZER_STATE_SCHEMA_INVALID: shards is not a list")
+    shard_digests: dict[str, Any] = {}
+    for record in shards:
+        if isinstance(record, dict) and isinstance(record.get("path"), str):
+            path = record["path"]
+            if path in shard_digests:
+                raise R1ExitBatteryRefusal(
+                    f"OPTIMIZER_STATE_SCHEMA_INVALID: duplicate shard path {path!r}"
+                )
+            shard_digests[path] = record.get("sha256")
+
+    def _digest(value: Any, label: str) -> str:
+        if not (
+            isinstance(value, str)
+            and len(value) == 64
+            and all(char in "0123456789abcdef" for char in value)
+        ):
+            raise R1ExitBatteryRefusal(
+                f"OPTIMIZER_STATE_SCHEMA_INVALID: {label} is not a lowercase sha256 digest"
+            )
+        return value
+
+    if scalar_present:
+        digest = _digest(manifest.get(scalar_key), scalar_key)
+        selected_key = scalar_key
+        selected: Any = digest
+        cross_refs = {"optimizer-state.pt": digest}
+    else:
+        owner_ids = manifest.get("optimizer_state_owner_ids")
+        owner_map = manifest.get(owner_key)
+        if not (
+            isinstance(owner_ids, list)
+            and owner_ids
+            and all(isinstance(owner, str) and owner for owner in owner_ids)
+            and len(set(owner_ids)) == len(owner_ids)
+        ):
+            raise R1ExitBatteryRefusal(
+                "OPTIMIZER_STATE_SCHEMA_INVALID: optimizer_state_owner_ids is not a nonempty unique string list"
+            )
+        if not isinstance(owner_map, dict) or not owner_map:
+            raise R1ExitBatteryRefusal(
+                "OPTIMIZER_STATE_SCHEMA_INVALID: optimizer_state_owner_shard_sha256 is not a nonempty object"
+            )
+        if set(owner_map) != set(owner_ids):
+            raise R1ExitBatteryRefusal(
+                "OPTIMIZER_STATE_SCHEMA_INVALID: owner digest keys do not equal optimizer_state_owner_ids"
+            )
+        selected = {
+            owner: _digest(owner_map[owner], f"{owner_key}[{owner!r}]")
+            for owner in owner_ids
+        }
+        cross_refs = {
+            f"optimizer-state-{owner}.pt": selected[owner] for owner in owner_ids
+        }
+        selected_key = owner_key
+    for path, digest in cross_refs.items():
+        if shard_digests.get(path) != digest:
+            raise R1ExitBatteryRefusal(
+                f"OPTIMIZER_STATE_SCHEMA_INVALID: {selected_key} disagrees with shard {path!r}"
+            )
+    return selected_key, selected, cross_refs
 
 
 def _validate_frozen_eval_suite_binding(
@@ -865,6 +941,9 @@ def verify_checkpoint_write_integrity(manifest_path: Path) -> dict[str, Any]:
     shards = manifest.get("shards")
     if not isinstance(shards, list) or not shards:
         raise R1ExitBatteryRefusal(f"CHECKPOINT_MANIFEST_UNREADABLE: {manifest_path} has no nonempty 'shards' list")
+    _optimizer_key, _optimizer_value, optimizer_cross_refs = (
+        _select_optimizer_state_binding(manifest)
+    )
 
     per_shard: list[dict[str, Any]] = []
     all_ok = True
@@ -885,7 +964,10 @@ def verify_checkpoint_write_integrity(manifest_path: Path) -> dict[str, Any]:
         cross_ref_ok = True
         cross_ref_field = None
         role = shard.get("role", "")
-        if role in CHECKPOINT_TOP_LEVEL_SHA_FIELDS:
+        if shard.get("path") in optimizer_cross_refs:
+            cross_ref_field = _optimizer_key
+            cross_ref_ok = optimizer_cross_refs[shard["path"]] == declared_sha256
+        elif role in CHECKPOINT_TOP_LEVEL_SHA_FIELDS:
             cross_ref_field = CHECKPOINT_TOP_LEVEL_SHA_FIELDS[role]
             cross_ref_ok = manifest.get(cross_ref_field) == declared_sha256
         elif isinstance(role, str) and role.startswith(CHECKPOINT_EXPERT_ROLE_PREFIX):
@@ -1369,7 +1451,8 @@ E5_WALL_VERDICTS = ("green", "red", "not_probed")
 # The manifest keys identity_spine.checkpoint_file_sha256s may mirror.
 E5_CHECKPOINT_HASH_KEYS = (
     "shared_model_shard_sha256", "expert_checkpoint_sha256",
-    "optimizer_state_shard_sha256", "rng_state_sha256",
+    "optimizer_state_shard_sha256", "optimizer_state_owner_shard_sha256",
+    "rng_state_sha256",
 )
 
 
@@ -1585,12 +1668,20 @@ def _validate_frontier_content(
     manifest_path: Path | None = None
     disk_manifest: dict[str, Any] | None = None
     disk_manifest_sha: str | None = None
+    optimizer_manifest_key: str | None = None
+    optimizer_manifest_value: Any = None
     try:
         manifest_path = find_checkpoint_manifest(run_root)
         disk_manifest_sha = _sha256_file(manifest_path)
         loaded = json.loads(manifest_path.read_text(encoding="utf-8"))
         if isinstance(loaded, dict):
             disk_manifest = loaded
+            try:
+                optimizer_manifest_key, optimizer_manifest_value, _cross_refs = (
+                    _select_optimizer_state_binding(disk_manifest)
+                )
+            except R1ExitBatteryRefusal as refusal:
+                defects.append(f"checkpoint manifest: {refusal}")
         else:
             defects.append(f"checkpoint manifest top level is not a JSON object: {manifest_path}")
     except R1ExitBatteryRefusal as refusal:
@@ -1624,6 +1715,13 @@ def _validate_frontier_content(
             for key, value in file_shas.items():
                 if key not in E5_CHECKPOINT_HASH_KEYS:
                     defects.append(f"identity_spine.checkpoint_file_sha256s carries unknown key {key!r}")
+                elif key in {
+                    "optimizer_state_shard_sha256",
+                    "optimizer_state_owner_shard_sha256",
+                } and key != optimizer_manifest_key:
+                    defects.append(
+                        f"identity_spine.checkpoint_file_sha256s carries unselected optimizer field {key!r}"
+                    )
                 elif disk_manifest.get(key) != value:
                     defects.append(f"identity_spine.checkpoint_file_sha256s[{key!r}] does not equal the checkpoint manifest's value")
 
@@ -1829,7 +1927,6 @@ def _validate_frontier_content(
         if disk_manifest is not None:
             for field_name, manifest_key in (
                 ("config_sha256", "model_config_sha256"),
-                ("optimizer_state_sha256", "optimizer_state_shard_sha256"),
                 ("rng_state_sha256", "rng_state_sha256"),
             ):
                 # Present-and-EQUAL, deliberately type-agnostic: v5 manifests
@@ -1838,6 +1935,13 @@ def _validate_frontier_content(
                 # requirement here refused every real generator receipt).
                 if not repro.get(field_name) or repro.get(field_name) != disk_manifest.get(manifest_key):
                     defects.append(f"reproducibility.{field_name} does not equal the checkpoint manifest's {manifest_key}")
+            if (
+                optimizer_manifest_key is None
+                or repro.get("optimizer_state_sha256") != optimizer_manifest_value
+            ):
+                defects.append(
+                    "reproducibility.optimizer_state_sha256 does not equal the checkpoint manifest's selected optimizer-state value"
+                )
             if not repro.get("optimizer_contract") or repro.get("optimizer_contract") != disk_manifest.get("optimizer_contract"):
                 defects.append("reproducibility.optimizer_contract does not equal the checkpoint manifest's optimizer_contract")
             manifest_seed = disk_manifest.get("launch_seed")
@@ -3339,7 +3443,7 @@ def run_selftest() -> None:
                 "shared_model_shard_sha256": shared_model_sha,
                 # Per-shard MAPPING, the real v5 shape (cross-check finding:
                 # these pins are not single hex strings).
-                "optimizer_state_shard_sha256": {"shard0": "d" * 64, "shard1": "d" * 63 + "e"},
+                "optimizer_state_shard_sha256": "d" * 64,
                 "rng_state_sha256": "e" * 64,
                 "optimizer_contract": "SELFTEST_FIXTURE-adamw-v1",
                 "launch_seed": 830001,
