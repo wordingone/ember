@@ -70,6 +70,11 @@ _IDENTITY_KEYS = {
     "tokenizer_sha256",
     "server_source_sha256",
 }
+_SEAT_MODEL_PREFIXES = {
+    "OWNED_ADMITTED": "ember-owned:",
+    "OWNED_DEVELOPMENT": "ember-owned-development:",
+}
+R1_ENDPOINT_SEATS = frozenset(_SEAT_MODEL_PREFIXES)
 _CLAIM_BOUNDARY = (
     "MEASURED_NOT_ADJUDICATED; no capability, R1, training, or issue-closure credit"
 )
@@ -248,14 +253,21 @@ def _endpoint_base(endpoint: str) -> str:
     return f"http://127.0.0.1:{port}"
 
 
-def _validate_identity(identity: object, checkpoint_sha256: str) -> dict:
+def _validate_identity(
+    identity: object,
+    checkpoint_sha256: str,
+    expected_endpoint_seat: str = "OWNED_ADMITTED",
+) -> dict:
+    model_prefix = _SEAT_MODEL_PREFIXES.get(expected_endpoint_seat)
+    if model_prefix is None:
+        raise FrozenEvalRefusal("EXPECTED_ENDPOINT_SEAT_INVALID")
     if not isinstance(identity, dict):
         raise FrozenEvalRefusal("ENDPOINT_IDENTITY_INVALID")
     if (
         identity.get("mode") != "FROZEN_EVAL"
-        or identity.get("seat") != "OWNED_ADMITTED"
+        or identity.get("seat") != expected_endpoint_seat
         or identity.get("checkpoint_sha256") != checkpoint_sha256
-        or identity.get("model_name") != f"ember-owned:{checkpoint_sha256[:12]}"
+        or identity.get("model_name") != model_prefix + checkpoint_sha256[:12]
         or any(not _is_digest(identity.get(key)) for key in (
             "model_config_sha256", "tokenizer_sha256", "server_source_sha256"
         ))
@@ -344,6 +356,7 @@ def validate_results_receipt(
     suite_sha256: str,
     checkpoint_manifest_sha256: str,
     checkpoint_file_sha256s: dict[str, str],
+    accepted_endpoint_seats: frozenset[str] = frozenset({"OWNED_ADMITTED"}),
 ) -> dict:
     """Reopen the exact result contract consumed by frontier/R1 authority."""
 
@@ -362,13 +375,21 @@ def validate_results_receipt(
         or receipt.get("claim_boundary") != _CLAIM_BOUNDARY
     ):
         raise FrozenEvalRefusal("RESULT_RECEIPT_BINDING_INVALID")
+    if (
+        not accepted_endpoint_seats
+        or not accepted_endpoint_seats.issubset(R1_ENDPOINT_SEATS)
+    ):
+        raise FrozenEvalRefusal("RESULT_RECEIPT_IDENTITY_INVALID")
     identity = receipt.get("owned_identity")
+    identity_seat = identity.get("seat") if isinstance(identity, dict) else None
+    model_prefix = _SEAT_MODEL_PREFIXES.get(identity_seat)
     if (
         not isinstance(identity, dict)
         or set(identity) != _IDENTITY_KEYS
-        or identity.get("seat") != "OWNED_ADMITTED"
+        or identity_seat not in accepted_endpoint_seats
+        or model_prefix is None
         or identity.get("checkpoint_sha256") != checkpoint_manifest_sha256
-        or identity.get("model_name") != f"ember-owned:{checkpoint_manifest_sha256[:12]}"
+        or identity.get("model_name") != model_prefix + checkpoint_manifest_sha256[:12]
         or any(
             not _is_digest(identity.get(key))
             for key in ("model_config_sha256", "tokenizer_sha256", "server_source_sha256")
@@ -444,6 +465,7 @@ def execute_frozen_eval(
     endpoint: str,
     output_dir: Path,
     transport: JsonTransport | None = None,
+    expected_endpoint_seat: str = "OWNED_ADMITTED",
 ) -> dict:
     """Run a closed suite once against the exact owned loaded checkpoint."""
 
@@ -453,7 +475,11 @@ def execute_frozen_eval(
     checkpoint_sha256, checkpoint_file_sha256s = _checkpoint_identity(checkpoint_dir)
     base = _endpoint_base(endpoint)
     client = transport if transport is not None else UrlTransport()
-    identity = _validate_identity(client.get_json(base + "/v1/models"), checkpoint_sha256)
+    identity = _validate_identity(
+        client.get_json(base + "/v1/models"),
+        checkpoint_sha256,
+        expected_endpoint_seat,
+    )
     rows = []
     for task in suite["tasks"]:
         request = {
@@ -499,6 +525,7 @@ def execute_frozen_eval(
         suite_sha256=expected_suite_sha256,
         checkpoint_manifest_sha256=checkpoint_sha256,
         checkpoint_file_sha256s=checkpoint_file_sha256s,
+        accepted_endpoint_seats=frozenset({expected_endpoint_seat}),
     )
     _publish(output_dir, suite_raw, receipt)
     return receipt
@@ -511,6 +538,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--checkpoint-dir", required=True, type=Path)
     parser.add_argument("--endpoint", required=True)
     parser.add_argument("--output-dir", required=True, type=Path)
+    parser.add_argument(
+        "--expected-endpoint-seat",
+        choices=sorted(R1_ENDPOINT_SEATS),
+        default="OWNED_ADMITTED",
+    )
     args = parser.parse_args(argv)
     try:
         execute_frozen_eval(
@@ -519,6 +551,7 @@ def main(argv: list[str] | None = None) -> int:
             checkpoint_dir=args.checkpoint_dir,
             endpoint=args.endpoint,
             output_dir=args.output_dir,
+            expected_endpoint_seat=args.expected_endpoint_seat,
         )
     except FrozenEvalRefusal as exc:
         print(f"R1_FROZEN_EVAL_REFUSED:{exc}")

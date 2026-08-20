@@ -356,6 +356,7 @@ def leg_capability(run_root: Path, manifest_path: Path, manifest: dict[str, Any]
             suite_sha256=suite_sha256,
             checkpoint_manifest_sha256=manifest_sha,
             checkpoint_file_sha256s=checkpoint_hashes,
+            accepted_endpoint_seats=frozen_eval.R1_ENDPOINT_SEATS,
         )
     except frozen_eval.FrozenEvalRefusal as exc:
         raise FrontierRefusal(str(exc)) from exc
@@ -368,6 +369,7 @@ def leg_capability(run_root: Path, manifest_path: Path, manifest: dict[str, Any]
         "results_receipt_sha256": _sha256(path),
         "checkpoint_manifest_sha256": manifest_sha,
         "checkpoint_file_sha256s": checkpoint_hashes,
+        "endpoint_seat": doc["owned_identity"]["seat"],
         "results": results,
         "tool_access": "none",
         # F7's probe column is "R4 + any claim"; with advantage_claims [] and
