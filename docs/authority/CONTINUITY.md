@@ -202,6 +202,10 @@ with an exact identity, `goal_id`, and `next_executed_outcome`.
 All capability-credit cells are `none`: these rows classify evidence and do
 not promote any current artifact into an Ember model.
 
+`execution_measurement_only` rows bind execution and measurement receipts
+only. They carry zero capability or sufficiency semantics and must state both
+the closed claim boundary and at least one explicit `caveat:` in evidence.
+
 | id | object_type | canonical_identity | artifact_class | parameter_count | trained_tokens | backend | capability_credit | evidence |
 |---|---|---|---|---:|---:|---|---|---|
 | cbase-seed-step610 | checkpoint | sha256:1ec99451d0c1446441db76f2d86d9b9e3f866941ca6f5a1c72f74182d08f5bdb | historical_only | 466658304 | 9994240 | none | none | receipts/v0-live-20260623T105829Z.json and receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json |
