@@ -6,7 +6,10 @@ from __future__ import annotations
 
 import copy
 import importlib.util
+import json
+import os
 import pathlib
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -91,7 +94,95 @@ def projection_fixture(root: pathlib.Path) -> list[dict[str, object]]:
     return rows
 
 
+def git(root: pathlib.Path, *args: str) -> str:
+    kwargs = {
+        "cwd": root,
+        "capture_output": True,
+        "check": True,
+        "text": True,
+    }
+    if os.name == "nt":
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+    return subprocess.run(["git", *args], **kwargs).stdout.strip()
+
+
+def scratch_repository(root: pathlib.Path) -> tuple[str, str]:
+    git(root, "init", "-q")
+    git(root, "config", "user.email", "projection-test@example.invalid")
+    git(root, "config", "user.name", "Projection Test")
+    marker = root / "marker.txt"
+    marker.write_text("one\n", encoding="utf-8")
+    git(root, "add", "marker.txt")
+    git(root, "commit", "-qm", "first")
+    first = git(root, "rev-parse", "HEAD")
+    marker.write_text("two\n", encoding="utf-8")
+    git(root, "commit", "-qam", "second")
+    second = git(root, "rev-parse", "HEAD")
+    git(root, "checkout", "-q", "--detach", second)
+    return first, second
+
+
 class CustodyPathProjectionTests(unittest.TestCase):
+    def test_write_source_base_commit_refuses_malformed_and_non_ancestor(self):
+        """Catches caller-minted or unreachable source identity on a write."""
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            repo = pathlib.Path(directory) / "repo"
+            other = pathlib.Path(directory) / "other"
+            repo.mkdir()
+            other.mkdir()
+            first, _ = scratch_repository(repo)
+            scratch_repository(other)
+            (other / "unrelated.txt").write_text("unrelated\n", encoding="utf-8")
+            git(other, "add", "unrelated.txt")
+            git(other, "commit", "-qm", "unrelated")
+            unrelated = git(other, "rev-parse", "HEAD")
+
+            self.assertEqual(
+                module.resolve_source_base_commit(
+                    repo=repo,
+                    write=True,
+                    requested=first,
+                ),
+                first,
+            )
+            for candidate in ("not-a-sha", unrelated):
+                with self.subTest(candidate=candidate), self.assertRaises(ValueError):
+                    module.resolve_source_base_commit(
+                        repo=repo,
+                        write=True,
+                        requested=candidate,
+                    )
+
+    def test_check_reuses_recorded_source_base_from_different_detached_head(self):
+        """Catches check mode restamping the invoking checkout's live HEAD."""
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            repo = pathlib.Path(directory) / "repo"
+            repo.mkdir()
+            recorded, detached_head = scratch_repository(repo)
+            identity = (
+                repo
+                / "data"
+                / "ember-restart-3b"
+                / "owned-text-lab-input-identity-v4.json"
+            )
+            identity.parent.mkdir(parents=True)
+            identity.write_text(
+                json.dumps({"source_base_commit": recorded}),
+                encoding="utf-8",
+            )
+
+            self.assertNotEqual(recorded, detached_head)
+            self.assertEqual(
+                module.resolve_source_base_commit(
+                    repo=repo,
+                    write=False,
+                    requested=None,
+                ),
+                recorded,
+            )
+
     def test_projects_exact_twelve_paths_and_preserves_every_other_row_byte_value(self):
         """Catches path projection changing payload identity or skipping one class member."""
         module = load_module()
