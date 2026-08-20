@@ -1795,10 +1795,17 @@ def check_state(root: Path, errors: list[dict[str, Any]]) -> None:
         errors.append(finding(6, "state.duplicate_id", ",".join(duplicate_ids)))
     if duplicate_identity:
         errors.append(finding(6, "state.ambiguous_identity", ",".join(duplicate_identity)))
-    allowed_classes = {"historical_only", "borrowed_reference", "research_prototype", "target", "current_admissible"}
+    allowed_classes = {
+        "historical_only",
+        "borrowed_reference",
+        "research_prototype",
+        "target",
+        "current_admissible",
+        "execution_measurement_only",
+    }
     seen_classes = set()
     for row in rows:
-        rid, object_type, identity, artifact_class, params, _tokens, backend, credit, _evidence = row
+        rid, object_type, identity, artifact_class, params, _tokens, backend, credit, evidence = row
         seen_classes.add(artifact_class)
         if artifact_class not in allowed_classes:
             errors.append(finding(6, "state.artifact_class_invalid", f"{rid}: {artifact_class}"))
@@ -1811,6 +1818,18 @@ def check_state(root: Path, errors: list[dict[str, Any]]) -> None:
                 errors.append(finding(6, "state.sub_3b_credit", rid))
         if artifact_class == "borrowed_reference" and credit.lower() != "none":
             errors.append(finding(6, "state.borrowed_credit", rid))
+        if artifact_class == "execution_measurement_only":
+            if credit.lower() != "none":
+                errors.append(finding(6, "state.execution_measurement_credit", rid))
+            if re.fullmatch(r"receipt-sha256:[0-9a-f]{64}", identity) is None:
+                errors.append(finding(6, "state.execution_measurement_identity", rid))
+            if (
+                "execution+measurement only" not in evidence
+                or "no sufficiency/capability/comparison claim" not in evidence
+            ):
+                errors.append(finding(6, "state.execution_measurement_boundary_missing", rid))
+            if re.search(r"(?:^|;\s*)caveat:\s*\S", evidence) is None:
+                errors.append(finding(6, "state.execution_measurement_caveat_missing", rid))
         if artifact_class == "target" and not identity.startswith("uninstantiated:"):
             errors.append(finding(6, "state.target_identity", rid))
         if not object_type or not identity or not backend:

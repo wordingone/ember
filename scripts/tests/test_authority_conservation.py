@@ -2072,6 +2072,61 @@ def test_ambiguous_identity_is_rejected(tmp_path: Path) -> None:
     refresh_continuity_hash(tmp_path)
     assert_rejected(tmp_path, "state.ambiguous_identity")
 
+
+def _append_execution_measurement_row(tmp_path: Path, evidence: str) -> None:
+    with (tmp_path / "CONTINUITY.md").open("a", encoding="utf-8") as stream:
+        stream.write(
+            "| measured-result | benchmark_result | receipt-sha256:"
+            f"{'a' * 64} | execution_measurement_only | not_claimed | 51200 | "
+            f"eval_cuda | none | {evidence} |\n"
+        )
+    refresh_continuity_hash(tmp_path)
+
+
+def test_execution_measurement_only_row_accepts_closed_claim_boundary(
+    tmp_path: Path,
+) -> None:
+    write_valid_fixture(tmp_path)
+    _append_execution_measurement_row(
+        tmp_path,
+        "execution+measurement only; no sufficiency/capability/comparison claim; "
+        "caveat: chance-level score",
+    )
+    result = run_verifier(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_execution_measurement_only_row_without_caveat_is_rejected(
+    tmp_path: Path,
+) -> None:
+    write_valid_fixture(tmp_path)
+    _append_execution_measurement_row(
+        tmp_path,
+        "execution+measurement only; no sufficiency/capability/comparison claim",
+    )
+    assert_rejected(tmp_path, "state.execution_measurement_caveat_missing")
+
+
+def test_execution_measurement_only_row_with_capability_credit_is_rejected(
+    tmp_path: Path,
+) -> None:
+    write_valid_fixture(tmp_path)
+    _append_execution_measurement_row(
+        tmp_path,
+        "execution+measurement only; no sufficiency/capability/comparison claim; "
+        "caveat: chance-level score",
+    )
+    state = tmp_path / "CONTINUITY.md"
+    state.write_text(
+        state.read_text(encoding="utf-8").replace(
+            "| eval_cuda | none | execution+measurement only",
+            "| eval_cuda | claimed | execution+measurement only",
+        ),
+        encoding="utf-8",
+    )
+    refresh_continuity_hash(tmp_path)
+    assert_rejected(tmp_path, "state.execution_measurement_credit")
+
 def test_continuity_identity_rows_loss_is_rejected(tmp_path: Path) -> None:
     write_valid_fixture(tmp_path)
     continuity = tmp_path / "CONTINUITY.md"
