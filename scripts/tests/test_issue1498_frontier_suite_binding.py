@@ -56,7 +56,13 @@ def _checkpoint(tmp_path: Path) -> tuple[Path, dict]:
     return manifest_path, manifest
 
 
-def _results(tmp_path: Path, manifest_path: Path, suite_sha256: str) -> Path:
+def _results(
+    tmp_path: Path,
+    manifest_path: Path,
+    suite_sha256: str,
+    *,
+    seat: str = "OWNED_ADMITTED",
+) -> Path:
     path = tmp_path / "frozen-eval-results.json"
     suite_path = tmp_path / "frozen-eval-suite.json"
     authority = (
@@ -83,6 +89,9 @@ def _results(tmp_path: Path, manifest_path: Path, suite_sha256: str) -> Path:
             }
             for task in suite["tasks"]
         ]
+        model_prefix = (
+            "ember-owned-development:" if seat == "OWNED_DEVELOPMENT" else "ember-owned:"
+        )
         receipt = {
             "schema": runner.RESULT_SCHEMA,
             "eval_suite_id": suite["eval_suite_id"],
@@ -92,9 +101,9 @@ def _results(tmp_path: Path, manifest_path: Path, suite_sha256: str) -> Path:
                 row["role"]: row["sha256"] for row in manifest["shards"]
             },
             "owned_identity": {
-                "seat": "OWNED_ADMITTED",
+                "seat": seat,
                 "checkpoint_sha256": checkpoint_sha,
-                "model_name": f"ember-owned:{checkpoint_sha[:12]}",
+                "model_name": model_prefix + checkpoint_sha[:12],
                 "model_config_sha256": "b" * 64,
                 "tokenizer_sha256": "c" * 64,
                 "server_source_sha256": "d" * 64,
@@ -143,6 +152,46 @@ def test_capability_reopens_and_hashes_the_frozen_suite(tmp_path: Path) -> None:
 
     assert result["eval_suite_sha256"] == suite_sha256
     assert result["eval_suite_path"] == str(suite_path)
+
+
+def test_r1_capability_accepts_truthful_development_stage(tmp_path: Path) -> None:
+    manifest_path, manifest = _checkpoint(tmp_path)
+    suite_path = tmp_path / "frozen-eval-suite.json"
+    suite_sha256 = _write_json(suite_path, _suite())
+    _results(
+        tmp_path,
+        manifest_path,
+        suite_sha256,
+        seat="OWNED_DEVELOPMENT",
+    )
+
+    result = frontier.leg_capability(tmp_path, manifest_path, manifest)
+
+    assert result["endpoint_seat"] == "OWNED_DEVELOPMENT"
+
+
+@pytest.mark.parametrize("seat", ["OWNED_CANDIDATE", "OWNED_DEVELOPMENT"])
+def test_r1_capability_refuses_unknown_or_relabelled_stage(
+    tmp_path: Path, seat: str
+) -> None:
+    manifest_path, manifest = _checkpoint(tmp_path)
+    suite_path = tmp_path / "frozen-eval-suite.json"
+    suite_sha256 = _write_json(suite_path, _suite())
+    path = _results(
+        tmp_path,
+        manifest_path,
+        suite_sha256,
+        seat="OWNED_ADMITTED",
+    )
+    receipt = json.loads(path.read_text(encoding="utf-8"))
+    receipt["owned_identity"]["seat"] = seat
+    receipt["receipt_sha256"] = hashlib.sha256(
+        runner._canonical_bytes(receipt, omit="receipt_sha256")
+    ).hexdigest()
+    _write_json(path, receipt)
+
+    with pytest.raises(frontier.FrontierRefusal, match="RESULT_RECEIPT_IDENTITY_INVALID"):
+        frontier.leg_capability(tmp_path, manifest_path, manifest)
 
 
 def test_forged_or_missing_frozen_suite_bytes_refuse(tmp_path: Path) -> None:
@@ -237,4 +286,16 @@ def test_r1_battery_independently_rederives_suite_bytes(
     )
     assert defects == [
         "capability: need exactly one frozen-eval-suite.json under the run root, found 0"
+    ]
+
+
+def test_r1_battery_independently_binds_true_endpoint_seat() -> None:
+    capability = {"endpoint_seat": "OWNED_DEVELOPMENT"}
+    eval_doc = {"owned_identity": {"seat": "OWNED_DEVELOPMENT"}}
+
+    assert battery._validate_frozen_eval_endpoint_seat(capability, eval_doc) == []
+
+    capability["endpoint_seat"] = "OWNED_ADMITTED"
+    assert battery._validate_frozen_eval_endpoint_seat(capability, eval_doc) == [
+        "capability.endpoint_seat does not equal the frozen-eval receipt's true seat"
     ]

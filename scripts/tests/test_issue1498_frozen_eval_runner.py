@@ -51,12 +51,21 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, str, dict]:
 
 
 class _Transport:
-    def __init__(self, manifest_sha: str, outputs: dict[str, str] | None = None):
+    def __init__(
+        self,
+        manifest_sha: str,
+        outputs: dict[str, str] | None = None,
+        *,
+        seat: str = "OWNED_ADMITTED",
+    ):
+        model_prefix = (
+            "ember-owned-development:" if seat == "OWNED_DEVELOPMENT" else "ember-owned:"
+        )
         self.identity = {
             "mode": "FROZEN_EVAL",
-            "seat": "OWNED_ADMITTED",
+            "seat": seat,
             "checkpoint_sha256": manifest_sha,
-            "model_name": f"ember-owned:{manifest_sha[:12]}",
+            "model_name": model_prefix + manifest_sha[:12],
             "model_config_sha256": "a" * 64,
             "tokenizer_sha256": "b" * 64,
             "server_source_sha256": "c" * 64,
@@ -128,6 +137,79 @@ def test_owned_frozen_eval_binds_suite_checkpoint_and_exact_rows(tmp_path: Path)
     ]
     assert [request["ember_context_limit_tokens"] for request in transport.requests] == [4096] * 64
     assert all("tools" not in request and request["stream"] is False for request in transport.requests)
+
+
+def test_explicit_development_stage_stamps_true_nonadmissible_seat(tmp_path: Path) -> None:
+    checkpoint, suite_path, suite_sha, _suite = _fixture(tmp_path)
+    manifest_sha = hashlib.sha256(
+        (checkpoint / "checkpoint-manifest.json").read_bytes()
+    ).hexdigest()
+
+    receipt = execute_frozen_eval(
+        suite_path=suite_path,
+        expected_suite_sha256=suite_sha,
+        checkpoint_dir=checkpoint,
+        endpoint="http://127.0.0.1:8173",
+        output_dir=tmp_path / "development-run",
+        transport=_Transport(manifest_sha, seat="OWNED_DEVELOPMENT"),
+        expected_endpoint_seat="OWNED_DEVELOPMENT",
+    )
+
+    assert receipt["owned_identity"]["seat"] == "OWNED_DEVELOPMENT"
+    assert receipt["owned_identity"]["model_name"] == (
+        f"ember-owned-development:{manifest_sha[:12]}"
+    )
+    assert receipt["result_credit"] is False
+    assert receipt["claim_boundary"] == (
+        "MEASURED_NOT_ADJUDICATED; no capability, R1, training, or issue-closure credit"
+    )
+
+
+def test_admitted_default_refuses_development_endpoint_without_output(tmp_path: Path) -> None:
+    checkpoint, suite_path, suite_sha, _suite = _fixture(tmp_path)
+    manifest_sha = hashlib.sha256(
+        (checkpoint / "checkpoint-manifest.json").read_bytes()
+    ).hexdigest()
+    output = tmp_path / "run"
+
+    with pytest.raises(FrozenEvalRefusal, match="ENDPOINT_IDENTITY_INVALID"):
+        execute_frozen_eval(
+            suite_path=suite_path,
+            expected_suite_sha256=suite_sha,
+            checkpoint_dir=checkpoint,
+            endpoint="http://127.0.0.1:8173",
+            output_dir=output,
+            transport=_Transport(manifest_sha, seat="OWNED_DEVELOPMENT"),
+        )
+    assert not output.exists()
+
+
+def test_explicit_development_stage_refuses_admitted_or_crossed_prefix(
+    tmp_path: Path,
+) -> None:
+    checkpoint, suite_path, suite_sha, _suite = _fixture(tmp_path)
+    manifest_sha = hashlib.sha256(
+        (checkpoint / "checkpoint-manifest.json").read_bytes()
+    ).hexdigest()
+
+    for label, transport in (
+        ("admitted", _Transport(manifest_sha)),
+        ("crossed-prefix", _Transport(manifest_sha, seat="OWNED_DEVELOPMENT")),
+    ):
+        if label == "crossed-prefix":
+            transport.identity["model_name"] = f"ember-owned:{manifest_sha[:12]}"
+        output = tmp_path / label
+        with pytest.raises(FrozenEvalRefusal, match="ENDPOINT_IDENTITY_INVALID"):
+            execute_frozen_eval(
+                suite_path=suite_path,
+                expected_suite_sha256=suite_sha,
+                checkpoint_dir=checkpoint,
+                endpoint="http://127.0.0.1:8173",
+                output_dir=output,
+                transport=transport,
+                expected_endpoint_seat="OWNED_DEVELOPMENT",
+            )
+        assert not output.exists()
 
 
 def test_probe_results_are_adjudicated_independently(tmp_path: Path) -> None:
