@@ -27,7 +27,7 @@ from typing import Any, Callable, Iterable, Mapping
 import tokenizers
 import torch
 
-from checkpoint_artifacts import CheckpointDeferredLowCommit, _atomic_publish_no_replace, _default_optimizer_contract, _empty_failure_comparison_operands, _normalize_failure_comparison_operands, _optimizer_realization, _select_detached_state, _write_atomic, load_checkpoint_artifacts, load_checkpoint_model_only_transition, optimizer_covers_every_expert_route, preflight_specialist_lineage_sources, published_checkpoint_receipt, write_checkpoint_artifacts
+from checkpoint_artifacts import CheckpointDeferredLowCommit, _atomic_publish_no_replace, _default_optimizer_contract, _empty_failure_comparison_operands, _normalize_failure_comparison_operands, _optimizer_realization, _select_detached_state, _write_atomic, available_host_commit_bytes, load_checkpoint_artifacts, load_checkpoint_model_only_transition, optimizer_covers_every_expert_route, preflight_specialist_lineage_sources, published_checkpoint_receipt, write_checkpoint_artifacts
 from parameter_counter import derive_expert_genesis_sha256, validate_realization_receipt
 from model import RestartDecoderConfig, UnifiedDecoder
 from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
@@ -40,6 +40,7 @@ from step2_realization_registry import validate_step2_realization_registry_bundl
 from train import run_launch, run_text_lab_preflight
 from text_lab_corpus import validate_admitted_authority_subset
 from a1_execution import run_dense_a1
+from a1_dense import DenseA1Config
 
 # R1-E4 measurement receipt (issue #1464): the two constants the MFU arithmetic
 # depends on, stated here so the receipt can carry them verbatim. Active count
@@ -1150,6 +1151,75 @@ def production_memory_preflight(*, total_parameters: int, active_parameters: int
         "runtime_reserve_bytes": runtime_reserve_bytes,
         "required_bytes": required_bytes,
         "device_free_bytes": device_free_bytes,
+    }
+
+
+def dense_a1_resource_preflight(
+    *,
+    parameter_count: int,
+    write_budget_bytes: int,
+    transient_checkpoint_bytes: int,
+    host_commit_reserve_bytes: int,
+    gpu_free_margin_bytes: int,
+    b_custody_floor_bytes: int,
+    available_commit_bytes: int,
+    device_free_bytes: int,
+    custody_free_bytes: int,
+) -> dict[str, int | str]:
+    """Refuse the dense A1 allocation unless every structural floor is live."""
+
+    operands = (
+        parameter_count,
+        write_budget_bytes,
+        transient_checkpoint_bytes,
+        host_commit_reserve_bytes,
+        gpu_free_margin_bytes,
+        b_custody_floor_bytes,
+        available_commit_bytes,
+        device_free_bytes,
+        custody_free_bytes,
+    )
+    if any(type(value) is not int or value <= 0 for value in operands):
+        raise ValueError("dense A1 resource operands must be positive integers")
+    if parameter_count < 3_000_000_000:
+        raise ValueError("dense A1 resource admission requires at least 3B parameters")
+    model_bytes = parameter_count * 2
+    gradient_bytes = parameter_count * 2
+    optimizer_bytes = parameter_count * 4 * 3
+    checkpoint_payload_floor_bytes = model_bytes + optimizer_bytes
+    required_commit_bytes = (
+        optimizer_bytes + transient_checkpoint_bytes + host_commit_reserve_bytes
+    )
+    required_device_bytes = model_bytes + gradient_bytes + gpu_free_margin_bytes
+    required_custody_bytes = checkpoint_payload_floor_bytes + b_custody_floor_bytes
+    if write_budget_bytes < checkpoint_payload_floor_bytes:
+        raise OSError("dense A1 write budget is below the full-state checkpoint floor")
+    if transient_checkpoint_bytes > write_budget_bytes:
+        raise OSError("dense A1 transient checkpoint authority exceeds write budget")
+    if available_commit_bytes < required_commit_bytes:
+        raise MemoryError("dense A1 host commit headroom is insufficient before allocation")
+    if device_free_bytes < required_device_bytes:
+        raise MemoryError("dense A1 GPU free headroom is insufficient before allocation")
+    if custody_free_bytes < required_custody_bytes:
+        raise OSError("dense A1 B custody floor is insufficient before allocation")
+    return {
+        "schema_version": "ember-a1-resource-preflight-v1",
+        "status": "PASS",
+        "parameter_count": parameter_count,
+        "model_bytes": model_bytes,
+        "gradient_bytes": gradient_bytes,
+        "cpu_fp32_optimizer_bytes": optimizer_bytes,
+        "checkpoint_payload_floor_bytes": checkpoint_payload_floor_bytes,
+        "transient_checkpoint_bytes": transient_checkpoint_bytes,
+        "host_commit_reserve_bytes": host_commit_reserve_bytes,
+        "gpu_free_margin_bytes": gpu_free_margin_bytes,
+        "b_custody_floor_bytes": b_custody_floor_bytes,
+        "available_commit_bytes": available_commit_bytes,
+        "device_free_bytes": device_free_bytes,
+        "custody_free_bytes": custody_free_bytes,
+        "required_commit_bytes": required_commit_bytes,
+        "required_device_bytes": required_device_bytes,
+        "required_custody_bytes": required_custody_bytes,
     }
 def checkpoint_serialization_byte_bound(config_path: Path, *, active_parameters: int | None = None) -> int:
     """Derive one publishable checkpoint bound from the frozen architecture and optimizer contract."""
@@ -4187,6 +4257,10 @@ def main() -> None:
     a1.add_argument("--sequence-length", type=int, required=True)
     a1.add_argument("--checkpoint-interval", type=int, required=True)
     a1.add_argument("--write-budget-gib", type=int, required=True)
+    a1.add_argument("--transient-checkpoint-gib", type=int, required=True)
+    a1.add_argument("--host-commit-reserve-gib", type=int, required=True)
+    a1.add_argument("--gpu-free-margin-gib", type=int, required=True)
+    a1.add_argument("--b-custody-floor-gib", type=int, required=True)
     a1.add_argument("--telemetry-path", type=Path, required=True)
     a1.add_argument("--telemetry-run-id", required=True)
     args = parser.parse_args()
@@ -4249,6 +4323,25 @@ def main() -> None:
         )
     elif args.command == "a1-dense-tier1":
         require_disk_budget_runner_contract()
+        a1_config = DenseA1Config.from_contract(
+            Path(__file__).resolve().with_name("ember-restart-3b-a1.json"),
+            repo_root=Path(__file__).resolve().parents[2],
+        )
+        governor_receipt = governed_resource_preflight()
+        device_free_bytes, _device_total_bytes = torch.cuda.mem_get_info()
+        custody_anchor = args.artifact_root.anchor or str(args.artifact_root)
+        resource_preflight = dense_a1_resource_preflight(
+            parameter_count=a1_config.structural_parameter_count(),
+            write_budget_bytes=args.write_budget_gib * 1024**3,
+            transient_checkpoint_bytes=args.transient_checkpoint_gib * 1024**3,
+            host_commit_reserve_bytes=args.host_commit_reserve_gib * 1024**3,
+            gpu_free_margin_bytes=args.gpu_free_margin_gib * 1024**3,
+            b_custody_floor_bytes=args.b_custody_floor_gib * 1024**3,
+            available_commit_bytes=available_host_commit_bytes(),
+            device_free_bytes=int(device_free_bytes),
+            custody_free_bytes=shutil.disk_usage(custody_anchor).free,
+        )
+        resource_preflight["governor"] = governor_receipt
         result = run_dense_a1(
             repo_root=Path(__file__).resolve().parents[2],
             seed=args.seed,
@@ -4262,6 +4355,7 @@ def main() -> None:
             write_budget_bytes=args.write_budget_gib * 1024**3,
             telemetry_path=args.telemetry_path,
             telemetry_run_id=args.telemetry_run_id,
+            resource_preflight=resource_preflight,
         )
     else:
         require_disk_budget_runner_contract()
