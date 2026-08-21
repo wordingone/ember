@@ -438,6 +438,36 @@ pub struct ReceiptArtifact {
     pub sha256: String,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResourceGuardRearmRequest {
+    pub frozen_observation_sha256: String,
+    pub breach_class: String,
+    pub diagnostic_receipt_path: PathBuf,
+    pub diagnostic_receipt_sha256: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ResourceGuardDiagnosticReceipt {
+    schema_version: String,
+    result: String,
+    breach_class: String,
+    frozen_observation_sha256: String,
+    executed_at_ms: i64,
+    probe: ResourceGuardDiagnosticProbe,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ResourceGuardDiagnosticProbe {
+    resource: String,
+    kind: String,
+    real_allocation_executed: bool,
+    requested_bytes: u64,
+    result: String,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct AssessmentEvidenceArtifact {
     pub schema: String,
@@ -726,6 +756,11 @@ const RESOURCE_GUARD_MIN_PHYSICAL_AVAILABLE_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 const RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 const RESOURCE_GUARD_OBSERVATION_LIMIT: i64 = 1024;
 const RESOURCE_GUARD_SAMPLE_INTERVAL_MS: u32 = 2_000;
+const RESOURCE_GUARD_REARM_BASE_SAMPLE_COUNT: usize = 30;
+const RESOURCE_GUARD_REARM_BASE_WINDOW_MS: i64 = 60_000;
+const RESOURCE_GUARD_REARM_FRESHNESS_MS: i64 = 10_000;
+const RESOURCE_GUARD_REARM_FLAP_WINDOW_MS: i64 = 30 * 60 * 1_000;
+const RESOURCE_GUARD_REARM_MAX_MULTIPLIER: usize = 4;
 const PROTECTIVE_CHECKPOINT_REQUEST_ENV: &str = "EMBER_LAB_PROTECTIVE_CHECKPOINT_REQUEST_PATH";
 const PROTECTIVE_CHECKPOINT_RESPONSE_ENV: &str = "EMBER_LAB_PROTECTIVE_CHECKPOINT_RESPONSE_PATH";
 const PROTECTIVE_CHECKPOINT_MAX_GRACE_MS: u64 = 30_000;
@@ -1440,6 +1475,7 @@ impl Daemon {
             CREATE TABLE IF NOT EXISTS dispatch_tokens(token_sha256 TEXT PRIMARY KEY, job_id TEXT NOT NULL UNIQUE, pid INTEGER NOT NULL, program TEXT NOT NULL, argv_sha256 TEXT NOT NULL, expires_at_ms INTEGER NOT NULL, consumed_at_ms INTEGER, FOREIGN KEY(job_id) REFERENCES jobs(job_id));
             CREATE TABLE IF NOT EXISTS resource_guard_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), admission_state TEXT NOT NULL CHECK(admission_state IN ('open','frozen')), reason TEXT, observed_at_ms INTEGER NOT NULL, oracle_evidence_required INTEGER NOT NULL CHECK(oracle_evidence_required IN (0,1)), observation_json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS resource_guard_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS resource_guard_rearms(frozen_observation_sha256 TEXT PRIMARY KEY, breach_class TEXT NOT NULL, transitioned_at_ms INTEGER NOT NULL, receipt_path TEXT NOT NULL, receipt_sha256 TEXT NOT NULL UNIQUE, healthy_sample_count INTEGER NOT NULL, healthy_window_ms INTEGER NOT NULL, flap_multiplier INTEGER NOT NULL);
             INSERT OR IGNORE INTO resource_guard_state(singleton,admission_state,reason,observed_at_ms,oracle_evidence_required,observation_json) VALUES(1,'open',NULL,0,0,'{}');")?;
         migrate_schema(&mut conn, &log_dir)?;
         conn.execute(
@@ -1499,6 +1535,298 @@ impl Daemon {
     pub fn resource_guard_status(&self) -> Result<Value> {
         let conn = self.conn()?;
         resource_guard_status_from_connection(&conn)
+    }
+
+    pub fn rearm_resource_guard(
+        &self,
+        request: ResourceGuardRearmRequest,
+    ) -> Result<ReceiptArtifact> {
+        self.rearm_resource_guard_inner(request, now_ms())
+    }
+
+    #[cfg(debug_assertions)]
+    #[doc(hidden)]
+    pub fn rearm_resource_guard_at(
+        &self,
+        request: ResourceGuardRearmRequest,
+        observed_at_ms: i64,
+    ) -> Result<ReceiptArtifact> {
+        self.rearm_resource_guard_inner(request, observed_at_ms)
+    }
+
+    fn rearm_resource_guard_inner(
+        &self,
+        request: ResourceGuardRearmRequest,
+        transition_at_ms: i64,
+    ) -> Result<ReceiptArtifact> {
+        let diagnostic_bytes = fs::read(&request.diagnostic_receipt_path)?;
+        if !is_sha256(&request.frozen_observation_sha256)
+            || !is_sha256(&request.diagnostic_receipt_sha256)
+            || hash_bytes(&diagnostic_bytes) != request.diagnostic_receipt_sha256
+            || request
+                .diagnostic_receipt_path
+                .file_stem()
+                .and_then(|value| value.to_str())
+                != Some(request.diagnostic_receipt_sha256.as_str())
+        {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "resource guard re-arm diagnostic receipt is not content-addressed".into(),
+            });
+        }
+        let diagnostic: ResourceGuardDiagnosticReceipt = serde_json::from_slice(&diagnostic_bytes)?;
+        let expected_resource = match request.breach_class.as_str() {
+            "commit_remaining_below_survival_floor" => "host_commit",
+            "physical_available_below_survival_floor" => "host_physical_memory",
+            "resource_guard_probe_failed" => "host_resource_counters",
+            _ => {
+                return Err(EmberLabError::InvalidDispatchManifest {
+                    detail: "resource guard re-arm breach class is not closed".into(),
+                })
+            }
+        };
+        if diagnostic.schema_version != "ember-lab-resource-guard-diagnostic-v1"
+            || diagnostic.result != "EXECUTED"
+            || diagnostic.breach_class != request.breach_class
+            || diagnostic.frozen_observation_sha256 != request.frozen_observation_sha256
+            || diagnostic.probe.resource != expected_resource
+            || diagnostic.probe.kind != "allocation_probe"
+            || !diagnostic.probe.real_allocation_executed
+            || diagnostic.probe.requested_bytes == 0
+            || diagnostic.probe.result != "COMPLETED"
+        {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "resource guard re-arm diagnostic receipt is not an executed bound probe"
+                    .into(),
+            });
+        }
+
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let (state, reason, freeze_at_ms, frozen_observation_json): (
+            String,
+            Option<String>,
+            i64,
+            String,
+        ) = tx.query_row(
+            "SELECT admission_state,reason,observed_at_ms,observation_json FROM resource_guard_state WHERE singleton=1",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )?;
+        if state != "frozen"
+            || reason.as_deref() != Some(request.breach_class.as_str())
+            || hash_bytes(frozen_observation_json.as_bytes()) != request.frozen_observation_sha256
+        {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "resource guard re-arm does not bind the live frozen observation".into(),
+            });
+        }
+        let already_consumed: i64 = tx.query_row(
+            "SELECT COUNT(*) FROM resource_guard_rearms WHERE frozen_observation_sha256=?1",
+            [&request.frozen_observation_sha256],
+            |row| row.get(0),
+        )?;
+        if already_consumed != 0 {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "resource guard re-arm frozen observation was already consumed".into(),
+            });
+        }
+        let freeze_seq: i64 = tx
+            .query_row(
+                "SELECT seq FROM resource_guard_observations WHERE observed_at_ms=?1 AND outcome='frozen' AND payload_json=?2 ORDER BY seq DESC LIMIT 1",
+                params![freeze_at_ms, frozen_observation_json],
+                |row| row.get(0),
+            )
+            .map_err(|_| EmberLabError::InvalidDispatchManifest {
+                detail: "resource guard re-arm freeze-causing observation row is absent".into(),
+            })?;
+        let recent_rearms: i64 = tx.query_row(
+            "SELECT COUNT(*) FROM resource_guard_rearms WHERE breach_class=?1 AND transitioned_at_ms>=?2 AND transitioned_at_ms<?3",
+            params![
+                request.breach_class,
+                transition_at_ms - RESOURCE_GUARD_REARM_FLAP_WINDOW_MS,
+                transition_at_ms,
+            ],
+            |row| row.get(0),
+        )?;
+        let shift = u32::try_from(recent_rearms.max(0))
+            .unwrap_or(u32::MAX)
+            .min(2);
+        let flap_multiplier = (1usize << shift).min(RESOURCE_GUARD_REARM_MAX_MULTIPLIER);
+        let required_samples = RESOURCE_GUARD_REARM_BASE_SAMPLE_COUNT * flap_multiplier;
+        let required_window_ms = RESOURCE_GUARD_REARM_BASE_WINDOW_MS
+            * i64::try_from(flap_multiplier).unwrap_or(i64::MAX);
+
+        let mut statement = tx.prepare(
+            "SELECT seq,observed_at_ms,outcome,payload_json FROM resource_guard_observations WHERE seq>?1 ORDER BY seq",
+        )?;
+        let rows = statement.query_map([freeze_seq], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        })?;
+        let mut healthy_tail: Vec<(i64, i64, String)> = Vec::new();
+        for row in rows {
+            let (seq, observed_at_ms, outcome, payload_json) = row?;
+            if outcome != "healthy" {
+                healthy_tail.clear();
+                continue;
+            }
+            let payload: Value = serde_json::from_str(&payload_json)?;
+            let physical = payload
+                .get("physical_available_bytes")
+                .and_then(Value::as_u64);
+            let commit = payload
+                .get("commit_remaining_bytes")
+                .and_then(Value::as_u64);
+            let payload_physical_floor = payload
+                .get("minimum_physical_available_bytes")
+                .and_then(Value::as_u64);
+            let payload_commit_floor = payload
+                .get("minimum_commit_remaining_bytes")
+                .and_then(Value::as_u64);
+            let physical_required = RESOURCE_GUARD_MIN_PHYSICAL_AVAILABLE_BYTES
+                .checked_mul(3)
+                .and_then(|value| value.checked_div(2));
+            let commit_required = RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES
+                .checked_mul(3)
+                .and_then(|value| value.checked_div(2));
+            if payload.get("schema_version")
+                != Some(&Value::String(
+                    "ember-lab-resource-guard-observation-v1".into(),
+                ))
+                || payload.get("result") != Some(&Value::String("HEALTHY".into()))
+                || payload.get("observed_at_ms") != Some(&Value::from(observed_at_ms))
+                || payload_physical_floor != Some(RESOURCE_GUARD_MIN_PHYSICAL_AVAILABLE_BYTES)
+                || payload_commit_floor != Some(RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES)
+                || physical
+                    .zip(physical_required)
+                    .map_or(true, |(actual, floor)| actual < floor)
+                || commit
+                    .zip(commit_required)
+                    .map_or(true, |(actual, floor)| actual < floor)
+            {
+                healthy_tail.clear();
+                continue;
+            }
+            healthy_tail.push((seq, observed_at_ms, payload_json));
+        }
+        drop(statement);
+        if healthy_tail.len() < required_samples {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "resource guard re-arm healthy sample count is insufficient".into(),
+            });
+        }
+        let first_healthy_at_ms = healthy_tail.first().map(|row| row.1).unwrap_or_default();
+        let (newest_healthy_seq, newest_healthy_at_ms, newest_healthy_json) =
+            healthy_tail.last().cloned().unwrap_or_default();
+        let healthy_window_ms = newest_healthy_at_ms - first_healthy_at_ms;
+        let freshness_ms = transition_at_ms - newest_healthy_at_ms;
+        if healthy_window_ms < required_window_ms {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "resource guard re-arm healthy window is too short".into(),
+            });
+        }
+        if !(0..=RESOURCE_GUARD_REARM_FRESHNESS_MS).contains(&freshness_ms) {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "resource guard re-arm newest healthy observation is stale or future"
+                    .into(),
+            });
+        }
+        if diagnostic.executed_at_ms < first_healthy_at_ms
+            || diagnostic.executed_at_ms > newest_healthy_at_ms
+        {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail:
+                    "resource guard re-arm diagnostic did not execute inside the healthy window"
+                        .into(),
+            });
+        }
+        let newest_row_at_commit: (i64, i64, String, String) = tx.query_row(
+            "SELECT seq,observed_at_ms,outcome,payload_json FROM resource_guard_observations ORDER BY seq DESC LIMIT 1",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )?;
+        if newest_row_at_commit
+            != (
+                newest_healthy_seq,
+                newest_healthy_at_ms,
+                "healthy".into(),
+                newest_healthy_json.clone(),
+            )
+        {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "resource guard re-arm newest healthy observation changed before transition commit"
+                    .into(),
+            });
+        }
+
+        let receipt = json!({
+            "schema_version": "ember-lab-resource-guard-rearm-v1",
+            "result": "RESOURCE_GUARD_REARMED",
+            "transitioned_at_ms": transition_at_ms,
+            "breach_class": request.breach_class,
+            "frozen_observation_sha256": request.frozen_observation_sha256,
+            "diagnostic_receipt_path": request.diagnostic_receipt_path,
+            "diagnostic_receipt_sha256": request.diagnostic_receipt_sha256,
+            "healthy_window": {
+                "sample_count": healthy_tail.len(),
+                "first_observed_at_ms": first_healthy_at_ms,
+                "newest_observed_at_ms": newest_healthy_at_ms,
+                "span_ms": healthy_window_ms,
+                "freshness_ms": freshness_ms,
+                "hysteresis_numerator": 3,
+                "hysteresis_denominator": 2,
+                "minimum_physical_available_bytes": RESOURCE_GUARD_MIN_PHYSICAL_AVAILABLE_BYTES,
+                "minimum_commit_remaining_bytes": RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES,
+            },
+            "flap_guard": {
+                "prior_same_class_rearms_within_30m": recent_rearms,
+                "multiplier": flap_multiplier,
+                "required_sample_count": required_samples,
+                "required_window_ms": required_window_ms,
+                "maximum_multiplier": RESOURCE_GUARD_REARM_MAX_MULTIPLIER,
+            },
+            "transition": {"from": "frozen", "to": "open"},
+        });
+        let receipt_bytes = serde_json::to_vec_pretty(&receipt)?;
+        let artifact = write_content_addressed_receipt(
+            &self.log_dir.join("resource-guard-rearms"),
+            &receipt_bytes,
+        )?;
+        tx.execute(
+            "INSERT INTO resource_guard_rearms(frozen_observation_sha256,breach_class,transitioned_at_ms,receipt_path,receipt_sha256,healthy_sample_count,healthy_window_ms,flap_multiplier) VALUES(?1,?2,?3,?4,?5,?6,?7,?8)",
+            params![
+                request.frozen_observation_sha256,
+                request.breach_class,
+                transition_at_ms,
+                artifact.path.to_string_lossy(),
+                artifact.sha256,
+                i64::try_from(healthy_tail.len()).unwrap_or(i64::MAX),
+                healthy_window_ms,
+                i64::try_from(flap_multiplier).unwrap_or(i64::MAX),
+            ],
+        )?;
+        let changed = tx.execute(
+            "UPDATE resource_guard_state SET admission_state='open',reason=NULL,observed_at_ms=?1,oracle_evidence_required=0,observation_json=?2 WHERE singleton=1 AND admission_state='frozen' AND reason=?3 AND observed_at_ms=?4 AND observation_json=?5",
+            params![
+                newest_healthy_at_ms,
+                newest_healthy_json,
+                request.breach_class,
+                freeze_at_ms,
+                frozen_observation_json,
+            ],
+        )?;
+        if changed != 1 {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "resource guard re-arm live frozen state changed before transition commit"
+                    .into(),
+            });
+        }
+        tx.commit()?;
+        Ok(artifact)
     }
 
     pub fn import_data_catalog_manifest(
@@ -6732,6 +7060,7 @@ fn migrate_schema(conn: &mut Connection, log_dir: &Path) -> Result<()> {
     tx.execute_batch(
         "CREATE TABLE IF NOT EXISTS resource_guard_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), admission_state TEXT NOT NULL CHECK(admission_state IN ('open','frozen')), reason TEXT, observed_at_ms INTEGER NOT NULL, oracle_evidence_required INTEGER NOT NULL CHECK(oracle_evidence_required IN (0,1)), observation_json TEXT NOT NULL);
          CREATE TABLE IF NOT EXISTS resource_guard_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL);
+         CREATE TABLE IF NOT EXISTS resource_guard_rearms(frozen_observation_sha256 TEXT PRIMARY KEY, breach_class TEXT NOT NULL, transitioned_at_ms INTEGER NOT NULL, receipt_path TEXT NOT NULL, receipt_sha256 TEXT NOT NULL UNIQUE, healthy_sample_count INTEGER NOT NULL, healthy_window_ms INTEGER NOT NULL, flap_multiplier INTEGER NOT NULL);
          INSERT OR IGNORE INTO resource_guard_state(singleton,admission_state,reason,observed_at_ms,oracle_evidence_required,observation_json) VALUES(1,'open',NULL,0,0,'{}');",
     )?;
     data_catalog::migrate(&tx)?;
@@ -6748,6 +7077,7 @@ fn create_resource_guard_tables(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS resource_guard_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), admission_state TEXT NOT NULL CHECK(admission_state IN ('open','frozen')), reason TEXT, observed_at_ms INTEGER NOT NULL, oracle_evidence_required INTEGER NOT NULL CHECK(oracle_evidence_required IN (0,1)), observation_json TEXT NOT NULL);
          CREATE TABLE IF NOT EXISTS resource_guard_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL);
+         CREATE TABLE IF NOT EXISTS resource_guard_rearms(frozen_observation_sha256 TEXT PRIMARY KEY, breach_class TEXT NOT NULL, transitioned_at_ms INTEGER NOT NULL, receipt_path TEXT NOT NULL, receipt_sha256 TEXT NOT NULL UNIQUE, healthy_sample_count INTEGER NOT NULL, healthy_window_ms INTEGER NOT NULL, flap_multiplier INTEGER NOT NULL);
          INSERT OR IGNORE INTO resource_guard_state(singleton,admission_state,reason,observed_at_ms,oracle_evidence_required,observation_json) VALUES(1,'open',NULL,0,0,'{}');",
     )?;
     Ok(())
