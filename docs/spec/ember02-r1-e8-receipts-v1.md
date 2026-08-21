@@ -73,13 +73,66 @@ Raw per-step liveness telemetry reuses the frozen `train_step` envelope
 `proxy_joules` (non-negative decimal) for the steps a liveness series covers.
 
 `tools/ember-restart-3b/a1_execution.py::run_dense_a1` wires `tokens` and
-`wall_seconds` honestly as of issue #1464's residual: each is measured per
-step (`time.perf_counter()` at step start, differenced at telemetry-write
-time). `proxy_joules` stays unwired -- no per-step energy sampler exists in
-this repository; `energy_proxy_logger.py` integrates GPU/CPU draw only over
-a run's whole lifetime, out-of-process at 1 Hz, never per optimizer step --
-so `a1_e8_evidence.derive_liveness_series` correctly finds zero
-liveness-complete rows for any real A1 run until a genuine per-step energy
-source is wired. Fabricating a placeholder (including the schema-legal `0`)
-was deliberately avoided: a liveness series built on invented energy would
-poison the E8 verdict it feeds.
+`wall_seconds` honestly as of issue #1464's first residual: each is measured
+per step (`time.perf_counter()` at step start, differenced at
+telemetry-write time).
+
+`proxy_joules` is now derived, closing issue #1464's second residual, by
+`tools/ember-restart-3b/a1_energy_apportionment.py`. The energy sidecar
+(`energy_proxy_logger.py --watch-pidfile`, launched as an independent OS
+process that communicates with the training child only through a pidfile --
+so an evidence sampler can never block or crash certified training) now
+persists its raw measured-window GPU readings as it captures them, one
+`{"ts": <unix seconds>, "watts": <non-negative float>}` object per line, to
+`energy_proxy_logger.samples_path_for(receipt_path)` -- a sibling of the
+aggregate `ember-energy-proxy-run-v1` receipt, named by the receipt's file
+stem plus `.gpu-samples.jsonl`. This is the raw record the whole-run
+`energy` block was already integrated from; it was previously discarded
+once aggregated.
+
+`a1_energy_apportionment.apportion_step_energy` reopens that raw record and
+a run's raw `train_step` telemetry, and derives each step's `proxy_joules`
+as the trapezoidal integral of REAL measured draw over the step's
+whole-boundary wall interval `[ts - wall_seconds, ts]` -- the same `ts` and
+`wall_seconds` `_train_step_envelope` already writes. This is measured
+apportionment, never fabrication: a step's `proxy_joules` is minted only
+when (a) at least one raw sample timestamp falls inside the step's own
+interval, and (b) both interval boundaries fall inside the sample record's
+own timestamp coverage, so the trapezoid only ever interpolates between two
+real observations and never extrapolates past one. A step that fails either
+condition -- the sidecar never ran, its samples are too sparse to touch this
+step's interval, or this step's interval reaches outside the sample
+record's own coverage -- keeps no `proxy_joules` field at all, exactly the
+schema-legal absence `derive_liveness_series` already refuses correctly (its
+`no liveness-complete train_step rows` refusal). A samples record that is
+present but malformed, non-finite, or carries a negative watts reading
+refuses the WHOLE record (`EnergyApportionmentError`) rather than silently
+skipping the bad line: a corrupted or negative-power sample stream cannot be
+trusted to bound any step's interval honestly, including steps far from the
+defect.
+
+`a1_energy_apportionment.enrich_telemetry_with_energy` performs the actual
+write: an in-place, atomic (same-directory temp file + `os.replace`)
+rewrite of the telemetry file that adds `proxy_joules` to every row this
+module could honestly derive, leaving every other line -- other runs, other
+event kinds, and any row it could not derive -- byte-identical, and never
+overwriting a row that already carries the field. It is wired into
+`certified_train_launch.py::execute_validated_launch` as
+`_apportion_a1_step_energy`, called after `_finish_energy_sidecar` closes
+the sidecar's measured window and strictly before `_finalize_a1_packet_a`
+-- no receipt has pinned the A1 telemetry file's bytes yet at that point, so
+the in-place rewrite is safe. Never fatal, mirroring the sidecar's own
+non-fatal spawn posture: a run this pass cannot enrich (no sidecar samples,
+no overlapping coverage) simply stays exactly as liveness-incomplete at the
+E8 producer as it did before this module existed.
+
+Architectural note: the sidecar and the training loop are two independent
+processes by design (the #1489 lesson: an evidence sampler must never be
+able to block or crash the certified child), so there is no honest in-loop
+point at which `_train_step_envelope` itself could attribute a step's
+energy -- the training process has no live channel to the sidecar's
+in-flight samples while a step is executing. The derivation is therefore a
+post-pass over two already-closed artifacts, reopened and joined after both
+producing processes have exited, the same "reopen, never construct forward"
+discipline this document's liveness producer already follows for run
+receipts and the charged-budget contract.
