@@ -96,16 +96,23 @@ def _train_step_envelope(
     differenced at telemetry-write time) -- reported in seconds rather than
     milliseconds because that is the unit the liveness series requires.
 
-    `proxy_joules` is deliberately absent. No per-step energy sampler exists
-    in this repository: `energy_proxy_logger.py` integrates GPU/CPU draw over
-    a run's whole lifetime through an out-of-process sidecar sampling at 1 Hz
-    against a pidfile, not per optimizer step, so there is nothing honest to
-    attribute to one step. Emitting a placeholder here -- even the
-    schema-legal `0` -- would misrepresent real, nonzero per-step draw as a
-    measurement. Until a genuine per-step energy source is wired,
-    `derive_liveness_series` correctly finds zero liveness-complete rows for
-    any run this function produces; that is the named residual this function
-    leaves open, not a defect in what it enforces.
+    `proxy_joules` is deliberately absent HERE. `energy_proxy_logger.py`
+    samples GPU/CPU draw through an out-of-process sidecar communicating
+    with this training process only through a pidfile (the #1489 lesson: an
+    evidence sampler must never be able to block or crash certified
+    training), so this function has no live channel to a sample while a
+    step is executing -- there is nothing honest to attribute in-loop.
+    `proxy_joules` is instead derived by a POST-PASS,
+    `a1_energy_apportionment.enrich_telemetry_with_energy` (issue #1464's
+    second residual), which reopens this envelope's `ts`/`wall_seconds` and
+    the sidecar's raw persisted samples once both processes have closed,
+    and rewrites the telemetry file in place wherever a real sample record
+    honestly covers a step's interval -- never a placeholder. A run whose
+    sidecar samples do not cover a given step (no sampler ran, sparse
+    coverage, or the step's interval reaches outside the sample record's
+    own timestamp range) leaves that row exactly as this function emits it,
+    and `derive_liveness_series` correctly continues to find it
+    liveness-incomplete.
     """
     return {
         "ts": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),

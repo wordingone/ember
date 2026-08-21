@@ -6062,5 +6062,85 @@ class DispatchAuthorityTests(unittest.TestCase):
         self.assertEqual(effects, [f"consume:{ROOT}", "validate"])
 
 
+class A1StepEnergyApportionmentWiringTests(unittest.TestCase):
+    """Issue #1464 residual: `_apportion_a1_step_energy` is the post-pass
+    join point wired into `execute_validated_launch` between
+    `_finish_energy_sidecar` and `_finalize_a1_packet_a` -- see
+    `tools/ember-restart-3b/a1_energy_apportionment.py`'s module docstring
+    for why a post-pass (not in-loop) is the architecturally honest choice.
+    """
+
+    def _write_jsonl(self, path: pathlib.Path, rows: list[dict]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8", newline="\n") as handle:
+            for row in rows:
+                handle.write(json.dumps(row, sort_keys=True) + "\n")
+
+    def test_no_telemetry_path_is_a_graceful_noop(self) -> None:
+        module = load_module()
+        launch = SimpleNamespace(a1_telemetry_path=None, run_id="a1run")
+        disclosure: dict[str, object] = {"receipt_path": "unused", "receipt_written": True}
+        module._apportion_a1_step_energy(ROOT, launch, disclosure)
+        self.assertNotIn("energy_apportionment_note", disclosure)
+
+    def test_no_energy_receipt_written_is_a_graceful_noop(self) -> None:
+        module = load_module()
+        launch = SimpleNamespace(a1_telemetry_path=pathlib.Path("telemetry.jsonl"), run_id="a1run")
+        disclosure: dict[str, object] = {"spawned": False, "note": "sidecar skipped: injected run_process (test double)"}
+        module._apportion_a1_step_energy(ROOT, launch, disclosure)
+        self.assertEqual(
+            disclosure["energy_apportionment_note"],
+            "skipped: no energy-proxy receipt was written for this run",
+        )
+
+    def test_real_samples_enrich_the_real_telemetry_file(self) -> None:
+        """The wiring's own real-path leg: a real `_train_step_envelope` row
+        plus a real raw samples sidecar file, joined through the actual
+        dynamically-loaded `a1_energy_apportionment.py` module -- the same
+        load path `execute_validated_launch` uses in production."""
+        module = load_module()
+        tools_directory = str(ROOT / "tools" / "ember-restart-3b")
+        inserted = tools_directory not in sys.path
+        if inserted:
+            sys.path.insert(0, tools_directory)
+        try:
+            a1_execution_path = ROOT / "tools" / "ember-restart-3b" / "a1_execution.py"
+            spec = importlib.util.spec_from_file_location("a1_execution_for_wiring_test", a1_execution_path)
+            assert spec is not None and spec.loader is not None
+            a1_execution = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(a1_execution)
+        finally:
+            if inserted:
+                sys.path.remove(tools_directory)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            telemetry_path = root / "a1-telemetry.jsonl"
+            from datetime import datetime, timezone
+
+            event = a1_execution._train_step_envelope(
+                run_id="a1run", step=1, tokens=170, loss=1.0, wall_seconds=1.0,
+            )
+            event["ts"] = datetime.fromtimestamp(1.0, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+            self._write_jsonl(telemetry_path, [event])
+
+            receipt_path = root / "energy-proxy-receipt.json"
+            samples_path = root / "energy-proxy-receipt.gpu-samples.jsonl"
+            with samples_path.open("w", encoding="utf-8", newline="\n") as handle:
+                handle.write(json.dumps({"ts": 0.0, "watts": 100.0}, sort_keys=True) + "\n")
+                handle.write(json.dumps({"ts": 1.0, "watts": 150.0}, sort_keys=True) + "\n")
+
+            launch = SimpleNamespace(a1_telemetry_path=telemetry_path, run_id="a1run")
+            disclosure = {"receipt_path": str(receipt_path), "receipt_written": True}
+            module._apportion_a1_step_energy(ROOT, launch, disclosure)
+
+            self.assertEqual(
+                disclosure["energy_apportionment_note"],
+                "1 train_step row(s) enriched with proxy_joules",
+            )
+            enriched_row = json.loads(telemetry_path.read_text(encoding="utf-8").splitlines()[0])
+            self.assertEqual(enriched_row["payload"]["proxy_joules"], "125.000000000000")
+
+
 if __name__ == "__main__":
     unittest.main()

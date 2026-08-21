@@ -31,18 +31,21 @@ Raw per-step liveness telemetry reuses the frozen `train_step` envelope
 loss/grad_norm, extended with three additional payload fields this producer
 requires: `tokens` (int > 0), `wall_seconds` (decimal > 0, whole-boundary
 step duration), and `proxy_joules` (decimal >= 0, from `energy_proxy_logger`
-`sec5.3` accounting). `a1_execution.run_dense_a1` (issue #1464 residual) now
-emits `tokens` and `wall_seconds` honestly, measured per step; `proxy_joules`
-remains unwired because no per-step energy sampler exists anywhere in this
-repository -- `energy_proxy_logger.py` only integrates GPU/CPU draw over a
-run's whole lifetime, out-of-process at 1 Hz, never per optimizer step -- and
-`a1_execution._train_step_envelope` deliberately omits the field rather than
-fabricate a placeholder. Consequently `derive_liveness_series` still finds
-zero liveness-complete rows for any real A1 run: every test here still
-constructs the full three-field envelope by hand, exactly as
-`r1_exit_battery.py`'s own train_step selftest fixtures already do. That
-remaining gap -- a genuine per-step energy source -- is this module's named
-residual, not a gap in what it enforces.
+`sec5.3` accounting). `a1_execution.run_dense_a1` (issue #1464's first
+residual) emits `tokens` and `wall_seconds` honestly, measured per step.
+`proxy_joules` is derived by a distinct post-pass,
+`a1_energy_apportionment.enrich_telemetry_with_energy` (issue #1464's second
+residual, `docs/spec/ember02-r1-e8-receipts-v1.md`): it reopens the energy
+sidecar's raw measured-window GPU samples and time-weight-integrates them
+over each step's `[ts - wall_seconds, ts]` interval, adding `proxy_joules`
+to the telemetry file in place only where a real sample record honestly
+covers the interval -- never a placeholder. A step whose interval the
+sidecar's samples do not cover (no sampler ran, sparse coverage, or the
+interval reaches outside the sample record's own timestamp range) keeps no
+`proxy_joules` field, so `derive_liveness_series` still correctly finds it
+liveness-incomplete; this producer's own tests still construct the full
+three-field envelope by hand for that reason, exactly as
+`r1_exit_battery.py`'s own train_step selftest fixtures already do.
 """
 from __future__ import annotations
 

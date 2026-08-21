@@ -4041,6 +4041,59 @@ def _finish_energy_sidecar(
     disclosure["receipt_written"] = receipt.is_file()
 
 
+def _apportion_a1_step_energy(
+    repo_root: pathlib.Path, launch: ValidatedLaunch, sidecar_disclosure: dict[str, Any]
+) -> None:
+    """Post-pass join of the closed energy sidecar samples and the closed A1
+    telemetry file (issue #1464's per-step energy residual) --
+    `tools/ember-restart-3b/a1_energy_apportionment.py`'s module docstring
+    documents why this must be a post-pass and not an in-loop attribution.
+
+    Runs only when the training child exited 0 and the sidecar wrote a
+    receipt, and always strictly BEFORE `_finalize_a1_packet_a`: no receipt
+    has pinned the A1 telemetry file's bytes at this point, so the in-place
+    enrichment rewrite `enrich_telemetry_with_energy` performs is safe.
+
+    Never fatal, mirroring `_start_energy_sidecar`'s own posture: an
+    evidence-enrichment pass must not be able to fail a certified launch. A
+    run this cannot enrich (no sidecar samples, no overlapping coverage)
+    simply stays exactly as liveness-incomplete at the E8 producer as it is
+    today -- this function can only add real, measured evidence, never
+    remove any.
+    """
+    if launch.a1_telemetry_path is None:
+        return
+    receipt_path = sidecar_disclosure.get("receipt_path")
+    if not receipt_path or not sidecar_disclosure.get("receipt_written"):
+        sidecar_disclosure["energy_apportionment_note"] = (
+            "skipped: no energy-proxy receipt was written for this run"
+        )
+        return
+    module_path = repo_root / "tools" / "ember-restart-3b" / "a1_energy_apportionment.py"
+    tools_directory = str(module_path.parent)
+    inserted = tools_directory not in sys.path
+    if inserted:
+        sys.path.insert(0, tools_directory)
+    try:
+        specification = importlib.util.spec_from_file_location(
+            "ember_a1_energy_apportionment", module_path
+        )
+        if specification is None or specification.loader is None:
+            raise RuntimeError("energy apportionment module cannot be loaded")
+        module = importlib.util.module_from_spec(specification)
+        specification.loader.exec_module(module)
+        samples_path = module.samples_path_for(pathlib.Path(receipt_path))
+        enriched_count = module.enrich_telemetry_with_energy(
+            launch.a1_telemetry_path, samples_path, run_id=launch.run_id,
+        )
+        sidecar_disclosure["energy_apportionment_note"] = (
+            f"{enriched_count} train_step row(s) enriched with proxy_joules"
+        )
+    finally:
+        if inserted:
+            sys.path.remove(tools_directory)
+
+
 def _finalize_a1_packet_a(repo_root: pathlib.Path, launch: ValidatedLaunch) -> None:
     """Load the dense finalizer from this tree only after the energy window."""
 
@@ -4192,6 +4245,12 @@ def execute_validated_launch(
                     f"{prior_note}; {finalize_note}" if prior_note else finalize_note
                 )
     if exit_code == 0 and launch.a1_family is not None:
+        try:
+            _apportion_a1_step_energy(repo_root, launch, sidecar_disclosure)
+        except Exception as error:  # never fatal: evidence enrichment must not fail a launch
+            sidecar_disclosure["energy_apportionment_note"] = (
+                f"energy apportionment failed: {type(error).__name__}"
+            )
         try:
             _finalize_a1_packet_a(repo_root, launch)
         except Exception as error:  # fail closed: no Packet-A receipt, nonzero launch
