@@ -105,7 +105,7 @@ def _checked_in_partition_row(source_id: str) -> dict:
         ),
     ],
 )
-def test_closed_v2_supersession_reopens_both_exact_reviewed_producer_classes(
+def test_carrier_a_refuses_historical_rows_until_closed_v2_chain_extends(
     source_id: str, recorded_sha: str
 ):
     import text_lab_corpus
@@ -120,7 +120,7 @@ def test_closed_v2_supersession_reopens_both_exact_reviewed_producer_classes(
         lambda *_args: False,
     )
 
-    assert allows_v2(ROOT, row, recorded_sha, current_sha)
+    assert not allows_v2(ROOT, row, recorded_sha, current_sha)
 
 
 def test_partition_authority_refuses_unlisted_historical_receipt(tmp_path: Path):

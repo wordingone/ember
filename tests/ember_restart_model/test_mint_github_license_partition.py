@@ -231,6 +231,47 @@ def test_partition_reopen_hashes_blobs_with_closed_bounded_parallelism(tmp_path:
     assert 1 < maximum_active <= 8
 
 
+def test_partition_prepare_consumes_supplied_receipt_bytes_without_rereading(tmp_path: Path, monkeypatch):
+    module = _load()
+    receipt_path, receipt_sha = _connector(tmp_path, extra_files=3)
+    output = tmp_path / "partition"
+    receipt = _mint(module, receipt_path, receipt_sha, output)
+    partition_receipt = output / "partition-receipt.json"
+    receipt_bytes = partition_receipt.read_bytes()
+    original_read_bytes = Path.read_bytes
+
+    def refuse_partition_receipt_reread(path: Path) -> bytes:
+        if path == partition_receipt:
+            raise AssertionError("supplied partition receipt bytes were reread")
+        return original_read_bytes(path)
+
+    monkeypatch.setattr(Path, "read_bytes", refuse_partition_receipt_reread)
+
+    prepared, checks = module.prepare_partition_receipt(
+        partition_receipt,
+        raw_bytes=receipt_bytes,
+    )
+
+    assert prepared == receipt
+    assert len(checks) == receipt["file_count"]
+
+
+def test_partition_validation_preserves_blob_refusal_before_aggregate_refusal(tmp_path: Path):
+    module = _load()
+    receipt_path, receipt_sha = _connector(tmp_path)
+    output = tmp_path / "partition"
+    receipt = _mint(module, receipt_path, receipt_sha, output)
+    partition_receipt = output / "partition-receipt.json"
+    first_blob = output.joinpath(*receipt["repositories"][0]["files"][0]["blob_path"].split("/"))
+    first_blob.write_bytes(b"changed")
+    stored = json.loads(partition_receipt.read_bytes())
+    stored["file_count"] += 1
+    partition_receipt.write_bytes(_canonical(stored))
+
+    with pytest.raises(ValueError, match="partition receipt blob changed"):
+        module.validate_partition_receipt(partition_receipt)
+
+
 @pytest.mark.parametrize("mutation", ["archive", "receipt", "swap"])
 def test_tamper_and_partition_swap_refuse(tmp_path: Path, mutation: str):
     module = _load()
