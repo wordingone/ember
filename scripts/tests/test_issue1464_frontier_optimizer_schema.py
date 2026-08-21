@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import sys
 from copy import deepcopy
 from pathlib import Path
@@ -16,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import frontier_receipt as frontier  # noqa: E402
+import r1_exit_battery as battery  # noqa: E402
 
 
 DIGEST_A = "a" * 64
@@ -95,3 +97,68 @@ def test_v3_scalar_remains_accepted() -> None:
     assert field == "optimizer_state_shard_sha256"
     assert value == DIGEST_A
     assert cross_refs == {"optimizer-state.pt": DIGEST_A}
+
+
+CHECKPOINT_ROLES = (
+    "shared_model",
+    "optimizer_state_shared",
+    "replay_state",
+    "expert_vision",
+    "expert_audio",
+    "expert_reasoning",
+    "expert_tool",
+)
+
+
+def _write_role_manifest(tmp_path: Path) -> tuple[Path, dict[str, str]]:
+    hashes: dict[str, str] = {}
+    shards = []
+    for role in CHECKPOINT_ROLES:
+        relative = f"{role}.pt"
+        payload = f"owned-{role}".encode("utf-8")
+        (tmp_path / relative).write_bytes(payload)
+        digest = hashlib.sha256(payload).hexdigest()
+        hashes[role] = digest
+        shards.append({"role": role, "path": relative, "sha256": digest})
+    manifest_path = tmp_path / "checkpoint-manifest.json"
+    manifest_path.write_text(json.dumps({"shards": shards}), encoding="utf-8")
+    return manifest_path, hashes
+
+
+def test_identity_spine_accepts_complete_rehashed_manifest_role_map(tmp_path: Path) -> None:
+    manifest_path, hashes = _write_role_manifest(tmp_path)
+
+    assert battery._identity_spine_checkpoint_hash_defects(manifest_path, hashes) == []
+
+
+@pytest.mark.parametrize(
+    ("mutate", "expected"),
+    [
+        (lambda hashes: hashes.pop("expert_tool"), "missing role 'expert_tool'"),
+        (lambda hashes: hashes.__setitem__("foreign", "f" * 64), "unknown role 'foreign'"),
+        (
+            lambda hashes: hashes.__setitem__("shared_model", "0" * 64),
+            "role 'shared_model' does not equal the independently rehashed shard",
+        ),
+    ],
+    ids=["missing", "extra", "digest"],
+)
+def test_identity_spine_refuses_nonidentical_role_maps(tmp_path: Path, mutate, expected: str) -> None:
+    manifest_path, hashes = _write_role_manifest(tmp_path)
+    mutate(hashes)
+
+    defects = battery._identity_spine_checkpoint_hash_defects(manifest_path, hashes)
+
+    assert any(expected in defect for defect in defects), defects
+
+
+def test_identity_spine_refuses_manifest_shard_digest_mismatch(tmp_path: Path) -> None:
+    manifest_path, hashes = _write_role_manifest(tmp_path)
+    (tmp_path / "replay_state.pt").write_bytes(b"changed-after-manifest")
+
+    defects = battery._identity_spine_checkpoint_hash_defects(manifest_path, hashes)
+
+    assert defects == [
+        "identity_spine.checkpoint_file_sha256s cannot be independently rehashed: "
+        "CHECKPOINT_SHARD_SHA_MISMATCH"
+    ]

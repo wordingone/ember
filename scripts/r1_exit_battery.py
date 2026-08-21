@@ -1448,12 +1448,27 @@ E5_WALL_IDS = (
     "11-roofline-numerics", "12-seriality-iteration",
 )
 E5_WALL_VERDICTS = ("green", "red", "not_probed")
-# The manifest keys identity_spine.checkpoint_file_sha256s may mirror.
-E5_CHECKPOINT_HASH_KEYS = (
-    "shared_model_shard_sha256", "expert_checkpoint_sha256",
-    "optimizer_state_shard_sha256", "optimizer_state_owner_shard_sha256",
-    "rng_state_sha256",
-)
+def _identity_spine_checkpoint_hash_defects(
+    manifest_path: Path, claimed: dict[str, Any]
+) -> list[str]:
+    """Compare the spine's complete shard-role map to rehashed manifest shards."""
+    label = "identity_spine.checkpoint_file_sha256s"
+    try:
+        _manifest_sha, actual = frozen_eval._checkpoint_identity(manifest_path.parent)
+    except frozen_eval.FrozenEvalRefusal as error:
+        return [f"{label} cannot be independently rehashed: {error}"]
+
+    defects: list[str] = []
+    for role in sorted(actual.keys() - claimed.keys()):
+        defects.append(f"{label} missing role {role!r}")
+    for role in sorted(claimed.keys() - actual.keys()):
+        defects.append(f"{label} carries unknown role {role!r}")
+    for role in sorted(actual.keys() & claimed.keys()):
+        if claimed[role] != actual[role]:
+            defects.append(
+                f"{label} role {role!r} does not equal the independently rehashed shard"
+            )
+    return defects
 
 
 def _validate_frontier_content(
@@ -1711,19 +1726,10 @@ def _validate_frontier_content(
         file_shas = spine.get("checkpoint_file_sha256s")
         if not isinstance(file_shas, dict) or not file_shas:
             defects.append("identity_spine.checkpoint_file_sha256s missing or empty")
-        elif disk_manifest is not None:
-            for key, value in file_shas.items():
-                if key not in E5_CHECKPOINT_HASH_KEYS:
-                    defects.append(f"identity_spine.checkpoint_file_sha256s carries unknown key {key!r}")
-                elif key in {
-                    "optimizer_state_shard_sha256",
-                    "optimizer_state_owner_shard_sha256",
-                } and key != optimizer_manifest_key:
-                    defects.append(
-                        f"identity_spine.checkpoint_file_sha256s carries unselected optimizer field {key!r}"
-                    )
-                elif disk_manifest.get(key) != value:
-                    defects.append(f"identity_spine.checkpoint_file_sha256s[{key!r}] does not equal the checkpoint manifest's value")
+        elif manifest_path is not None:
+            defects.extend(
+                _identity_spine_checkpoint_hash_defects(manifest_path, file_shas)
+            )
 
     def _bind_run_file(label: str, rel_name: str, expected_sha: Any) -> tuple[Path, Any] | None:
         """Discover exactly one rel_name under the run root (quarantine and
