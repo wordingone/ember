@@ -4354,7 +4354,7 @@ def main() -> None:
             telemetry_run_id=args.telemetry_run_id,
         )
     elif args.command == "a1-dense-tier1":
-        require_disk_budget_runner_contract()
+        canonical_runner_authority = canonical_disk_budget_runner_authority()
         a1_config = DenseA1Config.from_contract(
             Path(__file__).resolve().with_name("ember-restart-3b-a1.json"),
             repo_root=Path(__file__).resolve().parents[2],
@@ -4374,6 +4374,7 @@ def main() -> None:
             custody_free_bytes=shutil.disk_usage(custody_anchor).free,
         )
         resource_preflight["governor"] = governor_receipt
+        resource_preflight["canonical_runner"] = canonical_runner_authority
         result = run_dense_a1(
             repo_root=Path(__file__).resolve().parents[2],
             seed=args.seed,

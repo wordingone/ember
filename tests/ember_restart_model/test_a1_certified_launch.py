@@ -92,6 +92,17 @@ def _resource_preflight_receipt(parameter_count: int = 3_839_344_640) -> dict[st
         "required_device_bytes": 2 * model + 4 * gib,
         "required_custody_bytes": checkpoint + 8 * gib,
         "governor": {"vram_fraction": 0.85, "free_gb": 24.0, "total_gb": 24.0, "margin_gb": 4.0},
+        # #1464: the a1-dense-tier1 route now attaches the canonical disk
+        # budget runner authority alongside the governor receipt; this
+        # fixture pins a closed, schema-valid shape (not the real
+        # canonical_disk_budget_runner_authority() output) since these
+        # finalize_tier1_run/run_dense_a1 tests never exercise the CLI's
+        # env-bound startup assertion.
+        "canonical_runner": {
+            "schema_version": "ember-canonical-disk-budget-startup-v1",
+            "assertion_sha256": "a" * 64,
+            "cache_bindings_sha256": "b" * 64,
+        },
     }
 
 
