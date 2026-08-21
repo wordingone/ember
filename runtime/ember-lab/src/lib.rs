@@ -1703,10 +1703,10 @@ impl Daemon {
                 || payload_commit_floor != Some(RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES)
                 || physical
                     .zip(physical_required)
-                    .map_or(true, |(actual, floor)| actual < floor)
+                    .is_none_or(|(actual, floor)| actual < floor)
                 || commit
                     .zip(commit_required)
-                    .map_or(true, |(actual, floor)| actual < floor)
+                    .is_none_or(|(actual, floor)| actual < floor)
             {
                 healthy_tail.clear();
                 continue;
