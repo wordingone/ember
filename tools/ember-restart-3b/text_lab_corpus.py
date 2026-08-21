@@ -574,6 +574,7 @@ _AUTHORITY_INDEX = "data/ember-restart-3b/text-lab-authority-index-v2.json"
 _AUTHORITY_INDEX_SCHEMA_V1 = "ember-text-lab-authority-index-v1"
 _AUTHORITY_INDEX_SCHEMA_V2 = "ember-text-lab-authority-index-v2"
 _PARTITION_PRODUCER_SUPERSESSIONS = "data/ember-restart-3b/partition-producer-supersessions-v1.json"
+_PARTITION_PRODUCER_SUPERSESSIONS_V2 = "data/ember-restart-3b/partition-producer-supersessions-v2.json"
 _PARTITION_PRODUCER_PATH = "tools/ember-restart-3b/mint_github_license_partition.py"
 _UNRESOLVED_FIELDS = {"source_id", "domain", "split", "admission", "required_evidence", "allowed_license_spdx"}
 _ADMITTED_FIELDS = _UNRESOLVED_FIELDS | {"content_sha256", "license_spdx", "l4_receipt", "license_evidence"}
@@ -894,8 +895,8 @@ def _validate_partition_authority_row(
     receipt = module.validate_partition_receipt(receipt_path)
     recorded_producer_sha = receipt.get("producer_sha256")
     current_producer_sha = _sha_bytes(producer_path.read_bytes())
-    if recorded_producer_sha != current_producer_sha and not _partition_producer_supersession_allows(
-        repo_root.resolve(), recorded_producer_sha, current_producer_sha
+    if recorded_producer_sha != current_producer_sha and not _partition_producer_supersession_allows_v2(
+        repo_root.resolve(), row, recorded_producer_sha, current_producer_sha
     ):
         raise ValueError("partition receipt producer bytes changed")
     if any(receipt.get(field) != row.get(field) for field in ("source_id", "split", "domain")):
@@ -1050,6 +1051,156 @@ def _partition_producer_supersession_allows(
         if blob.returncode == 0 and _sha_bytes(blob.stdout) == recorded_sha:
             return True
     return False
+
+
+def _partition_producer_supersession_allows_v2(
+    repo_root: Path, row: dict[str, Any], recorded_sha: Any, current_sha: str
+) -> bool:
+    """Accept only the reviewed two-hop chain for the exact nine bound rows."""
+    try:
+        table = json.loads(_path(repo_root, _PARTITION_PRODUCER_SUPERSESSIONS_V2).read_bytes())
+        prior = json.loads(_path(repo_root, _PARTITION_PRODUCER_SUPERSESSIONS).read_bytes())
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return False
+    if (
+        not isinstance(table, dict)
+        or set(table) != {"schema_version", "issue", "path", "transitions", "row_bindings"}
+        or table.get("schema_version") != "ember-partition-producer-supersessions-v2"
+        or table.get("issue") != 1719
+        or table.get("path") != _PARTITION_PRODUCER_PATH
+    ):
+        return False
+    transitions = table.get("transitions")
+    bindings = table.get("row_bindings")
+    if not isinstance(transitions, list) or len(transitions) != 2 or not isinstance(bindings, list) or len(bindings) != 9:
+        return False
+
+    binding_fields = {
+        "source_id", "license_partition_receipt", "license_partition_sha256",
+        "recorded_producer_sha256",
+    }
+    previous_source_id: str | None = None
+    for binding in bindings:
+        if not isinstance(binding, dict) or set(binding) != binding_fields:
+            return False
+        source_id = binding.get("source_id")
+        if (
+            not isinstance(source_id, str)
+            or (previous_source_id is not None and source_id <= previous_source_id)
+            or not isinstance(binding.get("license_partition_receipt"), str)
+            or _HEX.fullmatch(binding.get("license_partition_sha256", "")) is None
+            or _HEX.fullmatch(binding.get("recorded_producer_sha256", "")) is None
+        ):
+            return False
+        previous_source_id = source_id
+    expected_binding = {
+        "source_id": row.get("source_id"),
+        "license_partition_receipt": row.get("license_partition_receipt"),
+        "license_partition_sha256": row.get("license_partition_sha256"),
+        "recorded_producer_sha256": recorded_sha,
+    }
+    if expected_binding not in bindings:
+        return False
+
+    transition_fields = {
+        "authorization_basis", "cause_commit", "resolved_source_commits",
+        "successor_sha256", "superseded_sha256",
+    }
+    prior_entries = prior.get("entries") if isinstance(prior, dict) else None
+    if (
+        not isinstance(prior_entries, list)
+        or len(prior_entries) != 1
+        or not isinstance(prior_entries[0], dict)
+    ):
+        return False
+    prior_entry = prior_entries[0]
+    first = transitions[0]
+    if not isinstance(first, dict) or set(first) != transition_fields:
+        return False
+    if any(
+        first.get(field) != prior_entry.get(field)
+        for field in ("superseded_sha256", "successor_sha256", "cause_commit")
+    ):
+        return False
+    if (
+        first.get("resolved_source_commits")
+        != ["71df8f892fa3a19a7bab1eee8c56e5a1fc700c6d"]
+        or first["resolved_source_commits"][0]
+        not in prior_entry.get("resolved_source_commits", [])
+    ):
+        return False
+    if first.get("authorization_basis") != (
+        "Prior reviewed 0bb53195 to baf5d769 transition preserved from "
+        "partition-producer-supersessions-v1."
+    ):
+        return False
+    review_basis = (
+        "The producer byte change 5a07a1b6 (PR1847) was byte-reviewed and PASSed by the gate "
+        "before merge with the explicit finding that the per-row validation contract is unchanged — "
+        "is_file + reparse + exact-size + full sha256 per blob — and only the execution concurrency "
+        "changed (ThreadPoolExecutor, input-order deterministic)."
+    )
+    second = transitions[1]
+    if (
+        not isinstance(second, dict)
+        or set(second) != transition_fields
+        or second.get("authorization_basis") != review_basis
+        or first.get("successor_sha256") != second.get("superseded_sha256")
+        or second.get("successor_sha256") != current_sha
+    ):
+        return False
+    start = next(
+        (index for index, transition in enumerate(transitions) if transition.get("superseded_sha256") == recorded_sha),
+        None,
+    )
+    if start is None:
+        return False
+
+    kwargs: dict[str, Any] = {"capture_output": True, "check": False}
+    if os.name == "nt":
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+    for transition in transitions[start:]:
+        if not isinstance(transition, dict) or set(transition) != transition_fields:
+            return False
+        cause = transition.get("cause_commit")
+        resolved = transition.get("resolved_source_commits")
+        if (
+            not isinstance(cause, str)
+            or re.fullmatch(r"[0-9a-f]{40}", cause) is None
+            or _HEX.fullmatch(transition.get("superseded_sha256", "")) is None
+            or _HEX.fullmatch(transition.get("successor_sha256", "")) is None
+            or not isinstance(resolved, list)
+            or not resolved
+            or len(set(resolved)) != len(resolved)
+            or any(not isinstance(commit, str) or re.fullmatch(r"[0-9a-f]{40}", commit) is None for commit in resolved)
+        ):
+            return False
+        cause_ancestry = subprocess.run(
+            ["git", "-C", str(repo_root), "merge-base", "--is-ancestor", cause, "HEAD"], **kwargs
+        )
+        cause_blob = subprocess.run(
+            ["git", "-C", str(repo_root), "show", f"{cause}:{_PARTITION_PRODUCER_PATH}"], **kwargs
+        )
+        if (
+            cause_ancestry.returncode != 0
+            or cause_blob.returncode != 0
+            or _sha_bytes(cause_blob.stdout) != transition["successor_sha256"]
+        ):
+            return False
+        for commit in resolved:
+            ancestry = subprocess.run(
+                ["git", "-C", str(repo_root), "merge-base", "--is-ancestor", commit, "HEAD"], **kwargs
+            )
+            blob = subprocess.run(
+                ["git", "-C", str(repo_root), "show", f"{commit}:{_PARTITION_PRODUCER_PATH}"], **kwargs
+            )
+            if (
+                ancestry.returncode != 0
+                or blob.returncode != 0
+                or _sha_bytes(blob.stdout) != transition["superseded_sha256"]
+            ):
+                return False
+    return True
 
 def _commit(root: Path) -> str:
     value=subprocess.run(["git","-C",str(root),"rev-parse","HEAD"],text=True,capture_output=True,check=False).stdout.strip()

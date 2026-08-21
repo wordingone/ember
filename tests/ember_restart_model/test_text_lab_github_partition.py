@@ -87,7 +87,43 @@ def test_partition_authority_row_reopens_every_join_and_is_schema_disjoint(tmp_p
         assert list(Draft202012Validator(candidate_schema).iter_errors(mixed))
 
 
-def test_partition_authority_reopens_exact_producer_bytes_from_reachable_history(tmp_path: Path):
+def _checked_in_partition_row(source_id: str) -> dict:
+    corpus = json.loads((ROOT / "data" / "ember-restart-3b" / "owned-text-lab-corpus-v4.json").read_bytes())
+    return next(row for row in corpus["sources"] if row["source_id"] == source_id)
+
+
+@pytest.mark.parametrize(
+    ("source_id", "recorded_sha"),
+    [
+        (
+            "candidate-training_infrastructure-train-1",
+            "0bb5319534d565aa01ed6d65437da3683004ffb84f6234c680e0e46e75661f6d",
+        ),
+        (
+            "candidate-statistics-heldout-1",
+            "baf5d76975bf5c7ccc7e34c40bd7c55b7968841c28f39655a147bb37cd753d4f",
+        ),
+    ],
+)
+def test_closed_v2_supersession_reopens_both_exact_reviewed_producer_classes(
+    source_id: str, recorded_sha: str
+):
+    import text_lab_corpus
+
+    row = _checked_in_partition_row(source_id)
+    current_sha = _sha(
+        (ROOT / "tools" / "ember-restart-3b" / "mint_github_license_partition.py").read_bytes()
+    )
+    allows_v2 = getattr(
+        text_lab_corpus,
+        "_partition_producer_supersession_allows_v2",
+        lambda *_args: False,
+    )
+
+    assert allows_v2(ROOT, row, recorded_sha, current_sha)
+
+
+def test_partition_authority_refuses_unlisted_historical_receipt(tmp_path: Path):
     import text_lab_corpus
 
     row, output, receipt = _partition_fixture(tmp_path)
@@ -98,9 +134,8 @@ def test_partition_authority_reopens_exact_producer_bytes_from_reachable_history
     row["license_partition_sha256"] = receipt_sha
     row["l4_receipt"]["license_partition_sha256"] = receipt_sha
 
-    reopened = text_lab_corpus._validate_partition_authority_row(ROOT, tmp_path, row)
-
-    assert reopened["producer_sha256"] == receipt["producer_sha256"]
+    with pytest.raises(ValueError, match="partition receipt producer bytes changed"):
+        text_lab_corpus._validate_partition_authority_row(ROOT, tmp_path, row)
 
 
 def test_partition_authority_refuses_producer_sha_absent_from_closed_table(tmp_path: Path):
@@ -118,32 +153,89 @@ def test_partition_authority_refuses_producer_sha_absent_from_closed_table(tmp_p
         text_lab_corpus._validate_partition_authority_row(ROOT, tmp_path, row)
 
 
-def test_partition_authority_refuses_closed_table_with_stale_successor(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "stale_successor",
+        "missing_row",
+        "extra_row",
+        "swapped_path",
+        "swapped_hash",
+        "changed_recorded_producer",
+        "broken_chain",
+        "unreachable_cause",
+        "unreachable_resolved",
+        "extra_field",
+    ],
+)
+def test_partition_authority_refuses_tampered_closed_v2_table(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str
 ):
     import text_lab_corpus
 
-    row, output, receipt = _partition_fixture(tmp_path)
-    receipt["producer_sha256"] = "0bb5319534d565aa01ed6d65437da3683004ffb84f6234c680e0e46e75661f6d"
-    receipt_path = output / "partition-receipt.json"
-    receipt_path.write_bytes(json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode())
-    receipt_sha = _sha(receipt_path.read_bytes())
-    row["license_partition_sha256"] = receipt_sha
-    row["l4_receipt"]["license_partition_sha256"] = receipt_sha
-    table = json.loads((ROOT / text_lab_corpus._PARTITION_PRODUCER_SUPERSESSIONS).read_bytes())
-    table["entries"][0]["successor_sha256"] = "0" * 64
-    stale_table = tmp_path / "stale-partition-producer-supersessions.json"
+    row = _checked_in_partition_row("candidate-training_infrastructure-train-1")
+    recorded_sha = "0bb5319534d565aa01ed6d65437da3683004ffb84f6234c680e0e46e75661f6d"
+    current_sha = _sha(
+        (ROOT / "tools" / "ember-restart-3b" / "mint_github_license_partition.py").read_bytes()
+    )
+    table = json.loads(
+        (ROOT / "data" / "ember-restart-3b" / "partition-producer-supersessions-v2.json").read_bytes()
+    )
+    binding_index = next(
+        index
+        for index, binding in enumerate(table["row_bindings"])
+        if binding["source_id"] == row["source_id"]
+    )
+    other_index = 0 if binding_index != 0 else 1
+    if mutation == "stale_successor":
+        table["transitions"][1]["successor_sha256"] = "0" * 64
+    elif mutation == "missing_row":
+        table["row_bindings"].pop()
+    elif mutation == "extra_row":
+        extra = dict(table["row_bindings"][-1], source_id="candidate-unreviewed-train-0")
+        table["row_bindings"].append(extra)
+    elif mutation == "swapped_path":
+        bound = table["row_bindings"][binding_index]
+        other = table["row_bindings"][other_index]
+        bound["license_partition_receipt"], other["license_partition_receipt"] = (
+            table["row_bindings"][other_index]["license_partition_receipt"],
+            table["row_bindings"][binding_index]["license_partition_receipt"],
+        )
+    elif mutation == "swapped_hash":
+        bound = table["row_bindings"][binding_index]
+        other = table["row_bindings"][other_index]
+        bound["license_partition_sha256"], other["license_partition_sha256"] = (
+            table["row_bindings"][other_index]["license_partition_sha256"],
+            table["row_bindings"][binding_index]["license_partition_sha256"],
+        )
+    elif mutation == "changed_recorded_producer":
+        table["row_bindings"][binding_index]["recorded_producer_sha256"] = "f" * 64
+    elif mutation == "broken_chain":
+        table["transitions"][0]["successor_sha256"] = "f" * 64
+    elif mutation == "unreachable_cause":
+        table["transitions"][1]["cause_commit"] = "0" * 40
+    elif mutation == "unreachable_resolved":
+        table["transitions"][0]["resolved_source_commits"] = [
+            "0f06bc87ecf3c18774a2bf1aeed54f3d2c0f1044"
+        ]
+    else:
+        table["unexpected"] = True
+    stale_table = tmp_path / "tampered-partition-producer-supersessions-v2.json"
     stale_table.write_bytes(json.dumps(table, sort_keys=True, separators=(",", ":")).encode())
     real_path = text_lab_corpus._path
 
     def stale_table_path(root: Path, relative: object):
-        if relative == text_lab_corpus._PARTITION_PRODUCER_SUPERSESSIONS:
+        if relative == text_lab_corpus._PARTITION_PRODUCER_SUPERSESSIONS_V2:
             return stale_table
         return real_path(root, relative)
 
     monkeypatch.setattr(text_lab_corpus, "_path", stale_table_path)
-    with pytest.raises(ValueError, match="partition receipt producer bytes changed"):
-        text_lab_corpus._validate_partition_authority_row(ROOT, tmp_path, row)
+    allows_v2 = getattr(
+        text_lab_corpus,
+        "_partition_producer_supersession_allows_v2",
+        lambda *_args: False,
+    )
+    assert not allows_v2(ROOT, row, recorded_sha, current_sha)
 
 
 def test_partition_authority_refuses_digest_swap_and_blob_tamper(tmp_path: Path):
