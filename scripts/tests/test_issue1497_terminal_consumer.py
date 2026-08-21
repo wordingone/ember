@@ -207,3 +207,47 @@ def test_frontier_producer_refuses_missing_terminal_before_asserting_coverage(
     registry_path.write_text(json.dumps(running, sort_keys=True) + "\n", encoding="utf-8")
     with pytest.raises(frontier.FrontierRefusal, match="missing terminal"):
         frontier.ledger_all_compute_coverage(run_root, "run-alpha", "f" * 64)
+
+
+def test_issue1464_historical_backfills_are_runner_receipt_sourced():
+    registry_path = ROOT / "receipts" / "run-attempts.jsonl"
+    rows = [json.loads(line) for line in registry_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    expected = {
+        ("issue1464-r1-e5-composition-20260820T090432Z", "issue1296-warm100-run-20260819T203314Z"): ("completed", "f28a9d8c175f6816a50277afd861d081b966293a2460afb69e642886992da366"),
+        ("issue1464-r1-e7-seed84-20260820T2355Z", "issue1464-r1-e7-seed84-20260820T2355Z"): ("aborted", "c9b462c46bfe23b162d1eb1f3d11538727f78cc634d774af62e2dc011b5392a9"),
+        ("issue1464-r1-e7-seed84-20260821T0040Z", "issue1464-r1-e7-seed84-20260821T0040Z"): ("failed", "9342c290cd576c386dd400697c431aa5c9a44d457d21c27b6f1bbae94c916d71"),
+        ("issue1464-r1-e7-seed84-20260821T0047Z", "issue1464-r1-e7-seed84-20260821T0047Z"): ("failed", "12e1f801fb1e9089b18647f85cb9b9b79e09a7640b551b5a84684ed041b04807"),
+        ("issue1464-r1-e7-seed84-20260821T0121Z", "issue1464-r1-e7-seed84-20260821T0121Z"): ("completed", "404f70b26d8fc3fcd62152d622950c4e0c7ba2edc6f2d85c57eec3a37e603c99"),
+    }
+    actual = {
+        (row["run_root_name"], row["run_id"]): row
+        for row in rows
+        if row.get("outcome_basis", "").startswith("gate-order-24762 runner receipt sha256 ")
+    }
+    assert set(actual) == set(expected)
+    for identity, (outcome, receipt_sha256) in expected.items():
+        row = actual[identity]
+        assert row["backfill"] is True
+        assert row["outcome"] == outcome
+        assert row["source_receipt"] == row["launch_receipt_ref"]
+        assert receipt_sha256 in row["outcome_basis"]
+
+
+def test_historical_backfill_refuses_an_unsourced_runner_receipt(tmp_path: Path):
+    run_root = tmp_path / "custody" / "run-alpha"
+    run_root.mkdir(parents=True)
+    unsourced = registry.build_row(
+        run_root=run_root,
+        outcome="completed",
+        run_id="run-alpha",
+        attempt_id="terminal-runner-receipt",
+        start_utc=START,
+        end_utc=END,
+        checkpoint_manifest_sha256=None,
+        launch_receipt_ref="runner-receipt.json",
+        source_receipt="runner-receipt.json",
+        outcome_basis="runner receipt sha256 " + "a" * 64,
+        backfill=True,
+    )
+    defects = _validate([unsourced], run_root)
+    assert any("source_receipt does not resolve to existing custody evidence" in defect for defect in defects)
