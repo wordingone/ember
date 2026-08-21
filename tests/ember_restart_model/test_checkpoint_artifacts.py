@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 import checkpoint_artifacts
 import durable_io
 
-from checkpoint_artifacts import CheckpointDeferredLowCommit, _default_optimizer_contract, _empty_failure_comparison_operands, _normalize_failure_comparison_operands, _optimizer_realization, _select_detached_state, _validate_runtime_optimizer_realization, admit_quarantined_checkpoint, checkpoint_commit_preflight, configured_maximum_available_commit_bytes, load_checkpoint_artifacts, load_checkpoint_model_only_transition, write_checkpoint_artifacts as _write_checkpoint_artifacts_public
+from checkpoint_artifacts import CheckpointDeferredLowCommit, _default_optimizer_contract, _empty_failure_comparison_operands, _normalize_failure_comparison_operands, _optimizer_realization, _select_detached_state, _validate_runtime_optimizer_realization, admit_quarantined_checkpoint, checkpoint_commit_preflight, configured_maximum_available_commit_bytes, host_commit_headroom_diagnostic, load_checkpoint_artifacts, load_checkpoint_model_only_transition, write_checkpoint_artifacts as _write_checkpoint_artifacts_public
 from model import RestartDecoderConfig, UnifiedDecoder
 from parameter_counter import measure_parameter_counts
 from run_vertical_slice import load_optimizer_contract
@@ -327,15 +327,48 @@ class CheckpointArtifactTests(unittest.TestCase):
             self.assertFalse(target.exists())
             self.assertEqual(list(Path(directory).iterdir()), [])
 
-    def test_checkpoint_capacity_uses_fixed_pagefile_maximum_not_current_limit(self) -> None:
+    def test_checkpoint_capacity_bounded_by_lesser_of_configured_and_live_limit(self) -> None:
         gib = 1024**3
+        # Pre-reboot window (#898 2026-08-21 amendment): the live commit limit
+        # is BELOW the configured (registry) maximum because the OS has not
+        # yet grown into a just-raised pagefile. Headroom must bind to the
+        # live limit, not the larger configured maximum.
         available = configured_maximum_available_commit_bytes(
             physical_ram_bytes=64 * gib,
             commit_total_bytes=60 * gib,
             current_commit_limit_bytes=80 * gib,
             paging_files=[r"C:\pagefile.sys 16384 32768"],
         )
-        self.assertEqual(available, 36 * gib)
+        self.assertEqual(available, 20 * gib)
+        diagnostic = host_commit_headroom_diagnostic(
+            physical_ram_bytes=64 * gib,
+            commit_total_bytes=60 * gib,
+            current_commit_limit_bytes=80 * gib,
+            paging_files=[r"C:\pagefile.sys 16384 32768"],
+        )
+        self.assertEqual(diagnostic["bound_by"], "live_commit_limit")
+        self.assertEqual(diagnostic["configured_maximum_capacity_bytes"], 96 * gib)
+        self.assertEqual(diagnostic["live_commit_limit_bytes"], 80 * gib)
+        self.assertEqual(diagnostic["available_commit_bytes"], 20 * gib)
+
+        # Normal (post-reboot) case: live limit equals configured capacity,
+        # so either bound gives the same headroom.
+        available_equal = configured_maximum_available_commit_bytes(
+            physical_ram_bytes=64 * gib,
+            commit_total_bytes=60 * gib,
+            current_commit_limit_bytes=96 * gib,
+            paging_files=[r"C:\pagefile.sys 16384 32768"],
+        )
+        self.assertEqual(available_equal, 36 * gib)
+        diagnostic_equal = host_commit_headroom_diagnostic(
+            physical_ram_bytes=64 * gib,
+            commit_total_bytes=60 * gib,
+            current_commit_limit_bytes=96 * gib,
+            paging_files=[r"C:\pagefile.sys 16384 32768"],
+        )
+        self.assertEqual(diagnostic_equal["bound_by"], "configured_maximum")
+        self.assertEqual(diagnostic_equal["available_commit_bytes"], 36 * gib)
+
         for paging_files in (
             [r"C:\pagefile.sys 0 0"],
             [r"C:\pagefile.sys 16384 automatic"],
@@ -357,11 +390,18 @@ class CheckpointArtifactTests(unittest.TestCase):
                 current_commit_limit_bytes=100 * gib,
                 paging_files=[r"C:\pagefile.sys 16384 32768"],
             )
-        with self.assertRaisesRegex(RuntimeError, "live committed bytes exceed"):
+        with self.assertRaisesRegex(RuntimeError, "live committed bytes exceed configured maximum"):
             configured_maximum_available_commit_bytes(
                 physical_ram_bytes=64 * gib,
                 commit_total_bytes=100 * gib,
                 current_commit_limit_bytes=80 * gib,
+                paging_files=[r"C:\pagefile.sys 16384 32768"],
+            )
+        with self.assertRaisesRegex(RuntimeError, "live committed bytes exceed the live Windows commit limit"):
+            configured_maximum_available_commit_bytes(
+                physical_ram_bytes=64 * gib,
+                commit_total_bytes=70 * gib,
+                current_commit_limit_bytes=65 * gib,
                 paging_files=[r"C:\pagefile.sys 16384 32768"],
             )
 
