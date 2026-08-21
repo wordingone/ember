@@ -71,7 +71,12 @@ def write_fixture(tmp_path: Path, *, run_ids: tuple[str, ...]) -> tuple[object, 
     telemetry.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
     energy = run_root / "energy-proxy-receipt.json"
     energy.parent.mkdir(parents=True, exist_ok=True)
-    energy.write_text(json.dumps({"total_proxy_joules": 4.0, "energy_boundary": "CPU"}), encoding="utf-8")
+    # Real shape: scripts/energy_proxy_logger.py (schema ember-energy-proxy-run-v1)
+    # always nests these fields under "energy" -- so does the E5 battery leg's read.
+    energy.write_text(
+        json.dumps({"energy": {"total_proxy_joules": 4.0, "energy_boundary": "CPU"}}),
+        encoding="utf-8",
+    )
     manifest = run_root / "checkpoint-manifest.json"
     manifest.write_text(json.dumps({"data_cursor": {"tokens_seen": 2, "global_step": 2}}), encoding="utf-8")
     (run_root / "run-child.log").write_text(json.dumps({"peak_memory_bytes": 1024**3}) + "\n", encoding="utf-8")
@@ -198,6 +203,64 @@ def test_producer_refuses_ambiguous_run_ids(tmp_path: Path) -> None:
     module, forecast, run_root = write_fixture(tmp_path, run_ids=("run-a", "run-b"))
 
     with pytest.raises(module.RecalibrationRefusal, match="AMBIGUOUS"):
+        module.build_receipt(forecast, run_root)
+
+
+def test_energy_leg_binds_nested_energy_block_and_refuses_flat_receipt(tmp_path: Path) -> None:
+    module, forecast, run_root = write_fixture(tmp_path, run_ids=("run-a",))
+    receipt = module.build_receipt(forecast, run_root)
+    q = receipt["quantities"]["proxy_joules_per_token"]
+    assert q["measurement"]["total_proxy_joules"] == 4.0
+    assert q["measurement"]["energy_boundary"] == "CPU"
+
+    # The real producer never writes a flat top-level shape; a receipt that
+    # does must be refused, not silently read as zero-signal.
+    (run_root / "energy-proxy-receipt.json").write_text(
+        json.dumps({"total_proxy_joules": 4.0, "energy_boundary": "CPU"}), encoding="utf-8"
+    )
+    with pytest.raises(module.RecalibrationRefusal, match="proxy_joules_per_token"):
+        module.build_receipt(forecast, run_root)
+
+
+def test_peak_vram_prefers_e4_measurement_receipt_over_telemetry(tmp_path: Path) -> None:
+    module, forecast, run_root = write_fixture(tmp_path, run_ids=("run-a",))
+    (run_root / "run-child.log").unlink()
+    (run_root / "e4-measurement-receipt.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "ember02-r1-e4-measurement/v1",
+                "run_id": "run-a",
+                "peak_vram": {"allocated_bytes": 3 * 1024 ** 3, "reserved_bytes": 4 * 1024 ** 3},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    receipt = module.build_receipt(forecast, run_root)
+
+    q = receipt["quantities"]["peak_vram_gib"]
+    # Telemetry total_gib/free_gib in the fixture would measure 1.0 GiB; the
+    # e4 receipt's allocator peak (3.0 GiB) must win, proving the source order.
+    assert q["measured"] == pytest.approx(3.0)
+    assert "e4-measurement-receipt.json" in q["measurement"]["source"]
+    assert "allocated_bytes" in q["measurement"]["source"]
+
+
+def test_peak_vram_refuses_non_finite_e4_allocated_bytes(tmp_path: Path) -> None:
+    module, forecast, run_root = write_fixture(tmp_path, run_ids=("run-a",))
+    (run_root / "run-child.log").unlink()
+    (run_root / "e4-measurement-receipt.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "ember02-r1-e4-measurement/v1",
+                "run_id": "run-a",
+                "peak_vram": {"allocated_bytes": float("nan"), "reserved_bytes": 4 * 1024 ** 3},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(module.RecalibrationRefusal, match="peak_vram_gib"):
         module.build_receipt(forecast, run_root)
 
 
