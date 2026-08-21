@@ -524,7 +524,7 @@ class RunnerPreflightTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "write budget"):
             run_vertical_slice.semantic_publication_plan(steps=100, checkpoint_interval=32, checkpoint_byte_bound=10, write_budget_bytes=39)
 
-    def _run_semantic_with_mocks(self, *, resume: bool, telemetry_path: Path | None = None, telemetry_run_id: str | None = None) -> tuple[dict[str, object], dict[str, object], MagicMock, list[int]]:
+    def _run_semantic_with_mocks(self, *, resume: bool, telemetry_path: Path | None = None, telemetry_run_id: str | None = None, atomic_json_mock: MagicMock | None = None) -> tuple[dict[str, object], dict[str, object], MagicMock, list[int]]:
         model = SimpleNamespace(active_expert="reasoning")
         model._activate_expert = lambda expert: setattr(model, "active_expert", expert)
         model.expert_bank_genesis_hashes = lambda: {name: name * 64 for name in ("vision", "audio", "reasoning", "tool")}
@@ -572,6 +572,7 @@ class RunnerPreflightTests(unittest.TestCase):
             stack.enter_context(patch.object(run_vertical_slice.torch.cuda, "manual_seed_all"))
             stack.enter_context(patch.object(run_vertical_slice.torch.cuda, "reset_peak_memory_stats"))
             stack.enter_context(patch.object(run_vertical_slice.torch.cuda, "max_memory_allocated", return_value=0))
+            stack.enter_context(patch.object(run_vertical_slice.torch.cuda, "max_memory_reserved", return_value=0))
             stack.enter_context(patch.object(run_vertical_slice.torch, "manual_seed"))
             stack.enter_context(patch.object(run_vertical_slice.torch, "get_default_dtype", return_value=torch.float32))
             stack.enter_context(patch.object(run_vertical_slice.torch, "set_default_dtype"))
@@ -587,7 +588,7 @@ class RunnerPreflightTests(unittest.TestCase):
             stack.enter_context(patch.object(run_vertical_slice, "governed_resource_preflight", return_value={"free_gb": 32.0}))
             stack.enter_context(patch.object(run_vertical_slice, "_retain_after_success", side_effect=retain))
             stack.enter_context(patch.object(run_vertical_slice, "write_checkpoint_artifacts", writer))
-            stack.enter_context(patch.object(run_vertical_slice, "_atomic_json"))
+            stack.enter_context(patch.object(run_vertical_slice, "_atomic_json", atomic_json_mock if atomic_json_mock is not None else MagicMock()))
             stack.enter_context(patch.object(run_vertical_slice, "_execute_realization_counter", return_value={"counter": "ok"}))
             stack.enter_context(patch.object(run_vertical_slice, "require_counter_success_receipt", return_value={"verified": True, "counter_sha256": "h" * 64}))
             stack.enter_context(patch.object(run_vertical_slice, "published_checkpoint_receipt", side_effect=lambda _path: (call_order.append("receipt"), resume_receipt)[1]))
@@ -654,6 +655,48 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertTrue(all(event["payload"]["run_id"] == "semantic-run-1719" for event in train_steps))
         self.assertTrue(all(isinstance(event["payload"]["loss"], float) for event in train_steps))
         self.assertTrue(all(isinstance(event["payload"]["grad_norm"], float) and event["payload"]["grad_norm"] > 0.0 for event in train_steps))
+
+    def test_semantic_run_writes_e4_measurement_receipt_when_telemetry_path_is_set(self) -> None:
+        """Issue #1464 (R1-E4 cascade review, 2026-08-21): run_semantic's progress_callback
+        appended train_step telemetry but never touched the e4 accumulator/writer that run()
+        already carried, so a fully certified semantic warm-100 run -- the only CLI route that
+        can complete >=100 contiguous steps -- produced zero e4-measurement-receipt.json and
+        check_r1_e4 returned EVIDENCE_MISSING after the compute was spent. The receipt must now
+        exist, upsert every step, and reflect this run's own accumulated counters.
+        """
+        atomic_json = MagicMock()
+        with tempfile.TemporaryDirectory() as directory:
+            telemetry_path = Path(directory) / "telemetry" / "telemetry.jsonl"
+            self._run_semantic_with_mocks(
+                resume=False, telemetry_path=telemetry_path, telemetry_run_id="semantic-run-1464",
+                atomic_json_mock=atomic_json,
+            )
+            receipt_calls = [
+                call for call in atomic_json.call_args_list
+                if call.args[0] == Path(directory) / "e4-measurement-receipt.json"
+            ]
+            self.assertEqual(len(receipt_calls), 2, "one running upsert per training step")
+            for _path, payload in (call.args for call in receipt_calls):
+                self.assertEqual(payload["schema_version"], "ember02-r1-e4-measurement/v1")
+                self.assertEqual(payload["run_id"], "semantic-run-1464")
+                self.assertEqual(payload["write_failures"], 0)
+            last_payload = receipt_calls[-1].args[1]
+            self.assertEqual(last_payload["steps"], 2)
+            self.assertEqual(last_payload["tokens_missing_steps"], 0)
+            self.assertEqual(last_payload["tokens_total"], 1024 + 2048)
+            self.assertIsInstance(last_payload["tokens_per_second"], float)
+            self.assertIsNotNone(last_payload["mfu"]["value"])
+            self.assertEqual(last_payload["peak_vram"], {"allocated_bytes": 0, "reserved_bytes": 0})
+
+    def test_semantic_run_omits_e4_measurement_receipt_without_telemetry_path(self) -> None:
+        """The e4 recorder is constructed unconditionally (issue #1464 wiring), but its
+        progress_callback guard -- unchanged by the wiring -- must still keep a telemetry-less
+        semantic run from writing any receipt, matching run()'s existing None-telemetry
+        behavior."""
+        atomic_json = MagicMock()
+        self._run_semantic_with_mocks(resume=False, atomic_json_mock=atomic_json)
+        receipt_calls = [call for call in atomic_json.call_args_list if call.args[0].name == "e4-measurement-receipt.json"]
+        self.assertEqual(receipt_calls, [])
 
     def test_disk_reopen_resume_receipt_binds_exact_frozen_manifest_bytes(self) -> None:
         """A disk-reopened resume receipt carries the manifest's out-of-band identity."""
