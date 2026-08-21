@@ -50,9 +50,21 @@ def _canonical_sha(value: object) -> str:
     return hashlib.sha256(_canonical_bytes(value)).hexdigest()
 
 
+def _matched_a3_self_digest_sha(value: dict[str, object]) -> str:
+    # Dedicated to the matched-A3 run receipt fixture: matches the module's
+    # `_matched_a3_self_digest_sha256` (fix(training): align matched-A3
+    # self-digest convention, #1464) -- compact JSON, no trailing newline,
+    # ensure_ascii False -- NOT `_canonical_sha` above, which stays
+    # WITH-newline for shard_sequence_sha256/schedule_sha256 (self-consistent
+    # internal comparisons the module's own unchanged `_canonical_sha256`
+    # still expects).
+    raw = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
 def _with_self_digest(value: dict[str, object]) -> dict[str, object]:
     value = dict(value)
-    value["receipt_sha256"] = _canonical_sha(value)
+    value["receipt_sha256"] = _matched_a3_self_digest_sha(value)
     return value
 
 

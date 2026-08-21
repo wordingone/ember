@@ -197,55 +197,92 @@ def test_mint_a3_run_receipt_passes_both_real_downstream_consumers() -> None:
             (root / "checkpoints" / "a3-checkpoint.bin").read_bytes()
         ).hexdigest()
         unsigned = {key: value for key, value in doc.items() if key != "receipt_sha256"}
-        # certified_train_launch.py's matched-A3 self-digest check (the mandatory
-        # real consumer #2 below) hashes compact JSON WITH a trailing newline;
-        # see the NOTE in a3_run_receipt._canonical for the cross-module residual.
+        # Self-digest convention: compact JSON, no trailing newline, ensure_ascii
+        # False -- matching scripts/r1_e8_validator.py's `_self_digest` exactly
+        # (see fix(training): align matched-A3 self-digest convention, #1464).
         assert doc["receipt_sha256"] == hashlib.sha256(
-            (json.dumps(unsigned, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+            json.dumps(unsigned, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
         ).hexdigest()
 
-        # Real consumer 1: scripts/r1_e8_validator.py's own _validate_run, unmocked.
+        # Real consumer 1 (bare check): scripts/r1_e8_validator.py's own
+        # _validate_run, unmocked. Does not check digest format on its own.
         validator = _load_validator()
         validator._validate_run(doc, arm="A3", tier=None, t06=T06)  # must not raise
 
-        # Real consumer 2: certified_train_launch.py's matched-A3 verification,
-        # reached through its public entrypoint against a real valid A1 launch
-        # bundle with the hand-built matched-a3-run.json replaced by mine.
-        launch_module = launch_fixtures.load_module()
-        with tempfile.TemporaryDirectory(dir="B:/tmp") as launch_directory:
-            paths = launch_fixtures.write_valid_bundle(Path(launch_directory))
-            authority = a1_authority_fixtures._install_valid_a1_authority(paths)
-            comparison_path = authority["comparison_path"]
-            matched_path = comparison_path.parent / "matched-a3-run.json"
-            matched_path.unlink()
-            swap_root = root / "swap"
-            module.mint_a3_run_receipt(
-                **{
-                    **_valid_kwargs(swap_root, matched_path),
-                    "comparison_authority_path": comparison_path,
-                    "certificate_path": paths["certificate"],
-                }
-            )
-            # The A3 receipt just minted is real, produced bytes -- its sha256
-            # differs from the placeholder the hand-built fixture recorded, so
-            # the comparison authority's own back-reference (and every hash
-            # that binds over it) must be refreshed to the real value, exactly
-            # as a real authoring pipeline would after minting this receipt.
-            minted_sha256 = hashlib.sha256(matched_path.read_bytes()).hexdigest()
-            comparison_doc = json.loads(comparison_path.read_text(encoding="utf-8"))
-            comparison_doc["matched_a3_run"]["sha256"] = minted_sha256
-            _write_json(comparison_path, comparison_doc)
-            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
-            run_spec["a1_comparison_authority_sha256"] = hashlib.sha256(
-                comparison_path.read_bytes()
-            ).hexdigest()
-            launch_fixtures.write_json(paths["run_spec"], run_spec)
-            launch_fixtures._write_custody_sidecars(paths)
-            with mock.patch.object(launch_module, "read_current_master", return_value=launch_fixtures.SHA):
-                launch = launch_module.validate_certified_request(
-                    paths["repo"], paths["certificate"], paths["ledger"], paths["run_spec"]
-                )
-            assert launch.a1_family == a1_authority_fixtures.A1_FAMILY
+
+def test_one_minted_a3_receipt_passes_both_full_real_pipelines_unmocked() -> None:
+    """The closure test the digest-convention gap demanded.
+
+    A SINGLE minted A3 receipt, unmocked, real fixture artifacts throughout,
+    must satisfy BOTH real full pipelines that actually reopen and
+    self-digest a matched A3 run receipt in production:
+
+      (a) scripts/r1_e8_validator.py's `_reopen_ref(..., self_digest=True)`,
+          the exact call `validate_e8` makes on the a3_run reference -- NOT
+          the bare `_validate_run`, which never checks digest format.
+      (b) certified_train_launch.py's matched-A3 verification, reached
+          through its public entrypoint `validate_certified_request`.
+
+    Before fix(training): align matched-A3 self-digest convention (#1464),
+    no single receipt_sha256 could satisfy both: (a) requires compact JSON
+    hashed with no trailing newline (r1_e8_validator._self_digest), (b)
+    required compact JSON hashed WITH one (certified_train_launch's own
+    `_canonical_bytes`, now scoped away from this check into a dedicated
+    `_matched_a3_self_digest_sha256` matching (a)'s convention).
+    """
+    module = _load_producer()
+    validator = _load_validator()
+    launch_module = launch_fixtures.load_module()
+    with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+        root = Path(directory)
+        paths = launch_fixtures.write_valid_bundle(root / "launch")
+        authority = a1_authority_fixtures._install_valid_a1_authority(paths)
+        comparison_path = authority["comparison_path"]
+        matched_path = comparison_path.parent / "matched-a3-run.json"
+        matched_path.unlink()
+
+        # Mint the ONE receipt every downstream check below reopens as-is,
+        # bound to the launch bundle's REAL comparison authority and
+        # certificate (not the generic fixture ones) so the identity and
+        # source_commit agree with what certified_train_launch.py itself
+        # independently recomputes in check (b) below.
+        module.mint_a3_run_receipt(
+            **{
+                **_valid_kwargs(root / "mint", matched_path),
+                "comparison_authority_path": comparison_path,
+                "certificate_path": paths["certificate"],
+            }
+        )
+
+        # (a) scripts/r1_e8_validator.py's real self-digest-checking reopen.
+        minted_sha256 = hashlib.sha256(matched_path.read_bytes()).hexdigest()
+        doc, digest = validator._reopen_ref(
+            matched_path.parent,
+            {"path": matched_path.name, "sha256": minted_sha256},
+            "A3_RUN_INVALID",
+        )  # self_digest=True by default -- must not raise
+        assert digest == minted_sha256
+        assert doc["arm_id"] == "A3"
+
+        # (b) certified_train_launch.py's real matched-A3 verification via its
+        # public entrypoint. The comparison authority's back-reference and
+        # every hash bound over it are refreshed to the real minted bytes,
+        # exactly as a real authoring pipeline would after minting this
+        # receipt -- the matched-a3-run.json file itself is never rewritten.
+        comparison_doc = json.loads(comparison_path.read_text(encoding="utf-8"))
+        comparison_doc["matched_a3_run"]["sha256"] = minted_sha256
+        _write_json(comparison_path, comparison_doc)
+        run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+        run_spec["a1_comparison_authority_sha256"] = hashlib.sha256(
+            comparison_path.read_bytes()
+        ).hexdigest()
+        launch_fixtures.write_json(paths["run_spec"], run_spec)
+        launch_fixtures._write_custody_sidecars(paths)
+        with mock.patch.object(launch_module, "read_current_master", return_value=launch_fixtures.SHA):
+            launch = launch_module.validate_certified_request(
+                paths["repo"], paths["certificate"], paths["ledger"], paths["run_spec"]
+            )  # must not raise
+        assert launch.a1_family == a1_authority_fixtures.A1_FAMILY
 
 
 def test_mint_refuses_to_overwrite_an_existing_receipt() -> None:
