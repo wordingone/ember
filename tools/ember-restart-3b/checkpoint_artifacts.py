@@ -618,14 +618,29 @@ def checkpoint_streaming_peak_bytes(
     return largest + _STREAMING_OVERHEAD_BYTES
 
 
-def configured_maximum_available_commit_bytes(
+def host_commit_headroom_diagnostic(
     *,
     physical_ram_bytes: int,
     commit_total_bytes: int,
     current_commit_limit_bytes: int,
     paging_files: object,
-) -> int:
-    """Return headroom against fixed maximum pagefile capacity, or fail closed."""
+) -> dict[str, int | str]:
+    """Return host commit headroom bounded by BOTH capacity bounds, naming each.
+
+    Two independent quantities bound how much host commit is actually
+    available: the configured (registry) maximum pagefile capacity, and the
+    live Windows commit limit Windows is currently enforcing. Between a
+    pagefile registry change and the next reboot, the live limit lags the
+    newly configured maximum -- the OS has not yet grown into the new
+    capacity. Bounding headroom by the configured maximum alone overstates
+    what is actually available during that window (receipted, #898
+    2026-08-21 amendment: 87 GiB reported by the configured-maximum-only
+    computation while the live commit limit still capped real headroom at
+    ~56 GiB, immediately before the E8 dense A1 launch refusal). Headroom is
+    therefore the lesser of the two bounds; both bounds and which one binds
+    are returned so a preflight refusal receipt can show both, not just the
+    resulting number.
+    """
 
     for name, value in (
         ("physical RAM", physical_ram_bytes),
@@ -647,12 +662,50 @@ def configured_maximum_available_commit_bytes(
         if maximum_mib <= 0:
             raise RuntimeError("pagefile setting is not a fixed positive maximum")
         pagefile_maximum_mib += maximum_mib
-    maximum_commit_capacity_bytes = physical_ram_bytes + pagefile_maximum_mib * 1024**2
-    if maximum_commit_capacity_bytes < current_commit_limit_bytes:
+    configured_maximum_capacity_bytes = physical_ram_bytes + pagefile_maximum_mib * 1024**2
+    if configured_maximum_capacity_bytes < current_commit_limit_bytes:
         raise RuntimeError("configured pagefile maximum is below the live Windows commit limit")
-    if maximum_commit_capacity_bytes < commit_total_bytes:
+    if configured_maximum_capacity_bytes < commit_total_bytes:
         raise RuntimeError("live committed bytes exceed configured maximum commit capacity")
-    return maximum_commit_capacity_bytes - commit_total_bytes
+    if current_commit_limit_bytes < commit_total_bytes:
+        raise RuntimeError("live committed bytes exceed the live Windows commit limit")
+    if current_commit_limit_bytes < configured_maximum_capacity_bytes:
+        bound_by = "live_commit_limit"
+        effective_capacity_bytes = current_commit_limit_bytes
+    else:
+        bound_by = "configured_maximum"
+        effective_capacity_bytes = configured_maximum_capacity_bytes
+    return {
+        "configured_maximum_capacity_bytes": configured_maximum_capacity_bytes,
+        "live_commit_limit_bytes": current_commit_limit_bytes,
+        "commit_total_bytes": commit_total_bytes,
+        "effective_capacity_bytes": effective_capacity_bytes,
+        "available_commit_bytes": effective_capacity_bytes - commit_total_bytes,
+        "bound_by": bound_by,
+    }
+
+
+def configured_maximum_available_commit_bytes(
+    *,
+    physical_ram_bytes: int,
+    commit_total_bytes: int,
+    current_commit_limit_bytes: int,
+    paging_files: object,
+) -> int:
+    """Return headroom bounded by the lesser of configured pagefile capacity
+    and the live Windows commit limit, or fail closed.
+
+    Thin wrapper preserving the original int-returning contract for existing
+    callers; see :func:`host_commit_headroom_diagnostic` for the full
+    computation naming both bounds and which one binds.
+    """
+
+    return host_commit_headroom_diagnostic(
+        physical_ram_bytes=physical_ram_bytes,
+        commit_total_bytes=commit_total_bytes,
+        current_commit_limit_bytes=current_commit_limit_bytes,
+        paging_files=paging_files,
+    )["available_commit_bytes"]
 
 
 def available_host_commit_bytes() -> int:
