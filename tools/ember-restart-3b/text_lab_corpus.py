@@ -12,6 +12,7 @@ import stat
 import subprocess
 import sys
 import unicodedata
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from jsonschema import Draft202012Validator
 from typing import Any, Iterable
@@ -862,14 +863,39 @@ def validate_admitted_authority_subset(
     }
 
 
-def _validate_partition_authority_row(
+_PARTITION_AUTHORITY_WORKERS = 8
+
+
+def _load_partition_reopener(repo_root: Path) -> tuple[Any, str]:
+    producer_path = _path(
+        repo_root.resolve(), "tools/ember-restart-3b/mint_github_license_partition.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "_ember_github_license_partition_reopener", producer_path
+    )
+    if spec is None or spec.loader is None:
+        raise ValueError("partition receipt reopener is unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    required = (
+        "prepare_partition_receipt",
+        "_verify_blob_checks",
+        "_validate_partition_receipt_aggregate",
+    )
+    if any(not callable(getattr(module, name, None)) for name in required):
+        raise ValueError("partition receipt reopener is unavailable")
+    return module, _sha_bytes(producer_path.read_bytes())
+
+
+def _prepare_partition_authority_row(
     repo_root: Path,
     authority_root: Path,
     row: dict[str, Any],
     *,
+    module: Any,
+    current_producer_sha: str,
     receipt_custody_root: Path | None = None,
-) -> dict[str, Any]:
-    """Reopen the exact partition receipt and every source/file/blob join it binds."""
+) -> tuple[dict[str, Any], dict[str, Any], list[tuple[Path, int, str]], str]:
     if not isinstance(row, dict) or set(row) != _PARTITION_ADMITTED_FIELDS:
         raise ValueError("partition authority row is not a closed alternative")
     content = row.get("content_sha256")
@@ -886,15 +912,20 @@ def _validate_partition_authority_row(
     receipt_bytes = receipt_path.read_bytes()
     if _sha_bytes(receipt_bytes) != receipt_sha:
         raise ValueError("partition receipt bytes do not match the bound hash")
-    producer_path = _path(repo_root.resolve(), "tools/ember-restart-3b/mint_github_license_partition.py")
-    spec = importlib.util.spec_from_file_location("_ember_github_license_partition_reopener", producer_path)
-    if spec is None or spec.loader is None:
-        raise ValueError("partition receipt reopener is unavailable")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    receipt = module.validate_partition_receipt(receipt_path)
+    receipt, blob_checks = module.prepare_partition_receipt(
+        receipt_path, raw_bytes=receipt_bytes
+    )
+    return row, receipt, blob_checks, current_producer_sha
+
+
+def _finalize_partition_authority_row(
+    repo_root: Path,
+    prepared: tuple[dict[str, Any], dict[str, Any], list[tuple[Path, int, str]], str],
+) -> dict[str, Any]:
+    row, receipt, _, current_producer_sha = prepared
+    content = row["content_sha256"]
+    receipt_sha = row["license_partition_sha256"]
     recorded_producer_sha = receipt.get("producer_sha256")
-    current_producer_sha = _sha_bytes(producer_path.read_bytes())
     if recorded_producer_sha != current_producer_sha and not _partition_producer_supersession_allows_v2(
         repo_root.resolve(), row, recorded_producer_sha, current_producer_sha
     ):
@@ -924,6 +955,54 @@ def _validate_partition_authority_row(
     if row.get("l4_receipt") != expected_l4:
         raise ValueError("partition authority L4 receipt is invalid")
     return receipt
+
+
+def _validate_partition_authority_rows(
+    repo_root: Path,
+    authority_root: Path,
+    rows: Iterable[dict[str, Any]],
+    *,
+    receipt_custody_root: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Reopen partition rows with one bounded, deterministic class-wide preparation pool."""
+    ordered_rows = list(rows)
+    if not ordered_rows:
+        return []
+    module, current_producer_sha = _load_partition_reopener(repo_root)
+
+    def prepare(row: dict[str, Any]):
+        return _prepare_partition_authority_row(
+            repo_root,
+            authority_root,
+            row,
+            module=module,
+            current_producer_sha=current_producer_sha,
+            receipt_custody_root=receipt_custody_root,
+        )
+
+    with ThreadPoolExecutor(max_workers=_PARTITION_AUTHORITY_WORKERS) as executor:
+        prepared = list(executor.map(prepare, ordered_rows))
+    blob_checks = [check for item in prepared for check in item[2]]
+    module._verify_blob_checks(blob_checks)
+    for _, receipt, _, _ in prepared:
+        module._validate_partition_receipt_aggregate(receipt)
+    return [_finalize_partition_authority_row(repo_root, item) for item in prepared]
+
+
+def _validate_partition_authority_row(
+    repo_root: Path,
+    authority_root: Path,
+    row: dict[str, Any],
+    *,
+    receipt_custody_root: Path | None = None,
+) -> dict[str, Any]:
+    """Reopen one exact partition row through the class-wide implementation."""
+    return _validate_partition_authority_rows(
+        repo_root,
+        authority_root,
+        [row],
+        receipt_custody_root=receipt_custody_root,
+    )[0]
 
 
 def _validate_projected_pdf_authority_row(
@@ -1056,7 +1135,7 @@ def _partition_producer_supersession_allows(
 def _partition_producer_supersession_allows_v2(
     repo_root: Path, row: dict[str, Any], recorded_sha: Any, current_sha: str
 ) -> bool:
-    """Accept only the reviewed two-hop chain for the exact nine bound rows."""
+    """Accept only the reviewed three-hop chain for the exact nine bound rows."""
     try:
         table = json.loads(_path(repo_root, _PARTITION_PRODUCER_SUPERSESSIONS_V2).read_bytes())
         prior = json.loads(_path(repo_root, _PARTITION_PRODUCER_SUPERSESSIONS).read_bytes())
@@ -1072,7 +1151,7 @@ def _partition_producer_supersession_allows_v2(
         return False
     transitions = table.get("transitions")
     bindings = table.get("row_bindings")
-    if not isinstance(transitions, list) or len(transitions) != 2 or not isinstance(bindings, list) or len(bindings) != 9:
+    if not isinstance(transitions, list) or len(transitions) != 3 or not isinstance(bindings, list) or len(bindings) != 9:
         return False
 
     binding_fields = {
@@ -1146,7 +1225,24 @@ def _partition_producer_supersession_allows_v2(
         or set(second) != transition_fields
         or second.get("authorization_basis") != review_basis
         or first.get("successor_sha256") != second.get("superseded_sha256")
-        or second.get("successor_sha256") != current_sha
+    ):
+        return False
+    third_basis = (
+        "The producer change parallelizes receipt ingestion and blob-check construction into "
+        "the bounded-8 deterministic pool per design C8A715EC approved by the gate "
+        "(gate-order-24771); the per-row v1 validation contract and every refusal path are "
+        "byte-untouched."
+    )
+    third = transitions[2]
+    if (
+        not isinstance(third, dict)
+        or set(third) != transition_fields
+        or third.get("authorization_basis") != third_basis
+        or second.get("successor_sha256") != third.get("superseded_sha256")
+        or third.get("successor_sha256") != current_sha
+        or third.get("cause_commit") != "b39ef2402dfc0a3cf7f9dedf6e28363b18b03bb9"
+        or third.get("resolved_source_commits")
+        != ["5a07a1b6504605a88da817d093f6619eaf1960a6"]
     ):
         return False
     start = next(
@@ -1365,13 +1461,12 @@ def validate_authority_index(
                     bound_receipt_root,
                 )
     partition_authority_root = authority_root if authority_root is not None else root
-    for partition_row in partition_rows:
-        _validate_partition_authority_row(
-            root,
-            partition_authority_root,
-            partition_row,
-            receipt_custody_root=bound_receipt_root,
-        )
+    _validate_partition_authority_rows(
+        root,
+        partition_authority_root,
+        partition_rows,
+        receipt_custody_root=bound_receipt_root,
+    )
     if (
         len(set(admitted_content_hashes)) != len(admitted_content_hashes)
         or any(value in protected_identifiers["content_sha256"] for value in admitted_content_hashes)

@@ -46,7 +46,7 @@ class TextLabCorpusTests(unittest.TestCase):
         fixture_root = Path(tempfile.gettempdir()).resolve()
         with patch.object(
             text_lab_corpus,
-            "_validate_partition_authority_row",
+            "_validate_partition_authority_rows",
         ), patch.object(
             text_lab_corpus,
             "_validate_projected_pdf_authority_row",

@@ -5,8 +5,11 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import inspect
 import json
 import sys
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -105,7 +108,7 @@ def _checked_in_partition_row(source_id: str) -> dict:
         ),
     ],
 )
-def test_carrier_a_refuses_historical_rows_until_closed_v2_chain_extends(
+def test_carrier_b_reopens_historical_rows_through_closed_v2_chain(
     source_id: str, recorded_sha: str
 ):
     import text_lab_corpus
@@ -120,7 +123,61 @@ def test_carrier_a_refuses_historical_rows_until_closed_v2_chain_extends(
         lambda *_args: False,
     )
 
-    assert not allows_v2(ROOT, row, recorded_sha, current_sha)
+    assert allows_v2(ROOT, row, recorded_sha, current_sha)
+
+
+def test_partition_authority_rows_prepare_receipts_concurrently_in_input_order(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    import text_lab_corpus
+
+    rows = []
+    receipts = []
+    targets = set()
+    for ordinal in range(4):
+        fixture_root = tmp_path / f"case-{ordinal}"
+        fixture_root.mkdir()
+        row, output, receipt = _partition_fixture(fixture_root)
+        row["license_partition_receipt"] = f"case-{ordinal}/partition/partition-receipt.json"
+        rows.append(row)
+        receipts.append(receipt)
+        targets.add((output / "partition-receipt.json").resolve())
+
+    original_read_bytes = Path.read_bytes
+    lock = threading.Lock()
+    active = 0
+    maximum_active = 0
+
+    def observed_read_bytes(path: Path) -> bytes:
+        nonlocal active, maximum_active
+        if path.resolve() not in targets:
+            return original_read_bytes(path)
+        with lock:
+            active += 1
+            maximum_active = max(maximum_active, active)
+        try:
+            time.sleep(0.02)
+            return original_read_bytes(path)
+        finally:
+            with lock:
+                active -= 1
+
+    monkeypatch.setattr(Path, "read_bytes", observed_read_bytes)
+
+    reopened = text_lab_corpus._validate_partition_authority_rows(ROOT, tmp_path, rows)
+
+    assert [item["partition_root_sha256"] for item in reopened] == [
+        item["partition_root_sha256"] for item in receipts
+    ]
+    assert 1 < maximum_active <= 8
+
+
+def test_authority_index_uses_classwide_partition_reopen_without_serial_row_loop():
+    import text_lab_corpus
+
+    source = inspect.getsource(text_lab_corpus.validate_authority_index)
+    assert "for partition_row in partition_rows" not in source
+    assert "_validate_partition_authority_rows(" in source
 
 
 def test_partition_authority_refuses_unlisted_historical_receipt(tmp_path: Path):
@@ -188,7 +245,7 @@ def test_partition_authority_refuses_tampered_closed_v2_table(
     )
     other_index = 0 if binding_index != 0 else 1
     if mutation == "stale_successor":
-        table["transitions"][1]["successor_sha256"] = "0" * 64
+        table["transitions"][-1]["successor_sha256"] = "0" * 64
     elif mutation == "missing_row":
         table["row_bindings"].pop()
     elif mutation == "extra_row":
@@ -213,9 +270,9 @@ def test_partition_authority_refuses_tampered_closed_v2_table(
     elif mutation == "broken_chain":
         table["transitions"][0]["successor_sha256"] = "f" * 64
     elif mutation == "unreachable_cause":
-        table["transitions"][1]["cause_commit"] = "0" * 40
+        table["transitions"][-1]["cause_commit"] = "0" * 40
     elif mutation == "unreachable_resolved":
-        table["transitions"][0]["resolved_source_commits"] = [
+        table["transitions"][-1]["resolved_source_commits"] = [
             "0f06bc87ecf3c18774a2bf1aeed54f3d2c0f1044"
         ]
     else:
