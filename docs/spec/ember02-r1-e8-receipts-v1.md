@@ -71,3 +71,15 @@ Raw per-step liveness telemetry reuses the frozen `train_step` envelope
 {"run_id":..., "step":int, ...}}`), with the payload additionally carrying
 `tokens` (positive integer), `wall_seconds` (positive decimal), and
 `proxy_joules` (non-negative decimal) for the steps a liveness series covers.
+
+`tools/ember-restart-3b/a1_execution.py::run_dense_a1` wires `tokens` and
+`wall_seconds` honestly as of issue #1464's residual: each is measured per
+step (`time.perf_counter()` at step start, differenced at telemetry-write
+time). `proxy_joules` stays unwired -- no per-step energy sampler exists in
+this repository; `energy_proxy_logger.py` integrates GPU/CPU draw only over
+a run's whole lifetime, out-of-process at 1 Hz, never per optimizer step --
+so `a1_e8_evidence.derive_liveness_series` correctly finds zero
+liveness-complete rows for any real A1 run until a genuine per-step energy
+source is wired. Fabricating a placeholder (including the schema-legal `0`)
+was deliberately avoided: a liveness series built on invented energy would
+poison the E8 verdict it feeds.

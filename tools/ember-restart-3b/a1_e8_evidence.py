@@ -31,10 +31,17 @@ Raw per-step liveness telemetry reuses the frozen `train_step` envelope
 loss/grad_norm, extended with three additional payload fields this producer
 requires: `tokens` (int > 0), `wall_seconds` (decimal > 0, whole-boundary
 step duration), and `proxy_joules` (decimal >= 0, from `energy_proxy_logger`
-`sec5.3` accounting). No run in this repository has emitted these fields yet
--- the dense >=3B A1 allocation is not separately authorized -- so every test
-here constructs the envelope by hand, exactly as `r1_exit_battery.py`'s own
-train_step selftest fixtures already do; that is this module's named
+`sec5.3` accounting). `a1_execution.run_dense_a1` (issue #1464 residual) now
+emits `tokens` and `wall_seconds` honestly, measured per step; `proxy_joules`
+remains unwired because no per-step energy sampler exists anywhere in this
+repository -- `energy_proxy_logger.py` only integrates GPU/CPU draw over a
+run's whole lifetime, out-of-process at 1 Hz, never per optimizer step -- and
+`a1_execution._train_step_envelope` deliberately omits the field rather than
+fabricate a placeholder. Consequently `derive_liveness_series` still finds
+zero liveness-complete rows for any real A1 run: every test here still
+constructs the full three-field envelope by hand, exactly as
+`r1_exit_battery.py`'s own train_step selftest fixtures already do. That
+remaining gap -- a genuine per-step energy source -- is this module's named
 residual, not a gap in what it enforces.
 """
 from __future__ import annotations
