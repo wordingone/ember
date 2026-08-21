@@ -5,12 +5,14 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 import hashlib
 import json
 import os
 from pathlib import Path
 import struct
+import time
 from typing import Any, Iterator
 
 import torch
@@ -79,6 +81,44 @@ def _tokens(receipt_path: Path, shards_root: Path) -> Iterator[int]:
         if hashlib.sha256(raw).hexdigest() != row["sha256"] or len(raw) != 2 * row["n_tokens"]:
             raise ValueError("A1 token shard bytes disagree with receipt")
         yield from struct.unpack(f"<{row['n_tokens']}H", raw)
+
+
+def _train_step_envelope(
+    *, run_id: str, step: int, tokens: int, loss: float, wall_seconds: float
+) -> dict[str, Any]:
+    """The frozen `train_step` telemetry envelope
+    (`docs/spec/ember02-r1-e8-receipts-v1.md`): `{"ts":..., "kind":"train_step",
+    "source":"ember-restart-3b", "payload": {...}}`, extended with `tokens` and
+    `wall_seconds` for `a1_e8_evidence.derive_liveness_series`.
+
+    `wall_seconds` is the whole-boundary per-step duration, measured the same
+    way `pretrain.py`'s `step_ms` is (`time.perf_counter()` at step start,
+    differenced at telemetry-write time) -- reported in seconds rather than
+    milliseconds because that is the unit the liveness series requires.
+
+    `proxy_joules` is deliberately absent. No per-step energy sampler exists
+    in this repository: `energy_proxy_logger.py` integrates GPU/CPU draw over
+    a run's whole lifetime through an out-of-process sidecar sampling at 1 Hz
+    against a pidfile, not per optimizer step, so there is nothing honest to
+    attribute to one step. Emitting a placeholder here -- even the
+    schema-legal `0` -- would misrepresent real, nonzero per-step draw as a
+    measurement. Until a genuine per-step energy source is wired,
+    `derive_liveness_series` correctly finds zero liveness-complete rows for
+    any run this function produces; that is the named residual this function
+    leaves open, not a defect in what it enforces.
+    """
+    return {
+        "ts": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "kind": "train_step",
+        "source": "ember-restart-3b",
+        "payload": {
+            "run_id": run_id,
+            "step": step,
+            "tokens": tokens,
+            "loss": format(float(loss), ".12f"),
+            "wall_seconds": format(float(wall_seconds), ".12f"),
+        },
+    }
 
 
 def run_dense_a1(
@@ -164,6 +204,7 @@ def run_dense_a1(
     checkpoint_sha = None
     with telemetry_path.open("a", encoding="utf-8", newline="\n") as telemetry:
         for step in range(1, steps + 1):
+            step_started = time.perf_counter()
             batch = [next(stream) for _ in range(sequence_length + 1)]
             input_ids = torch.tensor(batch[:-1], device="cuda", dtype=torch.long).unsqueeze(0)
             targets = torch.tensor(batch[1:], device="cuda", dtype=torch.long).unsqueeze(0)
@@ -172,7 +213,13 @@ def run_dense_a1(
             loss.backward()
             optimizer.step()
             tokens_seen += sequence_length
-            telemetry.write(json.dumps({"run_id": telemetry_run_id, "step": step, "tokens": sequence_length, "loss": format(float(loss.detach()), ".12f")}, sort_keys=True) + "\n")
+            telemetry.write(json.dumps(
+                _train_step_envelope(
+                    run_id=telemetry_run_id, step=step, tokens=sequence_length,
+                    loss=float(loss.detach()), wall_seconds=time.perf_counter() - step_started,
+                ),
+                sort_keys=True,
+            ) + "\n")
             telemetry.flush()
             if step % checkpoint_interval == 0 or step == steps:
                 checkpoint = artifact_root / f"checkpoint-a1-step-{step}"

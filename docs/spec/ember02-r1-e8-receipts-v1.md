@@ -50,3 +50,36 @@ subscale, arithmetically inconsistent, or route-confused evidence is
 This source carrier leaves real execution unresolved: no receipt here proves
 that a certified dense >=3B A1 model, full-state CPU-offloaded AdamW, or a
 matched Tier-2/reference segment has run.
+
+## Liveness evidence producer
+
+`tools/ember-restart-3b/a1_e8_evidence.py::mint_liveness_receipt` mints the
+`ember02-r1-e8-liveness-v1` packet from already-produced evidence: it reopens
+the Tier-1 A1 run (`a1_execution.finalize_tier1_run`'s output) and the
+matched A3 run by exact raw SHA-256, copies both plus the externally frozen
+`ember02-r2-charged-budget-contract-v1` authority byte-verified into one flat
+packet directory, derives both runs' `ember02-r1-e8-liveness-series-v1`
+objects from raw per-step telemetry, and recomputes tokens/second and
+joules/token independently of the validator before minting the closed,
+self-digested receipt. It never derives, selects, or infers
+`projected_r2_tokens`; an absent contract raises a distinguished
+`E8EvidenceProducerMissing`, routed by callers to `EVIDENCE_MISSING`, never a
+refusal.
+
+Raw per-step liveness telemetry reuses the frozen `train_step` envelope
+(`{"ts":..., "kind":"train_step", "source":"ember-restart-3b", "payload":
+{"run_id":..., "step":int, ...}}`), with the payload additionally carrying
+`tokens` (positive integer), `wall_seconds` (positive decimal), and
+`proxy_joules` (non-negative decimal) for the steps a liveness series covers.
+
+`tools/ember-restart-3b/a1_execution.py::run_dense_a1` wires `tokens` and
+`wall_seconds` honestly as of issue #1464's residual: each is measured per
+step (`time.perf_counter()` at step start, differenced at telemetry-write
+time). `proxy_joules` stays unwired -- no per-step energy sampler exists in
+this repository; `energy_proxy_logger.py` integrates GPU/CPU draw only over
+a run's whole lifetime, out-of-process at 1 Hz, never per optimizer step --
+so `a1_e8_evidence.derive_liveness_series` correctly finds zero
+liveness-complete rows for any real A1 run until a genuine per-step energy
+source is wired. Fabricating a placeholder (including the schema-legal `0`)
+was deliberately avoided: a liveness series built on invented energy would
+poison the E8 verdict it feeds.
