@@ -457,11 +457,34 @@ def _verify_blob_checks(checks: list[tuple[Path, int, str]]) -> None:
                 pass
 
 
-def validate_partition_receipt(path: Path) -> dict[str, Any]:
+def _validate_partition_receipt_aggregate(receipt: dict[str, Any]) -> None:
+    repositories = receipt["repositories"]
+    file_count = sum(len(repository["files"]) for repository in repositories)
+    blob_bytes = sum(
+        row["bytes"] for repository in repositories for row in repository["files"]
+    )
+    if (
+        receipt["repository_count"] != len(repositories)
+        or receipt["file_count"] != file_count
+        or receipt["blob_bytes"] != blob_bytes
+        or receipt["license_summary"] != sorted({row["declared_spdx"] for row in repositories})
+        or receipt["partition_root_sha256"] != sha256_bytes(canonical(repositories))
+        or receipt["model_mediated"] is not False
+        or receipt["borrowed_labels"] is not False
+    ):
+        raise ValueError("partition receipt aggregate changed")
+
+
+def prepare_partition_receipt(
+    path: Path, *, raw_bytes: bytes | None = None
+) -> tuple[dict[str, Any], list[tuple[Path, int, str]]]:
+    """Validate receipt metadata once and return ordered blob checks for its caller."""
     path = Path(path)
     if not path.is_file() or _is_reparse_or_symlink(path):
         raise ValueError("partition receipt path is invalid")
-    receipt = json.loads(path.read_bytes())
+    if raw_bytes is not None and not isinstance(raw_bytes, bytes):
+        raise ValueError("partition receipt bytes are invalid")
+    receipt = json.loads(path.read_bytes() if raw_bytes is None else raw_bytes)
     if not isinstance(receipt, dict) or set(receipt) != PARTITION_KEYS or receipt.get("schema_version") != SCHEMA or receipt.get("result") != "VERIFIED":
         raise ValueError("partition receipt is invalid")
     source_sha = receipt["source_connector_receipt_sha256"]
@@ -475,31 +498,23 @@ def validate_partition_receipt(path: Path) -> dict[str, Any]:
     if not isinstance(repositories, list) or not repositories:
         raise ValueError("partition receipt repositories are absent")
     previous: str | None = None
-    blob_bytes = 0
-    file_count = 0
     blob_checks: list[tuple[Path, int, str]] = []
     for repository in repositories:
         name = repository.get("source_repo") if isinstance(repository, dict) else None
         if not isinstance(name, str) or (previous is not None and name <= previous):
             raise ValueError("partition receipt repositories are not strictly ordered")
         previous = name
-        repository_bytes, repository_checks = _validate_repository(
+        _, repository_checks = _validate_repository(
             repository, root=root, receipt_sha256=source_sha
         )
-        blob_bytes += repository_bytes
         blob_checks.extend(repository_checks)
-        file_count += len(repository["files"])
+    return receipt, blob_checks
+
+
+def validate_partition_receipt(path: Path) -> dict[str, Any]:
+    receipt, blob_checks = prepare_partition_receipt(path)
     _verify_blob_checks(blob_checks)
-    if (
-        receipt["repository_count"] != len(repositories)
-        or receipt["file_count"] != file_count
-        or receipt["blob_bytes"] != blob_bytes
-        or receipt["license_summary"] != sorted({row["declared_spdx"] for row in repositories})
-        or receipt["partition_root_sha256"] != sha256_bytes(canonical(repositories))
-        or receipt["model_mediated"] is not False
-        or receipt["borrowed_labels"] is not False
-    ):
-        raise ValueError("partition receipt aggregate changed")
+    _validate_partition_receipt_aggregate(receipt)
     return receipt
 
 
