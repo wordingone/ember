@@ -4,7 +4,7 @@
 
 #![cfg(windows)]
 
-use ember_lab::{Daemon, EmberLabError, HostCommitCapacity, JobState};
+use ember_lab::{Daemon, EmberLabError, HostCommitCapacity, JobState, ResourceGuardRearmRequest};
 use rusqlite::Connection;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -1837,8 +1837,398 @@ fn sticky_resource_guard_freeze_refuses_dispatch_with_a_durable_receipt() {
     assert_eq!(receipt["result"], "REFUSED_RESOURCE_GUARD_FROZEN");
     assert_eq!(receipt["resource_guard"]["admission_state"], "frozen");
     assert_eq!(receipt["resource_guard"]["oracle_evidence_required"], true);
+    let refusal_path = root.join("custody").join("preflight.json");
+    let refusal_before = fs::read(&refusal_path).unwrap();
+    fs::remove_file(&refusal_path).unwrap();
+    assert!(daemon
+        .rearm_resource_guard_at(
+            ResourceGuardRearmRequest {
+                frozen_observation_sha256: "0".repeat(64),
+                breach_class: "physical_available_below_survival_floor".into(),
+                diagnostic_receipt_path: root.join("absent-diagnostic.json"),
+                diagnostic_receipt_sha256: "1".repeat(64),
+            },
+            10_000,
+        )
+        .is_err());
+    assert!(daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(1024),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .is_err());
+    assert_eq!(fs::read(&refusal_path).unwrap(), refusal_before);
     drop(daemon);
     fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn evidenced_resource_guard_rearm_consumes_the_exact_freeze_after_a_healthy_window() {
+    let root = sandbox("resource-guard-evidenced-rearm");
+    let db = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(host_capacity(16 * GIB))).unwrap();
+    let freeze_at_ms = 10_000i64;
+    let freeze = json!({
+        "schema_version": "ember-lab-resource-guard-observation-v1",
+        "result": "SURVIVAL_FLOOR_BREACH",
+        "observed_at_ms": freeze_at_ms,
+        "monitor_tier": "cheap_host_counters",
+        "driver_locked_provider": "UNAVAILABLE",
+        "physical_available_bytes": 16 * GIB,
+        "commit_remaining_bytes": GIB,
+        "minimum_physical_available_bytes": 8 * GIB,
+        "minimum_commit_remaining_bytes": 10 * GIB,
+    });
+    let freeze_bytes = serde_json::to_vec(&freeze).unwrap();
+    let freeze_sha256 = format!("{:x}", Sha256::digest(&freeze_bytes));
+    let connection = Connection::open(&db).unwrap();
+    connection
+        .execute(
+            "INSERT INTO resource_guard_observations(observed_at_ms,outcome,payload_json) VALUES(?1,'frozen',?2)",
+            rusqlite::params![freeze_at_ms, String::from_utf8(freeze_bytes).unwrap()],
+        )
+        .unwrap();
+    connection
+        .execute(
+            "UPDATE resource_guard_state SET admission_state='frozen',reason='commit_remaining_below_survival_floor',observed_at_ms=?1,oracle_evidence_required=1,observation_json=?2 WHERE singleton=1",
+            rusqlite::params![freeze_at_ms, serde_json::to_string(&freeze).unwrap()],
+        )
+        .unwrap();
+    for index in 1..=31i64 {
+        let observed_at_ms = freeze_at_ms + index * 2_000;
+        let healthy = json!({
+            "schema_version": "ember-lab-resource-guard-observation-v1",
+            "result": "HEALTHY",
+            "observed_at_ms": observed_at_ms,
+            "monitor_tier": "cheap_host_counters",
+            "driver_locked_provider": "UNAVAILABLE",
+            "physical_available_bytes": 12 * GIB,
+            "commit_remaining_bytes": 15 * GIB,
+            "minimum_physical_available_bytes": 8 * GIB,
+            "minimum_commit_remaining_bytes": 10 * GIB,
+        });
+        connection
+            .execute(
+                "INSERT INTO resource_guard_observations(observed_at_ms,outcome,payload_json) VALUES(?1,'healthy',?2)",
+                rusqlite::params![observed_at_ms, serde_json::to_string(&healthy).unwrap()],
+            )
+            .unwrap();
+    }
+    let diagnostic = json!({
+        "schema_version": "ember-lab-resource-guard-diagnostic-v1",
+        "result": "EXECUTED",
+        "breach_class": "commit_remaining_below_survival_floor",
+        "frozen_observation_sha256": freeze_sha256,
+        "executed_at_ms": freeze_at_ms + 30_000,
+        "probe": {
+            "resource": "host_commit",
+            "kind": "allocation_probe",
+            "real_allocation_executed": true,
+            "requested_bytes": 1,
+            "result": "COMPLETED",
+        },
+    });
+    let diagnostic_bytes = serde_json::to_vec(&diagnostic).unwrap();
+    let diagnostic_sha256 = format!("{:x}", Sha256::digest(&diagnostic_bytes));
+    let diagnostic_path = root.join(format!("{diagnostic_sha256}.json"));
+    fs::write(&diagnostic_path, diagnostic_bytes).unwrap();
+
+    let artifact = daemon
+        .rearm_resource_guard_at(
+            ResourceGuardRearmRequest {
+                frozen_observation_sha256: freeze_sha256.clone(),
+                breach_class: "commit_remaining_below_survival_floor".into(),
+                diagnostic_receipt_path: diagnostic_path,
+                diagnostic_receipt_sha256: diagnostic_sha256.clone(),
+            },
+            freeze_at_ms + 63_000,
+        )
+        .unwrap();
+
+    assert_eq!(
+        daemon.resource_guard_status().unwrap()["admission_state"],
+        "open"
+    );
+    assert_eq!(sha256(&artifact.path), artifact.sha256);
+    let receipt: Value = serde_json::from_slice(&fs::read(&artifact.path).unwrap()).unwrap();
+    assert_eq!(
+        receipt["schema_version"],
+        "ember-lab-resource-guard-rearm-v1"
+    );
+    assert_eq!(receipt["result"], "RESOURCE_GUARD_REARMED");
+    assert_eq!(receipt["frozen_observation_sha256"], freeze_sha256);
+    assert_eq!(receipt["healthy_window"]["sample_count"], 31);
+    assert_eq!(receipt["healthy_window"]["span_ms"], 60_000);
+    assert_eq!(receipt["healthy_window"]["hysteresis_numerator"], 3);
+    assert_eq!(receipt["healthy_window"]["hysteresis_denominator"], 2);
+    assert_eq!(receipt["flap_guard"]["multiplier"], 1);
+    assert_eq!(receipt["diagnostic_receipt_sha256"], diagnostic_sha256);
+
+    drop(daemon);
+    drop(connection);
+    remove_sandbox_when_unlocked(&root);
+}
+
+fn resource_guard_rearm_fixture(
+    name: &str,
+    healthy_sample_count: i64,
+    diagnostic_executed_at_ms: i64,
+) -> (
+    PathBuf,
+    PathBuf,
+    Daemon,
+    Connection,
+    ResourceGuardRearmRequest,
+) {
+    let root = sandbox(name);
+    let db = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(host_capacity(16 * GIB))).unwrap();
+    let freeze_at_ms = 10_000i64;
+    let freeze = json!({
+        "schema_version": "ember-lab-resource-guard-observation-v1",
+        "result": "SURVIVAL_FLOOR_BREACH",
+        "observed_at_ms": freeze_at_ms,
+        "monitor_tier": "cheap_host_counters",
+        "driver_locked_provider": "UNAVAILABLE",
+        "physical_available_bytes": 16 * GIB,
+        "commit_remaining_bytes": GIB,
+        "minimum_physical_available_bytes": 8 * GIB,
+        "minimum_commit_remaining_bytes": 10 * GIB,
+    });
+    let freeze_json = serde_json::to_string(&freeze).unwrap();
+    let freeze_sha256 = format!("{:x}", Sha256::digest(freeze_json.as_bytes()));
+    let connection = Connection::open(&db).unwrap();
+    connection
+        .execute(
+            "INSERT INTO resource_guard_observations(observed_at_ms,outcome,payload_json) VALUES(?1,'frozen',?2)",
+            rusqlite::params![freeze_at_ms, freeze_json],
+        )
+        .unwrap();
+    connection
+        .execute(
+            "UPDATE resource_guard_state SET admission_state='frozen',reason='commit_remaining_below_survival_floor',observed_at_ms=?1,oracle_evidence_required=1,observation_json=?2 WHERE singleton=1",
+            rusqlite::params![freeze_at_ms, serde_json::to_string(&freeze).unwrap()],
+        )
+        .unwrap();
+    for index in 1..=healthy_sample_count {
+        let observed_at_ms = freeze_at_ms + index * 2_000;
+        let healthy = json!({
+            "schema_version": "ember-lab-resource-guard-observation-v1",
+            "result": "HEALTHY",
+            "observed_at_ms": observed_at_ms,
+            "monitor_tier": "cheap_host_counters",
+            "driver_locked_provider": "UNAVAILABLE",
+            "physical_available_bytes": 12 * GIB,
+            "commit_remaining_bytes": 15 * GIB,
+            "minimum_physical_available_bytes": 8 * GIB,
+            "minimum_commit_remaining_bytes": 10 * GIB,
+        });
+        connection
+            .execute(
+                "INSERT INTO resource_guard_observations(observed_at_ms,outcome,payload_json) VALUES(?1,'healthy',?2)",
+                rusqlite::params![observed_at_ms, serde_json::to_string(&healthy).unwrap()],
+            )
+            .unwrap();
+    }
+    let diagnostic = json!({
+        "schema_version": "ember-lab-resource-guard-diagnostic-v1",
+        "result": "EXECUTED",
+        "breach_class": "commit_remaining_below_survival_floor",
+        "frozen_observation_sha256": freeze_sha256,
+        "executed_at_ms": diagnostic_executed_at_ms,
+        "probe": {
+            "resource": "host_commit",
+            "kind": "allocation_probe",
+            "real_allocation_executed": true,
+            "requested_bytes": 1,
+            "result": "COMPLETED",
+        },
+    });
+    let diagnostic_bytes = serde_json::to_vec(&diagnostic).unwrap();
+    let diagnostic_sha256 = format!("{:x}", Sha256::digest(&diagnostic_bytes));
+    let diagnostic_path = root.join(format!("{diagnostic_sha256}.json"));
+    fs::write(&diagnostic_path, diagnostic_bytes).unwrap();
+    let request = ResourceGuardRearmRequest {
+        frozen_observation_sha256: freeze_sha256,
+        breach_class: "commit_remaining_below_survival_floor".into(),
+        diagnostic_receipt_path: diagnostic_path,
+        diagnostic_receipt_sha256: diagnostic_sha256,
+    };
+    (root, db, daemon, connection, request)
+}
+
+#[test]
+fn resource_guard_rearm_refuses_unbound_stale_or_insufficient_evidence_without_thawing() {
+    let cases = [
+        ("insufficient-span", 30, 40_000, 73_000),
+        ("stale-newest", 31, 40_000, 83_001),
+        ("diagnostic-outside-window", 31, 9_999, 73_000),
+    ];
+    for (name, samples, diagnostic_at, transition_at) in cases {
+        let (root, _db, daemon, connection, request) =
+            resource_guard_rearm_fixture(name, samples, diagnostic_at);
+        assert!(daemon
+            .rearm_resource_guard_at(request, transition_at)
+            .is_err());
+        assert_eq!(
+            daemon.resource_guard_status().unwrap()["admission_state"],
+            "frozen"
+        );
+        drop(daemon);
+        drop(connection);
+        remove_sandbox_when_unlocked(&root);
+    }
+
+    let (root, _db, daemon, connection, request) =
+        resource_guard_rearm_fixture("wrong-binding", 31, 40_000);
+    let mut wrong_hash = request.clone();
+    wrong_hash.frozen_observation_sha256 = "0".repeat(64);
+    assert!(daemon.rearm_resource_guard_at(wrong_hash, 73_000).is_err());
+    let mut wrong_class = request.clone();
+    wrong_class.breach_class = "physical_available_below_survival_floor".into();
+    assert!(daemon.rearm_resource_guard_at(wrong_class, 73_000).is_err());
+    let mut wrong_receipt = request.clone();
+    wrong_receipt.diagnostic_receipt_sha256 = "f".repeat(64);
+    assert!(daemon
+        .rearm_resource_guard_at(wrong_receipt, 73_000)
+        .is_err());
+    assert_eq!(
+        daemon.resource_guard_status().unwrap()["admission_state"],
+        "frozen"
+    );
+    drop(daemon);
+    drop(connection);
+    remove_sandbox_when_unlocked(&root);
+
+    let (root, _db, daemon, connection, request) =
+        resource_guard_rearm_fixture("unknown-diagnostic-field", 31, 40_000);
+    let mut diagnostic: Value =
+        serde_json::from_slice(&fs::read(&request.diagnostic_receipt_path).unwrap()).unwrap();
+    diagnostic
+        .as_object_mut()
+        .unwrap()
+        .insert("unbound_claim".into(), Value::Bool(true));
+    let diagnostic_bytes = serde_json::to_vec(&diagnostic).unwrap();
+    let diagnostic_sha256 = format!("{:x}", Sha256::digest(&diagnostic_bytes));
+    let diagnostic_path = root.join(format!("{diagnostic_sha256}.json"));
+    fs::write(&diagnostic_path, diagnostic_bytes).unwrap();
+    assert!(daemon
+        .rearm_resource_guard_at(
+            ResourceGuardRearmRequest {
+                diagnostic_receipt_path: diagnostic_path,
+                diagnostic_receipt_sha256: diagnostic_sha256,
+                ..request
+            },
+            73_000,
+        )
+        .is_err());
+    assert_eq!(
+        daemon.resource_guard_status().unwrap()["admission_state"],
+        "frozen"
+    );
+    drop(daemon);
+    drop(connection);
+    remove_sandbox_when_unlocked(&root);
+
+    let (root, _db, daemon, connection, request) =
+        resource_guard_rearm_fixture("interleaved-breach", 31, 40_000);
+    connection
+        .execute(
+            "INSERT INTO resource_guard_observations(observed_at_ms,outcome,payload_json) VALUES(72500,'frozen','{}')",
+            [],
+        )
+        .unwrap();
+    assert!(daemon.rearm_resource_guard_at(request, 73_000).is_err());
+    assert_eq!(
+        daemon.resource_guard_status().unwrap()["admission_state"],
+        "frozen"
+    );
+    drop(daemon);
+    drop(connection);
+    remove_sandbox_when_unlocked(&root);
+
+    let (root, _db, daemon, connection, request) =
+        resource_guard_rearm_fixture("below-hysteresis", 31, 40_000);
+    let below_hysteresis = json!({
+        "schema_version": "ember-lab-resource-guard-observation-v1",
+        "result": "HEALTHY",
+        "observed_at_ms": 72_500,
+        "physical_available_bytes": 12 * GIB - 1,
+        "commit_remaining_bytes": 15 * GIB,
+        "minimum_physical_available_bytes": 8 * GIB,
+        "minimum_commit_remaining_bytes": 10 * GIB,
+    });
+    connection
+        .execute(
+            "INSERT INTO resource_guard_observations(observed_at_ms,outcome,payload_json) VALUES(72500,'healthy',?1)",
+            [serde_json::to_string(&below_hysteresis).unwrap()],
+        )
+        .unwrap();
+    assert!(daemon.rearm_resource_guard_at(request, 73_000).is_err());
+    assert_eq!(
+        daemon.resource_guard_status().unwrap()["admission_state"],
+        "frozen"
+    );
+    drop(daemon);
+    drop(connection);
+    remove_sandbox_when_unlocked(&root);
+
+    let (root, db, daemon, connection, request) =
+        resource_guard_rearm_fixture("flap-doubles-window", 31, 40_000);
+    connection
+        .execute(
+            "INSERT INTO resource_guard_rearms(frozen_observation_sha256,breach_class,transitioned_at_ms,receipt_path,receipt_sha256,healthy_sample_count,healthy_window_ms,flap_multiplier) VALUES(?1,?2,?3,?4,?5,31,60000,1)",
+            rusqlite::params!["1".repeat(64), "commit_remaining_below_survival_floor", 72_000i64, root.join("prior.json").to_string_lossy(), "2".repeat(64)],
+        )
+        .unwrap();
+    assert!(daemon.rearm_resource_guard_at(request, 73_000).is_err());
+    assert_eq!(
+        daemon.resource_guard_status().unwrap()["admission_state"],
+        "frozen"
+    );
+    assert_eq!(
+        Connection::open(db)
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM resource_guard_rearms", [], |row| row
+                .get::<_, i64>(
+                0
+            ))
+            .unwrap(),
+        1
+    );
+    drop(daemon);
+    drop(connection);
+    remove_sandbox_when_unlocked(&root);
+
+    let (root, _db, daemon, connection, request) =
+        resource_guard_rearm_fixture("single-use-freeze", 31, 40_000);
+    daemon
+        .rearm_resource_guard_at(request.clone(), 73_000)
+        .unwrap();
+    let frozen_json = connection
+        .query_row(
+            "SELECT payload_json FROM resource_guard_observations WHERE outcome='frozen' ORDER BY seq DESC LIMIT 1",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .unwrap();
+    connection
+        .execute(
+            "UPDATE resource_guard_state SET admission_state='frozen',reason='commit_remaining_below_survival_floor',observed_at_ms=10000,oracle_evidence_required=1,observation_json=?1 WHERE singleton=1",
+            [frozen_json],
+        )
+        .unwrap();
+    assert!(daemon.rearm_resource_guard_at(request, 74_000).is_err());
+    assert_eq!(
+        daemon.resource_guard_status().unwrap()["admission_state"],
+        "frozen"
+    );
+    drop(daemon);
+    drop(connection);
+    remove_sandbox_when_unlocked(&root);
 }
 
 #[test]

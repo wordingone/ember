@@ -3,8 +3,8 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 use crate::{
-    server_supervisor::ServerLiveCycleRequest, Daemon, SchedulePrediction,
-    MAX_DISPATCH_MANIFEST_BYTES,
+    server_supervisor::ServerLiveCycleRequest, Daemon, ResourceGuardRearmRequest,
+    SchedulePrediction, MAX_DISPATCH_MANIFEST_BYTES,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -113,6 +113,15 @@ struct PlanOutageParams {
 #[derive(Debug, Deserialize)]
 struct ResourceParams {
     resource: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ResourceGuardRearmParams {
+    frozen_observation_sha256: String,
+    breach_class: String,
+    diagnostic_receipt_path: PathBuf,
+    diagnostic_receipt_sha256: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -270,6 +279,27 @@ fn dispatch(daemon: &Daemon, request: WireRequest, client_pid: Option<u32>) -> (
                             "preflight_receipt_path": outcome.receipt.path,
                             "preflight_receipt_sha256": outcome.receipt.sha256,
                         }),
+                    ),
+                    false,
+                ),
+                Err(error) => (operation_error(id, error), false),
+            }
+        }
+        "resource_guard_rearm" => {
+            let params: ResourceGuardRearmParams = match decode(&id, request.params) {
+                Ok(value) => value,
+                Err(response) => return (response, false),
+            };
+            match daemon.rearm_resource_guard(ResourceGuardRearmRequest {
+                frozen_observation_sha256: params.frozen_observation_sha256,
+                breach_class: params.breach_class,
+                diagnostic_receipt_path: params.diagnostic_receipt_path,
+                diagnostic_receipt_sha256: params.diagnostic_receipt_sha256,
+            }) {
+                Ok(artifact) => (
+                    success(
+                        id,
+                        json!({"path": artifact.path, "sha256": artifact.sha256}),
                     ),
                     false,
                 ),

@@ -24,7 +24,7 @@ const DISPATCH_DAEMON_PID_ENV: &str = "EMBER_LAB_DISPATCH_DAEMON_PID";
 const DISPATCH_PIPE_ENV: &str = "EMBER_LAB_PIPE";
 
 fn usage() -> &'static str {
-    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab data-catalog-status --db <path>\n  ember-lab register-artifact --db <path> --sha256 <hex> --byte-count <n> --media-type <type> --location <volume>=<locator> [--location <volume>=<locator> ...]\n  ember-lab retire-artifact-location --db <path> --sha256 <hex> --volume <volume> --locator <locator> --reason <text>\n  ember-lab custody-verify --db <path> --hash <sha256> [--hash <sha256> ...] --root <volume>=<path> [--root <volume>=<path> ...] --receipt <path> [--rehash]\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
+    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab resource-guard-rearm --pipe <\\\\.\\pipe\\name> --frozen-observation-sha256 <hex> --breach-class <class> --diagnostic-receipt <path> --diagnostic-receipt-sha256 <hex>\n  ember-lab data-catalog-status --db <path>\n  ember-lab register-artifact --db <path> --sha256 <hex> --byte-count <n> --media-type <type> --location <volume>=<locator> [--location <volume>=<locator> ...]\n  ember-lab retire-artifact-location --db <path> --sha256 <hex> --volume <volume> --locator <locator> --reason <text>\n  ember-lab custody-verify --db <path> --hash <sha256> [--hash <sha256> ...] --root <volume>=<path> [--root <volume>=<path> ...] --receipt <path> [--rehash]\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
 }
 
 enum Command {
@@ -35,6 +35,13 @@ enum Command {
     Dispatch {
         pipe: String,
         manifest: PathBuf,
+    },
+    ResourceGuardRearm {
+        pipe: String,
+        frozen_observation_sha256: String,
+        breach_class: String,
+        diagnostic_receipt: PathBuf,
+        diagnostic_receipt_sha256: String,
     },
     DataCatalogStatus {
         db: PathBuf,
@@ -204,6 +211,38 @@ fn parse_args() -> Result<Command, String> {
                     format!("missing --root or producer output environment\n{}", usage())
                 })?,
             job_id: job_id.ok_or_else(|| format!("missing --job-id\n{}", usage()))?,
+        });
+    }
+
+    if command == "resource-guard-rearm" {
+        let mut pipe = None;
+        let mut frozen_observation_sha256 = None;
+        let mut breach_class = None;
+        let mut diagnostic_receipt = None;
+        let mut diagnostic_receipt_sha256 = None;
+        while let Some(flag) = args.next() {
+            let value = args
+                .next()
+                .ok_or_else(|| format!("missing value for {flag}\n{}", usage()))?;
+            match flag.as_str() {
+                "--pipe" => pipe = Some(value),
+                "--frozen-observation-sha256" => frozen_observation_sha256 = Some(value),
+                "--breach-class" => breach_class = Some(value),
+                "--diagnostic-receipt" => diagnostic_receipt = Some(PathBuf::from(value)),
+                "--diagnostic-receipt-sha256" => diagnostic_receipt_sha256 = Some(value),
+                _ => return Err(format!("unknown argument {flag}\n{}", usage())),
+            }
+        }
+        return Ok(Command::ResourceGuardRearm {
+            pipe: pipe.ok_or_else(|| format!("missing --pipe\n{}", usage()))?,
+            frozen_observation_sha256: frozen_observation_sha256
+                .ok_or_else(|| format!("missing --frozen-observation-sha256\n{}", usage()))?,
+            breach_class: breach_class
+                .ok_or_else(|| format!("missing --breach-class\n{}", usage()))?,
+            diagnostic_receipt: diagnostic_receipt
+                .ok_or_else(|| format!("missing --diagnostic-receipt\n{}", usage()))?,
+            diagnostic_receipt_sha256: diagnostic_receipt_sha256
+                .ok_or_else(|| format!("missing --diagnostic-receipt-sha256\n{}", usage()))?,
         });
     }
 
@@ -780,6 +819,27 @@ fn dispatch(pipe: &str, manifest: &Path) -> Result<Value, Box<dyn std::error::Er
     call_rpc(pipe, &request, "dispatch")
 }
 
+fn resource_guard_rearm(
+    pipe: &str,
+    frozen_observation_sha256: &str,
+    breach_class: &str,
+    diagnostic_receipt: &Path,
+    diagnostic_receipt_sha256: &str,
+) -> Result<Value, Box<dyn std::error::Error>> {
+    let request = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "resource_guard_rearm",
+        "params": {
+            "frozen_observation_sha256": frozen_observation_sha256,
+            "breach_class": breach_class,
+            "diagnostic_receipt_path": diagnostic_receipt,
+            "diagnostic_receipt_sha256": diagnostic_receipt_sha256,
+        },
+    });
+    call_rpc(pipe, &request, "resource-guard-rearm")
+}
+
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     match parse_args().map_err(std::io::Error::other)? {
         Command::Serve { db, pipe } => {
@@ -789,6 +849,24 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         Command::Dispatch { pipe, manifest } => {
             println!("{}", serde_json::to_string(&dispatch(&pipe, &manifest)?)?);
+        }
+        Command::ResourceGuardRearm {
+            pipe,
+            frozen_observation_sha256,
+            breach_class,
+            diagnostic_receipt,
+            diagnostic_receipt_sha256,
+        } => {
+            println!(
+                "{}",
+                serde_json::to_string(&resource_guard_rearm(
+                    &pipe,
+                    &frozen_observation_sha256,
+                    &breach_class,
+                    &diagnostic_receipt,
+                    &diagnostic_receipt_sha256,
+                )?)?
+            );
         }
         Command::DataCatalogStatus { db } => {
             println!(
