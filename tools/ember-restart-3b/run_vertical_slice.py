@@ -11,6 +11,7 @@ import gc
 import hashlib
 import importlib.util
 import json
+import math
 import os
 import re
 import shutil
@@ -999,6 +1000,35 @@ def _record_e4_measurement_write_failure(
             "write_failures": write_failures,
         },
     )
+
+
+def _frozen_envelope_fields(progress: Mapping[str, object]) -> dict[str, object]:
+    """Derive the frozen `train_step` envelope's `tokens`/`wall_seconds` fields
+    (`docs/spec/ember02-r1-e8-receipts-v1.md`, `a1_execution._train_step_envelope`)
+    from the shared pretraining producer's own measured quantities (issue #1464).
+
+    `run_pretraining_segment` (`pretrain.py`) already measures the exact same
+    quantities under its own names -- `tokens_consumed` is the step's exact
+    token count, `step_ms` is a `time.perf_counter()`-measured wall-clock
+    duration in milliseconds -- for both the governed (`run()`) and semantic
+    (`run_semantic()`) routes, since `run_manifest_bound_semantic_segment`
+    delegates to the same producer. This is an honest unit/name transcription,
+    never a new measurement: `wall_seconds` is `step_ms / 1000.0`.
+
+    Honest-transcription only: a source quantity that is absent or not a
+    usable positive number is omitted rather than defaulted, so a row this
+    cannot enrich is left exactly as before -- `a1_e8_evidence.
+    derive_liveness_series` correctly continues to find it liveness-incomplete
+    rather than being handed a fabricated value.
+    """
+    fields: dict[str, object] = {}
+    tokens = progress.get("tokens_consumed")
+    if type(tokens) is int and tokens > 0:
+        fields["tokens"] = tokens
+    step_ms = progress.get("step_ms")
+    if type(step_ms) in (int, float) and math.isfinite(step_ms) and step_ms > 0:
+        fields["wall_seconds"] = step_ms / 1000.0
+    return fields
 
 
 def _make_e4_measurement_recorder(
@@ -3745,6 +3775,7 @@ def run(
         append_training_telemetry(telemetry_path, kind="train_step", payload={
             "run_id": telemetry_run_id,
             **progress,
+            **_frozen_envelope_fields(progress),
             "free_gib": float(free_bytes / 1024**3),
             "total_gib": float(total_bytes / 1024**3),
             "vram_fraction_applied": float(torch.cuda.get_per_process_memory_fraction()),
@@ -4116,6 +4147,7 @@ def run_semantic(
         append_training_telemetry(telemetry_path, kind="train_step", payload={
             "run_id": telemetry_run_id,
             **progress,
+            **_frozen_envelope_fields(progress),
         })
         record_e4_step(progress)
 

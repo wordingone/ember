@@ -77,6 +77,24 @@ Raw per-step liveness telemetry reuses the frozen `train_step` envelope
 per step (`time.perf_counter()` at step start, differenced at
 telemetry-write time).
 
+`tools/ember-restart-3b/run_vertical_slice.py`'s governed (`run()`) and
+semantic (`run_semantic()`) routes emit the same frozen `tokens` and
+`wall_seconds` fields, via the shared helper `_frozen_envelope_fields`. Both
+routes' `progress_callback` closures already receive a per-step progress
+dict from the shared pretraining producer (`pretrain.py::
+run_pretraining_segment`, which `run_manifest_bound_semantic_segment`
+delegates to for the semantic route) carrying the identical measured
+quantities under its own names -- `tokens_consumed` (the step's exact token
+count) and `step_ms` (a `time.perf_counter()`-measured wall-clock duration
+in milliseconds). `_frozen_envelope_fields` is an honest unit/name
+transcription of those same measurements (`wall_seconds = step_ms /
+1000.0`), never a new or fabricated measurement; a source quantity that is
+absent or not a usable positive number is omitted rather than defaulted, so
+`derive_liveness_series` continues to correctly find that row
+liveness-incomplete. The existing `tokens_consumed`/`step_ms` keys are left
+in the payload unchanged for the E4 receipt accumulator and battery, which
+still read them under their original names.
+
 `proxy_joules` is now derived, closing issue #1464's second residual, by
 `tools/ember-restart-3b/a1_energy_apportionment.py`. The energy sidecar
 (`energy_proxy_logger.py --watch-pidfile`, launched as an independent OS
