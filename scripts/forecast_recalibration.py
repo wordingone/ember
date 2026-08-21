@@ -305,12 +305,24 @@ def measure_proxy_joules_per_token(run_root: Path, series: list[dict[str, Any]],
         receipt = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
         raise RecalibrationRefusal(f"UNMEASURABLE proxy_joules_per_token: {path}: {error}") from error
-    total = receipt.get("total_proxy_joules")
-    boundary = receipt.get("energy_boundary")
+    # scripts/energy_proxy_logger.py (schema ember-energy-proxy-run-v1) nests
+    # total_proxy_joules/energy_boundary under an "energy" block -- the same
+    # place scripts/r1_exit_battery.py's E5 leg reads them from. There is no
+    # flat top-level shape in this receipt's history; a top-level read would
+    # silently miss every real producer.
+    energy = receipt.get("energy") if isinstance(receipt, dict) else None
+    if not isinstance(energy, dict):
+        raise RecalibrationRefusal(
+            f"UNMEASURABLE proxy_joules_per_token: {path} carries no nested \"energy\" object "
+            "(scripts/energy_proxy_logger.py writes total_proxy_joules/energy_boundary under "
+            "energy.*, matching the E5 battery leg)"
+        )
+    total = energy.get("total_proxy_joules")
+    boundary = energy.get("energy_boundary")
     if not _finite(total) or total <= 0 or not boundary:
         raise RecalibrationRefusal(
-            f"UNMEASURABLE proxy_joules_per_token: {path} lacks finite positive total_proxy_joules "
-            f"({total!r}) or energy_boundary ({boundary!r})"
+            f"UNMEASURABLE proxy_joules_per_token: {path} energy block lacks finite positive "
+            f"total_proxy_joules ({total!r}) or energy_boundary ({boundary!r})"
         )
     total_tokens = tokens_per_step * len(series)
     if total_tokens <= 0:
@@ -320,11 +332,11 @@ def measure_proxy_joules_per_token(run_root: Path, series: list[dict[str, Any]],
         "total_proxy_joules": total,
         "energy_boundary": boundary,
         "receipt": str(path),
-        "source": "energy-proxy receipt total_proxy_joules over tokens_per_step x measured steps",
+        "source": "energy-proxy receipt energy.total_proxy_joules over tokens_per_step x measured steps",
     }
 
 
-def measure_peak_vram_gib(run_root: Path, series: list[dict[str, Any]]) -> dict[str, Any]:
+def measure_peak_vram_gib(run_root: Path, series: list[dict[str, Any]], *, run_id: str | None = None) -> dict[str, Any]:
     peak_bytes = None
     peak_source = None
     for log_path in sorted(run_root.glob("*-child.log")):
@@ -345,10 +357,47 @@ def measure_peak_vram_gib(run_root: Path, series: list[dict[str, Any]]) -> dict[
             break
     if peak_bytes is not None:
         return {"value": peak_bytes / (1024 ** 3), "source": peak_source}
+
+    # A certified semantic run (the real R1 evidence root) produces neither a
+    # *-child.log nor telemetry total_gib/free_gib rows -- it produces
+    # e4-measurement-receipt.json (schema ember02-r1-e4-measurement/v1) at the
+    # run root, carrying peak_vram.allocated_bytes: the allocator peak, higher
+    # fidelity than the device-level telemetry proxy below. Same candidate
+    # convention as scripts/r1_exit_battery.py's E4 leg (excluded from
+    # .checkpoint-quarantine, ambiguous on more than one file).
+    e4_candidates = sorted(
+        p for p in run_root.rglob("e4-measurement-receipt.json") if ".checkpoint-quarantine" not in p.parts
+    )
+    if len(e4_candidates) > 1:
+        raise RecalibrationRefusal(
+            "UNMEASURABLE peak_vram_gib: multiple e4-measurement-receipt.json files under the run root: "
+            + ", ".join(str(p) for p in e4_candidates)
+        )
+    if len(e4_candidates) == 1:
+        e4_path = e4_candidates[0]
+        try:
+            e4_receipt = json.loads(e4_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as error:
+            raise RecalibrationRefusal(f"UNMEASURABLE peak_vram_gib: {e4_path}: {error}") from error
+        if isinstance(e4_receipt, dict) and (run_id is None or e4_receipt.get("run_id") == run_id):
+            vram = e4_receipt.get("peak_vram")
+            allocated = vram.get("allocated_bytes") if isinstance(vram, dict) else None
+            if allocated is not None:
+                if not _finite(allocated) or allocated <= 0:
+                    raise RecalibrationRefusal(
+                        f"UNMEASURABLE peak_vram_gib: {e4_path} peak_vram.allocated_bytes is not "
+                        f"finite-positive ({allocated!r})"
+                    )
+                return {
+                    "value": allocated / (1024 ** 3),
+                    "source": f"{e4_path.name} peak_vram.allocated_bytes (allocator peak, R1-E4 wiring)",
+                }
+
     used = [p["total_gib"] - p["free_gib"] for p in series if _finite(p.get("total_gib")) and _finite(p.get("free_gib"))]
     if not used:
         raise RecalibrationRefusal(
-            "UNMEASURABLE peak_vram_gib: no captured peak_memory_bytes and no telemetry total_gib/free_gib rows"
+            "UNMEASURABLE peak_vram_gib: no captured peak_memory_bytes, no e4-measurement-receipt "
+            "peak_vram.allocated_bytes, and no telemetry total_gib/free_gib rows"
         )
     return {"value": max(used), "source": "telemetry max(total_gib - free_gib) -- device-level proxy, allocator peak not captured"}
 
@@ -435,7 +484,7 @@ def build_receipt(
     step_time = measure_step_time_ms(series)
     tokens = measure_tokens_per_second(series, run_root, step_time["value"])
     energy = measure_proxy_joules_per_token(run_root, series, tokens["tokens_per_step"])
-    vram = measure_peak_vram_gib(run_root, series)
+    vram = measure_peak_vram_gib(run_root, series, run_id=selected_run_id)
     losses = measure_loss_anchors(series, quantities["loss_trajectory"]["predicted_anchors"])
     telemetry_digest = telemetry_sha256(run_root)
 
