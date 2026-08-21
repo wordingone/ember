@@ -21,16 +21,23 @@ the step's whole-boundary wall interval `[ts - wall_seconds, ts]` (the same
 `ts`/`wall_seconds` pair `_train_step_envelope` already writes).
 
 This is measured apportionment, never fabrication: a step's `proxy_joules`
-is minted only when (a) at least one raw sample timestamp falls inside the
-step's own interval, and (b) both interval boundaries fall inside the
-sample record's own timestamp coverage, so the trapezoid interpolates only
-between real observations and never extrapolates past one -- exactly what
+is minted only when both interval boundaries interpolate inside the sample
+record's own timestamp coverage, so the trapezoid interpolates only between
+real observations and never extrapolates past one -- exactly what
 `energy_proxy_logger.trapezoidal_joules` already does for the whole-run
-integral, restricted here to one step's sub-interval. A step that fails
-either condition keeps no `proxy_joules` field at all; the caller must never
-substitute zero, an average, or any other placeholder for it.
-`a1_e8_evidence.derive_liveness_series` continues to correctly treat that
-step as liveness-incomplete.
+integral, restricted here to one step's sub-interval. Any raw sample
+timestamps that fall strictly inside the interval are folded into the same
+trapezoid as extra interior points (unchanged from before this amendment,
+and producing identical values whenever such points exist); a step whose
+interval contains none is no longer refused for that reason alone, because
+the boundary interpolation itself already bounds the estimate to real
+observations on both sides. A boundary that would require bridging a wide
+gap between raw samples -- a sampler outage, not ordinary 1 Hz jitter -- is
+refused via `MAX_BRACKET_GAP_S` below, the same way a boundary outside the
+record's coverage is refused. A step that fails either guard keeps no
+`proxy_joules` field at all; the caller must never substitute zero, an
+average, or any other placeholder for it. `a1_e8_evidence.derive_liveness_series`
+continues to correctly treat that step as liveness-incomplete.
 
 Architectural decision (post-pass, not in-loop): the energy sidecar and the
 A1 training loop are two independent OS processes, communicating only
@@ -64,6 +71,17 @@ Q = Decimal("0.000000000001")
 `a1_e8_evidence._serial` uses, restated independently rather than imported
 (the same "two independent transcriptions" discipline that module documents
 for its own reopened evidence)."""
+
+MAX_BRACKET_GAP_S = 3.0
+"""A boundary that interpolates between two raw samples separated by more
+than this many seconds is refused, never interpolated across. 3x the pinned
+measurement cadence (fixed-prior-manifest-v1 `energy_method.sample_hz` =
+1.0 Hz, frozen_form manifest_pinned, IMMUTABLE -- this module never raises
+or reads around that pin). At the pinned cadence, consecutive real samples
+are normally ~1 s apart; a bracket this wide means the sidecar's measured
+window actually stopped for a real interval (a stall, a gap between runs,
+the sidecar not yet warmed up), not ordinary sampling jitter, and
+interpolating across it would integrate over draw nobody measured."""
 
 
 class EnergyApportionmentError(ValueError):
@@ -155,7 +173,11 @@ def _interpolate_watts(samples: list[tuple[float, float]], t: float) -> float | 
     """Linear interpolation of watts at wall-clock time `t` between real
     bracketing samples. `None` when `t` falls outside the sample record's
     own coverage `[samples[0][0], samples[-1][0]]` -- extrapolation, which
-    this module never performs."""
+    this module never performs -- or when the two samples bracketing `t`
+    are separated by more than `MAX_BRACKET_GAP_S` (a sampler outage, not
+    ordinary cadence jitter; see that constant's docstring). `t` landing
+    exactly on a real sample timestamp always returns that sample's own
+    reading, with no bracket-gap check: no interpolation is happening."""
     if not samples or t < samples[0][0] or t > samples[-1][0]:
         return None
     if t == samples[0][0]:
@@ -166,6 +188,8 @@ def _interpolate_watts(samples: list[tuple[float, float]], t: float) -> float | 
         if t0 <= t <= t1:
             if t1 == t0:
                 return w0
+            if t1 - t0 > MAX_BRACKET_GAP_S:
+                return None
             return w0 + (t - t0) / (t1 - t0) * (w1 - w0)
     return None  # unreachable: the coverage check above already bounds t
 
@@ -173,24 +197,27 @@ def _interpolate_watts(samples: list[tuple[float, float]], t: float) -> float | 
 def _integrate_step(samples: list[tuple[float, float]], start: float, end: float) -> Decimal | None:
     """Trapezoidal joules over `[start, end]`, or `None` when the step
     cannot be honestly derived: either boundary falls outside the sample
-    record's coverage (extrapolation), or no real sample timestamp falls
-    inside `[start, end]` (the interval is not actually touched by a
-    measurement -- integrating only the two, possibly distant, bracket
-    points would understate or fabricate an excursion the sampler never
-    observed inside the interval itself).
+    record's own coverage (extrapolation), or either boundary would require
+    interpolating across a bracket wider than `MAX_BRACKET_GAP_S` (a
+    sampler outage). Both boundaries interpolating inside real coverage is
+    now sufficient on its own -- the trapezoid between the two interpolated
+    boundary points is derived even when no raw sample timestamp falls
+    strictly inside `[start, end]`, because each boundary is already bounded
+    to real, nearby observations by the two guards above. Any raw sample
+    timestamps that DO fall inside the interval are folded in as additional
+    interior points of the same trapezoid, unchanged from before this
+    amendment and producing byte-identical values whenever they exist.
     """
     if end <= start:
-        return None
-    touching = [(t, w) for t, w in samples if start <= t <= end]
-    if not touching:
         return None
     start_watts = _interpolate_watts(samples, start)
     end_watts = _interpolate_watts(samples, end)
     if start_watts is None or end_watts is None:
         return None
     points: dict[float, float] = {start: start_watts, end: end_watts}
-    for t, w in touching:
-        points.setdefault(t, w)
+    for t, w in samples:
+        if start <= t <= end:
+            points.setdefault(t, w)
     ordered = sorted(points.items())
     total = Decimal(0)
     for (t0, w0), (t1, w1) in zip(ordered, ordered[1:]):
