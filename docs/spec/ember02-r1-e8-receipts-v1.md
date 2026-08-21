@@ -50,3 +50,24 @@ subscale, arithmetically inconsistent, or route-confused evidence is
 This source carrier leaves real execution unresolved: no receipt here proves
 that a certified dense >=3B A1 model, full-state CPU-offloaded AdamW, or a
 matched Tier-2/reference segment has run.
+
+## Liveness evidence producer
+
+`tools/ember-restart-3b/a1_e8_evidence.py::mint_liveness_receipt` mints the
+`ember02-r1-e8-liveness-v1` packet from already-produced evidence: it reopens
+the Tier-1 A1 run (`a1_execution.finalize_tier1_run`'s output) and the
+matched A3 run by exact raw SHA-256, copies both plus the externally frozen
+`ember02-r2-charged-budget-contract-v1` authority byte-verified into one flat
+packet directory, derives both runs' `ember02-r1-e8-liveness-series-v1`
+objects from raw per-step telemetry, and recomputes tokens/second and
+joules/token independently of the validator before minting the closed,
+self-digested receipt. It never derives, selects, or infers
+`projected_r2_tokens`; an absent contract raises a distinguished
+`E8EvidenceProducerMissing`, routed by callers to `EVIDENCE_MISSING`, never a
+refusal.
+
+Raw per-step liveness telemetry reuses the frozen `train_step` envelope
+(`{"ts":..., "kind":"train_step", "source":"ember-restart-3b", "payload":
+{"run_id":..., "step":int, ...}}`), with the payload additionally carrying
+`tokens` (positive integer), `wall_seconds` (positive decimal), and
+`proxy_joules` (non-negative decimal) for the steps a liveness series covers.
