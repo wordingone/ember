@@ -114,15 +114,27 @@ as the trapezoidal integral of REAL measured draw over the step's
 whole-boundary wall interval `[ts - wall_seconds, ts]` -- the same `ts` and
 `wall_seconds` `_train_step_envelope` already writes. This is measured
 apportionment, never fabrication: a step's `proxy_joules` is minted only
-when (a) at least one raw sample timestamp falls inside the step's own
-interval, and (b) both interval boundaries fall inside the sample record's
-own timestamp coverage, so the trapezoid only ever interpolates between two
-real observations and never extrapolates past one. A step that fails either
-condition -- the sidecar never ran, its samples are too sparse to touch this
-step's interval, or this step's interval reaches outside the sample
-record's own coverage -- keeps no `proxy_joules` field at all, exactly the
-schema-legal absence `derive_liveness_series` already refuses correctly (its
-`no liveness-complete train_step rows` refusal). A samples record that is
+when both interval boundaries interpolate inside the sample record's own
+timestamp coverage, so the trapezoid only ever interpolates between real
+observations and never extrapolates past one. Any raw sample timestamps
+falling strictly inside the interval are folded in as additional interior
+points of the same trapezoid when present, but their presence is no longer
+required on its own: a boundary that DOES interpolate is already bounded to
+real, nearby draw by `MAX_BRACKET_GAP_S` -- the two raw samples bracketing
+an interpolated boundary must be no more than that constant (3.0 s, 3x the
+pinned 1.0 Hz cadence) apart, or the boundary refuses the same as one
+outside coverage entirely. This closes the derivation gap issue #1464 named
+for fast steps: a step whose wall duration is shorter than the 1.0 Hz
+sampling interval can have both boundaries interpolate between the same
+pair of close-by real samples while touching none directly, and is now
+derivable on exactly that basis, with no coupling to the training loop and
+no change to the underlying 1.0 Hz measurement. A step that fails either
+guard -- the sidecar never ran, a boundary reaches outside the sample
+record's own coverage, or a boundary's bracket is wider than
+`MAX_BRACKET_GAP_S` (a sampler outage, not ordinary cadence jitter) --
+keeps no `proxy_joules` field at all, exactly the schema-legal absence
+`derive_liveness_series` already refuses correctly (its `no
+liveness-complete train_step rows` refusal). A samples record that is
 present but malformed, non-finite, or carries a negative watts reading
 refuses the WHOLE record (`EnergyApportionmentError`) rather than silently
 skipping the bad line: a corrupted or negative-power sample stream cannot be

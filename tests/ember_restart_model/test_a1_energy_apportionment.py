@@ -221,6 +221,109 @@ def test_enrich_telemetry_preserves_other_rows_and_is_idempotent(tmp_path: Path)
     assert telemetry_path.read_text(encoding="utf-8").splitlines() == lines
 
 
+def test_boundary_interpolation_derives_a_step_with_zero_interior_samples(tmp_path: Path) -> None:
+    """Issue #1464's named residual: a step whose wall duration (130 ms) is
+    far shorter than the pinned 1.0 Hz sampling interval touches no raw
+    sample directly, but both its boundaries interpolate between the same
+    close-by pair of real samples -- derivable under the amended rule on
+    that basis alone."""
+    samples_path = tmp_path / "energy-proxy-receipt.gpu-samples.jsonl"
+    _write_samples(samples_path, [(0.0, 100.0), (1.0, 150.0), (2.0, 200.0)])
+
+    telemetry_path = tmp_path / "a1-telemetry.jsonl"
+    _write_jsonl(telemetry_path, [
+        # [1.20, 1.33]: both boundaries interpolate inside the [1.0, 2.0]
+        # bracket (1.0 s wide, within MAX_BRACKET_GAP_S); no sample ts
+        # (1.0 or 2.0) falls strictly inside [1.20, 1.33].
+        _envelope_at(run_id="a3run", step=1, ts_epoch=1.33, wall_seconds=0.13),
+    ])
+
+    joules = APPORTIONMENT.apportion_step_energy(telemetry_path, samples_path, run_id="a3run")
+
+    assert 1 in joules
+    # Linear watts(t) = 150 + 50*(t-1.0) on [1.0, 2.0]; trapezoid of that
+    # exact line over [1.20, 1.33] equals its analytic integral (matched to
+    # within the module's own float-interpolation precision, since the
+    # implementation interpolates in float before converting to Decimal).
+    start_w = Decimal("150") + Decimal("50") * Decimal("0.20")
+    end_w = Decimal("150") + Decimal("50") * Decimal("0.33")
+    expected = (start_w + end_w) / 2 * Decimal("0.13")
+    assert abs(joules[1] - expected) < Decimal("0.000000001")
+
+
+def test_boundary_bracket_wider_than_max_gap_refuses(tmp_path: Path) -> None:
+    """A step whose interpolated boundaries fall inside overall sample
+    coverage but whose bracketing real samples are separated by more than
+    `MAX_BRACKET_GAP_S` is refused -- the amendment never bridges a real
+    sampler outage, only ordinary cadence jitter."""
+    gap = APPORTIONMENT.MAX_BRACKET_GAP_S + 1.0
+    samples_path = tmp_path / "energy-proxy-receipt.gpu-samples.jsonl"
+    _write_samples(samples_path, [(0.0, 100.0), (gap, 200.0), (gap + 1.0, 210.0)])
+
+    telemetry_path = tmp_path / "a1-telemetry.jsonl"
+    midpoint = gap / 2
+    _write_jsonl(telemetry_path, [
+        # Interval sits entirely inside the wide [0.0, gap] bracket -- both
+        # boundaries would interpolate, but the bracket itself is an outage.
+        _envelope_at(run_id="a3run", step=1, ts_epoch=midpoint + 0.05, wall_seconds=0.10),
+    ])
+
+    joules = APPORTIONMENT.apportion_step_energy(telemetry_path, samples_path, run_id="a3run")
+    assert joules == {}
+
+
+def test_interior_sample_step_byte_identical_before_and_after_amendment(tmp_path: Path) -> None:
+    """Pinned regression: a step interval that DOES contain a real sample
+    must derive the exact same Decimal under the amended rule as it did
+    before -- the amendment only widens which zero-interior-sample steps
+    derive, it never changes an already-derivable value."""
+    samples_path = tmp_path / "energy-proxy-receipt.gpu-samples.jsonl"
+    _write_samples(samples_path, [(0.0, 100.0), (1.0, 150.0), (2.0, 200.0), (3.0, 250.0)])
+
+    telemetry_path = tmp_path / "a1-telemetry.jsonl"
+    _write_jsonl(telemetry_path, [
+        _envelope_at(run_id="a1run", step=1, ts_epoch=1.0, wall_seconds=1.0),
+        _envelope_at(run_id="a1run", step=2, ts_epoch=2.0, wall_seconds=1.0),
+        _envelope_at(run_id="a1run", step=3, ts_epoch=3.0, wall_seconds=1.0),
+    ])
+
+    joules = APPORTIONMENT.apportion_step_energy(telemetry_path, samples_path, run_id="a1run")
+
+    # Pinned to the pre-amendment values asserted by
+    # test_correct_apportionment_across_step_boundaries.
+    assert joules[1] == Decimal("125")
+    assert joules[2] == Decimal("175")
+    assert joules[3] == Decimal("225")
+
+
+def test_a3_shaped_run_derives_all_one_hundred_fast_steps(tmp_path: Path) -> None:
+    """Synthesizes the A3 semantic arm's real shape (1.0 Hz samples spanning
+    the run, 100 sub-second step intervals) without committing the real
+    multi-MB run artifacts. Under the pre-amendment rule only steps whose
+    interval happens to straddle an integer second derive (~14/100,
+    noncontiguous, matching the real A3 run's receipted
+    {2,9,16,23,30,38,47,53,61,66,72,80,87,95}); under the amended rule every
+    step's interval sits inside a single 1.0 s bracket with both boundaries
+    interpolating, so all 100 derive."""
+    samples_path = tmp_path / "energy-proxy-receipt.gpu-samples.jsonl"
+    _write_samples(samples_path, [(float(t), 100.0 + t) for t in range(0, 101)])
+
+    telemetry_path = tmp_path / "a1-telemetry.jsonl"
+    rows = []
+    for step in range(1, 101):
+        # Step i's ~130 ms interval sits at a fixed offset inside second
+        # (step - 1), i.e. entirely inside one real [t, t+1] bracket.
+        end = (step - 1) + 0.63
+        rows.append(_envelope_at(run_id="a3run", step=step, ts_epoch=end, wall_seconds=0.13))
+    _write_jsonl(telemetry_path, rows)
+
+    joules = APPORTIONMENT.apportion_step_energy(telemetry_path, samples_path, run_id="a3run")
+
+    assert len(joules) == 100
+    assert set(joules) == set(range(1, 101))
+    assert all(j > 0 for j in joules.values())
+
+
 def test_real_enriched_row_is_accepted_by_the_liveness_producer(tmp_path: Path) -> None:
     """The first real downstream consumer leg: a telemetry file this module
     ACTUALLY enriched (real envelope rows, a real raw samples file, a real
