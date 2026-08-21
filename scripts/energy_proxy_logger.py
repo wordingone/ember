@@ -590,8 +590,26 @@ def _pid_alive(pid: int) -> bool:
         return True
 
 
+def samples_path_for(receipt_path: str | Path) -> Path:
+    """The raw per-sample sidecar path for a given `run_watch` receipt path:
+    same directory, `<receipt-stem>.gpu-samples.jsonl`. A sibling file, not a
+    field of the receipt itself, so a consumer of only the aggregate sec5.3
+    `energy` block never has to parse it. The `ember-a1-e8-*` per-step energy
+    derivation (`tools/ember-restart-3b/a1_energy_apportionment.py`, issue
+    #1464) restates this exact naming convention independently rather than
+    importing it, the same "two independent transcriptions" discipline
+    `a1_e8_evidence.py` documents for its own reopened evidence -- a
+    transcription defect surfaces as a missing-samples refusal at first
+    contact instead of the derivation module silently trusting this logger's
+    internals.
+    """
+    receipt_path = Path(receipt_path)
+    return receipt_path.with_name(receipt_path.stem + ".gpu-samples.jsonl")
+
+
 def sample_while_pidfile(reader: str, pidfile: Path,
-                         sample_hz: float = SAMPLE_HZ) -> tuple[list, int, float, str]:
+                         sample_hz: float = SAMPLE_HZ,
+                         samples_handle=None) -> tuple[list, int, float, str]:
     """Sample the GPU leg on the pinned cadence while the pidfile exists AND
     the pid it names is alive. Returns (samples, intended, wall_s, stop_reason).
 
@@ -601,6 +619,14 @@ def sample_while_pidfile(reader: str, pidfile: Path,
     a launcher that dies without cleaning up must not leave this loop sampling
     forever. intended is computed from the pinned cadence and the wall the
     window actually spanned, so coverage is measured against the contract.
+
+    When `samples_handle` is given, every captured (timestamp, watts) reading
+    is additionally written to it as one JSON line (`{"ts": ..., "watts":
+    ...}`) and flushed immediately -- the same per-line durability bar
+    `a1_execution.run_dense_a1`'s own telemetry writer holds. This is the raw
+    measured-window record issue #1464's per-step energy derivation reopens;
+    the idle baseline (sampled separately, before this function is called) is
+    never written here, since no training step can fall inside it.
     """
     interval = 1.0 / sample_hz
     samples: list[tuple[float, float]] = []
@@ -624,7 +650,11 @@ def sample_while_pidfile(reader: str, pidfile: Path,
             time.sleep(min(target - now, interval))
         w = _read_gpu_watts(reader) if reader else None
         if w is not None:
-            samples.append((time.time(), w))
+            sample_ts = time.time()
+            samples.append((sample_ts, w))
+            if samples_handle is not None:
+                samples_handle.write(json.dumps({"ts": sample_ts, "watts": w}, sort_keys=True) + "\n")
+                samples_handle.flush()
         tick += 1
     wall = time.time() - start
     # One read fires at t=0 and one per interval after it, so the contract
@@ -680,8 +710,28 @@ def run_watch(pidfile_path: str, receipt_path: str, ticket: str) -> int:
     except (OSError, ValueError):
         pass
 
+    samples_file_path = samples_path_for(receipt_path)
+    samples_handle = None
+    samples_open_error = None
+    try:
+        samples_file_path.parent.mkdir(parents=True, exist_ok=True)
+        samples_handle = open(samples_file_path, "w", encoding="utf-8", newline="\n")
+    except OSError as error:
+        # The raw sample record is a bonus artifact for the downstream
+        # per-step energy derivation (issue #1464) -- it must never be able
+        # to abort the measured window this receipt is the primary evidence
+        # for. A failure to even OPEN the sidecar file degrades to
+        # unpersisted sampling (disclosed below); a mid-window write failure
+        # is left to propagate, same as any other measured-window defect,
+        # rather than silently discarding a partial sample record.
+        samples_open_error = repr(error)
     cpu_before = read_cpu_package_joules(cpu_resolved)
-    gpu_samples, intended, wall, stop_reason = sample_while_pidfile(gpu_reader, pidfile)
+    try:
+        gpu_samples, intended, wall, stop_reason = sample_while_pidfile(
+            gpu_reader, pidfile, samples_handle=samples_handle)
+    finally:
+        if samples_handle is not None:
+            samples_handle.close()
     cpu_after = read_cpu_package_joules(cpu_resolved)
     cpu_joules = (None if cpu_before is None or cpu_after is None
                   else cpu_after - cpu_before)
@@ -720,6 +770,17 @@ def run_watch(pidfile_path: str, receipt_path: str, ticket: str) -> int:
             "pidfile": str(pidfile),
             "watched_pid": watched_pid,
             "stop_reason": stop_reason,
+        },
+        "energy_step_samples": {
+            "path": str(samples_file_path),
+            "written": samples_open_error is None,
+            "captured": len(gpu_samples),
+            "note": samples_open_error,
+            "format": ("one JSON object per line, {\"ts\": <unix seconds float>, "
+                       "\"watts\": <non-negative float>} -- the raw measured-window "
+                       "GPU leg only (never the idle baseline), for the per-step "
+                       "energy derivation in "
+                       "tools/ember-restart-3b/a1_energy_apportionment.py (issue #1464)"),
         },
         "host": {
             "platform": sys.platform,
@@ -815,11 +876,19 @@ def _selftest() -> int:
     if named["method"]["cpu_energy_unit"] is None:
         failures.append("the PDH leg must declare its energy unit")
 
+    # issue #1464: the raw per-sample sidecar path is a sibling of the
+    # receipt, named by stem -- the exact convention
+    # a1_energy_apportionment.py restates independently.
+    if samples_path_for(Path("/x/y/energy-proxy-receipt.json")) != Path("/x/y/energy-proxy-receipt.gpu-samples.jsonl"):
+        failures.append("samples_path_for must derive a stem-based sibling .gpu-samples.jsonl path")
+    if samples_path_for("relative/energy-proxy-receipt.json") != Path("relative/energy-proxy-receipt.gpu-samples.jsonl"):
+        failures.append("samples_path_for must accept a str path")
+
     for f in failures:
         print(f"FAIL: {f}")
     if failures:
         return 1
-    print("ENERGY_PROXY_LOGGER_SELFTEST_PASS cases=15/15")
+    print("ENERGY_PROXY_LOGGER_SELFTEST_PASS cases=17/17")
     return 0
 
 
