@@ -170,7 +170,10 @@ def _require_run_stepped(telemetry_path: Path, run_id: str) -> None:
     or whose `payload` is not an object, simply does not count -- it is not
     a structural defect in the file, just a row this gate is not looking
     for (a different event kind, another run's row, etc). Only a genuinely
-    unparseable line or a non-object row still refuses the whole file."""
+    unparseable line or a non-object row still refuses the whole file.
+    `step` is matched with `type(step) is not int`, the same form
+    `a1_e8_evidence.derive_liveness_series` uses, so a `bool` payload
+    (a subclass of `int` in Python) is never mistaken for a step count."""
     try:
         lines = Path(telemetry_path).read_text(encoding="utf-8").splitlines()
     except OSError as error:
@@ -191,8 +194,12 @@ def _require_run_stepped(telemetry_path: Path, run_id: str) -> None:
         payload = row.get("payload")
         if not isinstance(payload, dict):
             continue
-        if payload.get("run_id") == run_id and isinstance(payload.get("step"), int) and payload["step"] > 0:
-            matched_steps += 1
+        if payload.get("run_id") != run_id:
+            continue
+        step = payload.get("step")
+        if type(step) is not int or step <= 0:
+            continue
+        matched_steps += 1
     if matched_steps == 0:
         raise A3ReceiptRefused(
             f"A3 run telemetry names no stepped row for run_id={run_id!r}: {telemetry_path}"

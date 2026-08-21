@@ -375,6 +375,24 @@ def test_require_run_stepped_skips_non_train_step_envelopes_without_refusing(tmp
     module._require_run_stepped(telemetry_path, "run-x")  # must not raise (last row matches)
 
 
+def test_require_run_stepped_excludes_bool_step(tmp_path: Path) -> None:
+    """`bool` is an `int` subclass in Python, so a naive `isinstance(step,
+    int)` check would let `step: true` count as a positive step. The gate
+    must use `type(step) is not int` (matching
+    `a1_e8_evidence.derive_liveness_series`) so a bool payload never counts
+    as step evidence."""
+    module = _load_producer()
+    telemetry_path = tmp_path / "a3-telemetry.jsonl"
+    rows = [
+        {"ts": "t", "kind": "train_step", "source": "ember-restart-3b",
+         "payload": {"run_id": "bool-run", "step": True}},
+    ]
+    telemetry_path.write_text("\n".join(json.dumps(r, sort_keys=True) for r in rows) + "\n", encoding="utf-8")
+
+    with pytest.raises(module.A3ReceiptRefused, match="telemetry names no stepped row"):
+        module._require_run_stepped(telemetry_path, "bool-run")
+
+
 def test_require_run_stepped_still_refuses_unparseable_and_non_object_rows(tmp_path: Path) -> None:
     """The existing structural refusals are unchanged by the envelope fix."""
     module = _load_producer()
