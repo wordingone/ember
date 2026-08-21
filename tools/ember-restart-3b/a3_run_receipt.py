@@ -160,6 +160,17 @@ def _require_sha256(value: object, label: str) -> str:
 # ---------------------------------------------------------------------------
 
 def _require_run_stepped(telemetry_path: Path, run_id: str) -> None:
+    """Every real producer (`a1_execution.py`, `run_vertical_slice.py`)
+    writes the frozen `train_step` envelope -- `{"ts":..., "kind":
+    "train_step", "source":"ember-restart-3b", "payload":{"run_id":...,
+    "step":int, ...}}` -- never a flat top-level `{"run_id":..., "step":...}`
+    row, so `run_id`/`step` are read from the envelope's `payload`, the same
+    place `a1_e8_evidence._iter_train_step_payloads` reads them. A row that
+    parses as an object but is not a `train_step` envelope for this source,
+    or whose `payload` is not an object, simply does not count -- it is not
+    a structural defect in the file, just a row this gate is not looking
+    for (a different event kind, another run's row, etc). Only a genuinely
+    unparseable line or a non-object row still refuses the whole file."""
     try:
         lines = Path(telemetry_path).read_text(encoding="utf-8").splitlines()
     except OSError as error:
@@ -175,7 +186,12 @@ def _require_run_stepped(telemetry_path: Path, run_id: str) -> None:
             raise A3ReceiptRefused(f"A3 run telemetry contains an unparseable row: {telemetry_path}") from error
         if not isinstance(row, dict):
             raise A3ReceiptRefused(f"A3 run telemetry row is not an object: {telemetry_path}")
-        if row.get("run_id") == run_id and isinstance(row.get("step"), int) and row["step"] > 0:
+        if row.get("kind") != "train_step" or row.get("source") != "ember-restart-3b":
+            continue
+        payload = row.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        if payload.get("run_id") == run_id and isinstance(payload.get("step"), int) and payload["step"] > 0:
             matched_steps += 1
     if matched_steps == 0:
         raise A3ReceiptRefused(
