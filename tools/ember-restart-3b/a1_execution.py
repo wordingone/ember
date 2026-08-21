@@ -17,7 +17,7 @@ import torch
 import torch.nn.functional as F
 
 from a1_checkpoint import write_dense_checkpoint
-from a1_dense import DenseA1Config, DenseA1Decoder
+from a1_dense import A1_CONFIG_SHA256, DenseA1Config, DenseA1Decoder
 from a1_optimizer import FullStateAdamWCPUOffload, load_a1_optimizer_contract
 from durable_io import atomic_create_durable
 
@@ -27,7 +27,15 @@ RUN_SCHEMA = "ember02-r1-e8-run-v1"
 CORE_FIELDS = {
     "schema_version", "status", "source_commit", "certified_launch_sha256",
     "parameter_count", "optimizer_inventory", "checkpoint_sha256",
-    "comparison_authority",
+    "comparison_authority", "checkpoint_identity", "resource_preflight",
+}
+RESOURCE_PREFLIGHT_FIELDS = {
+    "schema_version", "status", "parameter_count", "model_bytes",
+    "gradient_bytes", "cpu_fp32_optimizer_bytes", "checkpoint_payload_floor_bytes",
+    "transient_checkpoint_bytes", "host_commit_reserve_bytes",
+    "gpu_free_margin_bytes", "b_custody_floor_bytes", "available_commit_bytes",
+    "device_free_bytes", "custody_free_bytes", "required_commit_bytes",
+    "required_device_bytes", "required_custody_bytes", "governor",
 }
 OPTIMIZER_INVENTORY_FIELDS = {
     "schema_version", "state_format", "registered_parameters", "registered_numel",
@@ -87,11 +95,53 @@ def run_dense_a1(
     write_budget_bytes: int,
     telemetry_path: Path,
     telemetry_run_id: str,
+    resource_preflight: dict[str, Any],
 ) -> dict[str, Any]:
+    if (
+        not isinstance(resource_preflight, dict)
+        or set(resource_preflight) != RESOURCE_PREFLIGHT_FIELDS
+        or resource_preflight.get("schema_version") != "ember-a1-resource-preflight-v1"
+        or resource_preflight.get("status") != "PASS"
+    ):
+        raise ValueError("dense A1 resource preflight receipt is absent or invalid")
+    source_commit = os.environ.get("EMBER_A1_SOURCE_COMMIT")
+    certified_launch_sha256 = os.environ.get("EMBER_A1_CERTIFIED_LAUNCH_SHA256")
+    if (
+        not isinstance(source_commit, str)
+        or len(source_commit) != 40
+        or any(character not in "0123456789abcdef" for character in source_commit)
+        or not isinstance(certified_launch_sha256, str)
+        or len(certified_launch_sha256) != 64
+        or any(character not in "0123456789abcdef" for character in certified_launch_sha256)
+    ):
+        raise RuntimeError("dense A1 certified source identity is unavailable")
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for certified dense A1 execution")
     config_path = Path(repo_root) / "tools" / "ember-restart-3b" / "ember-restart-3b-a1.json"
     config = DenseA1Config.from_contract(config_path, repo_root=Path(repo_root))
+    if resource_preflight.get("parameter_count") != config.structural_parameter_count():
+        raise ValueError("dense A1 resource preflight parameter count drifted")
+    comparison = _load(Path(comparison_authority), "A1 comparison authority")
+    matched_ref = comparison.get("matched_a3_run")
+    if not isinstance(matched_ref, dict) or set(matched_ref) != {"path", "sha256"}:
+        raise ValueError("A1 comparison matched-run reference is invalid")
+    matched_path = Path(comparison_authority).parent / matched_ref["path"]
+    if _sha(matched_path) != matched_ref["sha256"]:
+        raise ValueError("matched A3 run changed before dense allocation")
+    matched = _load(matched_path, "matched A3 run")
+    matched_identity = matched.get("identity")
+    if not isinstance(matched_identity, dict):
+        raise ValueError("matched A3 identity is unavailable")
+    checkpoint_identity = {
+        "comparison_id": comparison.get("comparison_id"),
+        "matched_identity": dict(matched_identity),
+        "config_sha256": _sha(config_path),
+        "source_commit": source_commit,
+        "certified_launch_sha256": certified_launch_sha256,
+        "tier": "TIER_1",
+        "mechanism": "FULL_STATE_ADAMW_CPU_OFFLOAD",
+        "predecessor": None,
+    }
     # Meta construction is the no-allocation structural admission. The live
     # allocation below is a separate dense class, never UnifiedDecoder.
     meta = DenseA1Decoder(config, device="meta")
@@ -126,35 +176,16 @@ def run_dense_a1(
             telemetry.flush()
             if step % checkpoint_interval == 0 or step == steps:
                 checkpoint = artifact_root / f"checkpoint-a1-step-{step}"
-                comparison = _load(Path(comparison_authority), "A1 comparison authority")
                 _, checkpoint_sha = write_dense_checkpoint(
                     checkpoint,
                     model=model,
                     optimizer=optimizer,
                     global_step=step,
                     tokens_seen=tokens_seen,
-                    identity={
-                        "comparison_id": comparison["comparison_id"],
-                        "seed": seed,
-                        "schedule_sha256": comparison["schedule_sha256"],
-                    },
+                    identity=checkpoint_identity,
                 )
     if checkpoint_sha is None:
         raise RuntimeError("dense A1 execution produced no checkpoint")
-    source_commit = os.environ.get("EMBER_A1_SOURCE_COMMIT")
-    certified_launch_sha256 = os.environ.get("EMBER_A1_CERTIFIED_LAUNCH_SHA256")
-    if (
-        not isinstance(source_commit, str)
-        or len(source_commit) != 40
-        or any(character not in "0123456789abcdef" for character in source_commit)
-        or not isinstance(certified_launch_sha256, str)
-        or len(certified_launch_sha256) != 64
-        or any(
-            character not in "0123456789abcdef"
-            for character in certified_launch_sha256
-        )
-    ):
-        raise RuntimeError("dense A1 certified source identity is unavailable")
     core = {
         "schema_version": CORE_SCHEMA,
         "status": "TERMINAL",
@@ -163,6 +194,8 @@ def run_dense_a1(
         "parameter_count": config.structural_parameter_count(),
         "optimizer_inventory": optimizer.state_inventory(),
         "checkpoint_sha256": checkpoint_sha,
+        "checkpoint_identity": checkpoint_identity,
+        "resource_preflight": resource_preflight,
         "comparison_authority": {"path": str(comparison_authority), "sha256": _sha(Path(comparison_authority))},
     }
     _atomic_json(artifact_root / "a1-run-core.json", core)
@@ -212,6 +245,15 @@ def finalize_tier1_run(
         or core["parameter_count"] < 3_000_000_000
     ):
         raise ValueError("A1 run core is not terminal")
+    resource_preflight = core.get("resource_preflight")
+    if (
+        not isinstance(resource_preflight, dict)
+        or set(resource_preflight) != RESOURCE_PREFLIGHT_FIELDS
+        or resource_preflight.get("schema_version") != "ember-a1-resource-preflight-v1"
+        or resource_preflight.get("status") != "PASS"
+        or resource_preflight.get("parameter_count") != core.get("parameter_count")
+    ):
+        raise ValueError("A1 run core resource preflight is invalid")
     energy_block = energy.get("energy")
     t06 = _threshold(Path(thresholds_path), "T-06")
     if (
@@ -256,6 +298,18 @@ def finalize_tier1_run(
     if _sha(matched) != comparison["matched_a3_run"]["sha256"]:
         raise ValueError("matched A3 run changed after execution")
     a3 = _load(matched, "matched A3 run")
+    expected_checkpoint_identity = {
+        "comparison_id": comparison.get("comparison_id"),
+        "matched_identity": dict(a3["identity"]),
+        "config_sha256": A1_CONFIG_SHA256,
+        "source_commit": core["source_commit"],
+        "certified_launch_sha256": core["certified_launch_sha256"],
+        "tier": "TIER_1",
+        "mechanism": "FULL_STATE_ADAMW_CPU_OFFLOAD",
+        "predecessor": None,
+    }
+    if core.get("checkpoint_identity") != expected_checkpoint_identity:
+        raise ValueError("A1 checkpoint identity is thin, stale, or swapped")
     optimizer_inventory = core.get("optimizer_inventory")
     expected_parameters = core.get("parameter_count")
     if (

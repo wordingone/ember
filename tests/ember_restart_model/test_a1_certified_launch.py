@@ -56,6 +56,51 @@ def _with_self_digest(value: dict[str, object]) -> dict[str, object]:
     return value
 
 
+def _resource_preflight_receipt(parameter_count: int = 3_839_344_640) -> dict[str, object]:
+    model = parameter_count * 2
+    optimizer = parameter_count * 12
+    checkpoint = model + optimizer
+    gib = 1024**3
+    return {
+        "schema_version": "ember-a1-resource-preflight-v1",
+        "status": "PASS",
+        "parameter_count": parameter_count,
+        "model_bytes": model,
+        "gradient_bytes": model,
+        "cpu_fp32_optimizer_bytes": optimizer,
+        "checkpoint_payload_floor_bytes": checkpoint,
+        "transient_checkpoint_bytes": 4 * gib,
+        "host_commit_reserve_bytes": 8 * gib,
+        "gpu_free_margin_bytes": 4 * gib,
+        "b_custody_floor_bytes": 8 * gib,
+        "available_commit_bytes": optimizer + 12 * gib,
+        "device_free_bytes": 24 * gib,
+        "custody_free_bytes": checkpoint + 16 * gib,
+        "required_commit_bytes": optimizer + 12 * gib,
+        "required_device_bytes": 2 * model + 4 * gib,
+        "required_custody_bytes": checkpoint + 8 * gib,
+        "governor": {"vram_fraction": 0.85, "free_gb": 24.0, "total_gb": 24.0, "margin_gb": 4.0},
+    }
+
+
+def _checkpoint_identity(
+    authority: dict[str, object], *, source_commit: str, certified_launch_sha256: str
+) -> dict[str, object]:
+    comparison = authority["comparison"]
+    matched_path = authority["comparison_path"].parent / comparison["matched_a3_run"]["path"]
+    matched = json.loads(matched_path.read_text(encoding="utf-8"))
+    return {
+        "comparison_id": comparison["comparison_id"],
+        "matched_identity": matched["identity"],
+        "config_sha256": "563331b746619788f01900f4d951df29e4c6549c937a4662bac76234f5d71edc",
+        "source_commit": source_commit,
+        "certified_launch_sha256": certified_launch_sha256,
+        "tier": "TIER_1",
+        "mechanism": "FULL_STATE_ADAMW_CPU_OFFLOAD",
+        "predecessor": None,
+    }
+
+
 def _declare_a1_route(paths: dict[str, Path]) -> None:
     run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
     run_spec.update(
@@ -188,7 +233,12 @@ def _install_valid_a1_authority(paths: dict[str, Path]) -> dict[str, object]:
         paths,
         lambda certificate: (
             certificate["execution_scope"].update(
-                {"allowed_a1_families": [A1_FAMILY]}
+                {
+                    "allowed_a1_families": [A1_FAMILY],
+                    "a1_host_commit_reserve_gib": 8,
+                    "a1_gpu_free_margin_gib": 4,
+                    "a1_b_custody_floor_gib": 8,
+                }
             ),
             certificate.__setitem__(
                 "config_sha256", hashlib.sha256(config_path.read_bytes()).hexdigest()
@@ -294,9 +344,65 @@ def test_valid_a1_route_emits_the_distinct_runner_subcommand() -> None:
         "--sequence-length", "8",
         "--checkpoint-interval", "1",
         "--write-budget-gib", "16",
+        "--transient-checkpoint-gib", "4",
+        "--host-commit-reserve-gib", "8",
+        "--gpu-free-margin-gib", "4",
+        "--b-custody-floor-gib", "8",
         "--telemetry-path", str(launch.a1_telemetry_path),
         "--telemetry-run-id", launch.run_id,
     ]
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("a1_host_commit_reserve_gib", None),
+        ("a1_host_commit_reserve_gib", True),
+        ("a1_gpu_free_margin_gib", 0),
+        ("a1_b_custody_floor_gib", "8"),
+    ],
+)
+def test_a1_resource_authority_is_closed_typed_and_required(
+    field: str, value: object
+) -> None:
+    module = launch_fixtures.load_module()
+    authority = {
+        "a1_host_commit_reserve_gib": 8,
+        "a1_gpu_free_margin_gib": 4,
+        "a1_b_custody_floor_gib": 8,
+    }
+    if value is None:
+        authority.pop(field)
+    else:
+        authority[field] = value
+    with pytest.raises(ValueError, match="A1 resource authority"):
+        module._a1_resource_authority(authority)
+
+
+def test_dense_a1_resource_preflight_refuses_before_output_residue() -> None:
+    tools = ROOT / "tools" / "ember-restart-3b"
+    inserted = str(tools) not in sys.path
+    if inserted:
+        sys.path.insert(0, str(tools))
+    try:
+        import run_vertical_slice
+
+        parameters = 3_839_344_640
+        with pytest.raises(MemoryError, match="host commit"):
+            run_vertical_slice.dense_a1_resource_preflight(
+                parameter_count=parameters,
+                write_budget_bytes=64 * 1024**3,
+                transient_checkpoint_bytes=4 * 1024**3,
+                host_commit_reserve_bytes=8 * 1024**3,
+                gpu_free_margin_bytes=4 * 1024**3,
+                b_custody_floor_bytes=8 * 1024**3,
+                available_commit_bytes=1,
+                device_free_bytes=64 * 1024**3,
+                custody_free_bytes=128 * 1024**3,
+            )
+    finally:
+        if inserted:
+            sys.path.remove(str(tools))
 
 
 @pytest.mark.parametrize(
@@ -319,6 +425,12 @@ def test_energy_undercoverage_or_inconsistency_mints_no_tier1_run(
             "parameter_count": 3_839_344_640,
             "optimizer_inventory": {"complete": True},
             "checkpoint_sha256": "9" * 64,
+            "checkpoint_identity": _checkpoint_identity(
+                authority,
+                source_commit=launch_fixtures.SHA,
+                certified_launch_sha256="8" * 64,
+            ),
+            "resource_preflight": _resource_preflight_receipt(),
             "comparison_authority": {
                 "path": str(authority["comparison_path"]),
                 "sha256": hashlib.sha256(
@@ -385,6 +497,12 @@ def test_complete_energy_window_mints_packet_a_tier1_run() -> None:
                     "cpu_fp32_second_moment_numel": 3_839_344_640,
                 },
                 "checkpoint_sha256": "9" * 64,
+                "checkpoint_identity": _checkpoint_identity(
+                    authority,
+                    source_commit=launch_fixtures.SHA,
+                    certified_launch_sha256="8" * 64,
+                ),
+                "resource_preflight": _resource_preflight_receipt(),
                 "comparison_authority": {
                     "path": str(authority["comparison_path"]),
                     "sha256": hashlib.sha256(
@@ -528,6 +646,12 @@ def test_real_launcher_finalizer_join_mints_tier1_run_on_complete_energy() -> No
                     "complete": True,
                 },
                 "checkpoint_sha256": "9" * 64,
+                "checkpoint_identity": _checkpoint_identity(
+                    authority,
+                    source_commit=launch.public_master_sha,
+                    certified_launch_sha256=launch.run_spec_sha256,
+                ),
+                "resource_preflight": _resource_preflight_receipt(),
                 "comparison_authority": {
                     "path": str(authority["comparison_path"]),
                     "sha256": hashlib.sha256(
@@ -591,7 +715,8 @@ def test_dense_checkpoint_carries_complete_model_and_optimizer_inventory() -> No
     if inserted:
         sys.path.insert(0, str(tools))
     try:
-        from a1_checkpoint import write_dense_checkpoint
+        import a1_checkpoint
+        from a1_checkpoint import verify_dense_checkpoint, write_dense_checkpoint
         from a1_dense import DenseA1Config, DenseA1Decoder
         from a1_optimizer import A1OptimizerContract, FullStateAdamWCPUOffload
 
@@ -609,21 +734,54 @@ def test_dense_checkpoint_carries_complete_model_and_optimizer_inventory() -> No
         )
         optimizer.initialize_state()
         with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            checkpoint_root = Path(directory) / "checkpoint-a1-step-1"
+            identity = {
+                "comparison_id": "r1-e8-a1-vs-a3",
+                "matched_identity": {
+                    "comparison_id": "r1-e8-a1-vs-a3",
+                    "corpus_authority_sha256": "1" * 64,
+                    "shard_sequence_sha256": "2" * 64,
+                    "tokenizer_sha256": "3" * 64,
+                    "seed": 83,
+                    "cursor_start": {"global_step": 0, "record_index": 0, "tokens_seen": 0},
+                    "schedule_sha256": "4" * 64,
+                    "genesis_sha256": "5" * 64,
+                },
+                "config_sha256": "6" * 64,
+                "source_commit": "7" * 40,
+                "certified_launch_sha256": "8" * 64,
+                "tier": "TIER_1",
+                "mechanism": "FULL_STATE_ADAMW_CPU_OFFLOAD",
+                "predecessor": None,
+            }
+            original_cap = a1_checkpoint.MAX_SHARD_BYTES
+            # Above the largest single parameter bundle in this config (the
+            # fixed 48x48x3 raw-pixel image_input_shape's image_projector
+            # weight is not shrunk by small_for_tests' hidden_size, and its
+            # model+3-optimizer-moment bundle alone is ~3.4 MiB) so no single
+            # parameter is refused, and below the ~4.2 MiB total across all
+            # parameters so the write still splits across more than one shard.
+            a1_checkpoint.MAX_SHARD_BYTES = 4 * 1024 * 1024
             manifest_path, digest = write_dense_checkpoint(
-                Path(directory) / "checkpoint-a1-step-1",
+                checkpoint_root,
                 model=model,
                 optimizer=optimizer,
                 global_step=1,
                 tokens_seen=8,
-                identity={"comparison_id": "fixture"},
+                identity=identity,
             )
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             actual_digest = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+            verified = verify_dense_checkpoint(manifest_path, expected_identity=identity)
+            a1_checkpoint.MAX_SHARD_BYTES = original_cap
     finally:
         if inserted:
             sys.path.remove(str(tools))
     assert actual_digest == digest
-    assert manifest["schema_version"] == "ember-a1-dense-checkpoint-v1"
+    assert manifest["schema_version"] == "ember-a1-dense-checkpoint-v2"
+    assert not (checkpoint_root / "a1-full-state.pt").exists()
+    assert len(manifest["payload_shards"]) > 1
+    assert verified["identity"] == identity
     assert manifest["dense_inventory"]["contains_router_or_experts"] is False
     assert manifest["optimizer_inventory"]["complete"] is True
     assert manifest["optimizer_inventory"]["registered_numel"] == manifest[

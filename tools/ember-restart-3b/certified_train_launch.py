@@ -297,6 +297,9 @@ OPTIONAL_AUTHORIZED_SCOPE_KEYS = {
     "allowed_admitted_row_set_sha256",
     "allowed_receipt_custody_root",
     "allowed_a1_families",
+    "a1_host_commit_reserve_gib",
+    "a1_gpu_free_margin_gib",
+    "a1_b_custody_floor_gib",
 }
 REQUESTED_SCOPE_KEYS = {
     "mode",
@@ -472,6 +475,10 @@ class ValidatedLaunch(NamedTuple):
     a1_checkpoint_interval: int | None = None
     a1_write_budget_gib: int | None = None
     a1_telemetry_path: pathlib.Path | None = None
+    a1_transient_checkpoint_gib: int | None = None
+    a1_host_commit_reserve_gib: int | None = None
+    a1_gpu_free_margin_gib: int | None = None
+    a1_b_custody_floor_gib: int | None = None
 
 
 class A1Tier(str, Enum):
@@ -496,6 +503,10 @@ class A1DiscriminatingRequest(NamedTuple):
     checkpoint_interval: int
     write_budget_gib: int
     telemetry_path: pathlib.Path
+    transient_checkpoint_gib: int
+    host_commit_reserve_gib: int
+    gpu_free_margin_gib: int
+    b_custody_floor_gib: int
 
 
 def _canonical_bytes(value: object) -> bytes:
@@ -1870,6 +1881,23 @@ def _require_a1_string(value: object, label: str) -> str:
     return value
 
 
+def _a1_resource_authority(authorized: dict[str, Any]) -> tuple[int, int, int]:
+    fields = (
+        "a1_host_commit_reserve_gib",
+        "a1_gpu_free_margin_gib",
+        "a1_b_custody_floor_gib",
+    )
+    values: list[int] = []
+    for field in fields:
+        value = authorized.get(field)
+        if type(value) is not int or value <= 0:
+            raise ValueError(
+                f"certificate A1 resource authority {field} must be a positive integer"
+            )
+        values.append(value)
+    return values[0], values[1], values[2]
+
+
 def _validate_a1_request(
     run_spec: dict[str, Any],
     run_spec_path: pathlib.Path,
@@ -1877,6 +1905,7 @@ def _validate_a1_request(
     certificate: dict[str, Any],
     resume: ResumeRequest | None,
     write_budget_bytes: int,
+    transient_checkpoint_gib: object,
     optimizer_steps: int,
     authorized_families: set[str] | None,
 ) -> A1DiscriminatingRequest | None:
@@ -1885,6 +1914,9 @@ def _validate_a1_request(
         return None
     if resume is not None:
         raise ValueError("dense A1 launch requires clean-random genesis, not resume")
+    host_commit_reserve_gib, gpu_free_margin_gib, b_custody_floor_gib = (
+        _a1_resource_authority(certificate["execution_scope"])
+    )
     try:
         tier = A1Tier(run_spec["a1_tier"])
     except (TypeError, ValueError) as error:
@@ -1913,6 +1945,15 @@ def _validate_a1_request(
     if write_budget_bytes <= 0 or write_budget_bytes % (1024**3) != 0:
         raise ValueError(
             "dense A1 launch write_budget_bytes must be a positive exact GiB"
+        )
+    if (
+        isinstance(transient_checkpoint_gib, bool)
+        or not isinstance(transient_checkpoint_gib, (int, float))
+        or not float(transient_checkpoint_gib).is_integer()
+        or transient_checkpoint_gib <= 0
+    ):
+        raise ValueError(
+            "dense A1 transient checkpoint authority must be a positive exact GiB"
         )
 
     config_path = repo_root / "tools" / "ember-restart-3b" / "ember-restart-3b-a1.json"
@@ -2092,6 +2133,10 @@ def _validate_a1_request(
         checkpoint_interval=checkpoint_interval,
         write_budget_gib=write_budget_bytes // (1024**3),
         telemetry_path=telemetry_path,
+        transient_checkpoint_gib=int(transient_checkpoint_gib),
+        host_commit_reserve_gib=host_commit_reserve_gib,
+        gpu_free_margin_gib=gpu_free_margin_gib,
+        b_custody_floor_gib=b_custody_floor_gib,
     )
 
 
@@ -2966,6 +3011,7 @@ def validate_certified_request(
         certificate,
         resume,
         int(requested_scope["write_budget_bytes"]),
+        requested_scope["transient_checkpoint_gib"],
         requested_optimizer_steps,
         _authorized_a1_families(authorized_scope),
     )
@@ -3159,6 +3205,18 @@ def validate_certified_request(
         a1_checkpoint_interval=None if a1 is None else a1.checkpoint_interval,
         a1_write_budget_gib=None if a1 is None else a1.write_budget_gib,
         a1_telemetry_path=None if a1 is None else a1.telemetry_path,
+        a1_transient_checkpoint_gib=(
+            None if a1 is None else a1.transient_checkpoint_gib
+        ),
+        a1_host_commit_reserve_gib=(
+            None if a1 is None else a1.host_commit_reserve_gib
+        ),
+        a1_gpu_free_margin_gib=(
+            None if a1 is None else a1.gpu_free_margin_gib
+        ),
+        a1_b_custody_floor_gib=(
+            None if a1 is None else a1.b_custody_floor_gib
+        ),
         authority_paths=tuple(authority_paths),
     )
 
@@ -3217,6 +3275,14 @@ def build_runner_argv(
             str(launch.a1_checkpoint_interval),
             "--write-budget-gib",
             str(launch.a1_write_budget_gib),
+            "--transient-checkpoint-gib",
+            str(launch.a1_transient_checkpoint_gib),
+            "--host-commit-reserve-gib",
+            str(launch.a1_host_commit_reserve_gib),
+            "--gpu-free-margin-gib",
+            str(launch.a1_gpu_free_margin_gib),
+            "--b-custody-floor-gib",
+            str(launch.a1_b_custody_floor_gib),
             "--telemetry-path",
             str(launch.a1_telemetry_path),
             "--telemetry-run-id",
