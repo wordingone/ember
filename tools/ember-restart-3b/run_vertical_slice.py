@@ -1000,6 +1000,111 @@ def _record_e4_measurement_write_failure(
     )
 
 
+def _make_e4_measurement_recorder(
+    *, telemetry_path: Path | None, telemetry_run_id: str | None,
+) -> Callable[[dict[str, object]], None]:
+    """Build the per-step R1-E4 measurement accumulator + running-upsert writer (issue #1464).
+
+    Shared by run() and run_semantic(): each producer's own progress_callback calls the
+    returned function once per training step, after its own telemetry-append logic, so the
+    e4-measurement-receipt.json upsert behaves identically no matter which producer trained
+    the steps. Safe to construct even when telemetry_path/telemetry_run_id are None -- the
+    returned function is never actually invoked in that case, mirroring the None-guard every
+    caller already applies before touching telemetry.
+    """
+    e4_accumulator: dict[str, object] = {
+        "wall_t0": time.perf_counter(), "cpu_t0": os.times(),
+        "steps": 0, "tokens_total": 0, "step_ms_sum": 0.0, "tokens_missing": 0,
+        "write_failures": 0,
+    }
+
+    def _write_e4_measurement_receipt() -> None:
+        # Running upsert, rewritten after EVERY step (R1-E4, issue #1464). The
+        # #1489 incident proved post-publication housekeeping can raise INSIDE
+        # the training segment -- after the final checkpoint published -- which
+        # destroyed the child's final stdout JSON and with it the only peak-VRAM
+        # capture of the run. A receipt that exists from step 1 and is complete
+        # as of the last finished step cannot be destroyed by any later failure.
+        wall_seconds = max(time.perf_counter() - float(e4_accumulator["wall_t0"]), 1e-9)
+        cpu_t0, cpu_now = e4_accumulator["cpu_t0"], os.times()
+        process_cpu_seconds = max((cpu_now.user - cpu_t0.user) + (cpu_now.system - cpu_t0.system), 0.0)
+        tokens_total, steps = int(e4_accumulator["tokens_total"]), int(e4_accumulator["steps"])
+        tokens_known = int(e4_accumulator["tokens_missing"]) == 0 and tokens_total > 0
+        step_ms_sum = float(e4_accumulator["step_ms_sum"])
+        # Run-root derivation by MARKER, not blind depth (rev-1495 finding 2):
+        # the credited layout is <run_root>/telemetry/<file>.jsonl, so parent
+        # .parent is right exactly when the parent directory is named
+        # "telemetry"; any other launcher-supplied shape writes BESIDE the
+        # telemetry file instead -- always inside the run root, so the
+        # battery's rglob finds it either way, and a shallow path can no
+        # longer place the receipt outside the scanned tree.
+        receipt_dir = telemetry_path.parent.parent if telemetry_path.parent.name == "telemetry" else telemetry_path.parent
+        _atomic_json(receipt_dir / "e4-measurement-receipt.json", {
+            "schema_version": "ember02-r1-e4-measurement/v1",
+            "run_id": telemetry_run_id,
+            "updated_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "steps": steps,
+            "tokens_total": tokens_total if tokens_known else None,
+            "tokens_missing_steps": int(e4_accumulator["tokens_missing"]),
+            "write_failures": int(e4_accumulator["write_failures"]),
+            "wall_seconds": wall_seconds,
+            "step_ms_sum": step_ms_sum,
+            "tokens_per_second": (tokens_total / wall_seconds) if tokens_known else None,
+            "tokens_per_second_step_basis": (tokens_total / (step_ms_sum / 1000.0)) if tokens_known and step_ms_sum > 0 else None,
+            "mfu": {
+                "value": ((6.0 * _E4_ACTIVE_PARAMETERS * tokens_total / wall_seconds) / _E4_ASSUMED_PEAK_FLOPS) if tokens_known else None,
+                "flops_model": "6 * active_parameters * tokens_total / wall_seconds",
+                "active_parameters": _E4_ACTIVE_PARAMETERS,
+                "assumed_peak_flops": _E4_ASSUMED_PEAK_FLOPS,
+                "assumed_peak_note": "RTX 4090 BF16 dense peak without structured sparsity; with FP32 accumulate the peak is ~82.6e12, doubling the reported utilization",
+            },
+            "peak_vram": {
+                "allocated_bytes": int(torch.cuda.max_memory_allocated()),
+                "reserved_bytes": int(torch.cuda.max_memory_reserved()),
+            },
+            "host_utilization": {
+                "process_cpu_seconds": process_cpu_seconds,
+                "wall_seconds": wall_seconds,
+                "process_cpu_fraction": process_cpu_seconds / wall_seconds,
+                "method": "os.times() user+system delta over the segment wall clock (this process only)",
+            },
+        })
+
+    def record_e4_step(progress: dict[str, object]) -> None:
+        e4_accumulator["steps"] = int(e4_accumulator["steps"]) + 1
+        step_tokens = progress.get("tokens_consumed")
+        if isinstance(step_tokens, int) and not isinstance(step_tokens, bool) and step_tokens > 0:
+            e4_accumulator["tokens_total"] = int(e4_accumulator["tokens_total"]) + step_tokens
+        else:
+            # A payload without per-step tokens (an unpatched segment producer)
+            # poisons the throughput denominator honestly: the receipt keeps
+            # counting steps but reports tokens/s and MFU as null rather than
+            # extrapolating -- fail-closed, the battery refuses nulls.
+            e4_accumulator["tokens_missing"] = int(e4_accumulator["tokens_missing"]) + 1
+        step_ms = progress.get("step_ms")
+        if isinstance(step_ms, (int, float)) and not isinstance(step_ms, bool):
+            e4_accumulator["step_ms_sum"] = float(e4_accumulator["step_ms_sum"]) + float(step_ms)
+        try:
+            _write_e4_measurement_receipt()
+        except Exception as error:
+            # rev-1495 finding 1: the evidence writer must never kill the
+            # certified run it documents (that would invert the #1489 lesson --
+            # the receipt exists BECAUSE crashes destroy evidence). A full
+            # volume, a transient sharing violation on os.replace while the
+            # cockpit reads the file, or a CUDA query error costs one write,
+            # counted here and disclosed in the next successful receipt; the
+            # accumulator itself lost nothing. KeyboardInterrupt/SystemExit
+            # still propagate (BaseException, not Exception).
+            _record_e4_measurement_write_failure(
+                e4_accumulator,
+                telemetry_path=telemetry_path,
+                telemetry_run_id=telemetry_run_id,
+                error=error,
+            )
+
+    return record_e4_step
+
+
 def specialist_resume_cursor(cursor: dict[str, object], *, data_shard_id: str) -> dict[str, object]:
     """Preserve global accounting while starting a new verified specialist source at zero."""
     if not isinstance(data_shard_id, str) or not data_shard_id.startswith("VERIFIED_SPECIALIST:"):
@@ -3559,63 +3664,9 @@ def run(
                 "checkpoint_manifest_sha256": _sha256(checkpoint_target / "checkpoint-manifest.json"),
             })
 
-    e4_accumulator: dict[str, object] = {
-        "wall_t0": time.perf_counter(), "cpu_t0": os.times(),
-        "steps": 0, "tokens_total": 0, "step_ms_sum": 0.0, "tokens_missing": 0,
-        "write_failures": 0,
-    }
-
-    def _write_e4_measurement_receipt() -> None:
-        # Running upsert, rewritten after EVERY step (R1-E4, issue #1464). The
-        # #1489 incident proved post-publication housekeeping can raise INSIDE
-        # the training segment -- after the final checkpoint published -- which
-        # destroyed the child's final stdout JSON and with it the only peak-VRAM
-        # capture of the run. A receipt that exists from step 1 and is complete
-        # as of the last finished step cannot be destroyed by any later failure.
-        wall_seconds = max(time.perf_counter() - float(e4_accumulator["wall_t0"]), 1e-9)
-        cpu_t0, cpu_now = e4_accumulator["cpu_t0"], os.times()
-        process_cpu_seconds = max((cpu_now.user - cpu_t0.user) + (cpu_now.system - cpu_t0.system), 0.0)
-        tokens_total, steps = int(e4_accumulator["tokens_total"]), int(e4_accumulator["steps"])
-        tokens_known = int(e4_accumulator["tokens_missing"]) == 0 and tokens_total > 0
-        step_ms_sum = float(e4_accumulator["step_ms_sum"])
-        # Run-root derivation by MARKER, not blind depth (rev-1495 finding 2):
-        # the credited layout is <run_root>/telemetry/<file>.jsonl, so parent
-        # .parent is right exactly when the parent directory is named
-        # "telemetry"; any other launcher-supplied shape writes BESIDE the
-        # telemetry file instead -- always inside the run root, so the
-        # battery's rglob finds it either way, and a shallow path can no
-        # longer place the receipt outside the scanned tree.
-        receipt_dir = telemetry_path.parent.parent if telemetry_path.parent.name == "telemetry" else telemetry_path.parent
-        _atomic_json(receipt_dir / "e4-measurement-receipt.json", {
-            "schema_version": "ember02-r1-e4-measurement/v1",
-            "run_id": telemetry_run_id,
-            "updated_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "steps": steps,
-            "tokens_total": tokens_total if tokens_known else None,
-            "tokens_missing_steps": int(e4_accumulator["tokens_missing"]),
-            "write_failures": int(e4_accumulator["write_failures"]),
-            "wall_seconds": wall_seconds,
-            "step_ms_sum": step_ms_sum,
-            "tokens_per_second": (tokens_total / wall_seconds) if tokens_known else None,
-            "tokens_per_second_step_basis": (tokens_total / (step_ms_sum / 1000.0)) if tokens_known and step_ms_sum > 0 else None,
-            "mfu": {
-                "value": ((6.0 * _E4_ACTIVE_PARAMETERS * tokens_total / wall_seconds) / _E4_ASSUMED_PEAK_FLOPS) if tokens_known else None,
-                "flops_model": "6 * active_parameters * tokens_total / wall_seconds",
-                "active_parameters": _E4_ACTIVE_PARAMETERS,
-                "assumed_peak_flops": _E4_ASSUMED_PEAK_FLOPS,
-                "assumed_peak_note": "RTX 4090 BF16 dense peak without structured sparsity; with FP32 accumulate the peak is ~82.6e12, doubling the reported utilization",
-            },
-            "peak_vram": {
-                "allocated_bytes": int(torch.cuda.max_memory_allocated()),
-                "reserved_bytes": int(torch.cuda.max_memory_reserved()),
-            },
-            "host_utilization": {
-                "process_cpu_seconds": process_cpu_seconds,
-                "wall_seconds": wall_seconds,
-                "process_cpu_fraction": process_cpu_seconds / wall_seconds,
-                "method": "os.times() user+system delta over the segment wall clock (this process only)",
-            },
-        })
+    record_e4_step = _make_e4_measurement_recorder(
+        telemetry_path=telemetry_path, telemetry_run_id=telemetry_run_id,
+    )
 
     def progress_callback(progress: dict[str, object]) -> None:
         if telemetry_path is None or telemetry_run_id is None:
@@ -3628,36 +3679,7 @@ def run(
             "total_gib": float(total_bytes / 1024**3),
             "vram_fraction_applied": float(torch.cuda.get_per_process_memory_fraction()),
         })
-        e4_accumulator["steps"] = int(e4_accumulator["steps"]) + 1
-        step_tokens = progress.get("tokens_consumed")
-        if isinstance(step_tokens, int) and not isinstance(step_tokens, bool) and step_tokens > 0:
-            e4_accumulator["tokens_total"] = int(e4_accumulator["tokens_total"]) + step_tokens
-        else:
-            # A payload without per-step tokens (an unpatched segment producer)
-            # poisons the throughput denominator honestly: the receipt keeps
-            # counting steps but reports tokens/s and MFU as null rather than
-            # extrapolating -- fail-closed, the battery refuses nulls.
-            e4_accumulator["tokens_missing"] = int(e4_accumulator["tokens_missing"]) + 1
-        step_ms = progress.get("step_ms")
-        if isinstance(step_ms, (int, float)) and not isinstance(step_ms, bool):
-            e4_accumulator["step_ms_sum"] = float(e4_accumulator["step_ms_sum"]) + float(step_ms)
-        try:
-            _write_e4_measurement_receipt()
-        except Exception as error:
-            # rev-1495 finding 1: the evidence writer must never kill the
-            # certified run it documents (that would invert the #1489 lesson --
-            # the receipt exists BECAUSE crashes destroy evidence). A full
-            # volume, a transient sharing violation on os.replace while the
-            # cockpit reads the file, or a CUDA query error costs one write,
-            # counted here and disclosed in the next successful receipt; the
-            # accumulator itself lost nothing. KeyboardInterrupt/SystemExit
-            # still propagate (BaseException, not Exception).
-            _record_e4_measurement_write_failure(
-                e4_accumulator,
-                telemetry_path=telemetry_path,
-                telemetry_run_id=telemetry_run_id,
-                error=error,
-            )
+        record_e4_step(progress)
 
     segment = run_pretraining_segment(
         model=model, optimizer=optimizer, records=records, config=config, device=torch.device("cuda"),
@@ -4014,6 +4036,10 @@ def run_semantic(
         checkpoint, parameter_receipt = result
         last_checkpointed_step = global_step
 
+    record_e4_step = _make_e4_measurement_recorder(
+        telemetry_path=telemetry_path, telemetry_run_id=telemetry_run_id,
+    )
+
     def progress_callback(progress: dict[str, object]) -> None:
         if telemetry_path is None or telemetry_run_id is None:
             return
@@ -4021,6 +4047,7 @@ def run_semantic(
             "run_id": telemetry_run_id,
             **progress,
         })
+        record_e4_step(progress)
 
     segment = run_manifest_bound_semantic_segment(
         model=model,
