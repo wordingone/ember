@@ -118,10 +118,27 @@ def _architecture_manifest(root: Path, **overrides: object) -> Path:
 
 
 def _telemetry(root: Path, *, run_id: str = RUN_ID) -> Path:
+    """The real frozen `train_step` envelope
+    (`{"ts":..., "kind":"train_step", "source":"ember-restart-3b", "payload":
+    {"run_id":..., "step":int, ...}}`) -- the ONLY shape the real A1/A3
+    producers (`a1_execution.py`, `run_vertical_slice.py`) ever emit. A flat
+    top-level `{"run_id":..., "step":...}` row, as this fixture wrote before
+    issue #1464's second residual, is never produced by any real run and no
+    longer satisfies `_require_run_stepped`."""
     path = root / "a3-telemetry.jsonl"
     rows = [
-        {"run_id": run_id, "step": 1, "tokens": 8, "loss": "1.234500000000"},
-        {"run_id": run_id, "step": 2, "tokens": 8, "loss": "1.100000000000"},
+        {
+            "ts": "2026-08-21T16:49:00.000000Z",
+            "kind": "train_step",
+            "source": "ember-restart-3b",
+            "payload": {"run_id": run_id, "step": 1, "tokens": 8, "loss": "1.234500000000"},
+        },
+        {
+            "ts": "2026-08-21T16:49:01.000000Z",
+            "kind": "train_step",
+            "source": "ember-restart-3b",
+            "payload": {"run_id": run_id, "step": 2, "tokens": 8, "loss": "1.100000000000"},
+        },
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(json.dumps(row, sort_keys=True) for row in rows) + "\n", encoding="utf-8")
@@ -303,6 +320,74 @@ def test_mint_refuses_when_telemetry_names_no_stepped_row_for_run_id() -> None:
         kwargs["telemetry_path"] = _telemetry(root, run_id="a-different-run")
         with pytest.raises(module.A3ReceiptRefused, match="telemetry names no stepped row"):
             module.mint_a3_run_receipt(**kwargs)
+
+
+def test_require_run_stepped_reads_the_real_envelope_shape(tmp_path: Path) -> None:
+    """Issue #1464's second residual: the real producers write the frozen
+    `train_step` envelope, never a flat top-level `{run_id, step}` row.
+    `_require_run_stepped` must find the step evidence inside `payload`."""
+    module = _load_producer()
+    telemetry_path = tmp_path / "a3-telemetry.jsonl"
+    rows = [
+        {"ts": "2026-08-21T16:49:00Z", "kind": "train_step", "source": "ember-restart-3b",
+         "payload": {"run_id": "envelope-run", "step": 1, "tokens": 8}},
+    ]
+    telemetry_path.write_text("\n".join(json.dumps(r, sort_keys=True) for r in rows) + "\n", encoding="utf-8")
+
+    module._require_run_stepped(telemetry_path, "envelope-run")  # must not raise
+
+
+def test_require_run_stepped_refuses_a_flat_row_with_no_envelope(tmp_path: Path) -> None:
+    """RED regression for the pre-fix defect: a flat top-level
+    `{"run_id":..., "step":...}` row -- the old fixture shape, never emitted
+    by any real producer -- no longer satisfies the gate. Envelope-only is
+    correct because the ONLY real producer emits envelopes."""
+    module = _load_producer()
+    telemetry_path = tmp_path / "a3-telemetry.jsonl"
+    rows = [{"run_id": "flat-run", "step": 1, "tokens": 8}]
+    telemetry_path.write_text("\n".join(json.dumps(r, sort_keys=True) for r in rows) + "\n", encoding="utf-8")
+
+    with pytest.raises(module.A3ReceiptRefused, match="telemetry names no stepped row"):
+        module._require_run_stepped(telemetry_path, "flat-run")
+
+
+def test_require_run_stepped_skips_non_train_step_envelopes_without_refusing(tmp_path: Path) -> None:
+    """A well-formed row that is simply a different event kind, a different
+    source, another run's payload, or a non-object payload is not a
+    structural defect -- it just does not count. Refusal is reserved for
+    unparseable JSON and non-object rows."""
+    module = _load_producer()
+    telemetry_path = tmp_path / "a3-telemetry.jsonl"
+    rows = [
+        {"ts": "t", "kind": "checkpoint_saved", "source": "ember-restart-3b",
+         "payload": {"run_id": "run-x", "step": 1}},
+        {"ts": "t", "kind": "train_step", "source": "some-other-source",
+         "payload": {"run_id": "run-x", "step": 1}},
+        {"ts": "t", "kind": "train_step", "source": "ember-restart-3b",
+         "payload": "not-an-object"},
+        {"ts": "t", "kind": "train_step", "source": "ember-restart-3b",
+         "payload": {"run_id": "a-different-run", "step": 1}},
+        {"ts": "t", "kind": "train_step", "source": "ember-restart-3b",
+         "payload": {"run_id": "run-x", "step": 1}},
+    ]
+    telemetry_path.write_text("\n".join(json.dumps(r, sort_keys=True) for r in rows) + "\n", encoding="utf-8")
+
+    module._require_run_stepped(telemetry_path, "run-x")  # must not raise (last row matches)
+
+
+def test_require_run_stepped_still_refuses_unparseable_and_non_object_rows(tmp_path: Path) -> None:
+    """The existing structural refusals are unchanged by the envelope fix."""
+    module = _load_producer()
+
+    unparseable = tmp_path / "unparseable.jsonl"
+    unparseable.write_text("{not valid json\n", encoding="utf-8")
+    with pytest.raises(module.A3ReceiptRefused, match="unparseable row"):
+        module._require_run_stepped(unparseable, "run-x")
+
+    non_object = tmp_path / "non-object.jsonl"
+    non_object.write_text("[1, 2, 3]\n", encoding="utf-8")
+    with pytest.raises(module.A3ReceiptRefused, match="is not an object"):
+        module._require_run_stepped(non_object, "run-x")
 
 
 def test_mint_refuses_when_energy_coverage_is_below_t06() -> None:
