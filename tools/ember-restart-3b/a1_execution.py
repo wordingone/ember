@@ -38,6 +38,12 @@ RESOURCE_PREFLIGHT_FIELDS = {
     "gpu_free_margin_bytes", "b_custody_floor_bytes", "available_commit_bytes",
     "device_free_bytes", "custody_free_bytes", "required_commit_bytes",
     "required_device_bytes", "required_custody_bytes", "governor",
+    # #1464: the a1-dense-tier1 route now binds the same canonical disk
+    # budget runner authority every other production route embeds (was
+    # previously an unconditional-refusal stub); this closed-schema field
+    # carries that startup authority alongside the governor receipt so the
+    # dense receipt records the same runner evidence the semantic route does.
+    "canonical_runner",
 }
 OPTIMIZER_INVENTORY_FIELDS = {
     "schema_version", "state_format", "registered_parameters", "registered_numel",
