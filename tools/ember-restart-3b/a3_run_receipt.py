@@ -101,19 +101,15 @@ class A3ReceiptRefused(ValueError):
 
 
 def _canonical(value: object) -> bytes:
-    # NOTE: two real consumers of this exact schema disagree on the self-digest
-    # convention. certified_train_launch.py's matched-A3 gate hashes compact
-    # JSON WITH a trailing newline (its own `_canonical_bytes`); a1_execution.py's
-    # A1-arm minting and r1_e8_validator.py's `_self_digest`/`_reopen_ref` (the
-    # full `validate_e8` pipeline) both hash compact JSON WITHOUT one. No single
-    # receipt_sha256 can satisfy both full pipelines as those two modules are
-    # currently coded. This mint matches certified_train_launch.py's convention,
-    # since that gate is the one this producer's brief names as mandatory and
-    # `_validate_run` (the other named real consumer) does not check digest
-    # format at all. See the module docstring and the residual noted in the
-    # PR/report -- resolving the cross-module mismatch is out of this producer's
-    # touch-set.
-    return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    # Self-digest input bytes: compact JSON, NO trailing newline, matching
+    # a1_execution.py's own A1-arm receipt minting and
+    # scripts/r1_e8_validator.py's `_self_digest`/`_reopen_ref` -- the check
+    # the real `validate_e8` pipeline runs on every reopened A3 run receipt.
+    # certified_train_launch.py's matched-A3 gate was amended (fix(training):
+    # align matched-A3 self-digest convention, #1464) to a dedicated
+    # `_matched_a3_self_digest_sha256` helper matching this same convention,
+    # so one receipt_sha256 now satisfies both real full pipelines.
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
 
 def _sha_bytes(raw: bytes) -> str:
@@ -443,5 +439,11 @@ def mint_a3_run_receipt(
         raise A3ReceiptRefused(f"assembled A3 receipt fails the real R1-E8 validator: {error}") from error
 
     output_path = Path(output_path)
-    atomic_create_durable(output_path, _canonical(run))
+    # On-disk bytes carry a trailing newline (matching a1_execution.py's own
+    # `_atomic_json`); the digest above was computed on `_canonical(run)`
+    # without one, over `run` before `receipt_sha256` was added -- the file
+    # write re-serializes the now-complete dict, so the two calls to
+    # `_canonical` intentionally differ only by the receipt_sha256 key and
+    # this trailing newline, never by convention.
+    atomic_create_durable(output_path, _canonical(run) + b"\n")
     return output_path

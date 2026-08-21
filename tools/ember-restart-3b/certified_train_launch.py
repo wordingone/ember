@@ -519,6 +519,30 @@ def _canonical_sha256(value: object) -> str:
     return hashlib.sha256(_canonical_bytes(value)).hexdigest()
 
 
+def _matched_a3_self_digest_sha256(value: object) -> str:
+    """Self-digest for a matched A3 run receipt (schema `ember02-r1-e8-run-v1`).
+
+    Deliberately NOT `_canonical_sha256` (which appends a trailing newline):
+    this receipt is authored by an EXTERNAL producer (a3_run_receipt.py), not
+    round-tripped through this module's own write path, and the receipt's
+    `receipt_sha256` field must agree with the digest every other real
+    consumer of this exact schema computes -- a1_execution.py's own A1-arm
+    minting and, more importantly, scripts/r1_e8_validator.py's
+    `_self_digest`/`_reopen_ref` (the check `validate_e8` actually runs on A3
+    receipts). All three of those hash compact JSON with NO trailing
+    newline; `_canonical_bytes` disagreed here only because nothing had ever
+    exercised a real, externally-produced A3 receipt against this check
+    before. `_canonical_bytes`/`_canonical_sha256` keep their own convention
+    everywhere else in this module (shard_sequence_sha, schedule_sha256,
+    certificate_sha256, and the retention/disclosure/execution-receipt
+    writes) -- those are all self-consistent internal round-trips through
+    this same module, not cross-module contracts, so they are out of scope
+    for this fix.
+    """
+    raw = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
 def _file_sha256(path: pathlib.Path, label: str) -> str:
     try:
         return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -2057,7 +2081,7 @@ def _validate_a1_request(
         "matched A3 run",
     )
     unsigned = {key: value for key, value in matched.items() if key != "receipt_sha256"}
-    if matched.get("receipt_sha256") != _canonical_sha256(unsigned):
+    if matched.get("receipt_sha256") != _matched_a3_self_digest_sha256(unsigned):
         raise ValueError("matched A3 run self digest mismatch")
     if (
         matched.get("schema_version") != "ember02-r1-e8-run-v1"
