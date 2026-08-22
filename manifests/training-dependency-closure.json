@@ -47,6 +47,7 @@
     "tools/ember-restart-3b/text_lab_corpus.py",
     "tools/ember-restart-3b/tokenizer_runtime_bundle.py",
     "tools/ember-restart-3b/train.py",
+    "tools/ember-restart-3b/training_acceleration.py",
     "tools/ember-restart-3b/verify_capability_record.py",
     "tools/ember-restart-3b/verify_training_data.py",
     "scripts/artifact_custody_gate.py",

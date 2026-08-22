@@ -32,6 +32,7 @@ from checkpoint_artifacts import CheckpointDeferredLowCommit, _atomic_publish_no
 from parameter_counter import derive_expert_genesis_sha256, validate_realization_receipt
 from model import RestartDecoderConfig, UnifiedDecoder
 from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
+from training_acceleration import Stage1Policy, stage1_policy
 from durable_io import atomic_create_durable, atomic_replace_durable
 from parameter_counter import measure_parameter_counts
 from semantic_stream import ManifestBoundTokenStream
@@ -3297,6 +3298,12 @@ def load_memory_contract(config_path: Path) -> dict[str, object]:
         raise ValueError("production BF16 memory contract differs from the audited numerical envelope")
     return dict(value)
 
+
+def load_training_acceleration_policy() -> Stage1Policy:
+    """Load the closed issue #1413 Stage 1 policy before any model allocation."""
+
+    return stage1_policy()
+
 def load_optimizer_contract(config_path: Path) -> dict[str, object]:
     """Load the one structured optimizer declaration used by config, runtime, and checkpoint."""
 
@@ -3513,6 +3520,7 @@ def run(
     integration_contract_path = root / "docs" / "ember-restart" / "integration-contract-v1.md"
     if not integration_contract_path.is_file():
         raise RuntimeError("the merged Ember integration contract is required for production launch")
+    load_training_acceleration_policy()
     config = RestartDecoderConfig.from_contract(config_path)
     memory_contract = load_memory_contract(config_path)
     governor_receipt = governed_resource_preflight()
@@ -3998,6 +4006,7 @@ def run_semantic(
     integration_contract_path = root / "docs" / "ember-restart" / "integration-contract-v1.md"
     if not integration_contract_path.is_file():
         raise RuntimeError("the merged Ember integration contract is required for production launch")
+    load_training_acceleration_policy()
     config = RestartDecoderConfig.from_contract(config_path)
     memory_contract = load_memory_contract(config_path)
     governor_receipt = governed_resource_preflight()

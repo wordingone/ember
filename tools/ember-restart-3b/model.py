@@ -488,7 +488,12 @@ class UnifiedDecoder(nn.Module):
         allowed = self.build_attention_mask(batch_size=input_ids.shape[0], sequence_length=input_ids.shape[1], spans=spans, device=input_ids.device)
         for layer in self.layers:
             if self.config.gradient_checkpointing and self.training:
-                hidden_states = checkpoint_utils.checkpoint(lambda states, current_layer=layer: current_layer(states, coordinates, allowed, selected), hidden_states, use_reentrant=False)
+                hidden_states = checkpoint_utils.checkpoint(
+                    lambda states, current_layer=layer: current_layer(states, coordinates, allowed, selected),
+                    hidden_states,
+                    use_reentrant=False,
+                    preserve_rng_state=True,
+                )
             else:
                 hidden_states = layer(hidden_states, coordinates, allowed, selected)
         return self.lm_head(self.final_norm(hidden_states))

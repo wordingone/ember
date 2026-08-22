@@ -98,6 +98,8 @@ class RestartDecoderModelTests(unittest.TestCase):
         with patch("torch.utils.checkpoint.checkpoint", wraps=checkpoint) as spy:
             model(ids, active_expert="reasoning")
         self.assertEqual(spy.call_count, self.config.layers)
+        self.assertTrue(all(call.kwargs.get("preserve_rng_state") is True for call in spy.call_args_list))
+        self.assertTrue(all(call.kwargs.get("use_reentrant") is False for call in spy.call_args_list))
         model.eval()
         with patch("torch.utils.checkpoint.checkpoint", wraps=checkpoint) as spy:
             model(ids, active_expert="reasoning")

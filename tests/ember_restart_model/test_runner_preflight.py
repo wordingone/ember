@@ -32,6 +32,13 @@ from verify_capability_record import expected_receipt
 
 
 class RunnerPreflightTests(unittest.TestCase):
+    def test_training_acceleration_config_is_closed_and_stage1_disabled(self) -> None:
+        policy = run_vertical_slice.load_training_acceleration_policy()
+        self.assertFalse(policy.enabled)
+        self.assertFalse(policy.fp8_enabled)
+        self.assertFalse(policy.cuda_graph_enabled)
+        self.assertIsNone(policy.signature_census_sha256)
+
     def test_specialist_execution_slice_binds_exact_contiguous_records_and_tokens(self) -> None:
         records = [
             {"active_expert": "vision", "token_ids": [1, 2], "row_id": "zero"},
@@ -1113,6 +1120,8 @@ class RunnerPreflightTests(unittest.TestCase):
             expected_receipt_sha256="r" * 64,
             expected_tokenizer_sha256="t" * 64,
             expected_architecture_sha256="a" * 64,
+            admitted_row_set_sha256=None,
+            receipt_custody_root=None,
             steps=1,
             sequence_length=1024,
             checkpoint_interval=32,
