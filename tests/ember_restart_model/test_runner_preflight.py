@@ -1202,10 +1202,13 @@ class RunnerPreflightTests(unittest.TestCase):
                 **bindings, "EMBER_DISK_BUDGET_ENV_ASSERTION": str(assertion),
                 "EMBER_DISK_BUDGET_ENV_NONCE": nonce,
             }
+            census_output = artifact_root / "signature-census.json"
             with patch.dict(os.environ, environment, clear=True):
                 with patch.object(sys, "argv", [
                     "run_vertical_slice.py", "governed-vertical", "--seed", "83",
                     "--artifact-root", str(artifact_root), "--write-budget-bytes", "4096", "--max-records", "3",
+                    "--signature-census-output", str(census_output),
+                    "--signature-census-source-commit", "1" * 40,
                 ]):
                     with patch.object(run_vertical_slice, "checkpoint_serialization_byte_bound", return_value=4096):
                         with patch.object(run_vertical_slice, "run", return_value={"steps": 1}) as vertical_run:
@@ -1229,7 +1232,24 @@ class RunnerPreflightTests(unittest.TestCase):
                 write_budget_bytes=4096, max_records=3, canonical_runner_authority=assertion_authority,
                 c_relocated_under_disk_budget_runner=False,
                 relocation_custody_root=None,
+                signature_census_output=census_output,
+                signature_census_source_commit="1" * 40,
             )
+
+    def test_signature_census_request_is_paired_and_refuses_existing_output(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "census.json"
+            self.assertEqual(
+                run_vertical_slice.validate_signature_census_request(output, "1" * 40),
+                (output.resolve(), "1" * 40),
+            )
+            with self.assertRaisesRegex(ValueError, "together"):
+                run_vertical_slice.validate_signature_census_request(output, None)
+            with self.assertRaisesRegex(ValueError, "40hex"):
+                run_vertical_slice.validate_signature_census_request(output, "bad")
+            output.write_text("occupied", encoding="utf-8")
+            with self.assertRaisesRegex(FileExistsError, "refusing to overwrite"):
+                run_vertical_slice.validate_signature_census_request(output, "1" * 40)
 
     def test_governed_vertical_forwards_relocation_to_run(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

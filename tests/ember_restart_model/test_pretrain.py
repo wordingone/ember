@@ -45,6 +45,37 @@ class PretrainingSegmentTests(unittest.TestCase):
         self.assertEqual(result["expert_examples"], {"vision": 0, "audio": 0, "reasoning": 0, "tool": 0})
         self.assertTrue(all(torch.equal(parameter.detach(), experts_before[name]) for name, parameter in model.named_parameters() if ".experts." in name))
         self.assertFalse(torch.equal(model.token_embedding.weight.detach(), shared_before))
+
+    def test_optional_signature_observer_sees_real_decoded_batch_without_changing_counters(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64,
+        )
+        model = UnifiedDecoder(config, genesis_seed=43)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        observed: list[dict[str, object]] = []
+        record = {
+            "schema_version": "ember-owned-semantic-text-v1",
+            "active_expert": "shared",
+            "token_ids": [8, 9, 10, 11],
+            "target_ids": [9, 10, 11, 12],
+        }
+        result = run_pretraining_segment(
+            model=model,
+            optimizer=optimizer,
+            records=[record],
+            config=config,
+            device=torch.device("cpu"),
+            checkpoint_every=1,
+            checkpoint_callback=lambda _step, _result: None,
+            signature_observer=observed.append,
+            require_complete_coverage=False,
+        )
+        self.assertEqual(result["steps"], 1)
+        self.assertEqual(result["tokens_seen"], 4)
+        self.assertEqual(len(observed), 1)
+        self.assertEqual(observed[0]["schema_version"], "ember-training-step-signature-v1")
+        self.assertEqual(observed[0]["contract"]["active_expert"], "shared")
+        self.assertEqual(observed[0]["contract"]["tensors"]["input_ids"]["shape"], [1, 4])
     def _record(self, config: RestartDecoderConfig, *, expert: str, sample_id: str | None = None) -> dict[str, object]:
         image = bytes(index % 251 for index in range(48 * 48 * 3))
         audio = (torch.arange(640, dtype=torch.int16) - 320).numpy().tobytes()
