@@ -1,0 +1,59 @@
+{
+  "schema": "ember02-a1-lower-bound-only-amendment/v2",
+  "status": "FROZEN",
+  "issue": 1116,
+  "supersedes": {
+    "path": "docs/spec/ember02-preregistration-v1.md",
+    "sha256": "a671f81b02755178e67d0bcca5b0ec9c4d41650b6a1fd868f5e597b1aa3b3c51",
+    "preregistration_pin": "3d48d3870919bd04cec735f68d0fad45fcfae0b2",
+    "scope": "section-4-A1-both-tiers-fail-only"
+  },
+  "thresholds": {
+    "path": "docs/spec/ember02-preregistration-thresholds-v1.json",
+    "sha256": "12c83ca9ac90f85d5e8c0ce2c8156ac0c2cf9695929b211971ee277582a5eeb5",
+    "change": "NO_THRESHOLD_CHANGE"
+  },
+  "trigger_evidence": {
+    "condition": "BOTH_R1_E8_TIERS_FAIL",
+    "source_commit": "24decc312c771ec0e9309882f24f2a3ba82ea156",
+    "comparison_id": "e8-pair-24de-20260822T1230Z",
+    "charged_budget_contract_sha256": "61c7b28b6b85d623b73ca30b057dc08a44428f96391bc98c796409625535c8f0",
+    "liveness_receipt_sha256": "4d92cfeee4d7e4134a226641176cbc7d097aeaf0840f0b52423781a32a62577c",
+    "parity_receipt_sha256": "4322f089a286438bb7329959ec7027348c81c9c43125aa1aba35d13d5b320ac3",
+    "battery_receipt_sha256": "a583bedc6d7706f53b31d3156a5cb91e36852f2a035770d9aa6d925390674c00",
+    "public_adjudication": {
+      "issue": 1464,
+      "state": "CLOSED",
+      "state_reason": "COMPLETED",
+      "comment_id": 5380707076,
+      "url": "https://github.com/wordingone/ember/issues/1464#issuecomment-5380707076"
+    }
+  },
+  "decision": {
+    "arm": "A1",
+    "arm_scope": "LOWER_BOUND_ONLY",
+    "disclosure": "dense as best-achievable on this boundary",
+    "tier1_mechanism": "FULL_STATE_ADAMW_CPU_OFFLOAD",
+    "tier2_candidate_mechanism": "OWNED_Q_GALORE_PROJECTED_GRADIENT",
+    "tier1": "REJECTED_LIVENESS_BELOW_T08",
+    "tier2": "NOT_ADMITTED_PARITY_OUTSIDE_F11",
+    "r2_funding_allowed": false,
+    "dense_null_claim_allowed": false,
+    "beaten_null_citation_allowed": false,
+    "capability_credit_allowed": false,
+    "result_credit_allowed": false,
+    "capacity_matching": {
+      "total_capacity": "MATCHED",
+      "active_capacity": "MISMATCH_DISCLOSED",
+      "sub_3b_control_allowed": false
+    }
+  },
+  "change_control": {
+    "thresholds": "NO_THRESHOLD_CHANGE",
+    "authority": "NO_NEW_PARALLEL_AUTHORITY",
+    "prior_version_mutated": false,
+    "runtime_consumer_added": false
+  },
+  "execution_boundary": "This amendment records the preregistered both-tiers-fail branch. It activates no runtime, funds no R2 A1 arm, and grants no model, training, checkpoint, benchmark, capability, result, or milestone credit.",
+  "rollback": "Revert this amendment and its contract test together. The immutable v1 preregistration and its executed R1-E8 receipts remain historical authority; rollback does not make A1 eligible for R2 funding or restore a dense-null claim."
+}
