@@ -469,6 +469,9 @@ class TorchCudaGraphBackend:
 
     preparation_regions_per_signature = 4
 
+    def __init__(self) -> None:
+        self._pool: object | None = None
+
     def warmup(
         self,
         region: Callable[[], None],
@@ -490,8 +493,10 @@ class TorchCudaGraphBackend:
         if not torch.cuda.is_available():
             raise RuntimeError("CUDA graph capture requires CUDA")
         graph = torch.cuda.CUDAGraph()
-        with torch.cuda.graph(graph):
+        with torch.cuda.graph(graph, pool=self._pool):
             region()
+        if self._pool is None:
+            self._pool = graph.pool()
         return graph
 
 
