@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import sys
 import tempfile
 import unittest
@@ -158,6 +159,21 @@ class TrainingSignatureCensusTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(FileExistsError, "refusing to overwrite"):
                 census.write_receipt(output)
+
+    def test_checked_in_census_is_the_exact_reviewed_full_route_authority(self) -> None:
+        path = ROOT / "docs" / "spec" / "llmq" / "ember-training-signature-census-v1.json"
+        self.assertEqual(
+            hashlib.sha256(path.read_bytes()).hexdigest(),
+            "86e37ad5868da1ef77419d643c3ff31ee0a38b7e9f603b9c0807376958ef5d0c",
+        )
+        census = training_acceleration.load_training_signature_census(path)
+        self.assertEqual(census["source_commit"], "728421bcca5092a89df483f7df804c7177c337a7")
+        self.assertEqual(census["self_sha256"], "329115ccfdc11508da5b4918df08fe8ab95bbe20e483023843877e0d332dda77")
+        self.assertEqual(census["observed_steps"], 4)
+        self.assertEqual(census["signature_count"], 4)
+        self.assertEqual([row["count"] for row in census["signatures"]], [1, 1, 1, 1])
+        self.assertEqual(census["fallbacks"], 0)
+        self.assertFalse(census["activation_enabled"])
 
 
 class CheckpointCaptureProofTests(unittest.TestCase):
