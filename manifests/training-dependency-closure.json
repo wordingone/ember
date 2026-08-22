@@ -33,6 +33,7 @@
     "tools/ember-restart-3b/build_owned_vision_scenes.py",
     "tools/ember-restart-3b/checkpoint_scratch.py",
     "tools/ember-restart-3b/durable_io.py",
+    "tools/ember-restart-3b/host_setup_contract.py",
     "tools/ember-restart-3b/input_identity.py",
     "tools/ember-restart-3b/mint_github_license_partition.py",
     "tools/ember-restart-3b/model.py",
