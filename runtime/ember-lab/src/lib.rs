@@ -9491,7 +9491,9 @@ mod dispatch_binding_snapshot_tests {
         assert_eq!(frozen["admission_state"], "frozen");
         assert_eq!(frozen["reason"], "physical_available_below_survival_floor");
         assert!(
-            running_job_ids_for_protective_stop(&conn).unwrap().is_empty(),
+            running_job_ids_for_protective_stop(&conn)
+                .unwrap()
+                .is_empty(),
             "a physical-only breach must not select a running job for protective stop \
              -- it is an admission-quality signal, not a host-survival condition (#898)"
         );
@@ -9555,6 +9557,8 @@ mod dispatch_binding_snapshot_tests {
             resource_guard_status_from_connection(&conn).unwrap()["admission_state"],
             "open"
         );
-        assert!(running_job_ids_for_protective_stop(&conn).unwrap().is_empty());
+        assert!(running_job_ids_for_protective_stop(&conn)
+            .unwrap()
+            .is_empty());
     }
 }
