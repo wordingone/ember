@@ -211,6 +211,12 @@ def run_dense_a1(
         model.parameters(), contract=load_a1_optimizer_contract(config_path)
     )
     optimizer.initialize_state()
+    # #1464: the whole-model gradient set is the eliminable component of the
+    # OOM composite (CPU optimizer state ~46 GiB + GPU params + GPU grads +
+    # transients exceeded every lawful job-commit cap). Fusing the update
+    # into backward frees each parameter's gradient immediately after its
+    # own contribution lands, so the full gradient set never coexists.
+    optimizer.enable_fused_backward()
     stream = iter(_tokens(Path(token_shards_receipt), Path(shards_root)))
     telemetry_path.parent.mkdir(parents=True, exist_ok=True)
     tokens_seen = 0

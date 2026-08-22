@@ -130,6 +130,9 @@ class FullStateAdamWCPUOffload(torch.optim.Optimizer):
         if len({id(parameter) for parameter in parameters}) != len(parameters):
             _invalid("optimizer parameter inventory contains aliases")
         self.contract = contract
+        self._fused_backward_enabled = False
+        self._fused_hyperparameters_by_id: dict[int, tuple[float, float, float, float, float]] = {}
+        self._fused_hook_handles: list[Any] = []
         super().__init__(parameters, defaults={
             "lr": contract.learning_rate,
             "betas": (contract.beta1, contract.beta2),
@@ -241,12 +244,117 @@ class FullStateAdamWCPUOffload(torch.optim.Optimizer):
         self._require_complete_state()
 
     @torch.no_grad()
+    def _apply_parameter_update(
+        self,
+        parameter: torch.nn.Parameter,
+        *,
+        learning_rate: float,
+        beta1: float,
+        beta2: float,
+        epsilon: float,
+        weight_decay: float,
+    ) -> None:
+        """The one AdamW update, shared verbatim by the non-fused loop in
+        ``step`` and the per-parameter hook installed by
+        ``enable_fused_backward``. Callers guarantee ``parameter.grad`` is
+        not None."""
+        if parameter.grad.is_sparse:
+            _invalid("sparse gradients are not admitted by full-state AdamW")
+        state = self.state[parameter]
+        gradient = parameter.grad.detach().to(device="cpu", dtype=torch.float32)
+        state["step"] += 1
+        step = state["step"]
+        master = state["master_copy"]
+        exp_avg = state["exp_avg"]
+        exp_avg_sq = state["exp_avg_sq"]
+        master.mul_(1.0 - learning_rate * weight_decay)
+        exp_avg.mul_(beta1).add_(gradient, alpha=1.0 - beta1)
+        exp_avg_sq.mul_(beta2).addcmul_(gradient, gradient, value=1.0 - beta2)
+        bias_correction1 = 1.0 - beta1**step
+        bias_correction2 = 1.0 - beta2**step
+        denominator = exp_avg_sq.sqrt().div_(math.sqrt(bias_correction2)).add_(epsilon)
+        master.addcdiv_(exp_avg, denominator, value=-(learning_rate / bias_correction1))
+        parameter.copy_(master.to(device=parameter.device, dtype=parameter.dtype))
+
+    def enable_fused_backward(self) -> None:
+        """Fuse the per-parameter update into backward (#1464): registers a
+        ``register_post_accumulate_grad_hook`` on every registered parameter
+        (the documented torch fused-optimizer-into-backward pattern) that
+        applies the exact update ``step`` otherwise applies, then frees the
+        parameter's gradient immediately -- so the whole-model gradient set
+        never needs to coexist with the next layer's gradient in device
+        memory. Idempotent: a second call is a no-op.
+
+        Safe under gradient checkpointing (backward walks the recomputed
+        graph last-layer-first): a post-accumulate-grad hook fires only
+        after every use of that leaf tensor in the current backward has
+        contributed its gradient, so a parameter used more than once (the
+        tied token-embedding / lm_head weight accumulates from both the
+        embedding lookup and the output projection) still applies its
+        update exactly once, after both contributions have landed.
+
+        Once enabled, ``step`` no longer performs the update itself; it
+        only verifies no registered parameter still holds an unconsumed
+        accumulated gradient (see ``step``) -- the hook already guarantees
+        every parameter that DOES accumulate a gradient gets its update
+        applied and its gradient freed before backward returns, so a
+        leftover ``.grad`` can only mean a hook failed to fire or was never
+        registered. This deliberately does NOT require every registered
+        parameter to have received a gradient this cycle: a real
+        ``DenseA1Decoder`` registers ``image_projector``/``audio_projector``
+        parameters that a text-only forward pass never touches, and the
+        non-fused path already tolerates this identically
+        (``if parameter.grad is None: continue``). A stricter
+        every-parameter-applied check was tried first and refused on step 1
+        of the real training loop precisely because of those modality
+        projectors -- this is the real-path-tested invariant instead.
+        """
+        if self._fused_backward_enabled:
+            return
+        self._require_complete_state()
+        for group in self.param_groups:
+            learning_rate = float(group["lr"])
+            beta1, beta2 = group["betas"]
+            epsilon = float(group["eps"])
+            weight_decay = float(group["weight_decay"])
+            for parameter in group["params"]:
+                self._fused_hyperparameters_by_id[id(parameter)] = (
+                    learning_rate, beta1, beta2, epsilon, weight_decay,
+                )
+                handle = parameter.register_post_accumulate_grad_hook(self._fused_backward_hook)
+                self._fused_hook_handles.append(handle)
+        self._fused_backward_enabled = True
+
+    def _fused_backward_hook(self, parameter: torch.nn.Parameter) -> None:
+        if parameter.grad is None:
+            return
+        learning_rate, beta1, beta2, epsilon, weight_decay = self._fused_hyperparameters_by_id[id(parameter)]
+        self._apply_parameter_update(
+            parameter,
+            learning_rate=learning_rate,
+            beta1=beta1,
+            beta2=beta2,
+            epsilon=epsilon,
+            weight_decay=weight_decay,
+        )
+        parameter.grad = None
+
+    @torch.no_grad()
     def step(self, closure: Any | None = None) -> Any | None:
         self._require_complete_state()
         loss = None
         if closure is not None:
             with torch.enable_grad():
                 loss = closure()
+        if self._fused_backward_enabled:
+            leaked = [parameter for parameter in self._parameters() if parameter.grad is not None]
+            if leaked:
+                raise A1Refusal(
+                    A1RefusalCode.A1_OPTIMIZER_STATE_INCOMPLETE,
+                    f"{len(leaked)} registered parameter(s) hold an accumulated gradient "
+                    "that the fused backward hook did not apply this cycle",
+                )
+            return loss
         for group in self.param_groups:
             learning_rate = float(group["lr"])
             beta1, beta2 = group["betas"]
@@ -255,21 +363,12 @@ class FullStateAdamWCPUOffload(torch.optim.Optimizer):
             for parameter in group["params"]:
                 if parameter.grad is None:
                     continue
-                if parameter.grad.is_sparse:
-                    _invalid("sparse gradients are not admitted by full-state AdamW")
-                state = self.state[parameter]
-                gradient = parameter.grad.detach().to(device="cpu", dtype=torch.float32)
-                state["step"] += 1
-                step = state["step"]
-                master = state["master_copy"]
-                exp_avg = state["exp_avg"]
-                exp_avg_sq = state["exp_avg_sq"]
-                master.mul_(1.0 - learning_rate * weight_decay)
-                exp_avg.mul_(beta1).add_(gradient, alpha=1.0 - beta1)
-                exp_avg_sq.mul_(beta2).addcmul_(gradient, gradient, value=1.0 - beta2)
-                bias_correction1 = 1.0 - beta1**step
-                bias_correction2 = 1.0 - beta2**step
-                denominator = exp_avg_sq.sqrt().div_(math.sqrt(bias_correction2)).add_(epsilon)
-                master.addcdiv_(exp_avg, denominator, value=-(learning_rate / bias_correction1))
-                parameter.copy_(master.to(device=parameter.device, dtype=parameter.dtype))
+                self._apply_parameter_update(
+                    parameter,
+                    learning_rate=learning_rate,
+                    beta1=beta1,
+                    beta2=beta2,
+                    epsilon=epsilon,
+                    weight_decay=weight_decay,
+                )
         return loss
