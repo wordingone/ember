@@ -23,6 +23,10 @@
     "tools/ember-restart-3b/a1_energy_apportionment.py",
     "tools/ember-restart-3b/a1_execution.py",
     "tools/ember-restart-3b/a1_optimizer.py",
+    "tools/ember-restart-3b/a1_tier2_checkpoint.py",
+    "tools/ember-restart-3b/a1_tier2_contract.py",
+    "tools/ember-restart-3b/a1_tier2_execution.py",
+    "tools/ember-restart-3b/a1_tier2_optimizer.py",
     "tools/ember-restart-3b/batch.py",
     "tools/ember-restart-3b/build_owned_audio_frames.py",
     "tools/ember-restart-3b/build_owned_reasoning_tool_trajectories.py",
@@ -60,6 +64,7 @@
     "scripts/launch-ember-cli.ps1",
     "tokenizer/tokenizer.json",
     "tools/ember-restart-3b/ember-restart-3b-a1.json",
+    "tools/ember-restart-3b/ember-restart-3b-a1-tier2.json",
     "tools/ember-restart-3b/checkpoint-low-commit-deferral-policy.json"
   ],
   "data_declaration_note": "Data dependencies are declared rather than walked: a static walker cannot honestly prove which JSON a program reads, and a fabricated 'machine-detected' data edge would be worse than an explicit declaration. Every entry is a runtime input of the training chain -- the repo-relative constants in closure members (production_rung.SHARD_RELATIVE/RECEIPT_RELATIVE/TOKENIZER_RELATIVE/CONFIG_RELATIVE, text_lab_corpus._AUTHORITY_INDEX, run_vertical_slice's deferral policy and model config), the launch surface the certificate already binds by bytes (Ember.cmd as cli_binary_sha256, plus the launcher it invokes), and manifests/python-environment-v1.json, which pins the third-party imports (tokenizers, torch) that live outside the repo and therefore outside any path hash. All are inside the closure hash, so changing one demands re-verification.",

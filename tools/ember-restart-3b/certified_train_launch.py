@@ -232,7 +232,14 @@ A1_RUN_SPEC_KEYS = {
     "a1_checkpoint_interval",
     "a1_telemetry_path",
 }
-A1_FAMILIES = {"dense-tier1-full-state-adamw-cpu-offload-v1"}
+A1_TIER2_RUN_SPEC_KEYS = {
+    "a1_tier2_contract", "a1_tier2_contract_sha256",
+    "a1_liveness_receipt", "a1_liveness_receipt_sha256",
+}
+A1_FAMILIES = {
+    "dense-tier1-full-state-adamw-cpu-offload-v1",
+    "dense-tier2-owned-q-galore-v1",
+}
 A1_CONFIG_SHA256 = "563331b746619788f01900f4d951df29e4c6549c937a4662bac76234f5d71edc"
 OPTIONAL_RUN_SPEC_KEYS = (
     {"training_verify_receipt_path", "training_verify_receipt_sha256"}
@@ -244,6 +251,7 @@ OPTIONAL_RUN_SPEC_KEYS = (
     | RECEIPT_CUSTODY_RUN_SPEC_KEYS
     | SEMANTIC_REPRODUCTION_RUN_SPEC_KEYS
     | A1_RUN_SPEC_KEYS
+    | A1_TIER2_RUN_SPEC_KEYS
 )
 CHECKPOINT_MANIFEST_NAME = "checkpoint-manifest.json"
 CONFIG_RELATIVE_PATH = "configs/ember-restart-3b.json"
@@ -479,6 +487,10 @@ class ValidatedLaunch(NamedTuple):
     a1_host_commit_reserve_gib: int | None = None
     a1_gpu_free_margin_gib: int | None = None
     a1_b_custody_floor_gib: int | None = None
+    a1_tier2_contract: pathlib.Path | None = None
+    a1_liveness_receipt: pathlib.Path | None = None
+    a1_tier2_contract_sha256: str | None = None
+    a1_liveness_receipt_sha256: str | None = None
 
 
 class A1Tier(str, Enum):
@@ -507,6 +519,10 @@ class A1DiscriminatingRequest(NamedTuple):
     host_commit_reserve_gib: int
     gpu_free_margin_gib: int
     b_custody_floor_gib: int
+    tier2_contract: pathlib.Path | None
+    liveness_receipt: pathlib.Path | None
+    tier2_contract_sha256: str | None
+    liveness_receipt_sha256: str | None
 
 
 def _canonical_bytes(value: object) -> bytes:
@@ -1922,6 +1938,64 @@ def _a1_resource_authority(authorized: dict[str, Any]) -> tuple[int, int, int]:
     return values[0], values[1], values[2]
 
 
+def _validate_tier2_authority_inputs(
+    run_spec: dict[str, Any], run_spec_path: pathlib.Path, repo_root: pathlib.Path
+) -> tuple[pathlib.Path, pathlib.Path, str, str]:
+    present = {key for key in A1_TIER2_RUN_SPEC_KEYS if run_spec.get(key) is not None}
+    if present != A1_TIER2_RUN_SPEC_KEYS:
+        missing = sorted(A1_TIER2_RUN_SPEC_KEYS - present)
+        raise ValueError(
+            "Tier-2 A1 launch requires " + (missing[0] if missing else "the complete authority tuple")
+        )
+    contract_path = pathlib.Path(_require_a1_string(run_spec["a1_tier2_contract"], "a1_tier2_contract"))
+    liveness_path = pathlib.Path(_require_a1_string(run_spec["a1_liveness_receipt"], "a1_liveness_receipt"))
+    if not contract_path.is_absolute():
+        contract_path = repo_root / contract_path
+    if not liveness_path.is_absolute():
+        liveness_path = run_spec_path.parent / liveness_path
+    contract_sha = _require_sha256(run_spec["a1_tier2_contract_sha256"], "a1_tier2_contract_sha256")
+    liveness_sha = _require_sha256(run_spec["a1_liveness_receipt_sha256"], "a1_liveness_receipt_sha256")
+    if _file_sha256(contract_path, "Tier-2 contract") != contract_sha:
+        raise ValueError("Tier-2 contract raw SHA-256 mismatch")
+    if _file_sha256(liveness_path, "Tier-2 liveness receipt") != liveness_sha:
+        raise ValueError("Tier-2 liveness receipt raw SHA-256 mismatch")
+    contract = _load_json(contract_path, "Tier-2 contract")
+    if (
+        contract.get("schema_version") != "ember-restart-3b-a1-tier2-v1"
+        or contract.get("tier") != "TIER_2"
+        or contract.get("mechanism") != "OWNED_Q_GALORE_PROJECTED_GRADIENT"
+        or contract.get("projection", {}).get("max_rank") != 512
+        or contract.get("projection", {}).get("refresh_gap_steps") != 200
+        or contract.get("projection", {}).get("scale") != 0.25
+        or contract.get("projection", {}).get("moment_refresh_policy")
+        != "carry_quantized_moments_without_reset_or_reprojection"
+        or contract.get("quantization", {}).get("projector_format") != "SIGNED_INT4_SYMMETRIC"
+        or contract.get("quantization", {}).get("first_moment_format") != "SIGNED_INT8_SYMMETRIC"
+        or contract.get("quantization", {}).get("second_moment_format") != "UNSIGNED_UINT8"
+        or contract.get("quantization", {}).get("block_size") != 256
+        or contract.get("determinism", {}).get("random_or_stale_fallback") is not False
+    ):
+        raise ValueError("Tier-2 contract identity or ruled mechanism drifted")
+    liveness = _load_json(liveness_path, "Tier-2 liveness receipt")
+    unsigned = {key: value for key, value in liveness.items() if key != "receipt_sha256"}
+    expected_self = hashlib.sha256(
+        json.dumps(unsigned, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+    if liveness.get("receipt_sha256") != expected_self:
+        raise ValueError("Tier-2 liveness receipt self digest mismatch")
+    threshold_sha = _load_json(
+        repo_root / "tools" / "ember-restart-3b" / "ember-restart-3b-a1.json",
+        "canonical A1 config",
+    ).get("thresholds", {}).get("sha256")
+    if (
+        liveness.get("schema_version") != "ember02-r1-e8-liveness-v1"
+        or liveness.get("thresholds_sha256") != threshold_sha
+        or liveness.get("verdict") != "FALLBACK_REQUIRED"
+    ):
+        raise ValueError("Tier-2 liveness authority must be FALLBACK_REQUIRED with exact thresholds")
+    return contract_path, liveness_path, contract_sha, liveness_sha
+
+
 def _validate_a1_request(
     run_spec: dict[str, Any],
     run_spec_path: pathlib.Path,
@@ -1955,8 +2029,26 @@ def _validate_a1_request(
     }[tier]
     if mechanism is not expected_mechanism:
         raise ValueError("run spec A1 tier/mechanism binding is invalid")
-    if tier is not A1Tier.TIER_1:
-        raise ValueError("certified dense A1 runner currently authorizes TIER_1 only")
+    expected_family = {
+        A1Tier.TIER_1: "dense-tier1-full-state-adamw-cpu-offload-v1",
+        A1Tier.TIER_2: "dense-tier2-owned-q-galore-v1",
+    }[tier]
+    if family != expected_family:
+        raise ValueError("run spec A1 family/tier/mechanism binding is invalid")
+    tier2_contract: pathlib.Path | None = None
+    liveness_receipt: pathlib.Path | None = None
+    tier2_contract_sha256: str | None = None
+    liveness_receipt_sha256: str | None = None
+    tier2_present = {key for key in A1_TIER2_RUN_SPEC_KEYS if run_spec.get(key) is not None}
+    if tier is A1Tier.TIER_2:
+        (
+            tier2_contract, liveness_receipt,
+            tier2_contract_sha256, liveness_receipt_sha256,
+        ) = _validate_tier2_authority_inputs(
+            run_spec, run_spec_path, repo_root
+        )
+    elif tier2_present:
+        raise ValueError("Tier-1 A1 launch must not declare Tier-2 authority inputs")
 
     sequence_length = _require_a1_positive_int(
         run_spec["a1_sequence_length"], "a1_sequence_length"
@@ -2161,6 +2253,10 @@ def _validate_a1_request(
         host_commit_reserve_gib=host_commit_reserve_gib,
         gpu_free_margin_gib=gpu_free_margin_gib,
         b_custody_floor_gib=b_custody_floor_gib,
+        tier2_contract=tier2_contract,
+        liveness_receipt=liveness_receipt,
+        tier2_contract_sha256=tier2_contract_sha256,
+        liveness_receipt_sha256=liveness_receipt_sha256,
     )
 
 
@@ -3241,6 +3337,10 @@ def validate_certified_request(
         a1_b_custody_floor_gib=(
             None if a1 is None else a1.b_custody_floor_gib
         ),
+        a1_tier2_contract=None if a1 is None else a1.tier2_contract,
+        a1_liveness_receipt=None if a1 is None else a1.liveness_receipt,
+        a1_tier2_contract_sha256=None if a1 is None else a1.tier2_contract_sha256,
+        a1_liveness_receipt_sha256=None if a1 is None else a1.liveness_receipt_sha256,
         authority_paths=tuple(authority_paths),
     )
 
@@ -3280,7 +3380,7 @@ def build_runner_argv(
     # and not an alias for governed-vertical's sparse UnifiedDecoder route.
     if launch.a1_family is not None:
         argv += [
-            "a1-dense-tier1",
+            "a1-dense-tier2" if launch.a1_tier is A1Tier.TIER_2 else "a1-dense-tier1",
             "--seed",
             str(launch.seed),
             "--artifact-root",
@@ -3312,6 +3412,17 @@ def build_runner_argv(
             "--telemetry-run-id",
             launch.run_id,
         ]
+        if launch.a1_tier is A1Tier.TIER_2:
+            argv += [
+                "--tier2-contract",
+                str(launch.a1_tier2_contract),
+                "--tier2-contract-sha256",
+                str(launch.a1_tier2_contract_sha256),
+                "--liveness-receipt",
+                str(launch.a1_liveness_receipt),
+                "--liveness-receipt-sha256",
+                str(launch.a1_liveness_receipt_sha256),
+            ]
         return argv
     # A launch that declares no specialist route reaches only the
     # governed-vertical tail below, so its argv is byte-identical to a
@@ -4121,7 +4232,10 @@ def _apportion_a1_step_energy(
 def _finalize_a1_packet_a(repo_root: pathlib.Path, launch: ValidatedLaunch) -> None:
     """Load the dense finalizer from this tree only after the energy window."""
 
-    module_path = repo_root / "tools" / "ember-restart-3b" / "a1_execution.py"
+    tier2 = launch.a1_tier is A1Tier.TIER_2
+    module_path = repo_root / "tools" / "ember-restart-3b" / (
+        "a1_tier2_execution.py" if tier2 else "a1_execution.py"
+    )
     tools_directory = str(module_path.parent)
     inserted = tools_directory not in sys.path
     if inserted:
@@ -4134,19 +4248,40 @@ def _finalize_a1_packet_a(repo_root: pathlib.Path, launch: ValidatedLaunch) -> N
             raise RuntimeError("dense A1 finalizer cannot be loaded")
         module = importlib.util.module_from_spec(specification)
         specification.loader.exec_module(module)
-        module.finalize_tier1_run(
-            artifact_root=launch.artifact_root,
-            energy_receipt=launch.artifact_root / "energy-proxy-receipt.json",
-            thresholds_path=(
-                repo_root / "docs" / "spec" / "ember02-preregistration-thresholds-v1.json"
-            ),
-            expected_source_commit=launch.public_master_sha,
-            expected_certified_launch_sha256=launch.run_spec_sha256,
-            expected_comparison_authority=launch.a1_comparison_authority,
-        )
+        common = {
+            "artifact_root": launch.artifact_root,
+            "energy_receipt": launch.artifact_root / "energy-proxy-receipt.json",
+            "thresholds_path": repo_root / "docs" / "spec" / "ember02-preregistration-thresholds-v1.json",
+            "expected_source_commit": launch.public_master_sha,
+            "expected_certified_launch_sha256": launch.run_spec_sha256,
+            "expected_comparison_authority": launch.a1_comparison_authority,
+        }
+        if tier2:
+            module.finalize_tier2_run(
+                **common,
+                expected_tier2_contract=launch.a1_tier2_contract,
+                expected_liveness_receipt=launch.a1_liveness_receipt,
+            )
+        else:
+            module.finalize_tier1_run(**common)
     finally:
         if inserted:
             sys.path.remove(tools_directory)
+
+
+def _certified_child_environment(launch: ValidatedLaunch) -> dict[str, str]:
+    child_env = os.environ.copy()
+    child_env["PYTHONDONTWRITEBYTECODE"] = "1"
+    if launch.a1_family is not None:
+        child_env["EMBER_A1_SOURCE_COMMIT"] = launch.public_master_sha
+        child_env["EMBER_A1_CERTIFIED_LAUNCH_SHA256"] = launch.run_spec_sha256
+        if launch.a1_tier is A1Tier.TIER_2:
+            # CUDA's deterministic GEMM contract must exist before the child
+            # initializes a CUDA context.  The dedicated runner child owns its
+            # environment, so an ambient conflicting value is replaced rather
+            # than inherited as undeclared mechanism drift.
+            child_env["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+    return child_env
 
 
 def execute_validated_launch(
@@ -4175,11 +4310,7 @@ def execute_validated_launch(
     # argv is certificate-visible (an execution receipt pins argv[1] to the
     # fixed runner path) so bytecode suppression rides the spawn env instead
     # of an -B argv insertion, which would shift that pinned position.
-    child_env = os.environ.copy()
-    child_env["PYTHONDONTWRITEBYTECODE"] = "1"
-    if launch.a1_family is not None:
-        child_env["EMBER_A1_SOURCE_COMMIT"] = launch.public_master_sha
-        child_env["EMBER_A1_CERTIFIED_LAUNCH_SHA256"] = launch.run_spec_sha256
+    child_env = _certified_child_environment(launch)
     # R1-E5 energy sidecar rides only REAL launches: an injected run_process
     # is a test double with no child process to meter, and metering a fake
     # would slow every launcher test by the idle-baseline interval. The
