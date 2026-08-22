@@ -146,3 +146,43 @@ def test_enable_fused_backward_is_idempotent_and_registers_hooks_once() -> None:
     assert optimizer.state[parameter]["step"] == 1
     assert parameter.grad is None
     optimizer.step()  # single application this cycle satisfies completeness
+
+
+def test_full_gradient_norm_accumulator_includes_one_dimensional_gradients() -> None:
+    """Catches dropping 1-D parameters or summing norms instead of squares."""
+    optimizer_module = importlib.import_module("a1_optimizer")
+    accumulator = optimizer_module.FullGradientNormAccumulator()
+    accumulator.accumulate(torch.tensor([3.0, 4.0]))
+    accumulator.accumulate(torch.tensor([12.0]))
+    assert accumulator.finish_step() == pytest.approx(13.0)
+
+
+def test_full_gradient_norm_accumulator_refuses_empty_and_double_finish() -> None:
+    """Catches publishing a vacuous or stale norm for a training step."""
+    dense = importlib.import_module("a1_dense")
+    optimizer_module = importlib.import_module("a1_optimizer")
+    empty = optimizer_module.FullGradientNormAccumulator()
+    with pytest.raises(dense.A1Refusal):
+        empty.finish_step()
+
+    used = optimizer_module.FullGradientNormAccumulator()
+    used.accumulate(torch.tensor([1.0]))
+    assert used.finish_step() == pytest.approx(1.0)
+    with pytest.raises(dense.A1Refusal):
+        used.finish_step()
+
+
+def test_fused_hook_captures_full_gradient_norm_before_gradient_release() -> None:
+    """Catches measuring after the fused hook has cleared parameter.grad."""
+    optimizer_module = importlib.import_module("a1_optimizer")
+    parameter = torch.nn.Parameter(torch.tensor([1.0, -2.0]))
+    contract = optimizer_module.load_a1_optimizer_contract()
+    optimizer = optimizer_module.FullStateAdamWCPUOffload([parameter], contract=contract)
+    optimizer.initialize_state()
+    optimizer.enable_fused_backward()
+
+    parameter.grad = torch.tensor([3.0, 4.0])
+    optimizer._fused_backward_hook(parameter)
+    assert parameter.grad is None
+    optimizer.step()
+    assert optimizer.finish_gradient_norm() == pytest.approx(5.0)

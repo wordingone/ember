@@ -64,7 +64,8 @@ def _write_jsonl(path: Path, rows: list[dict]) -> None:
 
 def test_train_step_envelope_matches_frozen_shape() -> None:
     event = A1_EXECUTION._train_step_envelope(
-        run_id="a1run", step=3, tokens=1024, loss=0.5, wall_seconds=0.125,
+        run_id="a1run", step=3, tokens=1024, loss=0.5, grad_norm=13.0,
+        wall_seconds=0.125,
     )
     assert event["kind"] == "train_step"
     assert event["source"] == "ember-restart-3b"
@@ -78,6 +79,7 @@ def test_train_step_envelope_matches_frozen_shape() -> None:
     # for a1_e8_evidence's Decimal(str(value)) reopen path in every case
     # (e.g. NaN/inf), so the producer's own numeric floor stays authoritative.
     assert isinstance(payload["loss"], str)
+    assert payload["grad_norm"] == "13.000000000000"
     assert isinstance(payload["wall_seconds"], str)
     assert float(payload["wall_seconds"]) == pytest.approx(0.125)
     # The deliberate residual: no fabricated energy field.
@@ -93,13 +95,15 @@ def test_wired_fields_are_consumer_compatible(tmp_path: Path) -> None:
     rows = []
     for step, (tokens, wall) in enumerate([(170, 0.10), (170, 0.11), (170, 0.09)], start=1):
         event = A1_EXECUTION._train_step_envelope(
-            run_id="a1run", step=step, tokens=tokens, loss=1.0 / step, wall_seconds=wall,
+            run_id="a1run", step=step, tokens=tokens, loss=1.0 / step,
+            grad_norm=1.0 + step, wall_seconds=wall,
         )
         event["payload"]["proxy_joules"] = "1.0"  # external sampler, not this producer
         rows.append(event)
     # A different run_id in the same file must be filtered out by the real consumer.
     other_run_event = A1_EXECUTION._train_step_envelope(
-        run_id="other-run", step=1, tokens=999, loss=1.0, wall_seconds=1.0,
+        run_id="other-run", step=1, tokens=999, loss=1.0, grad_norm=2.0,
+        wall_seconds=1.0,
     )
     other_run_event["payload"]["proxy_joules"] = "1.0"
     rows.append(other_run_event)
@@ -127,7 +131,8 @@ def test_missing_proxy_joules_is_the_only_refusal_reason(tmp_path: Path) -> None
     telemetry = tmp_path / "a1-telemetry.jsonl"
     rows = [
         A1_EXECUTION._train_step_envelope(
-            run_id="a1run", step=step, tokens=170, loss=1.0, wall_seconds=0.1,
+            run_id="a1run", step=step, tokens=170, loss=1.0,
+            grad_norm=2.0, wall_seconds=0.1,
         )
         for step in (1, 2, 3)
     ]
