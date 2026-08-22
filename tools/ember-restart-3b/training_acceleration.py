@@ -32,7 +32,7 @@ _CLOSE_KEYS = {"minimum_tokens_per_second_exclusive", "require_both_mechanisms",
 _KERNEL_RECEIPT_KEYS = {
     "schema_version", "kernel", "compute_capability", "activation_dtype", "weight_dtype", "output_dtype",
     "activation_operand_layout", "weight_operand_layout", "per_forward_weight_materialization_copies",
-    "weight_refreshes", "dispatches", "fallbacks",
+    "accumulation_mode", "weight_refreshes", "dispatches", "fallbacks",
 }
 _CHECKPOINT_IDENTITY_KEYS = {
     "graph_signature_sha256", "fp8_kernel_receipt_sha256", "checkpoint_region_sha256",
@@ -408,6 +408,7 @@ class DynamicFp8DownProjection(nn.Module):
             "activation_operand_layout": "row_major_contiguous",
             "weight_operand_layout": "column_major_transposed_view",
             "per_forward_weight_materialization_copies": 0,
+            "accumulation_mode": "fast_accum",
             "weight_refreshes": self._weight_refreshes,
             "dispatches": self._dispatches,
             "fallbacks": self._fallbacks,
@@ -428,6 +429,8 @@ def validate_fp8_kernel_receipt(value: Mapping[str, object]) -> dict[str, object
         raise ValueError("FP8 kernel receipt operand layout does not match the reviewed SM89 contract")
     if value["per_forward_weight_materialization_copies"] != 0:
         raise ValueError("FP8 kernel receipt must prove zero per-forward weight materialization copies")
+    if value["accumulation_mode"] != "fast_accum":
+        raise ValueError("FP8 kernel receipt must pin torch._scaled_mm fast accumulation")
     for key in ("weight_refreshes", "dispatches", "fallbacks"):
         if type(value[key]) is not int or int(value[key]) < 0:
             raise ValueError(f"FP8 kernel receipt {key} must be a nonnegative integer")

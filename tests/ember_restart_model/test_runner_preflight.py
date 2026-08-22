@@ -1120,6 +1120,8 @@ class RunnerPreflightTests(unittest.TestCase):
             expected_receipt_sha256="r" * 64,
             expected_tokenizer_sha256="t" * 64,
             expected_architecture_sha256="a" * 64,
+            admitted_row_set_sha256=None,
+            receipt_custody_root=None,
             steps=1,
             sequence_length=1024,
             checkpoint_interval=32,

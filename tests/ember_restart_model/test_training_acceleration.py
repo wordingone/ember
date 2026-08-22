@@ -240,6 +240,7 @@ class Fp8DownProjectionTests(unittest.TestCase):
         self.assertEqual(receipt["activation_operand_layout"], "row_major_contiguous")
         self.assertEqual(receipt["weight_operand_layout"], "column_major_transposed_view")
         self.assertEqual(receipt["per_forward_weight_materialization_copies"], 0)
+        self.assertEqual(receipt["accumulation_mode"], "fast_accum")
         self.assertEqual(receipt["weight_refreshes"], 2)
 
     def test_real_kernel_receipt_requires_sm89_layout_and_zero_forward_weight_copies(self) -> None:
@@ -253,6 +254,7 @@ class Fp8DownProjectionTests(unittest.TestCase):
             "activation_operand_layout": "row_major_contiguous",
             "weight_operand_layout": "column_major_transposed_view",
             "per_forward_weight_materialization_copies": 0,
+            "accumulation_mode": "fast_accum",
             "weight_refreshes": 2,
             "dispatches": 1,
             "fallbacks": 0,
@@ -262,10 +264,11 @@ class Fp8DownProjectionTests(unittest.TestCase):
             ("compute_capability", "9.0"),
             ("weight_operand_layout", "row_major_copy"),
             ("per_forward_weight_materialization_copies", 1),
+            ("accumulation_mode", "precise_accum"),
         ):
             invalid = dict(valid)
             invalid[key] = value
-            with self.assertRaisesRegex(ValueError, "SM89|layout|materialization"):
+            with self.assertRaisesRegex(ValueError, "SM89|layout|materialization|accumulation"):
                 training_acceleration.validate_fp8_kernel_receipt(invalid)
 
     def test_fp8_site_refuses_non_bfloat16_master_or_activation(self) -> None:
