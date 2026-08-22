@@ -6,10 +6,12 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import torch
 
@@ -17,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 import training_acceleration
+from model import RestartDecoderConfig, UnifiedDecoder
 
 
 def _disabled_contract() -> dict[str, object]:
@@ -86,6 +89,100 @@ class TrainingAccelerationPolicyTests(unittest.TestCase):
         self.assertEqual(registry.require(signatures[1]), signatures[1])
         with self.assertRaisesRegex(RuntimeError, "outside the approved signature census"):
             registry.require("d" * 64)
+
+    def test_stage2_authority_reopens_exact_census_bytes(self) -> None:
+        batch = {
+            "input_ids": torch.ones((1, 4), dtype=torch.int64),
+            "target_ids": torch.ones((1, 4), dtype=torch.int64),
+            "image_patches": None,
+            "audio_frames": None,
+            "image_coordinates": torch.empty((0, 2), dtype=torch.int64),
+            "spans": [],
+            "active_expert": "reasoning",
+        }
+        measured = training_acceleration.training_step_signature(
+            batch, gradient_checkpointing=True,
+        )
+        contract = measured["contract"]
+        signature = measured["signature_sha256"]
+        unsigned = {
+            "schema_version": "ember-training-signature-census-v1",
+            "status": "OBSERVED_NOT_ACTIVATED",
+            "source_commit": "1" * 40,
+            "model_config_sha256": "2" * 64,
+            "input_identity_sha256": "3" * 64,
+            "runner_source_sha256": "4" * 64,
+            "capture_region": "forward_loss_backward",
+            "activation_enabled": False,
+            "fallbacks": 0,
+            "observed_steps": 2,
+            "signature_count": 1,
+            "approved_signatures": [signature],
+            "signatures": [{"signature_sha256": signature, "count": 2, "contract": contract}],
+        }
+        receipt = dict(unsigned)
+        receipt["self_sha256"] = hashlib.sha256(
+            json.dumps(unsigned, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "census.json"
+            path.write_text(json.dumps(receipt, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+            raw_sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
+            authority = training_acceleration.load_stage2_activation_authority(
+                path, expected_raw_sha256=raw_sha256,
+            )
+            self.assertEqual(authority.census_raw_sha256, raw_sha256)
+            self.assertEqual(authority.registry.require(signature), signature)
+            with patch.object(
+                training_acceleration.hashlib,
+                "sha256",
+                side_effect=AssertionError("runtime signature resolution must not hash"),
+            ):
+                self.assertEqual(
+                    authority.resolve(batch, gradient_checkpointing=True),
+                    signature,
+                )
+            changed = dict(batch)
+            changed["input_ids"] = torch.ones((1, 5), dtype=torch.int64)
+            with self.assertRaisesRegex(RuntimeError, "outside the approved signature census"):
+                authority.resolve(changed, gradient_checkpointing=True)
+            with self.assertRaisesRegex(ValueError, "raw hash mismatch"):
+                training_acceleration.load_stage2_activation_authority(
+                    path, expected_raw_sha256="b" * 64,
+                )
+
+    def test_fp8_installation_wraps_only_swiglu_down_sites_and_preserves_state_keys(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=16, layers=2, attention_heads=4, vocab_size=64,
+        )
+        model = UnifiedDecoder(config, genesis_seed=19).to(dtype=torch.bfloat16)
+        state_keys = list(model.state_dict())
+        receipt = training_acceleration.install_fp8_down_projections(
+            model, allow_test_device=True,
+        )
+        expected_sites = config.layers * (1 + len(config.expert_names))
+        self.assertEqual(receipt["installed_sites"], expected_sites)
+        self.assertEqual(list(model.state_dict()), state_keys)
+        for layer in model.layers:
+            self.assertIsInstance(layer.shared_ffn.down, training_acceleration.DynamicFp8DownProjection)
+            for expert in layer.experts.values():
+                self.assertIsInstance(expert.down, training_acceleration.DynamicFp8DownProjection)
+        with self.assertRaisesRegex(RuntimeError, "already installed"):
+            training_acceleration.install_fp8_down_projections(model, allow_test_device=True)
+
+    def test_post_optimizer_refresh_touches_only_stale_fp8_sites(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=16, layers=1, attention_heads=4, vocab_size=64,
+        )
+        model = UnifiedDecoder(config, genesis_seed=23).to(dtype=torch.bfloat16)
+        training_acceleration.install_fp8_down_projections(model, allow_test_device=True)
+        sites = list(training_acceleration.iter_fp8_down_projections(model))
+        with torch.no_grad():
+            sites[0].weight.add_(1)
+        refreshed = training_acceleration.refresh_fp8_after_optimizer_step(model)
+        self.assertEqual(refreshed, 1)
+        self.assertEqual(sites[0].kernel_receipt()["weight_refreshes"], 2)
+        self.assertTrue(all(site.kernel_receipt()["weight_refreshes"] == 1 for site in sites[1:]))
 
 
 class TrainingSignatureCensusTests(unittest.TestCase):
