@@ -2137,11 +2137,17 @@ class CheckpointArtifactTests(unittest.TestCase):
         self.assertGreater(
             projection["optimizer_state_tensor_storage_lower_bound_bytes"], 0
         )
-        self.assertGreaterEqual(
+        route_bytes = projection[
+            "optimizer_state_tensor_storage_by_route_bytes"
+        ]
+        self.assertGreater(route_bytes["shared"], 0)
+        self.assertGreater(route_bytes["vision"], 0)
+        self.assertEqual(
             projection[
                 "projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes"
             ],
-            projection["optimizer_state_tensor_storage_lower_bound_bytes"],
+            route_bytes["shared"]
+            + len(checkpoint_artifacts.EXPERT_NAMES) * route_bytes["vision"],
         )
         self.assertGreaterEqual(
             projection[
@@ -2356,7 +2362,7 @@ class CheckpointArtifactTests(unittest.TestCase):
             projection["optimizer_state_tensor_storage_lower_bound_bytes"],
         )
 
-    def test_v5_storage_projection_rejects_partial_multi_route_state(self) -> None:
+    def test_v5_storage_projection_admits_non_lineage_partial_multi_route_state(self) -> None:
         config = RestartDecoderConfig.small_for_tests(
             hidden_size=32, layers=2, attention_heads=4, vocab_size=64
         )
@@ -2372,27 +2378,42 @@ class CheckpointArtifactTests(unittest.TestCase):
         optimizer.zero_grad(set_to_none=True)
 
         with tempfile.TemporaryDirectory() as directory:
-            with self.assertRaisesRegex(
-                ValueError, "post-update optimizer state"
-            ):
-                write_checkpoint_artifacts(
-                    model,
-                    optimizer,
-                    Path(directory) / "v5",
-                    launch_seed=188,
-                    rng_state=_valid_rng_state(),
-                    data_cursor={
-                        "shard": "owned",
-                        "record_index": 2,
-                        "global_step": 2,
-                        "tokens_seen": 6,
-                    },
-                    model_config_sha256="a" * 64,
-                    contract_sha256="b" * 64,
-                    expert_genesis_sha256=model.expert_bank_genesis_hashes(),
-                    max_transient_scratch_bytes=1024**3,
-                    max_serialized_bytes=1024**3,
-                )
+            receipt = write_checkpoint_artifacts(
+                model,
+                optimizer,
+                Path(directory) / "v5",
+                launch_seed=188,
+                rng_state=_valid_rng_state(),
+                data_cursor={
+                    "shard": "owned",
+                    "record_index": 2,
+                    "global_step": 2,
+                    "tokens_seen": 6,
+                },
+                model_config_sha256="a" * 64,
+                contract_sha256="b" * 64,
+                expert_genesis_sha256=model.expert_bank_genesis_hashes(),
+                max_transient_scratch_bytes=1024**3,
+                max_serialized_bytes=1024**3,
+            )
+
+        projection = receipt["storage_projection"]
+        route_bytes = projection[
+            "optimizer_state_tensor_storage_by_route_bytes"
+        ]
+        populated = [route_bytes[name] for name in checkpoint_artifacts.EXPERT_NAMES if route_bytes[name] > 0]
+        expected = (
+            route_bytes["shared"]
+            + sum(populated)
+            + (len(checkpoint_artifacts.EXPERT_NAMES) - len(populated))
+            * max(populated)
+        )
+        self.assertEqual(
+            projection[
+                "projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes"
+            ],
+            expected,
+        )
 
     def test_v5_storage_projection_rejects_multi_route_state_for_specialist_episode(self) -> None:
         config = RestartDecoderConfig.small_for_tests(
@@ -2851,6 +2872,19 @@ class CheckpointArtifactTests(unittest.TestCase):
             )
         self.assertIsNotNone(
             raised.exception.comparison_operands["derived_byte_bound_inputs"]["active_parameters"]
+        )
+        floor_inputs = raised.exception.comparison_operands[
+            "projected_storage_floor_inputs"
+        ]
+        route_bytes = floor_inputs[
+            "optimizer_state_tensor_storage_by_route_bytes"
+        ]
+        self.assertEqual(
+            floor_inputs[
+                "projected_optimizer_state_tensor_storage_lower_bound_bytes"
+            ],
+            route_bytes["shared"]
+            + len(checkpoint_artifacts.EXPERT_NAMES) * route_bytes["vision"],
         )
 
     def test_v5_storage_projection_rejects_rehashed_route_tamper(self) -> None:

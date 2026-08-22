@@ -810,9 +810,14 @@ def _failure_comparison_operands_from_receipt(
         projected_optimizer = projection.get(
             "projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes"
         )
-        if type(optimizer_actual) is int and type(projected_optimizer) is int:
-            route_multiplier = projected_optimizer // max(1, optimizer_actual)
-        else:
+        try:
+            route_multiplier = _optimizer_projection_route_multiplier(
+                routed_optimizer=projection.get(
+                    "optimizer_state_tensor_storage_by_route_bytes", {}
+                ),
+                active_expert=projection.get("active_expert"),
+            )
+        except ValueError:
             route_multiplier = None
         operands = _merge_failure_comparison_operands(
             operands,
@@ -1060,6 +1065,54 @@ def optimizer_covers_every_expert_route(
     return all(routed[name] > 0 for name in EXPERT_NAMES)
 
 
+def _projected_all_expert_optimizer_storage_bytes(
+    *, routed_optimizer: Mapping[str, int], active_expert: str
+) -> int:
+    """Project one routed optimizer state across the closed expert set.
+
+    Shared moments are common to every route and therefore count once.  For a
+    partial expert set, missing symmetric routes are conservatively priced at
+    the largest populated expert route.
+    """
+
+    if (
+        set(routed_optimizer) != {"shared", *EXPERT_NAMES}
+        or any(type(value) is not int or value < 0 for value in routed_optimizer.values())
+        or active_expert not in {"shared", *EXPERT_NAMES}
+    ):
+        raise ValueError("checkpoint optimizer route projection is invalid")
+    specialist_routes = [name for name in EXPERT_NAMES if routed_optimizer[name] > 0]
+    if active_expert != "shared" and routed_optimizer[active_expert] < 1:
+        raise ValueError("checkpoint optimizer route projection is invalid")
+    if specialist_routes == []:
+        return routed_optimizer["shared"]
+    populated = [routed_optimizer[name] for name in specialist_routes]
+    return (
+        routed_optimizer["shared"]
+        + sum(populated)
+        + (len(EXPERT_NAMES) - len(populated)) * max(populated)
+    )
+
+
+def _optimizer_projection_route_multiplier(
+    *, routed_optimizer: Mapping[str, int], active_expert: str
+) -> int:
+    if (
+        set(routed_optimizer) != {"shared", *EXPERT_NAMES}
+        or any(type(value) is not int or value < 0 for value in routed_optimizer.values())
+        or active_expert not in {"shared", *EXPERT_NAMES}
+    ):
+        raise ValueError("checkpoint optimizer route projection is invalid")
+    specialist_routes = [name for name in EXPERT_NAMES if routed_optimizer[name] > 0]
+    if active_expert != "shared" and routed_optimizer[active_expert] < 1:
+        raise ValueError("checkpoint optimizer route projection is invalid")
+    return (
+        1
+        if not specialist_routes or specialist_routes == list(EXPERT_NAMES)
+        else len(EXPERT_NAMES)
+    )
+
+
 def _storage_failure_comparison_operands(
     *,
     model: UnifiedDecoder,
@@ -1085,13 +1138,22 @@ def _storage_failure_comparison_operands(
         shard_storage_lower_bounds=shard_storage_lower_bounds,
         optimizer_state_layout=optimizer_state_layout,
     )
-    specialist_routes = [name for name in EXPERT_NAMES if routed_optimizer[name] > 0]
-    route_multiplier = (
-        1
-        if model.active_expert == "shared" or specialist_routes == list(EXPERT_NAMES)
-        else len(EXPERT_NAMES)
-    )
-    projected_optimizer = optimizer_actual * route_multiplier
+    try:
+        route_multiplier = _optimizer_projection_route_multiplier(
+            routed_optimizer=routed_optimizer,
+            active_expert=model.active_expert,
+        )
+        projected_optimizer = _projected_all_expert_optimizer_storage_bytes(
+            routed_optimizer=routed_optimizer,
+            active_expert=model.active_expert,
+        )
+    except ValueError:
+        # Failure evidence must remain serializable even when the optimizer
+        # route shape itself is the refusal (for example, pre-update state).
+        route_multiplier = (
+            1 if model.active_expert == "shared" else len(EXPERT_NAMES)
+        )
+        projected_optimizer = optimizer_actual * route_multiplier
     projected_floor = sum(shard_storage_lower_bounds.values()) - optimizer_actual + projected_optimizer
     publication_modes = shard_publication_modes or {}
     retained = sorted(path for path, mode in publication_modes.items() if mode == "hardlink")
@@ -1217,34 +1279,29 @@ def _derive_checkpoint_storage_projection(
     specialist_routes = [
         name for name in EXPERT_NAMES if routed_optimizer[name] > 0
     ]
-    if model.active_expert == "shared":
-        route_valid = active_bytes > 0 and specialist_routes == []
-        active_routes = ["shared"]
-    elif specialist_routes == [model.active_expert]:
-        route_valid = active_bytes > 0
-        active_routes = [model.active_expert]
+    if specialist_parent_optimizer_routes is None:
+        route_valid = (
+            routed_optimizer["shared"] > 0
+            and (
+                model.active_expert == "shared"
+                or model.active_expert in specialist_routes
+            )
+        )
+        active_routes = list(specialist_routes) if specialist_routes else ["shared"]
     else:
-        # Post-update optimizer state on multiple expert routes has exactly two
-        # closed admissible shapes. (1) Full-shard vertical training with no
-        # lineage activates every record's routed expert (forward ->
-        # _activate_expert) before its single end-of-run checkpoint (#1316).
-        # (2) A single-specialist lineage episode that exact-resumed a parent
-        # whose own digest-bound storage projection attests initialized state
-        # on every route: load_checkpoint_artifacts restores the parent's
-        # moments verbatim and only the active route trains, so the full set
-        # persists through the episode (#1473 -- the first R2 entry inherited
-        # the r1 root's four routes and lost its trained segment to the
-        # previous single-route admission). Only the CLOSED full set is
-        # admissible either way; partial multi-route state stays rejected, and
-        # a lineage episode whose parent attests less than full coverage
-        # cannot have grown the extra routes legitimately.
+        # A lineage episode may carry exactly its independently attested parent
+        # routes plus the route trained by this episode.  No other populated
+        # optimizer owner is admitted.
+        inherited = set(specialist_parent_optimizer_routes)
+        expected_routes = [
+            name
+            for name in EXPERT_NAMES
+            if name in inherited or name == model.active_expert
+        ]
         route_valid = (
             active_bytes > 0
-            and specialist_routes == list(EXPERT_NAMES)
-            and (
-                specialist_parent_optimizer_routes is None
-                or list(specialist_parent_optimizer_routes) == list(EXPERT_NAMES)
-            )
+            and model.active_expert in EXPERT_NAMES
+            and specialist_routes == expected_routes
         )
         active_routes = list(specialist_routes)
     if optimizer_actual < 1 or not route_valid:
@@ -1255,11 +1312,9 @@ def _derive_checkpoint_storage_projection(
     # directly from model/optimizer state. Shared-only and closed full-route
     # states are therefore already their complete realization floor; a
     # single-specialist state retains the conservative four-route projection.
-    projected_optimizer = optimizer_actual * (
-        1
-        if model.active_expert == "shared"
-        or specialist_routes == list(EXPERT_NAMES)
-        else len(EXPERT_NAMES)
+    projected_optimizer = _projected_all_expert_optimizer_storage_bytes(
+        routed_optimizer=routed_optimizer,
+        active_expert=model.active_expert,
     )
     actual_checkpoint_floor = sum(shard_storage_lower_bounds.values())
     projected_checkpoint_floor = (
@@ -1394,15 +1449,9 @@ def _validate_checkpoint_storage_projection(
         or digest != _canonical_sha256(materialized)
     ):
         raise ValueError("checkpoint storage projection digest mismatch")
-    valid_active_ids = (
-        [["shared"]]
-        if materialized["active_expert"] == "shared"
-        else [[materialized["active_expert"]], list(EXPERT_NAMES)]
-    )
     if (
         materialized["active_expert"] not in {"shared", *EXPERT_NAMES}
-        or materialized["optimizer_state_active_expert_ids"]
-        not in valid_active_ids
+        or not isinstance(materialized["optimizer_state_active_expert_ids"], list)
         or type(materialized["optimizer_state_after_global_step"]) is not int
         or materialized["optimizer_state_after_global_step"] < 1
         or materialized["manifest_written_last"] is not True
@@ -1479,23 +1528,24 @@ def _validate_checkpoint_storage_projection(
     specialist_routes = [
         name for name in EXPERT_NAMES if route_bounds[name] > 0
     ]
+    expected_active_ids = specialist_routes if specialist_routes else ["shared"]
     route_valid = (
-        route_bounds["shared"] > 0 and specialist_routes == []
-        if active_expert == "shared"
-        else route_bounds[active_expert] > 0
-        and specialist_routes
-        == materialized["optimizer_state_active_expert_ids"]
+        route_bounds["shared"] > 0
+        and materialized["optimizer_state_active_expert_ids"]
+        == expected_active_ids
+        and (
+            active_expert == "shared"
+            or active_expert in specialist_routes
+        )
     )
     if not route_valid:
         raise ValueError("checkpoint optimizer route projection is invalid")
     optimizer_actual = materialized[
         "optimizer_state_tensor_storage_lower_bound_bytes"
     ]
-    expected_projected_optimizer = optimizer_actual * (
-        1
-        if active_expert == "shared"
-        or specialist_routes == list(EXPERT_NAMES)
-        else len(EXPERT_NAMES)
+    expected_projected_optimizer = _projected_all_expert_optimizer_storage_bytes(
+        routed_optimizer=route_bounds,
+        active_expert=active_expert,
     )
     optimizer_shard_total = sum(
         bound
@@ -1506,6 +1556,7 @@ def _validate_checkpoint_storage_projection(
         optimizer_shard_total = shard_bounds["optimizer-state.pt"]
     if (
         optimizer_shard_total != optimizer_actual
+        or sum(route_bounds.values()) != optimizer_actual
         or materialized[
             "projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes"
         ]
@@ -1572,12 +1623,11 @@ def _measure_candidate_storage_projection(
     )
     if optimizer_state_layout == "legacy-v1":
         optimizer_actual = measured["optimizer-state.pt"]
-    projected_optimizer = optimizer_actual * (
-        1
-        if projection["active_expert"] == "shared"
-        or projection["optimizer_state_active_expert_ids"]
-        == list(EXPERT_NAMES)
-        else len(EXPERT_NAMES)
+    projected_optimizer = _projected_all_expert_optimizer_storage_bytes(
+        routed_optimizer=projection[
+            "optimizer_state_tensor_storage_by_route_bytes"
+        ],
+        active_expert=projection["active_expert"],
     )
     projected_checkpoint = (
         sum(measured.values()) - optimizer_actual + projected_optimizer
@@ -2806,7 +2856,12 @@ def _write_checkpoint_artifacts_impl(
                     "derived_byte_bound_inputs": comparison_operands["derived_byte_bound_inputs"],
                     "projected_storage_floor_bytes": storage_projection["all_expert_projected_tensor_storage_lower_bound_bytes"],
                     "projected_storage_floor_inputs": {
-                        "route_multiplier": storage_projection["projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes"] // max(1, storage_projection["optimizer_state_tensor_storage_lower_bound_bytes"]),
+                        "route_multiplier": _optimizer_projection_route_multiplier(
+                            routed_optimizer=storage_projection[
+                                "optimizer_state_tensor_storage_by_route_bytes"
+                            ],
+                            active_expert=storage_projection["active_expert"],
+                        ),
                         "active_expert": storage_projection["active_expert"],
                         "optimizer_state_layout": optimizer_state_layout,
                         "optimizer_state_tensor_storage_lower_bound_bytes": storage_projection["optimizer_state_tensor_storage_lower_bound_bytes"],
