@@ -392,6 +392,122 @@ def test_valid_a1_route_projects_a_typed_discriminating_request() -> None:
     assert launch.a1_checkpoint_interval == 1
 
 
+def test_tier1_host_setup_contract_refuses_before_argv_or_spawn() -> None:
+    """Deliberate red: insufficient live commit cannot reach argv or a child."""
+
+    module = launch_fixtures.load_module()
+    launch = module.ValidatedLaunch(
+        certificate_sha256="1" * 64,
+        run_spec_sha256="2" * 64,
+        public_master_sha=launch_fixtures.SHA,
+        closure_sha256=None,
+        artifact_root=Path("artifacts"),
+        custody_root=Path("custody"),
+        runner_receipt=Path("custody/runner.json"),
+        seed=83,
+        write_budget_bytes=16 * 1024**3,
+        max_records=1,
+        max_c_write_gib=0.0,
+        max_b_write_gib=16.0,
+        a1_family=A1_FAMILY,
+        a1_tier=module.A1Tier.TIER_1,
+        a1_mechanism=module.A1Mechanism.FULL_STATE_ADAMW_CPU_OFFLOAD,
+    )
+    with (
+        mock.patch.object(
+            module,
+            "_validate_tier1_host_setup_contract",
+            side_effect=RuntimeError("host setup contract refused"),
+            create=True,
+        ) as contract,
+        mock.patch.object(module, "build_runner_argv") as build_argv,
+    ):
+        with pytest.raises(RuntimeError, match="host setup contract refused"):
+            module.execute_validated_launch(Path("repo"), launch)
+    contract.assert_called_once_with(launch)
+    build_argv.assert_not_called()
+
+
+def test_tier1_host_setup_contract_executes_real_validator_with_measured_commit() -> None:
+    """The live wiring consumes the real profile and validator deterministically."""
+
+    import checkpoint_artifacts
+
+    module = launch_fixtures.load_module()
+    launch = module.ValidatedLaunch(
+        certificate_sha256="1" * 64,
+        run_spec_sha256="2" * 64,
+        public_master_sha=launch_fixtures.SHA,
+        closure_sha256=None,
+        artifact_root=Path("artifacts"),
+        custody_root=Path("custody"),
+        runner_receipt=Path("custody/runner.json"),
+        seed=83,
+        write_budget_bytes=16 * 1024**3,
+        max_records=1,
+        max_c_write_gib=0.0,
+        max_b_write_gib=16.0,
+        a1_family=A1_FAMILY,
+        a1_tier=module.A1Tier.TIER_1,
+        a1_mechanism=module.A1Mechanism.FULL_STATE_ADAMW_CPU_OFFLOAD,
+    )
+
+    admitted_bytes = 64 * 1024**3
+    with mock.patch.object(
+        checkpoint_artifacts,
+        "available_host_commit_bytes",
+        return_value=admitted_bytes,
+    ):
+        disclosure = module._validate_tier1_host_setup_contract(launch)
+    assert disclosure is not None
+    assert set(disclosure) == {
+        "status",
+        "mechanism",
+        "required_headroom_bytes",
+        "available_commit_bytes",
+    }
+    assert disclosure["status"] == "PASS"
+    assert disclosure["mechanism"] == "dense-a1-full-state-cpu-offload"
+    assert disclosure["available_commit_bytes"] == admitted_bytes
+    assert disclosure["required_headroom_bytes"] < admitted_bytes
+
+    refused_bytes = 12 * 1024**3
+    with (
+        mock.patch.object(
+            checkpoint_artifacts,
+            "available_host_commit_bytes",
+            return_value=refused_bytes,
+        ),
+        pytest.raises(RuntimeError, match=r"only 12\.00 GiB is available") as refusal,
+    ):
+        module._validate_tier1_host_setup_contract(launch)
+    assert refusal.value.available_commit_bytes == refused_bytes
+
+
+def test_tier2_does_not_inherit_tier1_host_setup_contract() -> None:
+    """The elevated host profile belongs only to full-state CPU offload."""
+
+    module = launch_fixtures.load_module()
+    launch = module.ValidatedLaunch(
+        certificate_sha256="1" * 64,
+        run_spec_sha256="2" * 64,
+        public_master_sha=launch_fixtures.SHA,
+        closure_sha256=None,
+        artifact_root=Path("artifacts"),
+        custody_root=Path("custody"),
+        runner_receipt=Path("custody/runner.json"),
+        seed=83,
+        write_budget_bytes=16 * 1024**3,
+        max_records=1,
+        max_c_write_gib=0.0,
+        max_b_write_gib=16.0,
+        a1_family=TIER2_FAMILY,
+        a1_tier=module.A1Tier.TIER_2,
+        a1_mechanism=module.A1Mechanism.OWNED_Q_GALORE_PROJECTED_GRADIENT,
+    )
+    assert module._validate_tier1_host_setup_contract(launch) is None
+
+
 def test_valid_a1_route_emits_the_distinct_runner_subcommand() -> None:
     module = launch_fixtures.load_module()
     with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
