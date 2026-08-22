@@ -13,6 +13,7 @@ on:
 permissions:
   contents: read
   pull-requests: read
+  issues: read
 
 concurrency:
   group: repo-policy-gate-${{ github.event.pull_request.number || github.sha }}
@@ -86,12 +87,18 @@ jobs:
           gh api --paginate --slurp \
             "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" \
             > "${RUNNER_TEMP}/pr-files.json"
+          gh api graphql \
+            -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){closingIssuesReferences(first:50){nodes{number}}}}}' \
+            -F owner="${GITHUB_REPOSITORY%%/*}" -F repo="${GITHUB_REPOSITORY#*/}" -F number="${PR_NUMBER}" \
+            --jq '[.data.repository.pullRequest.closingIssuesReferences.nodes[].number]' \
+            > "${RUNNER_TEMP}/pr-closing-issues.json"
           cd "${kernel}"
           python -m scripts.github.live_pr_policy \
             --root "${kernel}" \
             --subject-root "${subject}" \
             --pr-json "${RUNNER_TEMP}/pr.json" \
             --files-json "${RUNNER_TEMP}/pr-files.json" \
+            --closing-issues-json "${RUNNER_TEMP}/pr-closing-issues.json" \
             --event-base-sha "${BASE_SHA}" \
             --event-head-sha "${HEAD_SHA}" \
             --snapshot-output "${RUNNER_TEMP}/pr-policy-snapshot.json"

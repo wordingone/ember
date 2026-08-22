@@ -14,6 +14,7 @@ import unittest
 import yaml
 
 from scripts.github.live_pr_policy import (
+    declared_closing_issue_numbers,
     pinned_head_covers_live_head,
     validate_live_pull_request,
 )
@@ -77,6 +78,7 @@ def human_pr() -> dict[str, object]:
             ".github/workflows/repo-policy-gate.yml",
             "scripts/github/live_pr_policy.py",
         ],
+        "closing_issue_numbers": [],
     }
 
 
@@ -197,6 +199,7 @@ class LivePullRequestPolicyTests(unittest.TestCase):
             ],
             "milestone": None,
             "changed_files": [".github/workflows/ci-pr.yml"],
+            "closing_issue_numbers": [],
         }
         self.assertEqual([], validate_live_pull_request(value))
         for mutation, expected in (
@@ -218,6 +221,85 @@ class LivePullRequestPolicyTests(unittest.TestCase):
         value = human_pr()
         value["changed_files"] = [None]
         self.assertIn("snapshot:changed-files-invalid", validate_live_pull_request(value))
+
+
+class ClosingLinkageTests(unittest.TestCase):
+    """#898, 2026-08-22: an unjustified issue-close via merge linkage is
+    banned, structurally. GitHub's own closing-keyword parser is
+    negation-blind -- a PR body reading "does not close #898" still produced
+    a live closingIssuesReferences entry for #898, and #898 was closed on
+    merge. These are the deliberate-red-then-green proof for the guard that
+    catches that class before merge."""
+
+    def test_declared_closing_line_is_recognized(self) -> None:
+        self.assertEqual(
+            {898}, declared_closing_issue_numbers("Some prose.\n\nCloses #898\n")
+        )
+        self.assertEqual(
+            {12, 34},
+            declared_closing_issue_numbers("fixes #12\nResolved: #34\n"),
+        )
+
+    def test_negated_prose_mention_is_not_a_declaration(self) -> None:
+        # The exact #898 incident shape: a negated sentence containing the
+        # keyword immediately before the issue number is NOT a standalone
+        # declaration line, and must not be treated as one.
+        self.assertEqual(
+            set(), declared_closing_issue_numbers("This PR does not close #898.")
+        )
+        self.assertEqual(
+            set(),
+            declared_closing_issue_numbers("Relates to #898 (see the amendment)."),
+        )
+
+    def test_deliberate_red_unjustified_live_closing_reference_is_refused(self) -> None:
+        """The demonstration this guard must fail on: GitHub's live
+        closingIssuesReferences names #898 (exactly as it did for the real
+        incident), but the body never declares it with its own line --
+        it only contains the same negated prose that fooled GitHub's
+        parser. This is the deliberate-red proof required by the real-path
+        closure rule."""
+        snapshot = human_pr()
+        snapshot["closing_issue_numbers"] = [898]
+        snapshot["body"] = snapshot["body"].replace(
+            "Relates to #1183", "Relates to #898. This PR does not close #898."
+        )
+        errors = validate_live_pull_request(snapshot)
+        self.assertIn("closing-linkage:body-live-mismatch:#898", errors)
+
+    def test_declared_closing_line_satisfies_the_same_live_reference(self) -> None:
+        """The green case: the same live linkage, but the body now declares
+        it explicitly on its own line."""
+        snapshot = human_pr()
+        snapshot["closing_issue_numbers"] = [898]
+        snapshot["body"] = snapshot["body"] + "\nCloses #898\n"
+        self.assertNotIn(
+            "closing-linkage:body-live-mismatch:#898",
+            validate_live_pull_request(snapshot),
+        )
+
+    def test_no_live_closing_references_never_requires_a_declaration(self) -> None:
+        snapshot = human_pr()
+        snapshot["closing_issue_numbers"] = []
+        self.assertEqual([], validate_live_pull_request(snapshot))
+
+    def test_closing_issue_numbers_must_be_a_list_of_positive_ints(self) -> None:
+        for bad_value in (None, "898", [898.0], [-1], [0], "not-a-list"):
+            snapshot = human_pr()
+            snapshot["closing_issue_numbers"] = bad_value
+            with self.subTest(bad_value=bad_value):
+                self.assertIn(
+                    "snapshot:closing-issue-numbers-invalid",
+                    validate_live_pull_request(snapshot),
+                )
+
+    def test_missing_field_is_a_missing_fields_error(self) -> None:
+        snapshot = human_pr()
+        del snapshot["closing_issue_numbers"]
+        self.assertIn(
+            "snapshot:missing-fields:closing_issue_numbers",
+            validate_live_pull_request(snapshot),
+        )
 
 
 

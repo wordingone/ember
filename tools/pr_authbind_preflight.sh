@@ -44,8 +44,9 @@
 #   bash tools/pr_authbind_preflight.sh <PR_NUMBER> [<LOCAL_HEAD_REF>]
 # Exit 0 only if ALL of Step A (repo-guard structural kernel), Step B (PR-body +
 # changed-artifact authority binding), and Step C (the live PR policy: labels,
-# milestone, title grammar, template marker, required body sections, and the
-# label/milestone vocabulary) pass against the merge ref.
+# milestone, title grammar, template marker, required body sections, the
+# label/milestone vocabulary, and the closing-linkage check against the real
+# fetched closingIssuesReferences) pass against the merge ref.
 # Exit 2 on any preflight-validity failure (head mismatch, non-master base,
 # unauthenticated/stale base, mergeable=false or persistently unknown,
 # unresolvable/stale merge ref, non-clean merge, API failure, empty body) —
@@ -233,6 +234,14 @@ step_c() {
     > "$WORK_C/labels.json" 2>/dev/null || return 2
   gh api "repos/${SLUG}/milestones?state=all&per_page=100" --paginate --slurp \
     > "$WORK_C/milestones.json" 2>/dev/null || return 2
+  # A live PR already has a real closingIssuesReferences computed by GitHub;
+  # fetch it rather than guessing, so Step C can actually predict the
+  # closing-linkage check instead of being structurally blind to it.
+  gh api graphql \
+    -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){closingIssuesReferences(first:50){nodes{number}}}}}' \
+    -F owner="${SLUG%%/*}" -F repo="${SLUG#*/}" -F number="${PR}" \
+    --jq '[.data.repository.pullRequest.closingIssuesReferences.nodes[].number]' \
+    > "$WORK_C/closing-issues.json" 2>/dev/null || return 2
   (
     cd "$TMPWT" || exit 2
     PR_C_DIR="$WORK_C" PR_C_BASE="$AUTH_BASE_SHA" PR_C_HEAD="$PUBLIC_HEAD" python -c '
@@ -245,6 +254,7 @@ snapshot = build_snapshot(
     json.loads((work / "files.json").read_text(encoding="utf-8")),
     event_base_sha=os.environ["PR_C_BASE"],
     event_head_sha=os.environ["PR_C_HEAD"],
+    closing_issue_numbers=json.loads((work / "closing-issues.json").read_text(encoding="utf-8")),
 )
 intent = {k: v for k, v in snapshot.items() if k not in DERIVED_FIELDS}
 (work / "intent.json").write_text(json.dumps(intent), encoding="utf-8")

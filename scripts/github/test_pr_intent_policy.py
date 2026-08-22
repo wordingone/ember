@@ -75,6 +75,7 @@ def intent() -> dict[str, object]:
         ],
         "milestone": MILESTONE,
         "changed_files": ["scripts/github/pr_intent_policy.py"],
+        "closing_issue_numbers": [],
     }
 
 

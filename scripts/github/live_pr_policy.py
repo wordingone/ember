@@ -32,12 +32,23 @@ SNAPSHOT_FIELDS = {
     "labels",
     "milestone",
     "changed_files",
+    "closing_issue_numbers",
 }
 TITLE_RE = re.compile(
     r"^(?:feat|fix|docs|test|refactor|perf|build|ci|chore|release|security)"
     r"\([a-z0-9][a-z0-9-]{0,31}\): [^\r\n]{8,120}$"
 )
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+# GitHub's own auto-close keyword set (close/closes/closed/fix/fixes/fixed/
+# resolve/resolves/resolved), matched only as a clean, standalone line -- not
+# embedded in prose -- so a negated mention ("does not close #898") never
+# counts as a declaration. GitHub's own closing-keyword parser has no such
+# distinction (issue #898, 2026-08-22: a PR body reading "Does not close
+# #898" still closed #898 on merge); this regex is deliberately stricter than
+# GitHub's so an author must state the closure as its own line to justify it.
+CLOSING_KEYWORD_LINE_RE = re.compile(
+    r"(?im)^\s*(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s*#(\d+)\s*$"
+)
 DEPENDABOT_TITLE_RE = re.compile(
     r"^(?:(?:build|chore)\(deps(?:-dev)?\): bump|Bump) [^\r\n]{3,120}$"
 )
@@ -205,6 +216,42 @@ def _label_cardinality(labels: Sequence[str]) -> list[str]:
     return errors
 
 
+def declared_closing_issue_numbers(body: str) -> set[int]:
+    """Issue numbers this body explicitly declares closure of, one clean
+    line at a time (see ``CLOSING_KEYWORD_LINE_RE``)."""
+    return {int(match.group(1)) for match in CLOSING_KEYWORD_LINE_RE.finditer(body or "")}
+
+
+def _validate_closing_linkage(snapshot: Mapping[str, Any]) -> list[str]:
+    """FAIL when GitHub's live closingIssuesReferences names an issue this
+    body never explicitly declared with its own ``Closes #<n>`` line.
+
+    Operator ruling (2026-08-22, receipted on #898): an unjustified
+    issue-close via merge linkage is banned, and the ban must be structural.
+    GitHub computes ``closingIssuesReferences`` with a negation-blind
+    keyword parser -- a body reading "does not close #898" still produces a
+    live closing reference for #898, and merging closes it anyway. This
+    check does not try to out-parse GitHub's parser; it requires the body to
+    make its OWN, unambiguous declaration for every issue GitHub's live
+    metadata says the merge will close.
+    """
+    closing_numbers = snapshot.get("closing_issue_numbers")
+    if not isinstance(closing_numbers, list) or not all(
+        type(number) is int and number > 0 for number in closing_numbers
+    ):
+        return ["snapshot:closing-issue-numbers-invalid"]
+    if not closing_numbers:
+        return []
+    declared = declared_closing_issue_numbers(str(snapshot.get("body", "")))
+    undeclared = sorted(set(closing_numbers) - declared)
+    if undeclared:
+        return [
+            "closing-linkage:body-live-mismatch:"
+            + ",".join(f"#{number}" for number in undeclared)
+        ]
+    return []
+
+
 def _validate_common(snapshot: Mapping[str, Any]) -> list[str]:
     errors: list[str] = []
     unknown = sorted(set(snapshot) - SNAPSHOT_FIELDS)
@@ -241,6 +288,7 @@ def _validate_common(snapshot: Mapping[str, Any]) -> list[str]:
         not isinstance(milestone, str) or not milestone.strip()
     ):
         errors.append("snapshot:milestone-invalid")
+    errors.extend(_validate_closing_linkage(snapshot))
     return errors
 
 
@@ -342,6 +390,7 @@ def build_snapshot(
     *,
     event_base_sha: str,
     event_head_sha: str,
+    closing_issue_numbers: Sequence[int],
 ) -> dict[str, Any]:
     pages = file_pages
     if isinstance(pages, list) and pages and all(isinstance(page, dict) for page in pages):
@@ -366,6 +415,7 @@ def build_snapshot(
         "labels": [row.get("name") for row in pr.get("labels", [])],
         "milestone": (pr.get("milestone") or {}).get("title"),
         "changed_files": files,
+        "closing_issue_numbers": list(closing_issue_numbers),
     }
 
 
@@ -378,15 +428,33 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--event-head-sha", required=True)
     parser.add_argument("--snapshot-output", type=Path)
     parser.add_argument("--subject-root", type=Path)
+    parser.add_argument(
+        "--closing-issues-json",
+        type=Path,
+        required=True,
+        help=(
+            "Path to a JSON array of issue numbers from the live PR's "
+            "GraphQL closingIssuesReferences (e.g. produced by "
+            "'gh api graphql')."
+        ),
+    )
     args = parser.parse_args(argv)
     try:
         pr = json.loads(args.pr_json.read_text(encoding="utf-8", errors="strict"))
         files = json.loads(args.files_json.read_text(encoding="utf-8", errors="strict"))
+        closing_issue_numbers = json.loads(
+            args.closing_issues_json.read_text(encoding="utf-8", errors="strict")
+        )
+        if not isinstance(closing_issue_numbers, list) or not all(
+            type(number) is int for number in closing_issue_numbers
+        ):
+            raise ValueError("closing-issues-json must be a JSON array of integers")
         snapshot = build_snapshot(
             pr,
             files,
             event_base_sha=args.event_base_sha,
             event_head_sha=args.event_head_sha,
+            closing_issue_numbers=closing_issue_numbers,
         )
         authority = load_goal_binding(args.root.resolve())
         policy_roots = (
