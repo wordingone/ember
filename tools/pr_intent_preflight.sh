@@ -138,6 +138,9 @@ intent = {
     "labels": labels,
     "milestone": milestone,
     "changed_files": changed,
+    # No PR exists yet at pre-open time, so GitHub has computed zero closing
+    # references -- this is the exact live value, not an approximation of it.
+    "closing_issue_numbers": [],
 }
 print(json.dumps(intent))
 ' > "$WORK/intent.json" || { echo "FAIL: could not assemble the PR intent"; exit 2; }
