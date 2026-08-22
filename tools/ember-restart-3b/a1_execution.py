@@ -90,7 +90,8 @@ def _tokens(receipt_path: Path, shards_root: Path) -> Iterator[int]:
 
 
 def _train_step_envelope(
-    *, run_id: str, step: int, tokens: int, loss: float, wall_seconds: float
+    *, run_id: str, step: int, tokens: int, loss: float, grad_norm: float,
+    wall_seconds: float,
 ) -> dict[str, Any]:
     """The frozen `train_step` telemetry envelope
     (`docs/spec/ember02-r1-e8-receipts-v1.md`): `{"ts":..., "kind":"train_step",
@@ -129,6 +130,7 @@ def _train_step_envelope(
             "step": step,
             "tokens": tokens,
             "loss": format(float(loss), ".12f"),
+            "grad_norm": format(float(grad_norm), ".12f"),
             "wall_seconds": format(float(wall_seconds), ".12f"),
         },
     }
@@ -231,11 +233,13 @@ def run_dense_a1(
             loss = F.cross_entropy(model(input_ids).reshape(-1, config.vocab_size), targets.reshape(-1))
             loss.backward()
             optimizer.step()
+            grad_norm = optimizer.finish_gradient_norm()
             tokens_seen += sequence_length
             telemetry.write(json.dumps(
                 _train_step_envelope(
                     run_id=telemetry_run_id, step=step, tokens=sequence_length,
-                    loss=float(loss.detach()), wall_seconds=time.perf_counter() - step_started,
+                    loss=float(loss.detach()), grad_norm=grad_norm,
+                    wall_seconds=time.perf_counter() - step_started,
                 ),
                 sort_keys=True,
             ) + "\n")

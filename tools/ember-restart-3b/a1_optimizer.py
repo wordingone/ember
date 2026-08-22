@@ -58,6 +58,34 @@ class A1OptimizerContract:
     mechanism: A1Mechanism = A1Mechanism.FULL_STATE_ADAMW_CPU_OFFLOAD
 
 
+class FullGradientNormAccumulator:
+    """Accumulate one step's full-gradient L2 norm before fused updates."""
+
+    def __init__(self) -> None:
+        self._sum_squares: torch.Tensor | None = None
+
+    def accumulate(self, gradient: torch.Tensor) -> None:
+        if not isinstance(gradient, torch.Tensor) or gradient.is_sparse:
+            _invalid("gradient norm requires a dense tensor")
+        contribution = gradient.detach().to(dtype=torch.float32).square().sum()
+        if self._sum_squares is None:
+            self._sum_squares = contribution
+        elif self._sum_squares.device != contribution.device:
+            _invalid("gradient norm contributions span devices")
+        else:
+            self._sum_squares.add_(contribution)
+
+    def finish_step(self) -> float:
+        total = self._sum_squares
+        self._sum_squares = None
+        if total is None or not bool(torch.isfinite(total).item()):
+            _invalid("gradient norm is empty or non-finite")
+        result = float(torch.sqrt(total).item())
+        if not math.isfinite(result):
+            _invalid("gradient norm is empty or non-finite")
+        return result
+
+
 def load_a1_optimizer_contract(path: str | Path | None = None) -> A1OptimizerContract:
     contract_path = Path(path) if path is not None else Path(__file__).with_name("ember-restart-3b-a1.json")
     try:
@@ -133,6 +161,7 @@ class FullStateAdamWCPUOffload(torch.optim.Optimizer):
         self._fused_backward_enabled = False
         self._fused_hyperparameters_by_id: dict[int, tuple[float, float, float, float, float]] = {}
         self._fused_hook_handles: list[Any] = []
+        self._gradient_norm = FullGradientNormAccumulator()
         super().__init__(parameters, defaults={
             "lr": contract.learning_rate,
             "betas": (contract.beta1, contract.beta2),
@@ -328,6 +357,7 @@ class FullStateAdamWCPUOffload(torch.optim.Optimizer):
     def _fused_backward_hook(self, parameter: torch.nn.Parameter) -> None:
         if parameter.grad is None:
             return
+        self._gradient_norm.accumulate(parameter.grad)
         learning_rate, beta1, beta2, epsilon, weight_decay = self._fused_hyperparameters_by_id[id(parameter)]
         self._apply_parameter_update(
             parameter,
@@ -338,6 +368,9 @@ class FullStateAdamWCPUOffload(torch.optim.Optimizer):
             weight_decay=weight_decay,
         )
         parameter.grad = None
+
+    def finish_gradient_norm(self) -> float:
+        return self._gradient_norm.finish_step()
 
     @torch.no_grad()
     def step(self, closure: Any | None = None) -> Any | None:
@@ -363,6 +396,7 @@ class FullStateAdamWCPUOffload(torch.optim.Optimizer):
             for parameter in group["params"]:
                 if parameter.grad is None:
                     continue
+                self._gradient_norm.accumulate(parameter.grad)
                 self._apply_parameter_update(
                     parameter,
                     learning_rate=learning_rate,
