@@ -52,6 +52,36 @@ class RestartDecoderModelTests(unittest.TestCase):
         self.assertEqual(logits.shape, (1, 4, self.config.vocab_size))
         self.assertTrue(torch.isfinite(logits).all())
 
+    def test_capture_static_marker_indices_avoid_tensor_to_host_sync_and_match_eager(self) -> None:
+        model = UnifiedDecoder(self.config)
+        model.eval()
+        ids = torch.tensor([[
+            1, self.config.image_token_id, 2, self.config.audio_token_id,
+        ]])
+        image = torch.randn(1, 48, 48, 3)
+        audio = torch.randn(1, 640)
+        with torch.no_grad():
+            eager = model(
+                ids,
+                image_patches=image,
+                audio_frames=audio,
+                active_expert="audio",
+            )
+            with patch.object(
+                torch.Tensor,
+                "item",
+                side_effect=AssertionError("capture-static forward synchronized to host"),
+            ):
+                capture_static = model(
+                    ids,
+                    image_patches=image,
+                    audio_frames=audio,
+                    active_expert="audio",
+                    static_image_marker_indices=torch.tensor([1]),
+                    static_audio_marker_indices=torch.tensor([3]),
+                )
+        torch.testing.assert_close(capture_static, eager, rtol=0.0, atol=0.0)
+
     def test_forward_is_total_over_text_only_input_colliding_with_modality_markers(self) -> None:
         # image_token_id/audio_token_id are ordinary emittable vocab ids, not reserved
         # out-of-band markers (issue #1725). A text-only forward (no image_patches, no
