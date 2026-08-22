@@ -1,0 +1,294 @@
+{
+  "activation_enabled": false,
+  "approved_signatures": [
+    "79e4b59e066975eccac672daf8e6d3a7212dee8fcef6ff5d11629bfcc7b53f65",
+    "81075dc893d38f38cda15efbf35baea9d59ef4696574d64ca8e47e38b5677d4f",
+    "bdd74a4adea932d3089a825b33f9a0e7601283b17b091c5e8c9529c18c132b85",
+    "f7ed6d57149b86d8cf8d3fd16b319f4a18c644268dfa8e43d1ac9cde047b7779"
+  ],
+  "capture_region": "forward_loss_backward",
+  "fallbacks": 0,
+  "input_identity_sha256": "88914d078fd800ef415da1b7f53f8e4d5ee1f89d70f4275d9b965b1b31652d48",
+  "model_config_sha256": "33a82113cfa42fcd62d70688fea39c62b3793630c7ea48fdb5b884681a8e1781",
+  "observed_steps": 4,
+  "runner_source_sha256": "4d4aa1cf85efed495e6823c570250a218bb3b99e27e95ade97c60053b38c6e75",
+  "schema_version": "ember-training-signature-census-v1",
+  "self_sha256": "329115ccfdc11508da5b4918df08fe8ab95bbe20e483023843877e0d332dda77",
+  "signature_count": 4,
+  "signatures": [
+    {
+      "contract": {
+        "active_expert": "tool",
+        "capture_region": "forward_loss_backward",
+        "gradient_checkpointing": true,
+        "spans": [],
+        "tensors": {
+          "audio_frames": null,
+          "image_coordinates": {
+            "device_index": 0,
+            "device_type": "cuda",
+            "dtype": "int64",
+            "requires_grad": false,
+            "shape": [
+              0,
+              2
+            ],
+            "stride": [
+              2,
+              1
+            ]
+          },
+          "image_patches": null,
+          "input_ids": {
+            "device_index": 0,
+            "device_type": "cuda",
+            "dtype": "int64",
+            "requires_grad": false,
+            "shape": [
+              1,
+              7
+            ],
+            "stride": [
+              7,
+              1
+            ]
+          },
+          "target_ids": {
+            "device_index": 0,
+            "device_type": "cuda",
+            "dtype": "int64",
+            "requires_grad": false,
+            "shape": [
+              1,
+              7
+            ],
+            "stride": [
+              7,
+              1
+            ]
+          }
+        }
+      },
+      "count": 1,
+      "signature_sha256": "79e4b59e066975eccac672daf8e6d3a7212dee8fcef6ff5d11629bfcc7b53f65"
+    },
+    {
+      "contract": {
+        "active_expert": "audio",
+        "capture_region": "forward_loss_backward",
+        "gradient_checkpointing": true,
+        "spans": [
+          {
+            "attention_mode": "causal",
+            "length": 4,
+            "modality": "audio",
+            "start": 0
+          }
+        ],
+        "tensors": {
+          "audio_frames": {
+            "device_index": 0,
+            "device_type": "cuda",
+            "dtype": "float32",
+            "requires_grad": false,
+            "shape": [
+              1,
+              4,
+              640
+            ],
+            "stride": [
+              2560,
+              640,
+              1
+            ]
+          },
+          "image_coordinates": {
+            "device_index": 0,
+            "device_type": "cuda",
+            "dtype": "int64",
+            "requires_grad": false,
+            "shape": [
+              0,
+              2
+            ],
+            "stride": [
+              2,
+              1
+            ]
+          },
+          "image_patches": null,
+          "input_ids": {
+            "device_index": 0,
+            "device_type": "cuda",
+            "dtype": "int64",
+            "requires_grad": false,
+            "shape": [
+              1,
+              15
+            ],
+            "stride": [
+              15,
+              1
+            ]
+          },
+          "target_ids": {
+            "device_index": 0,
+            "device_type": "cuda",
+            "dtype": "int64",
+            "requires_grad": false,
+            "shape": [
+              1,
+              15
+            ],
+            "stride": [
+              15,
+              1
+            ]
+          }
+        }
+      },
+      "count": 1,
+      "signature_sha256": "81075dc893d38f38cda15efbf35baea9d59ef4696574d64ca8e47e38b5677d4f"
+    },
+    {
+      "contract": {
+        "active_expert": "vision",
+        "capture_region": "forward_loss_backward",
+        "gradient_checkpointing": true,
+        "spans": [
+          {
+            "attention_mode": "isolated",
+            "length": 4,
+            "modality": "image",
+            "start": 0
+          }
+        ],
+        "tensors": {
+          "audio_frames": null,
+          "image_coordinates": {
+            "device_index": 0,
+            "device_type": "cuda",
+            "dtype": "int64",
+            "requires_grad": false,
+            "shape": [
+              4,
+              2
+            ],
+            "stride": [
+              2,
+              1
+            ]
+          },
+          "image_patches": {
+            "device_index": 0,
+            "device_type": "cuda",
+            "dtype": "float32",
+            "requires_grad": false,
+            "shape": [
+              1,
+              4,
+              48,
+              48,
+              3
+            ],
+            "stride": [
+              27648,
+              6912,
+              144,
+              3,
+              1
+            ]
+          },
+          "input_ids": {
+            "device_index": 0,
+            "device_type": "cuda",
+            "dtype": "int64",
+            "requires_grad": false,
+            "shape": [
+              1,
+              7
+            ],
+            "stride": [
+              7,
+              1
+            ]
+          },
+          "target_ids": {
+            "device_index": 0,
+            "device_type": "cuda",
+            "dtype": "int64",
+            "requires_grad": false,
+            "shape": [
+              1,
+              7
+            ],
+            "stride": [
+              7,
+              1
+            ]
+          }
+        }
+      },
+      "count": 1,
+      "signature_sha256": "bdd74a4adea932d3089a825b33f9a0e7601283b17b091c5e8c9529c18c132b85"
+    },
+    {
+      "contract": {
+        "active_expert": "reasoning",
+        "capture_region": "forward_loss_backward",
+        "gradient_checkpointing": true,
+        "spans": [],
+        "tensors": {
+          "audio_frames": null,
+          "image_coordinates": {
+            "device_index": 0,
+            "device_type": "cuda",
+            "dtype": "int64",
+            "requires_grad": false,
+            "shape": [
+              0,
+              2
+            ],
+            "stride": [
+              2,
+              1
+            ]
+          },
+          "image_patches": null,
+          "input_ids": {
+            "device_index": 0,
+            "device_type": "cuda",
+            "dtype": "int64",
+            "requires_grad": false,
+            "shape": [
+              1,
+              7
+            ],
+            "stride": [
+              7,
+              1
+            ]
+          },
+          "target_ids": {
+            "device_index": 0,
+            "device_type": "cuda",
+            "dtype": "int64",
+            "requires_grad": false,
+            "shape": [
+              1,
+              7
+            ],
+            "stride": [
+              7,
+              1
+            ]
+          }
+        }
+      },
+      "count": 1,
+      "signature_sha256": "f7ed6d57149b86d8cf8d3fd16b319f4a18c644268dfa8e43d1ac9cde047b7779"
+    }
+  ],
+  "source_commit": "728421bcca5092a89df483f7df804c7177c337a7",
+  "status": "OBSERVED_NOT_ACTIVATED"
+}
