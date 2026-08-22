@@ -136,12 +136,30 @@ class CensusBoundStage2Executor:
         static = self._static_batch(batch)
         loss_holder: list[torch.Tensor] = []
 
+        def marker_indices(*, marker_id: int, raw_key: str) -> torch.Tensor:
+            if static[raw_key] is None:
+                return torch.empty(
+                    0, dtype=torch.int64, device=static["input_ids"].device,
+                )
+            return static["input_ids"].eq(marker_id).reshape(-1).nonzero(
+                as_tuple=False,
+            ).flatten()
+
+        image_marker_indices = marker_indices(
+            marker_id=self.config.image_token_id, raw_key="image_patches",
+        )
+        audio_marker_indices = marker_indices(
+            marker_id=self.config.audio_token_id, raw_key="audio_frames",
+        )
+
         def region() -> None:
             logits = self.model(
                 static["input_ids"],
                 image_patches=static["image_patches"],
                 audio_frames=static["audio_frames"],
                 image_coordinates=static["image_coordinates"],
+                static_image_marker_indices=image_marker_indices,
+                static_audio_marker_indices=audio_marker_indices,
                 spans=static["spans"],
                 active_expert=static["active_expert"],
             )
