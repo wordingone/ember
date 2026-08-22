@@ -18,6 +18,101 @@ def _module():
     return importlib.import_module("a1_tier2_optimizer")
 
 
+def _legacy_quantize_blocks(module, value: torch.Tensor, format_name: str, block_size: int = 256):
+    """Frozen pre-vectorization oracle for byte-identity regression coverage."""
+    source = value.detach().to(dtype=torch.float32).contiguous().reshape(-1)
+    quantized_parts: list[torch.Tensor] = []
+    scales: list[torch.Tensor] = []
+    for start in range(0, source.numel(), block_size):
+        block = source[start:start + block_size]
+        maximum = block.max() if format_name == module.UNSIGNED_UINT8 else block.abs().max()
+        if maximum.item() == 0:
+            scale = torch.ones((), device=source.device, dtype=torch.float32)
+            quantized = torch.zeros_like(
+                block,
+                dtype=torch.uint8 if format_name == module.UNSIGNED_UINT8 else torch.int8,
+            )
+        else:
+            divisor = (
+                255.0
+                if format_name == module.UNSIGNED_UINT8
+                else (7.0 if format_name == module.SIGNED_INT4 else 127.0)
+            )
+            scale = maximum / divisor
+            lower = 0 if format_name == module.UNSIGNED_UINT8 else (-7 if format_name == module.SIGNED_INT4 else -127)
+            upper = 255 if format_name == module.UNSIGNED_UINT8 else (7 if format_name == module.SIGNED_INT4 else 127)
+            dtype = torch.uint8 if format_name == module.UNSIGNED_UINT8 else torch.int8
+            quantized = torch.round(block / scale).clamp(lower, upper).to(dtype=dtype)
+        scales.append(scale)
+        quantized_parts.append(quantized)
+    unpacked = torch.cat(quantized_parts)
+    if format_name == module.SIGNED_INT4:
+        nibbles = torch.bitwise_and(unpacked.to(torch.int16), 15).to(torch.uint8)
+        if nibbles.numel() % 2:
+            nibbles = torch.cat((nibbles, torch.zeros(1, dtype=torch.uint8, device=nibbles.device)))
+        payload = nibbles[0::2] | (nibbles[1::2] << 4)
+    else:
+        payload = unpacked
+    return module.QuantizedTensor(
+        format_name=format_name,
+        block_size=block_size,
+        shape=tuple(value.shape),
+        numel=value.numel(),
+        payload=payload.contiguous(),
+        scales=torch.stack(scales).to(dtype=torch.float32),
+    )
+
+
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+@pytest.mark.parametrize(
+    "format_name",
+    ["SIGNED_INT4_SYMMETRIC", "SIGNED_INT8_SYMMETRIC", "UNSIGNED_UINT8"],
+)
+def test_block_quantization_is_byte_identical_to_legacy_for_randomized_tails_and_zero_blocks(
+    device: str,
+    format_name: str,
+) -> None:
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA unavailable")
+    module = _module()
+    generator = torch.Generator(device="cpu").manual_seed(1464)
+    for size in (1, 255, 257, 511, 513, 770):
+        values = torch.randn(size, generator=generator, dtype=torch.float32)
+        if format_name == module.UNSIGNED_UINT8:
+            values = values.abs()
+        if size >= 257:
+            values[:256] = 0
+        if size == 770:
+            values[512:] = 0
+        values = values.to(device)
+        expected = _legacy_quantize_blocks(module, values, format_name)
+        actual = module.quantize_blocks(values, format_name)
+        assert actual.format_name == expected.format_name
+        assert actual.block_size == expected.block_size
+        assert actual.shape == expected.shape
+        assert actual.numel == expected.numel
+        assert torch.equal(actual.payload, expected.payload)
+        assert torch.equal(actual.scales, expected.scales)
+
+
+def test_block_quantization_host_sync_count_does_not_scale_with_block_count(monkeypatch) -> None:
+    module = _module()
+    original_item = torch.Tensor.item
+    item_calls = 0
+
+    def counted_item(tensor: torch.Tensor, *args):
+        nonlocal item_calls
+        item_calls += 1
+        return original_item(tensor, *args)
+
+    monkeypatch.setattr(torch.Tensor, "item", counted_item)
+    module.quantize_blocks(torch.ones(1), module.SIGNED_INT8)
+    one_block_calls = item_calls
+    item_calls = 0
+    module.quantize_blocks(torch.ones(1025), module.SIGNED_INT8)
+    assert item_calls == one_block_calls
+
+
 @pytest.mark.parametrize(
     ("format_name", "values", "tolerance"),
     [
