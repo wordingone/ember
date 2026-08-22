@@ -28,10 +28,30 @@ host-commit-capacity dimension specifically. Redesigning the mechanism itself
 `docs/spec/optimizer-state-mmap-arena-spec.md`, which this contract is
 compared against.
 
-## The formalized interim measure
+## Operator scoping ruling (2026-08-21) — binds everything below
 
-The pagefile change made on 2026-08-21 is recorded here as the first
-instance of the documented provisioning step, not as an ad-hoc one-off:
+The 2026-08-21 pagefile change is recorded as a **temporary operator
+intervention and technical debt**, acceptable only to finish the current
+dense control run — it is **not** formalized here as a repeatable Ember
+setup requirement, and declining the mmap-arena redesign (which would dirty
+~42.9 GiB of optimizer state per step, see
+`docs/spec/optimizer-state-mmap-arena-spec.md`) does not by itself establish
+a privileged pagefile configuration as the durable answer; those are
+independent claims. The dense A1 control's elevated commit footprint is a
+property of *that control experiment's own declared profile*
+(`dense_a1_full_state_cpu_offload_profile`), never a redefinition of Ember's
+normal host floor. A future mechanism that needs more headroom does **not**
+inherit "widen the pagefile" as its accepted remediation from this contract
+— it must fit the existing envelope, provision through its own declared,
+fail-closed, experiment-scoped contract, or redesign; a further privileged
+OS change requires its own fresh operator review, never an automatic reuse
+of this one.
+
+## The recorded exception
+
+The pagefile change made on 2026-08-21 is recorded here as a one-time,
+receipted, operator-authorized exception scoped to the dense A1 control
+run — not as a general provisioning step other mechanisms inherit:
 
 - **Registry path:** `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management`
 - **Value:** `PagingFiles` (REG_MULTI_SZ)
@@ -50,10 +70,12 @@ instance of the documented provisioning step, not as an ad-hoc one-off:
   entry to end in a positive fixed maximum) because its true ceiling is not a
   value ember can read and reason about ahead of a launch.
 
-This is recorded as the current baseline, not asserted to be sufficient
-forever: any mechanism whose declared requirement exceeds this baseline's
-headroom must widen the pagefile (or provision differently) before launch,
-following the same contract.
+This is recorded as the current exception, not a baseline: it is not
+asserted to be sufficient forever, and it is not the prescribed remediation
+for a mechanism other than the one that was granted it. A different or
+larger future need is a fresh operator decision, evaluated against fit,
+redesign, and a genuinely scoped, fail-closed contract of its own — not an
+extension of this one.
 
 ## The contract mechanics
 
@@ -102,6 +124,17 @@ Until that wiring lands, the host-commit preflight inside
 `CheckpointDeferredLowCommit`) remains the sole enforcement point for host
 commit headroom during a run; this contract adds pre-launch, mechanism-level
 declaration and refusal on top of it, once wired.
+
+This distinction matters against the operator's scoping ruling: the ruling
+requires that a genuine minimum host commit configuration be "declared in
+the host envelope contract and validated before execution — a preflight
+that fails closed with the measured number." Declaring the requirement
+(this module) is not the same as validating it before execution (a real
+pre-launch call site). Until `validate_host_setup_contract` is actually
+called at a real launch decision point — scoped to the declaring
+mechanism's own control-experiment declaration, not applied as a general
+host-floor check — this issue does not yet satisfy that requirement, and no
+packet on #898 should claim otherwise.
 
 ## Relationship to the mmap arena alternative
 
