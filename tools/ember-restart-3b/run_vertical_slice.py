@@ -42,6 +42,9 @@ from train import run_launch, run_text_lab_preflight
 from text_lab_corpus import validate_admitted_authority_subset
 from a1_execution import run_dense_a1
 from a1_dense import DenseA1Config
+from a1_dense import DenseA1Decoder
+from a1_tier2_contract import admit_tier2_resources, derive_tier2_resource_inventory, load_tier2_contract
+from a1_tier2_execution import run_dense_a1_tier2
 
 # R1-E4 measurement receipt (issue #1464): the two constants the MFU arithmetic
 # depends on, stated here so the receipt can carry them verbatim. Active count
@@ -4295,6 +4298,26 @@ def main() -> None:
     a1.add_argument("--b-custody-floor-gib", type=int, required=True)
     a1.add_argument("--telemetry-path", type=Path, required=True)
     a1.add_argument("--telemetry-run-id", required=True)
+    a1_tier2 = subparsers.add_parser("a1-dense-tier2")
+    a1_tier2.add_argument("--seed", type=int, required=True)
+    a1_tier2.add_argument("--artifact-root", type=Path, required=True)
+    a1_tier2.add_argument("--token-shards-receipt", type=Path, required=True)
+    a1_tier2.add_argument("--shards-root", type=Path, required=True)
+    a1_tier2.add_argument("--comparison-authority", type=Path, required=True)
+    a1_tier2.add_argument("--steps", type=int, required=True)
+    a1_tier2.add_argument("--sequence-length", type=int, required=True)
+    a1_tier2.add_argument("--checkpoint-interval", type=int, required=True)
+    a1_tier2.add_argument("--write-budget-gib", type=int, required=True)
+    a1_tier2.add_argument("--transient-checkpoint-gib", type=int, required=True)
+    a1_tier2.add_argument("--host-commit-reserve-gib", type=int, required=True)
+    a1_tier2.add_argument("--gpu-free-margin-gib", type=int, required=True)
+    a1_tier2.add_argument("--b-custody-floor-gib", type=int, required=True)
+    a1_tier2.add_argument("--telemetry-path", type=Path, required=True)
+    a1_tier2.add_argument("--telemetry-run-id", required=True)
+    a1_tier2.add_argument("--tier2-contract", type=Path, required=True)
+    a1_tier2.add_argument("--tier2-contract-sha256", required=True)
+    a1_tier2.add_argument("--liveness-receipt", type=Path, required=True)
+    a1_tier2.add_argument("--liveness-receipt-sha256", required=True)
     args = parser.parse_args()
     if args.command == "genesis-init":
         result = initialize_genesis_inventory(
@@ -4388,6 +4411,47 @@ def main() -> None:
             write_budget_bytes=args.write_budget_gib * 1024**3,
             telemetry_path=args.telemetry_path,
             telemetry_run_id=args.telemetry_run_id,
+            resource_preflight=resource_preflight,
+        )
+    elif args.command == "a1-dense-tier2":
+        canonical_runner_authority = canonical_disk_budget_runner_authority()
+        governor_receipt = governed_resource_preflight()
+        repo_root = Path(__file__).resolve().parents[2]
+        dense_config = DenseA1Config.from_contract(
+            Path(__file__).resolve().with_name("ember-restart-3b-a1.json"),
+            repo_root=repo_root,
+        )
+        contract = load_tier2_contract(args.tier2_contract)
+        meta = DenseA1Decoder(dense_config, device="meta")
+        shapes = {name: tuple(parameter.shape) for name, parameter in meta.named_parameters()}
+        del meta
+        inventory = derive_tier2_resource_inventory(shapes, contract=contract)
+        device_free_bytes, _device_total_bytes = torch.cuda.mem_get_info()
+        custody_anchor = args.artifact_root.anchor or str(args.artifact_root)
+        resource_preflight = admit_tier2_resources(
+            inventory,
+            available_device_bytes=int(device_free_bytes),
+            custody_free_bytes=shutil.disk_usage(custody_anchor).free,
+            contract=contract,
+        )
+        resource_preflight["governor"] = governor_receipt
+        resource_preflight["canonical_runner"] = canonical_runner_authority
+        result = run_dense_a1_tier2(
+            repo_root=repo_root,
+            seed=args.seed,
+            artifact_root=args.artifact_root,
+            token_shards_receipt=args.token_shards_receipt,
+            shards_root=args.shards_root,
+            comparison_authority=args.comparison_authority,
+            steps=args.steps,
+            sequence_length=args.sequence_length,
+            checkpoint_interval=args.checkpoint_interval,
+            telemetry_path=args.telemetry_path,
+            telemetry_run_id=args.telemetry_run_id,
+            tier2_contract_path=args.tier2_contract,
+            expected_tier2_contract_sha256=args.tier2_contract_sha256,
+            liveness_receipt=args.liveness_receipt,
+            expected_liveness_receipt_sha256=args.liveness_receipt_sha256,
             resource_preflight=resource_preflight,
         )
     else:
