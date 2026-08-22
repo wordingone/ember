@@ -1420,11 +1420,21 @@ class CheckpointArtifactTests(unittest.TestCase):
             projection["optimizer_state_active_expert_ids"] = list(
                 checkpoint_artifacts.EXPERT_NAMES
             )
+            forged_projected_optimizer = (
+                checkpoint_artifacts._projected_all_expert_optimizer_storage_bytes(
+                    routed_optimizer=projection[
+                        "optimizer_state_tensor_storage_by_route_bytes"
+                    ],
+                    active_expert=projection["active_expert"],
+                )
+            )
             projection[
                 "projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes"
-            ] = optimizer_bytes
-            projection["all_expert_projected_tensor_storage_lower_bound_bytes"] = sum(
-                projection["per_shard_tensor_storage_lower_bound_bytes"].values()
+            ] = forged_projected_optimizer
+            projection["all_expert_projected_tensor_storage_lower_bound_bytes"] = (
+                sum(projection["per_shard_tensor_storage_lower_bound_bytes"].values())
+                - optimizer_bytes
+                + forged_projected_optimizer
             )
             projection["projection_sha256"] = checkpoint_artifacts._canonical_sha256(
                 {

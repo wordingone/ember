@@ -1308,12 +1308,19 @@ def _derive_checkpoint_storage_projection(
         raise ValueError(
             "checkpoint storage projection requires one post-update optimizer state"
         )
-    # The writer owns the live parameter objects and derives route identity
-    # directly from model/optimizer state. Shared-only and closed full-route
-    # states are therefore already their complete realization floor; a
-    # single-specialist state retains the conservative four-route projection.
+    # Price the same owner-sharded bytes that will be stored in the projection.
+    # The live optimizer may share one tensor identity across owners (for
+    # example bitsandbytes qmaps), while independent owner files each carry a
+    # physical copy.  Using the live deduplicated route totals here would make
+    # the projected floor disagree with the stored per-owner attribution.
+    routed_optimizer_actual = _optimizer_tensor_storage_by_route_for_write(
+        model=model,
+        optimizer=optimizer,
+        shard_storage_lower_bounds=shard_storage_lower_bounds,
+        optimizer_state_layout=optimizer_state_layout,
+    )
     projected_optimizer = _projected_all_expert_optimizer_storage_bytes(
-        routed_optimizer=routed_optimizer,
+        routed_optimizer=routed_optimizer_actual,
         active_expert=model.active_expert,
     )
     actual_checkpoint_floor = sum(shard_storage_lower_bounds.values())
@@ -1366,12 +1373,6 @@ def _derive_checkpoint_storage_projection(
     # _validate_owner_storage_projection_authority, so it needs the same
     # real, write-time bytes as optimizer_actual above -- not the live,
     # pre-detach dedup this function otherwise uses for routed_optimizer.
-    routed_optimizer_actual = _optimizer_tensor_storage_by_route_for_write(
-        model=model,
-        optimizer=optimizer,
-        shard_storage_lower_bounds=shard_storage_lower_bounds,
-        optimizer_state_layout=optimizer_state_layout,
-    )
     projection = {
         "schema_version": "ember-checkpoint-storage-projection-v1",
         **({"optimizer_state_layout": optimizer_state_layout} if optimizer_state_layout != "legacy-v1" else {}),
@@ -1554,9 +1555,15 @@ def _validate_checkpoint_storage_projection(
     )
     if optimizer_state_layout == "legacy-v1":
         optimizer_shard_total = shard_bounds["optimizer-state.pt"]
+    route_total = sum(route_bounds.values())
+    route_total_invalid = (
+        route_total != optimizer_actual
+        if optimizer_state_layout == "legacy-v1"
+        else route_total < optimizer_actual
+    )
     if (
         optimizer_shard_total != optimizer_actual
-        or sum(route_bounds.values()) != optimizer_actual
+        or route_total_invalid
         or materialized[
             "projected_all_expert_optimizer_state_tensor_storage_lower_bound_bytes"
         ]
