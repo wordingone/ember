@@ -69,6 +69,7 @@ _STAGE2_CENSUS_SOURCE_COMMIT = "728421bcca5092a89df483f7df804c7177c337a7"
 _STAGE2_CENSUS_RELATIVE_PATH = Path("docs/spec/llmq/ember-training-signature-census-v1.json")
 _STAGE2_CENSUS_RAW_SHA256 = "86e37ad5868da1ef77419d643c3ff31ee0a38b7e9f603b9c0807376958ef5d0c"
 _STAGE2_MATCHED_LOSS_RELATIVE_TOLERANCE = 0.01
+_STAGE2_PREPARATION_REGIONS_PER_SIGNATURE = 4
 
 _GENESIS_INVENTORY_SCHEMA = "ember-genesis-inventory-v1"
 _GENESIS_INVENTORY_KEYS = {
@@ -747,6 +748,12 @@ def preflight_governed_vertical(
                 _STAGE2_CENSUS_RAW_SHA256 if stage2_acceleration else None
             ),
             "matched_loss_relative_tolerance_exclusive": _STAGE2_MATCHED_LOSS_RELATIVE_TOLERANCE,
+            "preparation_regions_per_signature": _STAGE2_PREPARATION_REGIONS_PER_SIGNATURE,
+            "preparation_signature_count": len(selected_records),
+            "preparation_region_count": (
+                _STAGE2_PREPARATION_REGIONS_PER_SIGNATURE * len(selected_records)
+            ),
+            "no_capture_in_measured_window": True,
             "receipt_output": str(receipt_output) if receipt_output is not None else None,
         },
     }
@@ -3974,6 +3981,10 @@ def run(
         max_records=max_records,
         signature_observer=(signature_census.observe if signature_census is not None else None),
         stage2_executor=stage2_executor,
+        measurement_preparation_regions_per_signature=(
+            _STAGE2_PREPARATION_REGIONS_PER_SIGNATURE
+            if stage2_arm_receipt_output is not None else 0
+        ),
     )
     if checkpoint is None or parameter_receipt is None:
         raise RuntimeError("training segment completed without a durable verified checkpoint")
@@ -4012,6 +4023,17 @@ def run(
             for key in ("record_index", "global_step", "tokens_seen")
         }
         config_sha256 = _sha256(config_path)
+        preparation = segment["measurement_preparation"]
+        if not isinstance(preparation, Mapping):
+            raise RuntimeError("Stage-2 arm completed without preparation evidence")
+        captures_during_preparation = (
+            int(runtime["captures_during_preparation"])
+            if stage2_acceleration and isinstance(runtime, Mapping) else 0
+        )
+        captures_during_measured_window = (
+            int(runtime["captures_during_measured_window"])
+            if stage2_acceleration and isinstance(runtime, Mapping) else 0
+        )
         stage2_arm_receipt = write_stage2_arm_receipt(
             stage2_arm_receipt_output,
             {
@@ -4038,6 +4060,14 @@ def run(
                 "tokens_per_second": float(segment["tokens_per_second"]),
                 "max_memory_allocated_bytes": int(torch.cuda.max_memory_allocated()),
                 "max_memory_reserved_bytes": int(torch.cuda.max_memory_reserved()),
+                "preparation_regions_per_signature": int(preparation["regions_per_signature"]),
+                "preparation_signature_count": int(preparation["signature_count"]),
+                "preparation_region_count": int(preparation["region_count"]),
+                "captures_during_preparation": captures_during_preparation,
+                "captures_during_measured_window": captures_during_measured_window,
+                "no_capture_in_measured_window": bool(
+                    preparation["no_capture_in_measured_window"]
+                ),
                 "mechanisms": mechanisms,
             },
         )

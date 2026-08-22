@@ -40,6 +40,29 @@ VERIFIER_PATH = Path(__file__).with_name("verify_capability_record.py")
 VERIFIER_PUBLIC_PATH = "tools/ember-restart-3b/verify_capability_record.py"
 
 
+def _eager_forward_loss_backward(
+    model: UnifiedDecoder,
+    batch: Mapping[str, object],
+    config: RestartDecoderConfig,
+) -> torch.Tensor:
+    logits = model(
+        batch["input_ids"],
+        image_patches=batch["image_patches"],
+        audio_frames=batch["audio_frames"],
+        image_coordinates=batch["image_coordinates"],
+        spans=batch["spans"],
+        active_expert=batch["active_expert"],
+    )
+    loss = F.cross_entropy(
+        logits.float().reshape(-1, config.vocab_size),
+        batch["target_ids"].reshape(-1),
+    )
+    if not torch.isfinite(loss):
+        raise RuntimeError("pretraining preparation produced a non-finite loss")
+    loss.backward()
+    return loss
+
+
 class CensusBoundStage2Executor:
     """Execute only forward/loss/backward through a census-bound graph pool."""
 
@@ -64,10 +87,21 @@ class CensusBoundStage2Executor:
         self.graph_pool = CudaGraphTrainingStepPool(
             registry=authority.registry, backend=graph_backend,
         )
+        preparation_regions = getattr(
+            self.graph_pool.backend, "preparation_regions_per_signature", None,
+        )
+        if type(preparation_regions) is not int or preparation_regions < 1:
+            raise ValueError(
+                "Stage-2 graph backend must declare preparation_regions_per_signature"
+            )
+        self.preparation_regions_per_signature = preparation_regions
         self._static_batches: dict[str, dict[str, object]] = {}
         self._losses: dict[str, list[torch.Tensor]] = {}
         self._optimizer_steps = 0
         self._refreshes = 0
+        self._captures_during_preparation = 0
+        self._captures_during_measured_window = 0
+        self._measurement_prepared = False
 
     @staticmethod
     def _static_batch(batch: Mapping[str, object]) -> dict[str, object]:
@@ -92,48 +126,97 @@ class CensusBoundStage2Executor:
             f"stage2-optimizer-steps:{self._optimizer_steps}".encode("ascii")
         ).hexdigest()
 
+    def _capture(
+        self,
+        batch: Mapping[str, object],
+        *,
+        signature: str,
+        cursor_identity: str,
+    ) -> None:
+        static = self._static_batch(batch)
+        loss_holder: list[torch.Tensor] = []
+
+        def region() -> None:
+            logits = self.model(
+                static["input_ids"],
+                image_patches=static["image_patches"],
+                audio_frames=static["audio_frames"],
+                image_coordinates=static["image_coordinates"],
+                spans=static["spans"],
+                active_expert=static["active_expert"],
+            )
+            loss = F.cross_entropy(
+                logits.float().reshape(-1, self.config.vocab_size),
+                static["target_ids"].reshape(-1),
+            )
+            loss.backward()
+            if loss_holder:
+                loss_holder[0] = loss
+            else:
+                loss_holder.append(loss)
+
+        warmup = getattr(self.graph_pool.backend, "warmup", None)
+        if not callable(warmup):
+            raise RuntimeError("Stage-2 graph backend must expose warmup")
+        warmup(region, lambda: self.optimizer.zero_grad(set_to_none=False))
+        self.graph_pool.capture(
+            signature_sha256=signature,
+            region=region,
+            optimizer_identity=self._optimizer_identity,
+            cursor_identity=lambda: cursor_identity,
+        )
+        self._static_batches[signature] = static
+        self._losses[signature] = loss_holder
+        self._captures_during_preparation += 1
+        self.optimizer.zero_grad(set_to_none=False)
+
+    def prepare_for_measurement(
+        self,
+        batches: Sequence[Mapping[str, object]],
+        *,
+        cursor_identity: str,
+        regions_per_signature: int,
+    ) -> dict[str, object]:
+        if self._measurement_prepared:
+            raise RuntimeError("Stage-2 measurement preparation is single-use")
+        if regions_per_signature != self.preparation_regions_per_signature:
+            raise ValueError("Stage-2 preparation region count differs from its backend")
+        unique: dict[str, Mapping[str, object]] = {}
+        for batch in batches:
+            signature = self.authority.resolve(
+                batch,
+                gradient_checkpointing=bool(self.config.gradient_checkpointing),
+            )
+            unique.setdefault(signature, batch)
+        if set(unique) != set(self.authority.registry.approved_signatures):
+            raise RuntimeError("Stage-2 preparation does not cover the full admitted census")
+        for signature in sorted(unique):
+            self._capture(
+                unique[signature],
+                signature=signature,
+                cursor_identity=cursor_identity,
+            )
+        self._measurement_prepared = True
+        return {
+            "regions_per_signature": regions_per_signature,
+            "signature_count": len(unique),
+            "region_count": regions_per_signature * len(unique),
+            "no_capture_in_measured_window": True,
+        }
+
     def forward_loss_backward(
         self, batch: Mapping[str, object], *, cursor_identity: str,
     ) -> torch.Tensor:
+        del cursor_identity
+        if not self._measurement_prepared:
+            raise RuntimeError("Stage-2 signatures must be prepared before measurement")
         signature = self.authority.resolve(
             batch, gradient_checkpointing=bool(self.config.gradient_checkpointing),
         )
         if not self.graph_pool.contains(signature):
-            static = self._static_batch(batch)
-            loss_holder: list[torch.Tensor] = []
-
-            def region() -> None:
-                logits = self.model(
-                    static["input_ids"],
-                    image_patches=static["image_patches"],
-                    audio_frames=static["audio_frames"],
-                    image_coordinates=static["image_coordinates"],
-                    spans=static["spans"],
-                    active_expert=static["active_expert"],
-                )
-                loss = F.cross_entropy(
-                    logits.float().reshape(-1, self.config.vocab_size),
-                    static["target_ids"].reshape(-1),
-                )
-                loss.backward()
-                if loss_holder:
-                    loss_holder[0] = loss
-                else:
-                    loss_holder.append(loss)
-
-            warmup = getattr(self.graph_pool.backend, "warmup", None)
-            if callable(warmup):
-                warmup(region, lambda: self.optimizer.zero_grad(set_to_none=False))
-            self.graph_pool.capture(
-                signature_sha256=signature,
-                region=region,
-                optimizer_identity=self._optimizer_identity,
-                cursor_identity=lambda: cursor_identity,
-            )
-            self._static_batches[signature] = static
-            self._losses[signature] = loss_holder
-        else:
-            self._copy_tensors(self._static_batches[signature], batch)
+            self._captures_during_measured_window += 1
+            raise RuntimeError("Stage-2 measured window cannot capture a graph")
+        self._copy_tensors(self._static_batches[signature], batch)
         self.optimizer.zero_grad(set_to_none=False)
         self.graph_pool.replay(signature)
         loss_holder = self._losses[signature]
@@ -160,6 +243,8 @@ class CensusBoundStage2Executor:
             "fp8_dispatches": sum(int(item["dispatches"]) for item in kernels),
             "fp8_fallbacks": sum(int(item["fallbacks"]) for item in kernels),
             "cuda_graph_captures": graph["captures"],
+            "captures_during_preparation": self._captures_during_preparation,
+            "captures_during_measured_window": self._captures_during_measured_window,
             "cuda_graph_replays": graph["replays"],
             "cuda_graph_fallbacks": graph["fallbacks"],
             "kernel_receipts": kernels,
@@ -243,6 +328,7 @@ def run_pretraining_segment(
     progress_callback: ProgressCallback | None = None,
     signature_observer: SignatureObserver | None = None,
     stage2_executor: CensusBoundStage2Executor | None = None,
+    measurement_preparation_regions_per_signature: int = 0,
     initial_global_step: int = 0,
     initial_tokens_seen: int = 0,
     initial_data_cursor: int = 0,
@@ -266,6 +352,13 @@ def run_pretraining_segment(
         raise ValueError("data_shard_id must be a nonempty owned shard identifier")
     if signature_observer is not None and stage2_executor is not None:
         raise ValueError("an activating run cannot mint its own signature census")
+    if (
+        type(measurement_preparation_regions_per_signature) is not int
+        or measurement_preparation_regions_per_signature < 0
+    ):
+        raise ValueError("measurement preparation regions must be a nonnegative integer")
+    if stage2_executor is not None and measurement_preparation_regions_per_signature < 1:
+        raise ValueError("Stage-2 measurement requires out-of-window preparation")
     model.train()
     losses: list[float] = []
     modality_examples = {"text": 0, "image": 0, "audio": 0, "reasoning": 0, "tool": 0}
@@ -274,6 +367,59 @@ def run_pretraining_segment(
     data_cursor = initial_data_cursor
     remaining_records = records[initial_data_cursor:] if max_records is None else records[initial_data_cursor:initial_data_cursor + max_records]
     final_global_step = initial_global_step + len(remaining_records)
+    measurement_preparation = {
+        "regions_per_signature": 0,
+        "signature_count": 0,
+        "region_count": 0,
+        "no_capture_in_measured_window": True,
+    }
+    if measurement_preparation_regions_per_signature:
+        prepared_batches = [
+            decode_owned_batch(record, config, device=device)
+            for record in remaining_records
+        ]
+        initial_cursor_identity = hashlib.sha256(
+            json.dumps(
+                {
+                    "record_index": initial_data_cursor,
+                    "global_step": initial_global_step,
+                    "tokens_seen": initial_tokens_seen,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        if stage2_executor is not None:
+            measurement_preparation = stage2_executor.prepare_for_measurement(
+                prepared_batches,
+                cursor_identity=initial_cursor_identity,
+                regions_per_signature=measurement_preparation_regions_per_signature,
+            )
+        else:
+            unique_batches: dict[str, Mapping[str, object]] = {}
+            for batch in prepared_batches:
+                signature = str(training_step_signature(
+                    batch,
+                    gradient_checkpointing=bool(config.gradient_checkpointing),
+                )["signature_sha256"])
+                unique_batches.setdefault(signature, batch)
+            for signature in sorted(unique_batches):
+                batch = unique_batches[signature]
+                for _ in range(measurement_preparation_regions_per_signature):
+                    optimizer.zero_grad(set_to_none=True)
+                    _eager_forward_loss_backward(model, batch, config)
+            optimizer.zero_grad(set_to_none=True)
+            measurement_preparation = {
+                "regions_per_signature": measurement_preparation_regions_per_signature,
+                "signature_count": len(unique_batches),
+                "region_count": (
+                    measurement_preparation_regions_per_signature * len(unique_batches)
+                ),
+                "no_capture_in_measured_window": True,
+            }
+        if device.type == "cuda":
+            torch.cuda.synchronize(device)
+        del prepared_batches
     elapsed_step_seconds = 0.0
     step_timings_seconds: list[float] = []
     for local_step, record in enumerate(remaining_records, start=1):
@@ -290,17 +436,15 @@ def run_pretraining_segment(
             )
         if stage2_executor is None:
             optimizer.zero_grad(set_to_none=True)
-            logits = model(
-                batch["input_ids"], image_patches=batch["image_patches"], audio_frames=batch["audio_frames"],
-                image_coordinates=batch["image_coordinates"], spans=batch["spans"], active_expert=active_expert,
-            )
-            loss = F.cross_entropy(logits.float().reshape(-1, config.vocab_size), batch["target_ids"].reshape(-1))
-            if not torch.isfinite(loss):
+            try:
+                loss = _eager_forward_loss_backward(model, batch, config)
+            except RuntimeError as error:
+                if "non-finite loss" not in str(error):
+                    raise
                 raise RuntimeError(
                     f"pretraining segment stopped on non-finite loss at step "
                     f"{initial_global_step + local_step}"
-                )
-            loss.backward()
+                ) from error
         else:
             cursor_identity = hashlib.sha256(
                 json.dumps(
@@ -376,6 +520,7 @@ def run_pretraining_segment(
         "tokens_seen": tokens_seen,
         "data_cursor": {"shard": data_shard_id, "record_index": data_cursor, "global_step": initial_global_step + len(remaining_records), "tokens_seen": tokens_seen},
         "modality_examples": modality_examples, "expert_examples": expert_examples,
+        "measurement_preparation": measurement_preparation,
         "step_timings_seconds": step_timings_seconds,
         "step_elapsed_seconds": elapsed_step_seconds,
         "tokens_per_second": (
