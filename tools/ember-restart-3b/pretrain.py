@@ -63,6 +63,94 @@ def _eager_forward_loss_backward(
     return loss
 
 
+def _measurement_trainable_parameters(
+    model: UnifiedDecoder,
+    records: Sequence[Mapping[str, object]],
+) -> tuple[torch.Tensor, ...]:
+    """Return the unique parameter union trainable across the bound records."""
+    activate_expert = getattr(model, "_activate_expert", None)
+    original_active_expert = getattr(model, "active_expert", None)
+    if not callable(activate_expert) or not isinstance(original_active_expert, str):
+        raise RuntimeError("measurement model lacks dynamic expert routing state")
+    active_experts: set[str] = set()
+    for record in records:
+        active_expert = record.get("active_expert")
+        if active_expert != "shared" and active_expert not in EXPERT_NAMES:
+            raise ValueError("measurement record declares an invalid active expert")
+        active_experts.add(str(active_expert))
+    selected: dict[int, torch.Tensor] = {}
+    try:
+        for active_expert in sorted(active_experts):
+            activate_expert(active_expert)
+            for parameter in model.parameters():
+                if parameter.requires_grad:
+                    selected.setdefault(id(parameter), parameter)
+    finally:
+        activate_expert(original_active_expert)
+    return tuple(selected.values())
+
+
+def _preinitialize_optimizer_state(
+    optimizer: object,
+    *,
+    trainable_parameters: Sequence[torch.Tensor] | None = None,
+) -> int:
+    """Materialize a lazy optimizer's state without taking an optimizer step."""
+    init_state = getattr(optimizer, "init_state", None)
+    if not callable(init_state):
+        return 0
+    param_groups = getattr(optimizer, "param_groups", None)
+    state = getattr(optimizer, "state", None)
+    if not isinstance(param_groups, list) or not isinstance(state, dict):
+        raise RuntimeError("lazy optimizer state surface is malformed")
+    selected_ids = (
+        None if trainable_parameters is None
+        else {id(parameter) for parameter in trainable_parameters}
+    )
+    covered_ids: set[int] = set()
+    for group_index, group in enumerate(param_groups):
+        if not isinstance(group, Mapping) or not isinstance(group.get("params"), list):
+            raise RuntimeError("lazy optimizer parameter group is malformed")
+        for parameter_index, parameter in enumerate(group["params"]):
+            if not isinstance(parameter, torch.Tensor):
+                continue
+            parameter_id = id(parameter)
+            selected = (
+                parameter.requires_grad if selected_ids is None
+                else parameter_id in selected_ids
+            )
+            if not selected or parameter_id in covered_ids:
+                continue
+            if not state.get(parameter):
+                init_state(group, parameter, group_index, parameter_index)
+            if not state.get(parameter):
+                raise RuntimeError("lazy optimizer state initialization retained no state")
+            covered_ids.add(parameter_id)
+    if selected_ids is not None and covered_ids != selected_ids:
+        raise RuntimeError("measurement trainable parameter is absent from optimizer groups")
+    return len(covered_ids)
+
+
+def _require_preinitialized_gradient_state(optimizer: object) -> None:
+    """Refuse before a lazy optimizer step if any gradient lacks state."""
+    init_state = getattr(optimizer, "init_state", None)
+    if not callable(init_state):
+        return
+    param_groups = getattr(optimizer, "param_groups", None)
+    state = getattr(optimizer, "state", None)
+    if not isinstance(param_groups, list) or not isinstance(state, dict):
+        raise RuntimeError("lazy optimizer state surface is malformed")
+    for group_index, group in enumerate(param_groups):
+        if not isinstance(group, Mapping) or not isinstance(group.get("params"), list):
+            raise RuntimeError("lazy optimizer parameter group is malformed")
+        for parameter_index, parameter in enumerate(group["params"]):
+            if isinstance(parameter, torch.Tensor) and parameter.grad is not None and not state.get(parameter):
+                raise RuntimeError(
+                    "optimizer state preinitialization missed gradient-bearing parameter "
+                    f"group={group_index} parameter={parameter_index}"
+                )
+
+
 class CensusBoundStage2Executor:
     """Execute only forward/loss/backward through a census-bound graph pool."""
 
@@ -96,7 +184,19 @@ class CensusBoundStage2Executor:
             )
         self.preparation_regions_per_signature = preparation_regions
         self._static_batches: dict[str, dict[str, object]] = {}
-        self._loss_snapshots: dict[str, torch.Tensor] = {}
+        self._loss_outputs: dict[str, torch.Tensor] = {}
+        self._shared_gradient_parameters: tuple[torch.Tensor, ...] = ()
+        self._expert_parameters: tuple[torch.Tensor, ...] = ()
+        self._conditional_gradient_parameters: tuple[torch.Tensor, ...] = ()
+        self._gradient_workspace: tuple[torch.Tensor, ...] | None = None
+        self._gradient_parameters_by_signature: dict[str, tuple[torch.Tensor, ...]] = {}
+        self._conditional_gradients_by_signature: dict[
+            str, tuple[tuple[torch.Tensor, torch.Tensor], ...]
+        ] = {}
+        self._gradient_workspace_reuses = 0
+        self._inactive_grad_none_assertions = 0
+        self._preparation_memory_allocated_bytes_by_signature: dict[str, int] = {}
+        self._active_gradient_signature: str | None = None
         self._optimizer_steps = 0
         self._refreshes = 0
         self._captures_during_preparation = 0
@@ -126,6 +226,127 @@ class CensusBoundStage2Executor:
             f"stage2-optimizer-steps:{self._optimizer_steps}".encode("ascii")
         ).hexdigest()
 
+    @staticmethod
+    def _parameter_bytes(parameters: Sequence[torch.Tensor]) -> int:
+        return sum(parameter.numel() * parameter.element_size() for parameter in parameters)
+
+    def _prepare_gradient_partition(
+        self, unique: Mapping[str, Mapping[str, object]],
+    ) -> None:
+        """Partition persistent trunk grads from one reusable expert workspace."""
+        named_parameters = tuple(self.model.named_parameters())
+        expert_parameters = tuple(
+            parameter for name, parameter in named_parameters
+            if ".experts." in f".{name}"
+        )
+        conditional_parameters = tuple(
+            parameter
+            for name, parameter in named_parameters
+            if name.startswith(("image_projector.", "audio_projector."))
+        )
+        expert_ids = {id(parameter) for parameter in expert_parameters}
+        conditional_ids = {id(parameter) for parameter in conditional_parameters}
+        shared_parameters = tuple(
+            parameter for _name, parameter in named_parameters
+            if id(parameter) not in expert_ids | conditional_ids
+        )
+        original_active_expert = self.model.active_expert
+        original_requires_grad = tuple(
+            parameter.requires_grad for _name, parameter in named_parameters
+        )
+        selected_by_signature: dict[str, tuple[torch.Tensor, ...]] = {}
+        try:
+            for signature, batch in sorted(unique.items()):
+                active_expert = batch.get("active_expert")
+                if active_expert not in EXPERT_NAMES:
+                    raise RuntimeError("Stage-2 gradient workspace requires an expert signature")
+                self.model._activate_expert(str(active_expert))
+                selected_by_signature[signature] = tuple(
+                    parameter for parameter in expert_parameters if parameter.requires_grad
+                )
+        finally:
+            self.model._activate_expert(original_active_expert)
+        if tuple(parameter.requires_grad for _name, parameter in named_parameters) != original_requires_grad:
+            raise RuntimeError("Stage-2 gradient partition did not restore requires_grad state")
+        if not selected_by_signature or any(not parameters for parameters in selected_by_signature.values()):
+            raise RuntimeError("Stage-2 gradient workspace found an empty expert bank")
+        first_signature = next(iter(sorted(selected_by_signature)))
+        reference = selected_by_signature[first_signature]
+        reference_layout = tuple(
+            (tuple(parameter.shape), parameter.dtype, parameter.device)
+            for parameter in reference
+        )
+        for signature, parameters in selected_by_signature.items():
+            layout = tuple(
+                (tuple(parameter.shape), parameter.dtype, parameter.device)
+                for parameter in parameters
+            )
+            if layout != reference_layout:
+                raise RuntimeError(
+                    "Stage-2 expert gradient workspace layout mismatch for signature "
+                    f"{signature}"
+                )
+        for _name, parameter in named_parameters:
+            parameter.grad = None
+        for parameter in shared_parameters:
+            parameter.grad = torch.zeros_like(parameter, memory_format=torch.preserve_format)
+        self._shared_gradient_parameters = shared_parameters
+        self._expert_parameters = expert_parameters
+        self._conditional_gradient_parameters = conditional_parameters
+        self._gradient_parameters_by_signature = selected_by_signature
+        self._gradient_workspace = tuple(
+            torch.zeros_like(parameter, memory_format=torch.preserve_format)
+            for parameter in reference
+        )
+
+    def _bind_gradient_workspace(self, *, signature: str, active_expert: str) -> None:
+        workspace = self._gradient_workspace
+        selected = self._gradient_parameters_by_signature.get(signature)
+        if workspace is None or selected is None or len(workspace) != len(selected):
+            raise RuntimeError("Stage-2 expert gradient workspace is not prepared")
+        self.model._activate_expert(active_expert)
+        for parameter in self._expert_parameters:
+            parameter.grad = None
+        for parameter in self._conditional_gradient_parameters:
+            parameter.grad = None
+        for parameter, gradient in zip(selected, workspace, strict=True):
+            if parameter.shape != gradient.shape or parameter.dtype != gradient.dtype:
+                raise RuntimeError("Stage-2 expert gradient workspace binding drifted")
+            parameter.grad = gradient
+        conditional = self._conditional_gradients_by_signature.get(signature, ())
+        for parameter, gradient in conditional:
+            parameter.grad = gradient
+        if self._active_gradient_signature is not None:
+            self._gradient_workspace_reuses += 1
+        self._active_gradient_signature = signature
+
+    def assert_optimizer_membership(self) -> int:
+        signature = self._active_gradient_signature
+        if signature is None:
+            raise RuntimeError("Stage-2 optimizer membership lacks an active signature")
+        selected_ids = {
+            id(parameter) for parameter in self._gradient_parameters_by_signature[signature]
+        }
+        conditional_ids = {
+            id(parameter)
+            for parameter, _gradient in self._conditional_gradients_by_signature.get(signature, ())
+        }
+        assertions = 0
+        for parameter in self._expert_parameters:
+            should_have_gradient = id(parameter) in selected_ids
+            if (parameter.grad is not None) != should_have_gradient:
+                raise RuntimeError("Stage-2 inactive expert gradient isolation failed")
+            if not should_have_gradient:
+                assertions += 1
+        for parameter in self._conditional_gradient_parameters:
+            should_have_gradient = id(parameter) in conditional_ids
+            if (parameter.grad is not None) != should_have_gradient:
+                raise RuntimeError("Stage-2 conditional gradient isolation failed")
+            if not should_have_gradient:
+                assertions += 1
+        self._inactive_grad_none_assertions += assertions
+        return assertions
+
     def _capture(
         self,
         batch: Mapping[str, object],
@@ -135,7 +356,9 @@ class CensusBoundStage2Executor:
     ) -> None:
         static = self._static_batch(batch)
         loss_holder: list[torch.Tensor] = []
-        loss_snapshot: torch.Tensor | None = None
+        self._bind_gradient_workspace(
+            signature=signature, active_expert=str(static["active_expert"]),
+        )
 
         def marker_indices(*, marker_id: int, raw_key: str) -> torch.Tensor:
             if static[raw_key] is None:
@@ -169,9 +392,6 @@ class CensusBoundStage2Executor:
                 static["target_ids"].reshape(-1),
             )
             loss.backward()
-            if loss_snapshot is not None:
-                with torch.no_grad():
-                    loss_snapshot.copy_(loss)
             if loss_holder:
                 loss_holder[0] = loss
             else:
@@ -183,7 +403,6 @@ class CensusBoundStage2Executor:
         warmup(region, lambda: self.optimizer.zero_grad(set_to_none=False))
         if not loss_holder:
             raise RuntimeError("Stage-2 graph warmup did not retain its loss tensor")
-        loss_snapshot = torch.empty_like(loss_holder[0], requires_grad=False)
         loss_holder.clear()
         self.graph_pool.capture(
             signature_sha256=signature,
@@ -193,9 +412,15 @@ class CensusBoundStage2Executor:
         )
         if not loss_holder:
             raise RuntimeError("Stage-2 graph capture did not retain its loss tensor")
+        loss_output = loss_holder[0].detach()
         loss_holder.clear()
         self._static_batches[signature] = static
-        self._loss_snapshots[signature] = loss_snapshot
+        self._loss_outputs[signature] = loss_output
+        self._conditional_gradients_by_signature[signature] = tuple(
+            (parameter, parameter.grad)
+            for parameter in self._conditional_gradient_parameters
+            if parameter.grad is not None
+        )
         self._captures_during_preparation += 1
         self.optimizer.zero_grad(set_to_none=False)
 
@@ -219,12 +444,29 @@ class CensusBoundStage2Executor:
             unique.setdefault(signature, batch)
         if set(unique) != set(self.authority.registry.approved_signatures):
             raise RuntimeError("Stage-2 preparation does not cover the full admitted census")
+        self._prepare_gradient_partition(unique)
         for signature in sorted(unique):
-            self._capture(
-                unique[signature],
-                signature=signature,
-                cursor_identity=cursor_identity,
-            )
+            status = "COMPLETED"
+            try:
+                self._capture(
+                    unique[signature],
+                    signature=signature,
+                    cursor_identity=cursor_identity,
+                )
+            except BaseException:
+                status = "FAILED"
+                raise
+            finally:
+                allocated_bytes = (
+                    int(torch.cuda.memory_allocated()) if torch.cuda.is_available() else 0
+                )
+                self._preparation_memory_allocated_bytes_by_signature[signature] = allocated_bytes
+                print(json.dumps({
+                    "event": "stage2_signature_preparation_memory",
+                    "status": status,
+                    "signature_sha256": signature,
+                    "memory_allocated_bytes": allocated_bytes,
+                }, sort_keys=True, separators=(",", ":")), flush=True)
         self._measurement_prepared = True
         return {
             "regions_per_signature": regions_per_signature,
@@ -246,9 +488,12 @@ class CensusBoundStage2Executor:
             self._captures_during_measured_window += 1
             raise RuntimeError("Stage-2 measured window cannot capture a graph")
         self._copy_tensors(self._static_batches[signature], batch)
+        self._bind_gradient_workspace(
+            signature=signature, active_expert=str(batch["active_expert"]),
+        )
         self.optimizer.zero_grad(set_to_none=False)
         self.graph_pool.replay(signature)
-        return self._loss_snapshots[signature]
+        return self._loss_outputs[signature]
 
     def after_optimizer_step(self) -> int:
         self._optimizer_steps += 1
@@ -273,6 +518,16 @@ class CensusBoundStage2Executor:
             "captures_during_measured_window": self._captures_during_measured_window,
             "cuda_graph_replays": graph["replays"],
             "cuda_graph_fallbacks": graph["fallbacks"],
+            "shared_trunk_gradient_parameters": len(self._shared_gradient_parameters),
+            "shared_trunk_gradient_bytes": self._parameter_bytes(self._shared_gradient_parameters),
+            "expert_bank_gradient_workspace_parameters": len(self._gradient_workspace or ()),
+            "gradient_workspace_bytes": self._parameter_bytes(self._gradient_workspace or ()),
+            "gradient_workspace_rebinds": self._gradient_workspace_reuses,
+            "inactive_grad_none_assertions": self._inactive_grad_none_assertions,
+            "capture_gradient_zeroing": "eager_default_stream_outside_capture",
+            "preparation_memory_allocated_bytes_by_signature": dict(
+                self._preparation_memory_allocated_bytes_by_signature
+            ),
             "kernel_receipts": kernels,
             "graph_receipt": graph,
         }
@@ -397,9 +652,18 @@ def run_pretraining_segment(
         "regions_per_signature": 0,
         "signature_count": 0,
         "region_count": 0,
+        "optimizer_state_preinitialized_parameters": 0,
         "no_capture_in_measured_window": True,
     }
+    optimizer_state_parameters = 0
     if measurement_preparation_regions_per_signature:
+        measurement_trainable_parameters = _measurement_trainable_parameters(
+            model, remaining_records,
+        )
+        optimizer_state_parameters = _preinitialize_optimizer_state(
+            optimizer,
+            trainable_parameters=measurement_trainable_parameters,
+        )
         prepared_batches = [
             decode_owned_batch(record, config, device=device)
             for record in remaining_records
@@ -421,6 +685,10 @@ def run_pretraining_segment(
                 cursor_identity=initial_cursor_identity,
                 regions_per_signature=measurement_preparation_regions_per_signature,
             )
+            measurement_preparation = {
+                **measurement_preparation,
+                "optimizer_state_preinitialized_parameters": optimizer_state_parameters,
+            }
         else:
             unique_batches: dict[str, Mapping[str, object]] = {}
             for batch in prepared_batches:
@@ -441,6 +709,7 @@ def run_pretraining_segment(
                 "region_count": (
                     measurement_preparation_regions_per_signature * len(unique_batches)
                 ),
+                "optimizer_state_preinitialized_parameters": optimizer_state_parameters,
                 "no_capture_in_measured_window": True,
             }
         if device.type == "cuda":
@@ -485,6 +754,10 @@ def run_pretraining_segment(
         if not torch.isfinite(loss):
             raise RuntimeError(f"pretraining segment stopped on non-finite loss at step {initial_global_step + local_step}")
         grad_norm_tensor = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        if stage2_executor is not None:
+            stage2_executor.assert_optimizer_membership()
+        if optimizer_state_parameters:
+            _require_preinitialized_gradient_state(optimizer)
         optimizer.step()
         if stage2_executor is not None:
             stage2_executor.after_optimizer_step()
