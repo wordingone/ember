@@ -72,27 +72,28 @@ def quantize_blocks(
         _invalid("quantization input is non-finite")
     if format_name == UNSIGNED_UINT8 and bool((source < 0).any().item()):
         _invalid("unsigned quantization input is negative")
-    quantized_parts: list[torch.Tensor] = []
-    scales: list[torch.Tensor] = []
-    for start in range(0, source.numel(), block_size):
-        block = source[start:start + block_size]
-        maximum = block.max() if format_name == UNSIGNED_UINT8 else block.abs().max()
-        if maximum.item() == 0:
-            scale = torch.ones((), device=source.device, dtype=torch.float32)
-            quantized = torch.zeros_like(
-                block,
-                dtype=torch.uint8 if format_name == UNSIGNED_UINT8 else torch.int8,
-            )
-        else:
-            divisor = 255.0 if format_name == UNSIGNED_UINT8 else (7.0 if format_name == SIGNED_INT4 else 127.0)
-            scale = maximum / divisor
-            lower = 0 if format_name == UNSIGNED_UINT8 else (-7 if format_name == SIGNED_INT4 else -127)
-            upper = 255 if format_name == UNSIGNED_UINT8 else (7 if format_name == SIGNED_INT4 else 127)
-            dtype = torch.uint8 if format_name == UNSIGNED_UINT8 else torch.int8
-            quantized = torch.round(block / scale).clamp(lower, upper).to(dtype=dtype)
-        scales.append(scale)
-        quantized_parts.append(quantized)
-    unpacked = torch.cat(quantized_parts)
+    padded_numel = ((source.numel() + block_size - 1) // block_size) * block_size
+    if padded_numel != source.numel():
+        source_blocks = torch.cat((source, source.new_zeros(padded_numel - source.numel())))
+    else:
+        source_blocks = source
+    source_blocks = source_blocks.reshape(-1, block_size)
+    maximum = (
+        source_blocks.max(dim=1).values
+        if format_name == UNSIGNED_UINT8
+        else source_blocks.abs().max(dim=1).values
+    )
+    divisor = 255.0 if format_name == UNSIGNED_UINT8 else (7.0 if format_name == SIGNED_INT4 else 127.0)
+    scales = torch.where(maximum == 0, torch.ones_like(maximum), maximum / divisor)
+    lower = 0 if format_name == UNSIGNED_UINT8 else (-7 if format_name == SIGNED_INT4 else -127)
+    upper = 255 if format_name == UNSIGNED_UINT8 else (7 if format_name == SIGNED_INT4 else 127)
+    dtype = torch.uint8 if format_name == UNSIGNED_UINT8 else torch.int8
+    unpacked = (
+        torch.round(source_blocks / scales[:, None])
+        .clamp(lower, upper)
+        .to(dtype=dtype)
+        .reshape(-1)[:source.numel()]
+    )
     if format_name == SIGNED_INT4:
         nibbles = torch.bitwise_and(unpacked.to(torch.int16), 15).to(torch.uint8)
         if nibbles.numel() % 2:
@@ -106,7 +107,7 @@ def quantize_blocks(
         shape=tuple(value.shape),
         numel=value.numel(),
         payload=payload.contiguous(),
-        scales=torch.stack(scales).to(dtype=torch.float32),
+        scales=scales.to(dtype=torch.float32),
     )
     _validate_quantized(record)
     return record
