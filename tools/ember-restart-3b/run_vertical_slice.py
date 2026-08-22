@@ -4008,6 +4008,9 @@ def run(
                 for key in (
                     "fp8_dispatches", "fp8_fallbacks", "cuda_graph_captures",
                     "cuda_graph_replays", "cuda_graph_fallbacks",
+                    "shared_trunk_gradient_parameters", "shared_trunk_gradient_bytes",
+                    "expert_bank_gradient_workspace_parameters", "gradient_workspace_bytes",
+                    "gradient_workspace_rebinds", "inactive_grad_none_assertions",
                 )
             }
         else:
@@ -4017,6 +4020,12 @@ def run(
                 "cuda_graph_captures": 0,
                 "cuda_graph_replays": 0,
                 "cuda_graph_fallbacks": 0,
+                "shared_trunk_gradient_parameters": 0,
+                "shared_trunk_gradient_bytes": 0,
+                "expert_bank_gradient_workspace_parameters": 0,
+                "gradient_workspace_bytes": 0,
+                "gradient_workspace_rebinds": 0,
+                "inactive_grad_none_assertions": 0,
             }
         initial_cursor = {
             key: int(resume_cursor[key])
@@ -4037,7 +4046,7 @@ def run(
         stage2_arm_receipt = write_stage2_arm_receipt(
             stage2_arm_receipt_output,
             {
-                "schema_version": "ember-stage2-training-arm-v1",
+                "schema_version": "ember-stage2-training-arm-v2",
                 "arm": "census_bound_stage2" if stage2_acceleration else "bf16_baseline",
                 "source_commit": _STAGE2_AB_SOURCE_COMMIT,
                 "runner_source_sha256": _sha256(Path(__file__).resolve()),
@@ -4063,6 +4072,19 @@ def run(
                 "preparation_regions_per_signature": int(preparation["regions_per_signature"]),
                 "preparation_signature_count": int(preparation["signature_count"]),
                 "preparation_region_count": int(preparation["region_count"]),
+                "optimizer_state_preinitialized_parameters": int(
+                    preparation["optimizer_state_preinitialized_parameters"]
+                ),
+                "capture_gradient_zeroing": (
+                    str(runtime["capture_gradient_zeroing"])
+                    if stage2_acceleration and isinstance(runtime, Mapping)
+                    else "NOT_APPLICABLE"
+                ),
+                "preparation_memory_allocated_bytes_by_signature": (
+                    dict(runtime["preparation_memory_allocated_bytes_by_signature"])
+                    if stage2_acceleration and isinstance(runtime, Mapping)
+                    else {}
+                ),
                 "captures_during_preparation": captures_during_preparation,
                 "captures_during_measured_window": captures_during_measured_window,
                 "no_capture_in_measured_window": bool(

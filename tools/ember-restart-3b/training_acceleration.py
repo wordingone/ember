@@ -469,6 +469,9 @@ class TorchCudaGraphBackend:
 
     preparation_regions_per_signature = 4
 
+    def __init__(self) -> None:
+        self._pool: object | None = None
+
     def warmup(
         self,
         region: Callable[[], None],
@@ -490,8 +493,10 @@ class TorchCudaGraphBackend:
         if not torch.cuda.is_available():
             raise RuntimeError("CUDA graph capture requires CUDA")
         graph = torch.cuda.CUDAGraph()
-        with torch.cuda.graph(graph):
+        with torch.cuda.graph(graph, pool=self._pool):
             region()
+        if self._pool is None:
+            self._pool = graph.pool()
         return graph
 
 
@@ -854,21 +859,26 @@ _STAGE2_ARM_KEYS = {
     "steps", "tokens", "losses", "step_timings_seconds", "step_elapsed_seconds", "tokens_per_second",
     "max_memory_allocated_bytes", "max_memory_reserved_bytes", "mechanisms",
     "preparation_regions_per_signature", "preparation_signature_count",
-    "preparation_region_count", "captures_during_preparation",
+    "preparation_region_count", "optimizer_state_preinitialized_parameters",
+    "capture_gradient_zeroing", "preparation_memory_allocated_bytes_by_signature",
+    "captures_during_preparation",
     "captures_during_measured_window", "no_capture_in_measured_window",
 }
 _STAGE2_MECHANISM_KEYS = {
     "fp8_dispatches", "fp8_fallbacks", "cuda_graph_captures",
     "cuda_graph_replays", "cuda_graph_fallbacks",
+    "shared_trunk_gradient_parameters", "shared_trunk_gradient_bytes",
+    "expert_bank_gradient_workspace_parameters", "gradient_workspace_bytes",
+    "gradient_workspace_rebinds", "inactive_grad_none_assertions",
 }
 _STAGE2_MATCHED_LOSS_RELATIVE_TOLERANCE = 0.01
 
 
 def _validate_stage2_arm(value: Mapping[str, object]) -> dict[str, object]:
     if not isinstance(value, Mapping) or set(value) != _STAGE2_ARM_KEYS:
-        raise ValueError("Stage-2 arm receipt must use the closed v1 key set")
+        raise ValueError("Stage-2 arm receipt must use the closed v2 key set")
     arm = value["arm"]
-    if value["schema_version"] != "ember-stage2-training-arm-v1" or arm not in {
+    if value["schema_version"] != "ember-stage2-training-arm-v2" or arm not in {
         "bf16_baseline", "census_bound_stage2",
     }:
         raise ValueError("Stage-2 arm receipt identity is invalid")
@@ -961,9 +971,22 @@ def _validate_stage2_arm(value: Mapping[str, object]) -> dict[str, object]:
         raise ValueError("BF16 baseline cannot activate Stage-2 mechanisms")
     if arm == "census_bound_stage2" and any(count < 1 for count in active_counts):
         raise ValueError("census-bound Stage-2 arm requires both mechanisms")
+    workspace_counts = tuple(
+        mechanisms[key]
+        for key in (
+            "shared_trunk_gradient_parameters", "shared_trunk_gradient_bytes",
+            "expert_bank_gradient_workspace_parameters", "gradient_workspace_bytes",
+            "gradient_workspace_rebinds", "inactive_grad_none_assertions",
+        )
+    )
+    if arm == "bf16_baseline" and any(workspace_counts):
+        raise ValueError("BF16 baseline cannot activate a Stage-2 gradient workspace")
+    if arm == "census_bound_stage2" and any(count < 1 for count in workspace_counts):
+        raise ValueError("census-bound Stage-2 arm requires gradient workspace evidence")
     regions_per_signature = value["preparation_regions_per_signature"]
     signature_count = value["preparation_signature_count"]
     region_count = value["preparation_region_count"]
+    optimizer_state_parameters = value["optimizer_state_preinitialized_parameters"]
     if (
         type(regions_per_signature) is not int
         or regions_per_signature < 1
@@ -971,8 +994,10 @@ def _validate_stage2_arm(value: Mapping[str, object]) -> dict[str, object]:
         or signature_count < 1
         or type(region_count) is not int
         or region_count != regions_per_signature * signature_count
+        or type(optimizer_state_parameters) is not int
+        or optimizer_state_parameters < 1
     ):
-        raise ValueError("Stage-2 arm preparation methodology is invalid")
+        raise ValueError("Stage-2 arm preparation or optimizer state methodology is invalid")
     captures_during_preparation = value["captures_during_preparation"]
     captures_during_measured_window = value["captures_during_measured_window"]
     if (
@@ -994,6 +1019,25 @@ def _validate_stage2_arm(value: Mapping[str, object]) -> dict[str, object]:
             raise ValueError("Stage-2 preparation must capture every admitted signature once")
         if mechanisms["cuda_graph_captures"] != captures_during_preparation:
             raise ValueError("Stage-2 preparation capture accounting mismatch")
+    zeroing = value["capture_gradient_zeroing"]
+    preparation_memory = value["preparation_memory_allocated_bytes_by_signature"]
+    if arm == "bf16_baseline":
+        if zeroing != "NOT_APPLICABLE" or preparation_memory != {}:
+            raise ValueError("BF16 baseline cannot carry Stage-2 gradient preparation evidence")
+    else:
+        if zeroing != "eager_default_stream_outside_capture":
+            raise ValueError("Stage-2 capture gradient zeroing is invalid")
+        if (
+            not isinstance(preparation_memory, Mapping)
+            or len(preparation_memory) != signature_count
+            or any(
+                re.fullmatch(r"[0-9a-f]{64}", str(signature)) is None
+                or type(allocated) is not int
+                or allocated < 1
+                for signature, allocated in preparation_memory.items()
+            )
+        ):
+            raise ValueError("Stage-2 per-signature preparation memory evidence is invalid")
     return dict(value)
 
 
@@ -1022,7 +1066,7 @@ def _load_stage2_arm_receipt_bytes(raw: bytes) -> dict[str, object]:
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ValueError("Stage-2 arm receipt is not readable strict JSON") from error
     if not isinstance(value, dict) or set(value) != _STAGE2_ARM_KEYS | {"self_sha256"}:
-        raise ValueError("Stage-2 arm receipt must use the closed v1 key set")
+        raise ValueError("Stage-2 arm receipt must use the closed v2 key set")
     claimed = _sha256(value["self_sha256"], label="Stage-2 arm receipt self sha256")
     unsigned = dict(value)
     del unsigned["self_sha256"]
@@ -1043,7 +1087,8 @@ def build_stage2_ab_comparison(
         "input_identity_sha256", "record_order_sha256", "checkpoint_lineage_sha256",
         "seed", "initial_cursor", "steps", "tokens",
         "preparation_regions_per_signature", "preparation_signature_count",
-        "preparation_region_count", "captures_during_measured_window",
+        "preparation_region_count", "optimizer_state_preinitialized_parameters",
+        "captures_during_measured_window",
         "no_capture_in_measured_window",
     )
     if any(baseline_value[key] != accelerated_value[key] for key in identity_keys):
