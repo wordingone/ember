@@ -32,6 +32,178 @@ from verify_capability_record import expected_receipt
 
 
 class PretrainingSegmentTests(unittest.TestCase):
+    def test_optimizer_state_preinitialization_is_idempotent_and_parameter_stable(self) -> None:
+        parameters = [
+            torch.nn.Parameter(torch.tensor([1.0, 2.0])),
+            torch.nn.Parameter(torch.tensor([3.0])),
+        ]
+
+        class FakeLazyOptimizer:
+            def __init__(self) -> None:
+                self.param_groups = [{"params": parameters}]
+                self.state: dict[torch.Tensor, dict[str, torch.Tensor]] = {}
+                self.calls: list[tuple[int, int]] = []
+
+            def init_state(
+                self, group: object, parameter: torch.Tensor,
+                group_index: int, parameter_index: int,
+            ) -> None:
+                del group
+                self.calls.append((group_index, parameter_index))
+                self.state[parameter] = {"state1": torch.zeros_like(parameter)}
+
+        optimizer = FakeLazyOptimizer()
+        before = [parameter.detach().clone() for parameter in parameters]
+
+        self.assertEqual(pretrain._preinitialize_optimizer_state(optimizer), 2)
+        self.assertEqual(optimizer.calls, [(0, 0), (0, 1)])
+        self.assertTrue(all(
+            torch.equal(parameter, frozen)
+            for parameter, frozen in zip(parameters, before, strict=True)
+        ))
+        self.assertEqual(pretrain._preinitialize_optimizer_state(optimizer), 2)
+        self.assertEqual(optimizer.calls, [(0, 0), (0, 1)])
+
+    def test_measurement_trainable_union_covers_dynamic_experts_and_restores_route(self) -> None:
+        shared = torch.nn.Parameter(torch.tensor([1.0]))
+        reasoning = torch.nn.Parameter(torch.tensor([2.0]))
+        tool = torch.nn.Parameter(torch.tensor([3.0]))
+
+        class DynamicExpertModel(torch.nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.shared = shared
+                self.experts = torch.nn.ParameterDict({
+                    "reasoning": reasoning,
+                    "tool": tool,
+                })
+                self.active_expert = "reasoning"
+                self._activate_expert(self.active_expert)
+
+            def _activate_expert(self, active_expert: str) -> None:
+                self.active_expert = active_expert
+                shared.requires_grad_(True)
+                reasoning.requires_grad_(active_expert == "reasoning")
+                tool.requires_grad_(active_expert == "tool")
+
+        model = DynamicExpertModel()
+        before = [parameter.detach().clone() for parameter in model.parameters()]
+        before_requires_grad = [parameter.requires_grad for parameter in model.parameters()]
+
+        selected = pretrain._measurement_trainable_parameters(
+            model,
+            [
+                {"schema_version": "ember-owned-bootstrap-batch-v1", "active_expert": "tool"},
+                {"schema_version": "ember-owned-bootstrap-batch-v1", "active_expert": "reasoning"},
+            ],
+        )
+
+        self.assertEqual({id(parameter) for parameter in selected}, {id(shared), id(reasoning), id(tool)})
+        self.assertEqual(model.active_expert, "reasoning")
+        self.assertTrue(reasoning.requires_grad)
+        self.assertFalse(tool.requires_grad)
+        self.assertEqual(
+            [parameter.requires_grad for parameter in model.parameters()],
+            before_requires_grad,
+        )
+        self.assertTrue(all(
+            torch.equal(parameter, frozen)
+            for parameter, frozen in zip(model.parameters(), before, strict=True)
+        ))
+
+        class FakeLazyOptimizer:
+            def __init__(self) -> None:
+                self.param_groups = [{"params": list(model.parameters())}]
+                self.state: dict[torch.Tensor, dict[str, torch.Tensor]] = {}
+
+            def init_state(
+                self, group: object, parameter: torch.Tensor,
+                group_index: int, parameter_index: int,
+            ) -> None:
+                del group, group_index, parameter_index
+                self.state[parameter] = {"state1": torch.zeros_like(parameter)}
+
+        optimizer = FakeLazyOptimizer()
+        self.assertEqual(
+            pretrain._preinitialize_optimizer_state(
+                optimizer, trainable_parameters=selected,
+            ),
+            3,
+        )
+        self.assertEqual({id(parameter) for parameter in optimizer.state}, {id(shared), id(reasoning), id(tool)})
+
+    def test_preinitialized_state_guard_names_a_gradient_bearing_miss(self) -> None:
+        covered = torch.nn.Parameter(torch.tensor([1.0]))
+        missed = torch.nn.Parameter(torch.tensor([2.0]))
+        covered.grad = torch.ones_like(covered)
+        missed.grad = torch.ones_like(missed)
+
+        class FakeLazyOptimizer:
+            param_groups = [{"params": [covered, missed]}]
+            state = {covered: {"state1": torch.zeros_like(covered)}}
+
+            @staticmethod
+            def init_state(*args: object) -> None:
+                del args
+
+        with self.assertRaisesRegex(RuntimeError, r"group=0 parameter=1"):
+            pretrain._require_preinitialized_gradient_state(FakeLazyOptimizer())
+
+    def test_stage2_gradient_workspace_reuses_addresses_and_isolates_inactive_experts(self) -> None:
+        shared = torch.nn.Parameter(torch.tensor([1.0, 2.0]))
+        reasoning = torch.nn.Parameter(torch.tensor([3.0]))
+        tool = torch.nn.Parameter(torch.tensor([4.0]))
+
+        class DynamicExpertModel(torch.nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.shared = shared
+                self.experts = torch.nn.ParameterDict({
+                    "reasoning": reasoning,
+                    "tool": tool,
+                })
+                self.active_expert = "reasoning"
+                self._activate_expert(self.active_expert)
+
+            def _activate_expert(self, active_expert: str) -> None:
+                self.active_expert = active_expert
+                shared.requires_grad_(True)
+                reasoning.requires_grad_(active_expert == "reasoning")
+                tool.requires_grad_(active_expert == "tool")
+
+        executor = object.__new__(pretrain.CensusBoundStage2Executor)
+        executor.model = DynamicExpertModel()
+        executor._gradient_workspace = None
+        executor._gradient_parameters_by_signature = {}
+        executor._gradient_workspace_reuses = 0
+        executor._inactive_grad_none_assertions = 0
+        executor._conditional_gradients_by_signature = {}
+        executor._active_gradient_signature = None
+
+        executor._prepare_gradient_partition({
+            "a" * 64: {"active_expert": "reasoning"},
+            "b" * 64: {"active_expert": "tool"},
+        })
+
+        executor._bind_gradient_workspace(signature="a" * 64, active_expert="reasoning")
+        first_addresses = tuple(tensor.data_ptr() for tensor in executor._gradient_workspace)
+        self.assertIsNone(tool.grad)
+
+        executor._bind_gradient_workspace(signature="b" * 64, active_expert="tool")
+        second_addresses = tuple(tensor.data_ptr() for tensor in executor._gradient_workspace)
+        self.assertEqual(second_addresses, first_addresses)
+        self.assertIsNone(reasoning.grad)
+        self.assertIs(tool.grad, executor._gradient_workspace[-1])
+        self.assertEqual(executor._gradient_workspace_reuses, 1)
+        self.assertEqual(executor.assert_optimizer_membership(), 1)
+        self.assertEqual(executor._inactive_grad_none_assertions, 1)
+        reasoning_before = reasoning.detach().clone()
+        tool_before = tool.detach().clone()
+        torch.optim.SGD(
+            executor.model.parameters(), lr=0.1, weight_decay=0.1,
+        ).step()
+        self.assertTrue(torch.equal(reasoning, reasoning_before))
+        self.assertFalse(torch.equal(tool, tool_before))
     @staticmethod
     def _fake_scaled_mm(
         activation: torch.Tensor,
@@ -135,12 +307,7 @@ class PretrainingSegmentTests(unittest.TestCase):
         config = RestartDecoderConfig.small_for_tests(
             hidden_size=32, layers=1, attention_heads=4, vocab_size=64,
         )
-        record = {
-            "schema_version": "ember-owned-semantic-text-v1",
-            "active_expert": "shared",
-            "token_ids": [8, 9, 10, 11],
-            "target_ids": [9, 10, 11, 12],
-        }
+        record = self._record(config, expert="vision")
         batch = decode_owned_batch(record, config, device=torch.device("cpu"))
         census = training_acceleration.TrainingSignatureCensus(
             source_commit="1" * 40,
@@ -199,6 +366,10 @@ class PretrainingSegmentTests(unittest.TestCase):
         gc.collect()
         self.assertIsNotNone(backend.captured_loss_ref)
         self.assertIsNone(backend.captured_loss_ref())
+        self.assertFalse(hasattr(executor, "_loss_snapshots"))
+        self.assertTrue(all(
+            loss.grad_fn is None for loss in executor._loss_outputs.values()
+        ))
         self.assertEqual(runtime["cuda_graph_captures"], 1)
         self.assertEqual(runtime["cuda_graph_replays"], 1)
         self.assertEqual(runtime["captures_during_preparation"], 1)
@@ -210,6 +381,7 @@ class PretrainingSegmentTests(unittest.TestCase):
             "regions_per_signature": 4,
             "signature_count": 1,
             "region_count": 4,
+            "optimizer_state_preinitialized_parameters": 0,
             "no_capture_in_measured_window": True,
         })
         self.assertAlmostEqual(
@@ -234,8 +406,9 @@ class PretrainingSegmentTests(unittest.TestCase):
 
             @staticmethod
             def replay(signature: str) -> None:
-                shared_pool_loss.fill_(1.0 if signature == signatures[0] else 2.0)
-                executor._loss_snapshots[signature].copy_(shared_pool_loss)
+                executor._loss_outputs[signature].fill_(
+                    1.0 if signature == signatures[0] else 2.0
+                )
 
         class FakeOptimizer:
             @staticmethod
@@ -249,16 +422,19 @@ class PretrainingSegmentTests(unittest.TestCase):
         executor.config = RestartDecoderConfig.small_for_tests()
         executor._static_batches = {signature: {} for signature in signatures}
         executor.optimizer = FakeOptimizer()
-        executor._loss_snapshots = {
+        executor._loss_outputs = {
             signature: torch.empty_like(shared_pool_loss) for signature in signatures
         }
         executor._captures_during_measured_window = 0
+        executor._bind_gradient_workspace = lambda **_kwargs: None
 
         first = executor.forward_loss_backward(
-            {"signature": signatures[0]}, cursor_identity="7" * 64,
+            {"signature": signatures[0], "active_expert": "reasoning"},
+            cursor_identity="7" * 64,
         )
         second = executor.forward_loss_backward(
-            {"signature": signatures[1]}, cursor_identity="8" * 64,
+            {"signature": signatures[1], "active_expert": "tool"},
+            cursor_identity="8" * 64,
         )
 
         self.assertEqual(float(first), 1.0)

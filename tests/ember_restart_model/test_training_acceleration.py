@@ -361,7 +361,7 @@ class CheckpointCaptureProofTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "outside the approved signature census"):
             pool.replay("a" * 64)
 
-    def test_cuda_graph_backend_keeps_graph_private_pools_separate(self) -> None:
+    def test_cuda_graph_backend_reuses_the_first_graph_private_pool(self) -> None:
         class FakeCudaGraph:
             def __init__(self) -> None:
                 self.pool_token = object()
@@ -390,7 +390,7 @@ class CheckpointCaptureProofTests(unittest.TestCase):
             backend.capture(lambda: None)
 
         self.assertIsNone(observed_pools[0])
-        self.assertIsNone(observed_pools[1])
+        self.assertIs(observed_pools[1], graphs[0].pool_token)
 
     def test_graph_capture_refuses_warmup_optimizer_or_cursor_mutation(self) -> None:
         class FakeBackend:
@@ -542,7 +542,7 @@ class CloseGateTests(unittest.TestCase):
         accelerated = arm == "census_bound_stage2"
         elapsed = 1.0 if accelerated else 2048.0 / 900.0
         return {
-            "schema_version": "ember-stage2-training-arm-v1",
+            "schema_version": "ember-stage2-training-arm-v2",
             "arm": arm,
             "source_commit": "a" * 40,
             "runner_source_sha256": "1" * 64,
@@ -554,6 +554,13 @@ class CloseGateTests(unittest.TestCase):
             "preparation_regions_per_signature": 4,
             "preparation_signature_count": 2,
             "preparation_region_count": 8,
+            "optimizer_state_preinitialized_parameters": 12,
+            "capture_gradient_zeroing": (
+                "eager_default_stream_outside_capture" if accelerated else "NOT_APPLICABLE"
+            ),
+            "preparation_memory_allocated_bytes_by_signature": (
+                {"7" * 64: 100, "8" * 64: 200} if accelerated else {}
+            ),
             "captures_during_preparation": 2 if accelerated else 0,
             "captures_during_measured_window": 0,
             "no_capture_in_measured_window": True,
@@ -573,6 +580,12 @@ class CloseGateTests(unittest.TestCase):
                 "cuda_graph_captures": 2 if accelerated else 0,
                 "cuda_graph_replays": 2 if accelerated else 0,
                 "cuda_graph_fallbacks": 0,
+                "shared_trunk_gradient_parameters": 10 if accelerated else 0,
+                "shared_trunk_gradient_bytes": 1000 if accelerated else 0,
+                "expert_bank_gradient_workspace_parameters": 2 if accelerated else 0,
+                "gradient_workspace_bytes": 200 if accelerated else 0,
+                "gradient_workspace_rebinds": 3 if accelerated else 0,
+                "inactive_grad_none_assertions": 4 if accelerated else 0,
             },
         }
 
@@ -594,6 +607,7 @@ class CloseGateTests(unittest.TestCase):
 
         for mutation, message in (
             (("runner_source_sha256", "7" * 64), "identity"),
+            (("optimizer_state_preinitialized_parameters", 13), "identity"),
             (("losses", [9.0, 7.0]), "matched loss"),
         ):
             refused = self._arm("census_bound_stage2")
@@ -611,6 +625,21 @@ class CloseGateTests(unittest.TestCase):
         refused = self._arm("census_bound_stage2")
         refused["mechanisms"] = dict(refused["mechanisms"], fp8_fallbacks=1)
         with self.assertRaisesRegex(ValueError, "fallback"):
+            training_acceleration.build_stage2_ab_comparison(baseline, refused)
+
+        refused = self._arm("census_bound_stage2")
+        refused["optimizer_state_preinitialized_parameters"] = 0
+        with self.assertRaisesRegex(ValueError, "optimizer state"):
+            training_acceleration.build_stage2_ab_comparison(baseline, refused)
+
+        refused = self._arm("census_bound_stage2")
+        refused["mechanisms"] = dict(refused["mechanisms"], gradient_workspace_bytes=0)
+        with self.assertRaisesRegex(ValueError, "workspace evidence"):
+            training_acceleration.build_stage2_ab_comparison(baseline, refused)
+
+        refused = self._arm("census_bound_stage2")
+        refused["capture_gradient_zeroing"] = "inside_capture"
+        with self.assertRaisesRegex(ValueError, "gradient zeroing"):
             training_acceleration.build_stage2_ab_comparison(baseline, refused)
 
         refused = self._arm("census_bound_stage2")
