@@ -420,6 +420,7 @@ class UnifiedDecoder(nn.Module):
         raw_values: torch.Tensor | None,
         projector: nn.Module,
         name: str,
+        static_marker_indices: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         if raw_values is None:
             # image_token_id/audio_token_id are ordinary emittable vocab ids, not
@@ -428,16 +429,29 @@ class UnifiedDecoder(nn.Module):
             # modality tensor was passed, never by a marker-id match alone, so a
             # coincidental match here is ordinary text: no raise, and no mask entry
             # for downstream callers (e.g. _coordinates) to mistake for a real span.
+            if static_marker_indices is not None and static_marker_indices.numel() != 0:
+                raise ValueError(f"static {name} marker indices require raw {name} values")
             return hidden_states, torch.zeros_like(input_ids, dtype=torch.bool)
         mask = input_ids.eq(marker_id)
-        count = int(mask.sum().item())
+        if static_marker_indices is None:
+            count = int(mask.sum().item())
+            marker_indices = mask.reshape(-1).nonzero(as_tuple=False).flatten()
+        else:
+            if (
+                static_marker_indices.ndim != 1
+                or static_marker_indices.dtype != torch.int64
+                or static_marker_indices.device != input_ids.device
+            ):
+                raise ValueError(f"static {name} marker indices must be a device-local int64 vector")
+            count = static_marker_indices.numel()
+            marker_indices = static_marker_indices
         if not count:
             raise ValueError(f"raw {name} values were supplied but no {name} marker is present")
         projected = projector(raw_values).reshape(-1, self.config.hidden_size)
         if projected.shape[0] != count:
             raise ValueError(f"{name} value count does not match {name} marker count")
         flat = hidden_states.reshape(-1, self.config.hidden_size)
-        flat = flat.index_copy(0, mask.reshape(-1).nonzero(as_tuple=False).flatten(), projected.to(hidden_states.dtype))
+        flat = flat.index_copy(0, marker_indices, projected.to(hidden_states.dtype))
         return flat.reshape_as(hidden_states), mask
 
     def _coordinates(
@@ -446,6 +460,7 @@ class UnifiedDecoder(nn.Module):
         image_mask: torch.Tensor,
         image_coordinates: torch.Tensor | None,
         position_ids: torch.Tensor | None,
+        static_image_marker_indices: torch.Tensor | None = None,
     ) -> torch.Tensor:
         batch, sequence = input_ids.shape
         if position_ids is None:
@@ -453,7 +468,18 @@ class UnifiedDecoder(nn.Module):
         if position_ids.shape != input_ids.shape:
             raise ValueError("position_ids must match input_ids")
         coordinates = torch.stack((position_ids, position_ids), dim=-1)
-        count = int(image_mask.sum().item())
+        if static_image_marker_indices is None:
+            count = int(image_mask.sum().item())
+            marker_indices = image_mask.reshape(-1).nonzero(as_tuple=False).flatten()
+        else:
+            if (
+                static_image_marker_indices.ndim != 1
+                or static_image_marker_indices.dtype != torch.int64
+                or static_image_marker_indices.device != input_ids.device
+            ):
+                raise ValueError("static image marker indices must be a device-local int64 vector")
+            count = static_image_marker_indices.numel()
+            marker_indices = static_image_marker_indices
         if not count:
             if image_coordinates is not None and image_coordinates.numel() != 0:
                 raise ValueError("nonempty image coordinates were supplied without image markers")
@@ -464,7 +490,7 @@ class UnifiedDecoder(nn.Module):
         if image_coordinates.reshape(-1, 2).shape[0] != count:
             raise ValueError("image_coordinates must provide one [x, y] pair per image marker")
         flat = coordinates.reshape(-1, 2)
-        return flat.index_copy(0, image_mask.reshape(-1).nonzero(as_tuple=False).flatten(), image_coordinates.reshape(-1, 2).to(coordinates.device)).reshape_as(coordinates)
+        return flat.index_copy(0, marker_indices, image_coordinates.reshape(-1, 2).to(coordinates.device)).reshape_as(coordinates)
 
     def forward(
         self,
@@ -474,6 +500,8 @@ class UnifiedDecoder(nn.Module):
         *,
         image_coordinates: torch.Tensor | None = None,
         position_ids: torch.Tensor | None = None,
+        static_image_marker_indices: torch.Tensor | None = None,
+        static_audio_marker_indices: torch.Tensor | None = None,
         spans: Sequence[MultimodalSpan] | None = None,
         active_expert: str | None = None,
     ) -> torch.Tensor:
@@ -482,9 +510,20 @@ class UnifiedDecoder(nn.Module):
         selected = active_expert or self.active_expert
         self._activate_expert(selected)
         hidden_states = self.token_embedding(input_ids)
-        hidden_states, image_mask = self._inject_modality(hidden_states, input_ids, marker_id=self.config.image_token_id, raw_values=image_patches, projector=self.image_projector, name="image")
-        hidden_states, _ = self._inject_modality(hidden_states, input_ids, marker_id=self.config.audio_token_id, raw_values=audio_frames, projector=self.audio_projector, name="audio")
-        coordinates = self._coordinates(input_ids, image_mask, image_coordinates, position_ids)
+        hidden_states, image_mask = self._inject_modality(
+            hidden_states, input_ids, marker_id=self.config.image_token_id,
+            raw_values=image_patches, projector=self.image_projector, name="image",
+            static_marker_indices=static_image_marker_indices,
+        )
+        hidden_states, _ = self._inject_modality(
+            hidden_states, input_ids, marker_id=self.config.audio_token_id,
+            raw_values=audio_frames, projector=self.audio_projector, name="audio",
+            static_marker_indices=static_audio_marker_indices,
+        )
+        coordinates = self._coordinates(
+            input_ids, image_mask, image_coordinates, position_ids,
+            static_image_marker_indices=static_image_marker_indices,
+        )
         allowed = self.build_attention_mask(batch_size=input_ids.shape[0], sequence_length=input_ids.shape[1], spans=spans, device=input_ids.device)
         for layer in self.layers:
             if self.config.gradient_checkpointing and self.training:
