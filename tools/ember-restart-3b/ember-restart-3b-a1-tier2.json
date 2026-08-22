@@ -1,0 +1,63 @@
+{
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02B",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "schema_version": "ember-restart-3b-a1-tier2-v1",
+  "tier": "TIER_2",
+  "mechanism": "OWNED_Q_GALORE_PROJECTED_GRADIENT",
+  "architecture_revision": "ember-dense-a1-3b-v1",
+  "state": {
+    "persistent_device": "cuda",
+    "cpu_offload": false,
+    "full_model_gradient_residency": false,
+    "master_weight_copy": false
+  },
+  "projection": {
+    "max_rank_policy": "min(512,min(parameter.shape))",
+    "max_rank": 512,
+    "refresh_gap_steps": 200,
+    "scale": 0.25,
+    "direction_policy": "smaller_dimension",
+    "small_parameter_policy": "unprojected_block_quantized",
+    "moment_refresh_policy": "carry_quantized_moments_without_reset_or_reprojection"
+  },
+  "quantization": {
+    "projector_format": "SIGNED_INT4_SYMMETRIC",
+    "first_moment_format": "SIGNED_INT8_SYMMETRIC",
+    "second_moment_format": "UNSIGNED_UINT8",
+    "block_size": 256,
+    "scale_dtype": "FP32",
+    "zero_block_scale": 1
+  },
+  "optimizer": {
+    "implementation": "owned.ProjectedQuantizedAdamWCUDA",
+    "state_format": "ember-a1-tier2-q-galore-cuda-v1",
+    "hyperparameters": {
+      "learning_rate": 0.00001,
+      "betas": [0.9, 0.999],
+      "epsilon": 1e-8,
+      "weight_decay": 0.01
+    }
+  },
+  "determinism": {
+    "svd_dtype": "FP32",
+    "algorithms_required": true,
+    "sign_policy": "largest_magnitude_element_positive",
+    "random_or_stale_fallback": false,
+    "registration_order_bound": true
+  },
+  "lineage": {
+    "parent_checkpoint": null,
+    "initialization": "random",
+    "borrowed_weights": false,
+    "teacher_outputs": false,
+    "model_derived_data": false,
+    "external_judges": false
+  },
+  "resource_policy": {
+    "gpu_free_margin_bytes": 4294967296,
+    "b_custody_floor_bytes": 268435456000,
+    "checkpoint_transient_reserve_bytes": 8589934592,
+    "svd_workspace_multiplier": 4
+  }
+}

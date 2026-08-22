@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import shutil
 import struct
@@ -22,6 +23,7 @@ from . import test_certified_train_launch as launch_fixtures
 
 ROOT = Path(__file__).resolve().parents[2]
 A1_FAMILY = "dense-tier1-full-state-adamw-cpu-offload-v1"
+TIER2_FAMILY = "dense-tier2-owned-q-galore-v1"
 
 
 def _load_a1_execution():
@@ -298,6 +300,51 @@ def _install_valid_a1_authority(paths: dict[str, Path]) -> dict[str, object]:
     }
 
 
+def _install_valid_tier2_authority(paths: dict[str, Path]) -> dict[str, Path]:
+    _install_valid_a1_authority(paths)
+    contract = paths["repo"] / "tools" / "ember-restart-3b" / "ember-restart-3b-a1-tier2.json"
+    shutil.copyfile(ROOT / "tools" / "ember-restart-3b" / "ember-restart-3b-a1-tier2.json", contract)
+    liveness = {
+        "schema_version": "ember02-r1-e8-liveness-v1",
+        "thresholds_sha256": "12c83ca9ac90f85d5e8c0ce2c8156ac0c2cf9695929b211971ee277582a5eeb5",
+        "verdict": "FALLBACK_REQUIRED",
+        "a1_series": {"path": "a1-live-series.json", "sha256": "1" * 64},
+        "a3_series": {"path": "a3-live-series.json", "sha256": "2" * 64},
+        "tier1_run": {"path": "tier1-run.json", "sha256": "3" * 64},
+        "a3_run": {"path": "a3-run.json", "sha256": "4" * 64},
+        "charged_budget_contract": {"path": "charged-budget-contract.json", "sha256": "5" * 64},
+        "measurements": {
+            "a1_joules_per_token": "1", "a1_tokens_per_second": "1",
+            "a3_joules_per_token": "1", "a3_tokens_per_second": "1",
+            "equal_budget_ratio": "0.02",
+        },
+    }
+    liveness["receipt_sha256"] = hashlib.sha256(
+        json.dumps(liveness, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    liveness_path = paths["custody_root"] / "a1-e8-liveness.json"
+    launch_fixtures.write_json(liveness_path, liveness)
+    launch_fixtures.rewrite_certificate(
+        paths,
+        lambda certificate: certificate["execution_scope"].update(
+            {"allowed_a1_families": [TIER2_FAMILY]}
+        ),
+    )
+    run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+    run_spec.update({
+        "a1_family": TIER2_FAMILY,
+        "a1_tier": "TIER_2",
+        "a1_mechanism": "OWNED_Q_GALORE_PROJECTED_GRADIENT",
+        "a1_tier2_contract": str(contract),
+        "a1_tier2_contract_sha256": hashlib.sha256(contract.read_bytes()).hexdigest(),
+        "a1_liveness_receipt": str(liveness_path),
+        "a1_liveness_receipt_sha256": hashlib.sha256(liveness_path.read_bytes()).hexdigest(),
+    })
+    launch_fixtures.write_json(paths["run_spec"], run_spec)
+    launch_fixtures._write_custody_sidecars(paths)
+    return {"contract": contract, "liveness": liveness_path}
+
+
 def test_certificate_without_a1_family_refuses_before_opening_route_inputs() -> None:
     """Removing certificate family authority must fail before route input I/O."""
 
@@ -374,6 +421,57 @@ def test_valid_a1_route_emits_the_distinct_runner_subcommand() -> None:
         "--telemetry-path", str(launch.a1_telemetry_path),
         "--telemetry-run-id", launch.run_id,
     ]
+
+
+def test_valid_tier2_route_requires_ruled_contract_and_liveness_and_is_distinct() -> None:
+    module = launch_fixtures.load_module()
+    temp_root = Path("B:/tmp/issue1464-tier2-tests")
+    temp_root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=temp_root) as directory:
+        paths = launch_fixtures.write_valid_bundle(Path(directory))
+        authority = _install_valid_tier2_authority(paths)
+        with mock.patch.object(module, "read_current_master", return_value=launch_fixtures.SHA):
+            launch = module.validate_certified_request(
+                paths["repo"], paths["certificate"], paths["ledger"], paths["run_spec"]
+            )
+        argv = module.build_runner_argv(paths["repo"], launch)
+    assert launch.a1_tier.value == "TIER_2"
+    assert launch.a1_mechanism.value == "OWNED_Q_GALORE_PROJECTED_GRADIENT"
+    assert "a1-dense-tier2" in argv
+    assert "a1-dense-tier1" not in argv
+    assert argv[argv.index("--tier2-contract") + 1] == str(authority["contract"])
+    assert argv[argv.index("--tier2-contract-sha256") + 1] == launch.a1_tier2_contract_sha256
+    assert argv[argv.index("--liveness-receipt") + 1] == str(authority["liveness"])
+    assert argv[argv.index("--liveness-receipt-sha256") + 1] == launch.a1_liveness_receipt_sha256
+    with mock.patch.dict(os.environ, {"CUBLAS_WORKSPACE_CONFIG": ":ambient-drift"}):
+        child_env = module._certified_child_environment(launch)
+    assert child_env["CUBLAS_WORKSPACE_CONFIG"] == ":4096:8"
+    assert child_env["EMBER_A1_SOURCE_COMMIT"] == launch.public_master_sha
+    assert child_env["EMBER_A1_CERTIFIED_LAUNCH_SHA256"] == launch.run_spec_sha256
+
+
+def test_tier2_route_refuses_nonfallback_liveness_before_argv() -> None:
+    module = launch_fixtures.load_module()
+    temp_root = Path("B:/tmp/issue1464-tier2-tests")
+    temp_root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=temp_root) as directory:
+        paths = launch_fixtures.write_valid_bundle(Path(directory))
+        authority = _install_valid_tier2_authority(paths)
+        liveness = json.loads(authority["liveness"].read_text(encoding="utf-8"))
+        liveness["verdict"] = "TIER1_LIVE"
+        liveness["receipt_sha256"] = hashlib.sha256(
+            json.dumps({k: v for k, v in liveness.items() if k != "receipt_sha256"}, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        launch_fixtures.write_json(authority["liveness"], liveness)
+        run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+        run_spec["a1_liveness_receipt_sha256"] = hashlib.sha256(authority["liveness"].read_bytes()).hexdigest()
+        launch_fixtures.write_json(paths["run_spec"], run_spec)
+        launch_fixtures._write_custody_sidecars(paths)
+        with mock.patch.object(module, "read_current_master", return_value=launch_fixtures.SHA):
+            with pytest.raises(ValueError, match="FALLBACK_REQUIRED"):
+                module.validate_certified_request(
+                    paths["repo"], paths["certificate"], paths["ledger"], paths["run_spec"]
+                )
 
 
 @pytest.mark.parametrize(
