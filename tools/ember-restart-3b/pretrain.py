@@ -96,7 +96,6 @@ class CensusBoundStage2Executor:
             )
         self.preparation_regions_per_signature = preparation_regions
         self._static_batches: dict[str, dict[str, object]] = {}
-        self._losses: dict[str, list[torch.Tensor]] = {}
         self._loss_snapshots: dict[str, torch.Tensor] = {}
         self._optimizer_steps = 0
         self._refreshes = 0
@@ -194,8 +193,8 @@ class CensusBoundStage2Executor:
         )
         if not loss_holder:
             raise RuntimeError("Stage-2 graph capture did not retain its loss tensor")
+        loss_holder.clear()
         self._static_batches[signature] = static
-        self._losses[signature] = loss_holder
         self._loss_snapshots[signature] = loss_snapshot
         self._captures_during_preparation += 1
         self.optimizer.zero_grad(set_to_none=False)
@@ -249,9 +248,6 @@ class CensusBoundStage2Executor:
         self._copy_tensors(self._static_batches[signature], batch)
         self.optimizer.zero_grad(set_to_none=False)
         self.graph_pool.replay(signature)
-        loss_holder = self._losses[signature]
-        if not loss_holder:
-            raise RuntimeError("Stage-2 graph replay did not retain its loss tensor")
         return self._loss_snapshots[signature]
 
     def after_optimizer_step(self) -> int:
