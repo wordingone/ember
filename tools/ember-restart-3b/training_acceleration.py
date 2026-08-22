@@ -217,10 +217,10 @@ def _span_descriptor(value: object) -> dict[str, object]:
     return descriptor
 
 
-def training_step_signature(
+def _training_step_contract(
     batch: Mapping[str, object], *, gradient_checkpointing: bool,
 ) -> dict[str, object]:
-    """Hash the static real-batch facts that determine one capture region."""
+    """Build the one canonical static contract used by census and activation."""
 
     if not isinstance(batch, Mapping):
         raise ValueError("training signature batch must be an object")
@@ -232,7 +232,7 @@ def training_step_signature(
     spans = batch.get("spans")
     if not isinstance(spans, Sequence) or isinstance(spans, (str, bytes, bytearray)):
         raise ValueError("training signature spans must be a sequence")
-    contract = {
+    return {
         "capture_region": "forward_loss_backward",
         "gradient_checkpointing": gradient_checkpointing,
         "active_expert": active_expert,
@@ -242,6 +242,16 @@ def training_step_signature(
         },
         "spans": [_span_descriptor(span) for span in spans],
     }
+
+
+def training_step_signature(
+    batch: Mapping[str, object], *, gradient_checkpointing: bool,
+) -> dict[str, object]:
+    """Hash the static real-batch facts that determine one capture region."""
+
+    contract = _training_step_contract(
+        batch, gradient_checkpointing=gradient_checkpointing,
+    )
     return {
         "schema_version": "ember-training-step-signature-v1",
         "signature_sha256": hashlib.sha256(_canonical_json(contract)).hexdigest(),
@@ -319,10 +329,10 @@ class TrainingSignatureCensus:
         return receipt
 
 
-def load_training_signature_census(path: Path) -> dict[str, object]:
+def _load_training_signature_census_bytes(raw: bytes) -> dict[str, object]:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
+        value = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ValueError("training signature census is not readable strict JSON") from error
     if not isinstance(value, dict) or set(value) != _CENSUS_KEYS:
         raise ValueError("training signature census must use the closed v1 key set")
@@ -331,7 +341,11 @@ def load_training_signature_census(path: Path) -> dict[str, object]:
     del unsigned["self_sha256"]
     if hashlib.sha256(_canonical_json(unsigned)).hexdigest() != claimed_self:
         raise ValueError("training signature census self hash mismatch")
-    if value["schema_version"] != "ember-training-signature-census-v1" or value["status"] != "OBSERVED_NOT_ACTIVATED":
+    if (
+        value["schema_version"] != "ember-training-signature-census-v1"
+        or value["status"] != "OBSERVED_NOT_ACTIVATED"
+        or value["capture_region"] != "forward_loss_backward"
+    ):
         raise ValueError("training signature census status is invalid")
     if value["activation_enabled"] is not False or value["fallbacks"] != 0:
         raise ValueError("training signature census cannot activate or fall back")
@@ -357,6 +371,14 @@ def load_training_signature_census(path: Path) -> dict[str, object]:
     return value
 
 
+def load_training_signature_census(path: Path) -> dict[str, object]:
+    try:
+        raw = path.read_bytes()
+    except OSError as error:
+        raise ValueError("training signature census is not readable strict JSON") from error
+    return _load_training_signature_census_bytes(raw)
+
+
 class Stage2SignatureRegistry:
     """A census-bound set, intentionally capable of carrying multiple signatures."""
 
@@ -374,6 +396,71 @@ class Stage2SignatureRegistry:
         if signature not in self.approved_signatures:
             raise RuntimeError("CUDA graph signature is outside the approved signature census")
         return signature
+
+
+def _freeze_static(value: object) -> object:
+    if isinstance(value, Mapping):
+        return tuple((key, _freeze_static(value[key])) for key in sorted(value))
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return tuple(_freeze_static(item) for item in value)
+    return value
+
+
+@dataclass(frozen=True)
+class Stage2ActivationAuthority:
+    census_path: Path
+    census_raw_sha256: str
+    census_self_sha256: str
+    registry: Stage2SignatureRegistry
+    signatures_by_static_key: Mapping[object, str]
+
+    def resolve(
+        self, batch: Mapping[str, object], *, gradient_checkpointing: bool,
+    ) -> str:
+        key = _freeze_static(
+            _training_step_contract(
+                batch, gradient_checkpointing=gradient_checkpointing,
+            )
+        )
+        signature = self.signatures_by_static_key.get(key)
+        if signature is None:
+            raise RuntimeError("CUDA graph signature is outside the approved signature census")
+        return self.registry.require(signature)
+
+
+def load_stage2_activation_authority(
+    path: Path, *, expected_raw_sha256: str,
+) -> Stage2ActivationAuthority:
+    """Reopen exact census bytes; never let an activating run mint authority."""
+
+    expected = _sha256(expected_raw_sha256, label="training signature census expected raw sha256")
+    try:
+        raw = path.read_bytes()
+    except OSError as error:
+        raise ValueError("training signature census is not readable strict JSON") from error
+    actual = hashlib.sha256(raw).hexdigest()
+    if actual != expected:
+        raise ValueError("training signature census raw hash mismatch")
+    value = _load_training_signature_census_bytes(raw)
+    claimed_self = str(value["self_sha256"])
+    approved = value["approved_signatures"]
+    signatures = value["signatures"]
+    signatures_by_static_key: dict[object, str] = {}
+    for row, signature in zip(signatures, approved, strict=True):
+        static_key = _freeze_static(row["contract"])
+        prior = signatures_by_static_key.setdefault(static_key, signature)
+        if prior != signature:
+            raise ValueError("training signature census static key maps to multiple signatures")
+    return Stage2ActivationAuthority(
+        census_path=path.resolve(),
+        census_raw_sha256=actual,
+        census_self_sha256=claimed_self,
+        registry=Stage2SignatureRegistry(
+            census_sha256=actual,
+            approved_signatures=approved,
+        ),
+        signatures_by_static_key=signatures_by_static_key,
+    )
 
 
 class TorchCudaGraphBackend:
@@ -596,6 +683,12 @@ class DynamicFp8DownProjection(nn.Module):
         self._refreshed_weight_version = self.weight._version
         self._weight_refreshes += 1
 
+    def refresh_if_stale_after_optimizer_step(self) -> bool:
+        if self.weight._version == self._refreshed_weight_version:
+            return False
+        self.refresh_after_optimizer_step()
+        return True
+
     def forward(self, activation: torch.Tensor) -> torch.Tensor:
         if activation.dtype is not torch.bfloat16:
             raise RuntimeError("issue #1413 FP8 site requires a BF16 activation")
@@ -627,6 +720,60 @@ class DynamicFp8DownProjection(nn.Module):
             "dispatches": self._dispatches,
             "fallbacks": self._fallbacks,
         }
+
+
+def iter_fp8_down_projections(model: nn.Module) -> Sequence[DynamicFp8DownProjection]:
+    return tuple(
+        module
+        for module in model.modules()
+        if isinstance(module, DynamicFp8DownProjection)
+    )
+
+
+def install_fp8_down_projections(
+    model: nn.Module, *, allow_test_device: bool = False,
+) -> dict[str, object]:
+    """Replace exactly the declared SwiGLU 4H-to-H down sites in-place."""
+
+    layers = getattr(model, "layers", None)
+    if not isinstance(layers, nn.ModuleList) or not layers:
+        raise ValueError("issue #1413 FP8 installation requires decoder layers")
+    targets: list[tuple[str, nn.Module, nn.Linear]] = []
+    for index, layer in enumerate(layers):
+        shared = getattr(layer, "shared_ffn", None)
+        experts = getattr(layer, "experts", None)
+        if shared is None or not isinstance(experts, nn.ModuleDict):
+            raise ValueError("issue #1413 FP8 installation requires closed SwiGLU expert sites")
+        candidates = [(f"layers.{index}.shared_ffn.down", shared)]
+        candidates.extend(
+            (f"layers.{index}.experts.{name}.down", expert)
+            for name, expert in experts.items()
+        )
+        for name, owner in candidates:
+            down = getattr(owner, "down", None)
+            if isinstance(down, DynamicFp8DownProjection):
+                raise RuntimeError("issue #1413 FP8 down projections are already installed")
+            if not isinstance(down, nn.Linear):
+                raise ValueError("issue #1413 FP8 site is not a linear down projection")
+            targets.append((name, owner, down))
+    for _name, owner, down in targets:
+        owner.down = DynamicFp8DownProjection.from_linear(
+            down,
+            allow_test_device=allow_test_device,
+        )
+    return {
+        "schema_version": "ember-fp8-down-projection-installation-v1",
+        "installed_sites": len(targets),
+        "sites": [name for name, _owner, _down in targets],
+        "fallbacks": 0,
+    }
+
+
+def refresh_fp8_after_optimizer_step(model: nn.Module) -> int:
+    return sum(
+        int(site.refresh_if_stale_after_optimizer_step())
+        for site in iter_fp8_down_projections(model)
+    )
 
 
 def validate_fp8_kernel_receipt(value: Mapping[str, object]) -> dict[str, object]:
