@@ -206,12 +206,18 @@ direction**. It would add a second, less-tested paging mechanism alongside
 the OS's own, tested one, without changing the fundamental resource
 trade-off.
 
-The host setup contract (`docs/host-setup-contract.md`) is therefore the
-primary cure: fixed pagefile provisioning is a one-time, reboot-then-done
-cost, uses the OS's own well-understood paging mechanism instead of
-reimplementing it, carries no per-step disk-write or SSD-wear cost of its
-own beyond what the OS already does, and is what already recovered the E8
-dense A1 launch. The conditions below are recorded for completeness — they
+Rejecting the arena and formalizing a pagefile floor as Ember's durable
+answer are independent claims — declining one does not establish the other
+(operator scoping ruling, 2026-08-21, `docs/host-setup-contract.md`). What
+this comparison does establish: if disk-as-ledger backing is needed at all
+for state that already fits in RAM, the OS's own paging mechanism is the
+better place for it than a second, less-tested userspace one, since it
+carries no per-step disk-write or SSD-wear cost of its own beyond what the
+OS already does. Whether a pagefile floor should be relied on repeatedly, or
+only ever as the kind of one-time, operator-reviewed exception that
+recovered the E8 dense A1 launch, is the separate question the operator
+ruling answers, not this comparison. The conditions below are recorded for
+completeness — they
 identify where the SAME underlying disk-as-ledger trade-off might need to
 move from OS-managed paging to ember-managed paging — but none of them
 currently overrides the ruling above:
