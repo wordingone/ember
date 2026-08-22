@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -84,6 +85,79 @@ class TrainingAccelerationPolicyTests(unittest.TestCase):
         self.assertEqual(registry.require(signatures[1]), signatures[1])
         with self.assertRaisesRegex(RuntimeError, "outside the approved signature census"):
             registry.require("d" * 64)
+
+
+class TrainingSignatureCensusTests(unittest.TestCase):
+    @staticmethod
+    def _batch(*, expert: str = "reasoning", sequence: int = 4) -> dict[str, object]:
+        return {
+            "input_ids": torch.ones((1, sequence), dtype=torch.int64),
+            "target_ids": torch.ones((1, sequence), dtype=torch.int64),
+            "image_patches": None,
+            "audio_frames": None,
+            "image_coordinates": torch.empty((0, 2), dtype=torch.int64),
+            "spans": [],
+            "active_expert": expert,
+        }
+
+    def test_signature_is_deterministic_and_binds_static_training_shape(self) -> None:
+        first = training_acceleration.training_step_signature(
+            self._batch(), gradient_checkpointing=True,
+        )
+        repeated = training_acceleration.training_step_signature(
+            self._batch(), gradient_checkpointing=True,
+        )
+        self.assertEqual(first, repeated)
+        self.assertEqual(first["schema_version"], "ember-training-step-signature-v1")
+        self.assertEqual(len(first["signature_sha256"]), 64)
+
+        changed_shape = training_acceleration.training_step_signature(
+            self._batch(sequence=5), gradient_checkpointing=True,
+        )
+        changed_expert = training_acceleration.training_step_signature(
+            self._batch(expert="tool"), gradient_checkpointing=True,
+        )
+        changed_checkpointing = training_acceleration.training_step_signature(
+            self._batch(), gradient_checkpointing=False,
+        )
+        self.assertNotEqual(first["signature_sha256"], changed_shape["signature_sha256"])
+        self.assertNotEqual(first["signature_sha256"], changed_expert["signature_sha256"])
+        self.assertNotEqual(first["signature_sha256"], changed_checkpointing["signature_sha256"])
+
+    def test_census_counts_signatures_and_refuses_overwrite(self) -> None:
+        census = training_acceleration.TrainingSignatureCensus(
+            source_commit="1" * 40,
+            model_config_sha256="2" * 64,
+            input_identity_sha256="3" * 64,
+            runner_source_sha256="4" * 64,
+        )
+        first = training_acceleration.training_step_signature(
+            self._batch(), gradient_checkpointing=True,
+        )
+        second = training_acceleration.training_step_signature(
+            self._batch(expert="tool"), gradient_checkpointing=True,
+        )
+        census.observe(first)
+        census.observe(first)
+        census.observe(second)
+        receipt = census.receipt()
+        self.assertEqual(receipt["observed_steps"], 3)
+        self.assertEqual(receipt["signature_count"], 2)
+        self.assertEqual(
+            receipt["approved_signatures"],
+            sorted((first["signature_sha256"], second["signature_sha256"])),
+        )
+        self.assertEqual(len(receipt["self_sha256"]), 64)
+
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "census.json"
+            census.write_receipt(output)
+            self.assertEqual(
+                training_acceleration.load_training_signature_census(output),
+                receipt,
+            )
+            with self.assertRaisesRegex(FileExistsError, "refusing to overwrite"):
+                census.write_receipt(output)
 
 
 class CheckpointCaptureProofTests(unittest.TestCase):

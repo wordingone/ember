@@ -32,7 +32,7 @@ from checkpoint_artifacts import CheckpointDeferredLowCommit, _atomic_publish_no
 from parameter_counter import derive_expert_genesis_sha256, validate_realization_receipt
 from model import RestartDecoderConfig, UnifiedDecoder
 from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
-from training_acceleration import Stage1Policy, stage1_policy
+from training_acceleration import Stage1Policy, TrainingSignatureCensus, stage1_policy
 from durable_io import atomic_create_durable, atomic_replace_durable
 from parameter_counter import measure_parameter_counts
 from semantic_stream import ManifestBoundTokenStream
@@ -630,6 +630,8 @@ def run_governed_vertical(
     resume_optimizer_transition_registry_sha256: str | None = None,
     c_relocated_under_disk_budget_runner: bool = False,
     relocation_custody_root: Path | None = None,
+    signature_census_output: Path | None = None,
+    signature_census_source_commit: str | None = None,
 ) -> dict[str, object]:
     """Canonical-runner entrypoint; check launch inputs before governor/CUDA admission."""
     if type(seed) is not int or seed < 0 or type(write_budget_bytes) is not int or write_budget_bytes < 1:
@@ -642,6 +644,11 @@ def run_governed_vertical(
     resolved_artifact_root = artifact_root.resolve()
     if not resolved_artifact_root.is_relative_to(custody):
         raise ValueError("governed vertical artifact root escapes canonical runner custody")
+    census_output, census_source_commit = validate_signature_census_request(
+        signature_census_output, signature_census_source_commit,
+    )
+    if census_output is not None and not census_output.is_relative_to(resolved_artifact_root):
+        raise ValueError("training signature census output must stay inside the governed artifact root")
     authority = {
         **startup_authority,
         "config_sha256": _sha256(config_path),
@@ -662,6 +669,8 @@ def run_governed_vertical(
         canonical_runner_authority=authority,
         c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
         relocation_custody_root=relocation_custody_root,
+        signature_census_output=census_output,
+        signature_census_source_commit=census_source_commit,
     )
 
 
@@ -3304,6 +3313,23 @@ def load_training_acceleration_policy() -> Stage1Policy:
 
     return stage1_policy()
 
+
+def validate_signature_census_request(
+    output: Path | None, source_commit: str | None,
+) -> tuple[Path | None, str | None]:
+    """Close and preflight the observation-only census request before allocation."""
+
+    if (output is None) != (source_commit is None):
+        raise ValueError("training signature census output and source commit are required together")
+    if output is None:
+        return None, None
+    if re.fullmatch(r"[0-9a-f]{40}", str(source_commit)) is None:
+        raise ValueError("training signature census source commit must be lowercase 40hex")
+    resolved = output.resolve()
+    if resolved.exists():
+        raise FileExistsError(f"refusing to overwrite training signature census: {resolved}")
+    return resolved, str(source_commit)
+
 def load_optimizer_contract(config_path: Path) -> dict[str, object]:
     """Load the one structured optimizer declaration used by config, runtime, and checkpoint."""
 
@@ -3442,6 +3468,8 @@ def run(
     telemetry_path: Path | None = None,
     telemetry_run_id: str | None = None,
     model_chat_restore_not_before: str | None = None,
+    signature_census_output: Path | None = None,
+    signature_census_source_commit: str | None = None,
 ) -> dict[str, object]:
     if records_override is not None and isinstance(specialist_verification, dict) and isinstance(specialist_lineage, dict) and specialist_verification.get("capability") == "image":
         selection = specialist_lineage.get("scene_split_selection")
@@ -3472,11 +3500,16 @@ def run(
         raise ValueError("training telemetry requires path, run id, and model-chat restore time together")
     if telemetry_run_id is not None and (not telemetry_run_id or len(telemetry_run_id) > 128):
         raise ValueError("training telemetry run id is invalid")
+    signature_census_output, signature_census_source_commit = validate_signature_census_request(
+        signature_census_output, signature_census_source_commit,
+    )
     artifact_root = production_artifact_root(
         artifact_root,
         c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
         relocation_custody_root=relocation_custody_root,
     )
+    if signature_census_output is not None and not signature_census_output.is_relative_to(artifact_root):
+        raise ValueError("training signature census output must stay inside the governed artifact root")
     root = Path(__file__).resolve().parents[2]
     config_path = root / "configs" / "ember-restart-3b.json"
     if write_budget_bytes is not None:
@@ -3567,6 +3600,14 @@ def run(
             + str(execution_slice["records_sha256"])[:12]
         )
         episode_expert = verified_specialist_episode_expert(records, specialist_verification)
+    signature_census = None
+    if signature_census_output is not None and signature_census_source_commit is not None:
+        signature_census = TrainingSignatureCensus(
+            source_commit=signature_census_source_commit,
+            model_config_sha256=_sha256(config_path),
+            input_identity_sha256=_json_sha256(input_receipt),
+            runner_source_sha256=_sha256(Path(__file__).resolve()),
+        )
     checkpoint_parent = artifact_root / "checkpoints"
     checkpoint_root = checkpoint_parent / f"checkpoint-vertical-slice-seed-{seed}"
     resume_authority: dict[str, object] | None = None
@@ -3801,9 +3842,13 @@ def run(
         initial_tokens_seen=int(resume_cursor["tokens_seen"]), initial_data_cursor=int(resume_cursor["record_index"]),
         data_shard_id=data_shard_id, require_complete_coverage=(records_override is None and max_records is None),
         max_records=max_records,
+        signature_observer=(signature_census.observe if signature_census is not None else None),
     )
     if checkpoint is None or parameter_receipt is None:
         raise RuntimeError("training segment completed without a durable verified checkpoint")
+    signature_census_receipt = None
+    if signature_census is not None and signature_census_output is not None:
+        signature_census_receipt = signature_census.write_receipt(signature_census_output)
     if telemetry_path is not None and telemetry_run_id is not None and model_chat_restore_not_before is not None:
         append_training_telemetry(telemetry_path, kind="run_status", payload={
             "run_id": telemetry_run_id,
@@ -3822,6 +3867,7 @@ def run(
         "parameter_receipt": parameter_receipt, "publication_plan": specialist_plan,
         "resume_authority": resume_authority,
         "governor": governor_receipt,
+        "training_signature_census": signature_census_receipt,
     }
 
 def specialist_lineage_request(
@@ -4239,6 +4285,8 @@ def main() -> None:
     governed_vertical.add_argument("--resume-optimizer-transition-registry-sha256")
     governed_vertical.add_argument("--c-relocated-under-disk-budget-runner", action="store_true")
     governed_vertical.add_argument("--relocation-custody-root", type=Path)
+    governed_vertical.add_argument("--signature-census-output", type=Path)
+    governed_vertical.add_argument("--signature-census-source-commit")
     governed_preflight = subparsers.add_parser("governed-vertical-preflight")
     governed_preflight.add_argument("--seed", type=int, required=True)
     governed_preflight.add_argument("--artifact-root", type=Path, required=True)
@@ -4356,6 +4404,8 @@ def main() -> None:
                 args.c_relocated_under_disk_budget_runner
             ),
             relocation_custody_root=args.relocation_custody_root,
+            signature_census_output=args.signature_census_output,
+            signature_census_source_commit=args.signature_census_source_commit,
         )
     elif args.command == "governed-vertical-preflight":
         result = preflight_governed_vertical(seed=args.seed, artifact_root=args.artifact_root, write_budget_bytes=args.write_budget_bytes, max_records=args.max_records)

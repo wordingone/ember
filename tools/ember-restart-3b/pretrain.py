@@ -23,9 +23,11 @@ from batch import DOMAIN_MODALITIES, decode_owned_batch
 from model import EXPERT_NAMES, RestartDecoderConfig, UnifiedDecoder
 from specialist_stream import TRAINING_CURSOR_SCHEMA_VERSION
 from semantic_stream import ManifestBoundTokenStream
+from training_acceleration import training_step_signature
 
 CheckpointCallback = Callable[[int, dict[str, Any]], None]
 ProgressCallback = Callable[[dict[str, object]], None]
+SignatureObserver = Callable[[dict[str, object]], None]
 VERIFIER_PATH = Path(__file__).with_name("verify_capability_record.py")
 VERIFIER_PUBLIC_PATH = "tools/ember-restart-3b/verify_capability_record.py"
 
@@ -104,6 +106,7 @@ def run_pretraining_segment(
     checkpoint_every: int,
     checkpoint_callback: CheckpointCallback,
     progress_callback: ProgressCallback | None = None,
+    signature_observer: SignatureObserver | None = None,
     initial_global_step: int = 0,
     initial_tokens_seen: int = 0,
     initial_data_cursor: int = 0,
@@ -138,6 +141,13 @@ def run_pretraining_segment(
         batch = decode_owned_batch(record, config, device=device)
         active_expert = batch["active_expert"]
         capabilities = _verified_capabilities(record, active_expert=active_expert)
+        if signature_observer is not None:
+            signature_observer(
+                training_step_signature(
+                    batch,
+                    gradient_checkpointing=bool(config.gradient_checkpointing),
+                )
+            )
         optimizer.zero_grad(set_to_none=True)
         logits = model(
             batch["input_ids"], image_patches=batch["image_patches"], audio_frames=batch["audio_frames"],

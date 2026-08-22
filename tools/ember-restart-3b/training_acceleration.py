@@ -11,10 +11,13 @@ measurement may enable them.
 
 from __future__ import annotations
 
-import re
 import copy
+import hashlib
+import json
+import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import torch
@@ -141,6 +144,217 @@ def stage1_policy() -> Stage1Policy:
     """Return the immutable source-bound disabled policy for production preflight."""
 
     return parse_stage1_policy(copy.deepcopy(_STAGE1_POLICY_CONTRACT))
+
+
+_SIGNATURE_TENSOR_KEYS = (
+    "input_ids",
+    "target_ids",
+    "image_patches",
+    "audio_frames",
+    "image_coordinates",
+)
+_SIGNATURE_CONTRACT_KEYS = {
+    "capture_region",
+    "gradient_checkpointing",
+    "active_expert",
+    "tensors",
+    "spans",
+}
+_CENSUS_KEYS = {
+    "schema_version",
+    "status",
+    "source_commit",
+    "model_config_sha256",
+    "input_identity_sha256",
+    "runner_source_sha256",
+    "capture_region",
+    "activation_enabled",
+    "fallbacks",
+    "observed_steps",
+    "signature_count",
+    "approved_signatures",
+    "signatures",
+    "self_sha256",
+}
+
+
+def _canonical_json(value: object) -> bytes:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+
+
+def _tensor_descriptor(value: object, *, label: str) -> dict[str, object] | None:
+    if value is None:
+        return None
+    if not isinstance(value, torch.Tensor):
+        raise ValueError(f"{label} must be a tensor or null")
+    return {
+        "shape": list(value.shape),
+        "dtype": str(value.dtype).removeprefix("torch."),
+        "device_type": value.device.type,
+        "device_index": value.device.index,
+        "stride": list(value.stride()),
+        "requires_grad": bool(value.requires_grad),
+    }
+
+
+def _span_descriptor(value: object) -> dict[str, object]:
+    fields = ("start", "length", "modality", "attention_mode")
+    if isinstance(value, Mapping):
+        descriptor = {field: value.get(field) for field in fields}
+    else:
+        descriptor = {field: getattr(value, field, None) for field in fields}
+    if (
+        type(descriptor["start"]) is not int
+        or type(descriptor["length"]) is not int
+        or descriptor["start"] < 0
+        or descriptor["length"] < 1
+        or not isinstance(descriptor["modality"], str)
+        or not descriptor["modality"]
+        or not isinstance(descriptor["attention_mode"], str)
+        or not descriptor["attention_mode"]
+    ):
+        raise ValueError("training signature span is invalid")
+    return descriptor
+
+
+def training_step_signature(
+    batch: Mapping[str, object], *, gradient_checkpointing: bool,
+) -> dict[str, object]:
+    """Hash the static real-batch facts that determine one capture region."""
+
+    if not isinstance(batch, Mapping):
+        raise ValueError("training signature batch must be an object")
+    active_expert = batch.get("active_expert")
+    if not isinstance(active_expert, str) or not active_expert:
+        raise ValueError("training signature requires an active expert")
+    if type(gradient_checkpointing) is not bool:
+        raise ValueError("training signature gradient_checkpointing must be boolean")
+    spans = batch.get("spans")
+    if not isinstance(spans, Sequence) or isinstance(spans, (str, bytes, bytearray)):
+        raise ValueError("training signature spans must be a sequence")
+    contract = {
+        "capture_region": "forward_loss_backward",
+        "gradient_checkpointing": gradient_checkpointing,
+        "active_expert": active_expert,
+        "tensors": {
+            key: _tensor_descriptor(batch.get(key), label=key)
+            for key in _SIGNATURE_TENSOR_KEYS
+        },
+        "spans": [_span_descriptor(span) for span in spans],
+    }
+    return {
+        "schema_version": "ember-training-step-signature-v1",
+        "signature_sha256": hashlib.sha256(_canonical_json(contract)).hexdigest(),
+        "contract": contract,
+    }
+
+
+class TrainingSignatureCensus:
+    """Observation-only real-path census; it carries no activation authority."""
+
+    def __init__(
+        self,
+        *,
+        source_commit: str,
+        model_config_sha256: str,
+        input_identity_sha256: str,
+        runner_source_sha256: str,
+    ) -> None:
+        if re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
+            raise ValueError("source commit must be lowercase 40hex")
+        self.source_commit = source_commit
+        self.model_config_sha256 = _sha256(model_config_sha256, label="model config sha256")
+        self.input_identity_sha256 = _sha256(input_identity_sha256, label="input identity sha256")
+        self.runner_source_sha256 = _sha256(runner_source_sha256, label="runner source sha256")
+        self._observations: dict[str, dict[str, object]] = {}
+
+    def observe(self, value: Mapping[str, object]) -> None:
+        if not isinstance(value, Mapping) or set(value) != {"schema_version", "signature_sha256", "contract"}:
+            raise ValueError("training step signature must use the closed v1 shape")
+        if value["schema_version"] != "ember-training-step-signature-v1":
+            raise ValueError("training step signature schema mismatch")
+        signature = _sha256(value["signature_sha256"], label="training step signature sha256")
+        contract = value["contract"]
+        if not isinstance(contract, Mapping) or set(contract) != _SIGNATURE_CONTRACT_KEYS:
+            raise ValueError("training step signature contract is not closed")
+        if hashlib.sha256(_canonical_json(contract)).hexdigest() != signature:
+            raise ValueError("training step signature hash mismatch")
+        existing = self._observations.get(signature)
+        if existing is None:
+            self._observations[signature] = {"signature_sha256": signature, "count": 1, "contract": dict(contract)}
+        else:
+            existing["count"] = int(existing["count"]) + 1
+
+    def receipt(self) -> dict[str, object]:
+        if not self._observations:
+            raise RuntimeError("training signature census has no observed real-path steps")
+        signatures = [self._observations[key] for key in sorted(self._observations)]
+        receipt: dict[str, object] = {
+            "schema_version": "ember-training-signature-census-v1",
+            "status": "OBSERVED_NOT_ACTIVATED",
+            "source_commit": self.source_commit,
+            "model_config_sha256": self.model_config_sha256,
+            "input_identity_sha256": self.input_identity_sha256,
+            "runner_source_sha256": self.runner_source_sha256,
+            "capture_region": "forward_loss_backward",
+            "activation_enabled": False,
+            "fallbacks": 0,
+            "observed_steps": sum(int(row["count"]) for row in signatures),
+            "signature_count": len(signatures),
+            "approved_signatures": [str(row["signature_sha256"]) for row in signatures],
+            "signatures": signatures,
+        }
+        receipt["self_sha256"] = hashlib.sha256(_canonical_json(receipt)).hexdigest()
+        return receipt
+
+    def write_receipt(self, path: Path) -> dict[str, object]:
+        receipt = self.receipt()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with path.open("x", encoding="utf-8", newline="\n") as handle:
+                json.dump(receipt, handle, sort_keys=True, indent=2)
+                handle.write("\n")
+        except FileExistsError as error:
+            raise FileExistsError(f"refusing to overwrite training signature census: {path}") from error
+        return receipt
+
+
+def load_training_signature_census(path: Path) -> dict[str, object]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError("training signature census is not readable strict JSON") from error
+    if not isinstance(value, dict) or set(value) != _CENSUS_KEYS:
+        raise ValueError("training signature census must use the closed v1 key set")
+    claimed_self = _sha256(value["self_sha256"], label="training signature census self sha256")
+    unsigned = dict(value)
+    del unsigned["self_sha256"]
+    if hashlib.sha256(_canonical_json(unsigned)).hexdigest() != claimed_self:
+        raise ValueError("training signature census self hash mismatch")
+    if value["schema_version"] != "ember-training-signature-census-v1" or value["status"] != "OBSERVED_NOT_ACTIVATED":
+        raise ValueError("training signature census status is invalid")
+    if value["activation_enabled"] is not False or value["fallbacks"] != 0:
+        raise ValueError("training signature census cannot activate or fall back")
+    signatures = value["signatures"]
+    approved = value["approved_signatures"]
+    if not isinstance(signatures, list) or not signatures or not isinstance(approved, list):
+        raise ValueError("training signature census has no admitted signatures")
+    if approved != sorted(approved) or len(set(approved)) != len(approved):
+        raise ValueError("training signature census approved signatures are not unique and sorted")
+    if value["signature_count"] != len(signatures) or value["signature_count"] != len(approved):
+        raise ValueError("training signature census count mismatch")
+    observed_steps = 0
+    for row, signature in zip(signatures, approved, strict=True):
+        if not isinstance(row, dict) or set(row) != {"signature_sha256", "count", "contract"}:
+            raise ValueError("training signature census row is not closed")
+        if row["signature_sha256"] != signature or type(row["count"]) is not int or row["count"] < 1:
+            raise ValueError("training signature census row identity is invalid")
+        if hashlib.sha256(_canonical_json(row["contract"])).hexdigest() != signature:
+            raise ValueError("training signature census row hash mismatch")
+        observed_steps += row["count"]
+    if value["observed_steps"] != observed_steps:
+        raise ValueError("training signature census observed-step count mismatch")
+    return value
 
 
 class Stage2SignatureRegistry:
