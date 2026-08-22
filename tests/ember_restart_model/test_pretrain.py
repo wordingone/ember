@@ -105,11 +105,8 @@ class PretrainingSegmentTests(unittest.TestCase):
         loss_refs: list[weakref.ReferenceType[torch.Tensor]] = []
 
         class FakeGraph:
-            def __init__(self, region: object) -> None:
-                self.region = region
-
             def replay(self) -> None:
-                self.region()
+                pass
 
         class FakeBackend:
             preparation_regions_per_signature = 4
@@ -118,6 +115,7 @@ class PretrainingSegmentTests(unittest.TestCase):
                 self.warmups = 0
                 self.captures = 0
                 self.warmup_loss_released = False
+                self.captured_loss_ref: weakref.ReferenceType[torch.Tensor] | None = None
 
             def warmup(self, region: object, zero_grad: object) -> None:
                 self.warmups += 1
@@ -131,7 +129,8 @@ class PretrainingSegmentTests(unittest.TestCase):
                 gc.collect()
                 self.warmup_loss_released = bool(loss_refs) and loss_refs[-1]() is None
                 region()
-                return FakeGraph(region)
+                self.captured_loss_ref = loss_refs[-1]
+                return FakeGraph()
 
         config = RestartDecoderConfig.small_for_tests(
             hidden_size=32, layers=1, attention_heads=4, vocab_size=64,
@@ -197,6 +196,9 @@ class PretrainingSegmentTests(unittest.TestCase):
         self.assertEqual(backend.warmups, 1)
         self.assertEqual(backend.captures, 1)
         self.assertTrue(backend.warmup_loss_released)
+        gc.collect()
+        self.assertIsNotNone(backend.captured_loss_ref)
+        self.assertIsNone(backend.captured_loss_ref())
         self.assertEqual(runtime["cuda_graph_captures"], 1)
         self.assertEqual(runtime["cuda_graph_replays"], 1)
         self.assertEqual(runtime["captures_during_preparation"], 1)
@@ -247,9 +249,6 @@ class PretrainingSegmentTests(unittest.TestCase):
         executor.config = RestartDecoderConfig.small_for_tests()
         executor._static_batches = {signature: {} for signature in signatures}
         executor.optimizer = FakeOptimizer()
-        executor._losses = {
-            signature: [shared_pool_loss] for signature in signatures
-        }
         executor._loss_snapshots = {
             signature: torch.empty_like(shared_pool_loss) for signature in signatures
         }

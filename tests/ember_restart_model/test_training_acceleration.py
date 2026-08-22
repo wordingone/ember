@@ -361,7 +361,7 @@ class CheckpointCaptureProofTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "outside the approved signature census"):
             pool.replay("a" * 64)
 
-    def test_cuda_graph_backend_reuses_the_first_graph_private_pool(self) -> None:
+    def test_cuda_graph_backend_keeps_graph_private_pools_separate(self) -> None:
         class FakeCudaGraph:
             def __init__(self) -> None:
                 self.pool_token = object()
@@ -390,7 +390,7 @@ class CheckpointCaptureProofTests(unittest.TestCase):
             backend.capture(lambda: None)
 
         self.assertIsNone(observed_pools[0])
-        self.assertIs(observed_pools[1], graphs[0].pool_token)
+        self.assertIsNone(observed_pools[1])
 
     def test_graph_capture_refuses_warmup_optimizer_or_cursor_mutation(self) -> None:
         class FakeBackend:
