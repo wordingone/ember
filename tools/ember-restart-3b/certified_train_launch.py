@@ -3961,6 +3961,7 @@ def _write_execution_receipt(
     runner_receipt_path: pathlib.Path | None = None,
     run_attempt_registry: list[dict[str, Any]] | None = None,
     prelaunch_refusal: dict[str, str] | None = None,
+    host_setup_contract: dict[str, int | str] | None = None,
 ) -> pathlib.Path:
     receipt_path = receipt_path or _execution_receipt_path(launch)
     receipt = {
@@ -4008,6 +4009,8 @@ def _write_execution_receipt(
         )
     if prelaunch_refusal is not None:
         receipt["prelaunch_refusal"] = prelaunch_refusal
+    if host_setup_contract is not None:
+        receipt["host_setup_contract"] = host_setup_contract
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
         mode="wb",
@@ -4284,12 +4287,47 @@ def _certified_child_environment(launch: ValidatedLaunch) -> dict[str, str]:
     return child_env
 
 
+def _validate_tier1_host_setup_contract(
+    launch: ValidatedLaunch,
+) -> dict[str, int | str] | None:
+    """Apply #898's declared host envelope at the real pre-spawn boundary.
+
+    Only the mechanism that declares the elevated host-commit profile pays
+    this contract. Tier 2 and every non-A1 route retain their existing
+    admission path byte-for-byte.
+    """
+
+    if launch.a1_tier is not A1Tier.TIER_1:
+        return None
+    if launch.a1_mechanism is not A1Mechanism.FULL_STATE_ADAMW_CPU_OFFLOAD:
+        raise ValueError("Tier-1 host setup contract mechanism drifted")
+    tools_directory = str(pathlib.Path(__file__).resolve().parent)
+    inserted = tools_directory not in sys.path
+    if inserted:
+        sys.path.insert(0, tools_directory)
+    try:
+        from checkpoint_artifacts import available_host_commit_bytes
+        from host_setup_contract import (
+            dense_a1_full_state_cpu_offload_profile,
+            validate_host_setup_contract,
+        )
+
+        return validate_host_setup_contract(
+            dense_a1_full_state_cpu_offload_profile(),
+            available_commit_bytes_probe=available_host_commit_bytes,
+        )
+    finally:
+        if inserted:
+            sys.path.remove(tools_directory)
+
+
 def execute_validated_launch(
     repo_root: pathlib.Path,
     launch: ValidatedLaunch,
     run_process=subprocess.run,
 ) -> int:
     repo_root = pathlib.Path(repo_root)
+    host_setup_contract = _validate_tier1_host_setup_contract(launch)
     argv = build_runner_argv(repo_root, launch)
     prelaunch_refusal = _chained_specialist_prelaunch_refusal(launch)
     if prelaunch_refusal is not None:
@@ -4305,6 +4343,7 @@ def execute_validated_launch(
                 "note": "sidecar not spawned: certified prelaunch refusal",
             },
             prelaunch_refusal=prelaunch_refusal,
+            host_setup_contract=host_setup_contract,
         )
         return 125
     # argv is certificate-visible (an execution receipt pins argv[1] to the
@@ -4433,6 +4472,7 @@ def execute_validated_launch(
                 "status": "PENDING_RETENTION",
             },
             run_attempt_registry=registry_disclosures,
+            host_setup_contract=host_setup_contract,
         )
         try:
             protected_paths = list(launch.authority_paths)
@@ -4496,6 +4536,7 @@ def execute_validated_launch(
             receipt_path=retained_execution_receipt_path,
             runner_receipt_path=bound_runner_receipt_path,
             run_attempt_registry=registry_disclosures,
+            host_setup_contract=host_setup_contract,
         )
     _write_execution_receipt(
         launch, argv, exit_code, child_log_path=child_log_path,
@@ -4503,6 +4544,7 @@ def execute_validated_launch(
         attempt_retention=attempt_retention,
         runner_receipt_path=bound_runner_receipt_path,
         run_attempt_registry=registry_disclosures,
+        host_setup_contract=host_setup_contract,
     )
     return exit_code
 
