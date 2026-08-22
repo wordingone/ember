@@ -23,13 +23,148 @@ from batch import DOMAIN_MODALITIES, decode_owned_batch
 from model import EXPERT_NAMES, RestartDecoderConfig, UnifiedDecoder
 from specialist_stream import TRAINING_CURSOR_SCHEMA_VERSION
 from semantic_stream import ManifestBoundTokenStream
-from training_acceleration import training_step_signature
+from training_acceleration import (
+    CudaGraphTrainingStepPool,
+    ScaledMmKernel,
+    Stage2ActivationAuthority,
+    install_fp8_down_projections,
+    iter_fp8_down_projections,
+    refresh_fp8_after_optimizer_step,
+    training_step_signature,
+)
 
 CheckpointCallback = Callable[[int, dict[str, Any]], None]
 ProgressCallback = Callable[[dict[str, object]], None]
 SignatureObserver = Callable[[dict[str, object]], None]
 VERIFIER_PATH = Path(__file__).with_name("verify_capability_record.py")
 VERIFIER_PUBLIC_PATH = "tools/ember-restart-3b/verify_capability_record.py"
+
+
+class CensusBoundStage2Executor:
+    """Execute only forward/loss/backward through a census-bound graph pool."""
+
+    def __init__(
+        self,
+        *,
+        model: UnifiedDecoder,
+        optimizer: torch.optim.Optimizer,
+        config: RestartDecoderConfig,
+        authority: Stage2ActivationAuthority,
+        graph_backend: object | None = None,
+        fp8_kernel: ScaledMmKernel | None = None,
+        allow_test_device: bool = False,
+    ) -> None:
+        self.model = model
+        self.optimizer = optimizer
+        self.config = config
+        self.authority = authority
+        self.installation_receipt = install_fp8_down_projections(
+            model, kernel=fp8_kernel, allow_test_device=allow_test_device,
+        )
+        self.graph_pool = CudaGraphTrainingStepPool(
+            registry=authority.registry, backend=graph_backend,
+        )
+        self._static_batches: dict[str, dict[str, object]] = {}
+        self._losses: dict[str, list[torch.Tensor]] = {}
+        self._optimizer_steps = 0
+        self._refreshes = 0
+
+    @staticmethod
+    def _static_batch(batch: Mapping[str, object]) -> dict[str, object]:
+        return {
+            key: value.clone() if isinstance(value, torch.Tensor) else value
+            for key, value in batch.items()
+        }
+
+    @staticmethod
+    def _copy_tensors(
+        target: Mapping[str, object], source: Mapping[str, object],
+    ) -> None:
+        for key, value in target.items():
+            if isinstance(value, torch.Tensor):
+                incoming = source.get(key)
+                if not isinstance(incoming, torch.Tensor):
+                    raise RuntimeError("Stage-2 static tensor source disappeared")
+                value.copy_(incoming)
+
+    def _optimizer_identity(self) -> str:
+        return hashlib.sha256(
+            f"stage2-optimizer-steps:{self._optimizer_steps}".encode("ascii")
+        ).hexdigest()
+
+    def forward_loss_backward(
+        self, batch: Mapping[str, object], *, cursor_identity: str,
+    ) -> torch.Tensor:
+        signature = self.authority.resolve(
+            batch, gradient_checkpointing=bool(self.config.gradient_checkpointing),
+        )
+        if not self.graph_pool.contains(signature):
+            static = self._static_batch(batch)
+            loss_holder: list[torch.Tensor] = []
+
+            def region() -> None:
+                logits = self.model(
+                    static["input_ids"],
+                    image_patches=static["image_patches"],
+                    audio_frames=static["audio_frames"],
+                    image_coordinates=static["image_coordinates"],
+                    spans=static["spans"],
+                    active_expert=static["active_expert"],
+                )
+                loss = F.cross_entropy(
+                    logits.float().reshape(-1, self.config.vocab_size),
+                    static["target_ids"].reshape(-1),
+                )
+                loss.backward()
+                if loss_holder:
+                    loss_holder[0] = loss
+                else:
+                    loss_holder.append(loss)
+
+            warmup = getattr(self.graph_pool.backend, "warmup", None)
+            if callable(warmup):
+                warmup(region, lambda: self.optimizer.zero_grad(set_to_none=False))
+            self.graph_pool.capture(
+                signature_sha256=signature,
+                region=region,
+                optimizer_identity=self._optimizer_identity,
+                cursor_identity=lambda: cursor_identity,
+            )
+            self._static_batches[signature] = static
+            self._losses[signature] = loss_holder
+        else:
+            self._copy_tensors(self._static_batches[signature], batch)
+        self.optimizer.zero_grad(set_to_none=False)
+        self.graph_pool.replay(signature)
+        loss_holder = self._losses[signature]
+        if not loss_holder:
+            raise RuntimeError("Stage-2 graph replay did not retain its loss tensor")
+        return loss_holder[0]
+
+    def after_optimizer_step(self) -> int:
+        self._optimizer_steps += 1
+        refreshed = refresh_fp8_after_optimizer_step(self.model)
+        self._refreshes += refreshed
+        return refreshed
+
+    def receipt(self) -> dict[str, object]:
+        graph = self.graph_pool.receipt()
+        kernels = [site.kernel_receipt() for site in iter_fp8_down_projections(self.model)]
+        return {
+            "schema_version": "ember-stage2-runtime-receipt-v1",
+            "census_raw_sha256": self.authority.census_raw_sha256,
+            "census_self_sha256": self.authority.census_self_sha256,
+            "installed_sites": self.installation_receipt["installed_sites"],
+            "optimizer_steps": self._optimizer_steps,
+            "fp8_weight_refreshes": self._refreshes,
+            "fp8_dispatches": sum(int(item["dispatches"]) for item in kernels),
+            "fp8_fallbacks": sum(int(item["fallbacks"]) for item in kernels),
+            "cuda_graph_captures": graph["captures"],
+            "cuda_graph_replays": graph["replays"],
+            "cuda_graph_fallbacks": graph["fallbacks"],
+            "kernel_receipts": kernels,
+            "graph_receipt": graph,
+        }
 
 
 def _verified_capabilities(record: Mapping[str, object], *, active_expert: str) -> set[str]:
@@ -107,6 +242,7 @@ def run_pretraining_segment(
     checkpoint_callback: CheckpointCallback,
     progress_callback: ProgressCallback | None = None,
     signature_observer: SignatureObserver | None = None,
+    stage2_executor: CensusBoundStage2Executor | None = None,
     initial_global_step: int = 0,
     initial_tokens_seen: int = 0,
     initial_data_cursor: int = 0,
@@ -128,6 +264,8 @@ def run_pretraining_segment(
         raise ValueError("pretraining max_records must be an integer from 1 through 200")
     if not isinstance(data_shard_id, str) or not data_shard_id:
         raise ValueError("data_shard_id must be a nonempty owned shard identifier")
+    if signature_observer is not None and stage2_executor is not None:
+        raise ValueError("an activating run cannot mint its own signature census")
     model.train()
     losses: list[float] = []
     modality_examples = {"text": 0, "image": 0, "audio": 0, "reasoning": 0, "tool": 0}
@@ -136,6 +274,8 @@ def run_pretraining_segment(
     data_cursor = initial_data_cursor
     remaining_records = records[initial_data_cursor:] if max_records is None else records[initial_data_cursor:initial_data_cursor + max_records]
     final_global_step = initial_global_step + len(remaining_records)
+    elapsed_step_seconds = 0.0
+    step_timings_seconds: list[float] = []
     for local_step, record in enumerate(remaining_records, start=1):
         step_started = time.perf_counter()
         batch = decode_owned_batch(record, config, device=device)
@@ -148,18 +288,42 @@ def run_pretraining_segment(
                     gradient_checkpointing=bool(config.gradient_checkpointing),
                 )
             )
-        optimizer.zero_grad(set_to_none=True)
-        logits = model(
-            batch["input_ids"], image_patches=batch["image_patches"], audio_frames=batch["audio_frames"],
-            image_coordinates=batch["image_coordinates"], spans=batch["spans"], active_expert=active_expert,
-        )
-        loss = F.cross_entropy(logits.float().reshape(-1, config.vocab_size), batch["target_ids"].reshape(-1))
+        if stage2_executor is None:
+            optimizer.zero_grad(set_to_none=True)
+            logits = model(
+                batch["input_ids"], image_patches=batch["image_patches"], audio_frames=batch["audio_frames"],
+                image_coordinates=batch["image_coordinates"], spans=batch["spans"], active_expert=active_expert,
+            )
+            loss = F.cross_entropy(logits.float().reshape(-1, config.vocab_size), batch["target_ids"].reshape(-1))
+            if not torch.isfinite(loss):
+                raise RuntimeError(
+                    f"pretraining segment stopped on non-finite loss at step "
+                    f"{initial_global_step + local_step}"
+                )
+            loss.backward()
+        else:
+            cursor_identity = hashlib.sha256(
+                json.dumps(
+                    {"record_index": data_cursor, "global_step": initial_global_step + local_step - 1,
+                     "tokens_seen": tokens_seen},
+                    sort_keys=True, separators=(",", ":"),
+                ).encode("utf-8")
+            ).hexdigest()
+            loss = stage2_executor.forward_loss_backward(
+                batch, cursor_identity=cursor_identity,
+            )
         if not torch.isfinite(loss):
             raise RuntimeError(f"pretraining segment stopped on non-finite loss at step {initial_global_step + local_step}")
-        loss.backward()
         grad_norm_tensor = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
+        if stage2_executor is not None:
+            stage2_executor.after_optimizer_step()
+        if device.type == "cuda":
+            torch.cuda.synchronize(device)
         losses.append(float(loss.detach().cpu()))
+        step_elapsed = time.perf_counter() - step_started
+        step_timings_seconds.append(step_elapsed)
+        elapsed_step_seconds += step_elapsed
         step_tokens = int(batch["input_ids"].numel())
         tokens_seen += step_tokens
         data_cursor += 1
@@ -212,6 +376,13 @@ def run_pretraining_segment(
         "tokens_seen": tokens_seen,
         "data_cursor": {"shard": data_shard_id, "record_index": data_cursor, "global_step": initial_global_step + len(remaining_records), "tokens_seen": tokens_seen},
         "modality_examples": modality_examples, "expert_examples": expert_examples,
+        "step_timings_seconds": step_timings_seconds,
+        "step_elapsed_seconds": elapsed_step_seconds,
+        "tokens_per_second": (
+            (tokens_seen - initial_tokens_seen) / elapsed_step_seconds
+            if elapsed_step_seconds > 0.0 else 0.0
+        ),
+        "stage2_runtime": stage2_executor.receipt() if stage2_executor is not None else None,
     }
 
 

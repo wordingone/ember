@@ -14,6 +14,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import math
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -466,6 +467,23 @@ def load_stage2_activation_authority(
 class TorchCudaGraphBackend:
     """Thin production backend; Stage 1 config cannot call it."""
 
+    def warmup(
+        self,
+        region: Callable[[], None],
+        zero_grad: Callable[[], None],
+    ) -> None:
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDA graph warmup requires CUDA")
+        current = torch.cuda.current_stream()
+        warmup_stream = torch.cuda.Stream()
+        warmup_stream.wait_stream(current)
+        with torch.cuda.stream(warmup_stream):
+            for _ in range(3):
+                zero_grad()
+                region()
+        current.wait_stream(warmup_stream)
+        zero_grad()
+
     def capture(self, region: Callable[[], None]) -> torch.cuda.CUDAGraph:
         if not torch.cuda.is_available():
             raise RuntimeError("CUDA graph capture requires CUDA")
@@ -493,6 +511,10 @@ class CudaGraphTrainingStepPool:
         self._captures = 0
         self._replays = 0
         self._fallbacks = 0
+
+    def contains(self, signature_sha256: str) -> bool:
+        signature = self.registry.require(signature_sha256)
+        return signature in self._graphs
 
     def capture(
         self,
@@ -582,8 +604,9 @@ class _DynamicFp8ScaledMm(torch.autograd.Function):
             raise RuntimeError("FP8 down projection input width does not match the live weight")
         flat = activation.reshape(-1, activation.shape[-1])
         absolute_max = flat.detach().abs().amax().float()
-        if not bool(torch.isfinite(absolute_max)):
-            raise RuntimeError("FP8 activation scale is non-finite")
+        # Keep the captured region free of tensor-to-host branching. A non-finite
+        # activation remains fail-closed at the authoritative loss check after
+        # replay; persistent master-weight scaling is checked outside capture.
         scale_a = torch.where(absolute_max > 0, absolute_max / 448.0, torch.ones_like(absolute_max))
         activation_fp8 = (flat / scale_a).clamp(-448.0, 448.0).to(torch.float8_e4m3fn).contiguous()
         weight_transposed = weight_fp8.transpose(0, 1)
@@ -731,7 +754,10 @@ def iter_fp8_down_projections(model: nn.Module) -> Sequence[DynamicFp8DownProjec
 
 
 def install_fp8_down_projections(
-    model: nn.Module, *, allow_test_device: bool = False,
+    model: nn.Module,
+    *,
+    kernel: ScaledMmKernel | None = None,
+    allow_test_device: bool = False,
 ) -> dict[str, object]:
     """Replace exactly the declared SwiGLU 4H-to-H down sites in-place."""
 
@@ -759,6 +785,7 @@ def install_fp8_down_projections(
     for _name, owner, down in targets:
         owner.down = DynamicFp8DownProjection.from_linear(
             down,
+            kernel=kernel,
             allow_test_device=allow_test_device,
         )
     return {
@@ -816,3 +843,227 @@ def validate_close_evidence(value: Mapping[str, object]) -> dict[str, object]:
     if not isinstance(tokens_per_second, (int, float)) or isinstance(tokens_per_second, bool) or float(tokens_per_second) <= 1000.0:
         raise ValueError("issue #1413 close evidence must be greater than 1000 tok/s")
     return dict(value)
+
+
+_STAGE2_ARM_KEYS = {
+    "schema_version", "arm", "source_commit", "runner_source_sha256", "model_config_sha256",
+    "input_identity_sha256", "record_order_sha256", "checkpoint_lineage_sha256",
+    "census_raw_sha256", "seed", "initial_cursor",
+    "steps", "tokens", "losses", "step_timings_seconds", "step_elapsed_seconds", "tokens_per_second",
+    "max_memory_allocated_bytes", "max_memory_reserved_bytes", "mechanisms",
+}
+_STAGE2_MECHANISM_KEYS = {
+    "fp8_dispatches", "fp8_fallbacks", "cuda_graph_captures",
+    "cuda_graph_replays", "cuda_graph_fallbacks",
+}
+_STAGE2_MATCHED_LOSS_RELATIVE_TOLERANCE = 0.01
+
+
+def _validate_stage2_arm(value: Mapping[str, object]) -> dict[str, object]:
+    if not isinstance(value, Mapping) or set(value) != _STAGE2_ARM_KEYS:
+        raise ValueError("Stage-2 arm receipt must use the closed v1 key set")
+    arm = value["arm"]
+    if value["schema_version"] != "ember-stage2-training-arm-v1" or arm not in {
+        "bf16_baseline", "census_bound_stage2",
+    }:
+        raise ValueError("Stage-2 arm receipt identity is invalid")
+    if re.fullmatch(r"[0-9a-f]{40}", str(value["source_commit"])) is None:
+        raise ValueError("Stage-2 arm source commit is invalid")
+    for key in (
+        "runner_source_sha256", "model_config_sha256", "input_identity_sha256",
+        "record_order_sha256", "checkpoint_lineage_sha256",
+    ):
+        _sha256(value[key], label=key.replace("_", " "))
+    census_raw_sha256 = value["census_raw_sha256"]
+    if arm == "bf16_baseline" and census_raw_sha256 is not None:
+        raise ValueError("BF16 baseline cannot carry Stage-2 census authority")
+    if arm == "census_bound_stage2":
+        _sha256(census_raw_sha256, label="Stage-2 census raw sha256")
+    if type(value["seed"]) is not int or value["seed"] < 0:
+        raise ValueError("Stage-2 arm seed is invalid")
+    cursor = value["initial_cursor"]
+    if (
+        not isinstance(cursor, Mapping)
+        or set(cursor) != {"record_index", "global_step", "tokens_seen"}
+        or any(type(item) is not int or item < 0 for item in cursor.values())
+    ):
+        raise ValueError("Stage-2 arm initial cursor is invalid")
+    steps, tokens = value["steps"], value["tokens"]
+    if type(steps) is not int or steps < 1 or type(tokens) is not int or tokens < 1:
+        raise ValueError("Stage-2 arm training extent is invalid")
+    losses = value["losses"]
+    if (
+        not isinstance(losses, list)
+        or len(losses) != steps
+        or any(
+            not isinstance(item, (int, float))
+            or isinstance(item, bool)
+            or not math.isfinite(float(item))
+            for item in losses
+        )
+    ):
+        raise ValueError("Stage-2 arm losses are invalid")
+    timings = value["step_timings_seconds"]
+    if (
+        not isinstance(timings, list)
+        or len(timings) != steps
+        or any(
+            not isinstance(item, (int, float))
+            or isinstance(item, bool)
+            or not math.isfinite(float(item))
+            or float(item) <= 0.0
+            for item in timings
+        )
+    ):
+        raise ValueError("Stage-2 arm raw step timings are invalid")
+    for key in ("step_elapsed_seconds", "tokens_per_second"):
+        metric = value[key]
+        if (
+            not isinstance(metric, (int, float))
+            or isinstance(metric, bool)
+            or not math.isfinite(float(metric))
+            or float(metric) <= 0.0
+        ):
+            raise ValueError(f"Stage-2 arm {key} is invalid")
+    elapsed = sum(float(item) for item in timings)
+    if not math.isclose(
+        float(value["step_elapsed_seconds"]), elapsed, rel_tol=1e-9, abs_tol=1e-12,
+    ):
+        raise ValueError("Stage-2 arm elapsed time does not match raw step timings")
+    recomputed_rate = tokens / elapsed
+    if not math.isclose(
+        float(value["tokens_per_second"]), recomputed_rate,
+        rel_tol=1e-9, abs_tol=1e-9,
+    ):
+        raise ValueError("Stage-2 arm throughput does not match raw step timings")
+    for key in ("max_memory_allocated_bytes", "max_memory_reserved_bytes"):
+        if type(value[key]) is not int or value[key] < 0:
+            raise ValueError(f"Stage-2 arm {key} is invalid")
+    mechanisms = value["mechanisms"]
+    if (
+        not isinstance(mechanisms, Mapping)
+        or set(mechanisms) != _STAGE2_MECHANISM_KEYS
+        or any(type(item) is not int or item < 0 for item in mechanisms.values())
+    ):
+        raise ValueError("Stage-2 arm mechanisms are invalid")
+    if mechanisms["fp8_fallbacks"] != 0 or mechanisms["cuda_graph_fallbacks"] != 0:
+        raise ValueError("Stage-2 arm mechanism fallback count must be zero")
+    active_counts = (
+        mechanisms["fp8_dispatches"], mechanisms["cuda_graph_captures"],
+        mechanisms["cuda_graph_replays"],
+    )
+    if arm == "bf16_baseline" and any(active_counts):
+        raise ValueError("BF16 baseline cannot activate Stage-2 mechanisms")
+    if arm == "census_bound_stage2" and any(count < 1 for count in active_counts):
+        raise ValueError("census-bound Stage-2 arm requires both mechanisms")
+    return dict(value)
+
+
+def _write_json_no_overwrite(path: Path, value: Mapping[str, object], *, label: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with path.open("x", encoding="utf-8", newline="\n") as handle:
+            json.dump(value, handle, sort_keys=True, indent=2)
+            handle.write("\n")
+    except FileExistsError as error:
+        raise FileExistsError(f"refusing to overwrite {label}: {path}") from error
+
+
+def write_stage2_arm_receipt(
+    path: Path, value: Mapping[str, object],
+) -> dict[str, object]:
+    receipt = _validate_stage2_arm(value)
+    receipt["self_sha256"] = hashlib.sha256(_canonical_json(receipt)).hexdigest()
+    _write_json_no_overwrite(path, receipt, label="Stage-2 arm receipt")
+    return receipt
+
+
+def _load_stage2_arm_receipt_bytes(raw: bytes) -> dict[str, object]:
+    try:
+        value = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("Stage-2 arm receipt is not readable strict JSON") from error
+    if not isinstance(value, dict) or set(value) != _STAGE2_ARM_KEYS | {"self_sha256"}:
+        raise ValueError("Stage-2 arm receipt must use the closed v1 key set")
+    claimed = _sha256(value["self_sha256"], label="Stage-2 arm receipt self sha256")
+    unsigned = dict(value)
+    del unsigned["self_sha256"]
+    if hashlib.sha256(_canonical_json(unsigned)).hexdigest() != claimed:
+        raise ValueError("Stage-2 arm receipt self hash mismatch")
+    return _validate_stage2_arm(unsigned)
+
+
+def build_stage2_ab_comparison(
+    baseline: Mapping[str, object], accelerated: Mapping[str, object],
+) -> dict[str, object]:
+    baseline_value = _validate_stage2_arm(baseline)
+    accelerated_value = _validate_stage2_arm(accelerated)
+    if baseline_value["arm"] != "bf16_baseline" or accelerated_value["arm"] != "census_bound_stage2":
+        raise ValueError("Stage-2 comparison arm order is invalid")
+    identity_keys = (
+        "source_commit", "runner_source_sha256", "model_config_sha256",
+        "input_identity_sha256", "record_order_sha256", "checkpoint_lineage_sha256",
+        "seed", "initial_cursor", "steps", "tokens",
+    )
+    if any(baseline_value[key] != accelerated_value[key] for key in identity_keys):
+        raise ValueError("Stage-2 comparison identity mismatch")
+    loss_pairs = zip(baseline_value["losses"], accelerated_value["losses"], strict=True)
+    deltas = [
+        (
+            abs(float(candidate) - float(control)),
+            abs(float(candidate) - float(control)) / max(abs(float(control)), 1e-12),
+        )
+        for control, candidate in loss_pairs
+    ]
+    max_absolute = max(item[0] for item in deltas)
+    max_relative = max(item[1] for item in deltas)
+    if max_relative >= _STAGE2_MATCHED_LOSS_RELATIVE_TOLERANCE:
+        raise ValueError("Stage-2 matched loss tolerance was not met")
+    mechanisms = accelerated_value["mechanisms"]
+    close = validate_close_evidence({
+        "fp8_dispatches": mechanisms["fp8_dispatches"],
+        "cuda_graph_replays": mechanisms["cuda_graph_replays"],
+        "fp8_fallbacks": mechanisms["fp8_fallbacks"],
+        "cuda_graph_fallbacks": mechanisms["cuda_graph_fallbacks"],
+        "tokens_per_second": accelerated_value["tokens_per_second"],
+        "real_training_path": True,
+    })
+    baseline_rate = float(baseline_value["tokens_per_second"])
+    accelerated_rate = float(accelerated_value["tokens_per_second"])
+    receipt: dict[str, object] = {
+        "schema_version": "ember-stage2-training-ab-v1",
+        "status": "PASS",
+        "baseline_receipt_sha256": hashlib.sha256(_canonical_json(baseline_value)).hexdigest(),
+        "accelerated_receipt_sha256": hashlib.sha256(_canonical_json(accelerated_value)).hexdigest(),
+        "matched_identity": {key: baseline_value[key] for key in identity_keys},
+        "matched_loss_relative_tolerance": _STAGE2_MATCHED_LOSS_RELATIVE_TOLERANCE,
+        "max_absolute_loss_delta": max_absolute,
+        "max_relative_loss_delta": max_relative,
+        "baseline_tokens_per_second": baseline_rate,
+        "accelerated_tokens_per_second": accelerated_rate,
+        "throughput_speedup": accelerated_rate / baseline_rate,
+        "close_evidence": close,
+    }
+    receipt["self_sha256"] = hashlib.sha256(_canonical_json(receipt)).hexdigest()
+    return receipt
+
+
+def compare_stage2_ab_receipts(
+    baseline_path: Path, accelerated_path: Path, output_path: Path,
+) -> dict[str, object]:
+    try:
+        baseline_raw = baseline_path.read_bytes()
+        accelerated_raw = accelerated_path.read_bytes()
+    except OSError as error:
+        raise ValueError("Stage-2 arm receipt is not readable") from error
+    comparison = build_stage2_ab_comparison(
+        _load_stage2_arm_receipt_bytes(baseline_raw),
+        _load_stage2_arm_receipt_bytes(accelerated_raw),
+    )
+    comparison["baseline_raw_sha256"] = hashlib.sha256(baseline_raw).hexdigest()
+    comparison["accelerated_raw_sha256"] = hashlib.sha256(accelerated_raw).hexdigest()
+    comparison["self_sha256"] = hashlib.sha256(
+        _canonical_json({key: value for key, value in comparison.items() if key != "self_sha256"})
+    ).hexdigest()
+    _write_json_no_overwrite(output_path, comparison, label="Stage-2 A/B comparison receipt")
+    return comparison

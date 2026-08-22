@@ -10,6 +10,7 @@ import json
 import sys
 import tempfile
 import unittest
+from dataclasses import fields
 from pathlib import Path
 from unittest.mock import patch
 
@@ -19,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 import training_acceleration
-from model import RestartDecoderConfig, UnifiedDecoder
+from model import MultimodalSpan, RestartDecoderConfig, UnifiedDecoder
 
 
 def _disabled_contract() -> dict[str, object]:
@@ -186,6 +187,12 @@ class TrainingAccelerationPolicyTests(unittest.TestCase):
 
 
 class TrainingSignatureCensusTests(unittest.TestCase):
+    def test_signature_descriptor_covers_every_multimodal_span_field(self) -> None:
+        self.assertEqual(
+            {field.name for field in fields(MultimodalSpan)},
+            {"start", "length", "modality", "attention_mode"},
+        )
+
     @staticmethod
     def _batch(*, expert: str = "reasoning", sequence: int = 4) -> dict[str, object]:
         return {
@@ -497,6 +504,101 @@ class CloseGateTests(unittest.TestCase):
             refused[key] = value
             with self.assertRaisesRegex(ValueError, "real training path|both mechanisms|fallback|greater than 1000"):
                 training_acceleration.validate_close_evidence(refused)
+
+    @staticmethod
+    def _arm(arm: str) -> dict[str, object]:
+        accelerated = arm == "census_bound_stage2"
+        elapsed = 1.0 if accelerated else 2048.0 / 900.0
+        return {
+            "schema_version": "ember-stage2-training-arm-v1",
+            "arm": arm,
+            "source_commit": "a" * 40,
+            "runner_source_sha256": "1" * 64,
+            "model_config_sha256": "2" * 64,
+            "input_identity_sha256": "3" * 64,
+            "record_order_sha256": "4" * 64,
+            "checkpoint_lineage_sha256": "5" * 64,
+            "census_raw_sha256": "6" * 64 if accelerated else None,
+            "seed": 83,
+            "initial_cursor": {"record_index": 0, "global_step": 0, "tokens_seen": 0},
+            "steps": 2,
+            "tokens": 2048,
+            "losses": [9.0, 8.0] if not accelerated else [9.01, 8.01],
+            "step_timings_seconds": [elapsed / 2.0, elapsed / 2.0],
+            "step_elapsed_seconds": elapsed,
+            "tokens_per_second": 2048.0 if accelerated else 900.0,
+            "max_memory_allocated_bytes": 100,
+            "max_memory_reserved_bytes": 200,
+            "mechanisms": {
+                "fp8_dispatches": 8 if accelerated else 0,
+                "fp8_fallbacks": 0,
+                "cuda_graph_captures": 2 if accelerated else 0,
+                "cuda_graph_replays": 2 if accelerated else 0,
+                "cuda_graph_fallbacks": 0,
+            },
+        }
+
+    def test_matched_ab_receipt_binds_identity_loss_mechanisms_and_floor(self) -> None:
+        baseline = self._arm("bf16_baseline")
+        accelerated = self._arm("census_bound_stage2")
+        receipt = training_acceleration.build_stage2_ab_comparison(
+            baseline, accelerated,
+        )
+        self.assertEqual(receipt["status"], "PASS")
+        self.assertLess(receipt["max_relative_loss_delta"], 0.01)
+        self.assertGreater(receipt["throughput_speedup"], 2.0)
+        self.assertEqual(len(receipt["self_sha256"]), 64)
+
+        refused = self._arm("census_bound_stage2")
+        refused["tokens_per_second"] = 2049.0
+        with self.assertRaisesRegex(ValueError, "raw step timings"):
+            training_acceleration.build_stage2_ab_comparison(baseline, refused)
+
+        for mutation, message in (
+            (("runner_source_sha256", "7" * 64), "identity"),
+            (("losses", [9.0, 7.0]), "matched loss"),
+        ):
+            refused = self._arm("census_bound_stage2")
+            refused[mutation[0]] = mutation[1]
+            with self.assertRaisesRegex(ValueError, message):
+                training_acceleration.build_stage2_ab_comparison(baseline, refused)
+
+        refused = self._arm("census_bound_stage2")
+        refused["step_timings_seconds"] = [1.024, 1.024]
+        refused["step_elapsed_seconds"] = 2.048
+        refused["tokens_per_second"] = 1000.0
+        with self.assertRaisesRegex(ValueError, "greater than 1000"):
+            training_acceleration.build_stage2_ab_comparison(baseline, refused)
+
+        refused = self._arm("census_bound_stage2")
+        refused["mechanisms"] = dict(refused["mechanisms"], fp8_fallbacks=1)
+        with self.assertRaisesRegex(ValueError, "fallback"):
+            training_acceleration.build_stage2_ab_comparison(baseline, refused)
+
+    def test_stage2_arm_and_comparison_receipts_refuse_overwrite(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            baseline_path = root / "baseline.json"
+            accelerated_path = root / "accelerated.json"
+            comparison_path = root / "comparison.json"
+            training_acceleration.write_stage2_arm_receipt(
+                baseline_path, self._arm("bf16_baseline"),
+            )
+            training_acceleration.write_stage2_arm_receipt(
+                accelerated_path, self._arm("census_bound_stage2"),
+            )
+            comparison = training_acceleration.compare_stage2_ab_receipts(
+                baseline_path, accelerated_path, comparison_path,
+            )
+            self.assertEqual(comparison["status"], "PASS")
+            self.assertEqual(
+                comparison["baseline_raw_sha256"],
+                hashlib.sha256(baseline_path.read_bytes()).hexdigest(),
+            )
+            with self.assertRaisesRegex(FileExistsError, "refusing to overwrite"):
+                training_acceleration.compare_stage2_ab_receipts(
+                    baseline_path, accelerated_path, comparison_path,
+                )
 
 
 if __name__ == "__main__":
