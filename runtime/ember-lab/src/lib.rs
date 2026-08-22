@@ -7291,10 +7291,38 @@ fn protective_checkpoint_monitor_grace_ms(job_count: usize) -> u64 {
     let divisor = u64::try_from(job_count).unwrap_or(u64::MAX).max(1);
     (PROTECTIVE_CHECKPOINT_MONITOR_TOTAL_GRACE_MS / divisor).max(1)
 }
+/// Return the running jobs a survival-floor freeze should protectively stop.
+///
+/// Only `commit_remaining_below_survival_floor` and
+/// `resource_guard_probe_failed` are host-SURVIVAL conditions: commit
+/// exhaustion is what actually starves the host and has its own floor
+/// (`RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES`); an unreadable probe means
+/// the guard cannot see the host at all. A
+/// `physical_available_below_survival_floor` freeze is an admission-quality
+/// signal, not a survival one -- Windows pages a paging-heavy-but-healthy
+/// workload under low physical availability and degrades gracefully; it
+/// does not crash. Stopping a running job on a physical-only breach
+/// destroys real run evidence (a live, otherwise-healthy training job) to
+/// "protect" against a condition the host already handles on its own.
+///
+/// Receipted defect (#898, same-day amendment): the E8 dense A1 run was
+/// protective-stopped at t+71s on `physical_available_below_survival_floor`
+/// while `commit_remaining_bytes` stayed >= 35 GiB (floor 10 GiB) for the
+/// entire trajectory -- the run was never in survival danger. A physical
+/// breach still freezes ADMISSION (new dispatch is refused, and the sticky
+/// freeze + oracle-evidence rearm protocol are unchanged); it must not stop
+/// an already-running job.
 #[cfg(windows)]
 fn running_job_ids_for_protective_stop(conn: &Connection) -> Result<Vec<String>> {
     let status = resource_guard_status_from_connection(conn)?;
     if status.get("admission_state") != Some(&Value::String("frozen".into())) {
+        return Ok(Vec::new());
+    }
+    let is_survival_breach = matches!(
+        status.get("reason").and_then(Value::as_str),
+        Some("commit_remaining_below_survival_floor") | Some("resource_guard_probe_failed")
+    );
+    if !is_survival_breach {
         return Ok(Vec::new());
     }
     let mut statement =
@@ -9435,5 +9463,102 @@ mod dispatch_binding_snapshot_tests {
         assert_eq!(protective_checkpoint_monitor_grace_ms(1), 5_000);
         assert_eq!(protective_checkpoint_monitor_grace_ms(2), 2_500);
         assert_eq!(protective_checkpoint_monitor_grace_ms(10_000), 1);
+    }
+
+    #[cfg(windows)]
+    fn seed_one_running_job(conn: &Connection, job_id: &str) {
+        conn.execute_batch("CREATE TABLE jobs(job_id TEXT PRIMARY KEY, state TEXT NOT NULL);")
+            .unwrap();
+        conn.execute(
+            "INSERT INTO jobs(job_id, state) VALUES(?1, 'running')",
+            params![job_id],
+        )
+        .unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_physical_only_breach_freezes_admission_but_leaves_running_jobs_alone() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_resource_guard_tables(&conn).unwrap();
+        seed_one_running_job(&conn, "e8-dense-a1-run");
+
+        let mut low_physical = healthy_host_capacity();
+        low_physical.physical_available_bytes = RESOURCE_GUARD_MIN_PHYSICAL_AVAILABLE_BYTES - 1;
+        persist_resource_guard_sample(&conn, 100, Ok(low_physical)).unwrap();
+
+        let frozen = resource_guard_status_from_connection(&conn).unwrap();
+        assert_eq!(frozen["admission_state"], "frozen");
+        assert_eq!(frozen["reason"], "physical_available_below_survival_floor");
+        assert!(
+            running_job_ids_for_protective_stop(&conn)
+                .unwrap()
+                .is_empty(),
+            "a physical-only breach must not select a running job for protective stop \
+             -- it is an admission-quality signal, not a host-survival condition (#898)"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_commit_breach_selects_the_running_job_for_protective_stop() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_resource_guard_tables(&conn).unwrap();
+        seed_one_running_job(&conn, "e8-dense-a1-run");
+
+        let mut low_commit = healthy_host_capacity();
+        low_commit.current_commit_remaining_bytes = RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES - 1;
+        persist_resource_guard_sample(&conn, 100, Ok(low_commit)).unwrap();
+
+        let frozen = resource_guard_status_from_connection(&conn).unwrap();
+        assert_eq!(frozen["admission_state"], "frozen");
+        assert_eq!(frozen["reason"], "commit_remaining_below_survival_floor");
+        assert_eq!(
+            running_job_ids_for_protective_stop(&conn).unwrap(),
+            vec!["e8-dense-a1-run".to_string()]
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_probe_failure_also_selects_the_running_job_for_protective_stop() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_resource_guard_tables(&conn).unwrap();
+        seed_one_running_job(&conn, "e8-dense-a1-run");
+
+        persist_resource_guard_headroom(
+            &conn,
+            100,
+            Err(EmberLabError::InvalidDispatchManifest {
+                detail: "probe unavailable".into(),
+            }),
+        )
+        .unwrap();
+
+        let frozen = resource_guard_status_from_connection(&conn).unwrap();
+        assert_eq!(frozen["admission_state"], "frozen");
+        assert_eq!(frozen["reason"], "resource_guard_probe_failed");
+        assert_eq!(
+            running_job_ids_for_protective_stop(&conn).unwrap(),
+            vec!["e8-dense-a1-run".to_string()]
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn no_freeze_selects_no_running_job_for_protective_stop() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_resource_guard_tables(&conn).unwrap();
+        seed_one_running_job(&conn, "e8-dense-a1-run");
+
+        persist_resource_guard_sample(&conn, 100, Ok(healthy_host_capacity())).unwrap();
+
+        assert_eq!(
+            resource_guard_status_from_connection(&conn).unwrap()["admission_state"],
+            "open"
+        );
+        assert!(running_job_ids_for_protective_stop(&conn)
+            .unwrap()
+            .is_empty());
     }
 }
