@@ -107,14 +107,17 @@ class PretrainingSegmentTests(unittest.TestCase):
                 self.region()
 
         class FakeBackend:
+            preparation_regions_per_signature = 4
+
             def __init__(self) -> None:
                 self.warmups = 0
                 self.captures = 0
 
             def warmup(self, region: object, zero_grad: object) -> None:
                 self.warmups += 1
-                zero_grad()
-                region()
+                for _ in range(3):
+                    zero_grad()
+                    region()
                 zero_grad()
 
             def capture(self, region: object) -> FakeGraph:
@@ -169,6 +172,7 @@ class PretrainingSegmentTests(unittest.TestCase):
                 checkpoint_every=1,
                 checkpoint_callback=lambda _step, _result: None,
                 stage2_executor=executor,
+                measurement_preparation_regions_per_signature=4,
                 require_complete_coverage=False,
             )
         runtime = result["stage2_runtime"]
@@ -176,9 +180,17 @@ class PretrainingSegmentTests(unittest.TestCase):
         self.assertEqual(backend.captures, 1)
         self.assertEqual(runtime["cuda_graph_captures"], 1)
         self.assertEqual(runtime["cuda_graph_replays"], 1)
+        self.assertEqual(runtime["captures_during_preparation"], 1)
+        self.assertEqual(runtime["captures_during_measured_window"], 0)
         self.assertGreater(runtime["fp8_dispatches"], 0)
         self.assertEqual(runtime["fp8_fallbacks"], 0)
         self.assertEqual(len(result["step_timings_seconds"]), 1)
+        self.assertEqual(result["measurement_preparation"], {
+            "regions_per_signature": 4,
+            "signature_count": 1,
+            "region_count": 4,
+            "no_capture_in_measured_window": True,
+        })
         self.assertAlmostEqual(
             result["tokens_per_second"],
             result["tokens_seen"] / sum(result["step_timings_seconds"]),

@@ -467,6 +467,8 @@ def load_stage2_activation_authority(
 class TorchCudaGraphBackend:
     """Thin production backend; Stage 1 config cannot call it."""
 
+    preparation_regions_per_signature = 4
+
     def warmup(
         self,
         region: Callable[[], None],
@@ -851,6 +853,9 @@ _STAGE2_ARM_KEYS = {
     "census_raw_sha256", "seed", "initial_cursor",
     "steps", "tokens", "losses", "step_timings_seconds", "step_elapsed_seconds", "tokens_per_second",
     "max_memory_allocated_bytes", "max_memory_reserved_bytes", "mechanisms",
+    "preparation_regions_per_signature", "preparation_signature_count",
+    "preparation_region_count", "captures_during_preparation",
+    "captures_during_measured_window", "no_capture_in_measured_window",
 }
 _STAGE2_MECHANISM_KEYS = {
     "fp8_dispatches", "fp8_fallbacks", "cuda_graph_captures",
@@ -956,6 +961,39 @@ def _validate_stage2_arm(value: Mapping[str, object]) -> dict[str, object]:
         raise ValueError("BF16 baseline cannot activate Stage-2 mechanisms")
     if arm == "census_bound_stage2" and any(count < 1 for count in active_counts):
         raise ValueError("census-bound Stage-2 arm requires both mechanisms")
+    regions_per_signature = value["preparation_regions_per_signature"]
+    signature_count = value["preparation_signature_count"]
+    region_count = value["preparation_region_count"]
+    if (
+        type(regions_per_signature) is not int
+        or regions_per_signature < 1
+        or type(signature_count) is not int
+        or signature_count < 1
+        or type(region_count) is not int
+        or region_count != regions_per_signature * signature_count
+    ):
+        raise ValueError("Stage-2 arm preparation methodology is invalid")
+    captures_during_preparation = value["captures_during_preparation"]
+    captures_during_measured_window = value["captures_during_measured_window"]
+    if (
+        type(captures_during_preparation) is not int
+        or captures_during_preparation < 0
+        or type(captures_during_measured_window) is not int
+        or captures_during_measured_window < 0
+    ):
+        raise ValueError("Stage-2 arm capture accounting is invalid")
+    if (
+        value["no_capture_in_measured_window"] is not True
+        or captures_during_measured_window != 0
+    ):
+        raise ValueError("Stage-2 accelerated arm captured inside the measured window")
+    if arm == "bf16_baseline" and captures_during_preparation != 0:
+        raise ValueError("BF16 baseline cannot capture during preparation")
+    if arm == "census_bound_stage2":
+        if captures_during_preparation != signature_count:
+            raise ValueError("Stage-2 preparation must capture every admitted signature once")
+        if mechanisms["cuda_graph_captures"] != captures_during_preparation:
+            raise ValueError("Stage-2 preparation capture accounting mismatch")
     return dict(value)
 
 
@@ -1004,6 +1042,9 @@ def build_stage2_ab_comparison(
         "source_commit", "runner_source_sha256", "model_config_sha256",
         "input_identity_sha256", "record_order_sha256", "checkpoint_lineage_sha256",
         "seed", "initial_cursor", "steps", "tokens",
+        "preparation_regions_per_signature", "preparation_signature_count",
+        "preparation_region_count", "captures_during_measured_window",
+        "no_capture_in_measured_window",
     )
     if any(baseline_value[key] != accelerated_value[key] for key in identity_keys):
         raise ValueError("Stage-2 comparison identity mismatch")
