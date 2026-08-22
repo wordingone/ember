@@ -519,6 +519,12 @@ class CloseGateTests(unittest.TestCase):
             "record_order_sha256": "4" * 64,
             "checkpoint_lineage_sha256": "5" * 64,
             "census_raw_sha256": "6" * 64 if accelerated else None,
+            "preparation_regions_per_signature": 4,
+            "preparation_signature_count": 2,
+            "preparation_region_count": 8,
+            "captures_during_preparation": 2 if accelerated else 0,
+            "captures_during_measured_window": 0,
+            "no_capture_in_measured_window": True,
             "seed": 83,
             "initial_cursor": {"record_index": 0, "global_step": 0, "tokens_seen": 0},
             "steps": 2,
@@ -573,6 +579,17 @@ class CloseGateTests(unittest.TestCase):
         refused = self._arm("census_bound_stage2")
         refused["mechanisms"] = dict(refused["mechanisms"], fp8_fallbacks=1)
         with self.assertRaisesRegex(ValueError, "fallback"):
+            training_acceleration.build_stage2_ab_comparison(baseline, refused)
+
+        refused = self._arm("census_bound_stage2")
+        refused["captures_during_measured_window"] = 1
+        refused["no_capture_in_measured_window"] = False
+        with self.assertRaisesRegex(ValueError, "measured window"):
+            training_acceleration.build_stage2_ab_comparison(baseline, refused)
+
+        refused = self._arm("census_bound_stage2")
+        refused["preparation_region_count"] = 12
+        with self.assertRaisesRegex(ValueError, "preparation|identity"):
             training_acceleration.build_stage2_ab_comparison(baseline, refused)
 
     def test_stage2_arm_and_comparison_receipts_refuse_overwrite(self) -> None:
