@@ -8,11 +8,10 @@ CPU-offloaded optimizer moments in ``a1_optimizer.py``).
 An ember mechanism that needs more host commit headroom than the reference
 host currently provides must not be admitted by silent ad-hoc OS tuning
 mid-run. This module gives each such mechanism a declared, testable
-capacity requirement and a single documented, auditable provisioning step a
-host can be brought up to (a fixed pagefile of a named size, set once,
-before launch). A host that does not meet the requirement is refused with a
-precise statement of the shortfall and the exact remediation -- never a
-suggestion to tune the OS by hand while a run is in flight.
+capacity requirement, checked by a fail-closed pre-execution probe. A host
+that does not meet the requirement is refused with a precise statement of
+the shortfall -- never a suggestion to tune the OS by hand while a run is
+in flight.
 
 Receipted defect this formalizes (#898, 2026-08-21 amendment): the E8 dense
 A1 launch needed a manual, undocumented, unreceipted pagefile increase
@@ -20,11 +19,24 @@ A1 launch needed a manual, undocumented, unreceipted pagefile increase
 the host envelope, provision prerequisites through a deliberate documented
 automated auditable setup contract, redesign the workload, or fail closed
 with a precise statement -- manual mid-run OS tuning is never an accepted
-path. This module is that contract for the host-commit-capacity dimension.
+path.
 
-This module declares and validates the requirement only. It is not wired
-into any live launch/dispatch path; that integration is deliberately a
-follow-up reviewed separately (see the #898 PR body boundary-honesty note).
+Scoping ruling (operator, 2026-08-21, binds this module): the 2026-08-21
+pagefile change is recorded here as a TEMPORARY operator intervention and
+technical debt, acceptable only to finish the current dense control run --
+never as a formalized, repeatable Ember setup requirement. A mechanism's
+elevated commit need is a property of that mechanism's own declared
+control-experiment profile (see ``HostMechanismProfile`` /
+``dense_a1_full_state_cpu_offload_profile``), never a redefinition of
+Ember's normal host floor. This module declares that per-mechanism
+requirement and validates it with a fail-closed probe
+(``validate_host_setup_contract``); it is not yet wired into any live
+launch/dispatch path, so it does not yet satisfy the operator's requirement
+that an elevated-commit need be "declared in the host envelope contract and
+validated before execution" -- that wiring, scoped to the declaring
+mechanism's own experiment declaration, is required follow-up before this
+issue can claim that requirement met (see the #898 PR body boundary-honesty
+note).
 """
 
 from __future__ import annotations
@@ -144,12 +156,18 @@ class HostSetupContractRefusal(RuntimeError):
             f"{profile.transient_bytes / BYTES_PER_GIB:.2f} GiB + reserve "
             f"{profile.reserve_bytes / BYTES_PER_GIB:.2f} GiB), but only "
             f"{available_gib:.2f} GiB is available -- shortfall {shortfall_gib:.2f} GiB. "
-            f"Documented remediation: set a FIXED (not system-managed) pagefile of at "
-            f"least {DOCUMENTED_PAGEFILE_MINIMUM_MIB} MiB at registry value "
-            f"'{DOCUMENTED_PAGEFILE_VALUE_NAME}' under {DOCUMENTED_PAGEFILE_REGISTRY_PATH}, "
-            f"then reboot so the live Windows commit limit reflects the new maximum "
-            f"(see docs/host-setup-contract.md). Manual ad-hoc OS tuning mid-training is "
-            f"not a supported path; this contract is the only sanctioned provisioning route."
+            f"This headroom is a property of the '{profile.name}' control-experiment "
+            f"profile itself, not Ember's normal host floor. The one exception on "
+            f"record is a fixed pagefile of at least {DOCUMENTED_PAGEFILE_MINIMUM_MIB} "
+            f"MiB (registry value '{DOCUMENTED_PAGEFILE_VALUE_NAME}' under "
+            f"{DOCUMENTED_PAGEFILE_REGISTRY_PATH}, effective after reboot), authorized "
+            f"2026-08-21 as a temporary operator intervention to finish the current "
+            f"dense control run (see docs/host-setup-contract.md) -- it is recorded "
+            f"technical debt, not a durable or repeatable answer for future mechanisms. "
+            f"Manual ad-hoc OS tuning mid-training is not a supported path; a mechanism "
+            f"whose declared profile exceeds this exception's headroom must fit the "
+            f"existing envelope, redesign to need less, or obtain its own fresh "
+            f"operator-reviewed exception -- never assume this one as a default."
         )
 
 
