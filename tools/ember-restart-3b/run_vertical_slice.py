@@ -31,8 +31,16 @@ import torch
 from checkpoint_artifacts import CheckpointDeferredLowCommit, _atomic_publish_no_replace, _default_optimizer_contract, _empty_failure_comparison_operands, _normalize_failure_comparison_operands, _optimizer_realization, _select_detached_state, _write_atomic, available_host_commit_bytes, load_checkpoint_artifacts, load_checkpoint_model_only_transition, optimizer_covers_every_expert_route, preflight_specialist_lineage_sources, published_checkpoint_receipt, write_checkpoint_artifacts
 from parameter_counter import derive_expert_genesis_sha256, validate_realization_receipt
 from model import RestartDecoderConfig, UnifiedDecoder
-from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
-from training_acceleration import Stage1Policy, TrainingSignatureCensus, stage1_policy
+from pretrain import CensusBoundStage2Executor, run_manifest_bound_semantic_segment, run_pretraining_segment
+from training_acceleration import (
+    Stage1Policy,
+    TrainingSignatureCensus,
+    compare_stage2_ab_receipts,
+    load_stage2_activation_authority,
+    load_training_signature_census,
+    stage1_policy,
+    write_stage2_arm_receipt,
+)
 from durable_io import atomic_create_durable, atomic_replace_durable
 from parameter_counter import measure_parameter_counts
 from semantic_stream import ManifestBoundTokenStream
@@ -55,6 +63,12 @@ from a1_tier2_execution import run_dense_a1_tier2
 # utilization, so the receipt names both.
 _E4_ACTIVE_PARAMETERS = 1_725_232_640
 _E4_ASSUMED_PEAK_FLOPS = 165.2e12
+
+_STAGE2_AB_SOURCE_COMMIT = "e2283dfd04aa7e61436764d6821d3afe6c64f13b"
+_STAGE2_CENSUS_SOURCE_COMMIT = "728421bcca5092a89df483f7df804c7177c337a7"
+_STAGE2_CENSUS_RELATIVE_PATH = Path("docs/spec/llmq/ember-training-signature-census-v1.json")
+_STAGE2_CENSUS_RAW_SHA256 = "86e37ad5868da1ef77419d643c3ff31ee0a38b7e9f603b9c0807376958ef5d0c"
+_STAGE2_MATCHED_LOSS_RELATIVE_TOLERANCE = 0.01
 
 _GENESIS_INVENTORY_SCHEMA = "ember-genesis-inventory-v1"
 _GENESIS_INVENTORY_KEYS = {
@@ -632,6 +646,8 @@ def run_governed_vertical(
     relocation_custody_root: Path | None = None,
     signature_census_output: Path | None = None,
     signature_census_source_commit: str | None = None,
+    stage2_acceleration: bool = False,
+    stage2_arm_receipt_output: Path | None = None,
 ) -> dict[str, object]:
     """Canonical-runner entrypoint; check launch inputs before governor/CUDA admission."""
     if type(seed) is not int or seed < 0 or type(write_budget_bytes) is not int or write_budget_bytes < 1:
@@ -671,10 +687,16 @@ def run_governed_vertical(
         relocation_custody_root=relocation_custody_root,
         signature_census_output=census_output,
         signature_census_source_commit=census_source_commit,
+        stage2_acceleration=stage2_acceleration,
+        stage2_arm_receipt_output=stage2_arm_receipt_output,
     )
 
 
-def preflight_governed_vertical(*, seed: int, artifact_root: Path, write_budget_bytes: int, max_records: int | None = None) -> dict[str, object]:
+def preflight_governed_vertical(
+    *, seed: int, artifact_root: Path, write_budget_bytes: int,
+    max_records: int | None = None, stage2_acceleration: bool = False,
+    stage2_arm_receipt_output: Path | None = None,
+) -> dict[str, object]:
     """CPU-only canonical-runner child preflight; it never admits CUDA or a training step."""
 
     if type(seed) is not int or seed < 0 or type(write_budget_bytes) is not int or write_budget_bytes < 1:
@@ -689,6 +711,17 @@ def preflight_governed_vertical(*, seed: int, artifact_root: Path, write_budget_
     resolved_artifact_root = artifact_root.resolve()
     if not resolved_artifact_root.is_relative_to(custody):
         raise ValueError("governed vertical artifact root escapes canonical runner custody")
+    receipt_output = validate_stage2_activation_request(
+        enabled=stage2_acceleration,
+        artifact_root=resolved_artifact_root,
+        receipt_output=stage2_arm_receipt_output,
+        signature_census_output=None,
+        resume_checkpoint=None,
+    )
+    root = Path(__file__).resolve().parents[2]
+    records, _launch_packet, input_receipt = load_authorized_records(root)
+    selected_records = records[:max_records] if max_records is not None else records
+    config_sha256 = _sha256(config_path)
     return {
         "decision": "PREFLIGHT_ONLY",
         "canonical_disk_budget_runner": {
@@ -699,6 +732,23 @@ def preflight_governed_vertical(*, seed: int, artifact_root: Path, write_budget_
             "write_budget_bytes": write_budget_bytes,
         },
         "max_records": max_records,
+        "stage2_matched_arm": {
+            "arm": "census_bound_stage2" if stage2_acceleration else "bf16_baseline",
+            "source_commit": _STAGE2_AB_SOURCE_COMMIT,
+            "model_config_sha256": config_sha256,
+            "input_identity_sha256": _json_sha256(input_receipt),
+            "record_order_sha256": _json_sha256({"records": selected_records}),
+            "checkpoint_lineage_sha256": _stage2_fresh_genesis_lineage_sha256(
+                seed=seed, config_sha256=config_sha256,
+            ),
+            "seed": seed,
+            "initial_cursor": {"record_index": 0, "global_step": 0, "tokens_seen": 0},
+            "census_raw_sha256": (
+                _STAGE2_CENSUS_RAW_SHA256 if stage2_acceleration else None
+            ),
+            "matched_loss_relative_tolerance_exclusive": _STAGE2_MATCHED_LOSS_RELATIVE_TOLERANCE,
+            "receipt_output": str(receipt_output) if receipt_output is not None else None,
+        },
     }
 
 
@@ -709,6 +759,18 @@ def require_disk_budget_runner_contract() -> None:
 
 def _json_sha256(payload: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def _stage2_fresh_genesis_lineage_sha256(*, seed: int, config_sha256: str) -> str:
+    """Bind both matched arms to the same deterministic, resume-free genesis."""
+
+    return _json_sha256({
+        "schema_version": "ember-stage2-fresh-genesis-lineage-v1",
+        "source_commit": _STAGE2_AB_SOURCE_COMMIT,
+        "model_config_sha256": config_sha256,
+        "seed": seed,
+        "resume_checkpoint": None,
+    })
 
 
 _SCENE_SPLITS = ("train", "validation", "test")
@@ -3330,6 +3392,34 @@ def validate_signature_census_request(
         raise FileExistsError(f"refusing to overwrite training signature census: {resolved}")
     return resolved, str(source_commit)
 
+
+def validate_stage2_activation_request(
+    *,
+    enabled: bool,
+    artifact_root: Path,
+    receipt_output: Path | None,
+    signature_census_output: Path | None,
+    resume_checkpoint: Path | None,
+) -> Path | None:
+    """Close the final #1413 activation boundary before model allocation."""
+
+    if type(enabled) is not bool:
+        raise ValueError("Stage-2 activation flag must be boolean")
+    if enabled and signature_census_output is not None:
+        raise ValueError("Stage-2 activation cannot mint its own census authority")
+    if receipt_output is not None and resume_checkpoint is not None:
+        raise ValueError("Stage-2 matched A/B does not admit resume ambiguity")
+    if enabled and receipt_output is None:
+        raise ValueError("Stage-2 activation requires an arm receipt output")
+    if receipt_output is None:
+        return None
+    resolved = receipt_output.resolve()
+    if not resolved.is_relative_to(artifact_root.resolve()):
+        raise ValueError("Stage-2 arm receipt output escapes governed custody")
+    if resolved.exists():
+        raise FileExistsError(f"refusing to overwrite Stage-2 arm receipt: {resolved}")
+    return resolved
+
 def load_optimizer_contract(config_path: Path) -> dict[str, object]:
     """Load the one structured optimizer declaration used by config, runtime, and checkpoint."""
 
@@ -3470,6 +3560,8 @@ def run(
     model_chat_restore_not_before: str | None = None,
     signature_census_output: Path | None = None,
     signature_census_source_commit: str | None = None,
+    stage2_acceleration: bool = False,
+    stage2_arm_receipt_output: Path | None = None,
 ) -> dict[str, object]:
     if records_override is not None and isinstance(specialist_verification, dict) and isinstance(specialist_lineage, dict) and specialist_verification.get("capability") == "image":
         selection = specialist_lineage.get("scene_split_selection")
@@ -3507,6 +3599,13 @@ def run(
         artifact_root,
         c_relocated_under_disk_budget_runner=c_relocated_under_disk_budget_runner,
         relocation_custody_root=relocation_custody_root,
+    )
+    stage2_arm_receipt_output = validate_stage2_activation_request(
+        enabled=stage2_acceleration,
+        artifact_root=artifact_root,
+        receipt_output=stage2_arm_receipt_output,
+        signature_census_output=signature_census_output,
+        resume_checkpoint=resume_checkpoint,
     )
     if signature_census_output is not None and not signature_census_output.is_relative_to(artifact_root):
         raise ValueError("training signature census output must stay inside the governed artifact root")
@@ -3600,6 +3699,27 @@ def run(
             + str(execution_slice["records_sha256"])[:12]
         )
         episode_expert = verified_specialist_episode_expert(records, specialist_verification)
+    stage2_authority = None
+    if stage2_acceleration:
+        if records_override is not None:
+            raise ValueError("Stage-2 matched A/B admits only the canonical full-route shard")
+        census_path = root / _STAGE2_CENSUS_RELATIVE_PATH
+        census = load_training_signature_census(census_path)
+        # The integration receipt's code_commit advances at merge while its
+        # admitted artifact/config/validator bytes stay immutable. Reconstruct
+        # the exact receipt projection observed by the census, then separately
+        # bind both comparison arms to the merged activation source above.
+        census_input_receipt = {**input_receipt, "code_commit": _STAGE2_CENSUS_SOURCE_COMMIT}
+        if (
+            census["source_commit"] != _STAGE2_CENSUS_SOURCE_COMMIT
+            or census["model_config_sha256"] != _sha256(config_path)
+            or census["input_identity_sha256"] != _json_sha256(census_input_receipt)
+        ):
+            raise RuntimeError("Stage-2 census authority does not bind the matched arm identity")
+        stage2_authority = load_stage2_activation_authority(
+            census_path,
+            expected_raw_sha256=_STAGE2_CENSUS_RAW_SHA256,
+        )
     signature_census = None
     if signature_census_output is not None and signature_census_source_commit is not None:
         signature_census = TrainingSignatureCensus(
@@ -3660,6 +3780,16 @@ def run(
         raise RuntimeError("instantiated sparse counts differ from the authorized architecture")
     optimizer_contract = load_optimizer_contract(config_path)
     optimizer = build_production_optimizer(model, optimizer_contract=optimizer_contract)
+    stage2_executor = (
+        CensusBoundStage2Executor(
+            model=model,
+            optimizer=optimizer,
+            config=config,
+            authority=stage2_authority,
+        )
+        if stage2_authority is not None
+        else None
+    )
     resume_cursor = {"record_index": 0, "global_step": 0, "tokens_seen": 0}
     if resume_checkpoint is not None:
         if resume_receipt is None or resume_authority is None:
@@ -3843,12 +3973,74 @@ def run(
         data_shard_id=data_shard_id, require_complete_coverage=(records_override is None and max_records is None),
         max_records=max_records,
         signature_observer=(signature_census.observe if signature_census is not None else None),
+        stage2_executor=stage2_executor,
     )
     if checkpoint is None or parameter_receipt is None:
         raise RuntimeError("training segment completed without a durable verified checkpoint")
     signature_census_receipt = None
     if signature_census is not None and signature_census_output is not None:
         signature_census_receipt = signature_census.write_receipt(signature_census_output)
+    stage2_arm_receipt = None
+    if stage2_arm_receipt_output is not None:
+        selected_records = records[
+            int(resume_cursor["record_index"]):(
+                None if max_records is None
+                else int(resume_cursor["record_index"]) + max_records
+            )
+        ]
+        runtime = segment["stage2_runtime"]
+        if stage2_acceleration:
+            if not isinstance(runtime, Mapping):
+                raise RuntimeError("Stage-2 activation completed without a runtime receipt")
+            mechanisms = {
+                key: int(runtime[key])
+                for key in (
+                    "fp8_dispatches", "fp8_fallbacks", "cuda_graph_captures",
+                    "cuda_graph_replays", "cuda_graph_fallbacks",
+                )
+            }
+        else:
+            mechanisms = {
+                "fp8_dispatches": 0,
+                "fp8_fallbacks": 0,
+                "cuda_graph_captures": 0,
+                "cuda_graph_replays": 0,
+                "cuda_graph_fallbacks": 0,
+            }
+        initial_cursor = {
+            key: int(resume_cursor[key])
+            for key in ("record_index", "global_step", "tokens_seen")
+        }
+        config_sha256 = _sha256(config_path)
+        stage2_arm_receipt = write_stage2_arm_receipt(
+            stage2_arm_receipt_output,
+            {
+                "schema_version": "ember-stage2-training-arm-v1",
+                "arm": "census_bound_stage2" if stage2_acceleration else "bf16_baseline",
+                "source_commit": _STAGE2_AB_SOURCE_COMMIT,
+                "runner_source_sha256": _sha256(Path(__file__).resolve()),
+                "model_config_sha256": config_sha256,
+                "input_identity_sha256": _json_sha256(input_receipt),
+                "record_order_sha256": _json_sha256({"records": selected_records}),
+                "checkpoint_lineage_sha256": _stage2_fresh_genesis_lineage_sha256(
+                    seed=seed, config_sha256=config_sha256,
+                ),
+                "census_raw_sha256": (
+                    _STAGE2_CENSUS_RAW_SHA256 if stage2_acceleration else None
+                ),
+                "seed": seed,
+                "initial_cursor": initial_cursor,
+                "steps": int(segment["steps"]),
+                "tokens": int(segment["tokens_seen"]) - initial_cursor["tokens_seen"],
+                "losses": list(segment["losses"]),
+                "step_timings_seconds": list(segment["step_timings_seconds"]),
+                "step_elapsed_seconds": float(segment["step_elapsed_seconds"]),
+                "tokens_per_second": float(segment["tokens_per_second"]),
+                "max_memory_allocated_bytes": int(torch.cuda.max_memory_allocated()),
+                "max_memory_reserved_bytes": int(torch.cuda.max_memory_reserved()),
+                "mechanisms": mechanisms,
+            },
+        )
     if telemetry_path is not None and telemetry_run_id is not None and model_chat_restore_not_before is not None:
         append_training_telemetry(telemetry_path, kind="run_status", payload={
             "run_id": telemetry_run_id,
@@ -3868,6 +4060,7 @@ def run(
         "resume_authority": resume_authority,
         "governor": governor_receipt,
         "training_signature_census": signature_census_receipt,
+        "stage2_arm_receipt": stage2_arm_receipt,
     }
 
 def specialist_lineage_request(
@@ -4287,11 +4480,19 @@ def main() -> None:
     governed_vertical.add_argument("--relocation-custody-root", type=Path)
     governed_vertical.add_argument("--signature-census-output", type=Path)
     governed_vertical.add_argument("--signature-census-source-commit")
+    governed_vertical.add_argument("--stage2-acceleration", action="store_true")
+    governed_vertical.add_argument("--stage2-arm-receipt-output", type=Path)
     governed_preflight = subparsers.add_parser("governed-vertical-preflight")
     governed_preflight.add_argument("--seed", type=int, required=True)
     governed_preflight.add_argument("--artifact-root", type=Path, required=True)
     governed_preflight.add_argument("--write-budget-bytes", type=int, required=True)
     governed_preflight.add_argument("--max-records", type=int)
+    governed_preflight.add_argument("--stage2-acceleration", action="store_true")
+    governed_preflight.add_argument("--stage2-arm-receipt-output", type=Path)
+    stage2_compare = subparsers.add_parser("stage2-ab-compare")
+    stage2_compare.add_argument("--baseline", type=Path, required=True)
+    stage2_compare.add_argument("--accelerated", type=Path, required=True)
+    stage2_compare.add_argument("--output", type=Path, required=True)
 
     specialist = subparsers.add_parser("specialist")
     specialist.add_argument("--seed", type=int, required=True)
@@ -4406,9 +4607,22 @@ def main() -> None:
             relocation_custody_root=args.relocation_custody_root,
             signature_census_output=args.signature_census_output,
             signature_census_source_commit=args.signature_census_source_commit,
+            stage2_acceleration=args.stage2_acceleration,
+            stage2_arm_receipt_output=args.stage2_arm_receipt_output,
         )
     elif args.command == "governed-vertical-preflight":
-        result = preflight_governed_vertical(seed=args.seed, artifact_root=args.artifact_root, write_budget_bytes=args.write_budget_bytes, max_records=args.max_records)
+        result = preflight_governed_vertical(
+            seed=args.seed,
+            artifact_root=args.artifact_root,
+            write_budget_bytes=args.write_budget_bytes,
+            max_records=args.max_records,
+            stage2_acceleration=args.stage2_acceleration,
+            stage2_arm_receipt_output=args.stage2_arm_receipt_output,
+        )
+    elif args.command == "stage2-ab-compare":
+        result = compare_stage2_ab_receipts(
+            args.baseline, args.accelerated, args.output,
+        )
     elif args.command == "specialist":
         result = run_specialist(seed=args.seed, artifact_root=args.artifact_root, data_manifest=args.data_manifest, tokenizer_path=args.tokenizer, capability=args.capability, resume_checkpoint=args.resume_checkpoint, resume_counter_receipt=args.resume_counter_receipt, resume_realization_registry=args.resume_realization_registry, resume_optimizer_transition_registry=args.resume_optimizer_transition_registry, resume_optimizer_transition_registry_sha256=args.resume_optimizer_transition_registry_sha256, parent_manifest=args.parent_manifest, root_manifest=args.root_manifest, start_record=args.start_record, max_records=args.max_records, checkpoint_interval=args.checkpoint_interval, write_budget_bytes=args.write_budget_gib * 1024**3, c_relocated_under_disk_budget_runner=args.c_relocated_under_disk_budget_runner, relocation_custody_root=args.relocation_custody_root, telemetry_path=args.telemetry_path, telemetry_run_id=args.telemetry_run_id, model_chat_restore_not_before=args.model_chat_restore_not_before)
     elif args.command == "semantic":
