@@ -1234,6 +1234,8 @@ class RunnerPreflightTests(unittest.TestCase):
                 relocation_custody_root=None,
                 signature_census_output=census_output,
                 signature_census_source_commit="1" * 40,
+                stage2_acceleration=False,
+                stage2_arm_receipt_output=None,
             )
 
     def test_signature_census_request_is_paired_and_refuses_existing_output(self) -> None:
@@ -1250,6 +1252,42 @@ class RunnerPreflightTests(unittest.TestCase):
             output.write_text("occupied", encoding="utf-8")
             with self.assertRaisesRegex(FileExistsError, "refusing to overwrite"):
                 run_vertical_slice.validate_signature_census_request(output, "1" * 40)
+
+    def test_stage2_activation_request_is_explicit_canonical_and_non_minting(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            artifact_root = Path(directory)
+            output = artifact_root / "stage2-arm.json"
+            self.assertEqual(
+                run_vertical_slice.validate_stage2_activation_request(
+                    enabled=True,
+                    artifact_root=artifact_root,
+                    receipt_output=output,
+                    signature_census_output=None,
+                    resume_checkpoint=None,
+                ),
+                output.resolve(),
+            )
+            with self.assertRaisesRegex(ValueError, "cannot mint"):
+                run_vertical_slice.validate_stage2_activation_request(
+                    enabled=True, artifact_root=artifact_root, receipt_output=output,
+                    signature_census_output=artifact_root / "census.json", resume_checkpoint=None,
+                )
+            with self.assertRaisesRegex(ValueError, "resume"):
+                run_vertical_slice.validate_stage2_activation_request(
+                    enabled=True, artifact_root=artifact_root, receipt_output=output,
+                    signature_census_output=None, resume_checkpoint=artifact_root / "checkpoint",
+                )
+            with self.assertRaisesRegex(ValueError, "receipt output"):
+                run_vertical_slice.validate_stage2_activation_request(
+                    enabled=True, artifact_root=artifact_root, receipt_output=None,
+                    signature_census_output=None, resume_checkpoint=None,
+                )
+            outside = artifact_root.parent / "outside-stage2.json"
+            with self.assertRaisesRegex(ValueError, "custody"):
+                run_vertical_slice.validate_stage2_activation_request(
+                    enabled=False, artifact_root=artifact_root, receipt_output=outside,
+                    signature_census_output=None, resume_checkpoint=None,
+                )
 
     def test_governed_vertical_forwards_relocation_to_run(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

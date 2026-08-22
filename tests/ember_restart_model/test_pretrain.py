@@ -6,9 +6,11 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import math
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -18,13 +20,32 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 from model import RestartDecoderConfig, UnifiedDecoder
+from batch import decode_owned_batch
 import pretrain
 from pretrain import run_pretraining_segment
+import training_acceleration
 from specialist_stream import SELECTION_CURSOR_SCHEMA_VERSION, SELECTION_RECEIPT_SCHEMA_VERSION
 from verify_capability_record import expected_receipt
 
 
 class PretrainingSegmentTests(unittest.TestCase):
+    @staticmethod
+    def _fake_scaled_mm(
+        activation: torch.Tensor,
+        weight_transposed: torch.Tensor,
+        scale_a: torch.Tensor,
+        scale_b: torch.Tensor,
+        *,
+        out_dtype: torch.dtype,
+        use_fast_accum: bool,
+    ) -> torch.Tensor:
+        del use_fast_accum
+        return (
+            activation.float().matmul(weight_transposed.float())
+            * scale_a.float()
+            * scale_b.float()
+        ).to(out_dtype)
+
     def test_core_only_text_episode_updates_shared_state_without_crediting_or_updating_an_expert(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=41)
@@ -76,6 +97,92 @@ class PretrainingSegmentTests(unittest.TestCase):
         self.assertEqual(observed[0]["schema_version"], "ember-training-step-signature-v1")
         self.assertEqual(observed[0]["contract"]["active_expert"], "shared")
         self.assertEqual(observed[0]["contract"]["tensors"]["input_ids"]["shape"], [1, 4])
+
+    def test_census_bound_executor_warms_captures_and_replays_real_step(self) -> None:
+        class FakeGraph:
+            def __init__(self, region: object) -> None:
+                self.region = region
+
+            def replay(self) -> None:
+                self.region()
+
+        class FakeBackend:
+            def __init__(self) -> None:
+                self.warmups = 0
+                self.captures = 0
+
+            def warmup(self, region: object, zero_grad: object) -> None:
+                self.warmups += 1
+                zero_grad()
+                region()
+                zero_grad()
+
+            def capture(self, region: object) -> FakeGraph:
+                self.captures += 1
+                region()
+                return FakeGraph(region)
+
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=1, attention_heads=4, vocab_size=64,
+        )
+        record = {
+            "schema_version": "ember-owned-semantic-text-v1",
+            "active_expert": "shared",
+            "token_ids": [8, 9, 10, 11],
+            "target_ids": [9, 10, 11, 12],
+        }
+        batch = decode_owned_batch(record, config, device=torch.device("cpu"))
+        census = training_acceleration.TrainingSignatureCensus(
+            source_commit="1" * 40,
+            model_config_sha256="2" * 64,
+            input_identity_sha256="3" * 64,
+            runner_source_sha256="4" * 64,
+        )
+        census.observe(training_acceleration.training_step_signature(
+            batch, gradient_checkpointing=bool(config.gradient_checkpointing),
+        ))
+        with tempfile.TemporaryDirectory() as directory:
+            census_path = Path(directory) / "census.json"
+            census.write_receipt(census_path)
+            authority = training_acceleration.load_stage2_activation_authority(
+                census_path,
+                expected_raw_sha256=hashlib.sha256(census_path.read_bytes()).hexdigest(),
+            )
+            model = UnifiedDecoder(config, genesis_seed=43).to(dtype=torch.bfloat16)
+            optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
+            backend = FakeBackend()
+            executor = pretrain.CensusBoundStage2Executor(
+                model=model,
+                optimizer=optimizer,
+                config=config,
+                authority=authority,
+                graph_backend=backend,
+                fp8_kernel=self._fake_scaled_mm,
+                allow_test_device=True,
+            )
+            result = run_pretraining_segment(
+                model=model,
+                optimizer=optimizer,
+                records=[record],
+                config=config,
+                device=torch.device("cpu"),
+                checkpoint_every=1,
+                checkpoint_callback=lambda _step, _result: None,
+                stage2_executor=executor,
+                require_complete_coverage=False,
+            )
+        runtime = result["stage2_runtime"]
+        self.assertEqual(backend.warmups, 1)
+        self.assertEqual(backend.captures, 1)
+        self.assertEqual(runtime["cuda_graph_captures"], 1)
+        self.assertEqual(runtime["cuda_graph_replays"], 1)
+        self.assertGreater(runtime["fp8_dispatches"], 0)
+        self.assertEqual(runtime["fp8_fallbacks"], 0)
+        self.assertEqual(len(result["step_timings_seconds"]), 1)
+        self.assertAlmostEqual(
+            result["tokens_per_second"],
+            result["tokens_seen"] / sum(result["step_timings_seconds"]),
+        )
     def _record(self, config: RestartDecoderConfig, *, expert: str, sample_id: str | None = None) -> dict[str, object]:
         image = bytes(index % 251 for index in range(48 * 48 * 3))
         audio = (torch.arange(640, dtype=torch.int16) - 320).numpy().tobytes()
