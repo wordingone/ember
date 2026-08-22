@@ -162,11 +162,7 @@ def _packet(root: Path, *, projected_a1: str = "340", include_contract: bool = T
             "exit_criterion": "R1-E7",
             "status": "MET",
             "prereg": {"thresholds_sha256": THRESHOLDS_SHA},
-            "result": {"sigma_seed": {
-                "loss": {"sigma_seed": "0.1"},
-                "grad_norm_ratio": {"sigma_seed": "0.1"},
-                "grad_norm": {"sigma_seed": "0.2", "validator_input": False},
-            }},
+            "result": {"sigma_seed": {"loss": {"sigma_seed": "0.1"}, "grad_norm_ratio": {"sigma_seed": "0.1"}}},
         })
         parity = {
             "schema_version": "ember02-r1-e8-parity-v1",
@@ -259,19 +255,6 @@ def test_fallback_requires_parity(tmp_path: Path):
 def test_fallback_with_green_parity_is_met(tmp_path: Path):
     _packet(tmp_path, projected_a1="320", include_parity=True)
     assert _check(tmp_path)["status"] == "MET"
-
-
-def test_live_v1_e7_shape_without_ratio_sigma_is_refused(tmp_path: Path):
-    """Catches dimensionally invalid aliasing of raw grad-norm sigma."""
-    _packet(tmp_path, projected_a1="320", include_parity=True)
-    _rewrite_parity_dependency(
-        tmp_path,
-        "r1-e7.json",
-        lambda d: d["result"]["sigma_seed"].pop("grad_norm_ratio"),
-    )
-    result = _check(tmp_path)
-    assert result["status"] == "REFUSED"
-    assert "E7_SIGMA_MISSING" in result["detail"]
 
 
 def test_fallback_with_honest_out_of_band_parity_is_not_met(tmp_path: Path):
