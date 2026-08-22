@@ -6,13 +6,16 @@
 from __future__ import annotations
 
 import base64
+import gc
 import hashlib
 import json
 import math
 import sys
 import tempfile
 import unittest
+import weakref
 from pathlib import Path
+from unittest.mock import patch
 
 import torch
 
@@ -99,6 +102,8 @@ class PretrainingSegmentTests(unittest.TestCase):
         self.assertEqual(observed[0]["contract"]["tensors"]["input_ids"]["shape"], [1, 4])
 
     def test_census_bound_executor_warms_captures_and_replays_real_step(self) -> None:
+        loss_refs: list[weakref.ReferenceType[torch.Tensor]] = []
+
         class FakeGraph:
             def __init__(self, region: object) -> None:
                 self.region = region
@@ -112,6 +117,7 @@ class PretrainingSegmentTests(unittest.TestCase):
             def __init__(self) -> None:
                 self.warmups = 0
                 self.captures = 0
+                self.warmup_loss_released = False
 
             def warmup(self, region: object, zero_grad: object) -> None:
                 self.warmups += 1
@@ -122,6 +128,8 @@ class PretrainingSegmentTests(unittest.TestCase):
 
             def capture(self, region: object) -> FakeGraph:
                 self.captures += 1
+                gc.collect()
+                self.warmup_loss_released = bool(loss_refs) and loss_refs[-1]() is None
                 region()
                 return FakeGraph(region)
 
@@ -163,21 +171,32 @@ class PretrainingSegmentTests(unittest.TestCase):
                 fp8_kernel=self._fake_scaled_mm,
                 allow_test_device=True,
             )
-            result = run_pretraining_segment(
-                model=model,
-                optimizer=optimizer,
-                records=[record],
-                config=config,
-                device=torch.device("cpu"),
-                checkpoint_every=1,
-                checkpoint_callback=lambda _step, _result: None,
-                stage2_executor=executor,
-                measurement_preparation_regions_per_signature=4,
-                require_complete_coverage=False,
-            )
+            real_cross_entropy = pretrain.F.cross_entropy
+
+            def tracked_cross_entropy(*args: object, **kwargs: object) -> torch.Tensor:
+                loss = real_cross_entropy(*args, **kwargs)
+                loss_refs.append(weakref.ref(loss))
+                return loss
+
+            with patch.object(
+                pretrain.F, "cross_entropy", side_effect=tracked_cross_entropy,
+            ):
+                result = run_pretraining_segment(
+                    model=model,
+                    optimizer=optimizer,
+                    records=[record],
+                    config=config,
+                    device=torch.device("cpu"),
+                    checkpoint_every=1,
+                    checkpoint_callback=lambda _step, _result: None,
+                    stage2_executor=executor,
+                    measurement_preparation_regions_per_signature=4,
+                    require_complete_coverage=False,
+                )
         runtime = result["stage2_runtime"]
         self.assertEqual(backend.warmups, 1)
         self.assertEqual(backend.captures, 1)
+        self.assertTrue(backend.warmup_loss_released)
         self.assertEqual(runtime["cuda_graph_captures"], 1)
         self.assertEqual(runtime["cuda_graph_replays"], 1)
         self.assertEqual(runtime["captures_during_preparation"], 1)
@@ -195,6 +214,57 @@ class PretrainingSegmentTests(unittest.TestCase):
             result["tokens_per_second"],
             result["tokens_seen"] / sum(result["step_timings_seconds"]),
         )
+
+    def test_census_bound_executor_snapshots_loss_before_a_pool_mate_replay(self) -> None:
+        signatures = ("5" * 64, "6" * 64)
+        shared_pool_loss = torch.tensor(0.0)
+
+        class FakeAuthority:
+            @staticmethod
+            def resolve(batch: object, *, gradient_checkpointing: bool) -> str:
+                del gradient_checkpointing
+                return batch["signature"]
+
+        class FakeGraphPool:
+            @staticmethod
+            def contains(signature: str) -> bool:
+                return signature in signatures
+
+            @staticmethod
+            def replay(signature: str) -> None:
+                shared_pool_loss.fill_(1.0 if signature == signatures[0] else 2.0)
+                executor._loss_snapshots[signature].copy_(shared_pool_loss)
+
+        class FakeOptimizer:
+            @staticmethod
+            def zero_grad(*, set_to_none: bool) -> None:
+                del set_to_none
+
+        executor = object.__new__(pretrain.CensusBoundStage2Executor)
+        executor._measurement_prepared = True
+        executor.authority = FakeAuthority()
+        executor.graph_pool = FakeGraphPool()
+        executor.config = RestartDecoderConfig.small_for_tests()
+        executor._static_batches = {signature: {} for signature in signatures}
+        executor.optimizer = FakeOptimizer()
+        executor._losses = {
+            signature: [shared_pool_loss] for signature in signatures
+        }
+        executor._loss_snapshots = {
+            signature: torch.empty_like(shared_pool_loss) for signature in signatures
+        }
+        executor._captures_during_measured_window = 0
+
+        first = executor.forward_loss_backward(
+            {"signature": signatures[0]}, cursor_identity="7" * 64,
+        )
+        second = executor.forward_loss_backward(
+            {"signature": signatures[1]}, cursor_identity="8" * 64,
+        )
+
+        self.assertEqual(float(first), 1.0)
+        self.assertEqual(float(second), 2.0)
+
     def _record(self, config: RestartDecoderConfig, *, expert: str, sample_id: str | None = None) -> dict[str, object]:
         image = bytes(index % 251 for index in range(48 * 48 * 3))
         audio = (torch.arange(640, dtype=torch.int16) - 320).numpy().tobytes()

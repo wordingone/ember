@@ -10,6 +10,7 @@ import json
 import sys
 import tempfile
 import unittest
+from contextlib import contextmanager
 from dataclasses import fields
 from pathlib import Path
 from unittest.mock import patch
@@ -359,6 +360,37 @@ class CheckpointCaptureProofTests(unittest.TestCase):
         self.assertEqual(pool.receipt()["fallbacks"], 0)
         with self.assertRaisesRegex(RuntimeError, "outside the approved signature census"):
             pool.replay("a" * 64)
+
+    def test_cuda_graph_backend_reuses_the_first_graph_private_pool(self) -> None:
+        class FakeCudaGraph:
+            def __init__(self) -> None:
+                self.pool_token = object()
+
+            def pool(self) -> object:
+                return self.pool_token
+
+        graphs = [FakeCudaGraph(), FakeCudaGraph()]
+        observed_pools: list[object | None] = []
+
+        @contextmanager
+        def fake_graph_context(
+            graph: FakeCudaGraph, *, pool: object | None = None,
+        ) -> object:
+            del graph
+            observed_pools.append(pool)
+            yield
+
+        with (
+            patch.object(torch.cuda, "is_available", return_value=True),
+            patch.object(torch.cuda, "CUDAGraph", side_effect=graphs),
+            patch.object(torch.cuda, "graph", side_effect=fake_graph_context),
+        ):
+            backend = training_acceleration.TorchCudaGraphBackend()
+            backend.capture(lambda: None)
+            backend.capture(lambda: None)
+
+        self.assertIsNone(observed_pools[0])
+        self.assertIs(observed_pools[1], graphs[0].pool_token)
 
     def test_graph_capture_refuses_warmup_optimizer_or_cursor_mutation(self) -> None:
         class FakeBackend:
