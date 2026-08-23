@@ -2231,6 +2231,70 @@ fn server_live_cycle_accepts_natural_exit_after_lease_release() {
     assert_eq!(daemon.lease_owner("server:8082").unwrap(), None);
 }
 
+#[cfg(windows)]
+#[test]
+fn repeated_short_lived_stop_exit_races_have_one_terminal_winner() {
+    let root = sandbox("terminal-stop-exit-race");
+    let db = root.join("ember-lab.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Arc::new(Daemon::open(&db).unwrap());
+
+    for attempt in 0..24 {
+        let job_id = format!("terminal-race-{attempt}");
+        let resource = format!("cpu-fixture-{attempt}");
+        daemon
+            .bind_identity(&job_id, &identity, &identity_hash)
+            .unwrap();
+        daemon.acquire_lease(&resource, &job_id).unwrap();
+        let started = daemon
+            .start_job(
+                JobSpec::new(
+                    &job_id,
+                    std::env::current_exe().unwrap().to_string_lossy(),
+                    ["--exact", "fixture_child_process", "--nocapture"],
+                    &resource,
+                )
+                .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+                .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "1"),
+            )
+            .unwrap();
+
+        if attempt % 2 == 0 {
+            for _ in 0..100 {
+                if daemon.job_state(&job_id).unwrap() == Some(JobState::Exited) {
+                    break;
+                }
+                thread::sleep(Duration::from_millis(2));
+            }
+        }
+        daemon.stop_job(&job_id).unwrap();
+
+        let state = daemon.job_state(&job_id).unwrap().unwrap();
+        assert!(matches!(state, JobState::Stopped | JobState::Exited));
+        assert_eq!(daemon.lease_owner(&resource).unwrap(), None);
+        let terminal_events = daemon
+            .job_event_kinds(&job_id)
+            .unwrap()
+            .into_iter()
+            .filter(|kind| matches!(kind.as_str(), "job_stopped" | "job_exited"))
+            .count();
+        assert_eq!(
+            terminal_events, 1,
+            "attempt {attempt} had duplicate terminal events"
+        );
+        let receipt_dir = root.join(format!("receipts-{attempt}"));
+        let first = daemon
+            .export_content_addressed_receipt(&job_id, &receipt_dir)
+            .unwrap();
+        let second = daemon
+            .export_content_addressed_receipt(&job_id, &receipt_dir)
+            .unwrap();
+        assert_eq!(first, second);
+        assert!(!daemon.has_retained_process_handle(&job_id));
+        assert!(!process_is_alive(started.pid));
+    }
+}
+
 #[test]
 fn concurrent_lease_claims_have_exactly_one_winner() {
     let root = sandbox("lease-race");
