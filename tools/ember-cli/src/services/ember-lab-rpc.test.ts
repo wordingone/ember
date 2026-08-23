@@ -10,7 +10,9 @@ import {
   callEmberLab,
   configuredEmberLabPipe,
   identifyEmberLabRuntime,
+  parseEmberLabWallObservationSnapshot,
   pingEmberLab,
+  type EmberLabWallObservationSnapshot,
 } from "./ember-lab-rpc.ts";
 import { operatorPipeName } from "./operator-pipe.ts";
 
@@ -27,6 +29,28 @@ describe("configuredEmberLabPipe", () => {
     expect(configuredEmberLabPipe({ EMBER_LAB_PIPE: "\\\\.\\pipe\\ember-lab-test-1234" }))
       .toBe("\\\\.\\pipe\\ember-lab-test-1234");
   });
+});
+
+test("wall observation snapshots are closed, cursor-monotone, and daemon-identity-bound", () => {
+  const sha = "a".repeat(64);
+  const snapshot: EmberLabWallObservationSnapshot = {
+    schema_version: "ember-lab-wall-observation-snapshot-v1",
+    captured_at_ms: 10,
+    after_vram_seq: 2,
+    after_disk_seq: 3,
+    next_vram_seq: 4,
+    next_disk_seq: 5,
+    daemon_identity: { schema_version: "ember-lab-runtime-identity-v1", pid: 7, binary_sha256: sha, source_sha256: sha },
+    vram_observations: [{ seq: 4, job_id: "sidecar", observed_at_ms: 9, outcome: "provider_unavailable", payload: {} }],
+    disk_observations: [{ seq: 5, job_id: "sidecar", write_root: "B:\\durable", observed_at_ms: 9, outcome: "within_limit", payload: { measurement_duration_ms: 10 } }],
+  };
+  expect(parseEmberLabWallObservationSnapshot(snapshot)).toEqual(snapshot);
+  expect(() => parseEmberLabWallObservationSnapshot({ ...snapshot, caller: "authority" }))
+    .toThrow("snapshot result is malformed");
+  expect(() => parseEmberLabWallObservationSnapshot({ ...snapshot, next_vram_seq: 1 }))
+    .toThrow("snapshot result is malformed");
+  expect(() => parseEmberLabWallObservationSnapshot({ ...snapshot, next_vram_seq: 5 }))
+    .toThrow("snapshot cursors are malformed");
 });
 
 const winTest = process.platform === "win32" ? test : test.skip;

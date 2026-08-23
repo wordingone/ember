@@ -31,6 +31,36 @@ export interface EmberLabRuntimeIdentity {
   pid: number;
 }
 
+export interface EmberLabWallObservationSnapshot {
+  schema_version: "ember-lab-wall-observation-snapshot-v1";
+  captured_at_ms: number;
+  after_vram_seq: number;
+  after_disk_seq: number;
+  next_vram_seq: number;
+  next_disk_seq: number;
+  daemon_identity: {
+    schema_version: "ember-lab-runtime-identity-v1";
+    pid: number;
+    binary_sha256: string;
+    source_sha256: string;
+  };
+  vram_observations: Array<{
+    seq: number;
+    job_id: string;
+    observed_at_ms: number;
+    outcome: string;
+    payload: Record<string, unknown>;
+  }>;
+  disk_observations: Array<{
+    seq: number;
+    job_id: string;
+    write_root: string;
+    observed_at_ms: number;
+    outcome: string;
+    payload: Record<string, unknown>;
+  }>;
+}
+
 export function configuredEmberLabPipe(
   environment: Record<string, string | undefined> = process.env,
 ): string {
@@ -240,6 +270,90 @@ export async function identifyEmberLabRuntime(
     throw responseError("runtime identity result is malformed");
   }
   return result as unknown as EmberLabRuntimeIdentity;
+}
+
+function exactObject(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value)
+    && Object.keys(value).sort().join(",") === [...keys].sort().join(",");
+}
+
+function nonnegativeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0;
+}
+
+export function parseEmberLabWallObservationSnapshot(
+  result: unknown,
+): EmberLabWallObservationSnapshot {
+  const topKeys = ["schema_version", "captured_at_ms", "after_vram_seq", "after_disk_seq", "next_vram_seq", "next_disk_seq", "daemon_identity", "vram_observations", "disk_observations"];
+  if (!exactObject(result, topKeys)) {
+    throw responseError("wall observation snapshot result is malformed");
+  }
+  const row = result;
+  const identity = row["daemon_identity"];
+  const sha256 = /^[0-9a-f]{64}$/;
+  const validRow = (row: unknown, disk: boolean): boolean => {
+    const keys = disk
+      ? ["seq", "job_id", "write_root", "observed_at_ms", "outcome", "payload"]
+      : ["seq", "job_id", "observed_at_ms", "outcome", "payload"];
+    if (!exactObject(row, keys) || !nonnegativeInteger(row["seq"]) || !nonnegativeInteger(row["observed_at_ms"])) return false;
+    if (typeof row["job_id"] !== "string" || !row["job_id"] || typeof row["outcome"] !== "string" || !row["outcome"]) return false;
+    if (disk && (typeof row["write_root"] !== "string" || !row["write_root"])) return false;
+    return !!row["payload"] && typeof row["payload"] === "object" && !Array.isArray(row["payload"]);
+  };
+  if (
+    row["schema_version"] !== "ember-lab-wall-observation-snapshot-v1"
+    || !nonnegativeInteger(row["captured_at_ms"])
+    || !nonnegativeInteger(row["after_vram_seq"])
+    || !nonnegativeInteger(row["after_disk_seq"])
+    || !nonnegativeInteger(row["next_vram_seq"])
+    || !nonnegativeInteger(row["next_disk_seq"])
+    || (row["next_vram_seq"] as number) < (row["after_vram_seq"] as number)
+    || (row["next_disk_seq"] as number) < (row["after_disk_seq"] as number)
+    || !exactObject(identity, ["schema_version", "pid", "binary_sha256", "source_sha256"])
+    || identity["schema_version"] !== "ember-lab-runtime-identity-v1"
+    || !Number.isSafeInteger(identity["pid"])
+    || (identity["pid"] as number) <= 0
+    || typeof identity["binary_sha256"] !== "string"
+    || !sha256.test(identity["binary_sha256"])
+    || typeof identity["source_sha256"] !== "string"
+    || !sha256.test(identity["source_sha256"])
+    || !Array.isArray(row["vram_observations"])
+    || !row["vram_observations"].every((observation) => validRow(observation, false))
+    || !Array.isArray(row["disk_observations"])
+    || !row["disk_observations"].every((observation) => validRow(observation, true))
+  ) {
+    throw responseError("wall observation snapshot result is malformed");
+  }
+  const monotoneRows = (rows: Array<{ seq: number }>, after: number, next: number): boolean => {
+    let prior = after;
+    for (const row of rows) {
+      if (row.seq <= prior || row.seq > next) return false;
+      prior = row.seq;
+    }
+    return rows.length === 0 ? next === after : prior === next;
+  };
+  if (
+    !monotoneRows(row["vram_observations"] as Array<{ seq: number }>, row["after_vram_seq"] as number, row["next_vram_seq"] as number)
+    || !monotoneRows(row["disk_observations"] as Array<{ seq: number }>, row["after_disk_seq"] as number, row["next_disk_seq"] as number)
+  ) {
+    throw responseError("wall observation snapshot cursors are malformed");
+  }
+  return row as unknown as EmberLabWallObservationSnapshot;
+}
+
+export async function readEmberLabWallObservationSnapshot(
+  options: EmberLabPingOptions & { afterVramSeq: number; afterDiskSeq: number },
+): Promise<EmberLabWallObservationSnapshot> {
+  if (!nonnegativeInteger(options.afterVramSeq) || !nonnegativeInteger(options.afterDiskSeq)) {
+    throw new Error("ember-lab wall observation cursors must be nonnegative integers");
+  }
+  return parseEmberLabWallObservationSnapshot(await callEmberLab({
+    pipeName: options.pipeName,
+    requestId: options.requestId,
+    timeoutMs: options.timeoutMs,
+    method: "wall_observation_snapshot",
+    params: { after_vram_seq: options.afterVramSeq, after_disk_seq: options.afterDiskSeq },
+  }));
 }
 
 export async function handshakeConfiguredEmberLab(): Promise<void> {
