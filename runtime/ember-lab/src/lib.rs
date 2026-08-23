@@ -36,6 +36,11 @@ const DISPATCH_TOKEN_ENV: &str = "EMBER_LAB_DISPATCH_TOKEN";
 const DISPATCH_JOB_ID_ENV: &str = "EMBER_LAB_DISPATCH_JOB_ID";
 const DISPATCH_DAEMON_PID_ENV: &str = "EMBER_LAB_DISPATCH_DAEMON_PID";
 const DISPATCH_MAXIMUM_JOB_MEMORY_ENV: &str = "EMBER_LAB_DISPATCH_MAXIMUM_JOB_MEMORY_BYTES";
+const DISPATCH_VRAM_PROVIDER_ENV: &str = "EMBER_LAB_DISPATCH_VRAM_PROVIDER";
+const DISPATCH_VRAM_DEVICE_UUID_ENV: &str = "EMBER_LAB_DISPATCH_VRAM_DEVICE_UUID";
+const DISPATCH_VRAM_FRACTION_ENV: &str = "EMBER_LAB_DISPATCH_VRAM_FRACTION_MILLIONTHS";
+const DISPATCH_MAXIMUM_PROCESS_VRAM_ENV: &str = "EMBER_LAB_DISPATCH_MAXIMUM_PROCESS_VRAM_BYTES";
+const DISPATCH_MINIMUM_FREE_VRAM_ENV: &str = "EMBER_LAB_DISPATCH_MINIMUM_FREE_VRAM_BYTES";
 const DISPATCH_TOKEN_BYTES: usize = 32;
 #[cfg(windows)]
 const JOB_MEMORY_OVERSHOOT_ALLOWANCE_BASIS_POINTS: u32 = 617;
@@ -508,6 +513,8 @@ pub struct JobSpec {
     env: BTreeMap<String, String>,
     restart_policy: RestartPolicy,
     maximum_job_memory_bytes: Option<u64>,
+    vram_wall: Option<VramWallContract>,
+    maximum_process_vram_bytes: Option<u64>,
     simulated_peak_commit_bytes: Option<u64>,
     cpu_rate_percent: Option<u32>,
     cpu_pacing_class: DispatchCpuPacingClass,
@@ -551,6 +558,177 @@ pub enum DispatchBindingKind {
 pub struct DispatchStorageReserve {
     pub root: PathBuf,
     pub minimum_free_bytes: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct VramDeviceCapacity {
+    pub provider: String,
+    pub device_uuid: String,
+    pub total_bytes: u64,
+    pub free_bytes: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct VramWallContract {
+    pub provider: String,
+    pub device_uuid: String,
+    pub maximum_process_fraction_millionths: u32,
+    pub minimum_free_bytes: u64,
+    pub consecutive_breach_samples: u32,
+    pub sample_interval_ms: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "applicability", content = "contract", rename_all = "snake_case")]
+pub enum DispatchVramWall {
+    NotApplicable,
+    Required(VramWallContract),
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct VramWallSample {
+    pub observed_at_ms: i64,
+    pub pid: u32,
+    pub process_start_token: String,
+    pub used_bytes: u64,
+    pub capacity: VramDeviceCapacity,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VramWallBreachClass {
+    ProcessFraction,
+    FreeFloor,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VramWallDecision {
+    Healthy,
+    Pending {
+        breach_class: VramWallBreachClass,
+        consecutive_observations: u32,
+        required_observations: u32,
+    },
+    ProtectiveStop {
+        breach_class: VramWallBreachClass,
+        consecutive_observations: u32,
+        required_observations: u32,
+    },
+}
+
+/// Evaluates already-bound nvidia-smi/NVML observations for one owned root
+/// process. The torch allocator fraction is only one signal: non-torch CUDA
+/// allocations can escape it, so the independent PID/UUID floor sentinel is
+/// deliberately load-bearing and uses the same three-sample debounce rule.
+pub fn evaluate_vram_wall_samples(
+    contract: &VramWallContract,
+    samples: &[VramWallSample],
+) -> Result<VramWallDecision> {
+    validate_vram_wall_contract(contract)?;
+    if samples.is_empty() {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "VRAM wall requires at least one observation".into(),
+        });
+    }
+    let expected_pid = samples[0].pid;
+    let expected_start_token = samples[0].process_start_token.as_str();
+    if expected_pid == 0 || expected_start_token.trim().is_empty() {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "VRAM wall sample lacks an owned process identity".into(),
+        });
+    }
+    let mut previous_at = None;
+    let mut active_class = None;
+    let mut consecutive = 0_u32;
+    for sample in samples {
+        if sample.pid != expected_pid
+            || sample.process_start_token != expected_start_token
+            || sample.capacity.provider != contract.provider
+            || sample.capacity.device_uuid != contract.device_uuid
+            || sample.capacity.total_bytes == 0
+            || sample.capacity.free_bytes > sample.capacity.total_bytes
+        {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "VRAM wall sample changed PID/start-token/provider/device identity".into(),
+            });
+        }
+        if let Some(previous) = previous_at {
+            let gap_ms = sample.observed_at_ms.saturating_sub(previous);
+            let maximum_adjacent_gap_ms = contract.sample_interval_ms.saturating_mul(2);
+            if sample.observed_at_ms <= previous
+                || (gap_ms as u64) < contract.sample_interval_ms
+                || (gap_ms as u64) > maximum_adjacent_gap_ms
+            {
+                return Err(EmberLabError::InvalidDispatchManifest {
+                    detail:
+                        "VRAM wall samples are non-monotone or non-adjacent to the declared cadence"
+                            .into(),
+                });
+            }
+        }
+        previous_at = Some(sample.observed_at_ms);
+        let maximum_process_bytes = sample
+            .capacity
+            .total_bytes
+            .checked_mul(contract.maximum_process_fraction_millionths as u64)
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                detail: "VRAM wall fraction derivation overflowed".into(),
+            })?
+            / 1_000_000;
+        let class = if sample.capacity.free_bytes < contract.minimum_free_bytes {
+            Some(VramWallBreachClass::FreeFloor)
+        } else if sample.used_bytes > maximum_process_bytes {
+            Some(VramWallBreachClass::ProcessFraction)
+        } else {
+            None
+        };
+        if class.is_none() {
+            active_class = None;
+            consecutive = 0;
+            continue;
+        }
+        if class == active_class {
+            consecutive = consecutive.saturating_add(1);
+        } else {
+            active_class = class;
+            consecutive = 1;
+        }
+    }
+    let Some(breach_class) = active_class else {
+        return Ok(VramWallDecision::Healthy);
+    };
+    if consecutive >= contract.consecutive_breach_samples {
+        Ok(VramWallDecision::ProtectiveStop {
+            breach_class,
+            consecutive_observations: consecutive,
+            required_observations: contract.consecutive_breach_samples,
+        })
+    } else {
+        Ok(VramWallDecision::Pending {
+            breach_class,
+            consecutive_observations: consecutive,
+            required_observations: contract.consecutive_breach_samples,
+        })
+    }
+}
+
+fn validate_vram_wall_contract(contract: &VramWallContract) -> Result<()> {
+    if contract.provider != "nvidia_smi_nvml"
+        || !contract.device_uuid.starts_with("GPU-")
+        || !(1..=1_000_000).contains(&contract.maximum_process_fraction_millionths)
+        || contract.minimum_free_bytes == 0
+        || contract.consecutive_breach_samples != 3
+        || contract.sample_interval_ms != u64::from(RESOURCE_GUARD_SAMPLE_INTERVAL_MS)
+    {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "VRAM wall contract requires an exact GPU UUID, three breach samples, and the daemon's 2s cadence".into(),
+        });
+    }
+    Ok(())
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -644,6 +822,9 @@ pub struct DispatchManifest {
     pub bindings: Vec<DispatchFileBinding>,
     pub custody_root: PathBuf,
     pub storage_reserves: Vec<DispatchStorageReserve>,
+    #[serde(default)]
+    pub vram_wall: Option<DispatchVramWall>,
+    #[serde(default)]
     pub minimum_free_vram_bytes: u64,
     pub required_available_maximum_commit_bytes: u64,
     pub maximum_job_memory_bytes: u64,
@@ -809,6 +990,8 @@ impl JobSpec {
             env: BTreeMap::new(),
             restart_policy: RestartPolicy::Never,
             maximum_job_memory_bytes: None,
+            vram_wall: None,
+            maximum_process_vram_bytes: None,
             simulated_peak_commit_bytes: None,
             cpu_rate_percent: None,
             cpu_pacing_class: DispatchCpuPacingClass::Unpaced,
@@ -829,6 +1012,16 @@ impl JobSpec {
 
     pub fn with_maximum_job_memory_bytes(mut self, maximum_job_memory_bytes: u64) -> Self {
         self.maximum_job_memory_bytes = Some(maximum_job_memory_bytes);
+        self
+    }
+
+    pub fn with_vram_wall(
+        mut self,
+        vram_wall: VramWallContract,
+        maximum_process_vram_bytes: u64,
+    ) -> Self {
+        self.vram_wall = Some(vram_wall);
+        self.maximum_process_vram_bytes = Some(maximum_process_vram_bytes);
         self
     }
 
@@ -1460,12 +1653,24 @@ type ScheduleRunRow = (
 /// injectable knob widens this struct instead of adding another positional
 /// parameter to `dispatch_manifest_bytes_at_with_probes_and_host_inner` and
 /// pushing it back over clippy's argument-count cap (#898 L6 follow-up).
-struct DispatchProbes<F, G, H>
-where
-    F: FnMut(&Path) -> Result<u64>,
-    G: FnMut() -> Result<u64>,
-    H: FnMut() -> Result<HostCommitCapacity>,
-{
+enum DispatchVramObservation {
+    LegacyFreeBytes(u64),
+    Device(VramDeviceCapacity),
+}
+
+impl From<u64> for DispatchVramObservation {
+    fn from(value: u64) -> Self {
+        Self::LegacyFreeBytes(value)
+    }
+}
+
+impl From<VramDeviceCapacity> for DispatchVramObservation {
+    fn from(value: VramDeviceCapacity) -> Self {
+        Self::Device(value)
+    }
+}
+
+struct DispatchProbes<F, G, H> {
     free_space: F,
     free_vram: G,
     free_host_commit: H,
@@ -1620,6 +1825,8 @@ impl Daemon {
             CREATE TABLE IF NOT EXISTS dispatch_receipt_recovery(job_id TEXT PRIMARY KEY, resource_lease TEXT NOT NULL, manifest_sha256 TEXT NOT NULL, receipt_path TEXT NOT NULL, receipt_sha256 TEXT NOT NULL, receipt_bytes BLOB NOT NULL, created_at_ms INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS dispatch_preflight_receipts(job_id TEXT PRIMARY KEY, resource_lease TEXT NOT NULL, manifest_sha256 TEXT NOT NULL, receipt_sha256 TEXT NOT NULL, receipt_bytes BLOB NOT NULL, created_at_ms INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS dispatch_tokens(token_sha256 TEXT PRIMARY KEY, job_id TEXT NOT NULL UNIQUE, pid INTEGER NOT NULL, program TEXT NOT NULL, argv_sha256 TEXT NOT NULL, expires_at_ms INTEGER NOT NULL, consumed_at_ms INTEGER, FOREIGN KEY(job_id) REFERENCES jobs(job_id));
+            CREATE TABLE IF NOT EXISTS job_vram_walls(job_id TEXT PRIMARY KEY, contract_json TEXT NOT NULL, maximum_process_vram_bytes INTEGER NOT NULL, consecutive_breach_observations INTEGER NOT NULL DEFAULT 0, active_breach_class TEXT, FOREIGN KEY(job_id) REFERENCES jobs(job_id));
+            CREATE TABLE IF NOT EXISTS vram_wall_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL, FOREIGN KEY(job_id) REFERENCES jobs(job_id));
             CREATE TABLE IF NOT EXISTS resource_guard_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), admission_state TEXT NOT NULL CHECK(admission_state IN ('open','frozen')), reason TEXT, observed_at_ms INTEGER NOT NULL, oracle_evidence_required INTEGER NOT NULL CHECK(oracle_evidence_required IN (0,1)), observation_json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS resource_guard_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS resource_guard_rearms(frozen_observation_sha256 TEXT PRIMARY KEY, breach_class TEXT NOT NULL, transitioned_at_ms INTEGER NOT NULL, receipt_path TEXT NOT NULL, receipt_sha256 TEXT NOT NULL UNIQUE, healthy_sample_count INTEGER NOT NULL, healthy_window_ms INTEGER NOT NULL, flap_multiplier INTEGER NOT NULL);
@@ -2483,22 +2690,39 @@ impl Daemon {
         manifest_bytes: &[u8],
         expected_sha256: &str,
     ) -> Result<DispatchOutcome> {
-        self.dispatch_manifest_bytes_at_with_probes_and_host(
+        self.dispatch_manifest_bytes_at_with_vram_observation_and_host(
             manifest_bytes,
             expected_sha256,
             now_ms(),
             available_free_bytes,
-            available_free_vram_bytes,
+            available_vram_observation,
             probe_host_commit_capacity,
         )
     }
     pub fn dispatch_manifest(&self, manifest_path: &Path) -> Result<DispatchOutcome> {
-        self.dispatch_manifest_at_with_probes(
-            manifest_path,
-            now_ms(),
-            available_free_bytes,
-            available_free_vram_bytes,
-        )
+        let manifest_bytes = fs::read(manifest_path)?;
+        let manifest: DispatchManifest =
+            serde_json::from_slice(&manifest_bytes).map_err(|error| {
+                EmberLabError::InvalidDispatchManifest {
+                    detail: format!("dispatch manifest schema is invalid: {error}"),
+                }
+            })?;
+        if manifest.schema_version == "ember-lab-dispatch-manifest-v4" {
+            self.dispatch_manifest_v4_at_with_device_probe_and_host(
+                manifest_path,
+                now_ms(),
+                available_free_bytes,
+                probe_vram_device_capacity,
+                probe_host_commit_capacity,
+            )
+        } else {
+            self.dispatch_manifest_at_with_probes(
+                manifest_path,
+                now_ms(),
+                available_free_bytes,
+                available_free_vram_bytes,
+            )
+        }
     }
 
     pub fn dispatch_manifest_at_with_probes<F, G>(
@@ -2555,7 +2779,7 @@ impl Daemon {
         manifest_path: &Path,
         observed_at_ms: i64,
         free_space: F,
-        free_vram: G,
+        mut free_vram: G,
         free_host_commit: H,
         window_census_budget: Duration,
     ) -> Result<DispatchOutcome>
@@ -2576,9 +2800,47 @@ impl Daemon {
             observed_at_ms,
             DispatchProbes {
                 free_space,
-                free_vram,
+                free_vram: move |_| free_vram(),
                 free_host_commit,
                 window_census_budget,
+            },
+        )
+    }
+
+    pub fn dispatch_manifest_v4_at_with_device_probe_and_host<F, G, H>(
+        &self,
+        manifest_path: &Path,
+        observed_at_ms: i64,
+        free_space: F,
+        mut device_vram: G,
+        free_host_commit: H,
+    ) -> Result<DispatchOutcome>
+    where
+        F: FnMut(&Path) -> Result<u64>,
+        G: FnMut(&VramWallContract) -> Result<VramDeviceCapacity>,
+        H: FnMut() -> Result<HostCommitCapacity>,
+    {
+        let canonical = fs::canonicalize(manifest_path).map_err(|error| {
+            EmberLabError::InvalidDispatchManifest {
+                detail: format!("dispatch manifest is not a canonical file: {error}"),
+            }
+        })?;
+        let manifest_bytes = fs::read(&canonical)?;
+        self.dispatch_manifest_bytes_at_with_probes_and_host_inner(
+            &manifest_bytes,
+            &canonical,
+            observed_at_ms,
+            DispatchProbes {
+                free_space,
+                free_vram: move |contract: Option<VramWallContract>| {
+                    let contract =
+                        contract.ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                            detail: "device probe requires a v4 VRAM wall contract".into(),
+                        })?;
+                    device_vram(&contract)
+                },
+                free_host_commit,
+                window_census_budget: DEFAULT_WINDOW_CENSUS_BUDGET,
             },
         )
     }
@@ -2589,12 +2851,37 @@ impl Daemon {
         expected_sha256: &str,
         observed_at_ms: i64,
         free_space: F,
-        free_vram: G,
+        mut free_vram: G,
         free_host_commit: H,
     ) -> Result<DispatchOutcome>
     where
         F: FnMut(&Path) -> Result<u64>,
         G: FnMut() -> Result<u64>,
+        H: FnMut() -> Result<HostCommitCapacity>,
+    {
+        self.dispatch_manifest_bytes_at_with_vram_observation_and_host(
+            manifest_bytes,
+            expected_sha256,
+            observed_at_ms,
+            free_space,
+            move |_| free_vram(),
+            free_host_commit,
+        )
+    }
+
+    fn dispatch_manifest_bytes_at_with_vram_observation_and_host<F, G, H, T>(
+        &self,
+        manifest_bytes: &[u8],
+        expected_sha256: &str,
+        observed_at_ms: i64,
+        free_space: F,
+        free_vram: G,
+        free_host_commit: H,
+    ) -> Result<DispatchOutcome>
+    where
+        F: FnMut(&Path) -> Result<u64>,
+        G: FnMut(Option<VramWallContract>) -> Result<T>,
+        T: Into<DispatchVramObservation>,
         H: FnMut() -> Result<HostCommitCapacity>,
     {
         if validate_hash(expected_sha256).is_err() || hash_bytes(manifest_bytes) != expected_sha256
@@ -2692,7 +2979,39 @@ impl Daemon {
         &self,
         manifest: &DispatchManifest,
     ) -> Result<()> {
-        if manifest.schema_version != "ember-lab-dispatch-manifest-v3"
+        let vram_declaration_valid = match manifest.schema_version.as_str() {
+            "ember-lab-dispatch-manifest-v3" => {
+                manifest.vram_wall.is_none()
+                    && (manifest.workload_profile.profile_id
+                        == DispatchWorkloadProfileId::EvidenceVerifier
+                        || manifest.minimum_free_vram_bytes > 0)
+            }
+            "ember-lab-dispatch-manifest-v4" => {
+                if manifest.minimum_free_vram_bytes != 0 {
+                    false
+                } else {
+                    match (
+                        manifest.workload_profile.profile_id,
+                        manifest.vram_wall.as_ref(),
+                    ) {
+                        (
+                            DispatchWorkloadProfileId::EvidenceVerifier,
+                            Some(DispatchVramWall::NotApplicable),
+                        ) => true,
+                        (
+                            DispatchWorkloadProfileId::EvidenceVerifier,
+                            Some(DispatchVramWall::Required(_)) | None,
+                        ) => false,
+                        (_, Some(DispatchVramWall::Required(contract))) => {
+                            validate_vram_wall_contract(contract).is_ok()
+                        }
+                        (_, Some(DispatchVramWall::NotApplicable) | None) => false,
+                    }
+                }
+            }
+            _ => false,
+        };
+        if !vram_declaration_valid
             || manifest.job_id.trim().is_empty()
             || manifest.source_commit.len() != 40
             || !manifest
@@ -2704,20 +3023,23 @@ impl Daemon {
             || manifest.expires_at_ms <= manifest.not_before_ms
             || manifest.bindings.is_empty()
             || manifest.storage_reserves.is_empty()
-            || (manifest.workload_profile.profile_id != DispatchWorkloadProfileId::EvidenceVerifier
-                && manifest.minimum_free_vram_bytes == 0)
             || manifest.required_available_maximum_commit_bytes == 0
             || manifest.maximum_job_memory_bytes == 0
             || manifest.simulated_peak_commit_bytes == 0
         {
             return Err(EmberLabError::InvalidDispatchManifest {
-                detail: "dispatch manifest requires the closed v3 schema, workload profile, identities, window, bindings, and reserves".into(),
+                detail: "dispatch manifest requires the closed v3/v4 schema, workload profile, identities, window, bindings, reserves, and an explicit VRAM declaration".into(),
             });
         }
         if manifest.env.contains_key(DISPATCH_TOKEN_ENV)
             || manifest.env.contains_key(DISPATCH_JOB_ID_ENV)
             || manifest.env.contains_key(DISPATCH_DAEMON_PID_ENV)
             || manifest.env.contains_key(DISPATCH_MAXIMUM_JOB_MEMORY_ENV)
+            || manifest.env.contains_key(DISPATCH_VRAM_PROVIDER_ENV)
+            || manifest.env.contains_key(DISPATCH_VRAM_DEVICE_UUID_ENV)
+            || manifest.env.contains_key(DISPATCH_VRAM_FRACTION_ENV)
+            || manifest.env.contains_key(DISPATCH_MAXIMUM_PROCESS_VRAM_ENV)
+            || manifest.env.contains_key(DISPATCH_MINIMUM_FREE_VRAM_ENV)
         {
             return Err(EmberLabError::InvalidDispatchManifest {
                 detail: "dispatch token environment is daemon-owned".into(),
@@ -2810,7 +3132,7 @@ impl Daemon {
         }
         validate_absolute_dispatch_args(&manifest.args, &program, &verified_bindings, &custody_root)
     }
-    fn dispatch_manifest_bytes_at_with_probes_and_host_inner<F, G, H>(
+    fn dispatch_manifest_bytes_at_with_probes_and_host_inner<F, G, H, T>(
         &self,
         manifest_bytes: &[u8],
         manifest_identity_path: &Path,
@@ -2819,7 +3141,8 @@ impl Daemon {
     ) -> Result<DispatchOutcome>
     where
         F: FnMut(&Path) -> Result<u64>,
-        G: FnMut() -> Result<u64>,
+        G: FnMut(Option<VramWallContract>) -> Result<T>,
+        T: Into<DispatchVramObservation>,
         H: FnMut() -> Result<HostCommitCapacity>,
     {
         let DispatchProbes {
@@ -2842,44 +3165,7 @@ impl Daemon {
                     ),
                 }
             })?;
-        if manifest.schema_version != "ember-lab-dispatch-manifest-v3"
-            || manifest.job_id.trim().is_empty()
-            || manifest.source_commit.len() != 40
-            || !manifest
-                .source_commit
-                .bytes()
-                .all(|byte| byte.is_ascii_hexdigit())
-            || manifest.resource_lease.trim().is_empty()
-            || manifest.not_before_ms < 0
-            || manifest.expires_at_ms <= manifest.not_before_ms
-            || manifest.bindings.is_empty()
-            || manifest.storage_reserves.is_empty()
-            || (manifest.workload_profile.profile_id != DispatchWorkloadProfileId::EvidenceVerifier
-                && manifest.minimum_free_vram_bytes == 0)
-            || manifest.required_available_maximum_commit_bytes == 0
-            || manifest.maximum_job_memory_bytes == 0
-            || manifest.simulated_peak_commit_bytes == 0
-        {
-            return Err(EmberLabError::InvalidDispatchManifest {
-                detail: "dispatch manifest requires the closed v3 schema, workload profile, identities, window, bindings, and reserves".into(),
-            });
-        }
-        if manifest.env.contains_key(DISPATCH_TOKEN_ENV)
-            || manifest.env.contains_key(DISPATCH_JOB_ID_ENV)
-            || manifest.env.contains_key(DISPATCH_DAEMON_PID_ENV)
-            || manifest.env.contains_key(DISPATCH_MAXIMUM_JOB_MEMORY_ENV)
-        {
-            return Err(EmberLabError::InvalidDispatchManifest {
-                detail: "dispatch token environment is daemon-owned".into(),
-            });
-        }
-        validate_dispatch_workload_profile(
-            &manifest.workload_profile,
-            manifest.cpu_pacing_class,
-            &manifest.args,
-            manifest.maximum_job_memory_bytes,
-            manifest.simulated_peak_commit_bytes,
-        )?;
+        self.validate_dispatch_manifest_snapshot_preconditions(&manifest)?;
         if observed_at_ms < manifest.not_before_ms {
             return Err(EmberLabError::DispatchTooEarly {
                 not_before_ms: manifest.not_before_ms,
@@ -3042,20 +3328,92 @@ impl Daemon {
             }));
         }
 
-        let available_vram = if manifest.workload_profile.profile_id
-            == DispatchWorkloadProfileId::EvidenceVerifier
-            && manifest.minimum_free_vram_bytes == 0
-        {
-            0
-        } else {
-            free_vram()?
+        let (vram_receipt, maximum_process_vram_bytes) = match (
+            manifest.schema_version.as_str(),
+            manifest.vram_wall.as_ref(),
+        ) {
+            ("ember-lab-dispatch-manifest-v4", Some(DispatchVramWall::NotApplicable)) => {
+                (json!({"applicability":"not_applicable"}), None)
+            }
+            ("ember-lab-dispatch-manifest-v4", Some(DispatchVramWall::Required(contract))) => {
+                let observation: DispatchVramObservation =
+                    free_vram(Some(contract.clone()))?.into();
+                let DispatchVramObservation::Device(capacity) = observation else {
+                    return Err(EmberLabError::InvalidDispatchManifest {
+                        detail: "v4 VRAM wall requires a provider/UUID-bound device probe".into(),
+                    });
+                };
+                if capacity.provider != contract.provider
+                    || capacity.device_uuid != contract.device_uuid
+                    || capacity.total_bytes == 0
+                    || capacity.free_bytes > capacity.total_bytes
+                {
+                    return Err(EmberLabError::InvalidDispatchManifest {
+                        detail: "v4 VRAM wall device provider/UUID/capacity mismatch".into(),
+                    });
+                }
+                if capacity.free_bytes < contract.minimum_free_bytes {
+                    return Err(EmberLabError::DispatchVramReserve {
+                        minimum_free_bytes: contract.minimum_free_bytes,
+                        available_free_bytes: capacity.free_bytes,
+                    });
+                }
+                let maximum_process_bytes = capacity
+                    .total_bytes
+                    .checked_mul(contract.maximum_process_fraction_millionths as u64)
+                    .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                        detail: "v4 VRAM wall fraction derivation overflowed".into(),
+                    })?
+                    / 1_000_000;
+                (
+                    json!({
+                        "applicability":"required",
+                        "claim_boundary":"torch_allocator_fraction_plus_load_bearing_external_sentinel_not_total_vram_guarantee",
+                        "provider":capacity.provider,
+                        "device_uuid":capacity.device_uuid,
+                        "total_bytes":capacity.total_bytes,
+                        "available_free_bytes":capacity.free_bytes,
+                        "minimum_free_bytes":contract.minimum_free_bytes,
+                        "maximum_process_fraction_millionths":contract.maximum_process_fraction_millionths,
+                        "maximum_process_vram_bytes":maximum_process_bytes,
+                        "consecutive_breach_samples":contract.consecutive_breach_samples,
+                        "sample_interval_ms":contract.sample_interval_ms,
+                    }),
+                    Some(maximum_process_bytes),
+                )
+            }
+            ("ember-lab-dispatch-manifest-v3", None) => {
+                let available_vram = if manifest.workload_profile.profile_id
+                    == DispatchWorkloadProfileId::EvidenceVerifier
+                    && manifest.minimum_free_vram_bytes == 0
+                {
+                    0
+                } else {
+                    match free_vram(None)?.into() {
+                        DispatchVramObservation::LegacyFreeBytes(value) => value,
+                        DispatchVramObservation::Device(capacity) => capacity.free_bytes,
+                    }
+                };
+                if available_vram < manifest.minimum_free_vram_bytes {
+                    return Err(EmberLabError::DispatchVramReserve {
+                        minimum_free_bytes: manifest.minimum_free_vram_bytes,
+                        available_free_bytes: available_vram,
+                    });
+                }
+                (
+                    json!({
+                        "minimum_free_bytes":manifest.minimum_free_vram_bytes,
+                        "available_free_bytes":available_vram,
+                    }),
+                    None,
+                )
+            }
+            _ => {
+                return Err(EmberLabError::InvalidDispatchManifest {
+                    detail: "dispatch VRAM declaration does not match its schema".into(),
+                })
+            }
         };
-        if available_vram < manifest.minimum_free_vram_bytes {
-            return Err(EmberLabError::DispatchVramReserve {
-                minimum_free_bytes: manifest.minimum_free_vram_bytes,
-                available_free_bytes: available_vram,
-            });
-        }
 
         validate_absolute_dispatch_args(
             &manifest.args,
@@ -3082,10 +3440,7 @@ impl Daemon {
             "env_sha256": env_sha256,
             "custody_root": &custody_root,
             "storage_reserves": reserve_receipts,
-            "vram_reserve": {
-                "minimum_free_bytes": manifest.minimum_free_vram_bytes,
-                "available_free_bytes": available_vram,
-            },
+            "vram_reserve": vram_receipt,
             "maximum_job_memory_bytes": manifest.maximum_job_memory_bytes,
             "host_commit": {
                 "basis": "maximum_configured_capacity",
@@ -3161,10 +3516,15 @@ impl Daemon {
         .with_cpu_pacing_class(manifest.cpu_pacing_class)
         .with_requires_ui_responsiveness(manifest.workload_profile.requires_ui_responsiveness)
         .with_window_contract(manifest.window_contract);
+        if let (Some(DispatchVramWall::Required(contract)), Some(maximum_process_bytes)) =
+            (manifest.vram_wall, maximum_process_vram_bytes)
+        {
+            spec = spec.with_vram_wall(contract, maximum_process_bytes);
+        }
         for (key, value) in manifest.env {
             spec = spec.with_env(key, value);
         }
-        if profile_id == DispatchWorkloadProfileId::EvidenceVerifier {
+        if profile_id == DispatchWorkloadProfileId::EvidenceVerifier || spec.vram_wall.is_some() {
             spec = spec.with_dispatch_token(dispatch_expires_at_ms)?;
         }
         let handle = match self.start_job_with_window_census_budget(spec, window_census_budget) {
@@ -3384,6 +3744,11 @@ impl Daemon {
                 });
             }
             tx.execute("DELETE FROM dispatch_tokens WHERE job_id=?1", [job_id])?;
+            tx.execute(
+                "DELETE FROM vram_wall_observations WHERE job_id=?1",
+                [job_id],
+            )?;
+            tx.execute("DELETE FROM job_vram_walls WHERE job_id=?1", [job_id])?;
             tx.execute("DELETE FROM events WHERE job_id=?1", [job_id])?;
             tx.execute("DELETE FROM jobs WHERE job_id=?1", [job_id])?;
         }
@@ -3435,6 +3800,45 @@ impl Daemon {
             spec.env.insert(
                 "EMBER_LAB_PHASE_OUTPUT_ROOT".into(),
                 output_root.to_string_lossy().into_owned(),
+            );
+        }
+        if let Some(contract) = spec.vram_wall.as_ref() {
+            if [
+                DISPATCH_VRAM_PROVIDER_ENV,
+                DISPATCH_VRAM_DEVICE_UUID_ENV,
+                DISPATCH_VRAM_FRACTION_ENV,
+                DISPATCH_MAXIMUM_PROCESS_VRAM_ENV,
+                DISPATCH_MINIMUM_FREE_VRAM_ENV,
+            ]
+            .iter()
+            .any(|key| spec.env.contains_key(*key))
+            {
+                return Err(EmberLabError::InvalidDispatchManifest {
+                    detail: "VRAM wall environment is daemon-owned".into(),
+                });
+            }
+            let maximum_process_bytes = spec.maximum_process_vram_bytes.ok_or_else(|| {
+                EmberLabError::InvalidDispatchManifest {
+                    detail: "VRAM wall lacks its derived process byte cap".into(),
+                }
+            })?;
+            spec.env
+                .insert(DISPATCH_VRAM_PROVIDER_ENV.into(), contract.provider.clone());
+            spec.env.insert(
+                DISPATCH_VRAM_DEVICE_UUID_ENV.into(),
+                contract.device_uuid.clone(),
+            );
+            spec.env.insert(
+                DISPATCH_VRAM_FRACTION_ENV.into(),
+                contract.maximum_process_fraction_millionths.to_string(),
+            );
+            spec.env.insert(
+                DISPATCH_MAXIMUM_PROCESS_VRAM_ENV.into(),
+                maximum_process_bytes.to_string(),
+            );
+            spec.env.insert(
+                DISPATCH_MINIMUM_FREE_VRAM_ENV.into(),
+                contract.minimum_free_bytes.to_string(),
             );
         }
         if spec.dispatch_token.is_some() {
@@ -3517,9 +3921,22 @@ impl Daemon {
                 "INSERT INTO jobs(job_id,program,args_json,env_json,resource,lease_epoch,job_object_name,argv_sha256,restart_policy,stdout_log_path,stderr_log_path,state,started_at_ms,updated_at_ms) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,'starting',?12,?12)",
                 params![spec.job_id, spec.program, argv_json, env_json, spec.resource_lease, lease_epoch, job_object_name, argv_sha, spec.restart_policy.as_str(), stdout_log_path.to_string_lossy(), stderr_log_path.to_string_lossy(), timestamp],
             )?;
+            if let (Some(contract), Some(maximum_process_bytes)) =
+                (spec.vram_wall.as_ref(), spec.maximum_process_vram_bytes)
+            {
+                let maximum_process_bytes = i64::try_from(maximum_process_bytes).map_err(|_| {
+                    EmberLabError::InvalidDispatchManifest {
+                        detail: "VRAM wall byte cap exceeds the durable integer range".into(),
+                    }
+                })?;
+                tx.execute(
+                    "INSERT INTO job_vram_walls(job_id,contract_json,maximum_process_vram_bytes) VALUES(?1,?2,?3)",
+                    params![spec.job_id, serde_json::to_string(contract)?, maximum_process_bytes],
+                )?;
+            }
             tx.execute(
                 "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_start_reserved',?3)",
-                params![spec.job_id, now_ms(), json!({"job_object_name":job_object_name,"cpu_rate_percent":spec.cpu_rate_percent,"requires_ui_responsiveness":spec.requires_ui_responsiveness}).to_string()],
+                params![spec.job_id, now_ms(), json!({"job_object_name":job_object_name,"cpu_rate_percent":spec.cpu_rate_percent,"requires_ui_responsiveness":spec.requires_ui_responsiveness,"vram_wall":spec.vram_wall,"maximum_process_vram_bytes":spec.maximum_process_vram_bytes}).to_string()],
             )?;
             tx.commit()?;
         }
@@ -7199,22 +7616,7 @@ mod linux_host_commit_capacity_tests {
 }
 
 fn available_free_vram_bytes() -> Result<u64> {
-    let output = std::process::Command::new("nvidia-smi")
-        .args(["--query-gpu=memory.free", "--format=csv,noheader,nounits"])
-        .output()
-        .map_err(|error| EmberLabError::InvalidDispatchManifest {
-            detail: format!("nvidia-smi VRAM probe failed to start: {error}"),
-        })?;
-    if !output.status.success() {
-        return Err(EmberLabError::InvalidDispatchManifest {
-            detail: format!("nvidia-smi VRAM probe failed with {}", output.status),
-        });
-    }
-    let stdout = String::from_utf8(output.stdout).map_err(|error| {
-        EmberLabError::InvalidDispatchManifest {
-            detail: format!("nvidia-smi VRAM output was not UTF-8: {error}"),
-        }
-    })?;
+    let stdout = nvidia_smi_text(&["--query-gpu=memory.free", "--format=csv,noheader,nounits"])?;
     let values = stdout
         .lines()
         .filter(|line| !line.trim().is_empty())
@@ -7236,6 +7638,125 @@ fn available_free_vram_bytes() -> Result<u64> {
         .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
             detail: "nvidia-smi VRAM value overflowed bytes".into(),
         })
+}
+
+fn available_vram_observation(
+    contract: Option<VramWallContract>,
+) -> Result<DispatchVramObservation> {
+    match contract {
+        Some(contract) => {
+            probe_vram_device_capacity(&contract).map(DispatchVramObservation::Device)
+        }
+        None => available_free_vram_bytes().map(DispatchVramObservation::LegacyFreeBytes),
+    }
+}
+
+fn nvidia_smi_text(args: &[&str]) -> Result<String> {
+    let mut command = std::process::Command::new("nvidia-smi");
+    command.args(args);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000);
+    }
+    let output = command
+        .output()
+        .map_err(|error| EmberLabError::InvalidDispatchManifest {
+            detail: format!("nvidia-smi VRAM probe failed to start: {error}"),
+        })?;
+    if !output.status.success() {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: format!("nvidia-smi VRAM probe failed with {}", output.status),
+        });
+    }
+    String::from_utf8(output.stdout).map_err(|error| EmberLabError::InvalidDispatchManifest {
+        detail: format!("nvidia-smi VRAM output was not UTF-8: {error}"),
+    })
+}
+
+fn probe_vram_device_capacity(contract: &VramWallContract) -> Result<VramDeviceCapacity> {
+    let stdout = nvidia_smi_text(&[
+        "--query-gpu=uuid,memory.total,memory.free",
+        "--format=csv,noheader,nounits",
+    ])?;
+    for line in stdout.lines().filter(|line| !line.trim().is_empty()) {
+        let fields = line.split(',').map(str::trim).collect::<Vec<_>>();
+        if fields.len() != 3 {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "nvidia-smi device capacity row has invalid cardinality".into(),
+            });
+        }
+        if fields[0] != contract.device_uuid {
+            continue;
+        }
+        let total_mib =
+            fields[1]
+                .parse::<u64>()
+                .map_err(|error| EmberLabError::InvalidDispatchManifest {
+                    detail: format!("nvidia-smi total VRAM value is invalid: {error}"),
+                })?;
+        let free_mib =
+            fields[2]
+                .parse::<u64>()
+                .map_err(|error| EmberLabError::InvalidDispatchManifest {
+                    detail: format!("nvidia-smi free VRAM value is invalid: {error}"),
+                })?;
+        return Ok(VramDeviceCapacity {
+            provider: "nvidia_smi_nvml".into(),
+            device_uuid: fields[0].into(),
+            total_bytes: total_mib.checked_mul(1024 * 1024).ok_or_else(|| {
+                EmberLabError::InvalidDispatchManifest {
+                    detail: "nvidia-smi total VRAM value overflowed".into(),
+                }
+            })?,
+            free_bytes: free_mib.checked_mul(1024 * 1024).ok_or_else(|| {
+                EmberLabError::InvalidDispatchManifest {
+                    detail: "nvidia-smi free VRAM value overflowed".into(),
+                }
+            })?,
+        });
+    }
+    Err(EmberLabError::InvalidDispatchManifest {
+        detail: format!(
+            "declared VRAM device {} is absent from the provider",
+            contract.device_uuid
+        ),
+    })
+}
+
+fn probe_process_vram_bytes(pid: u32, device_uuid: &str) -> Result<u64> {
+    let stdout = nvidia_smi_text(&[
+        "--query-compute-apps=pid,gpu_uuid,used_gpu_memory",
+        "--format=csv,noheader,nounits",
+    ])?;
+    let mut total = 0_u64;
+    for line in stdout.lines().filter(|line| !line.trim().is_empty()) {
+        let fields = line.split(',').map(str::trim).collect::<Vec<_>>();
+        if fields.len() != 3 {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "nvidia-smi process VRAM row has invalid cardinality".into(),
+            });
+        }
+        if fields[0].parse::<u32>().ok() != Some(pid) || fields[1] != device_uuid {
+            continue;
+        }
+        let used_mib =
+            fields[2]
+                .parse::<u64>()
+                .map_err(|error| EmberLabError::InvalidDispatchManifest {
+                    detail: format!("nvidia-smi process VRAM value is invalid: {error}"),
+                })?;
+        total = total
+            .checked_add(used_mib.checked_mul(1024 * 1024).ok_or_else(|| {
+                EmberLabError::InvalidDispatchManifest {
+                    detail: "nvidia-smi process VRAM value overflowed".into(),
+                }
+            })?)
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                detail: "nvidia-smi aggregate process VRAM value overflowed".into(),
+            })?;
+    }
+    Ok(total)
 }
 /// `pub`: reused by `main.rs`'s `verify-training` subcommand for the same self-identity
 /// receipt field the daemon already stamps on every dispatch (`Daemon::open`).
@@ -7342,7 +7863,9 @@ fn migrate_schema(conn: &mut Connection, log_dir: &Path) -> Result<()> {
         [],
     )?;
     tx.execute_batch(
-        "CREATE TABLE IF NOT EXISTS resource_guard_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), admission_state TEXT NOT NULL CHECK(admission_state IN ('open','frozen')), reason TEXT, observed_at_ms INTEGER NOT NULL, oracle_evidence_required INTEGER NOT NULL CHECK(oracle_evidence_required IN (0,1)), observation_json TEXT NOT NULL);
+        "CREATE TABLE IF NOT EXISTS job_vram_walls(job_id TEXT PRIMARY KEY, contract_json TEXT NOT NULL, maximum_process_vram_bytes INTEGER NOT NULL, consecutive_breach_observations INTEGER NOT NULL DEFAULT 0, active_breach_class TEXT, FOREIGN KEY(job_id) REFERENCES jobs(job_id));
+         CREATE TABLE IF NOT EXISTS vram_wall_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL, FOREIGN KEY(job_id) REFERENCES jobs(job_id));
+         CREATE TABLE IF NOT EXISTS resource_guard_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), admission_state TEXT NOT NULL CHECK(admission_state IN ('open','frozen')), reason TEXT, observed_at_ms INTEGER NOT NULL, oracle_evidence_required INTEGER NOT NULL CHECK(oracle_evidence_required IN (0,1)), observation_json TEXT NOT NULL);
          CREATE TABLE IF NOT EXISTS resource_guard_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL);
          CREATE TABLE IF NOT EXISTS resource_guard_rearms(frozen_observation_sha256 TEXT PRIMARY KEY, breach_class TEXT NOT NULL, transitioned_at_ms INTEGER NOT NULL, receipt_path TEXT NOT NULL, receipt_sha256 TEXT NOT NULL UNIQUE, healthy_sample_count INTEGER NOT NULL, healthy_window_ms INTEGER NOT NULL, flap_multiplier INTEGER NOT NULL);
          INSERT OR IGNORE INTO resource_guard_state(singleton,admission_state,reason,observed_at_ms,oracle_evidence_required,observation_json) VALUES(1,'open',NULL,0,0,'{}');",
@@ -7641,6 +8164,434 @@ fn record_protective_owned_stop_failure(
 }
 
 #[cfg(windows)]
+fn advance_vram_wall_debounce(
+    contract: &VramWallContract,
+    prior_observed_at_ms: i64,
+    prior_consecutive: u32,
+    prior_class: Option<&str>,
+    observed_at_ms: i64,
+    breach_class: Option<&str>,
+) -> Result<(u32, bool)> {
+    let mut adjacent = prior_observed_at_ms == 0;
+    if prior_observed_at_ms > 0 {
+        if observed_at_ms <= prior_observed_at_ms {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "persisted VRAM wall observation time is non-monotone".into(),
+            });
+        }
+        let gap_ms = u64::try_from(observed_at_ms - prior_observed_at_ms).map_err(|_| {
+            EmberLabError::InvalidDispatchManifest {
+                detail: "persisted VRAM wall observation gap is invalid".into(),
+            }
+        })?;
+        if gap_ms < contract.sample_interval_ms {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "persisted VRAM wall observation arrived before its cadence".into(),
+            });
+        }
+        adjacent = gap_ms <= contract.sample_interval_ms.saturating_mul(2);
+    }
+    let consecutive = match breach_class {
+        Some(class) if adjacent && prior_class == Some(class) => {
+            prior_consecutive.saturating_add(1)
+        }
+        Some(_) => 1,
+        None => 0,
+    };
+    Ok((
+        consecutive,
+        breach_class.is_some() && consecutive >= contract.consecutive_breach_samples,
+    ))
+}
+
+#[cfg(windows)]
+struct VramWallObservationWrite<'a> {
+    job_id: &'a str,
+    contract: &'a VramWallContract,
+    prior_observed_at_ms: i64,
+    prior_consecutive: u32,
+    prior_class: Option<&'a str>,
+    observed_at_ms: i64,
+    breach_class: Option<&'a str>,
+    observation: Value,
+}
+
+#[cfg(windows)]
+fn persist_vram_wall_observation(
+    conn: &Connection,
+    write: VramWallObservationWrite<'_>,
+) -> Result<bool> {
+    let VramWallObservationWrite {
+        job_id,
+        contract,
+        prior_observed_at_ms,
+        prior_consecutive,
+        prior_class,
+        observed_at_ms,
+        breach_class,
+        mut observation,
+    } = write;
+    let (consecutive, stop) = advance_vram_wall_debounce(
+        contract,
+        prior_observed_at_ms,
+        prior_consecutive,
+        prior_class,
+        observed_at_ms,
+        breach_class,
+    )?;
+    observation["active_breach_class"] = breach_class.map(Value::from).unwrap_or(Value::Null);
+    observation["consecutive_observations"] = json!(consecutive);
+    observation["required_observations"] = json!(contract.consecutive_breach_samples);
+    observation["decision"] = json!(if stop {
+        "PROTECTIVE_STOP"
+    } else if breach_class.is_some() {
+        "PENDING"
+    } else {
+        "HEALTHY"
+    });
+    let payload = serde_json::to_string(&observation)?;
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
+        "INSERT INTO vram_wall_observations(job_id,observed_at_ms,outcome,payload_json) VALUES(?1,?2,?3,?4)",
+        params![job_id, observed_at_ms, if stop { "protective_stop" } else if breach_class.is_some() { "pending" } else { "healthy" }, payload],
+    )?;
+    tx.execute(
+        "UPDATE job_vram_walls SET consecutive_breach_observations=?2,active_breach_class=?3 WHERE job_id=?1",
+        params![job_id, consecutive, breach_class],
+    )?;
+    if stop {
+        // The durable observation row is inserted before authorization and
+        // both become visible atomically; process control happens only after
+        // this transaction commits and the exact job id is returned.
+        tx.execute(
+            "UPDATE resource_guard_state SET admission_state='frozen',reason='vram_wall_breach',observed_at_ms=?1,oracle_evidence_required=1,observation_json=?2 WHERE singleton=1",
+            params![observed_at_ms, payload],
+        )?;
+        tx.execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'vram_wall_protective_stop_authorized',?3)",
+            params![job_id, observed_at_ms, payload],
+        )?;
+    }
+    tx.execute(
+        "DELETE FROM vram_wall_observations WHERE seq <= COALESCE((SELECT MAX(seq) FROM vram_wall_observations),0)-4096",
+        [],
+    )?;
+    tx.commit()?;
+    Ok(stop)
+}
+
+#[cfg(all(test, windows))]
+mod vram_wall_debounce_tests {
+    use super::*;
+
+    fn contract() -> VramWallContract {
+        VramWallContract {
+            provider: "nvidia_smi_nvml".into(),
+            device_uuid: "GPU-00000000-1111-2222-3333-444444444444".into(),
+            maximum_process_fraction_millionths: 500_000,
+            minimum_free_bytes: 1,
+            consecutive_breach_samples: 3,
+            sample_interval_ms: 2_000,
+        }
+    }
+
+    #[test]
+    fn persisted_debounce_requires_adjacent_monotone_observations() {
+        let wall = contract();
+        assert_eq!(
+            advance_vram_wall_debounce(&wall, 0, 0, None, 1_000, Some("free_floor")).unwrap(),
+            (1, false)
+        );
+        assert_eq!(
+            advance_vram_wall_debounce(
+                &wall,
+                1_000,
+                1,
+                Some("free_floor"),
+                3_000,
+                Some("free_floor")
+            )
+            .unwrap(),
+            (2, false)
+        );
+        assert_eq!(
+            advance_vram_wall_debounce(
+                &wall,
+                3_000,
+                2,
+                Some("free_floor"),
+                5_000,
+                Some("free_floor")
+            )
+            .unwrap(),
+            (3, true)
+        );
+        assert_eq!(
+            advance_vram_wall_debounce(
+                &wall,
+                5_000,
+                2,
+                Some("free_floor"),
+                20_000,
+                Some("free_floor")
+            )
+            .unwrap(),
+            (1, false),
+            "a stale observation window resets instead of accumulating"
+        );
+        assert!(advance_vram_wall_debounce(
+            &wall,
+            5_000,
+            2,
+            Some("free_floor"),
+            4_000,
+            Some("free_floor")
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn third_bound_observation_is_durable_before_stop_authorization() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE job_vram_walls(job_id TEXT PRIMARY KEY, consecutive_breach_observations INTEGER NOT NULL, active_breach_class TEXT);
+             CREATE TABLE vram_wall_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL);
+             CREATE TABLE resource_guard_state(singleton INTEGER PRIMARY KEY, admission_state TEXT NOT NULL, reason TEXT, observed_at_ms INTEGER NOT NULL, oracle_evidence_required INTEGER NOT NULL, observation_json TEXT NOT NULL);
+             CREATE TABLE events(job_id TEXT, ts_ms INTEGER NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL);
+             INSERT INTO job_vram_walls VALUES('owned-job',0,NULL);
+             INSERT INTO resource_guard_state VALUES(1,'open',NULL,0,0,'{}');",
+        )
+        .unwrap();
+        let wall = contract();
+        let mut prior_at = 0;
+        let mut prior_count = 0;
+        for observed_at_ms in [1_000_i64, 3_000, 5_000] {
+            let stop = persist_vram_wall_observation(
+                &conn,
+                VramWallObservationWrite {
+                    job_id: "owned-job",
+                    contract: &wall,
+                    prior_observed_at_ms: prior_at,
+                    prior_consecutive: prior_count,
+                    prior_class: if prior_count == 0 {
+                        None
+                    } else {
+                        Some("free_floor")
+                    },
+                    observed_at_ms,
+                    breach_class: Some("free_floor"),
+                    observation: json!({
+                        "schema_version":"ember-lab-vram-wall-observation-v1",
+                        "job_id":"owned-job",
+                        "pid":4242,
+                        "process_start_token":"bound-start-token",
+                        "foreign_process_control":false,
+                    }),
+                },
+            )
+            .unwrap();
+            prior_at = observed_at_ms;
+            prior_count += 1;
+            assert_eq!(stop, prior_count == 3);
+        }
+        let state: (String, Option<String>, String) = conn
+            .query_row(
+                "SELECT admission_state,reason,observation_json FROM resource_guard_state WHERE singleton=1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(state.0, "frozen");
+        assert_eq!(state.1.as_deref(), Some("vram_wall_breach"));
+        assert_eq!(
+            serde_json::from_str::<Value>(&state.2).unwrap()["decision"],
+            "PROTECTIVE_STOP"
+        );
+        let observations: i64 = conn
+            .query_row("SELECT COUNT(*) FROM vram_wall_observations", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        let authorizations: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM events WHERE kind='vram_wall_protective_stop_authorized'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(observations, 3);
+        assert_eq!(authorizations, 1);
+    }
+}
+
+#[cfg(windows)]
+fn sample_owned_vram_walls(
+    db: &Arc<Mutex<Connection>>,
+    live: &Arc<Mutex<HashMap<String, RetainedProcess>>>,
+) -> Result<Vec<String>> {
+    let rows = {
+        let conn = db.lock().map_err(|_| EmberLabError::Poisoned)?;
+        let mut statement = conn.prepare(
+            "SELECT j.job_id,j.pid,j.process_start_token,w.contract_json,w.maximum_process_vram_bytes,w.consecutive_breach_observations,w.active_breach_class,
+                    COALESCE((SELECT MAX(observed_at_ms) FROM vram_wall_observations o WHERE o.job_id=j.job_id),0)
+             FROM jobs j JOIN job_vram_walls w ON w.job_id=j.job_id
+             WHERE j.state='running' ORDER BY j.job_id",
+        )?;
+        let collected = statement
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, u32>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, i64>(4)?,
+                    row.get::<_, u32>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                    row.get::<_, i64>(7)?,
+                ))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        collected
+    };
+    let mut protective_stops = Vec::new();
+    for (
+        job_id,
+        pid,
+        start_token,
+        contract_json,
+        maximum_process_vram_bytes,
+        prior_consecutive,
+        prior_class,
+        last_observed_at_ms,
+    ) in rows
+    {
+        let contract: VramWallContract = serde_json::from_str(&contract_json).map_err(|error| {
+            EmberLabError::InvalidDispatchManifest {
+                detail: format!("persisted VRAM wall contract is invalid: {error}"),
+            }
+        })?;
+        validate_vram_wall_contract(&contract)?;
+        let observed_at_ms = now_ms();
+        if last_observed_at_ms > 0
+            && observed_at_ms > last_observed_at_ms
+            && observed_at_ms.saturating_sub(last_observed_at_ms)
+                < i64::try_from(contract.sample_interval_ms).unwrap_or(i64::MAX)
+        {
+            continue;
+        }
+        let identity_matches = {
+            let retained = live.lock().map_err(|_| EmberLabError::Poisoned)?;
+            retained
+                .get(&job_id)
+                .map(|entry| {
+                    entry.live.pid == pid && entry.live.identity.start_token == start_token
+                })
+                .unwrap_or(false)
+        };
+        if !identity_matches {
+            let observation = json!({
+                "schema_version":"ember-lab-vram-wall-observation-v1",
+                "result":"IDENTITY_CONFLICT_REFUSED",
+                "job_id":job_id,
+                "pid":pid,
+                "process_start_token":start_token,
+                "provider":contract.provider,
+                "device_uuid":contract.device_uuid,
+                "foreign_process_control":false,
+            });
+            let payload = serde_json::to_string(&observation)?;
+            let conn = db.lock().map_err(|_| EmberLabError::Poisoned)?;
+            let tx = conn.unchecked_transaction()?;
+            tx.execute(
+                "INSERT INTO vram_wall_observations(job_id,observed_at_ms,outcome,payload_json) VALUES(?1,?2,'identity_conflict_refused',?3)",
+                params![job_id, observed_at_ms, payload],
+            )?;
+            tx.execute(
+                "UPDATE resource_guard_state SET admission_state='frozen',reason='vram_wall_identity_conflict',observed_at_ms=?1,oracle_evidence_required=1,observation_json=?2 WHERE singleton=1",
+                params![observed_at_ms, payload],
+            )?;
+            tx.commit()?;
+            continue;
+        }
+
+        let sampled = (|| -> Result<(VramDeviceCapacity, u64)> {
+            let capacity = probe_vram_device_capacity(&contract)?;
+            let used_bytes = probe_process_vram_bytes(pid, &contract.device_uuid)?;
+            Ok((capacity, used_bytes))
+        })();
+        let (breach_class, observation) = match sampled {
+            Ok((capacity, used_bytes)) => {
+                let class = if capacity.free_bytes < contract.minimum_free_bytes {
+                    Some("free_floor")
+                } else if used_bytes > u64::try_from(maximum_process_vram_bytes).unwrap_or(0) {
+                    Some("process_fraction")
+                } else {
+                    None
+                };
+                (
+                    class,
+                    json!({
+                        "schema_version":"ember-lab-vram-wall-observation-v1",
+                        "result":if class.is_some() { "BREACH_OBSERVED" } else { "HEALTHY" },
+                        "observed_at_ms":observed_at_ms,
+                        "job_id":job_id,
+                        "pid":pid,
+                        "process_start_token":start_token,
+                        "provider":capacity.provider,
+                        "device_uuid":capacity.device_uuid,
+                        "total_bytes":capacity.total_bytes,
+                        "available_free_bytes":capacity.free_bytes,
+                        "minimum_free_bytes":contract.minimum_free_bytes,
+                        "used_process_bytes":used_bytes,
+                        "maximum_process_vram_bytes":maximum_process_vram_bytes,
+                        "maximum_process_fraction_millionths":contract.maximum_process_fraction_millionths,
+                        "consecutive_breach_samples":contract.consecutive_breach_samples,
+                        "sample_interval_ms":contract.sample_interval_ms,
+                        "claim_boundary":"torch_allocator_fraction_plus_load_bearing_external_sentinel_not_total_vram_guarantee",
+                        "foreign_process_control":false,
+                    }),
+                )
+            }
+            Err(error) => (
+                Some("provider_unavailable"),
+                json!({
+                    "schema_version":"ember-lab-vram-wall-observation-v1",
+                    "result":"PROVIDER_UNAVAILABLE",
+                    "observed_at_ms":observed_at_ms,
+                    "job_id":job_id,
+                    "pid":pid,
+                    "process_start_token":start_token,
+                    "provider":contract.provider,
+                    "device_uuid":contract.device_uuid,
+                    "error":error.to_string(),
+                    "consecutive_breach_samples":contract.consecutive_breach_samples,
+                    "sample_interval_ms":contract.sample_interval_ms,
+                    "foreign_process_control":false,
+                }),
+            ),
+        };
+        let conn = db.lock().map_err(|_| EmberLabError::Poisoned)?;
+        let stop = persist_vram_wall_observation(
+            &conn,
+            VramWallObservationWrite {
+                job_id: &job_id,
+                contract: &contract,
+                prior_observed_at_ms: last_observed_at_ms,
+                prior_consecutive,
+                prior_class: prior_class.as_deref(),
+                observed_at_ms,
+                breach_class,
+                observation,
+            },
+        )?;
+        if stop {
+            protective_stops.push(job_id);
+        }
+    }
+    Ok(protective_stops)
+}
+
+#[cfg(windows)]
 fn spawn_resource_guard_monitor(
     db: Weak<Mutex<Connection>>,
     live: Weak<Mutex<HashMap<String, RetainedProcess>>>,
@@ -7673,7 +8624,7 @@ fn spawn_resource_guard_monitor(
                 let Some(db) = db.upgrade() else {
                     break;
                 };
-                let job_ids = {
+                let mut job_ids = {
                     let Ok(conn) = db.lock() else {
                         break;
                     };
@@ -7689,12 +8640,36 @@ fn spawn_resource_guard_monitor(
                         running_job_ids_for_protective_stop(&conn).unwrap_or_default()
                     }
                 };
-                if job_ids.is_empty() {
-                    continue;
-                }
                 let Some(live) = live.upgrade() else {
                     break;
                 };
+                match sample_owned_vram_walls(&db, &live) {
+                    Ok(mut vram_job_ids) => job_ids.append(&mut vram_job_ids),
+                    Err(error) => {
+                        if let Ok(conn) = db.lock() {
+                            let observed_at_ms = now_ms();
+                            let payload = json!({
+                                "schema_version":"ember-lab-vram-wall-monitor-failure-v1",
+                                "error":error.to_string(),
+                                "foreign_process_control":false,
+                            })
+                            .to_string();
+                            let _ = conn.execute(
+                                "UPDATE resource_guard_state SET admission_state='frozen',reason='vram_wall_monitor_failed',observed_at_ms=?1,oracle_evidence_required=1,observation_json=?2 WHERE singleton=1",
+                                params![observed_at_ms, payload],
+                            );
+                            let _ = conn.execute(
+                                "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(NULL,?1,'vram_wall_monitor_failed',?2)",
+                                params![observed_at_ms, payload],
+                            );
+                        }
+                    }
+                }
+                job_ids.sort();
+                job_ids.dedup();
+                if job_ids.is_empty() {
+                    continue;
+                }
                 let context = ProtectiveStopContext {
                     db: Arc::clone(&db),
                     live,
