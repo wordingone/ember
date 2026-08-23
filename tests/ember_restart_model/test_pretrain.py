@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import base64
+import copy
 import gc
 import hashlib
 import json
@@ -22,16 +23,49 @@ import torch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
-from model import RestartDecoderConfig, UnifiedDecoder
-from batch import decode_owned_batch
 import pretrain
-from pretrain import run_pretraining_segment
 import training_acceleration
-from specialist_stream import SELECTION_CURSOR_SCHEMA_VERSION, SELECTION_RECEIPT_SCHEMA_VERSION
+from batch import decode_owned_batch, decode_owned_packed_batch
+from model import RestartDecoderConfig, UnifiedDecoder
+from pretrain import run_pretraining_segment
+from specialist_stream import (
+    SELECTION_CURSOR_SCHEMA_VERSION,
+    SELECTION_RECEIPT_SCHEMA_VERSION,
+)
 from verify_capability_record import expected_receipt
 
 
 class PretrainingSegmentTests(unittest.TestCase):
+    def test_capture_safe_masked_mean_matches_selection_and_zeroes_padding_gradients(self) -> None:
+        losses = torch.tensor(
+            [1.5, 2.5, 99.0, 3.5, 88.0], dtype=torch.float32, requires_grad=True,
+        )
+        loss_mask = torch.tensor([True, True, False, True, False])
+
+        loss = pretrain._capture_safe_masked_mean(
+            losses, loss_mask, true_source_tokens=3,
+        )
+
+        self.assertTrue(torch.equal(loss.detach(), losses.detach()[loss_mask].mean()))
+        loss.backward()
+        self.assertTrue(torch.equal(
+            losses.grad,
+            torch.tensor([1.0 / 3.0, 1.0 / 3.0, 0.0, 1.0 / 3.0, 0.0]),
+        ))
+
+        padded_nonfinite = torch.tensor([1.5, 2.5, float("nan"), 3.5, float("inf")])
+        excluded = pretrain._capture_safe_masked_mean(
+            padded_nonfinite, loss_mask, true_source_tokens=3,
+        )
+        self.assertTrue(torch.equal(excluded, padded_nonfinite[loss_mask].mean()))
+
+    def test_stage2_static_batch_refuses_loss_mask_count_drift_before_capture(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "true source token accounting"):
+            pretrain.CensusBoundStage2Executor._static_batch({
+                "loss_mask": torch.tensor([[True, False, True]]),
+                "true_source_tokens": 1,
+            })
+
     def test_optimizer_state_preinitialization_is_idempotent_and_parameter_stable(self) -> None:
         parameters = [
             torch.nn.Parameter(torch.tensor([1.0, 2.0])),
@@ -360,6 +394,14 @@ class PretrainingSegmentTests(unittest.TestCase):
                     require_complete_coverage=False,
                 )
         runtime = result["stage2_runtime"]
+        self.assertEqual(runtime["fp8_installation"], {
+            "schema_version": "ember-fp8-down-projection-installation-v2",
+            "scope": "final_decoder_layer_shared_swiglu_down_4h_to_h",
+            "layer_indexes": [0],
+            "installed_sites": 1,
+            "sites": ["layers.0.shared_ffn.down"],
+            "fallbacks": 0,
+        })
         self.assertEqual(backend.warmups, 1)
         self.assertEqual(backend.captures, 1)
         self.assertTrue(backend.warmup_loss_released)
@@ -422,8 +464,12 @@ class PretrainingSegmentTests(unittest.TestCase):
             )
         install.assert_not_called()
         self.assertEqual(executor.installation_receipt, {
-            "schema_version": "ember-stage2-bf16-down-diagnostic-installation-v1",
+            "schema_version": "ember-fp8-down-projection-installation-v2",
+            "scope": "NONE",
+            "layer_indexes": [],
             "installed_sites": 0,
+            "sites": [],
+            "fallbacks": 0,
         })
         with patch.object(pretrain, "refresh_fp8_after_optimizer_step") as refresh:
             self.assertEqual(executor.after_optimizer_step(), 0)
@@ -1042,6 +1088,163 @@ class PretrainingSegmentTests(unittest.TestCase):
         self.assertEqual(resumed["data_cursor"]["selection_cursor"], uninterrupted_result["data_cursor"]["selection_cursor"])
         self.assertEqual(resumed["global_step"], uninterrupted_result["global_step"])
         self.assertEqual(resumed["tokens_seen"], uninterrupted_result["tokens_seen"])
+
+    def test_packed_decoder_preserves_audio64_shape_and_true_token_accounting(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        records = [self._record(config, expert="audio", sample_id=f"packed-audio-{index}") for index in range(64)]
+        batch = decode_owned_packed_batch(records, config, device=torch.device("cpu"), expected_records=64)
+
+        self.assertEqual(batch["input_ids"].shape, (64, 3))
+        self.assertEqual(batch["target_ids"].shape, (64, 3))
+        self.assertEqual(batch["audio_frames"].shape, (64, 1, 640))
+        self.assertEqual(batch["active_expert"], "audio")
+        self.assertEqual(batch["record_count"], 64)
+        self.assertEqual(batch["true_source_tokens"], 192)
+        self.assertEqual(batch["processed_padded_tokens"], 192)
+        self.assertEqual(batch["padding_tokens"], 0)
+        self.assertTrue(torch.equal(batch["loss_mask"], torch.ones((64, 3), dtype=torch.bool)))
+
+    def test_packed_decoder_right_padding_never_counts_as_source_tokens(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        short = self._record(config, expert="reasoning", sample_id="packed-short")
+        long = self._record(config, expert="reasoning", sample_id="packed-long")
+        long["token_ids"] = [*long["token_ids"], 5, 6]
+        long["target_ids"] = [*long["target_ids"], 6, 7]
+
+        batch = decode_owned_packed_batch([short, long], config, device=torch.device("cpu"), expected_records=2)
+
+        self.assertEqual(batch["input_ids"].shape, (2, 5))
+        self.assertEqual(batch["true_source_tokens"], 8)
+        self.assertEqual(batch["processed_padded_tokens"], 10)
+        self.assertEqual(batch["padding_tokens"], 2)
+        self.assertEqual(batch["loss_mask"].tolist(), [[True, True, True, False, False], [True] * 5])
+
+    def test_packed_decoder_refuses_mixed_experts_and_partial_fixed_pack(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        audio = self._record(config, expert="audio", sample_id="packed-audio")
+        reasoning = self._record(config, expert="reasoning", sample_id="packed-reasoning")
+        with self.assertRaisesRegex(ValueError, "one active expert"):
+            decode_owned_packed_batch([audio, reasoning], config, device=torch.device("cpu"), expected_records=2)
+        with self.assertRaisesRegex(ValueError, "exactly 64 records"):
+            decode_owned_packed_batch([audio], config, device=torch.device("cpu"), expected_records=64)
+
+    def test_packed_loss_matches_token_weighted_unchanged_single_record_reference(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        records = [self._record(config, expert="reasoning", sample_id=f"loss-{index}") for index in range(2)]
+        records[1]["token_ids"] = [*records[1]["token_ids"], 5, 6]
+        records[1]["target_ids"] = [*records[1]["target_ids"], 6, 7]
+        model = UnifiedDecoder(config, genesis_seed=1413)
+        reference = pretrain.packed_single_record_reference_loss(model, records, config, device=torch.device("cpu"))
+        packed_model = copy.deepcopy(model)
+        batch = decode_owned_packed_batch(records, config, device=torch.device("cpu"), expected_records=2)
+        packed = pretrain.packed_eager_loss(packed_model, batch, config)
+        self.assertAlmostEqual(float(reference.detach()), float(packed.detach()), places=6)
+
+    def test_packed_selection_counts_optimizer_updates_and_binds_exact_cursor(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        records = [self._record(config, expert="reasoning", sample_id=f"pack-{index}") for index in range(4)]
+
+        class FourRecordSelection:
+            receipt = {
+                "schema_version": SELECTION_RECEIPT_SCHEMA_VERSION,
+                "capability": "reasoning",
+                "selection_rule_id": "all_records_semantic_pretraining_v1",
+                "selected_record_count": 4,
+            }
+
+            def iter_from(self, cursor: object = None):
+                start = 0 if cursor is None else int(cursor["next_source_index"])
+                for index in range(start, len(records)):
+                    yield records[index], {
+                        "schema_version": SELECTION_CURSOR_SCHEMA_VERSION,
+                        "selection_receipt_sha256": "c" * 64,
+                        "selection_rule_id": "all_records_semantic_pretraining_v1",
+                        "selected_ordinal": index + 1,
+                        "next_source_index": index + 1,
+                    }
+
+        model = UnifiedDecoder(config, genesis_seed=1413)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        checkpoints: list[tuple[int, dict[str, object]]] = []
+        result = pretrain.run_packed_selection_pretraining_segment(
+            model=model, optimizer=optimizer, selection=FourRecordSelection(), config=config,
+            device=torch.device("cpu"), pack_records=2, checkpoint_every=1,
+            checkpoint_callback=lambda step, state: checkpoints.append((step, state)),
+            measure_single_record_reference=True,
+        )
+        self.assertEqual(result["steps"], 2)
+        self.assertEqual(result["global_step"], 2)
+        self.assertEqual(result["tokens_seen"], 12)
+        self.assertEqual(result["processed_tokens_seen"], 12)
+        self.assertEqual(result["data_cursor"]["pack_ordinal"], 2)
+        self.assertEqual(result["data_cursor"]["records_consumed"], 4)
+        self.assertEqual(result["data_cursor"]["packed_selection_cursor"]["selected_ordinal"], 4)
+        self.assertEqual([step for step, _state in checkpoints], [1, 2])
+        self.assertEqual(len(result["single_record_reference_losses"]), 2)
+        for reference, packed in zip(result["single_record_reference_losses"], result["losses"], strict=True):
+            self.assertLess(abs(reference - packed) / abs(reference), 0.01)
+
+    def test_packed_selection_refuses_a_partial_terminal_pack(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        records = [self._record(config, expert="reasoning", sample_id=f"partial-{index}") for index in range(3)]
+
+        class ThreeRecordSelection:
+            receipt = {"schema_version": SELECTION_RECEIPT_SCHEMA_VERSION, "capability": "reasoning", "selected_record_count": 3}
+
+            def iter_from(self, cursor: object = None):
+                del cursor
+                for index, record in enumerate(records):
+                    yield record, {
+                        "schema_version": SELECTION_CURSOR_SCHEMA_VERSION,
+                        "selection_receipt_sha256": "d" * 64,
+                        "selection_rule_id": "all_records_semantic_pretraining_v1",
+                        "selected_ordinal": index + 1,
+                        "next_source_index": index + 1,
+                    }
+
+        model = UnifiedDecoder(config, genesis_seed=1413)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        with self.assertRaisesRegex(ValueError, "partial packed selection"):
+            pretrain.run_packed_selection_pretraining_segment(
+                model=model, optimizer=optimizer, selection=ThreeRecordSelection(), config=config,
+                device=torch.device("cpu"), pack_records=2, checkpoint_every=1,
+                checkpoint_callback=lambda _step, _state: None,
+            )
+
+    def test_packed_bf16_measurement_prepares_optimizer_and_warmup_outside_timing(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        records = [self._record(config, expert="reasoning", sample_id=f"prepared-{index}") for index in range(2)]
+
+        class PreparedSelection:
+            receipt = {"selected_record_count": 2}
+
+            def iter_from(self, cursor: object = None):
+                del cursor
+                for index, record in enumerate(records):
+                    yield record, {
+                        "selection_receipt_sha256": "e" * 64,
+                        "selected_ordinal": index + 1,
+                    }
+
+        model = UnifiedDecoder(config, genesis_seed=1413)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        with patch.object(
+            pretrain, "_preinitialize_optimizer_state",
+            wraps=pretrain._preinitialize_optimizer_state,
+        ) as initialize:
+            result = pretrain.run_packed_selection_pretraining_segment(
+                model=model, optimizer=optimizer, selection=PreparedSelection(), config=config,
+                device=torch.device("cpu"), pack_records=2, checkpoint_every=1,
+                checkpoint_callback=lambda _step, _state: None,
+                measurement_preparation_regions_per_signature=2,
+            )
+        initialize.assert_called_once()
+        preparation = result["measurement_preparation"]
+        self.assertEqual(preparation["regions_per_signature"], 2)
+        self.assertEqual(preparation["signature_count"], 1)
+        self.assertEqual(preparation["region_count"], 2)
+        self.assertEqual(preparation["optimizer_state_preinitialized_parameters"], 0)
+        self.assertTrue(preparation["no_capture_in_measured_window"])
 
 
 

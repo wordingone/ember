@@ -6,13 +6,13 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
 import hashlib
 import io
 import json
 import pickle
 import sys
 import zipfile
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator, Mapping
 
@@ -24,8 +24,8 @@ _COUNTER_MODULE_DIRECTORY = Path(__file__).resolve().parent
 if str(_COUNTER_MODULE_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(_COUNTER_MODULE_DIRECTORY))
 
-_P2B_STREAM_MANIFEST_SHA256 = "90ae6dd08430ead9f8287028ad20ed115a14d8d9fa3fc6c6c615f05e110fc9d0"
-_P2B_STREAM_BUILD_RECEIPT_SHA256 = "748787e23c3100836713f6672a05629185a914563475f592c264ee977260f2d8"
+_P2B_STREAM_MANIFEST_SHA256 = "25d4f681af1d43c12dda718b7cd0ddf75613a46a7d5053b7ddf5436e0cbf9a22"
+_P2B_STREAM_BUILD_RECEIPT_SHA256 = "2daf3de395c83dc19707cb81f31c12c1484d9c19de2249c8eb8aec1b5a179c9d"
 _P2B_STREAM_CORPUS_ROOT_SHA256 = "42d1aac14c1e59563d348b7a53ce83dcce499a48217569d7d00a3966199141ab"
 EXPERT_NAMES = ("vision", "audio", "reasoning", "tool")
 ARCHITECTURE_REVISION = "ember-sparse-3b-v2"
@@ -40,6 +40,22 @@ _EXPERT_GENESIS_AUTHORITY_FIELDS = frozenset(
         "expert_genesis_sha256",
     }
 )
+_PACKED_FRESH_GENESIS_LINEAGE_SCHEMA = (
+    "ember-issue1413-packed-fresh-genesis-specialist-lineage-v1"
+)
+_PACKED_FRESH_GENESIS_MODE = "FRESH_GENESIS_NO_EXTERNAL_PREDECESSOR"
+_PACKED_CURSOR_FIELDS = {
+    "selected_ordinal", "global_step", "tokens_seen",
+    "processed_tokens_seen", "pack_ordinal",
+}
+_PACKED_FRESH_GENESIS_LINEAGE_FIELDS = {
+    "schema_version", "lineage_mode", "source_commit",
+    "model_config_sha256", "seed", "active_expert", "trained_expert_ids",
+    "genesis_lineage_sha256", "selection_receipt_sha256",
+    "execution_record_order_sha256", "execution_tokens_sha256",
+    "pack_sequence_sha256", "initial_cursor", "checkpoint_cursor",
+    "lineage_sha256",
+}
 
 
 def _optimizer_owner_for_name(name: str) -> str:
@@ -215,6 +231,76 @@ def _sha256_value(value: object, *, label: str) -> str:
     if not isinstance(value, str) or len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
         raise ValueError(f"{label} must be a lowercase SHA-256 digest")
     return value
+
+
+def _canonical_sha256(value: Mapping[str, Any]) -> str:
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def _packed_cursor(value: object, *, label: str) -> dict[str, int]:
+    if not isinstance(value, Mapping) or set(value) != _PACKED_CURSOR_FIELDS:
+        raise ValueError(f"{label} must use the closed packed cursor projection")
+    cursor = dict(value)
+    if any(type(cursor[field]) is not int or cursor[field] < 0 for field in _PACKED_CURSOR_FIELDS):
+        raise ValueError(f"{label} counters must be nonnegative integers")
+    return cursor
+
+
+def _validate_packed_fresh_genesis_specialist_lineage(
+    manifest: Mapping[str, Any], *, active_expert: str,
+) -> dict[str, Any] | None:
+    lineage = manifest.get("lineage")
+    if not isinstance(lineage, Mapping) or lineage.get("schema_version") != _PACKED_FRESH_GENESIS_LINEAGE_SCHEMA:
+        return None
+    if set(lineage) != _PACKED_FRESH_GENESIS_LINEAGE_FIELDS:
+        raise ValueError("packed fresh-genesis lineage has an invalid closed shape")
+    if (
+        lineage.get("lineage_mode") != _PACKED_FRESH_GENESIS_MODE
+        or lineage.get("active_expert") != active_expert
+        or lineage.get("trained_expert_ids") != [active_expert]
+    ):
+        raise ValueError("packed fresh-genesis lineage route identity drifted")
+    source_commit = lineage.get("source_commit")
+    if (
+        not isinstance(source_commit, str)
+        or len(source_commit) != 40
+        or any(character not in "0123456789abcdef" for character in source_commit)
+    ):
+        raise ValueError("packed fresh-genesis source commit must be lowercase 40hex")
+    for field in (
+        "model_config_sha256", "genesis_lineage_sha256",
+        "selection_receipt_sha256", "execution_record_order_sha256",
+        "execution_tokens_sha256", "pack_sequence_sha256", "lineage_sha256",
+    ):
+        _sha256_value(lineage.get(field), label=f"packed fresh-genesis {field}")
+    seed = lineage.get("seed")
+    if type(seed) is not int or seed < 0:
+        raise ValueError("packed fresh-genesis seed must be a nonnegative integer")
+    initial = _packed_cursor(lineage.get("initial_cursor"), label="packed fresh-genesis initial cursor")
+    checkpoint = _packed_cursor(lineage.get("checkpoint_cursor"), label="packed fresh-genesis checkpoint cursor")
+    if (
+        checkpoint["selected_ordinal"] <= initial["selected_ordinal"]
+        or checkpoint["global_step"] <= initial["global_step"]
+        or checkpoint["tokens_seen"] <= initial["tokens_seen"]
+        or checkpoint["processed_tokens_seen"] < checkpoint["tokens_seen"]
+        or checkpoint["pack_ordinal"] <= initial["pack_ordinal"]
+    ):
+        raise ValueError("packed fresh-genesis checkpoint cursor made no valid progress")
+    expected_genesis = _canonical_sha256({
+        "schema_version": "ember-issue1413-packed-fresh-genesis-v1",
+        "lineage_mode": _PACKED_FRESH_GENESIS_MODE,
+        "source_commit": source_commit,
+        "model_config_sha256": lineage["model_config_sha256"],
+        "seed": seed,
+    })
+    if lineage["genesis_lineage_sha256"] != expected_genesis:
+        raise ValueError("packed fresh-genesis lineage hash drifted")
+    unsigned = {key: value for key, value in lineage.items() if key != "lineage_sha256"}
+    if lineage["lineage_sha256"] != _canonical_sha256(unsigned):
+        raise ValueError("packed fresh-genesis lineage self hash drifted")
+    return dict(lineage)
 
 
 def validate_p2b_stream_episode(episode: Mapping[str, Any], *, active_expert: str) -> dict[str, Any]:
@@ -800,6 +886,7 @@ def _inspect_realization(
     active_expert: str,
     shape: Mapping[str, int],
     full_coverage_root: bool = False,
+    packed_fresh_genesis_specialist: bool = False,
     genesis_override: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     records = manifest.get("shards")
@@ -867,7 +954,9 @@ def _inspect_realization(
     if active_expert != "shared" and (
         schema_version not in {"ember-sparse-checkpoint-v4", "ember-sparse-checkpoint-v5"}
         or not isinstance(manifest.get("lineage"), Mapping)
-    ) and not _full_coverage_root_projection(manifest, active_expert=active_expert):
+    ) and not _full_coverage_root_projection(
+        manifest, active_expert=active_expert,
+    ) and not packed_fresh_genesis_specialist:
         raise ValueError("specialist-active realization requires a lineage manifest")
     genesis = genesis_override if genesis_override is not None else manifest.get("expert_genesis_sha256")
     expert_hashes = manifest.get("expert_checkpoint_sha256")
@@ -923,7 +1012,17 @@ def _inspect_realization(
                         if not isinstance(payload, dict) or payload.get("expert") != name: raise ValueError(f"expert realization identifies the wrong bank: {name}")
                         _validate_state(payload.get("model"), _expected_expert(shape, name), label=f"expert {name}")
                         if active_expert == "shared": _verify_shared_expert_genesis(archive, payload, name=name, genesis=genesis, shape=shape)
-                        elif full_coverage_root: _verify_expert_trained_from_genesis(archive, payload, name=name, genesis=genesis, shape=shape)
+                        elif full_coverage_root:
+                            _verify_expert_trained_from_genesis(
+                                archive, payload, name=name, genesis=genesis, shape=shape,
+                            )
+                        elif packed_fresh_genesis_specialist:
+                            verifier = (
+                                _verify_expert_trained_from_genesis
+                                if name == active_expert
+                                else _verify_shared_expert_genesis
+                            )
+                            verifier(archive, payload, name=name, genesis=genesis, shape=shape)
         except (OSError, zipfile.BadZipFile, ValueError) as error:
             if isinstance(error, ValueError): raise
             raise ValueError(f"checkpoint realization cannot be safely inspected: {error}") from error
@@ -1001,6 +1100,9 @@ def execute_counter(
     # discriminator can be threaded into `_inspect_realization` for the inverted
     # genesis byte-verification (Finding 2, issue #1329) in the same shard pass.
     full_coverage_root = _full_coverage_root_projection(manifest_snapshot, active_expert=active_expert)
+    packed_fresh_genesis_lineage = _validate_packed_fresh_genesis_specialist_lineage(
+        manifest_snapshot, active_expert=active_expert,
+    )
     external_genesis: dict[str, str] | None = None
     if expert_genesis_authority is not None:
         expected_authority_sha256 = _sha256_value(
@@ -1024,6 +1126,7 @@ def execute_counter(
         active_expert=active_expert,
         shape=shape,
         full_coverage_root=full_coverage_root,
+        packed_fresh_genesis_specialist=packed_fresh_genesis_lineage is not None,
         genesis_override=external_genesis,
     )
     p2b_inputs = (p2b_repo_root, p2b_stream_manifest, p2b_stream_build_receipt, p2b_tokenizer_runtime_root, p2b_tokenizer_runtime_manifest)
@@ -1040,9 +1143,50 @@ def execute_counter(
             raise ValueError("full-coverage root manifest lacks closed expert parameter hashes")
         for name in EXPERT_NAMES:
             _sha256_value(root_parameters[name], label=f"root {name} parameter hash")
-    if active_expert != "shared" and not full_coverage_root and (parent_manifest is None or root_manifest is None):
+    if packed_fresh_genesis_lineage is not None:
+        if any(value is not None for value in p2b_inputs):
+            raise ValueError("packed fresh-genesis counter call must not include P2B stream authority")
+        if parent_manifest is not None or root_manifest is not None:
+            raise ValueError("packed fresh-genesis realization must not carry external lineage manifests")
+        if packed_fresh_genesis_lineage["model_config_sha256"] != config_sha256:
+            raise ValueError("packed fresh-genesis lineage model-config hash mismatch")
+        if packed_fresh_genesis_lineage["seed"] != manifest.get("launch_seed"):
+            raise ValueError("packed fresh-genesis lineage launch seed mismatch")
+        cursor = manifest.get("data_cursor")
+        selection_cursor = cursor.get("packed_selection_cursor") if isinstance(cursor, Mapping) else None
+        if not isinstance(selection_cursor, Mapping):
+            raise ValueError("packed fresh-genesis checkpoint lacks its selection cursor")
+        realized_cursor = _packed_cursor({
+            "selected_ordinal": selection_cursor.get("selected_ordinal"),
+            "global_step": cursor.get("global_step"),
+            "tokens_seen": cursor.get("tokens_seen"),
+            "processed_tokens_seen": cursor.get("processed_tokens_seen"),
+            "pack_ordinal": cursor.get("pack_ordinal"),
+        }, label="packed fresh-genesis realized cursor")
+        if realized_cursor != packed_fresh_genesis_lineage["checkpoint_cursor"]:
+            raise ValueError("packed fresh-genesis checkpoint cursor does not match lineage")
+        candidate_parameters = manifest.get("expert_parameter_sha256")
+        genesis_parameters = manifest.get("expert_genesis_sha256")
+        if (
+            not isinstance(candidate_parameters, Mapping)
+            or set(candidate_parameters) != set(EXPERT_NAMES)
+            or not isinstance(genesis_parameters, Mapping)
+            or set(genesis_parameters) != set(EXPERT_NAMES)
+        ):
+            raise ValueError("packed fresh-genesis checkpoint lacks closed expert hashes")
+        if candidate_parameters[active_expert] == genesis_parameters[active_expert]:
+            raise ValueError("packed fresh-genesis active expert did not change from genesis")
+        for name in EXPERT_NAMES:
+            if name != active_expert and candidate_parameters[name] != genesis_parameters[name]:
+                raise ValueError(f"packed fresh-genesis inactive expert changed from genesis: {name}")
+    if (
+        active_expert != "shared"
+        and not full_coverage_root
+        and packed_fresh_genesis_lineage is None
+        and (parent_manifest is None or root_manifest is None)
+    ):
         raise ValueError("specialist-active realization requires external parent and root manifests")
-    if active_expert != "shared" and not full_coverage_root:
+    if active_expert != "shared" and not full_coverage_root and packed_fresh_genesis_lineage is None:
         lineage = manifest.get("lineage")
         if not isinstance(lineage, Mapping):
             raise ValueError("specialist-active realization lacks v4 lineage")

@@ -25,7 +25,10 @@ import torch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
-from checkpoint_artifacts import load_checkpoint_artifacts
+from checkpoint_artifacts import (
+    build_packed_fresh_genesis_specialist_lineage,
+    load_checkpoint_artifacts,
+)
 import parameter_counter
 from specialist_stream import SELECTION_CURSOR_SCHEMA_VERSION, TRAINING_CURSOR_SCHEMA_VERSION, canonical_record_bytes, open_specialist_stream
 from model import RestartDecoderConfig, UnifiedDecoder
@@ -95,6 +98,149 @@ def _write_external_genesis_fixture(root: Path) -> tuple[Path, Path, Path, str]:
 
 
 class CounterCliTests(unittest.TestCase):
+    def test_counter_admits_closed_packed_fresh_genesis_specialist_lineage_without_external_parent(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=2, attention_heads=4, vocab_size=64,
+        )
+        model = UnifiedDecoder(config, genesis_seed=83)
+        model._activate_expert("audio")
+        genesis = model.expert_bank_genesis_hashes()
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path = root / "config.json"
+            config_path.write_text(json.dumps({
+                "architecture_revision": "ember-sparse-3b-v2",
+                "model": {
+                    "hidden_size": 32, "layers": 2, "attention_heads": 4,
+                    "vocab_size": 64, "tied_embeddings": True,
+                    "image_projection": {"input_shape": [48, 48, 3], "output_size": 32},
+                    "audio_projection": {"frame_samples": 640, "output_size": 32},
+                    "expert_routing": {"expert_names": ["vision", "audio", "reasoning", "tool"]},
+                },
+            }), encoding="utf-8")
+            config_sha256 = hashlib.sha256(config_path.read_bytes()).hexdigest()
+            initial_cursor = {
+                "selected_ordinal": 0, "global_step": 0, "tokens_seen": 0,
+                "processed_tokens_seen": 0, "pack_ordinal": 0,
+            }
+            checkpoint_cursor = {
+                "selected_ordinal": 64, "global_step": 1, "tokens_seen": 960,
+                "processed_tokens_seen": 960, "pack_ordinal": 1,
+            }
+            lineage = build_packed_fresh_genesis_specialist_lineage(
+                source_commit="a" * 40, model_config_sha256=config_sha256,
+                seed=83, active_expert="audio",
+                selection_receipt_sha256="b" * 64,
+                execution_record_order_sha256="c" * 64,
+                execution_tokens_sha256="d" * 64,
+                pack_sequence_sha256="e" * 64,
+                initial_cursor=initial_cursor, checkpoint_cursor=checkpoint_cursor,
+            )
+            writer_kwargs = {
+                "launch_seed": 83,
+                "rng_state": {
+                    "cpu": torch.get_rng_state().clone(),
+                    "cuda": (
+                        torch.cuda.get_rng_state().clone()
+                        if torch.cuda.is_available()
+                        else torch.tensor([1, 2, 3], dtype=torch.uint8)
+                    ),
+                },
+                "data_cursor": {
+                    "shard": "PACKED_SELECTION:bbbbbbbbbbbb", "record_index": 64,
+                    "global_step": 1, "tokens_seen": 960,
+                    "processed_tokens_seen": 960, "pack_ordinal": 1,
+                    "packed_selection_cursor": {"selected_ordinal": 64},
+                },
+                "model_config_sha256": config_sha256,
+                "contract_sha256": "f" * 64,
+                "expert_genesis_sha256": genesis,
+                "optimizer_state_layout": "owner-sharded-v1",
+                "specialist_lineage": lineage,
+            }
+            with self.assertRaisesRegex(ValueError, "active expert did not change from genesis"):
+                write_checkpoint_artifacts(
+                    model, optimizer, root / "unchanged-audio-refused", **writer_kwargs,
+                )
+            model(
+                torch.tensor([[1, 2, 3]], dtype=torch.long),
+                active_expert="audio",
+            ).float().square().mean().backward()
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+            checkpoint = root / "checkpoint"
+            checkpoint_receipt = write_checkpoint_artifacts(
+                model, optimizer, checkpoint, **writer_kwargs,
+            )
+            manifest_path = checkpoint / "checkpoint-manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["lineage"], lineage)
+            self.assertEqual(manifest["optimizer_state_owner_ids"], ["shared", "audio"])
+            resumed_model = UnifiedDecoder(config, genesis_seed=83)
+            resumed_model._activate_expert("audio")
+            resumed_optimizer = torch.optim.AdamW(resumed_model.parameters(), lr=1e-4)
+            resumed = load_checkpoint_artifacts(
+                resumed_model, resumed_optimizer, checkpoint, checkpoint_receipt,
+            )
+            self.assertEqual(resumed["data_cursor"], writer_kwargs["data_cursor"])
+            self.assertEqual(
+                resumed_model.expert_bank_genesis_hashes(),
+                model.expert_bank_genesis_hashes(),
+            )
+            measured = execute_counter(
+                model_config=config_path, checkpoint_manifest=manifest_path,
+                active_expert="audio",
+            )
+            self.assertEqual(measured["result"], "MEASURED")
+            self.assertEqual(measured["active_expert_ids"], ["audio"])
+            seed_drift = copy.deepcopy(manifest)
+            seed_drift["lineage"]["seed"] = 84
+            seed_drift["lineage"]["genesis_lineage_sha256"] = hashlib.sha256(
+                json.dumps({
+                    "schema_version": "ember-issue1413-packed-fresh-genesis-v1",
+                    "lineage_mode": "FRESH_GENESIS_NO_EXTERNAL_PREDECESSOR",
+                    "source_commit": "a" * 40,
+                    "model_config_sha256": config_sha256,
+                    "seed": 84,
+                }, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            ).hexdigest()
+            unsigned = {
+                key: value for key, value in seed_drift["lineage"].items()
+                if key != "lineage_sha256"
+            }
+            seed_drift["lineage"]["lineage_sha256"] = hashlib.sha256(
+                json.dumps(unsigned, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            ).hexdigest()
+            manifest_path.write_text(json.dumps(seed_drift, sort_keys=True), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "launch seed mismatch"):
+                execute_counter(
+                    model_config=config_path, checkpoint_manifest=manifest_path,
+                    active_expert="audio",
+                )
+            forged = copy.deepcopy(manifest)
+            forged["lineage"]["genesis_lineage_sha256"] = "0" * 64
+            unsigned = {
+                key: value for key, value in forged["lineage"].items()
+                if key != "lineage_sha256"
+            }
+            forged["lineage"]["lineage_sha256"] = hashlib.sha256(
+                json.dumps(unsigned, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            ).hexdigest()
+            manifest_path.write_text(json.dumps(forged, sort_keys=True), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "lineage hash drifted"):
+                execute_counter(
+                    model_config=config_path, checkpoint_manifest=manifest_path,
+                    active_expert="audio",
+                )
+            manifest["lineage"]["pack_sequence_sha256"] = "9" * 64
+            manifest_path.write_text(json.dumps(manifest, sort_keys=True), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "self hash drifted"):
+                execute_counter(
+                    model_config=config_path, checkpoint_manifest=manifest_path,
+                    active_expert="audio",
+                )
+
     def test_counter_inspects_v5_owner_sharded_optimizer_records(self) -> None:
         config = RestartDecoderConfig.small_for_tests(
             hidden_size=32, layers=2, attention_heads=4, vocab_size=64
@@ -1132,8 +1278,8 @@ class CounterCliTests(unittest.TestCase):
 
         selection = {
             "schema_version": "ember-owned-specialist-stream-selection-receipt-v1",
-            "stream_manifest_sha256": "90ae6dd08430ead9f8287028ad20ed115a14d8d9fa3fc6c6c615f05e110fc9d0",
-            "stream_build_receipt_sha256": "748787e23c3100836713f6672a05629185a914563475f592c264ee977260f2d8",
+            "stream_manifest_sha256": "25d4f681af1d43c12dda718b7cd0ddf75613a46a7d5053b7ddf5436e0cbf9a22",
+            "stream_build_receipt_sha256": "2daf3de395c83dc19707cb81f31c12c1484d9c19de2249c8eb8aec1b5a179c9d",
             "corpus_root_sha256": "42d1aac14c1e59563d348b7a53ce83dcce499a48217569d7d00a3966199141ab",
             "family_root_sha256": "4" * 64,
             "capability": "image",

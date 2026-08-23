@@ -19,19 +19,41 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 import torch
-
 from checkpoint_scratch import ScratchCappedWriter as _ScratchCappedWriter
 from durable_io import atomic_replace_durable
 from model import EXPERT_NAMES, UnifiedDecoder
-from parameter_counter import SPECIALIST_VERIFICATION_FIELDS, measure_parameter_counts, validate_p2b_stream_episode, validate_realization_receipt
-from specialist_stream import SELECTION_CURSOR_SCHEMA_VERSION, TRAINING_CURSOR_SCHEMA_VERSION
-
+from parameter_counter import (
+    SPECIALIST_VERIFICATION_FIELDS,
+    measure_parameter_counts,
+    validate_p2b_stream_episode,
+    validate_realization_receipt,
+)
+from specialist_stream import (
+    SELECTION_CURSOR_SCHEMA_VERSION,
+    TRAINING_CURSOR_SCHEMA_VERSION,
+)
 
 _STAGING_LEASE = ".writer-lease.json"
 _ALLOWED_CANDIDATE_METADATA = {"parameter-counter-receipt.json"}
 _FAILURE_EVIDENCE_LIMIT = 64 * 1024
 _STREAMING_OVERHEAD_BYTES = 64 * 1024 * 1024
 _OWNER_SHARDED_OPTIMIZER_STATE_LAYOUT = "owner-sharded-v1"
+_PACKED_FRESH_GENESIS_LINEAGE_SCHEMA = (
+    "ember-issue1413-packed-fresh-genesis-specialist-lineage-v1"
+)
+_PACKED_FRESH_GENESIS_MODE = "FRESH_GENESIS_NO_EXTERNAL_PREDECESSOR"
+_PACKED_CURSOR_FIELDS = {
+    "selected_ordinal", "global_step", "tokens_seen",
+    "processed_tokens_seen", "pack_ordinal",
+}
+_PACKED_FRESH_GENESIS_LINEAGE_FIELDS = {
+    "schema_version", "lineage_mode", "source_commit",
+    "model_config_sha256", "seed", "active_expert", "trained_expert_ids",
+    "genesis_lineage_sha256", "selection_receipt_sha256",
+    "execution_record_order_sha256", "execution_tokens_sha256",
+    "pack_sequence_sha256", "initial_cursor", "checkpoint_cursor",
+    "lineage_sha256",
+}
 
 _FAILURE_COMPARISON_OPERAND_FIELDS = {
     "derived_byte_bound_bytes",
@@ -1963,14 +1985,142 @@ def _attested_parent_optimizer_expert_routes(
     return tuple(owner_authority["specialist_owner_ids"])
 
 
+def _packed_cursor(value: Mapping[str, Any], *, label: str) -> dict[str, int]:
+    if not isinstance(value, Mapping) or set(value) != _PACKED_CURSOR_FIELDS:
+        raise ValueError(f"{label} must use the closed packed cursor projection")
+    cursor = dict(value)
+    if any(type(cursor[field]) is not int or cursor[field] < 0 for field in _PACKED_CURSOR_FIELDS):
+        raise ValueError(f"{label} counters must be nonnegative integers")
+    return cursor
+
+
+def _packed_cursor_from_training_state(value: Mapping[str, Any]) -> dict[str, int]:
+    selection_cursor = value.get("packed_selection_cursor")
+    if not isinstance(selection_cursor, Mapping):
+        raise ValueError("packed fresh-genesis checkpoint lacks its selection cursor")
+    return _packed_cursor({
+        "selected_ordinal": selection_cursor.get("selected_ordinal"),
+        "global_step": value.get("global_step"),
+        "tokens_seen": value.get("tokens_seen"),
+        "processed_tokens_seen": value.get("processed_tokens_seen"),
+        "pack_ordinal": value.get("pack_ordinal"),
+    }, label="packed fresh-genesis checkpoint cursor")
+
+
+def build_packed_fresh_genesis_specialist_lineage(
+    *, source_commit: str, model_config_sha256: str, seed: int,
+    active_expert: str, selection_receipt_sha256: str,
+    execution_record_order_sha256: str, execution_tokens_sha256: str,
+    pack_sequence_sha256: str, initial_cursor: Mapping[str, Any],
+    checkpoint_cursor: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Build the closed no-parent lineage for issue #1413's first audio checkpoint."""
+
+    if (
+        not isinstance(source_commit, str)
+        or len(source_commit) != 40
+        or any(character not in "0123456789abcdef" for character in source_commit)
+    ):
+        raise ValueError("packed fresh-genesis source commit must be lowercase 40hex")
+    for value, label in (
+        (model_config_sha256, "model config"),
+        (selection_receipt_sha256, "selection receipt"),
+        (execution_record_order_sha256, "execution record order"),
+        (execution_tokens_sha256, "execution tokens"),
+        (pack_sequence_sha256, "pack sequence"),
+    ):
+        _sha256_value(value, name=f"packed fresh-genesis {label} hash")
+    if type(seed) is not int or seed < 0:
+        raise ValueError("packed fresh-genesis seed must be a nonnegative integer")
+    if active_expert not in EXPERT_NAMES:
+        raise ValueError("packed fresh-genesis lineage requires one specialist expert")
+    initial = _packed_cursor(initial_cursor, label="packed fresh-genesis initial cursor")
+    checkpoint = _packed_cursor(checkpoint_cursor, label="packed fresh-genesis checkpoint cursor")
+    if (
+        checkpoint["selected_ordinal"] <= initial["selected_ordinal"]
+        or checkpoint["global_step"] <= initial["global_step"]
+        or checkpoint["tokens_seen"] <= initial["tokens_seen"]
+        or checkpoint["processed_tokens_seen"] < checkpoint["tokens_seen"]
+        or checkpoint["pack_ordinal"] <= initial["pack_ordinal"]
+    ):
+        raise ValueError("packed fresh-genesis checkpoint cursor made no valid progress")
+    genesis_lineage_sha256 = _canonical_sha256({
+        "schema_version": "ember-issue1413-packed-fresh-genesis-v1",
+        "lineage_mode": _PACKED_FRESH_GENESIS_MODE,
+        "source_commit": source_commit,
+        "model_config_sha256": model_config_sha256,
+        "seed": seed,
+    })
+    lineage: dict[str, Any] = {
+        "schema_version": _PACKED_FRESH_GENESIS_LINEAGE_SCHEMA,
+        "lineage_mode": _PACKED_FRESH_GENESIS_MODE,
+        "source_commit": source_commit,
+        "model_config_sha256": model_config_sha256,
+        "seed": seed,
+        "active_expert": active_expert,
+        "trained_expert_ids": [active_expert],
+        "genesis_lineage_sha256": genesis_lineage_sha256,
+        "selection_receipt_sha256": selection_receipt_sha256,
+        "execution_record_order_sha256": execution_record_order_sha256,
+        "execution_tokens_sha256": execution_tokens_sha256,
+        "pack_sequence_sha256": pack_sequence_sha256,
+        "initial_cursor": initial,
+        "checkpoint_cursor": checkpoint,
+    }
+    lineage["lineage_sha256"] = _canonical_sha256(lineage)
+    return lineage
+
+
+def _validate_packed_fresh_genesis_specialist_lineage(
+    lineage: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    if lineage.get("schema_version") != _PACKED_FRESH_GENESIS_LINEAGE_SCHEMA:
+        return None
+    if set(lineage) != _PACKED_FRESH_GENESIS_LINEAGE_FIELDS:
+        raise ValueError("packed fresh-genesis lineage has an invalid closed shape")
+    rebuilt = build_packed_fresh_genesis_specialist_lineage(
+        source_commit=lineage["source_commit"],
+        model_config_sha256=lineage["model_config_sha256"],
+        seed=lineage["seed"],
+        active_expert=lineage["active_expert"],
+        selection_receipt_sha256=lineage["selection_receipt_sha256"],
+        execution_record_order_sha256=lineage["execution_record_order_sha256"],
+        execution_tokens_sha256=lineage["execution_tokens_sha256"],
+        pack_sequence_sha256=lineage["pack_sequence_sha256"],
+        initial_cursor=lineage["initial_cursor"],
+        checkpoint_cursor=lineage["checkpoint_cursor"],
+    )
+    if rebuilt != dict(lineage):
+        raise ValueError("packed fresh-genesis lineage derived fields are inconsistent")
+    return rebuilt
+
+
 def _specialist_lineage(
     lineage: Mapping[str, Any], *, active_expert: str, candidate_parameter_sha256: Mapping[str, str],
+    expert_genesis_sha256: Mapping[str, str] | None = None,
+    model_config_sha256: str | None = None, launch_seed: int | None = None,
     data_cursor: Mapping[str, Any] | None = None,
-) -> tuple[dict[str, Any], dict[str, str], dict[str, str], Path, tuple[str, ...]]:
+) -> tuple[dict[str, Any], dict[str, str], dict[str, str], Path | None, tuple[str, ...]]:
     """Close one-family accretion against independently supplied parent/root bundles."""
 
     if active_expert not in EXPERT_NAMES:
         raise ValueError("specialist lineage requires one specialist active expert")
+    fresh = _validate_packed_fresh_genesis_specialist_lineage(lineage)
+    if fresh is not None:
+        if fresh["active_expert"] != active_expert:
+            raise ValueError("packed fresh-genesis lineage active expert drifted")
+        if fresh["model_config_sha256"] != model_config_sha256 or fresh["seed"] != launch_seed:
+            raise ValueError("packed fresh-genesis lineage launch identity drifted")
+        if not isinstance(data_cursor, Mapping) or fresh["checkpoint_cursor"] != _packed_cursor_from_training_state(data_cursor):
+            raise ValueError("packed fresh-genesis lineage checkpoint cursor drifted")
+        if not isinstance(expert_genesis_sha256, Mapping) or set(expert_genesis_sha256) != set(EXPERT_NAMES):
+            raise ValueError("packed fresh-genesis lineage lacks the four initial expert hashes")
+        if candidate_parameter_sha256[active_expert] == expert_genesis_sha256[active_expert]:
+            raise ValueError("packed fresh-genesis active expert did not change from genesis")
+        for name in EXPERT_NAMES:
+            if name != active_expert and candidate_parameter_sha256[name] != expert_genesis_sha256[name]:
+                raise ValueError(f"packed fresh-genesis inactive expert changed from genesis: {name}")
+        return fresh, dict(expert_genesis_sha256), {}, None, ()
     p2b_fields = {"parent_manifest", "root_manifest", "trained_expert_ids", "episode"}
     p2b_cursor = isinstance(data_cursor, Mapping) and (
         "selection_cursor" in data_cursor or data_cursor.get("schema_version") == TRAINING_CURSOR_SCHEMA_VERSION
@@ -2652,7 +2802,15 @@ def _write_checkpoint_artifacts_impl(
     preflight_genesis = None
     specialist_parent_optimizer_routes: tuple[str, ...] | None = None
     if specialist_lineage is not None:
-        preflight_lineage, preflight_genesis, preflight_parent_shards, preflight_parent_root, specialist_parent_optimizer_routes = _specialist_lineage(specialist_lineage, active_expert=model.active_expert, candidate_parameter_sha256=expert_parameter_sha256, data_cursor=data_cursor)
+        preflight_lineage, preflight_genesis, preflight_parent_shards, preflight_parent_root, specialist_parent_optimizer_routes = _specialist_lineage(
+            specialist_lineage,
+            active_expert=model.active_expert,
+            candidate_parameter_sha256=expert_parameter_sha256,
+            expert_genesis_sha256=expert_genesis_sha256,
+            model_config_sha256=model_config_sha256,
+            launch_seed=launch_seed,
+            data_cursor=data_cursor,
+        )
     published_root = root
     if published_root.exists():
         raise FileExistsError(f"published checkpoint bundle already exists: {published_root}")
@@ -2805,7 +2963,11 @@ def _write_checkpoint_artifacts_impl(
         expert_checkpoint_sha256: dict[str, str] = {}
         for name in EXPERT_NAMES:
             publication_mode = "written"
-            if specialist_lineage is not None and name != model.active_expert:
+            if (
+                specialist_lineage is not None
+                and preflight_parent_root is not None
+                and name != model.active_expert
+            ):
                 path, publication_mode = _link_or_copy_verified(
                     preflight_parent_root / f"expert-{name}.pt",
                     root / f"expert-{name}.pt",
