@@ -44,6 +44,7 @@ VALID_TOKEN = "a" * 64
 VALID_PIPE = r"\\.\pipe\ember-lab-1234"
 VALID_JOB_ID = "job-1344"
 VALID_DAEMON_PID = "4321"
+VALID_MAXIMUM_JOB_MEMORY_BYTES = 58_032_391_267
 
 
 def _env(**overrides) -> dict:
@@ -52,6 +53,9 @@ def _env(**overrides) -> dict:
         "EMBER_LAB_DISPATCH_JOB_ID": VALID_JOB_ID,
         "EMBER_LAB_DISPATCH_TOKEN": VALID_TOKEN,
         "EMBER_LAB_DISPATCH_DAEMON_PID": VALID_DAEMON_PID,
+        "EMBER_LAB_DISPATCH_MAXIMUM_JOB_MEMORY_BYTES": str(
+            VALID_MAXIMUM_JOB_MEMORY_BYTES
+        ),
     }
     base.update(overrides)
     return base
@@ -166,10 +170,34 @@ def test_well_formed_dispatch_is_consumed_and_env_is_cleared(monkeypatch, tmp_pa
     envelope = _well_formed_envelope(fixture, int(VALID_DAEMON_PID))
     monkeypatch.setattr(token, "_call_consume_rpc", lambda *a, **k: envelope)
 
-    token.consume_dispatch(tmp_path)
+    armed_cap = token.consume_dispatch(tmp_path)
 
+    assert armed_cap == VALID_MAXIMUM_JOB_MEMORY_BYTES
     for name in token._REQUIRED_ENV:
         assert name not in os.environ
+
+
+@pytest.mark.parametrize(
+    "bad_cap",
+    ["", "0", "-1", "1.5", "not-bytes", str(2**64)],
+)
+def test_malformed_daemon_owned_job_cap_refuses(monkeypatch, tmp_path, bad_cap):
+    fixture = _write_canonical_repo(tmp_path)
+    monkeypatch.setattr(
+        os,
+        "environ",
+        _env(EMBER_LAB_DISPATCH_MAXIMUM_JOB_MEMORY_BYTES=bad_cap),
+    )
+    envelope = _well_formed_envelope(fixture, int(VALID_DAEMON_PID))
+    monkeypatch.setattr(token, "_call_consume_rpc", lambda *a, **k: envelope)
+
+    expected = (
+        "EMBER_LAB_DISPATCH_REQUIRED"
+        if not bad_cap
+        else "EMBER_LAB_DISPATCH_TOKEN_INVALID"
+    )
+    with pytest.raises(token.DispatchTokenError, match=expected):
+        token.consume_dispatch(tmp_path)
 
 
 def test_daemon_pid_mismatch_between_pipe_server_and_claim_refuses(monkeypatch, tmp_path):
@@ -374,7 +402,7 @@ def test_live_named_pipe_fixture_consumption_uses_true_client_pid(monkeypatch, t
     }
 
     with _FakeDaemonPipe(pipe_name, response_result) as daemon:
-        token.consume_dispatch(tmp_path)
+        armed_cap = token.consume_dispatch(tmp_path)
 
     assert daemon.error is None, f"fake daemon pipe fixture failed: {daemon.error!r}"
     assert daemon.observed_client_pid == own_pid, (
@@ -382,5 +410,6 @@ def test_live_named_pipe_fixture_consumption_uses_true_client_pid(monkeypatch, t
         "the pipe connect happened in a spawned helper process again and the real "
         "dispatch daemon would refuse every consumption"
     )
+    assert armed_cap == VALID_MAXIMUM_JOB_MEMORY_BYTES
     for name in token._REQUIRED_ENV:
         assert name not in os.environ

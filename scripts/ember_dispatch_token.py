@@ -67,6 +67,7 @@ _REQUIRED_ENV: tuple[str, ...] = (
     "EMBER_LAB_DISPATCH_JOB_ID",
     "EMBER_LAB_DISPATCH_TOKEN",
     "EMBER_LAB_DISPATCH_DAEMON_PID",
+    "EMBER_LAB_DISPATCH_MAXIMUM_JOB_MEMORY_BYTES",
 )
 _RUNTIME_IDENTITY_SCHEMA = "ember-lab-runtime-identity-v1"
 _PIPE_PREFIX = r"\\.\pipe\ember-lab-"
@@ -146,7 +147,7 @@ def _require_env_present() -> dict[str, str]:
     return {name: os.environ[name] for name in _REQUIRED_ENV}
 
 
-def _validate_env_shape(values: dict[str, str]) -> tuple[str, str, str, int]:
+def _validate_env_shape(values: dict[str, str]) -> tuple[str, str, str, int, int]:
     pipe = _configured_pipe()
     if pipe is None or pipe != values["EMBER_LAB_PIPE"]:
         raise _refuse("EMBER_LAB_DISPATCH_TOKEN_INVALID", "pipe name is not a well-formed ember-lab pipe")
@@ -162,7 +163,23 @@ def _validate_env_shape(values: dict[str, str]) -> tuple[str, str, str, int]:
         daemon_pid = -1
     if daemon_pid <= 0:
         raise _refuse("EMBER_LAB_DISPATCH_DAEMON_IDENTITY_REFUSED", "daemon pid is not a positive integer")
-    return pipe, job_id, token, daemon_pid
+    raw_maximum_job_memory_bytes = values[
+        "EMBER_LAB_DISPATCH_MAXIMUM_JOB_MEMORY_BYTES"
+    ]
+    try:
+        maximum_job_memory_bytes = int(raw_maximum_job_memory_bytes)
+    except ValueError:
+        maximum_job_memory_bytes = -1
+    if (
+        maximum_job_memory_bytes <= 0
+        or maximum_job_memory_bytes > 2**64 - 1
+        or str(maximum_job_memory_bytes) != raw_maximum_job_memory_bytes
+    ):
+        raise _refuse(
+            "EMBER_LAB_DISPATCH_TOKEN_INVALID",
+            "maximum job memory is not a canonical positive u64",
+        )
+    return pipe, job_id, token, daemon_pid, maximum_job_memory_bytes
 
 
 def _open_and_consume_direct(pipe_name: str, job_id: str, token: str, expected_server_pid: int) -> dict:
@@ -303,17 +320,24 @@ def _call_consume_rpc(pipe_name: str, job_id: str, token: str, daemon_pid: int) 
     return envelope
 
 
-def consume_dispatch(repo_root: Path) -> None:
+def consume_dispatch(repo_root: Path) -> int:
     """Consume this process's Ember Lab dispatch token, or raise `DispatchTokenError`.
 
     Every inventoried Ember entry point calls this as its first action. Fail-closed:
     any missing/malformed environment variable, unreachable pipe, unauthenticated
     daemon, or identity mismatch raises before the caller does anything else. On
-    success the four dispatch env vars are removed from this process's environment
-    (a spawned child never inherits a token meant for this process alone).
+    success the daemon-owned dispatch env vars are removed from this process's
+    environment (a spawned child never inherits authority meant for this process
+    alone), and the authenticated cap that armed this Job Object is returned.
     """
     values = _require_env_present()
-    pipe_name, job_id, token, daemon_pid = _validate_env_shape(values)
+    (
+        pipe_name,
+        job_id,
+        token,
+        daemon_pid,
+        maximum_job_memory_bytes,
+    ) = _validate_env_shape(values)
 
     canonical_binary = _canonical_ember_lab_binary(repo_root)
     canonical_source_sha256 = _canonical_ember_lab_source_sha256(repo_root)
@@ -346,3 +370,4 @@ def consume_dispatch(repo_root: Path) -> None:
 
     for name in _REQUIRED_ENV:
         os.environ.pop(name, None)
+    return maximum_job_memory_bytes
