@@ -2464,6 +2464,72 @@ fn dispatch_manifest_fails_closed_before_spawn_on_time_hash_and_storage() {
 }
 
 #[test]
+fn v4_gpu_manifest_binds_uuid_fraction_floor_and_daemon_owned_environment() {
+    let root = sandbox("v4-vram-wall");
+    let manifest = write_manifest(&root, "dispatch-v4-vram-wall", 10_000);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["schema_version"] = json!("ember-lab-dispatch-manifest-v4");
+    payload
+        .as_object_mut()
+        .unwrap()
+        .remove("minimum_free_vram_bytes");
+    payload["vram_wall"] = json!({
+        "applicability":"required",
+        "contract":{
+            "provider":"nvidia_smi_nvml",
+            "device_uuid":"GPU-00000000-1111-2222-3333-444444444444",
+            "maximum_process_fraction_millionths":500_000,
+            "minimum_free_bytes":256 * 1024 * 1024_u64,
+            "consecutive_breach_samples":3,
+            "sample_interval_ms":2_000
+        }
+    });
+    payload["workload_profile"]["profile_id"] = json!("cockpit");
+    payload["workload_profile"]["pinned_host_producers"][0]["kind"] = json!("telemetry_buffer");
+    payload["workload_profile"]["requires_ui_responsiveness"] = json!(true);
+    payload["env"]
+        .as_object_mut()
+        .unwrap()
+        .remove("EMBER_LAB_DISPATCH_TOKEN_CAPTURE");
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+
+    let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
+    let outcome = daemon
+        .dispatch_manifest_v4_at_with_device_probe_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            |contract| {
+                assert_eq!(
+                    contract.device_uuid,
+                    "GPU-00000000-1111-2222-3333-444444444444"
+                );
+                Ok(ember_lab::VramDeviceCapacity {
+                    provider: "nvidia_smi_nvml".into(),
+                    device_uuid: contract.device_uuid.clone(),
+                    total_bytes: 1_000 * 1024 * 1024,
+                    free_bytes: 700 * 1024 * 1024,
+                })
+            },
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap();
+    let receipt: Value = serde_json::from_slice(&fs::read(&outcome.receipt.path).unwrap()).unwrap();
+    assert_eq!(receipt["vram_reserve"]["applicability"], "required");
+    assert_eq!(
+        receipt["vram_reserve"]["maximum_process_vram_bytes"],
+        500 * 1024 * 1024_u64
+    );
+    assert_eq!(receipt["vram_reserve"]["consecutive_breach_samples"], 3);
+    assert_eq!(receipt["vram_reserve"]["sample_interval_ms"], 2_000);
+    assert!(receipt["vram_reserve"]["claim_boundary"]
+        .as_str()
+        .unwrap()
+        .contains("not_total_vram_guarantee"));
+    daemon.stop_job("dispatch-v4-vram-wall").unwrap();
+}
+
+#[test]
 fn dispatch_manifest_rejects_unknown_fields_and_cache_escape() {
     let root = sandbox("closed");
     let manifest = write_manifest(&root, "dispatch-closed", 10_000);

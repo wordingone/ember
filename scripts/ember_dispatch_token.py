@@ -69,6 +69,13 @@ _REQUIRED_ENV: tuple[str, ...] = (
     "EMBER_LAB_DISPATCH_DAEMON_PID",
     "EMBER_LAB_DISPATCH_MAXIMUM_JOB_MEMORY_BYTES",
 )
+_VRAM_CONTRACT_ENV: tuple[str, ...] = (
+    "EMBER_LAB_DISPATCH_VRAM_PROVIDER",
+    "EMBER_LAB_DISPATCH_VRAM_DEVICE_UUID",
+    "EMBER_LAB_DISPATCH_VRAM_FRACTION_MILLIONTHS",
+    "EMBER_LAB_DISPATCH_MAXIMUM_PROCESS_VRAM_BYTES",
+    "EMBER_LAB_DISPATCH_MINIMUM_FREE_VRAM_BYTES",
+)
 _RUNTIME_IDENTITY_SCHEMA = "ember-lab-runtime-identity-v1"
 _PIPE_PREFIX = r"\\.\pipe\ember-lab-"
 _OPERATOR_PIPE_PREFIX = r"\\.\pipe\ember-operator-"
@@ -144,7 +151,14 @@ def _require_env_present() -> dict[str, str]:
     missing = [name for name in _REQUIRED_ENV if not os.environ.get(name, "").strip()]
     if missing:
         raise _refuse("EMBER_LAB_DISPATCH_REQUIRED", f"missing {missing[0]}")
-    return {name: os.environ[name] for name in _REQUIRED_ENV}
+    present_vram = [name for name in _VRAM_CONTRACT_ENV if os.environ.get(name, "").strip()]
+    if present_vram and len(present_vram) != len(_VRAM_CONTRACT_ENV):
+        missing_vram = next(name for name in _VRAM_CONTRACT_ENV if name not in present_vram)
+        raise _refuse("EMBER_LAB_DISPATCH_REQUIRED", f"missing {missing_vram}")
+    return {
+        name: os.environ[name]
+        for name in (*_REQUIRED_ENV, *(_VRAM_CONTRACT_ENV if present_vram else ()))
+    }
 
 
 def _validate_env_shape(values: dict[str, str]) -> tuple[str, str, str, int, int]:
@@ -179,6 +193,29 @@ def _validate_env_shape(values: dict[str, str]) -> tuple[str, str, str, int, int
             "EMBER_LAB_DISPATCH_TOKEN_INVALID",
             "maximum job memory is not a canonical positive u64",
         )
+    if "EMBER_LAB_DISPATCH_VRAM_PROVIDER" in values:
+        provider = values["EMBER_LAB_DISPATCH_VRAM_PROVIDER"]
+        device_uuid = values["EMBER_LAB_DISPATCH_VRAM_DEVICE_UUID"]
+        if provider != "nvidia_smi_nvml" or not device_uuid.startswith("GPU-"):
+            raise _refuse(
+                "EMBER_LAB_DISPATCH_TOKEN_INVALID",
+                "VRAM provider/device identity is invalid",
+            )
+        for name, maximum in (
+            ("EMBER_LAB_DISPATCH_VRAM_FRACTION_MILLIONTHS", 1_000_000),
+            ("EMBER_LAB_DISPATCH_MAXIMUM_PROCESS_VRAM_BYTES", 2**64 - 1),
+            ("EMBER_LAB_DISPATCH_MINIMUM_FREE_VRAM_BYTES", 2**64 - 1),
+        ):
+            raw = values[name]
+            try:
+                parsed = int(raw)
+            except ValueError:
+                parsed = -1
+            if parsed <= 0 or parsed > maximum or str(parsed) != raw:
+                raise _refuse(
+                    "EMBER_LAB_DISPATCH_TOKEN_INVALID",
+                    f"{name} is not a canonical positive integer",
+                )
     return pipe, job_id, token, daemon_pid, maximum_job_memory_bytes
 
 
@@ -368,6 +405,9 @@ def consume_dispatch(repo_root: Path) -> int:
     ):
         raise _refuse("EMBER_LAB_DISPATCH_REFUSED", "dispatch daemon did not confirm token consumption")
 
+    # The token/pipe/PID values are single-process authority and are removed.
+    # The validated VRAM values are a non-authority resource contract for the
+    # caged canonical runner child, so they deliberately remain inheritable.
     for name in _REQUIRED_ENV:
         os.environ.pop(name, None)
     return maximum_job_memory_bytes

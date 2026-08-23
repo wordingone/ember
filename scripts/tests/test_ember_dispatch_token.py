@@ -177,6 +177,44 @@ def test_well_formed_dispatch_is_consumed_and_env_is_cleared(monkeypatch, tmp_pa
         assert name not in os.environ
 
 
+def _vram_contract_env() -> dict[str, str]:
+    return {
+        "EMBER_LAB_DISPATCH_VRAM_PROVIDER": "nvidia_smi_nvml",
+        "EMBER_LAB_DISPATCH_VRAM_DEVICE_UUID": "GPU-00000000-1111-2222-3333-444444444444",
+        "EMBER_LAB_DISPATCH_VRAM_FRACTION_MILLIONTHS": "500000",
+        "EMBER_LAB_DISPATCH_MAXIMUM_PROCESS_VRAM_BYTES": str(12 * 1024**3),
+        "EMBER_LAB_DISPATCH_MINIMUM_FREE_VRAM_BYTES": str(2 * 1024**3),
+    }
+
+
+def test_daemon_vram_contract_is_validated_then_preserved_for_caged_child(monkeypatch, tmp_path):
+    fixture = _write_canonical_repo(tmp_path)
+    vram = _vram_contract_env()
+    monkeypatch.setattr(os, "environ", _env(**vram))
+    envelope = _well_formed_envelope(fixture, int(VALID_DAEMON_PID))
+    monkeypatch.setattr(token, "_call_consume_rpc", lambda *a, **k: envelope)
+
+    assert token.consume_dispatch(tmp_path) == VALID_MAXIMUM_JOB_MEMORY_BYTES
+    for name in token._REQUIRED_ENV:
+        assert name not in os.environ
+    for name, value in vram.items():
+        assert os.environ[name] == value
+
+
+def test_partial_or_noncanonical_vram_contract_refuses_before_rpc(monkeypatch, tmp_path):
+    vram = _vram_contract_env()
+    vram.pop("EMBER_LAB_DISPATCH_VRAM_DEVICE_UUID")
+    monkeypatch.setattr(os, "environ", _env(**vram))
+    with pytest.raises(token.DispatchTokenError, match="EMBER_LAB_DISPATCH_REQUIRED"):
+        token.consume_dispatch(tmp_path)
+
+    malformed = _vram_contract_env()
+    malformed["EMBER_LAB_DISPATCH_VRAM_FRACTION_MILLIONTHS"] = "0500000"
+    monkeypatch.setattr(os, "environ", _env(**malformed))
+    with pytest.raises(token.DispatchTokenError, match="EMBER_LAB_DISPATCH_TOKEN_INVALID"):
+        token.consume_dispatch(tmp_path)
+
+
 @pytest.mark.parametrize(
     "bad_cap",
     ["", "0", "-1", "1.5", "not-bytes", str(2**64)],

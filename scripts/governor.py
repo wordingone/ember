@@ -1,3 +1,8 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+# issue: #898 packet-2 A VRAM wall
+
 """governor — the resource governor as a module (eng #9).
 
 The launch preconditions that keep this PC alive (post-crash 0670e3ec,
@@ -36,13 +41,119 @@ scripts/test_governor.py (pytest).
 import os
 import sys
 import time
+import uuid
+
+
+_DAEMON_VRAM_ENV = (
+    "EMBER_LAB_DISPATCH_VRAM_PROVIDER",
+    "EMBER_LAB_DISPATCH_VRAM_DEVICE_UUID",
+    "EMBER_LAB_DISPATCH_VRAM_FRACTION_MILLIONTHS",
+    "EMBER_LAB_DISPATCH_MAXIMUM_PROCESS_VRAM_BYTES",
+    "EMBER_LAB_DISPATCH_MINIMUM_FREE_VRAM_BYTES",
+)
+
+
+def daemon_vram_contract():
+    """Return the complete daemon-stamped VRAM contract, or None.
+
+    Partial/caller-shaped contracts fail closed. The fraction is explicitly
+    the torch caching-allocator ceiling; the daemon's external PID/UUID
+    sentinel remains load-bearing for non-torch CUDA allocations.
+    """
+    present = [name for name in _DAEMON_VRAM_ENV if os.environ.get(name, "").strip()]
+    if not present:
+        return None
+    if len(present) != len(_DAEMON_VRAM_ENV):
+        missing = next(name for name in _DAEMON_VRAM_ENV if name not in present)
+        raise RuntimeError(f"VRAM-WALL: incomplete daemon contract; missing {missing}")
+    provider = os.environ[_DAEMON_VRAM_ENV[0]]
+    device_uuid = os.environ[_DAEMON_VRAM_ENV[1]]
+    if provider != "nvidia_smi_nvml" or not device_uuid.startswith("GPU-"):
+        raise RuntimeError("VRAM-WALL: invalid daemon provider/device identity")
+    parsed = {}
+    for name, maximum in (
+        (_DAEMON_VRAM_ENV[2], 1_000_000),
+        (_DAEMON_VRAM_ENV[3], 2**64 - 1),
+        (_DAEMON_VRAM_ENV[4], 2**64 - 1),
+    ):
+        raw = os.environ[name]
+        try:
+            value = int(raw)
+        except ValueError as error:
+            raise RuntimeError(f"VRAM-WALL: {name} is not an integer") from error
+        if value <= 0 or value > maximum or str(value) != raw:
+            raise RuntimeError(f"VRAM-WALL: {name} is not canonical positive")
+        parsed[name] = value
+    fraction_millionths = parsed[_DAEMON_VRAM_ENV[2]]
+    return {
+        "provider": provider,
+        "device_uuid": device_uuid,
+        "fraction_millionths": fraction_millionths,
+        "fraction": fraction_millionths / 1_000_000,
+        "maximum_process_vram_bytes": parsed[_DAEMON_VRAM_ENV[3]],
+        "minimum_free_vram_bytes": parsed[_DAEMON_VRAM_ENV[4]],
+        "claim_boundary": (
+            "torch_allocator_fraction_plus_load_bearing_external_sentinel_"
+            "not_total_vram_guarantee"
+        ),
+    }
 
 
 def env_limits():
     """(vram_fraction, margin_gb, throttle_s) from env with frozen defaults."""
-    return (float(os.environ.get("EMBER_VRAM_FRACTION", "0.85")),
-            float(os.environ.get("EMBER_VRAM_MARGIN_GB", "4.0")),
+    daemon_contract = daemon_vram_contract()
+    fraction = (
+        daemon_contract["fraction"]
+        if daemon_contract is not None
+        else float(os.environ.get("EMBER_VRAM_FRACTION", "0.85"))
+    )
+    margin_gb = (
+        daemon_contract["minimum_free_vram_bytes"] / 1e9
+        if daemon_contract is not None
+        else float(os.environ.get("EMBER_VRAM_MARGIN_GB", "4.0"))
+    )
+    return (fraction,
+            margin_gb,
             float(os.environ.get("EMBER_THROTTLE_S", "0.3")))
+
+
+def _canonical_gpu_uuid(value):
+    """Normalize nvidia-smi and torch UUID representations to 32 hex digits."""
+    if isinstance(value, bytes):
+        value = value.decode("ascii", errors="strict")
+    raw = str(value).strip()
+    if raw.upper().startswith("GPU-"):
+        raw = raw[4:]
+    try:
+        return uuid.UUID(raw).hex
+    except (AttributeError, ValueError) as error:
+        raise RuntimeError("VRAM-WALL: malformed CUDA device UUID") from error
+
+
+def _contracted_torch_device(torch, device_uuid):
+    """Resolve the visible torch ordinal carrying the contracted GPU UUID.
+
+    The daemon contract is physical-device authority. Never fall back to the
+    process default CUDA ordinal: CUDA_VISIBLE_DEVICES and driver ordering can
+    otherwise make the allocator cap and margin check govern a different GPU.
+    """
+    contracted_uuid = _canonical_gpu_uuid(device_uuid)
+    matches = []
+    for index in range(torch.cuda.device_count()):
+        try:
+            observed_uuid = getattr(torch.cuda.get_device_properties(index), "uuid")
+        except (AttributeError, RuntimeError) as error:
+            raise RuntimeError(
+                "VRAM-WALL: torch cannot attest visible CUDA device UUIDs"
+            ) from error
+        if _canonical_gpu_uuid(observed_uuid) == contracted_uuid:
+            matches.append(index)
+    if len(matches) != 1:
+        raise RuntimeError(
+            "VRAM-WALL: contracted device UUID does not identify exactly one "
+            "visible torch CUDA device"
+        )
+    return matches[0]
 
 
 def preflight():
@@ -50,14 +161,22 @@ def preflight():
     call only inside GPU jobs (POSIX/daemon side)."""
     import torch
     frac, margin_gb, _ = env_limits()
-    torch.cuda.set_per_process_memory_fraction(frac)
-    free, total = torch.cuda.mem_get_info()
+    daemon_contract = daemon_vram_contract()
+    device = None
+    if daemon_contract is not None:
+        device = _contracted_torch_device(torch, daemon_contract["device_uuid"])
+    torch.cuda.set_per_process_memory_fraction(frac, device=device)
+    free, total = torch.cuda.mem_get_info(device=device)
     if free < margin_gb * 1e9:
         raise SystemExit(
             f"VRAM-PREFLIGHT: {free/1e9:.1f}GB free of {total/1e9:.1f}GB — "
             f"need >= {margin_gb}GB free before load; refusing launch")
-    return {"vram_fraction": frac, "free_gb": round(free / 1e9, 2),
-            "total_gb": round(total / 1e9, 2), "margin_gb": margin_gb}
+    receipt = {"vram_fraction": frac, "free_gb": round(free / 1e9, 2),
+               "total_gb": round(total / 1e9, 2), "margin_gb": margin_gb}
+    if daemon_contract is not None:
+        receipt["daemon_vram_wall"] = daemon_contract
+        receipt["daemon_vram_wall"]["torch_device_ordinal"] = device
+    return receipt
 
 
 def throttle_step():
