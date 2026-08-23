@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 #[cfg(windows)]
 use std::sync::RwLock;
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Condvar, Mutex, Weak};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub mod data_catalog;
@@ -35,7 +35,18 @@ const CURRENT_DATABASE_SCHEMA_VERSION: u32 = 6;
 const DISPATCH_TOKEN_ENV: &str = "EMBER_LAB_DISPATCH_TOKEN";
 const DISPATCH_JOB_ID_ENV: &str = "EMBER_LAB_DISPATCH_JOB_ID";
 const DISPATCH_DAEMON_PID_ENV: &str = "EMBER_LAB_DISPATCH_DAEMON_PID";
+const DISPATCH_MAXIMUM_JOB_MEMORY_ENV: &str = "EMBER_LAB_DISPATCH_MAXIMUM_JOB_MEMORY_BYTES";
 const DISPATCH_TOKEN_BYTES: usize = 32;
+#[cfg(windows)]
+const JOB_MEMORY_OVERSHOOT_ALLOWANCE_BASIS_POINTS: u32 = 617;
+#[cfg(windows)]
+const JOB_MEMORY_OVERSHOOT_ALLOWANCE_BASIS: &str = "windows_job_object_cuda_wddm_measured";
+#[cfg(windows)]
+const JOB_COMPLETION_KEY: usize = 1;
+#[cfg(windows)]
+const JOB_TERMINAL_COMPLETION_KEY: usize = 2;
+#[cfg(windows)]
+const JOB_OBSERVER_CANCEL_COMPLETION_KEY: usize = 3;
 
 pub fn read_data_catalog_status(path: &Path) -> Result<Value> {
     let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
@@ -497,6 +508,7 @@ pub struct JobSpec {
     env: BTreeMap<String, String>,
     restart_policy: RestartPolicy,
     maximum_job_memory_bytes: Option<u64>,
+    simulated_peak_commit_bytes: Option<u64>,
     cpu_rate_percent: Option<u32>,
     cpu_pacing_class: DispatchCpuPacingClass,
     requires_ui_responsiveness: bool,
@@ -797,6 +809,7 @@ impl JobSpec {
             env: BTreeMap::new(),
             restart_policy: RestartPolicy::Never,
             maximum_job_memory_bytes: None,
+            simulated_peak_commit_bytes: None,
             cpu_rate_percent: None,
             cpu_pacing_class: DispatchCpuPacingClass::Unpaced,
             requires_ui_responsiveness: false,
@@ -816,6 +829,11 @@ impl JobSpec {
 
     pub fn with_maximum_job_memory_bytes(mut self, maximum_job_memory_bytes: u64) -> Self {
         self.maximum_job_memory_bytes = Some(maximum_job_memory_bytes);
+        self
+    }
+
+    pub fn with_simulated_peak_commit_bytes(mut self, simulated_peak_commit_bytes: u64) -> Self {
+        self.simulated_peak_commit_bytes = Some(simulated_peak_commit_bytes);
         self
     }
 
@@ -914,17 +932,100 @@ impl Drop for OwnedHandle {
 #[cfg(windows)]
 struct LiveProcess {
     job: OwnedHandle,
+    completion_port: OwnedHandle,
     process: OwnedHandle,
     _stdout_log_guard: OwnedHandle,
     _stderr_log_guard: OwnedHandle,
     pid: u32,
     identity: ProcessIdentity,
+    job_memory_contract: JobMemoryContract,
+}
+
+#[cfg(windows)]
+#[derive(Clone, Copy)]
+struct JobMemoryContract {
+    maximum_job_memory_bytes: Option<u64>,
+    simulated_peak_commit_bytes: Option<u64>,
+    overshoot_allowance_basis_points: u32,
+    kernel_limit_signal_observation_available: bool,
+}
+
+#[cfg(windows)]
+struct JobMonitorHandles {
+    waiter: OwnedHandle,
+    shutdown: OwnedHandle,
+    observer_job: OwnedHandle,
+    observer_process: OwnedHandle,
+    observer_port: OwnedHandle,
+    terminal_job: OwnedHandle,
+    terminal_process: OwnedHandle,
+    terminal_port: OwnedHandle,
+}
+
+#[cfg(windows)]
+struct JobMemoryObserverRegistration {
+    db: Weak<Mutex<Connection>>,
+    job_id: String,
+    root_pid: u32,
+    job: OwnedHandle,
+    process: OwnedHandle,
+    completion_port: OwnedHandle,
+    expected_identity: ProcessIdentity,
+    contract: JobMemoryContract,
+}
+
+#[cfg(windows)]
+struct ExitMonitorRegistration {
+    db: Weak<Mutex<Connection>>,
+    retained: Weak<Mutex<HashMap<String, RetainedProcess>>>,
+    ownership: Arc<RwLock<bool>>,
+    shutdown: OwnedHandle,
+    job_id: String,
+    pid: u32,
+    waiter: OwnedHandle,
+    terminal_job: OwnedHandle,
+    terminal_process: OwnedHandle,
+    terminal_port: OwnedHandle,
+    memory_barrier: Arc<JobMemoryObserverBarrier>,
+}
+
+#[cfg(windows)]
+#[derive(Default)]
+struct JobMemoryObserverBarrier {
+    outcome: Mutex<Option<std::result::Result<(), String>>>,
+    ready: Condvar,
+}
+
+#[cfg(windows)]
+impl JobMemoryObserverBarrier {
+    fn complete(&self, outcome: std::result::Result<(), String>) {
+        if let Ok(mut stored) = self.outcome.lock() {
+            *stored = Some(outcome);
+            self.ready.notify_all();
+        }
+    }
+
+    fn wait(&self) -> Result<()> {
+        let stored = self.outcome.lock().map_err(|_| EmberLabError::Poisoned)?;
+        let (stored, timeout) = self
+            .ready
+            .wait_timeout_while(stored, Duration::from_secs(5), |outcome| outcome.is_none())
+            .map_err(|_| EmberLabError::Poisoned)?;
+        if timeout.timed_out() && stored.is_none() {
+            return Err(std::io::Error::other("job-memory observer barrier timed out").into());
+        }
+        match stored.as_ref().expect("barrier outcome exists after wait") {
+            Ok(()) => Ok(()),
+            Err(error) => Err(std::io::Error::other(error.clone()).into()),
+        }
+    }
 }
 
 #[cfg(windows)]
 struct RetainedProcess {
     live: LiveProcess,
     monitored: bool,
+    memory_barrier: Option<Arc<JobMemoryObserverBarrier>>,
 }
 
 pub struct Daemon {
@@ -976,6 +1077,45 @@ impl ProtectiveStopContext {
     }
 
     #[cfg(windows)]
+    fn verify_owned_live_process(&self, job_id: &str, row: &JobProcessRow) -> Result<()> {
+        let retained = self.live.lock().map_err(|_| EmberLabError::Poisoned)?;
+        if let Some(retained) = retained.get(job_id) {
+            if retained.live.pid != row.pid
+                || retained.live.identity.start_token != row.start_token
+                || !same_executable(&retained.live.identity.executable, &row.executable)
+            {
+                return Err(EmberLabError::ProcessControlUncertain {
+                    job_id: job_id.into(),
+                    pid: row.pid,
+                    detail: "retained process identity does not match the persisted job".into(),
+                });
+            }
+            if !live_process_is_running(&retained.live) {
+                return Err(EmberLabError::ProcessUnavailable {
+                    job_id: job_id.into(),
+                    pid: row.pid,
+                });
+            }
+            return Ok(());
+        }
+        drop(retained);
+        match open_live_status(row) {
+            LiveStatus::Verified(_) => Ok(()),
+            LiveStatus::Dead => Err(EmberLabError::ProcessUnavailable {
+                job_id: job_id.into(),
+                pid: row.pid,
+            }),
+            LiveStatus::Orphaned(detail) | LiveStatus::IdentityConflict(detail) => {
+                Err(EmberLabError::ProcessControlUncertain {
+                    job_id: job_id.into(),
+                    pid: row.pid,
+                    detail,
+                })
+            }
+        }
+    }
+
+    #[cfg(windows)]
     fn protective_owned_stop(
         &self,
         job_id: &str,
@@ -1022,22 +1162,7 @@ impl ProtectiveStopContext {
                 job_id: job_id.into(),
             });
         }
-        match open_live_status(&row) {
-            LiveStatus::Verified(_) => {}
-            LiveStatus::Dead => {
-                return Err(EmberLabError::ProcessUnavailable {
-                    job_id: job_id.into(),
-                    pid: row.pid,
-                })
-            }
-            LiveStatus::Orphaned(detail) | LiveStatus::IdentityConflict(detail) => {
-                return Err(EmberLabError::ProcessControlUncertain {
-                    job_id: job_id.into(),
-                    pid: row.pid,
-                    detail,
-                })
-            }
-        }
+        self.verify_owned_live_process(job_id, &row)?;
 
         let protective_key = hash_bytes(job_id.as_bytes());
         let checkpoint_request_path = self.log_dir.join(format!(
@@ -1093,22 +1218,7 @@ impl ProtectiveStopContext {
             std::thread::sleep(Duration::from_millis(5));
         }
 
-        let live = match open_live_status(&row) {
-            LiveStatus::Verified(live) => live,
-            LiveStatus::Dead => {
-                return Err(EmberLabError::ProcessUnavailable {
-                    job_id: job_id.into(),
-                    pid: row.pid,
-                })
-            }
-            LiveStatus::Orphaned(detail) | LiveStatus::IdentityConflict(detail) => {
-                return Err(EmberLabError::ProcessControlUncertain {
-                    job_id: job_id.into(),
-                    pid: row.pid,
-                    detail,
-                })
-            }
-        };
+        self.verify_owned_live_process(job_id, &row)?;
 
         {
             let mut conn = self.conn()?;
@@ -1240,10 +1350,31 @@ impl ProtectiveStopContext {
             }
         };
 
-        self.live
+        let retained = self
+            .live
             .lock()
             .map_err(|_| EmberLabError::Poisoned)?
             .remove(job_id);
+        let (live, memory_barrier) = match retained {
+            Some(retained) => (LiveStatus::Verified(retained.live), retained.memory_barrier),
+            None => (open_live_status(&row), None),
+        };
+        let live = match live {
+            LiveStatus::Verified(live) => live,
+            LiveStatus::Dead => {
+                return Err(EmberLabError::ProcessUnavailable {
+                    job_id: job_id.into(),
+                    pid: row.pid,
+                });
+            }
+            LiveStatus::Orphaned(detail) | LiveStatus::IdentityConflict(detail) => {
+                return Err(EmberLabError::ProcessControlUncertain {
+                    job_id: job_id.into(),
+                    pid: row.pid,
+                    detail,
+                });
+            }
+        };
         if let Err(error) = terminate_live(&live) {
             self.live
                 .lock()
@@ -1253,9 +1384,25 @@ impl ProtectiveStopContext {
                     RetainedProcess {
                         live,
                         monitored: false,
+                        memory_barrier,
                     },
                 );
             return Err(error);
+        }
+        if let Some(memory_barrier) = memory_barrier {
+            use windows_sys::Win32::System::IO::PostQueuedCompletionStatus;
+            if unsafe {
+                PostQueuedCompletionStatus(
+                    live.completion_port.raw(),
+                    0,
+                    JOB_TERMINAL_COMPLETION_KEY,
+                    std::ptr::null(),
+                )
+            } == 0
+            {
+                return Err(std::io::Error::last_os_error().into());
+            }
+            memory_barrier.wait()?;
         }
         self.finalize_stopped(job_id, &row, true)?;
         self.conn()?.execute(
@@ -2570,6 +2717,7 @@ impl Daemon {
         if manifest.env.contains_key(DISPATCH_TOKEN_ENV)
             || manifest.env.contains_key(DISPATCH_JOB_ID_ENV)
             || manifest.env.contains_key(DISPATCH_DAEMON_PID_ENV)
+            || manifest.env.contains_key(DISPATCH_MAXIMUM_JOB_MEMORY_ENV)
         {
             return Err(EmberLabError::InvalidDispatchManifest {
                 detail: "dispatch token environment is daemon-owned".into(),
@@ -2719,6 +2867,7 @@ impl Daemon {
         if manifest.env.contains_key(DISPATCH_TOKEN_ENV)
             || manifest.env.contains_key(DISPATCH_JOB_ID_ENV)
             || manifest.env.contains_key(DISPATCH_DAEMON_PID_ENV)
+            || manifest.env.contains_key(DISPATCH_MAXIMUM_JOB_MEMORY_ENV)
         {
             return Err(EmberLabError::InvalidDispatchManifest {
                 detail: "dispatch token environment is daemon-owned".into(),
@@ -3007,6 +3156,7 @@ impl Daemon {
             resource_lease.clone(),
         )
         .with_maximum_job_memory_bytes(manifest.maximum_job_memory_bytes)
+        .with_simulated_peak_commit_bytes(manifest.simulated_peak_commit_bytes)
         .with_cpu_rate_percent(manifest.workload_profile.cpu_rate_percent)
         .with_cpu_pacing_class(manifest.cpu_pacing_class)
         .with_requires_ui_responsiveness(manifest.workload_profile.requires_ui_responsiveness)
@@ -3287,6 +3437,22 @@ impl Daemon {
                 output_root.to_string_lossy().into_owned(),
             );
         }
+        if spec.dispatch_token.is_some() {
+            if spec.env.contains_key(DISPATCH_MAXIMUM_JOB_MEMORY_ENV) {
+                return Err(EmberLabError::InvalidDispatchManifest {
+                    detail: "maximum job memory environment is daemon-owned".into(),
+                });
+            }
+            let maximum_job_memory_bytes = spec.maximum_job_memory_bytes.ok_or_else(|| {
+                EmberLabError::InvalidDispatchManifest {
+                    detail: "token-gated dispatch requires maximum job memory".into(),
+                }
+            })?;
+            spec.env.insert(
+                DISPATCH_MAXIMUM_JOB_MEMORY_ENV.into(),
+                maximum_job_memory_bytes.to_string(),
+            );
+        }
         let argv_json = serde_json::to_string(&spec.args)?;
         let persisted_env = spec
             .env
@@ -3519,6 +3685,21 @@ impl Daemon {
         (&self.ember_lab_binary_sha256, &self.ember_lab_source_sha256)
     }
 
+    #[cfg(windows)]
+    fn retained_live_observation(
+        &self,
+        job_id: &str,
+    ) -> Result<Option<(u32, ProcessIdentity, bool)>> {
+        let retained = self.live.lock().map_err(|_| EmberLabError::Poisoned)?;
+        Ok(retained.get(job_id).map(|retained| {
+            (
+                retained.live.pid,
+                retained.live.identity.clone(),
+                live_process_is_running(&retained.live),
+            )
+        }))
+    }
+
     pub fn consume_dispatch_token(&self, job_id: &str, token: &str, client_pid: u32) -> Result<()> {
         if job_id.trim().is_empty()
             || token.len() != DISPATCH_TOKEN_BYTES * 2
@@ -3543,15 +3724,31 @@ impl Daemon {
         }
         #[cfg(windows)]
         {
-            let live = match open_live_status(&row) {
-                LiveStatus::Verified(live) => live,
-                LiveStatus::Dead | LiveStatus::Orphaned(_) | LiveStatus::IdentityConflict(_) => {
+            let (observed_identity, process_running) = match self
+                .retained_live_observation(job_id)
+                .map_err(|_| EmberLabError::DispatchTokenRefused {
+                    job_id: job_id.into(),
+                })? {
+                Some((pid, identity, running)) if pid == client_pid => (identity, running),
+                Some(_) => {
                     return Err(EmberLabError::DispatchTokenRefused {
                         job_id: job_id.into(),
-                    })
+                    });
                 }
+                None => match open_live_status(&row) {
+                    LiveStatus::Verified(live) => {
+                        let running = live_process_is_running(&live);
+                        (live.identity.clone(), running)
+                    }
+                    LiveStatus::Dead
+                    | LiveStatus::Orphaned(_)
+                    | LiveStatus::IdentityConflict(_) => {
+                        return Err(EmberLabError::DispatchTokenRefused {
+                            job_id: job_id.into(),
+                        });
+                    }
+                },
             };
-            let observed_identity = live.identity.clone();
             let mut conn = self.conn()?;
             consume_dispatch_token_transaction(
                 &mut conn,
@@ -3559,7 +3756,7 @@ impl Daemon {
                 token,
                 client_pid,
                 &observed_identity,
-                || Ok(live_process_is_running(&live)),
+                || Ok(process_running),
             )
         }
         #[cfg(not(windows))]
@@ -3609,6 +3806,26 @@ impl Daemon {
                 job_id: job_id.into(),
                 detail: "only running jobs can be adopted".into(),
             });
+        }
+        #[cfg(windows)]
+        if let Some((pid, identity, running)) = self.retained_live_observation(job_id)? {
+            if pid != row.pid
+                || identity.start_token != row.start_token
+                || !same_executable(&identity.executable, &row.executable)
+            {
+                return Err(EmberLabError::ProcessIdentityMismatch {
+                    job_id: job_id.into(),
+                    pid: row.pid,
+                });
+            }
+            if !running {
+                return Err(EmberLabError::ProcessUnavailable {
+                    job_id: job_id.into(),
+                    pid: row.pid,
+                });
+            }
+            self.commit_adoption(job_id, &row)?;
+            return Ok(JobHandle { pid: row.pid });
         }
         #[cfg(windows)]
         let live = match open_live_status(&row) {
@@ -3685,13 +3902,16 @@ impl Daemon {
             });
         }
         #[cfg(windows)]
-        let live = self
+        let retained = self
             .live
             .lock()
             .map_err(|_| EmberLabError::Poisoned)?
-            .remove(job_id)
-            .map(|retained| LiveStatus::Verified(retained.live))
-            .unwrap_or_else(|| open_live_status(&row));
+            .remove(job_id);
+        #[cfg(windows)]
+        let (live, memory_barrier) = match retained {
+            Some(retained) => (LiveStatus::Verified(retained.live), retained.memory_barrier),
+            None => (open_live_status(&row), None),
+        };
         #[cfg(windows)]
         let live = match live {
             LiveStatus::Verified(live) => live,
@@ -3776,9 +3996,26 @@ impl Daemon {
                     RetainedProcess {
                         live,
                         monitored: false,
+                        memory_barrier,
                     },
                 );
             return Err(error);
+        }
+        #[cfg(windows)]
+        if let Some(memory_barrier) = memory_barrier {
+            use windows_sys::Win32::System::IO::PostQueuedCompletionStatus;
+            if unsafe {
+                PostQueuedCompletionStatus(
+                    live.completion_port.raw(),
+                    0,
+                    JOB_TERMINAL_COMPLETION_KEY,
+                    std::ptr::null(),
+                )
+            } == 0
+            {
+                return Err(std::io::Error::last_os_error().into());
+            }
+            memory_barrier.wait()?;
         }
         #[cfg(not(windows))]
         terminate_process(row.pid)?;
@@ -4206,13 +4443,28 @@ impl Daemon {
     }
     #[cfg(windows)]
     fn retain_and_monitor(&self, job_id: &str, live: LiveProcess) -> Result<()> {
-        let registration = (|| -> Result<(OwnedHandle, OwnedHandle)> {
-            Ok((
-                duplicate_owned_handle(live.process.raw())?,
-                duplicate_owned_handle(self.monitor_shutdown.raw())?,
-            ))
+        if self
+            .live
+            .lock()
+            .map_err(|_| EmberLabError::Poisoned)?
+            .get(job_id)
+            .is_some_and(|existing| existing.monitored)
+        {
+            return Ok(());
+        }
+        let registration = (|| -> Result<JobMonitorHandles> {
+            Ok(JobMonitorHandles {
+                waiter: duplicate_owned_handle(live.process.raw())?,
+                shutdown: duplicate_owned_handle(self.monitor_shutdown.raw())?,
+                observer_job: duplicate_owned_handle(live.job.raw())?,
+                observer_process: duplicate_owned_handle(live.process.raw())?,
+                observer_port: duplicate_owned_handle(live.completion_port.raw())?,
+                terminal_job: duplicate_owned_handle(live.job.raw())?,
+                terminal_process: duplicate_owned_handle(live.process.raw())?,
+                terminal_port: duplicate_owned_handle(live.completion_port.raw())?,
+            })
         })();
-        let (waiter, shutdown) = match registration {
+        let handles = match registration {
             Ok(registration) => registration,
             Err(setup_error) => {
                 let cleanup = terminate_live(&live)
@@ -4228,6 +4480,7 @@ impl Daemon {
                                 RetainedProcess {
                                     live,
                                     monitored: false,
+                                    memory_barrier: None,
                                 },
                             );
                         Err(EmberLabError::MonitorSetupCleanupFailed {
@@ -4240,6 +4493,30 @@ impl Daemon {
             }
         };
         let pid = live.pid;
+        let memory_barrier = match spawn_job_memory_observer(JobMemoryObserverRegistration {
+            db: Arc::downgrade(&self.db),
+            job_id: job_id.into(),
+            root_pid: pid,
+            job: handles.observer_job,
+            process: handles.observer_process,
+            completion_port: handles.observer_port,
+            expected_identity: live.identity.clone(),
+            contract: live.job_memory_contract,
+        }) {
+            Ok(receiver) => receiver,
+            Err(setup_error) => {
+                let cleanup = terminate_live(&live)
+                    .and_then(|_| self.mark_failed(job_id, "job_memory_observer_setup_failed"));
+                return match cleanup {
+                    Ok(()) => Err(setup_error.into()),
+                    Err(cleanup_error) => Err(EmberLabError::MonitorSetupCleanupFailed {
+                        job_id: job_id.into(),
+                        setup: setup_error.to_string(),
+                        cleanup: format!("{cleanup_error:?}"),
+                    }),
+                };
+            }
+        };
         let mut retained = self
             .live
             .lock()
@@ -4249,6 +4526,7 @@ impl Daemon {
                 return Ok(());
             }
             existing.monitored = true;
+            existing.memory_barrier = Some(Arc::clone(&memory_barrier));
             drop(retained);
         } else {
             retained.insert(
@@ -4256,19 +4534,24 @@ impl Daemon {
                 RetainedProcess {
                     live,
                     monitored: true,
+                    memory_barrier: Some(Arc::clone(&memory_barrier)),
                 },
             );
             drop(retained);
         }
-        spawn_exit_monitor(
-            Arc::downgrade(&self.db),
-            Arc::downgrade(&self.live),
-            Arc::clone(&self.monitor_ownership),
-            shutdown,
-            job_id.into(),
+        spawn_exit_monitor(ExitMonitorRegistration {
+            db: Arc::downgrade(&self.db),
+            retained: Arc::downgrade(&self.live),
+            ownership: Arc::clone(&self.monitor_ownership),
+            shutdown: handles.shutdown,
+            job_id: job_id.into(),
             pid,
-            waiter,
-        );
+            waiter: handles.waiter,
+            terminal_job: handles.terminal_job,
+            terminal_process: handles.terminal_process,
+            terminal_port: handles.terminal_port,
+            memory_barrier,
+        });
         Ok(())
     }
     pub fn has_retained_process_handle(&self, job_id: &str) -> bool {
@@ -5515,6 +5798,7 @@ impl Daemon {
                                         RetainedProcess {
                                             live,
                                             monitored: false,
+                                            memory_barrier: None,
                                         },
                                     );
                                 return Err(EmberLabError::PreparedResumeCleanupFailed {
@@ -7730,6 +8014,7 @@ fn atomic_create(path: &Path, bytes: &[u8]) -> Result<()> {
 #[cfg(windows)]
 struct SpawnedProcess {
     job: OwnedHandle,
+    completion_port: OwnedHandle,
     process: OwnedHandle,
     thread: OwnedHandle,
     stdout_log_guard: OwnedHandle,
@@ -7738,6 +8023,7 @@ struct SpawnedProcess {
     main_thread_id: u32,
     identity: ProcessIdentity,
     applied_cpu_rate: Option<u32>,
+    job_memory_contract: JobMemoryContract,
 }
 
 #[cfg(windows)]
@@ -7778,11 +8064,13 @@ impl SpawnedProcess {
     fn into_live(self) -> LiveProcess {
         LiveProcess {
             job: self.job,
+            completion_port: self.completion_port,
             process: self.process,
             _stdout_log_guard: self.stdout_log_guard,
             _stderr_log_guard: self.stderr_log_guard,
             pid: self.pid,
             identity: self.identity,
+            job_memory_contract: self.job_memory_contract,
         }
     }
 }
@@ -8223,6 +8511,46 @@ fn configure_and_verify_windows_cpu_rate(
 }
 
 #[cfg(windows)]
+fn create_private_completion_port() -> Result<OwnedHandle> {
+    use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+    use windows_sys::Win32::System::IO::CreateIoCompletionPort;
+
+    let completion_port =
+        unsafe { CreateIoCompletionPort(INVALID_HANDLE_VALUE, std::ptr::null_mut(), 0, 1) };
+    if completion_port.is_null() {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    Ok(OwnedHandle(completion_port))
+}
+
+#[cfg(windows)]
+fn create_job_completion_port(job: windows_sys::Win32::Foundation::HANDLE) -> Result<OwnedHandle> {
+    use std::mem::size_of;
+    use windows_sys::Win32::System::JobObjects::{
+        JobObjectAssociateCompletionPortInformation, SetInformationJobObject,
+        JOBOBJECT_ASSOCIATE_COMPLETION_PORT,
+    };
+
+    let completion_port = create_private_completion_port()?;
+    let association = JOBOBJECT_ASSOCIATE_COMPLETION_PORT {
+        CompletionKey: JOB_COMPLETION_KEY as *mut std::ffi::c_void,
+        CompletionPort: completion_port.raw(),
+    };
+    if unsafe {
+        SetInformationJobObject(
+            job,
+            JobObjectAssociateCompletionPortInformation,
+            (&association as *const JOBOBJECT_ASSOCIATE_COMPLETION_PORT).cast(),
+            size_of::<JOBOBJECT_ASSOCIATE_COMPLETION_PORT>() as u32,
+        )
+    } == 0
+    {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    Ok(completion_port)
+}
+
+#[cfg(windows)]
 fn spawn_managed(
     spec: &JobSpec,
     job_name: &str,
@@ -8337,6 +8665,14 @@ fn spawn_managed(
             return Err(error.into());
         }
     }
+
+    let completion_port = match create_job_completion_port(job) {
+        Ok(port) => port,
+        Err(error) => {
+            unsafe { windows_sys::Win32::Foundation::CloseHandle(job) };
+            return Err(error);
+        }
+    };
 
     let inherited_stdio = (|| -> Result<(OwnedHandle, OwnedHandle, OwnedHandle)> {
         use std::os::windows::fs::OpenOptionsExt;
@@ -8455,6 +8791,7 @@ fn spawn_managed(
     };
     Ok(SpawnedProcess {
         job: OwnedHandle(job),
+        completion_port,
         process: OwnedHandle(info.hProcess),
         thread: OwnedHandle(info.hThread),
         stdout_log_guard: inherited_stdout,
@@ -8463,6 +8800,12 @@ fn spawn_managed(
         main_thread_id: info.dwThreadId,
         identity,
         applied_cpu_rate,
+        job_memory_contract: JobMemoryContract {
+            maximum_job_memory_bytes: spec.maximum_job_memory_bytes,
+            simulated_peak_commit_bytes: spec.simulated_peak_commit_bytes,
+            overshoot_allowance_basis_points: JOB_MEMORY_OVERSHOOT_ALLOWANCE_BASIS_POINTS,
+            kernel_limit_signal_observation_available: true,
+        },
     })
 }
 #[cfg(windows)]
@@ -8564,15 +8907,327 @@ fn record_process_exit(
 }
 
 #[cfg(windows)]
-fn record_natural_exit(
+fn query_job_memory_peak(job: windows_sys::Win32::Foundation::HANDLE) -> Result<u64> {
+    use std::mem::{size_of, zeroed};
+    use windows_sys::Win32::System::JobObjects::{
+        JobObjectExtendedLimitInformation, QueryInformationJobObject,
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+    };
+
+    let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { zeroed() };
+    if unsafe {
+        QueryInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            (&mut info as *mut JOBOBJECT_EXTENDED_LIMIT_INFORMATION).cast(),
+            size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+            std::ptr::null_mut(),
+        )
+    } == 0
+    {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    Ok(info.PeakJobMemoryUsed as u64)
+}
+
+#[cfg(windows)]
+fn job_memory_verification_payload(
     db: &Mutex<Connection>,
     job_id: &str,
-    pid: u32,
-    exit_code: u32,
-    live: &LiveProcess,
+    root_pid: u32,
+    observed_pid: u32,
+    job: windows_sys::Win32::Foundation::HANDLE,
+    root_process: windows_sys::Win32::Foundation::HANDLE,
+    expected_root_identity: &ProcessIdentity,
+) -> Value {
+    use windows_sys::Win32::Foundation::{CloseHandle, BOOL};
+    use windows_sys::Win32::System::JobObjects::IsProcessInJob;
+    use windows_sys::Win32::System::Threading::{
+        GetProcessId, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+
+    let opened = if observed_pid == root_pid {
+        None
+    } else {
+        let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, observed_pid) };
+        (!handle.is_null()).then_some(handle)
+    };
+    let process = opened.unwrap_or(root_process);
+    let mut in_job: BOOL = 0;
+    let membership = unsafe { IsProcessInJob(process, job, &mut in_job) };
+    let membership_error = (membership == 0).then(|| std::io::Error::last_os_error().to_string());
+    let membership_verified = membership != 0 && in_job != 0;
+    let handle_pid = unsafe { GetProcessId(process) };
+    let handle_pid_verified = handle_pid == observed_pid && handle_pid != 0;
+    let identity = inspect_handle(process, observed_pid);
+    if let Some(handle) = opened {
+        unsafe { CloseHandle(handle) };
+    }
+    let identity_payload = match identity {
+        Ok(observed) => {
+            let root_identity_match = observed_pid == root_pid
+                && handle_pid_verified
+                && observed.start_token == expected_root_identity.start_token
+                && observed.executable == expected_root_identity.executable;
+            json!({
+                "verified": membership_verified && (root_identity_match || (observed_pid != root_pid && handle_pid_verified)),
+                "kind": if observed_pid == root_pid { "root_process" } else { "job_member_descendant" },
+                "basis": "event_time_process_inspection",
+                "handle_pid": handle_pid,
+                "handle_pid_verified": handle_pid_verified,
+                "inspected_at_event": true,
+                "observed_start_token": observed.start_token,
+                "observed_executable": observed.executable,
+                "error": Value::Null,
+            })
+        }
+        Err(error) if observed_pid == root_pid => json!({
+            "verified": membership_verified && handle_pid_verified,
+            "kind": "root_process",
+            "basis": "retained_birth_handle_identity",
+            "handle_pid": handle_pid,
+            "handle_pid_verified": handle_pid_verified,
+            "inspected_at_event": false,
+            "bound_start_token": expected_root_identity.start_token,
+            "bound_executable": expected_root_identity.executable,
+            "event_inspection_error": format!("{error:?}"),
+        }),
+        Err(error) => json!({
+            "verified": false,
+            "kind": "job_member_descendant",
+            "basis": "event_time_process_inspection",
+            "handle_pid": handle_pid,
+            "handle_pid_verified": handle_pid_verified,
+            "inspected_at_event": false,
+            "error": format!("{error:?}"),
+        }),
+    };
+    let lease_verified = db
+        .lock()
+        .map_err(|_| EmberLabError::Poisoned)
+        .and_then(|conn| {
+            conn.query_row(
+                "SELECT EXISTS(SELECT 1 FROM jobs j JOIN leases l ON l.resource=j.resource AND l.owner_job_id=j.job_id AND l.lease_epoch=j.lease_epoch WHERE j.job_id=?1 AND j.pid=?2 AND j.state='running')",
+                params![job_id, root_pid],
+                |row| row.get::<_, i64>(0),
+            )
+            .map(|value| value == 1)
+            .map_err(Into::into)
+        });
+    let lease_payload = match lease_verified {
+        Ok(verified) => json!({"verified": verified, "error": Value::Null}),
+        Err(error) => json!({"verified": false, "error": format!("{error:?}")}),
+    };
+    json!({
+        "job_object_membership": {
+            "verified": membership_verified,
+            "error": membership_error,
+        },
+        "process_identity": identity_payload,
+        "lease": lease_payload,
+    })
+}
+
+#[cfg(windows)]
+fn insert_job_memory_event(
+    db: &Mutex<Connection>,
+    job_id: &str,
+    kind: &str,
+    payload: &Value,
 ) -> Result<()> {
-    terminate_live(live)?;
-    record_process_exit(db, job_id, pid, exit_code as i64)
+    db.lock().map_err(|_| EmberLabError::Poisoned)?.execute(
+        "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,?4)",
+        params![job_id, now_ms(), kind, payload.to_string()],
+    )?;
+    Ok(())
+}
+
+#[cfg(windows)]
+struct JobMemoryEventContext<'a> {
+    db: &'a Mutex<Connection>,
+    job_id: &'a str,
+    root_pid: u32,
+    job: windows_sys::Win32::Foundation::HANDLE,
+    process: windows_sys::Win32::Foundation::HANDLE,
+    expected_identity: &'a ProcessIdentity,
+    contract: JobMemoryContract,
+}
+
+#[cfg(windows)]
+fn job_memory_event_payload(
+    context: &JobMemoryEventContext<'_>,
+    observed_pid: u32,
+    peak_job_memory_used_bytes: u64,
+) -> Value {
+    let simulated = context.contract.simulated_peak_commit_bytes;
+    let margin = context
+        .contract
+        .maximum_job_memory_bytes
+        .zip(simulated)
+        .and_then(|(maximum, simulated)| maximum.checked_sub(simulated));
+    json!({
+        "schema_version": "ember-lab-job-memory-observation-v1",
+        "scope": "windows_job_object",
+        "root_pid": context.root_pid,
+        "offending_pid": observed_pid,
+        "maximum_job_memory_bytes": context.contract.maximum_job_memory_bytes,
+        "simulated_peak_commit_bytes": simulated,
+        "overshoot_allowance_basis": JOB_MEMORY_OVERSHOOT_ALLOWANCE_BASIS,
+        "overshoot_allowance_bps": context.contract.overshoot_allowance_basis_points,
+        "overshoot_margin_bytes": margin,
+        "kernel_limit_signal_observation_available": context.contract.kernel_limit_signal_observation_available,
+        "kernel_limit_signal_observation_reason": if context.contract.kernel_limit_signal_observation_available {
+            Value::Null
+        } else {
+            json!("job_object_completion_port_already_associated_win32_5_after_daemon_handoff")
+        },
+        "peak_job_memory_used_bytes": peak_job_memory_used_bytes,
+        "verification": job_memory_verification_payload(
+            context.db,
+            context.job_id,
+            context.root_pid,
+            observed_pid,
+            context.job,
+            context.process,
+            context.expected_identity,
+        ),
+    })
+}
+
+#[cfg(windows)]
+fn observe_job_memory_completion(
+    context: &JobMemoryEventContext<'_>,
+    message: u32,
+    key: usize,
+    value: *mut windows_sys::Win32::System::IO::OVERLAPPED,
+    limit_signal_observed: &mut bool,
+) -> Result<()> {
+    use windows_sys::Win32::System::SystemServices::JOB_OBJECT_MSG_JOB_MEMORY_LIMIT;
+
+    if key == JOB_COMPLETION_KEY
+        && message == JOB_OBJECT_MSG_JOB_MEMORY_LIMIT
+        && !*limit_signal_observed
+    {
+        *limit_signal_observed = true;
+        let observed_pid = value as usize as u32;
+        let peak = query_job_memory_peak(context.job)?;
+        let mut payload = job_memory_event_payload(context, observed_pid, peak);
+        payload["kernel_message_code"] = json!(JOB_OBJECT_MSG_JOB_MEMORY_LIMIT);
+        payload["signal_latched"] = json!(true);
+        insert_job_memory_event(
+            context.db,
+            context.job_id,
+            "job_memory_limit_reached",
+            &payload,
+        )?;
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn spawn_job_memory_observer(
+    registration: JobMemoryObserverRegistration,
+) -> std::io::Result<Arc<JobMemoryObserverBarrier>> {
+    let JobMemoryObserverRegistration {
+        db,
+        job_id,
+        root_pid,
+        job,
+        process,
+        completion_port,
+        expected_identity,
+        contract,
+    } = registration;
+    let barrier = Arc::new(JobMemoryObserverBarrier::default());
+    let thread_barrier = Arc::clone(&barrier);
+    std::thread::Builder::new()
+        .name(format!("ember-job-memory-{root_pid}"))
+        .spawn(move || {
+            use windows_sys::Win32::System::Threading::INFINITE;
+            use windows_sys::Win32::System::IO::GetQueuedCompletionStatus;
+
+            let outcome = (|| -> Result<()> {
+                let db = db.upgrade().ok_or(EmberLabError::Poisoned)?;
+                let context = JobMemoryEventContext {
+                    db: &db,
+                    job_id: &job_id,
+                    root_pid,
+                    job: job.raw(),
+                    process: process.raw(),
+                    expected_identity: &expected_identity,
+                    contract,
+                };
+                let mut limit_signal_observed = false;
+                loop {
+                    let mut message = 0u32;
+                    let mut key = 0usize;
+                    let mut value = std::ptr::null_mut();
+                    if unsafe {
+                        GetQueuedCompletionStatus(
+                            completion_port.raw(),
+                            &mut message,
+                            &mut key,
+                            &mut value,
+                            INFINITE,
+                        )
+                    } == 0
+                    {
+                        return Err(std::io::Error::last_os_error().into());
+                    }
+                    if key == JOB_OBSERVER_CANCEL_COMPLETION_KEY {
+                        return Ok(());
+                    }
+                    if key == JOB_TERMINAL_COMPLETION_KEY {
+                        // The exit monitor has already terminated the owned job and
+                        // observed ActiveProcesses==0 before posting this sentinel.
+                        // Drain anything the kernel queued ahead of or concurrently
+                        // with the sentinel before snapshotting the terminal peak.
+                        loop {
+                            let mut drain_message = 0u32;
+                            let mut drain_key = 0usize;
+                            let mut drain_value = std::ptr::null_mut();
+                            if unsafe {
+                                GetQueuedCompletionStatus(
+                                    completion_port.raw(),
+                                    &mut drain_message,
+                                    &mut drain_key,
+                                    &mut drain_value,
+                                    0,
+                                )
+                            } == 0
+                            {
+                                let error = std::io::Error::last_os_error();
+                                if error.raw_os_error() == Some(258) {
+                                    break;
+                                }
+                                return Err(error.into());
+                            }
+                            observe_job_memory_completion(
+                                &context,
+                                drain_message,
+                                drain_key,
+                                drain_value,
+                                &mut limit_signal_observed,
+                            )?;
+                        }
+                        let peak = query_job_memory_peak(job.raw())?;
+                        let mut payload = job_memory_event_payload(&context, root_pid, peak);
+                        payload["limit_signal_observed"] = json!(limit_signal_observed);
+                        insert_job_memory_event(&db, &job_id, "job_memory_accounting", &payload)?;
+                        return Ok(());
+                    }
+                    observe_job_memory_completion(
+                        &context,
+                        message,
+                        key,
+                        value,
+                        &mut limit_signal_observed,
+                    )?;
+                }
+            })();
+            thread_barrier.complete(outcome.map_err(|error| format!("{error:?}")));
+        })?;
+    Ok(barrier)
 }
 
 /// Unix exit-code encoding for the shared `exit_code` column: the process's
@@ -8589,23 +9244,63 @@ fn unix_exit_code(status: std::process::ExitStatus) -> i64 {
 }
 
 #[cfg(windows)]
-fn spawn_exit_monitor(
-    db: Weak<Mutex<Connection>>,
-    retained: Weak<Mutex<HashMap<String, RetainedProcess>>>,
-    ownership: Arc<RwLock<bool>>,
-    shutdown: OwnedHandle,
-    job_id: String,
-    pid: u32,
-    waiter: OwnedHandle,
-) {
+fn spawn_exit_monitor(registration: ExitMonitorRegistration) {
+    let ExitMonitorRegistration {
+        db,
+        retained,
+        ownership,
+        shutdown,
+        job_id,
+        pid,
+        waiter,
+        terminal_job,
+        terminal_process,
+        terminal_port,
+        memory_barrier,
+    } = registration;
     std::thread::spawn(move || {
         use windows_sys::Win32::Foundation::WAIT_OBJECT_0;
         use windows_sys::Win32::System::Threading::{
             GetExitCodeProcess, WaitForMultipleObjects, INFINITE,
         };
+        use windows_sys::Win32::System::IO::PostQueuedCompletionStatus;
 
         let handles = [waiter.raw(), shutdown.raw()];
-        if unsafe { WaitForMultipleObjects(2, handles.as_ptr(), 0, INFINITE) } != WAIT_OBJECT_0 {
+        let wait_result = unsafe { WaitForMultipleObjects(2, handles.as_ptr(), 0, INFINITE) };
+        if wait_result != WAIT_OBJECT_0 && wait_result != WAIT_OBJECT_0 + 1 {
+            return;
+        }
+        let process_exited = wait_result == WAIT_OBJECT_0;
+        if !process_exited {
+            let _ = unsafe {
+                PostQueuedCompletionStatus(
+                    terminal_port.raw(),
+                    0,
+                    JOB_OBSERVER_CANCEL_COMPLETION_KEY,
+                    std::ptr::null(),
+                )
+            };
+            let _ = memory_barrier.wait();
+            return;
+        }
+        // Dedicated duplicates keep terminal accounting alive even when an
+        // explicit stop path has removed the retained-map entry. Stop this
+        // exact owned job to zero active processes before the sentinel.
+        if terminate_handles(terminal_job.raw(), terminal_process.raw(), pid).is_err() {
+            return;
+        }
+        if unsafe {
+            PostQueuedCompletionStatus(
+                terminal_port.raw(),
+                0,
+                JOB_TERMINAL_COMPLETION_KEY,
+                std::ptr::null(),
+            )
+        } == 0
+        {
+            return;
+        }
+        if memory_barrier.wait().is_err() {
             return;
         }
         let mut exit_code = 0u32;
@@ -8627,10 +9322,10 @@ fn spawn_exit_monitor(
         let Ok(mut retained) = retained.lock() else {
             return;
         };
-        let Some(retained_process) = retained.get(&job_id) else {
+        if !retained.contains_key(&job_id) {
             return;
-        };
-        if record_natural_exit(&db, &job_id, pid, exit_code, &retained_process.live).is_ok() {
+        }
+        if record_process_exit(&db, &job_id, pid, exit_code as i64).is_ok() {
             retained.remove(&job_id);
         }
     });
@@ -8803,13 +9498,50 @@ fn open_live_status(row: &JobProcessRow) -> LiveStatus {
                 ));
             }
         };
+    let completion_port = match create_job_completion_port(job) {
+        Ok(port) => port,
+        Err(EmberLabError::Io(error)) if error.raw_os_error() == Some(5) => {
+            // Windows does not permit replacing a Job Object's original
+            // completion-port association after daemon handoff. Preserve
+            // custody with a private sentinel-only port; the terminal receipt
+            // explicitly marks kernel limit-signal observation unavailable.
+            match create_private_completion_port() {
+                Ok(port) => port,
+                Err(error) => {
+                    unsafe {
+                        windows_sys::Win32::Foundation::CloseHandle(process);
+                        windows_sys::Win32::Foundation::CloseHandle(job);
+                    }
+                    return LiveStatus::IdentityConflict(format!(
+                        "terminal-only job-memory port cannot be created: {error:?}"
+                    ));
+                }
+            }
+        }
+        Err(error) => {
+            unsafe {
+                windows_sys::Win32::Foundation::CloseHandle(process);
+                windows_sys::Win32::Foundation::CloseHandle(job);
+            }
+            return LiveStatus::IdentityConflict(format!(
+                "job-memory completion port cannot be re-established: {error:?}"
+            ));
+        }
+    };
     LiveStatus::Verified(LiveProcess {
         job: OwnedHandle(job),
+        completion_port,
         process: OwnedHandle(process),
         _stdout_log_guard: stdout_log_guard,
         _stderr_log_guard: stderr_log_guard,
         pid: row.pid,
         identity: current,
+        job_memory_contract: JobMemoryContract {
+            maximum_job_memory_bytes: None,
+            simulated_peak_commit_bytes: None,
+            overshoot_allowance_basis_points: JOB_MEMORY_OVERSHOOT_ALLOWANCE_BASIS_POINTS,
+            kernel_limit_signal_observation_available: false,
+        },
     })
 }
 

@@ -101,7 +101,11 @@ fn fixture_dispatch_child() {
                 });
             }
         }
-        thread::sleep(Duration::from_secs(30));
+        let sleep_ms = std::env::var("EMBER_LAB_DISPATCH_FIXTURE_SLEEP_MS")
+            .ok()
+            .and_then(|raw| raw.parse::<u64>().ok())
+            .unwrap_or(30_000);
+        thread::sleep(Duration::from_millis(sleep_ms));
     }
 }
 
@@ -1703,6 +1707,136 @@ fn dispatch_job_memory_ceiling_terminates_an_over_allocation_probe() {
         thread::sleep(Duration::from_millis(25));
     }
     assert_eq!(daemon.lease_owner("gpu-smoke").unwrap(), None);
+    let receipt_path = root.join("operational-receipt.json");
+    daemon
+        .export_receipt("dispatch-memory-ceiling", &receipt_path)
+        .unwrap();
+    let receipt: Value = serde_json::from_slice(&fs::read(receipt_path).unwrap()).unwrap();
+    let events = receipt["events"].as_array().unwrap();
+    let alarm = events
+        .iter()
+        .find(|event| event["kind"] == "job_memory_limit_reached")
+        .expect("the kernel job-memory-limit alarm must be receipted");
+    assert_eq!(alarm["payload"]["kernel_message_code"], 10);
+    assert_eq!(alarm["payload"]["overshoot_allowance_bps"], 617);
+    assert_eq!(
+        alarm["payload"]["overshoot_allowance_basis"],
+        "windows_job_object_cuda_wddm_measured"
+    );
+    assert_eq!(
+        alarm["payload"]["kernel_limit_signal_observation_available"],
+        true
+    );
+    assert_eq!(
+        alarm["payload"]["kernel_limit_signal_observation_reason"],
+        Value::Null
+    );
+    assert_eq!(alarm["payload"]["scope"], "windows_job_object");
+    assert!(alarm["payload"]["offending_pid"].as_u64().unwrap() > 0);
+    assert!(
+        alarm["payload"]["peak_job_memory_used_bytes"]
+            .as_u64()
+            .unwrap()
+            > 0
+    );
+    assert_eq!(
+        alarm["payload"]["verification"]["job_object_membership"]["verified"],
+        true
+    );
+    assert_eq!(
+        alarm["payload"]["verification"]["process_identity"]["verified"],
+        true
+    );
+    assert_eq!(
+        alarm["payload"]["verification"]["process_identity"]["handle_pid"],
+        alarm["payload"]["offending_pid"]
+    );
+    assert_eq!(
+        alarm["payload"]["verification"]["process_identity"]["handle_pid_verified"],
+        true
+    );
+    assert_eq!(alarm["payload"]["verification"]["lease"]["verified"], true);
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| event["kind"] == "job_memory_limit_reached")
+            .count(),
+        1
+    );
+    let accounting_index = events
+        .iter()
+        .position(|event| event["kind"] == "job_memory_accounting")
+        .expect("terminal job-memory accounting must be receipted");
+    assert_eq!(
+        events[accounting_index]["payload"]["limit_signal_observed"],
+        true
+    );
+    let exited_index = events
+        .iter()
+        .position(|event| event["kind"] == "job_exited")
+        .expect("job exit must be receipted");
+    assert!(accounting_index < exited_index);
+}
+
+#[test]
+fn dispatch_job_memory_below_limit_receipts_peak_without_alarm() {
+    let root = sandbox("job-memory-below-limit");
+    let manifest = write_manifest(&root, "dispatch-memory-below-limit", 10_000);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["env"]["EMBER_LAB_DISPATCH_ALLOCATE_BYTES"] = json!((16 * 1024 * 1024u64).to_string());
+    payload["env"]["EMBER_LAB_DISPATCH_FIXTURE_SLEEP_MS"] = json!("50");
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
+    daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(1024),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(15);
+    loop {
+        let state = daemon
+            .job_state("dispatch-memory-below-limit")
+            .unwrap()
+            .unwrap();
+        if matches!(state, JobState::Exited | JobState::Failed) {
+            break;
+        }
+        assert!(std::time::Instant::now() < deadline);
+        thread::sleep(Duration::from_millis(25));
+    }
+    let receipt_path = root.join("operational-receipt.json");
+    daemon
+        .export_receipt("dispatch-memory-below-limit", &receipt_path)
+        .unwrap();
+    let receipt: Value = serde_json::from_slice(&fs::read(receipt_path).unwrap()).unwrap();
+    let events = receipt["events"].as_array().unwrap();
+    assert!(!events
+        .iter()
+        .any(|event| event["kind"] == "job_memory_limit_reached"));
+    let accounting = events
+        .iter()
+        .find(|event| event["kind"] == "job_memory_accounting")
+        .expect("terminal job-memory accounting must be receipted");
+    assert_eq!(accounting["payload"]["limit_signal_observed"], false);
+    assert_eq!(
+        accounting["payload"]["kernel_limit_signal_observation_available"],
+        true
+    );
+    assert_eq!(
+        accounting["payload"]["kernel_limit_signal_observation_reason"],
+        Value::Null
+    );
+    assert_eq!(accounting["payload"]["overshoot_allowance_bps"], 617);
+    assert!(
+        accounting["payload"]["peak_job_memory_used_bytes"]
+            .as_u64()
+            .unwrap()
+            > 0
+    );
 }
 
 #[test]
@@ -1727,6 +1861,29 @@ fn dispatch_manifest_rejects_a_missing_job_memory_ceiling() {
         Err(EmberLabError::InvalidDispatchManifest { .. })
     ));
     assert_eq!(daemon.job_state("dispatch-missing-memory").unwrap(), None);
+    assert!(!root.join("custody").join("preflight.json").exists());
+}
+
+#[test]
+fn dispatch_manifest_rejects_caller_supplied_armed_job_memory_environment() {
+    let root = sandbox("caller-supplied-armed-job-memory-env");
+    let manifest = write_manifest(&root, "dispatch-caller-armed-cap", 10_000);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["env"]["EMBER_LAB_DISPATCH_MAXIMUM_JOB_MEMORY_BYTES"] =
+        json!(MAXIMUM_JOB_MEMORY_BYTES.to_string());
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
+    assert!(matches!(
+        daemon.dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(1024),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES))
+        ),
+        Err(EmberLabError::InvalidDispatchManifest { .. })
+    ));
+    assert_eq!(daemon.job_state("dispatch-caller-armed-cap").unwrap(), None);
     assert!(!root.join("custody").join("preflight.json").exists());
 }
 
