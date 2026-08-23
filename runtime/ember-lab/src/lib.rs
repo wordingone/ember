@@ -1467,6 +1467,7 @@ struct ExitMonitorRegistration {
     shutdown: OwnedHandle,
     job_id: String,
     pid: u32,
+    lease_epoch: i64,
     waiter: OwnedHandle,
     terminal_job: OwnedHandle,
     terminal_process: OwnedHandle,
@@ -4525,10 +4526,11 @@ impl Daemon {
             let _ = self.mark_failed(&spec.job_id, failure_kind);
             return Err(error);
         }
+        let lease_epoch = self.job_process_row(&spec.job_id)?.lease_epoch;
         #[cfg(windows)]
-        self.retain_and_monitor(&spec.job_id, spawned.into_live())?;
+        self.retain_and_monitor(&spec.job_id, lease_epoch, spawned.into_live())?;
         #[cfg(not(windows))]
-        spawned.detach_reaper(Arc::downgrade(&self.db), spec.job_id.clone());
+        spawned.detach_reaper(Arc::downgrade(&self.db), spec.job_id.clone(), lease_epoch);
         Ok(JobHandle { pid })
     }
 
@@ -4760,12 +4762,20 @@ impl Daemon {
         }
         self.commit_adoption(job_id, &row)?;
         #[cfg(windows)]
-        self.retain_and_monitor(job_id, live)?;
+        self.retain_and_monitor(job_id, row.lease_epoch, live)?;
         Ok(JobHandle { pid: row.pid })
     }
 
     pub fn stop_job(&self, job_id: &str) -> Result<()> {
         let row = self.job_process_row(job_id)?;
+        if matches!(row.state, JobState::Stopped | JobState::Exited) {
+            #[cfg(windows)]
+            self.live
+                .lock()
+                .map_err(|_| EmberLabError::Poisoned)?
+                .remove(job_id);
+            return Ok(());
+        }
         if !matches!(row.state, JobState::Running | JobState::Stopping) {
             return Err(EmberLabError::InvalidTransition {
                 job_id: job_id.into(),
@@ -4791,7 +4801,17 @@ impl Daemon {
                 return Ok(());
             }
             LiveStatus::Dead => {
-                self.mark_exited_unknown(job_id, &row, "job_exited_before_stop")?;
+                if let Err(error) = self.mark_exited_unknown(job_id, &row, "job_exited_before_stop")
+                {
+                    let conn = self.conn()?;
+                    if matches!(
+                        process_state_at_fence(&conn, job_id, row.pid, row.lease_epoch)?,
+                        Some(JobState::Stopped | JobState::Exited)
+                    ) {
+                        return Ok(());
+                    }
+                    return Err(error);
+                }
                 return Err(EmberLabError::ProcessUnavailable {
                     job_id: job_id.into(),
                     pid: row.pid,
@@ -4848,12 +4868,19 @@ impl Daemon {
                 let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
                 let changed = tx.execute("UPDATE jobs SET state='stopping',updated_at_ms=?2 WHERE job_id=?1 AND state='running' AND lease_epoch=?3 AND EXISTS(SELECT 1 FROM leases l WHERE l.resource=jobs.resource AND l.owner_job_id=jobs.job_id AND l.lease_epoch=jobs.lease_epoch)", params![job_id, now_ms(), row.lease_epoch])?;
                 if changed != 1 {
-                    return Err(EmberLabError::InvalidTransition {
-                        job_id: job_id.into(),
-                        detail: "stop lost its state or lease fence".into(),
-                    });
+                    match process_state_at_fence(&tx, job_id, row.pid, row.lease_epoch)? {
+                        Some(JobState::Stopping) => {}
+                        Some(JobState::Stopped | JobState::Exited) => return Ok(()),
+                        _ => {
+                            return Err(EmberLabError::InvalidTransition {
+                                job_id: job_id.into(),
+                                detail: "stop lost its state or lease fence".into(),
+                            });
+                        }
+                    }
+                } else {
+                    tx.execute("INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_stop_requested',?3)", params![job_id, now_ms(), json!({"pid":row.pid}).to_string()])?;
                 }
-                tx.execute("INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_stop_requested',?3)", params![job_id, now_ms(), json!({"pid":row.pid}).to_string()])?;
                 tx.commit()?;
             }
         }
@@ -5313,7 +5340,7 @@ impl Daemon {
         write_content_addressed_receipt(directory, &serde_json::to_vec_pretty(&receipt)?)
     }
     #[cfg(windows)]
-    fn retain_and_monitor(&self, job_id: &str, live: LiveProcess) -> Result<()> {
+    fn retain_and_monitor(&self, job_id: &str, lease_epoch: i64, live: LiveProcess) -> Result<()> {
         if self
             .live
             .lock()
@@ -5417,6 +5444,7 @@ impl Daemon {
             shutdown: handles.shutdown,
             job_id: job_id.into(),
             pid,
+            lease_epoch,
             waiter: handles.waiter,
             terminal_job: handles.terminal_job,
             terminal_process: handles.terminal_process,
@@ -6656,7 +6684,7 @@ impl Daemon {
                 }
                 (JobState::Prepared, LiveStatus::Verified(live)) => {
                     match self.transition_prepared_running(&job_id, &row) {
-                        Ok(true) => self.retain_and_monitor(&job_id, live)?,
+                        Ok(true) => self.retain_and_monitor(&job_id, row.lease_epoch, live)?,
                         Ok(false) => {}
                         Err(PreparedTransitionError::BeforeResume(error)) => return Err(error),
                         Err(PreparedTransitionError::AfterResume(transition_error)) => {
@@ -6699,7 +6727,7 @@ impl Daemon {
                 }
                 (JobState::Running, LiveStatus::Verified(live)) => {
                     self.commit_adoption(&job_id, &row)?;
-                    self.retain_and_monitor(&job_id, live)?;
+                    self.retain_and_monitor(&job_id, row.lease_epoch, live)?;
                 }
                 (JobState::Stopping, LiveStatus::Verified(live)) => {
                     terminate_live(&live)?;
@@ -7026,6 +7054,12 @@ fn finalize_stopped_in_connection(
         params![job_id, now_ms(), row.lease_epoch, stdout_sha256, stderr_sha256],
     )?;
     if changed != 1 {
+        if matches!(
+            process_state_at_fence(&tx, job_id, row.pid, row.lease_epoch)?,
+            Some(JobState::Stopped | JobState::Exited)
+        ) {
+            return Ok(());
+        }
         return Err(EmberLabError::InvalidTransition {
             job_id: job_id.into(),
             detail: "stop finalization lost its state or lease epoch fence".into(),
@@ -7051,6 +7085,22 @@ fn finalize_stopped_in_connection(
     )?;
     tx.commit()?;
     Ok(())
+}
+
+fn process_state_at_fence(
+    conn: &Connection,
+    job_id: &str,
+    pid: u32,
+    lease_epoch: i64,
+) -> Result<Option<JobState>> {
+    let state: Option<String> = conn
+        .query_row(
+            "SELECT state FROM jobs WHERE job_id=?1 AND pid=?2 AND lease_epoch=?3",
+            params![job_id, pid, lease_epoch],
+            |row| row.get(0),
+        )
+        .optional()?;
+    state.map(|state| JobState::parse(&state)).transpose()
 }
 
 fn job_process_row_from_connection(conn: &Connection, job_id: &str) -> Result<JobProcessRow> {
@@ -10615,21 +10665,39 @@ fn record_process_exit(
     db: &Mutex<Connection>,
     job_id: &str,
     pid: u32,
+    expected_lease_epoch: i64,
     exit_code: i64,
 ) -> Result<()> {
     let mut conn = db.lock().map_err(|_| EmberLabError::Poisoned)?;
     let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
     let lease: Option<(String, i64)> = tx
         .query_row(
-            "SELECT resource,lease_epoch FROM jobs WHERE job_id=?1 AND state='running' AND pid=?2",
-            params![job_id, pid],
+            "SELECT resource,lease_epoch FROM jobs WHERE job_id=?1 AND state='running' AND pid=?2 AND lease_epoch=?3",
+            params![job_id, pid, expected_lease_epoch],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .optional()?;
-    let (resource, lease_epoch) = lease.ok_or_else(|| EmberLabError::InvalidTransition {
-        job_id: job_id.into(),
-        detail: "natural-exit monitor lost its running state fence".into(),
-    })?;
+    let Some((resource, lease_epoch)) = lease else {
+        let current: Option<String> = tx
+            .query_row(
+                "SELECT state FROM jobs WHERE job_id=?1 AND pid=?2 AND lease_epoch=?3",
+                params![job_id, pid, expected_lease_epoch],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if let Some(state) = current {
+            if matches!(
+                JobState::parse(&state)?,
+                JobState::Stopping | JobState::Stopped | JobState::Exited
+            ) {
+                return Ok(());
+            }
+        }
+        return Err(EmberLabError::InvalidTransition {
+            job_id: job_id.into(),
+            detail: "natural-exit monitor lost its running state fence".into(),
+        });
+    };
     let (stdout_sha256, stderr_sha256) = seal_log_hashes(&tx, job_id)?;
     let timestamp = now_ms();
     let changed = tx.execute(
@@ -11018,6 +11086,7 @@ fn spawn_exit_monitor(registration: ExitMonitorRegistration) {
         shutdown,
         job_id,
         pid,
+        lease_epoch,
         waiter,
         terminal_job,
         terminal_process,
@@ -11091,7 +11160,7 @@ fn spawn_exit_monitor(registration: ExitMonitorRegistration) {
         if !retained.contains_key(&job_id) {
             return;
         }
-        if record_process_exit(&db, &job_id, pid, exit_code as i64).is_ok() {
+        if record_process_exit(&db, &job_id, pid, lease_epoch, exit_code as i64).is_ok() {
             retained.remove(&job_id);
         }
     });
@@ -11551,7 +11620,7 @@ impl SpawnedProcess {
         }
         Ok(())
     }
-    fn detach_reaper(mut self, db: Weak<Mutex<Connection>>, job_id: String) {
+    fn detach_reaper(mut self, db: Weak<Mutex<Connection>>, job_id: String, lease_epoch: i64) {
         if let Some(mut child) = self.child.take() {
             let pid = self.pid;
             std::thread::spawn(move || {
@@ -11561,7 +11630,7 @@ impl SpawnedProcess {
                 let Some(db) = db.upgrade() else {
                     return;
                 };
-                let _ = record_process_exit(&db, &job_id, pid, unix_exit_code(status));
+                let _ = record_process_exit(&db, &job_id, pid, lease_epoch, unix_exit_code(status));
             });
         }
     }
