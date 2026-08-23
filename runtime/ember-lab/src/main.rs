@@ -22,6 +22,7 @@ const DISPATCH_TOKEN_ENV: &str = "EMBER_LAB_DISPATCH_TOKEN";
 const DISPATCH_JOB_ID_ENV: &str = "EMBER_LAB_DISPATCH_JOB_ID";
 const DISPATCH_DAEMON_PID_ENV: &str = "EMBER_LAB_DISPATCH_DAEMON_PID";
 const DISPATCH_PIPE_ENV: &str = "EMBER_LAB_PIPE";
+const DISPATCH_MAXIMUM_JOB_MEMORY_ENV: &str = "EMBER_LAB_DISPATCH_MAXIMUM_JOB_MEMORY_BYTES";
 
 fn usage() -> &'static str {
     "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab resource-guard-rearm --pipe <\\\\.\\pipe\\name> --frozen-observation-sha256 <hex> --breach-class <class> --diagnostic-receipt <path> --diagnostic-receipt-sha256 <hex>\n  ember-lab data-catalog-status --db <path>\n  ember-lab register-artifact --db <path> --sha256 <hex> --byte-count <n> --media-type <type> --location <volume>=<locator> [--location <volume>=<locator> ...]\n  ember-lab retire-artifact-location --db <path> --sha256 <hex> --volume <volume> --locator <locator> --reason <text>\n  ember-lab custody-verify --db <path> --hash <sha256> [--hash <sha256> ...] --root <volume>=<path> [--root <volume>=<path> ...] --receipt <path> [--rehash]\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
@@ -574,11 +575,20 @@ fn consume_verifier_dispatch_token() -> Result<(), Box<dyn std::error::Error>> {
     let pipe = required(DISPATCH_PIPE_ENV)?;
     let job_id = required(DISPATCH_JOB_ID_ENV)?;
     let token = required(DISPATCH_TOKEN_ENV)?;
+    let maximum_job_memory_bytes = required(DISPATCH_MAXIMUM_JOB_MEMORY_ENV)?;
     if job_id.trim().is_empty()
         || token.len() != 64
         || !token
             .bytes()
             .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
+        return Err(std::io::Error::other("VERIFIER_DISPATCH_TOKEN_INVALID").into());
+    }
+    if maximum_job_memory_bytes
+        .parse::<u64>()
+        .ok()
+        .filter(|value| *value > 0)
+        .is_none()
     {
         return Err(std::io::Error::other("VERIFIER_DISPATCH_TOKEN_INVALID").into());
     }
@@ -619,6 +629,7 @@ fn consume_verifier_dispatch_token() -> Result<(), Box<dyn std::error::Error>> {
     std::env::remove_var(DISPATCH_TOKEN_ENV);
     std::env::remove_var(DISPATCH_JOB_ID_ENV);
     std::env::remove_var(DISPATCH_DAEMON_PID_ENV);
+    std::env::remove_var(DISPATCH_MAXIMUM_JOB_MEMORY_ENV);
     Ok(())
 }
 

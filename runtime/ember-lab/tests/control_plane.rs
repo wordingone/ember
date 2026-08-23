@@ -863,6 +863,25 @@ fn detached_job_is_adopted_stopped_and_exported_after_daemon_reopen() {
     assert!(events.iter().any(|row| row["kind"] == "job_started"));
     assert!(events.iter().any(|row| row["kind"] == "job_adopted"));
     assert!(events.iter().any(|row| row["kind"] == "job_stopped"));
+    let accounting_index = events
+        .iter()
+        .position(|row| row["kind"] == "job_memory_accounting")
+        .expect("adopted job must preserve terminal job-scoped peak accounting");
+    let stopped_index = events
+        .iter()
+        .position(|row| row["kind"] == "job_stopped")
+        .unwrap();
+    assert!(accounting_index < stopped_index);
+    let accounting = &events[accounting_index]["payload"];
+    assert_eq!(
+        accounting["kernel_limit_signal_observation_available"],
+        false
+    );
+    assert_eq!(
+        accounting["kernel_limit_signal_observation_reason"],
+        "job_object_completion_port_already_associated_win32_5_after_daemon_handoff"
+    );
+    assert!(accounting["peak_job_memory_used_bytes"].as_u64().unwrap() > 0);
 }
 
 #[test]

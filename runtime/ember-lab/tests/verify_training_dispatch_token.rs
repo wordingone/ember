@@ -15,7 +15,9 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::windows::io::{FromRawHandle, RawHandle};
 use std::path::PathBuf;
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+const CANONICAL_MAXIMUM_JOB_MEMORY_BYTES: &str = "58032391267";
 
 fn hidden_command(program: &str) -> Command {
     let mut command = Command::new(program);
@@ -51,14 +53,15 @@ fn fake_pipe(name: &str) -> String {
 }
 
 fn serve_forged_consumed_once(pipe_name: String) -> std::thread::JoinHandle<()> {
-    std::thread::spawn(move || {
+    let (ready_tx, ready_rx) = std::sync::mpsc::sync_channel(0);
+    let server = std::thread::spawn(move || {
         use windows_sys::Win32::Foundation::{
-            GetLastError, ERROR_PIPE_CONNECTED, INVALID_HANDLE_VALUE,
+            GetLastError, ERROR_PIPE_CONNECTED, ERROR_PIPE_LISTENING, INVALID_HANDLE_VALUE,
         };
         use windows_sys::Win32::Storage::FileSystem::PIPE_ACCESS_DUPLEX;
         use windows_sys::Win32::System::Pipes::{
-            ConnectNamedPipe, CreateNamedPipeW, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS,
-            PIPE_TYPE_BYTE, PIPE_WAIT,
+            ConnectNamedPipe, CreateNamedPipeW, PIPE_NOWAIT, PIPE_READMODE_BYTE,
+            PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE,
         };
 
         let mut wide: Vec<u16> = pipe_name.encode_utf16().collect();
@@ -67,7 +70,7 @@ fn serve_forged_consumed_once(pipe_name: String) -> std::thread::JoinHandle<()> 
             CreateNamedPipeW(
                 wide.as_ptr(),
                 PIPE_ACCESS_DUPLEX,
-                PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
+                PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_NOWAIT | PIPE_REJECT_REMOTE_CLIENTS,
                 1,
                 4096,
                 4096,
@@ -76,8 +79,21 @@ fn serve_forged_consumed_once(pipe_name: String) -> std::thread::JoinHandle<()> 
             )
         };
         assert_ne!(handle, INVALID_HANDLE_VALUE);
-        let connected = unsafe { ConnectNamedPipe(handle, std::ptr::null_mut()) };
-        assert!(connected != 0 || unsafe { GetLastError() } == ERROR_PIPE_CONNECTED);
+        ready_tx.send(()).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let connected = unsafe { ConnectNamedPipe(handle, std::ptr::null_mut()) };
+            if connected != 0 || unsafe { GetLastError() } == ERROR_PIPE_CONNECTED {
+                break;
+            }
+            let error = unsafe { GetLastError() };
+            assert_eq!(error, ERROR_PIPE_LISTENING);
+            assert!(
+                Instant::now() < deadline,
+                "forged dispatch-token client did not connect within 5 seconds"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
         let mut stream = unsafe { fs::File::from_raw_handle(handle as RawHandle) };
         let mut request = String::new();
         if BufReader::new(stream.try_clone().unwrap())
@@ -91,7 +107,9 @@ fn serve_forged_consumed_once(pipe_name: String) -> std::thread::JoinHandle<()> 
             )
             .unwrap();
         }
-    })
+    });
+    ready_rx.recv().unwrap();
+    server
 }
 
 #[test]
@@ -110,6 +128,10 @@ fn direct_verify_training_without_daemon_token_refuses_before_receipt_or_source_
         .env_remove("EMBER_LAB_PIPE")
         .env_remove("EMBER_LAB_DISPATCH_JOB_ID")
         .env_remove("EMBER_LAB_DISPATCH_TOKEN")
+        .env(
+            "EMBER_LAB_DISPATCH_MAXIMUM_JOB_MEMORY_BYTES",
+            CANONICAL_MAXIMUM_JOB_MEMORY_BYTES,
+        )
         .output()
         .unwrap();
     assert!(!output.status.success());
@@ -133,12 +155,55 @@ fn malformed_token_refuses_before_named_pipe_open_or_receipt_write() {
         .env("EMBER_LAB_PIPE", r"\\.\pipe\must-not-open")
         .env("EMBER_LAB_DISPATCH_JOB_ID", "job-1344")
         .env("EMBER_LAB_DISPATCH_TOKEN", "A".repeat(64))
+        .env(
+            "EMBER_LAB_DISPATCH_MAXIMUM_JOB_MEMORY_BYTES",
+            CANONICAL_MAXIMUM_JOB_MEMORY_BYTES,
+        )
         .output()
         .unwrap();
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("VERIFIER_DISPATCH_TOKEN_INVALID"));
     assert!(!receipt.exists());
     fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn missing_or_malformed_maximum_job_memory_refuses_before_named_pipe_open() {
+    for maximum_job_memory_bytes in [None, Some("not-a-byte-count")] {
+        let root = sandbox("verify-training-invalid-maximum-job-memory");
+        let receipt = root.join("must-not-exist.json");
+        let mut command = hidden_command(env!("CARGO_BIN_EXE_ember-lab"));
+        command
+            .args([
+                "verify-training",
+                "--root",
+                root.to_str().unwrap(),
+                "--receipt",
+                receipt.to_str().unwrap(),
+            ])
+            .env("EMBER_LAB_PIPE", r"\\.\pipe\must-not-open")
+            .env("EMBER_LAB_DISPATCH_JOB_ID", "job-1344")
+            .env("EMBER_LAB_DISPATCH_TOKEN", "a".repeat(64))
+            .env(
+                "EMBER_LAB_DISPATCH_DAEMON_PID",
+                std::process::id().to_string(),
+            )
+            .env_remove("EMBER_LAB_DISPATCH_MAXIMUM_JOB_MEMORY_BYTES");
+        if let Some(value) = maximum_job_memory_bytes {
+            command.env("EMBER_LAB_DISPATCH_MAXIMUM_JOB_MEMORY_BYTES", value);
+        }
+        let output = command.output().unwrap();
+        assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if maximum_job_memory_bytes.is_none() {
+            assert!(stderr.contains("VERIFIER_DISPATCH_TOKEN_REQUIRED"));
+            assert!(stderr.contains("EMBER_LAB_DISPATCH_MAXIMUM_JOB_MEMORY_BYTES"));
+        } else {
+            assert!(stderr.contains("VERIFIER_DISPATCH_TOKEN_INVALID"));
+        }
+        assert!(!receipt.exists());
+        fs::remove_dir_all(root).unwrap();
+    }
 }
 
 #[test]
@@ -159,6 +224,10 @@ fn well_formed_token_and_forged_pipe_cannot_authorize_verifier_effects() {
         .env("EMBER_LAB_PIPE", pipe)
         .env("EMBER_LAB_DISPATCH_JOB_ID", "job-1344")
         .env("EMBER_LAB_DISPATCH_TOKEN", "a".repeat(64))
+        .env(
+            "EMBER_LAB_DISPATCH_MAXIMUM_JOB_MEMORY_BYTES",
+            CANONICAL_MAXIMUM_JOB_MEMORY_BYTES,
+        )
         .env(
             "EMBER_LAB_DISPATCH_DAEMON_PID",
             std::process::id().to_string(),
