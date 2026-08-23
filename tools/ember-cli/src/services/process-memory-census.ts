@@ -110,11 +110,14 @@ async function censusWindowsProcessMemoryBatchInner(
   const samples: ProcessMemoryCensusSample[] = [];
   const overlapPids: number[] = [];
   const seen = new Set<number>();
+  let candidateProcessCount = 0;
   for (const candidate of rows) {
     if (typeof candidate !== "object" || candidate === null) {
       throw new Error("MEMORY_CENSUS_ROW_INVALID");
     }
     const row = candidate as WindowsProcessRow;
+    if (row.Id === 0 && row.ParentProcessId === 0) continue;
+    candidateProcessCount += 1;
     if (
       !Number.isSafeInteger(row.Id)
       || (row.Id as number) <= 0
@@ -173,7 +176,7 @@ async function censusWindowsProcessMemoryBatchInner(
     schema_version: "ember-process-memory-census-poll-v1",
     observed_at: observedAt,
     provider: WINDOWS_PROCESS_MEMORY_PROVIDER,
-    candidate_process_count: rows.length,
+    candidate_process_count: candidateProcessCount,
     admitted_process_count: samples.length,
     class_cardinality: {
       cockpit: samples.filter((sample) => sample.process_class === "cockpit").length,
