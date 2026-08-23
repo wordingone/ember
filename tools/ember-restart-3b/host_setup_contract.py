@@ -22,29 +22,29 @@ with a precise statement -- manual mid-run OS tuning is never an accepted
 path.
 
 Scoping ruling (operator, 2026-08-21, binds this module): the 2026-08-21
-pagefile change is recorded here as a TEMPORARY operator intervention and
-technical debt, acceptable only to finish the current dense control run --
-never as a formalized, repeatable Ember setup requirement. A mechanism's
-elevated commit need is a property of that mechanism's own declared
-control-experiment profile (see ``HostMechanismProfile`` /
-``dense_a1_full_state_cpu_offload_profile``), never a redefinition of
-Ember's normal host floor. This module declares that per-mechanism
-requirement and validates it with a fail-closed probe
-(``validate_host_setup_contract``); it is not yet wired into any live
-launch/dispatch path, so it does not yet satisfy the operator's requirement
-that an elevated-commit need be "declared in the host envelope contract and
-validated before execution" -- that wiring, scoped to the declaring
-mechanism's own experiment declaration, is required follow-up before this
-issue can claim that requirement met (see the #898 PR body boundary-honesty
-note).
+pagefile change was a TEMPORARY operator intervention and technical debt,
+acceptable only to finish that dense control run -- never a formalized,
+repeatable Ember setup requirement. A mechanism's elevated commit need is a
+property of that mechanism's own declared control-experiment profile (see
+``HostMechanismProfile`` / ``dense_a1_full_state_cpu_offload_profile``), never
+a redefinition of Ember's normal host floor. The certified launch path now
+validates this profile against live headroom and the daemon-authenticated Job
+Object ceiling before the load-bearing trainer runner is constructed.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import Any, Callable
 
 BYTES_PER_GIB = 1024**3
+_U64_MAX = 2**64 - 1
+
+# #898 L2 measured the largest hard Job Object limit overshoot at 6.17%
+# on the same CUDA/WDDM allocation class used by dense A1. This is a compiled
+# evidence binding, not a caller-selected margin.
+DENSE_A1_JOB_MEMORY_OVERSHOOT_BASIS_POINTS = 617
+DENSE_A1_JOB_MEMORY_OVERSHOOT_BASIS = "windows_job_object_cuda_wddm_measured"
 
 # fp32 master_copy + exp_avg + exp_avg_sq: three 4-byte tensors per parameter,
 # each touched in full on every optimizer.step() call (a1_optimizer.py
@@ -60,20 +60,9 @@ DENSE_A1_TRANSIENT_CHECKPOINT_BYTES = 8 * BYTES_PER_GIB
 # reserve already receipted for this run in the same amendment.
 DENSE_A1_RESERVE_BYTES = 6 * BYTES_PER_GIB
 
-# The active-parameter count the #898 2026-08-21 amendment measured against
-# (3.84B dense specialist-plus-shared parameters).
-DENSE_A1_REFERENCE_ACTIVE_PARAMETERS = 3_840_000_000
-
-# The single documented, auditable provisioning step this contract accepts:
-# a FIXED (not system-managed) pagefile of at least this many MiB, set via
-# the documented registry path below, applied before launch (not mid-run).
-DOCUMENTED_PAGEFILE_REGISTRY_PATH = (
-    r"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager"
-    r"\Memory Management\PagingFiles"
-)
-DOCUMENTED_PAGEFILE_MINIMUM_MIB = 65536  # 64 GiB fixed; see docs/host-setup-contract.md
-DOCUMENTED_PAGEFILE_VALUE_NAME = "PagingFiles"
-
+# Canonical dense structural parameter count used by the certified A1 config.
+# The #898 amendment described it as 3.84B; the envelope binds the exact count.
+DENSE_A1_REFERENCE_ACTIVE_PARAMETERS = 3_839_161_856
 
 @dataclass(frozen=True)
 class HostMechanismProfile:
@@ -84,6 +73,8 @@ class HostMechanismProfile:
     bytes_per_param: int
     transient_bytes: int
     reserve_bytes: int
+    overshoot_allowance_basis_points: int = 0
+    overshoot_allowance_basis: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or not self.name:
@@ -96,14 +87,85 @@ class HostMechanismProfile:
         ):
             if type(value) is not int or value <= 0:
                 raise ValueError(f"host mechanism profile {field_name} must be a positive integer")
+        if (
+            type(self.overshoot_allowance_basis_points) is not int
+            or not 0 <= self.overshoot_allowance_basis_points <= 10_000
+        ):
+            raise ValueError(
+                "host mechanism profile overshoot allowance basis points must be "
+                "an integer between 0 and 10000"
+            )
+        if self.overshoot_allowance_basis_points:
+            if (
+                not isinstance(self.overshoot_allowance_basis, str)
+                or not self.overshoot_allowance_basis
+            ):
+                raise ValueError(
+                    "host mechanism profile with an overshoot allowance requires "
+                    "a nonempty evidence basis"
+                )
+        elif self.overshoot_allowance_basis is not None:
+            raise ValueError(
+                "host mechanism profile without an overshoot allowance cannot "
+                "declare an evidence basis"
+            )
+        # Ember Lab's manifest and Windows Job Object boundary are u64-sized.
+        # Refuse at profile construction instead of relying on Python's
+        # unbounded integers and truncating later.
+        for field_name, value in (
+            ("optimizer_state_bytes", self.optimizer_state_bytes),
+            ("simulated_peak_commit_bytes", self.simulated_peak_commit_bytes),
+            ("overshoot_margin_bytes", self.overshoot_margin_bytes),
+            ("maximum_job_memory_bytes", self.maximum_job_memory_bytes),
+            ("required_headroom_bytes", self.required_headroom_bytes),
+        ):
+            if value > _U64_MAX:
+                raise ValueError(f"host mechanism profile {field_name} exceeds u64")
 
     @property
     def optimizer_state_bytes(self) -> int:
         return self.active_parameters * self.bytes_per_param
 
     @property
+    def simulated_peak_commit_bytes(self) -> int:
+        return self.optimizer_state_bytes + self.transient_bytes
+
+    @property
+    def overshoot_margin_bytes(self) -> int:
+        numerator = (
+            self.simulated_peak_commit_bytes * self.overshoot_allowance_basis_points
+        )
+        return (numerator + 9_999) // 10_000
+
+    @property
+    def maximum_job_memory_bytes(self) -> int:
+        return self.simulated_peak_commit_bytes + self.overshoot_margin_bytes
+
+    @property
     def required_headroom_bytes(self) -> int:
-        return self.optimizer_state_bytes + self.transient_bytes + self.reserve_bytes
+        return self.maximum_job_memory_bytes + self.reserve_bytes
+
+    def job_memory_envelope_disclosure(self) -> dict[str, Any]:
+        return {
+            "schema_version": "ember-host-job-memory-envelope-v1",
+            "mechanism": self.name,
+            "active_parameters": self.active_parameters,
+            "bytes_per_param": self.bytes_per_param,
+            "optimizer_state_bytes": self.optimizer_state_bytes,
+            "transient_bytes": self.transient_bytes,
+            "simulated_peak_commit_bytes": self.simulated_peak_commit_bytes,
+            "overshoot_allowance_basis": {
+                "kind": self.overshoot_allowance_basis or "none",
+                "issue_comment": 5289202818
+                if self.overshoot_allowance_basis_points
+                else None,
+                "basis_points": self.overshoot_allowance_basis_points,
+            },
+            "overshoot_margin_bytes": self.overshoot_margin_bytes,
+            "maximum_job_memory_bytes": self.maximum_job_memory_bytes,
+            "host_reserve_bytes": self.reserve_bytes,
+            "required_headroom_bytes": self.required_headroom_bytes,
+        }
 
 
 def dense_a1_full_state_cpu_offload_profile(
@@ -112,7 +174,8 @@ def dense_a1_full_state_cpu_offload_profile(
     """The declared host commit-capacity profile for dense-arm A1 training.
 
     Defaults to the #898 2026-08-21 amendment's reference parameter count
-    (3.84B), which yields ~56.9 GiB required headroom -- matching the
+    (3.839161856B), which yields ~60.05 GiB required headroom after the
+    evidence-bound overshoot margin -- matching the
     amendment's receipted math (42.9 GiB optimizer state + 8 GiB transient +
     6 GiB reserve).
     """
@@ -125,7 +188,35 @@ def dense_a1_full_state_cpu_offload_profile(
         bytes_per_param=_FULL_STATE_ADAMW_CPU_OFFLOAD_BYTES_PER_PARAM,
         transient_bytes=DENSE_A1_TRANSIENT_CHECKPOINT_BYTES,
         reserve_bytes=DENSE_A1_RESERVE_BYTES,
+        overshoot_allowance_basis_points=(
+            DENSE_A1_JOB_MEMORY_OVERSHOOT_BASIS_POINTS
+        ),
+        overshoot_allowance_basis=DENSE_A1_JOB_MEMORY_OVERSHOOT_BASIS,
     )
+
+
+class HostJobMemoryEnvelopeRefusal(RuntimeError):
+    """The cap armed by the daemon differs from the mechanism-derived cap."""
+
+    def __init__(
+        self,
+        *,
+        profile: HostMechanismProfile,
+        expected_maximum_job_memory_bytes: int,
+    ) -> None:
+        if (
+            type(expected_maximum_job_memory_bytes) is not int
+            or expected_maximum_job_memory_bytes <= 0
+        ):
+            raise ValueError("expected maximum job memory bytes must be a positive integer")
+        self.profile = profile
+        self.expected_maximum_job_memory_bytes = expected_maximum_job_memory_bytes
+        self.derived_maximum_job_memory_bytes = profile.maximum_job_memory_bytes
+        super().__init__(
+            f"host job-memory envelope refused mechanism '{profile.name}': "
+            f"daemon armed {expected_maximum_job_memory_bytes} bytes but the "
+            f"mechanism derives {profile.maximum_job_memory_bytes} bytes"
+        )
 
 
 class HostSetupContractRefusal(RuntimeError):
@@ -134,9 +225,8 @@ class HostSetupContractRefusal(RuntimeError):
     Distinct from an in-run resource-preflight refusal (``CheckpointDeferredLowCommit``
     in ``checkpoint_artifacts.py``): this fires BEFORE a run is dispatched, at
     host-setup time, and its message always names the exact shortfall in GiB
-    plus the one documented remediation step. It never suggests ad-hoc OS
-    tuning as a substitute -- the message says explicitly that mid-training
-    manual tuning is not a supported path.
+    and the lawful outcomes. It never encodes the temporary 2026-08-21 OS
+    intervention as a repeatable provisioning contract.
     """
 
     def __init__(self, *, profile: HostMechanismProfile, available_commit_bytes: int) -> None:
@@ -153,21 +243,16 @@ class HostSetupContractRefusal(RuntimeError):
             f"host setup contract refused mechanism '{profile.name}': requires "
             f"{required_gib:.2f} GiB host commit headroom (optimizer state "
             f"{profile.optimizer_state_bytes / BYTES_PER_GIB:.2f} GiB + transient "
-            f"{profile.transient_bytes / BYTES_PER_GIB:.2f} GiB + reserve "
+            f"{profile.transient_bytes / BYTES_PER_GIB:.2f} GiB + evidence-bound "
+            f"job-limit overshoot margin "
+            f"{profile.overshoot_margin_bytes / BYTES_PER_GIB:.2f} GiB + reserve "
             f"{profile.reserve_bytes / BYTES_PER_GIB:.2f} GiB), but only "
             f"{available_gib:.2f} GiB is available -- shortfall {shortfall_gib:.2f} GiB. "
             f"This headroom is a property of the '{profile.name}' control-experiment "
-            f"profile itself, not Ember's normal host floor. The one exception on "
-            f"record is a fixed pagefile of at least {DOCUMENTED_PAGEFILE_MINIMUM_MIB} "
-            f"MiB (registry value '{DOCUMENTED_PAGEFILE_VALUE_NAME}' under "
-            f"{DOCUMENTED_PAGEFILE_REGISTRY_PATH}, effective after reboot), authorized "
-            f"2026-08-21 as a temporary operator intervention to finish the current "
-            f"dense control run (see docs/host-setup-contract.md) -- it is recorded "
-            f"technical debt, not a durable or repeatable answer for future mechanisms. "
-            f"Manual ad-hoc OS tuning mid-training is not a supported path; a mechanism "
-            f"whose declared profile exceeds this exception's headroom must fit the "
-            f"existing envelope, redesign to need less, or obtain its own fresh "
-            f"operator-reviewed exception -- never assume this one as a default."
+            f"profile itself, not Ember's normal host floor. No OS provisioning "
+            f"exception is encoded by this contract: the mechanism must fit the "
+            f"existing envelope, redesign to need less, or fail closed pending a "
+            f"separately reviewed mechanism/host contract."
         )
 
 
@@ -175,7 +260,8 @@ def validate_host_setup_contract(
     profile: HostMechanismProfile,
     *,
     available_commit_bytes_probe: Callable[[], int],
-) -> dict[str, int | str]:
+    expected_maximum_job_memory_bytes: int | None = None,
+) -> dict[str, Any]:
     """Refuse admission when the live host cannot host ``profile``.
 
     ``available_commit_bytes_probe`` is injected so this validates against
@@ -185,6 +271,17 @@ def validate_host_setup_contract(
     machinery itself.
     """
 
+    if expected_maximum_job_memory_bytes is not None:
+        if (
+            type(expected_maximum_job_memory_bytes) is not int
+            or expected_maximum_job_memory_bytes <= 0
+        ):
+            raise ValueError("expected maximum job memory bytes must be a positive integer")
+        if expected_maximum_job_memory_bytes != profile.maximum_job_memory_bytes:
+            raise HostJobMemoryEnvelopeRefusal(
+                profile=profile,
+                expected_maximum_job_memory_bytes=expected_maximum_job_memory_bytes,
+            )
     if not callable(available_commit_bytes_probe):
         raise ValueError("available commit bytes probe must be callable")
     available_commit_bytes = available_commit_bytes_probe()
@@ -197,4 +294,5 @@ def validate_host_setup_contract(
         "mechanism": profile.name,
         "required_headroom_bytes": profile.required_headroom_bytes,
         "available_commit_bytes": available_commit_bytes,
+        "job_memory_envelope": profile.job_memory_envelope_disclosure(),
     }

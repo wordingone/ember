@@ -22,6 +22,9 @@ from . import test_certified_train_launch as launch_fixtures
 
 
 ROOT = Path(__file__).resolve().parents[2]
+TOOLS_DIRECTORY = ROOT / "tools" / "ember-restart-3b"
+if str(TOOLS_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(TOOLS_DIRECTORY))
 A1_FAMILY = "dense-tier1-full-state-adamw-cpu-offload-v1"
 TIER2_FAMILY = "dense-tier2-owned-q-galore-v1"
 
@@ -393,7 +396,7 @@ def test_valid_a1_route_projects_a_typed_discriminating_request() -> None:
 
 
 def test_tier1_host_setup_contract_refuses_before_argv_or_spawn() -> None:
-    """Deliberate red: insufficient live commit cannot reach argv or a child."""
+    """An underdeclared armed cap cannot reach trainer argv or a child."""
 
     module = launch_fixtures.load_module()
     launch = module.ValidatedLaunch(
@@ -413,18 +416,16 @@ def test_tier1_host_setup_contract_refuses_before_argv_or_spawn() -> None:
         a1_tier=module.A1Tier.TIER_1,
         a1_mechanism=module.A1Mechanism.FULL_STATE_ADAMW_CPU_OFFLOAD,
     )
-    with (
-        mock.patch.object(
-            module,
-            "_validate_tier1_host_setup_contract",
-            side_effect=RuntimeError("host setup contract refused"),
-            create=True,
-        ) as contract,
-        mock.patch.object(module, "build_runner_argv") as build_argv,
-    ):
-        with pytest.raises(RuntimeError, match="host setup contract refused"):
-            module.execute_validated_launch(Path("repo"), launch)
-    contract.assert_called_once_with(launch)
+    from host_setup_contract import dense_a1_full_state_cpu_offload_profile
+
+    derived = dense_a1_full_state_cpu_offload_profile().maximum_job_memory_bytes
+    with mock.patch.object(module, "build_runner_argv") as build_argv:
+        with pytest.raises(RuntimeError, match="daemon armed"):
+            module.execute_validated_launch(
+                Path("repo"),
+                launch,
+                armed_maximum_job_memory_bytes=derived - 1,
+            )
     build_argv.assert_not_called()
 
 
@@ -458,18 +459,23 @@ def test_tier1_host_setup_contract_executes_real_validator_with_measured_commit(
         "available_host_commit_bytes",
         return_value=admitted_bytes,
     ):
-        disclosure = module._validate_tier1_host_setup_contract(launch)
+        from host_setup_contract import dense_a1_full_state_cpu_offload_profile
+
+        derived = dense_a1_full_state_cpu_offload_profile().maximum_job_memory_bytes
+        disclosure = module._validate_tier1_host_setup_contract(launch, derived)
     assert disclosure is not None
     assert set(disclosure) == {
         "status",
         "mechanism",
         "required_headroom_bytes",
         "available_commit_bytes",
+        "job_memory_envelope",
     }
     assert disclosure["status"] == "PASS"
     assert disclosure["mechanism"] == "dense-a1-full-state-cpu-offload"
     assert disclosure["available_commit_bytes"] == admitted_bytes
     assert disclosure["required_headroom_bytes"] < admitted_bytes
+    assert disclosure["job_memory_envelope"]["maximum_job_memory_bytes"] == derived
 
     refused_bytes = 12 * 1024**3
     with (
@@ -480,7 +486,7 @@ def test_tier1_host_setup_contract_executes_real_validator_with_measured_commit(
         ),
         pytest.raises(RuntimeError, match=r"only 12\.00 GiB is available") as refusal,
     ):
-        module._validate_tier1_host_setup_contract(launch)
+        module._validate_tier1_host_setup_contract(launch, derived)
     assert refusal.value.available_commit_bytes == refused_bytes
 
 
@@ -912,12 +918,17 @@ def test_real_launcher_finalizer_join_mints_tier1_run_on_complete_energy() -> No
             },
         )
         with mock.patch.object(module, "_record_run_attempt", return_value={}):
+            from host_setup_contract import dense_a1_full_state_cpu_offload_profile
+
             exit_code = module.execute_validated_launch(
                 ROOT,
                 launch,
                 run_process=lambda *args, **kwargs: type(
                     "Result", (), {"returncode": 0}
                 )(),
+                armed_maximum_job_memory_bytes=(
+                    dense_a1_full_state_cpu_offload_profile().maximum_job_memory_bytes
+                ),
             )
         receipt = json.loads(
             (launch.artifact_root / "tier1-run.json").read_text(encoding="utf-8")

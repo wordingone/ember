@@ -4289,7 +4289,8 @@ def _certified_child_environment(launch: ValidatedLaunch) -> dict[str, str]:
 
 def _validate_tier1_host_setup_contract(
     launch: ValidatedLaunch,
-) -> dict[str, int | str] | None:
+    armed_maximum_job_memory_bytes: int | None = None,
+) -> dict[str, Any] | None:
     """Apply #898's declared host envelope at the real pre-spawn boundary.
 
     Only the mechanism that declares the elevated host-commit profile pays
@@ -4301,6 +4302,10 @@ def _validate_tier1_host_setup_contract(
         return None
     if launch.a1_mechanism is not A1Mechanism.FULL_STATE_ADAMW_CPU_OFFLOAD:
         raise ValueError("Tier-1 host setup contract mechanism drifted")
+    if armed_maximum_job_memory_bytes is None:
+        raise ValueError(
+            "Tier-1 host setup contract requires the authenticated armed job-memory cap"
+        )
     tools_directory = str(pathlib.Path(__file__).resolve().parent)
     inserted = tools_directory not in sys.path
     if inserted:
@@ -4315,6 +4320,7 @@ def _validate_tier1_host_setup_contract(
         return validate_host_setup_contract(
             dense_a1_full_state_cpu_offload_profile(),
             available_commit_bytes_probe=available_host_commit_bytes,
+            expected_maximum_job_memory_bytes=armed_maximum_job_memory_bytes,
         )
     finally:
         if inserted:
@@ -4325,9 +4331,12 @@ def execute_validated_launch(
     repo_root: pathlib.Path,
     launch: ValidatedLaunch,
     run_process=subprocess.run,
+    armed_maximum_job_memory_bytes: int | None = None,
 ) -> int:
     repo_root = pathlib.Path(repo_root)
-    host_setup_contract = _validate_tier1_host_setup_contract(launch)
+    host_setup_contract = _validate_tier1_host_setup_contract(
+        launch, armed_maximum_job_memory_bytes
+    )
     argv = build_runner_argv(repo_root, launch)
     prelaunch_refusal = _chained_specialist_prelaunch_refusal(launch)
     if prelaunch_refusal is not None:
@@ -4567,12 +4576,13 @@ def certify_and_execute(
     return execute_validated_launch(repo_root, launch, run_process=run_process)
 
 
-def consume_ember_lab_dispatch(repo_root: pathlib.Path) -> None:
+def consume_ember_lab_dispatch(repo_root: pathlib.Path) -> int:
     required_environment = (
         "EMBER_LAB_PIPE",
         "EMBER_LAB_DISPATCH_JOB_ID",
         "EMBER_LAB_DISPATCH_TOKEN",
         "EMBER_LAB_DISPATCH_DAEMON_PID",
+        "EMBER_LAB_DISPATCH_MAXIMUM_JOB_MEMORY_BYTES",
     )
     missing = [name for name in required_environment if not os.environ.get(name, "").strip()]
     if missing:
@@ -4588,7 +4598,7 @@ def consume_ember_lab_dispatch(repo_root: pathlib.Path) -> None:
         raise ValueError(
             "EMBER_LAB_DISPATCH_REFUSED: shared dispatch consumer is unavailable"
         ) from error
-    module.consume_dispatch(repo_root)
+    return module.consume_dispatch(repo_root)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -4604,7 +4614,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--custody-receipt-sha256", required=True)
     arguments = parser.parse_args(argv)
     try:
-        consume_ember_lab_dispatch(arguments.root)
+        armed_maximum_job_memory_bytes = consume_ember_lab_dispatch(arguments.root)
         launch = validate_certified_request(
             arguments.root,
             arguments.certificate,
@@ -4612,7 +4622,11 @@ def main(argv: list[str] | None = None) -> int:
             arguments.run_spec,
             arguments.custody_receipt_sha256,
         )
-        exit_code = execute_validated_launch(arguments.root, launch)
+        exit_code = execute_validated_launch(
+            arguments.root,
+            launch,
+            armed_maximum_job_memory_bytes=armed_maximum_job_memory_bytes,
+        )
     except (ValueError, RuntimeError, OSError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
