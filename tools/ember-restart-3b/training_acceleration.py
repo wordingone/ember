@@ -36,8 +36,10 @@ _CLOSE_KEYS = {"minimum_tokens_per_second_exclusive", "require_both_mechanisms",
 _KERNEL_RECEIPT_KEYS = {
     "schema_version", "kernel", "compute_capability", "activation_dtype", "weight_dtype", "output_dtype",
     "activation_operand_layout", "weight_operand_layout", "per_forward_weight_materialization_copies",
-    "accumulation_mode", "weight_refreshes", "dispatches", "fallbacks",
+    "native_kernel_scaling", "activation_scaling", "weight_scaling", "accumulation_mode",
+    "weight_refreshes", "dispatches", "fallbacks",
 }
+_FP8_INSTALLATION_SCOPE = "final_decoder_layer_shared_swiglu_down_4h_to_h"
 _CHECKPOINT_IDENTITY_KEYS = {
     "graph_signature_sha256", "fp8_kernel_receipt_sha256", "checkpoint_region_sha256",
 }
@@ -50,7 +52,7 @@ _STAGE1_POLICY_CONTRACT: dict[str, object] = {
         "format": "float8_e4m3fn",
         "kernel": "torch._scaled_mm",
         "required_compute_capability": "8.9",
-        "sites": "swiglu_down_4h_to_h",
+        "sites": _FP8_INSTALLATION_SCOPE,
         "fallback": "refuse",
     },
     "cuda_graph": {
@@ -109,8 +111,8 @@ def parse_stage1_policy(value: Mapping[str, object]) -> Stage1Policy:
         raise ValueError("training acceleration activation gate must require a Stage 2 real-path receipt")
     if fp8["format"] != "float8_e4m3fn" or fp8["kernel"] != "torch._scaled_mm":
         raise ValueError("FP8 policy must bind float8_e4m3fn through torch._scaled_mm")
-    if fp8["required_compute_capability"] != "8.9" or fp8["sites"] != "swiglu_down_4h_to_h":
-        raise ValueError("FP8 policy must bind SM89 SwiGLU 4H-to-H down projections")
+    if fp8["required_compute_capability"] != "8.9" or fp8["sites"] != _FP8_INSTALLATION_SCOPE:
+        raise ValueError("FP8 policy must bind the final decoder layer shared SwiGLU 4H-to-H down projection")
     if fp8["fallback"] != "refuse" or graph["fallback"] != "refuse":
         raise ValueError("accelerator fallback policy must refuse")
     if graph["capture_region"] != "forward_loss_backward":
@@ -605,12 +607,13 @@ class _DynamicFp8ScaledMm(torch.autograd.Function):
         weight: torch.Tensor,
         weight_fp8: torch.Tensor,
         weight_scale: torch.Tensor,
+        unit_scale: torch.Tensor,
         kernel: ScaledMmKernel,
     ) -> torch.Tensor:
         if activation.shape[-1] != weight.shape[1]:
             raise RuntimeError("FP8 down projection input width does not match the live weight")
         flat = activation.reshape(-1, activation.shape[-1])
-        absolute_max = flat.detach().abs().amax().float()
+        absolute_max = flat.detach().abs().amax(dim=1, keepdim=True).float()
         # Keep the captured region free of tensor-to-host branching. A non-finite
         # activation remains fail-closed at the authoritative loss check after
         # replay; persistent master-weight scaling is checked outside capture.
@@ -626,13 +629,14 @@ class _DynamicFp8ScaledMm(torch.autograd.Function):
         output = kernel(
             activation_fp8,
             weight_transposed,
-            scale_a,
-            weight_scale,
+            unit_scale,
+            unit_scale,
             out_dtype=activation.dtype,
             use_fast_accum=True,
         )
         if isinstance(output, tuple):
             output = output[0]
+        output = output.float().mul_(scale_a).mul_(weight_scale).to(activation.dtype)
         ctx.save_for_backward(flat, weight)
         ctx.input_shape = activation.shape
         return output.reshape(*activation.shape[:-1], weight.shape[0])
@@ -643,7 +647,7 @@ class _DynamicFp8ScaledMm(torch.autograd.Function):
         grad = grad_output.reshape(-1, grad_output.shape[-1]).to(weight.dtype)
         grad_input = grad.matmul(weight).reshape(ctx.input_shape)
         grad_weight = grad.transpose(0, 1).matmul(flat.to(weight.dtype))
-        return grad_input, grad_weight, None, None, None
+        return grad_input, grad_weight, None, None, None, None
 
 
 class DynamicFp8DownProjection(nn.Module):
@@ -684,7 +688,15 @@ class DynamicFp8DownProjection(nn.Module):
             torch.empty_like(weight, dtype=torch.float8_e4m3fn),
             persistent=False,
         )
-        self.register_buffer("_weight_scale", torch.ones((), device=weight.device, dtype=torch.float32), persistent=False)
+        self.register_buffer(
+            "_weight_scale",
+            torch.ones((1, weight.shape[0]), device=weight.device, dtype=torch.float32),
+            persistent=False,
+        )
+        self.register_buffer(
+            "_unit_scale", torch.ones((), device=weight.device, dtype=torch.float32),
+            persistent=False,
+        )
         self._dispatches = 0
         self._fallbacks = 0
         self._weight_refreshes = 0
@@ -703,13 +715,13 @@ class DynamicFp8DownProjection(nn.Module):
 
     def refresh_after_optimizer_step(self) -> None:
         with torch.no_grad():
-            absolute_max = self.weight.detach().abs().amax().float()
-            if not bool(torch.isfinite(absolute_max)):
+            absolute_max = self.weight.detach().abs().amax(dim=1, keepdim=True).float()
+            if not bool(torch.isfinite(absolute_max).all()):
                 raise RuntimeError("FP8 weight scale is non-finite")
             scale = torch.where(absolute_max > 0, absolute_max / 448.0, torch.ones_like(absolute_max))
             quantized = (self.weight.detach() / scale).clamp(-448.0, 448.0).to(torch.float8_e4m3fn)
             self._weight_fp8.copy_(quantized)
-            self._weight_scale.copy_(scale)
+            self._weight_scale.copy_(scale.transpose(0, 1))
         self._refreshed_weight_version = self.weight._version
         self._weight_refreshes += 1
 
@@ -725,7 +737,8 @@ class DynamicFp8DownProjection(nn.Module):
         if self.weight._version != self._refreshed_weight_version:
             raise RuntimeError("stale FP8 weight: refresh_after_optimizer_step is required after every update")
         output = _DynamicFp8ScaledMm.apply(
-            activation, self.weight, self._weight_fp8, self._weight_scale, self._kernel,
+            activation, self.weight, self._weight_fp8, self._weight_scale,
+            self._unit_scale, self._kernel,
         )
         self._dispatches += 1
         return output
@@ -736,7 +749,7 @@ class DynamicFp8DownProjection(nn.Module):
             major, minor = torch.cuda.get_device_capability(self.weight.device)
             capability = f"{major}.{minor}"
         return {
-            "schema_version": "ember-fp8-scaled-mm-kernel-receipt-v1",
+            "schema_version": "ember-fp8-scaled-mm-kernel-receipt-v2",
             "kernel": "torch._scaled_mm",
             "compute_capability": capability,
             "activation_dtype": "float8_e4m3fn",
@@ -745,6 +758,9 @@ class DynamicFp8DownProjection(nn.Module):
             "activation_operand_layout": "row_major_contiguous",
             "weight_operand_layout": "column_major_transposed_view",
             "per_forward_weight_materialization_copies": 0,
+            "native_kernel_scaling": "tensorwise_unit",
+            "activation_scaling": "emulated_rowwise_per_token",
+            "weight_scaling": "emulated_columnwise_per_output_channel",
             "accumulation_mode": "fast_accum",
             "weight_refreshes": self._weight_refreshes,
             "dispatches": self._dispatches,
@@ -760,17 +776,29 @@ def iter_fp8_down_projections(model: nn.Module) -> Sequence[DynamicFp8DownProjec
     )
 
 
+def disabled_fp8_installation_receipt() -> dict[str, object]:
+    return {
+        "schema_version": "ember-fp8-down-projection-installation-v2",
+        "scope": "NONE",
+        "layer_indexes": [],
+        "installed_sites": 0,
+        "sites": [],
+        "fallbacks": 0,
+    }
+
+
 def install_fp8_down_projections(
     model: nn.Module,
     *,
     kernel: ScaledMmKernel | None = None,
     allow_test_device: bool = False,
 ) -> dict[str, object]:
-    """Replace exactly the declared SwiGLU 4H-to-H down sites in-place."""
+    """Replace the one declared, route-stable final shared down site in-place."""
 
     layers = getattr(model, "layers", None)
     if not isinstance(layers, nn.ModuleList) or not layers:
         raise ValueError("issue #1413 FP8 installation requires decoder layers")
+    final_layer_index = len(layers) - 1
     targets: list[tuple[str, nn.Module, nn.Linear]] = []
     for index, layer in enumerate(layers):
         shared = getattr(layer, "shared_ffn", None)
@@ -788,7 +816,10 @@ def install_fp8_down_projections(
                 raise RuntimeError("issue #1413 FP8 down projections are already installed")
             if not isinstance(down, nn.Linear):
                 raise ValueError("issue #1413 FP8 site is not a linear down projection")
-            targets.append((name, owner, down))
+            if index == final_layer_index and owner is shared:
+                targets.append((name, owner, down))
+    if len(targets) != 1:
+        raise RuntimeError("issue #1413 FP8 scope must resolve exactly one final shared down projection")
     for _name, owner, down in targets:
         owner.down = DynamicFp8DownProjection.from_linear(
             down,
@@ -796,7 +827,9 @@ def install_fp8_down_projections(
             allow_test_device=allow_test_device,
         )
     return {
-        "schema_version": "ember-fp8-down-projection-installation-v1",
+        "schema_version": "ember-fp8-down-projection-installation-v2",
+        "scope": _FP8_INSTALLATION_SCOPE,
+        "layer_indexes": [final_layer_index],
         "installed_sites": len(targets),
         "sites": [name for name, _owner, _down in targets],
         "fallbacks": 0,
@@ -812,7 +845,7 @@ def refresh_fp8_after_optimizer_step(model: nn.Module) -> int:
 
 def validate_fp8_kernel_receipt(value: Mapping[str, object]) -> dict[str, object]:
     _closed_keys(value, _KERNEL_RECEIPT_KEYS, label="FP8 kernel receipt")
-    if value["schema_version"] != "ember-fp8-scaled-mm-kernel-receipt-v1" or value["kernel"] != "torch._scaled_mm":
+    if value["schema_version"] != "ember-fp8-scaled-mm-kernel-receipt-v2" or value["kernel"] != "torch._scaled_mm":
         raise ValueError("FP8 kernel receipt must bind torch._scaled_mm")
     if value["compute_capability"] != "8.9":
         raise ValueError("FP8 kernel receipt requires exact SM89 compute capability")
@@ -824,6 +857,12 @@ def validate_fp8_kernel_receipt(value: Mapping[str, object]) -> dict[str, object
         raise ValueError("FP8 kernel receipt operand layout does not match the reviewed SM89 contract")
     if value["per_forward_weight_materialization_copies"] != 0:
         raise ValueError("FP8 kernel receipt must prove zero per-forward weight materialization copies")
+    if (
+        value["native_kernel_scaling"] != "tensorwise_unit"
+        or value["activation_scaling"] != "emulated_rowwise_per_token"
+        or value["weight_scaling"] != "emulated_columnwise_per_output_channel"
+    ):
+        raise ValueError("FP8 kernel receipt must bind emulated rowwise scaling")
     if value["accumulation_mode"] != "fast_accum":
         raise ValueError("FP8 kernel receipt must pin torch._scaled_mm fast accumulation")
     for key in ("weight_refreshes", "dispatches", "fallbacks"):

@@ -18,15 +18,15 @@ from typing import Any
 
 import torch
 import torch.nn.functional as F
-
-from batch import DOMAIN_MODALITIES, decode_owned_batch
+from batch import DOMAIN_MODALITIES, decode_owned_batch, decode_owned_packed_batch
 from model import EXPERT_NAMES, RestartDecoderConfig, UnifiedDecoder
-from specialist_stream import TRAINING_CURSOR_SCHEMA_VERSION
 from semantic_stream import ManifestBoundTokenStream
+from specialist_stream import TRAINING_CURSOR_SCHEMA_VERSION
 from training_acceleration import (
     CudaGraphTrainingStepPool,
     ScaledMmKernel,
     Stage2ActivationAuthority,
+    disabled_fp8_installation_receipt,
     install_fp8_down_projections,
     iter_fp8_down_projections,
     refresh_fp8_after_optimizer_step,
@@ -61,6 +61,84 @@ def _eager_forward_loss_backward(
         raise RuntimeError("pretraining preparation produced a non-finite loss")
     loss.backward()
     return loss
+
+
+def packed_eager_loss(
+    model: UnifiedDecoder,
+    batch: Mapping[str, object],
+    config: RestartDecoderConfig,
+) -> torch.Tensor:
+    """Return mean cross entropy over true source positions, excluding right padding."""
+
+    loss_mask = batch.get("loss_mask")
+    if not isinstance(loss_mask, torch.Tensor) or loss_mask.dtype != torch.bool:
+        raise ValueError("packed batch requires a boolean loss mask")
+    logits = model(
+        batch["input_ids"],
+        image_patches=batch["image_patches"],
+        audio_frames=batch["audio_frames"],
+        image_coordinates=batch["image_coordinates"],
+        spans=batch["spans"],
+        active_expert=batch["active_expert"],
+    )
+    losses = F.cross_entropy(
+        logits.float().reshape(-1, config.vocab_size),
+        batch["target_ids"].reshape(-1),
+        reduction="none",
+    )
+    selected = losses[loss_mask.reshape(-1)]
+    if selected.numel() != int(batch.get("true_source_tokens", -1)) or selected.numel() < 1:
+        raise RuntimeError("packed loss mask does not match true source token accounting")
+    loss = selected.mean()
+    if not torch.isfinite(loss):
+        raise RuntimeError("packed pretraining produced a non-finite loss")
+    return loss
+
+
+def _capture_safe_masked_mean(
+    losses: torch.Tensor,
+    loss_mask: torch.Tensor,
+    *,
+    true_source_tokens: int,
+) -> torch.Tensor:
+    """Reduce a fixed-shape packed loss without data-dependent indexing."""
+
+    if loss_mask.dtype != torch.bool or loss_mask.numel() != losses.numel():
+        raise ValueError("packed loss mask must be boolean and match the loss shape")
+    if true_source_tokens < 1 or true_source_tokens > losses.numel():
+        raise ValueError("packed true source token count is outside the loss shape")
+    selected_or_zero = losses.reshape(-1).masked_fill(~loss_mask.reshape(-1), 0.0)
+    return selected_or_zero.sum() / true_source_tokens
+
+
+def packed_single_record_reference_loss(
+    model: UnifiedDecoder,
+    records: Sequence[dict[str, Any]],
+    config: RestartDecoderConfig,
+    *,
+    device: torch.device,
+) -> torch.Tensor:
+    """Evaluate the unchanged decoder record-by-record and aggregate by true tokens."""
+
+    total: torch.Tensor | None = None
+    token_count = 0
+    for record in records:
+        batch = decode_owned_batch(record, config, device=device)
+        with torch.no_grad():
+            logits = model(
+                batch["input_ids"], image_patches=batch["image_patches"],
+                audio_frames=batch["audio_frames"], image_coordinates=batch["image_coordinates"],
+                spans=batch["spans"], active_expert=batch["active_expert"],
+            )
+            losses = F.cross_entropy(
+                logits.float().reshape(-1, config.vocab_size),
+                batch["target_ids"].reshape(-1), reduction="sum",
+            )
+        total = losses if total is None else total + losses
+        token_count += int(batch["input_ids"].numel())
+    if total is None or token_count < 1:
+        raise ValueError("packed reference requires at least one record")
+    return total / token_count
 
 
 def _measurement_trainable_parameters(
@@ -188,14 +266,7 @@ class CensusBoundStage2Executor:
         if (diagnostic_bf16_down or diagnostic_eager_workspace) and tuple(iter_fp8_down_projections(model)):
             raise RuntimeError("Stage-2 BF16 diagnostic requires an unwrapped BF16 model")
         self.installation_receipt = (
-            {
-                "schema_version": (
-                    "ember-stage2-eager-workspace-diagnostic-installation-v1"
-                    if diagnostic_eager_workspace
-                    else "ember-stage2-bf16-down-diagnostic-installation-v1"
-                ),
-                "installed_sites": 0,
-            }
+            disabled_fp8_installation_receipt()
             if diagnostic_bf16_down or diagnostic_eager_workspace
             else install_fp8_down_projections(
                 model, kernel=fp8_kernel, allow_test_device=allow_test_device,
@@ -244,10 +315,22 @@ class CensusBoundStage2Executor:
 
     @staticmethod
     def _static_batch(batch: Mapping[str, object]) -> dict[str, object]:
-        return {
+        static = {
             key: value.clone() if isinstance(value, torch.Tensor) else value
             for key, value in batch.items()
         }
+        loss_mask = static.get("loss_mask")
+        if isinstance(loss_mask, torch.Tensor):
+            true_source_tokens = int(static.get("true_source_tokens", -1))
+            if (
+                loss_mask.dtype != torch.bool
+                or true_source_tokens < 1
+                or int(loss_mask.count_nonzero().item()) != true_source_tokens
+            ):
+                raise RuntimeError(
+                    "Stage-2 packed loss mask does not match true source token accounting"
+                )
+        return static
 
     @staticmethod
     def _copy_tensors(
@@ -477,7 +560,15 @@ class CensusBoundStage2Executor:
         loss = F.cross_entropy(
             logits.float().reshape(-1, self.config.vocab_size),
             static["target_ids"].reshape(-1),
+            reduction="none" if isinstance(static.get("loss_mask"), torch.Tensor) else "mean",
         )
+        loss_mask = static.get("loss_mask")
+        if isinstance(loss_mask, torch.Tensor):
+            loss = _capture_safe_masked_mean(
+                loss,
+                loss_mask,
+                true_source_tokens=int(static["true_source_tokens"]),
+            )
         loss.backward()
         return loss
 
@@ -666,6 +757,7 @@ class CensusBoundStage2Executor:
             "census_raw_sha256": self.authority.census_raw_sha256,
             "census_self_sha256": self.authority.census_self_sha256,
             "installed_sites": self.installation_receipt["installed_sites"],
+            "fp8_installation": dict(self.installation_receipt),
             "optimizer_steps": self._optimizer_steps,
             "fp8_weight_refreshes": self._refreshes,
             "fp8_dispatches": sum(int(item["dispatches"]) for item in kernels),
@@ -1111,6 +1203,259 @@ def run_selection_pretraining_segment(
         "tokens_seen": tokens_seen, "data_cursor": dict(last_result["data_cursor"]),
         "modality_examples": modality_examples, "expert_examples": expert_examples,
     }
+
+
+def run_packed_selection_pretraining_segment(
+    *,
+    model: UnifiedDecoder,
+    optimizer: torch.optim.Optimizer,
+    selection: object,
+    config: RestartDecoderConfig,
+    device: torch.device,
+    pack_records: int,
+    checkpoint_every: int,
+    checkpoint_callback: CheckpointCallback,
+    progress_callback: ProgressCallback | None = None,
+    initial_selection_cursor: Mapping[str, object] | None = None,
+    initial_global_step: int = 0,
+    initial_tokens_seen: int = 0,
+    initial_processed_tokens_seen: int = 0,
+    initial_pack_ordinal: int = 0,
+    max_packs: int | None = None,
+    signature_observer: SignatureObserver | None = None,
+    stage2_executor: CensusBoundStage2Executor | None = None,
+    measurement_preparation_regions_per_signature: int = 0,
+    measure_single_record_reference: bool = False,
+) -> dict[str, Any]:
+    """Train fixed same-expert packs while advancing the exact underlying selection cursor."""
+
+    if type(pack_records) is not int or pack_records < 1:
+        raise ValueError("pack_records must be positive")
+    if type(checkpoint_every) is not int or checkpoint_every < 1:
+        raise ValueError("checkpoint_every must be positive")
+    if any(type(value) is not int or value < 0 for value in (
+        initial_global_step, initial_tokens_seen, initial_processed_tokens_seen, initial_pack_ordinal,
+    )):
+        raise ValueError("packed resume counters must be nonnegative integers")
+    if max_packs is not None and (type(max_packs) is not int or max_packs < 1):
+        raise ValueError("max_packs must be positive when supplied")
+    if signature_observer is not None and stage2_executor is not None:
+        raise ValueError("an activating packed run cannot mint its own signature census")
+    if (
+        type(measurement_preparation_regions_per_signature) is not int
+        or measurement_preparation_regions_per_signature < 0
+    ):
+        raise ValueError("packed measurement preparation regions must be nonnegative")
+    if stage2_executor is not None and measurement_preparation_regions_per_signature < 1:
+        raise ValueError("packed Stage-2 requires measurement preparation")
+    if type(measure_single_record_reference) is not bool:
+        raise ValueError("packed single-record reference flag must be boolean")
+    if stage2_executor is not None and measure_single_record_reference:
+        raise ValueError("packed Stage-2 arm cannot mint the BF16 reference trajectory")
+    receipt = getattr(selection, "receipt", None)
+    iter_from = getattr(selection, "iter_from", None)
+    if not isinstance(receipt, Mapping) or not callable(iter_from):
+        raise ValueError("packed selection consumer requires a bound sequential selection")
+    selected_count = receipt.get("selected_record_count")
+    if type(selected_count) is not int or selected_count < 1:
+        raise ValueError("packed selection receipt requires selected_record_count")
+    start_ordinal = 0 if initial_selection_cursor is None else initial_selection_cursor.get("selected_ordinal")
+    if type(start_ordinal) is not int or not 0 <= start_ordinal <= selected_count:
+        raise ValueError("packed selection start cursor has invalid progress")
+    available = selected_count - start_ordinal
+    planned_records = available if max_packs is None else min(available, max_packs * pack_records)
+    if planned_records < pack_records or planned_records % pack_records:
+        raise ValueError("partial packed selection is not admissible")
+
+    model.train()
+    iterator = iter(iter_from(initial_selection_cursor))
+    prepared_packs: list[tuple[list[dict[str, Any]], dict[str, object], dict[str, Any]]] = []
+    for _ in range(planned_records // pack_records):
+        packed_records: list[dict[str, Any]] = []
+        end_cursor: dict[str, object] | None = None
+        for _ in range(pack_records):
+            try:
+                item = next(iterator)
+            except StopIteration as error:
+                raise ValueError("partial packed selection terminated before its bound count") from error
+            if not isinstance(item, tuple) or len(item) != 2 or not isinstance(item[0], Mapping) or not isinstance(item[1], Mapping):
+                raise ValueError("packed selection iterator must yield a record and exact next cursor")
+            packed_records.append(dict(item[0]))
+            end_cursor = dict(item[1])
+        if end_cursor is None:
+            raise RuntimeError("packed selection retained no end cursor")
+        prepared_packs.append((
+            packed_records,
+            end_cursor,
+            decode_owned_packed_batch(
+                packed_records, config, device=device, expected_records=pack_records,
+            ),
+        ))
+    measurement_preparation = {
+        "regions_per_signature": 0,
+        "signature_count": 0,
+        "region_count": 0,
+        "optimizer_state_preinitialized_parameters": 0,
+        "no_capture_in_measured_window": True,
+    }
+    if measurement_preparation_regions_per_signature:
+        flattened_records = [
+            record for packed_records, _cursor, _batch in prepared_packs
+            for record in packed_records
+        ]
+        optimizer_state_parameters = _preinitialize_optimizer_state(
+            optimizer,
+            trainable_parameters=_measurement_trainable_parameters(
+                model, flattened_records,
+            ),
+        )
+        unique_batches: dict[str, Mapping[str, object]] = {}
+        for _records, _cursor, batch in prepared_packs:
+            signature = str(training_step_signature(
+                batch, gradient_checkpointing=bool(config.gradient_checkpointing),
+            )["signature_sha256"])
+            unique_batches.setdefault(signature, batch)
+        cursor_identity = hashlib.sha256(json.dumps({
+            "selection_cursor": initial_selection_cursor,
+            "global_step": initial_global_step,
+            "tokens_seen": initial_tokens_seen,
+            "pack_ordinal": initial_pack_ordinal,
+        }, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+        if stage2_executor is not None:
+            measurement_preparation = stage2_executor.prepare_for_measurement(
+                list(unique_batches.values()),
+                cursor_identity=cursor_identity,
+                regions_per_signature=measurement_preparation_regions_per_signature,
+            )
+            measurement_preparation = {
+                **measurement_preparation,
+                "optimizer_state_preinitialized_parameters": optimizer_state_parameters,
+            }
+        else:
+            for signature in sorted(unique_batches):
+                batch = unique_batches[signature]
+                for _ in range(measurement_preparation_regions_per_signature):
+                    optimizer.zero_grad(set_to_none=True)
+                    packed_eager_loss(model, batch, config).backward()
+            optimizer.zero_grad(set_to_none=True)
+            measurement_preparation = {
+                "regions_per_signature": measurement_preparation_regions_per_signature,
+                "signature_count": len(unique_batches),
+                "region_count": measurement_preparation_regions_per_signature * len(unique_batches),
+                "optimizer_state_preinitialized_parameters": optimizer_state_parameters,
+                "no_capture_in_measured_window": True,
+            }
+        if device.type == "cuda":
+            torch.cuda.synchronize(device)
+    losses: list[float] = []
+    single_record_reference_losses: list[float] = []
+    step_timings_seconds: list[float] = []
+    true_tokens_seen = initial_tokens_seen
+    processed_tokens_seen = initial_processed_tokens_seen
+    records_consumed = start_ordinal
+    pack_ordinal = initial_pack_ordinal
+    last_result: dict[str, Any] | None = None
+    last_checkpoint_step: int | None = None
+    for local_pack, (_packed_records, end_cursor, batch) in enumerate(prepared_packs):
+        if signature_observer is not None:
+            signature_observer(training_step_signature(
+                batch, gradient_checkpointing=bool(config.gradient_checkpointing),
+            ))
+        reference_loss = (
+            float(packed_single_record_reference_loss(
+                model, _packed_records, config, device=device,
+            ).detach().cpu())
+            if measure_single_record_reference else None
+        )
+        step_started = time.perf_counter()
+        optimizer.zero_grad(set_to_none=(stage2_executor is None))
+        if stage2_executor is None:
+            loss = packed_eager_loss(model, batch, config)
+            loss.backward()
+        else:
+            cursor_identity = hashlib.sha256(json.dumps({
+                "selection_cursor": end_cursor,
+                "global_step": initial_global_step + local_pack,
+                "tokens_seen": true_tokens_seen,
+                "pack_ordinal": pack_ordinal,
+            }, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+            loss = stage2_executor.forward_loss_backward(batch, cursor_identity=cursor_identity)
+        if not torch.isfinite(loss):
+            raise RuntimeError("packed selection stopped on non-finite loss")
+        if reference_loss is not None:
+            packed_loss = float(loss.detach().cpu())
+            if abs(packed_loss - reference_loss) / max(abs(reference_loss), 1e-12) >= 0.01:
+                raise RuntimeError("packed BF16 loss exceeds the unchanged single-record one-percent tolerance")
+            single_record_reference_losses.append(reference_loss)
+        grad_norm_tensor = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        if stage2_executor is not None:
+            stage2_executor.assert_optimizer_membership()
+            stage2_executor.before_optimizer_step()
+        optimizer.step()
+        if stage2_executor is not None:
+            stage2_executor.after_optimizer_step()
+        if device.type == "cuda":
+            torch.cuda.synchronize(device)
+        elapsed = time.perf_counter() - step_started
+
+        true_tokens = int(batch["true_source_tokens"])
+        processed_tokens = int(batch["processed_padded_tokens"])
+        true_tokens_seen += true_tokens
+        processed_tokens_seen += processed_tokens
+        records_consumed += pack_records
+        pack_ordinal += 1
+        global_step = initial_global_step + local_pack + 1
+        losses.append(float(loss.detach().cpu()))
+        step_timings_seconds.append(elapsed)
+        cursor = {
+            "schema_version": "ember-specialist-packed-training-cursor-v1",
+            "shard": "PACKED_SELECTION:" + str(end_cursor["selection_receipt_sha256"])[:12],
+            "record_index": records_consumed,
+            "packed_selection_cursor": end_cursor,
+            "global_step": global_step,
+            "tokens_seen": true_tokens_seen,
+            "processed_tokens_seen": processed_tokens_seen,
+            "pack_ordinal": pack_ordinal,
+            "records_consumed": records_consumed,
+            "pack_records": pack_records,
+        }
+        last_result = {
+            "step": global_step, "global_step": global_step, "losses": list(losses),
+            "tokens_seen": true_tokens_seen, "processed_tokens_seen": processed_tokens_seen,
+            "data_cursor": cursor, "active_expert": batch["active_expert"],
+            "record_order_sha256": batch["record_order_sha256"],
+            "tokens_sha256": batch["tokens_sha256"],
+        }
+        if progress_callback is not None:
+            progress_callback({
+                "step": global_step, "total_steps": planned_records // pack_records,
+                "loss": losses[-1], "step_ms": elapsed * 1000.0,
+                "tokens_consumed": true_tokens, "processed_tokens": processed_tokens,
+                "records_consumed": pack_records, "grad_norm": float(grad_norm_tensor),
+            })
+        if global_step % checkpoint_every == 0:
+            checkpoint_callback(global_step, last_result)
+            last_checkpoint_step = global_step
+    if last_result is None:
+        raise ValueError("packed selection requires at least one complete pack")
+    if last_checkpoint_step != last_result["global_step"]:
+        checkpoint_callback(int(last_result["global_step"]), last_result)
+    elapsed_total = sum(step_timings_seconds)
+    return {
+        "steps": len(losses), "global_step": int(last_result["global_step"]), "losses": losses,
+        "tokens_seen": true_tokens_seen, "processed_tokens_seen": processed_tokens_seen,
+        "data_cursor": dict(last_result["data_cursor"]),
+        "step_timings_seconds": step_timings_seconds,
+        "tokens_per_second": ((true_tokens_seen - initial_tokens_seen) / elapsed_total if elapsed_total else 0.0),
+        "processed_tokens_per_second": ((processed_tokens_seen - initial_processed_tokens_seen) / elapsed_total if elapsed_total else 0.0),
+        "single_record_reference_losses": (
+            single_record_reference_losses if measure_single_record_reference else None
+        ),
+        "measurement_preparation": measurement_preparation,
+        "stage2_runtime": stage2_executor.receipt() if stage2_executor is not None else None,
+    }
+
+
 def run_manifest_bound_semantic_segment(
     *,
     model: UnifiedDecoder,

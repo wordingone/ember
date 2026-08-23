@@ -1083,8 +1083,8 @@ class CheckpointArtifactTests(unittest.TestCase):
         genesis = {"vision": "a" * 64, "audio": "b" * 64, "reasoning": "c" * 64, "tool": "d" * 64}
         receipt = {
             "schema_version": "ember-owned-specialist-stream-selection-receipt-v1",
-            "stream_manifest_sha256": "90ae6dd08430ead9f8287028ad20ed115a14d8d9fa3fc6c6c615f05e110fc9d0",
-            "stream_build_receipt_sha256": "748787e23c3100836713f6672a05629185a914563475f592c264ee977260f2d8",
+            "stream_manifest_sha256": "25d4f681af1d43c12dda718b7cd0ddf75613a46a7d5053b7ddf5436e0cbf9a22",
+            "stream_build_receipt_sha256": "2daf3de395c83dc19707cb81f31c12c1484d9c19de2249c8eb8aec1b5a179c9d",
             "corpus_root_sha256": "42d1aac14c1e59563d348b7a53ce83dcce499a48217569d7d00a3966199141ab",
             "family_root_sha256": "e" * 64, "capability": "image", "selection_rule_id": "image_scene_split_train_v1",
             "selected_record_count": 3, "selected_token_count": 12, "selected_records_sha256": "f" * 64,
