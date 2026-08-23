@@ -352,6 +352,7 @@ class CheckpointCaptureProofTests(unittest.TestCase):
                 optimizer_identity=lambda: "8" * 64,
                 cursor_identity=lambda: "9" * 64,
             )
+        for signature in signatures:
             pool.replay(signature)
         self.assertEqual(calls, list(signatures))
         self.assertEqual(pool.receipt()["signature_count"], 2)
@@ -676,6 +677,96 @@ class CloseGateTests(unittest.TestCase):
             with self.assertRaisesRegex(FileExistsError, "refusing to overwrite"):
                 training_acceleration.compare_stage2_ab_receipts(
                     baseline_path, accelerated_path, comparison_path,
+                )
+
+    def test_graph_only_diagnostic_receipt_is_closed_and_rejected_by_production_comparator(self) -> None:
+        diagnostic = self._arm("census_bound_stage2")
+        diagnostic.update({
+            "schema_version": "ember-stage2-graph-only-diagnostic-v1",
+            "arm": "graph_only_bf16_down",
+            "claim_boundary": "DIAGNOSTIC_ONLY_NOT_CLOSE_EVIDENCE",
+            "production_accelerated_arm_self_sha256": "9" * 64,
+            "pre_optimizer_sync": "NONE",
+        })
+        diagnostic["mechanisms"] = dict(
+            diagnostic["mechanisms"], fp8_dispatches=0,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            diagnostic_path = root / "diagnostic.json"
+            baseline_path = root / "baseline.json"
+            output_path = root / "comparison.json"
+            receipt = training_acceleration.write_stage2_graph_only_diagnostic_receipt(
+                diagnostic_path, diagnostic,
+            )
+            self.assertEqual(receipt["mechanisms"]["fp8_dispatches"], 0)
+            self.assertGreater(receipt["mechanisms"]["cuda_graph_replays"], 0)
+            self.assertEqual(
+                training_acceleration.load_stage2_graph_only_diagnostic_receipt(
+                    diagnostic_path,
+                ),
+                diagnostic,
+            )
+            training_acceleration.write_stage2_arm_receipt(
+                baseline_path, self._arm("bf16_baseline"),
+            )
+            with self.assertRaisesRegex(ValueError, "closed v2 key set"):
+                training_acceleration.compare_stage2_ab_receipts(
+                    baseline_path, diagnostic_path, output_path,
+                )
+
+            refused = dict(diagnostic)
+            refused["mechanisms"] = dict(refused["mechanisms"], fp8_dispatches=1)
+            with self.assertRaisesRegex(ValueError, "zero FP8 dispatches"):
+                training_acceleration.write_stage2_graph_only_diagnostic_receipt(
+                    root / "refused.json", refused,
+                )
+
+            synchronized = dict(diagnostic, pre_optimizer_sync="current_stream_synchronize")
+            training_acceleration.write_stage2_graph_only_diagnostic_receipt(
+                root / "synchronized.json", synchronized,
+            )
+
+    def test_eager_workspace_diagnostic_receipt_refuses_graphs_fp8_and_close_comparison(self) -> None:
+        diagnostic = self._arm("census_bound_stage2")
+        diagnostic.update({
+            "schema_version": "ember-stage2-eager-workspace-diagnostic-v1",
+            "arm": "eager_workspace_bf16",
+            "claim_boundary": "DIAGNOSTIC_ONLY_NOT_CLOSE_EVIDENCE",
+            "production_accelerated_arm_self_sha256": "9" * 64,
+            "post_step1_parameter_delta_l2": {
+                "active_expert_bank": 0.25,
+                "trunk": 0.5,
+            },
+        })
+        diagnostic["mechanisms"] = dict(
+            diagnostic["mechanisms"],
+            fp8_dispatches=0,
+            cuda_graph_captures=0,
+            cuda_graph_replays=0,
+        )
+        diagnostic["captures_during_preparation"] = 0
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "eager-workspace.json"
+            receipt = training_acceleration.write_stage2_eager_workspace_diagnostic_receipt(
+                path, diagnostic,
+            )
+            self.assertEqual(receipt["mechanisms"]["cuda_graph_replays"], 0)
+            baseline = root / "baseline.json"
+            training_acceleration.write_stage2_arm_receipt(
+                baseline, self._arm("bf16_baseline"),
+            )
+            with self.assertRaisesRegex(ValueError, "closed v2 key set"):
+                training_acceleration.compare_stage2_ab_receipts(
+                    baseline, path, root / "comparison.json",
+                )
+
+            refused = dict(diagnostic)
+            refused["mechanisms"] = dict(refused["mechanisms"], cuda_graph_replays=1)
+            with self.assertRaisesRegex(ValueError, "cannot engage CUDA graphs"):
+                training_acceleration.write_stage2_eager_workspace_diagnostic_receipt(
+                    root / "refused.json", refused,
                 )
 
 

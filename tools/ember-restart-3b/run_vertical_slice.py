@@ -40,6 +40,8 @@ from training_acceleration import (
     load_training_signature_census,
     stage1_policy,
     write_stage2_arm_receipt,
+    write_stage2_eager_workspace_diagnostic_receipt,
+    write_stage2_graph_only_diagnostic_receipt,
 )
 from durable_io import atomic_create_durable, atomic_replace_durable
 from parameter_counter import measure_parameter_counts
@@ -70,6 +72,10 @@ _STAGE2_CENSUS_RELATIVE_PATH = Path("docs/spec/llmq/ember-training-signature-cen
 _STAGE2_CENSUS_RAW_SHA256 = "86e37ad5868da1ef77419d643c3ff31ee0a38b7e9f603b9c0807376958ef5d0c"
 _STAGE2_MATCHED_LOSS_RELATIVE_TOLERANCE = 0.01
 _STAGE2_PREPARATION_REGIONS_PER_SIGNATURE = 4
+_STAGE2_PRODUCTION_ACCELERATED_ARM_SELF_SHA256 = (
+    "f3baa9473802c0f9088fc30e883692b4c460a1bf67ba5221fda986a0425a7699"
+)
+_STAGE2_DIAGNOSTIC_CLAIM_BOUNDARY = "DIAGNOSTIC_ONLY_NOT_CLOSE_EVIDENCE"
 
 _GENESIS_INVENTORY_SCHEMA = "ember-genesis-inventory-v1"
 _GENESIS_INVENTORY_KEYS = {
@@ -648,6 +654,9 @@ def run_governed_vertical(
     signature_census_output: Path | None = None,
     signature_census_source_commit: str | None = None,
     stage2_acceleration: bool = False,
+    stage2_diagnostic_bf16_down: bool = False,
+    stage2_diagnostic_eager_workspace: bool = False,
+    stage2_diagnostic_pre_optimizer_sync: bool = False,
     stage2_arm_receipt_output: Path | None = None,
 ) -> dict[str, object]:
     """Canonical-runner entrypoint; check launch inputs before governor/CUDA admission."""
@@ -689,6 +698,9 @@ def run_governed_vertical(
         signature_census_output=census_output,
         signature_census_source_commit=census_source_commit,
         stage2_acceleration=stage2_acceleration,
+        stage2_diagnostic_bf16_down=stage2_diagnostic_bf16_down,
+        stage2_diagnostic_eager_workspace=stage2_diagnostic_eager_workspace,
+        stage2_diagnostic_pre_optimizer_sync=stage2_diagnostic_pre_optimizer_sync,
         stage2_arm_receipt_output=stage2_arm_receipt_output,
     )
 
@@ -696,6 +708,9 @@ def run_governed_vertical(
 def preflight_governed_vertical(
     *, seed: int, artifact_root: Path, write_budget_bytes: int,
     max_records: int | None = None, stage2_acceleration: bool = False,
+    stage2_diagnostic_bf16_down: bool = False,
+    stage2_diagnostic_eager_workspace: bool = False,
+    stage2_diagnostic_pre_optimizer_sync: bool = False,
     stage2_arm_receipt_output: Path | None = None,
 ) -> dict[str, object]:
     """CPU-only canonical-runner child preflight; it never admits CUDA or a training step."""
@@ -714,6 +729,9 @@ def preflight_governed_vertical(
         raise ValueError("governed vertical artifact root escapes canonical runner custody")
     receipt_output = validate_stage2_activation_request(
         enabled=stage2_acceleration,
+        diagnostic_bf16_down=stage2_diagnostic_bf16_down,
+        diagnostic_eager_workspace=stage2_diagnostic_eager_workspace,
+        diagnostic_pre_optimizer_sync=stage2_diagnostic_pre_optimizer_sync,
         artifact_root=resolved_artifact_root,
         receipt_output=stage2_arm_receipt_output,
         signature_census_output=None,
@@ -723,6 +741,10 @@ def preflight_governed_vertical(
     records, _launch_packet, input_receipt = load_authorized_records(root)
     selected_records = records[:max_records] if max_records is not None else records
     config_sha256 = _sha256(config_path)
+    stage2_active = (
+        stage2_acceleration or stage2_diagnostic_bf16_down
+        or stage2_diagnostic_eager_workspace
+    )
     return {
         "decision": "PREFLIGHT_ONLY",
         "canonical_disk_budget_runner": {
@@ -734,7 +756,12 @@ def preflight_governed_vertical(
         },
         "max_records": max_records,
         "stage2_matched_arm": {
-            "arm": "census_bound_stage2" if stage2_acceleration else "bf16_baseline",
+            "arm": (
+                "eager_workspace_bf16" if stage2_diagnostic_eager_workspace
+                else "graph_only_bf16_down" if stage2_diagnostic_bf16_down
+                else "census_bound_stage2" if stage2_acceleration
+                else "bf16_baseline"
+            ),
             "source_commit": _STAGE2_AB_SOURCE_COMMIT,
             "model_config_sha256": config_sha256,
             "input_identity_sha256": _json_sha256(input_receipt),
@@ -745,7 +772,7 @@ def preflight_governed_vertical(
             "seed": seed,
             "initial_cursor": {"record_index": 0, "global_step": 0, "tokens_seen": 0},
             "census_raw_sha256": (
-                _STAGE2_CENSUS_RAW_SHA256 if stage2_acceleration else None
+                _STAGE2_CENSUS_RAW_SHA256 if stage2_active else None
             ),
             "matched_loss_relative_tolerance_exclusive": _STAGE2_MATCHED_LOSS_RELATIVE_TOLERANCE,
             "preparation_regions_per_signature": _STAGE2_PREPARATION_REGIONS_PER_SIGNATURE,
@@ -3403,6 +3430,9 @@ def validate_signature_census_request(
 def validate_stage2_activation_request(
     *,
     enabled: bool,
+    diagnostic_bf16_down: bool = False,
+    diagnostic_eager_workspace: bool = False,
+    diagnostic_pre_optimizer_sync: bool = False,
     artifact_root: Path,
     receipt_output: Path | None,
     signature_census_output: Path | None,
@@ -3410,13 +3440,23 @@ def validate_stage2_activation_request(
 ) -> Path | None:
     """Close the final #1413 activation boundary before model allocation."""
 
-    if type(enabled) is not bool:
-        raise ValueError("Stage-2 activation flag must be boolean")
-    if enabled and signature_census_output is not None:
+    if (
+        type(enabled) is not bool
+        or type(diagnostic_bf16_down) is not bool
+        or type(diagnostic_eager_workspace) is not bool
+        or type(diagnostic_pre_optimizer_sync) is not bool
+    ):
+        raise ValueError("Stage-2 activation and diagnostic flags must be boolean")
+    if sum((enabled, diagnostic_bf16_down, diagnostic_eager_workspace)) > 1:
+        raise ValueError("Stage-2 production and graph-only diagnostic modes are mutually exclusive")
+    if diagnostic_pre_optimizer_sync and not diagnostic_bf16_down:
+        raise ValueError("Stage-2 pre-optimizer sync requires graph-only diagnostic mode")
+    active_mode = enabled or diagnostic_bf16_down or diagnostic_eager_workspace
+    if active_mode and signature_census_output is not None:
         raise ValueError("Stage-2 activation cannot mint its own census authority")
     if receipt_output is not None and resume_checkpoint is not None:
         raise ValueError("Stage-2 matched A/B does not admit resume ambiguity")
-    if enabled and receipt_output is None:
+    if active_mode and receipt_output is None:
         raise ValueError("Stage-2 activation requires an arm receipt output")
     if receipt_output is None:
         return None
@@ -3568,6 +3608,9 @@ def run(
     signature_census_output: Path | None = None,
     signature_census_source_commit: str | None = None,
     stage2_acceleration: bool = False,
+    stage2_diagnostic_bf16_down: bool = False,
+    stage2_diagnostic_eager_workspace: bool = False,
+    stage2_diagnostic_pre_optimizer_sync: bool = False,
     stage2_arm_receipt_output: Path | None = None,
 ) -> dict[str, object]:
     if records_override is not None and isinstance(specialist_verification, dict) and isinstance(specialist_lineage, dict) and specialist_verification.get("capability") == "image":
@@ -3609,6 +3652,9 @@ def run(
     )
     stage2_arm_receipt_output = validate_stage2_activation_request(
         enabled=stage2_acceleration,
+        diagnostic_bf16_down=stage2_diagnostic_bf16_down,
+        diagnostic_eager_workspace=stage2_diagnostic_eager_workspace,
+        diagnostic_pre_optimizer_sync=stage2_diagnostic_pre_optimizer_sync,
         artifact_root=artifact_root,
         receipt_output=stage2_arm_receipt_output,
         signature_census_output=signature_census_output,
@@ -3706,8 +3752,12 @@ def run(
             + str(execution_slice["records_sha256"])[:12]
         )
         episode_expert = verified_specialist_episode_expert(records, specialist_verification)
+    stage2_active = (
+        stage2_acceleration or stage2_diagnostic_bf16_down
+        or stage2_diagnostic_eager_workspace
+    )
     stage2_authority = None
-    if stage2_acceleration:
+    if stage2_active:
         if records_override is not None:
             raise ValueError("Stage-2 matched A/B admits only the canonical full-route shard")
         census_path = root / _STAGE2_CENSUS_RELATIVE_PATH
@@ -3793,6 +3843,9 @@ def run(
             optimizer=optimizer,
             config=config,
             authority=stage2_authority,
+            diagnostic_bf16_down=stage2_diagnostic_bf16_down,
+            diagnostic_eager_workspace=stage2_diagnostic_eager_workspace,
+            diagnostic_pre_optimizer_sync=stage2_diagnostic_pre_optimizer_sync,
         )
         if stage2_authority is not None
         else None
@@ -4000,7 +4053,7 @@ def run(
             )
         ]
         runtime = segment["stage2_runtime"]
-        if stage2_acceleration:
+        if stage2_active:
             if not isinstance(runtime, Mapping):
                 raise RuntimeError("Stage-2 activation completed without a runtime receipt")
             mechanisms = {
@@ -4037,17 +4090,26 @@ def run(
             raise RuntimeError("Stage-2 arm completed without preparation evidence")
         captures_during_preparation = (
             int(runtime["captures_during_preparation"])
-            if stage2_acceleration and isinstance(runtime, Mapping) else 0
+            if stage2_active and isinstance(runtime, Mapping) else 0
         )
         captures_during_measured_window = (
             int(runtime["captures_during_measured_window"])
-            if stage2_acceleration and isinstance(runtime, Mapping) else 0
+            if stage2_active and isinstance(runtime, Mapping) else 0
         )
-        stage2_arm_receipt = write_stage2_arm_receipt(
-            stage2_arm_receipt_output,
-            {
-                "schema_version": "ember-stage2-training-arm-v2",
-                "arm": "census_bound_stage2" if stage2_acceleration else "bf16_baseline",
+        receipt_value = {
+                "schema_version": (
+                    "ember-stage2-eager-workspace-diagnostic-v1"
+                    if stage2_diagnostic_eager_workspace
+                    else "ember-stage2-graph-only-diagnostic-v1"
+                    if stage2_diagnostic_bf16_down
+                    else "ember-stage2-training-arm-v2"
+                ),
+                "arm": (
+                    "eager_workspace_bf16" if stage2_diagnostic_eager_workspace
+                    else "graph_only_bf16_down" if stage2_diagnostic_bf16_down
+                    else "census_bound_stage2" if stage2_acceleration
+                    else "bf16_baseline"
+                ),
                 "source_commit": _STAGE2_AB_SOURCE_COMMIT,
                 "runner_source_sha256": _sha256(Path(__file__).resolve()),
                 "model_config_sha256": config_sha256,
@@ -4057,7 +4119,7 @@ def run(
                     seed=seed, config_sha256=config_sha256,
                 ),
                 "census_raw_sha256": (
-                    _STAGE2_CENSUS_RAW_SHA256 if stage2_acceleration else None
+                    _STAGE2_CENSUS_RAW_SHA256 if stage2_active else None
                 ),
                 "seed": seed,
                 "initial_cursor": initial_cursor,
@@ -4077,12 +4139,12 @@ def run(
                 ),
                 "capture_gradient_zeroing": (
                     str(runtime["capture_gradient_zeroing"])
-                    if stage2_acceleration and isinstance(runtime, Mapping)
+                    if stage2_active and isinstance(runtime, Mapping)
                     else "NOT_APPLICABLE"
                 ),
                 "preparation_memory_allocated_bytes_by_signature": (
                     dict(runtime["preparation_memory_allocated_bytes_by_signature"])
-                    if stage2_acceleration and isinstance(runtime, Mapping)
+                    if stage2_active and isinstance(runtime, Mapping)
                     else {}
                 ),
                 "captures_during_preparation": captures_during_preparation,
@@ -4091,8 +4153,30 @@ def run(
                     preparation["no_capture_in_measured_window"]
                 ),
                 "mechanisms": mechanisms,
-            },
-        )
+            }
+        if stage2_diagnostic_bf16_down or stage2_diagnostic_eager_workspace:
+            receipt_value.update({
+                "claim_boundary": _STAGE2_DIAGNOSTIC_CLAIM_BOUNDARY,
+                "production_accelerated_arm_self_sha256": (
+                    _STAGE2_PRODUCTION_ACCELERATED_ARM_SELF_SHA256
+                ),
+            })
+        if stage2_diagnostic_eager_workspace:
+            receipt_value["post_step1_parameter_delta_l2"] = dict(
+                runtime["post_step1_parameter_delta_l2"]
+            )
+            stage2_arm_receipt = write_stage2_eager_workspace_diagnostic_receipt(
+                stage2_arm_receipt_output, receipt_value,
+            )
+        elif stage2_diagnostic_bf16_down:
+            receipt_value["pre_optimizer_sync"] = str(runtime["pre_optimizer_sync"])
+            stage2_arm_receipt = write_stage2_graph_only_diagnostic_receipt(
+                stage2_arm_receipt_output, receipt_value,
+            )
+        else:
+            stage2_arm_receipt = write_stage2_arm_receipt(
+                stage2_arm_receipt_output, receipt_value,
+            )
     if telemetry_path is not None and telemetry_run_id is not None and model_chat_restore_not_before is not None:
         append_training_telemetry(telemetry_path, kind="run_status", payload={
             "run_id": telemetry_run_id,
@@ -4533,6 +4617,9 @@ def main() -> None:
     governed_vertical.add_argument("--signature-census-output", type=Path)
     governed_vertical.add_argument("--signature-census-source-commit")
     governed_vertical.add_argument("--stage2-acceleration", action="store_true")
+    governed_vertical.add_argument("--stage2-diagnostic-bf16-down", action="store_true")
+    governed_vertical.add_argument("--stage2-diagnostic-eager-workspace", action="store_true")
+    governed_vertical.add_argument("--stage2-diagnostic-pre-optimizer-sync", action="store_true")
     governed_vertical.add_argument("--stage2-arm-receipt-output", type=Path)
     governed_preflight = subparsers.add_parser("governed-vertical-preflight")
     governed_preflight.add_argument("--seed", type=int, required=True)
@@ -4540,6 +4627,9 @@ def main() -> None:
     governed_preflight.add_argument("--write-budget-bytes", type=int, required=True)
     governed_preflight.add_argument("--max-records", type=int)
     governed_preflight.add_argument("--stage2-acceleration", action="store_true")
+    governed_preflight.add_argument("--stage2-diagnostic-bf16-down", action="store_true")
+    governed_preflight.add_argument("--stage2-diagnostic-eager-workspace", action="store_true")
+    governed_preflight.add_argument("--stage2-diagnostic-pre-optimizer-sync", action="store_true")
     governed_preflight.add_argument("--stage2-arm-receipt-output", type=Path)
     stage2_compare = subparsers.add_parser("stage2-ab-compare")
     stage2_compare.add_argument("--baseline", type=Path, required=True)
@@ -4660,6 +4750,9 @@ def main() -> None:
             signature_census_output=args.signature_census_output,
             signature_census_source_commit=args.signature_census_source_commit,
             stage2_acceleration=args.stage2_acceleration,
+            stage2_diagnostic_bf16_down=args.stage2_diagnostic_bf16_down,
+            stage2_diagnostic_eager_workspace=args.stage2_diagnostic_eager_workspace,
+            stage2_diagnostic_pre_optimizer_sync=args.stage2_diagnostic_pre_optimizer_sync,
             stage2_arm_receipt_output=args.stage2_arm_receipt_output,
         )
     elif args.command == "governed-vertical-preflight":
@@ -4669,6 +4762,9 @@ def main() -> None:
             write_budget_bytes=args.write_budget_bytes,
             max_records=args.max_records,
             stage2_acceleration=args.stage2_acceleration,
+            stage2_diagnostic_bf16_down=args.stage2_diagnostic_bf16_down,
+            stage2_diagnostic_eager_workspace=args.stage2_diagnostic_eager_workspace,
+            stage2_diagnostic_pre_optimizer_sync=args.stage2_diagnostic_pre_optimizer_sync,
             stage2_arm_receipt_output=args.stage2_arm_receipt_output,
         )
     elif args.command == "stage2-ab-compare":

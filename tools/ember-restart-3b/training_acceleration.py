@@ -872,6 +872,35 @@ _STAGE2_MECHANISM_KEYS = {
     "gradient_workspace_rebinds", "inactive_grad_none_assertions",
 }
 _STAGE2_MATCHED_LOSS_RELATIVE_TOLERANCE = 0.01
+_STAGE2_DIAGNOSTIC_IDENTITY_KEYS = {
+    "claim_boundary", "production_accelerated_arm_self_sha256",
+}
+_STAGE2_GRAPH_ONLY_DIAGNOSTIC_KEYS = (
+    _STAGE2_ARM_KEYS | _STAGE2_DIAGNOSTIC_IDENTITY_KEYS | {"pre_optimizer_sync"}
+)
+_STAGE2_GRAPH_ONLY_DIAGNOSTIC_SCHEMA = "ember-stage2-graph-only-diagnostic-v1"
+_STAGE2_GRAPH_ONLY_DIAGNOSTIC_CLAIM_BOUNDARY = "DIAGNOSTIC_ONLY_NOT_CLOSE_EVIDENCE"
+_STAGE2_EAGER_WORKSPACE_DIAGNOSTIC_SCHEMA = "ember-stage2-eager-workspace-diagnostic-v1"
+_STAGE2_EAGER_WORKSPACE_DIAGNOSTIC_KEYS = (
+    _STAGE2_ARM_KEYS | _STAGE2_DIAGNOSTIC_IDENTITY_KEYS
+    | {"post_step1_parameter_delta_l2"}
+)
+
+
+def _validate_post_step1_parameter_delta_l2(value: object) -> dict[str, float]:
+    if (
+        not isinstance(value, Mapping)
+        or set(value) != {"active_expert_bank", "trunk"}
+        or any(
+            not isinstance(item, (int, float))
+            or isinstance(item, bool)
+            or not math.isfinite(float(item))
+            or float(item) < 0.0
+            for item in value.values()
+        )
+    ):
+        raise ValueError("Stage-2 diagnostic post-step1 parameter delta L2 evidence is invalid")
+    return {key: float(value[key]) for key in ("active_expert_bank", "trunk")}
 
 
 def _validate_stage2_arm(value: Mapping[str, object]) -> dict[str, object]:
@@ -1058,6 +1087,161 @@ def write_stage2_arm_receipt(
     receipt["self_sha256"] = hashlib.sha256(_canonical_json(receipt)).hexdigest()
     _write_json_no_overwrite(path, receipt, label="Stage-2 arm receipt")
     return receipt
+
+
+def _validate_stage2_graph_only_diagnostic(
+    value: Mapping[str, object],
+) -> dict[str, object]:
+    if not isinstance(value, Mapping) or set(value) != _STAGE2_GRAPH_ONLY_DIAGNOSTIC_KEYS:
+        raise ValueError("Stage-2 graph-only diagnostic must use its closed v1 key set")
+    if (
+        value["schema_version"] != _STAGE2_GRAPH_ONLY_DIAGNOSTIC_SCHEMA
+        or value["arm"] != "graph_only_bf16_down"
+    ):
+        raise ValueError("Stage-2 graph-only diagnostic identity is invalid")
+    if value["claim_boundary"] != _STAGE2_GRAPH_ONLY_DIAGNOSTIC_CLAIM_BOUNDARY:
+        raise ValueError("Stage-2 graph-only diagnostic claim boundary is invalid")
+    _sha256(
+        value["production_accelerated_arm_self_sha256"],
+        label="production accelerated arm self sha256",
+    )
+    if value["pre_optimizer_sync"] not in {"NONE", "current_stream_synchronize"}:
+        raise ValueError("Stage-2 graph-only diagnostic pre-optimizer sync is invalid")
+    mechanisms = value["mechanisms"]
+    if not isinstance(mechanisms, Mapping) or mechanisms.get("fp8_dispatches") != 0:
+        raise ValueError("Stage-2 graph-only diagnostic requires zero FP8 dispatches")
+    if mechanisms.get("fp8_fallbacks") != 0:
+        raise ValueError("Stage-2 graph-only diagnostic requires zero FP8 fallbacks")
+
+    # Reuse the production arm's closed identity, timing, graph, workspace, and
+    # preparation validators. The proxy's synthetic positive FP8 count exists
+    # only to pass the production arm's mechanism-presence clause; the truthful
+    # diagnostic count above is independently pinned to zero and is what is
+    # signed and persisted.
+    production_proxy = {
+        key: value[key]
+        for key in _STAGE2_ARM_KEYS
+    }
+    production_proxy["schema_version"] = "ember-stage2-training-arm-v2"
+    production_proxy["arm"] = "census_bound_stage2"
+    production_proxy["mechanisms"] = dict(mechanisms, fp8_dispatches=1)
+    _validate_stage2_arm(production_proxy)
+    return dict(value)
+
+
+def write_stage2_graph_only_diagnostic_receipt(
+    path: Path, value: Mapping[str, object],
+) -> dict[str, object]:
+    receipt = _validate_stage2_graph_only_diagnostic(value)
+    receipt["self_sha256"] = hashlib.sha256(_canonical_json(receipt)).hexdigest()
+    _write_json_no_overwrite(path, receipt, label="Stage-2 graph-only diagnostic receipt")
+    return receipt
+
+
+def load_stage2_graph_only_diagnostic_receipt(path: Path) -> dict[str, object]:
+    try:
+        raw = path.read_bytes()
+        value = json.loads(raw)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("Stage-2 graph-only diagnostic receipt is not readable strict JSON") from error
+    if (
+        not isinstance(value, dict)
+        or set(value) != _STAGE2_GRAPH_ONLY_DIAGNOSTIC_KEYS | {"self_sha256"}
+    ):
+        raise ValueError("Stage-2 graph-only diagnostic must use its closed v1 key set")
+    claimed = _sha256(value["self_sha256"], label="graph-only diagnostic self sha256")
+    unsigned = dict(value)
+    del unsigned["self_sha256"]
+    if hashlib.sha256(_canonical_json(unsigned)).hexdigest() != claimed:
+        raise ValueError("Stage-2 graph-only diagnostic self hash mismatch")
+    return _validate_stage2_graph_only_diagnostic(unsigned)
+
+
+def _validate_stage2_eager_workspace_diagnostic(
+    value: Mapping[str, object],
+) -> dict[str, object]:
+    if not isinstance(value, Mapping) or set(value) != _STAGE2_EAGER_WORKSPACE_DIAGNOSTIC_KEYS:
+        raise ValueError("Stage-2 eager-workspace diagnostic must use its closed v1 key set")
+    if (
+        value["schema_version"] != _STAGE2_EAGER_WORKSPACE_DIAGNOSTIC_SCHEMA
+        or value["arm"] != "eager_workspace_bf16"
+        or value["claim_boundary"] != _STAGE2_GRAPH_ONLY_DIAGNOSTIC_CLAIM_BOUNDARY
+    ):
+        raise ValueError("Stage-2 eager-workspace diagnostic identity or claim boundary is invalid")
+    _sha256(
+        value["production_accelerated_arm_self_sha256"],
+        label="production accelerated arm self sha256",
+    )
+    _validate_post_step1_parameter_delta_l2(value["post_step1_parameter_delta_l2"])
+    mechanisms = value["mechanisms"]
+    if not isinstance(mechanisms, Mapping):
+        raise ValueError("Stage-2 eager-workspace diagnostic mechanisms are invalid")
+    if mechanisms.get("fp8_dispatches") != 0 or mechanisms.get("fp8_fallbacks") != 0:
+        raise ValueError("Stage-2 eager-workspace diagnostic cannot engage FP8")
+    if any(mechanisms.get(key) != 0 for key in (
+        "cuda_graph_captures", "cuda_graph_replays", "cuda_graph_fallbacks",
+    )):
+        raise ValueError("Stage-2 eager-workspace diagnostic cannot engage CUDA graphs")
+    if (
+        value["captures_during_preparation"] != 0
+        or value["captures_during_measured_window"] != 0
+    ):
+        raise ValueError("Stage-2 eager-workspace diagnostic cannot carry CUDA graph evidence")
+    preparation_memory = value["preparation_memory_allocated_bytes_by_signature"]
+    signature_count = value["preparation_signature_count"]
+    if (
+        type(signature_count) is not int
+        or signature_count < 1
+        or not isinstance(preparation_memory, Mapping)
+        or len(preparation_memory) != signature_count
+        or any(
+            re.fullmatch(r"[0-9a-f]{64}", str(signature)) is None
+            or type(allocated) is not int
+            or allocated < 1
+            for signature, allocated in preparation_memory.items()
+        )
+    ):
+        raise ValueError("Stage-2 eager-workspace preparation memory evidence is invalid")
+
+    proxy = {key: value[key] for key in _STAGE2_ARM_KEYS}
+    proxy["schema_version"] = "ember-stage2-training-arm-v2"
+    proxy["arm"] = "census_bound_stage2"
+    proxy["mechanisms"] = dict(
+        mechanisms,
+        fp8_dispatches=1,
+        cuda_graph_captures=signature_count,
+        cuda_graph_replays=value["steps"],
+    )
+    proxy["captures_during_preparation"] = signature_count
+    _validate_stage2_arm(proxy)
+    return dict(value)
+
+
+def write_stage2_eager_workspace_diagnostic_receipt(
+    path: Path, value: Mapping[str, object],
+) -> dict[str, object]:
+    receipt = _validate_stage2_eager_workspace_diagnostic(value)
+    receipt["self_sha256"] = hashlib.sha256(_canonical_json(receipt)).hexdigest()
+    _write_json_no_overwrite(path, receipt, label="Stage-2 eager-workspace diagnostic receipt")
+    return receipt
+
+
+def load_stage2_eager_workspace_diagnostic_receipt(path: Path) -> dict[str, object]:
+    try:
+        value = json.loads(path.read_bytes())
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("Stage-2 eager-workspace diagnostic is not readable strict JSON") from error
+    if (
+        not isinstance(value, dict)
+        or set(value) != _STAGE2_EAGER_WORKSPACE_DIAGNOSTIC_KEYS | {"self_sha256"}
+    ):
+        raise ValueError("Stage-2 eager-workspace diagnostic must use its closed v1 key set")
+    claimed = _sha256(value["self_sha256"], label="eager-workspace diagnostic self sha256")
+    unsigned = dict(value)
+    del unsigned["self_sha256"]
+    if hashlib.sha256(_canonical_json(unsigned)).hexdigest() != claimed:
+        raise ValueError("Stage-2 eager-workspace diagnostic self hash mismatch")
+    return _validate_stage2_eager_workspace_diagnostic(unsigned)
 
 
 def _load_stage2_arm_receipt_bytes(raw: bytes) -> dict[str, object]:

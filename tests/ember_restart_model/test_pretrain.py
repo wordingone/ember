@@ -389,6 +389,168 @@ class PretrainingSegmentTests(unittest.TestCase):
             result["tokens_seen"] / sum(result["step_timings_seconds"]),
         )
 
+    def test_graph_only_diagnostic_skips_fp8_installation_and_refresh(self) -> None:
+        class FakeAuthority:
+            registry = object()
+
+        class FakeBackend:
+            preparation_regions_per_signature = 4
+
+            @staticmethod
+            def capture(region: object) -> object:
+                del region
+                return object()
+
+            @staticmethod
+            def warmup(region: object, zero_grad: object) -> None:
+                del region, zero_grad
+
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=1, attention_heads=4, vocab_size=64,
+        )
+        model = UnifiedDecoder(config, genesis_seed=44).to(dtype=torch.bfloat16)
+        optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
+        with patch.object(pretrain, "install_fp8_down_projections") as install:
+            executor = pretrain.CensusBoundStage2Executor(
+                model=model,
+                optimizer=optimizer,
+                config=config,
+                authority=FakeAuthority(),
+                graph_backend=FakeBackend(),
+                allow_test_device=True,
+                diagnostic_bf16_down=True,
+            )
+        install.assert_not_called()
+        self.assertEqual(executor.installation_receipt, {
+            "schema_version": "ember-stage2-bf16-down-diagnostic-installation-v1",
+            "installed_sites": 0,
+        })
+        with patch.object(pretrain, "refresh_fp8_after_optimizer_step") as refresh:
+            self.assertEqual(executor.after_optimizer_step(), 0)
+        refresh.assert_not_called()
+
+    def test_graph_only_sync_diagnostic_places_barrier_before_optimizer(self) -> None:
+        executor = object.__new__(pretrain.CensusBoundStage2Executor)
+        executor._optimizer_steps = 0
+        executor.diagnostic_bf16_down = True
+        executor.diagnostic_eager_workspace = False
+        executor.diagnostic_pre_optimizer_sync = True
+        executor._step1_parameter_snapshots = None
+        with patch.object(torch.cuda, "current_stream") as current_stream:
+            executor.before_optimizer_step()
+        current_stream.return_value.synchronize.assert_called_once_with()
+        self.assertIsNone(executor._step1_parameter_snapshots)
+
+    def test_eager_workspace_diagnostic_engages_neither_graphs_nor_fp8(self) -> None:
+        class FakeAuthority:
+            registry = object()
+
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=1, attention_heads=4, vocab_size=64,
+        )
+        model = UnifiedDecoder(config, genesis_seed=45).to(dtype=torch.bfloat16)
+        optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
+        with (
+            patch.object(pretrain, "install_fp8_down_projections") as install,
+            patch.object(pretrain, "CudaGraphTrainingStepPool") as graph_pool,
+        ):
+            executor = pretrain.CensusBoundStage2Executor(
+                model=model,
+                optimizer=optimizer,
+                config=config,
+                authority=FakeAuthority(),
+                allow_test_device=True,
+                diagnostic_eager_workspace=True,
+            )
+        install.assert_not_called()
+        graph_pool.assert_not_called()
+        self.assertIsNone(executor.graph_pool)
+        self.assertEqual(executor.installation_receipt["installed_sites"], 0)
+
+    def test_eager_workspace_diagnostic_runs_the_workspace_scaffold_without_replay(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=32, layers=1, attention_heads=4, vocab_size=64,
+        )
+        record = self._record(config, expert="vision")
+        batch = decode_owned_batch(record, config, device=torch.device("cpu"))
+        census = training_acceleration.TrainingSignatureCensus(
+            source_commit="1" * 40,
+            model_config_sha256="2" * 64,
+            input_identity_sha256="3" * 64,
+            runner_source_sha256="4" * 64,
+        )
+        census.observe(training_acceleration.training_step_signature(
+            batch, gradient_checkpointing=bool(config.gradient_checkpointing),
+        ))
+        with tempfile.TemporaryDirectory() as directory:
+            census_path = Path(directory) / "census.json"
+            census.write_receipt(census_path)
+            authority = training_acceleration.load_stage2_activation_authority(
+                census_path,
+                expected_raw_sha256=hashlib.sha256(census_path.read_bytes()).hexdigest(),
+            )
+            model = UnifiedDecoder(config, genesis_seed=46).to(dtype=torch.bfloat16)
+            optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
+            executor = pretrain.CensusBoundStage2Executor(
+                model=model,
+                optimizer=optimizer,
+                config=config,
+                authority=authority,
+                allow_test_device=True,
+                diagnostic_eager_workspace=True,
+            )
+            result = run_pretraining_segment(
+                model=model,
+                optimizer=optimizer,
+                records=[record],
+                config=config,
+                device=torch.device("cpu"),
+                checkpoint_every=1,
+                checkpoint_callback=lambda _step, _result: None,
+                stage2_executor=executor,
+                measurement_preparation_regions_per_signature=4,
+                require_complete_coverage=False,
+            )
+        runtime = result["stage2_runtime"]
+        self.assertEqual(runtime["cuda_graph_captures"], 0)
+        self.assertEqual(runtime["cuda_graph_replays"], 0)
+        self.assertEqual(runtime["fp8_dispatches"], 0)
+        self.assertGreater(runtime["post_step1_parameter_delta_l2"]["trunk"], 0.0)
+        self.assertGreater(
+            runtime["post_step1_parameter_delta_l2"]["active_expert_bank"], 0.0,
+        )
+
+    def test_replay_marker_buffers_refresh_eagerly_and_refuse_count_drift(self) -> None:
+        executor = object.__new__(pretrain.CensusBoundStage2Executor)
+        executor.config = RestartDecoderConfig.small_for_tests()
+        signature = "a" * 64
+        executor._marker_indices_by_signature = {
+            signature: (
+                torch.tensor([1], dtype=torch.int64),
+                torch.empty(0, dtype=torch.int64),
+            ),
+        }
+        executor._refresh_marker_indices(
+            signature=signature,
+            batch={
+                "input_ids": torch.tensor([[7, executor.config.image_token_id, 8]]),
+                "image_patches": torch.zeros(1),
+                "audio_frames": None,
+            },
+        )
+        self.assertEqual(
+            executor._marker_indices_by_signature[signature][0].tolist(), [1],
+        )
+        with self.assertRaisesRegex(RuntimeError, "marker count"):
+            executor._refresh_marker_indices(
+                signature=signature,
+                batch={
+                    "input_ids": torch.tensor([[executor.config.image_token_id, 7, executor.config.image_token_id]]),
+                    "image_patches": torch.zeros(1),
+                    "audio_frames": None,
+                },
+            )
+
     def test_census_bound_executor_snapshots_loss_before_a_pool_mate_replay(self) -> None:
         signatures = ("5" * 64, "6" * 64)
         shared_pool_loss = torch.tensor(0.0)
