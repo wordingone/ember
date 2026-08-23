@@ -153,6 +153,27 @@ describe("Windows process memory census", () => {
     })).rejects.toThrow("MEMORY_CENSUS_NAME_AMBIGUOUS:ember");
   });
 
+  test("excludes only the canonical Windows idle pseudo-process", async () => {
+    const batch = await censusWindowsProcessMemoryBatch(spec, {
+      cockpitPid: 11,
+      observedAt: () => "2026-08-23T20:00:00.000Z",
+      runPowerShell: async () => JSON.stringify([
+        { Id: 0, ParentProcessId: 0, ProcessName: "System Idle Process", PagedMemorySize64: null, ProcessStartToken: null },
+        { Id: 11, ParentProcessId: 1, ProcessName: "ember.exe", PagedMemorySize64: 5, ProcessStartToken: "639231120000000000" },
+      ]),
+    });
+    expect(batch.candidate_process_count).toBe(1);
+    expect(batch.admitted_process_count).toBe(1);
+
+    await expect(censusWindowsProcessMemoryBatch(spec, {
+      cockpitPid: 11,
+      runPowerShell: async () => JSON.stringify([
+        { Id: 0, ParentProcessId: 1, ProcessName: "not-idle", PagedMemorySize64: 0, ProcessStartToken: null },
+        { Id: 11, ParentProcessId: 1, ProcessName: "ember.exe", PagedMemorySize64: 5, ProcessStartToken: "639231120000000000" },
+      ]),
+    })).rejects.toThrow("MEMORY_CENSUS_ROW_INVALID");
+  });
+
   test("refuses a census with no exact current cockpit identity", async () => {
     await expect(censusWindowsProcessMemory(spec, {
       cockpitPid: 11,
