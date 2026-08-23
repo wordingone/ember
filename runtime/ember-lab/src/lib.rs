@@ -10056,7 +10056,23 @@ mod dispatch_binding_snapshot_tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let root = scratch::ember_scratch_dir(&format!("binding-snapshot-{nonce}")).unwrap();
+        let scratch_root = std::env::var("CARGO_TARGET_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target"))
+            .join("binding-snapshot-tests");
+        let lease = scratch::ScratchLease::create_with_identity(
+            scratch::ScratchPolicy {
+                root: scratch_root,
+                minimum_free_bytes: 1,
+                stale_after: Duration::from_secs(60),
+            },
+            &format!("binding-snapshot-{nonce}"),
+            std::process::id(),
+            "unit-test-process",
+            nonce.try_into().unwrap(),
+        )
+        .unwrap();
+        let root = lease.path().to_path_buf();
         let registry = root.join("trusted-verifiers.json");
         fs::write(
             &registry,
@@ -10071,7 +10087,7 @@ mod dispatch_binding_snapshot_tests {
             error,
             EmberLabError::DispatchBindingMismatch { .. }
         ));
-        fs::remove_dir_all(root).unwrap();
+        drop(lease);
     }
 
     #[test]
