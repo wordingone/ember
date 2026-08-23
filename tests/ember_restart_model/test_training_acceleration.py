@@ -34,7 +34,7 @@ def _disabled_contract() -> dict[str, object]:
             "format": "float8_e4m3fn",
             "kernel": "torch._scaled_mm",
             "required_compute_capability": "8.9",
-            "sites": "swiglu_down_4h_to_h",
+            "sites": "final_decoder_layer_shared_swiglu_down_4h_to_h",
             "fallback": "refuse",
         },
         "cuda_graph": {
@@ -153,7 +153,7 @@ class TrainingAccelerationPolicyTests(unittest.TestCase):
                     path, expected_raw_sha256="b" * 64,
                 )
 
-    def test_fp8_installation_wraps_only_swiglu_down_sites_and_preserves_state_keys(self) -> None:
+    def test_fp8_installation_wraps_only_final_shared_down_site_and_preserves_state_keys(self) -> None:
         config = RestartDecoderConfig.small_for_tests(
             hidden_size=16, layers=2, attention_heads=4, vocab_size=64,
         )
@@ -162,13 +162,23 @@ class TrainingAccelerationPolicyTests(unittest.TestCase):
         receipt = training_acceleration.install_fp8_down_projections(
             model, allow_test_device=True,
         )
-        expected_sites = config.layers * (1 + len(config.expert_names))
-        self.assertEqual(receipt["installed_sites"], expected_sites)
+        self.assertEqual(receipt, {
+            "schema_version": "ember-fp8-down-projection-installation-v2",
+            "scope": "final_decoder_layer_shared_swiglu_down_4h_to_h",
+            "layer_indexes": [config.layers - 1],
+            "installed_sites": 1,
+            "sites": [f"layers.{config.layers - 1}.shared_ffn.down"],
+            "fallbacks": 0,
+        })
         self.assertEqual(list(model.state_dict()), state_keys)
-        for layer in model.layers:
-            self.assertIsInstance(layer.shared_ffn.down, training_acceleration.DynamicFp8DownProjection)
+        for index, layer in enumerate(model.layers):
+            expected_type = (
+                training_acceleration.DynamicFp8DownProjection
+                if index == config.layers - 1 else torch.nn.Linear
+            )
+            self.assertIsInstance(layer.shared_ffn.down, expected_type)
             for expert in layer.experts.values():
-                self.assertIsInstance(expert.down, training_acceleration.DynamicFp8DownProjection)
+                self.assertIsInstance(expert.down, torch.nn.Linear)
         with self.assertRaisesRegex(RuntimeError, "already installed"):
             training_acceleration.install_fp8_down_projections(model, allow_test_device=True)
 
@@ -442,15 +452,33 @@ class Fp8DownProjectionTests(unittest.TestCase):
     def test_live_master_weight_requires_explicit_post_step_refresh_without_forward_copy(self) -> None:
         linear = torch.nn.Linear(16, 4, bias=False, dtype=torch.bfloat16)
         original_weight = linear.weight
+        scale_shapes: list[tuple[tuple[int, ...], tuple[int, ...]]] = []
+
+        def tracked_scaled_mm(
+            activation: torch.Tensor,
+            weight_transposed: torch.Tensor,
+            scale_a: torch.Tensor,
+            scale_b: torch.Tensor,
+            *,
+            out_dtype: torch.dtype,
+            use_fast_accum: bool,
+        ) -> torch.Tensor:
+            scale_shapes.append((tuple(scale_a.shape), tuple(scale_b.shape)))
+            return self._fake_scaled_mm(
+                activation, weight_transposed, scale_a, scale_b,
+                out_dtype=out_dtype, use_fast_accum=use_fast_accum,
+            )
+
         wrapped = training_acceleration.DynamicFp8DownProjection.from_linear(
             linear,
-            kernel=self._fake_scaled_mm,
+            kernel=tracked_scaled_mm,
             allow_test_device=True,
         )
         self.assertIs(wrapped.weight, original_weight)
         self.assertEqual(list(wrapped.state_dict()), ["weight"])
         sample = torch.randn(2, 16, dtype=torch.bfloat16)
         first = wrapped(sample)
+        self.assertEqual(scale_shapes, [((), ())])
         self.assertEqual(wrapped.kernel_receipt()["per_forward_weight_materialization_copies"], 0)
 
         optimizer = torch.optim.SGD(wrapped.parameters(), lr=0.25)
@@ -466,13 +494,62 @@ class Fp8DownProjectionTests(unittest.TestCase):
         self.assertEqual(receipt["compute_capability"], "TEST_ONLY")
         self.assertEqual(receipt["activation_operand_layout"], "row_major_contiguous")
         self.assertEqual(receipt["weight_operand_layout"], "column_major_transposed_view")
+        self.assertEqual(receipt["native_kernel_scaling"], "tensorwise_unit")
+        self.assertEqual(receipt["activation_scaling"], "emulated_rowwise_per_token")
+        self.assertEqual(receipt["weight_scaling"], "emulated_columnwise_per_output_channel")
         self.assertEqual(receipt["per_forward_weight_materialization_copies"], 0)
         self.assertEqual(receipt["accumulation_mode"], "fast_accum")
         self.assertEqual(receipt["weight_refreshes"], 2)
 
+    def test_emulated_rowwise_scaling_reduces_heterogeneous_fp8_error(self) -> None:
+        torch.manual_seed(7)
+        linear = torch.nn.Linear(128, 32, bias=False, dtype=torch.bfloat16)
+        with torch.no_grad():
+            linear.weight.copy_(
+                torch.randn_like(linear.weight)
+                * torch.linspace(0.01, 10.0, 32, dtype=torch.bfloat16)[:, None]
+            )
+        wrapped = training_acceleration.DynamicFp8DownProjection.from_linear(
+            linear, kernel=self._fake_scaled_mm, allow_test_device=True,
+        )
+        activation = (
+            torch.randn(4, 128, dtype=torch.bfloat16)
+            * torch.tensor([[0.001], [0.1], [1.0], [100.0]], dtype=torch.bfloat16)
+        )
+        reference = activation.float().matmul(linear.weight.float().transpose(0, 1))
+        emulated_rowwise = wrapped(activation).float()
+
+        activation_scale = activation.abs().amax().float() / 448.0
+        weight_scale = linear.weight.abs().amax().float() / 448.0
+        tensorwise = (
+            (activation.float() / activation_scale)
+            .clamp(-448.0, 448.0)
+            .to(torch.float8_e4m3fn)
+            .float()
+            .matmul(
+                (linear.weight.float() / weight_scale)
+                .clamp(-448.0, 448.0)
+                .to(torch.float8_e4m3fn)
+                .float()
+                .transpose(0, 1)
+            )
+            * activation_scale
+            * weight_scale
+        ).to(torch.bfloat16).float()
+        rowwise_small_row_error = torch.linalg.vector_norm(
+            emulated_rowwise[0] - reference[0]
+        ) / torch.linalg.vector_norm(reference[0])
+        tensorwise_small_row_error = torch.linalg.vector_norm(
+            tensorwise[0] - reference[0]
+        ) / torch.linalg.vector_norm(reference[0])
+        self.assertLess(
+            float(rowwise_small_row_error.detach()),
+            float(tensorwise_small_row_error.detach()) / 5.0,
+        )
+
     def test_real_kernel_receipt_requires_sm89_layout_and_zero_forward_weight_copies(self) -> None:
         valid = {
-            "schema_version": "ember-fp8-scaled-mm-kernel-receipt-v1",
+            "schema_version": "ember-fp8-scaled-mm-kernel-receipt-v2",
             "kernel": "torch._scaled_mm",
             "compute_capability": "8.9",
             "activation_dtype": "float8_e4m3fn",
@@ -481,6 +558,9 @@ class Fp8DownProjectionTests(unittest.TestCase):
             "activation_operand_layout": "row_major_contiguous",
             "weight_operand_layout": "column_major_transposed_view",
             "per_forward_weight_materialization_copies": 0,
+            "native_kernel_scaling": "tensorwise_unit",
+            "activation_scaling": "emulated_rowwise_per_token",
+            "weight_scaling": "emulated_columnwise_per_output_channel",
             "accumulation_mode": "fast_accum",
             "weight_refreshes": 2,
             "dispatches": 1,
@@ -491,11 +571,13 @@ class Fp8DownProjectionTests(unittest.TestCase):
             ("compute_capability", "9.0"),
             ("weight_operand_layout", "row_major_copy"),
             ("per_forward_weight_materialization_copies", 1),
+            ("native_kernel_scaling", "rowwise"),
+            ("activation_scaling", "tensorwise"),
             ("accumulation_mode", "precise_accum"),
         ):
             invalid = dict(valid)
             invalid[key] = value
-            with self.assertRaisesRegex(ValueError, "SM89|layout|materialization|accumulation"):
+            with self.assertRaisesRegex(ValueError, "SM89|layout|materialization|scaling|accumulation"):
                 training_acceleration.validate_fp8_kernel_receipt(invalid)
 
     def test_fp8_site_refuses_non_bfloat16_master_or_activation(self) -> None:

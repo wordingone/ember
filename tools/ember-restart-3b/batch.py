@@ -6,6 +6,8 @@
 from __future__ import annotations
 
 import base64
+import hashlib
+import json
 import struct
 from typing import Any
 
@@ -158,6 +160,96 @@ def decode_owned_batch(
         "image_coordinates": (torch.tensor(raw_coordinates, dtype=torch.long, device=device).reshape(-1, 2) if raw_coordinates else torch.empty((0, 2), dtype=torch.long, device=device)),
         "spans": spans,
         "active_expert": active_expert,
+    }
+
+
+def _canonical_record_bytes(value: object) -> bytes:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+
+
+def decode_owned_packed_batch(
+    records: list[dict[str, Any]],
+    config: RestartDecoderConfig,
+    *,
+    device: torch.device,
+    expected_records: int,
+) -> dict[str, Any]:
+    """Decode one fixed-size, same-expert pack without counting right padding as data."""
+
+    if type(expected_records) is not int or expected_records < 1:
+        raise ValueError("packed batch expected_records must be positive")
+    if not isinstance(records, list) or len(records) != expected_records:
+        raise ValueError(f"packed batch requires exactly {expected_records} records")
+    decoded = [decode_owned_batch(record, config, device=device) for record in records]
+    experts = {str(batch["active_expert"]) for batch in decoded}
+    if len(experts) != 1:
+        raise ValueError("packed batch requires exactly one active expert")
+
+    def span_contract(batch: dict[str, Any]) -> tuple[tuple[int, int, str, str], ...]:
+        return tuple(
+            (span.start, span.length, span.modality, span.attention_mode)
+            for span in batch["spans"]
+        )
+
+    topology = span_contract(decoded[0])
+    if any(span_contract(batch) != topology for batch in decoded[1:]):
+        raise ValueError("packed batch requires one static multimodal span topology")
+    for field in ("image_patches", "audio_frames"):
+        shapes = {
+            None if batch[field] is None else tuple(batch[field].shape[1:])
+            for batch in decoded
+        }
+        if len(shapes) != 1:
+            raise ValueError(f"packed batch requires one static {field} topology")
+
+    lengths = [int(batch["input_ids"].shape[1]) for batch in decoded]
+    maximum = max(lengths)
+    input_ids = torch.zeros((expected_records, maximum), dtype=torch.long, device=device)
+    target_ids = torch.zeros((expected_records, maximum), dtype=torch.long, device=device)
+    loss_mask = torch.zeros((expected_records, maximum), dtype=torch.bool, device=device)
+    for index, batch in enumerate(decoded):
+        length = lengths[index]
+        input_ids[index, :length].copy_(batch["input_ids"][0])
+        target_ids[index, :length].copy_(batch["target_ids"][0])
+        loss_mask[index, :length] = True
+
+    def packed_modality(field: str) -> torch.Tensor | None:
+        first = decoded[0][field]
+        if first is None:
+            return None
+        return torch.cat([batch[field] for batch in decoded], dim=0)
+
+    record_hashes = [hashlib.sha256(_canonical_record_bytes(record)).hexdigest() for record in records]
+    token_rows = [batch["input_ids"][0].tolist() for batch in decoded]
+    true_source_tokens = sum(lengths)
+    processed_padded_tokens = expected_records * maximum
+    identity = {
+        "schema_version": "ember-owned-packed-batch-v1",
+        "active_expert": next(iter(experts)),
+        "record_count": expected_records,
+        "true_source_tokens": true_source_tokens,
+        "processed_padded_tokens": processed_padded_tokens,
+        "padding_tokens": processed_padded_tokens - true_source_tokens,
+        "record_hashes": record_hashes,
+        "token_rows_sha256": hashlib.sha256(_canonical_record_bytes({"rows": token_rows})).hexdigest(),
+    }
+    return {
+        "input_ids": input_ids,
+        "target_ids": target_ids,
+        "loss_mask": loss_mask,
+        "image_patches": packed_modality("image_patches"),
+        "audio_frames": packed_modality("audio_frames"),
+        "image_coordinates": torch.cat([batch["image_coordinates"] for batch in decoded], dim=0),
+        "spans": decoded[0]["spans"],
+        "active_expert": next(iter(experts)),
+        "record_count": expected_records,
+        "true_source_tokens": true_source_tokens,
+        "processed_padded_tokens": processed_padded_tokens,
+        "padding_tokens": processed_padded_tokens - true_source_tokens,
+        "record_hashes": record_hashes,
+        "record_order_sha256": hashlib.sha256(_canonical_record_bytes({"records": record_hashes})).hexdigest(),
+        "tokens_sha256": identity["token_rows_sha256"],
+        "pack_signature_sha256": hashlib.sha256(_canonical_record_bytes(identity)).hexdigest(),
     }
 
 
