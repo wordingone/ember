@@ -164,19 +164,53 @@ class CensusBoundStage2Executor:
         graph_backend: object | None = None,
         fp8_kernel: ScaledMmKernel | None = None,
         allow_test_device: bool = False,
+        diagnostic_bf16_down: bool = False,
+        diagnostic_eager_workspace: bool = False,
+        diagnostic_pre_optimizer_sync: bool = False,
     ) -> None:
+        if type(diagnostic_bf16_down) is not bool or type(diagnostic_eager_workspace) is not bool:
+            raise ValueError("Stage-2 diagnostic flags must be boolean")
+        if diagnostic_bf16_down and diagnostic_eager_workspace:
+            raise ValueError("Stage-2 diagnostic modes are mutually exclusive")
+        if diagnostic_pre_optimizer_sync and not diagnostic_bf16_down:
+            raise ValueError("Stage-2 pre-optimizer sync requires graph-only diagnostic mode")
+        if (diagnostic_bf16_down or diagnostic_eager_workspace) and fp8_kernel is not None:
+            raise ValueError("Stage-2 BF16 diagnostic cannot accept an FP8 kernel")
+        if diagnostic_eager_workspace and graph_backend is not None:
+            raise ValueError("Stage-2 eager-workspace diagnostic cannot accept a graph backend")
         self.model = model
         self.optimizer = optimizer
         self.config = config
         self.authority = authority
-        self.installation_receipt = install_fp8_down_projections(
-            model, kernel=fp8_kernel, allow_test_device=allow_test_device,
+        self.diagnostic_bf16_down = diagnostic_bf16_down
+        self.diagnostic_eager_workspace = diagnostic_eager_workspace
+        self.diagnostic_pre_optimizer_sync = diagnostic_pre_optimizer_sync
+        if (diagnostic_bf16_down or diagnostic_eager_workspace) and tuple(iter_fp8_down_projections(model)):
+            raise RuntimeError("Stage-2 BF16 diagnostic requires an unwrapped BF16 model")
+        self.installation_receipt = (
+            {
+                "schema_version": (
+                    "ember-stage2-eager-workspace-diagnostic-installation-v1"
+                    if diagnostic_eager_workspace
+                    else "ember-stage2-bf16-down-diagnostic-installation-v1"
+                ),
+                "installed_sites": 0,
+            }
+            if diagnostic_bf16_down or diagnostic_eager_workspace
+            else install_fp8_down_projections(
+                model, kernel=fp8_kernel, allow_test_device=allow_test_device,
+            )
         )
-        self.graph_pool = CudaGraphTrainingStepPool(
-            registry=authority.registry, backend=graph_backend,
+        self.graph_pool = (
+            None
+            if diagnostic_eager_workspace
+            else CudaGraphTrainingStepPool(
+                registry=authority.registry, backend=graph_backend,
+            )
         )
-        preparation_regions = getattr(
-            self.graph_pool.backend, "preparation_regions_per_signature", None,
+        preparation_regions = (
+            4 if diagnostic_eager_workspace
+            else getattr(self.graph_pool.backend, "preparation_regions_per_signature", None)
         )
         if type(preparation_regions) is not int or preparation_regions < 1:
             raise ValueError(
@@ -184,6 +218,9 @@ class CensusBoundStage2Executor:
             )
         self.preparation_regions_per_signature = preparation_regions
         self._static_batches: dict[str, dict[str, object]] = {}
+        self._marker_indices_by_signature: dict[
+            str, tuple[torch.Tensor, torch.Tensor]
+        ] = {}
         self._loss_outputs: dict[str, torch.Tensor] = {}
         self._shared_gradient_parameters: tuple[torch.Tensor, ...] = ()
         self._expert_parameters: tuple[torch.Tensor, ...] = ()
@@ -202,6 +239,8 @@ class CensusBoundStage2Executor:
         self._captures_during_preparation = 0
         self._captures_during_measured_window = 0
         self._measurement_prepared = False
+        self._step1_parameter_snapshots: dict[str, tuple[torch.Tensor, ...]] | None = None
+        self._post_step1_parameter_delta_l2: dict[str, float] = {}
 
     @staticmethod
     def _static_batch(batch: Mapping[str, object]) -> dict[str, object]:
@@ -359,39 +398,10 @@ class CensusBoundStage2Executor:
         self._bind_gradient_workspace(
             signature=signature, active_expert=str(static["active_expert"]),
         )
-
-        def marker_indices(*, marker_id: int, raw_key: str) -> torch.Tensor:
-            if static[raw_key] is None:
-                return torch.empty(
-                    0, dtype=torch.int64, device=static["input_ids"].device,
-                )
-            return static["input_ids"].eq(marker_id).reshape(-1).nonzero(
-                as_tuple=False,
-            ).flatten()
-
-        image_marker_indices = marker_indices(
-            marker_id=self.config.image_token_id, raw_key="image_patches",
-        )
-        audio_marker_indices = marker_indices(
-            marker_id=self.config.audio_token_id, raw_key="audio_frames",
-        )
+        marker_indices = self._marker_indices(static)
 
         def region() -> None:
-            logits = self.model(
-                static["input_ids"],
-                image_patches=static["image_patches"],
-                audio_frames=static["audio_frames"],
-                image_coordinates=static["image_coordinates"],
-                static_image_marker_indices=image_marker_indices,
-                static_audio_marker_indices=audio_marker_indices,
-                spans=static["spans"],
-                active_expert=static["active_expert"],
-            )
-            loss = F.cross_entropy(
-                logits.float().reshape(-1, self.config.vocab_size),
-                static["target_ids"].reshape(-1),
-            )
-            loss.backward()
+            loss = self._static_loss_backward(static, marker_indices=marker_indices)
             if loss_holder:
                 loss_holder[0] = loss
             else:
@@ -415,6 +425,7 @@ class CensusBoundStage2Executor:
         loss_output = loss_holder[0].detach()
         loss_holder.clear()
         self._static_batches[signature] = static
+        self._marker_indices_by_signature[signature] = marker_indices
         self._loss_outputs[signature] = loss_output
         self._conditional_gradients_by_signature[signature] = tuple(
             (parameter, parameter.grad)
@@ -423,6 +434,86 @@ class CensusBoundStage2Executor:
         )
         self._captures_during_preparation += 1
         self.optimizer.zero_grad(set_to_none=False)
+
+    def _marker_indices(
+        self, static: Mapping[str, object],
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        def marker_indices(*, marker_id: int, raw_key: str) -> torch.Tensor:
+            if static[raw_key] is None:
+                return torch.empty(
+                    0, dtype=torch.int64, device=static["input_ids"].device,
+                )
+            return static["input_ids"].eq(marker_id).reshape(-1).nonzero(
+                as_tuple=False,
+            ).flatten()
+
+        return (
+            marker_indices(
+                marker_id=self.config.image_token_id, raw_key="image_patches",
+            ),
+            marker_indices(
+                marker_id=self.config.audio_token_id, raw_key="audio_frames",
+            ),
+        )
+
+    def _static_loss_backward(
+        self,
+        static: Mapping[str, object],
+        *,
+        marker_indices: tuple[torch.Tensor, torch.Tensor],
+    ) -> torch.Tensor:
+        image_marker_indices, audio_marker_indices = marker_indices
+
+        logits = self.model(
+            static["input_ids"],
+            image_patches=static["image_patches"],
+            audio_frames=static["audio_frames"],
+            image_coordinates=static["image_coordinates"],
+            static_image_marker_indices=image_marker_indices,
+            static_audio_marker_indices=audio_marker_indices,
+            spans=static["spans"],
+            active_expert=static["active_expert"],
+        )
+        loss = F.cross_entropy(
+            logits.float().reshape(-1, self.config.vocab_size),
+            static["target_ids"].reshape(-1),
+        )
+        loss.backward()
+        return loss
+
+    def _refresh_marker_indices(
+        self, *, signature: str, batch: Mapping[str, object],
+    ) -> None:
+        incoming_markers = self._marker_indices(batch)
+        static_markers = self._marker_indices_by_signature[signature]
+        for static_marker, incoming_marker in zip(
+            static_markers, incoming_markers, strict=True,
+        ):
+            if static_marker.shape != incoming_marker.shape:
+                raise RuntimeError(
+                    "Stage-2 replay marker count differs from its admitted signature"
+                )
+            static_marker.copy_(incoming_marker)
+
+    def _prepare_eager_workspace(
+        self, batch: Mapping[str, object], *, signature: str, regions: int,
+    ) -> None:
+        static = self._static_batch(batch)
+        marker_indices = self._marker_indices(static)
+        self._bind_gradient_workspace(
+            signature=signature, active_expert=str(static["active_expert"]),
+        )
+        for _ in range(regions):
+            self.optimizer.zero_grad(set_to_none=False)
+            self._static_loss_backward(static, marker_indices=marker_indices)
+        self._conditional_gradients_by_signature[signature] = tuple(
+            (parameter, parameter.grad)
+            for parameter in self._conditional_gradient_parameters
+            if parameter.grad is not None
+        )
+        self.optimizer.zero_grad(set_to_none=False)
+        self._static_batches[signature] = static
+        self._marker_indices_by_signature[signature] = marker_indices
 
     def prepare_for_measurement(
         self,
@@ -448,11 +539,16 @@ class CensusBoundStage2Executor:
         for signature in sorted(unique):
             status = "COMPLETED"
             try:
-                self._capture(
-                    unique[signature],
-                    signature=signature,
-                    cursor_identity=cursor_identity,
-                )
+                if self.diagnostic_eager_workspace:
+                    self._prepare_eager_workspace(
+                        unique[signature], signature=signature, regions=regions_per_signature,
+                    )
+                else:
+                    self._capture(
+                        unique[signature],
+                        signature=signature,
+                        cursor_identity=cursor_identity,
+                    )
             except BaseException:
                 status = "FAILED"
                 raise
@@ -484,25 +580,86 @@ class CensusBoundStage2Executor:
         signature = self.authority.resolve(
             batch, gradient_checkpointing=bool(self.config.gradient_checkpointing),
         )
-        if not self.graph_pool.contains(signature):
+        eager_workspace = getattr(self, "diagnostic_eager_workspace", False)
+        if not eager_workspace and not self.graph_pool.contains(signature):
             self._captures_during_measured_window += 1
             raise RuntimeError("Stage-2 measured window cannot capture a graph")
         self._copy_tensors(self._static_batches[signature], batch)
+        if hasattr(self, "_marker_indices_by_signature"):
+            self._refresh_marker_indices(signature=signature, batch=batch)
         self._bind_gradient_workspace(
             signature=signature, active_expert=str(batch["active_expert"]),
         )
         self.optimizer.zero_grad(set_to_none=False)
+        if eager_workspace:
+            return self._static_loss_backward(
+                self._static_batches[signature],
+                marker_indices=self._marker_indices_by_signature[signature],
+            )
         self.graph_pool.replay(signature)
         return self._loss_outputs[signature]
 
+    def before_optimizer_step(self) -> None:
+        if self._optimizer_steps != 0:
+            return
+        if self.diagnostic_pre_optimizer_sync:
+            torch.cuda.current_stream().synchronize()
+        if not self.diagnostic_eager_workspace:
+            return
+        signature = self._active_gradient_signature
+        if signature is None:
+            raise RuntimeError("Stage-2 step-one delta audit lacks an active signature")
+        self._step1_parameter_snapshots = {
+            "trunk": tuple(parameter.detach().cpu().clone() for parameter in self._shared_gradient_parameters),
+            "active_expert_bank": tuple(
+                parameter.detach().cpu().clone()
+                for parameter in self._gradient_parameters_by_signature[signature]
+            ),
+        }
+
+    def _record_step1_parameter_deltas(self) -> None:
+        snapshots = self._step1_parameter_snapshots
+        if snapshots is None:
+            return
+        signature = self._active_gradient_signature
+        if signature is None:
+            raise RuntimeError("Stage-2 step-one delta audit lost its active signature")
+        parameters = {
+            "trunk": self._shared_gradient_parameters,
+            "active_expert_bank": self._gradient_parameters_by_signature[signature],
+        }
+        result: dict[str, float] = {}
+        for label, selected in parameters.items():
+            squared = 0.0
+            for parameter, before in zip(selected, snapshots[label], strict=True):
+                delta = parameter.detach().cpu().sub(before)
+                norm = float(torch.linalg.vector_norm(delta, dtype=torch.float32))
+                squared += norm * norm
+            result[label] = math.sqrt(squared)
+        self._post_step1_parameter_delta_l2 = result
+        self._step1_parameter_snapshots = None
+        print(json.dumps({
+            "event": "stage2_post_step1_parameter_delta_l2",
+            **result,
+        }, sort_keys=True, separators=(",", ":")), flush=True)
+
     def after_optimizer_step(self) -> int:
         self._optimizer_steps += 1
-        refreshed = refresh_fp8_after_optimizer_step(self.model)
+        refreshed = (
+            0
+            if self.diagnostic_bf16_down or self.diagnostic_eager_workspace
+            else refresh_fp8_after_optimizer_step(self.model)
+        )
         self._refreshes += refreshed
+        if self._optimizer_steps == 1:
+            self._record_step1_parameter_deltas()
         return refreshed
 
     def receipt(self) -> dict[str, object]:
-        graph = self.graph_pool.receipt()
+        graph = (
+            {"captures": 0, "replays": 0, "fallbacks": 0}
+            if self.graph_pool is None else self.graph_pool.receipt()
+        )
         kernels = [site.kernel_receipt() for site in iter_fp8_down_projections(self.model)]
         return {
             "schema_version": "ember-stage2-runtime-receipt-v1",
@@ -518,6 +675,11 @@ class CensusBoundStage2Executor:
             "captures_during_measured_window": self._captures_during_measured_window,
             "cuda_graph_replays": graph["replays"],
             "cuda_graph_fallbacks": graph["fallbacks"],
+            "post_step1_parameter_delta_l2": dict(self._post_step1_parameter_delta_l2),
+            "pre_optimizer_sync": (
+                "current_stream_synchronize"
+                if self.diagnostic_pre_optimizer_sync else "NONE"
+            ),
             "shared_trunk_gradient_parameters": len(self._shared_gradient_parameters),
             "shared_trunk_gradient_bytes": self._parameter_bytes(self._shared_gradient_parameters),
             "expert_bank_gradient_workspace_parameters": len(self._gradient_workspace or ()),
@@ -758,6 +920,8 @@ def run_pretraining_segment(
             stage2_executor.assert_optimizer_membership()
         if optimizer_state_parameters:
             _require_preinitialized_gradient_state(optimizer)
+        if stage2_executor is not None:
+            stage2_executor.before_optimizer_step()
         optimizer.step()
         if stage2_executor is not None:
             stage2_executor.after_optimizer_step()

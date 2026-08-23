@@ -1235,6 +1235,9 @@ class RunnerPreflightTests(unittest.TestCase):
                 signature_census_output=census_output,
                 signature_census_source_commit="1" * 40,
                 stage2_acceleration=False,
+                stage2_diagnostic_bf16_down=False,
+                stage2_diagnostic_eager_workspace=False,
+                stage2_diagnostic_pre_optimizer_sync=False,
                 stage2_arm_receipt_output=None,
             )
 
@@ -1287,6 +1290,92 @@ class RunnerPreflightTests(unittest.TestCase):
                 run_vertical_slice.validate_stage2_activation_request(
                     enabled=False, artifact_root=artifact_root, receipt_output=outside,
                     signature_census_output=None, resume_checkpoint=None,
+                )
+
+    def test_stage2_graph_only_diagnostic_is_explicit_and_requires_closed_custody(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            artifact_root = Path(directory)
+            output = artifact_root / "graph-only-diagnostic.json"
+            self.assertEqual(
+                run_vertical_slice.validate_stage2_activation_request(
+                    enabled=False,
+                    diagnostic_bf16_down=True,
+                    artifact_root=artifact_root,
+                    receipt_output=output,
+                    signature_census_output=None,
+                    resume_checkpoint=None,
+                ),
+                output.resolve(),
+            )
+            with self.assertRaisesRegex(ValueError, "mutually exclusive"):
+                run_vertical_slice.validate_stage2_activation_request(
+                    enabled=True,
+                    diagnostic_bf16_down=True,
+                    artifact_root=artifact_root,
+                    receipt_output=output,
+                    signature_census_output=None,
+                    resume_checkpoint=None,
+                )
+
+    def test_stage2_eager_workspace_diagnostic_is_mutually_exclusive(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            artifact_root = Path(directory)
+            output = artifact_root / "eager-workspace.json"
+            self.assertEqual(
+                run_vertical_slice.validate_stage2_activation_request(
+                    enabled=False,
+                    diagnostic_eager_workspace=True,
+                    artifact_root=artifact_root,
+                    receipt_output=output,
+                    signature_census_output=None,
+                    resume_checkpoint=None,
+                ),
+                output.resolve(),
+            )
+            with self.assertRaisesRegex(ValueError, "mutually exclusive"):
+                run_vertical_slice.validate_stage2_activation_request(
+                    enabled=False,
+                    diagnostic_bf16_down=True,
+                    diagnostic_eager_workspace=True,
+                    artifact_root=artifact_root,
+                    receipt_output=output,
+                    signature_census_output=None,
+                    resume_checkpoint=None,
+                )
+
+    def test_pre_optimizer_sync_is_admitted_only_for_graph_diagnostic(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            artifact_root = Path(directory)
+            output = artifact_root / "sync.json"
+            self.assertEqual(
+                run_vertical_slice.validate_stage2_activation_request(
+                    enabled=False,
+                    diagnostic_bf16_down=True,
+                    diagnostic_pre_optimizer_sync=True,
+                    artifact_root=artifact_root,
+                    receipt_output=output,
+                    signature_census_output=None,
+                    resume_checkpoint=None,
+                ),
+                output.resolve(),
+            )
+            with self.assertRaisesRegex(ValueError, "sync requires"):
+                run_vertical_slice.validate_stage2_activation_request(
+                    enabled=False,
+                    diagnostic_pre_optimizer_sync=True,
+                    artifact_root=artifact_root,
+                    receipt_output=output,
+                    signature_census_output=None,
+                    resume_checkpoint=None,
+                )
+            with self.assertRaisesRegex(ValueError, "receipt output"):
+                run_vertical_slice.validate_stage2_activation_request(
+                    enabled=False,
+                    diagnostic_bf16_down=True,
+                    artifact_root=artifact_root,
+                    receipt_output=None,
+                    signature_census_output=None,
+                    resume_checkpoint=None,
                 )
 
     def test_governed_vertical_forwards_relocation_to_run(self) -> None:
