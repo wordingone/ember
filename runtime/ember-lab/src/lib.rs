@@ -1528,6 +1528,46 @@ pub struct Daemon {
     monitor_ownership: Arc<RwLock<bool>>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct WallObservationDaemonIdentity {
+    pub schema_version: &'static str,
+    pub pid: u32,
+    pub binary_sha256: String,
+    pub source_sha256: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct VramWallObservationSnapshotRow {
+    pub seq: i64,
+    pub job_id: String,
+    pub observed_at_ms: i64,
+    pub outcome: String,
+    pub payload: Value,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DiskWallObservationSnapshotRow {
+    pub seq: i64,
+    pub job_id: String,
+    pub write_root: String,
+    pub observed_at_ms: i64,
+    pub outcome: String,
+    pub payload: Value,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WallObservationSnapshot {
+    pub schema_version: &'static str,
+    pub captured_at_ms: i64,
+    pub after_vram_seq: i64,
+    pub after_disk_seq: i64,
+    pub next_vram_seq: i64,
+    pub next_disk_seq: i64,
+    pub daemon_identity: WallObservationDaemonIdentity,
+    pub vram_observations: Vec<VramWallObservationSnapshotRow>,
+    pub disk_observations: Vec<DiskWallObservationSnapshotRow>,
+}
+
 #[cfg(windows)]
 #[derive(Clone)]
 struct ProtectiveStopContext {
@@ -2185,6 +2225,96 @@ impl Daemon {
     pub fn resource_guard_status(&self) -> Result<Value> {
         let conn = self.conn()?;
         resource_guard_status_from_connection(&conn)
+    }
+
+    pub fn wall_observation_snapshot(
+        &self,
+        after_vram_seq: i64,
+        after_disk_seq: i64,
+    ) -> Result<WallObservationSnapshot> {
+        if after_vram_seq < 0 || after_disk_seq < 0 {
+            return Err(
+                std::io::Error::other("wall observation cursors must be nonnegative").into(),
+            );
+        }
+        let mut conn = self.conn()?;
+        let transaction = conn.transaction_with_behavior(TransactionBehavior::Deferred)?;
+        let vram_observations = {
+            let mut statement = transaction.prepare(
+                "SELECT seq,job_id,observed_at_ms,outcome,payload_json FROM vram_wall_observations WHERE seq>?1 ORDER BY seq LIMIT 4096",
+            )?;
+            let rows = statement
+                .query_map([after_vram_seq], |row| {
+                    let payload_json: String = row.get(4)?;
+                    let payload = serde_json::from_str(&payload_json).map_err(|error| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            4,
+                            rusqlite::types::Type::Text,
+                            Box::new(error),
+                        )
+                    })?;
+                    Ok(VramWallObservationSnapshotRow {
+                        seq: row.get(0)?,
+                        job_id: row.get(1)?,
+                        observed_at_ms: row.get(2)?,
+                        outcome: row.get(3)?,
+                        payload,
+                    })
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            rows
+        };
+        let disk_observations = {
+            let mut statement = transaction.prepare(
+                "SELECT seq,job_id,write_root,observed_at_ms,outcome,payload_json FROM disk_wall_observations WHERE seq>?1 ORDER BY seq LIMIT 4096",
+            )?;
+            let rows = statement
+                .query_map([after_disk_seq], |row| {
+                    let payload_json: String = row.get(5)?;
+                    let payload = serde_json::from_str(&payload_json).map_err(|error| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            5,
+                            rusqlite::types::Type::Text,
+                            Box::new(error),
+                        )
+                    })?;
+                    Ok(DiskWallObservationSnapshotRow {
+                        seq: row.get(0)?,
+                        job_id: row.get(1)?,
+                        write_root: row.get(2)?,
+                        observed_at_ms: row.get(3)?,
+                        outcome: row.get(4)?,
+                        payload,
+                    })
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            rows
+        };
+        let next_vram_seq = vram_observations
+            .last()
+            .map(|row| row.seq)
+            .unwrap_or(after_vram_seq);
+        let next_disk_seq = disk_observations
+            .last()
+            .map(|row| row.seq)
+            .unwrap_or(after_disk_seq);
+        transaction.commit()?;
+        Ok(WallObservationSnapshot {
+            schema_version: "ember-lab-wall-observation-snapshot-v1",
+            captured_at_ms: now_ms(),
+            after_vram_seq,
+            after_disk_seq,
+            next_vram_seq,
+            next_disk_seq,
+            daemon_identity: WallObservationDaemonIdentity {
+                schema_version: "ember-lab-runtime-identity-v1",
+                pid: std::process::id(),
+                binary_sha256: self.ember_lab_binary_sha256.clone(),
+                source_sha256: self.ember_lab_source_sha256.clone(),
+            },
+            vram_observations,
+            disk_observations,
+        })
     }
 
     pub fn rearm_resource_guard(

@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test";
 // goal_id: EMBER-02
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-import { censusWindowsProcessMemory } from "./process-memory-census.ts";
+import {
+  censusWindowsProcessMemory,
+  censusWindowsProcessMemoryBatch,
+} from "./process-memory-census.ts";
 import type { MemoryFootprintSpec } from "./memory-footprint-governor.ts";
 
 const spec: MemoryFootprintSpec = {
@@ -28,6 +31,34 @@ const spec: MemoryFootprintSpec = {
 };
 
 describe("Windows process memory census", () => {
+  test("receipts provider, start tokens, cardinality, and ownership overlaps per poll", async () => {
+    const batch = await censusWindowsProcessMemoryBatch(spec, {
+      cockpitPid: 11,
+      ownedBrainPids: [14],
+      observedAt: () => "2026-08-23T17:00:00.000Z",
+      runPowerShell: async () => JSON.stringify([
+        { Id: 11, ParentProcessId: 1, ProcessName: "ember.exe", PagedMemorySize64: 5, ProcessStartToken: "638915652000000000" },
+        { Id: 14, ParentProcessId: 999, ProcessName: "ember-lab.exe", PagedMemorySize64: 16, ProcessStartToken: "638915652010000000" },
+        { Id: 16, ParentProcessId: 14, ProcessName: "brain-server.exe", PagedMemorySize64: 17, ProcessStartToken: "638915652020000000" },
+        { Id: 17, ParentProcessId: 999, ProcessName: "ember-lab.exe", PagedMemorySize64: 99, ProcessStartToken: "638915652030000000" },
+      ]),
+    });
+    expect(batch).toEqual({
+      schema_version: "ember-process-memory-census-poll-v1",
+      observed_at: "2026-08-23T17:00:00.000Z",
+      provider: "win32_process+cim/get-process:paged-memory-size64+start-time-utc-ticks",
+      candidate_process_count: 4,
+      admitted_process_count: 3,
+      class_cardinality: { cockpit: 1, brain_server: 2 },
+      ownership_overlap: { count: 0, pids: [] },
+      samples: [
+        { process_class: "cockpit", pid: 11, parent_pid: 1, process_name: "ember", process_start_token: "638915652000000000", provider: "win32_process+cim/get-process:paged-memory-size64+start-time-utc-ticks", commit_bytes: 5, ownership_basis: ["cockpit_pid"] },
+        { process_class: "brain_server", pid: 14, parent_pid: 999, process_name: "ember-lab", process_start_token: "638915652010000000", provider: "win32_process+cim/get-process:paged-memory-size64+start-time-utc-ticks", commit_bytes: 16, ownership_basis: ["ember_lab_runtime_pid"] },
+        { process_class: "brain_server", pid: 16, parent_pid: 14, process_name: "brain-server", process_start_token: "638915652020000000", provider: "win32_process+cim/get-process:paged-memory-size64+start-time-utc-ticks", commit_bytes: 17, ownership_basis: ["ember_lab_runtime_child"] },
+      ],
+    });
+  });
+
   test("maps exact configured process names to commit-byte samples", async () => {
     const samples = await censusWindowsProcessMemory(spec, {
       cockpitPid: 11,
