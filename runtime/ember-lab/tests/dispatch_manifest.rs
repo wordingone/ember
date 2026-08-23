@@ -2530,6 +2530,155 @@ fn v4_gpu_manifest_binds_uuid_fraction_floor_and_daemon_owned_environment() {
 }
 
 #[test]
+fn v5_manifest_binds_two_named_roots_and_samples_the_shared_volume_once() {
+    let root = sandbox("v5-disk-wall");
+    let manifest = write_manifest(&root, "dispatch-v5-disk-wall", 10_000);
+    let write_root_a = root.join("disk-wall-a");
+    let write_root_b = root.join("disk-wall-b");
+    fs::create_dir(&write_root_a).unwrap();
+    fs::create_dir(&write_root_b).unwrap();
+    fs::write(write_root_a.join("a.bin"), b"ember-a").unwrap();
+    fs::write(write_root_b.join("b.bin"), b"ember-bb").unwrap();
+    let root_text = root.to_string_lossy();
+    let volume_root = PathBuf::from(format!(r"{}\", &root_text[..2]));
+
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["schema_version"] = json!("ember-lab-dispatch-manifest-v5");
+    payload
+        .as_object_mut()
+        .unwrap()
+        .remove("minimum_free_vram_bytes");
+    payload["vram_wall"] = json!({"applicability":"not_applicable"});
+    payload["disk_write_walls"] = json!([
+        {
+            "volume_root":volume_root,
+            "write_root":write_root_a,
+            "maximum_write_bytes":100 * 1024 * 1024_u64,
+            "minimum_free_bytes":1,
+            "sample_interval_ms":2_000,
+            "maximum_measurement_duration_ms":250
+        },
+        {
+            "volume_root":volume_root,
+            "write_root":write_root_b,
+            "maximum_write_bytes":100 * 1024 * 1024_u64,
+            "minimum_free_bytes":1,
+            "sample_interval_ms":2_000,
+            "maximum_measurement_duration_ms":250
+        }
+    ]);
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+
+    let free_space_calls = std::cell::Cell::new(0_u32);
+    let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
+    let outcome = daemon
+        .dispatch_manifest_v4_at_with_device_probe_and_host(
+            &manifest,
+            10_001,
+            |_observed_root| {
+                free_space_calls.set(free_space_calls.get() + 1);
+                Ok(1024 * 1024 * 1024)
+            },
+            |_contract| panic!("evidence verifier v5 must not probe a GPU"),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap();
+    // One call is the existing storage-reserve root. The other is the single
+    // shared-volume floor probe for both named roots.
+    assert_eq!(free_space_calls.get(), 2);
+
+    let receipt: Value = serde_json::from_slice(&fs::read(&outcome.receipt.path).unwrap()).unwrap();
+    let disk_receipts = receipt["disk_write_walls"].as_array().unwrap();
+    assert_eq!(disk_receipts.len(), 3);
+    assert_eq!(disk_receipts[0]["baseline_tree_bytes"], 7);
+    assert_eq!(disk_receipts[1]["baseline_tree_bytes"], 8);
+    assert_eq!(
+        disk_receipts[2]["aggregate_declared_maximum_duration_ms"],
+        500
+    );
+    assert_eq!(disk_receipts[2]["maximum_aggregate_duration_ms"], 1_000);
+    assert!(disk_receipts[0]["claim_boundary"]
+        .as_str()
+        .unwrap()
+        .contains("not_os_wide_write_quota"));
+
+    assert_eq!(
+        Connection::open(root.join("ember-lab.sqlite3"))
+            .unwrap()
+            .query_row(
+                "SELECT COUNT(*) FROM job_disk_walls WHERE job_id='dispatch-v5-disk-wall'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap(),
+        2
+    );
+    daemon.stop_job("dispatch-v5-disk-wall").unwrap();
+}
+
+#[test]
+fn v5_manifest_refuses_missing_roots_and_overbudget_aggregate_measurement() {
+    for (name, wall_count, create_roots, expected_detail) in [
+        ("missing-root", 1_usize, false, "must exist at admission"),
+        (
+            "aggregate-cap",
+            5_usize,
+            true,
+            "explicit resource declarations",
+        ),
+    ] {
+        let root = sandbox(name);
+        let manifest = write_manifest(&root, &format!("dispatch-v5-{name}"), 10_000);
+        let root_text = root.to_string_lossy();
+        let volume_root = PathBuf::from(format!(r"{}\", &root_text[..2]));
+        let walls = (0..wall_count)
+            .map(|index| {
+                let write_root = root.join(format!("disk-wall-{index}"));
+                if create_roots {
+                    fs::create_dir(&write_root).unwrap();
+                }
+                json!({
+                    "volume_root":volume_root,
+                    "write_root":write_root,
+                    "maximum_write_bytes":100 * 1024 * 1024_u64,
+                    "minimum_free_bytes":1,
+                    "sample_interval_ms":2_000,
+                    "maximum_measurement_duration_ms":250
+                })
+            })
+            .collect::<Vec<_>>();
+        let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+        payload["schema_version"] = json!("ember-lab-dispatch-manifest-v5");
+        payload
+            .as_object_mut()
+            .unwrap()
+            .remove("minimum_free_vram_bytes");
+        payload["vram_wall"] = json!({"applicability":"not_applicable"});
+        payload["disk_write_walls"] = json!(walls);
+        fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+
+        let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
+        let error = daemon
+            .dispatch_manifest_v4_at_with_device_probe_and_host(
+                &manifest,
+                10_001,
+                |_root| Ok(1024 * 1024 * 1024),
+                |_contract| panic!("evidence verifier v5 must not probe a GPU"),
+                || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            )
+            .unwrap_err();
+        assert!(
+            error.to_string().contains(expected_detail),
+            "unexpected refusal for {name}: {error}"
+        );
+        assert_eq!(
+            daemon.job_state(&format!("dispatch-v5-{name}")).unwrap(),
+            None
+        );
+    }
+}
+
+#[test]
 fn dispatch_manifest_rejects_unknown_fields_and_cache_escape() {
     let root = sandbox("closed");
     let manifest = write_manifest(&root, "dispatch-closed", 10_000);

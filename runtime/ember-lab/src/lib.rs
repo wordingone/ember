@@ -315,6 +315,10 @@ pub enum EmberLabError {
         minimum_free_bytes: u64,
         available_free_bytes: u64,
     },
+    DiskWallMeasurementDuration {
+        elapsed_ms: u64,
+        maximum_ms: u64,
+    },
     DispatchHostCommitReserve {
         required_available_maximum_commit_bytes: u64,
         observed_available_maximum_commit_bytes: u64,
@@ -515,12 +519,19 @@ pub struct JobSpec {
     maximum_job_memory_bytes: Option<u64>,
     vram_wall: Option<VramWallContract>,
     maximum_process_vram_bytes: Option<u64>,
+    disk_write_walls: Vec<BoundDiskWriteWall>,
     simulated_peak_commit_bytes: Option<u64>,
     cpu_rate_percent: Option<u32>,
     cpu_pacing_class: DispatchCpuPacingClass,
     requires_ui_responsiveness: bool,
     window_contract: DispatchWindowContract,
     dispatch_token: Option<DispatchToken>,
+}
+
+#[derive(Clone, Debug)]
+struct BoundDiskWriteWall {
+    contract: DiskWriteWallContract,
+    baseline_tree_bytes: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -589,6 +600,17 @@ pub enum DispatchVramWall {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
+pub struct DiskWriteWallContract {
+    pub volume_root: PathBuf,
+    pub write_root: PathBuf,
+    pub maximum_write_bytes: u64,
+    pub minimum_free_bytes: u64,
+    pub sample_interval_ms: u64,
+    pub maximum_measurement_duration_ms: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct VramWallSample {
     pub observed_at_ms: i64,
     pub pid: u32,
@@ -602,6 +624,26 @@ pub struct VramWallSample {
 pub enum VramWallBreachClass {
     ProcessFraction,
     FreeFloor,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DiskWriteWallSample {
+    pub observed_at_ms: i64,
+    pub baseline_tree_bytes: u64,
+    pub current_tree_bytes: u64,
+    pub available_free_bytes: u64,
+    pub measurement_duration_ms: u64,
+}
+
+const DISK_WALL_SAMPLE_INTERVAL_MS: u64 = 2_000;
+const DISK_WALL_MAXIMUM_MEASUREMENT_DURATION_MS: u64 = 250;
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DiskWallBreachClass {
+    NamedRootWriteBudget,
+    VolumeFreeFloor,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -731,6 +773,248 @@ fn validate_vram_wall_contract(contract: &VramWallContract) -> Result<()> {
     Ok(())
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DiskWallDecision {
+    Healthy {
+        growth_bytes: u64,
+    },
+    ProtectiveStop {
+        breach_class: DiskWallBreachClass,
+        growth_bytes: u64,
+    },
+}
+
+/// Disk growth is monotone inside the immutable named write root, so a bound
+/// breach authorizes a stop on its first durable observation. This deliberately
+/// differs from the transient VRAM wall's three-sample debounce. A volume-floor
+/// breach protects host survival but never attributes foreign writes to the
+/// owned job.
+pub fn evaluate_disk_write_wall(
+    contract: &DiskWriteWallContract,
+    sample: &DiskWriteWallSample,
+) -> Result<DiskWallDecision> {
+    validate_disk_write_wall_contract(contract)?;
+    if sample.observed_at_ms <= 0 {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "disk write wall observation timestamp must be positive".into(),
+        });
+    }
+    if sample.current_tree_bytes < sample.baseline_tree_bytes {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "disk write wall named-root measurement shrank below its bound baseline".into(),
+        });
+    }
+    if sample.measurement_duration_ms > contract.maximum_measurement_duration_ms {
+        return Err(EmberLabError::DiskWallMeasurementDuration {
+            elapsed_ms: sample.measurement_duration_ms,
+            maximum_ms: contract.maximum_measurement_duration_ms,
+        });
+    }
+    let growth_bytes = sample.current_tree_bytes - sample.baseline_tree_bytes;
+    if growth_bytes > contract.maximum_write_bytes {
+        return Ok(DiskWallDecision::ProtectiveStop {
+            breach_class: DiskWallBreachClass::NamedRootWriteBudget,
+            growth_bytes,
+        });
+    }
+    if sample.available_free_bytes < contract.minimum_free_bytes {
+        return Ok(DiskWallDecision::ProtectiveStop {
+            breach_class: DiskWallBreachClass::VolumeFreeFloor,
+            growth_bytes,
+        });
+    }
+    Ok(DiskWallDecision::Healthy { growth_bytes })
+}
+
+fn validate_disk_write_wall_contract(contract: &DiskWriteWallContract) -> Result<()> {
+    if !contract.volume_root.is_absolute()
+        || !contract.write_root.is_absolute()
+        || contract.write_root == contract.volume_root
+        || !contract.write_root.starts_with(&contract.volume_root)
+        || contract.maximum_write_bytes == 0
+        || contract.minimum_free_bytes == 0
+        || contract.sample_interval_ms != DISK_WALL_SAMPLE_INTERVAL_MS
+        || contract.maximum_measurement_duration_ms != DISK_WALL_MAXIMUM_MEASUREMENT_DURATION_MS
+    {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "disk write wall contract is incomplete or invalid".into(),
+        });
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn windows_file_link_count(path: &Path) -> Result<u32> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::{
+        GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
+    };
+
+    let file = fs::File::open(path)?;
+    let mut information: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
+    if unsafe { GetFileInformationByHandle(file.as_raw_handle().cast(), &mut information) } == 0 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    Ok(information.nNumberOfLinks)
+}
+
+#[cfg(windows)]
+fn measure_disk_write_tree(
+    directory: &Path,
+    canonical_write_root: &Path,
+    started: Instant,
+    maximum_duration: Duration,
+) -> Result<u64> {
+    use std::os::windows::fs::MetadataExt;
+
+    let mut total = 0_u64;
+    for entry in fs::read_dir(directory)? {
+        if started.elapsed() > maximum_duration {
+            return Err(EmberLabError::DiskWallMeasurementDuration {
+                elapsed_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+                maximum_ms: u64::try_from(maximum_duration.as_millis()).unwrap_or(u64::MAX),
+            });
+        }
+        let entry = entry?;
+        let path = entry.path();
+        let metadata = fs::symlink_metadata(&path)?;
+        if metadata.file_attributes() & 0x400 != 0 {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: format!(
+                    "disk write wall refuses reparse-point traversal at {}",
+                    path.display()
+                ),
+            });
+        }
+        let canonical = fs::canonicalize(&path)?;
+        if !canonical.starts_with(canonical_write_root) {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: format!(
+                    "disk write wall entry escaped its canonical write root: {}",
+                    path.display()
+                ),
+            });
+        }
+        if metadata.is_dir() {
+            total = total
+                .checked_add(measure_disk_write_tree(
+                    &canonical,
+                    canonical_write_root,
+                    started,
+                    maximum_duration,
+                )?)
+                .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                    detail: "disk write wall tree byte count overflowed".into(),
+                })?;
+        } else if metadata.is_file() {
+            if windows_file_link_count(&canonical)? != 1 {
+                return Err(EmberLabError::InvalidDispatchManifest {
+                    detail: format!(
+                        "disk write wall refuses hard-linked file attribution at {}",
+                        path.display()
+                    ),
+                });
+            }
+            total = total.checked_add(metadata.file_size()).ok_or_else(|| {
+                EmberLabError::InvalidDispatchManifest {
+                    detail: "disk write wall tree byte count overflowed".into(),
+                }
+            })?;
+        } else {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: format!(
+                    "disk write wall refuses an unsupported entry at {}",
+                    path.display()
+                ),
+            });
+        }
+    }
+    Ok(total)
+}
+
+#[cfg(windows)]
+fn measure_disk_write_wall_sample_with_available_free(
+    contract: &DiskWriteWallContract,
+    baseline_tree_bytes: u64,
+    observed_at_ms: i64,
+    available_free_bytes: u64,
+) -> Result<DiskWriteWallSample> {
+    validate_disk_write_wall_contract(contract)?;
+    let canonical_volume_root = fs::canonicalize(&contract.volume_root)?;
+    let canonical_write_root = fs::canonicalize(&contract.write_root)?;
+    if canonical_volume_root.parent().is_some()
+        || canonical_write_root == canonical_volume_root
+        || !canonical_write_root.starts_with(&canonical_volume_root)
+    {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "disk write wall requires a canonical volume root containing the write root"
+                .into(),
+        });
+    }
+    let root_metadata = fs::symlink_metadata(&contract.write_root)?;
+    use std::os::windows::fs::MetadataExt;
+    if root_metadata.file_attributes() & 0x400 != 0 {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "disk write wall root itself must not be a reparse point".into(),
+        });
+    }
+    let started = Instant::now();
+    let maximum_duration = Duration::from_millis(contract.maximum_measurement_duration_ms);
+    let current_tree_bytes = measure_disk_write_tree(
+        &canonical_write_root,
+        &canonical_write_root,
+        started,
+        maximum_duration,
+    )?;
+    let elapsed = started.elapsed();
+    if elapsed > maximum_duration {
+        return Err(EmberLabError::DiskWallMeasurementDuration {
+            elapsed_ms: u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX),
+            maximum_ms: contract.maximum_measurement_duration_ms,
+        });
+    }
+    let measurement_duration_ms =
+        u64::try_from(elapsed.as_nanos().div_ceil(1_000_000)).unwrap_or(u64::MAX);
+    let sample = DiskWriteWallSample {
+        observed_at_ms,
+        baseline_tree_bytes,
+        current_tree_bytes,
+        available_free_bytes,
+        measurement_duration_ms,
+    };
+    evaluate_disk_write_wall(contract, &sample)?;
+    Ok(sample)
+}
+
+#[cfg(not(windows))]
+fn measure_disk_write_wall_sample_with_available_free(
+    _contract: &DiskWriteWallContract,
+    _baseline_tree_bytes: u64,
+    _observed_at_ms: i64,
+    _available_free_bytes: u64,
+) -> Result<DiskWriteWallSample> {
+    Err(EmberLabError::InvalidDispatchManifest {
+        detail: "disk write wall v5 is currently Windows-only".into(),
+    })
+}
+
+#[cfg(windows)]
+pub fn measure_disk_write_wall_sample(
+    contract: &DiskWriteWallContract,
+    baseline_tree_bytes: u64,
+    observed_at_ms: i64,
+) -> Result<DiskWriteWallSample> {
+    let canonical_volume_root = fs::canonicalize(&contract.volume_root)?;
+    let available_free_bytes = available_free_bytes(&canonical_volume_root)?;
+    measure_disk_write_wall_sample_with_available_free(
+        contract,
+        baseline_tree_bytes,
+        observed_at_ms,
+        available_free_bytes,
+    )
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DispatchWorkloadProfileId {
@@ -824,6 +1108,8 @@ pub struct DispatchManifest {
     pub storage_reserves: Vec<DispatchStorageReserve>,
     #[serde(default)]
     pub vram_wall: Option<DispatchVramWall>,
+    #[serde(default)]
+    pub disk_write_walls: Vec<DiskWriteWallContract>,
     #[serde(default)]
     pub minimum_free_vram_bytes: u64,
     pub required_available_maximum_commit_bytes: u64,
@@ -992,6 +1278,7 @@ impl JobSpec {
             maximum_job_memory_bytes: None,
             vram_wall: None,
             maximum_process_vram_bytes: None,
+            disk_write_walls: Vec::new(),
             simulated_peak_commit_bytes: None,
             cpu_rate_percent: None,
             cpu_pacing_class: DispatchCpuPacingClass::Unpaced,
@@ -1022,6 +1309,11 @@ impl JobSpec {
     ) -> Self {
         self.vram_wall = Some(vram_wall);
         self.maximum_process_vram_bytes = Some(maximum_process_vram_bytes);
+        self
+    }
+
+    fn with_disk_write_walls(mut self, disk_write_walls: Vec<BoundDiskWriteWall>) -> Self {
+        self.disk_write_walls = disk_write_walls;
         self
     }
 
@@ -1827,6 +2119,9 @@ impl Daemon {
             CREATE TABLE IF NOT EXISTS dispatch_tokens(token_sha256 TEXT PRIMARY KEY, job_id TEXT NOT NULL UNIQUE, pid INTEGER NOT NULL, program TEXT NOT NULL, argv_sha256 TEXT NOT NULL, expires_at_ms INTEGER NOT NULL, consumed_at_ms INTEGER, FOREIGN KEY(job_id) REFERENCES jobs(job_id));
             CREATE TABLE IF NOT EXISTS job_vram_walls(job_id TEXT PRIMARY KEY, contract_json TEXT NOT NULL, maximum_process_vram_bytes INTEGER NOT NULL, consecutive_breach_observations INTEGER NOT NULL DEFAULT 0, active_breach_class TEXT, FOREIGN KEY(job_id) REFERENCES jobs(job_id));
             CREATE TABLE IF NOT EXISTS vram_wall_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL, FOREIGN KEY(job_id) REFERENCES jobs(job_id));
+            CREATE TABLE IF NOT EXISTS job_disk_walls(job_id TEXT NOT NULL, write_root TEXT NOT NULL, contract_json TEXT NOT NULL, baseline_tree_bytes INTEGER NOT NULL, consecutive_duration_misses INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(job_id,write_root), FOREIGN KEY(job_id) REFERENCES jobs(job_id));
+            CREATE TABLE IF NOT EXISTS disk_wall_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, write_root TEXT NOT NULL, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL, FOREIGN KEY(job_id) REFERENCES jobs(job_id));
+            CREATE TABLE IF NOT EXISTS disk_volume_floor_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, observed_at_ms INTEGER NOT NULL, volume_root TEXT NOT NULL, available_free_bytes INTEGER NOT NULL, payload_json TEXT NOT NULL, UNIQUE(observed_at_ms,volume_root));
             CREATE TABLE IF NOT EXISTS resource_guard_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), admission_state TEXT NOT NULL CHECK(admission_state IN ('open','frozen')), reason TEXT, observed_at_ms INTEGER NOT NULL, oracle_evidence_required INTEGER NOT NULL CHECK(oracle_evidence_required IN (0,1)), observation_json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS resource_guard_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS resource_guard_rearms(frozen_observation_sha256 TEXT PRIMARY KEY, breach_class TEXT NOT NULL, transitioned_at_ms INTEGER NOT NULL, receipt_path TEXT NOT NULL, receipt_sha256 TEXT NOT NULL UNIQUE, healthy_sample_count INTEGER NOT NULL, healthy_window_ms INTEGER NOT NULL, flap_multiplier INTEGER NOT NULL);
@@ -2707,7 +3002,10 @@ impl Daemon {
                     detail: format!("dispatch manifest schema is invalid: {error}"),
                 }
             })?;
-        if manifest.schema_version == "ember-lab-dispatch-manifest-v4" {
+        if matches!(
+            manifest.schema_version.as_str(),
+            "ember-lab-dispatch-manifest-v4" | "ember-lab-dispatch-manifest-v5"
+        ) {
             self.dispatch_manifest_v4_at_with_device_probe_and_host(
                 manifest_path,
                 now_ms(),
@@ -2986,7 +3284,7 @@ impl Daemon {
                         == DispatchWorkloadProfileId::EvidenceVerifier
                         || manifest.minimum_free_vram_bytes > 0)
             }
-            "ember-lab-dispatch-manifest-v4" => {
+            "ember-lab-dispatch-manifest-v4" | "ember-lab-dispatch-manifest-v5" => {
                 if manifest.minimum_free_vram_bytes != 0 {
                     false
                 } else {
@@ -3011,7 +3309,28 @@ impl Daemon {
             }
             _ => false,
         };
+        let disk_declaration_valid = match manifest.schema_version.as_str() {
+            "ember-lab-dispatch-manifest-v3" | "ember-lab-dispatch-manifest-v4" => {
+                manifest.disk_write_walls.is_empty()
+            }
+            "ember-lab-dispatch-manifest-v5" => {
+                !manifest.disk_write_walls.is_empty()
+                    && manifest
+                        .disk_write_walls
+                        .iter()
+                        .all(|contract| validate_disk_write_wall_contract(contract).is_ok())
+                    && manifest
+                        .disk_write_walls
+                        .iter()
+                        .try_fold(0_u64, |total, contract| {
+                            total.checked_add(contract.maximum_measurement_duration_ms)
+                        })
+                        .is_some_and(|total| total <= DISK_WALL_SAMPLE_INTERVAL_MS / 2)
+            }
+            _ => false,
+        };
         if !vram_declaration_valid
+            || !disk_declaration_valid
             || manifest.job_id.trim().is_empty()
             || manifest.source_commit.len() != 40
             || !manifest
@@ -3028,7 +3347,7 @@ impl Daemon {
             || manifest.simulated_peak_commit_bytes == 0
         {
             return Err(EmberLabError::InvalidDispatchManifest {
-                detail: "dispatch manifest requires the closed v3/v4 schema, workload profile, identities, window, bindings, reserves, and an explicit VRAM declaration".into(),
+                detail: "dispatch manifest requires the closed v3/v4/v5 schema, workload profile, identities, window, bindings, reserves, and explicit resource declarations".into(),
             });
         }
         if manifest.env.contains_key(DISPATCH_TOKEN_ENV)
@@ -3328,14 +3647,124 @@ impl Daemon {
             }));
         }
 
+        let mut disk_wall_bindings = Vec::new();
+        let mut disk_wall_receipts = Vec::new();
+        if manifest.schema_version == "ember-lab-dispatch-manifest-v5" {
+            let mut canonical_write_roots = Vec::<PathBuf>::new();
+            let mut volume_free = BTreeMap::<PathBuf, u64>::new();
+            let mut aggregate_measurement_duration_ms = 0_u64;
+            let aggregate_declared_maximum_duration_ms = manifest
+                .disk_write_walls
+                .iter()
+                .try_fold(0_u64, |total, wall| {
+                    total.checked_add(wall.maximum_measurement_duration_ms)
+                })
+                .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                    detail: "disk write wall aggregate declared duration overflowed".into(),
+                })?;
+            for declared in &manifest.disk_write_walls {
+                let canonical_volume_root =
+                    fs::canonicalize(&declared.volume_root).map_err(|error| {
+                        EmberLabError::InvalidDispatchManifest {
+                            detail: format!(
+                                "disk write wall volume root is unavailable at admission: {error}"
+                            ),
+                        }
+                    })?;
+                let canonical_write_root =
+                    fs::canonicalize(&declared.write_root).map_err(|error| {
+                        EmberLabError::InvalidDispatchManifest {
+                            detail: format!(
+                                "disk write wall named root must exist at admission: {error}"
+                            ),
+                        }
+                    })?;
+                if canonical_write_roots.iter().any(|existing| {
+                    canonical_write_root.starts_with(existing)
+                        || existing.starts_with(&canonical_write_root)
+                }) {
+                    return Err(EmberLabError::InvalidDispatchManifest {
+                        detail: "disk write wall named roots must be pairwise non-overlapping"
+                            .into(),
+                    });
+                }
+                canonical_write_roots.push(canonical_write_root.clone());
+                let available_free_bytes =
+                    if let Some(value) = volume_free.get(&canonical_volume_root) {
+                        *value
+                    } else {
+                        let value = free_space(&canonical_volume_root)?;
+                        volume_free.insert(canonical_volume_root.clone(), value);
+                        value
+                    };
+                let canonical_contract = DiskWriteWallContract {
+                    volume_root: canonical_volume_root.clone(),
+                    write_root: canonical_write_root.clone(),
+                    maximum_write_bytes: declared.maximum_write_bytes,
+                    minimum_free_bytes: declared.minimum_free_bytes,
+                    sample_interval_ms: declared.sample_interval_ms,
+                    maximum_measurement_duration_ms: declared.maximum_measurement_duration_ms,
+                };
+                let mut baseline = measure_disk_write_wall_sample_with_available_free(
+                    &canonical_contract,
+                    0,
+                    observed_at_ms,
+                    available_free_bytes,
+                )?;
+                baseline.baseline_tree_bytes = baseline.current_tree_bytes;
+                if let DiskWallDecision::ProtectiveStop {
+                    breach_class: DiskWallBreachClass::VolumeFreeFloor,
+                    ..
+                } = evaluate_disk_write_wall(&canonical_contract, &baseline)?
+                {
+                    return Err(EmberLabError::DispatchStorageReserve {
+                        root: canonical_volume_root,
+                        minimum_free_bytes: canonical_contract.minimum_free_bytes,
+                        available_free_bytes,
+                    });
+                }
+                aggregate_measurement_duration_ms = aggregate_measurement_duration_ms
+                    .checked_add(baseline.measurement_duration_ms)
+                    .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                        detail: "disk write wall aggregate measurement duration overflowed".into(),
+                    })?;
+                disk_wall_receipts.push(json!({
+                    "volume_root":canonical_contract.volume_root,
+                    "write_root":canonical_contract.write_root,
+                    "baseline_tree_bytes":baseline.baseline_tree_bytes,
+                    "maximum_write_bytes":canonical_contract.maximum_write_bytes,
+                    "minimum_free_bytes":canonical_contract.minimum_free_bytes,
+                    "available_free_bytes":available_free_bytes,
+                    "measurement_duration_ms":baseline.measurement_duration_ms,
+                    "maximum_measurement_duration_ms":canonical_contract.maximum_measurement_duration_ms,
+                    "sample_interval_ms":canonical_contract.sample_interval_ms,
+                    "claim_boundary":"immutable_named_root_growth_plus_per_volume_survival_floor_not_os_wide_write_quota",
+                }));
+                disk_wall_bindings.push(BoundDiskWriteWall {
+                    contract: canonical_contract,
+                    baseline_tree_bytes: baseline.baseline_tree_bytes,
+                });
+            }
+            disk_wall_receipts.push(json!({
+                "aggregate_measurement_duration_ms":aggregate_measurement_duration_ms,
+                "aggregate_declared_maximum_duration_ms":aggregate_declared_maximum_duration_ms,
+                "maximum_aggregate_duration_ms":DISK_WALL_SAMPLE_INTERVAL_MS / 2,
+                "per_volume_floor_observations":volume_free,
+            }));
+        }
+
         let (vram_receipt, maximum_process_vram_bytes) = match (
             manifest.schema_version.as_str(),
             manifest.vram_wall.as_ref(),
         ) {
-            ("ember-lab-dispatch-manifest-v4", Some(DispatchVramWall::NotApplicable)) => {
-                (json!({"applicability":"not_applicable"}), None)
-            }
-            ("ember-lab-dispatch-manifest-v4", Some(DispatchVramWall::Required(contract))) => {
+            (
+                "ember-lab-dispatch-manifest-v4" | "ember-lab-dispatch-manifest-v5",
+                Some(DispatchVramWall::NotApplicable),
+            ) => (json!({"applicability":"not_applicable"}), None),
+            (
+                "ember-lab-dispatch-manifest-v4" | "ember-lab-dispatch-manifest-v5",
+                Some(DispatchVramWall::Required(contract)),
+            ) => {
                 let observation: DispatchVramObservation =
                     free_vram(Some(contract.clone()))?.into();
                 let DispatchVramObservation::Device(capacity) = observation else {
@@ -3441,6 +3870,7 @@ impl Daemon {
             "custody_root": &custody_root,
             "storage_reserves": reserve_receipts,
             "vram_reserve": vram_receipt,
+            "disk_write_walls": disk_wall_receipts,
             "maximum_job_memory_bytes": manifest.maximum_job_memory_bytes,
             "host_commit": {
                 "basis": "maximum_configured_capacity",
@@ -3521,6 +3951,7 @@ impl Daemon {
         {
             spec = spec.with_vram_wall(contract, maximum_process_bytes);
         }
+        spec = spec.with_disk_write_walls(disk_wall_bindings);
         for (key, value) in manifest.env {
             spec = spec.with_env(key, value);
         }
@@ -3749,6 +4180,11 @@ impl Daemon {
                 [job_id],
             )?;
             tx.execute("DELETE FROM job_vram_walls WHERE job_id=?1", [job_id])?;
+            tx.execute(
+                "DELETE FROM disk_wall_observations WHERE job_id=?1",
+                [job_id],
+            )?;
+            tx.execute("DELETE FROM job_disk_walls WHERE job_id=?1", [job_id])?;
             tx.execute("DELETE FROM events WHERE job_id=?1", [job_id])?;
             tx.execute("DELETE FROM jobs WHERE job_id=?1", [job_id])?;
         }
@@ -3934,9 +4370,27 @@ impl Daemon {
                     params![spec.job_id, serde_json::to_string(contract)?, maximum_process_bytes],
                 )?;
             }
+            for wall in &spec.disk_write_walls {
+                let baseline_tree_bytes =
+                    i64::try_from(wall.baseline_tree_bytes).map_err(|_| {
+                        EmberLabError::InvalidDispatchManifest {
+                            detail: "disk write wall baseline exceeds the durable integer range"
+                                .into(),
+                        }
+                    })?;
+                tx.execute(
+                    "INSERT INTO job_disk_walls(job_id,write_root,contract_json,baseline_tree_bytes) VALUES(?1,?2,?3,?4)",
+                    params![
+                        spec.job_id,
+                        wall.contract.write_root.to_string_lossy(),
+                        serde_json::to_string(&wall.contract)?,
+                        baseline_tree_bytes,
+                    ],
+                )?;
+            }
             tx.execute(
                 "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_start_reserved',?3)",
-                params![spec.job_id, now_ms(), json!({"job_object_name":job_object_name,"cpu_rate_percent":spec.cpu_rate_percent,"requires_ui_responsiveness":spec.requires_ui_responsiveness,"vram_wall":spec.vram_wall,"maximum_process_vram_bytes":spec.maximum_process_vram_bytes}).to_string()],
+                params![spec.job_id, now_ms(), json!({"job_object_name":job_object_name,"cpu_rate_percent":spec.cpu_rate_percent,"requires_ui_responsiveness":spec.requires_ui_responsiveness,"vram_wall":spec.vram_wall,"maximum_process_vram_bytes":spec.maximum_process_vram_bytes,"disk_write_walls":spec.disk_write_walls.iter().map(|wall| json!({"contract":wall.contract,"baseline_tree_bytes":wall.baseline_tree_bytes})).collect::<Vec<_>>()}).to_string()],
             )?;
             tx.commit()?;
         }
@@ -7865,6 +8319,9 @@ fn migrate_schema(conn: &mut Connection, log_dir: &Path) -> Result<()> {
     tx.execute_batch(
         "CREATE TABLE IF NOT EXISTS job_vram_walls(job_id TEXT PRIMARY KEY, contract_json TEXT NOT NULL, maximum_process_vram_bytes INTEGER NOT NULL, consecutive_breach_observations INTEGER NOT NULL DEFAULT 0, active_breach_class TEXT, FOREIGN KEY(job_id) REFERENCES jobs(job_id));
          CREATE TABLE IF NOT EXISTS vram_wall_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL, FOREIGN KEY(job_id) REFERENCES jobs(job_id));
+         CREATE TABLE IF NOT EXISTS job_disk_walls(job_id TEXT NOT NULL, write_root TEXT NOT NULL, contract_json TEXT NOT NULL, baseline_tree_bytes INTEGER NOT NULL, consecutive_duration_misses INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(job_id,write_root), FOREIGN KEY(job_id) REFERENCES jobs(job_id));
+         CREATE TABLE IF NOT EXISTS disk_wall_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, write_root TEXT NOT NULL, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL, FOREIGN KEY(job_id) REFERENCES jobs(job_id));
+         CREATE TABLE IF NOT EXISTS disk_volume_floor_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, observed_at_ms INTEGER NOT NULL, volume_root TEXT NOT NULL, available_free_bytes INTEGER NOT NULL, payload_json TEXT NOT NULL, UNIQUE(observed_at_ms,volume_root));
          CREATE TABLE IF NOT EXISTS resource_guard_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), admission_state TEXT NOT NULL CHECK(admission_state IN ('open','frozen')), reason TEXT, observed_at_ms INTEGER NOT NULL, oracle_evidence_required INTEGER NOT NULL CHECK(oracle_evidence_required IN (0,1)), observation_json TEXT NOT NULL);
          CREATE TABLE IF NOT EXISTS resource_guard_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL);
          CREATE TABLE IF NOT EXISTS resource_guard_rearms(frozen_observation_sha256 TEXT PRIMARY KEY, breach_class TEXT NOT NULL, transitioned_at_ms INTEGER NOT NULL, receipt_path TEXT NOT NULL, receipt_sha256 TEXT NOT NULL UNIQUE, healthy_sample_count INTEGER NOT NULL, healthy_window_ms INTEGER NOT NULL, flap_multiplier INTEGER NOT NULL);
@@ -8592,6 +9049,318 @@ fn sample_owned_vram_walls(
 }
 
 #[cfg(windows)]
+fn disk_wall_duration_miss_transition(prior_misses: u32) -> (u32, bool) {
+    let misses = prior_misses.saturating_add(1);
+    (misses, misses >= 3)
+}
+
+#[cfg(windows)]
+fn disk_wall_error_authorizes_protective_stop(error: &EmberLabError) -> bool {
+    !matches!(error, EmberLabError::DiskWallMeasurementDuration { .. })
+}
+
+#[cfg(windows)]
+fn sample_owned_disk_walls(
+    db: &Arc<Mutex<Connection>>,
+    live: &Arc<Mutex<HashMap<String, RetainedProcess>>>,
+) -> Result<Vec<String>> {
+    type DiskWallRow = (String, u32, String, String, String, i64, u32);
+    let rows: Vec<DiskWallRow> = {
+        let conn = db.lock().map_err(|_| EmberLabError::Poisoned)?;
+        let mut statement = conn.prepare(
+            "SELECT j.job_id,j.pid,j.process_start_token,w.write_root,w.contract_json,w.baseline_tree_bytes,w.consecutive_duration_misses
+             FROM jobs j JOIN job_disk_walls w ON w.job_id=j.job_id
+             WHERE j.state='running' ORDER BY j.job_id,w.write_root",
+        )?;
+        let collected = statement
+            .query_map([], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                ))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        collected
+    };
+    if rows.is_empty() {
+        return Ok(Vec::new());
+    }
+    let observed_at_ms = now_ms();
+    let mut contracts = Vec::with_capacity(rows.len());
+    let mut volume_floors = BTreeMap::<PathBuf, (u64, String)>::new();
+    for row in &rows {
+        let contract: DiskWriteWallContract = serde_json::from_str(&row.4).map_err(|error| {
+            EmberLabError::InvalidDispatchManifest {
+                detail: format!("persisted disk wall contract is invalid: {error}"),
+            }
+        })?;
+        validate_disk_write_wall_contract(&contract)?;
+        if !volume_floors.contains_key(&contract.volume_root) {
+            let available_free_bytes = available_free_bytes(&contract.volume_root)?;
+            let payload = json!({
+                "schema_version":"ember-lab-disk-volume-floor-observation-v1",
+                "observed_at_ms":observed_at_ms,
+                "volume_root":contract.volume_root,
+                "available_free_bytes":available_free_bytes,
+                "observation_scope":"one_per_volume_per_tick",
+                "foreign_write_attribution":false,
+            });
+            let payload_bytes = serde_json::to_vec(&payload)?;
+            let payload_sha256 = hash_bytes(&payload_bytes);
+            let conn = db.lock().map_err(|_| EmberLabError::Poisoned)?;
+            conn.execute(
+                "INSERT INTO disk_volume_floor_observations(observed_at_ms,volume_root,available_free_bytes,payload_json) VALUES(?1,?2,?3,?4)",
+                params![
+                    observed_at_ms,
+                    contract.volume_root.to_string_lossy(),
+                    i64::try_from(available_free_bytes).map_err(|_| EmberLabError::InvalidDispatchManifest { detail: "disk volume free bytes exceed the durable integer range".into() })?,
+                    String::from_utf8(payload_bytes).map_err(|error| EmberLabError::InvalidDispatchManifest { detail: format!("disk floor receipt encoding failed: {error}") })?,
+                ],
+            )?;
+            volume_floors.insert(
+                contract.volume_root.clone(),
+                (available_free_bytes, payload_sha256),
+            );
+        }
+        contracts.push(contract);
+    }
+
+    let mut protective_stops = Vec::new();
+    for (row, contract) in rows.into_iter().zip(contracts) {
+        let (job_id, pid, start_token, write_root, _, baseline_tree_bytes, prior_misses) = row;
+        let identity_matches = {
+            let retained = live.lock().map_err(|_| EmberLabError::Poisoned)?;
+            retained
+                .get(&job_id)
+                .map(|entry| {
+                    entry.live.pid == pid && entry.live.identity.start_token == start_token
+                })
+                .unwrap_or(false)
+        };
+        if !identity_matches {
+            let payload = json!({
+                "schema_version":"ember-lab-disk-wall-observation-v1",
+                "result":"IDENTITY_CONFLICT_REFUSED",
+                "job_id":job_id,
+                "pid":pid,
+                "process_start_token":start_token,
+                "write_root":write_root,
+                "foreign_process_control":false,
+            })
+            .to_string();
+            let conn = db.lock().map_err(|_| EmberLabError::Poisoned)?;
+            let tx = conn.unchecked_transaction()?;
+            tx.execute(
+                "INSERT INTO disk_wall_observations(job_id,write_root,observed_at_ms,outcome,payload_json) VALUES(?1,?2,?3,'identity_conflict_refused',?4)",
+                params![job_id, write_root, observed_at_ms, payload],
+            )?;
+            tx.execute(
+                "UPDATE resource_guard_state SET admission_state='frozen',reason='disk_wall_identity_conflict',observed_at_ms=?1,oracle_evidence_required=1,observation_json=?2 WHERE singleton=1",
+                params![observed_at_ms, payload],
+            )?;
+            tx.commit()?;
+            continue;
+        }
+        let (available_free_bytes, floor_receipt_sha256) = volume_floors
+            .get(&contract.volume_root)
+            .cloned()
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                detail: "disk wall lost its per-volume floor observation".into(),
+            })?;
+        let baseline_tree_bytes = u64::try_from(baseline_tree_bytes).map_err(|_| {
+            EmberLabError::InvalidDispatchManifest {
+                detail: "persisted disk wall baseline is negative".into(),
+            }
+        })?;
+        let sampled = measure_disk_write_wall_sample_with_available_free(
+            &contract,
+            baseline_tree_bytes,
+            observed_at_ms,
+            available_free_bytes,
+        )
+        .and_then(|sample| {
+            let decision = evaluate_disk_write_wall(&contract, &sample)?;
+            Ok((sample, decision))
+        });
+        let (outcome, stop, next_misses, payload) = match sampled {
+            Err(EmberLabError::DiskWallMeasurementDuration {
+                elapsed_ms,
+                maximum_ms,
+            }) => {
+                let (misses, frozen) = disk_wall_duration_miss_transition(prior_misses);
+                (
+                    if frozen {
+                        "monitor_fail_frozen"
+                    } else {
+                        "duration_miss_pending"
+                    },
+                    false,
+                    misses,
+                    json!({
+                        "schema_version":"ember-lab-disk-wall-observation-v1",
+                        "result":if frozen { "MONITOR_FAIL_FROZEN" } else { "DURATION_MISS_PENDING" },
+                        "job_id":job_id,
+                        "pid":pid,
+                        "process_start_token":start_token,
+                        "write_root":contract.write_root,
+                        "elapsed_ms":elapsed_ms,
+                        "maximum_ms":maximum_ms,
+                        "consecutive_duration_misses":misses,
+                        "required_duration_misses":3,
+                        "owned_stop_authorized":false,
+                        "foreign_process_control":false,
+                    }),
+                )
+            }
+            Err(error) => {
+                debug_assert!(disk_wall_error_authorizes_protective_stop(&error));
+                (
+                    "protective_stop",
+                    true,
+                    0,
+                    json!({
+                    "schema_version":"ember-lab-disk-wall-observation-v1",
+                    "result":"PROTECTIVE_STOP",
+                    "breach_class":"contract_integrity",
+                    "job_id":job_id,
+                    "pid":pid,
+                    "process_start_token":start_token,
+                    "write_root":contract.write_root,
+                    "error":error.to_string(),
+                    "volume_floor_receipt_sha256":floor_receipt_sha256,
+                    "owned_stop_authorized":true,
+                    "foreign_process_control":false,
+                    }),
+                )
+            }
+            Ok((sample, decision)) => {
+                let (stop, breach_class) = match decision {
+                    DiskWallDecision::Healthy { .. } => (false, Value::Null),
+                    DiskWallDecision::ProtectiveStop { breach_class, .. } => {
+                        (true, json!(breach_class))
+                    }
+                };
+                (
+                    if stop { "protective_stop" } else { "healthy" },
+                    stop,
+                    0,
+                    json!({
+                        "schema_version":"ember-lab-disk-wall-observation-v1",
+                        "result":if stop { "PROTECTIVE_STOP" } else { "HEALTHY" },
+                        "breach_class":breach_class,
+                        "job_id":job_id,
+                        "pid":pid,
+                        "process_start_token":start_token,
+                        "volume_root":contract.volume_root,
+                        "write_root":contract.write_root,
+                        "baseline_tree_bytes":sample.baseline_tree_bytes,
+                        "current_tree_bytes":sample.current_tree_bytes,
+                        "growth_bytes":sample.current_tree_bytes - sample.baseline_tree_bytes,
+                        "maximum_write_bytes":contract.maximum_write_bytes,
+                        "minimum_free_bytes":contract.minimum_free_bytes,
+                        "measurement_duration_ms":sample.measurement_duration_ms,
+                        "maximum_measurement_duration_ms":contract.maximum_measurement_duration_ms,
+                        "volume_floor_receipt_sha256":floor_receipt_sha256,
+                        "claim_boundary":"immutable_named_root_growth_plus_per_volume_survival_floor_not_os_wide_write_quota",
+                        "race_surface":"mid_walk_mutation_refuses_or_misses_deadline_fail_closed",
+                        "owned_stop_authorized":stop,
+                        "foreign_process_control":false,
+                    }),
+                )
+            }
+        };
+        let payload = serde_json::to_string(&payload)?;
+        let conn = db.lock().map_err(|_| EmberLabError::Poisoned)?;
+        let tx = conn.unchecked_transaction()?;
+        tx.execute(
+            "INSERT INTO disk_wall_observations(job_id,write_root,observed_at_ms,outcome,payload_json) VALUES(?1,?2,?3,?4,?5)",
+            params![job_id, write_root, observed_at_ms, outcome, payload],
+        )?;
+        tx.execute(
+            "UPDATE job_disk_walls SET consecutive_duration_misses=?3 WHERE job_id=?1 AND write_root=?2",
+            params![job_id, write_root, next_misses],
+        )?;
+        if outcome == "monitor_fail_frozen" {
+            tx.execute(
+                "UPDATE resource_guard_state SET admission_state='frozen',reason='disk_wall_measurement_unavailable',observed_at_ms=?1,oracle_evidence_required=1,observation_json=?2 WHERE singleton=1",
+                params![observed_at_ms, payload],
+            )?;
+            tx.execute(
+                "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'disk_wall_monitor_fail_frozen',?3)",
+                params![job_id, observed_at_ms, payload],
+            )?;
+        } else if stop {
+            tx.execute(
+                "UPDATE resource_guard_state SET admission_state='frozen',reason='disk_wall_breach',observed_at_ms=?1,oracle_evidence_required=1,observation_json=?2 WHERE singleton=1",
+                params![observed_at_ms, payload],
+            )?;
+            tx.execute(
+                "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'disk_wall_protective_stop_authorized',?3)",
+                params![job_id, observed_at_ms, payload],
+            )?;
+        }
+        tx.execute(
+            "DELETE FROM disk_wall_observations WHERE seq <= COALESCE((SELECT MAX(seq) FROM disk_wall_observations),0)-4096",
+            [],
+        )?;
+        tx.execute(
+            "DELETE FROM disk_volume_floor_observations WHERE seq <= COALESCE((SELECT MAX(seq) FROM disk_volume_floor_observations),0)-2048",
+            [],
+        )?;
+        tx.commit()?;
+        if stop {
+            protective_stops.push(job_id);
+        }
+    }
+    Ok(protective_stops)
+}
+
+#[cfg(all(test, windows))]
+mod disk_wall_monitor_policy_tests {
+    use super::*;
+
+    fn contract() -> DiskWriteWallContract {
+        DiskWriteWallContract {
+            volume_root: PathBuf::from(r"B:\"),
+            write_root: PathBuf::from(r"B:\ember-custody\run-898"),
+            maximum_write_bytes: 100,
+            minimum_free_bytes: 1,
+            sample_interval_ms: DISK_WALL_SAMPLE_INTERVAL_MS,
+            maximum_measurement_duration_ms: DISK_WALL_MAXIMUM_MEASUREMENT_DURATION_MS,
+        }
+    }
+
+    #[test]
+    fn duration_miss_waits_for_third_sample_and_never_authorizes_a_stop() {
+        assert_eq!(disk_wall_duration_miss_transition(0), (1, false));
+        assert_eq!(disk_wall_duration_miss_transition(1), (2, false));
+        assert_eq!(disk_wall_duration_miss_transition(2), (3, true));
+        assert_eq!(
+            disk_wall_duration_miss_transition(u32::MAX),
+            (u32::MAX, true)
+        );
+    }
+
+    #[test]
+    fn named_root_shrink_enters_the_non_duration_protective_stop_arm() {
+        let sample = DiskWriteWallSample {
+            observed_at_ms: 10_000,
+            baseline_tree_bytes: 100,
+            current_tree_bytes: 99,
+            available_free_bytes: 1,
+            measurement_duration_ms: 1,
+        };
+        let error = evaluate_disk_write_wall(&contract(), &sample).unwrap_err();
+        assert!(disk_wall_error_authorizes_protective_stop(&error));
+    }
+}
+
+#[cfg(windows)]
 fn spawn_resource_guard_monitor(
     db: Weak<Mutex<Connection>>,
     live: Weak<Mutex<HashMap<String, RetainedProcess>>>,
@@ -8660,6 +9429,28 @@ fn spawn_resource_guard_monitor(
                             );
                             let _ = conn.execute(
                                 "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(NULL,?1,'vram_wall_monitor_failed',?2)",
+                                params![observed_at_ms, payload],
+                            );
+                        }
+                    }
+                }
+                match sample_owned_disk_walls(&db, &live) {
+                    Ok(mut disk_job_ids) => job_ids.append(&mut disk_job_ids),
+                    Err(error) => {
+                        if let Ok(conn) = db.lock() {
+                            let observed_at_ms = now_ms();
+                            let payload = json!({
+                                "schema_version":"ember-lab-disk-wall-monitor-failure-v1",
+                                "error":error.to_string(),
+                                "foreign_process_control":false,
+                            })
+                            .to_string();
+                            let _ = conn.execute(
+                                "UPDATE resource_guard_state SET admission_state='frozen',reason='disk_wall_monitor_failed',observed_at_ms=?1,oracle_evidence_required=1,observation_json=?2 WHERE singleton=1",
+                                params![observed_at_ms, payload],
+                            );
+                            let _ = conn.execute(
+                                "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(NULL,?1,'disk_wall_monitor_failed',?2)",
                                 params![observed_at_ms, payload],
                             );
                         }
