@@ -430,12 +430,12 @@ fn sha256(bytes: &[u8]) -> String {
 }
 
 fn now_ms() -> io::Result<u64> {
-    Ok(SystemTime::now()
+    SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(io::Error::other)?
         .as_millis()
         .try_into()
-        .map_err(io::Error::other)?)
+        .map_err(io::Error::other)
 }
 
 #[cfg(windows)]
