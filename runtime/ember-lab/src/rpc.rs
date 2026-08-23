@@ -117,6 +117,13 @@ struct ResourceParams {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+struct WallObservationSnapshotParams {
+    after_vram_seq: i64,
+    after_disk_seq: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ResourceGuardRearmParams {
     frozen_observation_sha256: String,
     breach_class: String,
@@ -194,6 +201,19 @@ fn dispatch(daemon: &Daemon, request: WireRequest, client_pid: Option<u32>) -> (
             ),
             false,
         ),
+        "wall_observation_snapshot" => {
+            let params: WallObservationSnapshotParams = match decode(&id, request.params) {
+                Ok(value) => value,
+                Err(response) => return (response, false),
+            };
+            match daemon.wall_observation_snapshot(params.after_vram_seq, params.after_disk_seq) {
+                Ok(snapshot) => match serde_json::to_value(snapshot) {
+                    Ok(value) => (success(id, value), false),
+                    Err(error) => (operation_error(id, error), false),
+                },
+                Err(error) => (operation_error(id, error), false),
+            }
+        }
         "bind_identity" => {
             let params: BindIdentityParams = match decode(&id, request.params) {
                 Ok(value) => value,
@@ -874,7 +894,23 @@ pub fn serve_named_pipe(_daemon: Arc<Daemon>, _pipe_name: &str) -> io::Result<()
 
 #[cfg(test)]
 mod tests {
-    use super::ServerCycleParams;
+    use super::{ServerCycleParams, WallObservationSnapshotParams};
+
+    #[test]
+    fn wall_snapshot_params_are_closed_and_preserve_negative_for_daemon_refusal() {
+        let widened = serde_json::json!({
+            "after_vram_seq": 0,
+            "after_disk_seq": 0,
+            "mutation": "delete",
+        });
+        assert!(serde_json::from_value::<WallObservationSnapshotParams>(widened).is_err());
+        let negative = WallObservationSnapshotParams {
+            after_vram_seq: -1,
+            after_disk_seq: 0,
+        };
+        assert!(negative.after_vram_seq < 0);
+        assert_eq!(negative.after_disk_seq, 0);
+    }
 
     #[test]
     fn server_cycle_params_reject_caller_restart_count() {

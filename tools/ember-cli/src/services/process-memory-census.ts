@@ -12,7 +12,30 @@ import type {
 export interface ProcessMemoryCensusOptions {
   cockpitPid: number;
   ownedBrainPids?: readonly number[];
+  observedAt?: () => string;
   runPowerShell?: () => Promise<string>;
+}
+
+export const WINDOWS_PROCESS_MEMORY_PROVIDER =
+  "win32_process+cim/get-process:paged-memory-size64+start-time-utc-ticks" as const;
+
+export interface ProcessMemoryCensusSample extends ProcessMemorySample {
+  parent_pid: number;
+  process_name: string;
+  process_start_token: string;
+  provider: typeof WINDOWS_PROCESS_MEMORY_PROVIDER;
+  ownership_basis: string[];
+}
+
+export interface ProcessMemoryCensusBatch {
+  schema_version: "ember-process-memory-census-poll-v1";
+  observed_at: string;
+  provider: typeof WINDOWS_PROCESS_MEMORY_PROVIDER;
+  candidate_process_count: number;
+  admitted_process_count: number;
+  class_cardinality: Record<MemoryProcessClass, number>;
+  ownership_overlap: { count: number; pids: number[] };
+  samples: ProcessMemoryCensusSample[];
 }
 
 interface WindowsProcessRow {
@@ -20,6 +43,7 @@ interface WindowsProcessRow {
   ParentProcessId: unknown;
   ProcessName: unknown;
   PagedMemorySize64: unknown;
+  ProcessStartToken?: unknown;
 }
 
 function normalizedProcessName(value: string): string {
@@ -45,8 +69,8 @@ function defaultPowerShellCensus(): Promise<string> {
   const script = [
     "$rows = @()",
     "Get-CimInstance Win32_Process | ForEach-Object {",
-    "$commit = $null; try { $p = Get-Process -Id $_.ProcessId -ErrorAction Stop; $commit = [int64]$p.PagedMemorySize64 } catch {}",
-    "$rows += [PSCustomObject]@{ Id = [int]$_.ProcessId; ParentProcessId = [int]$_.ParentProcessId; ProcessName = [string]$_.Name; PagedMemorySize64 = $commit } }",
+    "$commit = $null; $start = $null; try { $p = Get-Process -Id $_.ProcessId -ErrorAction Stop; $commit = [int64]$p.PagedMemorySize64; $start = [string]$p.StartTime.ToUniversalTime().Ticks } catch {}",
+    "$rows += [PSCustomObject]@{ Id = [int]$_.ProcessId; ParentProcessId = [int]$_.ParentProcessId; ProcessName = [string]$_.Name; PagedMemorySize64 = $commit; ProcessStartToken = $start } }",
     "$rows | ConvertTo-Json -Compress",
   ].join("; ");
   return new Promise((resolve, reject) => {
@@ -59,10 +83,11 @@ function defaultPowerShellCensus(): Promise<string> {
   });
 }
 
-export async function censusWindowsProcessMemory(
+async function censusWindowsProcessMemoryBatchInner(
   spec: MemoryFootprintSpec,
   options: ProcessMemoryCensusOptions,
-): Promise<ProcessMemorySample[]> {
+  requireStartToken: boolean,
+): Promise<ProcessMemoryCensusBatch> {
   if (!Number.isSafeInteger(options.cockpitPid) || options.cockpitPid <= 0) {
     throw new Error("MEMORY_CENSUS_COCKPIT_PID_INVALID");
   }
@@ -82,7 +107,8 @@ export async function censusWindowsProcessMemory(
     throw new Error("MEMORY_CENSUS_JSON_INVALID");
   }
   const rows = Array.isArray(parsed) ? parsed : [parsed];
-  const samples: ProcessMemorySample[] = [];
+  const samples: ProcessMemoryCensusSample[] = [];
+  const overlapPids: number[] = [];
   const seen = new Set<number>();
   for (const candidate of rows) {
     if (typeof candidate !== "object" || candidate === null) {
@@ -99,27 +125,80 @@ export async function censusWindowsProcessMemory(
       throw new Error("MEMORY_CENSUS_ROW_INVALID");
     }
     const pid = row.Id as number;
-    const owner = owners.get(normalizedProcessName(row.ProcessName));
+    const processName = normalizedProcessName(row.ProcessName);
+    const owner = owners.get(processName);
     const isCockpit = pid === options.cockpitPid;
-    const isOwnedBrainServer = owner === "brain_server" && (
-      row.ParentProcessId === options.cockpitPid
-      || ownedBrainPids.has(pid)
-      || ownedBrainPids.has(row.ParentProcessId as number)
-    );
+    const brainBases: string[] = [];
+    if (owner === "brain_server") {
+      if (ownedBrainPids.has(pid)) brainBases.push("ember_lab_runtime_pid");
+      if (ownedBrainPids.has(row.ParentProcessId as number)) brainBases.push("ember_lab_runtime_child");
+      if (row.ParentProcessId === options.cockpitPid) brainBases.push("cockpit_child");
+    }
+    const isOwnedBrainServer = brainBases.length > 0;
     if (!isCockpit && !isOwnedBrainServer) continue;
     if (!Number.isFinite(row.PagedMemorySize64) || (row.PagedMemorySize64 as number) < 0) {
       throw new Error(`MEMORY_CENSUS_COMMIT_UNREADABLE:${pid}`);
     }
+    let processStartToken: string;
+    if (typeof row.ProcessStartToken === "string" && /^[1-9][0-9]*$/.test(row.ProcessStartToken)) {
+      processStartToken = row.ProcessStartToken;
+    } else if (requireStartToken) {
+      throw new Error(`MEMORY_CENSUS_START_TOKEN_UNREADABLE:${pid}`);
+    } else {
+      processStartToken = "unavailable-legacy-call";
+    }
     if (seen.has(pid)) throw new Error(`MEMORY_CENSUS_PID_DUPLICATE:${pid}`);
     seen.add(pid);
+    const ownershipBasis = isCockpit ? ["cockpit_pid"] : brainBases;
+    if (ownershipBasis.length > 1) overlapPids.push(pid);
     samples.push({
       process_class: isCockpit ? "cockpit" : "brain_server",
       pid,
+      parent_pid: row.ParentProcessId as number,
+      process_name: processName,
+      process_start_token: processStartToken,
+      provider: WINDOWS_PROCESS_MEMORY_PROVIDER,
       commit_bytes: row.PagedMemorySize64 as number,
+      ownership_basis: ownershipBasis,
     });
   }
   if (!samples.some((sample) => sample.process_class === "cockpit" && sample.pid === options.cockpitPid)) {
     throw new Error(`MEMORY_CENSUS_COCKPIT_MISSING:${options.cockpitPid}`);
   }
-  return samples.sort((left, right) => left.pid - right.pid);
+  samples.sort((left, right) => left.pid - right.pid);
+  const observedAt = (options.observedAt ?? (() => new Date().toISOString()))();
+  const observedAtMs = Date.parse(observedAt);
+  if (Number.isNaN(observedAtMs) || new Date(observedAtMs).toISOString() !== observedAt) throw new Error("MEMORY_CENSUS_OBSERVED_AT_INVALID");
+  return {
+    schema_version: "ember-process-memory-census-poll-v1",
+    observed_at: observedAt,
+    provider: WINDOWS_PROCESS_MEMORY_PROVIDER,
+    candidate_process_count: rows.length,
+    admitted_process_count: samples.length,
+    class_cardinality: {
+      cockpit: samples.filter((sample) => sample.process_class === "cockpit").length,
+      brain_server: samples.filter((sample) => sample.process_class === "brain_server").length,
+    },
+    ownership_overlap: { count: overlapPids.length, pids: overlapPids.sort((a, b) => a - b) },
+    samples,
+  };
+}
+
+export function censusWindowsProcessMemoryBatch(
+  spec: MemoryFootprintSpec,
+  options: ProcessMemoryCensusOptions,
+): Promise<ProcessMemoryCensusBatch> {
+  return censusWindowsProcessMemoryBatchInner(spec, options, true);
+}
+
+export async function censusWindowsProcessMemory(
+  spec: MemoryFootprintSpec,
+  options: ProcessMemoryCensusOptions,
+): Promise<ProcessMemorySample[]> {
+  const batch = await censusWindowsProcessMemoryBatchInner(spec, options, false);
+  return batch.samples.map(({ process_class, pid, commit_bytes }) => ({
+    process_class,
+    pid,
+    commit_bytes,
+  }));
 }
