@@ -24,6 +24,10 @@ import type { BorderStyleName } from "./border-glyphs.ts";
 import { ClickEvent, PointerEvent, type MouseModifiers, type TerminalEvent } from "./event-system.ts";
 import { _setMouseDispatcher } from "./hooks.ts";
 import type { SgrMouseEvent } from "./termio.ts";
+import {
+  createRendererDiagnosticFromEnv,
+  type RendererDiagnostic,
+} from "./renderer-diagnostic.ts";
 
 // ---------------------------------------------------------------------------
 // Internal node — extends RenderNode with reconciler bookkeeping
@@ -693,10 +697,14 @@ export interface MountOptions {
   onFirstFrameFlushed?: () => void;
   /** Fatal render/reconciliation error. Callers owning terminal modes must tear them down here. */
   onError?: (error: Error) => void;
+  /** Nonfatal renderer-diagnostic sink error. Rendering continues after the sink disables itself. */
+  onDiagnosticError?: (error: Error) => void;
   /** Test-only: forwarded verbatim to createRenderer -- see RendererOptions' own comment.
    *  Production callers never pass these. */
   stylePool?: StylePool;
   hyperlinkPool?: HyperlinkPool;
+  /** Optional #898 renderer diagnostic; otherwise an explicit env path activates it. */
+  diagnostic?: RendererDiagnostic;
 }
 
 /**
@@ -722,6 +730,9 @@ export function mountInk(element: ReactElement, options: MountOptions): MountHan
     }
   };
 
+  const diagnostic = options.diagnostic
+    ?? createRendererDiagnosticFromEnv(process.env, options.onDiagnosticError);
+
   const renderer = createRenderer({
     stream: options.stream,
     stdout: options.stdout,
@@ -730,6 +741,7 @@ export function mountInk(element: ReactElement, options: MountOptions): MountHan
     onError: reportRenderError,
     stylePool: options.stylePool,
     hyperlinkPool: options.hyperlinkPool,
+    diagnostic,
   });
 
   const container: InkContainer = {
