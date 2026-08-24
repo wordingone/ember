@@ -1548,6 +1548,7 @@ mod tests {
     use std::fs;
     use std::net::TcpListener;
     use std::path::{Path, PathBuf};
+    use std::sync::mpsc;
     use std::thread;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1711,7 +1712,9 @@ mod tests {
             .unwrap();
         let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
         let port = listener.local_addr().unwrap().port();
+        let (ready_tx, ready_rx) = mpsc::sync_channel(0);
         let server = thread::spawn(move || {
+            ready_tx.send(()).unwrap();
             if let Ok((mut stream, _)) = listener.accept() {
                 let _ = std::io::Write::write_all(
                     &mut stream,
@@ -1719,6 +1722,7 @@ mod tests {
                 );
             }
         });
+        ready_rx.recv_timeout(Duration::from_secs(5)).unwrap();
         let serving_contract_path = root.join("unused-serving-contract.json");
         fs::write(&serving_contract_path, b"{}").unwrap();
         let serving_contract_sha256 = sha256(&serving_contract_path);
