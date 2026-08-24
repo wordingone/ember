@@ -11,6 +11,7 @@ Status: CURRENT
 Issue: #898 packet-2 J
 
 Consumer: `tools/ember-cli/src/services/issue898-installed-cockpit-soak.ts`, `tools/ember-cli/src/services/issue898-cockpit-negative-harness.ts`
+Consumer: `tools/ember-cli/src/services/issue898-renderer-census-evidence.ts`
 
 ## Contract
 
@@ -21,6 +22,13 @@ self-hashed receipt containing cadence, custody, negative-harness, and shared
 five-minute OLS window evidence. The receipt remains
 `MEASURED_NEEDS_INDEPENDENT_ADJUDICATION`; this component cannot mint its own
 plateau, execution PASS, issue closure, or training credit.
+
+The renderer-census evidence consumer first verifies that sealed receipt and
+its custody bindings, joins each admitted cockpit census row only to the latest
+nonfuture renderer diagnostic row inside the frozen tolerance, derives bounded
+full-run and settled-window rates, and writes one self-hashed receipt into an
+absent sibling root. It is read-only and cannot mint a runtime cure, execution
+PASS, or issue closure.
 
 The negative harness executes the real governor and admission logic against an
 injected provider listing. It proves receipt-before-action, below-hard reset,
