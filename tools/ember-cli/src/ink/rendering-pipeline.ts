@@ -10,6 +10,7 @@ import type { Style, ColorValue } from "./termio.ts";
 import { cursorPosition, applyAnsiCodes } from "./termio.ts";
 import type { LayoutNode } from "./layout-engine.ts";
 import { resolveBorderGlyphs, type BorderStyleName } from "./border-glyphs.ts";
+import type { RendererDiagnostic } from "./renderer-diagnostic.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -995,6 +996,8 @@ export interface RendererOptions {
    *  prior behavior (a fresh, renderer-owned pool). */
   stylePool?: StylePool;
   hyperlinkPool?: HyperlinkPool;
+  /** Optional #898 diagnostic sink. It only observes counters and never wraps stdout. */
+  diagnostic?: RendererDiagnostic;
 }
 
 export interface Renderer {
@@ -1016,6 +1019,7 @@ export function createRenderer(options: RendererOptions): Renderer {
   const { stream, stdout } = options;
   const stylePool    = options.stylePool    ?? new StylePool();
   const hyperlinkPool = options.hyperlinkPool ?? new HyperlinkPool();
+  const diagnostic = options.diagnostic;
 
   let prevFrame: Frame | null = null;
   let spareFrame: Frame | null = null;
@@ -1042,8 +1046,10 @@ export function createRenderer(options: RendererOptions): Renderer {
 
   const renderer: Renderer = {
     render(rootNode: RenderNode): void {
+      diagnostic?.recordRenderCall(backpressured);
       if (backpressured) {
         pendingRootNode = rootNode;
+        diagnostic?.maybeEmit(stylePool.size(), hyperlinkPool.size());
         return;
       }
 
@@ -1094,6 +1100,13 @@ export function createRenderer(options: RendererOptions): Renderer {
       const patch = diffFrames(geometryChanged ? null : previousFrame, frame);
       const runs  = optimizePatch(patch);
 
+      diagnostic?.recordRenderPass({
+        fullRepaint: geometryChanged,
+        renderedFrameUtf8Bytes: Buffer.byteLength(rendered),
+        diffCells: patch.changes.length,
+        optimizedRuns: runs.length,
+      });
+
       // Write minimal output -- clear-screen first on a geometry change so any terminal-side
       // reflow of the previous (differently-sized) frame's content can't leave visible remnants
       // outside the cells this frame's diff will actually (re)write.
@@ -1120,6 +1133,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       if (runs.length > 0) buf += "\x1b[m";
       if (buf) {
         const accepted = stream.write(buf);
+        diagnostic?.recordStreamWrite(Buffer.byteLength(buf), accepted !== false);
         forceFullRepaintAfterDrain = false;
         if (accepted === false) {
           if (typeof stream.once !== "function") {
@@ -1135,6 +1149,7 @@ export function createRenderer(options: RendererOptions): Renderer {
               forceFullRepaintAfterDrain = true;
               if (latestRootNode !== null) {
                 try {
+                  diagnostic?.recordDrainRepaint();
                   renderer.render(latestRootNode);
                 } catch (error) {
                   if (options.onError === undefined) throw error;
@@ -1157,6 +1172,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       spareFrame = previousFrame?.width === w && previousFrame.height === h
         ? previousFrame
         : null;
+      diagnostic?.maybeEmit(stylePool.size(), hyperlinkPool.size());
     },
 
     unmount(): void {
@@ -1165,6 +1181,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       pendingRootNode = null;
       prevFrame = null;
       spareFrame = null;
+      diagnostic?.close();
     },
 
     clear(): void {
