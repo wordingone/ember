@@ -28,6 +28,10 @@ import {
   createRendererDiagnosticFromEnv,
   type RendererDiagnostic,
 } from "./renderer-diagnostic.ts";
+import {
+  createHeapAttributionDiagnosticFromEnv,
+  type HeapAttributionDiagnostic,
+} from "./heap-attribution-diagnostic.ts";
 
 // ---------------------------------------------------------------------------
 // Internal node — extends RenderNode with reconciler bookkeeping
@@ -705,6 +709,8 @@ export interface MountOptions {
   hyperlinkPool?: HyperlinkPool;
   /** Optional #898 renderer diagnostic; otherwise an explicit env path activates it. */
   diagnostic?: RendererDiagnostic;
+  /** Optional #898 heap-attribution sink; otherwise its explicit env path activates it. */
+  heapAttributionDiagnostic?: HeapAttributionDiagnostic;
 }
 
 /**
@@ -732,6 +738,8 @@ export function mountInk(element: ReactElement, options: MountOptions): MountHan
 
   const diagnostic = options.diagnostic
     ?? createRendererDiagnosticFromEnv(process.env, options.onDiagnosticError);
+  const heapAttributionDiagnostic = options.heapAttributionDiagnostic
+    ?? createHeapAttributionDiagnosticFromEnv(process.env, undefined, options.onDiagnosticError);
 
   const renderer = createRenderer({
     stream: options.stream,
@@ -742,6 +750,7 @@ export function mountInk(element: ReactElement, options: MountOptions): MountHan
     stylePool: options.stylePool,
     hyperlinkPool: options.hyperlinkPool,
     diagnostic,
+    heapAttributionDiagnostic,
   });
 
   const container: InkContainer = {

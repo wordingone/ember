@@ -11,6 +11,7 @@ import { cursorPosition, applyAnsiCodes } from "./termio.ts";
 import type { LayoutNode } from "./layout-engine.ts";
 import { resolveBorderGlyphs, type BorderStyleName } from "./border-glyphs.ts";
 import type { RendererDiagnostic } from "./renderer-diagnostic.ts";
+import type { HeapAttributionDiagnostic } from "./heap-attribution-diagnostic.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -998,6 +999,8 @@ export interface RendererOptions {
   hyperlinkPool?: HyperlinkPool;
   /** Optional #898 diagnostic sink. It only observes counters and never wraps stdout. */
   diagnostic?: RendererDiagnostic;
+  /** Optional #898 post-GC attribution sink. Environment-absent production omits it. */
+  heapAttributionDiagnostic?: HeapAttributionDiagnostic;
 }
 
 export interface Renderer {
@@ -1020,6 +1023,7 @@ export function createRenderer(options: RendererOptions): Renderer {
   const stylePool    = options.stylePool    ?? new StylePool();
   const hyperlinkPool = options.hyperlinkPool ?? new HyperlinkPool();
   const diagnostic = options.diagnostic;
+  const heapAttributionDiagnostic = options.heapAttributionDiagnostic;
 
   let prevFrame: Frame | null = null;
   let spareFrame: Frame | null = null;
@@ -1131,6 +1135,17 @@ export function createRenderer(options: RendererOptions): Renderer {
       // non-empty, so plain content needing no SGR is written without SGR and inherits the
       // stale inverse. The reset makes each patch self-terminating, breaking the cross-patch leak.
       if (runs.length > 0) buf += "\x1b[m";
+      heapAttributionDiagnostic?.recordRenderPass({
+        frameWidth: w,
+        frameHeight: h,
+        frameCellCount: w * h,
+        patchChanges: patch.changes.length,
+        optimizedRuns: runs.length,
+        renderedBytes: Buffer.byteLength(rendered),
+        patchBufferBytes: Buffer.byteLength(buf),
+        stylePoolSize: stylePool.size(),
+        hyperlinkPoolSize: hyperlinkPool.size(),
+      });
       if (buf) {
         const accepted = stream.write(buf);
         diagnostic?.recordStreamWrite(Buffer.byteLength(buf), accepted !== false);
@@ -1182,6 +1197,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       prevFrame = null;
       spareFrame = null;
       diagnostic?.close();
+      heapAttributionDiagnostic?.close();
     },
 
     clear(): void {
