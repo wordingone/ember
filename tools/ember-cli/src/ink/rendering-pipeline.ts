@@ -620,16 +620,241 @@ function pinnedBorderBottomRow(ly: number, lh: number, clipRect: ClipRect): numb
   return (ly >= clipRect.y && visibleBottomRow > ly) ? visibleBottomRow : naturalBottomRow;
 }
 
+interface NodePaintTarget {
+  writeAt(row: number, col: number, ch: string, style: Style): void;
+  writeRawAnsiAt(row: number, col: number, rawAnsi: string): void;
+  resetStyle(): void;
+}
+
+class AnsiNodePaintTarget implements NodePaintTarget {
+  constructor(
+    private readonly output: Output,
+    private readonly stylePool: StylePool,
+    private readonly previousStyle: PrevStyleTracker,
+  ) {}
+
+  writeAt(row: number, col: number, ch: string, style: Style): void {
+    this.stylePool.intern(style);
+    this.output.write(cursorPosition(row + 1, col + 1));
+    this.output.writeSGR(style, this.previousStyle.current);
+    this.previousStyle.current = style;
+    this.output.write(ch);
+  }
+
+  writeRawAnsiAt(row: number, col: number, rawAnsi: string): void {
+    this.output.write(cursorPosition(row + 1, col + 1));
+    this.output.write(rawAnsi);
+    this.previousStyle.current = {};
+  }
+
+  resetStyle(): void {
+    this.output.write("\x1b[m");
+    this.previousStyle.current = {};
+  }
+}
+
+function decimalDigits(value: number): number {
+  const n = Math.abs(Math.trunc(value));
+  if (n < 10) return 1;
+  if (n < 100) return 2;
+  if (n < 1_000) return 3;
+  if (n < 10_000) return 4;
+  if (n < 100_000) return 5;
+  if (n < 1_000_000) return 6;
+  return String(n).length;
+}
+
+function sameColor(a: ColorValue | undefined, b: ColorValue | undefined): boolean {
+  if (a === b) return true;
+  if (a === undefined || b === undefined || a.type !== b.type) return false;
+  if (a.type === "rgb" && b.type === "rgb") return a.r === b.r && a.g === b.g && a.b === b.b;
+  return "index" in a && "index" in b && a.index === b.index;
+}
+
+function sameStyle(a: Style, b: Style): boolean {
+  return a === b || (
+    a.bold === b.bold
+    && a.dim === b.dim
+    && a.italic === b.italic
+    && a.underline === b.underline
+    && a.inverse === b.inverse
+    && a.strikethrough === b.strikethrough
+    && sameColor(a.fg, b.fg)
+    && sameColor(a.bg, b.bg)
+  );
+}
+
+function styleTransitionNeedsReset(style: Style, previousStyle: Style): boolean {
+  return Boolean(
+    (previousStyle.bold && !style.bold)
+    || (previousStyle.dim && !style.dim)
+    || (previousStyle.italic && !style.italic)
+    || (previousStyle.underline && !style.underline)
+    || (previousStyle.inverse && !style.inverse)
+    || (previousStyle.strikethrough && !style.strikethrough)
+    || (previousStyle.fg && !style.fg)
+    || (previousStyle.bg && !style.bg)
+  );
+}
+
+function normalizedStyle(style: Style): Style {
+  const normalized: Style = {};
+  if (style.bold) normalized.bold = true;
+  if (style.dim) normalized.dim = true;
+  if (style.italic) normalized.italic = true;
+  if (style.underline) normalized.underline = true;
+  if (style.inverse) normalized.inverse = true;
+  if (style.strikethrough) normalized.strikethrough = true;
+  if (style.fg) normalized.fg = style.fg;
+  if (style.bg) normalized.bg = style.bg;
+  return normalized;
+}
+
+function applyVirtualStyleTransition(
+  style: Style,
+  previousEmissionStyle: Style,
+  previousFrameStyle: Style,
+): Style {
+  if (sameStyle(style, previousEmissionStyle)) return previousFrameStyle;
+  if (styleTransitionNeedsReset(style, previousEmissionStyle)) return normalizedStyle(style);
+  const addBold = Boolean(style.bold && !previousEmissionStyle.bold);
+  const addDim = Boolean(style.dim && !previousEmissionStyle.dim);
+  const addItalic = Boolean(style.italic && !previousEmissionStyle.italic);
+  const addUnderline = Boolean(style.underline && !previousEmissionStyle.underline);
+  const addInverse = Boolean(style.inverse && !previousEmissionStyle.inverse);
+  const addStrike = Boolean(style.strikethrough && !previousEmissionStyle.strikethrough);
+  const changeFg = Boolean(style.fg && !sameColor(style.fg, previousEmissionStyle.fg));
+  const changeBg = Boolean(style.bg && !sameColor(style.bg, previousEmissionStyle.bg));
+  if (!(addBold || addDim || addItalic || addUnderline || addInverse || addStrike || changeFg || changeBg)) {
+    return previousFrameStyle;
+  }
+  const next: Style = { ...previousFrameStyle };
+  if (addBold) next.bold = true;
+  if (addDim) next.dim = true;
+  if (addItalic) next.italic = true;
+  if (addUnderline) next.underline = true;
+  if (addInverse) next.inverse = true;
+  if (addStrike) next.strikethrough = true;
+  if (changeFg) next.fg = style.fg!;
+  if (changeBg) next.bg = style.bg!;
+  return next;
+}
+
+function colorSgrLength(color: ColorValue, foreground: boolean): number {
+  if (color.type === "rgb") {
+    return 7 + decimalDigits(color.r) + decimalDigits(color.g) + decimalDigits(color.b);
+  }
+  if (color.type === "indexed") return 5 + decimalDigits(color.index);
+  const code = color.index < 8
+    ? (foreground ? 30 : 40) + color.index
+    : (foreground ? 90 : 100) + color.index - 8;
+  return decimalDigits(code);
+}
+
+function sgrTransitionByteLength(style: Style, previousStyle: Style): number {
+  if (sameStyle(style, previousStyle)) return 0;
+  const needsReset = styleTransitionNeedsReset(style, previousStyle);
+  let items = 0;
+  let payloadBytes = 0;
+  const add = (bytes: number): void => {
+    if (items > 0) payloadBytes += 1;
+    payloadBytes += bytes;
+    items += 1;
+  };
+  const addAll = needsReset;
+  if (style.bold && (addAll || !previousStyle.bold)) add(1);
+  if (style.dim && (addAll || !previousStyle.dim)) add(1);
+  if (style.italic && (addAll || !previousStyle.italic)) add(1);
+  if (style.underline && (addAll || !previousStyle.underline)) add(1);
+  if (style.inverse && (addAll || !previousStyle.inverse)) add(1);
+  if (style.strikethrough && (addAll || !previousStyle.strikethrough)) add(1);
+  if (style.fg && (addAll || !sameColor(style.fg, previousStyle.fg))) add(colorSgrLength(style.fg, true));
+  if (style.bg && (addAll || !sameColor(style.bg, previousStyle.bg))) add(colorSgrLength(style.bg, false));
+  return (needsReset ? 3 : 0) + (items > 0 ? payloadBytes + 3 : 0);
+}
+
+/** Direct frame producer for the hot cockpit path. It intentionally carries a diagnostic-only
+ * count of the bytes the legacy full-frame ANSI oracle would have emitted; frame correctness must
+ * never depend on that counter. */
+export class FrameRenderTarget implements NodePaintTarget {
+  private frame: Frame | null = null;
+  private emissionStyle: Style = {};
+  private frameStyle: Style = {};
+  private styleRefs = new WeakMap<Style, StyleRef>();
+  renderedByteLength = 0;
+
+  constructor(
+    private readonly stylePool: StylePool,
+    private readonly scratch: FrameParseScratch,
+  ) {}
+
+  begin(frame: Frame): void {
+    this.frame = frame;
+    this.emissionStyle = {};
+    this.frameStyle = {};
+    this.renderedByteLength = 0;
+  }
+
+  resetStyleCache(): void {
+    this.styleRefs = new WeakMap<Style, StyleRef>();
+  }
+
+  private styleRef(style: Style): StyleRef {
+    const cached = this.styleRefs.get(style);
+    if (cached !== undefined) return cached;
+    const ref = this.stylePool.intern(style);
+    this.styleRefs.set(style, ref);
+    return ref;
+  }
+
+  writeAt(row: number, col: number, ch: string, style: Style): void {
+    this.renderedByteLength += 4 + decimalDigits(row + 1) + decimalDigits(col + 1);
+    this.renderedByteLength += sgrTransitionByteLength(style, this.emissionStyle);
+    this.renderedByteLength += Buffer.byteLength(ch);
+    this.frameStyle = applyVirtualStyleTransition(style, this.emissionStyle, this.frameStyle);
+    this.emissionStyle = style;
+    const cell = this.frame?.cells[row]?.[col];
+    if (cell) {
+      cell.char = ch;
+      cell.styleRef = this.styleRef(this.frameStyle);
+      cell.hyperlinkId = null;
+    }
+  }
+
+  writeRawAnsiAt(row: number, col: number, rawAnsi: string): void {
+    this.renderedByteLength += 4 + decimalDigits(row + 1) + decimalDigits(col + 1);
+    this.renderedByteLength += Buffer.byteLength(rawAnsi);
+    if (this.frame) {
+      const finalStyleRef = parseRenderedIntoFrame(
+        rawAnsi,
+        this.frame,
+        this.stylePool,
+        this.scratch,
+        row,
+        col,
+        this.styleRef(this.frameStyle),
+      );
+      this.frameStyle = this.stylePool.lookup(finalStyleRef);
+    }
+    this.emissionStyle = {};
+  }
+
+  resetStyle(): void {
+    this.renderedByteLength += 3;
+    this.emissionStyle = {};
+    this.frameStyle = {};
+  }
+}
+
 /** Paints a box's perimeter (all 4 edges) at its own layout rect, clipped to
  * clipRect exactly like text painting. Embeds borderTitle in the top edge when
  * given (falls back to a truncated title, never throwing, when it overflows the
  * available inner width). No-ops when the box is too small to hold a border. */
 function paintBorder(
   node: RenderNode,
-  output: Output,
+  target: NodePaintTarget,
   lx: number, ly: number, lw: number, lh: number,
   clipRect: ClipRect,
-  prevStyleTracker: PrevStyleTracker,
 ): void {
   if (!node.borderStyle || lw < 2 || lh < 2) return;
   const glyphs = resolveBorderGlyphs(node.borderStyle);
@@ -666,10 +891,7 @@ function paintBorder(
   const writeAt = (row: number, col: number, ch: string): void => {
     if (col < clipRect.x || col >= clipRect.x + clipRect.width) return;
     if (row < clipRect.y || row >= clipRect.y + clipRect.height) return;
-    output.write(cursorPosition(row + 1, col + 1));
-    output.writeSGR(style, prevStyleTracker.current);
-    prevStyleTracker.current = style;
-    output.write(ch);
+    target.writeAt(row, col, ch, style);
   };
 
   // Top edge — plain horizontal run, or with the title embedded just after the
@@ -720,8 +942,7 @@ function paintBorder(
   // renders immediately after it -- and updates the shared tracker to match, so the NEXT write
   // (text/border, sibling or child) correctly sees the terminal as default again.
   if (style.fg || style.bg) {
-    output.write("\x1b[m");
-    prevStyleTracker.current = {};
+    target.resetStyle();
   }
 }
 
@@ -745,6 +966,22 @@ export function renderNodeToOutput(
   // the real, currently-active style instead of each independently assuming "starts from {}".
   // Optional + defaulted so any external caller still constructing a bare 7-arg call keeps working.
   prevStyleTracker: PrevStyleTracker = { current: {} },
+): void {
+  renderNodeToTarget(
+    node,
+    new AnsiNodePaintTarget(output, stylePool, prevStyleTracker),
+    x,
+    y,
+    clipRect,
+  );
+}
+
+function renderNodeToTarget(
+  node: RenderNode,
+  target: NodePaintTarget,
+  x: number,
+  y: number,
+  clipRect: ClipRect,
 ): void {
   const lx = x + node.layout.computedLeft;
   const ly = y + node.layout.computedTop;
@@ -777,23 +1014,14 @@ export function renderNodeToOutput(
         col >= clipRect.x && col < clipRect.x + clipRect.width &&
         row >= clipRect.y && row < clipRect.y + clipRect.height;
       if (inBounds) {
-        stylePool.intern(style);
-        output.write(cursorPosition(row + 1, col + 1));
-        output.writeSGR(style, prevStyleTracker.current);
-        prevStyleTracker.current = style;
-        output.write(ch);
+        target.writeAt(row, col, ch, style);
       }
       col += charWidth(ch);
     }
   } else if (node.kind === "raw-ansi" && node.rawAnsi !== undefined) {
-    output.write(cursorPosition(ly + 1, lx + 1));
-    output.write(node.rawAnsi);
-    // raw-ansi content (e.g. the fireball's per-cell RESET convention) is expected to be
-    // self-terminating, same as the border-color reset below -- treat the shared tracker as
-    // back to default afterward rather than carrying an unknown internal state forward.
-    prevStyleTracker.current = {};
+    target.writeRawAnsiAt(ly, lx, node.rawAnsi);
   } else if (node.kind === "box" && node.borderStyle) {
-    paintBorder(node, output, lx, ly, lw, lh, clipRect, prevStyleTracker);
+    paintBorder(node, target, lx, ly, lw, lh, clipRect);
   }
 
   // #561 P0-A / W4: overflow:"hidden" has always been a declared layout property
@@ -845,8 +1073,25 @@ export function renderNodeToOutput(
 
   // Recurse into children
   for (const child of node.children) {
-    renderNodeToOutput(child, output, lx, ly, childClipRect, stylePool, hyperlinkPool, prevStyleTracker);
+    renderNodeToTarget(child, target, lx, ly, childClipRect);
   }
+}
+
+/** Render directly into a reusable Frame without materializing or reparsing a full-frame ANSI
+ * string. The returned byte count is diagnostic-only and mirrors the legacy oracle's stream size. */
+export function renderNodeToFrame(
+  node: RenderNode,
+  frame: Frame,
+  x: number,
+  y: number,
+  clipRect: ClipRect,
+  stylePool: StylePool,
+  scratch: FrameParseScratch,
+  target: FrameRenderTarget = new FrameRenderTarget(stylePool, scratch),
+): number {
+  target.begin(frame);
+  renderNodeToTarget(node, target, x, y, clipRect);
+  return target.renderedByteLength;
 }
 
 /** Intersects two clip rectangles; an empty (non-overlapping) result has width/height clamped
@@ -1065,11 +1310,10 @@ export function createRenderer(options: RendererOptions): Renderer {
   const hyperlinkPool = options.hyperlinkPool ?? new HyperlinkPool();
   const diagnostic = options.diagnostic;
   const heapAttributionDiagnostic = options.heapAttributionDiagnostic;
-  // issue #898: full-frame rendering is the hot path (~21 KiB/pass in the measured cockpit).
-  // Retain one Output and its chunk storage for the renderer lifetime instead of constructing a
-  // new accumulator on every React commit.
-  const frameOutput = new Output(stylePool, hyperlinkPool);
   const frameParseScratch = createFrameParseScratch();
+  // issue #898: the cockpit hot path writes directly into the reusable frame. The legacy
+  // Output+parse route remains exported as a differential-test oracle only.
+  const frameRenderTarget = new FrameRenderTarget(stylePool, frameParseScratch);
 
   let prevFrame: Frame | null = null;
   let spareFrame: Frame | null = null;
@@ -1122,27 +1366,26 @@ export function createRenderer(options: RendererOptions): Renderer {
       if (stylePool.size() > STYLE_POOL_CAP || hyperlinkPool.size() > HYPERLINK_POOL_CAP) {
         stylePool.reset();
         hyperlinkPool.reset();
+        frameRenderTarget.resetStyleCache();
         geometryChanged = true;
       }
 
-      // Build output for the whole frame
       const clipRect: ClipRect = { x: 0, y: 0, width: w, height: h };
 
       // Run layout
       calculateLayoutWithText(rootNode, w, h);
 
-      // #343: one fresh tracker per render() pass -- the real terminal is back to default at
-      // the START of every render (guaranteed by #325's own unconditional trailing reset below),
-      // so {} is the correct starting point; it then threads through the WHOLE tree walk.
-      frameOutput.reset();
-      renderNodeToOutput(rootNode, frameOutput, 0, 0, clipRect, stylePool, hyperlinkPool, { current: {} });
-      const rendered = frameOutput.flush();
-
-      // Build current frame from rendered output by re-parsing
       const frame = prepareFrame(spareFrame, w, h);
-
-      // Simple parse: extract cursorPosition + text sequences from rendered output
-      parseRenderedIntoFrame(rendered, frame, stylePool, frameParseScratch);
+      const renderedBytes = renderNodeToFrame(
+        rootNode,
+        frame,
+        0,
+        0,
+        clipRect,
+        stylePool,
+        frameParseScratch,
+        frameRenderTarget,
+      );
 
       // Diff -- force a full repaint (nothing carried from prevFrame) on any geometry change,
       // so a shrink never leaves stale off-frame content unaddressed.
@@ -1152,7 +1395,7 @@ export function createRenderer(options: RendererOptions): Renderer {
 
       diagnostic?.recordRenderPass({
         fullRepaint: geometryChanged,
-        renderedFrameUtf8Bytes: Buffer.byteLength(rendered),
+        renderedFrameUtf8Bytes: renderedBytes,
         diffCells: patch.changes.length,
         optimizedRuns: runs.length,
       });
@@ -1174,7 +1417,7 @@ export function createRenderer(options: RendererOptions): Renderer {
         frameCellCount: w * h,
         patchChanges: patch.changes.length,
         optimizedRuns: runs.length,
-        renderedBytes: Buffer.byteLength(rendered),
+        renderedBytes,
         patchBufferBytes: Buffer.byteLength(buf),
         stylePoolSize: stylePool.size(),
         hyperlinkPoolSize: hyperlinkPool.size(),
@@ -1309,12 +1552,15 @@ export function parseRenderedIntoFrame(
   frame: Frame,
   stylePool: StylePool,
   scratch: FrameParseScratch = createFrameParseScratch(),
-): void {
+  startRow = 0,
+  startCol = 0,
+  startStyleRef: StyleRef = 0,
+): StyleRef {
   // Parse cursor-position + SGR + text sequences
   let pos = 0;
-  let curRow = 0;
-  let curCol = 0;
-  let currentStyleRef: StyleRef = 0;
+  let curRow = startRow;
+  let curCol = startCol;
+  let currentStyleRef: StyleRef = startStyleRef;
 
   while (pos < rendered.length) {
     if (rendered[pos] === "\x1b" && rendered[pos + 1] === "[") {
@@ -1368,4 +1614,5 @@ export function parseRenderedIntoFrame(
       curCol += charWidth(ch);
     }
   }
+  return currentStyleRef;
 }
