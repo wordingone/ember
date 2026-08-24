@@ -339,8 +339,10 @@ function parseRendererRows(text: string, input: Issue898RendererCensusEvidenceIn
     previousTime = capturedAtMs;
     previous = row;
   }
-  const deltaMs = Number((BigInt(runtimeToken!) - BigInt(input.cockpitProcessStartToken)) / 10_000n);
-  if (deltaMs < 0 || deltaMs > ISSUE898_RUNTIME_ORIGIN_TOLERANCE_MS) {
+  const runtimeTicks = BigInt(runtimeToken!);
+  const kernelTicks = BigInt(input.cockpitProcessStartToken);
+  const maximumRuntimeTicks = kernelTicks + BigInt(ISSUE898_RUNTIME_ORIGIN_TOLERANCE_MS) * 10_000n;
+  if (runtimeTicks < kernelTicks || runtimeTicks > maximumRuntimeTicks) {
     throw new Error("ISSUE898_RENDERER_CENSUS_RUNTIME_ORIGIN_OUT_OF_RANGE");
   }
   return rows;
@@ -387,7 +389,8 @@ function parsePollRows(text: string, input: Issue898RendererCensusEvidenceInput)
     if (row.census.admitted_process_count !== 2
       || row.census.class_cardinality?.cockpit !== 1
       || row.census.class_cardinality?.brain_server !== 1
-      || row.census.ownership_overlap?.count !== 0) {
+      || row.census.ownership_overlap?.count !== 0
+      || row.census.ownership_overlap?.pids.length !== 0) {
       throw new Error("ISSUE898_RENDERER_CENSUS_CENSUS_CARDINALITY_INVALID");
     }
     const cockpit = row.census.samples.find((sample) => sample.process_class === "cockpit");
@@ -397,9 +400,10 @@ function parsePollRows(text: string, input: Issue898RendererCensusEvidenceInput)
       || cockpit.process_start_token !== input.cockpitProcessStartToken) {
       throw new Error("ISSUE898_RENDERER_CENSUS_COCKPIT_IDENTITY_DRIFT");
     }
+    const totalCommitBytes = cockpit.commit_bytes + brain.commit_bytes;
     if (![cockpit.commit_bytes, brain.commit_bytes].every((value) =>
       Number.isSafeInteger(value) && value >= 0
-    )) {
+    ) || !Number.isSafeInteger(totalCommitBytes)) {
       throw new Error("ISSUE898_RENDERER_CENSUS_COMMIT_BYTES_INVALID");
     }
     previousTime = observedAtMs;
@@ -424,6 +428,7 @@ function anchorsFromRows(polls: PollRow[], renderer: RendererRow[]): Anchor[] {
       rendererStalenessMs: observedAtMs - selected.captured_at_ms,
     });
   }
+  if (anchors.length < 3) throw new Error("ISSUE898_RENDERER_CENSUS_ANCHORS_SHORT");
   return anchors;
 }
 
@@ -538,7 +543,7 @@ function settledWindows(anchors: Anchor[]): EvidenceFitGroup[] {
     start + ISSUE898_WINDOW_MS <= last;
     start += ISSUE898_WINDOW_MS) {
     const selected = anchors.filter((anchor) =>
-      anchor.observedAtMs >= start && anchor.observedAtMs <= start + ISSUE898_WINDOW_MS
+      anchor.observedAtMs >= start && anchor.observedAtMs < start + ISSUE898_WINDOW_MS
     );
     if (selected.length >= 3) windows.push(fitGroup(selected));
   }

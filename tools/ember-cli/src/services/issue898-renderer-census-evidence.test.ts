@@ -529,6 +529,65 @@ test.each([
   expect(existsSync(fixture.input.outputPath)).toBe(false);
 });
 
+test("refuses overlap PIDs even when the declared overlap count is zero", () => {
+  const fixture = createEvidenceFixture();
+  mutatePollFixture(fixture, 1, (row) => {
+    row.census.ownership_overlap = { count: 0, pids: [COCKPIT_PID] };
+  });
+  expect(() => sealIssue898RendererCensusEvidence(fixture.input)).toThrow(
+    "ISSUE898_RENDERER_CENSUS_CENSUS_CARDINALITY_INVALID",
+  );
+  expect(existsSync(fixture.input.outputPath)).toBe(false);
+});
+
+test("settled windows do not share a boundary anchor", () => {
+  const fixture = createEvidenceFixture();
+  const receipt = sealIssue898RendererCensusEvidence(fixture.input);
+  expect(receipt.settled_windows.length).toBeGreaterThan(1);
+  for (let index = 1; index < receipt.settled_windows.length; index += 1) {
+    const previous = receipt.settled_windows[index - 1]!;
+    const current = receipt.settled_windows[index]!;
+    expect(Date.parse(previous.ended_at)).toBeLessThan(Date.parse(current.started_at));
+  }
+});
+
+test.each([
+  ["one tick before kernel", String(BigInt(KERNEL_TOKEN) - 1n)],
+  ["one tick above runtime tolerance", String(
+    BigInt(KERNEL_TOKEN) + BigInt(5_000 * 10_000) + 1n,
+  )],
+] as const)("refuses runtime origin %s", (_name, token) => {
+  const fixture = createEvidenceFixture();
+  setRendererRuntimeToken(fixture, token);
+  expect(() => sealIssue898RendererCensusEvidence(fixture.input)).toThrow(
+    "ISSUE898_RENDERER_CENSUS_RUNTIME_ORIGIN_OUT_OF_RANGE",
+  );
+  expect(existsSync(fixture.input.outputPath)).toBe(false);
+});
+
+test("refuses fewer than three census-renderer anchors", () => {
+  const fixture = createEvidenceFixture();
+  mutateAllRendererRows(fixture, (row, index) => {
+    row.captured_at_ms = STARTED_AT_MS + (121 + index) * 120_000;
+    row.captured_at = new Date(Number(row.captured_at_ms)).toISOString();
+  });
+  expect(() => sealIssue898RendererCensusEvidence(fixture.input)).toThrow(
+    "ISSUE898_RENDERER_CENSUS_ANCHORS_SHORT",
+  );
+  expect(existsSync(fixture.input.outputPath)).toBe(false);
+});
+
+test("refuses an unsafe summed commit value", () => {
+  const fixture = createEvidenceFixture();
+  mutatePollFixture(fixture, 1, (row) => {
+    for (const sample of row.census.samples) sample.commit_bytes = Number.MAX_SAFE_INTEGER;
+  });
+  expect(() => sealIssue898RendererCensusEvidence(fixture.input)).toThrow(
+    "ISSUE898_RENDERER_CENSUS_COMMIT_BYTES_INVALID",
+  );
+  expect(existsSync(fixture.input.outputPath)).toBe(false);
+});
+
 test.each([
   ["relative input path", (fixture: EvidenceFixture) => {
     fixture.input.soakReceiptPath = "soak-receipt.json";
