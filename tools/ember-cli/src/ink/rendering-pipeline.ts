@@ -882,7 +882,7 @@ export function diffFrames(prev: Frame | null, curr: Frame): Patch {
 // Optimizer
 // ---------------------------------------------------------------------------
 
-interface Run {
+export interface Run {
   row: number;
   startCol: number;
   cells: FrameCell[];
@@ -907,6 +907,34 @@ export function optimizePatch(patch: Patch): Run[] {
   }
   if (current) runs.push(current);
   return runs;
+}
+
+/** Serializes optimized patch runs without allocating a temporary Output for every changed cell. */
+export function serializePatchRuns(
+  runs: readonly Run[],
+  stylePool: StylePool,
+  hyperlinkPool: HyperlinkPool,
+  geometryChanged: boolean,
+): string {
+  let buf = geometryChanged ? "\x1b[2J\x1b[H" : "";
+  if (runs.length === 0) return buf;
+
+  const sgrOutput = new Output(stylePool, hyperlinkPool);
+  let prevStyleRef: StyleRef = 0;
+  for (const run of runs) {
+    buf += cursorPosition(run.row + 1, run.startCol + 1);
+    for (const cell of run.cells) {
+      const style = stylePool.lookup(cell.styleRef);
+      const prevStyle = stylePool.lookup(prevStyleRef);
+      sgrOutput.writeSGR(style, prevStyle);
+      buf += sgrOutput.flush();
+      buf += cell.char;
+      prevStyleRef = cell.styleRef;
+    }
+  }
+  // issue #310: every non-empty patch is self-terminating so the next render starts from the
+  // default terminal style assumed by prevStyleRef=0.
+  return buf + "\x1b[m";
 }
 
 // ---------------------------------------------------------------------------
@@ -1114,27 +1142,14 @@ export function createRenderer(options: RendererOptions): Renderer {
       // Write minimal output -- clear-screen first on a geometry change so any terminal-side
       // reflow of the previous (differently-sized) frame's content can't leave visible remnants
       // outside the cells this frame's diff will actually (re)write.
-      let buf = geometryChanged ? "\x1b[2J\x1b[H" : "";
-      let prevStyleRef: StyleRef = 0;
-      for (const run of runs) {
-        buf += cursorPosition(run.row + 1, run.startCol + 1);
-        for (const cell of run.cells) {
-          const style = stylePool.lookup(cell.styleRef);
-          const prevStyle = stylePool.lookup(prevStyleRef);
-          const tmp = new Output(stylePool, hyperlinkPool);
-          tmp.writeSGR(style, prevStyle);
-          buf += tmp.flush();
-          buf += cell.char;
-          prevStyleRef = cell.styleRef;
-        }
-      }
-      // issue #310: unconditional trailing reset ensures the real terminal is always left in a
-      // default state at the end of each patch write. Without this, a non-default style (e.g.
+      const buf = serializePatchRuns(runs, stylePool, hyperlinkPool, geometryChanged);
+      // issue #310: serializePatchRuns' unconditional trailing reset ensures the real terminal is
+      // always left in a default state at the end of each patch write. Without this, a
+      // non-default style (e.g.
       // the cursor's inverse) painted as the last cell in a patch leaves the terminal inverted;
       // the NEXT render() call assumes prevStyleRef=0 (empty state) but the terminal is actually
       // non-empty, so plain content needing no SGR is written without SGR and inherits the
       // stale inverse. The reset makes each patch self-terminating, breaking the cross-patch leak.
-      if (runs.length > 0) buf += "\x1b[m";
       heapAttributionDiagnostic?.recordRenderPass({
         frameWidth: w,
         frameHeight: h,
