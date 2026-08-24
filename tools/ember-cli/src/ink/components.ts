@@ -529,6 +529,11 @@ export function App({ children, onExit }: AppProps): React.ReactElement {
   }, []);
 
   useEffect(() => {
+    // #898 diagnostic-only one-factor arm: pause only the root ClockContext repaint while
+    // preserving its initial value. The independent REPL liveness/heartbeat clock, resize
+    // fallback, pollers, and all default behavior remain unchanged; flag-absent is the
+    // production path.
+    if (process.env["EMBER_DIAGNOSTIC_DISABLE_CLOCK_CONTEXT_TICK"] === "1") return;
     const tick = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(tick);
   }, []);
